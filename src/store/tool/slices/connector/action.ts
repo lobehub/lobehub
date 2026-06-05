@@ -66,6 +66,14 @@ export class ConnectorActionImpl {
   };
 
   /**
+   * Reset all tool permissions for a connector back to 'auto' (fully open).
+   */
+  resetConnectorPermissions = async (id: string): Promise<void> => {
+    await lambdaClient.connector.resetPermissions.mutate({ id });
+    await this.fetchConnectors();
+  };
+
+  /**
    * Sync tools from a client-provided list (for Lobehub OAuth skills / Klavis
    * that already have their tool list available on the client side).
    * Idempotent — safe to call whenever the detail panel opens.

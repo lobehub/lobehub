@@ -26,6 +26,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
   const syncConnectorTools = useToolStore((s) => s.syncConnectorTools);
   const syncBuiltinTool = useToolStore((s) => s.syncBuiltinTool);
   const syncPluginTools = useToolStore((s) => s.syncPluginTools);
+  const resetConnectorPermissions = useToolStore((s) => s.resetConnectorPermissions);
   const disconnectConnector = useToolStore((s) => s.disconnectConnector);
   const updateToolPermission = useToolStore((s) => s.updateToolPermission);
 
@@ -44,12 +45,11 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
 
   if (!connector) return null;
 
+  // Sync button label: re-sync tool list from manifest (does NOT reset permissions)
   const syncLabel =
-    connector?.sourceType === ConnectorSourceType.builtin
-      ? t('connector.reset', 'Reset')
-      : connector?.sourceType === ConnectorSourceType.marketplace
-        ? t('connector.refresh', 'Refresh')
-        : t('connector.sync', 'Sync');
+    connector?.sourceType === ConnectorSourceType.custom
+      ? t('connector.sync', 'Sync')
+      : t('connector.refresh', 'Refresh');
 
   const hasTools =
     readTools.length > 0 ||
@@ -75,6 +75,11 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
       >
         <div style={{ fontSize: 16, fontWeight: 600 }}>{connector.name}</div>
         <div style={{ display: 'flex', gap: 8 }}>
+          {/* Reset permissions: restore all tools to auto (fully open) */}
+          <Button size="small" onClick={() => resetConnectorPermissions(connectorId)}>
+            {t('connector.resetPermissions', 'Reset permissions')}
+          </Button>
+          {/* Sync/Refresh: re-sync tool list from manifest */}
           <Button
             icon={<RefreshCwIcon size={14} />}
             loading={syncing}

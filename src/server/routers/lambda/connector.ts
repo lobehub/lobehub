@@ -177,6 +177,21 @@ export const connectorRouter = router({
       return { toolCount: syncInputs.length };
     }),
 
+  /**
+   * Reset all tool permissions for a connector back to 'auto' (fully open).
+   */
+  resetPermissions: connectorProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ input, ctx }) => {
+      const tools = await ctx.connectorToolModel.queryByConnector(input.id);
+      await Promise.all(
+        tools.map((t) =>
+          ctx.connectorToolModel.updatePermission(t.id, ConnectorToolPermission.auto),
+        ),
+      );
+      return { toolCount: tools.length };
+    }),
+
   updateToolPermission: connectorProcedure
     .input(
       z.object({
