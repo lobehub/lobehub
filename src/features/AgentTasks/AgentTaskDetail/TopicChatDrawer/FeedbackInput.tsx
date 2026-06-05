@@ -1,14 +1,17 @@
-import {
-  ChatInput,
-  ChatInputActionBar,
-  Editor,
-  SendButton,
-  useEditor,
-} from '@lobehub/editor/react';
-import { memo, useCallback, useState } from 'react';
+import { ChatInput, ChatInputActionBar, SendButton, useEditor } from '@lobehub/editor/react';
+import { Button } from '@lobehub/ui';
+import { $getRoot } from 'lexical';
+import { MessageCirclePlus } from 'lucide-react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AttachmentUploadButton } from '@/features/AttachmentInput';
 import { useConversationStore } from '@/features/Conversation';
+import { EditorCanvas } from '@/features/EditorCanvas';
+import {
+  getAttachmentFileIdsFromEditor,
+  insertFilesIntoEditor,
+} from '@/features/EditorCanvas/editorAttachments';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 
 const FeedbackInput = memo(() => {
@@ -17,35 +20,81 @@ const FeedbackInput = memo(() => {
   const sendMessage = useConversationStore((s) => s.sendMessage);
   const [submitting, setSubmitting] = useState(false);
   const [hasContent, setHasContent] = useState(false);
+  const [hasAttachments, setHasAttachments] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const shouldSendOnEnter = useEnterToSend();
 
+  const canSubmit = hasContent || hasAttachments;
+
+  useEffect(() => {
+    if (expanded) editor?.focus?.();
+  }, [expanded, editor]);
+
+  const handleContentChange = useCallback(() => {
+    const lexicalEditor = editor?.getLexicalEditor?.();
+    if (!lexicalEditor) return;
+    lexicalEditor.getEditorState().read(() => {
+      const text = $getRoot().getTextContent().trim();
+      setHasContent(text.length > 0);
+    });
+    setHasAttachments(getAttachmentFileIdsFromEditor(editor).length > 0);
+  }, [editor]);
+
+  const handleAttach = useCallback(
+    (files: File[]) => {
+      insertFilesIntoEditor(editor, files);
+    },
+    [editor],
+  );
+
   const handleSubmit = useCallback(async () => {
-    const trimmed = String(editor?.getDocument?.('markdown') ?? '').trim();
-    if (!trimmed || submitting) return;
+    if (submitting) return;
+    const editorData = editor?.getDocument?.('json') as Record<string, any> | undefined;
+    const markdown = String(editor?.getDocument?.('markdown') ?? '').trim();
+    const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
+    if (!markdown && !hasFiles) return;
+
     setSubmitting(true);
     try {
       // sendMessage is bound to this drawer's ConversationProvider context
       // (agentId + topicId + isolatedTopic), so the message continues this
-      // topic's conversation rather than spawning a new run.
-      await sendMessage({ message: trimmed });
+      // topic's conversation. Files attached inline in the editor travel as
+      // part of editorData / markdown — no separate files array needed.
+      await sendMessage({ editorData, message: markdown });
       editor?.cleanDocument?.();
       setHasContent(false);
+      setHasAttachments(false);
+      setExpanded(false);
     } finally {
       setSubmitting(false);
     }
   }, [editor, sendMessage, submitting]);
 
+  if (!expanded) {
+    return (
+      <Button
+        block
+        icon={MessageCirclePlus}
+        size={'large'}
+        type={'default'}
+        onClick={() => setExpanded(true)}
+      >
+        {t('taskDetail.sendFollowUp')}
+      </Button>
+    );
+  }
+
   return (
     <ChatInput
-      maxHeight={200}
-      minHeight={40}
+      maxHeight={240}
+      minHeight={64}
       footer={
         <ChatInputActionBar
-          left={null}
-          style={{ paddingRight: 8 }}
+          left={<AttachmentUploadButton onFiles={handleAttach} />}
+          style={{ paddingInline: 8 }}
           right={
             <SendButton
-              disabled={!hasContent && !submitting}
+              disabled={!canSubmit && !submitting}
               loading={submitting}
               shape={'round'}
               title={t('taskDetail.replyInThread')}
@@ -56,17 +105,12 @@ const FeedbackInput = memo(() => {
         />
       }
     >
-      <Editor
-        content={''}
+      <EditorCanvas
         editor={editor}
-        enablePasteMarkdown={false}
-        markdownOption={false}
+        floatingToolbar={false}
         placeholder={t('taskDetail.replyPlaceholder')}
-        type={'text'}
-        variant={'chat'}
-        onChange={(ed) => {
-          setHasContent(!ed?.isEmpty);
-        }}
+        style={{ paddingBlock: 0 }}
+        onContentChange={handleContentChange}
         onPressEnter={({ event }) => {
           if (shouldSendOnEnter(event)) {
             handleSubmit();

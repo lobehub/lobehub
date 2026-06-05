@@ -648,6 +648,7 @@
   "taskDetail.runNow": "Run now",
   "taskDetail.runTask": "Run",
   "taskDetail.saveModelConfig": "Save",
+  "taskDetail.sendFollowUp": "Send follow up message",
   "taskDetail.status.backlog": "Backlog",
   "taskDetail.status.canceled": "Canceled",
   "taskDetail.status.completed": "Completed",

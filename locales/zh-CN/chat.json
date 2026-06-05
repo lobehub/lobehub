@@ -648,6 +648,7 @@
   "taskDetail.runNow": "立即运行",
   "taskDetail.runTask": "运行",
   "taskDetail.saveModelConfig": "保存",
+  "taskDetail.sendFollowUp": "发送追加消息",
   "taskDetail.status.backlog": "待办",
   "taskDetail.status.canceled": "已取消",
   "taskDetail.status.completed": "已完成",
