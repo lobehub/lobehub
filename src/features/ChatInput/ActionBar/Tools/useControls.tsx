@@ -289,17 +289,6 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1;
     text-align: start;
   `,
-  searchBox: css`
-    display: flex;
-    align-items: center;
-
-    height: 36px;
-    margin-inline: -8px;
-    padding-inline: 4px;
-    border-radius: 10px;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
   toolLabel: css`
     display: flex;
     flex: 1;
@@ -346,9 +335,45 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 14px;
     align-items: center;
 
-    margin-block-end: -4px;
     margin-inline: -8px;
     padding-inline: 8px;
+  `,
+  addSkillRow: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 8px;
+    align-items: center;
+
+    /* Break out of the footer's 12px inline padding so the row spans the full
+       popup width and its hover background lines up with the menu items above;
+       padding-inline: 12px then re-aligns the icon/text to the same column. */
+    width: calc(100% + 24px);
+    min-height: 32px;
+    margin-block-start: 4px;
+    margin-block-end: -8px;
+    margin-inline: -12px;
+    padding-inline: 12px;
+    border: 0;
+    border-radius: 6px;
+
+    font-size: 14px;
+    color: ${cssVar.colorText};
+
+    background: transparent;
+
+    transition: background 150ms ${cssVar.motionEaseOut};
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  addSkillLabel: css`
+    flex: 1;
+    text-align: start;
+  `,
+  addSkillArrow: css`
+    color: ${cssVar.colorTextTertiary};
   `,
   statsSettingsButton: css`
     cursor: pointer;
@@ -1339,57 +1364,36 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   );
 
   const marketHeader = (
-    <div className={cx(styles.searchBox)} onClick={stopPropagation} onKeyDown={stopPropagation}>
-      <SearchBar
-        allowClear
-        placeholder={t('tools.search')}
-        size="small"
-        style={{ flex: 1 }}
-        value={searchKeyword}
-        variant="borderless"
-        onChange={(event) => setSearchKeyword(event.target.value)}
-        onKeyDown={stopPropagation}
-      />
-    </div>
+    <SearchBar
+      allowClear
+      placeholder={t('tools.search')}
+      size="small"
+      style={{ width: '100%' }}
+      value={searchKeyword}
+      variant="borderless"
+      onChange={(event) => setSearchKeyword(event.target.value)}
+      onClick={stopPropagation}
+      onKeyDown={stopPropagation}
+    />
   );
 
   const marketFooter =
     allSkillItems.length > 0 || fixedItems.length > 0 ? (
-      <div className={cx(styles.statsFooter)}>
-        <span className={cx(styles.statsItem)}>
-          <Icon icon={Pin} size={12} />
-          {allPinnedItems.length + fixedItems.length}
-        </span>
-        <span className={cx(styles.statsItem)}>
-          <Icon icon={Zap} size={12} />
-          {allAutoItems.length}
-        </span>
-        <span
-          style={{
-            alignItems: 'center',
-            display: 'inline-flex',
-            gap: 2,
-            marginInlineStart: 'auto',
-          }}
-        >
-          <Tooltip placement="top" title={t('plus.addSkills', { ns: 'chat' })}>
-            <button
-              aria-label={t('plus.addSkills', { ns: 'chat' })}
-              className={cx(styles.statsSettingsButton)}
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                closeDropdown?.();
-                createSkillStoreModal();
-              }}
-            >
-              <Icon icon={Store} size={14} />
-            </button>
-          </Tooltip>
+      <>
+        <div className={cx(styles.statsFooter)}>
+          <span className={cx(styles.statsItem)}>
+            <Icon icon={Pin} size={12} />
+            {allPinnedItems.length + fixedItems.length}
+          </span>
+          <span className={cx(styles.statsItem)}>
+            <Icon icon={Zap} size={12} />
+            {allAutoItems.length}
+          </span>
           <Tooltip placement="top" title={t('tools.plugins.management')}>
             <button
               aria-label={t('tools.plugins.management')}
               className={cx(styles.statsSettingsButton)}
+              style={{ marginInlineStart: 'auto' }}
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
@@ -1400,8 +1404,22 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
               <Icon icon={Settings} size={14} />
             </button>
           </Tooltip>
-        </span>
-      </div>
+        </div>
+        <button
+          aria-label={t('plus.addSkills', { ns: 'chat' })}
+          className={cx(styles.addSkillRow)}
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            closeDropdown?.();
+            createSkillStoreModal();
+          }}
+        >
+          <Icon icon={Store} size={SKILL_ICON_SIZE} />
+          <span className={cx(styles.addSkillLabel)}>{t('plus.addSkills', { ns: 'chat' })}</span>
+          <Icon className={cx(styles.addSkillArrow)} icon={ChevronRight} size={16} />
+        </button>
+      </>
     ) : undefined;
 
   const marketItems: ItemType[] = [
