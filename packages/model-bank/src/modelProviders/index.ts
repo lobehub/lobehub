@@ -7,6 +7,7 @@ import Ai302Provider from './ai302';
 import Ai360Provider from './ai360';
 import AiHubMixProvider from './aihubmix';
 import AkashChatProvider from './akashchat';
+import AtlasCloudProvider from './atlascloud';
 import AnthropicProvider from './anthropic';
 import AzureProvider from './azure';
 import AzureAIProvider from './azureai';
@@ -123,6 +124,7 @@ export const LOBE_DEFAULT_MODEL_LIST: ChatModelCard[] = [
   CloudflareProvider.chatModels,
   Ai360Provider.chatModels,
   AiHubMixProvider.chatModels,
+  AtlasCloudProvider.chatModels,
   SiliconCloudProvider.chatModels,
   GiteeAIProvider.chatModels,
   UpstageProvider.chatModels,
@@ -156,6 +158,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   { ...AzureProvider, chatModels: [] },
   AzureAIProvider,
   AiHubMixProvider,
+  AtlasCloudProvider,
   OpenRouterProvider,
   FalProvider,
   OllamaProvider,
@@ -238,6 +241,7 @@ export const isProviderDisableBrowserRequest = (id: string) => {
 export { default as Ai21ProviderCard } from './ai21';
 export { default as Ai302ProviderCard } from './ai302';
 export { default as Ai360ProviderCard } from './ai360';
+export { default as AtlasCloudProviderCard } from './atlascloud';
 export { default as AiHubMixProviderCard } from './aihubmix';
 export { default as AkashChatProviderCard } from './akashchat';
 export { default as AnthropicProviderCard } from './anthropic';

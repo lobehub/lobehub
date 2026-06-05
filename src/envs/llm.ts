@@ -222,6 +222,9 @@ export const getLLMConfig = () => {
       ENABLED_AIHUBMIX: z.boolean(),
       AIHUBMIX_API_KEY: z.string().optional(),
 
+      ENABLED_ATLASCLOUD: z.boolean(),
+      ATLASCLOUD_API_KEY: z.string().optional(),
+
       ENABLED_NEWAPI: z.boolean(),
       NEWAPI_API_KEY: z.string().optional(),
       NEWAPI_PROXY_URL: z.string().optional(),
@@ -468,6 +471,9 @@ export const getLLMConfig = () => {
 
       ENABLED_AIHUBMIX: !!process.env.AIHUBMIX_API_KEY,
       AIHUBMIX_API_KEY: process.env.AIHUBMIX_API_KEY,
+
+      ENABLED_ATLASCLOUD: !!process.env.ATLASCLOUD_API_KEY,
+      ATLASCLOUD_API_KEY: process.env.ATLASCLOUD_API_KEY,
 
       ENABLED_NEWAPI: !!process.env.NEWAPI_API_KEY,
       NEWAPI_API_KEY: process.env.NEWAPI_API_KEY,
