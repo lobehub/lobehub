@@ -894,6 +894,7 @@ export class StreamingExecutorActionImpl {
               context: execContext,
               editorData: merged.editorData,
               files: mergedFiles,
+              ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
               message: mergedContent,
               metadata: merged.metadata,
             })

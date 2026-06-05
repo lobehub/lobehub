@@ -69,7 +69,10 @@ const FeedbackInput = memo(() => {
       // (agentId + topicId + isolatedTopic), so the message continues this
       // topic's conversation. Files attached inline in the editor travel as
       // part of editorData / markdown — no separate files array needed.
-      await sendMessage({ editorData, message: markdown });
+      // Force the gateway runtime so the follow-up runs on the same
+      // server-side path as the original `runTask` that spawned this topic,
+      // regardless of the user's global local/cloud preference.
+      await sendMessage({ editorData, forceRuntime: 'gateway', message: markdown });
     } finally {
       setSubmitting(false);
     }
