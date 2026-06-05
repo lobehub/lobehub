@@ -1,13 +1,17 @@
 import { z } from 'zod';
 
+import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorToolModel } from '@/database/models/connectorTool';
+import { ConnectorToolPermission } from '@/database/schemas';
 import { getKlavisClient } from '@/libs/klavis';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
+import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MCPService } from '@/server/services/mcp';
 
 /**
  * Klavis procedure with client initialized in context
  */
-const klavisProcedure = authedProcedure.use(async (opts) => {
+const klavisProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const klavisClient = getKlavisClient();
 
   return opts.next({
@@ -32,6 +36,32 @@ export const klavisRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // ── Connector tool permission gate ────────────────────────────────────
+      // Extract connector identifier from tool name prefix (e.g. "gmail_search_emails" → "gmail")
+      // and check if this tool has been disabled by the user.
+      const identifierPrefix = input.toolName.split('_')[0];
+      if (identifierPrefix && ctx.userId && ctx.serverDB) {
+        const connectorModel = new ConnectorModel(ctx.serverDB, ctx.userId);
+        const [connector] = await connectorModel.queryByIdentifiers([identifierPrefix]);
+        if (connector) {
+          const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId);
+          const tools = await connectorToolModel.queryByConnector(connector.id);
+          const tool = tools.find((t) => t.toolName === input.toolName);
+          if (tool?.permission === ConnectorToolPermission.disabled) {
+            const message =
+              `The tool "${input.toolName}" has been disabled by the user and cannot be executed. ` +
+              `Please inform the user that this tool is currently disabled. ` +
+              `They can re-enable it in Settings > Connectors.`;
+            return {
+              content: message,
+              state: { content: [{ text: message, type: 'text' }], isError: false },
+              success: true,
+            };
+          }
+        }
+      }
+      // ── End permission gate ───────────────────────────────────────────────
+
       const response = await ctx.klavisClient.mcpServer.callTools({
         serverUrl: input.serverUrl,
         toolArgs: input.toolArgs,
