@@ -54,13 +54,14 @@ const FeedbackInput = memo(() => {
     const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
     if (!markdown && !hasFiles) return;
 
-    // Clear / collapse synchronously BEFORE await so the input feels
+    // Clear the editor synchronously BEFORE await so the input feels
     // responsive — sendMessage's optimistic-update pipeline keeps a copy
-    // of the captured markdown / editorData for rendering.
+    // of the captured markdown / editorData for rendering. Keep the
+    // ChatInput expanded after send: once the user has opened the reply
+    // composer, treat it as the new resting state for this drawer session.
     editor?.cleanDocument?.();
     setHasContent(false);
     setHasAttachments(false);
-    setExpanded(false);
 
     setSubmitting(true);
     try {
