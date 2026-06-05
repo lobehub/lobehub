@@ -1,25 +1,21 @@
 'use client';
 
-import { COPYRIGHT_FULL } from '@lobechat/business-const';
-import { Center, Flexbox, Text } from '@lobehub/ui';
+import { Center, Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cx } from 'antd-style';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { type FC, type PropsWithChildren } from 'react';
 
 import { ProductLogo } from '@/components/Branding';
 import { useIsDark } from '@/hooks/useIsDark';
 
-import AuthAgreement from './AuthAgreement';
+import AuthFooterLinks from './AuthFooterLinks';
 import AuthLangButton from './AuthLangButton';
 import AuthThemeButton from './AuthThemeButton';
 import { styles } from './style';
 
 const AuthContainer: FC<PropsWithChildren> = ({ children }) => {
   const isDarkMode = useIsDark();
-  const pathname = usePathname();
-  const isSignInPage = pathname?.endsWith('/signin');
   return (
     <Flexbox className={styles.outerContainer} height={'100%'} padding={8} width={'100%'}>
       <Flexbox
@@ -48,13 +44,7 @@ const AuthContainer: FC<PropsWithChildren> = ({ children }) => {
           {children}
         </Center>
         <Center padding={24}>
-          {isSignInPage ? (
-            <AuthAgreement />
-          ) : (
-            <Text align={'center'} type={'secondary'}>
-              {COPYRIGHT_FULL}
-            </Text>
-          )}
+          <AuthFooterLinks />
         </Center>
       </Flexbox>
     </Flexbox>
