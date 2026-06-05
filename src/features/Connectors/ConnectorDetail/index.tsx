@@ -97,7 +97,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
       </div>
 
       {/* Description */}
-      {connector.metadata?.description && (
+      {typeof connector.metadata?.description === 'string' && connector.metadata.description && (
         <div
           style={{
             color: 'var(--ant-color-text-secondary)',
@@ -106,7 +106,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
             marginBottom: 16,
           }}
         >
-          {String(connector.metadata.description)}
+          {connector.metadata.description}
         </div>
       )}
 

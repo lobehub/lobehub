@@ -87,7 +87,12 @@ export class ConnectorToolModel {
     return this.db
       .select()
       .from(userConnectorTools)
-      .where(eq(userConnectorTools.userConnectorId, userConnectorId));
+      .where(
+        and(
+          eq(userConnectorTools.userConnectorId, userConnectorId),
+          eq(userConnectorTools.userId, this.userId),
+        ),
+      );
   };
 
   /**
@@ -107,5 +112,38 @@ export class ConnectorToolModel {
           ne(userConnectorTools.permission, Permission.disabled),
         ),
       );
+  };
+
+  /**
+   * Query all tools for the given connector UUIDs, including disabled ones.
+   * Used for manifest building where disabled tools must be visible (blocking description).
+   */
+  queryAllByConnectorIds = async (connectorIds: string[]): Promise<UserConnectorToolItem[]> => {
+    if (connectorIds.length === 0) return [];
+
+    return this.db
+      .select()
+      .from(userConnectorTools)
+      .where(
+        and(
+          eq(userConnectorTools.userId, this.userId),
+          inArray(userConnectorTools.userConnectorId, connectorIds),
+        ),
+      );
+  };
+
+  /**
+   * Look up a single tool by its toolName for this user.
+   * Used for direct permission checks (e.g. Klavis gate).
+   */
+  findByToolName = async (toolName: string): Promise<UserConnectorToolItem | undefined> => {
+    const results = await this.db
+      .select()
+      .from(userConnectorTools)
+      .where(
+        and(eq(userConnectorTools.userId, this.userId), eq(userConnectorTools.toolName, toolName)),
+      )
+      .limit(1);
+    return results[0];
   };
 }

@@ -67,6 +67,7 @@ vi.mock('@/database/models/connectorTool', () => ({
   ConnectorToolModel: vi.fn().mockImplementation(() => ({
     queryByConnector: vi.fn().mockResolvedValue([]),
     queryByConnectorIds: vi.fn().mockResolvedValue([]),
+    queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
   })),
 }));
 

@@ -1189,11 +1189,12 @@ export class AiAgentService {
         (p) => !connectorIdentifierSet.has(p.identifier),
       );
 
-      // Fetch tools for enabled real-MCP connectors (non-disabled only, via queryByConnectorIds)
-      const enabledConnectorsMcp = connectorsMcp.filter((c) => c.isEnabled);
+      // Fetch ALL tools for all real-MCP connectors (including disabled tools) so that
+      // buildConnectorManifests can show blocking descriptions for disabled tools.
+      // The runtime hot-path still uses queryByConnectorIds (non-disabled only) elsewhere.
       const connectorTools =
-        enabledConnectorsMcp.length > 0
-          ? await this.connectorToolModel.queryByConnectorIds(enabledConnectorsMcp.map((c) => c.id))
+        connectorsMcp.length > 0
+          ? await this.connectorToolModel.queryAllByConnectorIds(connectorsMcp.map((c) => c.id))
           : [];
 
       const connectorManifests = buildConnectorManifests(connectorsMcp, connectorTools);

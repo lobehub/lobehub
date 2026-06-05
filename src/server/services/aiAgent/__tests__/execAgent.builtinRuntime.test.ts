@@ -89,6 +89,20 @@ vi.mock('@/database/models/plugin', () => ({
   })),
 }));
 
+vi.mock('@/database/models/connector', () => ({
+  ConnectorModel: vi.fn().mockImplementation(() => ({
+    queryByIdentifiers: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
+vi.mock('@/database/models/connectorTool', () => ({
+  ConnectorToolModel: vi.fn().mockImplementation(() => ({
+    queryByConnector: vi.fn().mockResolvedValue([]),
+    queryByConnectorIds: vi.fn().mockResolvedValue([]),
+    queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
     create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
@@ -220,7 +234,10 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
       slug: 'self-reflection',
       systemRole: '',
     });
-    mockGetBuiltinAgent.mockResolvedValueOnce({ id: 'agent-self-reflection', slug: 'self-reflection' });
+    mockGetBuiltinAgent.mockResolvedValueOnce({
+      id: 'agent-self-reflection',
+      slug: 'self-reflection',
+    });
 
     await service.execAgent({ prompt: 'reflect', slug: 'self-reflection' });
 
