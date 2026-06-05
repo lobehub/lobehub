@@ -18,7 +18,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
   const { t } = useTranslation('tool');
 
   const connector = useToolStore(connectorSelectors.connectorById(connectorId));
-  const { readTools, writeTools } = useToolStore(
+  const { readTools, createTools, updateTools, deleteTools } = useToolStore(
     connectorSelectors.connectorToolsGrouped(connectorId),
   );
   const syncing = useToolStore(connectorSelectors.isSyncing(connectorId));
@@ -51,7 +51,11 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
         ? t('connector.refresh', 'Refresh')
         : t('connector.sync', 'Sync');
 
-  const hasTools = readTools.length > 0 || writeTools.length > 0;
+  const hasTools =
+    readTools.length > 0 ||
+    createTools.length > 0 ||
+    updateTools.length > 0 ||
+    deleteTools.length > 0;
 
   const handleBatchPermission = async (toolIds: string[], permission: ConnectorToolPermission) => {
     await Promise.all(toolIds.map((id) => updateToolPermission(id, permission)));
@@ -110,8 +114,20 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
             onPermissionChange={updateToolPermission}
           />
           <ToolPermissionGroup
-            label={t('connector.writeTools', 'Write/delete tools')}
-            tools={writeTools}
+            label={t('connector.createTools', 'Create tools')}
+            tools={createTools}
+            onBatchPermission={handleBatchPermission}
+            onPermissionChange={updateToolPermission}
+          />
+          <ToolPermissionGroup
+            label={t('connector.updateTools', 'Update tools')}
+            tools={updateTools}
+            onBatchPermission={handleBatchPermission}
+            onPermissionChange={updateToolPermission}
+          />
+          <ToolPermissionGroup
+            label={t('connector.deleteTools', 'Delete tools')}
+            tools={deleteTools}
             onBatchPermission={handleBatchPermission}
             onPermissionChange={updateToolPermission}
           />

@@ -6,7 +6,6 @@ import { MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SkillSourceTag from '@/components/SkillSourceTag';
 import { createBuiltinSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
@@ -120,9 +119,7 @@ const BuiltinSkillItem = memo<BuiltinSkillItemProps>(
           </Flexbox>
           {!isInstalled && renderStatus()}
         </Flexbox>
-        {onSelect ? (
-          <SkillSourceTag source="builtin" />
-        ) : (
+        {!onSelect && (
           <Flexbox horizontal align="center" gap={8} onClick={stopPropagation}>
             {isInstalled && renderStatus()}
             {renderActions()}

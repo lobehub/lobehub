@@ -9,7 +9,6 @@ import { DownloadIcon, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SkillSourceTag from '@/components/SkillSourceTag';
 import { createBuiltinAgentSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
@@ -223,9 +222,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
           </Flexbox>
           {showDisconnected && renderStatus()}
         </Flexbox>
-        {onSelect ? (
-          <SkillSourceTag source={skill.source} />
-        ) : (
+        {!onSelect && (
           <Flexbox horizontal align="center" gap={8} onClick={stopPropagation}>
             {isBuiltin && isBuiltinInstalled && renderStatus()}
             {renderActions()}

@@ -23,21 +23,25 @@ const notConnectedConnectors = (s: ToolStore): ConnectorWithTools[] =>
   s.connectors.filter((c) => c.status !== 'connected');
 
 interface GroupedTools {
+  createTools: ConnectorTool[];
+  deleteTools: ConnectorTool[];
   readTools: ConnectorTool[];
-  writeTools: ConnectorTool[];
+  updateTools: ConnectorTool[];
 }
 
 const connectorToolsGrouped =
   (connectorId: string) =>
   (s: ToolStore): GroupedTools => {
     const connector = s.connectors.find((c) => c.id === connectorId);
-    if (!connector) return { readTools: [], writeTools: [] };
+    if (!connector) return { createTools: [], deleteTools: [], readTools: [], updateTools: [] };
 
     // Show ALL tools in the settings UI (including disabled ones so users can re-enable them).
     // Disabled tools are filtered out at runtime in buildConnectorManifests / queryByConnectorIds.
     return {
+      createTools: connector.tools.filter((t) => t.crudType === 'write'),
+      deleteTools: connector.tools.filter((t) => t.crudType === 'delete'),
       readTools: connector.tools.filter((t) => t.crudType === 'read'),
-      writeTools: connector.tools.filter((t) => t.crudType !== 'read'),
+      updateTools: connector.tools.filter((t) => t.crudType === 'update'),
     };
   };
 
@@ -54,9 +58,9 @@ export const connectorSelectors = {
   connectorToolsGrouped,
   connectorToolsGroupedByIdentifier:
     (identifier: string) =>
-    (s: ToolStore): { readTools: ConnectorTool[]; writeTools: ConnectorTool[] } => {
+    (s: ToolStore): GroupedTools => {
       const connector = connectorByIdentifier(identifier)(s);
-      if (!connector) return { readTools: [], writeTools: [] };
+      if (!connector) return { createTools: [], deleteTools: [], readTools: [], updateTools: [] };
       return connectorToolsGrouped(connector.id)(s);
     },
   enabledConnectors,

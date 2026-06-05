@@ -9,7 +9,6 @@ import { Loader2, MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'luci
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SkillSourceTag from '@/components/SkillSourceTag';
 import { createKlavisSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { useToolStore } from '@/store/tool';
 import { type KlavisServer } from '@/store/tool/slices/klavisStore';
@@ -315,9 +314,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
           </Flexbox>
           {!isConnected && renderStatus()}
         </Flexbox>
-        {onSelect ? (
-          <SkillSourceTag source="builtin" />
-        ) : (
+        {!onSelect && (
           <Flexbox horizontal align="center" gap={8}>
             {isConnected && renderStatus()}
             {renderAction()}
