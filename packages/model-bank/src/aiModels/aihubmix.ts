@@ -1,5 +1,10 @@
 import { gptImage2Schema } from '../const/imageParameters';
-import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import {
+  PRESET_VIDEO_ASPECT_RATIOS,
+  PRESET_VIDEO_RESOLUTIONS,
+  type VideoModelParamsSchema,
+} from '../standard-parameters/video';
+import type { AIChatModelCard, AIImageModelCard, AIVideoModelCard } from '../types/aiModel';
 
 const aihubmixChatModels: AIChatModelCard[] = [
   {
@@ -1005,6 +1010,37 @@ const aihubmixChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     description:
+      "Claude Opus 4.8 is Anthropic's most capable model, building on Opus 4.7 with improvements across reasoning, agentic coding, and tool use.",
+    displayName: 'Claude Opus 4.8',
+    enabled: true,
+    id: 'claude-opus-4-8',
+    maxOutput: 128_000,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 6.25, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-05-28',
+    settings: {
+      disabledParams: ['temperature', 'top_p'],
+      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'opus47Effort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      structuredOutput: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
       "Claude Opus 4.7 is Anthropic's most capable generally available model for complex reasoning and agentic coding.",
     displayName: 'Claude Opus 4.7',
     enabled: true,
@@ -1936,6 +1972,358 @@ const aihubmixImageModels: AIImageModelCard[] = [
   },
 ];
 
-export const allModels = [...aihubmixChatModels, ...aihubmixImageModels];
+const seedance20Params: VideoModelParamsSchema = {
+  aspectRatio: {
+    default: 'adaptive',
+    enum: ['adaptive', ...PRESET_VIDEO_ASPECT_RATIOS],
+  },
+  duration: { default: 5, max: 15, min: 4 },
+  endImageUrl: {
+    aspectRatio: { max: 2.5, min: 0.4 },
+    default: null,
+    height: { max: 6000, min: 300 },
+    maxFileSize: 30 * 1024 * 1024,
+    requiresImageUrl: true,
+    width: { max: 6000, min: 300 },
+  },
+  generateAudio: { default: true },
+  imageUrls: {
+    aspectRatio: { max: 2.5, min: 0.4 },
+    default: [],
+    height: { max: 6000, min: 300 },
+    maxCount: 9,
+    maxFileSize: 30 * 1024 * 1024,
+    width: { max: 6000, min: 300 },
+  },
+  prompt: { default: '' },
+  resolution: {
+    default: '720p',
+    enum: PRESET_VIDEO_RESOLUTIONS,
+  },
+  seed: { default: null },
+};
+
+const aihubmixVideoModels: AIVideoModelCard[] = [
+  // HappyHorse models
+  {
+    description:
+      'HappyHorse-1.0-I2V supports text-to-video generation, delivering highly faithful dynamic visuals. It can accurately understand textual semantics and produce high-quality videos that are smooth, natural, and rich in detail.',
+    displayName: 'HappyHorse-1.0-I2V',
+    enabled: true,
+    id: 'happyhorse-1.0-i2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 3 },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1.6, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-22',
+    type: 'video',
+  },
+  {
+    description:
+      'HappyHorse-1.0-R2V supports reference-based video generation, offering more stable subject and scene consistency. It supports up to 9 reference images, accurately preserves creative intent, and delivers enhanced expressive capability.',
+    displayName: 'HappyHorse-1.0-R2V',
+    enabled: true,
+    id: 'happyhorse-1.0-r2v',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+      },
+      duration: { default: 5, max: 10, min: 3 },
+      imageUrls: {
+        default: [],
+        maxCount: 9,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1.6, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-26',
+    type: 'video',
+  },
+  {
+    description:
+      'HappyHorse-1.0-T2V supports text-to-video generation, delivering highly faithful dynamic visuals. It can accurately understand textual semantics and produce high-quality videos that are smooth, natural, and rich in detail.',
+    displayName: 'HappyHorse-1.0-T2V',
+    enabled: true,
+    id: 'happyhorse-1.0-t2v',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+      },
+      duration: { default: 5, max: 15, min: 3 },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1.6, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-21',
+    type: 'video',
+  },
+  // Wan2.7 models
+  {
+    description:
+      'Wanxiang 2.7 Image-to-Video delivers a comprehensive upgrade in performance capabilities. Dramatic scenes feature delicate and natural emotional expression, while action sequences are intense and impactful. Combined with more dynamic and rhythmically driven shot transitions, it achieves stronger overall performance and storytelling.',
+    displayName: 'Wan2.7 I2V',
+    enabled: true,
+    id: 'wan2.7-i2v',
+    parameters: {
+      duration: { default: 5, max: 15, min: 2 },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrl: {
+        default: null,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-03',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.7 Reference-to-Video offers more stable references for characters, props, and scenes. It supports up to 5 mixed reference images or videos, along with audio tone referencing. Combined with upgraded core capabilities, it delivers stronger performance and expressive power.',
+    displayName: 'Wan2.7 R2V',
+    enabled: true,
+    id: 'wan2.7-r2v',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+      },
+      duration: { default: 5, max: 10, min: 2 },
+      imageUrls: {
+        default: [],
+        maxCount: 5,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-03',
+    type: 'video',
+  },
+  {
+    description:
+      'Wanxiang 2.7 Text-to-Video delivers a comprehensive upgrade in performance capabilities. Dramatic scenes feature delicate and natural emotional expression, while action sequences are intense and impactful. Enhanced with more dynamic and rhythmically driven shot transitions, it achieves stronger overall acting and storytelling performance.',
+    displayName: 'Wan2.7 T2V',
+    enabled: true,
+    id: 'wan2.7-t2v',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1', '4:3', '3:4'],
+      },
+      duration: { default: 5, max: 15, min: 2 },
+      prompt: { default: '' },
+      resolution: {
+        default: '1080P',
+        enum: ['720P', '1080P'],
+      },
+      seed: { default: null },
+      promptExtend: { default: false },
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 1, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-04-03',
+    type: 'video',
+  },
+  // Veo 3.1 models
+  {
+    description:
+      'Our latest video generation model, available to developers on the paid tier of the Gemini API.',
+    displayName: 'Veo 3.1 Generate Preview',
+    enabled: true,
+    id: 'veo-3.1-generate-preview',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16'],
+      },
+      duration: { default: 8, enum: [4, 6, 8] },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrls: {
+        default: [],
+        maxCount: 3,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720p',
+        enum: ['720p', '1080p', '4k'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.6, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-01-13',
+    type: 'video',
+  },
+  {
+    description:
+      'Our latest video generation model, available to developers on the paid tier of the Gemini API.',
+    displayName: 'Veo 3.1 Fast Generate Preview',
+    enabled: true,
+    id: 'veo-3.1-fast-generate-preview',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16'],
+      },
+      duration: { default: 8, enum: [4, 6, 8] },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrls: {
+        default: [],
+        maxCount: 3,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720p',
+        enum: ['720p', '1080p', '4k'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.35, strategy: 'fixed', unit: 'second' }],
+    },
+    releasedAt: '2026-01-13',
+    type: 'video',
+  },
+  {
+    description: 'Our lightweight video generation model, optimized for speed and cost-efficiency.',
+    displayName: 'Veo 3.1 Lite Generate Preview',
+    enabled: true,
+    id: 'veo-3.1-lite-generate-preview',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16'],
+      },
+      duration: { default: 8, enum: [4, 6, 8] },
+      endImageUrl: {
+        default: null,
+      },
+      imageUrls: {
+        default: [],
+        maxCount: 3,
+      },
+      prompt: { default: '' },
+      resolution: {
+        default: '720p',
+        enum: ['720p', '1080p'],
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [
+        {
+          lookup: {
+            pricingParams: ['resolution'],
+            prices: { '720p': 0.05, '1080p': 0.08 },
+          },
+          name: 'videoGeneration',
+          strategy: 'lookup',
+          unit: 'second',
+        },
+      ],
+    },
+    type: 'video',
+  },
+  // Seedance models
+  {
+    description:
+      'Seedance 2.0 by ByteDance is the most powerful video generation model, supporting multimodal reference video generation, video editing, video extension, text-to-video, and image-to-video with synchronized audio.',
+    displayName: 'Seedance 2.0',
+    enabled: true,
+    id: 'doubao-seedance-2-0-260128',
+    organization: 'ByteDance',
+    parameters: {
+      ...seedance20Params,
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 46, strategy: 'fixed', unit: 'millionTokens' }],
+    },
+    releasedAt: '2026-01-28',
+    type: 'video',
+  },
+  {
+    description:
+      'Seedance 2.0 Fast by ByteDance offers the same capabilities as Seedance 2.0 with faster generation speeds at a more competitive price.',
+    displayName: 'Seedance 2.0 Fast',
+    enabled: true,
+    id: 'doubao-seedance-2-0-fast-260128',
+    organization: 'ByteDance',
+    parameters: {
+      ...seedance20Params,
+      watermark: { default: false },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'videoGeneration', rate: 37, strategy: 'fixed', unit: 'millionTokens' }],
+    },
+    releasedAt: '2026-01-28',
+    type: 'video',
+  },
+];
+
+export const allModels = [...aihubmixChatModels, ...aihubmixImageModels, ...aihubmixVideoModels];
 
 export default allModels;
