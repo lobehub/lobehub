@@ -33,7 +33,7 @@ export class AgentService extends BaseService {
    * @returns The user's Agent list
    */
   async queryAgents(request: GetAgentsRequest): ServiceResult<AgentListResponse> {
-    this.log('info', '获取 Agent 列表', { request });
+    this.log('info', 'Getting Agent list', { request });
 
     const { keyword } = request;
 
@@ -58,14 +58,14 @@ export class AgentService extends BaseService {
 
       const [agentsList, totalResult] = await Promise.all([query, countQuery]);
 
-      this.log('info', `查询到 ${agentsList.length} 个 Agent`);
+      this.log('info', `Found ${agentsList.length} Agents`);
 
       return {
         agents: agentsList,
         total: totalResult[0]?.count ?? 0,
       };
     } catch (error) {
-      this.handleServiceError(error, '获取 Agent 列表');
+      this.handleServiceError(error, 'get Agent list');
     }
   }
 
@@ -75,7 +75,7 @@ export class AgentService extends BaseService {
    * @returns Created Agent info
    */
   async createAgent(request: CreateAgentRequest): ServiceResult<AgentDetailResponse> {
-    this.log('info', '创建智能体', { title: request.title });
+    this.log('info', 'Creating Agent', { title: request.title });
 
     try {
       return await this.db.transaction(async (tx) => {
@@ -99,12 +99,12 @@ export class AgentService extends BaseService {
 
         // Insert into database
         const [createdAgent] = await tx.insert(agents).values(newAgentData).returning();
-        this.log('info', 'Agent 创建成功', { id: createdAgent.id, slug: createdAgent.slug });
+        this.log('info', 'Agent created successfully', { id: createdAgent.id, slug: createdAgent.slug });
 
         return createdAgent;
       });
     } catch (error) {
-      this.handleServiceError(error, '创建 Agent');
+      this.handleServiceError(error, 'create Agent');
     }
   }
 
@@ -114,7 +114,7 @@ export class AgentService extends BaseService {
    * @returns Updated Agent info
    */
   async updateAgent(request: UpdateAgentRequest): ServiceResult<AgentDetailResponse> {
-    this.log('info', '更新智能体', { id: request.id, title: request.title });
+    this.log('info', 'Updating Agent', { id: request.id, title: request.title });
 
     try {
       // Permission validation
@@ -123,7 +123,7 @@ export class AgentService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权更新此 Agent');
+        throw this.createAuthorizationError(permissionResult.message || 'Unauthorized to update this Agent');
       }
 
       return await this.db.transaction(async (tx) => {
@@ -139,7 +139,7 @@ export class AgentService extends BaseService {
         });
 
         if (!existingAgent) {
-          throw this.createBusinessError(`Agent ID "${request.id}" 不存在`);
+          throw this.createBusinessError(`Agent ID "${request.id}" does not exist`);
         }
 
         // Only update fields actually provided in the request to avoid overwriting existing values with undefined
@@ -177,11 +177,11 @@ export class AgentService extends BaseService {
           .where(and(...whereConditions))
           .returning();
 
-        this.log('info', 'Agent 更新成功', { id: updatedAgent.id, slug: updatedAgent.slug });
+        this.log('info', 'Agent updated successfully', { id: updatedAgent.id, slug: updatedAgent.slug });
         return updatedAgent;
       });
     } catch (error) {
-      this.handleServiceError(error, '更新 Agent');
+      this.handleServiceError(error, 'update Agent');
     }
   }
 
@@ -190,7 +190,7 @@ export class AgentService extends BaseService {
    * @param request Delete request parameters
    */
   async deleteAgent(request: AgentDeleteRequest): ServiceResult<void> {
-    this.log('info', '删除智能体', {
+    this.log('info', 'Deleting Agent', {
       agentId: request.agentId,
       migrateSessionTo: request.migrateSessionTo,
     });
@@ -202,7 +202,7 @@ export class AgentService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权删除此 Agent');
+        throw this.createAuthorizationError(permissionResult.message || 'Unauthorized to delete this Agent');
       }
 
       // Check if the Agent to be deleted exists
@@ -211,7 +211,7 @@ export class AgentService extends BaseService {
       });
 
       if (!targetAgent) {
-        throw this.createBusinessError(`Agent ID ${request.agentId} 不存在`);
+        throw this.createBusinessError(`Agent ID ${request.agentId} does not exist`);
       }
 
       if (request.migrateSessionTo) {
@@ -221,13 +221,13 @@ export class AgentService extends BaseService {
         });
 
         if (!migrateTarget) {
-          throw this.createBusinessError(`迁移目标 Agent ID ${request.migrateSessionTo} 不存在`);
+          throw this.createBusinessError(`Migration target Agent ID ${request.migrateSessionTo} does not exist`);
         }
 
         // Migrate session associations to the target Agent
         await this.migrateAgentSessions(request.agentId, request.migrateSessionTo);
 
-        this.log('info', '会话迁移完成', {
+        this.log('info', 'Session migration completed', {
           from: request.agentId,
           to: request.migrateSessionTo,
         });
@@ -242,9 +242,9 @@ export class AgentService extends BaseService {
         await agentModel.delete(request.agentId);
       }
 
-      this.log('info', 'Agent 删除成功', { agentId: request.agentId });
+      this.log('info', 'Agent deleted successfully', { agentId: request.agentId });
     } catch (error) {
-      this.handleServiceError(error, '删除 Agent');
+      this.handleServiceError(error, 'delete Agent');
     }
   }
 
@@ -254,7 +254,7 @@ export class AgentService extends BaseService {
    * @returns Agent details
    */
   async getAgentById(agentId: string): ServiceResult<AgentDetailResponse | null> {
-    this.log('info', '根据 ID 获取 Agent 详情', { agentId });
+    this.log('info', 'Getting Agent detail by ID', { agentId });
 
     try {
       // Permission validation
@@ -263,11 +263,11 @@ export class AgentService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问此 Agent');
+        throw this.createAuthorizationError(permissionResult.message || 'Unauthorized to access this Agent');
       }
 
       if (!this.userId) {
-        throw this.createAuthError('未登录，无法获取 Agent 详情');
+        throw this.createAuthError('Not logged in, cannot get Agent detail');
       }
 
       // Reuse AgentModel methods to get the full Agent configuration
@@ -275,13 +275,13 @@ export class AgentService extends BaseService {
       const agent = await agentModel.getAgentConfigById(agentId);
 
       if (!agent || !agent.id) {
-        this.log('warn', 'Agent 不存在', { agentId });
+        this.log('warn', 'Agent does not exist', { agentId });
         return null;
       }
 
       return agent as AgentDetailResponse;
     } catch (error) {
-      this.handleServiceError(error, '获取 Agent 详情');
+      this.handleServiceError(error, 'get Agent detail');
     }
   }
 
@@ -292,7 +292,7 @@ export class AgentService extends BaseService {
    * @private
    */
   private async migrateAgentSessions(fromAgentId: string, toAgentId: string): Promise<void> {
-    this.log('info', '开始迁移会话', { fromAgentId, toAgentId });
+    this.log('info', 'Starting session migration', { fromAgentId, toAgentId });
 
     try {
       await this.db.transaction(async (tx) => {
@@ -346,12 +346,12 @@ export class AgentService extends BaseService {
           );
         }
 
-        this.log('info', '迁移会话完成', { count: newSessionIds.length });
+        this.log('info', 'Session migration completed', { count: newSessionIds.length });
       });
 
-      this.log('info', '会话迁移成功', { fromAgentId, toAgentId });
+      this.log('info', 'Session migration succeeded', { fromAgentId, toAgentId });
     } catch (error) {
-      this.handleServiceError(error, '会话迁移');
+      this.handleServiceError(error, 'migrate sessions');
     }
   }
 }

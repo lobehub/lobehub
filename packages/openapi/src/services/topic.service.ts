@@ -30,7 +30,7 @@ export class TopicService extends BaseService {
       const permissionResult = await this.resolveOperationPermission('TOPIC_READ');
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '没有权限访问话题列表');
+        throw this.createAuthorizationError(permissionResult.message || 'Unauthorized to access topic list');
       }
 
       // Build query conditions
@@ -112,7 +112,7 @@ export class TopicService extends BaseService {
         total: countResult.count,
       };
     } catch (error) {
-      this.handleServiceError(error, '获取话题列表');
+      this.handleServiceError(error, 'get topic list');
     }
   }
 
@@ -124,7 +124,7 @@ export class TopicService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '没有权限访问该话题');
+        throw this.createAuthorizationError(permissionResult.message || 'Unauthorized to access this topic');
       }
 
       // Build query conditions
@@ -149,7 +149,7 @@ export class TopicService extends BaseService {
         .limit(1);
 
       if (!result) {
-        throw this.createNotFoundError('话题不存在');
+        throw this.createNotFoundError('Topic does not exist');
       }
 
       return {
@@ -158,7 +158,7 @@ export class TopicService extends BaseService {
         user: result.user,
       };
     } catch (error) {
-      return this.handleServiceError(error, '获取话题');
+      return this.handleServiceError(error, 'get topic');
     }
   }
 
@@ -190,7 +190,7 @@ export class TopicService extends BaseService {
       );
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权创建话题');
+        throw this.createAuthorizationError(permissionResult.message || 'Unauthorized to create topic');
       }
 
       const [newTopic] = await this.db
@@ -209,7 +209,7 @@ export class TopicService extends BaseService {
 
       return this.getTopicById(newTopic.id);
     } catch (error) {
-      this.handleServiceError(error, '创建话题');
+      this.handleServiceError(error, 'create topic');
     }
   }
 
@@ -227,7 +227,7 @@ export class TopicService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '没有权限更新该话题');
+        throw this.createAuthorizationError(permissionResult.message || 'Unauthorized to update this topic');
       }
 
       // Build query conditions to check if topic exists
@@ -245,12 +245,12 @@ export class TopicService extends BaseService {
         .returning();
 
       if (!updatedTopic) {
-        throw this.createNotFoundError('话题不存在');
+        throw this.createNotFoundError('Topic does not exist');
       }
 
       return this.getTopicById(updatedTopic.id);
     } catch (error) {
-      return this.handleServiceError(error, '更新话题');
+      return this.handleServiceError(error, 'update topic');
     }
   }
 
@@ -266,7 +266,7 @@ export class TopicService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '没有权限删除该话题');
+        throw this.createAuthorizationError(permissionResult.message || 'Unauthorized to delete this topic');
       }
 
       // Build query conditions to check if topic exists
@@ -283,12 +283,12 @@ export class TopicService extends BaseService {
         .returning();
 
       if (!existingTopic) {
-        throw this.createNotFoundError('话题不存在');
+        throw this.createNotFoundError('Topic does not exist');
       }
 
       this.log('info', 'Topic deleted successfully', { topicId });
     } catch (error) {
-      return this.handleServiceError(error, '删除话题');
+      return this.handleServiceError(error, 'delete topic');
     }
   }
 }
