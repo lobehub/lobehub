@@ -23,29 +23,22 @@ const AuthContainer: FC<PropsWithChildren> = ({ children }) => {
         height={'100%'}
         width={'100%'}
       >
-        <Flexbox
-          horizontal
-          align={'center'}
-          gap={8}
-          justify={'space-between'}
-          padding={16}
-          width={'100%'}
-        >
+        <Flexbox horizontal align={'center'} padding={16} width={'100%'}>
           <Link aria-label={'LobeHub'} href={'/'} style={{ display: 'inline-flex' }}>
             <ProductLogo size={40} />
           </Link>
+        </Flexbox>
+        <Center height={'100%'} padding={16} width={'100%'}>
+          {children}
+        </Center>
+        <Flexbox horizontal align={'center'} justify={'space-between'} padding={16} width={'100%'}>
           <Flexbox horizontal align={'center'}>
             <AuthLangButton size={18} />
             <Divider className={styles.divider} orientation={'vertical'} />
             <AuthThemeButton size={18} />
           </Flexbox>
-        </Flexbox>
-        <Center height={'100%'} padding={16} width={'100%'}>
-          {children}
-        </Center>
-        <Center padding={24}>
           <AuthFooterLinks />
-        </Center>
+        </Flexbox>
       </Flexbox>
     </Flexbox>
   );
