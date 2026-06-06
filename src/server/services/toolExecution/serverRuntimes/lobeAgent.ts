@@ -181,13 +181,25 @@ class LobeAgentExecutionRuntime {
       return buildError('goal is required.', 'INVALID_ARGUMENTS');
     }
 
+    // Prefer explicit params; otherwise derive the mounted rubric / ad-hoc
+    // criteria from the agent's agencyConfig (the real-agent path — the model
+    // calls this with just a `goal` and doesn't know rubric ids).
+    let rubricId = params.rubricId;
+    let criteriaIds = params.criteriaIds;
+    if (!rubricId && !criteriaIds?.length && this.agentId) {
+      const { AgentModel } = await import('@/database/models/agent');
+      const agent = await new AgentModel(this.db, this.userId).getAgentConfigById(this.agentId);
+      rubricId = agent?.agencyConfig?.verifyRubricId ?? undefined;
+      criteriaIds = agent?.agencyConfig?.verifyCriteriaIds ?? undefined;
+    }
+
     const { VerifyPlanGeneratorService } = await import('@/server/services/verify');
     const planGenerator = new VerifyPlanGeneratorService(this.db, this.userId);
     const items = await planGenerator.generateDraftPlan({
       goal: params.goal,
       operationId: this.operationId,
-      verifyCriteriaIds: params.criteriaIds,
-      verifyRubricId: params.rubricId ?? null,
+      verifyCriteriaIds: criteriaIds,
+      verifyRubricId: rubricId ?? null,
     });
 
     return {
