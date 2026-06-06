@@ -221,6 +221,7 @@ export function buildCorpusReport(perResult: ToolResultMetrics[], ops: number): 
   });
   for (const r of perResult) {
     const b = buckets.find((x) => r.tokens < x.upper) ?? buckets.at(-1);
+    if (!b) continue;
     b.count += 1;
     b.tokens += r.tokens;
   }
