@@ -1147,7 +1147,7 @@ export const executeHeterogeneousAgent = async (
    * `toolState.payloads` reset that happens on every new step.
    *
    * Required for the **toolless middle step** case (): when a step
-   * produces only text (e.g. Monitor stdout drives Claude to reply "等一下…"
+   * produces only text (e.g. Monitor stdout drives Claude to reply "hold on…"
    * without invoking a tool), `toolState.payloads` is empty at the next step
    * boundary. Without this tracker, `stepParentId` would fall back to
    * `currentAssistantMessageId` (= the toolless assistant), forming an
@@ -1767,7 +1767,7 @@ export const executeHeterogeneousAgent = async (
       // — otherwise the handler reads `assistant.tools[]` while a parallel
       // `persistToolBatch` is still mid-flight and `replaceMessages` clobbers
       // the in-memory cumulative tools[] with a shorter snapshot. That's the
-      // "7 → 6 次技能调用" rollback users see on parallel CC tool batches.
+      // "7 → 6 tool-count" rollback users see on parallel CC tool batches.
       //
       // Other forwards (text / reasoning / tools_calling dispatches) stay
       // synchronous so live streaming UX isn't gated on DB round-trips.
