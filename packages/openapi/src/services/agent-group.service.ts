@@ -36,7 +36,7 @@ export class AgentGroupService extends BaseService {
       // Permission check
       const permissionResult = await this.resolveOperationPermission('AGENT_READ');
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问助理分类列表');
+        throw this.createAuthorizationError(permissionResult.message || 'no permission to access agent group list');
       }
 
       // Build query conditions
@@ -55,7 +55,7 @@ export class AgentGroupService extends BaseService {
 
       return agentGroupList;
     } catch (error) {
-      this.handleServiceError(error, '获取助理分类列表');
+      this.handleServiceError(error, 'get agent group list');
     }
   }
 
@@ -71,7 +71,7 @@ export class AgentGroupService extends BaseService {
       // Permission check
       const permissionResult = await this.resolveOperationPermission('AGENT_READ');
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问此助理分类');
+        throw this.createAuthorizationError(permissionResult.message || 'no permission to access this agent group');
       }
 
       // Build query conditions
@@ -92,7 +92,7 @@ export class AgentGroupService extends BaseService {
 
       return agentGroup;
     } catch (error) {
-      this.handleServiceError(error, '获取助理分类详情');
+      this.handleServiceError(error, 'get agent group detail');
     }
   }
 
@@ -108,7 +108,7 @@ export class AgentGroupService extends BaseService {
       // Permission check
       const permissionResult = await this.resolveOperationPermission('AGENT_CREATE');
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权创建助理分类');
+        throw this.createAuthorizationError(permissionResult.message || 'no permission to create agent group');
       }
 
       const [result] = await this.db
@@ -121,13 +121,13 @@ export class AgentGroupService extends BaseService {
         .returning();
 
       if (!result) {
-        throw this.createBusinessError('助理分类创建失败');
+        throw this.createBusinessError('failed to create agent group');
       }
 
       this.log('info', 'Agent group created successfully', { id: result.id, name: request.name });
       return result.id;
     } catch (error) {
-      this.handleServiceError(error, '创建助理分类');
+      this.handleServiceError(error, 'create agent group');
     }
   }
 
@@ -143,7 +143,7 @@ export class AgentGroupService extends BaseService {
       // Permission check
       const permissionResult = await this.resolveOperationPermission('AGENT_UPDATE');
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权更新助理分类');
+        throw this.createAuthorizationError(permissionResult.message || 'no permission to update agent group');
       }
 
       const { id, ...updateData } = request;
@@ -151,7 +151,7 @@ export class AgentGroupService extends BaseService {
       // Check if agent group exists
       const existingGroup = await this.sessionGroupModel.findById(id);
       if (!existingGroup) {
-        throw this.createBusinessError(`助理分类 ID "${id}" 不存在`);
+        throw this.createBusinessError(`agent group ID "${id}" not found`);
       }
 
       await this.db
@@ -161,7 +161,7 @@ export class AgentGroupService extends BaseService {
 
       this.log('info', 'Agent group updated successfully', { id });
     } catch (error) {
-      this.handleServiceError(error, '更新助理分类');
+      this.handleServiceError(error, 'update agent group');
     }
   }
 
@@ -177,13 +177,13 @@ export class AgentGroupService extends BaseService {
       // Permission check
       const permissionResult = await this.resolveOperationPermission('AGENT_DELETE');
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权删除助理分类');
+        throw this.createAuthorizationError(permissionResult.message || 'no permission to delete agent group');
       }
 
       // Check if agent group exists
       const existingGroup = await this.sessionGroupModel.findById(request.id);
       if (!existingGroup) {
-        throw this.createBusinessError(`助理分类 ID "${request.id}" 不存在`);
+        throw this.createBusinessError(`agent group ID "${request.id}" not found`);
       }
 
       // Build query conditions
@@ -197,7 +197,7 @@ export class AgentGroupService extends BaseService {
 
       this.log('info', 'Agent group deleted successfully', { id: request.id });
     } catch (error) {
-      this.handleServiceError(error, '删除助理分类');
+      this.handleServiceError(error, 'delete agent group');
     }
   }
 }

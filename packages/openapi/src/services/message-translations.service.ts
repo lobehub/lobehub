@@ -28,7 +28,7 @@ export class MessageTranslateService extends BaseService {
   async getTranslateByMessageId(messageId: string): ServiceResult<MessageTranslateResponse | null> {
     // Permission check is already done in the route layer (MESSAGE_READ + TRANSLATION_READ)
 
-    this.log('info', '根据消息ID获取翻译信息', { messageId, userId: this.userId });
+    this.log('info', 'get translation by message ID', { messageId, userId: this.userId });
 
     try {
       const result = await this.db.query.messageTranslates.findFirst({
@@ -36,7 +36,7 @@ export class MessageTranslateService extends BaseService {
       });
 
       if (!result) {
-        this.log('info', '未找到翻译信息', { messageId });
+        this.log('info', 'translation not found', { messageId });
         return null;
       }
 
@@ -49,10 +49,10 @@ export class MessageTranslateService extends BaseService {
         userId: result.userId,
       };
 
-      this.log('info', '获取翻译信息完成', { messageId });
+      this.log('info', 'translation retrieved successfully', { messageId });
       return response;
     } catch (error) {
-      this.handleServiceError(error, '根据消息ID获取翻译信息');
+      this.handleServiceError(error, 'get translation by message ID');
     }
   }
 
@@ -66,7 +66,7 @@ export class MessageTranslateService extends BaseService {
   ): ServiceResult<Partial<MessageTranslateItem>> {
     // Permission check is already done in the route layer (MESSAGE_READ + TRANSLATION_CREATE)
 
-    this.log('info', '开始翻译消息', {
+    this.log('info', 'start translating message', {
       ...translateData,
       userId: this.userId,
     });
@@ -78,10 +78,10 @@ export class MessageTranslateService extends BaseService {
       });
 
       if (!messageInfo) {
-        throw this.createCommonError('未找到要翻译的消息');
+        throw this.createCommonError('message to translate not found');
       }
 
-      this.log('info', '原始消息内容', { originalMessage: messageInfo.content });
+      this.log('info', 'original message content', { originalMessage: messageInfo.content });
 
       // Use ChatService for translation, passing sessionId to use the correct model configuration
       const chatService = new ChatService(this.db, this.userId);
@@ -99,7 +99,7 @@ export class MessageTranslateService extends BaseService {
         content: translatedContent,
       });
     } catch (error) {
-      this.handleServiceError(error, '翻译消息');
+      this.handleServiceError(error, 'translate message');
     }
   }
 
@@ -119,7 +119,7 @@ export class MessageTranslateService extends BaseService {
         where: eq(messages.id, data.messageId),
       });
       if (!messageInfo) {
-        throw this.createCommonError('未找到要更新翻译信息的消息');
+        throw this.createCommonError('message to update translation for not found');
       }
 
       // Update translation info and content
@@ -141,7 +141,7 @@ export class MessageTranslateService extends BaseService {
           target: messageTranslates.id,
         });
 
-      this.log('info', '更新翻译信息完成', { messageId: data.messageId });
+      this.log('info', 'translation info updated successfully', { messageId: data.messageId });
 
       return {
         content: data.content,
@@ -151,7 +151,7 @@ export class MessageTranslateService extends BaseService {
         userId: this.userId,
       };
     } catch (error) {
-      this.handleServiceError(error, '更新翻译信息');
+      this.handleServiceError(error, 'update translation info');
     }
   }
 
@@ -172,14 +172,14 @@ export class MessageTranslateService extends BaseService {
       });
 
       if (!originalTranslation) {
-        throw this.createNotFoundError('翻译消息不存在');
+        throw this.createNotFoundError('translation not found');
       }
 
       await this.db.delete(messageTranslates).where(eq(messageTranslates.id, messageId));
 
       return { deleted: true, messageId };
     } catch (error) {
-      this.handleServiceError(error, '删除翻译信息');
+      this.handleServiceError(error, 'delete translation info');
     }
   }
 }

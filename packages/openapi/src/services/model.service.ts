@@ -28,7 +28,7 @@ export class ModelService extends BaseService {
    * @param request Query request parameters
    */
   async getModels(request: ModelsListQuery = {}): ServiceResult<GetModelsResponse> {
-    this.log('info', '获取模型列表', {
+    this.log('info', 'get model list', {
       ...request,
       userId: this.userId,
     });
@@ -38,7 +38,7 @@ export class ModelService extends BaseService {
       const permissionResult = await this.resolveOperationPermission('AI_MODEL_READ');
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问模型列表');
+        throw this.createAuthorizationError(permissionResult.message || 'no permission to access model list');
       }
 
       // Build query conditions
@@ -96,7 +96,7 @@ export class ModelService extends BaseService {
         total: totalResult[0]?.count ?? 0,
       };
     } catch (error) {
-      this.handleServiceError(error, '获取模型列表失败');
+      this.handleServiceError(error, 'get model list');
     }
   }
 
@@ -104,7 +104,7 @@ export class ModelService extends BaseService {
    * Get model details
    */
   async getModelDetail(providerId: string, modelId: string): ServiceResult<ModelDetailResponse> {
-    this.log('info', '获取模型详情', { modelId, providerId, userId: this.userId });
+    this.log('info', 'get model detail', { modelId, providerId, userId: this.userId });
 
     try {
       const permissionResult = await this.resolveOperationPermission('AI_MODEL_READ', {
@@ -112,7 +112,7 @@ export class ModelService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问模型详情');
+        throw this.createAuthorizationError(permissionResult.message || 'no permission to access model detail');
       }
 
       const conditions = [eq(aiModels.providerId, providerId), eq(aiModels.id, modelId)];
@@ -124,12 +124,12 @@ export class ModelService extends BaseService {
       const model = await this.db.query.aiModels.findFirst({ where: and(...conditions) });
 
       if (!model) {
-        throw this.createNotFoundError(`模型 ${providerId}/${modelId} 不存在`);
+        throw this.createNotFoundError(`model ${providerId}/${modelId} not found`);
       }
 
       return model;
     } catch (error) {
-      this.handleServiceError(error, '获取模型详情');
+      this.handleServiceError(error, 'get model detail');
     }
   }
 
@@ -137,16 +137,16 @@ export class ModelService extends BaseService {
    * Create a model
    */
   async createModel(payload: CreateModelRequest): ServiceResult<ModelDetailResponse> {
-    this.log('info', '创建模型', { payload, userId: this.userId });
+    this.log('info', 'create model', { payload, userId: this.userId });
 
     try {
       const permissionResult = await this.resolveOperationPermission('AI_MODEL_CREATE');
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权创建模型');
+        throw this.createAuthorizationError(permissionResult.message || 'no permission to create model');
       }
 
       if (!this.userId) {
-        throw this.createAuthError('用户未认证');
+        throw this.createAuthError('user not authenticated');
       }
 
       return await this.db.transaction(async (tx) => {
@@ -159,7 +159,7 @@ export class ModelService extends BaseService {
         });
 
         if (existingModel) {
-          throw this.createBusinessError(`模型 ${payload.providerId}/${payload.id} 已存在`);
+          throw this.createBusinessError(`model ${payload.providerId}/${payload.id} already exists`);
         }
 
         const [created] = await tx
@@ -187,7 +187,7 @@ export class ModelService extends BaseService {
         return created;
       });
     } catch (error) {
-      this.handleServiceError(error, '创建模型');
+      this.handleServiceError(error, 'create model');
     }
   }
 
@@ -199,7 +199,7 @@ export class ModelService extends BaseService {
     modelId: string,
     payload: UpdateModelRequest,
   ): ServiceResult<ModelDetailResponse> {
-    this.log('info', '更新模型', { modelId, payload, providerId, userId: this.userId });
+    this.log('info', 'update model', { modelId, payload, providerId, userId: this.userId });
 
     try {
       const permissionResult = await this.resolveOperationPermission('AI_MODEL_UPDATE', {
@@ -207,7 +207,7 @@ export class ModelService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权更新模型');
+        throw this.createAuthorizationError(permissionResult.message || 'no permission to update model');
       }
 
       const conditions = [eq(aiModels.providerId, providerId), eq(aiModels.id, modelId)];
@@ -219,7 +219,7 @@ export class ModelService extends BaseService {
         const existingModel = await tx.query.aiModels.findFirst({ where: and(...conditions) });
 
         if (!existingModel) {
-          throw this.createNotFoundError(`模型 ${providerId}/${modelId} 不存在`);
+          throw this.createNotFoundError(`model ${providerId}/${modelId} not found`);
         }
 
         const updateFields = {
@@ -242,7 +242,7 @@ export class ModelService extends BaseService {
         } as Record<string, unknown>;
 
         if (Object.keys(updateFields).length === 1) {
-          throw this.createBusinessError('未提供需要更新的字段');
+          throw this.createBusinessError('no fields provided for update');
         }
 
         const [updated] = await tx
@@ -252,13 +252,13 @@ export class ModelService extends BaseService {
           .returning();
 
         if (!updated) {
-          throw this.createBusinessError('更新模型失败');
+          throw this.createBusinessError('failed to update model');
         }
 
         return updated;
       });
     } catch (error) {
-      this.handleServiceError(error, '更新模型');
+      this.handleServiceError(error, 'update model');
     }
   }
 }

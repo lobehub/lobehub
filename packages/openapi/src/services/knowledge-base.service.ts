@@ -41,7 +41,7 @@ export class KnowledgeBaseService extends BaseService {
       const permissionResult = await this.resolveOperationPermission('KNOWLEDGE_BASE_READ');
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问知识库列表');
+        throw this.createAuthorizationError(permissionResult.message || 'no permission to access knowledge base list');
       }
 
       this.log('info', 'Getting knowledge base list', request);
@@ -95,7 +95,7 @@ export class KnowledgeBaseService extends BaseService {
         total,
       };
     } catch (error) {
-      this.handleServiceError(error, '获取知识库列表');
+      this.handleServiceError(error, 'get knowledge base list');
     }
   }
 
@@ -108,7 +108,7 @@ export class KnowledgeBaseService extends BaseService {
       const permissionResult = await this.resolveOperationPermission('KNOWLEDGE_BASE_READ');
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权访问此知识库');
+        throw this.createAuthorizationError(permissionResult.message || 'no permission to access this knowledge base');
       }
 
       this.log('info', 'Getting knowledge base detail', { id });
@@ -126,7 +126,7 @@ export class KnowledgeBaseService extends BaseService {
         knowledgeBase,
       };
     } catch (error) {
-      this.handleServiceError(error, '获取知识库详情');
+      this.handleServiceError(error, 'get knowledge base detail');
     }
   }
 
@@ -141,7 +141,7 @@ export class KnowledgeBaseService extends BaseService {
       const permissionResult = await this.resolveOperationPermission('KNOWLEDGE_BASE_CREATE');
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权创建知识库');
+        throw this.createAuthorizationError(permissionResult.message || 'no permission to create knowledge base');
       }
 
       this.log('info', 'Creating knowledge base', {
@@ -167,7 +167,7 @@ export class KnowledgeBaseService extends BaseService {
         knowledgeBase,
       };
     } catch (error) {
-      this.handleServiceError(error, '创建知识库');
+      this.handleServiceError(error, 'create knowledge base');
     }
   }
 
@@ -183,7 +183,7 @@ export class KnowledgeBaseService extends BaseService {
       const permissionResult = await this.resolveOperationPermission('KNOWLEDGE_BASE_UPDATE');
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权更新此知识库');
+        throw this.createAuthorizationError(permissionResult.message || 'no permission to update this knowledge base');
       }
 
       this.log('info', 'Updating knowledge base', { id, request });
@@ -211,7 +211,7 @@ export class KnowledgeBaseService extends BaseService {
         knowledgeBase: updatedKb as KnowledgeBaseItem,
       };
     } catch (error) {
-      this.handleServiceError(error, '更新知识库');
+      this.handleServiceError(error, 'update knowledge base');
     }
   }
 
@@ -224,7 +224,7 @@ export class KnowledgeBaseService extends BaseService {
       const permissionResult = await this.resolveOperationPermission('KNOWLEDGE_BASE_DELETE');
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '无权删除此知识库');
+        throw this.createAuthorizationError(permissionResult.message || 'no permission to delete this knowledge base');
       }
 
       this.log('info', 'Deleting knowledge base', { id });
@@ -258,7 +258,7 @@ export class KnowledgeBaseService extends BaseService {
         success: true,
       };
     } catch (error) {
-      this.handleServiceError(error, '删除知识库');
+      this.handleServiceError(error, 'delete knowledge base');
     }
   }
 }

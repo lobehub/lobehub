@@ -65,7 +65,7 @@ export class PermissionService extends BaseService {
         total: totalResult[0]?.count || 0,
       };
     } catch (error) {
-      this.handleServiceError(error, '获取权限列表');
+      this.handleServiceError(error, 'get permission list');
     }
   }
 
@@ -80,7 +80,7 @@ export class PermissionService extends BaseService {
 
       return permission || null;
     } catch (error) {
-      this.handleServiceError(error, '获取权限详情');
+      this.handleServiceError(error, 'get permission detail');
     }
   }
 
@@ -111,7 +111,7 @@ export class PermissionService extends BaseService {
 
       return created;
     } catch (error) {
-      this.handleServiceError(error, '创建权限');
+      this.handleServiceError(error, 'create permission');
     }
   }
 
@@ -162,7 +162,7 @@ export class PermissionService extends BaseService {
 
       return updated;
     } catch (error) {
-      this.handleServiceError(error, '更新权限');
+      this.handleServiceError(error, 'update permission');
     }
   }
 
@@ -199,7 +199,7 @@ export class PermissionService extends BaseService {
 
       return deleted;
     } catch (error) {
-      this.handleServiceError(error, '删除权限');
+      this.handleServiceError(error, 'delete permission');
     }
   }
 }
