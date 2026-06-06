@@ -181,6 +181,10 @@ const currentToolUI = (
 const toolMessageId = (s: ChatStoreState) => currentToolUI(s)?.messageId;
 const toolUIIdentifier = (s: ChatStoreState) => currentToolUI(s)?.identifier;
 const toolUIParams = (s: ChatStoreState) => currentToolUI(s)?.params;
+
+const currentVerifyResult = (s: ChatStoreState) => getViewData(s, PortalViewType.VerifyResult);
+const verifyResultOperationId = (s: ChatStoreState) => currentVerifyResult(s)?.operationId;
+const verifyResultCheckItemId = (s: ChatStoreState) => currentVerifyResult(s)?.checkItemId;
 const isPluginUIOpen = (id: string) => (s: ChatStoreState) =>
   toolMessageId(s) === id && showPortal(s);
 
@@ -240,6 +244,10 @@ export const chatPortalSelectors = {
   toolUIIdentifier,
   toolUIParams,
   isPluginUIOpen,
+
+  // Verify result detail data
+  verifyResultOperationId,
+  verifyResultCheckItemId,
 };
 
 export * from './selectors/thread';

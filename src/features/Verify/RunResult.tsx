@@ -66,34 +66,34 @@ interface BadgeMeta {
   key: 'pending' | 'failed' | 'repairing' | 'passed';
 }
 
-const phaseToArtifact: Record<DockPhase, { badge: BadgeMeta; subKey: string } | null> = {
+const phaseToResult: Record<DockPhase, { badge: BadgeMeta; subKey: string } | null> = {
   draft: {
     badge: { color: 'default', icon: Shield, key: 'pending' },
-    subKey: 'artifact.pending.sub',
+    subKey: 'result.pending.sub',
   },
   failed: {
     badge: { color: 'error', icon: X, key: 'failed' },
-    subKey: 'artifact.failed.sub',
+    subKey: 'result.failed.sub',
   },
   idle: {
     badge: { color: 'default', icon: Shield, key: 'pending' },
-    subKey: 'artifact.pending.sub',
+    subKey: 'result.pending.sub',
   },
   passed: {
     badge: { color: 'success', icon: Check, key: 'passed' },
-    subKey: 'artifact.passed.sub',
+    subKey: 'result.passed.sub',
   },
   repairing: {
     badge: { color: 'warning', icon: RefreshCw, key: 'repairing' },
-    subKey: 'artifact.repairing.sub',
+    subKey: 'result.repairing.sub',
   },
   verifying: {
     badge: { color: 'default', icon: Shield, key: 'pending' },
-    subKey: 'artifact.pending.sub',
+    subKey: 'result.pending.sub',
   },
 };
 
-interface RunArtifactProps {
+interface RunResultProps {
   /** Render only the header (kicker + title + status), no card chrome — for the merged verify card. */
   embedded?: boolean;
   operationId: string;
@@ -104,16 +104,16 @@ interface RunArtifactProps {
 /**
  * Inline snapshot card for one Agent Run's verify outcome. Rendered in the chat
  * thread below the assistant message group. Each round (operation) keeps its own
- * artifact, so failed snapshots are never overwritten by later success.
+ * result snapshot, so failures are never overwritten by later success.
  */
-const RunArtifact = memo<RunArtifactProps>(({ operationId, round = 1, embedded }) => {
+const RunResult = memo<RunResultProps>(({ operationId, round = 1, embedded }) => {
   const { styles, cx, theme } = useStyles();
   const { t } = useTranslation('verify');
   const { data: state } = useVerifyState(operationId);
   const { data: results } = useVerifyResults(operationId);
 
   const phase = phaseFromStatus(state?.verifyStatus);
-  const meta = phaseToArtifact[phase];
+  const meta = phaseToResult[phase];
   if (!state?.verifyPlan?.length || !meta) return null;
 
   const counts = countResults(results ?? []);
@@ -129,7 +129,7 @@ const RunArtifact = memo<RunArtifactProps>(({ operationId, round = 1, embedded }
       <Flexbox>
         <Flexbox horizontal align="center" gap={7}>
           <Icon icon={ShieldCheck} size={16} />
-          <span className={styles.title}>{t('artifact.title', { round })}</span>
+          <span className={styles.title}>{t('result.title', { round })}</span>
         </Flexbox>
         <div className={styles.sub}>
           {t(meta.subKey as any, { passed: counts.passed, total: counts.total } as any)}
@@ -176,12 +176,12 @@ const RunArtifact = memo<RunArtifactProps>(({ operationId, round = 1, embedded }
       </div>
       <div className={styles.foot}>
         <Icon icon={Info} size={14} />
-        <span>{t('artifact.foot')}</span>
+        <span>{t('result.foot')}</span>
       </div>
     </div>
   );
 });
 
-RunArtifact.displayName = 'RunArtifact';
+RunResult.displayName = 'RunResult';
 
-export default RunArtifact;
+export default RunResult;

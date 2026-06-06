@@ -7,7 +7,7 @@ import { Info } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { CheckerDock, RunArtifact } from '@/features/Verify';
+import { CheckerDock, RunResult } from '@/features/Verify';
 import { useVerifyState } from '@/features/Verify/hooks';
 import { phaseCardBackground, phaseFromStatus } from '@/features/Verify/utils';
 
@@ -42,7 +42,7 @@ interface VerifyMessageProps {
 /**
  * Renders a `role='verify'` message — the Agent Run delivery-checker card. The
  * run's `operationId` is carried on `metadata.verifyOperationId`. Renders as a
- * single card: the Run Artifact header (round + status) on top, then the checker
+ * single card: the run result header (round + status) on top, then the checker
  * results + actions, then the snapshot note. Unlike assistant/user messages this
  * is a standalone card group (no avatar bubble).
  */
@@ -61,11 +61,11 @@ const VerifyMessage = memo<VerifyMessageProps>(({ id }) => {
   return (
     <Flexbox paddingBlock={8}>
       <div className={styles.card} style={{ background: phaseCardBackground(phase, theme) }}>
-        <RunArtifact embedded operationId={operationId} round={round} />
+        <RunResult embedded operationId={operationId} round={round} />
         <CheckerDock embedded operationId={operationId} />
         <div className={styles.foot}>
           <Icon icon={Info} size={14} />
-          <span>{t('artifact.foot')}</span>
+          <span>{t('result.foot')}</span>
         </div>
       </div>
     </Flexbox>
