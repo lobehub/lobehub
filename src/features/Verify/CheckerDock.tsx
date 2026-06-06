@@ -17,6 +17,7 @@ import {
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import RingLoadingIcon from '@/components/RingLoading';
 import type { VerifyCheckItem, VerifyCheckResultItem } from '@/database/schemas/verify';
 import { verifyService } from '@/services/verify';
 
@@ -194,7 +195,19 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
     const evidence = result?.toulmin?.reasoning || result?.suggestion;
     return (
       <div className={styles.checkRow} key={item.id}>
-        <Icon color={colorOf(sIcon.color)} icon={sIcon.icon} size={16} spin={sIcon.spin} />
+        {result?.status === 'running' ? (
+          <RingLoadingIcon
+            size={16}
+            style={{ color: theme.colorWarning }}
+            ringColor={
+              theme.isDarkMode
+                ? theme.colorWarningBorder
+                : `color-mix(in srgb, ${theme.colorWarning} 45%, transparent)`
+            }
+          />
+        ) : (
+          <Icon color={colorOf(sIcon.color)} icon={sIcon.icon} size={16} spin={sIcon.spin} />
+        )}
         <Flexbox style={{ minWidth: 0 }}>
           <span className={styles.title} style={{ fontWeight: 600 }}>
             {item.title}

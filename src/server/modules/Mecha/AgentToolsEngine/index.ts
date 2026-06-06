@@ -16,6 +16,7 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest } from '@lobechat/builtin-tool-message';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
+import { VerifyToolManifest } from '@lobechat/builtin-tool-verify';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import {
   alwaysOnToolIds,
@@ -179,6 +180,8 @@ export const createServerAgentToolsEngine = (
   const chatModeRules = {
     [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
     [MemoryManifest.identifier]: globalMemoryEnabled,
+    // The verify agent's writeback tool — always available in its (chat-mode) run.
+    [VerifyToolManifest.identifier]: true,
     [WebBrowsingManifest.identifier]: isSearchEnabled,
   };
 

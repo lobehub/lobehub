@@ -101,6 +101,9 @@ export const chatModeAllowedToolIds = [
   KnowledgeBaseManifest.identifier,
   MemoryManifest.identifier,
   WebBrowsingManifest.identifier,
+  // The verify agent runs in chat mode (strict whitelist) so it isn't flooded
+  // with default tools; it only needs its own writeback tool.
+  VerifyToolManifest.identifier,
 ];
 
 /**
