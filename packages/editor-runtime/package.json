@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "exports": {
-    ".": "./src/index.ts",
-    "./server": "./src/server.ts"
+    ".": "./src/index.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {
