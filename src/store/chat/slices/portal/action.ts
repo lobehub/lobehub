@@ -239,8 +239,8 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ type: PortalViewType.Notebook });
   };
 
-  openToolUI = (messageId: string, identifier: string): void => {
-    this.#get().pushPortalView({ identifier, messageId, type: PortalViewType.ToolUI });
+  openToolUI = (messageId: string, identifier: string, params?: Record<string, any>): void => {
+    this.#get().pushPortalView({ identifier, messageId, params, type: PortalViewType.ToolUI });
   };
 
   popPortalView = (): void => {

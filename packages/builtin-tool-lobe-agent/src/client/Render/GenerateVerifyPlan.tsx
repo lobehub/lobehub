@@ -8,12 +8,15 @@ import { Bot, Sparkles, SquareTerminal } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useChatStore } from '@/store/chat';
+
 import type {
   GeneratedVerifyCheck,
   GenerateVerifyPlanParams,
   GenerateVerifyPlanState,
   VerifyVerifierType,
 } from '../../types';
+import { LobeAgentIdentifier } from '../../types';
 
 /** Each verifier type gets a distinct icon so llm/agent/program checks read apart. */
 const VERIFIER_ICON: Record<VerifyVerifierType, LucideIcon> = {
@@ -34,10 +37,21 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   item: css`
+    cursor: pointer;
+
     padding-block: 8px;
     padding-inline: 10px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 8px;
+
+    transition:
+      border-color 150ms ${cssVar.motionEaseOut},
+      background 150ms ${cssVar.motionEaseOut};
+
+    &:hover {
+      border-color: ${cssVar.colorBorder};
+      background: ${cssVar.colorFillQuaternary};
+    }
   `,
   kicker: css`
     font-size: 12px;
@@ -76,8 +90,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
  */
 const GenerateVerifyPlanRender = memo<
   BuiltinRenderProps<GenerateVerifyPlanParams, GenerateVerifyPlanState>
->(({ args, pluginState }) => {
+>(({ args, pluginState, messageId }) => {
   const { t } = useTranslation('plugin');
+  const openToolUI = useChatStore((s) => s.openToolUI);
 
   const items: GeneratedVerifyCheck[] =
     pluginState?.items ??
@@ -103,6 +118,7 @@ const GenerateVerifyPlanRender = memo<
           gap={8}
           justify="space-between"
           key={index}
+          onClick={() => openToolUI(messageId, LobeAgentIdentifier, { index })}
         >
           <Flexbox horizontal align="flex-start" gap={8} style={{ minWidth: 0 }}>
             <Icon

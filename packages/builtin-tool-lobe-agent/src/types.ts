@@ -64,8 +64,12 @@ export interface GenerateVerifyPlanParams {
  * linked document; only the concise `description` is shown in the check list.
  */
 export interface GeneratedVerifyCheck {
+  /** The persisted `verify_criteria.id` — lets the client write edits back. */
+  criterionId?: string;
   /** One-sentence summary shown under the title. */
   description?: string;
+  /** The instruction document id — lets the client edit the detailed rubric. */
+  documentId?: string;
   onFail: VerifyOnFailStrategy;
   /** Whether this check is required (must pass) vs optional. */
   required: boolean;

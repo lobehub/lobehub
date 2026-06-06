@@ -70,6 +70,7 @@ export const verifyRouter = router({
       z.object({
         id: z.string(),
         value: z.object({
+          description: z.string().nullable().optional(),
           documentId: z.string().nullable().optional(),
           onFail: onFailSchema.optional(),
           required: z.boolean().optional(),

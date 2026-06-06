@@ -210,7 +210,11 @@ class LobeAgentExecutionRuntime {
         )}. The checks run automatically when this operation completes — do not run them yourself.`,
       state: {
         items: items.map((i) => ({
+          // Surface the persisted ids so the client can write edits back to the
+          // criterion row (and its instruction document) from the portal.
+          criterionId: i.sourceCriterionId ?? undefined,
           description: i.description,
+          documentId: i.documentId,
           onFail: i.onFail,
           required: i.required,
           title: i.title,

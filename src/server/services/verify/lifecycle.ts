@@ -54,12 +54,13 @@ export const runVerifyOnCompletion = async (
       goal: params.goal,
       modelConfig: { model: op.model, provider: op.provider },
       operationId: params.operationId,
-      // `agent`-type checks run as verifier sub-agents reusing this run's agent;
-      // their verdicts land asynchronously via the runner's onComplete hook.
+      // `agent`-type checks run as the dedicated builtin verify agent, which
+      // writes its verdict back via the submitVerifyResult tool during its run.
       runVerifierAgent: createVerifierAgentRunner({
-        agentId: op.agentId,
         db,
         deliverable: params.deliverable,
+        model: op.model,
+        provider: op.provider,
         topicId: op.topicId,
         userId,
       }),

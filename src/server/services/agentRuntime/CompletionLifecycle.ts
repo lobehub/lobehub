@@ -272,7 +272,6 @@ export class CompletionLifecycle {
     userId: string,
   ): Promise<void> {
     try {
-      if (!assistantMessageId) return;
       const operationModel = new AgentOperationModel(this.serverDB, userId);
       const state = await operationModel.getVerifyState(operationId);
       if (!state?.verifyPlan?.length) return;

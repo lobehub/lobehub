@@ -1,0 +1,29 @@
+import type { VerifierType, VerifyOnFailStrategy } from '@/database/schemas/verify';
+
+/** The criterion fields the portal can edit. */
+export interface VerifyCriterionEdit {
+  description?: string;
+  onFail?: VerifyOnFailStrategy;
+  required?: boolean;
+  title?: string;
+  verifierType?: VerifierType;
+}
+
+export interface State {
+  /**
+   * Per-criterion edit overlay, keyed by `verify_criteria.id`. Holds the
+   * user's in-flight edits so the UI reflects them immediately while they are
+   * debounced-persisted to the backend.
+   */
+  criterionEdits: Record<string, VerifyCriterionEdit>;
+  /**
+   * Per-instruction edit overlay, keyed by the instruction document id. Holds
+   * the latest rubric text pending a debounced document save.
+   */
+  instructionEdits: Record<string, string>;
+}
+
+export const initialState: State = {
+  criterionEdits: {},
+  instructionEdits: {},
+};

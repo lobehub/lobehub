@@ -1,12 +1,25 @@
 import type { VerifyStatus } from '@/database/models/agentOperation';
 import type {
+  VerifierType,
   VerifyCheckItem,
   VerifyCheckResultItem,
   VerifyCriterionItem,
+  VerifyOnFailStrategy,
   VerifyRubricItem,
   VerifyUserDecision,
 } from '@/database/schemas/verify';
 import { lambdaClient } from '@/libs/trpc/client';
+
+/** Editable fields of a single delivery-check criterion. */
+export interface UpdateCriterionValue {
+  description?: string | null;
+  documentId?: string | null;
+  onFail?: VerifyOnFailStrategy;
+  required?: boolean;
+  title?: string;
+  verifierConfig?: Record<string, unknown>;
+  verifierType?: VerifierType;
+}
 
 export interface VerifyStateResponse {
   verifyPlan: VerifyCheckItem[] | null;
@@ -64,6 +77,9 @@ export class VerifyService {
   // ---- criteria / rubric management ----
   listCriteria = (): Promise<VerifyCriterionItem[]> =>
     lambdaClient.verify.listCriteria.query() as Promise<VerifyCriterionItem[]>;
+
+  updateCriterion = (id: string, value: UpdateCriterionValue): Promise<unknown> =>
+    lambdaClient.verify.updateCriterion.mutate({ id, value });
 
   listRubrics = (): Promise<VerifyRubricItem[]> =>
     lambdaClient.verify.listRubrics.query() as Promise<VerifyRubricItem[]>;

@@ -103,7 +103,9 @@ export class VerifyPlanGeneratorService {
     const items: VerifyCheckItem[] = [];
     const links: { criterionId: string; sortOrder: number }[] = [];
     for (const [index, draft] of params.criteria.entries()) {
-      const onFail = draft.onFail ?? 'manual';
+      // Default to auto-repair: a failing check should attempt a fix rather than
+      // silently waiting for manual intervention.
+      const onFail = draft.onFail ?? 'auto_repair';
       const required = draft.required ?? true;
       const verifierType = draft.verifierType ?? 'llm';
 

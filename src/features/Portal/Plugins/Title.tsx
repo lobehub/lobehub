@@ -1,43 +1,49 @@
-import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { ActionIcon, Flexbox, Icon, Text } from '@lobehub/ui';
+import { BuiltinToolsPortalTitles } from '@lobechat/builtin-tools/portals';
+import type { BuiltinPortalTitle } from '@lobechat/types';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { ArrowLeft, Globe } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
+import { ArrowLeft } from 'lucide-react';
 
 import PluginAvatar from '@/features/PluginAvatar';
 import { useChatStore } from '@/store/chat';
-import { chatPortalSelectors } from '@/store/chat/selectors';
+import { chatPortalSelectors, dbMessageSelectors } from '@/store/chat/selectors';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 
 const Title = () => {
-  const [closeToolUI, toolUIIdentifier = ''] = useChatStore((s) => [
+  const [closeToolUI, toolUIIdentifier = '', messageId] = useChatStore((s) => [
     s.closeToolUI,
     chatPortalSelectors.toolUIIdentifier(s),
+    chatPortalSelectors.toolMessageId(s),
   ]);
+  const toolUIParams = useChatStore(chatPortalSelectors.toolUIParams, isEqual);
+  const message = useChatStore(dbMessageSelectors.getDbMessageById(messageId || ''), isEqual);
 
-  const { t } = useTranslation('plugin');
   const pluginMeta = useToolStore(toolSelectors.getMetaById(toolUIIdentifier), isEqual);
   const pluginTitle = pluginHelpers.getPluginTitle(pluginMeta) ?? toolUIIdentifier;
 
-  if (toolUIIdentifier === WebBrowsingManifest.identifier) {
-    return (
-      <Flexbox horizontal align={'center'} gap={8}>
-        <ActionIcon icon={ArrowLeft} size={'small'} onClick={() => closeToolUI()} />
-        <Icon icon={Globe} size={16} />
-        <Text style={{ fontSize: 16 }} type={'secondary'}>
-          {t('search.title')}
-        </Text>
-      </Flexbox>
-    );
-  }
+  // A tool may ship its own portal header content; otherwise fall back to the
+  // generic plugin avatar + title. The framework keeps owning the back chrome.
+  const CustomTitle = BuiltinToolsPortalTitles[toolUIIdentifier] as BuiltinPortalTitle | undefined;
+
   return (
-    <Flexbox horizontal align={'center'} gap={4}>
+    <Flexbox horizontal align={'center'} gap={CustomTitle ? 8 : 4}>
       <ActionIcon icon={ArrowLeft} size={'small'} onClick={() => closeToolUI()} />
-      <PluginAvatar identifier={toolUIIdentifier} size={28} />
-      <Text style={{ fontSize: 16 }} type={'secondary'}>
-        {pluginTitle}
-      </Text>
+      {CustomTitle ? (
+        <CustomTitle
+          apiName={message?.plugin?.apiName}
+          identifier={toolUIIdentifier}
+          messageId={messageId || ''}
+          params={toolUIParams}
+        />
+      ) : (
+        <>
+          <PluginAvatar identifier={toolUIIdentifier} size={28} />
+          <Text style={{ fontSize: 16 }} type={'secondary'}>
+            {pluginTitle}
+          </Text>
+        </>
+      )}
     </Flexbox>
   );
 };
