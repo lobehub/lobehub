@@ -25,15 +25,17 @@ const FollowUpChips = memo<FollowUpChipsProps>(({ conversationKey, messageId }) 
   );
   const chips = useFollowUpActionStore(selector);
   const fillInputMessage = useConversationStore((s) => s.fillInputMessage);
+  const recordChipClick = useFollowUpActionStore((s) => s.recordChipClick);
   const isGenerating = useConversationStore(
     messageStateSelectors.isAssistantGroupItemGenerating(messageId),
   );
 
   const handleClick = useCallback(
-    (chip: FollowUpChip) => {
+    (chip: FollowUpChip, chipIndex: number) => {
+      recordChipClick(conversationKey, chipIndex);
       fillInputMessage(chip.message);
     },
-    [fillInputMessage],
+    [recordChipClick, conversationKey, fillInputMessage],
   );
 
   if (chips.length === 0 || isGenerating) return null;
@@ -47,7 +49,7 @@ const FollowUpChips = memo<FollowUpChipsProps>(({ conversationKey, messageId }) 
           key={`${messageId}-${i}`}
           style={{ animationDelay: `${i * 60}ms` }}
           type="button"
-          onClick={() => handleClick(chip)}
+          onClick={() => handleClick(chip, i)}
         >
           <Reply className={`${styles.chipIcon} followup-icon`} size={14} />
           <span>{chip.label}</span>

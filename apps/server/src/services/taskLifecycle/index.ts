@@ -983,6 +983,10 @@ export class TaskLifecycleService {
         provider,
         this.workspaceId,
       );
+      // Pre-allocate the tracing row id so it can be stamped onto the brief —
+      // the user's later resolve action (approve / feedback / ignore) is then
+      // reported back as implicit feedback against this exact generation.
+      const briefTracingId = randomUUID();
       const result = await modelRuntime.generateObject(
         {
           messages: payload.messages as any[],
@@ -995,6 +999,8 @@ export class TaskLifecycleService {
             promptVersion: GENERATE_BRIEF_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.TaskBrief,
             schemaName: GENERATE_BRIEF_SCHEMA_NAME,
+            topicId,
+            tracingId: briefTracingId,
           } satisfies TracingOptions,
         },
       );
@@ -1017,6 +1023,7 @@ export class TaskLifecycleService {
         actions,
         agentId: currentTask.assigneeAgentId || undefined,
         artifacts,
+        metadata: { tracingId: briefTracingId },
         priority,
         summary: generated.summary,
         taskId,
