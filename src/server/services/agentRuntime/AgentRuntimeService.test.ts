@@ -102,6 +102,14 @@ vi.mock('@lobechat/agent-runtime', () => ({
   AgentRuntime: vi.fn().mockImplementation((_agent, _options) => ({
     step: vi.fn(),
   })),
+  // Mirror the real status predicates (packages/agent-runtime/src/utils/status.ts)
+  // so completion-lifecycle / getOperationStatus paths don't crash on the mock.
+  isBlockedStatus: (status: string) =>
+    status === 'waiting_for_human' ||
+    status === 'waiting_for_async_tool' ||
+    status === 'interrupted',
+  isParkedStatus: (status: string) =>
+    status === 'waiting_for_human' || status === 'waiting_for_async_tool',
 }));
 
 vi.mock('@/server/services/queue', () => ({

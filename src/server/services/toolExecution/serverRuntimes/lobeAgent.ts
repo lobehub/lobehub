@@ -137,11 +137,19 @@ class LobeAgentExecutionRuntime {
       return buildError('instruction is required.', 'INVALID_ARGUMENTS');
     }
 
-    const { threadId, subOperationId } = await ctx.subAgent.run({
+    const { started, threadId, subOperationId } = await ctx.subAgent.run({
       description,
       instruction,
       timeout,
     });
+
+    // The child op failed to start — no completion bridge will ever fire to
+    // backfill a placeholder, so we must NOT defer/park here. Return a normal
+    // (non-deferred) tool error so the parent's LLM sees the failure and the
+    // batch continues instead of hanging in `waiting_for_async_tool`.
+    if (!started) {
+      return buildError('Sub-agent failed to start.', 'SUB_AGENT_START_FAILED');
+    }
 
     return {
       // No tool_result yet — the bridge fills this in when the sub-op completes.

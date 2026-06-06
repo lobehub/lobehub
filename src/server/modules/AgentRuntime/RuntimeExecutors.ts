@@ -291,9 +291,29 @@ const buildServerSubAgentRunner = (
         timeout,
         title: description,
         topicId,
-      })) as { operationId?: string; threadId?: string } | undefined;
+      })) as { operationId?: string; success?: boolean; threadId?: string } | undefined;
 
-      return { subOperationId: result?.operationId, threadId: result?.threadId ?? '' };
+      // 3. If the child op never started, no completion bridge will fire — parking
+      //    the parent on it would hang forever. Drop the placeholder and signal
+      //    `started: false` so callSubAgent surfaces an inline tool error instead.
+      if (!result?.success) {
+        try {
+          await ctx.messageModel.deleteMessage(placeholder.id);
+        } catch (error) {
+          log(
+            'buildServerSubAgentRunner: failed to clean up placeholder %s: %O',
+            placeholder.id,
+            error,
+          );
+        }
+        return { started: false, subOperationId: result?.operationId, threadId: '' };
+      }
+
+      return {
+        started: true,
+        subOperationId: result?.operationId,
+        threadId: result?.threadId ?? '',
+      };
     },
   };
 };

@@ -2947,7 +2947,7 @@ export class AiAgentService {
               model: finalState?.modelRuntimeConfig?.model,
               status: failed ? 'error' : 'completed',
               threadId,
-              totalToolCalls: finalState?.session?.toolCalls,
+              totalToolCalls: finalState?.usage?.tools?.totalCalls,
               totalTokens: this.calculateTotalTokens(finalState?.usage),
             },
           });

@@ -182,28 +182,6 @@ export class AgentOperationModel {
   }
 
   /**
-   * Return every sub-operation spawned by a parent op. Used by the
-   * sub-agent completion bridge to reconcile which deferred tool calls have
-   * reached a terminal state when deciding whether to resume the parent.
-   */
-  async queryByParentOperationId(parentOperationId: string) {
-    return this.db
-      .select({
-        completionReason: agentOperations.completionReason,
-        id: agentOperations.id,
-        metadata: agentOperations.metadata,
-        status: agentOperations.status,
-      })
-      .from(agentOperations)
-      .where(
-        and(
-          eq(agentOperations.parentOperationId, parentOperationId),
-          eq(agentOperations.userId, this.userId),
-        ),
-      );
-  }
-
-  /**
    * Atomically flip a parked parent op from `waiting_for_async_tool` back to
    * `running`. Returns true only for the single winner (affected === 1) so
    * concurrent sub-op completions that lose the race no-op instead of

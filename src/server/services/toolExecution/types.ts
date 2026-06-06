@@ -27,6 +27,13 @@ export interface ServerSubAgentRunParams {
 }
 
 export interface ServerSubAgentRunResult {
+  /**
+   * Whether the child op was actually forked. `false` means the child failed to
+   * start (e.g. the operation row could not be created/scheduled): no completion
+   * bridge will ever fire, so the caller must surface an inline tool error
+   * instead of parking the parent — otherwise the parent hangs forever.
+   */
+  started: boolean;
   /** The spawned child operation id. */
   subOperationId?: string;
   /** The isolation thread holding the sub-agent's full message trace. */

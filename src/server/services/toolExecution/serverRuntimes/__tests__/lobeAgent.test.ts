@@ -492,7 +492,9 @@ describe('lobeAgentRuntime', () => {
   describe('callSubAgent', () => {
     it('returns a deferred result and kicks off the sub-agent via the injected runner', async () => {
       const runtime = lobeAgentRuntime.factory(baseContext);
-      const run = vi.fn().mockResolvedValue({ subOperationId: 'sub-op-1', threadId: 'thread-1' });
+      const run = vi
+        .fn()
+        .mockResolvedValue({ started: true, subOperationId: 'sub-op-1', threadId: 'thread-1' });
 
       const result = await runtime.callSubAgent(
         { description: 'Research', instruction: 'Find the answer', timeout: 1000 },
@@ -510,6 +512,22 @@ describe('lobeAgentRuntime', () => {
         state: { status: 'pending', subOperationId: 'sub-op-1', threadId: 'thread-1' },
         success: true,
       });
+    });
+
+    it('returns a non-deferred error when the sub-agent fails to start', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      // Child op never started: no completion bridge will fire, so the parent
+      // must not park — surface an inline tool error instead.
+      const run = vi.fn().mockResolvedValue({ started: false, threadId: '' });
+
+      const result = await runtime.callSubAgent(
+        { description: 'Research', instruction: 'Find the answer' },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.deferred).toBeUndefined();
+      expect(result).toMatchObject({ error: { code: 'SUB_AGENT_START_FAILED' } });
     });
 
     it('fails (not deferred) when no sub-agent runner is available', async () => {
