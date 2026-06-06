@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createErrorResponse } from './errorResponse';
 
 describe('createErrorResponse', () => {
-  // 测试各种错误类型的状态码
+  // Test status codes for various error types
   it('returns a 401 status for NoOpenAIAPIKey error type', () => {
     const errorType = ChatErrorType.NoOpenAIAPIKey;
     const response = createErrorResponse(errorType);
@@ -18,7 +18,7 @@ describe('createErrorResponse', () => {
     expect(response.status).toBe(401);
   });
 
-  // 测试包含Invalid的错误类型
+  // Test error types containing 'Invalid'
   it('returns a 401 status for Invalid error type', () => {
     const errorType = 'InvalidTestError';
     const response = createErrorResponse(errorType as any);
@@ -99,7 +99,7 @@ describe('createErrorResponse', () => {
     });
   });
 
-  // 测试状态码不在200-599范围内的情况
+  // Test when status code is not a number or not in the range of 200-599
   it('logs an error when the status code is not a number or not in the range of 200-599', () => {
     const errorType = 'Unknown Error';
     const consoleSpy = vi.spyOn(console, 'error');
@@ -110,14 +110,14 @@ describe('createErrorResponse', () => {
     consoleSpy.mockRestore();
   });
 
-  // 测试默认情况
+  // Test the default case
   it('returns the same error type as status for unknown error types', () => {
-    const errorType = 500; // 假设500是一个未知的错误类型
+    const errorType = 500; // Assume 500 is an unknown error type
     const response = createErrorResponse(errorType as any);
     expect(response.status).toBe(errorType);
   });
 
-  // 测试返回的Response对象是否包含正确的body和errorType
+  // Test that the returned Response object contains the correct body and errorType
   it('returns a Response object with the correct body and errorType', () => {
     const errorType = ChatErrorType.NoOpenAIAPIKey;
     const body = { message: 'No API key provided' };
@@ -130,7 +130,7 @@ describe('createErrorResponse', () => {
     });
   });
 
-  // 测试没有提供body时，返回的Response对象的body是否为undefined
+  // Test that the returned Response object has an undefined body when no body is provided
   it('returns a Response object with an undefined body when no body is provided', () => {
     const errorType = ChatErrorType.NoOpenAIAPIKey;
     const response = createErrorResponse(errorType);

@@ -37,7 +37,7 @@ describe('calculateScore', () => {
         hasTools: true,
         hasPrompts: true,
         hasResources: true,
-        hasClaimed: false, // 缺少这项
+        hasClaimed: false, // missing this item
       });
 
       const result = calculateScore(scoreItems);
@@ -51,14 +51,14 @@ describe('calculateScore', () => {
     it('should return grade B for 65-84% score with all required items', () => {
       const scoreItems = createScoreItems({
         hasReadme: true,
-        hasLicense: false, // 缺少这项
+        hasLicense: false, // missing this item
         hasDeployment: true,
-        hasDeployMoreThanManual: false, // 缺少这项
+        hasDeployMoreThanManual: false, // missing this item
         hasValidated: true,
         hasTools: true,
-        hasPrompts: false, // 缺少这项
-        hasResources: false, // 缺少这项
-        hasClaimed: false, // 缺少这项
+        hasPrompts: false, // missing this item
+        hasResources: false, // missing this item
+        hasClaimed: false, // missing this item
       });
 
       const result = calculateScore(scoreItems);
@@ -72,7 +72,7 @@ describe('calculateScore', () => {
   describe('Grade F scenarios', () => {
     it('should return grade F when required items are missing', () => {
       const scoreItems = createScoreItems({
-        hasReadme: false, // 必需项缺失
+        hasReadme: false, // required item missing
         hasLicense: true,
         hasDeployment: true,
         hasDeployMoreThanManual: true,
@@ -94,7 +94,7 @@ describe('calculateScore', () => {
         hasLicense: true,
         hasDeployment: true,
         hasDeployMoreThanManual: true,
-        hasValidated: false, // 必需项缺失
+        hasValidated: false, // required item missing
         hasTools: true,
         hasPrompts: true,
         hasResources: true,
@@ -119,7 +119,7 @@ describe('calculateScore', () => {
         hasClaimed: false,
       });
 
-      // 手动设置更低的权重来测试低分情况
+      // Manually set lower weights to test the low-score scenario
       const lowWeights = {
         ...DEFAULT_WEIGHTS,
         readme: 5,
@@ -130,7 +130,7 @@ describe('calculateScore', () => {
 
       const result = calculateScore(scoreItems, lowWeights);
 
-      // 这种情况下应该能达到 65% 以上，所以改为测试另一种情况
+      // In this case the score should exceed 65%, so test another scenario instead
       expect(result.percentage).toBeGreaterThan(0);
     });
   });
@@ -177,7 +177,7 @@ describe('calculateScore', () => {
 
       const result = calculateScore(unknownItem);
 
-      expect(result.totalScore).toBe(5); // 默认权重
+      expect(result.totalScore).toBe(5); // default weight
       expect(result.maxScore).toBe(5);
       expect(result.percentage).toBe(100);
     });

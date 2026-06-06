@@ -120,7 +120,7 @@ describe('translation', () => {
 
   it('should handle missing parameters in translation string', async () => {
     const { t } = await translation('common', 'en-US');
-    // 当缺少参数时应保留占位符
+    // Should preserve placeholders when parameters are missing
     expect(t('withParam')).toBe('Text with {{param}}');
   });
 
