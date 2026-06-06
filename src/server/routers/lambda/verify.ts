@@ -140,6 +140,16 @@ export const verifyRouter = router({
     )
     .mutation(async ({ ctx, input }) => ctx.planGenerator.generateDraftPlan(input)),
 
+  getVerifierThread: verifyProcedure
+    .input(z.object({ operationId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      // Resolve an agent verifier's sub-run to the thread it ran in, so the
+      // client can open that execution trace in the portal.
+      const op = await ctx.operationModel.findById(input.operationId);
+      if (!op) return null;
+      return { threadId: op.threadId ?? null, topicId: op.topicId ?? null };
+    }),
+
   getVerifyState: verifyProcedure
     .input(z.object({ operationId: z.string() }))
     .query(async ({ ctx, input }) => ctx.operationModel.getVerifyState(input.operationId)),

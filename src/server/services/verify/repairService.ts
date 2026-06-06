@@ -23,6 +23,121 @@ export interface RepairSpawner {
   }): Promise<{ repairOperationId: string } | null>;
 }
 
+/** Cap on automatic repair rounds (parent-chain depth) to prevent runaway loops. */
+const MAX_REPAIR_ROUNDS = 2;
+
+/** Count how many repair rounds already precede this operation (parent-chain depth). */
+const countRepairRounds = async (
+  operationModel: AgentOperationModel,
+  operationId: string,
+): Promise<number> => {
+  let depth = 0;
+  let current: string | null | undefined = operationId;
+  while (current && depth < 10) {
+    const op = await operationModel.findById(current);
+    current = op?.parentOperationId;
+    if (current) depth += 1;
+  }
+  return depth;
+};
+
+/**
+ * Build a {@link RepairSpawner} for a run: when checks fail with `auto_repair`,
+ * re-run the SAME agent in the same topic with the failure feedback as the prompt
+ * (a second iteration that fixes the deliverable), then re-snapshot the plan onto
+ * the repair operation and confirm it so it re-verifies on completion (next round).
+ * Caps the chain at {@link MAX_REPAIR_ROUNDS} to avoid infinite repair loops.
+ */
+export const createRepairRunner = (params: {
+  agentId?: string | null;
+  db: LobeChatDatabase;
+  model?: string | null;
+  provider?: string | null;
+  topicId?: string | null;
+  userId: string;
+}): RepairSpawner | undefined => {
+  const { agentId, db, model, provider, topicId, userId } = params;
+  if (!agentId || !topicId) return undefined;
+
+  return async ({ instruction, operationId }) => {
+    const operationModel = new AgentOperationModel(db, userId);
+
+    const round = await countRepairRounds(operationModel, operationId);
+    if (round >= MAX_REPAIR_ROUNDS) {
+      log('op %s reached max repair rounds (%d), not repairing', operationId, MAX_REPAIR_ROUNDS);
+      return null;
+    }
+
+    // Re-run the original agent in the same topic with the failure feedback.
+    const { AiAgentService } = await import('@/server/services/aiAgent');
+    const result = await new AiAgentService(db, userId).execAgent({
+      agentId,
+      appContext: { topicId },
+      autoStart: true,
+      ...(model ? { model } : {}),
+      parentOperationId: operationId,
+      prompt: instruction,
+      ...(provider ? { provider } : {}),
+      userInterventionConfig: { approvalMode: 'headless' },
+    });
+    const repairOperationId = result.operationId;
+
+    // Re-snapshot the same plan onto the repair op + confirm, so the repair run
+    // re-verifies (round N+1) against its corrected deliverable on completion.
+    const state = await operationModel.getVerifyState(operationId);
+    const plan = (state?.verifyPlan ?? []) as VerifyCheckItem[];
+    if (plan.length > 0) {
+      await operationModel.setVerifyPlan(repairOperationId, plan);
+      await operationModel.confirmVerifyPlan(repairOperationId);
+    }
+
+    log('repair op %s → %s (round %d)', operationId, repairOperationId, round + 1);
+    return { repairOperationId };
+  };
+};
+
+/**
+ * Trigger auto-repair once a run's verification has fully resolved. Safe to call
+ * from any path that may have completed the last check (the inline LLM judge, or
+ * an agent verifier's async writeback): it no-ops until every required check has
+ * a terminal result, then — if any `auto_repair` check failed — re-runs the agent
+ * with the failure feedback (a second iteration). Builds the repair runner from
+ * the run's own agent/topic/model so the fix is produced by the original agent.
+ */
+export const maybeAutoRepair = async (
+  db: LobeChatDatabase,
+  userId: string,
+  operationId: string,
+): Promise<void> => {
+  const operationModel = new AgentOperationModel(db, userId);
+  const state = await operationModel.getVerifyState(operationId);
+  const plan = (state?.verifyPlan ?? []) as VerifyCheckItem[];
+  if (plan.length === 0) return;
+
+  const results = await new VerifyCheckResultModel(db, userId).listByOperation(operationId);
+  const byItem = new Map(results.map((r) => [r.checkItemId, r]));
+
+  // Wait until every required check has a terminal result (don't repair early).
+  const stillPending = plan
+    .filter((i) => i.required)
+    .some((i) => {
+      const r = byItem.get(i.id);
+      return !r || r.status === 'pending' || r.status === 'running';
+    });
+  if (stillPending) return;
+
+  const op = await operationModel.findById(operationId);
+  const spawner = createRepairRunner({
+    agentId: op?.agentId,
+    db,
+    model: op?.model,
+    provider: op?.provider,
+    topicId: op?.topicId,
+    userId,
+  });
+  await new VerifyRepairService(db, userId).triggerAutoRepair(operationId, spawner);
+};
+
 const isFailed = (r: VerifyCheckResultItem | undefined): boolean =>
   !!r && (r.status === 'failed' || r.verdict === 'failed' || r.verdict === 'uncertain');
 

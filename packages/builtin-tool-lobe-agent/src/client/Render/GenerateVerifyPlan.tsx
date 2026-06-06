@@ -36,43 +36,47 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     line-height: 1.5;
     color: ${cssVar.colorTextTertiary};
   `,
-  item: css`
-    cursor: pointer;
-
-    padding-block: 8px;
-    padding-inline: 10px;
+  card: css`
+    overflow: hidden;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 8px;
-
-    transition:
-      border-color 150ms ${cssVar.motionEaseOut},
-      background 150ms ${cssVar.motionEaseOut};
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-      background: ${cssVar.colorFillQuaternary};
-    }
+    border-radius: 12px;
+    background: ${cssVar.colorBgElevated};
   `,
   kicker: css`
     font-size: 12px;
     font-weight: 600;
     color: ${cssVar.colorTextTertiary};
   `,
+  row: css`
+    cursor: pointer;
+    padding-block: 10px;
+    padding-inline: 12px;
+    transition: background 150ms ${cssVar.motionEaseOut};
+
+    &:not(:last-child) {
+      border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    }
+
+    &:hover {
+      background: ${cssVar.colorFillQuaternary};
+    }
+  `,
   tag: css`
     flex: none;
 
-    padding-block: 1px;
-    padding-inline: 6px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 4px;
+    padding-block: 2px;
+    padding-inline: 8px;
+    border-radius: 6px;
 
     font-size: 11px;
     font-weight: 500;
     color: ${cssVar.colorTextTertiary};
+
+    background: ${cssVar.colorFillTertiary};
   `,
   tagRequired: css`
-    border-color: ${cssVar.colorBorder};
     color: ${cssVar.colorText};
+    background: ${cssVar.colorFillSecondary};
   `,
   title: css`
     font-weight: 500;
@@ -108,36 +112,38 @@ const GenerateVerifyPlanRender = memo<
   if (!items.length) return null;
 
   return (
-    <Flexbox gap={6} paddingBlock={4}>
+    <Flexbox gap={8} paddingBlock={4}>
       {title && <span className={styles.kicker}>{title}</span>}
-      {items.map((item, index) => (
-        <Flexbox
-          horizontal
-          align="flex-start"
-          className={styles.item}
-          gap={8}
-          justify="space-between"
-          key={index}
-          onClick={() => openToolUI(messageId, LobeAgentIdentifier, { index })}
-        >
-          <Flexbox horizontal align="flex-start" gap={8} style={{ minWidth: 0 }}>
-            <Icon
-              className={styles.icon}
-              icon={VERIFIER_ICON[item.verifierType] ?? Sparkles}
-              size={15}
-            />
-            <Flexbox gap={0} style={{ minWidth: 0 }}>
-              <span className={styles.title}>{item.title}</span>
-              {item.description && <span className={styles.description}>{item.description}</span>}
+      <div className={styles.card}>
+        {items.map((item, index) => (
+          <Flexbox
+            horizontal
+            align="flex-start"
+            className={styles.row}
+            gap={8}
+            justify="space-between"
+            key={index}
+            onClick={() => openToolUI(messageId, LobeAgentIdentifier, { index })}
+          >
+            <Flexbox horizontal align="flex-start" gap={8} style={{ minWidth: 0 }}>
+              <Icon
+                className={styles.icon}
+                icon={VERIFIER_ICON[item.verifierType] ?? Sparkles}
+                size={15}
+              />
+              <Flexbox gap={0} style={{ minWidth: 0 }}>
+                <span className={styles.title}>{item.title}</span>
+                {item.description && <span className={styles.description}>{item.description}</span>}
+              </Flexbox>
             </Flexbox>
+            <span className={`${styles.tag} ${item.required ? styles.tagRequired : ''}`}>
+              {item.required
+                ? t('builtins.lobe-agent.verifyPlan.required')
+                : t('builtins.lobe-agent.verifyPlan.optional')}
+            </span>
           </Flexbox>
-          <span className={`${styles.tag} ${item.required ? styles.tagRequired : ''}`}>
-            {item.required
-              ? t('builtins.lobe-agent.verifyPlan.required')
-              : t('builtins.lobe-agent.verifyPlan.optional')}
-          </span>
-        </Flexbox>
-      ))}
+        ))}
+      </div>
     </Flexbox>
   );
 });

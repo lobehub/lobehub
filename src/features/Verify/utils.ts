@@ -49,3 +49,44 @@ export const countResults = (results: VerifyCheckResultItem[] = []): CheckCounts
   passed: results.filter((r) => r.status === 'passed' || r.verdict === 'passed').length,
   total: results.length,
 });
+
+/** The subset of theme color tokens the verify card tint reads. */
+export interface VerifyTintTheme {
+  colorBgElevated: string;
+  colorError: string;
+  colorSuccess: string;
+  colorWarning: string;
+}
+
+const mix = (color: string, percent: number) =>
+  `color-mix(in srgb, ${color} ${percent}%, transparent)`;
+
+/**
+ * State-tinted background for the whole verify card, keyed by phase. A soft
+ * radial glow anchored to the status corner (top-right, behind the badge) over
+ * the container fill — a gentle halo, not a full-width banner. Returns undefined
+ * when neutral.
+ */
+export const phaseCardBackground = (
+  phase: DockPhase,
+  theme: VerifyTintTheme,
+): string | undefined => {
+  const glow = (color: string) =>
+    `radial-gradient(60% 90% at 100% 0%, ${mix(color, 8)} 0%, ${mix(color, 0)} 52%), ${theme.colorBgElevated}`;
+  switch (phase) {
+    case 'passed': {
+      return glow(theme.colorSuccess);
+    }
+    case 'failed': {
+      return glow(theme.colorError);
+    }
+    case 'draft':
+    case 'verifying':
+    case 'repairing': {
+      return glow(theme.colorWarning);
+    }
+    default: {
+      return undefined;
+    }
+  }
+};

@@ -12,6 +12,7 @@ export default {
   'artifact.pending.title': 'Draft result',
   'artifact.repairing.sub': 'Checks did not pass. A repair round has started.',
   'artifact.repairing.title': 'Draft result',
+  'artifact.title': 'Verification #{{round}}',
 
   'badge.failed': 'Check failed',
   'badge.passed': 'Check passed',

@@ -7,5 +7,10 @@ export {
 export { computeFalseFlags, VerifyFeedbackService } from './feedbackService';
 export { runVerifyOnCompletion } from './lifecycle';
 export { type GeneratePlanParams, VerifyPlanGeneratorService } from './planGenerator';
-export { type RepairSpawner, VerifyRepairService } from './repairService';
+export {
+  createRepairRunner,
+  maybeAutoRepair,
+  type RepairSpawner,
+  VerifyRepairService,
+} from './repairService';
 export { VerifyStatusService } from './statusService';

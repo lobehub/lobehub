@@ -8,6 +8,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CheckerDock, RunArtifact } from '@/features/Verify';
+import { useVerifyState } from '@/features/Verify/hooks';
+import { phaseCardBackground, phaseFromStatus } from '@/features/Verify/utils';
 
 import { dataSelectors, useConversationStore } from '../../store';
 
@@ -16,7 +18,7 @@ const useStyles = createStyles(({ css, token }) => ({
     overflow: hidden;
     border: 1px solid ${token.colorBorderSecondary};
     border-radius: 16px;
-    background: ${token.colorBgContainer};
+    background: ${token.colorBgElevated};
   `,
   foot: css`
     display: flex;
@@ -45,17 +47,20 @@ interface VerifyMessageProps {
  * is a standalone card group (no avatar bubble).
  */
 const VerifyMessage = memo<VerifyMessageProps>(({ id }) => {
-  const { styles } = useStyles();
+  const { styles, theme } = useStyles();
   const { t } = useTranslation('verify');
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual);
   const operationId = item?.metadata?.verifyOperationId;
   const round = item?.metadata?.verifyRound ?? 1;
 
+  const { data: state } = useVerifyState(operationId ?? null);
+  const phase = phaseFromStatus(state?.verifyStatus);
+
   if (!operationId) return null;
 
   return (
     <Flexbox paddingBlock={8}>
-      <div className={styles.card}>
+      <div className={styles.card} style={{ background: phaseCardBackground(phase, theme) }}>
         <RunArtifact embedded operationId={operationId} round={round} />
         <CheckerDock embedded operationId={operationId} />
         <div className={styles.foot}>

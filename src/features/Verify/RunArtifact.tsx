@@ -1,6 +1,6 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
-import { Check, Info, PackageCheck, RefreshCw, Shield, X } from 'lucide-react';
+import { Check, Info, RefreshCw, Shield, ShieldCheck, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -46,12 +46,6 @@ const useStyles = createStyles(({ css, token }) => ({
     padding-block: 14px;
     padding-inline: 16px;
     border-block-end: 1px solid ${token.colorBorderSecondary};
-  `,
-  kicker: css`
-    margin-block-end: 4px;
-    font-size: 12px;
-    font-weight: 600;
-    color: ${token.colorTextTertiary};
   `,
   sub: css`
     margin-block-start: 4px;
@@ -123,7 +117,6 @@ const RunArtifact = memo<RunArtifactProps>(({ operationId, round = 1, embedded }
   if (!state?.verifyPlan?.length || !meta) return null;
 
   const counts = countResults(results ?? []);
-  const titleKey = phase === 'passed' ? 'artifact.passed.title' : 'artifact.failed.title';
   const badgeColorMap = {
     default: theme.colorTextTertiary,
     error: theme.colorError,
@@ -134,11 +127,10 @@ const RunArtifact = memo<RunArtifactProps>(({ operationId, round = 1, embedded }
   const header = (
     <div className={styles.head}>
       <Flexbox>
-        <Flexbox horizontal align="center" className={styles.kicker} gap={6}>
-          <Icon icon={PackageCheck} size={14} />
-          {t('artifact.kicker', { round })}
+        <Flexbox horizontal align="center" gap={7}>
+          <Icon icon={ShieldCheck} size={16} />
+          <span className={styles.title}>{t('artifact.title', { round })}</span>
         </Flexbox>
-        <div className={styles.title}>{t(titleKey as any)}</div>
         <div className={styles.sub}>
           {t(meta.subKey as any, { passed: counts.passed, total: counts.total } as any)}
         </div>

@@ -7,6 +7,7 @@ import {
   ChevronUp,
   Circle,
   CircleAlert,
+  ListTree,
   LoaderCircle,
   Plus,
   ShieldAlert,
@@ -20,9 +21,11 @@ import { useTranslation } from 'react-i18next';
 import RingLoadingIcon from '@/components/RingLoading';
 import type { VerifyCheckItem, VerifyCheckResultItem } from '@/database/schemas/verify';
 import { verifyService } from '@/services/verify';
+import { useChatStore } from '@/store/chat';
+import { threadSelectors } from '@/store/chat/selectors';
 
 import { useVerifyResults, useVerifyState } from './hooks';
-import { countResults, itemBehavior, phaseFromStatus } from './utils';
+import { countResults, phaseFromStatus } from './utils';
 
 const useStyles = createStyles(({ css, token }) => ({
   body: css`
@@ -40,6 +43,17 @@ const useStyles = createStyles(({ css, token }) => ({
     border-radius: 10px;
 
     background: ${token.colorFillQuaternary};
+  `,
+  checkRowClickable: css`
+    cursor: pointer;
+    transition: filter 150ms ${token.motionEaseOut};
+
+    &:hover {
+      filter: brightness(1.06);
+    }
+  `,
+  traceHint: css`
+    color: ${token.colorTextQuaternary};
   `,
   desc: css`
     margin-block-start: 3px;
@@ -71,15 +85,6 @@ const useStyles = createStyles(({ css, token }) => ({
     border-radius: 12px;
 
     background: ${token.colorFillQuaternary};
-  `,
-  phase: css`
-    padding-block: 2px;
-    padding-inline: 8px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: 999px;
-
-    font-size: 11px;
-    font-weight: 600;
   `,
   sub: css`
     overflow: hidden;
@@ -163,6 +168,18 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
   const onSkip = () => run(() => verifyService.skipPlan(operationId));
   const onForceDeliver = () => run(() => verifyService.skipPlan(operationId));
 
+  // Open an agent verifier's execution trace (the sub-run thread) in the portal,
+  // mirroring how sub-agent renders surface their isolated thread.
+  const openAgentTrace = async (verifierOperationId: string) => {
+    const resolved = await verifyService.getVerifierThread(verifierOperationId);
+    const threadId = resolved?.threadId;
+    if (!threadId) return;
+    const thread = (threadSelectors.currentTopicThreads(useChatStore.getState()) ?? []).find(
+      (t) => t.id === threadId,
+    );
+    useChatStore.getState().openThreadInPortal(threadId, thread?.sourceMessageId);
+  };
+
   const startEdit = () => {
     setDraftItems(plan.map((i) => ({ ...i })));
     setEditing(true);
@@ -191,10 +208,15 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
   const renderCheckRow = (item: VerifyCheckItem) => {
     const result = resultByItem.get(item.id);
     const sIcon = statusIcon(result?.status);
-    const behavior = itemBehavior(item);
     const evidence = result?.toulmin?.reasoning || result?.suggestion;
+    // Agent verifiers run in their own thread — let the row open that trace.
+    const traceOp = item.verifierType === 'agent' ? result?.verifierOperationId : undefined;
     return (
-      <div className={styles.checkRow} key={item.id}>
+      <div
+        className={cx(styles.checkRow, traceOp && styles.checkRowClickable)}
+        key={item.id}
+        onClick={traceOp ? () => openAgentTrace(traceOp) : undefined}
+      >
         {result?.status === 'running' ? (
           <RingLoadingIcon
             size={16}
@@ -214,7 +236,16 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
           </span>
           {evidence && <span className={styles.desc}>{evidence}</span>}
         </Flexbox>
-        <span className={styles.phase}>{t(`behavior.${behavior}` as any)}</span>
+        {traceOp ? (
+          <Icon
+            className={styles.traceHint}
+            icon={ListTree}
+            size={14}
+            style={{ marginBlockStart: 2 }}
+          />
+        ) : (
+          <span />
+        )}
       </div>
     );
   };

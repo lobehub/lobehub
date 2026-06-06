@@ -5,7 +5,7 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { createVerifierAgentRunner } from './agentVerifier';
 import { VerifyExecutorService } from './executor';
-import { VerifyRepairService } from './repairService';
+import { maybeAutoRepair } from './repairService';
 
 const log = debug('lobe-server:verify-lifecycle');
 
@@ -66,9 +66,10 @@ export const runVerifyOnCompletion = async (
       }),
     });
 
-    // Best-effort auto-repair (no-op in v1 without an injected spawner).
-    const repair = new VerifyRepairService(db, userId);
-    await repair.triggerAutoRepair(params.operationId);
+    // Auto-repair once verification has fully resolved. For runs with only inline
+    // (LLM/program) checks, everything is resolved now; runs with async agent
+    // checks no-op here and re-trigger from the verifier's writeback path.
+    await maybeAutoRepair(db, userId, params.operationId);
   } catch (error) {
     log('runVerifyOnCompletion failed for op %s (non-fatal): %O', params.operationId, error);
   }

@@ -46,6 +46,12 @@ export class VerifyService {
       operationId,
     }) as Promise<VerifyStateResponse | null>;
 
+  /** Resolve an agent verifier's sub-run to the thread it executed in. */
+  getVerifierThread = (
+    operationId: string,
+  ): Promise<{ threadId: string | null; topicId: string | null } | null> =>
+    lambdaClient.verify.getVerifierThread.query({ operationId });
+
   generateDraftPlan = (input: GenerateDraftPlanInput): Promise<VerifyCheckItem[]> =>
     lambdaClient.verify.generateDraftPlan.mutate(input) as Promise<VerifyCheckItem[]>;
 

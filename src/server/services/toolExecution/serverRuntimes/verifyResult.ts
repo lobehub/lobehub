@@ -5,7 +5,7 @@ import debug from 'debug';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import type { LobeChatDatabase } from '@/database/type';
-import { VerifyStatusService } from '@/server/services/verify';
+import { maybeAutoRepair, VerifyStatusService } from '@/server/services/verify';
 
 import type { ServerRuntimeRegistration } from './types';
 
@@ -67,6 +67,9 @@ class VerifyResultExecutionRuntime {
       },
     );
     await new VerifyStatusService(this.db, this.userId).recompute(targetOperationId);
+    // This may be the last check to resolve — kick auto-repair if the run failed
+    // with auto_repair checks (no-op until everything has a terminal result).
+    await maybeAutoRepair(this.db, this.userId, targetOperationId);
 
     log(
       'submitted verdict %s for check %s (op %s)',
