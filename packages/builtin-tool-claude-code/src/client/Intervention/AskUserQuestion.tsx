@@ -24,6 +24,19 @@ import type { AskUserQuestionArgs, AskUserQuestionItem } from '../../types';
 const FREEFORM_PAYLOAD_KEY = '__freeform__';
 
 /**
+ * Draft-key prefix for the per-question "write your own" text. Unlike the
+ * global escape hatch (`__freeform__`, which replaces the whole form), this is
+ * scoped to a single question: the user keeps the multi-choice form but writes
+ * a custom answer for one question. Stored in the draft as
+ * `__custom__:<question text>` so it round-trips through the single
+ * `askUserDraft` plugin-state map without a second store key. The text is
+ * merged into that question's submit answer at send time, so the bridge and
+ * the completed Render — which already handle arbitrary label strings — need
+ * no changes.
+ */
+const CUSTOM_PREFIX = '__custom__:';
+
+/**
  * Server-side bridge timeout (matches `AskUserMcpServer.pendingTimeoutMs`).
  * Not strictly synchronized — server is authoritative — but keeps the on-screen
  * countdown close to reality without plumbing a deadline through every layer.
@@ -40,7 +53,72 @@ const formatRemaining = (msLeft: number): string => {
   return `${min}:${sec.toString().padStart(2, '0')}`;
 };
 
+interface SplitDraft {
+  answers: Record<string, string | string[]>;
+  custom: Record<string, string>;
+  freeform: string;
+}
+
+/**
+ * A persisted draft co-mingles three kinds of entry under one map:
+ *   - `__freeform__`           → global escape-mode text
+ *   - `__custom__:<question>`  → per-question "write your own" text
+ *   - `<question>`             → multi-choice picks
+ * Split them so each piece of state owns its own slice and a stale key from
+ * one mode never leaks into another's submit payload.
+ */
+const splitDraft = (draft: Record<string, string | string[]> | undefined): SplitDraft => {
+  const answers: Record<string, string | string[]> = {};
+  const custom: Record<string, string> = {};
+  let freeform = '';
+  for (const [key, value] of Object.entries(draft ?? {})) {
+    if (key === FREEFORM_PAYLOAD_KEY) {
+      if (typeof value === 'string') freeform = value;
+    } else if (key.startsWith(CUSTOM_PREFIX)) {
+      if (typeof value === 'string') custom[key.slice(CUSTOM_PREFIX.length)] = value;
+    } else {
+      answers[key] = value;
+    }
+  }
+  return { answers, custom, freeform };
+};
+
+/**
+ * Recompose the flat `askUserDraft` map from the split state. Picks and
+ * per-question custom text are always carried (so toggling escape on/off or
+ * remounting restores the form); the global freeform key is added only while
+ * escape mode is the active surface.
+ */
+const composeDraft = (
+  answers: Record<string, string | string[]>,
+  custom: Record<string, string>,
+  escape: { active: boolean; text: string },
+): Record<string, string | string[]> => {
+  const draft: Record<string, string | string[]> = { ...answers };
+  for (const [question, text] of Object.entries(custom)) {
+    if (text.trim().length > 0) draft[CUSTOM_PREFIX + question] = text;
+  }
+  if (escape.active && escape.text.length > 0) draft[FREEFORM_PAYLOAD_KEY] = escape.text;
+  return draft;
+};
+
+/** A question counts as answered when it has a pick or non-empty custom text. */
+const isQuestionAnswered = (
+  q: AskUserQuestionItem,
+  answers: Record<string, string | string[]>,
+  custom: Record<string, string>,
+): boolean => {
+  if (custom[q.question]?.trim()) return true;
+  const a = answers[q.question];
+  return q.multiSelect ? Array.isArray(a) && a.length > 0 : !!a;
+};
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  // Per-question "write your own" input — sits as the last row in the option
+  // stack so it reads as one more choice rather than a separate control.
+  customInput: css`
+    margin-block-start: 2px;
+  `,
   // "Or type directly" / "Back to options" link — slim secondary text that
   // sits alongside Skip in the action bar; matches the
   // `lobe-user-interaction` escape-toggle styling so the two flows feel
@@ -155,44 +233,58 @@ OptionCard.displayName = 'CCAskUserQuestionOption';
 
 interface QuestionPanelProps {
   answer: string | string[] | undefined;
+  customValue: string;
   disabled: boolean;
+  onCustomChange: (q: AskUserQuestionItem, value: string) => void;
   onToggle: (q: AskUserQuestionItem, label: string) => void;
   question: AskUserQuestionItem;
 }
 
-const QuestionPanel = memo<QuestionPanelProps>(({ question, answer, disabled, onToggle }) => {
-  const { t } = useTranslation('tool');
-  const isOptionSelected = (label: string): boolean =>
-    question.multiSelect ? Array.isArray(answer) && answer.includes(label) : answer === label;
+const QuestionPanel = memo<QuestionPanelProps>(
+  ({ question, answer, customValue, disabled, onToggle, onCustomChange }) => {
+    const { t } = useTranslation('tool');
+    const isOptionSelected = (label: string): boolean =>
+      question.multiSelect ? Array.isArray(answer) && answer.includes(label) : answer === label;
 
-  return (
-    <Flexbox gap={10}>
-      <Flexbox horizontal align="center" gap={8}>
-        {question.header && <Text type="secondary">{question.header}</Text>}
-        {question.multiSelect && (
-          <Text fontSize={12} type="secondary">
-            {t('claudeCode.askUserQuestion.multiSelectTag')}
-          </Text>
-        )}
-      </Flexbox>
-      <Text strong>{question.question}</Text>
+    return (
+      <Flexbox gap={10}>
+        <Flexbox horizontal align="center" gap={8}>
+          {question.header && <Text type="secondary">{question.header}</Text>}
+          {question.multiSelect && (
+            <Text fontSize={12} type="secondary">
+              {t('claudeCode.askUserQuestion.multiSelectTag')}
+            </Text>
+          )}
+        </Flexbox>
+        <Text strong>{question.question}</Text>
 
-      <Flexbox gap={4} role="listbox">
-        {question.options.map((opt, optIdx) => (
-          <OptionCard
-            description={opt.description}
+        <Flexbox gap={4} role="listbox">
+          {question.options.map((opt, optIdx) => (
+            <OptionCard
+              description={opt.description}
+              disabled={disabled}
+              index={optIdx + 1}
+              key={opt.label}
+              label={opt.label}
+              selected={isOptionSelected(opt.label)}
+              onToggle={() => onToggle(question, opt.label)}
+            />
+          ))}
+          {/* Last item: let the user write their own answer for this question. */}
+          <TextArea
+            autoSize={{ maxRows: 4, minRows: 1 }}
+            className={styles.customInput}
             disabled={disabled}
-            index={optIdx + 1}
-            key={opt.label}
-            label={opt.label}
-            selected={isOptionSelected(opt.label)}
-            onToggle={() => onToggle(question, opt.label)}
+            placeholder={t('claudeCode.askUserQuestion.customOption.placeholder')}
+            value={customValue}
+            variant="filled"
+            onChange={(e) => onCustomChange(question, e.target.value)}
           />
-        ))}
+        </Flexbox>
       </Flexbox>
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 
 QuestionPanel.displayName = 'CCAskUserQuestionPanel';
 
@@ -203,6 +295,12 @@ QuestionPanel.displayName = 'CCAskUserQuestionPanel';
  * outbound side effect. The framework's `handleInteractionAction` (or the
  * hetero branch the chat conversation wires up) is responsible for marking
  * `pluginIntervention.status` and forwarding the answer to CC over IPC.
+ *
+ * Answering a question
+ * - Pick one of the numbered options, or
+ * - Write your own in the trailing input. Single-select treats the two as
+ *   mutually exclusive (typing clears the pick and vice-versa); multi-select
+ *   appends the custom text as an extra entry alongside the checked options.
  *
  * Layout
  * - One question → renders the question + options directly, no tab strip.
@@ -231,38 +329,31 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     });
     const setInterventionDraft = useChatStore((s) => s.setInterventionDraft);
 
-    // Persisted draft may carry both form picks and escape-mode text under
-    // `__freeform__`. Split them so `answers` only contains per-question
-    // picks and `escapeText` owns the freeform string — otherwise a stale
-    // `__freeform__` key would leak into the form-mode submit payload.
-    const [answers, setAnswers] = useState<Record<string, string | string[]>>(() => {
-      if (!persistedDraft) return {};
-      const { [FREEFORM_PAYLOAD_KEY]: _, ...rest } = persistedDraft;
-      return rest;
-    });
+    // Split the persisted draft into its three slices (picks / per-question
+    // custom text / global freeform). Each `useState` lazy-initializer runs
+    // once at mount, so re-splitting per slot is cheap and avoids leaking a
+    // stale `__freeform__` / `__custom__:` key into the form-mode payload.
+    const [answers, setAnswers] = useState<Record<string, string | string[]>>(
+      () => splitDraft(persistedDraft).answers,
+    );
+    const [customAnswers, setCustomAnswers] = useState<Record<string, string>>(
+      () => splitDraft(persistedDraft).custom,
+    );
     // Escape-mode mirrors `lobe-user-interaction`'s "Or type directly"
-    // toggle — options and freeform are mutually exclusive, not stacked.
-    // Persisted text under the `__freeform__` key restores the user back
-    // into escape mode on remount; an empty draft starts in form mode.
-    const [escapeText, setEscapeText] = useState<string>(() => {
-      const v = persistedDraft?.[FREEFORM_PAYLOAD_KEY];
-      return typeof v === 'string' ? v : '';
-    });
-    const [escapeActive, setEscapeActive] = useState<boolean>(() => {
-      const v = persistedDraft?.[FREEFORM_PAYLOAD_KEY];
-      return typeof v === 'string' && v.length > 0;
-    });
+    // toggle — the whole form is replaced by one freeform box. Persisted text
+    // under the `__freeform__` key restores the user back into escape mode on
+    // remount; an empty draft starts in form mode.
+    const [escapeText, setEscapeText] = useState<string>(() => splitDraft(persistedDraft).freeform);
+    const [escapeActive, setEscapeActive] = useState<boolean>(
+      () => splitDraft(persistedDraft).freeform.length > 0,
+    );
     const [submitting, setSubmitting] = useState(false);
     const [activeTab, setActiveTab] = useState<string>(() => {
       // Resume on the first unanswered question so coming back lands the user
       // where they left off rather than always at Q1.
-      const initial = persistedDraft ?? {};
-      const firstUnanswered = questions.findIndex((q) => {
-        const a = initial[q.question];
-        return q.multiSelect ? !Array.isArray(a) || a.length === 0 : !a;
-      });
-      const idx = firstUnanswered >= 0 ? firstUnanswered : 0;
-      return String(idx);
+      const { answers: a, custom } = splitDraft(persistedDraft);
+      const firstUnanswered = questions.findIndex((q) => !isQuestionAnswered(q, a, custom));
+      return String(firstUnanswered >= 0 ? firstUnanswered : 0);
     });
 
     // Mounted-time deadline; server has its own clock and will return
@@ -277,38 +368,99 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
 
     const handleToggle = useCallback(
       (q: AskUserQuestionItem, label: string) => {
-        setAnswers((prev) => {
-          let next: Record<string, string | string[]>;
-          if (q.multiSelect) {
-            const current = (prev[q.question] as string[] | undefined) ?? [];
-            const updated = current.includes(label)
-              ? current.filter((x) => x !== label)
-              : [...current, label];
-            next = { ...prev, [q.question]: updated };
-          } else {
-            next = { ...prev, [q.question]: label };
-          }
-          // Persist picks only. Form mode is mutually exclusive with escape
-          // mode, so we never co-mingle `__freeform__` into a form-mode draft.
-          setInterventionDraft(messageId, next);
+        let nextAnswers: Record<string, string | string[]>;
+        if (q.multiSelect) {
+          const current = (answers[q.question] as string[] | undefined) ?? [];
+          const updated = current.includes(label)
+            ? current.filter((x) => x !== label)
+            : [...current, label];
+          nextAnswers = { ...answers, [q.question]: updated };
+        } else {
+          nextAnswers = { ...answers, [q.question]: label };
+        }
 
-          // Single-select auto-advance: if there's a next unanswered question,
-          // jump to it. Multi-select stays on the same panel so the user can
-          // toggle additional options.
-          if (!q.multiSelect && questions.length > 1) {
-            const nextUnanswered = questions.findIndex((qq, idx) => {
-              if (qq.question === q.question) return false;
-              const a = next[qq.question];
-              if (idx < 0) return false;
-              return qq.multiSelect ? !Array.isArray(a) || a.length === 0 : !a;
-            });
-            if (nextUnanswered >= 0) setActiveTab(String(nextUnanswered));
-          }
-          return next;
-        });
+        // Single-select picks are mutually exclusive with that question's
+        // custom text — picking an option drops any "write your own" text.
+        // Multi-select keeps custom text (it's an additive entry).
+        let nextCustom = customAnswers;
+        if (!q.multiSelect && customAnswers[q.question]) {
+          const { [q.question]: _drop, ...rest } = customAnswers;
+          nextCustom = rest;
+        }
+
+        setAnswers(nextAnswers);
+        if (nextCustom !== customAnswers) setCustomAnswers(nextCustom);
+        setInterventionDraft(
+          messageId,
+          composeDraft(nextAnswers, nextCustom, { active: escapeActive, text: escapeText }),
+        );
+
+        // Single-select auto-advance: if there's a next unanswered question,
+        // jump to it. Multi-select stays on the same panel so the user can
+        // toggle additional options.
+        if (!q.multiSelect && questions.length > 1) {
+          const nextUnanswered = questions.findIndex(
+            (qq) => qq.question !== q.question && !isQuestionAnswered(qq, nextAnswers, nextCustom),
+          );
+          if (nextUnanswered >= 0) setActiveTab(String(nextUnanswered));
+        }
       },
-      [messageId, questions, setInterventionDraft],
+      [
+        answers,
+        customAnswers,
+        escapeActive,
+        escapeText,
+        messageId,
+        questions,
+        setInterventionDraft,
+      ],
     );
+
+    const handleCustomChange = useCallback(
+      (q: AskUserQuestionItem, value: string) => {
+        const nextCustom = { ...customAnswers, [q.question]: value };
+
+        // Single-select: writing your own answer clears the picked option so
+        // the two stay mutually exclusive. Multi-select keeps the checks —
+        // custom text rides along as an additive entry.
+        let nextAnswers = answers;
+        if (!q.multiSelect && value.trim() && answers[q.question]) {
+          const { [q.question]: _drop, ...rest } = answers;
+          nextAnswers = rest;
+        }
+
+        setCustomAnswers(nextCustom);
+        if (nextAnswers !== answers) setAnswers(nextAnswers);
+        setInterventionDraft(
+          messageId,
+          composeDraft(nextAnswers, nextCustom, { active: escapeActive, text: escapeText }),
+        );
+      },
+      [answers, customAnswers, escapeActive, escapeText, messageId, setInterventionDraft],
+    );
+
+    /**
+     * Build the form-mode submit payload: each question maps to its picks,
+     * its custom text, or both (multi-select appends custom as an extra
+     * entry). Shared by the explicit Submit button and the timeout fallback
+     * so both stay in lockstep.
+     */
+    const buildSubmitPayload = useCallback((): Record<string, string | string[]> => {
+      const payload: Record<string, string | string[]> = {};
+      for (const q of questions) {
+        const custom = customAnswers[q.question]?.trim();
+        if (q.multiSelect) {
+          const picks = Array.isArray(answers[q.question]) ? (answers[q.question] as string[]) : [];
+          const merged = custom ? [...picks, custom] : picks;
+          if (merged.length > 0) payload[q.question] = merged;
+        } else if (custom) {
+          payload[q.question] = custom;
+        } else if (answers[q.question]) {
+          payload[q.question] = answers[q.question];
+        }
+      }
+      return payload;
+    }, [answers, customAnswers, questions]);
 
     /**
      * Submit `payload` exactly as given. Used by both the explicit "Submit"
@@ -332,15 +484,14 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     const handleEscapeTextChange = useCallback(
       (value: string) => {
         setEscapeText(value);
-        // Only persist the freeform text while escape mode is the active UI.
-        // Stale `__freeform__` entries left in the draft would re-arm escape
-        // mode on the next mount, which is not what the user signalled.
-        setInterventionDraft(messageId, {
-          ...answers,
-          [FREEFORM_PAYLOAD_KEY]: value,
-        });
+        // Persist the freeform text alongside the (hidden) form picks so a
+        // refresh resumes here; the picks survive a toggle back to the form.
+        setInterventionDraft(
+          messageId,
+          composeDraft(answers, customAnswers, { active: true, text: value }),
+        );
       },
-      [answers, messageId, setInterventionDraft],
+      [answers, customAnswers, messageId, setInterventionDraft],
     );
 
     const handleEscapeToggle = useCallback(() => {
@@ -349,17 +500,13 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
         // Mirror the toggle into the draft: turning escape ON saves the
         // current text (so a refresh resumes here); turning it OFF strips
         // `__freeform__` so the next mount lands back in form mode.
-        if (next) {
-          setInterventionDraft(messageId, {
-            ...answers,
-            [FREEFORM_PAYLOAD_KEY]: escapeText,
-          });
-        } else {
-          setInterventionDraft(messageId, answers);
-        }
+        setInterventionDraft(
+          messageId,
+          composeDraft(answers, customAnswers, { active: next, text: escapeText }),
+        );
         return next;
       });
-    }, [answers, escapeText, messageId, setInterventionDraft]);
+    }, [answers, customAnswers, escapeText, messageId, setInterventionDraft]);
 
     const handleSubmit = useCallback(() => {
       if (escapeActive) {
@@ -367,9 +514,9 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
         // under `__freeform__`. Bridge formatter forwards it to CC verbatim.
         void submitWith({ [FREEFORM_PAYLOAD_KEY]: escapeText.trim() });
       } else {
-        void submitWith(answers);
+        void submitWith(buildSubmitPayload());
       }
-    }, [answers, escapeActive, escapeText, submitWith]);
+    }, [buildSubmitPayload, escapeActive, escapeText, submitWith]);
 
     const handleSkip = useCallback(async () => {
       if (!onInteractionAction || submitting) return;
@@ -383,12 +530,8 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
     }, [onInteractionAction, submitting]);
 
     const allAnswered = useMemo(
-      () =>
-        questions.every((q) => {
-          const a = answers[q.question];
-          return q.multiSelect ? Array.isArray(a) && a.length > 0 : !!a;
-        }),
-      [answers, questions],
+      () => questions.every((q) => isQuestionAnswered(q, answers, customAnswers)),
+      [answers, customAnswers, questions],
     );
 
     // Timeout fallback: when the countdown hits zero and the user hasn't
@@ -406,17 +549,17 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
         void submitWith({ [FREEFORM_PAYLOAD_KEY]: escapeText.trim() });
         return;
       }
-      const fallback: Record<string, string | string[]> = { ...answers };
+      // Start from whatever the user has picked / typed, then backfill option
+      // 1 for any question still left untouched.
+      const fallback = buildSubmitPayload();
       for (const q of questions) {
-        const a = fallback[q.question];
-        const unanswered = q.multiSelect ? !Array.isArray(a) || a.length === 0 : !a;
-        if (unanswered && q.options.length > 0) {
+        if (fallback[q.question] == null && q.options.length > 0) {
           const first = q.options[0].label;
           fallback[q.question] = q.multiSelect ? [first] : first;
         }
       }
       void submitWith(fallback);
-    }, [expired, submitting, questions, answers, escapeActive, escapeText, submitWith]);
+    }, [expired, submitting, questions, escapeActive, escapeText, buildSubmitPayload, submitWith]);
 
     const isMulti = questions.length > 1;
     const activeQuestion = questions[Number(activeTab)] ?? questions[0];
@@ -431,8 +574,7 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
             compact
             activeKey={activeTab}
             items={questions.map((q, idx) => {
-              const a = answers[q.question];
-              const done = q.multiSelect ? Array.isArray(a) && a.length > 0 : !!a;
+              const done = isQuestionAnswered(q, answers, customAnswers);
               return {
                 key: String(idx),
                 label: (
@@ -460,8 +602,10 @@ const AskUserQuestionIntervention = memo<BuiltinInterventionProps<AskUserQuestio
           activeQuestion && (
             <QuestionPanel
               answer={answers[activeQuestion.question]}
+              customValue={customAnswers[activeQuestion.question] ?? ''}
               disabled={expired || submitting}
               question={activeQuestion}
+              onCustomChange={handleCustomChange}
               onToggle={handleToggle}
             />
           )
