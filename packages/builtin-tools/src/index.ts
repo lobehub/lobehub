@@ -63,6 +63,17 @@ export const alwaysOnToolIds = [
 ];
 
 /**
+ * Tool IDs the application force-enables (always on, not user-controllable) that should
+ * be surfaced READ-ONLY in the chat-input Tools popover's "Pinned" section, so users can
+ * see what the app keeps active for every conversation. Unlike user-pinned plugins, these
+ * have no toggle — their on state is owned by the runtime, not the agent's `plugins` array.
+ *
+ * `lobe-agent` is listed first as the headline capability; the rest are the always-on
+ * discovery/activation infra tools (`alwaysOnToolIds`).
+ */
+export const fixedDisplayToolIds = [LobeAgentManifest.identifier, ...alwaysOnToolIds];
+
+/**
  * Tool IDs to exclude from defaults when in manual skill-activate mode.
  * These are the tool/skill discovery tools that should be disabled when user wants precise control.
  * Other default tools (sandbox, web browsing, etc.) remain available if enabled externally.

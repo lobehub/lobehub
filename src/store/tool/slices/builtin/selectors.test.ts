@@ -110,6 +110,50 @@ describe('builtinToolSelectors', () => {
     });
   });
 
+  describe('fixedDisplayMetaList', () => {
+    it('should surface app-fixed tools (e.g. lobe-agent) even though they are hidden', () => {
+      const state = {
+        ...initialState,
+        builtinTools: [
+          {
+            hidden: true,
+            identifier: 'lobe-agent',
+            manifest: {
+              api: [],
+              identifier: 'lobe-agent',
+              meta: { avatar: '🤖', title: 'Lobe Agent' },
+              systemRole: '',
+            },
+            type: 'builtin',
+          },
+          {
+            hidden: true,
+            identifier: 'tool-1',
+            manifest: { api: [], identifier: 'tool-1', meta: { title: 'Tool 1' }, systemRole: '' },
+            type: 'builtin',
+          },
+        ],
+        uninstalledBuiltinTools: [],
+      } as ToolStoreState;
+
+      const result = builtinToolSelectors.fixedDisplayMetaList(state);
+
+      // Only fixed-display ids are returned; lobe-agent leads the list, unrelated tools excluded.
+      expect(result.map((item) => item.identifier)).toContain('lobe-agent');
+      expect(result.map((item) => item.identifier)).not.toContain('tool-1');
+      expect(result[0].identifier).toBe('lobe-agent');
+    });
+
+    it('should skip fixed ids that are not registered in builtinTools', () => {
+      const state = {
+        ...initialState,
+        builtinTools: [],
+      } as unknown as ToolStoreState;
+
+      expect(builtinToolSelectors.fixedDisplayMetaList(state)).toEqual([]);
+    });
+  });
+
   describe('installedAllMetaList', () => {
     it('should include all non-uninstalled tools in agent profile configuration', () => {
       const state = {

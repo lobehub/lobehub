@@ -1,4 +1,4 @@
-import { runtimeManagedToolIds } from '@lobechat/builtin-tools';
+import { fixedDisplayToolIds, runtimeManagedToolIds } from '@lobechat/builtin-tools';
 import { type BuiltinSkill, type LobeToolMeta } from '@lobechat/types';
 
 import {
@@ -229,6 +229,22 @@ const installedAllMetaList = (s: ToolStoreState): LobeToolMetaWithAvailability[]
 };
 
 /**
+ * Get meta for the application-fixed tools (always-on, not user-controllable) that should
+ * be shown read-only in the chat-input Tools popover's "Pinned" section.
+ *
+ * These tools are normally `hidden` (and some are `discoverable: false`), so they never
+ * appear in `metaList` / `metaListIncludingHidden`. Here we read them directly from
+ * `builtinTools` by identifier, preserving the `fixedDisplayToolIds` order and dropping any
+ * that aren't available in the current environment.
+ */
+const fixedDisplayMetaList = (s: ToolStoreState): LobeToolMeta[] =>
+  fixedDisplayToolIds
+    .map((id) => s.builtinTools.find((tool) => tool.identifier === id))
+    .filter((tool): tool is ToolStoreState['builtinTools'][number] => !!tool)
+    .filter((tool) => isBuiltinToolAvailableInCurrentEnv(tool.identifier))
+    .map(toBuiltinMeta);
+
+/**
  * Get installed builtin skills (excludes uninstalled ones)
  */
 const installedBuiltinSkills = (s: ToolStoreState): BuiltinSkill[] =>
@@ -253,6 +269,7 @@ const isBuiltinToolInstalled = (identifier: string) => (s: ToolStoreState) =>
 export const builtinToolSelectors = {
   allMetaList,
   discoverableMetaList,
+  fixedDisplayMetaList,
   installedAllMetaList,
   installedBuiltinSkills,
   isBuiltinToolInstalled,
