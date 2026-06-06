@@ -13,6 +13,7 @@ const mockClient = vi.hoisted(() => ({
   executeMessageApi: vi.fn(),
   executeToolCall: vi.fn(),
   getDeviceSystemInfo: vi.fn(),
+  invokeRpc: vi.fn(),
   queryDeviceList: vi.fn(),
   queryDeviceStatus: vi.fn(),
 }));
@@ -417,6 +418,116 @@ describe('DeviceGateway', () => {
         error: 'connection refused',
         success: false,
       });
+    });
+  });
+
+  describe('initWorkspace', () => {
+    const configure = () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+    };
+
+    it('should return undefined when not configured', async () => {
+      const proxy = new DeviceGateway();
+      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+      expect(result).toBeUndefined();
+      expect(mockClient.invokeRpc).not.toHaveBeenCalled();
+    });
+
+    it('narrows device skills to metadata and passes instructions through', async () => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({
+        data: {
+          instructions: [{ content: '# Rules', source: 'AGENTS.md' }],
+          // Device returns rich ProjectSkillItems; only name/description/path survive.
+          skills: [
+            {
+              description: 'spa',
+              fileCount: 3,
+              files: ['SKILL.md'],
+              name: 'spa-routes',
+              path: '/proj/.agents/skills/spa-routes/SKILL.md',
+              skillDir: '/proj/.agents/skills/spa-routes',
+              source: '.agents/skills',
+            },
+          ],
+        },
+        success: true,
+      });
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+
+      expect(result).toEqual({
+        instructions: [{ content: '# Rules', source: 'AGENTS.md' }],
+        skills: [
+          {
+            description: 'spa',
+            name: 'spa-routes',
+            path: '/proj/.agents/skills/spa-routes/SKILL.md',
+          },
+        ],
+      });
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+        { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
+        { method: 'initWorkspace', params: { scope: '/proj' } },
+      );
+    });
+
+    it('defaults instructions and skills to empty arrays when absent', async () => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({ data: {}, success: true });
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+
+      expect(result).toEqual({ instructions: [], skills: [] });
+    });
+
+    it('returns undefined when the rpc reports failure', async () => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({ error: 'offline', success: false });
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+
+      expect(result).toBeUndefined();
+    });
+
+    it('returns undefined when the rpc succeeds without data', async () => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({ success: true });
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+
+      expect(result).toBeUndefined();
+    });
+
+    it('returns undefined on exception', async () => {
+      configure();
+      mockClient.invokeRpc.mockRejectedValue(new Error('timeout'));
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+
+      expect(result).toBeUndefined();
+    });
+
+    it('forwards a custom timeout', async () => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({
+        data: { instructions: [], skills: [] },
+        success: true,
+      });
+
+      const proxy = new DeviceGateway();
+      await proxy.initWorkspace('user-1', 'dev-1', '/proj', 60_000);
+
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+        { deviceId: 'dev-1', timeout: 60_000, userId: 'user-1' },
+        { method: 'initWorkspace', params: { scope: '/proj' } },
+      );
     });
   });
 

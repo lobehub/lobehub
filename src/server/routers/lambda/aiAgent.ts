@@ -160,20 +160,6 @@ const ExecAgentSchema = z
     fileIds: z.array(z.string()).optional(),
     /** Parent message ID for regeneration/continue (skip user message creation, branch from this message) */
     parentMessageId: z.string().optional(),
-    /**
-     * Project-level skills discovered on the device filesystem
-     * (`.agents/skills` / `.claude/skills`) by the client at request time.
-     * Surfaced in `<available_skills>` and loaded on demand via readFile.
-     */
-    projectSkills: z
-      .array(
-        z.object({
-          description: z.string().optional(),
-          name: z.string(),
-          path: z.string(),
-        }),
-      )
-      .optional(),
     /** The user input/prompt */
     prompt: z.string(),
     /**
@@ -647,7 +633,6 @@ export const aiAgentRouter = router({
       existingMessageIds = [],
       fileIds,
       parentMessageId,
-      projectSkills,
       resumeApproval,
       trigger,
       userInterventionConfig,
@@ -664,7 +649,6 @@ export const aiAgentRouter = router({
         existingMessageIds,
         fileIds,
         parentMessageId,
-        projectSkills,
         prompt,
         // When parentMessageId is provided, this is a regeneration/continue or a
         // human-approval resume — either way, skip user message creation.

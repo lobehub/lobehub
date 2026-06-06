@@ -37,6 +37,7 @@ import type {
   ExecSubAgentTaskResult,
   MessagePluginItem,
   UserInterventionConfig,
+  WorkspaceInitResult,
 } from '@lobechat/types';
 import { RequestTrigger, ThreadStatus, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
@@ -92,6 +93,7 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 import { resolveDeviceAccessPolicy } from './deviceAccessPolicy';
 import { buildAllowedBuiltinTools, isDeviceToolIdentifier } from './deviceToolRegistry';
 import { ingestAttachment } from './ingestAttachment';
+import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -293,6 +295,68 @@ export class AiAgentService {
     // operation runtimes store this value in FK-backed records.
     const task = await this.taskModel.resolve(idOrIdentifier);
     return task?.id;
+  }
+
+  /**
+   * Resolve the "workspace init" scan (project skills + AGENTS.md) for a run
+   * bound to a device's project directory. Reads the cache on
+   * `devices.workingDirs[].workspace`, reusing it within {@link WORKSPACE_INIT_TTL_MS};
+   * otherwise re-scans the device in one round-trip and writes the result back.
+   *
+   * Gated on `activeDeviceId` — without an online device there is nothing to
+   * scan and no current working directory to key the cache on. The web UI reads
+   * the same persisted `workingDirs` directly, so it can still render a last-known
+   * scan even while the device is offline.
+   */
+  private async resolveWorkspaceInit(params: {
+    activeDeviceId: string | undefined;
+    topicId: string;
+  }): Promise<WorkspaceInitResult> {
+    const empty: WorkspaceInitResult = { instructions: [], skills: [] };
+    const { activeDeviceId, topicId } = params;
+    if (!activeDeviceId) return empty;
+
+    try {
+      const deviceModel = new DeviceModel(this.db, this.userId);
+      const device = await deviceModel.findByDeviceId(activeDeviceId);
+      if (!device) return empty;
+
+      // The bound project root: a topic-pinned cwd wins, else the device default
+      // (mirrors the hetero dispatch resolution). This is the directory we scan.
+      const topic = await this.topicModel.findById(topicId);
+      const boundCwd = topic?.metadata?.workingDirectory || device.defaultCwd || undefined;
+      if (!boundCwd) return empty;
+
+      const workingDirs = device.workingDirs ?? [];
+      const cached = workingDirs.find((dir) => dir.path === boundCwd);
+
+      if (isWorkspaceCacheFresh(cached, Date.now()) && cached?.workspace) {
+        log('execAgent: reusing cached workspace init for %s', boundCwd);
+        return cached.workspace;
+      }
+
+      const scanned = await deviceGateway.initWorkspace(this.userId, activeDeviceId, boundCwd);
+      if (!scanned) {
+        // Scan failed (offline mid-run / parse error). Fall back to a stale
+        // cache rather than dropping the project's skills + instructions.
+        if (cached?.workspace) {
+          log('execAgent: workspace init scan failed, using stale cache for %s', boundCwd);
+          return cached.workspace;
+        }
+        return empty;
+      }
+
+      // Persist the fresh scan back onto `workingDirs` (update in place or prepend
+      // a new MRU entry), keeping the JSONB payload bounded.
+      const updated = upsertWorkspaceScan(workingDirs, boundCwd, scanned, Date.now());
+      await deviceModel.update(activeDeviceId, { workingDirs: updated });
+      log('execAgent: scanned and cached workspace init for %s', boundCwd);
+
+      return scanned;
+    } catch (error) {
+      log('execAgent: resolveWorkspaceInit failed: %O', error);
+      return empty;
+    }
   }
 
   /**
@@ -2211,34 +2275,50 @@ export class AiAgentService {
         name: skill.name,
       }));
 
-      // Project skills are filesystem SKILL.md discovered on the device. Their
-      // presence in `params.projectSkills` is itself proof that a client just
-      // scanned the working directory, so we surface them in
-      // `<available_skills>` unconditionally — decoupled from `activeDeviceId`
-      // (a routing decision for `LocalSystemManifest` injection that can
-      // legitimately be `undefined` for multi-device-no-bind or
-      // device-just-went-offline cases). Whether SKILL.md can actually be read
-      // at activation time is re-gated at the executor in
-      // `serverRuntimes/skills.ts` — there `deviceFileAccess` is only built
-      // when `activeDeviceId` resolves, and a missing reader naturally fails
-      // the `activateSkill` call rather than silently hiding the option.
-      // Only `location` (absolute SKILL.md path) flows through; the directory
-      // tree is enumerated lazily at activation time via
-      // `local-system.listFiles`, keeping the op-param payload small.
-      const projectMetas =
-        params.projectSkills?.map((s) => ({
-          description: s.description ?? '',
-          identifier: `project:${s.name}`,
-          location: s.path,
-          name: s.name,
-          source: 'project' as const,
-        })) ?? [];
+      // Project skills + the root AGENTS.md are discovered server-side by
+      // scanning the device's bound project directory ("workspace init"), cached
+      // on `devices.workingDirs` and reused within the TTL. Skills surface in
+      // `<available_skills>` (metadata only — SKILL.md bodies are read lazily at
+      // activation via `local-system` readFile, which `serverRuntimes/skills.ts`
+      // re-gates on `activeDeviceId`). Only `location` (the absolute SKILL.md
+      // path) flows through; the directory tree is enumerated lazily, keeping the
+      // op-param payload small.
+      const workspaceInit = await this.resolveWorkspaceInit({ activeDeviceId, topicId });
 
-      if (params.projectSkills?.length) {
+      const projectMetas = workspaceInit.skills.map((s) => ({
+        description: s.description ?? '',
+        identifier: `project:${s.name}`,
+        location: s.path,
+        name: s.name,
+        source: 'project' as const,
+      }));
+
+      if (projectMetas.length) {
         log(
-          'execAgent: projectSkills merged: %d (activeDeviceId=%s)',
+          'execAgent: workspace skills merged: %d (activeDeviceId=%s)',
           projectMetas.length,
           activeDeviceId ?? 'none',
+        );
+      }
+
+      // Inject the project-root agent instructions (AGENTS.md / CLAUDE.md) as
+      // trailing blocks on the system role — after the agent's persona and any
+      // page/task/additional instructions. `agentConfig` is read by
+      // `createOperation` below, so appending here still reaches the LLM.
+      if (workspaceInit.instructions.length) {
+        const block = workspaceInit.instructions
+          .map(
+            ({ content, source }) =>
+              `<project_instructions source="${source}">\n${content}\n</project_instructions>`,
+          )
+          .join('\n\n');
+        agentConfig.systemRole = agentConfig.systemRole
+          ? `${agentConfig.systemRole}\n\n${block}`
+          : block;
+        log(
+          'execAgent: injected %d project instruction file(s): %s',
+          workspaceInit.instructions.length,
+          workspaceInit.instructions.map((i) => i.source).join(', '),
         );
       }
 

@@ -8,6 +8,7 @@ import {
   type GatewayMcpStdioParams,
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import type { ProjectSkillMeta, WorkspaceInitResult } from '@lobechat/types';
 import debug from 'debug';
 
 import { gatewayEnv } from '@/envs/gateway';
@@ -74,6 +75,54 @@ export class DeviceGateway {
       return result.success ? result.systemInfo : undefined;
     } catch {
       log('queryDeviceSystemInfo: failed for userId=%s, deviceId=%s', userId, deviceId);
+      return undefined;
+    }
+  }
+
+  /**
+   * Scan a bound project directory on the device in a single round-trip:
+   * project skills (`.agents/skills` + `.claude/skills`) plus the root
+   * `AGENTS.md` / `CLAUDE.md`. Routed through the generic device RPC relay
+   * (`invokeRpc`) — a server-internal channel the agent never sees, distinct
+   * from the LLM-facing tool-call path.
+   *
+   * Returns `undefined` when the gateway is unconfigured, the device is offline,
+   * or the call fails — callers fall back to the cached scan.
+   */
+  async initWorkspace(
+    userId: string,
+    deviceId: string,
+    scope: string,
+    timeout = 30_000,
+  ): Promise<WorkspaceInitResult | undefined> {
+    const client = this.getClient();
+    if (!client) return undefined;
+
+    try {
+      // The device returns rich `ProjectSkillItem`s; narrow to metadata only so
+      // the cached `workingDirs` payload stays small (SKILL.md bodies are still
+      // read lazily at activation time).
+      const result = await client.invokeRpc<{
+        instructions?: WorkspaceInitResult['instructions'];
+        skills?: (ProjectSkillMeta & Record<string, unknown>)[];
+      }>({ deviceId, timeout, userId }, { method: 'initWorkspace', params: { scope } });
+
+      if (!result.success || !result.data) {
+        log('initWorkspace: failed for deviceId=%s — %s', deviceId, result.error);
+        return undefined;
+      }
+
+      const { instructions, skills } = result.data;
+      return {
+        instructions: instructions ?? [],
+        skills: (skills ?? []).map(({ description, name, path }) => ({
+          description,
+          name,
+          path,
+        })),
+      };
+    } catch (error) {
+      log('initWorkspace: error for deviceId=%s — %O', deviceId, error);
       return undefined;
     }
   }

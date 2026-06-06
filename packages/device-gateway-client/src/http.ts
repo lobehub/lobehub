@@ -26,6 +26,12 @@ export interface DeviceMessageApiResult {
   success: boolean;
 }
 
+export interface DeviceRpcResult<T = unknown> {
+  data?: T;
+  error?: string;
+  success: boolean;
+}
+
 export interface GatewayHttpClientOptions {
   gatewayUrl: string;
   serviceToken: string;
@@ -192,6 +198,42 @@ export class GatewayHttpClient {
       return { error: text || `HTTP ${res.status}`, success: false };
     }
     return { success: true };
+  }
+
+  /**
+   * Invoke a named device-side method over the generic RPC relay. Server-only —
+   * the gateway forwards `{ method, params }` opaquely to the device's RPC
+   * dispatcher and correlates the response by `requestId`, so new methods need
+   * no per-method gateway route. Distinct from {@link executeToolCall}, which is
+   * the LLM-facing tool channel.
+   */
+  async invokeRpc<T = unknown>(
+    params: { deviceId?: string; timeout?: number; userId: string },
+    rpc: { method: string; params?: unknown },
+  ): Promise<DeviceRpcResult<T>> {
+    const timeout =
+      typeof params.timeout === 'number' && Number.isFinite(params.timeout)
+        ? Math.max(Math.trunc(params.timeout), 0)
+        : DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS;
+    const res = await this.post(
+      '/api/device/rpc',
+      {
+        deviceId: params.deviceId,
+        method: rpc.method,
+        params: rpc.params,
+        timeout: params.timeout,
+        userId: params.userId,
+      },
+      { timeout: timeout + HTTP_CALL_TIMEOUT_PADDING_MS },
+    );
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      return { error: text || `HTTP ${res.status}`, success: false };
+    }
+
+    const data = await res.json();
+    return { data: data.data, error: data.error, success: data.success ?? false };
   }
 
   async getDeviceSystemInfo(

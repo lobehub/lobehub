@@ -13,6 +13,7 @@ import type {
   GetCommandOutputParams,
   GlobFilesParams,
   GrepContentParams,
+  InitWorkspaceParams,
   KillCommandParams,
   ListLocalFileParams,
   LocalReadFileParams,
@@ -34,6 +35,7 @@ import LocalFileCtr from './LocalFileCtr';
 import McpCtr from './McpCtr';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 import ShellCommandCtr from './ShellCommandCtr';
+import WorkspaceCtr from './WorkspaceCtr';
 
 /**
  * Inject the lh-notify protocol into the first turn of a new hetero-agent session.
@@ -162,6 +164,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
     return this.app.getController(LocalFileCtr);
   }
 
+  private get workspaceCtr() {
+    return this.app.getController(WorkspaceCtr);
+  }
+
   private get shellCommandCtr() {
     return this.app.getController(ShellCommandCtr);
   }
@@ -202,6 +208,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
     // Wire up agent run handler
     srv.setAgentRunHandler((request) => this.executeAgentRun(request));
+
+    // Wire up generic device RPC handler (server-internal method forwarding,
+    // e.g. workspace-init scans — never surfaced to the agent)
+    srv.setRpcHandler((method, params) => this.executeDeviceRpc(method, params));
 
     // Wire up device registrar (persists this device to the server registry)
     srv.setDeviceRegistrar((info) => this.registerDevice(info));
@@ -333,6 +343,23 @@ export default class GatewayConnectionCtr extends ControllerModule {
       this.localSystemRuntime = new LocalSystemExecutionRuntime(service);
     }
     return this.localSystemRuntime;
+  }
+
+  /**
+   * Dispatch a generic server-internal device RPC (not an agent tool call) by
+   * method name. Currently only `initWorkspace` (scan the bound project root for
+   * skills + AGENTS.md); add new server-only device methods here.
+   */
+  private async executeDeviceRpc(method: string, params: unknown): Promise<unknown> {
+    switch (method) {
+      case 'initWorkspace': {
+        return this.workspaceCtr.initWorkspace(params as InitWorkspaceParams);
+      }
+
+      default: {
+        throw new Error(`Unknown device RPC method: ${method}`);
+      }
+    }
   }
 
   private async executeToolCall(

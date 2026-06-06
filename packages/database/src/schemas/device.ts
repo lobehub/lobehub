@@ -1,3 +1,4 @@
+import type { WorkspaceInitResult } from '@lobechat/types';
 import { index, jsonb, pgTable, text, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
 
 import { timestamps, timestamptz } from './_helpers';
@@ -13,6 +14,18 @@ import { workspaces } from './workspace';
 export interface WorkingDirEntry {
   path: string;
   repoType?: 'git' | 'github';
+  /**
+   * Cached "workspace init" scan of this directory (AGENTS.md + project skills).
+   * Populated server-side at run start via `deviceGateway.initWorkspace` and
+   * reused within the TTL gated by `workspaceScannedAt`. Also read directly by
+   * the web UI to render the project's skills / instructions.
+   */
+  workspace?: WorkspaceInitResult;
+  /**
+   * Epoch ms when `workspace` was last scanned. Hoisted to the top level (out of
+   * `workspace`) so freshness can be checked without deserializing the payload.
+   */
+  workspaceScannedAt?: number;
 }
 
 /**

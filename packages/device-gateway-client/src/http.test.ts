@@ -482,4 +482,51 @@ describe('GatewayHttpClient', () => {
       expect(result.success).toBe(false);
     });
   });
+
+  describe('invokeRpc', () => {
+    it('forwards method + params and returns data on success', async () => {
+      const data = { instructions: [], skills: [] };
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ data, success: true }),
+        ok: true,
+      });
+
+      const result = await client.invokeRpc(
+        { deviceId: 'device-1', userId: 'user-1' },
+        { method: 'initWorkspace', params: { scope: '/proj' } },
+      );
+
+      expect(result).toEqual({ data, error: undefined, success: true });
+      const [url, init] = vi.mocked(fetch).mock.calls[0];
+      expect(url).toBe('https://gateway.test.com/api/device/rpc');
+      expect(JSON.parse((init as any).body)).toEqual({
+        deviceId: 'device-1',
+        method: 'initWorkspace',
+        params: { scope: '/proj' },
+        userId: 'user-1',
+      });
+    });
+
+    it('returns failure on non-ok response', async () => {
+      mockFetch({ ok: false, status: 503, text: vi.fn().mockResolvedValue('offline') });
+
+      const result = await client.invokeRpc(
+        { deviceId: 'device-1', userId: 'user-1' },
+        { method: 'initWorkspace' },
+      );
+
+      expect(result).toEqual({ error: 'offline', success: false });
+    });
+
+    it('defaults success to false when the field is missing', async () => {
+      mockFetch({ json: vi.fn().mockResolvedValue({ data: {} }), ok: true });
+
+      const result = await client.invokeRpc(
+        { deviceId: 'device-1', userId: 'user-1' },
+        { method: 'initWorkspace' },
+      );
+
+      expect(result.success).toBe(false);
+    });
+  });
 });
