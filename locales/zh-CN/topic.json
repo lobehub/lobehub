@@ -135,6 +135,8 @@
   "renameModal.title": "重命名话题",
   "searchPlaceholder": "搜索话题…",
   "searchResultEmpty": "暂无搜索结果",
+  "sidebar.collapseAll": "折叠所有分组",
+  "sidebar.expandAll": "展开所有分组",
   "sidebar.title": "话题",
   "taskManager.agent": "任务助手",
   "taskManager.welcome": "问我关于你的任务",

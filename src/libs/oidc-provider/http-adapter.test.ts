@@ -4,6 +4,7 @@
 import type { Readable } from 'node:stream';
 
 import type { NextRequest } from 'next/server';
+import type { SelectiveBodyContext } from 'oidc-provider/lib/shared/selective_body.js';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('debug', () => ({
@@ -75,11 +76,9 @@ describe('OIDC HTTP adapter', () => {
       }) as unknown as NextRequest;
 
       const { createNodeRequest } = await import('./http-adapter');
-      const { urlencoded } = (await import('oidc-provider/lib/shared/selective_body.js')) as {
-        urlencoded: (ctx: any, next: () => Promise<void>) => Promise<void>;
-      };
+      const { urlencoded } = await import('oidc-provider/lib/shared/selective_body.js');
       const nodeRequest = await createNodeRequest(request);
-      const ctx = {
+      const ctx: SelectiveBodyContext = {
         charset: 'utf-8',
         is: (contentType: string) => contentType === 'application/x-www-form-urlencoded',
         oidc: {},

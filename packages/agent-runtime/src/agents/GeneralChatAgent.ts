@@ -187,6 +187,8 @@ export class GeneralChatAgent implements Agent {
       if (dynamicPolicy !== undefined) {
         if (dynamicPolicy === 'never') {
           toolsToExecute.push(toolCalling);
+        } else if (approvalMode === 'headless' && dynamicPolicy !== 'always') {
+          toolsToExecute.push(toolCalling);
         } else {
           toolsNeedingIntervention.push(toolCalling);
         }
@@ -208,6 +210,13 @@ export class GeneralChatAgent implements Agent {
       // Phase 4: Check 'always' policy - overrides auto-run mode
       if (this.matchesAlwaysPolicy(staticConfig, toolArgs)) {
         toolsNeedingIntervention.push(toolCalling);
+        continue;
+      }
+
+      // Headless/CLI has no approval UI. Auto-run overridable tool-level policies,
+      // while preserving non-bypassable `always` blocks handled above.
+      if (approvalMode === 'headless') {
+        toolsToExecute.push(toolCalling);
         continue;
       }
 

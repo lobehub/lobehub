@@ -74,6 +74,42 @@ describe('defineUserMemoryActionHandler', () => {
     expect(context.runtimeState.touchGuardState).toHaveBeenCalledTimes(1);
   });
 
+  it('anchors the memory-agent thread on the user message id when no assistant boundary exists', async () => {
+    // Non-clientRuntimeComplete source: sourceId has no `:completion:` segment,
+    // so assistantMessageId is absent. The run must still anchor a child thread
+    // under the triggering user message instead of leaking into the main topic.
+    memoryActionRunner.mockResolvedValue({ status: 'applied' });
+
+    const handler = defineUserMemoryActionHandler({
+      db: {} as never,
+      memoryActionRunner,
+      userId: 'user_1',
+    });
+
+    await handler.handle(
+      {
+        actionId: 'act_memory_fallback_anchor',
+        actionType: 'action.user-memory.handle',
+        chain: { chainId: 'chain_1', rootSourceId: 'source_1' },
+        payload: {
+          agentId: 'agent_1',
+          idempotencyKey: 'source_1:memory:msg_user_1',
+          message: 'Remember that I prefer concise answers.',
+          messageId: 'msg_user_1',
+          topicId: 'topic_1',
+        },
+        signal: { signalId: 'sig_1', signalType: 'signal.feedback.domain.memory' },
+        source: { sourceId: 'source_1', sourceType: 'agent.user.message' },
+        timestamp: 1,
+      },
+      context,
+    );
+
+    expect(memoryActionRunner).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceMessageId: 'msg_user_1', topicId: 'topic_1' }),
+    );
+  });
+
   it('returns the applied memory target from the memory agent runner', async () => {
     memoryActionRunner.mockResolvedValue({
       detail: 'Arvin Xu 希望助手在输出时每个段落/模块都写得更长、更展开。',

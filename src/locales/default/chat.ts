@@ -714,7 +714,9 @@ export default {
   'taskDetail.comment.save': 'Save',
   'taskDetail.commentPlaceholder':
     'Leave feedback to guide the agent — your comments shape the next run...',
-  'taskDetail.commentSubmitAndRun': 'Send & run now',
+  'taskDetail.replyInThread': 'Reply in this thread',
+  'taskDetail.replyPlaceholder': 'Reply in this thread...',
+  'taskDetail.sendFollowUp': 'Send follow up message',
   'taskDetail.deleteConfirm.content': 'This action cannot be undone.',
   'taskDetail.deleteConfirm.ok': 'Delete',
   'taskDetail.deleteConfirm.title': 'Delete this task?',

@@ -293,4 +293,45 @@ describe('AiAgentService.execAgent - threadId handling', () => {
       // This is handled by the createOperation call
     }, 10_000);
   });
+
+  describe('Agent Signal marker attribution', () => {
+    it('persists trace messages under the reviewed user agent carried on the marker', async () => {
+      // Background self-iteration runs execute under a builtin slug, so the
+      // resolved agent ('agent-1') is the builtin agent — but their persisted
+      // messages must attribute to the reviewed user agent on `marker.agentId`,
+      // matching the operation row + receipts (not the builtin slug).
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: {
+          agentSignal: { agentId: 'user-agent-9', kind: 'skill', sourceId: 'src-1' },
+          topicId: 'topic-1',
+        },
+        prompt: 'Skill feedback evidence',
+      });
+
+      const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
+      const assistantMessageCall = mockMessageCreate.mock.calls.find(
+        (call) => call[0].role === 'assistant',
+      );
+
+      expect(userMessageCall![0].agentId).toBe('user-agent-9');
+      expect(assistantMessageCall![0].agentId).toBe('user-agent-9');
+    }, 10_000);
+
+    it('falls back to the executing agent id for ordinary runs without a marker', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-1' },
+        prompt: 'Test prompt',
+      });
+
+      const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
+      const assistantMessageCall = mockMessageCreate.mock.calls.find(
+        (call) => call[0].role === 'assistant',
+      );
+
+      expect(userMessageCall![0].agentId).toBe('agent-1');
+      expect(assistantMessageCall![0].agentId).toBe('agent-1');
+    }, 10_000);
+  });
 });
