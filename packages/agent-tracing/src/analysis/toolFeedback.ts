@@ -21,7 +21,11 @@ export interface ToolResultMetrics {
   /** 0..1 — fraction of fixed-size shingles that are exact repeats (degenerate dumps). */
   selfRedundancy: number;
   stepIndex: number;
-  /** 0..1 — for xml/html, share of chars living inside `<...>` tags (node ids, markup). */
+  /**
+   * 0..1 — for xml/html, share of chars spent on markup ATTRIBUTES (`id="3tx0"`,
+   * class/style/data-*). Semantic element tags (<title>, <result>) are treated as useful
+   * structure, not noise — so clean semantic XML scores ~0, id-laden DOM dumps score high.
+   */
   structuralNoiseRatio: number;
   /** gpt-tokenizer count of the unwrapped content. */
   tokens: number;
@@ -63,12 +67,19 @@ function selfRedundancy(s: string): number {
   return 1 - new Set(shingles).size / shingles.length;
 }
 
+// Attribute NAMES that carry no signal for the model — opaque identifiers and presentational
+// markup. Everything else (title=, url=, href=, name=, lang=…) labels real content and is kept.
+const NOISE_ATTR_RE =
+  /\b(?:id|class|style|role|rel|target|width|height|aria-[\w-]+|data-[\w-]+|on\w+)\s*=\s*(?:"[^"]*"|'[^']*')/gi;
+
 function structuralNoiseRatio(s: string, format: ToolResultMetrics['format']): number {
   if (format !== 'xml' || s.length === 0) return 0;
-  let inside = 0;
-  const tags = s.match(/<[^>]*>/g);
-  if (tags) for (const tag of tags) inside += tag.length;
-  return inside / s.length;
+  // Semantic structure is NOT noise: element tags (<item>, <result>) and signal-bearing
+  // attributes (title="…", url="…") are exactly what the model reads. Only opaque/presentational
+  // attributes (id="3tx0", class, style, data-*) are dead bytes the model never references.
+  let attrChars = 0;
+  for (const m of s.matchAll(NOISE_ATTR_RE)) attrChars += m[0].length;
+  return attrChars / s.length;
 }
 
 /** Pure: score one raw tool output string. The shared core reused by CLI / DC ingestion / backfill. */
