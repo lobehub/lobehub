@@ -55,8 +55,16 @@ export const defaultToolIds = [
 /**
  * Tool IDs that are always enabled regardless of user selection.
  * These are core system tools that the agent needs to function properly.
+ *
+ * `lobe-agent` is listed first: its built-in capabilities (plan + todo management,
+ * sub-agent dispatch, visual-media fallback) should be available on every agent-mode turn,
+ * not gated behind explicit injection. NOTE: these rules only apply in agent mode — chat
+ * mode (`enableAgentMode === false`) drops `alwaysOnToolIds` entirely. In manual
+ * skill-activate mode the discovery tools in `manualModeExcludeToolIds` are still removed
+ * from the defaults before the enable checker runs, so they end up disabled there.
  */
 export const alwaysOnToolIds = [
+  LobeAgentManifest.identifier,
   LobeActivatorManifest.identifier,
   SkillsManifest.identifier,
   SkillStoreManifest.identifier,
@@ -68,10 +76,12 @@ export const alwaysOnToolIds = [
  * see what the app keeps active for every conversation. Unlike user-pinned plugins, these
  * have no toggle — their on state is owned by the runtime, not the agent's `plugins` array.
  *
- * `lobe-agent` is listed first as the headline capability; the rest are the always-on
- * discovery/activation infra tools (`alwaysOnToolIds`).
+ * Derived from `alwaysOnToolIds` (single source of truth) so the display can't drift from
+ * what the engine actually enables. Consumers must still drop `manualModeExcludeToolIds`
+ * when the agent is in manual skill-activate mode — those tools are excluded from the
+ * defaults there and therefore not actually on.
  */
-export const fixedDisplayToolIds = [LobeAgentManifest.identifier, ...alwaysOnToolIds];
+export const fixedDisplayToolIds = alwaysOnToolIds;
 
 /**
  * Tool IDs to exclude from defaults when in manual skill-activate mode.

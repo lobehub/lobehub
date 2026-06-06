@@ -269,7 +269,7 @@ describe('createServerAgentToolsEngine', () => {
     expect(result.enabledToolIds).toContain(LobeAgentManifest.identifier);
   });
 
-  it('should not enable VisualUnderstanding by default', () => {
+  it('should enable lobe-agent by default since it is always-on', () => {
     const context = createMockContext();
     const engine = createServerAgentToolsEngine(context, {
       agentConfig: { plugins: [] },
@@ -283,7 +283,8 @@ describe('createServerAgentToolsEngine', () => {
       toolIds: [],
     });
 
-    expect(result.enabledToolIds).not.toContain(LobeAgentManifest.identifier);
+    // lobe-agent is in alwaysOnToolIds, so its core capabilities are on for every agent-mode turn.
+    expect(result.enabledToolIds).toContain(LobeAgentManifest.identifier);
   });
 
   it('should enable KnowledgeBase when hasEnabledKnowledgeBases is true', () => {

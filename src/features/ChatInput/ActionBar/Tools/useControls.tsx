@@ -441,8 +441,12 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   );
   // Application-fixed tools (always-on, not user-controllable, e.g. lobe-agent).
   // Rendered read-only at the top of the "Pinned" section so users can see what the
-  // app keeps active for every conversation.
-  const fixedDisplayList = useToolStore(builtinToolSelectors.fixedDisplayMetaList, isEqual);
+  // app keeps active for every conversation. Mode-aware: in manual skill-activate mode the
+  // discovery tools the engine strips (activator, skill-store) are dropped from the list.
+  const fixedDisplayList = useToolStore(
+    builtinToolSelectors.fixedDisplayMetaList({ isManualMode: isManualSkillMode }),
+    isEqual,
+  );
   const plugins = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
 
   const updateSkillPolicy = useCallback(
