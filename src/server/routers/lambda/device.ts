@@ -7,6 +7,8 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { deviceGateway } from '@/server/services/toolExecution/deviceGateway';
 
+import { preserveWorkspaceCache } from './deviceWorkingDirs';
+
 // Derive the zod enum from the canonical config so new platforms are
 // automatically covered without touching this file.
 const remotePlatformEnum = z.enum(
@@ -242,8 +244,19 @@ export const deviceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { deviceId, ...value } = input;
-      await ctx.deviceModel.update(deviceId, value);
+      const { deviceId, workingDirs, ...value } = input;
+
+      // The workspace-init cache (workspace / workspaceScannedAt) is stripped
+      // from `workingDirs` by the strict schema above, so re-attach it from the
+      // stored row by path — otherwise an ordinary cwd save wipes the cache.
+      const nextWorkingDirs = workingDirs
+        ? preserveWorkspaceCache(
+            workingDirs,
+            (await ctx.deviceModel.findByDeviceId(deviceId))?.workingDirs ?? [],
+          )
+        : undefined;
+
+      await ctx.deviceModel.update(deviceId, { ...value, workingDirs: nextWorkingDirs });
       return { success: true };
     }),
 });
