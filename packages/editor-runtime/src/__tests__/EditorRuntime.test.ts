@@ -1,13 +1,5 @@
 import type { IEditor } from '@lobehub/editor';
-import {
-  CommonPlugin,
-  Kernel,
-  LITEXML_APPLY_COMMAND,
-  LITEXML_MODIFY_COMMAND,
-  LitexmlPlugin,
-  MarkdownPlugin,
-  moment,
-} from '@lobehub/editor';
+import { CommonPlugin, Kernel, LitexmlPlugin, MarkdownPlugin, moment } from '@lobehub/editor';
 import { resetRandomKey } from 'lexical';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -27,14 +19,6 @@ describe('EditorRuntime', () => {
 
     runtime = new EditorRuntime();
     runtime.setEditor(editor);
-    runtime.setLiteXMLAdapter({
-      applyBatch: (target, operations) => {
-        target.dispatchCommand(LITEXML_MODIFY_COMMAND, operations);
-      },
-      applyReplace: (target, litexml) => {
-        target.dispatchCommand(LITEXML_APPLY_COMMAND, { litexml });
-      },
-    });
 
     mockTitleSetter = vi.fn();
     mockTitleGetter = vi.fn().mockReturnValue('Test Title');

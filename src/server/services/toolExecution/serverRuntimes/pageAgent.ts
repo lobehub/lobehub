@@ -4,7 +4,7 @@ import {
   type PageAgentInvocationContext,
   type PageAgentRuntimeService,
 } from '@lobechat/builtin-tool-page-agent/executionRuntime';
-import { EditorRuntime, type LiteXMLAdapter } from '@lobechat/editor-runtime/server';
+import { EditorRuntime } from '@lobechat/editor-runtime/server';
 import { createHeadlessEditor, type HeadlessEditor } from '@lobehub/editor/headless';
 import type { SerializedEditorState, SerializedLexicalNode } from 'lexical';
 
@@ -146,20 +146,10 @@ const buildEnv = (snapshot: DocumentSnapshot, documentId: string): InvocationEnv
   // unknown to keep the contract explicit.
   runtime.setEditor(headless.kernel as unknown as EditorRuntimeEditorParam);
   runtime.setCurrentDocId(documentId);
-  // Route LiteXML mutations through the HeadlessEditor wrapper so the right
-  // command symbols (registered inside the headless bundle) are dispatched.
-  // Going through `kernel.dispatchCommand(LITEXML_*_COMMAND, ...)` with the
-  // symbols imported from `@lobehub/editor` would no-op silently — different
-  // module copies create different command identities.
-  const headlessAdapter: LiteXMLAdapter = {
-    applyBatch: async (_editor, operations) => {
-      await headless.applyLiteXMLBatch(operations);
-    },
-    applyReplace: async (_editor, litexml) => {
-      await headless.applyLiteXML({ action: 'apply', litexml });
-    },
-  };
-  runtime.setLiteXMLAdapter(headlessAdapter);
+  // `EditorRuntime` dispatches `LITEXML_*_COMMAND` (imported from the DOM-free
+  // `@lobehub/editor/litexml-commands` subpath) straight onto the kernel. The
+  // headless bundle's `LitexmlPlugin` registers its listeners against the same
+  // single command identities, so the dispatch lands without any adapter.
   runtime.setTitleHandlers(
     (next) => {
       title = next;

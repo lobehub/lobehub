@@ -1,5 +1,6 @@
 import type { PageContentContext } from '@lobechat/prompts';
 import type { IEditor } from '@lobehub/editor';
+import { LITEXML_APPLY_COMMAND, LITEXML_MODIFY_COMMAND } from '@lobehub/editor/litexml-commands';
 import debug from 'debug';
 
 import type {
@@ -40,34 +41,14 @@ export interface EditorMutationContext {
 }
 
 /**
- * Payload for a single LiteXML modify-batch operation. Matches the runtime
- * shape of `LITEXML_MODIFY_COMMAND` payload in `@lobehub/editor` without
- * importing it (which pulls the renderer bundle and breaks Node).
+ * Payload for a single LiteXML modify-batch operation — the runtime shape of
+ * the `LITEXML_MODIFY_COMMAND` payload.
  */
 export type LiteXMLBatchOperation =
   | { action: 'insert'; afterId: string; litexml: string }
   | { action: 'insert'; beforeId: string; litexml: string }
   | { action: 'modify'; litexml: string | string[] }
   | { action: 'remove'; id: string };
-
-/**
- * Strategy object for dispatching LiteXML mutations.
- *
- * `EditorRuntime` does not import the `LITEXML_*_COMMAND` symbols from
- * `@lobehub/editor` because that pulls the React renderer bundle (and crashes
- * Node — see ReactSlashPlugin's top-level `document.createElement`). Instead,
- * the call site supplies an adapter:
- *
- *   - Renderer: dispatches `LITEXML_MODIFY_COMMAND` / `LITEXML_APPLY_COMMAND`
- *     on the live editor (commands imported from `@lobehub/editor`).
- *   - Server (HeadlessEditor): forwards to `HeadlessEditor.applyLiteXMLBatch`
- *     / `applyLiteXML({ action: 'apply', ... })` so the correct headless-bundle
- *     command symbols are dispatched.
- */
-export interface LiteXMLAdapter {
-  applyBatch: (editor: IEditor, operations: LiteXMLBatchOperation[]) => Promise<void> | void;
-  applyReplace: (editor: IEditor, litexml: string[]) => Promise<void> | void;
-}
 
 export interface EditorRuntimeDebugSnapshot {
   currentDocId?: string;
@@ -113,25 +94,6 @@ export class EditorRuntime {
   private afterMutateHandler: (() => void | Promise<void>) | null = null;
   private beforeMutateHandler: ((context: EditorMutationContext) => void | Promise<void>) | null =
     null;
-  private litexmlAdapter: LiteXMLAdapter | null = null;
-
-  /**
-   * Configure how LiteXML mutations are dispatched (see {@link LiteXMLAdapter}).
-   * Must be set before calling `modifyNodes` / `replaceText`.
-   */
-  setLiteXMLAdapter(adapter: LiteXMLAdapter | null) {
-    this.litexmlAdapter = adapter;
-    log('[EditorRuntime] setLiteXMLAdapter', { hasAdapter: !!adapter });
-  }
-
-  private getLiteXMLAdapter(): LiteXMLAdapter {
-    if (!this.litexmlAdapter) {
-      throw new Error(
-        'EditorRuntime: LiteXML adapter not configured. Call setLiteXMLAdapter() before invoking modifyNodes/replaceText.',
-      );
-    }
-    return this.litexmlAdapter;
-  }
 
   /**
    * Set the current editor instance
@@ -578,7 +540,7 @@ export class EditorRuntime {
     }
 
     log('Dispatching LiteXML modify batch with payload:', commandPayload);
-    await this.getLiteXMLAdapter().applyBatch(editor, commandPayload);
+    editor.dispatchCommand(LITEXML_MODIFY_COMMAND, commandPayload);
 
     const successCount = results.filter((r) => r.success).length;
     const totalCount = results.length;
@@ -868,7 +830,7 @@ export class EditorRuntime {
         throw new Error('replaceText failed: LiteXML data source is not ready.');
       }
 
-      await this.getLiteXMLAdapter().applyReplace(editor, litexmlUpdates);
+      editor.dispatchCommand(LITEXML_APPLY_COMMAND, { litexml: litexmlUpdates });
       log('LiteXML replace dispatched');
     }
 
