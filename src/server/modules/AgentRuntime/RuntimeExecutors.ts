@@ -540,14 +540,10 @@ export const createRuntimeExecutors = (
         const { loadModels } = await import('@/business/client/model-bank/loadModels');
         const builtinModels = await loadModels();
 
-        const preserveThinkingFromPayload = (llmPayload as { preserveThinking?: boolean })
-          .preserveThinking;
         const preserveThinkingConfigured =
-          typeof preserveThinkingFromPayload === 'boolean'
-            ? preserveThinkingFromPayload
-            : typeof agentConfig.chatConfig?.preserveThinking === 'boolean'
-              ? agentConfig.chatConfig.preserveThinking
-              : undefined;
+          typeof agentConfig.chatConfig?.preserveThinking === 'boolean'
+            ? agentConfig.chatConfig.preserveThinking
+            : undefined;
         const preserveThinkingRequested = preserveThinkingConfigured === true;
 
         const modelCard = builtinModels.find(
