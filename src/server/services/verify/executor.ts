@@ -140,62 +140,73 @@ export class VerifyExecutorService {
     const agentItems = items.filter((i) => i.verifierType === 'agent');
     const programItems = items.filter((i) => i.verifierType === 'program');
 
-    // --- program: v1 placeholder (no shell environment) ---
-    for (const item of programItems) {
-      await this.resultModel.updateByCheckItem(params.operationId, item.id, {
+    // The three verifier kinds are independent — run them concurrently. LLM items
+    // are judged in one batched call; each agent item spawns its own sub-agent.
+    await Promise.all([
+      this.runProgramItems(params.operationId, programItems),
+      this.runLlmItems(params, llmItems),
+      ...agentItems.map((item) => this.runAgentItem(params, item)),
+    ]);
+
+    await this.statusService.recompute(params.operationId);
+  }
+
+  /** Program verifiers are a v1 placeholder (no shell environment) — mark skipped. */
+  private async runProgramItems(operationId: string, items: VerifyCheckItem[]): Promise<void> {
+    for (const item of items) {
+      await this.resultModel.updateByCheckItem(operationId, item.id, {
         completedAt: new Date(),
         status: 'skipped',
         toulmin: { limitation: 'Program verifier is not executed in v1.' },
       });
     }
+  }
 
-    // --- llm: Toulmin judge (batch by default) ---
-    if (llmItems.length > 0) {
-      try {
-        if (params.batchLlm ?? true) {
-          await this.judgeBatch(params, llmItems);
-        } else {
-          for (const item of llmItems) await this.judgeSingle(params, item);
-        }
-      } catch (error) {
-        log('llm judge failed for op %s: %O', params.operationId, error);
-        // Leave failed-to-judge items pending; rollup will report `verifying`.
+  /** Judge all LLM items via the Toulmin judge (one batched call by default). */
+  private async runLlmItems(params: ExecuteVerifyParams, items: VerifyCheckItem[]): Promise<void> {
+    if (items.length === 0) return;
+    try {
+      if (params.batchLlm ?? true) {
+        await this.judgeBatch(params, items);
+      } else {
+        for (const item of items) await this.judgeSingle(params, item);
       }
+    } catch (error) {
+      log('llm judge failed for op %s: %O', params.operationId, error);
+      // Leave failed-to-judge items pending; rollup will report `verifying`.
     }
+  }
 
-    // --- agent: run a verifier sub-agent (verdict lands async via its hook) or skip ---
-    for (const item of agentItems) {
-      if (!params.runVerifierAgent) {
-        await this.resultModel.updateByCheckItem(params.operationId, item.id, {
-          completedAt: new Date(),
-          status: 'skipped',
-          toulmin: { limitation: 'Agent verifier requires runtime context; not run here.' },
-        });
-        continue;
-      }
-      try {
-        const spawned = await params.runVerifierAgent({
-          checkItem: item,
-          goal: params.goal,
-          operationId: params.operationId,
-        });
-        await this.resultModel.updateByCheckItem(params.operationId, item.id, {
-          startedAt: new Date(),
-          status: 'running',
-          verifierOperationId: spawned?.verifierOperationId ?? null,
-        });
-      } catch (error) {
-        log('agent verifier spawn failed for item %s: %O', item.id, error);
-        await this.resultModel.updateByCheckItem(params.operationId, item.id, {
-          completedAt: new Date(),
-          status: 'failed',
-          toulmin: { limitation: 'Agent verifier failed to start.' },
-          verdict: 'uncertain',
-        });
-      }
+  /** Run one agent check as a verifier sub-agent (verdict lands async via its hook) or skip. */
+  private async runAgentItem(params: ExecuteVerifyParams, item: VerifyCheckItem): Promise<void> {
+    if (!params.runVerifierAgent) {
+      await this.resultModel.updateByCheckItem(params.operationId, item.id, {
+        completedAt: new Date(),
+        status: 'skipped',
+        toulmin: { limitation: 'Agent verifier requires runtime context; not run here.' },
+      });
+      return;
     }
-
-    await this.statusService.recompute(params.operationId);
+    try {
+      const spawned = await params.runVerifierAgent({
+        checkItem: item,
+        goal: params.goal,
+        operationId: params.operationId,
+      });
+      await this.resultModel.updateByCheckItem(params.operationId, item.id, {
+        startedAt: new Date(),
+        status: 'running',
+        verifierOperationId: spawned?.verifierOperationId ?? null,
+      });
+    } catch (error) {
+      log('agent verifier spawn failed for item %s: %O', item.id, error);
+      await this.resultModel.updateByCheckItem(params.operationId, item.id, {
+        completedAt: new Date(),
+        status: 'failed',
+        toulmin: { limitation: 'Agent verifier failed to start.' },
+        verdict: 'uncertain',
+      });
+    }
   }
 
   private async judgeBatch(params: ExecuteVerifyParams, items: VerifyCheckItem[]): Promise<void> {
