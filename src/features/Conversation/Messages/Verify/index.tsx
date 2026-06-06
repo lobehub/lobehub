@@ -7,7 +7,7 @@ import { Info } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { CheckerDock, phaseFromStatus, RunArtifact, useVerifyState } from '@/features/Verify';
+import { CheckerDock, RunArtifact } from '@/features/Verify';
 
 import { dataSelectors, useConversationStore } from '../../store';
 
@@ -17,9 +17,6 @@ const useStyles = createStyles(({ css, token }) => ({
     border: 1px solid ${token.colorBorderSecondary};
     border-radius: 16px;
     background: ${token.colorBgContainer};
-  `,
-  cardFailed: css`
-    border-color: ${token.colorErrorBorder};
   `,
   foot: css`
     display: flex;
@@ -48,20 +45,17 @@ interface VerifyMessageProps {
  * is a standalone card group (no avatar bubble).
  */
 const VerifyMessage = memo<VerifyMessageProps>(({ id }) => {
-  const { styles, cx } = useStyles();
+  const { styles } = useStyles();
   const { t } = useTranslation('verify');
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual);
   const operationId = item?.metadata?.verifyOperationId;
   const round = item?.metadata?.verifyRound ?? 1;
-  const { data: state } = useVerifyState(operationId ?? null);
 
   if (!operationId) return null;
 
-  const failed = phaseFromStatus(state?.verifyStatus) === 'failed';
-
   return (
     <Flexbox paddingBlock={8}>
-      <div className={cx(styles.card, failed && styles.cardFailed)}>
+      <div className={styles.card}>
         <RunArtifact embedded operationId={operationId} round={round} />
         <CheckerDock embedded operationId={operationId} />
         <div className={styles.foot}>

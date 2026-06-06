@@ -3,7 +3,7 @@ export default {
     'This result is held back. The delivery checker found verification insufficient and triggered a repair.',
   'artifact.failed.title': 'Draft result',
   'artifact.foot': 'A snapshot of this run’s output — not an assistant or user message.',
-  'artifact.kicker': 'Run Artifact · Round {{round}}',
+  'artifact.kicker': 'Verification · Round {{round}}',
   'artifact.passed.sub':
     'The delivery checker passed {{passed}}/{{total}}. This result is ready to deliver.',
   'artifact.passed.title': 'Result',
