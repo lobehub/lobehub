@@ -17,7 +17,7 @@ import {
 import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
 import { type BuiltinToolsExecutor } from './builtin';
-import { deviceProxy } from './deviceProxy';
+import { deviceGateway } from './deviceGateway';
 import { classifyToolError } from './errorClassification';
 import {
   type ToolExecutionContext,
@@ -225,7 +225,7 @@ export class ToolExecutionService {
       // in-process MCP service below, where spawning is on the user's machine.
       if (
         mcpParams.type === 'stdio' &&
-        deviceProxy.isConfigured &&
+        deviceGateway.isConfigured &&
         context.activeDeviceId &&
         context.userId
       ) {
@@ -279,7 +279,7 @@ export class ToolExecutionService {
       context.activeDeviceId,
     );
 
-    const result = await deviceProxy.executeMcpCall(
+    const result = await deviceGateway.executeMcpCall(
       {
         apiName,
         arguments: args,

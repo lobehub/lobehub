@@ -308,7 +308,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
    * renderer uses, so remote tool calls produce identical
    * `{ content, state, success }` envelopes — `content` is the LLM-facing
    * prompt text, `state` is the structured payload, both flow downstream
-   * intact (the gateway / DeviceProxy / RuntimeExecutors paths preserve them
+   * intact (the gateway / DeviceGateway / RuntimeExecutors paths preserve them
    * and write `state` to the tool message's `pluginState`).
    */
   private getLocalSystemRuntime(): LocalSystemExecutionRuntime {

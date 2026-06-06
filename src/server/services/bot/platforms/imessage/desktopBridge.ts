@@ -7,7 +7,7 @@ import type {
   BlueBubblesSendOptions,
 } from '@lobechat/chat-adapter-imessage';
 
-import { deviceProxy } from '@/server/services/toolExecution/deviceProxy';
+import { deviceGateway } from '@/server/services/toolExecution/deviceGateway';
 
 const IMESSAGE_MESSAGE_API_TIMEOUT_MS = 60_000;
 
@@ -95,7 +95,7 @@ export class ImessageDesktopBridgeApi {
   };
 
   private async call<T>(apiName: string, payload: Record<string, unknown>): Promise<T> {
-    const result = await deviceProxy.executeMessageApi(
+    const result = await deviceGateway.executeMessageApi(
       { deviceId: this.deviceId, userId: this.userId },
       {
         apiName,

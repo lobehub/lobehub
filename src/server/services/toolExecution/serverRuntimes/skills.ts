@@ -1,6 +1,6 @@
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { LocalSystemApiName, LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
-// Note: only `readFile` is wired through deviceProxy. Directory enumeration is
+// Note: only `readFile` is wired through deviceGateway. Directory enumeration is
 // left to the model via `local-system.listFiles` so we don't double-fetch.
 import { type CommandResult, SkillsIdentifier } from '@lobechat/builtin-tool-skills';
 import {
@@ -25,7 +25,7 @@ import { MarketService } from '@/server/services/market';
 import { SkillResourceService } from '@/server/services/skill/resource';
 import { preprocessLhCommand } from '@/server/services/toolExecution/preprocessLhCommand';
 
-import { deviceProxy } from '../deviceProxy';
+import { deviceGateway } from '../deviceGateway';
 import { type ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:skills-runtime');
@@ -379,7 +379,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
 
     // Project skills live on the device filesystem. Read them through the
     // device gateway by reusing the local-system tools — no special
-    // file-read primitive, just the existing capabilities over deviceProxy.
+    // file-read primitive, just the existing capabilities over deviceGateway.
     //   - `readFile`  loads SKILL.md and validated reference files.
     //   - `globFiles` enumerates the skill directory so `readReference` can
     //     reject paths the model guessed (e.g. `.env`) instead of trusting
@@ -391,7 +391,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       const userId = context.userId;
       deviceFileAccess = {
         listFiles: async (dir: string) => {
-          const result = await deviceProxy.executeToolCall(
+          const result = await deviceGateway.executeToolCall(
             { deviceId: activeDeviceId, userId },
             {
               apiName: LocalSystemApiName.globFiles,
@@ -420,7 +420,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
             .map((f) => (f.startsWith(dir) ? f.slice(dir.length).replace(/^[/\\]+/, '') : f));
         },
         readFile: async (filePath: string) => {
-          const result = await deviceProxy.executeToolCall(
+          const result = await deviceGateway.executeToolCall(
             { deviceId: activeDeviceId, userId },
             {
               apiName: LocalSystemApiName.readFile,

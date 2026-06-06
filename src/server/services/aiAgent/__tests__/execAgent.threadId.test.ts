@@ -123,9 +123,9 @@ vi.mock('@/server/modules/Mecha', () => ({
   serverMessagesEngine: vi.fn().mockResolvedValue([{ content: 'test', role: 'user' }]),
 }));
 
-// Mock deviceProxy
-vi.mock('@/server/services/toolExecution/deviceProxy', () => ({
-  deviceProxy: {
+// Mock deviceGateway
+vi.mock('@/server/services/toolExecution/deviceGateway', () => ({
+  deviceGateway: {
     isConfigured: false,
     queryDeviceList: vi.fn().mockResolvedValue([]),
   },

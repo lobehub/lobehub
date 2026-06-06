@@ -86,7 +86,7 @@ import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent'
 import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
-import { deviceProxy } from '@/server/services/toolExecution/deviceProxy';
+import { deviceGateway } from '@/server/services/toolExecution/deviceGateway';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { resolveDeviceAccessPolicy } from './deviceAccessPolicy';
@@ -885,7 +885,7 @@ export class AiAgentService {
 
         // lh connect only handles tool_call_request (not agent_run_request),
         // so we use executeToolCall with the runHeteroTask tool instead of dispatchAgentRun.
-        const result = await deviceProxy.executeToolCall(
+        const result = await deviceGateway.executeToolCall(
           { deviceId: remoteDeviceId, userId: this.userId },
           {
             apiName: 'runHeteroTask',
@@ -980,7 +980,7 @@ export class AiAgentService {
           // Resolve the working directory for the run: a topic-level override
           // wins, else the device's user-configured defaultCwd. The device row
           // lives in the DB (the gateway only knows live connections), so read
-          // it directly rather than via deviceProxy.
+          // it directly rather than via deviceGateway.
           const boundDevice = await new DeviceModel(this.db, this.userId).findByDeviceId(
             dispatchDeviceId,
           );
@@ -1005,7 +1005,7 @@ export class AiAgentService {
             cwd: deviceCwd,
           });
 
-          const result = await deviceProxy.dispatchAgentRun({
+          const result = await deviceGateway.dispatchAgentRun({
             ...heteroParams,
             cwd: deviceCwd,
             deviceId: dispatchDeviceId,
@@ -1296,12 +1296,12 @@ export class AiAgentService {
       log('execAgent: isBotConversation=%s', isBotConversation);
 
       // Build device context for ToolsEngine enableChecker
-      const gatewayConfigured = deviceProxy.isConfigured;
+      const gatewayConfigured = deviceGateway.isConfigured;
       const agentBoundDeviceId = agentConfig.agencyConfig?.boundDeviceId;
       const boundDeviceId = topicBoundDeviceId || agentBoundDeviceId;
       if (gatewayConfigured) {
         try {
-          onlineDevices = await deviceProxy.queryDeviceList(this.userId);
+          onlineDevices = await deviceGateway.queryDeviceList(this.userId);
           log('execAgent: found %d online device(s)', onlineDevices.length);
         } catch (error) {
           log('execAgent: failed to query device list: %O', error);
@@ -1614,7 +1614,7 @@ export class AiAgentService {
     ): Promise<Record<string, string>> => {
       if (!deviceId) return {};
       try {
-        const systemInfo = await deviceProxy.queryDeviceSystemInfo(this.userId, deviceId);
+        const systemInfo = await deviceGateway.queryDeviceSystemInfo(this.userId, deviceId);
         if (!systemInfo) return {};
         const device = onlineDevices.find((d) => d.deviceId === deviceId);
         log('execAgent: fetched device system info for %s', deviceId);
@@ -2950,7 +2950,7 @@ export class AiAgentService {
           runningOp.deviceId,
           taskId,
         );
-        await deviceProxy
+        await deviceGateway
           .executeToolCall(
             { deviceId: runningOp.deviceId, userId: this.userId },
             {

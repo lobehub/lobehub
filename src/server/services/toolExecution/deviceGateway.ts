@@ -12,11 +12,11 @@ import debug from 'debug';
 
 import { gatewayEnv } from '@/envs/gateway';
 
-const log = debug('lobe-server:device-proxy');
+const log = debug('lobe-server:device-gateway');
 
 export type { DeviceAttachment, DeviceStatusResult, DeviceSystemInfo };
 
-export class DeviceProxy {
+export class DeviceGateway {
   private client: GatewayHttpClient | null = null;
 
   get isConfigured(): boolean {
@@ -224,4 +224,4 @@ export class DeviceProxy {
   }
 }
 
-export const deviceProxy = new DeviceProxy();
+export const deviceGateway = new DeviceGateway();

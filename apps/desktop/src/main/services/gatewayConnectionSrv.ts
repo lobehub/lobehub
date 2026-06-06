@@ -465,7 +465,7 @@ export default class GatewayConnectionService extends ServiceModule {
       // Forward the typed envelope unchanged. Critically, do NOT stringify the
       // whole result into `content` — that would bury the structured payload
       // inside a JSON blob and lose `state`. The wire protocol carries each
-      // field separately so downstream (`DeviceProxy` → `RuntimeExecutors`)
+      // field separately so downstream (`DeviceGateway` → `RuntimeExecutors`)
       // can persist `state` to `pluginState`. Optional fields are only set
       // when present so payloads stay minimal.
       const wireResult: ToolCallResponseMessage['result'] = {
