@@ -35,12 +35,12 @@ export const DRAFT_PLUGIN_STATE_KEY = 'askUserDraft';
  * Storing this as a typed object (rather than a flat string-keyed map) is what
  * lets us avoid sentinel key prefixes for the picks/custom split.
  */
-export interface AskUserDraft {
+export type AskUserDraft = {
   custom: Record<string, string>;
   escapeActive: boolean;
   escapeText: string;
   picks: Record<string, string | string[]>;
-}
+};
 
 /** Coerce a persisted (possibly partial / legacy) blob into a full draft. */
 export const readDraft = (raw: unknown): AskUserDraft => {
