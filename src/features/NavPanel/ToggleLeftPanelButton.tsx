@@ -18,13 +18,20 @@ export const TOGGLE_BUTTON_ID = 'toggle_left_panel_button';
 
 interface ToggleLeftPanelButtonProps {
   icon?: ActionIconProps['icon'];
+  /**
+   * DOM id for the button. Defaults to the shared {@link TOGGLE_BUTTON_ID} which
+   * NavPanelDraggable targets for its hover-reveal CSS. Pass a custom id (or `null`)
+   * to opt out — e.g. for a persistent instance rendered outside the sidebar panel,
+   * to avoid duplicate ids and the hover-hide behavior.
+   */
+  id?: string | null;
   showActive?: boolean;
   size?: ActionIconProps['size'];
   title?: ReactNode;
 }
 
 const ToggleLeftPanelButton = memo<ToggleLeftPanelButtonProps>(
-  ({ title, showActive, icon, size }) => {
+  ({ title, showActive, icon, size, id = TOGGLE_BUTTON_ID }) => {
     const [expand, togglePanel] = useGlobalStore((s) => [
       systemStatusSelectors.showLeftPanel(s),
       s.toggleLeftPanel,
@@ -37,7 +44,7 @@ const ToggleLeftPanelButton = memo<ToggleLeftPanelButtonProps>(
       <ActionIcon
         active={showActive ? expand : undefined}
         icon={icon || (expand ? PanelLeftClose : PanelLeftOpen)}
-        id={TOGGLE_BUTTON_ID}
+        id={id ?? undefined}
         size={size || DESKTOP_HEADER_ICON_SMALL_SIZE}
         title={title || t('toggleLeftPanel.title', { ns: 'hotkey' })}
         tooltipProps={{
