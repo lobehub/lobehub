@@ -6,8 +6,12 @@ export type FollowUpActionStatus = 'idle' | 'loading' | 'ready';
 export interface FollowUpActionSlot {
   abortController?: AbortController;
   chips: FollowUpChip[];
+  /** Guards against double-reporting feedback (a click followed by the clear-on-send). */
+  feedbackDone?: boolean;
   messageId?: string;
   status: FollowUpActionStatus;
+  /** `llm_generation_tracing` row id this chip set was generated under, if any. */
+  tracingId?: string;
 }
 
 export interface FollowUpActionState {

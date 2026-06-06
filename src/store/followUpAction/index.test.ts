@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { aiChatService } from '@/services/aiChat';
 import { followUpActionService } from '@/services/followUpAction';
 
 import { followUpActionSelectors } from './selectors';
@@ -213,6 +214,88 @@ describe('useFollowUpActionStore', () => {
     useFollowUpActionStore.getState().reset();
     expect(signals.every((s) => s.aborted)).toBe(true);
     expect(useFollowUpActionStore.getState().slots).toEqual({});
+  });
+});
+
+describe('follow-up implicit feedback', () => {
+  const TRACING_ID = 'tracing-1';
+  const readySlot = (extra?: Record<string, unknown>) => ({
+    chips: [{ label: 'x', message: 'hello' }],
+    messageId: MSG,
+    status: 'ready' as const,
+    tracingId: TRACING_ID,
+    ...extra,
+  });
+
+  beforeEach(() => {
+    useFollowUpActionStore.getState().reset?.();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('fetchFor stores the tracingId returned by the service', async () => {
+    vi.spyOn(followUpActionService, 'extract').mockResolvedValue({
+      chips: [{ label: 'a', message: 'a' }],
+      messageId: MSG,
+      tracingId: TRACING_ID,
+    });
+    await useFollowUpActionStore.getState().fetchFor(KEY_A, FETCH_PARAMS_A);
+    expect(slotA().tracingId).toBe(TRACING_ID);
+  });
+
+  it('recordChipClick reports a positive signal and marks the slot done', () => {
+    const spy = vi.spyOn(aiChatService, 'recordTracingFeedback').mockResolvedValue({ ok: true });
+    useFollowUpActionStore.setState({ slots: { [KEY_A]: readySlot() } });
+
+    useFollowUpActionStore.getState().recordChipClick(KEY_A, 2);
+
+    expect(spy).toHaveBeenCalledWith({
+      data: { chipIndex: 2, totalChips: 1 },
+      signal: 'positive',
+      source: 'followup_clicked',
+      tracingId: TRACING_ID,
+    });
+    expect(slotA().feedbackDone).toBe(true);
+  });
+
+  it('clear reports a dismissal for a shown-but-unacted chip set', () => {
+    const spy = vi.spyOn(aiChatService, 'recordTracingFeedback').mockResolvedValue({ ok: true });
+    useFollowUpActionStore.setState({ slots: { [KEY_A]: readySlot() } });
+
+    useFollowUpActionStore.getState().clear(KEY_A);
+
+    expect(spy).toHaveBeenCalledWith({
+      data: { totalChips: 1 },
+      signal: 'negative',
+      source: 'followup_dismissed',
+      tracingId: TRACING_ID,
+    });
+  });
+
+  it('a click followed by clear does not double-report (no dismissal after click)', () => {
+    const spy = vi.spyOn(aiChatService, 'recordTracingFeedback').mockResolvedValue({ ok: true });
+    useFollowUpActionStore.setState({ slots: { [KEY_A]: readySlot() } });
+
+    useFollowUpActionStore.getState().recordChipClick(KEY_A, 0);
+    useFollowUpActionStore.getState().clear(KEY_A);
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ signal: 'positive' }));
+  });
+
+  it('does not report feedback when the slot carries no tracingId', () => {
+    const spy = vi.spyOn(aiChatService, 'recordTracingFeedback').mockResolvedValue({ ok: true });
+    useFollowUpActionStore.setState({
+      slots: {
+        [KEY_A]: { chips: [{ label: 'x', message: 'h' }], messageId: MSG, status: 'ready' },
+      },
+    });
+
+    useFollowUpActionStore.getState().recordChipClick(KEY_A, 0);
+    useFollowUpActionStore.getState().clear(KEY_A);
+
+    expect(spy).not.toHaveBeenCalled();
   });
 });
 

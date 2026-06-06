@@ -27,6 +27,13 @@ vi.mock('@/server/services/taskRunner', () => ({
   TaskRunnerService: vi.fn().mockImplementation(() => ({ cascadeOnCompletion })),
 }));
 
+// `recordBriefFeedback` dynamically imports the tracing service — stub it so we
+// can assert the action→signal mapping without a DB.
+const { recordFeedback } = vi.hoisted(() => ({ recordFeedback: vi.fn() }));
+vi.mock('@/server/services/llmGenerationTracing', () => ({
+  getLLMGenerationTracingService: () => ({ recordFeedback }),
+}));
+
 describe('BriefService', () => {
   const db = {} as LobeChatDatabase;
   const userId = 'user-1';
@@ -548,6 +555,87 @@ describe('BriefService', () => {
       await service.resolve('b7', { action: 'approve' });
 
       expect(mockTaskModel.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resolve → implicit feedback', () => {
+    const briefWithTracing = (extra: Record<string, unknown>) => ({
+      id: 'b1',
+      metadata: { tracingId: 'trace-1' },
+      taskId: 'task-1',
+      type: 'decision',
+      ...extra,
+    });
+
+    it('reports a positive signal when a brief is approved', async () => {
+      const service = new BriefService(db, userId);
+      mockBriefModel.resolve.mockResolvedValue(briefWithTracing({ type: 'insight' }));
+
+      await service.resolve('b1', { action: 'approve' });
+
+      expect(recordFeedback).toHaveBeenCalledWith('user-1', 'trace-1', {
+        data: { briefType: 'insight', hasComment: false },
+        signal: 'positive',
+        source: 'brief_approved',
+      });
+    });
+
+    it('reports a negative signal carrying the comment flag for feedback actions', async () => {
+      const service = new BriefService(db, userId);
+      mockBriefModel.resolve.mockResolvedValue(briefWithTracing({}));
+
+      await service.resolve('b1', { action: 'feedback', comment: 'tighten it' });
+
+      expect(recordFeedback).toHaveBeenCalledWith('user-1', 'trace-1', {
+        data: { briefType: 'decision', hasComment: true },
+        signal: 'negative',
+        source: 'brief_feedback',
+      });
+    });
+
+    it('reports a negative signal for ignore', async () => {
+      const service = new BriefService(db, userId);
+      mockBriefModel.resolve.mockResolvedValue(briefWithTracing({}));
+
+      await service.resolve('b1', { action: 'ignore' });
+
+      expect(recordFeedback).toHaveBeenCalledWith(
+        'user-1',
+        'trace-1',
+        expect.objectContaining({ signal: 'negative', source: 'brief_ignored' }),
+      );
+    });
+
+    it('falls back to a neutral signal for ambiguous actions', async () => {
+      const service = new BriefService(db, userId);
+      mockBriefModel.resolve.mockResolvedValue(briefWithTracing({}));
+
+      await service.resolve('b1', { action: 'acknowledge' });
+
+      expect(recordFeedback).toHaveBeenCalledWith(
+        'user-1',
+        'trace-1',
+        expect.objectContaining({ signal: 'neutral', source: 'brief_acknowledge' }),
+      );
+    });
+
+    it('does not report feedback for briefs without a tracingId', async () => {
+      const service = new BriefService(db, userId);
+      mockBriefModel.resolve.mockResolvedValue({ id: 'b9', taskId: null, type: 'insight' });
+
+      await service.resolve('b9', { action: 'approve' });
+
+      expect(recordFeedback).not.toHaveBeenCalled();
+    });
+
+    it('never lets a tracing failure break brief resolution', async () => {
+      const service = new BriefService(db, userId);
+      mockBriefModel.resolve.mockResolvedValue(briefWithTracing({}));
+      recordFeedback.mockRejectedValueOnce(new Error('db down'));
+
+      const brief = await service.resolve('b1', { action: 'ignore' });
+
+      expect(brief).not.toBeNull();
     });
   });
 });
