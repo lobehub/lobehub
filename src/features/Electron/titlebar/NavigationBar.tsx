@@ -87,19 +87,23 @@ const NavigationBar = memo(() => {
       align="center"
       data-width={leftPanelWidth}
       gap={8}
-      justify="space-between"
+      justify={isMac ? 'space-between' : 'end'}
       style={{
         paddingLeft: isMac ? macTrafficLightPadding : 0,
         paddingRight: 8,
         // Expanded: span the sidebar width so the right group hugs its right edge.
-        // Collapsed: shrink to content so the controls cluster at the left edge.
-        width: isLeftPanelVisible ? `${leftPanelWidth - 12}px` : 'auto',
+        // Collapsed (macOS): shrink to content so the controls cluster at the left edge.
+        width: isLeftPanelVisible ? `${leftPanelWidth - 12}px` : isMac ? 'auto' : '150px',
         transition: !isLeftPanelVisible ? 'width 0.2s' : 'none',
       }}
     >
-      <Flexbox horizontal align="center" className={electronStylish.nodrag}>
-        <ToggleLeftPanelButton id={NAV_TOGGLE_ID} size="small" />
-      </Flexbox>
+      {/* The persistent panel toggle is macOS-only; other platforms keep the
+          in-page toggles, so the titlebar shows just the navigation controls. */}
+      {isMac && (
+        <Flexbox horizontal align="center" className={electronStylish.nodrag}>
+          <ToggleLeftPanelButton forceVisible id={NAV_TOGGLE_ID} size="small" />
+        </Flexbox>
+      )}
       <Flexbox horizontal align="center" className={electronStylish.nodrag} gap={2}>
         <ActionIcon disabled={!canGoBack} icon={ArrowLeft} size="small" onClick={goBack} />
         <ActionIcon disabled={!canGoForward} icon={ArrowRight} size="small" onClick={goForward} />
