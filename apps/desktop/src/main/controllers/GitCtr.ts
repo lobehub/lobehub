@@ -637,7 +637,7 @@ export default class GitController extends ControllerModule {
   async getGitWorkingTreeStatus(dirPath: string): Promise<GitWorkingTreeStatus> {
     const execFileAsync = promisify(execFile);
     try {
-      const { stdout } = await execFileAsync('git', ['status', '--porcelain', '-z'], {
+      const { stdout } = await execFileAsync('git', ['status', '--porcelain', '-u', '-z'], {
         cwd: dirPath,
         timeout: 5000,
       });
@@ -689,7 +689,7 @@ export default class GitController extends ControllerModule {
     const modified: string[] = [];
     const deleted: string[] = [];
     try {
-      const { stdout } = await execFileAsync('git', ['status', '--porcelain', '-z'], {
+      const { stdout } = await execFileAsync('git', ['status', '--porcelain', '-u', '-z'], {
         cwd: dirPath,
         timeout: 5000,
       });
@@ -830,7 +830,7 @@ export default class GitController extends ControllerModule {
     const entries: Entry[] = [];
     const submoduleDirtyEntries: Entry[] = [];
     try {
-      const { stdout } = await execFileAsync('git', ['status', '--porcelain', '-z'], {
+      const { stdout } = await execFileAsync('git', ['status', '--porcelain', '-u', '-z'], {
         cwd: dirPath,
         timeout: 5000,
       });
