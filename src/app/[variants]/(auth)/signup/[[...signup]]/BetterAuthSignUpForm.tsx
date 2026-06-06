@@ -1,17 +1,17 @@
 'use client';
 
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { Button, Icon, Text } from '@lobehub/ui';
 import { Form, Input, type InputRef } from 'antd';
 import { Lock, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef } from 'react';
-import { Trans, useTranslation } from 'react-i18next';
-
-import { PRIVACY_URL, TERMS_URL } from '@/const/url';
+import { useTranslation } from 'react-i18next';
 
 import { AuthCard } from '../../../../../features/AuthCard';
 import { trackLoginOrSignupClicked } from '../../../../../features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
+import AuthAgreement from '../../_layout/AuthAgreement';
 import { type SignUpFormValues } from './useSignUp';
 import { useSignUp } from './useSignUp';
 
@@ -53,11 +53,7 @@ const BetterAuthSignUpForm = () => {
   );
 
   return (
-    <AuthCard
-      footer={footer}
-      subtitle={t('betterAuth.signup.subtitle')}
-      title={t('betterAuth.signup.title')}
-    >
+    <AuthCard footer={footer} title={t('betterAuth.signup.cardTitle', { appName: BRANDING_NAME })}>
       <Form form={form} layout="vertical" onFinish={onSubmit}>
         <Form.Item
           name="email"
@@ -80,30 +76,6 @@ const BetterAuthSignUpForm = () => {
             }
           />
         </Form.Item>
-        <Text fontSize={13} style={{ display: 'block', marginBottom: 24 }} type={'secondary'}>
-          <Trans
-            i18nKey={'footer.agreement'}
-            ns={'auth'}
-            components={{
-              privacy: (
-                <a
-                  href={PRIVACY_URL}
-                  style={{ color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
-                >
-                  {t('footer.terms')}
-                </a>
-              ),
-              terms: (
-                <a
-                  href={TERMS_URL}
-                  style={{ color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
-                >
-                  {t('footer.privacy')}
-                </a>
-              ),
-            }}
-          />
-        </Text>
         <Form.Item
           name="password"
           rules={[
@@ -172,6 +144,7 @@ const BetterAuthSignUpForm = () => {
           </Button>
         </Form.Item>
       </Form>
+      <AuthAgreement />
     </AuthCard>
   );
 };

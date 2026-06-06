@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import AuthIcons from '@/components/AuthIcons';
 
 import AuthCard from '../../../../features/AuthCard';
+import AuthAgreement from '../_layout/AuthAgreement';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   setPasswordLink: css`
@@ -193,6 +194,7 @@ export const SignInEmailStep = ({
           }
         />
       )}
+      <AuthAgreement />
     </AuthCard>
   );
 };
