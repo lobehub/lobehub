@@ -211,7 +211,10 @@ class LobeAgentExecutionRuntime {
                 '; ',
               )}. The user reviews and confirms it; the checks run automatically when this operation completes — do not run them yourself.`
           : 'No delivery checks are mounted for this agent, so no plan was generated. Proceed normally.',
-      state: { itemCount: items.length },
+      state: {
+        itemCount: items.length,
+        items: items.map((i) => ({ required: i.required, title: i.title })),
+      },
       success: true,
     };
   };

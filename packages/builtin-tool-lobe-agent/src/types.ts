@@ -31,10 +31,19 @@ export interface GenerateVerifyPlanParams {
   rubricId?: string;
 }
 
-/** State persisted on the generateVerifyPlan tool message (drives the Inspector chip). */
+/** A generated check item, surfaced on the tool message for the Render. */
+export interface GeneratedVerifyCheck {
+  /** Whether this check blocks delivery on failure (gate) vs is auto-fixed (soft). */
+  required: boolean;
+  title: string;
+}
+
+/** State persisted on the generateVerifyPlan tool message (drives the Inspector chip + Render). */
 export interface GenerateVerifyPlanState {
   /** Number of check items in the generated plan. */
   itemCount: number;
+  /** The generated check items (title + gate/soft), for the Render. */
+  items: GeneratedVerifyCheck[];
 }
 
 export interface AnalyzeVisualMediaParams {
