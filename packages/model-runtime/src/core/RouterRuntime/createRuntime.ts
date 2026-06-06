@@ -695,6 +695,22 @@ export const createRouterRuntime = ({
       );
     }
 
+    async handlePollVideoStatus(inferenceId: string) {
+      const resolvedRouters = await this.resolveRouters();
+      const matchedRouter = this._options.baseURL
+        ? (resolvedRouters.find((router) => router.baseURLPattern?.test(this._options.baseURL!)) ??
+          resolvedRouters.at(-1)!)
+        : resolvedRouters.at(-1)!;
+      const routerOptions = this.normalizeRouterOptions(matchedRouter);
+      const { runtime } = await this.createRuntimeFromOption(matchedRouter, routerOptions[0]);
+
+      if (!runtime.handlePollVideoStatus) {
+        throw new Error('Video polling is not supported by the matched runtime');
+      }
+
+      return runtime.handlePollVideoStatus(inferenceId);
+    }
+
     async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {
       const model = (payload.body as any)?.model;
       const resolvedRouters = await this.resolveRouters(model);

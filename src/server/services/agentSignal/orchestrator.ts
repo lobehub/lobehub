@@ -23,7 +23,7 @@ import { createProcedurePolicyOptions } from './procedure';
 import type { RuntimeGuardBackend } from './runtime/AgentSignalRuntime';
 import { createAgentSignalRuntime } from './runtime/AgentSignalRuntime';
 import { persistAgentSignalReceipts, projectAgentSignalReceipts } from './services/receiptService';
-import { createServerSelfReviewBriefWriter } from './services/selfIteration/review/brief';
+import { createSelfIterationCompletionHandler } from './services/selfIteration/completion';
 import { emitSourceEvent } from './sources';
 import { redisPolicyStateStore } from './store/adapters/redis/policyStateStore';
 import type { AgentSignalReceiptStore, AgentSignalSourceEventStore } from './store/types';
@@ -91,46 +91,22 @@ const buildRuntimeOrchestrationResult = (
   };
 };
 
-/**
- * Adds server defaults to optional Agent Signal self-iteration policy options.
- *
- * Use when:
- * - A caller already installed nightly review options but omitted the brief writer
- * - Nightly review outcomes should persist eligible Daily Brief rows in the server runtime
- *
- * Expects:
- * - Missing `nightlyReview` still means the nightly handler is intentionally not installed
- *
- * Returns:
- * - Policy options with a server `writeDailyBrief` fallback only for nightly review
- */
-export const withServerAgentSignalPolicyDefaults = (
-  policyOptions: AgentSignalEmitOptions['policyOptions'] | undefined,
-  context: AgentSignalExecutionContext,
-): AgentSignalEmitOptions['policyOptions'] => {
-  if (!policyOptions?.nightlyReview || policyOptions.nightlyReview.writeDailyBrief) {
-    return policyOptions;
-  }
-
-  const briefWriter = createServerSelfReviewBriefWriter(context.db, context.userId);
-
-  return {
-    ...policyOptions,
-    nightlyReview: {
-      ...policyOptions.nightlyReview,
-      writeDailyBrief: briefWriter.writeDailyBrief,
-    },
-  };
-};
-
 const createPolicyOptions = (
   context: AgentSignalExecutionContext,
   options: ExecuteAgentSignalSourceEventOptions,
   procedurePolicyOptions: NonNullable<CreateDefaultAgentSignalPoliciesOptions['procedure']>,
 ): CreateDefaultAgentSignalPoliciesOptions => {
-  const policyOptions = withServerAgentSignalPolicyDefaults(options.policyOptions, context);
+  // Nightly review writes its Daily Brief in-run via the builtin review
+  // serverRuntime primitive, so the orchestrator no longer injects a brief
+  // writer default.
+  const policyOptions = options.policyOptions;
 
   return {
+    completion: {
+      onSelfIterationCompleted: createSelfIterationCompletionHandler(
+        options.receiptStore ? { receiptStore: options.receiptStore } : {},
+      ),
+    },
     feedbackDomainJudge: {
       db: context.db,
       ...policyOptions?.feedbackDomainJudge,

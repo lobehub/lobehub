@@ -63,6 +63,11 @@ export default {
   'builtins.lobe-agent.title': 'Lobe Agent',
   'builtins.lobe-claude-code.agent.instruction': 'Instruction',
   'builtins.lobe-claude-code.agent.result': 'Result',
+  'builtins.lobe-claude-code.askUserQuestion.noAnswer':
+    'No answer received — model continued without their input.',
+  'builtins.lobe-claude-code.askUserQuestion.question': 'Question',
+  'builtins.lobe-claude-code.askUserQuestion.reply': 'Reply',
+  'builtins.lobe-claude-code.askUserQuestion.selected': 'Selected',
   'builtins.lobe-claude-code.task.create.completed': 'Task created: ',
   'builtins.lobe-claude-code.task.create.loading': 'Creating task: ',
   'builtins.lobe-claude-code.task.getLabel': 'View task #{{taskId}}',

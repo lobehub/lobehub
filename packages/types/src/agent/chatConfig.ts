@@ -139,6 +139,8 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    */
   skillActivateMode?: 'auto' | 'manual';
 
+  step3_5ReasoningEffort?: 'low' | 'high';
+
   /**
    * Output text verbosity control
    */
@@ -238,6 +240,7 @@ export const AgentChatConfigSchema = z
       })
       .optional(),
     searchMode: z.enum(['off', 'on', 'auto']).optional(),
+    step3_5ReasoningEffort: z.enum(['low', 'high']).optional(),
     skillActivateMode: z.enum(['auto', 'manual']).optional(),
     textVerbosity: z.enum(['low', 'medium', 'high']).optional(),
     thinking: z.enum(['disabled', 'auto', 'enabled']).optional(),
@@ -247,7 +250,7 @@ export const AgentChatConfigSchema = z
     thinkingLevel3: z.enum(['low', 'medium', 'high']).optional(),
     thinkingLevel4: z.enum(['minimal', 'high']).optional(),
     toolResultMaxLength: z.number().default(25000),
-    topicGroupMode: z.enum(['byTime', 'byProject', 'flat']).optional(),
+    topicGroupMode: z.enum(['byTime', 'byProject', 'flat', 'byStatus']).optional(),
     urlContext: z.boolean().optional(),
     useModelBuiltinSearch: z.boolean().optional(),
   })

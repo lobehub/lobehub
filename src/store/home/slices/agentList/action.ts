@@ -4,6 +4,7 @@ import { type SWRResponse } from 'swr';
 import { type SidebarAgentItem, type SidebarAgentListResponse } from '@/database/repositories/home';
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
 import { homeService } from '@/services/home';
+import { getAgentStoreState } from '@/store/agent';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -38,6 +39,7 @@ export class AgentListActionImpl {
   };
 
   refreshAgentList = async (): Promise<void> => {
+    getAgentStoreState().invalidateAvailableAgents();
     await mutate([FETCH_AGENT_LIST_KEY, true]);
   };
 

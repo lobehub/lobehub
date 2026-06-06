@@ -2,14 +2,11 @@ import type { ModelProviderCard } from '@/types/llm';
 
 const InternLM: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'internlm2.5-latest',
+  checkModel: 'intern-latest',
   description:
     'An open-source organization focused on large-model research and tooling, providing an efficient, easy-to-use platform that makes cutting-edge models and algorithms accessible.',
-  disableBrowserRequest: true,
   id: 'internlm',
-  modelList: { showModelFetcher: true },
-  modelsUrl:
-    'https://internlm.intern-ai.org.cn/doc/docs/Models#%E8%8E%B7%E5%8F%96%E6%A8%A1%E5%9E%8B%E5%88%97%E8%A1%A8',
+  modelsUrl: 'https://internlm.intern-ai.org.cn/api/document',
   name: 'InternLM',
   settings: {
     disableBrowserRequest: true,

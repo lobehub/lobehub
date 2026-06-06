@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Flexbox, Input } from '@lobehub/ui';
-import { Badge, Card, Modal, Table } from 'antd';
+import { Badge, Card, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { createStaticStyles } from 'antd-style';
 import { Eye, Search } from 'lucide-react';
@@ -9,6 +9,8 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useEvalStore } from '@/store/eval';
+
+import { createTestCasePreviewModal } from '../TestCasePreviewModal';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
@@ -79,29 +81,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
-  modalContent: css`
-    .ant-modal-content {
-      padding: 24px;
-    }
-  `,
-  previewBlock: css`
-    padding: 12px;
-    border-radius: 8px;
-
-    font-size: 14px;
-    line-height: 1.6;
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillSecondary};
-  `,
-  previewLabel: css`
-    margin: 0;
-
-    font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-  `,
   searchIcon: css`
     position: absolute;
     inset-block-start: 50%;
@@ -150,7 +129,6 @@ const TestCasesTab = memo<TestCasesTabProps>(({ datasetId }) => {
   const [pagination, setPagination] = useState({ current: 1, pageSize: 8 });
   const [search, setSearch] = useState('');
   const [diffFilter, setDiffFilter] = useState<'all' | 'easy' | 'medium' | 'hard'>('all');
-  const [previewCase, setPreviewCase] = useState<any | null>(null);
 
   const useFetchTestCases = useEvalStore((s) => s.useFetchTestCases);
 
@@ -261,7 +239,7 @@ const TestCasesTab = memo<TestCasesTabProps>(({ datasetId }) => {
           icon={Eye}
           size="small"
           variant="text"
-          onClick={() => setPreviewCase(record)}
+          onClick={() => createTestCasePreviewModal({ testCase: record })}
         />
       ),
       width: 64,
@@ -324,48 +302,6 @@ const TestCasesTab = memo<TestCasesTabProps>(({ datasetId }) => {
           />
         </div>
       </Card>
-
-      {/* Preview Modal */}
-      <Modal
-        className={styles.modalContent}
-        footer={null}
-        open={!!previewCase}
-        title={t('testCase.preview.title')}
-        width={600}
-        onCancel={() => setPreviewCase(null)}
-      >
-        {previewCase && (
-          <Flexbox gap={16}>
-            <Flexbox gap={4}>
-              <p className={styles.previewLabel}>{t('testCase.preview.input')}</p>
-              <div className={styles.previewBlock}>{previewCase.content?.input}</div>
-            </Flexbox>
-            <Flexbox gap={4}>
-              <p className={styles.previewLabel}>{t('testCase.preview.expected')}</p>
-              <div className={styles.previewBlock}>
-                {previewCase.content?.expectedOutput || '-'}
-              </div>
-            </Flexbox>
-            <Flexbox horizontal align="center" gap={8}>
-              {previewCase.metadata?.difficulty &&
-                getDifficultyBadge(previewCase.metadata.difficulty)}
-              {previewCase.metadata?.tags?.map((tag: string) => (
-                <Badge
-                  key={tag}
-                  style={{
-                    backgroundColor: 'transparent',
-                    borderColor: 'var(--ant-color-border)',
-                    color: 'var(--ant-color-text-tertiary)',
-                    fontSize: 12,
-                  }}
-                >
-                  {tag}
-                </Badge>
-              ))}
-            </Flexbox>
-          </Flexbox>
-        )}
-      </Modal>
     </>
   );
 });

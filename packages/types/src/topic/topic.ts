@@ -11,8 +11,19 @@ export type TimeGroupId =
   | `${number}-${string}`
   | `${number}`;
 
-export type TopicGroupMode = 'byTime' | 'byProject' | 'flat';
+export type TopicGroupMode = 'byTime' | 'byProject' | 'flat' | 'byStatus';
 export type TopicSortBy = 'createdAt' | 'updatedAt';
+
+/**
+ * Server-side ordering for the topic list query.
+ * - `updatedAt` (default): favorites first, then most-recently-updated.
+ * - `status`: favorites first, then by status priority
+ *   (waitingForHuman → running → active → paused → failed → completed →
+ *   archived), then most-recently-updated within each status. Backs the
+ *   sidebar "group by status" mode so the highest-priority topics stay on the
+ *   first page regardless of pagination.
+ */
+export type TopicQuerySortBy = 'updatedAt' | 'status';
 
 export interface GroupedTopic {
   children: ChatTopic[];
@@ -211,9 +222,9 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
 export type ChatTopicMap = Record<string, ChatTopic>;
 
 export interface TopicRankItem {
+  agentId: string | null;
   count: number;
   id: string;
-  sessionId: string | null;
   title: string | null;
 }
 
@@ -280,6 +291,11 @@ export interface QueryTopicParams {
    */
   isInbox?: boolean;
   pageSize?: number;
+  /**
+   * Server-side ordering. Defaults to `updatedAt`. Use `status` to back the
+   * sidebar "group by status" mode so high-priority topics stay on page one.
+   */
+  sortBy?: TopicQuerySortBy;
   /**
    * Include only topics matching the given trigger types (positive filter)
    */

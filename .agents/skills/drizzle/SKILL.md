@@ -1,6 +1,6 @@
 ---
 name: drizzle
-description: "Drizzle ORM schema authoring and query style for LobeHub (postgres, strict mode). Use when editing anything under `src/database/schemas/`, defining `pgTable` columns/indexes/junction tables, spreading `...timestamps`, generating `createInsertSchema`/`$inferSelect`/`$inferInsert` types, writing `db.select().from(...).leftJoin(...)` queries, or deciding when to split a relational `with:` into two queries. Triggers on `pgTable`, `db.select`, `db.query`, `eq()`/`and()`/`inArray()`, `uniqueIndex`, `primaryKey`, `references({ onDelete })`, 'add a column', 'new table', 'foreign key', 'junction table', 'schema field'. For migration files specifically, see the `db-migrations` skill."
+description: 'LobeHub Drizzle ORM schema and query style. Use for pgTable schemas, indexes, joins, inferred types, db.select/db.query, schema fields, foreign keys, junction tables, or postgres query patterns.'
 user-invocable: false
 ---
 
@@ -9,13 +9,13 @@ user-invocable: false
 ## Configuration
 
 - Config: `drizzle.config.ts`
-- Schemas: `src/database/schemas/`
-- Migrations: `src/database/migrations/`
+- Schemas: `packages/database/src/schemas/`
+- Migrations: `packages/database/migrations/`
 - Dialect: `postgresql` with `strict: true`
 
 ## Helper Functions
 
-Location: `src/database/schemas/_helpers.ts`
+Location: `packages/database/src/schemas/_helpers.ts`
 
 - `timestamptz(name)`: Timestamp with timezone
 - `createdAt()`, `updatedAt()`, `accessedAt()`: Standard timestamp columns
@@ -172,6 +172,94 @@ const rows = await this.db
   .from(agentEvalDatasets)
   .leftJoin(agentEvalTestCases, eq(agentEvalDatasets.id, agentEvalTestCases.datasetId))
   .groupBy(agentEvalDatasets.id);
+```
+
+### Raw SQL and Advanced Queries
+
+Prefer Drizzle builders whenever the query can be expressed clearly with `select`,
+`insert().select()`, `update().from()`, joins, CTEs, `groupBy`, and typed selected
+columns. This keeps table and column references tied to schema definitions, so
+schema changes are more likely to surface as TypeScript errors.
+
+Expression-level `sql<T>` is fine inside a Drizzle builder for PostgreSQL features
+that do not have a dedicated helper, such as JSON path extraction, casts, aggregate
+expressions, `CASE`, `NOW()`, or advisory locks. Row locks are query clauses, not
+expressions; use the select builder's `.for('update')` instead of raw
+`FOR UPDATE` SQL fragments.
+
+When refactoring raw SQL:
+
+- Preserve the original query shape for latency-sensitive paths. If raw SQL is one
+  database roundtrip, do not replace it with multiple depth-based queries just to
+  remove `execute`.
+- Use `$with(...)` plus `insert().select()` / `update().from()` for multi-step
+  single-roundtrip writes when Drizzle can express the data flow.
+- Avoid generic `execute<MyRow>(sql...)` as the main safety mechanism. It types the
+  returned rows, but it does not keep selected columns in sync with schema changes.
+- If the only clean implementation is a PostgreSQL feature that Drizzle cannot
+  express well, keep the raw SQL and tighten it instead: use schema references in
+  interpolations, explicit user scope, a narrow row interface, and regression tests.
+
+Recursive CTEs are a special case: current Drizzle usage in this repo does not have
+a clean `WITH RECURSIVE` builder pattern. Keep recursive CTE raw SQL when replacing
+it would add extra database roundtrips or materially worsen performance.
+
+Example: convert an aggregate query when Drizzle can preserve one roundtrip:
+
+```typescript
+// ✅ Good: builder owns table and column references; sql<T> stays expression-level.
+const rows = await trx
+  .select({
+    model: messages.model,
+    provider: messages.provider,
+    totalCost: sql<string | null>`sum((${messages.metadata}->'usage'->>'cost')::numeric)`.as(
+      'totalCost',
+    ),
+  })
+  .from(messages)
+  .where(
+    and(
+      eq(messages.topicId, topicId),
+      eq(messages.userId, userId),
+      eq(messages.role, 'assistant'),
+      sql`${messages.metadata} ? 'usage'`,
+    ),
+  )
+  .groupBy(messages.provider, messages.model);
+```
+
+Example: use the select lock builder for row locks:
+
+```typescript
+const [user] = await trx.select().from(users).where(eq(users.id, userId)).for('update');
+```
+
+Example: keep a recursive CTE raw when replacing it would add depth-based DB
+roundtrips:
+
+```typescript
+interface TaskTreeRow {
+  id: string;
+  parent_task_id: string | null;
+}
+
+// execute<T> is acceptable here only because Drizzle has no clean WITH RECURSIVE
+// builder; a builder rewrite would add depth-based roundtrips. Keep schema refs in
+// the interpolations and scope every leg to the user.
+const { rows } = await db.execute<TaskTreeRow>(sql`
+  WITH RECURSIVE task_tree AS (
+    SELECT ${tasks.id}, ${tasks.parentTaskId}
+    FROM ${tasks}
+    WHERE ${tasks.id} = ${rootTaskId}
+      AND ${tasks.createdByUserId} = ${userId}
+    UNION ALL
+    SELECT ${tasks.id}, ${tasks.parentTaskId}
+    FROM ${tasks}
+    JOIN task_tree ON ${tasks.parentTaskId} = task_tree.id
+    WHERE ${tasks.createdByUserId} = ${userId}
+  )
+  SELECT * FROM task_tree
+`);
 ```
 
 ### One-to-Many (Separate Queries)

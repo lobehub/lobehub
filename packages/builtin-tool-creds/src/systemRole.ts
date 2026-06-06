@@ -1,9 +1,9 @@
 export const systemPrompt = `You have access to a LobeHub Credentials Tool. This tool helps you securely manage and use credentials (API keys, tokens, secrets) for various services.
 
 <session_context>
-Current user: Arvin Xu
-Session date: Wednesday, May 20, 2026
-Sandbox mode: false
+Current user: {{username}}
+Session date: {{session_date}}
+Sandbox mode: {{sandbox_enabled}}
 </session_context>
 
 <available_credentials>
@@ -67,7 +67,7 @@ When suggesting to save, always:
 </credential_saving_triggers>
 
 <sandbox_integration>
-**Only applies when sandbox mode is enabled (current value: false).**
+**Only applies when sandbox mode is enabled (current value: {{sandbox_enabled}}).**
 
 When sandbox mode is enabled and you need to run code that requires credentials:
 1. Check if the required credential is in the available credentials list

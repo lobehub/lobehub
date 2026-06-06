@@ -241,9 +241,9 @@ export default {
   // Heterogeneous agent — Desktop tab
   'heterogeneousStatus.desktop.tabLabel': 'Desktop',
 
-  // Remote platform agent profile config panel (openclaw / hermes)
-  'platformAgentConfig.title': 'Platform Configuration',
-  'platformAgentConfig.platform.label': 'Platform',
+  // Connected agent profile config panel (openclaw / hermes)
+  'platformAgentConfig.title': 'Connection',
+  'platformAgentConfig.platform.label': 'Connected to',
   'platformAgentConfig.device.label': 'Bound Device',
   'platformAgentConfig.device.none': 'None',
   'platformAgentConfig.device.online': 'Online',
@@ -328,6 +328,12 @@ export default {
   'devices.actions.edit': 'Edit',
   'devices.actions.remove': 'Remove',
   'devices.channel.connected': 'Connected {{time}}',
+  'devices.currentBadge': 'This device',
+  'devices.detail.addDir': 'Add directory',
+  'devices.detail.connections': 'Connections',
+  'devices.detail.noRecent': 'No recent directories',
+  'devices.detail.recentDirs': 'Recent directories',
+  'devices.edit.browse': 'Browse…',
   'devices.edit.cancel': 'Cancel',
   'devices.edit.defaultCwd': 'Default working directory',
   'devices.edit.defaultCwdPlaceholder': 'e.g. /Users/me/projects',
@@ -529,10 +535,15 @@ export default {
   'notification.email.title': 'Email Notifications',
   'notification.inbox.desc': 'Show notifications in the in-app inbox',
   'notification.inbox.title': 'Inbox Notifications',
+  'notification.push.desc':
+    'Send push notifications to your mobile devices (LobeHub mobile app required)',
+  'notification.push.title': 'Mobile Push Notifications',
+  'notification.category.billing.title': 'Billing',
   'notification.category.generation.title': 'Generation',
   'notification.category.schedule.title': 'Scheduled tasks',
   'notification.item.agent_cron_job_failed': 'Scheduled task failed',
   'notification.item.image_generation_completed': 'Image generation completed',
+  'notification.item.storage_overage_cap_reached': 'Storage pay-as-you-go cap reached',
   'notification.item.video_generation_completed': 'Video generation completed',
   'notification.title': 'Notification Channels',
   'myAgents.actions.cancel': 'Cancel',
@@ -967,6 +978,54 @@ When I am ___, I need ___
   'storage.embeddings.used': 'Vector Storage',
   'storage.title': 'Data Storage',
   'storage.used': 'Storage Usage',
+  'storageOverage.addPaymentMethod': 'Add payment method',
+  'storageOverage.capped': 'Monthly spending cap reached. Overage uploads are paused.',
+  'storageOverage.capUpdateFailed': 'Failed to update monthly cap.',
+  'storageOverage.capUpdated': 'Monthly cap updated.',
+  'storageOverage.consent.billedMonthlyForYearly':
+    'Storage overage is billed monthly, separate from your yearly plan renewal',
+  'storageOverage.consent.billedTogether': 'Billed together with your subscription',
+  'storageOverage.consent.canDisable': 'Can be disabled anytime',
+  'storageOverage.consent.description': 'Storage exceeding your plan quota will be charged:',
+  'storageOverage.consent.enable': 'Agree and enable',
+  'storageOverage.consent.onlyOverage': 'Only overage is charged',
+  'storageOverage.consent.rate':
+    'About {{limitedMonthlyRate}}/GB/month for a limited time (regular {{regularMonthlyRate}}).',
+  'storageOverage.consent.title': 'Enable Storage Pay-as-you-go',
+  'storageOverage.currentPlanLocked.desc':
+    'Your current plan does not support storage pay-as-you-go. After it ends, subscribe to a plan to enable it.',
+  'storageOverage.desc':
+    'Subscription plans can enable metered billing for storage beyond the included quota.',
+  'storageOverage.disableConfirm.blockUploads':
+    'If your storage is still above the included quota, new uploads will be blocked.',
+  'storageOverage.disableConfirm.canEnableAgain':
+    'You can enable storage pay-as-you-go again later.',
+  'storageOverage.disableConfirm.confirm': 'Disable',
+  'storageOverage.disableConfirm.description':
+    'After disabling, storage overage will no longer be billed.',
+  'storageOverage.disableConfirm.existingCharges':
+    'Charges already incurred in this billing cycle will still be included on your subscription invoice.',
+  'storageOverage.disableConfirm.title': 'Disable storage pay-as-you-go?',
+  'storageOverage.disableFailed': 'Failed to disable storage pay-as-you-go.',
+  'storageOverage.disabled': 'Storage pay-as-you-go disabled.',
+  'storageOverage.enableFailed': 'Failed to enable storage pay-as-you-go.',
+  'storageOverage.enabled': 'Storage pay-as-you-go enabled.',
+  'storageOverage.monthlyCap': 'Monthly Spending Cap',
+  'storageOverage.monthlyCapDesc':
+    'Leave empty for unlimited. Uploads will be blocked when the cap is reached.',
+  'storageOverage.noPaymentMethod': 'Please add a payment method to enable storage pay-as-you-go.',
+  'storageOverage.rate':
+    'About {{limitedMonthlyRate}}/GB/month for a limited time (regular {{regularMonthlyRate}}).',
+  'storageOverage.subscriptionRequired.action': 'View plans',
+  'storageOverage.subscriptionRequired.desc':
+    'Subscribe to a plan to enable storage pay-as-you-go for overage usage.',
+  'storageOverage.title': 'File Storage Pay-as-you-go',
+  'storageOverage.toggle': 'Enable overage billing',
+  'storageOverage.unlimited': 'Unlimited',
+  'storageOverage.usage.current': 'Usage',
+  'storageOverage.usage.estimatedCharge': 'Est. Cycle Charge',
+  'storageOverage.usage.incurredCharge': 'Incurred This Cycle',
+  'storageOverage.usage.overage': 'Overage',
   'submitAgentModal.button': 'Submit Agent',
   'submitAgentModal.identifier': 'Agent Identifier',
   'submitAgentModal.metaMiss':

@@ -115,14 +115,23 @@ cd packages/database && bunx vitest run --silent='passed-only' '[file]'
 ```
 
 - Prefer `vi.spyOn` over `vi.mock`
-- Tests must pass type check: `bun run type-check`
-- After 2 failed fix attempts, stop and ask for help
+
+### Type Checking
+
+```bash
+bun run type-check
+```
 
 ### i18n
 
 - Add keys to a namespace file under `src/locales/default/` (e.g. `agent.ts`, `auth.ts`)
-- For dev preview: translate `locales/zh-CN/` and `locales/en-US/`
-- `pnpm i18n` is slow; run it manually when locale keys need updating (e.g. before opening a PR).
+- Ship en-US and zh-CN by hand in the same PR: write the English source in `src/locales/default/*.ts` and mirror it to `locales/en-US/`; hand-translate `locales/zh-CN/`. Leave all other locales to CI.
+- Don't run `pnpm i18n` manually by default — a daily CI workflow (`auto-i18n.yml`) runs it and opens an automated translation PR for any missing keys.
+- Run `pnpm i18n` manually only when your branch needs the translated locales immediately, instead of waiting for the daily job (slow; requires `OPENAI_API_KEY`). Note it only fills keys missing from other locales — value-only edits never need it.
+
+### Code Style
+
+- When a single file grows beyond \~800 lines, consider splitting it into multiple files (extract sub-components, hooks, helpers, or types). Smaller, focused files are friendly to humans and agents.
 
 ### Code Review
 

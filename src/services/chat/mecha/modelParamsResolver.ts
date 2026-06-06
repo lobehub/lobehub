@@ -255,6 +255,10 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.effort = chatConfig.opus47Effort;
   }
 
+  if (modelExtendParams.includes('step3_5ReasoningEffort') && chatConfig.step3_5ReasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.step3_5ReasoningEffort;
+  }
+
   // Text verbosity
   if (modelExtendParams.includes('textVerbosity') && chatConfig.textVerbosity) {
     extendParams.verbosity = chatConfig.textVerbosity;

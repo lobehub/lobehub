@@ -4,11 +4,23 @@ import type { TaskItem, TaskTopicHandoff, WorkspaceData } from '@lobechat/types'
 import type { BriefModel } from '@/database/models/brief';
 import type { TaskModel } from '@/database/models/task';
 import type { TaskTopicModel } from '@/database/models/taskTopic';
+import type { LobeChatDatabase } from '@/database/type';
+import { extractFileIdsFromEditorData } from '@/server/services/file/extractFileIdsFromEditorData';
+import { resolveAttachmentMetadata } from '@/server/services/file/resolveAttachments';
 
 export interface BuildTaskPromptDeps {
   briefModel: BriefModel;
+  db: LobeChatDatabase;
   taskModel: TaskModel;
   taskTopicModel: TaskTopicModel;
+  userId: string;
+}
+
+export interface BuiltTaskPrompt {
+  /** Merged, deduplicated list of fileIds (task instruction + all comments)
+   * to forward to execAgent so files arrive as multimodal inputs. */
+  fileIds: string[];
+  prompt: string;
 }
 
 /**
@@ -22,8 +34,8 @@ export async function buildTaskPrompt(
   task: TaskItem,
   deps: BuildTaskPromptDeps,
   extraPrompt?: string,
-): Promise<string> {
-  const { briefModel, taskModel, taskTopicModel } = deps;
+): Promise<BuiltTaskPrompt> {
+  const { briefModel, db, taskModel, taskTopicModel, userId } = deps;
 
   const [topics, briefs, comments, subtasks, dependencies, documents] = await Promise.all([
     task.totalTopics && task.totalTopics > 0
@@ -37,6 +49,40 @@ export async function buildTaskPrompt(
       .getTreePinnedDocuments(task.id)
       .catch((): WorkspaceData => ({ nodeMap: {}, tree: [] })),
   ]);
+
+  // Derive fileIds from the persisted Lexical state. editor_data is the
+  // single source of truth — fileId is recovered from the URL in each node
+  // (proxy URL form via regex; pre-signed dev URLs via files.url lookup).
+  const extractCtx = { db, userId };
+  const [taskFileIds, ...commentFileIdLists] = await Promise.all([
+    extractFileIdsFromEditorData(task.editorData, extractCtx),
+    ...comments.map((c) => extractFileIdsFromEditorData(c.editorData, extractCtx)),
+  ]);
+  const commentFileIdsMap: Record<string, string[]> = {};
+  comments.forEach((c, i) => {
+    const ids = commentFileIdLists[i];
+    if (ids.length > 0) commentFileIdsMap[c.id] = ids;
+  });
+
+  // Metadata-only lookup (name + fileType) for prompt rendering. Full content
+  // for the agent comes via `execAgent.fileIds` → `resolveAttachmentsByFileIds`.
+  // `signUrls: false` skips presigned-URL fetches we don't need for prompts.
+  const allFileIds = Array.from(
+    new Set([...taskFileIds, ...Object.values(commentFileIdsMap).flat()]),
+  );
+  const fileMetadata = await resolveAttachmentMetadata({
+    db,
+    fileIds: allFileIds,
+    signUrls: false,
+    userId,
+  });
+  const fileMetaById = new Map(fileMetadata.map((f) => [f.id, f]));
+
+  const toFileMetas = (ids: string[]) =>
+    ids
+      .map((id) => fileMetaById.get(id))
+      .filter((f): f is (typeof fileMetadata)[number] => !!f)
+      .map((f) => ({ fileType: f.fileType, id: f.id, name: f.name }));
 
   const subtaskIds = subtasks.map((s: any) => s.id);
   const subtaskDeps =
@@ -102,7 +148,9 @@ export async function buildTaskPrompt(
     }
   }
 
-  return buildTaskRunPrompt({
+  const taskFiles = toFileMetas(taskFileIds);
+
+  const prompt = buildTaskRunPrompt({
     activities: {
       briefs: briefs.map((b: any) => ({
         createdAt: b.createdAt,
@@ -115,12 +163,16 @@ export async function buildTaskPrompt(
         title: b.title,
         type: b.type,
       })),
-      comments: comments.map((c: any) => ({
-        agentId: c.authorAgentId,
-        content: c.content,
-        createdAt: c.createdAt,
-        id: c.id,
-      })),
+      comments: comments.map((c: any) => {
+        const files = toFileMetas(commentFileIdsMap[c.id] ?? []);
+        return {
+          agentId: c.authorAgentId,
+          content: c.content,
+          createdAt: c.createdAt,
+          ...(files.length > 0 ? { files } : {}),
+          id: c.id,
+        };
+      }),
       subtasks: subtasks.map((s: any) => ({
         createdAt: s.createdAt,
         id: s.id,
@@ -149,6 +201,7 @@ export async function buildTaskPrompt(
         type: d.type,
       })),
       description: task.description,
+      ...(taskFiles.length > 0 ? { files: taskFiles } : {}),
       id: task.id,
       identifier: task.identifier,
       instruction: task.instruction,
@@ -184,4 +237,6 @@ export async function buildTaskPrompt(
       };
     }),
   });
+
+  return { fileIds: allFileIds, prompt };
 }

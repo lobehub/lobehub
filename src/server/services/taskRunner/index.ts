@@ -110,12 +110,14 @@ export class TaskRunnerService {
         }
       }
 
-      const prompt = await buildTaskPrompt(
+      const { fileIds: attachmentFileIds, prompt } = await buildTaskPrompt(
         task,
         {
           briefModel: this.briefModel,
+          db: this.db,
           taskModel: this.taskModel,
           taskTopicModel: this.taskTopicModel,
+          userId: this.userId,
         },
         extraPrompt,
       );
@@ -200,6 +202,7 @@ export class TaskRunnerService {
             },
           },
         ],
+        ...(attachmentFileIds.length > 0 ? { fileIds: attachmentFileIds } : {}),
         prompt,
         taskId: task.id,
         title: extraPrompt ? extraPrompt.slice(0, 100) : task.name || task.identifier,

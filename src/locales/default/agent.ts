@@ -68,9 +68,26 @@ export default {
   'channel.imessage.blueBubblesServerUrl': 'BlueBubbles Server URL',
   'channel.imessage.blueBubblesServerUrlHint':
     'The local BlueBubbles server URL reachable from this Desktop app.',
+  'channel.imessage.blueBubblesServerUrlTip':
+    'If BlueBubbles and LobeHub Desktop run on the same Mac, use 127.0.0.1; if they run on different devices, enter the LAN IP.',
   'channel.imessage.bridgeEnabled': 'Enable Bridge',
   'channel.imessage.bridgeEnabledHint':
     'When enabled, LobeHub Desktop receives local BlueBubbles webhooks and forwards them to LobeHub.',
+  'channel.imessage.bridgeRunningDesc':
+    'This local relay forwards iMessage messages to LobeHub. You can now test the BlueBubbles connection.',
+  'channel.imessage.bridgeRunningDescListening':
+    'Listening on {url}, relaying iMessage messages to LobeHub. You can now test the BlueBubbles connection.',
+  'channel.imessage.bridgeRunningTitle': 'Bridge service running',
+  'channel.imessage.bridgeSectionDesc':
+    'Confirm the Server URL and password first, then enable the bridge and test the connection.',
+  'channel.imessage.bridgeSectionTitle': 'BlueBubbles Connection',
+  'channel.imessage.bridgeStatusConnected': 'Connected',
+  'channel.imessage.bridgeStatusFailed': 'Connection Failed',
+  'channel.imessage.bridgeStatusPending': 'Pending Test',
+  'channel.imessage.bridgeStoppedDesc':
+    'Enable the bridge to relay iMessage messages to LobeHub, then test the connection.',
+  'channel.imessage.bridgeStoppedTitle': 'Bridge service stopped',
+  'channel.imessage.bridgeTestDisabledHint': 'Enable the bridge service first.',
   'channel.imessage.bridgeMissingApplicationId': 'Enter the Application ID first.',
   'channel.imessage.bridgeMissingPassword': 'Enter the BlueBubbles password first.',
   'channel.imessage.bridgeMissingServerUrl': 'Enter the BlueBubbles Server URL first.',

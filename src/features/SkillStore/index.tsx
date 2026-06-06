@@ -1,6 +1,6 @@
 'use client';
 
-import { createModal, LOBE_THEME_APP_ID } from '@lobehub/ui';
+import { createModal } from '@lobehub/ui/base-ui';
 import { t } from 'i18next';
 
 import { isDesktop } from '@/const/version';
@@ -10,20 +10,12 @@ import { SkillStoreContent } from './SkillStoreContent';
 
 export const createSkillStoreModal = () =>
   createModal({
-    allowFullscreen: true,
-    children: (
+    content: (
       <MarketAuthProvider isDesktop={isDesktop}>
         <SkillStoreContent />
       </MarketAuthProvider>
     ),
-    destroyOnHidden: false,
     footer: null,
-    // Render the antd Modal inside appElement instead of document.body,
-    // so the modal and DropdownMenu portals share the same stacking context
-    getContainer: () => document.getElementById(LOBE_THEME_APP_ID) || document.body,
-    styles: {
-      body: { overflow: 'hidden', padding: 0 },
-    },
     title: t('skillStore.title', { ns: 'setting' }),
     width: 'min(80%, 800px)',
   });

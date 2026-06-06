@@ -73,8 +73,19 @@ export const extractFromFinalState = (
 
     if (resultKind !== kind) continue;
 
+    // `apiName` rides in the result content (stamped alongside `kind` by the tool
+    // runtime), because the agent runtime persists tool messages without a
+    // message-level `apiName`. Fall back to `message.apiName` for any producer
+    // that does set it.
+    const apiName =
+      typeof contentRecord?.apiName === 'string'
+        ? contentRecord.apiName
+        : typeof message.apiName === 'string'
+          ? message.apiName
+          : undefined;
+
     results.push({
-      apiName: typeof message.apiName === 'string' ? message.apiName : undefined,
+      apiName,
       data: contentRecord ?? content,
       kind,
       toolCallId: typeof message.tool_call_id === 'string' ? message.tool_call_id : undefined,

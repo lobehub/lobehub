@@ -9,8 +9,12 @@ describe('shouldSuppressSignal', () => {
     expect(shouldSuppressSignal({ appContext: { suppressSignal: true } })).toBe(true);
   });
 
-  it('returns true when slug is in SELF_ITERATION_AGENT_SLUGS', () => {
-    expect(shouldSuppressSignal({ slug: BUILTIN_AGENT_SLUGS.selfIteration })).toBe(true);
+  it.each([
+    [BUILTIN_AGENT_SLUGS.nightlyReview],
+    [BUILTIN_AGENT_SLUGS.selfReflection],
+    [BUILTIN_AGENT_SLUGS.selfFeedbackIntent],
+  ])('returns true when slug is %s (member of SELF_ITERATION_AGENT_SLUGS)', (slug) => {
+    expect(shouldSuppressSignal({ slug })).toBe(true);
   });
 
   it('returns false for ordinary user-facing slugs', () => {

@@ -147,10 +147,6 @@ export const sessionRouter = router({
       return ctx.sessionModel.query({ current, pageSize });
     }),
 
-  rankSessions: sessionProcedure.input(z.number().max(50).optional()).query(async ({ ctx, input }) => {
-    return ctx.sessionModel.rank(input);
-  }),
-
   removeAllSessions: sessionProcedure.mutation(async ({ ctx }) => {
     return ctx.sessionModel.deleteAll();
   }),

@@ -7,43 +7,242 @@ import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/create
 import type { ChatStreamPayload } from '../../types';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 
+// ============================================================================
+// Constants
+// ============================================================================
+
 const GO_BASE_URL = 'https://opencode.ai/zen/go/v1';
+const MODELS_DEV_URL = 'https://models.dev/api.json';
 
-// MiniMax and Qwen models in Go use @ai-sdk/anthropic (Anthropic Messages API format)
-// Endpoint: /go/v1/messages
-const anthropicModels = ['minimax-m2.5', 'minimax-m2.7', 'qwen3.5-plus', 'qwen3.6-plus', 'qwen3.7-max'];
+// ============================================================================
+// Models.dev Types & Cache
+// ============================================================================
 
-// Moonshot Kimi thinking toggle models (kimi-k2.N) expose reasoning on the
-// OpenAI-compatible route. Matches the official Moonshot provider's prefix logic.
-const isKimiThinkingToggleModel = (model: string) => model.startsWith('kimi-k2.');
+interface ModelsDevModel {
+  id: string;
+  name?: string;
+  family?: string;
+  provider?: { npm?: string };
+  release_date?: string;
+  attachment?: boolean;
+  reasoning?: boolean;
+  tool_call?: boolean;
+  structured_output?: boolean;
+  modalities?: { input?: string[]; output?: string[] };
+  limit?: { context?: number; output?: number };
+  cost?: {
+    input?: number;
+    output?: number;
+    cache_read?: number;
+    cache_write?: number;
+  };
+  [key: string]: any;
+}
 
-// Models with interleaved reasoning_content (from models.dev opencode-go)
-// that use openai-compatible SDK. All of these need:
-//   1. reason → reasoning_content conversion
-//   2. reasoning_content forced on all assistant messages (fill '' if missing)
-// Ref: https://models.dev/api.json → opencode-go
-const reasoningInterleavedModels = [
+interface ModelsDevData {
+  [provider: string]: {
+    models?: Record<string, ModelsDevModel>;
+    npm?: string;
+  };
+}
+
+interface ModelsCache {
+  anthropicModels: string[];
+  /**
+   * Model IDs whose `interleaved.field` is set in models.dev. These need
+   * special reasoning_content handling in the OpenAI-compatible payload.
+   * Populated by `fetchModelsDevData` so it stays in sync with models.dev.
+   */
+  interleavedIds: Set<string>;
+  modelsDev: Record<string, ModelsDevModel>;
+}
+
+// Fallback: models that need Anthropic SDK (used when models.dev is unavailable)
+const ANTHROPIC_MODEL_PREFIXES = ['minimax', 'qwen'];
+
+// Fallback: models with interleaved reasoning_content (used when models.dev
+// is unreachable). Mirrors the last-known state of models.dev.
+const FALLBACK_INTERLEAVED_IDS: ReadonlySet<string> = new Set([
+  'deepseek-v4-flash',
+  'deepseek-v4-pro',
   'glm-5',
   'glm-5.1',
-  'mimo-v2.5',
-  'mimo-v2.5-pro',
+  'kimi-k2.5',
+  'kimi-k2.6',
   'mimo-v2-omni',
   'mimo-v2-pro',
-  'qwen3.7-max',
-  'deepseek-v4-pro',
-  'deepseek-v4-flash',
-];
+  'mimo-v2.5',
+  'mimo-v2.5-pro',
+]);
 
-const hasValidReasoning = (reasoning: any) =>
-  typeof reasoning?.content === 'string';
+let cachedModelsData: ModelsCache | null = null;
+
+// ============================================================================
+// Models.dev Fetcher
+// ============================================================================
+
+/**
+ * Fetch models.dev data and derive all per-provider fields from it:
+ *   - `anthropicModels`  (models whose `provider.npm` is the Anthropic SDK)
+ *   - `interleavedIds`   (models with `interleaved.field` set, needing
+ *                         special reasoning_content handling)
+ *   - `modelsDev`        (raw model map for enrichment)
+ *
+ * The result is cached for the process lifetime, so a single successful
+ * fetch keeps every derived field in sync with models.dev.
+ */
+const fetchModelsDevData = async (): Promise<ModelsCache> => {
+  if (cachedModelsData) return cachedModelsData;
+
+  try {
+    const res = await fetch(MODELS_DEV_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const data: ModelsDevData = await res.json();
+    const models = data?.['opencode-go']?.models;
+    if (!models || typeof models !== 'object') {
+      throw new Error('opencode-go provider not found in models.dev');
+    }
+
+    const anthropicModels = Object.values(models)
+      .filter((m) => m.provider?.npm === '@ai-sdk/anthropic')
+      .map((m) => m.id);
+
+    const interleavedIds = new Set<string>();
+    for (const m of Object.values(models)) {
+      if (m?.interleaved?.field) interleavedIds.add(m.id);
+    }
+
+    cachedModelsData = { anthropicModels, interleavedIds, modelsDev: models };
+    return cachedModelsData;
+  } catch {
+    cachedModelsData = {
+      anthropicModels: [],
+      interleavedIds: new Set(),
+      modelsDev: {},
+    };
+    return cachedModelsData;
+  }
+};
+
+/**
+ * Sync accessor for the interleaved model set. Returns the cached value
+ * populated by `fetchModelsDevData`; falls back to a hardcoded snapshot of
+ * models.dev's last-known state when the cache hasn't been populated yet
+ * (e.g. the very first chat request before any models.dev fetch has run).
+ */
+const getInterleavedModelIds = (): ReadonlySet<string> => {
+  if (cachedModelsData && cachedModelsData.interleavedIds.size > 0) {
+    return cachedModelsData.interleavedIds;
+  }
+  return FALLBACK_INTERLEAVED_IDS;
+};
+
+/**
+ * Get anthropic models with self-contained fallback chain:
+ *   1. models.dev (authoritative `provider.npm` field)
+ *   2. static model-bank prefix match (used when models.dev is unreachable)
+ *
+ * Self-contained: does not depend on a runtime `client` object, so it's safe
+ * to call from `routers` (which receives `ClientOptions` only and has no
+ * `client` property during normal chat routing).
+ */
+const getAnthropicModels = async (): Promise<string[]> => {
+  const { anthropicModels, modelsDev } = await fetchModelsDevData();
+
+  if (Object.keys(modelsDev).length > 0) {
+    return anthropicModels;
+  }
+
+  // Fallback: prefix-match the static model-bank list. Equivalent to the
+  // pre-refactor hard-coded behavior when models.dev is unreachable.
+  try {
+    const { opencodecodingplan } = await import('model-bank');
+    return opencodecodingplan
+      .map((m) => m.id)
+      .filter((id) => ANTHROPIC_MODEL_PREFIXES.some((p) => id.startsWith(p)));
+  } catch {
+    return [];
+  }
+};
+
+// ============================================================================
+// Models.dev → Model Card Enrichment
+// ============================================================================
+
+/**
+ * Map a models.dev model entry to the flat fields understood by
+ * `processModelCard`. Fields not provided by models.dev (description,
+ * organization, settings, etc.) are filled in from the static model-bank
+ * entry via the knownModel fallback in processModelCard.
+ *
+ * Pricing is passed in the flat `input` / `output` / `cachedInput` /
+ * `writeCacheInput` shape; processModelCard's `formatPricing` converts it
+ * into the new `units` array.
+ */
+const enrichWithModelsDev = (
+  id: string,
+  dev?: ModelsDevModel,
+): { id: string; [key: string]: any } => {
+  if (!dev) return { id };
+
+  const inputModalities = dev.modalities?.input ?? [];
+  const cost = dev.cost;
+  const limit = dev.limit;
+
+  return {
+    id,
+    displayName: dev.name,
+    contextWindowTokens: limit?.context,
+    maxOutput: limit?.output,
+    releasedAt: dev.release_date,
+    functionCall: dev.tool_call || undefined,
+    reasoning: dev.reasoning || undefined,
+    vision: inputModalities.includes('image') || undefined,
+    structuredOutput: dev.structured_output || undefined,
+    pricing: cost
+      ? {
+          input: cost.input,
+          output: cost.output,
+          cachedInput: cost.cache_read,
+          writeCacheInput: cost.cache_write,
+        }
+      : undefined,
+  };
+};
+
+// ============================================================================
+// Reasoning Content Helpers
+// ============================================================================
+
+// Kimi K2.x models expose reasoning on the OpenAI-compatible route
+const isKimiThinkingToggleModel = (model: string) => model.startsWith('kimi-k2.');
+
+// Models in `interleavedIds` need:
+//   1. reason → reasoning_content conversion
+//   2. reasoning_content forced on all assistant messages
+// The set is populated from models.dev by `fetchModelsDevData`; the fallback
+// is used when models.dev hasn't been fetched yet.
+// Ref: https://models.dev/api.json → opencode-go.interleaved
+const isInterleavedModel = (model: string) => {
+  for (const id of getInterleavedModelIds()) {
+    if (model?.includes(id)) return true;
+  }
+  return false;
+};
+
+const hasValidReasoning = (reasoning: any) => typeof reasoning?.content === 'string';
 
 const isEmptyContent = (content: any) =>
   content === '' || content === null || content === undefined;
 
+// ============================================================================
+// JSON Schema Sanitizer
+// ============================================================================
+
 /**
  * Recursively remove `null` values from `enum` arrays in a JSON Schema.
- * The opencode-go backend ("could not translate the enum None") rejects
- * nullable enums produced by Zod schema `.nullable()` / `.nullish()`.
+ * The opencode-go backend rejects nullable enums produced by Zod `.nullable()` / `.nullish()`.
  */
 export const sanitizeJsonSchema = (schema: any): any => {
   if (!schema || typeof schema !== 'object') return schema;
@@ -51,24 +250,22 @@ export const sanitizeJsonSchema = (schema: any): any => {
 
   const result: any = {};
   for (const [key, value] of Object.entries(schema)) {
+    // Filter null from enum arrays
     if (key === 'enum' && Array.isArray(value)) {
       const filtered = value.filter((v: any) => v !== null);
       if (filtered.length > 0) result[key] = filtered;
       continue;
     }
-    // For `type: ['string', 'null']` → just `type: 'string'`
+
+    // type: ['string', 'null'] → type: 'string'
     if (key === 'type' && Array.isArray(value) && value.includes('null') && value.length >= 2) {
       const nonNullTypes = value.filter((v: any) => v !== 'null' && v !== null);
       if (nonNullTypes.length === 1) result.type = nonNullTypes[0];
       else if (nonNullTypes.length > 1) result.type = nonNullTypes;
       continue;
     }
-    // Recurse into schema traversals:
-    //   properties, additionalProperties, items, prefixItems
-    //   allOf, anyOf, oneOf, not
-    //   if/then/else
-    //   $defs, definitions
-    //   contains, unevaluatedItems, unevaluatedProperties
+
+    // Recurse into nested structures
     if (key === 'properties' || key === '$defs' || key === 'definitions') {
       const nested: any = {};
       for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
@@ -82,8 +279,7 @@ export const sanitizeJsonSchema = (schema: any): any => {
       result[key] = value.map(sanitizeJsonSchema);
     } else if (
       ['items', 'additionalProperties', 'not', 'contains', 'if', 'then', 'else',
-       'unevaluatedItems', 'unevaluatedProperties']
-        .includes(key)
+       'unevaluatedItems', 'unevaluatedProperties'].includes(key)
     ) {
       result[key] = sanitizeJsonSchema(value);
     } else {
@@ -93,31 +289,28 @@ export const sanitizeJsonSchema = (schema: any): any => {
   return result;
 };
 
+// ============================================================================
+// Payload Builder
+// ============================================================================
+
 /**
  * Build OpenAI-compatible payload with reasoning_content handling.
- *
- * Applies to all models with interleaved reasoning_content (models.dev opencode-go):
- *   GLM-5/5.1, MiMo-V2.5/Pro, MiMo-V2-Omni/Pro, DeepSeek V4 Flash/Pro, Kimi K2.5/K2.6
- *
- * All of these get reason → reasoning_content conversion AND forced
- * reasoning_content on assistant messages when thinking is not explicitly disabled.
+ * Applies to models with interleaved reasoning_content and Kimi K2.x models.
  */
 const buildOpenAIPayload = (
   payload: ChatStreamPayload,
 ): OpenAI.ChatCompletionCreateParamsStreaming => {
   const model = payload.model;
   const isKimi = isKimiThinkingToggleModel(model);
-  const isInterleavedModel = reasoningInterleavedModels.some((m) => model?.includes(m));
-  if (!isKimi && !isInterleavedModel) return payload as any;
+  const interleaved = isInterleavedModel(model);
+
+  if (!isKimi && !interleaved) return payload as any;
 
   const thinkingExplicitlyDisabled = (payload as any).thinking?.type === 'disabled';
-  const shouldForceAssistantReasoningContent =
-    (isInterleavedModel || isKimi) && !thinkingExplicitlyDisabled;
+  const shouldForceReasoning = (interleaved || isKimi) && !thinkingExplicitlyDisabled;
 
   const messages = payload.messages.map((message: any) => {
     const { reasoning, ...rest } = message;
-
-    // Normalize empty content to space for Kimi (matching Moonshot provider)
     const normalized = isKimi && isEmptyContent(message.content) ? { ...rest, content: ' ' } : rest;
 
     const reasoningContent =
@@ -127,18 +320,12 @@ const buildOpenAIPayload = (
           ? reasoning.content
           : undefined;
 
-    if (message.role === 'assistant' && shouldForceAssistantReasoningContent) {
-      return {
-        ...normalized,
-        reasoning_content: reasoningContent ?? ' ',
-      };
+    if (message.role === 'assistant' && shouldForceReasoning) {
+      return { ...normalized, reasoning_content: reasoningContent ?? ' ' };
     }
 
     if (reasoningContent !== undefined) {
-      return {
-        ...normalized,
-        reasoning_content: reasoningContent,
-      };
+      return { ...normalized, reasoning_content: reasoningContent };
     }
 
     return normalized;
@@ -146,8 +333,7 @@ const buildOpenAIPayload = (
 
   const { reasoning_effort, thinking, ...restPayload } = payload;
 
-  // Sanitize response_format schema for Kimi models only (opencode-go backend
-  // rejects nullable Zod enums from Kimi K2.5/K2.6 with "could not translate the enum None").
+  // Sanitize response_format for Kimi models
   const response_format =
     isKimi &&
     restPayload.response_format &&
@@ -162,7 +348,7 @@ const buildOpenAIPayload = (
         }
       : restPayload.response_format;
 
-  // Sanitize tool parameters schemas for Kimi models only
+  // Sanitize tool parameters for Kimi models
   const tools =
     isKimi && restPayload.tools
       ? restPayload.tools.map((tool: any) => ({
@@ -189,22 +375,26 @@ const buildOpenAIPayload = (
   } as OpenAI.ChatCompletionCreateParamsStreaming;
 };
 
-// Dedicated OpenAI-compatible runtime with buildOpenAIPayload baked into the
-// factory closure. RouterRuntime creates instances of this class for all
-// non-MiniMax models, ensuring reasoning_content is properly set on messages.
+// ============================================================================
+// Runtime Instances
+// ============================================================================
+
+// OpenAI-compatible runtime for non-Anthropic models
 const LobeOpenCodeCodingPlanOpenAI = createOpenAICompatibleRuntime({
   provider: ModelProvider.OpenCodeCodingPlan,
   baseURL: GO_BASE_URL,
-  chatCompletion: {
-    handlePayload: buildOpenAIPayload,
-  },
+  chatCompletion: { handlePayload: buildOpenAIPayload },
   debug: {
     chatCompletion: () => process.env.DEBUG_OPENCODE_GO_CHAT_COMPLETION === '1',
   },
 });
 
-// Anthropic SDK auto-appends /v1/messages to baseURL, so we need to strip trailing /v1
+// Anthropic SDK auto-appends /v1/messages to baseURL, so strip trailing /v1
 const stripV1 = (url?: string) => url?.replace(/\/v1$/, '');
+
+// ============================================================================
+// Provider Export
+// ============================================================================
 
 export const params = {
   debug: {
@@ -212,38 +402,52 @@ export const params = {
   },
   id: ModelProvider.OpenCodeCodingPlan,
   models: async ({ client }) => {
+    // Always pull models.dev for enrichment (cached after first call).
+    const { modelsDev } = await fetchModelsDevData();
+
     try {
+      // 1. Try API first (real-time available models), enriched with models.dev.
       const modelsPage = await (client as any).models.list();
-      const modelList = modelsPage.data || [];
-      return processMultiProviderModelList(modelList, 'opencodecodingplan');
+      const apiModels = modelsPage.data || [];
+      return processMultiProviderModelList(
+        apiModels.map((m: { id: string }) => enrichWithModelsDev(m.id, modelsDev[m.id])),
+        'opencodecodingplan',
+      );
     } catch {
+      // 2. Fallback to models.dev (if we got data) enriched with itself.
+      const modelIds = Object.keys(modelsDev);
+      if (modelIds.length > 0) {
+        return processMultiProviderModelList(
+          modelIds.map((id) => enrichWithModelsDev(id, modelsDev[id])),
+          'opencodecodingplan',
+        );
+      }
+
+      // 3. Final fallback: static model bank.
       const { opencodecodingplan } = await import('model-bank');
       return processMultiProviderModelList(
-        opencodecodingplan.map((m: { id: string }) => ({ id: m.id })),
+        opencodecodingplan.map((m) => ({ id: m.id })),
         'opencodecodingplan',
       );
     }
   },
-  routers: (options) => {
+  routers: async (options) => {
     const baseURL = options.baseURL || GO_BASE_URL;
+
+    const anthropicModels = await getAnthropicModels();
+
     return [
-      // Anthropic router for MiniMax & Qwen models (use Anthropic Messages API format)
+      // Anthropic SDK for models with provider.npm === '@ai-sdk/anthropic'
       {
         apiType: 'anthropic',
         models: anthropicModels,
-        options: {
-          ...options,
-          baseURL: stripV1(baseURL),
-        },
+        options: { ...options, baseURL: stripV1(baseURL) },
       },
-      // OpenAI-compatible fallback for all other models (GLM, Kimi, MiMo, Qwen, DeepSeek)
+      // OpenAI-compatible fallback for all other models
       {
         apiType: 'openai',
         runtime: LobeOpenCodeCodingPlanOpenAI as any,
-        options: {
-          ...options,
-          baseURL,
-        },
+        options: { ...options, baseURL },
       },
     ];
   },

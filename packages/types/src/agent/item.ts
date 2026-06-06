@@ -8,6 +8,18 @@ import type { LobeAgentAgencyConfig } from './agencyConfig';
 import { AgentChatConfigSchema, type LobeAgentChatConfig } from './chatConfig';
 import type { LobeAgentTTSConfig } from './tts';
 
+/**
+ * A single entry in the agent usage ranking (by topic count). `id` is the
+ * agentId — the ranking is agent-native (no sessionId).
+ */
+export interface AgentRankItem {
+  avatar: string | null;
+  backgroundColor: string | null;
+  count: number;
+  id: string;
+  title: string | null;
+}
+
 export interface LobeAgentConfig {
   /**
    * Agency configuration: device binding, heterogeneous agent provider, etc.

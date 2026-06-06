@@ -1,3 +1,4 @@
+import { isOfficialProvider, OFFICIAL_PROVIDER_DISABLE_ERROR } from '@lobechat/business-const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -134,6 +135,13 @@ export const aiProviderRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      if (isOfficialProvider(input.id) && input.enabled === false) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: OFFICIAL_PROVIDER_DISABLE_ERROR,
+        });
+      }
+
       return ctx.aiProviderModel.toggleProviderEnabled(input.id, input.enabled);
     }),
 

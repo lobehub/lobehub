@@ -6,9 +6,13 @@ import { registerTopicCommand } from './topic';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
+    message: {
+      getMessages: { query: vi.fn() },
+    },
     topic: {
       batchDelete: { mutate: vi.fn() },
       createTopic: { mutate: vi.fn() },
+      getTopicDetail: { query: vi.fn() },
       getTopics: { query: vi.fn() },
       recentTopics: { query: vi.fn() },
       removeTopic: { mutate: vi.fn() },
@@ -41,6 +45,18 @@ describe('topic command', () => {
         (fn as ReturnType<typeof vi.fn>).mockReset();
       }
     }
+    for (const method of Object.values(mockTrpcClient.message)) {
+      for (const fn of Object.values(method)) {
+        (fn as ReturnType<typeof vi.fn>).mockReset();
+      }
+    }
+    // Default stub for getTopicDetail
+    mockTrpcClient.topic.getTopicDetail.query.mockResolvedValue({
+      favorite: false,
+      id: 't1',
+      title: 'Test Topic',
+      updatedAt: new Date().toISOString(),
+    });
   });
 
   afterEach(() => {
@@ -201,6 +217,132 @@ describe('topic command', () => {
       await program.parseAsync(['node', 'test', 'topic', 'recent']);
 
       expect(mockTrpcClient.topic.recentTopics.query).toHaveBeenCalledWith({ limit: 10 });
+    });
+  });
+
+  describe('view', () => {
+    it('should display topic metadata and messages', async () => {
+      mockTrpcClient.message.getMessages.query.mockResolvedValue([
+        { content: 'Hello world', id: 'm1', role: 'user' },
+        { content: 'Hi there', id: 'm2', role: 'assistant' },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'topic', 'view', 't1']);
+
+      expect(mockTrpcClient.topic.getTopicDetail.query).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 't1' }),
+      );
+      expect(mockTrpcClient.message.getMessages.query).toHaveBeenCalledWith(
+        expect.objectContaining({ topicId: 't1' }),
+      );
+      expect(consoleSpy).toHaveBeenCalled();
+    });
+
+    it('should skip message query entirely when --no-messages flag is set', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'topic', 'view', 't1', '--no-messages']);
+
+      // getTopicDetail is still called (for metadata)
+      expect(mockTrpcClient.topic.getTopicDetail.query).toHaveBeenCalled();
+      // but getMessages must NOT be called
+      expect(mockTrpcClient.message.getMessages.query).not.toHaveBeenCalled();
+    });
+
+    it('should output json when --json flag is set', async () => {
+      mockTrpcClient.message.getMessages.query.mockResolvedValue([
+        { content: 'Hello', id: 'm1', role: 'user' },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'topic', 'view', 't1', '--json']);
+
+      const calls = consoleSpy.mock.calls.flat().join('');
+      const parsed = JSON.parse(calls);
+      expect(parsed.topic.id).toBe('t1');
+      expect(parsed.messages).toHaveLength(1);
+      expect(parsed.messages[0]).toHaveProperty('role', 'user');
+      expect(parsed.messages[0]).toHaveProperty('content', 'Hello');
+    });
+
+    it('should output json with empty messages for --no-messages --json', async () => {
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'topic', 'view', 't1', '--no-messages', '--json']);
+
+      expect(mockTrpcClient.message.getMessages.query).not.toHaveBeenCalled();
+      const calls = consoleSpy.mock.calls.flat().join('');
+      const parsed = JSON.parse(calls);
+      expect(parsed.topic.id).toBe('t1');
+      expect(parsed.messages).toHaveLength(0);
+    });
+
+    it('should respect -L for message page size', async () => {
+      mockTrpcClient.message.getMessages.query.mockResolvedValue([]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'topic', 'view', 't1', '-L', '10']);
+
+      expect(mockTrpcClient.message.getMessages.query).toHaveBeenCalledWith(
+        expect.objectContaining({ pageSize: 10, topicId: 't1' }),
+      );
+    });
+
+    it('should slice messages with --from and --to', async () => {
+      mockTrpcClient.message.getMessages.query.mockResolvedValue([
+        { content: 'msg1', id: 'm1', role: 'user' },
+        { content: 'msg2', id: 'm2', role: 'assistant' },
+        { content: 'msg3', id: 'm3', role: 'user' },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'topic', 'view', 't1', '--from', '2', '--to', '3']);
+
+      // Should print only m2 and m3 (index 1 and 2)
+      const output = consoleSpy.mock.calls.flat().join('\n');
+      expect(output).toContain('msg2');
+      expect(output).toContain('msg3');
+      expect(output).not.toContain('msg1');
+    });
+
+    it('should render tool calls inline', async () => {
+      mockTrpcClient.message.getMessages.query.mockResolvedValue([
+        {
+          content: "I'll search for that.",
+          id: 'm1',
+          role: 'assistant',
+          tools: [
+            {
+              function: { arguments: '{"query":"lobehub"}', name: 'web_search' },
+              id: 'call_1',
+              type: 'function',
+            },
+          ],
+        },
+        { content: 'search results...', id: 'm2', role: 'tool' },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'topic', 'view', 't1']);
+
+      const output = consoleSpy.mock.calls.flat().join('\n');
+      expect(output).toContain('web_search');
+      expect(output).toContain('lobehub');
+    });
+
+    it('should render threaded messages with indentation', async () => {
+      mockTrpcClient.message.getMessages.query.mockResolvedValue([
+        { content: 'Parent message', id: 'm1', parentId: null, role: 'user' },
+        { content: 'Thread reply', id: 'm2', parentId: 'm1', role: 'assistant' },
+      ]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'topic', 'view', 't1']);
+
+      const output = consoleSpy.mock.calls.flat().join('\n');
+      expect(output).toContain('Parent message');
+      expect(output).toContain('Thread reply');
+      // thread reply should appear after parent (basic ordering check)
+      expect(output.indexOf('Thread reply')).toBeGreaterThan(output.indexOf('Parent message'));
     });
   });
 });

@@ -1,4 +1,4 @@
-import { isDesktop } from '@lobechat/const';
+import { isDesktop, MARKDOWN_MIME_TYPES } from '@lobechat/const';
 import { Center, Empty, Flexbox, Icon, Markdown, Segmented, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CodeIcon, EyeIcon } from 'lucide-react';
@@ -28,8 +28,7 @@ const TEXT_PREVIEW_MIME_TYPES = new Set([
   'application/toml',
   'application/xml',
   'application/yaml',
-  'text/markdown',
-  'text/x-markdown',
+  ...MARKDOWN_MIME_TYPES,
 ]);
 
 interface BinaryLocalFilePreview {

@@ -32,6 +32,12 @@ export interface AgentSignalSourcePayloadMap {
   [AGENT_SIGNAL_SOURCE_TYPES.agentExecutionCompleted]: {
     agentId?: string;
     operationId: string;
+    /**
+     * Opaque completion side-effect payload attached by the executor for
+     * builtin background agents (e.g. self-iteration tool outcomes used for
+     * receipt projection). Carried as-is; the producing layer owns its shape.
+     */
+    selfIteration?: unknown;
     serializedContext?: string;
     steps: number;
     topicId?: string;

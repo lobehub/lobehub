@@ -22,6 +22,11 @@ import {
 } from '@/server/services/mcp/contentProcessor';
 
 import { scheduleToolCallReport } from './_helpers';
+import {
+  isMarketConnectionsTimeoutError,
+  listMarketConnectionsWithTimeout,
+  MARKET_CONNECTIONS_REQUEST_TIMEOUT_MS,
+} from './_helpers/marketConnections';
 
 const log = debug('lobe-server:tools:market');
 
@@ -530,7 +535,7 @@ export const marketRouter = router({
     log('connectListConnections');
 
     try {
-      const response = await ctx.marketSDK.connect.listConnections();
+      const response = await listMarketConnectionsWithTimeout(ctx.marketSDK.connect);
       // Debug logging
       log('connectListConnections raw response: %O', response);
       log('connectListConnections connections: %O', response.connections);
@@ -539,7 +544,16 @@ export const marketRouter = router({
       };
     } catch (error) {
       log('connectListConnections error: %O', error);
+      if (isMarketConnectionsTimeoutError(error)) {
+        throw new TRPCError({
+          cause: error,
+          code: 'TIMEOUT',
+          message: `Market connections request timed out after ${MARKET_CONNECTIONS_REQUEST_TIMEOUT_MS / 1000}s`,
+        });
+      }
+
       throw new TRPCError({
+        cause: error,
         code: 'INTERNAL_SERVER_ERROR',
         message: `Failed to list connections: ${(error as Error).message}`,
       });

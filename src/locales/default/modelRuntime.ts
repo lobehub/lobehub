@@ -43,6 +43,8 @@ export default {
     'Vertex authentication failed. Please check your credentials and try again.',
   LocationNotSupportError:
     "We're sorry, your current location does not support this model service. This may be due to regional restrictions or the service not being available. Please confirm if the current location supports using this service, or try using a different location.",
+  ModelEmptyCompletion:
+    'The model returned an empty response. This usually clears up on retry; if it persists, try simplifying the request or switching models.',
   ModelNotFound:
     'Sorry, the requested model could not be found. It may not exist or you may not have the necessary access permissions. Please try again after changing the API Key or adjusting your access permissions.',
   NoAvailableChannel:

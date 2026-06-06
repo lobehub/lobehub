@@ -186,6 +186,7 @@ export default {
   'heteroAgent.executionTarget.online': 'Online',
   'heteroAgent.executionTarget.sandbox': 'Cloud sandbox',
   'heteroAgent.executionTarget.sandboxDesc': 'Run in an ephemeral cloud sandbox',
+  'heteroAgent.executionTarget.downloadDesktop': 'Get Desktop App',
   'heteroAgent.executionTarget.title': 'Execution Device',
   'heteroAgent.executionTarget.unknownDevice': 'Unknown device',
   'hideForYou':
@@ -368,27 +369,27 @@ export default {
   'newAgent': 'Create Agent',
   'newClaudeCodeAgent': 'Add Claude Code',
   'newCodexAgent': 'Add Codex',
-  'newPlatformAgent': 'Add Platform Agent',
+  'newPlatformAgent': 'Connect Agent',
   'newGroupChat': 'Create Group',
 
-  // Platform agent: per-platform descriptions shown in step 0 of the creation modal
+  // Connect agent: per-agent descriptions shown in step 0 of the connect modal
   'platformAgent.create.desc.openclaw': 'Connect to OpenClaw running on one of your devices',
   'platformAgent.create.desc.hermes': 'Connect to Hermes running on one of your devices',
   'platformAgent.create.desc.amp': 'Connect to Amp running on one of your devices',
   'platformAgent.create.desc.opencode': 'Connect to OpenCode running on one of your devices',
 
-  // Platform agent: shared device status label (used in Select option labels)
+  // Connect agent: shared device status label (used in Select option labels)
   'platformAgent.device.online': 'Online',
 
-  // Platform agent creation modal (openclaw / hermes)
-  'platformAgent.create.title': 'Add Platform Agent',
-  'platformAgent.create.step1': 'Select Platform',
+  // Connect agent modal (openclaw / hermes)
+  'platformAgent.create.title': 'Connect Agent',
+  'platformAgent.create.step1': 'Select Agent',
   'platformAgent.create.step2': 'Select Device',
   'platformAgent.create.step3': 'Configure Agent',
   'platformAgent.create.next': 'Next',
   'platformAgent.create.back': 'Back',
-  'platformAgent.create.create': 'Create Agent',
-  'platformAgent.create.creating': 'Creating...',
+  'platformAgent.create.create': 'Connect',
+  'platformAgent.create.creating': 'Connecting...',
   'platformAgent.create.namePlaceholder': 'e.g. My OpenClaw Agent',
   'platformAgent.create.descriptionPlaceholder': 'Brief description (optional)',
   'platformAgent.create.fetchingProfile': 'Fetching profile...',
@@ -409,7 +410,7 @@ export default {
   'platformAgent.create.upgradeCmd': 'npm install -g @lobehub/cli',
   'platformAgent.create.comingSoon': 'Coming Soon',
 
-  // Platform agent device guard banner
+  // Connect agent device guard banner
   'platformAgent.deviceGuard.deviceOffline.title': 'Device not connected',
   'platformAgent.deviceGuard.deviceOffline.desc':
     'The bound device is not connected. Run `lh connect` on that machine then refresh.',
@@ -468,6 +469,7 @@ export default {
   'plus.search.modelSearchDesc': 'May cause unexpected behavior when enabled, not recommended.',
   'plus.search.off': 'Off',
   'plus.search.offDesc': '',
+  'plus.addAttachments': 'Attachments',
   'plus.addSkills': 'Add Skills...',
   'plus.title': 'Add',
   'plus.tooltip': 'Add files, skills, and more context...',
@@ -712,7 +714,9 @@ export default {
   'taskDetail.comment.save': 'Save',
   'taskDetail.commentPlaceholder':
     'Leave feedback to guide the agent — your comments shape the next run...',
-  'taskDetail.commentSubmitAndRun': 'Send & run now',
+  'taskDetail.replyInThread': 'Reply in this thread',
+  'taskDetail.replyPlaceholder': 'Reply in this thread...',
+  'taskDetail.sendFollowUp': 'Send follow up message',
   'taskDetail.deleteConfirm.content': 'This action cannot be undone.',
   'taskDetail.deleteConfirm.ok': 'Delete',
   'taskDetail.deleteConfirm.title': 'Delete this task?',

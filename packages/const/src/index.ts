@@ -1,3 +1,4 @@
+export * from './agentDocument';
 export * from './bot';
 export * from './currency';
 export * from './desktop';

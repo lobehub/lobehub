@@ -110,6 +110,77 @@ describe('AgentDocument VFS Router Integration Tests', () => {
     );
   });
 
+  it('keeps extensionless ordinary VFS writes as system document names', async () => {
+    const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+
+    const created = await caller.writeDocumentByPath({
+      agentId,
+      content: '# Draft',
+      path: './draft',
+    });
+
+    expect(created).toEqual(
+      expect.objectContaining({
+        name: 'draft',
+        path: './draft',
+        type: 'file',
+      }),
+    );
+
+    const read = await caller.readDocumentByPath({ agentId, path: './draft' });
+
+    expect(read).toEqual(
+      expect.objectContaining({
+        content: '# Draft\n',
+        path: './draft',
+      }),
+    );
+  });
+
+  it('resolves extensionless ordinary VFS writes to the existing system document', async () => {
+    const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+
+    await caller.writeDocumentByPath({
+      agentId,
+      content: 'first',
+      path: './draft',
+    });
+    await caller.writeDocumentByPath({
+      agentId,
+      content: 'second',
+      path: './draft',
+    });
+
+    const nodes = await caller.listDocumentsByPath({ agentId, path: './' });
+    if (!nodes) throw new Error('Expected root document listing');
+
+    const draftNodes = nodes.filter((node) => node.name === 'draft');
+    const read = await caller.readDocumentByPath({ agentId, path: './draft' });
+
+    expect(draftNodes).toHaveLength(1);
+    expect(read).toEqual(expect.objectContaining({ content: 'second\n', path: './draft' }));
+  });
+
+  it('updates existing legacy extensionless ordinary documents by exact path', async () => {
+    await agentDocumentModel.create(agentId, 'draft', 'first');
+
+    const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+    const updated = await caller.writeDocumentByPath({
+      agentId,
+      content: 'second',
+      path: './draft',
+    });
+
+    const nodes = await caller.listDocumentsByPath({ agentId, path: './' });
+    if (!nodes) throw new Error('Expected root document listing');
+
+    const read = await caller.readDocumentByPath({ agentId, path: './draft' });
+
+    expect(updated).toEqual(expect.objectContaining({ name: 'draft', path: './draft' }));
+    expect(nodes.some((node) => node.name === 'draft.md')).toBe(false);
+    expect(read).toEqual(expect.objectContaining({ content: 'second\n', path: './draft' }));
+  });
+
   it('stats mounted agent skills through unified ./lobe paths', async () => {
     const caller = agentDocumentRouter.createCaller(createTestContext(userId));
 

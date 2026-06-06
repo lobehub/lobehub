@@ -120,7 +120,11 @@ const buildSyntheticStream = (): AgentStreamEvent[] => {
       model: 'claude-opus-4-7',
       phase: 'turn_metadata',
       provider: 'claude-code',
-      usage: { inputTokens: 100 + step, outputTokens: 50 + step },
+      usage: {
+        totalInputTokens: 100 + step,
+        totalOutputTokens: 50 + step,
+        totalTokens: 150 + 2 * step,
+      },
     });
 
     stepIndex += 1;

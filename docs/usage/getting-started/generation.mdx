@@ -1,0 +1,212 @@
+---
+title: Image & Video Generation
+description: >-
+  Create high-quality images and videos from text descriptions using AI models
+  like DALL-E 3, Flux, Sora, Veo, Kling, and more. Learn how to write effective
+  prompts, choose the right model, and configure parameters for each medium.
+tags:
+  - LobeHub
+  - Image Generation
+  - Video Generation
+  - AI Drawing
+  - AI Video
+  - DALL-E
+  - Sora
+  - Veo
+  - Kling
+  - Text to Image
+  - Text to Video
+  - Prompt Writing
+---
+
+# Image & Video Generation
+
+Describe what you want — LobeHub turns text into images and videos. Product prototypes, design inspiration, illustrations, motion concepts, short clips, or creative exploration: choose a model, set your parameters, and generate in seconds. All output lands in your generation feed and can be downloaded or saved to your Resource Library.
+
+LobeHub ships two parallel workspaces — **Image** and **Video** — built on the same generation pipeline but tuned for each medium.
+
+## Get Started
+
+From the LobeHub sidebar:
+
+- Click **Image** (the picture icon) to open the image generation workspace at `/image`.
+- Click **Video** (the video icon) to open the video generation workspace at `/video`.
+
+Each workspace has the same three-pane layout: prompt input, configuration panel, and a generation feed for past results.
+
+## Image Generation
+
+### Enter a Prompt
+
+Describe the image you want in the input box. The more specific your description, the more accurate the result.
+
+**Effective prompt structure:**
+
+```
+[Subject] [Style/Medium] [Setting/Background] [Lighting] [Mood] [Technical details]
+```
+
+Examples:
+
+```
+"A futuristic city skyline at sunset, digital art, cyberpunk style, neon lights reflecting on wet streets, cinematic lighting, 4K detail"
+
+"A cozy coffee shop interior, watercolor illustration, warm golden light streaming through windows, potted plants on windowsills, soft and inviting atmosphere"
+
+"A product photo of a minimalist leather wallet on a clean white background, studio lighting, sharp focus, commercial photography style"
+```
+
+**Prompt tips:**
+
+- **Be specific about style** — "oil painting", "watercolor", "digital art", "photorealistic", "anime", "vector illustration"
+- **Describe lighting** — "dramatic shadows", "soft diffused light", "golden hour", "studio lighting"
+- **Specify composition** — "portrait view", "wide angle", "close-up", "bird's eye view"
+- **Add quality modifiers** — "high detail", "4K", "sharp focus", "professional quality"
+- **Avoid vagueness** — "beautiful", "nice", "good" add little — describe what you actually want
+
+### Choose an AI Model
+
+LobeHub offers multiple AI image generation models. Different models have different strengths:
+
+![Choose a Model](/blog/assetsdd913561927c64d32bd390cee6846f9a.webp)
+
+| Model                | Best For                                                      |
+| -------------------- | ------------------------------------------------------------- |
+| **DALL-E 3**         | Realistic photos, illustrations, following prompts accurately |
+| **GPT Image**        | High-fidelity edits, text rendering inside images             |
+| **Flux**             | Artistic styles, creative images, fast generation             |
+| **Stable Diffusion** | Highly customizable, community styles and fine-tuned models   |
+| **Gemini Imagen**    | Photoreal scenes, strong global composition                   |
+| **fal.ai models**    | Various specialized styles and fast generation                |
+
+Try different models with the same prompt to see which gives the best results for your use case.
+
+### Reference Images (Optional)
+
+If you have reference images, upload them to guide the generation process. Click the upload button or drag and drop your reference images directly. You can upload multiple reference images depending on the model.
+
+![Upload Reference Images for Image Generation](/blog/assets3c160860feef0bd7c653eeb46f683445.webp)
+
+Reference images help the model understand your desired style, composition, or color palette — and many models also support reference-based **edits** (e.g. swap the background, change the outfit) when you describe the change in the prompt.
+
+### Configure Generation Parameters
+
+The right-hand config panel exposes everything the selected model supports. Common controls:
+
+- **Aspect Ratio** — `1:1`, `16:9`, `9:16`, `4:3`, `3:2`. Lock or unlock to free-form size.
+- **Size / Resolution** — pick a preset (`512px`, `1K`, `2K`, `4K`) or set width × height directly.
+- **Number of Images** — generate 1–4 variations per run.
+- **Quality** — Standard or High Definition (model-dependent).
+- **Seed** — leave random for variety, or paste a fixed seed to reproduce a previous result.
+- **Steps / Guidance Intensity (CFG)** — fine-tune the speed-vs-quality and prompt-adherence tradeoffs.
+- **Watermark** — toggle on/off where supported.
+- **Web Search** / **Prompt Extend** — let an LLM enrich your prompt with current references before generation.
+
+**Aspect ratio cheatsheet:**
+
+- **1:1** — Social media posts, profile pictures
+- **16:9** — Widescreen, presentations, banners
+- **9:16** — Mobile screens, stories, reels
+- **4:3** — General use, older display formats
+- **3:2** — Photography standard, prints
+
+### View and Download Images
+
+Once generated, images appear in the generation feed. You can:
+
+- Preview any image at full size by clicking it
+- Download, copy the seed, copy the prompt, or reuse the full settings on a new run
+- Delete a single image or the whole batch
+
+![Generated Images in Asset Library](/blog/assets974acc551878f2f395518a3fbb9bd924.webp)
+
+## Video Generation
+
+The Video workspace mirrors Image — same prompt-first flow, same config panel, same feed — but with controls tuned for motion.
+
+### Enter a Prompt
+
+Describe the **scene, motion, and camera**, not just the subject. Models reward verbs and shot language.
+
+```
+"A red fox trotting through fresh snow at golden hour, breath visible in the cold air, slow tracking shot, cinematic"
+
+"An astronaut floating into a colorful nebula, slow dolly-in, dreamy atmosphere, soft volumetric light"
+
+"A cup of coffee being poured in macro slow motion, steam rising, shallow depth of field, commercial product shot"
+```
+
+**Prompt tips for video:**
+
+- **Describe motion explicitly** — "slow tracking shot", "dolly-in", "handheld", "static wide", "pan left"
+- **Set a time progression** — "starts misty then clears", "the door slowly opens"
+- **Reference cinematography** — "shallow depth of field", "anamorphic lens flare", "golden hour"
+- **Keep it focused** — one main action per clip works better than several
+
+### Choose an AI Model
+
+LobeHub integrates the major text-to-video and image-to-video providers:
+
+| Model                          | Best For                                                     |
+| ------------------------------ | ------------------------------------------------------------ |
+| **OpenAI Sora 2 / Sora 2 Pro** | Coherent multi-second clips, strong scene understanding      |
+| **Google Veo 3 / 3.1**         | Photoreal motion, native audio generation, cinematic look    |
+| **Kling V3**                   | High-motion fidelity, image-to-video and omni-video          |
+| **MiniMax Hailuo 2.3**         | Fast text-to-video, expressive characters                    |
+| **Qwen / Wan**                 | Text-to-video with strong Chinese prompt understanding       |
+| **fal.ai models**              | Specialised models, fast turnaround                          |
+
+Different models support different parameter sets — switching models updates the config panel automatically.
+
+### Start & End Frames (Optional)
+
+Many video models support image conditioning:
+
+- **Start Frame** — upload an image to use as the first frame of the clip. Great for animating a still you generated in the Image workspace.
+- **End Frame** — upload an image to land on as the final frame. Requires a start frame.
+
+When a start frame is set, the prompt placeholder shifts to "Describe the scene you want to generate with the image".
+
+### Configure Generation Parameters
+
+Controls vary by model, but typically include:
+
+- **Duration** — clip length in seconds (model-dependent, e.g. 4s / 6s / 8s).
+- **Aspect Ratio** — `16:9`, `9:16`, `1:1`, `4:3`, `3:4`, `21:9`.
+- **Resolution** — `480p`, `720p`, `1080p`.
+- **Fixed Camera** — lock the camera in place instead of letting the model animate it.
+- **Generate Audio** — produce a synced soundtrack alongside the video (model-dependent, e.g. Veo).
+- **Seed** — random or fixed for reproducibility.
+- **Watermark** — toggle on/off where supported.
+- **Web Search** / **Prompt Extend** — same LLM-assisted prompt enrichment as the image flow.
+
+### View and Download Videos
+
+Generated clips appear in the feed and play inline. You can:
+
+- Play, pause, and scrub through the clip
+- Download the video
+- Copy the error message to clipboard if a generation fails
+- Delete a single clip or the whole batch
+
+A "🎁 N free videos today" badge shows your remaining free quota; once it's used up, credits are consumed per generation.
+
+## Tips for Better Results
+
+**Iterate on prompts** — If the first result isn't quite right, adjust one element at a time rather than rewriting the whole prompt. Add more detail, change the style descriptor, or specify what you don't want.
+
+**Use a reference image or start frame** — Uploading a reference helps the model match your intended style, color palette, composition, or — for video — your opening shot.
+
+**Try multiple variations** — Generate several images per run, or re-generate videos with the same seed and a tweaked prompt. AI generation has inherent randomness — some variations will be significantly better than others.
+
+**Match model to task** — Photorealistic models (DALL-E 3, Flux, Imagen) for product photos and realistic scenes; style-focused models for artistic illustrations; Veo or Sora for cinematic motion; Kling or Hailuo for character-heavy clips.
+
+**Bridge image → video** — Generate a strong still in the Image workspace, then feed it into the Video workspace as a start frame to animate it.
+
+<Cards>
+  <Card href={'/docs/usage/getting-started/resource'} title={'Resource Library'} />
+
+  <Card href={'/docs/usage/getting-started/vision'} title={'Vision & Image Understanding'} />
+
+  <Card href={'/docs/usage/providers'} title={'AI Providers'} />
+</Cards>

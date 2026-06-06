@@ -53,6 +53,79 @@ describe('TopicModel - Query', () => {
       expect(result.items[2].id).toBe('4');
     });
 
+    it('should order by status priority when sortBy is "status"', async () => {
+      await serverDB.insert(topics).values([
+        // favorite floats to the top regardless of its (lower-priority) status
+        {
+          favorite: true,
+          id: 'fav',
+          sessionId,
+          status: 'completed',
+          updatedAt: new Date('2023-01-01'),
+          userId,
+        },
+        // null status is treated as `active` (rank 2)
+        { id: 'active', sessionId, updatedAt: new Date('2023-09-01'), userId },
+        {
+          id: 'running-old',
+          sessionId,
+          status: 'running',
+          updatedAt: new Date('2023-02-01'),
+          userId,
+        },
+        {
+          id: 'running-new',
+          sessionId,
+          status: 'running',
+          updatedAt: new Date('2023-08-01'),
+          userId,
+        },
+        {
+          id: 'waiting',
+          sessionId,
+          status: 'waitingForHuman',
+          updatedAt: new Date('2023-03-01'),
+          userId,
+        },
+        {
+          id: 'completed',
+          sessionId,
+          status: 'completed',
+          updatedAt: new Date('2023-07-01'),
+          userId,
+        },
+      ]);
+
+      const result = await topicModel.query({ containerId: sessionId, sortBy: 'status' });
+
+      expect(result.items.map((t) => t.id)).toEqual([
+        'fav', // favorite, rank-independent
+        'waiting', // waitingForHuman = 0
+        'running-new', // running = 1, newer first within the bucket
+        'running-old',
+        'active', // null status → active = 2
+        'completed', // completed = 5
+      ]);
+    });
+
+    it('should keep updatedAt ordering by default (no sortBy)', async () => {
+      await serverDB.insert(topics).values([
+        {
+          id: 'waiting',
+          sessionId,
+          status: 'waitingForHuman',
+          updatedAt: new Date('2023-01-01'),
+          userId,
+        },
+        { id: 'active', sessionId, updatedAt: new Date('2023-05-01'), userId },
+      ]);
+
+      const result = await topicModel.query({ containerId: sessionId });
+
+      // Without status sort, most-recently-updated wins even if lower priority
+      expect(result.items.map((t) => t.id)).toEqual(['active', 'waiting']);
+    });
+
     it('should query topics with pagination', async () => {
       await serverDB.insert(topics).values([
         { id: '1', userId, updatedAt: new Date('2023-01-01') },
@@ -370,12 +443,9 @@ describe('TopicModel - Query', () => {
   });
 
   describe('query with agentId filter', () => {
-    it('should filter legacy topics by agentId through agentsToSessions lookup', async () => {
+    it('should not match legacy session-only topics by agentId', async () => {
       await serverDB.transaction(async (trx) => {
-        await trx.insert(sessions).values([
-          { id: 'session-for-agent', userId },
-          { id: 'session-other', userId },
-        ]);
+        await trx.insert(sessions).values([{ id: 'session-for-agent', userId }]);
         await trx.insert(agents).values([{ id: 'agent1', userId, title: 'Agent 1' }]);
         await trx
           .insert(agentsToSessions)
@@ -388,20 +458,14 @@ describe('TopicModel - Query', () => {
             agentId: null,
             updatedAt: new Date('2023-01-01'),
           },
-          {
-            id: 'topic-other-session',
-            userId,
-            sessionId: 'session-other',
-            agentId: null,
-            updatedAt: new Date('2023-01-02'),
-          },
         ]);
       });
 
+      // Topics carrying only a legacy sessionId are no longer adopted by the
+      // agent query; only `topics.agentId` matches.
       const result = await topicModel.query({ agentId: 'agent1' });
 
-      expect(result.items).toHaveLength(1);
-      expect(result.items[0].id).toBe('topic-agent-session');
+      expect(result.items).toHaveLength(0);
     });
 
     it('should filter new topics by agentId directly', async () => {
@@ -434,7 +498,7 @@ describe('TopicModel - Query', () => {
       expect(result.items[0].id).toBe('new-topic-1');
     });
 
-    it('should return both legacy and new topics when querying by agentId', async () => {
+    it('should only return topics carrying the agentId, ignoring session-only ones', async () => {
       await serverDB.transaction(async (trx) => {
         await trx.insert(sessions).values([{ id: 'mixed-session', userId }]);
         await trx.insert(agents).values([{ id: 'mixed-agent', userId, title: 'Mixed Agent' }]);
@@ -468,12 +532,9 @@ describe('TopicModel - Query', () => {
 
       const result = await topicModel.query({ agentId: 'mixed-agent' });
 
-      expect(result.items).toHaveLength(3);
-      expect(result.items.map((t) => t.id).sort()).toEqual([
-        'both-topic',
-        'legacy-topic',
-        'new-topic',
-      ]);
+      // `legacy-topic` (sessionId only, no agentId) is excluded.
+      expect(result.items).toHaveLength(2);
+      expect(result.items.map((t) => t.id).sort()).toEqual(['both-topic', 'new-topic']);
     });
 
     it('should not return duplicate topics when both agentId and sessionId match', async () => {
@@ -683,21 +744,15 @@ describe('TopicModel - Query', () => {
 
     it('should ignore containerId when agentId is provided', async () => {
       await serverDB.transaction(async (trx) => {
-        await trx.insert(sessions).values([
-          { id: 'agent-only-session', userId },
-          { id: 'container-only-session', userId },
-        ]);
+        await trx.insert(sessions).values([{ id: 'container-only-session', userId }]);
         await trx
           .insert(agents)
           .values([{ id: 'priority-agent', userId, title: 'Priority Agent' }]);
-        await trx
-          .insert(agentsToSessions)
-          .values([{ agentId: 'priority-agent', sessionId: 'agent-only-session', userId }]);
         await trx.insert(topics).values([
           {
             id: 'agent-topic',
             userId,
-            sessionId: 'agent-only-session',
+            agentId: 'priority-agent',
             updatedAt: new Date('2023-01-01'),
           },
           {
@@ -1130,9 +1185,7 @@ describe('TopicModel - Query', () => {
       expect(result.items[0].id).toBe('true-legacy-inbox');
     });
 
-    it('should include topics with associated sessionId via agentsToSessions when isInbox is true', async () => {
-      // This tests the scenario where old users have inbox topics with sessionId
-      // but no agentId, linked via agentsToSessions relation
+    it('should adopt only agentId and fully-orphan topics, not session-linked ones, when isInbox is true', async () => {
       await serverDB.transaction(async (trx) => {
         // Create inbox session and agent with relation
         await trx.insert(sessions).values([{ id: 'inbox-session', slug: 'inbox', userId }]);
@@ -1174,10 +1227,10 @@ describe('TopicModel - Query', () => {
 
       const result = await topicModel.query({ agentId: 'inbox-agent-linked', isInbox: true });
 
-      // Should include all three: legacy with sessionId, new with agentId, orphan legacy
-      expect(result.items).toHaveLength(3);
+      // `legacy-session-topic` is no longer adopted via the agentsToSessions
+      // lookup; only the agentId match and the fully-orphan fallback remain.
+      expect(result.items).toHaveLength(2);
       expect(result.items.map((t) => t.id).sort()).toEqual([
-        'legacy-session-topic',
         'new-agentid-topic',
         'orphan-legacy-topic',
       ]);
@@ -1415,7 +1468,7 @@ describe('TopicModel - Query', () => {
   });
 
   describe('queryRecent', () => {
-    it('should return recent topics with agentId and sessionId', async () => {
+    it('should return recent topics with agentId', async () => {
       await serverDB.transaction(async (tx) => {
         await tx.insert(agents).values([
           {

@@ -20,7 +20,7 @@ interface ResolvedAuth {
 /**
  * Parse the `sub` claim from a JWT without verifying the signature.
  */
-function parseJwtSub(token: string): string | undefined {
+export function parseJwtSub(token: string): string | undefined {
   try {
     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
     return payload.sub;

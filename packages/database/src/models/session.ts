@@ -1,18 +1,17 @@
-import { DEFAULT_AGENT_CONFIG, DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
+import { DEFAULT_AGENT_CONFIG, INBOX_SESSION_ID } from '@lobechat/const';
 import type {
   ChatSessionList,
   LobeAgentConfig,
   LobeAgentSession,
   LobeGroupSession,
-  SessionRankItem,
 } from '@lobechat/types';
-import { and, asc, count, desc, eq, gt, inArray, isNull, not, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, not, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
 
 import type { AgentItem, NewAgent, NewSession, SessionItem } from '../schemas';
-import { agents, agentsToSessions, sessionGroups, sessions, topics } from '../schemas';
+import { agents, agentsToSessions, sessionGroups, sessions } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
@@ -151,53 +150,6 @@ export class SessionModel {
       );
 
     return result[0].count;
-  };
-
-  _rank = async (limit: number = 10): Promise<SessionRankItem[]> => {
-    return this.db
-      .select({
-        avatar: agents.avatar,
-        backgroundColor: agents.backgroundColor,
-        count: count(topics.id).as('count'),
-        id: sessions.id,
-        title: agents.title,
-      })
-      .from(sessions)
-      .where(and(eq(sessions.userId, this.userId)))
-      .leftJoin(topics, eq(sessions.id, topics.sessionId))
-      .leftJoin(agentsToSessions, eq(sessions.id, agentsToSessions.sessionId))
-      .leftJoin(agents, eq(agentsToSessions.agentId, agents.id))
-      .groupBy(sessions.id, agentsToSessions.agentId, agents.id)
-      .having(({ count }) => gt(count, 0))
-      .orderBy(desc(sql`count`))
-      .limit(limit);
-  };
-
-  // TODO: In the future, once Inbox ID is stored in the database, we can directly use the _rank method
-  rank = async (limit: number = 10): Promise<SessionRankItem[]> => {
-    const inboxResult = await this.db
-      .select({
-        count: count(topics.id).as('count'),
-      })
-      .from(topics)
-      .where(and(eq(topics.userId, this.userId), isNull(topics.sessionId)));
-
-    const inboxCount = inboxResult[0].count;
-
-    if (!inboxCount || inboxCount === 0) return this._rank(limit);
-
-    const result = await this._rank(limit ? limit - 1 : undefined);
-
-    return [
-      {
-        avatar: DEFAULT_INBOX_AVATAR,
-        backgroundColor: null,
-        count: inboxCount,
-        id: INBOX_SESSION_ID,
-        title: 'inbox.title',
-      },
-      ...result,
-    ].sort((a, b) => b.count - a.count);
   };
 
   hasMoreThanN = async (n: number): Promise<boolean> => {

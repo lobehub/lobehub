@@ -8,6 +8,7 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type ThreadItem } from '@/types/topic/thread';
 import { createThreadSchema } from '@/types/topic/thread';
+import { markdownToTxt } from '@/utils/markdownToTxt';
 
 /**
  * `ThreadModel.create` uses `onConflictDoNothing()` and returns undefined when
@@ -73,7 +74,7 @@ export const threadRouter = router({
           metadata: input.metadata,
           parentThreadId: input.parentThreadId,
           sourceMessageId: input.sourceMessageId,
-          title: input.message.content.slice(0, 80),
+          title: markdownToTxt(input.message.content).slice(0, 80),
           topicId: input.topicId,
           type: input.type,
         }),

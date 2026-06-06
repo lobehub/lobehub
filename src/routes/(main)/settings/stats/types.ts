@@ -13,3 +13,8 @@ export enum GroupBy {
   Model = 'model',
   Provider = 'provider',
 }
+
+export enum HeatmapType {
+  Messages = 'messages',
+  Tokens = 'tokens',
+}

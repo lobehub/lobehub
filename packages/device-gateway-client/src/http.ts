@@ -1,4 +1,9 @@
-import type { DeviceSystemInfo, GatewayDevice } from './types';
+import type {
+  DeviceSystemInfo,
+  GatewayDevice,
+  GatewayMcpStdioParams,
+  GatewayToolCallType,
+} from './types';
 
 const DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS = 30_000;
 const HTTP_CALL_TIMEOUT_PADDING_MS = 30_000;
@@ -11,6 +16,7 @@ export interface DeviceStatusResult {
 export interface DeviceToolCallResult {
   content: string;
   error?: string;
+  state?: unknown;
   success: boolean;
 }
 
@@ -57,6 +63,41 @@ export class GatewayHttpClient {
     params: { deviceId?: string; timeout?: number; userId: string },
     toolCall: { apiName: string; arguments: string; identifier: string },
   ): Promise<DeviceToolCallResult> {
+    return this.postToolCall(params, { ...toolCall, type: 'tool' });
+  }
+
+  /**
+   * Tunnel a stdio MCP tool call to the device. Rides the same
+   * `/api/device/tool-call` relay as {@link executeToolCall} — the gateway
+   * forwards `toolCall` opaquely — but carries `params` (the stdio connection
+   * params) so the device routes it to its local MCP client (spawning the
+   * stdio server) rather than the builtin local-system tool switch. The cloud
+   * server can't spawn the user's binary, so execution must happen on the
+   * device.
+   */
+  async executeMcpCall(mcpCall: {
+    apiName: string;
+    arguments: string;
+    deviceId?: string;
+    identifier: string;
+    params: GatewayMcpStdioParams;
+    timeout?: number;
+    userId: string;
+  }): Promise<DeviceToolCallResult> {
+    const { deviceId, timeout, userId, ...toolCall } = mcpCall;
+    return this.postToolCall({ deviceId, timeout, userId }, { ...toolCall, type: 'mcp' });
+  }
+
+  private async postToolCall(
+    params: { deviceId?: string; timeout?: number; userId: string },
+    toolCall: {
+      apiName: string;
+      arguments: string;
+      identifier: string;
+      params?: GatewayMcpStdioParams;
+      type?: GatewayToolCallType;
+    },
+  ): Promise<DeviceToolCallResult> {
     const timeout =
       typeof params.timeout === 'number' && Number.isFinite(params.timeout)
         ? Math.max(Math.trunc(params.timeout), 0)
@@ -83,9 +124,22 @@ export class GatewayHttpClient {
 
     const data = await res.json();
     return {
+      // Device sends a typed envelope ({ content, state, success }). The legacy
+      // fallback used to JSON.stringify `data.content ?? data` — when content
+      // was missing it would stringify the *entire response body* including
+      // `success` and any other top-level fields, which leaked the structured
+      // payload into the LLM-facing content string. Only stringify the
+      // `content` field itself; never fall back to the whole body.
       content:
-        typeof data.content === 'string' ? data.content : JSON.stringify(data.content ?? data),
+        typeof data.content === 'string'
+          ? data.content
+          : data.content !== undefined && data.content !== null
+            ? JSON.stringify(data.content)
+            : typeof data.error === 'string'
+              ? data.error
+              : '',
       error: data.error,
+      state: data.state,
       success: data.success ?? true,
     };
   }
@@ -127,6 +181,7 @@ export class GatewayHttpClient {
     operationId: string;
     prompt: string;
     resumeSessionId?: string;
+    systemContext?: string;
     timeout?: number;
     topicId: string;
     userId: string;

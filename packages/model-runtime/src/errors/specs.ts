@@ -570,6 +570,24 @@ export const ERROR_CODE_SPECS: SpecMap = {
     isFallback: true,
     description: 'Bare upstream HTTP error with no further context (e.g. "400 status code").',
   },
+  [AgentRuntimeErrorType.ModelEmptyCompletion]: {
+    code: AgentRuntimeErrorType.ModelEmptyCompletion,
+    numericId: 8014,
+    category: 'provider',
+    severity: 'warning',
+    // The provider returned a successful (HTTP 200) but empty response — its
+    // own behavior, not our bug and not a timeout. Mirrors the image analog
+    // `ProviderNoImageGenerated` (provider attribution, status 471).
+    attribution: 'provider',
+    httpStatus: 471,
+    // Retryable — re-issuing the same request usually yields a real response.
+    // The call_llm retry loop relies on this flag to re-attempt empty turns
+    // before they ever surface as a terminal error.
+    retryable: true,
+    countAsFailure: true,
+    description:
+      'Model returned an empty completion (no content, no tool calls, ~0 output tokens), usually after a stalled tool loop.',
+  },
 
   // ─── 9xxx Config ──────────────────────────────────────────────────────
   [AgentRuntimeErrorType.InvalidOllamaArgs]: {

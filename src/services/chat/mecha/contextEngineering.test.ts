@@ -1,8 +1,10 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as isCanUseFCModule from '@/helpers/isCanUseFC';
+import { agentService } from '@/services/agent';
 import { agentDocumentService } from '@/services/agentDocument';
+import { useAgentStore } from '@/store/agent';
 
 import * as helpers from '../helper';
 import { contextEngineering } from './contextEngineering';
@@ -46,6 +48,14 @@ vi.mock('@/services/agentDocument', () => ({
   },
 }));
 
+vi.mock('@/services/agent', () => ({
+  AVAILABLE_AGENTS_CONTEXT_LIMIT: 10,
+  AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT: 12,
+  agentService: {
+    queryAgents: vi.fn(),
+  },
+}));
+
 // 默认设置 isServerMode 为 false
 let isServerMode = false;
 
@@ -59,6 +69,14 @@ vi.mock('@lobechat/const', async (importOriginal) => {
     isDeprecatedEdition: false,
     isDesktop: false,
   };
+});
+
+beforeEach(() => {
+  vi.mocked(agentService.queryAgents).mockResolvedValue([]);
+  useAgentStore.setState({
+    agentMap: {},
+    availableAgents: undefined,
+  });
 });
 
 afterEach(() => {
@@ -123,6 +141,47 @@ describe('contextEngineering', () => {
       content: expect.stringContaining('Project setup steps'),
       role: 'user',
     });
+  });
+
+  it('should use cached available agents without querying during context engineering', async () => {
+    useAgentStore.setState({
+      availableAgents: [
+        {
+          avatar: null,
+          backgroundColor: null,
+          description: null,
+          id: 'agent-1',
+          title: 'Current Agent',
+        },
+        {
+          avatar: null,
+          backgroundColor: null,
+          description: 'Helps with setup',
+          id: 'agent-2',
+          title: 'Setup Agent',
+        },
+      ],
+    });
+
+    await contextEngineering({
+      agentId: 'agent-1',
+      messages: [{ content: 'Hello', role: 'user' }] as UIChatMessage[],
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(agentService.queryAgents).not.toHaveBeenCalled();
+  });
+
+  it('should query available agents when the prefetch cache is missing', async () => {
+    await contextEngineering({
+      agentId: 'agent-1',
+      messages: [{ content: 'Hello', role: 'user' }] as UIChatMessage[],
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(agentService.queryAgents).toHaveBeenCalledWith({ limit: 12 });
   });
 
   describe('handle with files content in server mode', () => {

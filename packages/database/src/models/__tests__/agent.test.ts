@@ -15,6 +15,7 @@ import {
   knowledgeBases,
   sessionGroups,
   sessions,
+  topics,
   users,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
@@ -1748,6 +1749,70 @@ describe('AgentModel', () => {
     });
   });
 
+  describe('countAgents', () => {
+    it('should count all non-virtual agents regardless of pagination', async () => {
+      for (let i = 1; i <= 5; i++) {
+        await agentModel.create({
+          title: `Agent ${i}`,
+          virtual: false,
+        });
+      }
+      await agentModel.create({
+        title: 'Virtual Agent',
+        virtual: true,
+      });
+
+      const total = await agentModel.countAgents();
+
+      expect(total).toBe(5);
+      // count stays the full total even when queryAgents is limited
+      const limitedResults = await agentModel.queryAgents({ limit: 2 });
+      expect(limitedResults.length).toBe(2);
+    });
+
+    it('should apply the same keyword filter as queryAgents', async () => {
+      await agentModel.create({
+        title: 'Code Assistant',
+        description: 'Helps with coding',
+        virtual: false,
+      });
+      await agentModel.create({
+        title: 'Writer',
+        description: 'Helps with writing tasks',
+        virtual: false,
+      });
+      await agentModel.create({
+        title: 'Designer',
+        description: 'Helps with design code review',
+        virtual: false,
+      });
+
+      // matches 'Code Assistant' (title) and 'Designer' (description)
+      expect(await agentModel.countAgents({ keyword: 'code' })).toBe(2);
+      expect(await agentModel.countAgents({ keyword: 'writing' })).toBe(1);
+      expect(await agentModel.countAgents({ keyword: 'nonexistent' })).toBe(0);
+    });
+
+    it('should only count agents for the current user', async () => {
+      await agentModel.create({ title: 'User1 Agent', virtual: false });
+      await agentModel2.create({ title: 'User2 Agent', virtual: false });
+
+      expect(await agentModel.countAgents()).toBe(1);
+      expect(await agentModel2.countAgents()).toBe(1);
+    });
+
+    it('should count agents with null virtual field (treat as non-virtual)', async () => {
+      await serverDB.insert(agents).values({
+        id: 'null-virtual-agent-count',
+        title: 'Null Virtual Agent',
+        userId,
+        virtual: null as unknown as boolean,
+      });
+
+      expect(await agentModel.countAgents()).toBe(1);
+    });
+  });
+
   describe('checkByMarketIdentifier', () => {
     it('should return true when agent with marketIdentifier exists', async () => {
       await serverDB.insert(agents).values({
@@ -2004,6 +2069,84 @@ describe('AgentModel', () => {
 
       expect((result?.params as any)?.temperature).toBeNull();
       expect((result?.params as any)?.topP).toBe(0.5);
+    });
+  });
+
+  describe('rank', () => {
+    it('should rank agents by topic count, excluding agents with no topics', async () => {
+      await serverDB.insert(agents).values([
+        { avatar: 'av1', backgroundColor: 'bg1', id: 'ra1', title: 'Agent 1', userId },
+        { id: 'ra2', title: 'Agent 2', userId },
+        { id: 'ra3', title: 'Agent 3', userId }, // no topics → excluded
+      ]);
+      await serverDB.insert(topics).values([
+        { agentId: 'ra1', id: 'rt1', userId },
+        { agentId: 'ra1', id: 'rt2', userId },
+        { agentId: 'ra1', id: 'rt3', userId },
+        { agentId: 'ra2', id: 'rt4', userId },
+        { agentId: 'ra2', id: 'rt5', userId },
+      ]);
+
+      const result = await agentModel.rank();
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({
+        avatar: 'av1',
+        backgroundColor: 'bg1',
+        count: 3,
+        id: 'ra1',
+        title: 'Agent 1',
+      });
+      expect(result[1]).toMatchObject({ count: 2, id: 'ra2' });
+    });
+
+    it('should include the inbox agent but exclude other virtual agents', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'inbox-agent', slug: 'inbox', title: 'Inbox', userId, virtual: true },
+        { id: 'virtual-agent', title: 'Virtual', userId, virtual: true },
+        { id: 'normal-agent', title: 'Normal', userId },
+      ]);
+      await serverDB.insert(topics).values([
+        { agentId: 'inbox-agent', id: 'it1', userId },
+        { agentId: 'virtual-agent', id: 'vt1', userId },
+        { agentId: 'normal-agent', id: 'nt1', userId },
+      ]);
+
+      const ids = (await agentModel.rank()).map((r) => r.id);
+
+      expect(ids).toContain('inbox-agent');
+      expect(ids).toContain('normal-agent');
+      expect(ids).not.toContain('virtual-agent');
+    });
+
+    it('should only rank the current user agents', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'mine', title: 'Mine', userId },
+        { id: 'theirs', title: 'Theirs', userId: userId2 },
+      ]);
+      await serverDB.insert(topics).values([
+        { agentId: 'mine', id: 'mt1', userId },
+        { agentId: 'theirs', id: 'tt1', userId: userId2 },
+      ]);
+
+      const result = await agentModel.rank();
+
+      expect(result.map((r) => r.id)).toEqual(['mine']);
+    });
+
+    it('should respect the limit parameter', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'la1', title: 'A1', userId },
+        { id: 'la2', title: 'A2', userId },
+      ]);
+      await serverDB.insert(topics).values([
+        { agentId: 'la1', id: 'lt1', userId },
+        { agentId: 'la2', id: 'lt2', userId },
+      ]);
+
+      const result = await agentModel.rank(1);
+
+      expect(result).toHaveLength(1);
     });
   });
 });

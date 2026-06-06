@@ -21,10 +21,13 @@ export class UserController extends BaseController {
    */
   async getCurrentUser(c: Context): Promise<Response> {
     try {
+      const includeCountQuery = c.req.query('includeCount');
+      const includeCount = includeCountQuery !== '0' && includeCountQuery !== 'false';
+
       // Get database connection and create service instance
       const db = await this.getDatabase();
       const userService = new UserService(db, this.getUserId(c));
-      const userInfo = await userService.getCurrentUser();
+      const userInfo = await userService.getCurrentUser(includeCount);
 
       return this.success(c, userInfo, 'User info retrieved successfully');
     } catch (error) {

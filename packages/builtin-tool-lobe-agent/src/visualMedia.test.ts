@@ -1,4 +1,4 @@
-import { createVisualFileRef } from '@lobechat/types';
+import { createVisualFileRef } from '@lobechat/const/visualRef';
 import { describe, expect, it } from 'vitest';
 
 import {

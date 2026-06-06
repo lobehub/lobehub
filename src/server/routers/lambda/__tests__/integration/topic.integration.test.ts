@@ -191,16 +191,11 @@ describe('Topic Router Integration Tests', () => {
     it('should get topics by agentId', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // Create test topic
-      await caller.createTopic({
-        title: 'Topic 1',
-        sessionId: testSessionId,
-      });
-
-      await caller.createTopic({
-        title: 'Topic 2',
-        sessionId: testSessionId,
-      });
+      // Topics are agent-native: stored with agentId directly
+      await serverDB.insert(topics).values([
+        { title: 'Topic 1', agentId: testAgentId, userId },
+        { title: 'Topic 2', agentId: testAgentId, userId },
+      ]);
 
       // Query using agentId
       const result = await caller.getTopics({
@@ -217,10 +212,12 @@ describe('Topic Router Integration Tests', () => {
     it('should resolve sessionId to agentId when only sessionId provided', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // Create test topic
-      await caller.createTopic({
+      // Agent-native topic; queried via sessionId, which the procedure
+      // reverse-resolves to agentId before matching `topics.agentId`.
+      await serverDB.insert(topics).values({
         title: 'Topic for reverse lookup',
-        sessionId: testSessionId,
+        agentId: testAgentId,
+        userId,
       });
 
       // Query using sessionId (requires reverse lookup of agentId)
@@ -239,13 +236,13 @@ describe('Topic Router Integration Tests', () => {
       await serverDB.insert(topics).values([
         {
           title: 'Cron Topic',
-          sessionId: testSessionId,
+          agentId: testAgentId,
           trigger: 'cron',
           userId,
         },
         {
           title: 'Eval Topic',
-          sessionId: testSessionId,
+          agentId: testAgentId,
           trigger: 'eval',
           userId,
         },
@@ -315,69 +312,16 @@ describe('Topic Router Integration Tests', () => {
   });
 
   describe('batchDeleteByAgentId', () => {
-    it('should batch delete topics by agentId (new data)', async () => {
+    it('should batch delete topics by agentId', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // Create topics with agentId directly (new data structure)
-      const topicId1 = await caller.createTopic({
-        title: 'Agent Topic 1',
-        agentId: testAgentId,
-      });
-      const topicId2 = await caller.createTopic({
-        title: 'Agent Topic 2',
-        agentId: testAgentId,
-      });
+      // Agent-native topics stored with agentId directly
+      await serverDB.insert(topics).values([
+        { title: 'Agent Topic 1', agentId: testAgentId, userId },
+        { title: 'Agent Topic 2', agentId: testAgentId, userId },
+      ]);
 
       // Batch delete by agentId
-      await caller.batchDeleteByAgentId({
-        agentId: testAgentId,
-      });
-
-      const remainingTopics = await serverDB.select().from(topics).where(eq(topics.userId, userId));
-
-      expect(remainingTopics).toHaveLength(0);
-    });
-
-    it('should batch delete topics by agentId (legacy sessionId data)', async () => {
-      const caller = topicRouter.createCaller(createTestContext(userId));
-
-      // Create topics with sessionId (legacy data structure)
-      await caller.createTopic({
-        title: 'Legacy Topic 1',
-        sessionId: testSessionId,
-      });
-      await caller.createTopic({
-        title: 'Legacy Topic 2',
-        sessionId: testSessionId,
-      });
-
-      // Batch delete by agentId should also delete legacy topics via sessionId mapping
-      await caller.batchDeleteByAgentId({
-        agentId: testAgentId,
-      });
-
-      const remainingTopics = await serverDB
-        .select()
-        .from(topics)
-        .where(eq(topics.sessionId, testSessionId));
-
-      expect(remainingTopics).toHaveLength(0);
-    });
-
-    it('should batch delete topics by agentId (mixed data)', async () => {
-      const caller = topicRouter.createCaller(createTestContext(userId));
-
-      // Create both new (agentId) and legacy (sessionId) topics
-      await caller.createTopic({
-        title: 'New Agent Topic',
-        agentId: testAgentId,
-      });
-      await caller.createTopic({
-        title: 'Legacy Session Topic',
-        sessionId: testSessionId,
-      });
-
-      // Batch delete by agentId should delete both
       await caller.batchDeleteByAgentId({
         agentId: testAgentId,
       });
@@ -466,70 +410,36 @@ describe('Topic Router Integration Tests', () => {
   });
 
   describe('runtime migration - agentId backfill', () => {
-    it('should trigger migration for legacy topics (with sessionId but no agentId)', async () => {
+    it('should backfill agentId for legacy session-only topics on query', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // Directly insert legacy topic with sessionId but no agentId (simulating old data)
+      // Legacy topic: sessionId set, agentId still null (pre-migration data)
       const [legacyTopic] = await serverDB
         .insert(topics)
-        .values({
-          title: 'Legacy Topic',
-          sessionId: testSessionId,
-          agentId: null, // Legacy data has no agentId
-          userId,
-        })
+        .values({ title: 'Legacy Topic', sessionId: testSessionId, agentId: null, userId })
         .returning();
 
-      // Verify the topic has no agentId initially
-      const [beforeMigration] = await serverDB
-        .select()
-        .from(topics)
-        .where(eq(topics.id, legacyTopic.id));
-      expect(beforeMigration.agentId).toBeNull();
+      // Querying the agent triggers the background backfill via after().
+      await caller.getTopics({ agentId: testAgentId });
 
-      // Query topics using agentId - this should trigger migration
-      const result = await caller.getTopics({
-        agentId: testAgentId,
-      });
-
-      // Should return the legacy topic
-      expect(result.items).toHaveLength(1);
-      expect(result.items[0].id).toBe(legacyTopic.id);
-
-      // Wait a bit for the after() callback to execute
+      // Wait for the after() callback to run
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Verify the agentId was backfilled
-      const [afterMigration] = await serverDB
-        .select()
-        .from(topics)
-        .where(eq(topics.id, legacyTopic.id));
-      expect(afterMigration.agentId).toBe(testAgentId);
+      const [migrated] = await serverDB.select().from(topics).where(eq(topics.id, legacyTopic.id));
+      expect(migrated.agentId).toBe(testAgentId);
     });
 
-    it('should not migrate topics that already have agentId', async () => {
+    it('should not change topics that already have agentId', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // Create topic with agentId already set
       const [topicWithAgentId] = await serverDB
         .insert(topics)
-        .values({
-          title: 'New Topic',
-          sessionId: testSessionId,
-          agentId: testAgentId, // Already has agentId
-          userId,
-        })
+        .values({ title: 'New Topic', sessionId: testSessionId, agentId: testAgentId, userId })
         .returning();
 
-      // Query topics using agentId
-      await caller.getTopics({
-        agentId: testAgentId,
-      });
-
-      // Wait for potential migration
+      await caller.getTopics({ agentId: testAgentId });
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Verify the agentId is unchanged
       const [afterQuery] = await serverDB
         .select()
         .from(topics)
@@ -537,80 +447,39 @@ describe('Topic Router Integration Tests', () => {
       expect(afterQuery.agentId).toBe(testAgentId);
     });
 
-    it('should migrate multiple legacy topics in batch', async () => {
-      const caller = topicRouter.createCaller(createTestContext(userId));
-
-      // Insert multiple legacy topics
-      const legacyTopics = await serverDB
-        .insert(topics)
-        .values([
-          { title: 'Legacy 1', sessionId: testSessionId, agentId: null, userId },
-          { title: 'Legacy 2', sessionId: testSessionId, agentId: null, userId },
-          { title: 'Legacy 3', sessionId: testSessionId, agentId: null, userId },
-        ])
-        .returning();
-
-      // Query topics using agentId
-      const result = await caller.getTopics({
-        agentId: testAgentId,
-      });
-
-      expect(result.items).toHaveLength(3);
-
-      // Wait for migration
-      await new Promise((resolve) => setTimeout(resolve, 100));
-
-      // Verify all topics were migrated
-      for (const topic of legacyTopics) {
-        const [migrated] = await serverDB.select().from(topics).where(eq(topics.id, topic.id));
-        expect(migrated.agentId).toBe(testAgentId);
-      }
-    });
-
-    it('should only migrate topics that match the query', async () => {
-      // Create another agent and session
+    it('should only backfill topics under the queried agent session', async () => {
       const { agents, agentsToSessions } = await import('@/database/schemas');
       const [otherAgent] = await serverDB
         .insert(agents)
         .values({ userId, title: 'Other Agent' })
         .returning();
-
       const [otherSession] = await serverDB
         .insert(sessions)
         .values({ userId, type: 'agent' })
         .returning();
-
       await serverDB.insert(agentsToSessions).values({
         agentId: otherAgent.id,
         sessionId: otherSession.id,
         userId,
       });
 
-      // Insert legacy topics for different sessions
       const [topic1] = await serverDB
         .insert(topics)
         .values({ title: 'Topic 1', sessionId: testSessionId, agentId: null, userId })
         .returning();
-
       const [topic2] = await serverDB
         .insert(topics)
         .values({ title: 'Topic 2', sessionId: otherSession.id, agentId: null, userId })
         .returning();
 
       const caller = topicRouter.createCaller(createTestContext(userId));
-
-      // Query only for testAgentId
       await caller.getTopics({ agentId: testAgentId });
-
-      // Wait for migration
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Only topic1 should be migrated
       const [migrated1] = await serverDB.select().from(topics).where(eq(topics.id, topic1.id));
       const [migrated2] = await serverDB.select().from(topics).where(eq(topics.id, topic2.id));
-
       expect(migrated1.agentId).toBe(testAgentId);
-      expect(migrated2.agentId).toBeNull(); // Should not be migrated
+      expect(migrated2.agentId).toBeNull();
     });
   });
 
@@ -681,10 +550,10 @@ describe('Topic Router Integration Tests', () => {
       expect(result.items.map((t) => t.title)).toContain('New Inbox Topic');
     });
 
-    it('should migrate legacy inbox topics when queried', async () => {
+    it('should backfill agentId for legacy inbox topics on query', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // Insert legacy inbox topic
+      // Legacy inbox topic: all owner columns null
       const [legacyTopic] = await serverDB
         .insert(topics)
         .values({
@@ -696,16 +565,10 @@ describe('Topic Router Integration Tests', () => {
         })
         .returning();
 
-      // Query with isInbox=true
-      await caller.getTopics({
-        agentId: inboxAgentId,
-        isInbox: true,
-      });
-
-      // Wait for migration
+      // Query with isInbox=true triggers the background backfill
+      await caller.getTopics({ agentId: inboxAgentId, isInbox: true });
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // Verify agentId was backfilled
       const [migrated] = await serverDB.select().from(topics).where(eq(topics.id, legacyTopic.id));
       expect(migrated.agentId).toBe(inboxAgentId);
     });

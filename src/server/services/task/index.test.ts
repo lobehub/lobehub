@@ -39,6 +39,12 @@ vi.mock('@/server/services/aiAgent', () => ({
   })),
 }));
 
+// Attachment resolver hits FileModel + DocumentService + FileService — stub it
+// out so getTaskDetail tests don't need a real file pipeline.
+vi.mock('@/server/services/file/resolveAttachments', () => ({
+  resolveAttachmentMetadata: vi.fn().mockResolvedValue([]),
+}));
+
 describe('TaskService', () => {
   const db = {} as LobeChatDatabase;
   const userId = 'user-1';
@@ -53,9 +59,11 @@ describe('TaskService', () => {
     findAllDescendants: vi.fn(),
     getCheckpointConfig: vi.fn(),
     getComments: vi.fn(),
+    getCommentFileIdsMap: vi.fn().mockResolvedValue({}),
     getDependencies: vi.fn(),
     getDependenciesByTaskIds: vi.fn(),
     getReviewConfig: vi.fn(),
+    getTaskFileIds: vi.fn().mockResolvedValue([]),
     getTreeAgentIdsForTaskIds: vi.fn().mockResolvedValue({}),
     getTreePinnedDocuments: vi.fn(),
     resolve: vi.fn(),

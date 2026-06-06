@@ -1,9 +1,10 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 
+import type { AgentDocument } from '@/database/models/agentDocuments';
 import {
   AgentAccess,
-  type AgentDocument,
   AgentDocumentModel,
+  buildDocumentFilename,
 } from '@/database/models/agentDocuments';
 import { DOCUMENT_FOLDER_TYPE } from '@/database/schemas';
 
@@ -784,15 +785,17 @@ export class AgentDocumentVfsService {
       throw new AgentDocumentVfsError(`Cannot write reserved path: ${path}`, 'BAD_REQUEST');
     }
 
-    const existing = await this.resolveOrdinaryPath(path, ctx.agentId);
+    const exactExisting = await this.resolveOrdinaryPath(path, ctx.agentId);
+    const writablePath = exactExisting ? path : normalizeOrdinaryDocumentPath(path);
+    const existing = exactExisting ?? (await this.resolveOrdinaryPath(writablePath, ctx.agentId));
 
     if (existing) {
       if (existing.fileType === DOCUMENT_FOLDER_TYPE) {
-        throw new AgentDocumentVfsError(`Path is not a file: ${path}`, 'BAD_REQUEST');
+        throw new AgentDocumentVfsError(`Path is not a file: ${writablePath}`, 'BAD_REQUEST');
       }
 
       if (createMode === 'always-new') {
-        throw new AgentDocumentVfsError(`Path already exists: ${path}`, 'BAD_REQUEST');
+        throw new AgentDocumentVfsError(`Path already exists: ${writablePath}`, 'BAD_REQUEST');
       }
 
       const snapshot = await createMarkdownEditorSnapshot(content);
@@ -801,24 +804,27 @@ export class AgentDocumentVfsService {
         editorData: snapshot.editorData,
       });
 
-      const updated = await this.resolveOrdinaryPath(path, ctx.agentId);
+      const updated = await this.resolveOrdinaryPath(writablePath, ctx.agentId);
 
       if (!updated) {
-        throw new AgentDocumentVfsError(`Failed to reload updated path: ${path}`, 'BAD_REQUEST');
+        throw new AgentDocumentVfsError(
+          `Failed to reload updated path: ${writablePath}`,
+          'BAD_REQUEST',
+        );
       }
 
-      return this.toOrdinaryStats(updated, path);
+      return this.toOrdinaryStats(updated, writablePath);
     }
 
     if (createMode === 'must-exist') {
-      throw new AgentDocumentVfsError(`Path not found: ${path}`, 'NOT_FOUND');
+      throw new AgentDocumentVfsError(`Path not found: ${writablePath}`, 'NOT_FOUND');
     }
 
-    const segments = splitAgentDocumentPath(path);
+    const segments = splitAgentDocumentPath(writablePath);
     const filename = segments.at(-1);
 
     if (!filename) {
-      throw new AgentDocumentVfsError(`Invalid VFS path: ${path}`, 'BAD_REQUEST');
+      throw new AgentDocumentVfsError(`Invalid VFS path: ${writablePath}`, 'BAD_REQUEST');
     }
 
     const parentPath = segments.length === 1 ? './' : `./${segments.slice(0, -1).join('/')}`;
@@ -836,14 +842,20 @@ export class AgentDocumentVfsService {
       );
     }
 
+    const normalizedFilename = buildDocumentFilename(filename);
     const snapshot = await createMarkdownEditorSnapshot(content);
-    const created = await this.agentDocumentModel.create(ctx.agentId, filename, snapshot.content, {
-      editorData: snapshot.editorData,
-      parentId: parentNode?.documentId ?? null,
-      title: filename,
-    });
+    const created = await this.agentDocumentModel.create(
+      ctx.agentId,
+      normalizedFilename,
+      snapshot.content,
+      {
+        editorData: snapshot.editorData,
+        parentId: parentNode?.documentId ?? null,
+        title: normalizedFilename,
+      },
+    );
 
-    return this.toOrdinaryStats(created, path);
+    return this.toOrdinaryStats(created, buildOrdinaryPath(parentPath, normalizedFilename));
   }
 
   private async renameOrdinaryPath(
@@ -1149,6 +1161,16 @@ const splitAgentDocumentPath = (path: string) =>
 
 const buildOrdinaryPath = (parentPath: string, filename: string) =>
   parentPath === './' ? `./${filename}` : `${parentPath}/${filename}`;
+
+const normalizeOrdinaryDocumentPath = (path: string): string => {
+  const segments = splitAgentDocumentPath(path);
+  const filename = segments.at(-1);
+  if (!filename) return path;
+
+  const parentPath = segments.length === 1 ? './' : `./${segments.slice(0, -1).join('/')}`;
+  const normalizedFilename = buildDocumentFilename(filename);
+  return buildOrdinaryPath(parentPath, normalizedFilename);
+};
 
 const normalizeListLimit = (limit?: number) => {
   if (limit === undefined) return DEFAULT_LIST_LIMIT;

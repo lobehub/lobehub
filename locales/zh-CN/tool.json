@@ -40,6 +40,7 @@
   "agentMarketplace.render.alreadyInLibraryTag": "已在库中",
   "agentMarketplace.render.alreadyInLibrary_one": "{{count}} 个已在库中",
   "agentMarketplace.render.alreadyInLibrary_other": "{{count}} 个已在库中",
+  "claudeCode.askUserQuestion.customOption.placeholder": "或自己输入…",
   "claudeCode.askUserQuestion.escape.back": "返回选项",
   "claudeCode.askUserQuestion.escape.enter": "或直接输入",
   "claudeCode.askUserQuestion.escape.placeholder": "在此输入你的回复…",

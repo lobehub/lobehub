@@ -20,6 +20,7 @@ import {
   Package,
   Pin,
   Settings,
+  Store,
   Trash2,
   Wrench,
   Zap,
@@ -30,6 +31,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import DevModal from '@/features/PluginDevModal';
+import { createSkillStoreModal } from '@/features/SkillStore';
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { useAgentStore } from '@/store/agent';
@@ -332,7 +334,10 @@ const styles = createStaticStyles(({ css }) => ({
     display: flex;
     gap: 14px;
     align-items: center;
-    width: 100%;
+
+    margin-block-end: -4px;
+    margin-inline: -8px;
+    padding-inline: 8px;
   `,
   statsSettingsButton: css`
     cursor: pointer;
@@ -344,7 +349,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 24px;
     height: 24px;
-    margin-inline-start: auto;
     padding: 0;
     border: 0;
     border-radius: 6px;
@@ -373,7 +377,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-export const useControls = () => {
+export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = {}) => {
   const { t } = useTranslation('setting');
   const agentId = useAgentId();
   const navigate = useNavigate();
@@ -1276,19 +1280,43 @@ export const useControls = () => {
           <Icon icon={Zap} size={12} />
           {allAutoItems.length}
         </span>
-        <Tooltip placement="top" title={t('tools.plugins.management')}>
-          <button
-            aria-label={t('tools.plugins.management')}
-            className={cx(styles.statsSettingsButton)}
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              navigate('/settings/skill');
-            }}
-          >
-            <Icon icon={Settings} size={14} />
-          </button>
-        </Tooltip>
+        <span
+          style={{
+            alignItems: 'center',
+            display: 'inline-flex',
+            gap: 2,
+            marginInlineStart: 'auto',
+          }}
+        >
+          <Tooltip placement="top" title={t('plus.addSkills', { ns: 'chat' })}>
+            <button
+              aria-label={t('plus.addSkills', { ns: 'chat' })}
+              className={cx(styles.statsSettingsButton)}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                closeDropdown?.();
+                createSkillStoreModal();
+              }}
+            >
+              <Icon icon={Store} size={14} />
+            </button>
+          </Tooltip>
+          <Tooltip placement="top" title={t('tools.plugins.management')}>
+            <button
+              aria-label={t('tools.plugins.management')}
+              className={cx(styles.statsSettingsButton)}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                closeDropdown?.();
+                navigate('/settings/skill');
+              }}
+            >
+              <Icon icon={Settings} size={14} />
+            </button>
+          </Tooltip>
+        </span>
       </div>
     ) : undefined;
 

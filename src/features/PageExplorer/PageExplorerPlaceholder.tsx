@@ -1,4 +1,5 @@
 import { FILE_URL } from '@lobechat/business-const';
+import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 import { Notion } from '@lobehub/icons';
 import { Center, FileTypeIcon, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Upload } from 'antd';
@@ -138,7 +139,7 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
             typeof newDoc.editorData === 'string'
               ? JSON.parse(newDoc.editorData)
               : newDoc.editorData || null,
-          fileType: 'custom/document' as const,
+          fileType: CUSTOM_DOCUMENT_FILE_TYPE,
           filename: newDoc.title || title,
           id: newDoc.id,
           metadata: newDoc.metadata || {},
@@ -206,7 +207,7 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
                 typeof parsedDocument.editorData === 'string'
                   ? JSON.parse(parsedDocument.editorData)
                   : parsedDocument.editorData || null,
-              fileType: parsedDocument.fileType || 'custom/document',
+              fileType: parsedDocument.fileType || CUSTOM_DOCUMENT_FILE_TYPE,
               filename: parsedDocument.filename || fileName,
               id: parsedDocument.id,
               metadata: parsedDocument.metadata || {},

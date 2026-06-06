@@ -1,4 +1,6 @@
 // @vitest-environment node
+import type * as BusinessConst from '@lobechat/business-const';
+import { OFFICIAL_PROVIDER_DISABLE_ERROR } from '@lobechat/business-const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiProviderModel } from '@/database/models/aiProvider';
@@ -14,6 +16,16 @@ vi.mock('@/server/modules/KeyVaultsEncrypt');
 vi.mock('@/database/repositories/aiInfra');
 vi.mock('@/database/models/aiProvider');
 vi.mock('@/database/models/user');
+vi.mock('@lobechat/business-const', async () => {
+  const actual = await vi.importActual<typeof BusinessConst>('@lobechat/business-const');
+
+  return {
+    ...actual,
+    BRANDING_PROVIDER: 'lobehub',
+    ENABLE_BUSINESS_FEATURES: true,
+    isOfficialProvider: (id: string) => id === 'lobehub',
+  };
+});
 
 describe('aiProviderRouter', () => {
   const mockUserId = 'test-user-id';
@@ -148,6 +160,25 @@ describe('aiProviderRouter', () => {
       });
 
       expect(mockToggle).toHaveBeenCalledWith(mockProviderId, true);
+    });
+
+    it('should reject disabling the official provider', async () => {
+      const mockToggle = vi.fn();
+      vi.mocked(AiProviderModel).prototype.toggleProviderEnabled = mockToggle;
+
+      const caller = aiProviderRouter.createCaller(createMockContext());
+
+      await expect(
+        caller.toggleProviderEnabled({
+          enabled: false,
+          id: 'lobehub',
+        }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: OFFICIAL_PROVIDER_DISABLE_ERROR,
+      });
+
+      expect(mockToggle).not.toHaveBeenCalled();
     });
   });
 

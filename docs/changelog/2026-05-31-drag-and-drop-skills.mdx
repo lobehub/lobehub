@@ -1,0 +1,49 @@
+---
+title: Platform Agents & Drag-Drop Skills
+description: >-
+  Run agents locally or on a remote device and drop skills straight into the
+  message box. v2.2.1 is here.
+tags:
+  - Platform Agents
+  - Skills
+  - Models
+---
+
+# Platform Agents & Drag-Drop Skills
+
+## Platform agents, local or remote (beta)
+
+You can now create platform agents like **OpenClaw** and **Hermes** and choose, right from the composer, whether they run on your own machine or on a remote device. A new device switcher in the chat input lets you swap targets without leaving the conversation, and your registered devices are remembered so you can pick up where you left off.
+
+On desktop, the recent-directories list can be reordered by drag-and-drop, and devices auto-register with a stable ID — set it once, use it everywhere.
+
+> Platform agents are in beta. Head to **Settings → Advanced → Labs** and turn on the platform-agent flag to try them.
+
+## Drag-and-drop skills & folders
+
+The chat input got more direct. Drag a skill from the right panel into the message box and it becomes an action tag — no menu hunting. Typing `/` mid-sentence pops up a slash menu of every skill you have installed, from built-ins to ones from the Skill Market or your own agents.
+
+On desktop, drag a whole folder into chat and it shows up as a `@localFile` reference instead of trying to upload every file inside it.
+
+## Other improvements
+
+- **Bots that send files**: Discord, Telegram, Slack, Feishu, WeChat, LINE, and QQ can now exchange images, videos, voice, and files — not just text
+- **Page Agent sharing**: share an agent's working pages with one click
+- **Document highlights**: non-markdown documents render as read-only highlighted code; you can open a thread chat inside the document preview
+- **Tasks with attachments**: drop files and images directly into a task
+- **Export an agent**: download any agent's profile as a Markdown file
+- **New models**: Claude Opus 4.8, DeepSeek V4 Flash/Pro, Gemini 3.5 Flash, Qwen 3.7 Max, intern-s2-preview, step-3.7-flash
+- **Chat cost estimates** shown alongside replies
+- **Smoother first run**: guided agent creation, and new topics aren't created until you send your first message
+- **Multi-select delete** in the agent documents explorer
+- **Follow-up suggestions** in general chats, not just agent ones
+
+## Fixes & polish
+
+- Input drafts persist when you switch tabs.
+- Action bar stays open while you hover the next message.
+- Copying a user message no longer leaves escaped Markdown.
+- Cmd +/−/0 shows a zoom HUD on desktop, and `~` paths expand correctly.
+- Empty replies retry instead of silently finishing; market OAuth re-login pops the right modal when a session expires.
+- Topic list pagination is preserved after creating, deleting, or moving topics.
+- File preview now covers `.cjs`, `.mjs`, and extension-less text files; Bedrock structured output and Gemini diagnostics fixes also landed.

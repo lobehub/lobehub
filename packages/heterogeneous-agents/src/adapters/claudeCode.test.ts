@@ -96,6 +96,86 @@ describe('ClaudeCodeAdapter', () => {
       });
     });
 
+    it('classifies a 429 "not your usage limit" server throttle as overloaded, not rate_limit', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError =
+        'API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      // CC still emits a generic rate_limit_event (rejected, no resetsAt) for
+      // this transient throttle — it must NOT tip the classifier toward the
+      // user-facing usage-limit guide.
+      adapter.adapt({
+        rate_limit_info: { isUsingOverage: false, status: 'rejected' },
+        type: 'rate_limit_event',
+      });
+
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
+      expect(events[1].data).toMatchObject({
+        agentType: 'claude-code',
+        clearEchoedContent: true,
+        code: 'overloaded',
+        message: rawError,
+        stderr: rawError,
+      });
+    });
+
+    it('treats a 429 with no reset window in rate_limit_event as overloaded, not rate_limit', () => {
+      const adapter = new ClaudeCodeAdapter();
+      // Generic "Rate limited" wording + a rate_limit_event that carries no
+      // resetsAt / rateLimitType. The structured signal — not the 429 status
+      // or the "rate limit" substring — decides: no reset window → transient
+      // server throttle → overloaded.
+      const rawError = 'API Error: 429 · Rate limited';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        rate_limit_info: { status: 'rejected' },
+        type: 'rate_limit_event',
+      });
+
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
+      expect(events[1].data).toMatchObject({ code: 'overloaded', message: rawError });
+    });
+
+    it('classifies a user quota limit from rateLimitType alone (no resetsAt)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError = 'API Error: 429 · Rate limited';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      // rateLimitType is itself a user-quota signal even without resetsAt.
+      adapter.adapt({
+        rate_limit_info: { rateLimitType: 'seven_day', status: 'rejected' },
+        type: 'rate_limit_event',
+      });
+
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events[1].data).toMatchObject({
+        code: 'rate_limit',
+        rateLimitInfo: { rateLimitType: 'seven_day' },
+      });
+    });
+
     it('classifies rate-limit failures from paired rate_limit_event + result events', () => {
       const adapter = new ClaudeCodeAdapter();
       const rawError = "You've hit your limit · resets 9am (Asia/Shanghai)";

@@ -57,11 +57,13 @@
     "@lobechat/chat-adapter-imessage": "workspace:*",
     "@lobechat/desktop-bridge": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",
+    "@lobechat/device-identity": "workspace:*",
     "@lobechat/electron-client-ipc": "workspace:*",
     "@lobechat/electron-server-ipc": "workspace:*",
     "@lobechat/file-loaders": "workspace:*",
     "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
+    "@lobechat/tool-runtime": "workspace:*",
     "@lobehub/i18n-cli": "^1.25.1",
     "@modelcontextprotocol/sdk": "^1.24.3",
     "@t3-oss/env-core": "^0.13.8",
@@ -109,7 +111,7 @@
     "undici": "^7.16.0",
     "uuid": "^14.0.0",
     "vite": "8.0.14",
-    "vitest": "^3.2.4",
+    "vitest": "3.2.4",
     "zod": "^3.25.76"
   },
   "optionalDependencies": {
@@ -124,7 +126,8 @@
     ],
     "overrides": {
       "react": "19.2.4",
-      "react-dom": "19.2.4"
+      "react-dom": "19.2.4",
+      "vitest": "3.2.4"
     }
   }
 }

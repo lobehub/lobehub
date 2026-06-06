@@ -234,7 +234,7 @@
   "exportType.allAgentWithMessage": "Xuất tất cả Tác nhân và Tin nhắn",
   "exportType.globalSetting": "Xuất cài đặt toàn cục",
   "feedback": "Phản hồi",
-  "feedback.emailContact": "Bạn cũng có thể gửi email cho chúng tôi tại {{email}}",
+  "feedback.emailContact": "Bạn cũng có thể gửi email cho chúng tôi tại <email>{{email}}</email>",
   "feedback.errors.fileTooLarge": "Tệp vượt quá 5MB",
   "feedback.errors.submitFailed": "Gửi thất bại. Vui lòng thử lại.",
   "feedback.errors.teamNotFound": "Lỗi cấu hình",

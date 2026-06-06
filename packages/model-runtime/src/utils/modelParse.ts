@@ -56,6 +56,11 @@ export const MODEL_LIST_CONFIGS = {
     reasoningKeywords: ['ring-'],
     visionKeywords: ['ming-'],
   },
+  internlm: {
+    functionCallKeywords: ['internlm', 'intern-s'],
+    reasoningKeywords: ['intern-s'],
+    visionKeywords: ['internvl', 'intern-s'],
+  },
   llama: {
     functionCallKeywords: ['llama-3.2', 'llama-3.3', 'llama-4'],
     reasoningKeywords: [],
@@ -69,7 +74,7 @@ export const MODEL_LIST_CONFIGS = {
   minimax: {
     functionCallKeywords: ['minimax'],
     reasoningKeywords: ['-m'],
-    visionKeywords: ['-vl', 'Text-01'],
+    visionKeywords: ['-vl', 'Text-01', '-m3'],
   },
   mistral: {
     functionCallKeywords: ['mistral', 'ministral', 'pixtral'],
@@ -159,6 +164,7 @@ export const MODEL_OWNER_DETECTION_CONFIG = {
   deepseek: ['deepseek'],
   google: ['gemini', 'imagen', 'gemma'],
   inclusionai: ['ling-', 'ming-', 'ring-'],
+  internlm: ['internvl', 'internlm', 'intern-'],
   llama: ['llama', 'llava'],
   longcat: ['longcat'],
   minimax: ['minimax'],
@@ -664,6 +670,10 @@ export const processModelList = async (
 
   return Promise.all(
     modelList.map(async (model) => {
+      if (!model?.id) {
+        return undefined;
+      }
+
       let knownModel: any = null;
 
       // If provider is provided, prioritize using provider-specific configuration

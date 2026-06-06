@@ -1,20 +1,17 @@
 import type { SourceAgentNightlyReviewRequested } from '@lobechat/agent-signal/source';
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import { tracer } from '@lobechat/observability-otel/modules/agent-signal';
+import { createAgentSignalSelfIterationPrompt } from '@lobechat/prompts';
 import { isNonEmptyString } from '@lobechat/utils';
 
+import type { LobeChatDatabase } from '@/database/type';
+
 import { defineSourceHandler } from '../../../runtime/middleware';
-import type { AgentSignalReceipt } from '../../receiptService';
-import { createSelfReviewReceipts } from '../../receiptService';
-import type { AgentRunResult } from '../execute';
-import type { EvidenceRef, Plan, RunResult } from '../types';
+import { enqueueSelfIterationRun } from '../dispatch/enqueueSelfIterationRun';
 import { buildNightlyReviewSourceId, ReviewRunStatus } from '../types';
-import type { SelfReviewBriefProjection } from './brief';
-import { createBriefSelfReviewService, getNightlySelfReviewBriefMetadata } from './brief';
-import type { SelfReviewBriefTextTranslator } from './briefText';
 import type { CollectNightlyReviewContextInput, NightlyReviewContext } from './collect';
-import type { SelfReviewProposalPlan } from './proposal';
 
 /**
  * Validated nightly review request payload consumed by the handler.
@@ -52,19 +49,13 @@ export interface NightlyReviewSourceGuardInput extends NightlyReviewSourcePayloa
 export interface NightlyReviewSourceHandlerResult extends Record<string, unknown> {
   /** Stable agent id being reviewed when payload validation succeeds. */
   agentId?: string;
-  /** Whether Daily Brief creation failed after shared execution. */
-  briefWriteFailed?: boolean;
-  /** Executor result for completed runs. */
-  execution?: RunResult;
   /** Stable guard key used for idempotency when payload validation succeeds. */
   guardKey?: string;
   /** User-local date in YYYY-MM-DD form when payload validation succeeds. */
   localDate?: string;
-  /** Number of planned self-review actions before execution. */
-  plannedActionCount?: number;
-  /** Planner summary for future brief construction. */
-  planSummary?: string;
-  /** Machine-readable skip reason for non-completed runs. */
+  /** Operation id of the enqueued background self-iteration run, when dispatched. */
+  operationId?: string;
+  /** Machine-readable skip reason for non-dispatched runs. */
   reason?: 'gate_disabled' | 'invalid_payload';
   /** Review window end as an ISO string when payload validation succeeds. */
   reviewWindowEnd?: string;
@@ -88,21 +79,16 @@ export interface CreateNightlyReviewSourceHandlerDependencies {
   canRunReview: (input: NightlyReviewSourceGuardInput) => Promise<boolean>;
   /** Collects bounded digest context without mutating shared resources. */
   collectContext: (input: CollectNightlyReviewContextInput) => Promise<NightlyReviewContext>;
-  /** Resolves a home-namespace translator for persisted nightly Brief text. */
-  resolveBriefTextTranslator?: (input: {
-    userId: string;
-  }) => Promise<SelfReviewBriefTextTranslator | undefined>;
-  /** Runs the bounded self-iteration agent and returns execution plus the frozen projection plan. */
-  runSelfReviewAgent: (input: {
-    context: NightlyReviewContext;
-    localDate: string;
-    sourceId: string;
-    userId: string;
-  }) => Promise<AgentRunResult>;
-  /** Writes a Daily Brief payload for user-visible nightly outcomes. */
-  writeDailyBrief?: (brief: SelfReviewBriefProjection) => Promise<{ id?: string } | void>;
-  /** Writes durable receipts for the review summary and action outcomes. */
-  writeReceipts?: (receipts: AgentSignalReceipt[]) => Promise<void>;
+  /** Postgres handle used by the dispatch helper to enqueue the execAgent run. */
+  db: LobeChatDatabase;
+  /** Enqueues the async self-iteration run. Overridable for tests. */
+  dispatch?: typeof enqueueSelfIterationRun;
+  /**
+   * Maximum self-iteration runtime steps.
+   *
+   * @default builtin agent default
+   */
+  maxSteps?: number;
 }
 
 interface NightlyReviewSpanLike {
@@ -193,133 +179,6 @@ const toBaseResult = (
   userId: guardInput.userId,
 });
 
-const applyReceiptIdsToExecution = (
-  execution: RunResult,
-  receipts: AgentSignalReceipt[],
-): RunResult => {
-  const receiptByActionKey = new Map(
-    receipts
-      .filter((receipt) => receipt.id.endsWith(':action'))
-      .map((receipt) => [receipt.id.slice(0, -':action'.length), receipt.id]),
-  );
-
-  return {
-    ...execution,
-    actions: execution.actions.map((action) => ({
-      ...action,
-      ...(receiptByActionKey.get(action.idempotencyKey)
-        ? { receiptId: receiptByActionKey.get(action.idempotencyKey) }
-        : {}),
-    })),
-    summaryReceiptId: `${execution.sourceId ?? receipts[0]?.sourceId}:review-summary`,
-  };
-};
-
-const collectPlanEvidenceRefs = (plan: Plan): EvidenceRef[] => {
-  const evidenceRefs = new Map<string, EvidenceRef>();
-
-  for (const action of plan.actions) {
-    for (const evidenceRef of action.evidenceRefs) {
-      evidenceRefs.set(`${evidenceRef.type}:${evidenceRef.id}`, evidenceRef);
-    }
-  }
-
-  return [...evidenceRefs.values()];
-};
-
-const isMergeableProposalAction = (actionType: string) =>
-  actionType === 'create_skill' || actionType === 'refine_skill';
-
-const hasProjectionBaseSnapshot = (action: Plan['actions'][number]) => {
-  if (!isMergeableProposalAction(action.actionType)) return true;
-
-  const actionWithSnapshot = action as Plan['actions'][number] & {
-    baseSnapshot?: unknown;
-  };
-
-  return actionWithSnapshot.baseSnapshot !== undefined;
-};
-
-const isSnapshotAwareProposalPlan = (plan: Plan): plan is SelfReviewProposalPlan =>
-  plan.actions.every(hasProjectionBaseSnapshot);
-
-const writeNightlyReceipts = async (
-  deps: CreateNightlyReviewSourceHandlerDependencies,
-  receipts: AgentSignalReceipt[],
-) => {
-  if (!deps.writeReceipts || receipts.length === 0) return;
-
-  return tracer.startActiveSpan(
-    'agent_signal.nightly_review.write_receipts',
-    {
-      attributes: {
-        'agent.signal.nightly.receipt_count': receipts.length,
-        'agent.signal.source_id': receipts[0]?.sourceId ?? '',
-      },
-    },
-    async (span) => {
-      try {
-        await deps.writeReceipts?.(receipts);
-        span.setStatus({ code: SpanStatusCode.OK });
-      } catch (error) {
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message:
-            error instanceof Error ? error.message : 'AgentSignal nightly receipts write failed',
-        });
-        span.recordException(error as Error);
-        console.error('[AgentSignal] Failed to write nightly review receipts:', error);
-      } finally {
-        span.end();
-      }
-    },
-  );
-};
-
-const writeNightlyBrief = async (
-  deps: CreateNightlyReviewSourceHandlerDependencies,
-  brief: SelfReviewBriefProjection | undefined,
-) => {
-  if (!deps.writeDailyBrief || !brief) return {};
-
-  const metadata = getNightlySelfReviewBriefMetadata(brief.metadata);
-
-  return tracer.startActiveSpan(
-    'agent_signal.nightly_review.write_brief',
-    {
-      attributes: {
-        'agent.signal.agent_id': brief.agentId ?? '',
-        'agent.signal.nightly.applied_count': metadata?.actionCounts.applied ?? 0,
-        'agent.signal.nightly.failed_count': metadata?.actionCounts.failed ?? 0,
-        'agent.signal.nightly.outcome': metadata?.outcome ?? 'unknown',
-        'agent.signal.nightly.proposed_count': metadata?.actionCounts.proposed ?? 0,
-        'agent.signal.nightly.skipped_count': metadata?.actionCounts.skipped ?? 0,
-      },
-    },
-    async (span) => {
-      try {
-        const result = await deps.writeDailyBrief?.(brief);
-        span.setAttribute('agent.signal.nightly.brief_id', result?.id ?? '');
-        span.setStatus({ code: SpanStatusCode.OK });
-
-        return result && result.id ? { briefId: result.id } : {};
-      } catch (error) {
-        span.setStatus({
-          code: SpanStatusCode.ERROR,
-          message:
-            error instanceof Error ? error.message : 'AgentSignal nightly brief write failed',
-        });
-        span.recordException(error as Error);
-        console.error('[AgentSignal] Failed to write nightly review brief:', error);
-
-        return { briefWriteFailed: true };
-      } finally {
-        span.end();
-      }
-    },
-  );
-};
-
 /**
  * Creates the DI-friendly handler for nightly review request sources.
  *
@@ -329,22 +188,21 @@ const writeNightlyBrief = async (
  *   -> `agent.nightly_review.requested`
  *     -> {@link createNightlyReviewSourceHandler}
  *
- * Upstream:
- * - `agent.nightly_review.requested`
- *
- * Downstream:
- * - injected bounded self-iteration agent runner
- *
- * Use when:
- * - Tests need to run the nightly review orchestration without DB or LLM dependencies
- * - Runtime policy composition needs a side-effect boundary before executing self-iteration plans
+ * The handler validates the request, re-checks gates + idempotency, collects the
+ * bounded review digest, then enqueues an async `execAgent` run under the builtin
+ * `nightly-review` agent. The review window + local date ride on the marker so the
+ * builtin `agent-signal-review` serverRuntime can re-derive them; the Daily Brief
+ * is written in-run by the review tool primitive, and receipts are projected by
+ * the completion path — this handler runs no model and writes no brief/receipts
+ * inline.
  *
  * Expects:
  * - `source` is an `agent.nightly_review.requested` source with scheduler-produced payload
- * - Dependencies enforce gates, idempotency, runner limits, and persistence
+ * - Dependencies enforce gates, idempotency, and provide a db handle for dispatch
  *
  * Returns:
- * - A run result with status and enough plan metadata for future brief builders
+ * - A run result with `Dispatched` status + the enqueued operation id, or a
+ *   `Skipped` / `Deduped` status when gates / idempotency reject the run
  */
 export const createNightlyReviewSourceHandler = (
   deps: CreateNightlyReviewSourceHandlerDependencies,
@@ -444,94 +302,57 @@ export const createNightlyReviewSourceHandler = (
             );
           },
         );
-        const agentResult = await runNightlyReviewSpan(
-          'agent_signal.nightly_review.run_agent',
+
+        const prompt = createAgentSignalSelfIterationPrompt({
+          agentId: payload.agentId,
+          context,
+          mode: 'review',
+          sourceId: source.sourceId,
+          userId: payload.userId,
+          window: {
+            end: payload.reviewWindowEnd,
+            localDate: payload.localDate,
+            start: payload.reviewWindowStart,
+            timezone: payload.timezone,
+          },
+        });
+
+        const { operationId } = await runNightlyReviewSpan(
+          'agent_signal.nightly_review.dispatch',
           {
             'agent.signal.agent_id': payload.agentId,
-            'agent.signal.nightly.document_skill_event_count':
-              context.documentActivity?.skillBucket?.length ?? 0,
-            'agent.signal.nightly.managed_skill_count': context.managedSkills.length,
-            'agent.signal.nightly.self_review_signal_count': context.selfReviewSignals?.length ?? 0,
-            'agent.signal.nightly.memory_count': context.relevantMemories.length,
-            'agent.signal.nightly.topic_count': context.topics.length,
-            'agent.signal.nightly.tool_activity_count': context.toolActivity?.length ?? 0,
             'agent.signal.source_id': source.sourceId,
             'agent.signal.user_id': payload.userId,
           },
-          () =>
-            deps.runSelfReviewAgent({
-              context,
-              localDate: payload.localDate,
-              sourceId: source.sourceId,
+          () => {
+            const dispatch = deps.dispatch ?? enqueueSelfIterationRun;
+
+            return dispatch({
+              agentId: payload.agentId,
+              db: deps.db,
+              marker: {
+                agentId: payload.agentId,
+                kind: 'nightly-review',
+                localDate: payload.localDate,
+                reviewWindowEnd: payload.reviewWindowEnd,
+                reviewWindowStart: payload.reviewWindowStart,
+                sourceId: source.sourceId,
+              },
+              ...(deps.maxSteps ? { maxSteps: deps.maxSteps } : {}),
+              prompt,
+              slug: BUILTIN_AGENT_SLUGS.nightlyReview,
               userId: payload.userId,
-            }),
+            });
+          },
           (span, result) => {
-            span.setAttribute(
-              'agent.signal.nightly.plan_action_count',
-              result.projectionPlan.actions.length,
-            );
-            span.setAttribute(
-              'agent.signal.nightly.execution_action_count',
-              result.execution.actions.length,
-            );
-            if (typeof result.stepCount === 'number') {
-              span.setAttribute('agent.signal.nightly.agent_step_count', result.stepCount);
-            }
+            span.setAttribute('agent.signal.nightly.operation_id', result.operationId);
           },
         );
-        const plan = agentResult.projectionPlan;
-        const proposalPlan = isSnapshotAwareProposalPlan(plan) ? plan : undefined;
-        const execution = agentResult.execution;
-        const receipts = createSelfReviewReceipts({
-          agentId: payload.agentId,
-          createdAt: source.timestamp,
-          localDate: payload.localDate,
-          plan,
-          result: {
-            ...execution,
-            sourceId: source.sourceId,
-          },
-          sourceId: source.sourceId,
-          sourceType: source.sourceType,
-          timezone: payload.timezone,
-          userId: payload.userId,
-        });
-        const executionWithReceipts = applyReceiptIdsToExecution(
-          {
-            ...execution,
-            sourceId: source.sourceId,
-          },
-          receipts,
-        );
-
-        await writeNightlyReceipts(deps, receipts);
-
-        const t = await deps.resolveBriefTextTranslator?.({ userId: payload.userId });
-        const brief = createBriefSelfReviewService().projectNightlyReviewBrief({
-          agentId: payload.agentId,
-          evidenceRefs: collectPlanEvidenceRefs(plan),
-          ideas: agentResult.ideas,
-          localDate: payload.localDate,
-          ...(proposalPlan ? { plan: proposalPlan } : {}),
-          result: executionWithReceipts,
-          reviewWindowEnd: payload.reviewWindowEnd,
-          reviewWindowStart: payload.reviewWindowStart,
-          t,
-          timezone: payload.timezone,
-          userId: payload.userId,
-        });
-        const briefResult = await writeNightlyBrief(deps, brief);
 
         return {
           ...baseResult,
-          ...briefResult,
-          execution: {
-            ...executionWithReceipts,
-            ...('briefId' in briefResult ? { briefId: briefResult.briefId } : {}),
-          },
-          plannedActionCount: plan.actions.length,
-          planSummary: plan.summary,
-          status: execution.status,
+          operationId,
+          status: ReviewRunStatus.Dispatched,
         };
       },
     );
@@ -547,21 +368,12 @@ export const createNightlyReviewSourceHandler = (
  *   -> `agent.nightly_review.requested`
  *     -> {@link createNightlyReviewSourcePolicyHandler}
  *
- * Upstream:
- * - `agent.nightly_review.requested`
- *
- * Downstream:
- * - {@link createNightlyReviewSourceHandler}
- *
  * Use when:
  * - Default Agent Signal policies are composed with nightly review dependencies
  * - The runtime source registry needs an installable source handler definition
  *
- * Expects:
- * - All server-only dependencies are injected by the caller
- *
  * Returns:
- * - A source handler that concludes the runtime chain with the review run metadata
+ * - A source handler that concludes the runtime chain with the dispatch metadata
  */
 export const createNightlyReviewSourcePolicyHandler = (
   deps: CreateNightlyReviewSourceHandlerDependencies,

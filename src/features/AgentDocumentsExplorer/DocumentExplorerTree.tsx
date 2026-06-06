@@ -1,3 +1,4 @@
+import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
 import type { MenuProps } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Trash2Icon } from 'lucide-react';
@@ -21,6 +22,23 @@ import { isOrphanSkillBundleItem } from './types';
 import { canDropDocument } from './utils/canDrop';
 
 const SKILL_INDEX_FILENAME = 'SKILL.md';
+const FILE_TREE_HOST_TAG = 'file-tree-container';
+const RENAME_INPUT_SELECTOR = 'input[data-item-rename-input]';
+
+// pierre/trees auto-selects the full value when the rename input mounts. For
+// files with extensions (e.g. `Untitled document.md`), narrow the selection to
+// the stem so the user can type a new name without overwriting the suffix.
+const selectStemOfActiveRenameInput = (root: HTMLElement | null) => {
+  if (!root) return;
+  const host = root.querySelector(FILE_TREE_HOST_TAG);
+  const input = host?.shadowRoot?.querySelector<HTMLInputElement>(RENAME_INPUT_SELECTOR);
+  if (!input) return;
+  const value = input.value;
+  const dotIndex = value.lastIndexOf('.');
+  // Skip dotfiles and extension-less names — leave pierre's full-selection.
+  if (dotIndex <= 0) return;
+  input.setSelectionRange(0, dotIndex);
+};
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   tree: css`
@@ -53,9 +71,13 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   const { t } = useTranslation(['chat', 'common']);
   const openDocument = useChatStore((s) => s.openDocument);
   const treeRef = useRef<ExplorerTreeHandle | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const startInlineRename = useCallback((id: string) => {
     treeRef.current?.startRenaming(id);
+    // Match the new-file flow: leave the extension out of the selection so
+    // the user can retype only the stem.
+    requestAnimationFrame(() => selectStemOfActiveRenameInput(containerRef.current));
   }, []);
 
   const ops = useDocumentTreeOps({ agentId, data, mutate });
@@ -113,7 +135,12 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   const focusNewRowForRename = useCallback((pendingId: string) => {
     // Defer past the current task so React commits the inserted row and the
     // tree adapter rebuilds its id→path map before we trigger rename.
-    setTimeout(() => treeRef.current?.startRenaming(pendingId), 0);
+    setTimeout(() => {
+      treeRef.current?.startRenaming(pendingId);
+      // After pierre's input.select() runs in its own layout effect, narrow
+      // selection to the stem so the `.md` extension stays intact.
+      requestAnimationFrame(() => selectStemOfActiveRenameInput(containerRef.current));
+    }, 0);
   }, []);
 
   const handleCreateFolder = useCallback(
@@ -159,12 +186,14 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   );
 
   const canDrag = useCallback(
-    (node: ExplorerTreeNode<AgentDocumentItem>) => !!node.data && node.data.category === 'document',
+    (node: ExplorerTreeNode<AgentDocumentItem>) =>
+      !!node.data && node.data.category === AGENT_DOCUMENT_CATEGORY,
     [],
   );
 
   const canRename = useCallback(
-    (node: ExplorerTreeNode<AgentDocumentItem>) => !!node.data && node.data.category === 'document',
+    (node: ExplorerTreeNode<AgentDocumentItem>) =>
+      !!node.data && node.data.category === AGENT_DOCUMENT_CATEGORY,
     [],
   );
 
@@ -233,7 +262,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   );
 
   return (
-    <div className={styles.tree} style={{ ...style, ...treeStyleVars }}>
+    <div className={styles.tree} ref={containerRef} style={{ ...style, ...treeStyleVars }}>
       <ExplorerTree<AgentDocumentItem>
         iconsColored
         canDrag={canDrag}

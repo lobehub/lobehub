@@ -43,6 +43,16 @@ export const agentRouter = router({
     }),
 
   /**
+   * Count non-virtual agents with optional keyword filter, matching the
+   * conditions of queryAgents. Lets paginated callers report real totals.
+   */
+  countAgents: agentProcedure
+    .input(z.object({ keyword: z.string().optional() }).optional())
+    .query(async ({ input, ctx }) => {
+      return ctx.agentModel.countAgents(input);
+    }),
+
+  /**
    * Create a new agent with session
    * Returns the created agent ID and session ID
    */
@@ -284,6 +294,10 @@ export const agentRouter = router({
     .query(async ({ input, ctx }) => {
       return ctx.agentModel.queryAgents(input);
     }),
+
+  rankAgents: agentProcedure.input(z.number().max(50).optional()).query(async ({ ctx, input }) => {
+    return ctx.agentModel.rank(input);
+  }),
 
   /**
    * Remove an agent and its associated session

@@ -1,3 +1,4 @@
+import { CUSTOM_DOCUMENT_FILE_TYPE, CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { type DocumentItem } from '@lobechat/database/schemas';
 import { documents, files } from '@lobechat/database/schemas';
@@ -94,7 +95,7 @@ export class DocumentService {
       content,
       editorData,
       title,
-      fileType = 'custom/document',
+      fileType = CUSTOM_DOCUMENT_FILE_TYPE,
       metadata,
       knowledgeBaseId,
       parentId,
@@ -109,7 +110,7 @@ export class DocumentService {
 
     // If creating in a knowledge base, create a corresponding file record
     // BUT skip for folders - folders should only exist in the documents table
-    if (knowledgeBaseId && fileType !== 'custom/folder') {
+    if (knowledgeBaseId && fileType !== CUSTOM_FOLDER_FILE_TYPE) {
       const file = await this.fileModel.create(
         {
           fileType,
@@ -127,7 +128,9 @@ export class DocumentService {
 
     // Store knowledgeBaseId in metadata for folders (which don't have fileId)
     const finalMetadata =
-      knowledgeBaseId && fileType === 'custom/folder' ? { ...metadata, knowledgeBaseId } : metadata;
+      knowledgeBaseId && fileType === CUSTOM_FOLDER_FILE_TYPE
+        ? { ...metadata, knowledgeBaseId }
+        : metadata;
 
     const document = await this.documentModel.create({
       content,
@@ -273,7 +276,7 @@ export class DocumentService {
     if (!document) return;
 
     // If it's a folder, recursively delete all children first
-    if (document.fileType === 'custom/folder') {
+    if (document.fileType === CUSTOM_FOLDER_FILE_TYPE) {
       const children = await this.db.query.documents.findMany({
         where: eq(documents.parentId, id),
       });
@@ -433,7 +436,7 @@ export class DocumentService {
       const document = await this.documentModel.create({
         content: cleanContent,
         fileId,
-        fileType: 'custom/document',
+        fileType: CUSTOM_DOCUMENT_FILE_TYPE,
         filename: title,
         metadata: fileDocument.metadata,
         parentId: file.parentId,
@@ -486,7 +489,7 @@ export class DocumentService {
       const document = await this.documentModel.create({
         content: fileDocument.content,
         fileId,
-        fileType: 'custom/document', // Use custom/document for all parsed files
+        fileType: CUSTOM_DOCUMENT_FILE_TYPE, // Use custom/document for all parsed files
         filename: title,
         metadata: fileDocument.metadata,
         pages: fileDocument.pages,

@@ -54,8 +54,8 @@ const GenerationListItemRenderer = memo<GenerationListItemRendererProps>(
             gap={8}
             style={{ color: cssVar.colorTextTertiary }}
             onClick={() => {
-              navigate('/settings/provider/all');
               onClose();
+              navigate('/settings/provider/all');
             }}
           >
             {t('ModelSwitchPanel.emptyProvider')}

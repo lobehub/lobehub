@@ -1,10 +1,20 @@
 // @vitest-environment node
+import {
+  AGENT_DOCUMENT_FILE_TYPE,
+  AGENT_DOCUMENT_SOURCE_TYPE,
+  AGENT_SIGNAL_SOURCE_TYPE,
+} from '@lobechat/const';
 import { and, eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { agentDocuments, agents, documents, users } from '../../../schemas';
-import { DOCUMENT_FOLDER_TYPE } from '../../../schemas/file';
+import {
+  AGENT_SKILL_TEMPLATE_ID,
+  DOCUMENT_FOLDER_TYPE,
+  SKILL_BUNDLE_FILE_TYPE,
+  SKILL_INDEX_FILE_TYPE,
+} from '../../../schemas/file';
 import type { LobeChatDatabase } from '../../../type';
 import {
   AgentDocumentModel,
@@ -162,17 +172,17 @@ describe('AgentDocumentModel', () => {
     it('creates ordinary agent documents with agent source attribution by default', async () => {
       const created = await agentDocumentModel.create(agentId, 'brief', 'content');
 
-      expect(created.sourceType).toBe('agent');
+      expect(created.sourceType).toBe(AGENT_DOCUMENT_SOURCE_TYPE);
       expect(created.source).toBe(`agent-document://${agentId}/brief`);
     });
 
     it('allows trusted callers to set document source attribution', async () => {
       const created = await agentDocumentModel.create(agentId, 'skill-a', 'content', {
         source: 'agent-signal:skill-management',
-        sourceType: 'agent-signal',
+        sourceType: AGENT_SIGNAL_SOURCE_TYPE,
       });
 
-      expect(created.sourceType).toBe('agent-signal');
+      expect(created.sourceType).toBe(AGENT_SIGNAL_SOURCE_TYPE);
       expect(created.source).toBe('agent-signal:skill-management');
     });
 
@@ -446,6 +456,24 @@ describe('AgentDocumentModel', () => {
       expect(renamed?.filename).toBe('IDENTITY 2');
     });
 
+    it('should allow rename callers to keep title and filename separate', async () => {
+      const created = await agentDocumentModel.create(agentId, 'old-name.md', 'hello');
+
+      const renamed = await agentDocumentModel.rename(created.id, 'New Name', {
+        filename: 'New Name.md',
+      });
+
+      expect(renamed?.title).toBe('New Name');
+      expect(renamed?.filename).toBe('New Name.md');
+
+      const [doc] = await serverDB
+        .select()
+        .from(documents)
+        .where(eq(documents.id, created.documentId));
+
+      expect(doc?.source).toBe(`agent-document://${agentId}/${encodeURIComponent('New Name.md')}`);
+    });
+
     it('should move path metadata without changing agent document identity', async () => {
       const folder = await agentDocumentModel.create(agentId, 'folder', '', {
         fileType: DOCUMENT_FOLDER_TYPE,
@@ -537,7 +565,7 @@ describe('AgentDocumentModel', () => {
         fileType: 'skills/bundle',
         policyLoad: PolicyLoad.DISABLED,
         source: 'agent-signal:skill-management',
-        sourceType: 'agent-signal',
+        sourceType: AGENT_SIGNAL_SOURCE_TYPE,
       });
 
       const converted = await agentDocumentModel.convertAgentDocumentToSkillIndex({
@@ -551,7 +579,7 @@ describe('AgentDocumentModel', () => {
         },
         parentId: bundle.documentId,
         source: 'agent-signal:skill-management',
-        sourceType: 'agent-signal',
+        sourceType: AGENT_SIGNAL_SOURCE_TYPE,
         title: 'Workflow Note',
       });
 
@@ -561,7 +589,7 @@ describe('AgentDocumentModel', () => {
       expect(converted?.filename).toBe('workflow-note');
       expect(converted?.parentId).toBe(bundle.documentId);
       expect(converted?.policyLoad).toBe(PolicyLoad.DISABLED);
-      expect(converted?.sourceType).toBe('agent-signal');
+      expect(converted?.sourceType).toBe(AGENT_SIGNAL_SOURCE_TYPE);
       expect(converted?.source).toBe('agent-signal:skill-management');
       expect(converted?.templateId).toBe('agent-skill');
       expect(converted?.title).toBe('Workflow Note');
@@ -594,7 +622,7 @@ describe('AgentDocumentModel', () => {
         fileType: 'skills/bundle',
         policyLoad: PolicyLoad.DISABLED,
         source: 'agent-signal:skill-management',
-        sourceType: 'agent-signal',
+        sourceType: AGENT_SIGNAL_SOURCE_TYPE,
       });
 
       await expect(
@@ -609,7 +637,7 @@ describe('AgentDocumentModel', () => {
             },
             parentId: bundle.documentId,
             source: 'agent-signal:skill-management',
-            sourceType: 'agent-signal',
+            sourceType: AGENT_SIGNAL_SOURCE_TYPE,
             title: 'SKILL.md',
           });
 
@@ -621,11 +649,11 @@ describe('AgentDocumentModel', () => {
 
       expect(unchanged).toMatchObject({
         documentId: source.documentId,
-        fileType: 'agent/document',
+        fileType: AGENT_DOCUMENT_FILE_TYPE,
         filename: 'workflow-note',
         parentId: null,
         policyLoad: PolicyLoad.PROGRESSIVE,
-        sourceType: 'agent',
+        sourceType: AGENT_DOCUMENT_SOURCE_TYPE,
       });
     });
 
@@ -703,6 +731,58 @@ describe('AgentDocumentModel', () => {
       const byTemplate = await agentDocumentModel.findByTemplate(agentId, 'claw');
       expect(byTemplate).toHaveLength(2);
       expect(byTemplate.every((item) => item.templateId === 'claw')).toBe(true);
+    });
+
+    it('should return only skill-managed docs for skill registry assembly', async () => {
+      const bundle = await agentDocumentModel.create(agentId, 'bug-triage', 'bundle body', {
+        fileType: SKILL_BUNDLE_FILE_TYPE,
+        templateId: AGENT_SKILL_TEMPLATE_ID,
+      });
+      await agentDocumentModel.create(agentId, 'SKILL.md', 'skill body', {
+        fileType: SKILL_INDEX_FILE_TYPE,
+        parentId: bundle.documentId,
+        templateId: AGENT_SKILL_TEMPLATE_ID,
+      });
+      await agentDocumentModel.create(agentId, 'ordinary.md', 'ordinary body');
+      await agentDocumentModel.create(agentId, 'web-page', 'web body', {
+        fileType: 'article',
+        sourceType: 'web',
+      });
+
+      const result = await agentDocumentModel.findSkillDocsByAgent(agentId);
+
+      expect(result.map((item) => item.filename).sort()).toEqual(['SKILL.md', 'bug-triage']);
+      expect(result.every((item) => item.category === 'skill')).toBe(true);
+    });
+
+    it('should omit progressive document content for chat context hydration', async () => {
+      await agentDocumentModel.create(agentId, 'always.md', 'always body', {
+        editorData: { root: { children: [{ text: 'always body' }] } },
+        policyLoad: PolicyLoad.ALWAYS,
+      });
+      await agentDocumentModel.create(agentId, 'progressive.md', 'progressive body', {
+        editorData: { root: { children: [{ text: 'progressive body' }] } },
+        policyLoad: PolicyLoad.PROGRESSIVE,
+      });
+      await agentDocumentModel.create(agentId, 'web-page', 'web body', {
+        fileType: 'article',
+        policyLoad: PolicyLoad.PROGRESSIVE,
+        sourceType: 'web',
+      });
+
+      const result = await agentDocumentModel.findContextByAgent(agentId);
+      const byFilename = Object.fromEntries(result.map((item) => [item.filename, item]));
+
+      expect(byFilename['always.md']?.content).toBe('always body');
+      expect(byFilename['always.md']?.contentCharCount).toBe('always body'.length);
+      expect(byFilename['always.md']?.editorData).toEqual({
+        root: { children: [{ text: 'always body' }] },
+      });
+      expect(byFilename['progressive.md']?.content).toBe('');
+      expect(byFilename['progressive.md']?.contentCharCount).toBe('progressive body'.length);
+      expect(byFilename['progressive.md']?.editorData).toBeNull();
+      expect(byFilename['web-page']?.content).toBe('');
+      expect(byFilename['web-page']?.contentCharCount).toBe('web body'.length);
     });
   });
 

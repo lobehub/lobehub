@@ -21,7 +21,7 @@ export const useTopicFilterDropdownMenu = (): DropdownItem[] => {
   ]);
 
   return useMemo(() => {
-    const groupModes: TopicGroupMode[] = ['byTime', 'byProject', 'flat'];
+    const groupModes: TopicGroupMode[] = ['byStatus', 'byTime', 'byProject', 'flat'];
     const sortByOptions: TopicSortBy[] = ['createdAt', 'updatedAt'];
 
     return [

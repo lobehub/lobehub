@@ -1,3 +1,4 @@
+import { isOfficialProvider, OFFICIAL_PROVIDER_DISABLE_ERROR } from '@lobechat/business-const';
 import { and, asc, count, desc, eq, ilike, or } from 'drizzle-orm';
 
 import type { AiProviderSelectItem } from '@/database/schemas';
@@ -191,6 +192,10 @@ export class ProviderService extends BaseService {
     });
 
     try {
+      if (isOfficialProvider(request.id) && request.enabled === false) {
+        throw this.createBusinessError(OFFICIAL_PROVIDER_DISABLE_ERROR);
+      }
+
       const permissionResult = await this.resolveOperationPermission('AI_PROVIDER_CREATE');
 
       if (!permissionResult.isPermitted) {
@@ -244,6 +249,10 @@ export class ProviderService extends BaseService {
     });
 
     try {
+      if (isOfficialProvider(request.id) && request.enabled === false) {
+        throw this.createBusinessError(OFFICIAL_PROVIDER_DISABLE_ERROR);
+      }
+
       const permissionResult = await this.resolveOperationPermission('AI_PROVIDER_UPDATE', {
         targetProviderId: request.id,
       });

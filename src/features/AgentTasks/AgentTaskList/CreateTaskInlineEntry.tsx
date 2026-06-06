@@ -5,11 +5,15 @@ import { ActionIcon, Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Button } from 'antd';
 import { cssVar } from 'antd-style';
 import { $getRoot } from 'lexical';
-import { ChevronUp, UserCircle2 } from 'lucide-react';
+import { ChevronUp, Paperclip, UserCircle2 } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { EditorCanvas } from '@/features/EditorCanvas';
+import {
+  getAttachmentFileIdsFromEditor,
+  pickAndInsertAttachments,
+} from '@/features/EditorCanvas/editorAttachments';
 import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
 
@@ -52,6 +56,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const [priority, setPriority] = useState(0);
   const [assigneeAgentId, setAssigneeAgentId] = useState<string | undefined>(agentId);
   const [instruction, setInstruction] = useState('');
+  const [hasAttachments, setHasAttachments] = useState(false);
 
   const editor = useEditor();
 
@@ -75,22 +80,35 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     lexicalEditor.getEditorState().read(() => {
       setInstruction($getRoot().getTextContent());
     });
+    setHasAttachments(getAttachmentFileIdsFromEditor(editor).length > 0);
+  }, [editor]);
+
+  const handleAttach = useCallback(() => {
+    pickAndInsertAttachments(editor);
   }, [editor]);
 
   const handleSubmit = useCallback(async () => {
-    const trimmed = instruction.trim();
-    if (!trimmed) return;
+    const markdown = String(editor?.getDocument?.('markdown') ?? '').trim();
+    const trimmedText = instruction.trim();
+    const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
+    if (!trimmedText && !markdown && !hasFiles) return;
 
     const firstLine =
-      trimmed
+      trimmedText
         .split('\n')
         .find((line) => line.trim())
-        ?.trim() ?? trimmed;
-    const name = firstLine.length > 30 ? `${firstLine.slice(0, 30)}…` : firstLine;
+        ?.trim() ?? trimmedText;
+    let name: string | undefined;
+    if (firstLine) {
+      name = firstLine.length > 30 ? `${firstLine.slice(0, 30)}…` : firstLine;
+    }
+
+    const editorJson = editor?.getDocument?.('json') as unknown;
 
     const result = await createTask({
       assigneeAgentId,
-      instruction: trimmed,
+      editorData: editorJson,
+      instruction: markdown || trimmedText || name || '',
       name,
       parentTaskId,
       priority: priority || undefined,
@@ -220,10 +238,17 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
               )}
             </Block>
           </AssigneeAgentSelector>
+
+          <ActionIcon
+            icon={Paperclip}
+            size={'small'}
+            title={t('upload.action.tooltip')}
+            onClick={handleAttach}
+          />
         </Flexbox>
 
         <Button
-          disabled={isCreating || !instruction.trim()}
+          disabled={isCreating || (!instruction.trim() && !hasAttachments)}
           loading={isCreating}
           shape={'round'}
           size={'small'}

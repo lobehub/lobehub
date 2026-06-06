@@ -2,6 +2,12 @@ import { LobeActivatorManifest } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import { AgentDocumentsManifest } from '@lobechat/builtin-tool-agent-documents';
 import { AgentManagementManifest } from '@lobechat/builtin-tool-agent-management';
+import {
+  agentSignalFeedbackIntentManifest,
+  agentSignalReflectionManifest,
+  agentSignalReviewManifest,
+  agentSignalSkillManagementManifest,
+} from '@lobechat/builtin-tool-agent-signal';
 import { BriefManifest } from '@lobechat/builtin-tool-brief';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
@@ -141,6 +147,34 @@ export const builtinTools: LobeBuiltinTool[] = [
     hidden: true,
     identifier: selfFeedbackIntentManifest.identifier,
     manifest: selfFeedbackIntentManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: agentSignalReviewManifest.identifier,
+    manifest: agentSignalReviewManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: agentSignalReflectionManifest.identifier,
+    manifest: agentSignalReflectionManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: agentSignalFeedbackIntentManifest.identifier,
+    manifest: agentSignalFeedbackIntentManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: agentSignalSkillManagementManifest.identifier,
+    manifest: agentSignalSkillManagementManifest,
     type: 'builtin',
   },
   {

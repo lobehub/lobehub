@@ -98,6 +98,35 @@ describe('UsageRecordService', () => {
       expect(result[0].spend).toBe(0.03);
     });
 
+    it('prefers the top-level usage column over metadata.usage', async () => {
+      const mockMessages = [
+        {
+          id: 'msg-1',
+          userId,
+          role: 'assistant',
+          provider: 'openai',
+          model: 'gpt-4',
+          createdAt: new Date(),
+          // dedicated column must win over the legacy metadata.usage
+          usage: { cost: 0.05, totalInputTokens: 100, totalOutputTokens: 50 },
+          metadata: {
+            usage: { cost: 9.9, totalInputTokens: 999, totalOutputTokens: 999 },
+          } as MessageMetadata,
+        },
+      ];
+
+      setupQueryChainMock(mockMessages);
+
+      const result = await service.findByMonth();
+
+      expect(result[0]).toMatchObject({
+        spend: 0.05,
+        totalInputTokens: 100,
+        totalOutputTokens: 50,
+        totalTokens: 150,
+      });
+    });
+
     it('should handle messages with missing metadata fields', async () => {
       const mockMessages = [
         {

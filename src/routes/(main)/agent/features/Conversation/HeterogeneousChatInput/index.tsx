@@ -44,20 +44,27 @@ const HeterogeneousChatInput = memo(() => {
   const navigate = useNavigate();
 
   const providerType = useAgentStore(agentSelectors.currentAgentHeterogeneousProviderType);
+  const executionTarget = useAgentStore(agentSelectors.currentAgentExecutionTarget);
   const isRemoteAgent = !!providerType && isRemoteHeterogeneousType(providerType);
 
-  const { status, refresh } = useRemoteAgentDeviceGuard({ enabled: isRemoteAgent });
+  // A run goes to an `lh connect` device when the provider is a remote-only type
+  // (openclaw / hermes) OR a local-CLI type (claude-code / codex) explicitly
+  // targeted at a device. Either way the bound device must be online before we
+  // let the user send — guard it here instead of failing at dispatch time.
+  const isDeviceExecution = isRemoteAgent || executionTarget === 'device';
+
+  const { status, refresh } = useRemoteAgentDeviceGuard({ enabled: isDeviceExecution });
 
   const goToAgentProfile = () => {
     if (params.aid) navigate(urlJoin('/agent', params.aid, 'profile'));
   };
 
   const deviceBlocked =
-    isRemoteAgent &&
+    isDeviceExecution &&
     (status === 'device-offline' || status === 'platform-unavailable' || status === 'no-device');
 
   const renderDeviceGuard = () => {
-    if (!isRemoteAgent || !deviceBlocked) return null;
+    if (!deviceBlocked) return null;
 
     let title: string;
     let desc: string;
@@ -69,7 +76,9 @@ const HeterogeneousChatInput = memo(() => {
       title = t('platformAgent.deviceGuard.deviceOffline.title');
       desc = t('platformAgent.deviceGuard.deviceOffline.desc');
     } else {
-      const name = HETEROGENEOUS_TYPE_LABELS[providerType] ?? providerType;
+      // `platform-unavailable` only arises for remote-typed agents (the guard's
+      // capability check), so providerType is always set here — fall back safely.
+      const name = (providerType && HETEROGENEOUS_TYPE_LABELS[providerType]) || providerType || '';
       title = t('platformAgent.deviceGuard.platformUnavailable.title', { name });
       desc = t('platformAgent.deviceGuard.platformUnavailable.desc', { name });
     }
@@ -97,11 +106,13 @@ const HeterogeneousChatInput = memo(() => {
     );
   };
 
-  const inputDisabled = (!isConfigured && !isRemoteAgent) || deviceBlocked;
+  // Device execution doesn't use the cloud sandbox, so it doesn't need cloud
+  // credentials — only the sandbox path gates on `isConfigured`.
+  const inputDisabled = (!isConfigured && !isDeviceExecution) || deviceBlocked;
 
   return (
     <Flexbox>
-      {!isRemoteAgent && !isConfigured && (
+      {!isDeviceExecution && !isConfigured && (
         <WideScreenContainer>
           <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
             <Alert

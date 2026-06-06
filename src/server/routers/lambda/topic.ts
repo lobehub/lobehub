@@ -8,6 +8,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { after } from 'next/server';
 import { z } from 'zod';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
@@ -31,6 +32,7 @@ const topicProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   return opts.next({
     ctx: {
       agentMigrationRepo: new AgentMigrationRepo(ctx.serverDB, ctx.userId),
+      agentOperationModel: new AgentOperationModel(ctx.serverDB, ctx.userId),
       topicImporterRepo: new TopicImporterRepo(ctx.serverDB, ctx.userId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId),
       topicShareModel: new TopicShareModel(ctx.serverDB, ctx.userId),
@@ -39,6 +41,14 @@ const topicProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
 });
 
 export const topicRouter = router({
+  getTopicDetail: topicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const topic = await ctx.topicModel.findById(input.id);
+      if (!topic) return null;
+      return topic;
+    }),
+
   getTopicContext: topicProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ input, ctx }) => {
@@ -236,6 +246,11 @@ export const topicRouter = router({
         isInbox: z.boolean().optional(),
         pageSize: z.number().max(100).optional(),
         sessionId: z.string().nullable().optional(),
+        /**
+         * Server-side ordering. Defaults to `updatedAt`; `status` orders by
+         * status priority for the sidebar "group by status" mode.
+         */
+        sortBy: z.enum(['updatedAt', 'status']).optional(),
         triggers: z.array(z.string()).optional(),
         /**
          * When true, returns extra card-detail columns (firstUserMessage,
@@ -339,6 +354,10 @@ export const topicRouter = router({
 
       return result;
     }),
+
+  getMaxTaskDuration: topicProcedure.query(async ({ ctx }) => {
+    return ctx.agentOperationModel.getMaxDurationSeconds();
+  }),
 
   rankTopics: topicProcedure.input(z.number().max(50).optional()).query(async ({ ctx, input }) => {
     return ctx.topicModel.rank(input);

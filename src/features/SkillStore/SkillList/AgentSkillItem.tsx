@@ -65,11 +65,14 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
 
   const handleDelete = () => {
     confirmModal({
+      cancelText: tc('cancel'),
+      content: t('store.actions.confirmUninstall'),
       okButtonProps: { danger: true },
+      okText: t('store.actions.uninstall'),
       onOk: async () => {
         await deleteAgentSkill(skill.id);
       },
-      title: t('store.actions.confirmUninstall'),
+      title: t('store.actions.uninstall'),
     });
   };
 

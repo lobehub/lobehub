@@ -15,7 +15,7 @@
   "features.imessage.title": "iMessage 渠道",
   "features.inputMarkdown.desc": "在输入区域实时渲染 Markdown（粗体、代码块、表格等）",
   "features.inputMarkdown.title": "输入框 Markdown 渲染",
-  "features.platformAgent.desc": "在创建菜单中显示「添加平台 Agent」入口。平台 Agent（如 OpenClaw、Hermes）运行在已连接的设备上，通过 lh connect 与 LobeHub 通信。",
-  "features.platformAgent.title": "平台 Agent 创建",
+  "features.platformAgent.desc": "在创建菜单中显示「接入助理」入口。接入的助理（如 OpenClaw、Hermes）运行在你自己的设备上，通过 lh connect 与 LobeHub 通信。",
+  "features.platformAgent.title": "接入助理",
   "title": "实验室"
 }

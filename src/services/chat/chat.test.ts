@@ -1,8 +1,9 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { REQUEST_TRIGGER_HEADER } from '@lobechat/const';
+import { createVisualFileRef } from '@lobechat/const/visualRef';
 import type { ChatStreamPayload, LobeTool, UIChatMessage } from '@lobechat/types';
-import { ChatErrorType, createVisualFileRef, RequestTrigger } from '@lobechat/types';
+import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { act } from '@testing-library/react';
 import { type EnabledAiModel, ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -1583,7 +1584,7 @@ describe('ChatService', () => {
           .spyOn(mechaModule, 'contextEngineering')
           .mockResolvedValue([]);
         vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
-        vi.spyOn(agentDocumentService, 'getDocuments').mockResolvedValue([
+        vi.spyOn(agentDocumentService, 'getContextDocuments').mockResolvedValue([
           {
             content: 'Project setup steps',
             filename: 'setup.md',
@@ -1603,7 +1604,9 @@ describe('ChatService', () => {
           resolvedAgentConfig: createMockResolvedConfig(),
         });
 
-        expect(agentDocumentService.getDocuments).toHaveBeenCalledWith({ agentId: 'agent-1' });
+        expect(agentDocumentService.getContextDocuments).toHaveBeenCalledWith({
+          agentId: 'agent-1',
+        });
         expect(contextEngineeringSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             agentDocuments: [
@@ -1622,7 +1625,7 @@ describe('ChatService', () => {
           .spyOn(mechaModule, 'contextEngineering')
           .mockResolvedValue([]);
         vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
-        vi.spyOn(agentDocumentService, 'getDocuments').mockResolvedValue([
+        vi.spyOn(agentDocumentService, 'getContextDocuments').mockResolvedValue([
           {
             content: 'Edited agent setup',
             filename: 'builder-target.md',
@@ -1646,7 +1649,9 @@ describe('ChatService', () => {
           }),
         });
 
-        expect(agentDocumentService.getDocuments).toHaveBeenCalledWith({ agentId: 'edited-agent' });
+        expect(agentDocumentService.getContextDocuments).toHaveBeenCalledWith({
+          agentId: 'edited-agent',
+        });
         expect(contextEngineeringSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             agentDocuments: [
@@ -1826,7 +1831,7 @@ describe('ChatService', () => {
   describe('fetchPresetTaskResult', () => {
     it('should not wait for agent documents on preset task chains', async () => {
       vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
-      vi.spyOn(agentDocumentService, 'getDocuments').mockResolvedValue([]);
+      vi.spyOn(agentDocumentService, 'getContextDocuments').mockResolvedValue([]);
 
       await chatService.fetchPresetTaskResult({
         abortController: new AbortController(),
@@ -1837,7 +1842,7 @@ describe('ChatService', () => {
         },
       });
 
-      expect(agentDocumentService.getDocuments).not.toHaveBeenCalled();
+      expect(agentDocumentService.getContextDocuments).not.toHaveBeenCalled();
     });
 
     it('should handle successful chat completion response', async () => {

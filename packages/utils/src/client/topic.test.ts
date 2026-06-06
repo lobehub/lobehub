@@ -2,7 +2,7 @@ import type { ChatTopic } from '@lobechat/types';
 import dayjs from 'dayjs';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { groupTopicsByTime, groupTopicsByUpdatedTime } from './topic';
+import { groupTopicsByStatus, groupTopicsByTime, groupTopicsByUpdatedTime } from './topic';
 
 // Mock current date to ensure consistent test results
 const NOW = '2024-01-15T12:00:00Z';
@@ -212,5 +212,87 @@ describe('groupTopicsByUpdatedTime', () => {
 
     // By updatedAt: grouped under yesterday
     expect(byUpdated[0].id).toBe('yesterday');
+  });
+});
+
+describe('groupTopicsByStatus', () => {
+  const createTopic = (
+    id: string,
+    status: ChatTopic['status'],
+    updatedAt: number = 0,
+  ): ChatTopic => ({
+    id,
+    title: id,
+    createdAt: updatedAt,
+    status,
+    updatedAt,
+  });
+
+  it('should return empty array for empty input', () => {
+    expect(groupTopicsByStatus([], 'updatedAt')).toEqual([]);
+  });
+
+  it('should order groups by fixed priority: waitingForHuman, running, then active', () => {
+    const topics = [
+      createTopic('a', 'active'),
+      createTopic('r', 'running'),
+      createTopic('w', 'waitingForHuman'),
+    ];
+
+    const result = groupTopicsByStatus(topics, 'updatedAt');
+
+    expect(result.map((g) => g.id)).toEqual(['waitingForHuman', 'running', 'active']);
+  });
+
+  it('should bucket topics without a status as active', () => {
+    const topics = [createTopic('1', undefined), createTopic('2', null)];
+
+    const result = groupTopicsByStatus(topics, 'updatedAt');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('active');
+    expect(result[0].children.map((t) => t.id)).toEqual(['1', '2']);
+  });
+
+  it('should only emit non-empty groups and keep the remaining states below the priority ones', () => {
+    const topics = [
+      createTopic('c', 'completed'),
+      createTopic('w', 'waitingForHuman'),
+      createTopic('p', 'paused'),
+    ];
+
+    const result = groupTopicsByStatus(topics, 'updatedAt');
+
+    expect(result.map((g) => g.id)).toEqual(['waitingForHuman', 'paused', 'completed']);
+  });
+
+  it('should sort topics inside a group by the chosen field desc', () => {
+    const topics = [
+      createTopic('old', 'running', 1),
+      createTopic('new', 'running', 100),
+      createTopic('mid', 'running', 50),
+    ];
+
+    const result = groupTopicsByStatus(topics, 'updatedAt');
+
+    expect(result[0].children.map((t) => t.id)).toEqual(['new', 'mid', 'old']);
+  });
+
+  it('should bucket a topic that is streaming on this client (loadingTopicIds) as running', () => {
+    const topics = [createTopic('loading', 'active'), createTopic('idle', 'active')];
+
+    const result = groupTopicsByStatus(topics, 'updatedAt', new Set(['loading']));
+
+    expect(result.map((g) => g.id)).toEqual(['running', 'active']);
+    expect(result[0].children.map((t) => t.id)).toEqual(['loading']);
+    expect(result[1].children.map((t) => t.id)).toEqual(['idle']);
+  });
+
+  it('should keep a loading topic in waitingForHuman (it outranks the running overlay)', () => {
+    const topics = [createTopic('waiting', 'waitingForHuman')];
+
+    const result = groupTopicsByStatus(topics, 'updatedAt', new Set(['waiting']));
+
+    expect(result.map((g) => g.id)).toEqual(['waitingForHuman']);
   });
 });

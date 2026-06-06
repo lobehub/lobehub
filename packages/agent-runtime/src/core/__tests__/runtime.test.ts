@@ -1172,6 +1172,57 @@ describe('AgentRuntime', () => {
       expect(result.nextContext?.payload).toHaveProperty('toolCount', 3);
     });
 
+    it('should resolve blocked tools and continue without waiting for human approval', async () => {
+      class BlockedToolAgent implements Agent {
+        async runner(context: AgentRuntimeContext, _state: AgentState) {
+          if (context.phase === 'user_input') {
+            return {
+              payload: {
+                parentMessageId: 'assistant-1',
+                toolsCalling: [
+                  {
+                    apiName: 'bash',
+                    arguments: '{"command":"rm -rf /"}',
+                    id: 'call_blocked',
+                    identifier: 'bash',
+                    type: 'builtin' as const,
+                  },
+                ],
+              },
+              type: 'resolve_blocked_tools' as const,
+            };
+          }
+
+          return { reason: 'completed' as const, type: 'finish' as const };
+        }
+      }
+
+      const runtime = new AgentRuntime(new BlockedToolAgent());
+      const state = AgentRuntime.createInitialState({
+        messages: [{ content: 'Try a blocked tool', role: 'user' }],
+        operationId: 'blocked-tool-test',
+      });
+
+      const result = await runtime.step(state);
+
+      expect(result.newState.status).toBe('running');
+      expect(result.events).toEqual([
+        {
+          id: 'call_blocked',
+          result: {
+            content: 'Blocked by security/privacy.',
+            success: false,
+          },
+          type: 'tool_result',
+        },
+      ]);
+      expect(result.nextContext?.phase).toBe('tools_batch_result');
+      expect(result.nextContext?.payload).toMatchObject({
+        parentMessageId: 'assistant-1',
+        toolCount: 1,
+      });
+    });
+
     // Regression test for Gemini 3 thoughtSignature must survive the
     // OpenAI ToolsCalling -> ChatToolPayload normalization in call_tools_batch,
     // otherwise Gemini 3 400s on the second tool_call turn.

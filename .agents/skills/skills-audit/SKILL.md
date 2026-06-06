@@ -1,6 +1,6 @@
 ---
 name: skills-audit
-description: Weekly audit of `.agents/skills/*/SKILL.md` — surfaces duplicate / overlapping / stale skills, inconsistent descriptions, broken cross-references, and merge/delete candidates. Run as a recurring health-check, not during normal feature work.
+description: 'Audit .agents/skills SKILL.md files. Use for recurring checks of duplicate, overlapping, stale, inconsistent, or broken skills and merge/delete candidates.'
 disable-model-invocation: true
 argument-hint: '[--verbose | --apply]'
 ---

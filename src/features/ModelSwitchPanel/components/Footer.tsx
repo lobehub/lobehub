@@ -25,8 +25,8 @@ export const Footer: FC<FooterProps> = ({ onClose }) => {
         paddingInline={12}
         variant={'borderless'}
         onClick={() => {
-          navigate('/settings/provider/all');
           onClose();
+          navigate('/settings/provider/all');
         }}
       >
         <Flexbox horizontal align={'center'} gap={8} style={{ flex: 1 }}>

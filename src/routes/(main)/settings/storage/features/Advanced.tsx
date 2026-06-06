@@ -23,7 +23,7 @@ import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 const AdvancedActions = () => {
-  const { t } = useTranslation('setting');
+  const { t } = useTranslation(['setting', 'common']);
   const { message } = App.useApp();
   const { hideDocs } = useServerConfigStore(featureFlagsSelectors);
   const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
@@ -43,9 +43,12 @@ const AdvancedActions = () => {
 
   const handleClear = useCallback(() => {
     confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('danger.clear.confirm'),
       okButtonProps: {
         danger: true,
       },
+      okText: t('danger.clear.action'),
       onOk: async () => {
         await clearSessions();
         await removeAllPlugins();
@@ -56,7 +59,7 @@ const AdvancedActions = () => {
 
         message.success(t('danger.clear.success'));
       },
-      title: t('danger.clear.confirm'),
+      title: t('danger.clear.title'),
     });
   }, [
     clearAllMessages,
@@ -71,12 +74,15 @@ const AdvancedActions = () => {
 
   const handleReset = useCallback(() => {
     confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('danger.reset.confirm'),
       okButtonProps: { danger: true },
+      okText: t('danger.reset.action'),
       onOk: () => {
         resetSettings();
         message.success(t('danger.reset.success'));
       },
-      title: t('danger.reset.confirm'),
+      title: t('danger.reset.title'),
     });
   }, [message, resetSettings, t]);
 

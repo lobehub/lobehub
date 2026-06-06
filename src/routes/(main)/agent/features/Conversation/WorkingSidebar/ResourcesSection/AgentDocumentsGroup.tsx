@@ -1,4 +1,8 @@
-import { buildAgentSkillIdentifier } from '@lobechat/const';
+import {
+  AGENT_DOCUMENT_CATEGORY,
+  AGENT_DOCUMENT_WEB_CATEGORY,
+  buildAgentSkillIdentifier,
+} from '@lobechat/const';
 import { ActionIcon, Center, Empty, Flexbox, Text } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
@@ -280,9 +284,15 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, workingDire
     agentDocumentService.getDocuments({ agentId: agentId! }),
   );
 
-  const webData = useMemo(() => data.filter((doc) => doc.category === 'web'), [data]);
+  const webData = useMemo(
+    () => data.filter((doc) => doc.category === AGENT_DOCUMENT_WEB_CATEGORY),
+    [data],
+  );
 
-  const documentsData = useMemo(() => data.filter((doc) => doc.category === 'document'), [data]);
+  const documentsData = useMemo(
+    () => data.filter((doc) => doc.category === AGENT_DOCUMENT_CATEGORY),
+    [data],
+  );
 
   const skillBundleViews = useMemo(() => buildSkillBundleViews(data), [data]);
 

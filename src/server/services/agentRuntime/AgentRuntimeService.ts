@@ -299,6 +299,10 @@ export class AgentRuntimeService {
       },
       chatGroupId: appContext?.groupId ?? null,
       maxSteps,
+      // Persist the Agent Signal run marker on the operation row so server-side
+      // self-iteration tools can read it back (metadata.agentSignal) at tool-call
+      // time — the trimmed appContext above intentionally drops it.
+      ...(appContext?.agentSignal ? { metadata: { agentSignal: appContext.agentSignal } } : {}),
       model: modelRuntimeConfig?.model,
       modelRuntimeConfig,
       operationId,

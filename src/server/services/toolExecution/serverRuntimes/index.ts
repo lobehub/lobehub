@@ -8,8 +8,13 @@
  */
 import type { ToolExecutionContext } from '../types';
 import { activatorRuntime } from './activator';
+import { agentBuilderRuntime } from './agentBuilder';
 import { agentDocumentsRuntime } from './agentDocuments';
 import { agentManagementRuntime } from './agentManagement';
+import { agentSignalFeedbackIntentRuntime } from './agentSignalFeedbackIntent';
+import { agentSignalReflectionRuntime } from './agentSignalReflection';
+import { agentSignalReviewRuntime } from './agentSignalReview';
+import { agentSignalSkillManagementRuntime } from './agentSignalSkillManagement';
 import { briefRuntime } from './brief';
 import { calculatorRuntime } from './calculator';
 import { cloudSandboxRuntime } from './cloudSandbox';
@@ -48,6 +53,7 @@ const registerRuntimes = (runtimes: ServerRuntimeRegistration[]) => {
 
 // Register all server runtimes
 registerRuntimes([
+  agentBuilderRuntime,
   webBrowsingRuntime,
   cloudSandboxRuntime,
   calculatorRuntime,
@@ -71,6 +77,10 @@ registerRuntimes([
   webOnboardingRuntime,
   lobeAgentRuntime,
   selfFeedbackIntentRuntime,
+  agentSignalSkillManagementRuntime,
+  agentSignalReviewRuntime,
+  agentSignalReflectionRuntime,
+  agentSignalFeedbackIntentRuntime,
 ]);
 
 // ==================== Registry API ====================

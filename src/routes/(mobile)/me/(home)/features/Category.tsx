@@ -6,12 +6,8 @@ import Cell from '@/components/Cell';
 
 import { useCategory } from './useCategory';
 
-interface CategoryProps {
-  onOpenChangelogModal: () => void;
-}
-
-const Category = memo<CategoryProps>(({ onOpenChangelogModal }) => {
-  const items = useCategory(onOpenChangelogModal);
+const Category = memo(() => {
+  const items = useCategory();
 
   return items?.map(({ key, ...item }, index) => <Cell key={key || index} {...item} />);
 });

@@ -1,3 +1,5 @@
+import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
+
 import { fileService } from '@/services/file';
 import { resourceService } from '@/services/resource';
 import type { StoreSetter } from '@/store/types';
@@ -24,7 +26,7 @@ export const toTreeItem = (item: {
 }): TreeItem => ({
   fileType: item.fileType,
   id: item.id,
-  isFolder: item.fileType === 'custom/folder',
+  isFolder: item.fileType === CUSTOM_FOLDER_FILE_TYPE,
   metadata: item.metadata ?? undefined,
   name: item.name,
   slug: item.slug,
@@ -189,21 +191,19 @@ export class TreeActionImpl {
     );
   };
 
-  navigateTo = async (folderSlug: string) => {
+  expandAncestors = async (folderIds: string[]) => {
+    if (!folderIds.length) return;
     const epoch = this.#get().epoch;
-    const breadcrumb = await fileService.getFolderBreadcrumb(folderSlug);
-    if (!breadcrumb?.length || this.#get().epoch !== epoch) return;
 
-    const folderIds = breadcrumb.map((c: { id: string }) => c.id);
     const expanded = { ...this.#get().expanded };
     for (const id of folderIds) expanded[id] = true;
-    this.#set({ expanded }, false, 'tree/navigateTo/expand');
+    this.#set({ expanded }, false, 'tree/expandAncestors');
 
     await Promise.all(
-      folderIds
-        .filter((id: string) => !this.#get().children[id])
-        .map((id: string) => this.loadChildren(id)),
+      folderIds.filter((id) => !this.#get().children[id]).map((id) => this.loadChildren(id)),
     );
+
+    if (this.#get().epoch !== epoch) return;
   };
 
   moveItem = async (itemId: string, fromParent: string, toParent: string): Promise<void> => {

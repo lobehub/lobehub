@@ -15,7 +15,5 @@
   "features.imessage.title": "iMessage Kanalı",
   "features.inputMarkdown.desc": "Girdi alanında Markdown biçimlendirmesini (kalın metin, kod blokları, tablolar vb.) gerçek zamanlı olarak görüntüleyin.",
   "features.inputMarkdown.title": "Girdi Markdown Görüntüleme",
-  "features.platformAgent.desc": "Oluşturma menüsünde \"Platform Ajanı Ekle\" girişini göster. Platform ajanları (ör. OpenClaw, Hermes) bağlı bir cihazda çalışır ve lh connect aracılığıyla geri iletişim kurar.",
-  "features.platformAgent.title": "Platform Ajanı Oluşturma",
   "title": "Deneysel Özellikler"
 }

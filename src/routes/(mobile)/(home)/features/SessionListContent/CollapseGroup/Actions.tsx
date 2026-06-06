@@ -30,7 +30,7 @@ type MenuItemType = ItemOfType<MenuProps['items']>;
 
 const Actions = memo<ActionsProps>(
   ({ id, openRenameModal, openConfigModal, onOpenChange, isCustomGroup, isPinned }) => {
-    const { t } = useTranslation('chat');
+    const { t } = useTranslation(['chat', 'common']);
     const { message } = App.useApp();
 
     const isMobile = useIsMobile();
@@ -142,12 +142,15 @@ const Actions = memo<ActionsProps>(
           onClick: ({ domEvent }) => {
             domEvent.stopPropagation();
             confirmModal({
+              cancelText: t('cancel', { ns: 'common' }),
+              content: t('sessionGroup.confirmRemoveGroupAlert'),
               okButtonProps: { danger: true },
+              okText: t('delete', { ns: 'common' }),
               onOk: async () => {
                 if (!id) return;
                 await removeSessionGroup(id);
               },
-              title: t('sessionGroup.confirmRemoveGroupAlert'),
+              title: t('delete', { ns: 'common' }),
             });
           },
         },

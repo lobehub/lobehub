@@ -56,13 +56,16 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
         label: t('header.actions.deleteLibrary', { ns: 'file' }),
         onClick: async () => {
           confirmModal({
+            cancelText: t('cancel', { ns: 'common' }),
+            content: t('library.list.confirmRemoveLibrary', { ns: 'file' }),
             okButtonProps: {
               danger: true,
             },
+            okText: t('delete', { ns: 'common' }),
             onOk: async () => {
               await onActionClick('deleteLibrary');
             },
-            title: t('library.list.confirmRemoveLibrary', { ns: 'file' }),
+            title: t('header.actions.deleteLibrary', { ns: 'file' }),
           });
         },
       });
@@ -102,16 +105,19 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
         label: t('FileManager.actions.removeFromLibrary'),
         onClick: () => {
           confirmModal({
+            cancelText: t('cancel', { ns: 'common' }),
+            content: t('FileManager.actions.confirmRemoveFromLibrary', {
+              count: selectCount,
+            }),
             okButtonProps: {
               danger: true,
             },
+            okText: t('FileManager.actions.removeFromLibrary'),
             onOk: async () => {
               await onActionClick('removeFromKnowledgeBase');
               message.success(t('FileManager.actions.removeFromLibrarySuccess'));
             },
-            title: t('FileManager.actions.confirmRemoveFromLibrary', {
-              count: selectCount,
-            }),
+            title: t('FileManager.actions.removeFromLibrary'),
           });
         },
       });
@@ -156,14 +162,17 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
         label: t('delete', { ns: 'common' }),
         onClick: async () => {
           confirmModal({
+            cancelText: t('cancel', { ns: 'common' }),
+            content: t('FileManager.actions.confirmDeleteMultiFiles', { count: selectCount }),
             okButtonProps: {
               danger: true,
             },
+            okText: t('delete', { ns: 'common' }),
             onOk: async () => {
               await onActionClick('delete');
               message.success(t('FileManager.actions.deleteSuccess'));
             },
-            title: t('FileManager.actions.confirmDeleteMultiFiles', { count: selectCount }),
+            title: t('delete', { ns: 'common' }),
           });
         },
       },

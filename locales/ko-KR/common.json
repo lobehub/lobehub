@@ -234,7 +234,7 @@
   "exportType.allAgentWithMessage": "모든 도우미 및 메시지 내보내기",
   "exportType.globalSetting": "전체 설정 내보내기",
   "feedback": "피드백 및 제안",
-  "feedback.emailContact": "{{email}}로 이메일을 보내주실 수도 있습니다",
+  "feedback.emailContact": "<email>{{email}}</email>로 이메일을 보내주실 수도 있습니다",
   "feedback.errors.fileTooLarge": "파일 크기가 5MB를 초과합니다",
   "feedback.errors.submitFailed": "제출에 실패했습니다. 다시 시도해 주세요.",
   "feedback.errors.teamNotFound": "설정 오류",

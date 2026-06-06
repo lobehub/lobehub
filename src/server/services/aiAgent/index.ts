@@ -46,6 +46,9 @@ import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { AiModelModel } from '@/database/models/aiModel';
+import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorToolModel } from '@/database/models/connectorTool';
+import { DeviceModel } from '@/database/models/device';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
@@ -56,6 +59,7 @@ import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { toolsEnv } from '@/envs/tools';
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
+import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { signOperationJwt, signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import type { EvalContext, ServerAgentToolsContext } from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
@@ -77,11 +81,13 @@ import {
 import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSignal';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
+import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
 import { deviceProxy } from '@/server/services/toolExecution/deviceProxy';
+import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { resolveDeviceAccessPolicy } from './deviceAccessPolicy';
 import { buildAllowedBuiltinTools, isDeviceToolIdentifier } from './deviceToolRegistry';
@@ -243,6 +249,8 @@ export class AiAgentService {
   private readonly agentModel: AgentModel;
   private readonly agentService: AgentService;
   private readonly messageModel: MessageModel;
+  private readonly connectorModel: ConnectorModel;
+  private readonly connectorToolModel: ConnectorToolModel;
   private readonly pluginModel: PluginModel;
   private readonly taskModel: TaskModel;
   private readonly threadModel: ThreadModel;
@@ -262,6 +270,8 @@ export class AiAgentService {
     this.agentModel = new AgentModel(db, userId);
     this.agentService = new AgentService(db, userId);
     this.messageModel = new MessageModel(db, userId);
+    this.connectorModel = new ConnectorModel(db, userId);
+    this.connectorToolModel = new ConnectorToolModel(db, userId);
     this.pluginModel = new PluginModel(db, userId);
     this.taskModel = new TaskModel(db, userId);
     this.threadModel = new ThreadModel(db, userId);
@@ -383,13 +393,31 @@ export class AiAgentService {
     throwIfAborted(signal, 'Agent execution aborted before startup');
 
     // 1. Get agent configuration with default config merged (supports both id and slug)
-    const agentConfig = await this.agentService.getAgentConfig(identifier);
+    let agentConfig = await this.agentService.getAgentConfig(identifier);
+    // Builtin agents (inbox / page / task / self-iteration slugs) may be addressed
+    // purely by slug before a row exists — e.g. background self-iteration runs
+    // dispatched via execAgent({ slug }). Lazily materialize the virtual row from
+    // the builtin registry (mirrors the inbox/task `getBuiltinAgent` path) and
+    // re-resolve. No-op for ordinary agent ids (getBuiltinAgent returns null).
+    if (!agentConfig && (Object.values(BUILTIN_AGENT_SLUGS) as string[]).includes(identifier)) {
+      await this.agentModel.getBuiltinAgent(identifier);
+      agentConfig = await this.agentService.getAgentConfig(identifier);
+    }
     if (!agentConfig) {
       throw new Error(`Agent not found: ${identifier}`);
     }
 
     // Use actual agent ID from config for subsequent operations
     const resolvedAgentId = agentConfig.id;
+
+    // Persistence-attribution agent id. Background Agent Signal runs (memory /
+    // skill / self-reflection) execute under a builtin slug, so `resolvedAgentId`
+    // is the builtin agent — but the run's persisted messages, like its operation
+    // row (createOperation appContext.agentId) and receipts, must attribute to the
+    // reviewed *user* agent carried on `marker.agentId`. Ordinary runs (no marker)
+    // fall back to the executing agent. Tools / systemRole / skills / agent
+    // documents stay keyed on `resolvedAgentId`.
+    const persistAgentId = appContext?.agentSignal?.agentId ?? resolvedAgentId;
 
     // Apply per-call model/provider overrides (e.g. from task.config)
     if (modelOverride) agentConfig.model = modelOverride;
@@ -628,11 +656,14 @@ export class AiAgentService {
             }
           : undefined;
 
+      const fallbackTitleSource = markdownToTxt(prompt);
       const newTopic = await this.topicModel.create({
         agentId: resolvedAgentId,
         metadata,
         title:
-          title !== undefined ? title : prompt.slice(0, 50) + (prompt.length > 50 ? '...' : ''),
+          title !== undefined
+            ? title
+            : fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : ''),
         trigger,
       });
       topicId = newTopic.id;
@@ -946,9 +977,39 @@ export class AiAgentService {
               userMessageId: userMsg?.id ?? parentMessageId ?? '',
             };
           }
+          // Resolve the working directory for the run: a topic-level override
+          // wins, else the device's user-configured defaultCwd. The device row
+          // lives in the DB (the gateway only knows live connections), so read
+          // it directly rather than via deviceProxy.
+          const boundDevice = await new DeviceModel(this.db, this.userId).findByDeviceId(
+            dispatchDeviceId,
+          );
+          // Prefer the topic's own pinned cwd — an existing topic carries it in
+          // `metadata.workingDirectory`, whereas `initialTopicMetadata` is only
+          // populated for a brand-new topic. Fall back to the device default.
+          const deviceCwd =
+            topic?.metadata?.workingDirectory ||
+            appContext?.initialTopicMetadata?.workingDirectory ||
+            boundDevice?.defaultCwd ||
+            undefined;
+
+          // A device is the user's own persistent machine — build a
+          // device-specific context instead of reusing the cloud-sandbox one
+          // (which describes an ephemeral /workspace + pre-cloned repos and
+          // would mislead the agent).
+          const { buildRemoteDeviceHeteroContext } =
+            await import('@/server/services/heterogeneousAgent/remoteDeviceHeteroContext');
+          const deviceSystemContext = buildRemoteDeviceHeteroContext({
+            agentSystemContext: agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+            conversationHistory,
+            cwd: deviceCwd,
+          });
+
           const result = await deviceProxy.dispatchAgentRun({
             ...heteroParams,
+            cwd: deviceCwd,
             deviceId: dispatchDeviceId,
+            systemContext: deviceSystemContext,
           });
           if (!result.success) {
             log('execAgent: hetero device dispatch failed: %s', result.error);
@@ -1119,6 +1180,35 @@ export class AiAgentService {
       const installedPlugins = await this.pluginModel.query();
       log('execAgent: got %d installed plugins', installedPlugins.length);
 
+      // 5a-1. Resolve connectors — connector identifier takes priority over plugin
+      const connectors =
+        agentPlugins.length > 0 ? await this.connectorModel.queryByIdentifiers(agentPlugins) : [];
+
+      // Only connectors WITH a real MCP endpoint (mcpServerUrl or stdio) can replace plugins in the
+      // manifest. Connectors WITHOUT an endpoint (e.g. Lobehub/Klavis OAuth skills synced via
+      // syncToolsFromClient) must continue using their original plugin executor path — otherwise
+      // after humanIntervention approval the runtime tries to call mcpServerUrl='' and returns empty.
+      const connectorsMcp = connectors.filter(
+        (c) => c.mcpServerUrl || c.mcpConnectionType === 'stdio',
+      );
+      const connectorIdentifierSet = new Set(connectorsMcp.map((c) => c.identifier));
+
+      // Filter out plugin entries that are now handled by real MCP connectors
+      const pluginsWithoutConnectors = installedPlugins.filter(
+        (p) => !connectorIdentifierSet.has(p.identifier),
+      );
+
+      // Fetch ALL tools for all real-MCP connectors (including disabled tools) so that
+      // buildConnectorManifests can show blocking descriptions for disabled tools.
+      // The runtime hot-path still uses queryByConnectorIds (non-disabled only) elsewhere.
+      const connectorTools =
+        connectorsMcp.length > 0
+          ? await this.connectorToolModel.queryAllByConnectorIds(connectorsMcp.map((c) => c.id))
+          : [];
+
+      const connectorManifests = buildConnectorManifests(connectorsMcp, connectorTools);
+      log('execAgent: got %d connector manifests', connectorManifests.length);
+
       // 5b. Get model abilities from model-bank for function calling support check
       const isModelSupportToolUse = (m: string, p: string) => {
         const info = builtinModels.find((item) => item.id === m && item.providerId === p);
@@ -1141,6 +1231,54 @@ export class AiAgentService {
       }
       log('execAgent: got %d klavis manifests', klavisManifests.length);
 
+      // 5d-1. Patch Lobehub/Klavis manifests with connector tool permissions.
+      // This enables needs_approval (→ humanIntervention: 'required') and disabled
+      // (→ blocking description) for skills that are managed via the connector system.
+      // The humanIntervention system already handles headless auto-rejection for qstash.
+      if (lobehubSkillManifests.length > 0 || klavisManifests.length > 0) {
+        try {
+          const { patchManifestWithPermissions } =
+            await import('@/libs/mcp/connectorPermissionCheck');
+          const { ConnectorToolModel } = await import('@/database/models/connectorTool');
+          const allIdentifiers = [
+            ...lobehubSkillManifests.map((m) => m.identifier),
+            ...klavisManifests.map((m) => m.identifier),
+          ];
+          const connectorEntries =
+            allIdentifiers.length > 0
+              ? await this.connectorModel.queryByIdentifiers(allIdentifiers)
+              : [];
+
+          if (connectorEntries.length > 0) {
+            const toolModel = new ConnectorToolModel(this.db, this.userId);
+            const connectorToolsMap = new Map<string, Map<string, string>>();
+            await Promise.all(
+              connectorEntries.map(async (c) => {
+                const tools = await toolModel.queryByConnector(c.id);
+                const perms = new Map(tools.map((t) => [t.toolName, t.permission]));
+                connectorToolsMap.set(c.identifier, perms);
+              }),
+            );
+
+            lobehubSkillManifests = lobehubSkillManifests.map((m) => {
+              const perms = connectorToolsMap.get(m.identifier);
+              return perms && perms.size > 0
+                ? (patchManifestWithPermissions(m as any, perms as any) as any)
+                : m;
+            });
+
+            klavisManifests = klavisManifests.map((m) => {
+              const perms = connectorToolsMap.get(m.identifier);
+              return perms && perms.size > 0
+                ? (patchManifestWithPermissions(m as any, perms as any) as any)
+                : m;
+            });
+          }
+        } catch (err) {
+          log('execAgent: failed to patch manifests with connector permissions: %O', err);
+        }
+      }
+
       await throwIfExecutionAborted('tool discovery');
 
       // 5e. Create tools using Server AgentToolsEngine
@@ -1150,8 +1288,7 @@ export class AiAgentService {
         ) ?? false;
 
       try {
-        const docs = await this.agentDocumentsService.getAgentDocuments(resolvedAgentId);
-        hasAgentDocuments = docs.length > 0;
+        hasAgentDocuments = await this.agentDocumentsService.hasDocuments(resolvedAgentId);
       } catch {
         // Agent documents check is non-critical
       }
@@ -1173,7 +1310,7 @@ export class AiAgentService {
       const deviceOnline = onlineDevices.length > 0;
 
       const toolsContext: ServerAgentToolsContext = {
-        installedPlugins,
+        installedPlugins: pluginsWithoutConnectors,
         isModelSupportToolUse,
       };
 
@@ -1253,7 +1390,7 @@ export class AiAgentService {
               : undefined;
 
       const toolsEngine = createServerAgentToolsEngine(toolsContext, {
-        additionalManifests: [...lobehubSkillManifests, ...klavisManifests],
+        additionalManifests: [...lobehubSkillManifests, ...klavisManifests, ...connectorManifests],
         agentConfig: {
           chatConfig: agentConfig.chatConfig ?? undefined,
           plugins: agentPlugins,
@@ -1285,6 +1422,8 @@ export class AiAgentService {
           // Include LobeHub Skills and Klavis tools so they are passed to generateToolsDetailed
           ...lobehubSkillManifests.map((m) => m.identifier),
           ...klavisManifests.map((m) => m.identifier),
+          // Connector manifests are also injected as additionalManifests
+          ...connectorManifests.map((m) => m.identifier),
         ]),
       ];
       log('execAgent: agent configured plugins: %O', pluginIds);
@@ -1374,6 +1513,11 @@ export class AiAgentService {
         for (const plugin of installedPlugins) {
           if (plugin.customParams?.mcp?.type === 'stdio' && manifestMap.has(plugin.identifier)) {
             toolExecutorMap[plugin.identifier] = 'client';
+          }
+        }
+        for (const connector of connectorsMcp) {
+          if (connector.mcpConnectionType === 'stdio' && manifestMap.has(connector.identifier)) {
+            toolExecutorMap[connector.identifier] = 'client';
           }
         }
       }
@@ -1773,96 +1917,26 @@ export class AiAgentService {
     if (attachedFileIds && attachedFileIds.length > 0) {
       await throwIfExecutionAborted('file resolution');
 
-      // Dedupe while preserving caller order. messages_files has a composite PK
-      // on (file_id, message_id), so duplicate fileIds would violate the
-      // constraint on messageModel.create and abort the whole send.
-      const dedupedFileIds = Array.from(new Set(attachedFileIds));
+      const resolved = await resolveAttachmentsByFileIds({
+        db: this.db,
+        fileIds: attachedFileIds,
+        userId: this.userId,
+      });
 
-      const fileModel = new FileModel(this.db, this.userId);
-      const fileRecords = await fileModel.findByIds(dedupedFileIds);
+      warnings.push(...resolved.warnings);
 
-      if (fileRecords.length > 0) {
-        fileIds = fileIds ?? [];
-        imageList = imageList ?? [];
-        videoList = videoList ?? [];
-        fileList = fileList ?? [];
+      if (resolved.orderedFileIds.length > 0) {
+        fileIds = [...(fileIds ?? []), ...resolved.orderedFileIds];
 
-        const documentService = new DocumentService(this.db, this.userId);
-
-        // Preserve caller's ordering of fileIds so rendering matches upload order.
-        const recordById = new Map(fileRecords.map((f) => [f.id, f]));
-
-        for (const id of dedupedFileIds) {
-          const file = recordById.get(id);
-          if (!file) {
-            warnings.push(`Attachment "${id}" was not found and skipped.`);
-            continue;
-          }
-
-          fileIds.push(file.id);
-          const resolvedUrl = (await fileService.getFileAccessUrl(file)) || file.url;
-          const fileType = file.fileType || '';
-
-          if (fileType.startsWith('image')) {
-            imageList.push({
-              alt: file.name || 'image',
-              id: file.id,
-              url: resolvedUrl,
-            });
-            continue;
-          }
-
-          if (fileType.startsWith('video')) {
-            videoList.push({
-              alt: file.name || 'video',
-              id: file.id,
-              url: resolvedUrl,
-            });
-            continue;
-          }
-
-          // Non-image / non-video: ensure the document content is parsed so
-          // MessageContentProcessor can inject it via filesPrompts(). parseFile
-          // is idempotent — returns cached content when the document already exists.
-          let content: string | undefined;
-          try {
-            const document = await documentService.parseFile(file.id);
-            content = document.content ?? undefined;
-          } catch (parseError) {
-            log(
-              'execAgent: parseFile failed for attached file %s (id=%s): %O',
-              file.name,
-              file.id,
-              parseError,
-            );
-            warnings.push(
-              `File "${file.name || 'unknown'}" was attached but its contents could not be extracted.`,
-            );
-          }
-
-          fileList.push({
-            content,
-            fileType: fileType || 'application/octet-stream',
-            id: file.id,
-            name: file.name || 'file',
-            size: file.size ?? 0,
-            url: resolvedUrl,
-          });
+        if (resolved.imageList.length > 0) {
+          imageList = [...(imageList ?? []), ...resolved.imageList];
         }
-
-        log(
-          'execAgent: resolved %d attached file(s) (%d images, %d videos, %d documents)',
-          fileRecords.length,
-          imageList.length,
-          videoList.length,
-          fileList.length,
-        );
-
-        if (imageList.length === 0) imageList = undefined;
-        if (videoList.length === 0) videoList = undefined;
-        if (fileList.length === 0) fileList = undefined;
-      } else {
-        log('execAgent: no file records found for attachedFileIds=%O', dedupedFileIds);
+        if (resolved.videoList.length > 0) {
+          videoList = [...(videoList ?? []), ...resolved.videoList];
+        }
+        if (resolved.fileList.length > 0) {
+          fileList = [...(fileList ?? []), ...resolved.fileList];
+        }
       }
     }
 
@@ -1878,7 +1952,7 @@ export class AiAgentService {
     const userMessageRecord = effectiveResume
       ? undefined
       : await this.messageModel.create({
-          agentId: resolvedAgentId,
+          agentId: persistAgentId,
           content: prompt,
           files: fileIds,
           metadata: requestTriggerMetadata,
@@ -1924,7 +1998,7 @@ export class AiAgentService {
     // 14. Create assistant message placeholder in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
     const assistantMessageRecord = await this.messageModel.create({
-      agentId: resolvedAgentId,
+      agentId: persistAgentId,
       content: LOADING_FLAT,
       model,
       parentId: parentMessageId ?? userMessageRecord?.id,
@@ -2209,7 +2283,17 @@ export class AiAgentService {
         deviceSystemInfo: Object.keys(deviceSystemInfo).length > 0 ? deviceSystemInfo : undefined,
         userTimezone,
         appContext: {
-          agentId: resolvedAgentId,
+          // Background self-iteration runs execute under a builtin slug (so they
+          // inherit the builtin agent's tools / systemRole / model), but their
+          // resource tools and receipts must attribute to the *reviewed* user
+          // agent, which rides on the marker. Prefer it so the tool-execution
+          // context (state.metadata.agentId) targets the reviewed agent; ordinary
+          // runs (no marker) fall back to the resolved executing agent.
+          agentId: appContext?.agentSignal?.agentId ?? resolvedAgentId,
+          // Run-scoped Agent Signal marker for background self-iteration / memory
+          // runs — lands in state.metadata.agentSignal so the completion path can
+          // project receipts/briefs. Undefined for ordinary chat runs.
+          ...(appContext?.agentSignal ? { agentSignal: appContext.agentSignal } : {}),
           defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
           documentId: appContext?.documentId,
           groupId: appContext?.groupId,
@@ -2358,8 +2442,10 @@ export class AiAgentService {
     // - newTopic is explicitly provided, OR
     // - no topicId is provided (default behavior for group chat)
     if (newTopic || !inputTopicId) {
+      const fallbackTitleSource = markdownToTxt(message);
       const topicTitle =
-        newTopic?.title || message.slice(0, 50) + (message.length > 50 ? '...' : '');
+        newTopic?.title ||
+        fallbackTitleSource.slice(0, 50) + (fallbackTitleSource.length > 50 ? '...' : '');
       const topicItem = await this.topicModel.create({
         agentId,
         groupId,

@@ -244,7 +244,7 @@ export const todoWriteStress = defineCase({
       ),
       callSubAgent(
         `为 ${table} 表添加索引`,
-        `检查 src/database/schemas/${table}.ts 的表结构，添加 createdAt 性能索引，生成迁移 SQL`,
+        `检查 packages/database/src/schemas/${table}.ts 的表结构，添加 createdAt 性能索引，生成迁移 SQL`,
       ),
       updateTodos(
         [{ type: 'complete', index: i }],
@@ -277,7 +277,7 @@ export const todoWriteStress = defineCase({
       ),
       callSubAgent(
         `为 ${table} 表添加索引`,
-        `检查 src/database/schemas/${table}.ts 的表结构，添加 createdAt 性能索引，生成迁移 SQL`,
+        `检查 packages/database/src/schemas/${table}.ts 的表结构，添加 createdAt 性能索引，生成迁移 SQL`,
       ),
       updateTodos(
         [{ type: 'complete', index: i }],
@@ -337,7 +337,7 @@ export const todoWriteStress = defineCase({
       'compression',
       'file',
       'notification',
-    ].flatMap((slice, i) => [
+    ].flatMap((slice) => [
       createTodos([`迁移 ${slice} store slice 到 SWR 模式`]),
       updateTodos(
         [{ type: 'processing', index: 0 }],
@@ -516,7 +516,7 @@ export const todoWriteStress = defineCase({
       'file',
       'knowledge',
       'share',
-    ].flatMap((ns, i) => {
+    ].flatMap((ns) => {
       return [
         createTodos([`提取 ${ns} 命名空间的硬编码字符串`]),
         updateTodos(

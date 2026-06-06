@@ -1,34 +1,45 @@
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
-import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import debug from 'debug';
 
 import { defineAgentSignalHandlers, defineSourceHandler } from '../runtime/middleware';
+import type { SelfIterationCompletionPayload } from '../services/selfIteration/completion';
+
+const log = debug('lobe-server:completion-lifecycle');
 
 /**
- * Handles `agent.execution.completed` source events emitted after every execAgent run
- * (including builtin background agents). Routes builtin self-iteration runs to an
- * optional caller callback so side-effects (brief writing, receipt projection,
- * idempotency marker) can happen asynchronously after the agent run finishes.
+ * Handles `agent.execution.completed` source events emitted after every execAgent
+ * run. Routes runs that stamped an agent-signal marker (nightly-review /
+ * self-reflection / self-feedback-intent / memory) to an optional caller
+ * callback so side-effects (receipt projection) can happen asynchronously after
+ * the agent run finishes.
  *
- * Mode-specific dispatch (review / reflection / feedback) is deferred — the
- * caller can demultiplex by looking up the operation row and inspecting the
- * stored scope / iteration mode at callback time.
+ * Routing is keyed on the marker-derived `selfIteration` payload, NOT the agent
+ * slug: a memory-writer run executes as the user's own agent, so a slug check
+ * would miss it. The marker is the authoritative "this run wants completion-side
+ * projection" signal, stamped by the dispatcher.
  *
  * The callback is fire-and-forget from the worker's perspective; failures are
  * logged but never re-trigger the source pipeline.
- *
- * NOTE on userId: the `agent.execution.completed` source payload does not carry
- * userId, and `AgentSignalSource.scope` is not populated by renderers. Callers
- * that need userId should look it up via the operations table by `operationId`.
  */
 export interface CompletionCallbackParams {
+  /** Agent that ran — a builtin self-iteration slug, or a user agent for memory. */
   agentId: string;
   operationId: string;
+  /**
+   * Compact self-iteration tool outcomes + run marker, extracted from the run's
+   * finalState by the executor and carried on the completion payload. Absent for
+   * runs that did not stamp an agent-signal marker.
+   */
+  selfIteration?: SelfIterationCompletionPayload;
   /** Optional topic id forwarded from the source payload. */
   topicId?: string;
 }
 
 export interface CreateCompletionPolicyOptions {
-  /** Called when a self-iteration run completes (any mode: review / reflection / feedback). */
+  /**
+   * Called when a self-iteration run completes. `params.agentId` identifies
+   * which mode (nightly-review / self-reflection / self-feedback-intent) ran.
+   */
   onSelfIterationCompleted?: (params: CompletionCallbackParams) => Promise<void>;
 }
 
@@ -38,15 +49,30 @@ export const createCompletionPolicy = (options: CreateCompletionPolicyOptions = 
       AGENT_SIGNAL_SOURCE_TYPES.agentExecutionCompleted,
       'agent.execution.completed:completion-fanout',
       async (source) => {
-        const { agentId, operationId, topicId } = source.payload;
+        const { agentId, operationId, selfIteration, topicId } = source.payload;
+
+        log(
+          '[completion-policy] received agent.execution.completed agentId=%s op=%s selfIteration=%s',
+          agentId,
+          operationId,
+          selfIteration
+            ? `kind=${(selfIteration as SelfIterationCompletionPayload).marker?.kind} mutations=${(selfIteration as SelfIterationCompletionPayload).mutations?.length}`
+            : 'ABSENT',
+        );
 
         if (!agentId || !operationId) return;
-        if (agentId !== BUILTIN_AGENT_SLUGS.selfIteration) return;
-        if (!options.onSelfIterationCompleted) return;
+        // Marker-driven: only runs that stamped a marker carry a selfIteration
+        // payload. Unmarked runs have nothing to project.
+        if (!selfIteration) return;
+        if (!options.onSelfIterationCompleted) {
+          log('[completion-policy] no onSelfIterationCompleted wired — skipping projection');
+          return;
+        }
 
         const params: CompletionCallbackParams = {
           agentId,
           operationId,
+          selfIteration: selfIteration as SelfIterationCompletionPayload,
           ...(topicId ? { topicId } : {}),
         };
 

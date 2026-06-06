@@ -1,6 +1,6 @@
 ---
 name: modal
-description: "LobeHub imperative-modal conventions. Use whenever creating, editing, opening, or migrating a modal/dialog/popup — prefer `createModal` / `confirmModal` / `useModalContext` from `@lobehub/ui/base-ui` (headless) over the legacy root `@lobehub/ui` `createModal` (antd Modal props) and over any declarative `open` state + `<Modal />` pattern. Covers required `ModalHost` mounting, the `Content` + `index.tsx` file layout, `content` vs `children` slot, i18n inside `createModal()` (`import { t } from 'i18next'`), and migration notes. Triggers on `createModal`, `confirmModal`, `useModalContext`, `ModalHost`, `antd Modal`, `<Modal open>`, 'open a modal', 'popup', 'dialog', 'confirm dialog', '弹框', '弹窗', '确认框', 'migrate to base-ui'."
+description: 'LobeHub imperative modal conventions. Use when creating or migrating modals, dialogs, popups, confirm flows, ModalHost wiring, createModal, confirmModal, useModalContext, or base-ui modal APIs.'
 user-invocable: false
 ---
 

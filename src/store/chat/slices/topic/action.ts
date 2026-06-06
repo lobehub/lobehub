@@ -20,7 +20,12 @@ import { useGlobalStore } from '@/store/global';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors, userGeneralSettingsSelectors } from '@/store/user/selectors';
-import { type ChatTopic, type ChatTopicStatus, type CreateTopicParams } from '@/types/topic';
+import {
+  type ChatTopic,
+  type ChatTopicStatus,
+  type CreateTopicParams,
+  type TopicQuerySortBy,
+} from '@/types/topic';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -375,6 +380,7 @@ export class ChatTopicActionImpl {
       groupId,
       pageSize: customPageSize,
       isInbox,
+      sortBy,
       withDetails,
     }: {
       agentId?: string;
@@ -383,6 +389,7 @@ export class ChatTopicActionImpl {
       groupId?: string;
       isInbox?: boolean;
       pageSize?: number;
+      sortBy?: TopicQuerySortBy;
       withDetails?: boolean;
     } = {},
   ): SWRResponse<{ items: ChatTopic[]; total: number }> => {
@@ -405,6 +412,7 @@ export class ChatTopicActionImpl {
               pageSize,
               ...(effectiveExcludeTriggers ? { excludeTriggers: effectiveExcludeTriggers } : {}),
               ...(effectiveExcludeStatuses ? { excludeStatuses: effectiveExcludeStatuses } : {}),
+              ...(sortBy ? { sortBy } : {}),
               ...(withDetails ? { withDetails: true } : {}),
             },
           ]
@@ -433,6 +441,7 @@ export class ChatTopicActionImpl {
           groupId,
           isInbox,
           pageSize,
+          sortBy,
           withDetails,
         });
 

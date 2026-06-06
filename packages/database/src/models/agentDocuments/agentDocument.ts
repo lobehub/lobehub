@@ -1,7 +1,8 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
+import { AGENT_DOCUMENT_FILE_TYPE, AGENT_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, like, or, sql } from 'drizzle-orm';
 
 import type { DocumentItem, NewAgentDocument, NewDocument } from '../../schemas';
-import { agentDocuments, documents } from '../../schemas';
+import { AGENT_SKILL_TEMPLATE_ID, agentDocuments, documents } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
 import { deriveAgentDocumentFields } from './deriveFields';
 import { buildDocumentFilename } from './filename';
@@ -15,6 +16,7 @@ import {
 } from './policy';
 import type {
   AgentDocument,
+  AgentDocumentContextRow,
   AgentDocumentPolicy,
   AgentDocumentSourceType,
   AgentDocumentWithRules,
@@ -289,7 +291,7 @@ export class AgentDocumentModel {
     const {
       createdAt,
       editorData,
-      fileType = 'agent/document',
+      fileType = AGENT_DOCUMENT_FILE_TYPE,
       loadPosition,
       loadRules,
       metadata,
@@ -297,7 +299,7 @@ export class AgentDocumentModel {
       policy,
       policyLoad,
       source,
-      sourceType = 'agent',
+      sourceType = AGENT_DOCUMENT_SOURCE_TYPE,
       templateId,
       title: providedTitle,
       updatedAt,
@@ -634,14 +636,18 @@ export class AgentDocumentModel {
    * - The renamed agent document, or `undefined` when the binding is not visible.
    *
    */
-  async rename(documentId: string, newTitle: string): Promise<AgentDocument | undefined> {
+  async rename(
+    documentId: string,
+    newTitle: string,
+    options?: { filename?: string },
+  ): Promise<AgentDocument | undefined> {
     const existing = await this.findById(documentId);
     if (!existing) return undefined;
 
     const title = newTitle.trim();
     if (!title) return existing;
 
-    const filename = buildDocumentFilename(title);
+    const filename = options?.filename?.trim() || buildDocumentFilename(title);
     const source = `agent-document://${existing.agentId}/${encodeURIComponent(filename)}`;
 
     await this.db.transaction(async (trx) => {
@@ -874,6 +880,119 @@ export class AgentDocumentModel {
 
     return results.map(({ settings, doc }) => {
       const item = this.toAgentDocument(settings, doc);
+      return {
+        ...item,
+        ...deriveAgentDocumentFields(item),
+        loadRules: parseLoadRules(item),
+      };
+    });
+  }
+
+  async findSkillDocsByAgent(agentId: string): Promise<AgentDocumentWithRules[]> {
+    const results = await this.db
+      .select({ doc: documents, settings: agentDocuments })
+      .from(agentDocuments)
+      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .where(
+        and(
+          eq(agentDocuments.userId, this.userId),
+          eq(agentDocuments.agentId, agentId),
+          isNull(agentDocuments.deletedAt),
+          or(
+            eq(agentDocuments.templateId, AGENT_SKILL_TEMPLATE_ID),
+            like(documents.fileType, 'skills/%'),
+          ),
+        ),
+      )
+      .orderBy(desc(agentDocuments.updatedAt));
+
+    return results.map(({ settings, doc }) => {
+      const item = this.toAgentDocument(settings, doc);
+      return {
+        ...item,
+        ...deriveAgentDocumentFields(item),
+        loadRules: parseLoadRules(item),
+      };
+    });
+  }
+
+  async findContextByAgent(agentId: string): Promise<AgentDocumentContextRow[]> {
+    const results = await this.db
+      .select({
+        doc: {
+          content: sql<string>`
+            CASE
+              WHEN ${agentDocuments.policyLoad} = ${PolicyLoad.ALWAYS}
+                THEN COALESCE(${documents.content}, '')
+              ELSE ''
+            END
+          `.as('content'),
+          description: documents.description,
+          editorData: sql<Record<string, any> | null>`
+            CASE
+              WHEN ${agentDocuments.policyLoad} = ${PolicyLoad.ALWAYS} THEN ${documents.editorData}
+              ELSE NULL
+            END
+          `.as('editor_data'),
+          filename: documents.filename,
+          fileType: documents.fileType,
+          parentId: documents.parentId,
+          sourceType: documents.sourceType,
+          title: documents.title,
+          totalCharCount: documents.totalCharCount,
+        },
+        settings: {
+          agentId: agentDocuments.agentId,
+          documentId: agentDocuments.documentId,
+          id: agentDocuments.id,
+          policy: agentDocuments.policy,
+          policyLoad: agentDocuments.policyLoad,
+          policyLoadFormat: agentDocuments.policyLoadFormat,
+          policyLoadPosition: agentDocuments.policyLoadPosition,
+          policyLoadRule: agentDocuments.policyLoadRule,
+          templateId: agentDocuments.templateId,
+          updatedAt: agentDocuments.updatedAt,
+        },
+      })
+      .from(agentDocuments)
+      .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
+      .where(
+        and(
+          eq(agentDocuments.userId, this.userId),
+          eq(agentDocuments.agentId, agentId),
+          isNull(agentDocuments.deletedAt),
+        ),
+      )
+      .orderBy(desc(agentDocuments.updatedAt));
+
+    return results.map(({ settings, doc }) => {
+      const policy = (settings.policy as AgentDocumentPolicy | null) ?? null;
+      const item: Omit<
+        AgentDocumentContextRow,
+        'category' | 'isFolder' | 'isSkillBundle' | 'isSkillIndex' | 'loadRules'
+      > = {
+        content: doc.content,
+        contentCharCount: doc.totalCharCount,
+        description: doc.description ?? null,
+        documentId: settings.documentId,
+        editorData: doc.editorData ?? null,
+        filename: doc.filename ?? '',
+        fileType: doc.fileType,
+        id: settings.id,
+        parentId: doc.parentId ?? null,
+        policy,
+        policyLoad: settings.policyLoad as PolicyLoad,
+        policyLoadFormat:
+          (settings.policyLoadFormat as DocumentLoadFormat | null) ??
+          policy?.context?.policyLoadFormat ??
+          DocumentLoadFormat.RAW,
+        policyLoadPosition: settings.policyLoadPosition,
+        policyLoadRule: settings.policyLoadRule,
+        sourceType: doc.sourceType,
+        templateId: settings.templateId ?? null,
+        title: doc.title ?? doc.filename ?? '',
+        updatedAt: settings.updatedAt,
+      };
       return {
         ...item,
         ...deriveAgentDocumentFields(item),

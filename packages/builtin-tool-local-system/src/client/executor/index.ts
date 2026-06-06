@@ -12,12 +12,12 @@ import type {
   RunCommandParams,
   WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
+import { LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 import type { BuiltinToolResult } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 
 import { localFileService } from '@/services/electron/localFileService';
 
-import { LocalSystemExecutionRuntime } from '../../ExecutionRuntime';
 import { LocalSystemIdentifier } from '../../types';
 import { resolveArgsWithScope } from '../../utils/path';
 

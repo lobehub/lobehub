@@ -9,6 +9,7 @@ const mockEnv = vi.hoisted(() => ({
 }));
 
 const mockClient = vi.hoisted(() => ({
+  executeMcpCall: vi.fn(),
   executeMessageApi: vi.fn(),
   executeToolCall: vi.fn(),
   getDeviceSystemInfo: vi.fn(),
@@ -286,6 +287,73 @@ describe('DeviceProxy', () => {
       expect(result).toEqual({
         content: 'Device tool call error: string error',
         error: 'string error',
+        success: false,
+      });
+    });
+  });
+
+  describe('executeMcpCall', () => {
+    const mcpCall = {
+      apiName: 'getStock',
+      arguments: '{"symbol":"AAPL"}',
+      deviceId: 'dev-1',
+      identifier: 'kimi-datasource',
+      params: {
+        args: ['stock-mcp'],
+        command: 'npx',
+        env: { TOKEN: 'secret' },
+        name: 'kimi-datasource',
+        type: 'stdio' as const,
+      },
+      userId: 'user-1',
+    };
+
+    it('should return error when not configured', async () => {
+      const proxy = new DeviceProxy();
+      const result = await proxy.executeMcpCall(mcpCall);
+
+      expect(result).toEqual({
+        content: 'Device Gateway is not configured',
+        error: 'GATEWAY_NOT_CONFIGURED',
+        success: false,
+      });
+    });
+
+    it('should forward the mcp call with default timeout', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      const expected = { content: 'stock data', state: { rows: 3 }, success: true };
+      mockClient.executeMcpCall.mockResolvedValue(expected);
+
+      const proxy = new DeviceProxy();
+      const result = await proxy.executeMcpCall(mcpCall);
+
+      expect(result).toEqual(expected);
+      expect(mockClient.executeMcpCall).toHaveBeenCalledWith({ ...mcpCall, timeout: 30_000 });
+    });
+
+    it('should use custom timeout', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      mockClient.executeMcpCall.mockResolvedValue({ content: 'ok', success: true });
+
+      const proxy = new DeviceProxy();
+      await proxy.executeMcpCall(mcpCall, 60_000);
+
+      expect(mockClient.executeMcpCall).toHaveBeenCalledWith({ ...mcpCall, timeout: 60_000 });
+    });
+
+    it('should return error result on exception', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      mockClient.executeMcpCall.mockRejectedValue(new Error('connection refused'));
+
+      const proxy = new DeviceProxy();
+      const result = await proxy.executeMcpCall(mcpCall);
+
+      expect(result).toEqual({
+        content: 'Device MCP call error: connection refused',
+        error: 'connection refused',
         success: false,
       });
     });

@@ -59,15 +59,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextSecondary};
   `,
   value: css`
-    padding-block: 10px;
-    padding-inline: 12px;
-    border-radius: 10px;
-
     font-size: 14px;
     font-weight: 500;
     color: ${cssVar.colorText};
-
-    background: ${cssVar.colorFillQuaternary};
   `,
 }));
 

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as ContextEngineering from '@/server/modules/Mecha/ContextEngineering';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
+import { ModelEmptyError } from '../ModelEmptyError';
 import { createRuntimeExecutors, type RuntimeExecutorContext } from '../RuntimeExecutors';
 
 const mockCreateCompressionGroup = vi.fn();
@@ -30,7 +31,13 @@ const mockBuiltinModels = vi.hoisted(() => [
 // Mock dependencies
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn().mockResolvedValue({
-    chat: vi.fn().mockResolvedValue(new Response('done')),
+    // Emit a minimal non-empty completion so the call_llm empty-completion
+    // guard doesn't treat the default mock as a "gave up" turn and
+    // throw ModelEmptyError. Tests that exercise real output override this.
+    chat: vi.fn().mockImplementation(async (_payload: any, options: any) => {
+      await options?.callback?.onText?.('done');
+      return new Response('done');
+    }),
   }),
 }));
 
@@ -60,6 +67,13 @@ vi.mock('@/business/client/model-bank/loadModels', () => ({
 // model-bank is a TypeScript source file that cannot be dynamically imported in vitest
 vi.mock('model-bank', () => ({
   LOBE_DEFAULT_MODEL_LIST: mockBuiltinModels,
+}));
+
+// klavisEnv uses @t3-oss/env-nextjs which throws in jsdom (treats it as client context)
+vi.mock('@/config/klavis', () => ({
+  getKlavisConfig: vi.fn(),
+  getServerKlavisApiKey: vi.fn().mockReturnValue(undefined),
+  klavisEnv: { KLAVIS_API_KEY: undefined },
 }));
 
 describe('RuntimeExecutors', () => {
@@ -382,6 +396,84 @@ describe('RuntimeExecutors', () => {
           role: 'assistant',
           tool_calls: [expect.objectContaining({ id: 'call_1' })],
         }),
+      );
+    });
+
+    it('retries empty completions on the branded provider then throws ModelEmptyError', async () => {
+      // A "gave up" turn: no onText / onThinking / onToolsCalling and ~0 output
+      // tokens — mirrors the empty completion repro (provider=lobehub, `out=1 token`).
+      // The branded provider has 0 general retries, but empty completions get a
+      // dedicated budget so the request is still re-issued before failing.
+      vi.useFakeTimers();
+      try {
+        const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+          await options?.callback?.onCompletion?.({
+            usage: { totalInputTokens: 100, totalOutputTokens: 1, totalTokens: 101 },
+          });
+          return new Response('done');
+        });
+        // initModelRuntimeFromDB resolves once before the retry loop; the same
+        // empty mockChat is then re-invoked on every attempt.
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+        const executors = createRuntimeExecutors(ctx);
+        const state = createMockState();
+
+        const promise = executors.call_llm!(
+          {
+            payload: {
+              messages: [{ content: 'Hello', role: 'user' }],
+              model: 'deepseek-v4-pro',
+              provider: 'lobehub',
+              tools: [],
+            },
+            type: 'call_llm' as const,
+          },
+          state,
+        );
+        // Drive the retry backoff sleeps to completion.
+        const settled = expect(promise).rejects.toBeInstanceOf(ModelEmptyError);
+        await vi.runAllTimersAsync();
+        // Must throw (so the harness records a readable error state) instead of
+        // silently finalizing to a completion with a blank assistant message.
+        await settled;
+        // EMPTY_COMPLETION_MAX_RETRIES (2) retries → 3 total attempts.
+        expect(mockChat).toHaveBeenCalledTimes(3);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does NOT treat a content-bearing completion as empty', async () => {
+      // Empty output-token usage but real text content — a legitimate reply,
+      // must not trip the empty-completion guard.
+      const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+        await options?.callback?.onText?.('Here is your answer.');
+        await options?.callback?.onCompletion?.({
+          usage: { totalInputTokens: 10, totalOutputTokens: 0, totalTokens: 10 },
+        });
+        return new Response('done');
+      });
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const result = await executors.call_llm!(
+        {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'deepseek-v4-pro',
+            provider: 'lobehub',
+            tools: [],
+          },
+          type: 'call_llm' as const,
+        },
+        state,
+      );
+
+      expect(result.newState.messages.at(-1)).toEqual(
+        expect.objectContaining({ content: 'Here is your answer.', role: 'assistant' }),
       );
     });
 
@@ -913,7 +1005,10 @@ describe('RuntimeExecutors', () => {
       let mockChat: ReturnType<typeof vi.fn>;
 
       beforeEach(() => {
-        mockChat = vi.fn().mockResolvedValue(new Response('done'));
+        mockChat = vi.fn().mockImplementation(async (_payload: any, options: any) => {
+          await options?.callback?.onText?.('done');
+          return new Response('done');
+        });
         vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
       });
 
@@ -1029,7 +1124,10 @@ describe('RuntimeExecutors', () => {
       let engineSpy: any;
 
       beforeEach(() => {
-        mockChat = vi.fn().mockResolvedValue(new Response('done'));
+        mockChat = vi.fn().mockImplementation(async (_payload: any, options: any) => {
+          await options?.callback?.onText?.('done');
+          return new Response('done');
+        });
         vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ chat: mockChat } as any);
         engineSpy = vi.spyOn(ContextEngineering, 'serverMessagesEngine');
       });
@@ -3141,6 +3239,74 @@ describe('RuntimeExecutors', () => {
           toolCallId: 'tool-call-1',
         }),
       );
+    });
+  });
+
+  describe('resolve_blocked_tools executor', () => {
+    const createMockState = (overrides?: Partial<AgentState>): AgentState => ({
+      cost: createMockCost(),
+      createdAt: new Date().toISOString(),
+      lastModified: new Date().toISOString(),
+      maxSteps: 100,
+      messages: [],
+      metadata: {
+        agentId: 'agent-123',
+        threadId: 'thread-123',
+        topicId: 'topic-123',
+      },
+      operationId: 'op-123',
+      status: 'running',
+      stepCount: 0,
+      toolManifestMap: {},
+      usage: createMockUsage(),
+      ...overrides,
+    });
+
+    it('should create rejected tool messages and continue execution', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolsCalling: [
+            {
+              apiName: 'bash',
+              arguments: '{"command":"rm -rf /"}',
+              id: 'tool-call-1',
+              identifier: 'bash',
+              type: 'builtin' as const,
+            },
+          ],
+        },
+        type: 'resolve_blocked_tools' as const,
+      };
+
+      const result = await executors.resolve_blocked_tools!(instruction, state);
+
+      expect(mockToolExecutionService.executeTool).not.toHaveBeenCalled();
+      expect(mockMessageModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'agent-123',
+          content: 'Blocked by security/privacy.',
+          parentId: 'assistant-msg-123',
+          pluginError: 'blocked_by_security_privacy',
+          pluginIntervention: {
+            rejectedReason: 'blocked_by_security_privacy',
+            status: 'rejected',
+          },
+          role: 'tool',
+          threadId: 'thread-123',
+          tool_call_id: 'tool-call-1',
+          topicId: 'topic-123',
+        }),
+      );
+      expect(result.newState.status).toBe('running');
+      expect(result.nextContext?.phase).toBe('tools_batch_result');
+      expect(result.nextContext?.payload).toMatchObject({
+        parentMessageId: 'msg-123',
+        toolCount: 1,
+      });
     });
   });
 

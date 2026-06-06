@@ -42,8 +42,7 @@ describe('useCategory', () => {
       useUserStore.setState({ isSignedIn: true });
     });
 
-    const mockOpenChangelogModal = vi.fn();
-    const { result } = renderHook(() => useCategory(mockOpenChangelogModal), { wrapper });
+    const { result } = renderHook(() => useCategory(), { wrapper });
 
     act(() => {
       const items = result.current;
@@ -60,8 +59,7 @@ describe('useCategory', () => {
       useUserStore.setState({ isSignedIn: false });
     });
 
-    const mockOpenChangelogModal = vi.fn();
-    const { result } = renderHook(() => useCategory(mockOpenChangelogModal), { wrapper });
+    const { result } = renderHook(() => useCategory(), { wrapper });
 
     act(() => {
       const items = result.current;

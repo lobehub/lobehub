@@ -59,4 +59,31 @@ describe('agent signal sources', () => {
     });
     expect(result.trigger.windowEventCount).toBe(2);
   });
+
+  it('carries the selfIteration payload through the agent.execution.completed renderer', async () => {
+    const { buildSource } = await import('..');
+
+    // Compact completion payload the CompletionLifecycle attaches; the renderer
+    // rebuilds the payload from an allow-list, so this field is the one that
+    // regressed — it MUST survive for the completion policy to project receipts.
+    const selfIteration = {
+      artifacts: [],
+      marker: { kind: 'memory', sourceId: 'src_1', topicId: 'topic_1' },
+      mutations: [
+        { apiName: 'writeMemory', data: { kind: 'mutation', status: 'applied' }, kind: 'mutation' },
+      ],
+      userId: 'user_1',
+    };
+
+    const built = buildSource({
+      payload: { agentId: 'agent_1', operationId: 'op_1', selfIteration, topicId: 'topic_1' },
+      scopeKey: 'topic:topic_1',
+      sourceId: 'op_1:complete:done',
+      sourceType: 'agent.execution.completed',
+      timestamp: 1_710_000_000_000,
+    });
+
+    expect(built.sourceType).toBe('agent.execution.completed');
+    expect(built.payload.selfIteration).toEqual(selfIteration);
+  });
 });

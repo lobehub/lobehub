@@ -78,6 +78,31 @@ export const logTimingSink = (
   timing?.log(event, metadata);
 };
 
+export const markTimingStageDone = (
+  logger: TimingLogger,
+  context: TimingContext | undefined,
+  stage: string,
+  metadata?: TimingMetadata,
+) => {
+  if (!context) return;
+
+  logTiming(logger, context, `${stage}:done`, {
+    ...metadata,
+    stageMs: 0,
+  });
+};
+
+export const markTimingSinkStageDone = (
+  timing: TimingSink | undefined,
+  stage: string,
+  metadata?: TimingMetadata,
+) => {
+  logTimingSink(timing, `${stage}:done`, {
+    ...metadata,
+    stageMs: 0,
+  });
+};
+
 export const runTimedStage = async <T>(
   logger: TimingLogger,
   context: TimingContext | undefined,
@@ -161,6 +186,8 @@ export const createTimingHelpers = (namespace: string) => {
     logger,
     logTiming: (context: TimingContext | undefined, event: string, metadata?: TimingMetadata) =>
       logTiming(logger, context, event, metadata),
+    markStageDone: (context: TimingContext | undefined, stage: string, metadata?: TimingMetadata) =>
+      markTimingStageDone(logger, context, stage, metadata),
     runTimedStage: <T>(
       context: TimingContext | undefined,
       stage: string,

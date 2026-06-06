@@ -9,7 +9,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { createProcedurePolicyOptions as createProcedurePolicyOptionsFixture } from '@/server/services/agentSignal/procedure';
 import type { SelfReflectionReviewContext } from '@/server/services/agentSignal/services/selfIteration/reflection/handler';
 import type { NightlyReviewContext } from '@/server/services/agentSignal/services/selfIteration/review/collect';
-import { ReviewRunStatus, Scope } from '@/server/services/agentSignal/services/selfIteration/types';
 import type { AgentSignalPolicyStateStore } from '@/server/services/agentSignal/store/types';
 import type { RunAgentSignalWorkflowDeps } from '@/server/workflows/agentSignal/run';
 import { runAgentSignalWorkflow } from '@/server/workflows/agentSignal/run';
@@ -820,15 +819,8 @@ describe('runAgentSignalWorkflow', () => {
           userId,
         }),
       ),
-      runSelfReviewAgent: vi.fn(async () => ({
-        execution: { actions: [], status: ReviewRunStatus.Completed },
-        projectionPlan: {
-          actions: [],
-          plannerVersion: 'test',
-          reviewScope: Scope.Nightly,
-          summary: 'Noop',
-        },
-      })),
+      db,
+      dispatch: vi.fn(async () => ({ operationId: 'op-self-iter-1', topicId: 'topic-1' })),
     };
     const createSelfReviewPolicyOptions: NonNullable<
       RunAgentSignalWorkflowDeps['createSelfReviewPolicyOptions']
@@ -895,21 +887,8 @@ describe('runAgentSignalWorkflow', () => {
       acquireReviewGuard: vi.fn(async () => true),
       canRunReview: vi.fn(async () => true),
       collectContext: vi.fn(async () => selfReflectionContext),
-      executeSelfIteration: vi.fn(async () => ({
-        actions: [],
-        content: 'Noop',
-        ideas: [],
-        intents: [],
-        status: ReviewRunStatus.Completed,
-        stepCount: 0,
-        toolCalls: [],
-        usage: [],
-        writeOutcomes: [],
-      })),
-      model: 'gpt-test',
-      modelRuntime: { chat: vi.fn() },
-      tools: {} as never,
-      writeReceipt: vi.fn(async () => {}),
+      db,
+      dispatch: vi.fn(async () => ({ operationId: 'op-self-iter-1', topicId: 'topic-1' })),
     };
     const createSelfReflectionPolicyOptions: NonNullable<
       RunAgentSignalWorkflowDeps['createSelfReflectionPolicyOptions']
@@ -968,21 +947,9 @@ describe('runAgentSignalWorkflow', () => {
     const selfFeedbackIntentPolicyOptions = {
       acquireReviewGuard: vi.fn(async () => true),
       canRunReview: vi.fn(async () => true),
-      executeSelfIteration: vi.fn(async () => ({
-        actions: [],
-        content: 'Noop',
-        ideas: [],
-        intents: [],
-        status: ReviewRunStatus.Completed,
-        stepCount: 0,
-        toolCalls: [],
-        usage: [],
-        writeOutcomes: [],
-      })),
-      model: 'gpt-test',
-      modelRuntime: { chat: vi.fn() },
-      tools: {} as never,
-      writeReceipt: vi.fn(async () => {}),
+      db,
+      dispatch: vi.fn(async () => ({ operationId: 'op-self-iter-1', topicId: 'topic-1' })),
+      enrichEvidence: vi.fn(async () => ({ evidenceRefs: [] })),
     };
     const createSelfFeedbackIntentPolicyOptions: NonNullable<
       RunAgentSignalWorkflowDeps['createSelfFeedbackIntentPolicyOptions']

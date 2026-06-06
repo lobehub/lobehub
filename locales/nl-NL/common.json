@@ -234,7 +234,7 @@
   "exportType.allAgentWithMessage": "Alle agents en berichten exporteren",
   "exportType.globalSetting": "Globale instellingen exporteren",
   "feedback": "Feedback",
-  "feedback.emailContact": "Je kunt ons ook e-mailen op {{email}}",
+  "feedback.emailContact": "Je kunt ons ook e-mailen op <email>{{email}}</email>",
   "feedback.errors.fileTooLarge": "Bestand is groter dan 5MB",
   "feedback.errors.submitFailed": "Verzenden mislukt. Probeer het opnieuw.",
   "feedback.errors.teamNotFound": "Configuratiefout",

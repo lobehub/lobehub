@@ -8,6 +8,34 @@ const stepfunChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      vision: true,
+      video: true,
+    },
+    contextWindowTokens: 256_000,
+    description:
+      'The flagship multimodal reasoning model from StepFun. Building on the high-speed reasoning and tool-calling capabilities of step-3.5-flash, it adds native multimodal input support, enabling direct understanding of images and video content without relying on visual MCPs or additional vision models. The model supports three reasoning levels (low / medium / high), making it a fast and reliable choice for agent workflows, coding tasks, and multimodal applications.',
+    displayName: 'Step 3.7 Flash',
+    enabled: true,
+    id: 'step-3.7-flash',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.27, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1.35, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8.1, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['reasoningEffort'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
     },
     contextWindowTokens: 256_000,
     description:
@@ -22,6 +50,10 @@ const stepfunChatModels: AIChatModelCard[] = [
         { name: 'textInput', rate: 0.7, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
       ],
+    },
+    settings: {
+      extendParams: ['step3_5ReasoningEffort'],
+      searchImpl: 'params',
     },
     type: 'chat',
   },
@@ -55,7 +87,6 @@ const stepfunChatModels: AIChatModelCard[] = [
     description:
       'This model has strong visual perception and complex reasoning, accurately handling cross-domain knowledge understanding, math-vision cross analysis, and a wide range of everyday visual analysis tasks.',
     displayName: 'Step 3',
-    enabled: true,
     id: 'step-3',
     pricing: {
       currency: 'CNY',
@@ -93,9 +124,7 @@ const stepfunChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      // functionCall: true,
       reasoning: true,
-      // search: true,
       vision: true,
     },
     contextWindowTokens: 100_000,
@@ -111,9 +140,6 @@ const stepfunChatModels: AIChatModelCard[] = [
         { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    // settings: {
-    //   searchImpl: 'params',
-    // },
     type: 'chat',
   },
   {

@@ -11,7 +11,7 @@ import {
   formatMoveResults,
   formatRenameResult,
   formatWriteResult,
-} from '@lobechat/prompts';
+} from '@lobechat/prompts/fileSystem';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {

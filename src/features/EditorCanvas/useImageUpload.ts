@@ -2,27 +2,31 @@ import { useCallback } from 'react';
 
 import { useFileStore } from '@/store/file';
 
+import { registerAttachment } from './attachmentRegistry';
+
 /**
- * Shared hook for editor image upload.
- * Returns a handler compatible with ReactImagePlugin's `handleUpload` signature.
+ * Upload handler compatible with `@lobehub/editor`'s `ReactImagePlugin` /
+ * `ReactFilePlugin` `handleUpload` signature. Side effect: registers the
+ * resulting `url → fileId` pair so callers can recover fileIds from the
+ * editor state later (see `attachmentRegistry`).
  */
-export const useImageUpload = () => {
+const useEditorAttachmentUpload = (skipCheckFileType: boolean) => {
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
 
   return useCallback(
     async (file: File): Promise<{ url: string }> => {
-      try {
-        const result = await uploadWithProgress({
-          file,
-          skipCheckFileType: false,
-          source: 'page-editor',
-        });
-        if (!result) throw new Error('Upload returned empty result');
-        return { url: result.url };
-      } catch (error) {
-        throw new Error('Image upload failed', { cause: error });
-      }
+      const result = await uploadWithProgress({
+        file,
+        skipCheckFileType,
+        source: 'page-editor',
+      });
+      if (!result) throw new Error('Upload returned empty result');
+      registerAttachment(result.url, result.id);
+      return { url: result.url };
     },
-    [uploadWithProgress],
+    [uploadWithProgress, skipCheckFileType],
   );
 };
+
+export const useImageUpload = () => useEditorAttachmentUpload(false);
+export const useFileUpload = () => useEditorAttachmentUpload(true);
