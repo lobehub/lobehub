@@ -1,5 +1,5 @@
 import {
-  fixedDisplayToolIds,
+  alwaysOnToolIds,
   manualModeExcludeToolIds,
   runtimeManagedToolIds,
 } from '@lobechat/builtin-tools';
@@ -240,7 +240,7 @@ const MANUAL_MODE_EXCLUDE_TOOL_IDS = new Set(manualModeExcludeToolIds);
  *
  * These tools are normally `hidden` (and some are `discoverable: false`), so they never
  * appear in `metaList` / `metaListIncludingHidden`. Here we read them directly from
- * `builtinTools` by identifier, preserving the `fixedDisplayToolIds` order and dropping any
+ * `builtinTools` by identifier, preserving the `alwaysOnToolIds` order and dropping any
  * that aren't available in the current environment.
  *
  * The list must match what the engine actually enables: in manual skill-activate mode the
@@ -251,7 +251,7 @@ const MANUAL_MODE_EXCLUDE_TOOL_IDS = new Set(manualModeExcludeToolIds);
 const fixedDisplayMetaList =
   ({ isManualMode }: { isManualMode: boolean } = { isManualMode: false }) =>
   (s: ToolStoreState): LobeToolMeta[] =>
-    fixedDisplayToolIds
+    alwaysOnToolIds
       .filter((id) => !(isManualMode && MANUAL_MODE_EXCLUDE_TOOL_IDS.has(id)))
       .map((id) => s.builtinTools.find((tool) => tool.identifier === id))
       .filter((tool): tool is ToolStoreState['builtinTools'][number] => !!tool)

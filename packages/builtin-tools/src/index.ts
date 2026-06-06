@@ -62,6 +62,10 @@ export const defaultToolIds = [
  * mode (`enableAgentMode === false`) drops `alwaysOnToolIds` entirely. In manual
  * skill-activate mode the discovery tools in `manualModeExcludeToolIds` are still removed
  * from the defaults before the enable checker runs, so they end up disabled there.
+ *
+ * This list is also the source for the chat-input Tools popover's read-only "Pinned"
+ * section (`builtinToolSelectors.fixedDisplayMetaList`), so users can see what the app
+ * keeps active — that selector applies the same manual-mode exclusion to stay truthful.
  */
 export const alwaysOnToolIds = [
   LobeAgentManifest.identifier,
@@ -69,19 +73,6 @@ export const alwaysOnToolIds = [
   SkillsManifest.identifier,
   SkillStoreManifest.identifier,
 ];
-
-/**
- * Tool IDs the application force-enables (always on, not user-controllable) that should
- * be surfaced READ-ONLY in the chat-input Tools popover's "Pinned" section, so users can
- * see what the app keeps active for every conversation. Unlike user-pinned plugins, these
- * have no toggle — their on state is owned by the runtime, not the agent's `plugins` array.
- *
- * Derived from `alwaysOnToolIds` (single source of truth) so the display can't drift from
- * what the engine actually enables. Consumers must still drop `manualModeExcludeToolIds`
- * when the agent is in manual skill-activate mode — those tools are excluded from the
- * defaults there and therefore not actually on.
- */
-export const fixedDisplayToolIds = alwaysOnToolIds;
 
 /**
  * Tool IDs to exclude from defaults when in manual skill-activate mode.
