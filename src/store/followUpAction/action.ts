@@ -1,5 +1,6 @@
 import type { FollowUpChip, FollowUpHint, FollowUpModelConfig } from '@lobechat/types';
 
+import { aiChatService } from '@/services/aiChat';
 import { followUpActionService } from '@/services/followUpAction';
 import { type StoreSetter } from '@/store/types';
 
@@ -72,6 +73,10 @@ export class FollowUpActionImpl {
     const existing = this.#get().slots[conversationKey];
     if (existing?.status === 'loading') return;
 
+    // A ready-but-unacted chip set being replaced by a new turn is a dismissal.
+    // (Normally `onBeforeSendMessage` clears first, so this is a belt-and-braces
+    // guard for paths that fetch without an explicit clear.)
+    this.#maybeRecordDismissal(existing);
     existing?.abortController?.abort();
 
     const controller = new AbortController();
@@ -116,6 +121,7 @@ export class FollowUpActionImpl {
         chips: result.chips,
         messageId: result.messageId,
         status: 'ready',
+        tracingId: result.tracingId,
       },
       'fetchFor:ready',
     );
@@ -124,6 +130,7 @@ export class FollowUpActionImpl {
   abort = (conversationKey: string): void => {
     const slot = this.#get().slots[conversationKey];
     if (!slot) return;
+    this.#maybeRecordDismissal(slot);
     slot.abortController?.abort();
     writeSlot(this.#set, conversationKey, { ...IDLE_SLOT }, 'abort');
   };
@@ -131,6 +138,7 @@ export class FollowUpActionImpl {
   clear = (conversationKey: string): void => {
     const slot = this.#get().slots[conversationKey];
     if (!slot) return;
+    this.#maybeRecordDismissal(slot);
     slot.abortController?.abort();
     removeSlot(this.#set, conversationKey, 'clear');
   };
@@ -138,6 +146,47 @@ export class FollowUpActionImpl {
   consume = (conversationKey: string, chip: FollowUpChip): void => {
     void chip;
     this.clear(conversationKey);
+  };
+
+  /**
+   * Report that the user clicked a chip — a positive feedback signal for the
+   * generated suggestion set. Marks the slot so the subsequent clear-on-send
+   * doesn't additionally fire a dismissal for the same chips.
+   */
+  recordChipClick = (conversationKey: string, chipIndex: number): void => {
+    const slot = this.#get().slots[conversationKey];
+    if (!slot || slot.status !== 'ready' || !slot.tracingId || slot.feedbackDone) return;
+
+    void aiChatService
+      .recordTracingFeedback({
+        data: { chipIndex, totalChips: slot.chips.length },
+        signal: 'positive',
+        source: 'followup_clicked',
+        tracingId: slot.tracingId,
+      })
+      .catch((err) => console.warn('[FollowUp] recordFeedback (clicked) failed', err));
+
+    writeSlot(this.#set, conversationKey, { ...slot, feedbackDone: true }, 'recordChipClick');
+  };
+
+  /**
+   * Fire a `negative` dismissal for a chip set the user saw but never clicked —
+   * the suggestions weren't compelling. Together with `followup_clicked` this
+   * makes chip click-through-rate computable per prompt version. No-op unless
+   * the slot was actually shown (`ready`), carries a tracingId, and hasn't
+   * already produced a click signal.
+   */
+  #maybeRecordDismissal = (slot: FollowUpActionSlot | undefined): void => {
+    if (!slot || slot.status !== 'ready' || !slot.tracingId || slot.feedbackDone) return;
+
+    void aiChatService
+      .recordTracingFeedback({
+        data: { totalChips: slot.chips.length },
+        signal: 'negative',
+        source: 'followup_dismissed',
+        tracingId: slot.tracingId,
+      })
+      .catch((err) => console.warn('[FollowUp] recordFeedback (dismissed) failed', err));
   };
 }
 

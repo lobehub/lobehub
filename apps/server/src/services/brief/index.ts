@@ -251,6 +251,64 @@ export class BriefService {
       }
     }
 
+    // Implicit feedback for the LLM that synthesized this brief. Only briefs
+    // carrying a `tracingId` (task-synthesized ones) participate — others (e.g.
+    // signal briefs) simply have nothing to score.
+    await this.recordBriefFeedback(brief, options);
+
     return brief;
+  }
+
+  /**
+   * Translate the user's resolve action into a feedback signal against the
+   * brief's source generation. Fire-and-forget at the service boundary — a
+   * tracing write must never break brief resolution, so failures are swallowed.
+   */
+  private async recordBriefFeedback(
+    brief: BriefItem,
+    options?: BriefResolveOptions,
+  ): Promise<void> {
+    const tracingId = brief.metadata?.tracingId;
+    if (!tracingId) return;
+
+    const action = options?.action;
+    const { signal, source } = ((): {
+      signal: 'positive' | 'negative' | 'neutral';
+      source: string;
+    } => {
+      switch (action) {
+        case 'approve': {
+          return { signal: 'positive', source: 'brief_approved' };
+        }
+        case 'feedback': {
+          return { signal: 'negative', source: 'brief_feedback' };
+        }
+        case 'ignore': {
+          return { signal: 'negative', source: 'brief_ignored' };
+        }
+        // acknowledge / retry / dismiss / unknown — neither a clear accept nor
+        // reject of the brief's content.
+        default: {
+          return { signal: 'neutral', source: `brief_${action ?? 'resolved'}` };
+        }
+      }
+    })();
+
+    try {
+      // Lazy-load to keep the tracing service out of BriefService's static
+      // import graph, mirroring the TaskRunner lazy-import above.
+      const { getLLMGenerationTracingService } =
+        await import('@/server/services/llmGenerationTracing');
+      await getLLMGenerationTracingService().recordFeedback(this.userId, tracingId, {
+        data: {
+          briefType: brief.type,
+          hasComment: !!options?.comment,
+        },
+        signal,
+        source,
+      });
+    } catch (error) {
+      console.warn('[brief:resolve] recordFeedback failed', error);
+    }
   }
 }
