@@ -455,15 +455,6 @@ interface SubagentRunState {
    */
   lastChainParentId: string;
   /**
-   * Most recent non-zero per-turn `usage.totalTokens` seen for this
-   * subagent. CC's per-turn `message.usage` already includes the full
-   * prior context, so the LAST turn's value (not a sum) is what the
-   * inspector chip surfaces — tracked here as turns land so `finalize`
-   * can roll it onto `thread.metadata.totalTokens` without re-reading the
-   * (terminal, usage-less) `currentAssistantMsgId`.
-   */
-  lastTurnTokens?: number;
-  /**
    * Run-lifetime set of every inner tool_call_id this subagent has ever
    * persisted into its thread. Unlike `state.persistedIds`, which is
    * turn-scoped and wiped when `currentSubagentMessageId` advances, this
@@ -486,12 +477,6 @@ interface SubagentRunState {
    */
   pendingFlushTarget?: string;
   /**
-   * ISO timestamp the spawn's Thread was created — mirrors the
-   * `metadata.startedAt` written at create time so `finalize` can derive
-   * `duration` without re-reading the Thread row.
-   */
-  startedAt: string;
-  /**
    * Per-subagent-assistant persistence state (tools[] payloads +
    * dedupe). Reset on every turn boundary so each in-thread assistant
    * has its own tools[].
@@ -504,15 +489,6 @@ interface SubagentRunState {
    * once per spawn alongside the Thread row + the per-spawn sub-op.
    */
   stream: SubagentStoreDispatcher;
-  /**
-   * Model the subagent runs on, pinned from the first per-turn
-   * `turn_metadata.model`. Subagents fix a single model for the whole run,
-   * so the first value holds; rolled onto `thread.metadata.model` at
-   * finalize for the cold-load chip tooltip.
-   */
-  subagentModel?: string;
-  /** Subagent variant (CC's `subagent_type`), preserved onto `thread.metadata` at finalize. */
-  subagentType?: string;
   /**
    * Per-spawn sub-operation id. Created via `startOperation` with
    * `parentOperationId` = the main run's op + `context.threadId` set, so
@@ -688,11 +664,9 @@ const ensureSubagentRun = async (
       lastBatchToolMsgIds: [],
       lastChainParentId: firstAssistantId,
       lifetimeToolCallIds: new Set(),
-      startedAt,
       state: { payloads: [], persistedIds: new Set() },
       stream,
       subOperationId,
-      subagentType: spawnMetadata?.subagentType,
       threadId,
     };
     subagentRuns.set(subagentCtx.parentToolCallId, run);
@@ -1001,32 +975,16 @@ const finalizeSubagentRun = async ({
     }
   }
 
-  // Roll subagent stats onto `thread.metadata` so the inspector chip survives
-  // a cold-load / historical view (where the child messages aren't hydrated
-  // and the live aggregation has nothing to read). Mirrors the server-side
-  // `HeterogeneousPersistenceHandler.finalizeSubagentRun` rollup. `totalTokens`
-  // comes off the run's tracked last-non-zero turn value rather than the
-  // (terminal, usage-less) `currentAssistantMsgId`. `updateThread` REPLACES the
-  // metadata column, so re-send the create-time peer fields alongside the
-  // totals. Best-effort — a failure here must not break finalize.
+  // Mark the subagent Thread complete (created as `Processing`). The chip's
+  // tool-count / token / model metrics are NOT written here — they're derived
+  // on read from the child messages (live: `aggregateSubagentMetrics` over
+  // `dbMessagesMap`; cold-load: the same aggregation in SQL via
+  // `threadModel.queryByTopicId`), so finalize owns only the status transition.
+  // Best-effort — a failure here must not break finalize.
   try {
-    const completedAt = new Date().toISOString();
-    const duration = run.startedAt ? Date.now() - new Date(run.startedAt).getTime() : undefined;
-    await threadService.updateThread(run.threadId, {
-      metadata: {
-        completedAt,
-        duration,
-        sourceToolCallId: parentToolCallId,
-        startedAt: run.startedAt,
-        subagentType: run.subagentType,
-        totalToolCalls: run.lifetimeToolCallIds.size,
-        ...(run.lastTurnTokens !== undefined && { totalTokens: run.lastTurnTokens }),
-        ...(run.subagentModel && { model: run.subagentModel }),
-      },
-      status: ThreadStatus.Active,
-    });
+    await threadService.updateThread(run.threadId, { status: ThreadStatus.Active });
   } catch (err) {
-    console.error('[HeterogeneousAgent] Failed to roll up subagent thread metadata:', err);
+    console.error('[HeterogeneousAgent] Failed to mark subagent thread complete:', err);
   }
 
   completeSubOp(run.subOperationId);
@@ -1574,28 +1532,19 @@ export const executeHeterogeneousAgent = async (
         const turnUsage = event.data.usage;
 
         if (subagentCtx) {
-          // Subagent-tagged usage: route the write onto the subagent's
-          // in-thread assistant rather than the main agent's. The Inspector
-          // chip derives its token total live from these per-message
-          // `metadata.usage` snapshots, so no running sum on `run` is
-          // needed. Don't touch the MAIN agent's `lastModel` / `lastProvider`
-          // — those are main-agent step state and would contaminate the next
-          // main turn's create. The subagent's own model/provider DO get
-          // written onto the in-thread assistant (and pinned on the run) so
-          // the chip tooltip can name the model.
+          // Subagent-tagged usage: write it (plus the subagent's own
+          // model/provider) onto the subagent's in-thread assistant — NOT the
+          // main agent's. The chip derives its totals from these per-message
+          // `usage` snapshots (live + cold-load both aggregate the messages),
+          // so nothing is tracked on the run. Don't touch the MAIN agent's
+          // `lastModel` / `lastProvider` — those are main-agent step state and
+          // would contaminate the next main turn's create.
           const turnModel = event.data.model as string | undefined;
           const turnProvider = event.data.provider as string | undefined;
           if (turnUsage) {
             persistQueue = persistQueue.then(async () => {
               const run = subagentRuns.get(subagentCtx.parentToolCallId);
               if (!run) return;
-              // Track the last non-zero turn total + pin the model for the
-              // finalize-time `thread.metadata` rollup (cold-load chip).
-              const turnTokens = turnUsage.totalTokens;
-              if (typeof turnTokens === 'number' && turnTokens > 0) {
-                run.lastTurnTokens = turnTokens;
-              }
-              if (turnModel && !run.subagentModel) run.subagentModel = turnModel;
 
               const update = {
                 metadata: { usage: turnUsage },

@@ -14,6 +14,7 @@ import path from 'node:path';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import type { AgentEventAdapter } from '@lobechat/heterogeneous-agents';
 import { createAdapter } from '@lobechat/heterogeneous-agents';
+import { ThreadStatus } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createGatewayEventHandler } from '../gatewayEventHandler';
@@ -2428,11 +2429,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(finalizeWrite).toBeDefined();
     });
 
-    it('rolls subagent tool count + tokens + model onto thread.metadata on finalize', async () => {
-      // Cold-load / historical view reads the chip metrics off `thread.metadata`
-      // (the child messages aren't hydrated). Finalize must roll up the lifetime
-      // tool count, the LAST non-zero turn's totalTokens, and the pinned model —
-      // plus preserve the create-time peer fields the metadata write replaces.
+    it('marks the subagent thread Active on finalize without denormalizing metrics', async () => {
+      // Under read-time derivation the chip metrics (tool count / tokens /
+      // model) are NOT written onto `thread.metadata` at finalize — they're
+      // aggregated from the child messages on read. Finalize only flips the
+      // thread status Processing → Active.
       await runWithEvents([
         ccInit(),
         ccToolUse('msg_main', 'toolu_task', 'Task', {
@@ -2442,7 +2443,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         }),
         ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child', 'Bash', { command: 'ls' }),
         ccSubagentToolResult('toolu_child', 'toolu_task', 'file list'),
-        // Subagent summary turn carrying the authoritative per-turn usage + model.
         {
           message: {
             content: [{ text: 'summary', type: 'text' }],
@@ -2459,19 +2459,10 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       ]);
 
       const threadId = mockCreateThread.mock.calls[0][0].id;
-      const rollup = mockUpdateThread.mock.calls.find(([id]: any) => id === threadId);
-      expect(rollup).toBeDefined();
-
-      const { metadata, status } = rollup![1];
-      expect(metadata.totalToolCalls).toBe(1);
-      expect(metadata.totalTokens).toBe(1200);
-      expect(metadata.model).toBe('claude-opus-4-8');
-      // Create-time peer fields survive the metadata replace.
-      expect(metadata.sourceToolCallId).toBe('toolu_task');
-      expect(metadata.subagentType).toBe('Explore');
-      expect(metadata.startedAt).toBeDefined();
-      expect(metadata.completedAt).toBeDefined();
-      expect(status).toBeDefined();
+      const finalize = mockUpdateThread.mock.calls.find(([id]: any) => id === threadId);
+      expect(finalize).toBeDefined();
+      // Status-only — no metrics denormalized onto metadata.
+      expect(finalize![1]).toEqual({ status: ThreadStatus.Active });
     });
 
     it('writes the subagent model onto the in-thread assistant for the live tooltip', async () => {

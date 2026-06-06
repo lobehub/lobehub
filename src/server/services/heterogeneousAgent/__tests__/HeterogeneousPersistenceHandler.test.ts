@@ -1,5 +1,6 @@
 // @vitest-environment node
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { ThreadStatus } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -929,7 +930,7 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(thread.status).toBeDefined();
     });
 
-    it('rolls subagent tool count + tokens + model onto thread.metadata on finalize', async () => {
+    it('writes subagent usage + model onto the in-thread assistant, and finalize only flips status', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',
         operationId: 'op-1',
@@ -978,20 +979,21 @@ describe('HeterogeneousPersistenceHandler', () => {
 
       const threadId = [...h.threads.keys()][0];
       const thread = h.threads.get(threadId)!;
-      // Rollup totals come off run-tracked state, NOT a re-read of the terminal
-      // assistant (which carries no usage), so the LAST turn's value survives.
-      expect(thread.metadata?.totalToolCalls).toBe(1);
-      expect(thread.metadata?.totalTokens).toBe(15);
-      expect(thread.metadata?.model).toBe('claude-opus-4-8');
-      // Create-time peer fields survive the metadata merge.
+      // Metrics are NOT denormalized onto metadata — derived on read instead.
+      expect(thread.metadata?.totalTokens).toBeUndefined();
+      expect(thread.metadata?.totalToolCalls).toBeUndefined();
+      // Create-time peer fields untouched; finalize only flips status.
       expect(thread.metadata?.sourceToolCallId).toBe('tc-spawn-1');
       expect(thread.metadata?.subagentType).toBe('Explore');
+      expect(thread.status).toBe(ThreadStatus.Active);
 
-      // The in-thread assistant got model written for the live tooltip.
+      // The in-thread assistant got usage + model written — the rows the
+      // read-time aggregation later sums over.
       const threadAssts = [...h.messages.values()].filter(
         (m) => m.threadId === threadId && m.role === 'assistant',
       );
-      expect(threadAssts.some((m) => m.model === 'claude-opus-4-8')).toBe(true);
+      const withUsage = threadAssts.find((m) => m.metadata?.usage?.totalTokens === 15);
+      expect(withUsage?.model).toBe('claude-opus-4-8');
     });
   });
 

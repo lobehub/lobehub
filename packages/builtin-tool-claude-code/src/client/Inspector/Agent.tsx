@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 import { threadSelectors } from '@/store/chat/selectors';
+import { aggregateSubagentMetrics } from '@/utils/subagentMetrics';
 
 import { type AgentArgs, ClaudeCodeApiName } from '../../types';
 import { resolveCCSubagentType } from '../subagentTypes';
@@ -79,18 +80,17 @@ interface SubagentMetrics {
 }
 
 /**
- * Live metrics off the subagent's child messages:
- *  - tool count: count of `role==='tool'` messages
- *  - tokens: the LAST assistant's `metadata.usage.totalTokens`. CC's per-turn
- *    `message.usage` already includes the cumulative input context at that
- *    turn (history grows each turn) plus the turn's output — so summing across
- *    turns double-counts overlap. The final turn's value is what's meaningful
- *    and matches the main agent's message-footer convention.
- *  - model: first assistant message that carries one (subagents pin a single
- *    model for the whole run).
+ * Subagent metrics for the chip, derived from the child messages via the shared
+ * `aggregateSubagentMetrics` (tool count, SUM of every turn's
+ * `usage.totalTokens`, pinned model).
  *
- * Persisted `thread.metadata.total*` written on finalize takes precedence so
- * historical viewers don't have to wait for dbMessagesMap to populate.
+ * Two data sources, ONE rule:
+ *  - **Live** (streaming / still hydrated): aggregate the in-memory child
+ *    messages from `dbMessagesMap`.
+ *  - **Cold-load**: the child messages aren't hydrated, so fall back to the
+ *    `thread.metadata.*` totals the server derives in `threadModel.queryByTopicId`
+ *    — which runs the SAME aggregation in SQL over the SAME rows, so the two
+ *    paths can't diverge.
  */
 const useSubagentMetrics = (toolCallId: string | undefined): SubagentMetrics | null =>
   useChatStore((s) => {
@@ -100,37 +100,17 @@ const useSubagentMetrics = (toolCallId: string | undefined): SubagentMetrics | n
     );
     if (!thread) return null;
 
-    const messages = threadSelectors.getThreadDbMessages(thread.id)(s);
+    const live = aggregateSubagentMetrics(threadSelectors.getThreadDbMessages(thread.id)(s));
 
-    let toolCalls = 0;
-    let lastAsstTokens = 0;
-    let model: string | undefined;
-
-    for (const m of messages) {
-      if (m.role === 'tool') toolCalls += 1;
-      else if (m.role === 'assistant') {
-        // dbMessagesMap holds the raw DB shape — usage lives under
-        // `metadata.usage`. UIChatMessage's normalized top-level `usage`
-        // field only appears in the display-bound messagesMap.
-        const turnTokens = m.metadata?.usage?.totalTokens ?? m.usage?.totalTokens ?? 0;
-        if (turnTokens > 0) lastAsstTokens = turnTokens;
-        if (!model && m.model) model = m.model;
-      }
-    }
-
-    const persistedTokens = thread.metadata?.totalTokens;
-    const persistedToolCalls = thread.metadata?.totalToolCalls;
-    const totalTokens = persistedTokens ?? lastAsstTokens;
-    if (persistedToolCalls !== undefined) toolCalls = persistedToolCalls;
-
-    // Live runs pin the model off the child assistant messages; on cold-load
-    // those aren't hydrated yet, so fall back to the finalize-time rollup on
-    // `thread.metadata` so the tooltip still names the model.
-    const resolvedModel = model ?? thread.metadata?.model;
+    // Live values win when the child messages are present; otherwise read the
+    // server-derived rollup off `thread.metadata`.
+    const toolCalls = live.toolCalls || thread.metadata?.totalToolCalls || 0;
+    const totalTokens = live.totalTokens || thread.metadata?.totalTokens || 0;
+    const model = live.model || thread.metadata?.model;
 
     return {
-      hasAny: toolCalls > 0 || totalTokens > 0 || !!resolvedModel,
-      model: resolvedModel,
+      hasAny: toolCalls > 0 || totalTokens > 0 || !!model,
+      model,
       toolCalls,
       totalTokens,
     };

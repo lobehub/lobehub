@@ -137,19 +137,8 @@ interface SubagentRunState {
   currentAssistantMsgId: string;
   currentSubagentMessageId: string;
   lastChainParentId: string;
-  /**
-   * Last non-zero per-turn `usage.totalTokens`. CC's per-turn `message.usage`
-   * already carries the cumulative context, so the LAST turn's value (not a
-   * sum) is the meaningful total. Tracked here so `finalizeSubagentRun` rolls
-   * the right number onto `thread.metadata.totalTokens` — the terminal
-   * assistant created at finalize carries no usage, so reading it back would
-   * always yield `undefined`.
-   */
-  lastTurnTokens?: number;
   lifetimeToolCallIds: Set<string>;
   state: ToolPersistenceState;
-  /** Model the subagent ran on, pinned from the first turn_metadata; rolled onto `thread.metadata.model`. */
-  subagentModel?: string;
   threadId: string;
 }
 
@@ -717,21 +706,16 @@ export class HeterogeneousPersistenceHandler {
     const subagentCtx = (event.data as any)?.subagent as SubagentEventContext | undefined;
 
     if (subagentCtx) {
-      // Subagent-tagged usage: write to the subagent's in-thread assistant.
-      // Track the last non-zero turn total + pin the model on the run so
-      // `finalizeSubagentRun` can roll them onto `thread.metadata` (the
-      // terminal assistant it creates carries no usage, so reading it back
-      // would lose the total). Do NOT touch `state.lastModel` /
-      // `state.lastProvider` — those carry main-agent step boundary state and
-      // would contaminate the next main-agent assistant create. The subagent's
-      // own model/provider DO get written onto the in-thread assistant so the
-      // chip tooltip can name the model.
+      // Subagent-tagged usage: write it (plus the subagent's own model/provider)
+      // onto the subagent's in-thread assistant. The chip's totals are derived
+      // from these per-message `usage` snapshots on read (live aggregation +
+      // SQL rollup in `threadModel.queryByTopicId`), so nothing is tracked on
+      // the run. Do NOT touch `state.lastModel` / `state.lastProvider` — those
+      // carry main-agent step boundary state and would contaminate the next
+      // main-agent assistant create.
       if (!usage) return;
       const run = state.subagentRuns.get(subagentCtx.parentToolCallId);
       if (!run) return;
-      const turnTokens = usage.totalTokens;
-      if (typeof turnTokens === 'number' && turnTokens > 0) run.lastTurnTokens = turnTokens;
-      if (model && !run.subagentModel) run.subagentModel = model;
       await this.deps.messageModel.update(run.currentAssistantMsgId, {
         metadata: { usage },
         ...(model && { model }),
@@ -1273,37 +1257,12 @@ export class HeterogeneousPersistenceHandler {
       run.lastChainParentId = terminal.id;
     }
 
-    // Roll up subagent stats onto `thread.metadata` so historical viewers can
-    // surface counts without re-walking the message list. Tool count comes
-    // from `lifetimeToolCallIds` (dedup'd across turns). `totalTokens` /
-    // `model` come off the run's tracked last-non-zero turn value + pinned
-    // model rather than re-reading `currentAssistantMsgId` — which at this
-    // point is the terminal assistant created above, carrying no usage.
-    // CC's per-turn `message.usage` already includes the full prior context,
-    // so the final turn's value (not a sum) is what the user expects to see
-    // (same convention as the main agent message footer). `duration` is
-    // derived off the `startedAt` set in `ensureSubagentRun`.
-    //
-    // Read-merge-write the metadata in one update() so peer fields set at
-    // create time (`sourceToolCallId` / `subagentType` / `startedAt`) stay
-    // intact alongside the new totals.
-    const existingThread = await this.deps.threadModel.findById(run.threadId);
-    const startedAtIso = existingThread?.metadata?.startedAt;
-    const completedAt = new Date().toISOString();
-    const duration = startedAtIso ? Date.now() - new Date(startedAtIso).getTime() : undefined;
-    const totalTokens = run.lastTurnTokens;
-
-    await this.deps.threadModel.update(run.threadId, {
-      metadata: {
-        ...existingThread?.metadata,
-        completedAt,
-        duration,
-        totalToolCalls: run.lifetimeToolCallIds.size,
-        ...(totalTokens !== undefined && { totalTokens }),
-        ...(run.subagentModel && { model: run.subagentModel }),
-      },
-      status: ThreadStatus.Active,
-    });
+    // Mark the thread complete (created as `Processing`). The chip's
+    // tool-count / token / model metrics are NOT denormalized here — they're
+    // derived on read from the child messages (`threadModel.queryByTopicId`
+    // aggregates them in SQL, mirroring the live `aggregateSubagentMetrics`),
+    // so finalize owns only the status transition. Idempotent.
+    await this.deps.threadModel.update(run.threadId, { status: ThreadStatus.Active });
 
     state.subagentRuns.delete(parentToolCallId);
   }
