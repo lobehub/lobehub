@@ -116,6 +116,8 @@ const statusIcon = (status: VerifyCheckResultItem['status'] | undefined) => {
 };
 
 interface CheckerDockProps {
+  /** Render only the checker body (items + actions), no dock chrome / header — for the merged verify card. */
+  embedded?: boolean;
   operationId: string;
 }
 
@@ -125,7 +127,7 @@ interface CheckerDockProps {
  * (draft → verifying → failed/repairing → passed) with confirm / edit / skip
  * and a failure feedback panel.
  */
-const CheckerDock = memo<CheckerDockProps>(({ operationId }) => {
+const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
   const { styles, cx, theme } = useStyles();
   const { t } = useTranslation('verify');
   const { data: state, mutate: mutateState } = useVerifyState(operationId);
@@ -308,6 +310,22 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId }) => {
     return null;
   };
 
+  const body = (
+    <div className={styles.body}>
+      {editing ? (
+        renderEditor()
+      ) : (
+        <>
+          <Flexbox gap={7}>{plan.map((item) => renderCheckRow(item))}</Flexbox>
+          {renderActions()}
+        </>
+      )}
+    </div>
+  );
+
+  // Merged verify card: just the checker body (items + actions), no dock chrome.
+  if (embedded) return body;
+
   const headIcon = phase === 'passed' ? Check : phase === 'failed' ? ShieldAlert : ShieldCheck;
 
   return (
@@ -324,18 +342,7 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId }) => {
         </Flexbox>
         <Icon color={theme.colorTextTertiary} icon={expanded ? ChevronDown : ChevronUp} size={16} />
       </div>
-      {expanded && (
-        <div className={styles.body}>
-          {editing ? (
-            renderEditor()
-          ) : (
-            <>
-              <Flexbox gap={7}>{plan.map((item) => renderCheckRow(item))}</Flexbox>
-              {renderActions()}
-            </>
-          )}
-        </div>
-      )}
+      {expanded && body}
     </div>
   );
 });

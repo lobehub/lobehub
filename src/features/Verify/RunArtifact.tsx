@@ -97,6 +97,8 @@ const phaseToArtifact: Record<DockPhase, { badge: BadgeMeta; subKey: string } | 
 };
 
 interface RunArtifactProps {
+  /** Render only the header (kicker + title + status), no card chrome — for the merged verify card. */
+  embedded?: boolean;
   operationId: string;
   /** Display round number (1-based); repair rounds are separate operations. */
   round?: number;
@@ -107,7 +109,7 @@ interface RunArtifactProps {
  * thread below the assistant message group. Each round (operation) keeps its own
  * artifact, so failed snapshots are never overwritten by later success.
  */
-const RunArtifact = memo<RunArtifactProps>(({ operationId, round = 1 }) => {
+const RunArtifact = memo<RunArtifactProps>(({ operationId, round = 1, embedded }) => {
   const { styles, cx, theme } = useStyles();
   const { t } = useTranslation('verify');
   const { data: state } = useVerifyState(operationId);
@@ -126,29 +128,36 @@ const RunArtifact = memo<RunArtifactProps>(({ operationId, round = 1 }) => {
     warning: theme.colorWarning,
   } as const;
 
+  const header = (
+    <div className={styles.head}>
+      <Flexbox>
+        <Flexbox horizontal align="center" className={styles.kicker} gap={6}>
+          <Icon icon={PackageCheck} size={14} />
+          {t('artifact.kicker', { round })}
+        </Flexbox>
+        <div className={styles.title}>{t(titleKey as any)}</div>
+        <div className={styles.sub}>
+          {t(meta.subKey as any, { passed: counts.passed, total: counts.total } as any)}
+        </div>
+      </Flexbox>
+      <Flexbox
+        horizontal
+        align="center"
+        gap={5}
+        style={{ color: badgeColorMap[meta.badge.color], fontSize: 12, fontWeight: 600 }}
+      >
+        <Icon icon={meta.badge.icon} size={14} />
+        {t(`badge.${meta.badge.key}` as any)}
+      </Flexbox>
+    </div>
+  );
+
+  // Merged verify card: header only, no card chrome / summary list / footer.
+  if (embedded) return header;
+
   return (
     <div className={cx(styles.card, phase === 'failed' && styles.cardFailed)}>
-      <div className={styles.head}>
-        <Flexbox>
-          <Flexbox horizontal align="center" className={styles.kicker} gap={6}>
-            <Icon icon={PackageCheck} size={14} />
-            {t('artifact.kicker', { round })}
-          </Flexbox>
-          <div className={styles.title}>{t(titleKey as any)}</div>
-          <div className={styles.sub}>
-            {t(meta.subKey as any, { passed: counts.passed, total: counts.total } as any)}
-          </div>
-        </Flexbox>
-        <Flexbox
-          horizontal
-          align="center"
-          gap={5}
-          style={{ color: badgeColorMap[meta.badge.color], fontSize: 12, fontWeight: 600 }}
-        >
-          <Icon icon={meta.badge.icon} size={14} />
-          {t(`badge.${meta.badge.key}` as any)}
-        </Flexbox>
-      </div>
+      {header}
       <div className={styles.body}>
         <Flexbox gap={4}>
           {(state.verifyPlan ?? []).map((item) => {
