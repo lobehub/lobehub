@@ -73,7 +73,10 @@ interface BadgeMeta {
 }
 
 const phaseToArtifact: Record<DockPhase, { badge: BadgeMeta; subKey: string } | null> = {
-  draft: null,
+  draft: {
+    badge: { color: 'default', icon: Shield, key: 'pending' },
+    subKey: 'artifact.pending.sub',
+  },
   failed: {
     badge: { color: 'error', icon: X, key: 'failed' },
     subKey: 'artifact.failed.sub',

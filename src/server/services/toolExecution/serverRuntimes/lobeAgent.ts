@@ -202,14 +202,22 @@ class LobeAgentExecutionRuntime {
       verifyRubricId: rubricId ?? null,
     });
 
+    // Auto-confirm (freeze) the plan so it runs automatically when the operation
+    // completes (`runVerifyOnCompletion` gates on a confirmed plan). An optional
+    // interactive "review before run" gate is a future enhancement.
+    if (items.length > 0) {
+      const { AgentOperationModel } = await import('@/database/models/agentOperation');
+      await new AgentOperationModel(this.db, this.userId).confirmVerifyPlan(this.operationId);
+    }
+
     return {
       content:
         items.length > 0
-          ? `Generated a delivery-checker plan with ${items.length} check(s): ${items
+          ? `Generated and confirmed a delivery-checker plan with ${items.length} check(s): ${items
               .map((i) => i.title)
               .join(
                 '; ',
-              )}. The user reviews and confirms it; the checks run automatically when this operation completes — do not run them yourself.`
+              )}. The checks run automatically when this operation completes — do not run them yourself.`
           : 'No delivery checks are mounted for this agent, so no plan was generated. Proceed normally.',
       state: {
         itemCount: items.length,
