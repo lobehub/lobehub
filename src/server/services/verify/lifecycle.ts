@@ -3,6 +3,7 @@ import debug from 'debug';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { createVerifierAgentRunner } from './agentVerifier';
 import { VerifyExecutorService } from './executor';
 import { VerifyRepairService } from './repairService';
 
@@ -53,6 +54,15 @@ export const runVerifyOnCompletion = async (
       goal: params.goal,
       modelConfig: { model: op.model, provider: op.provider },
       operationId: params.operationId,
+      // `agent`-type checks run as verifier sub-agents reusing this run's agent;
+      // their verdicts land asynchronously via the runner's onComplete hook.
+      runVerifierAgent: createVerifierAgentRunner({
+        agentId: op.agentId,
+        db,
+        deliverable: params.deliverable,
+        topicId: op.topicId,
+        userId,
+      }),
     });
 
     // Best-effort auto-repair (no-op in v1 without an injected spawner).

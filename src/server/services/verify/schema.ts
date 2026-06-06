@@ -13,6 +13,7 @@ export const RawGeneratedCriteriaSchema = z.object({
   criteria: z.array(
     z.object({
       description: z.string().optional(),
+      instruction: z.string().optional(),
       onFail: z.enum(onFailEnum).optional(),
       required: z.boolean().optional(),
       title: z.string(),
@@ -34,12 +35,13 @@ export const GENERATED_CRITERIA_JSON_SCHEMA: GenerateObjectSchema = {
           additionalProperties: false,
           properties: {
             description: { maxLength: 280, type: 'string' },
+            instruction: { type: 'string' },
             onFail: { enum: [...onFailEnum], type: 'string' },
             required: { type: 'boolean' },
             title: { maxLength: 80, minLength: 1, type: 'string' },
             verifierType: { enum: [...verifierTypeEnum], type: 'string' },
           },
-          required: ['title', 'verifierType', 'required', 'onFail', 'description'],
+          required: ['title', 'description', 'instruction', 'verifierType', 'required', 'onFail'],
           type: 'object',
         },
         maxItems: 6,

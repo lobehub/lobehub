@@ -5,6 +5,7 @@ import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { DocumentModel } from '@/database/models/document';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import type {
   NewVerifyCheckResult,
@@ -29,11 +30,13 @@ import { VerifyStatusService } from './statusService';
 const log = debug('lobe-server:verify-executor');
 
 /**
- * Spawns a sub agent_operations to actively investigate one criterion. Injected
- * by the runtime layer (Phase 7) because it needs full runtime context; when
- * absent the agent item is left for later / marked skipped.
+ * Runs a verifier sub-agent (its own agent operation in an isolated thread) to
+ * actively investigate one criterion — reading files, running checks — and
+ * write its verdict back to the check result. Injected by the runtime layer
+ * because it needs full agent-execution context; when absent the agent item is
+ * marked skipped.
  */
-export interface AgentVerifierSpawner {
+export interface VerifierAgentRunner {
   (args: {
     checkItem: VerifyCheckItem;
     goal: string;
@@ -42,7 +45,6 @@ export interface AgentVerifierSpawner {
 }
 
 export interface ExecuteVerifyParams {
-  agentSpawner?: AgentVerifierSpawner;
   /** Judge all LLM items in one batched generateObject (default true). */
   batchLlm?: boolean;
   /** The run's final output / artifacts, judged against the criteria. */
@@ -50,6 +52,8 @@ export interface ExecuteVerifyParams {
   goal: string;
   modelConfig: { model: string; provider: string };
   operationId: string;
+  /** Runs `agent`-type checks as verifier sub-agents; agent items skip when absent. */
+  runVerifierAgent?: VerifierAgentRunner;
 }
 
 const hashConfig = (config: Record<string, unknown>): string =>
@@ -74,6 +78,7 @@ export class VerifyExecutorService {
   private readonly operationModel: AgentOperationModel;
   private readonly resultModel: VerifyCheckResultModel;
   private readonly statusService: VerifyStatusService;
+  private readonly documentModel: DocumentModel;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.db = db;
@@ -81,6 +86,17 @@ export class VerifyExecutorService {
     this.operationModel = new AgentOperationModel(db, userId);
     this.resultModel = new VerifyCheckResultModel(db, userId);
     this.statusService = new VerifyStatusService(db, userId);
+    this.documentModel = new DocumentModel(db, userId);
+  }
+
+  /**
+   * Resolve a check item's detailed judging instruction — the criterion's rule
+   * body lives in its linked document (the single source of truth).
+   */
+  private async resolveInstruction(item: VerifyCheckItem): Promise<string | undefined> {
+    if (!item.documentId) return undefined;
+    const doc = await this.documentModel.findById(item.documentId);
+    return doc?.content ?? undefined;
   }
 
   /**
@@ -147,9 +163,9 @@ export class VerifyExecutorService {
       }
     }
 
-    // --- agent: spawn sub-operation (async result) or skip ---
+    // --- agent: run a verifier sub-agent (verdict lands async via its hook) or skip ---
     for (const item of agentItems) {
-      if (!params.agentSpawner) {
+      if (!params.runVerifierAgent) {
         await this.resultModel.updateByCheckItem(params.operationId, item.id, {
           completedAt: new Date(),
           status: 'skipped',
@@ -158,7 +174,7 @@ export class VerifyExecutorService {
         continue;
       }
       try {
-        const spawned = await params.agentSpawner({
+        const spawned = await params.runVerifierAgent({
           checkItem: item,
           goal: params.goal,
           operationId: params.operationId,
@@ -185,10 +201,17 @@ export class VerifyExecutorService {
   private async judgeBatch(params: ExecuteVerifyParams, items: VerifyCheckItem[]): Promise<void> {
     // Batch: N verdicts share ONE tracing row (N:1).
     const tracingId = randomUUID();
+    const promptItems = await Promise.all(
+      items.map(async (i) => ({
+        id: i.id,
+        instruction: await this.resolveInstruction(i),
+        title: i.title,
+      })),
+    );
     const { system, user } = buildJudgePrompt({
       deliverable: params.deliverable,
       goal: params.goal,
-      items: items.map((i) => ({ id: i.id, title: i.title, verifierConfig: i.verifierConfig })),
+      items: promptItems,
       mode: 'batch',
     });
 
@@ -244,7 +267,7 @@ export class VerifyExecutorService {
     const { system, user } = buildJudgePrompt({
       deliverable: params.deliverable,
       goal: params.goal,
-      items: [{ id: item.id, title: item.title, verifierConfig: item.verifierConfig }],
+      items: [{ id: item.id, instruction: await this.resolveInstruction(item), title: item.title }],
       mode: 'single',
     });
 

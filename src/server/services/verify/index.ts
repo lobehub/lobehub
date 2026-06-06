@@ -1,6 +1,7 @@
+export { createVerifierAgentRunner } from './agentVerifier';
 export {
-  type AgentVerifierSpawner,
   type ExecuteVerifyParams,
+  type VerifierAgentRunner,
   VerifyExecutorService,
 } from './executor';
 export { computeFalseFlags, VerifyFeedbackService } from './feedbackService';

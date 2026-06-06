@@ -167,9 +167,15 @@ class LobeAgentExecutionRuntime {
   // ==================== Verify (delivery checker) ====================
 
   generateVerifyPlan = async (params: {
-    criteriaIds?: string[];
-    goal: string;
-    rubricId?: string;
+    criteria?: {
+      description?: string;
+      instruction?: string;
+      onFail?: 'manual' | 'auto_repair';
+      required?: boolean;
+      title: string;
+      verifierType?: 'program' | 'agent' | 'llm';
+    }[];
+    title: string;
   }): Promise<BuiltinServerRuntimeOutput> => {
     if (!this.operationId) {
       return buildError(
@@ -177,51 +183,41 @@ class LobeAgentExecutionRuntime {
         'NO_OPERATION',
       );
     }
-    if (!params.goal || typeof params.goal !== 'string' || !params.goal.trim()) {
-      return buildError('goal is required.', 'INVALID_ARGUMENTS');
+    if (!params.title || typeof params.title !== 'string' || !params.title.trim()) {
+      return buildError('title is required.', 'INVALID_ARGUMENTS');
+    }
+    const criteria = (params.criteria ?? []).filter((c) => c?.title?.trim());
+    if (criteria.length === 0) {
+      return buildError('At least one criterion with a title is required.', 'INVALID_ARGUMENTS');
     }
 
-    // Prefer explicit params; otherwise derive the mounted rubric / ad-hoc
-    // criteria from the agent's agencyConfig (the real-agent path — the model
-    // calls this with just a `goal` and doesn't know rubric ids).
-    let rubricId = params.rubricId;
-    let criteriaIds = params.criteriaIds;
-    if (!rubricId && !criteriaIds?.length && this.agentId) {
-      const { AgentModel } = await import('@/database/models/agent');
-      const agent = await new AgentModel(this.db, this.userId).getAgentConfigById(this.agentId);
-      rubricId = agent?.agencyConfig?.verifyRubricId ?? undefined;
-      criteriaIds = agent?.agencyConfig?.verifyCriteriaIds ?? undefined;
-    }
-
+    // Agent-authored path: the model enumerated the checks, so create the
+    // criteria + a rubric, snapshot it onto this operation, and confirm it. The
+    // tool call is human-reviewed (humanIntervention); this runs post-approval.
     const { VerifyPlanGeneratorService } = await import('@/server/services/verify');
     const planGenerator = new VerifyPlanGeneratorService(this.db, this.userId);
-    const items = await planGenerator.generateDraftPlan({
-      goal: params.goal,
+    const { items, rubricId } = await planGenerator.createPlanFromCriteria({
+      criteria,
       operationId: this.operationId,
-      verifyCriteriaIds: criteriaIds,
-      verifyRubricId: rubricId ?? null,
+      title: params.title,
     });
 
-    // Auto-confirm (freeze) the plan so it runs automatically when the operation
-    // completes (`runVerifyOnCompletion` gates on a confirmed plan). An optional
-    // interactive "review before run" gate is a future enhancement.
-    if (items.length > 0) {
-      const { AgentOperationModel } = await import('@/database/models/agentOperation');
-      await new AgentOperationModel(this.db, this.userId).confirmVerifyPlan(this.operationId);
-    }
-
     return {
-      content:
-        items.length > 0
-          ? `Generated and confirmed a delivery-checker plan with ${items.length} check(s): ${items
-              .map((i) => i.title)
-              .join(
-                '; ',
-              )}. The checks run automatically when this operation completes — do not run them yourself.`
-          : 'No delivery checks are mounted for this agent, so no plan was generated. Proceed normally.',
+      content: `Created delivery standard "${params.title}" with ${items.length} check(s): ${items
+        .map((i) => `${i.title}${i.required ? ' (gate)' : ''}`)
+        .join(
+          '; ',
+        )}. The checks run automatically when this operation completes — do not run them yourself.`,
       state: {
-        itemCount: items.length,
-        items: items.map((i) => ({ required: i.required, title: i.title })),
+        items: items.map((i) => ({
+          description: i.description,
+          onFail: i.onFail,
+          required: i.required,
+          title: i.title,
+          verifierType: i.verifierType,
+        })),
+        rubricId,
+        title: params.title,
       },
       success: true,
     };

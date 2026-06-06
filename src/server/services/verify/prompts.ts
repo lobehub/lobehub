@@ -28,7 +28,8 @@ export const buildPlanPrompt = ({
     '- Choose verifierType: "llm" for qualitative judgment from artifacts/output; "agent" when active investigation (reading files, running checks) is needed; "program" only for strictly deterministic command checks.',
     '- Set required=true when failing the criterion must block delivery; false for nice-to-have improvements.',
     '- Set onFail="auto_repair" when a failure can be fixed by re-running the agent with guidance; otherwise "manual".',
-    '- description: one sentence of judging guidance (what evidence proves pass/fail).',
+    '- description: a one-sentence summary of what this criterion verifies.',
+    '- instruction: a detailed, fine-grained judging rubric for this criterion — the exact conditions that constitute a pass, what counts as a fail, the concrete evidence to look for, and edge cases to check. Be specific and thorough, not a one-liner.',
     '- Do not restate criteria already mounted (listed below); propose complementary ones only.',
   ].join('\n');
 
@@ -49,17 +50,15 @@ export interface JudgePromptInput {
   /** The artifacts / agent output to judge against. */
   deliverable: string;
   goal: string;
-  items: Pick<VerifyCheckItem, 'id' | 'title' | 'verifierConfig'>[];
+  /** Each item carries its resolved judging instruction (from its document, if any). */
+  items: (Pick<VerifyCheckItem, 'id' | 'title'> & { instruction?: string })[];
   /** Single mode judges one item; batch mode judges all `items`. */
   mode: 'single' | 'batch';
 }
 
 const describeItem = (item: JudgePromptInput['items'][number]) => {
-  const description =
-    item.verifierConfig && typeof item.verifierConfig.description === 'string'
-      ? ` — ${item.verifierConfig.description}`
-      : '';
-  return `${item.title}${description}`;
+  const instruction = item.instruction ? `\n${item.instruction}` : '';
+  return `${item.title}${instruction}`;
 };
 
 export const buildJudgePrompt = ({ goal, deliverable, items, mode }: JudgePromptInput) => {
