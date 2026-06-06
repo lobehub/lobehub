@@ -2,7 +2,7 @@ import { type ItemType } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { ChevronRight, LibraryBig } from 'lucide-react';
+import { LibraryBig } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -55,9 +55,6 @@ const styles = createStaticStyles(({ css }) => ({
   viewMoreLabel: css`
     flex: 1;
     text-align: start;
-  `,
-  viewMoreArrow: css`
-    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -139,7 +136,6 @@ export const useControls = ({
     >
       <Icon icon={LibraryBig} size={16} />
       <span className={cx(styles.viewMoreLabel)}>{t('knowledgeBase.viewMore')}</span>
-      <Icon className={cx(styles.viewMoreArrow)} icon={ChevronRight} size={16} />
     </button>
   );
 

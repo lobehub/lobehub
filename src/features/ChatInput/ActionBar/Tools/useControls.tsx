@@ -369,9 +369,6 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1;
     text-align: start;
   `,
-  addSkillArrow: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
 }));
 
 export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = {}) => {
@@ -1357,7 +1354,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         >
           <Icon icon={Store} size={SKILL_ICON_SIZE} />
           <span className={cx(styles.addSkillLabel)}>{t('plus.addSkills', { ns: 'chat' })}</span>
-          <Icon className={cx(styles.addSkillArrow)} icon={ChevronRight} size={16} />
         </button>
         <button
           aria-label={t('tools.plugins.management')}
@@ -1371,7 +1367,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         >
           <Icon icon={Settings} size={SKILL_ICON_SIZE} />
           <span className={cx(styles.addSkillLabel)}>{t('tools.plugins.management')}</span>
-          <Icon className={cx(styles.addSkillArrow)} icon={ChevronRight} size={16} />
         </button>
       </>
     ) : undefined;
