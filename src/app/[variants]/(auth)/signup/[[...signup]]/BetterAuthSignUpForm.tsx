@@ -6,7 +6,9 @@ import { Lock, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
+
+import { PRIVACY_URL, TERMS_URL } from '@/const/url';
 
 import { AuthCard } from '../../../../../features/AuthCard';
 import { trackLoginOrSignupClicked } from '../../../../../features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
@@ -78,6 +80,30 @@ const BetterAuthSignUpForm = () => {
             }
           />
         </Form.Item>
+        <Text fontSize={13} style={{ display: 'block', marginBottom: 24 }} type={'secondary'}>
+          <Trans
+            i18nKey={'footer.agreement'}
+            ns={'auth'}
+            components={{
+              privacy: (
+                <a
+                  href={PRIVACY_URL}
+                  style={{ color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  {t('footer.terms')}
+                </a>
+              ),
+              terms: (
+                <a
+                  href={TERMS_URL}
+                  style={{ color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  {t('footer.privacy')}
+                </a>
+              ),
+            }}
+          />
+        </Text>
         <Form.Item
           name="password"
           rules={[

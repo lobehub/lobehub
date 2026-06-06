@@ -1,7 +1,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Alert, Button, Flexbox, Icon, Input, Skeleton, Text } from '@lobehub/ui';
 import { type FormInstance, type InputRef } from 'antd';
-import { Divider, Form } from 'antd';
+import { Badge, Divider, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRight, Mail } from 'lucide-react';
 import { type CSSProperties, useEffect, useRef } from 'react';
@@ -79,14 +79,8 @@ export const SignInEmailStep = ({
     return t(key, { defaultValue: `Continue with ${normalized}` });
   };
 
-  const lastUsedProvider =
-    lastAuthProvider && oAuthSSOProviders.includes(lastAuthProvider) ? lastAuthProvider : undefined;
-  const lastUsedSubtitle = lastUsedProvider
-    ? t('betterAuth.signin.lastUsedSubtitle', { provider: getProviderName(lastUsedProvider) })
-    : undefined;
-
   return (
-    <AuthCard subtitle={lastUsedSubtitle} title={t('signin.subtitle', { appName: BRANDING_NAME })}>
+    <AuthCard title={t('signin.subtitle', { appName: BRANDING_NAME })}>
       {!serverConfigInit && (
         <Flexbox gap={12}>
           <Skeleton.Button active block size="large" />
@@ -96,19 +90,37 @@ export const SignInEmailStep = ({
       )}
       {serverConfigInit && oAuthSSOProviders.length > 0 && (
         <Flexbox gap={12}>
-          {oAuthSSOProviders.map((provider) => (
-            <Button
-              block
-              icon={<Icon icon={AuthIcons(provider, 18)} style={PROVIDER_ICON_STYLE} />}
-              iconProps={{ size: 18, style: PROVIDER_ICON_STYLE }}
-              key={provider}
-              loading={socialLoading === provider}
-              size="large"
-              onClick={() => onSocialSignIn(provider)}
-            >
-              {getProviderLabel(provider)}
-            </Button>
-          ))}
+          {oAuthSSOProviders.map((provider) => {
+            const button = (
+              <Button
+                block
+                icon={<Icon icon={AuthIcons(provider, 18)} style={PROVIDER_ICON_STYLE} />}
+                iconProps={{ size: 18, style: PROVIDER_ICON_STYLE }}
+                key={provider}
+                loading={socialLoading === provider}
+                size="large"
+                onClick={() => onSocialSignIn(provider)}
+              >
+                {getProviderLabel(provider)}
+              </Button>
+            );
+            const showLastUsed =
+              provider === lastAuthProvider &&
+              (oAuthSSOProviders.length > 1 ||
+                (oAuthSSOProviders.length === 1 && !disableEmailPassword));
+            return showLastUsed ? (
+              <Badge
+                color="var(--ant-color-info)"
+                count={t('betterAuth.signin.lastUsed')}
+                key={provider}
+                styles={{ root: { display: 'block', width: '100%' } }}
+              >
+                {button}
+              </Badge>
+            ) : (
+              button
+            );
+          })}
           {!disableEmailPassword && divider}
         </Flexbox>
       )}
