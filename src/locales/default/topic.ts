@@ -142,6 +142,8 @@ export default {
   'renameModal.title': 'Rename Topic',
   'searchPlaceholder': 'Search Topics...',
   'searchResultEmpty': 'No search results found.',
+  'sidebar.collapseAll': 'Collapse all groups',
+  'sidebar.expandAll': 'Expand all groups',
   'sidebar.title': 'Topics',
   'taskManager.agent': 'Task Agent',
   'taskManager.welcome': 'Ask me about your tasks',

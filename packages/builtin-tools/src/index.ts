@@ -6,6 +6,7 @@ import {
   agentSignalFeedbackIntentManifest,
   agentSignalReflectionManifest,
   agentSignalReviewManifest,
+  agentSignalSkillManagementManifest,
 } from '@lobechat/builtin-tool-agent-signal';
 import { BriefManifest } from '@lobechat/builtin-tool-brief';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator';
@@ -167,6 +168,13 @@ export const builtinTools: LobeBuiltinTool[] = [
     hidden: true,
     identifier: agentSignalFeedbackIntentManifest.identifier,
     manifest: agentSignalFeedbackIntentManifest,
+    type: 'builtin',
+  },
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: agentSignalSkillManagementManifest.identifier,
+    manifest: agentSignalSkillManagementManifest,
     type: 'builtin',
   },
   {

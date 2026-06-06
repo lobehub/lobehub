@@ -36,6 +36,11 @@ const hotArea = css`
   }
 `;
 
+// Keep every row's leading icon the same width. The menu's icon slot sizes to its
+// content, so a larger file-type icon next to a smaller line icon would widen that
+// slot and push its label out of alignment with the upload / "view more" rows.
+const MENU_ICON_SIZE = 20;
+
 const FileUpload = memo(() => {
   const { t } = useTranslation('chat');
 
@@ -76,7 +81,7 @@ const FileUpload = memo(() => {
     {
       closeOnClick: false,
       disabled: !canUploadImage,
-      icon: ImageUp,
+      icon: <Icon icon={ImageUp} size={MENU_ICON_SIZE} />,
       key: 'upload-image',
       label: canUploadImage ? (
         <Upload
@@ -101,7 +106,7 @@ const FileUpload = memo(() => {
     },
     {
       closeOnClick: false,
-      icon: FileUp,
+      icon: <Icon icon={FileUp} size={MENU_ICON_SIZE} />,
       key: 'upload-file',
       label: (
         <Upload
@@ -138,7 +143,7 @@ const FileUpload = memo(() => {
     },
     {
       closeOnClick: false,
-      icon: FolderUp,
+      icon: <Icon icon={FolderUp} size={MENU_ICON_SIZE} />,
       key: 'upload-folder',
       label: (
         <Upload
@@ -184,7 +189,7 @@ const FileUpload = memo(() => {
       children: [
         // first the files
         ...files.map((item) => ({
-          icon: <FileIcon fileName={item.name} fileType={item.type} size={20} />,
+          icon: <FileIcon fileName={item.name} fileType={item.type} size={MENU_ICON_SIZE} />,
           key: item.id,
           label: (
             <CheckboxItem
@@ -202,7 +207,7 @@ const FileUpload = memo(() => {
 
         // then the knowledge bases
         ...knowledgeBases.map((item) => ({
-          icon: <RepoIcon />,
+          icon: <RepoIcon size={MENU_ICON_SIZE} />,
           key: item.id,
           label: (
             <CheckboxItem
@@ -231,7 +236,7 @@ const FileUpload = memo(() => {
     },
     {
       extra: <Icon icon={ArrowRight} />,
-      icon: LibraryBig,
+      icon: <Icon icon={LibraryBig} size={MENU_ICON_SIZE} />,
       key: 'knowledge-base-store',
       label: t('knowledgeBase.viewMore'),
       onClick: () => {

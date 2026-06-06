@@ -1,5 +1,6 @@
 'use client';
 
+import { AGENT_PLAN_FILE_TYPE } from '@lobechat/const';
 import { Checkbox, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDown, ChevronUp, ListTodo } from 'lucide-react';
@@ -121,7 +122,7 @@ const TodoList = memo(() => {
   const document = useNotebookStore(notebookSelectors.getDocumentById(topicId, documentId));
 
   // Only show for agent/plan documents with todos in metadata
-  if (!document || document.fileType !== 'agent/plan') return null;
+  if (!document || document.fileType !== AGENT_PLAN_FILE_TYPE) return null;
 
   const todos: TodoState | undefined = document.metadata?.todos;
   const items = todos?.items || [];

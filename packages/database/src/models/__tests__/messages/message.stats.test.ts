@@ -589,6 +589,41 @@ describe('MessageModel Statistics Tests', () => {
       vi.useRealTimers();
     });
 
+    it('prefers the usage column and falls back to metadata.usage', async () => {
+      vi.useFakeTimers();
+      const fixedDate = new Date('2023-04-07T13:00:00Z');
+      vi.setSystemTime(fixedDate);
+
+      const today = dayjs(fixedDate);
+      const dayKey = today.subtract(2, 'day').format('YYYY-MM-DD');
+
+      await serverDB.insert(messages).values([
+        // dedicated column wins over metadata.usage → contributes 100, not 9999
+        {
+          id: 'h1',
+          userId,
+          role: 'assistant',
+          usage: { totalTokens: 100 } as any,
+          metadata: { usage: { totalTokens: 9999 } },
+          createdAt: today.subtract(2, 'day').toDate(),
+        },
+        // legacy row: only metadata.usage → falls back, contributes 50
+        {
+          id: 'h2',
+          userId,
+          role: 'assistant',
+          metadata: { usage: { totalTokens: 50 } },
+          createdAt: today.subtract(2, 'day').toDate(),
+        },
+      ]);
+
+      const result = await messageModel.getTokenHeatmaps();
+      const day = result.find((item) => item.date === dayKey);
+      expect(day?.count).toBe(150);
+
+      vi.useRealTimers();
+    });
+
     it('should return all-zero data when there are no messages', async () => {
       const result = await messageModel.getTokenHeatmaps();
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { CaretDownFilled, LoadingOutlined } from '@ant-design/icons';
+import { DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import { ActionIcon, Block, Flexbox, Icon, showContextMenu, stopPropagation } from '@lobehub/ui';
 import { App, Input } from 'antd';
 import { cx } from 'antd-style';
@@ -62,7 +63,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
       const pageMatch =
         !isPDF &&
         !isOfficeFile &&
-        (item.sourceType === 'document' || item.fileType === PAGE_FILE_TYPE);
+        (item.sourceType === DERIVED_DOCUMENT_SOURCE_TYPE || item.fileType === PAGE_FILE_TYPE);
 
       return {
         emoji: pageMatch ? item.metadata?.emoji : null,

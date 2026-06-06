@@ -4,4 +4,5 @@ import { createSecurityBlacklistGlobalAudit } from './createSecurityBlacklistAud
 
 export const createDefaultGlobalAudits = (): GlobalInterventionAuditConfig[] => [
   createSecurityBlacklistGlobalAudit(),
+  createSecurityBlacklistGlobalAudit('required'),
 ];

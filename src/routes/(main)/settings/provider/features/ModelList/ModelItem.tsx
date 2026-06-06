@@ -204,16 +204,19 @@ const ModelItem = memo<ModelItemProps>(
               title={t('providerModels.item.delete.title')}
               onClick={() => {
                 confirmModal({
+                  cancelText: t('cancel', { ns: 'common' }),
+                  content: t('providerModels.item.delete.confirm', {
+                    displayName: displayName || id,
+                  }),
                   okButtonProps: {
                     danger: true,
                   },
+                  okText: t('delete', { ns: 'common' }),
                   onOk: async () => {
                     await removeAiModel(id, activeAiProvider!);
                     message.success(t('providerModels.item.delete.success'));
                   },
-                  title: t('providerModels.item.delete.confirm', {
-                    displayName: displayName || id,
-                  }),
+                  title: t('providerModels.item.delete.title'),
                 });
               }}
             />

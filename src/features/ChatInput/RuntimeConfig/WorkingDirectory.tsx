@@ -1,10 +1,9 @@
 import { isDesktop } from '@lobechat/const';
-import { Github } from '@lobehub/icons';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { CheckIcon, FolderIcon, FolderOpenIcon, GitBranchIcon, XIcon } from 'lucide-react';
-import { memo, type ReactNode, useCallback, useMemo, useState } from 'react';
+import { CheckIcon, FolderOpenIcon, XIcon } from 'lucide-react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { lambdaQuery } from '@/libs/trpc/client';
@@ -15,6 +14,7 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useElectronStore } from '@/store/electron';
 
+import { renderDirIcon } from './dirIcon';
 import { addRecentDir, getRecentDirs, type RecentDirEntry, removeRecentDir } from './recentDirs';
 import { useRepoType } from './useRepoType';
 import { useUpdateDeviceCwd } from './useUpdateDeviceCwd';
@@ -119,14 +119,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const renderDirIcon = (repoType?: 'git' | 'github'): ReactNode => {
-  const iconStyle = { color: cssVar.colorTextTertiary, flex: 'none' as const };
-  if (repoType === 'github') return <Github size={16} style={iconStyle} />;
-  return (
-    <Icon icon={repoType === 'git' ? GitBranchIcon : FolderIcon} size={16} style={iconStyle} />
-  );
-};
-
 // Backfills `repoType` for entries cached before detection supported submodule /
 // worktree layouts — `useRepoType` probes and updates the recents cache.
 const RecentDirIcon = memo<{ entry: RecentDirEntry }>(({ entry }) => {
@@ -158,8 +150,8 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
   const updateTopicMetadata = useChatStore((s) => s.updateTopicMetadata);
 
   // Local runs execute on this very machine, so also record the chosen dir in
-  // its device-registry `recentCwds` — keeps the settings detail view + future
-  // device-mode picker in sync. recentCwds only; the device default is untouched.
+  // its device-registry `workingDirs` — keeps the settings detail view + future
+  // device-mode picker in sync. workingDirs only; the device default is untouched.
   const useFetchDeviceInfo = useElectronStore((s) => s.useFetchGatewayDeviceInfo);
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
   useFetchDeviceInfo();
@@ -167,8 +159,8 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
   const { data: allDevices } = lambdaQuery.device.listDevices.useQuery(undefined, {
     staleTime: 30_000,
   });
-  const deviceRecentCwds =
-    allDevices?.find((d) => d.deviceId === currentDeviceId)?.recentCwds ?? [];
+  const deviceWorkingDirs =
+    allDevices?.find((d) => d.deviceId === currentDeviceId)?.workingDirs ?? [];
   const updateDeviceCwd = useUpdateDeviceCwd();
 
   const [recentDirs, setRecentDirs] = useState(getRecentDirs);
@@ -195,9 +187,10 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
           await updateAgentRuntimeEnvConfig(agentId, { workingDirectory: newPath });
         }
         setRecentDirs(addRecentDir(entry));
-        // Record on this machine's device registry (recentCwds only).
+        // Record on this machine's device registry (workingDirs only) — the
+        // whole entry, so the detected repoType is preserved cross-device.
         if (currentDeviceId) {
-          void updateDeviceCwd(currentDeviceId, newPath, deviceRecentCwds, { setDefault: false });
+          void updateDeviceCwd(currentDeviceId, entry, deviceWorkingDirs, { setDefault: false });
         }
         onClose?.();
       };
@@ -227,7 +220,7 @@ const WorkingDirectoryContent = memo<WorkingDirectoryContentProps>(({ agentId, o
       activeTopic,
       agentId,
       currentDeviceId,
-      deviceRecentCwds,
+      deviceWorkingDirs,
       t,
       updateAgentRuntimeEnvConfig,
       updateDeviceCwd,

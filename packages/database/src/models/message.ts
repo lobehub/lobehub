@@ -12,6 +12,7 @@ import type {
   IThreadType,
   MessagePluginItem,
   ModelRankItem,
+  ModelUsage,
   NewMessageQueryParams,
   QueryMessageParams,
   TaskDetail,
@@ -367,6 +368,7 @@ export class MessageModel {
             reasoning: messages.reasoning,
             search: messages.search,
             metadata: messages.metadata,
+            usage: messages.usage,
             error: messages.error,
 
             model: messages.model,
@@ -530,6 +532,9 @@ export class MessageModel {
               ragRawQuery: messageQuery?.userQuery,
               // Add taskDetail for task messages
               taskDetail: item.role === 'task' ? threadMap.get(item.id as string) : undefined,
+              // Prefer the dedicated `usage` column, falling back to legacy
+              // `metadata.usage` for rows written before the migration.
+              usage: item.usage ?? (item.metadata as { usage?: ModelUsage } | null)?.usage,
               videoList: videoList
                 .filter((relation) => relation.messageId === item.id)
 
@@ -840,6 +845,7 @@ export class MessageModel {
         reasoning: messages.reasoning,
         search: messages.search,
         metadata: messages.metadata,
+        usage: messages.usage,
         error: messages.error,
 
         model: messages.model,
@@ -1068,6 +1074,9 @@ export class MessageModel {
           ragRawQuery: messageQuery?.userQuery,
           // Add taskDetail for task messages
           taskDetail: item.role === 'task' ? threadMap.get(item.id as string) : undefined,
+          // Prefer the dedicated `usage` column, falling back to legacy
+          // `metadata.usage` for rows written before the migration.
+          usage: item.usage ?? (item.metadata as { usage?: ModelUsage } | null)?.usage,
           videoList: videoList
             .filter((relation) => relation.messageId === item.id)
             .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
@@ -1558,13 +1567,13 @@ export class MessageModel {
   /**
    * Daily token-usage heatmap for the last year.
    *
-   * Sums `metadata.usage.totalTokens` of assistant messages bucketed by the day
-   * each message was created — so tokens land on the day they were actually
-   * consumed (a long-running topic spreads across days instead of piling onto
-   * its creation date). `metadata.usage` is the source of truth for usage, so we
-   * aggregate it directly in SQL rather than pulling rows into JS. `level` is
-   * scaled relative to the busiest day so the heatmap stays readable regardless
-   * of absolute token volume.
+   * Sums `usage.totalTokens` of assistant messages bucketed by the day each
+   * message was created — so tokens land on the day they were actually consumed
+   * (a long-running topic spreads across days instead of piling onto its
+   * creation date). Reads prefer the dedicated `usage` column and fall back to
+   * legacy `metadata.usage`, aggregating directly in SQL rather than pulling
+   * rows into JS. `level` is scaled relative to the busiest day so the heatmap
+   * stays readable regardless of absolute token volume.
    */
   getTokenHeatmaps = async (): Promise<HeatmapsProps['data']> => {
     const startDate = today().subtract(1, 'year').startOf('day');
@@ -1574,7 +1583,7 @@ export class MessageModel {
       .select({
         date: sql`DATE(${messages.createdAt})`.as('heatmaps_date'),
         tokens:
-          sql<number>`COALESCE(SUM((${messages.metadata}->'usage'->>'totalTokens')::numeric), 0)`.mapWith(
+          sql<number>`COALESCE(SUM((COALESCE(${messages.usage}, ${messages.metadata}->'usage')->>'totalTokens')::numeric), 0)`.mapWith(
             Number,
           ),
       })
@@ -1701,6 +1710,11 @@ export class MessageModel {
       model: fromModel,
       provider: fromProvider,
       updatedAt: updatedAt ? new Date(updatedAt) : undefined,
+      // Promote token usage into the dedicated `usage` column, preferring a
+      // top-level `usage` over the legacy `metadata.usage`.
+      usage:
+        normalizedMessage.usage ??
+        (normalizedMessage.metadata as { usage?: ModelUsage } | undefined)?.usage,
       userId: this.userId,
     };
   };
@@ -1954,9 +1968,22 @@ export class MessageModel {
 
   update = async (
     id: string,
-    { imageList, metadata, ...message }: Partial<UpdateMessageParams>,
+    { imageList, metadata, usage, ...message }: Partial<UpdateMessageParams>,
     timing?: ModelTimingContext,
   ): Promise<{ success: boolean }> => {
+    // Promote token usage into the dedicated `usage` column. Prefer a top-level
+    // `usage` payload, falling back to `metadata.usage` so existing writers
+    // (Gateway / hetero-agent executors) keep populating the column without
+    // changes. `metadata.usage` is still written for backward-compatible reads.
+    const usageToWrite = usage ?? (metadata as { usage?: ModelUsage } | undefined)?.usage;
+    // Keep `metadata.usage` dual-written even when usage arrives as a top-level
+    // param (with no metadata payload) — legacy readers / rollback paths still
+    // consume it during the transition. Folding the resolved usage into the
+    // patch also keeps it consistent with the column when both are sent.
+    const metadataPatch =
+      metadata || usageToWrite
+        ? { ...metadata, ...(usageToWrite && { usage: usageToWrite }) }
+        : undefined;
     try {
       await runTimedStage(
         timing,
@@ -1980,9 +2007,10 @@ export class MessageModel {
               );
             }
 
-            // 2. Handle metadata merge if provided
+            // 2. Handle metadata merge if there's a metadata payload or a
+            // top-level usage to fold back into `metadata.usage`.
             let mergedMetadata: Record<string, any> | undefined;
-            if (metadata) {
+            if (metadataPatch) {
               const [existingMessage] = await runTimedStage(
                 timing,
                 'db.message.update.metadata.select',
@@ -1992,7 +2020,7 @@ export class MessageModel {
                     .from(messages)
                     .where(and(eq(messages.id, id), eq(messages.userId, this.userId))),
               );
-              mergedMetadata = merge(existingMessage?.metadata || {}, metadata);
+              mergedMetadata = merge(existingMessage?.metadata || {}, metadataPatch);
             }
 
             const [updated] = await runTimedStage(
@@ -2001,10 +2029,14 @@ export class MessageModel {
               () =>
                 trx
                   .update(messages)
-                  .set({ ...message, ...(mergedMetadata && { metadata: mergedMetadata }) })
+                  .set({
+                    ...message,
+                    ...(mergedMetadata && { metadata: mergedMetadata }),
+                    ...(usageToWrite && { usage: usageToWrite }),
+                  })
                   .where(and(eq(messages.id, id), eq(messages.userId, this.userId)))
                   .returning({ topicId: messages.topicId }),
-              { hasMetadata: !!metadata, valueKeys: Object.keys(message) },
+              { hasMetadata: !!metadataPatch, valueKeys: Object.keys(message) },
             );
 
             // Touch topic's updatedAt when updating a message
@@ -2020,7 +2052,7 @@ export class MessageModel {
               // step), recompute the topic's denormalized usage rollup from its
               // messages. Gated on the *incoming* payload so streaming
               // content-only updates don't trigger needless recomputes.
-              if ((metadata as { usage?: unknown } | undefined)?.usage) {
+              if (usageToWrite) {
                 await runTimedStage(
                   timing,
                   'db.message.update.topic.recomputeUsage',
@@ -2032,7 +2064,7 @@ export class MessageModel {
           }),
         {
           hasImageList: !!imageList?.length,
-          hasMetadata: !!metadata,
+          hasMetadata: !!metadataPatch,
           valueKeys: Object.keys(message),
         },
       );
@@ -2051,9 +2083,14 @@ export class MessageModel {
 
     if (!item) return;
 
+    const mergedMetadata = merge(item.metadata || {}, metadata);
+    // Keep the dedicated `usage` column in sync when the merged metadata carries
+    // token usage, preferring it over the existing column value.
+    const usageToWrite = (metadata as { usage?: ModelUsage } | undefined)?.usage;
+
     return this.db
       .update(messages)
-      .set({ metadata: merge(item.metadata || {}, metadata) })
+      .set({ metadata: mergedMetadata, ...(usageToWrite && { usage: usageToWrite }) })
       .where(and(eq(messages.userId, this.userId), eq(messages.id, id)));
   };
 

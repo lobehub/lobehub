@@ -29,14 +29,11 @@ interface GetMessagesAndTopicsParams {
 }
 
 export class AiChatService {
-  private userId: string;
   private messageModel: MessageModel;
   private fileService: FileService;
   private topicModel: TopicModel;
 
   constructor(serverDB: LobeChatDatabase, userId: string) {
-    this.userId = userId;
-
     this.messageModel = new MessageModel(serverDB, userId);
     this.topicModel = new TopicModel(serverDB, userId);
     this.fileService = new FileService(serverDB, userId);

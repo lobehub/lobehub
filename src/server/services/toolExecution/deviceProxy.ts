@@ -5,6 +5,7 @@ import {
   type DeviceSystemInfo,
   type DeviceToolCallResult,
   GatewayHttpClient,
+  type GatewayMcpStdioParams,
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import debug from 'debug';
@@ -132,6 +133,48 @@ export class DeviceProxy {
       const message = error instanceof Error ? error.message : String(error);
       log('executeToolCall: error — %s', message);
       return { content: `Device tool call error: ${message}`, error: message, success: false };
+    }
+  }
+
+  /**
+   * Tunnel a stdio MCP tool call to a connected device. The cloud server can't
+   * spawn the user's local MCP binary, so the command/args/env are forwarded
+   * to the device, which spawns the stdio server and runs the call locally.
+   */
+  async executeMcpCall(
+    mcpCall: {
+      apiName: string;
+      arguments: string;
+      deviceId: string;
+      identifier: string;
+      params: GatewayMcpStdioParams;
+      userId: string;
+    },
+    timeout = 30_000,
+  ): Promise<DeviceToolCallResult> {
+    const client = this.getClient();
+    if (!client) {
+      return {
+        content: 'Device Gateway is not configured',
+        error: 'GATEWAY_NOT_CONFIGURED',
+        success: false,
+      };
+    }
+
+    log(
+      'executeMcpCall: userId=%s, deviceId=%s, mcp=%s/%s',
+      mcpCall.userId,
+      mcpCall.deviceId,
+      mcpCall.identifier,
+      mcpCall.apiName,
+    );
+
+    try {
+      return await client.executeMcpCall({ ...mcpCall, timeout });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log('executeMcpCall: error — %s', message);
+      return { content: `Device MCP call error: ${message}`, error: message, success: false };
     }
   }
 

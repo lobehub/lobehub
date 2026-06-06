@@ -132,10 +132,8 @@ const AiHeatmaps = memo<
       fontSize={16}
       title={t('stats.lastYearActivity')}
     >
-      <Flexbox gap={16}>
-        {isTokens && <HeatmapStats data={data} loading={isLoading || !data} />}
-        {content}
-      </Flexbox>
+      <HeatmapStats />
+      {content}
     </StatsFormGroup>
   );
 });

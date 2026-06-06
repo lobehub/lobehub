@@ -222,6 +222,15 @@ export const agentDocumentRouter = router({
     }),
 
   /**
+   * Get documents for chat context injection.
+   */
+  getContextDocuments: agentDocumentProcedure
+    .input(z.object({ agentId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.agentDocumentService.getAgentContextDocuments(input.agentId);
+    }),
+
+  /**
    * Get a specific document by filename
    */
   getDocument: agentDocumentProcedure

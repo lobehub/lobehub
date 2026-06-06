@@ -51,8 +51,12 @@ export const formatShortenNumber = (num: any) => {
   // Use Intl.NumberFormat to add thousand separators
   const formattedWithComma = new Intl.NumberFormat('en-US').format(num);
 
-  // Format as K or M
-  if (num >= 1_000_000) {
+  // Format as K, M, B or T
+  if (num >= 1_000_000_000_000) {
+    return (num / 1_000_000_000_000).toFixed(1) + 'T';
+  } else if (num >= 1_000_000_000) {
+    return (num / 1_000_000_000).toFixed(1) + 'B';
+  } else if (num >= 1_000_000) {
     return (num / 1_000_000).toFixed(1) + 'M';
   } else if (num >= 10_000) {
     return (num / 1000).toFixed(1) + 'K';

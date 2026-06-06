@@ -8,7 +8,8 @@ import { FolderOpenIcon, FolderPlusIcon, XIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { nextRecentCwds } from '@/features/ChatInput/RuntimeConfig/deviceCwd';
+import { nextWorkingDirs } from '@/features/ChatInput/RuntimeConfig/deviceCwd';
+import { renderDirIcon } from '@/features/ChatInput/RuntimeConfig/dirIcon';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { electronSystemService } from '@/services/electron/system';
 
@@ -84,13 +85,15 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
     update.mutate({ deviceId: device.deviceId, friendlyName: next });
   };
 
-  const commitCwd = (value: string) => {
+  const commitCwd = (value: string, repoType?: 'git' | 'github') => {
     const trimmed = value.trim();
     update.mutate({
       defaultCwd: trimmed || null,
       deviceId: device.deviceId,
-      // Setting a default cwd also seeds the recent list.
-      recentCwds: trimmed ? nextRecentCwds(trimmed, device.recentCwds) : device.recentCwds,
+      // Setting a default cwd also seeds the working-dirs list.
+      workingDirs: trimmed
+        ? nextWorkingDirs({ path: trimmed, repoType }, device.workingDirs)
+        : device.workingDirs,
     });
   };
 
@@ -106,7 +109,7 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
     });
     if (result?.path) {
       setCwd(result.path);
-      commitCwd(result.path);
+      commitCwd(result.path, result.repoType);
     }
   };
 
@@ -117,7 +120,10 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
     if (result?.path) {
       update.mutate({
         deviceId: device.deviceId,
-        recentCwds: nextRecentCwds(result.path, device.recentCwds),
+        workingDirs: nextWorkingDirs(
+          { path: result.path, repoType: result.repoType },
+          device.workingDirs,
+        ),
       });
     }
   };
@@ -125,14 +131,17 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
   const handleRemoveRecent = (path: string) => {
     update.mutate({
       deviceId: device.deviceId,
-      recentCwds: device.recentCwds.filter((p) => p !== path),
+      workingDirs: device.workingDirs.filter((d) => d.path !== path),
     });
   };
 
   const handleReorderRecent = (items: { id: string }[]) => {
+    // SortableList items are keyed by path; map ids back to their entries so the
+    // detected repoType survives a reorder.
+    const byPath = new Map(device.workingDirs.map((d) => [d.path, d]));
     update.mutate({
       deviceId: device.deviceId,
-      recentCwds: items.map((item) => item.id),
+      workingDirs: items.map((item) => byPath.get(item.id) ?? { path: item.id }),
     });
   };
 
@@ -212,16 +221,17 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
       {/* ─── Recent directories ─── */}
       <Flexbox gap={6}>
         <span className={styles.label}>{t('devices.detail.recentDirs')}</span>
-        {device.recentCwds.length === 0 ? (
+        {device.workingDirs.length === 0 ? (
           <Text style={{ fontSize: 12 }} type={'secondary'}>
             {t('devices.detail.noRecent')}
           </Text>
         ) : (
           <SortableList
-            items={device.recentCwds.map((path) => ({ id: path }))}
-            renderItem={(item: { id: string }) => (
+            items={device.workingDirs.map((d) => ({ id: d.path, repoType: d.repoType }))}
+            renderItem={(item: { id: string; repoType?: 'git' | 'github' }) => (
               <SortableList.Item className={styles.recentItem} id={item.id} variant={'filled'}>
                 <SortableList.DragHandle />
+                {renderDirIcon(item.repoType)}
                 <Text className={styles.path} title={item.id}>
                   {item.id}
                 </Text>

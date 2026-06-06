@@ -1,32 +1,50 @@
 import { describe, expect, it } from 'vitest';
 
-import { nextRecentCwds, RECENT_CWDS_MAX } from './deviceCwd';
+import { nextWorkingDirs, WORKING_DIRS_MAX, type WorkingDirEntry } from './deviceCwd';
 
-describe('nextRecentCwds', () => {
-  it('prepends a new path as most-recent', () => {
-    expect(nextRecentCwds('/b', ['/a'])).toEqual(['/b', '/a']);
+const entry = (path: string, repoType?: 'git' | 'github'): WorkingDirEntry => ({ path, repoType });
+
+describe('nextWorkingDirs', () => {
+  it('prepends a new entry as most-recent', () => {
+    expect(nextWorkingDirs(entry('/b'), [entry('/a')])).toEqual([entry('/b'), entry('/a')]);
   });
 
   it('moves an existing path to the front without duplicating it', () => {
-    expect(nextRecentCwds('/a', ['/a', '/b', '/c'])).toEqual(['/a', '/b', '/c']);
-    expect(nextRecentCwds('/c', ['/a', '/b', '/c'])).toEqual(['/c', '/a', '/b']);
+    expect(nextWorkingDirs(entry('/a'), [entry('/a'), entry('/b'), entry('/c')])).toEqual([
+      entry('/a'),
+      entry('/b'),
+      entry('/c'),
+    ]);
+    expect(nextWorkingDirs(entry('/c'), [entry('/a'), entry('/b'), entry('/c')])).toEqual([
+      entry('/c'),
+      entry('/a'),
+      entry('/b'),
+    ]);
+  });
+
+  it('preserves and updates metadata such as repoType', () => {
+    expect(nextWorkingDirs(entry('/a', 'github'), [])).toEqual([entry('/a', 'github')]);
+    // Re-picking with a freshly-detected type overwrites the stale entry.
+    expect(nextWorkingDirs(entry('/a', 'github'), [entry('/a', 'git')])).toEqual([
+      entry('/a', 'github'),
+    ]);
   });
 
   it('caps the list length', () => {
-    const current = Array.from({ length: RECENT_CWDS_MAX }, (_, i) => `/p${i}`);
-    const result = nextRecentCwds('/new', current);
-    expect(result).toHaveLength(RECENT_CWDS_MAX);
-    expect(result[0]).toBe('/new');
-    expect(result).not.toContain(`/p${RECENT_CWDS_MAX - 1}`); // oldest dropped
+    const current = Array.from({ length: WORKING_DIRS_MAX }, (_, i) => entry(`/p${i}`));
+    const result = nextWorkingDirs(entry('/new'), current);
+    expect(result).toHaveLength(WORKING_DIRS_MAX);
+    expect(result[0]).toEqual(entry('/new'));
+    expect(result.some((d) => d.path === `/p${WORKING_DIRS_MAX - 1}`)).toBe(false); // oldest dropped
   });
 
-  it('trims the input and ignores a blank path', () => {
-    expect(nextRecentCwds('  /a  ', ['/b'])).toEqual(['/a', '/b']);
-    expect(nextRecentCwds('   ', ['/b'])).toEqual(['/b']);
-    expect(nextRecentCwds('', ['/b'])).toEqual(['/b']);
+  it('trims the path and ignores a blank one', () => {
+    expect(nextWorkingDirs(entry('  /a  '), [entry('/b')])).toEqual([entry('/a'), entry('/b')]);
+    expect(nextWorkingDirs(entry('   '), [entry('/b')])).toEqual([entry('/b')]);
+    expect(nextWorkingDirs(entry(''), [entry('/b')])).toEqual([entry('/b')]);
   });
 
   it('defaults to an empty current list', () => {
-    expect(nextRecentCwds('/a')).toEqual(['/a']);
+    expect(nextWorkingDirs(entry('/a'))).toEqual([entry('/a')]);
   });
 });

@@ -251,6 +251,7 @@ export class SessionActionImpl {
               title: session.meta?.title || 'Untitled Group',
               updatedAt: session.updatedAt,
               userId: '', // Use updatedAt as accessedAt fallback
+              workspaceId: null,
             }));
 
             chatGroupStore.internal_updateGroupMaps(chatGroups);

@@ -9,13 +9,9 @@ import type { PartialDeep } from 'type-fest';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
-import type { CreateAgentParams, CreateAgentResult } from '@/services/agent';
-import { agentService } from '@/services/agent';
-import {
-  agentDocumentService,
-  agentDocumentSWRKeys,
-  resolveAgentDocumentsContext,
-} from '@/services/agentDocument';
+import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@/services/agent';
+import { agentService, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT } from '@/services/agent';
+import { agentDocumentSWRKeys, resolveAgentDocumentsContext } from '@/services/agentDocument';
 import type { StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -25,7 +21,6 @@ import type {
   LobeAgentConfig,
   RuntimeEnvConfig,
 } from '@/types/agent';
-import { toAgentContextDocuments } from '@/utils/agentDocumentContextMapping';
 import { merge } from '@/utils/merge';
 
 import type { AgentStore } from '../../store';
@@ -33,6 +28,11 @@ import { setLocalAgentWorkingDirectory } from '../../utils/localAgentWorkingDire
 import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 
 const FETCH_AGENT_CONFIG_KEY = 'FETCH_AGENT_CONFIG';
+const FETCH_AVAILABLE_AGENTS_KEY = 'FETCH_AVAILABLE_AGENTS';
+const FETCH_AVAILABLE_AGENTS_SWR_KEY = [
+  FETCH_AVAILABLE_AGENTS_KEY,
+  AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT,
+] as const;
 type AgentMetaUpdate = Partial<
   Pick<
     AgentItem,
@@ -80,6 +80,7 @@ export class AgentSliceActionImpl {
 
   createAgent = async (params: CreateAgentParams): Promise<CreateAgentResult> => {
     const result = await agentService.createAgent(params);
+    this.#get().invalidateAvailableAgents();
 
     // Track new agent creation analytics
     const analytics = getSingletonAnalyticsOptional();
@@ -324,8 +325,7 @@ export class AgentSliceActionImpl {
   useFetchAgentDocuments = (agentId?: string | null): SWRResponse<AgentContextDocument[]> => {
     return useClientDataSWRWithSync<AgentContextDocument[]>(
       agentId ? agentDocumentSWRKeys.documents(agentId) : null,
-      async () =>
-        toAgentContextDocuments(await agentDocumentService.getDocuments({ agentId: agentId! })),
+      async () => (await resolveAgentDocumentsContext({ agentId: agentId! })) ?? [],
       {
         onData: (data) => {
           if (!agentId) return;
@@ -335,6 +335,24 @@ export class AgentSliceActionImpl {
         revalidateOnFocus: false,
       },
     );
+  };
+
+  useFetchAvailableAgents = (enabled: boolean): SWRResponse<AvailableAgentItem[]> => {
+    return useClientDataSWRWithSync<AvailableAgentItem[]>(
+      enabled ? FETCH_AVAILABLE_AGENTS_SWR_KEY : null,
+      () => agentService.queryAgents({ limit: AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT }),
+      {
+        onData: (data) => {
+          this.#set({ availableAgents: data }, false, 'useFetchAvailableAgents');
+        },
+        revalidateOnFocus: false,
+      },
+    );
+  };
+
+  invalidateAvailableAgents = (): void => {
+    this.#set({ availableAgents: undefined }, false, 'invalidateAvailableAgents');
+    void mutate(FETCH_AVAILABLE_AGENTS_SWR_KEY);
   };
 
   ensureAgentDocuments = async (
@@ -397,6 +415,7 @@ export class AgentSliceActionImpl {
       // 3. Use returned data directly (no refetch needed!)
       if (result?.success && result.agent) {
         internal_dispatchAgentMap(id, result.agent);
+        this.#get().invalidateAvailableAgents();
       }
       updateSaveStatus('saved');
     } catch (error: any) {
@@ -427,6 +446,7 @@ export class AgentSliceActionImpl {
       // 3. Use returned data directly (no refetch needed!)
       if (result?.success && result.agent) {
         internal_dispatchAgentMap(id, result.agent);
+        this.#get().invalidateAvailableAgents();
       }
       updateSaveStatus('saved');
     } catch (error: any) {

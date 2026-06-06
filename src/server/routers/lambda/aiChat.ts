@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
+import { getErrorCodeSpec } from '@lobechat/model-runtime';
 import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/types';
 import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
 import { createTimingHelpers, createTimingRequestId } from '@lobechat/utils';
+import { TRPCError } from '@trpc/server';
+import { getStatusKeyFromCode } from '@trpc/server/unstable-core-do-not-import';
 import debug from 'debug';
 import { z } from 'zod';
 
@@ -23,6 +26,38 @@ const log = debug('lobe-lambda-router:ai-chat');
 const { createPrefixedTimingContext, logTiming, runTimedStage } = createTimingHelpers(
   'lobe-server:chat:lobehub:timing',
 );
+
+type TRPCErrorCode = ConstructorParameters<typeof TRPCError>[0]['code'];
+type TRPCStatusCode = Parameters<typeof getStatusKeyFromCode>[0];
+
+const getRuntimeErrorType = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') return;
+
+  const errorType = (error as { errorType?: unknown }).errorType;
+  return typeof errorType === 'string' ? errorType : undefined;
+};
+
+const getTRPCErrorCodeFromStatus = (status: number): TRPCErrorCode => {
+  const code = getStatusKeyFromCode(status as TRPCStatusCode) as TRPCErrorCode;
+  if (code !== 'INTERNAL_SERVER_ERROR' || status === 500) return code;
+
+  if (status >= 500) return 'INTERNAL_SERVER_ERROR';
+  if (status >= 400) return 'BAD_REQUEST';
+
+  return 'INTERNAL_SERVER_ERROR';
+};
+
+const createRuntimeTRPCError = (error: unknown): TRPCError | undefined => {
+  const errorType = getRuntimeErrorType(error);
+  const spec = getErrorCodeSpec(errorType);
+  if (!errorType || !spec) return;
+
+  return new TRPCError({
+    cause: error,
+    code: getTRPCErrorCodeFromStatus(spec.httpStatus),
+    message: errorType,
+  });
+};
 
 const aiChatProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -57,19 +92,27 @@ export const aiChatRouter = router({
     // routing) and the tracing registry have a fallback when the caller
     // forgets to set one. `tracing` carries the structured tracing config
     // (scenario / promptVersion / schemaName / inputHint / ...).
-    const data = await ctx.aiGenerationService.generateObject(
-      {
-        messages: input.messages,
-        model: input.model,
-        provider: input.provider,
-        schema: input.schema,
-        tools: input.tools,
-      },
-      {
-        metadata: { trigger: RequestTrigger.Chat, ...input.metadata },
-        tracing: { ...input.tracing, tracingId },
-      },
-    );
+    let data: unknown;
+    try {
+      data = await ctx.aiGenerationService.generateObject(
+        {
+          messages: input.messages,
+          model: input.model,
+          provider: input.provider,
+          schema: input.schema,
+          tools: input.tools,
+        },
+        {
+          metadata: { trigger: RequestTrigger.Chat, ...input.metadata },
+          tracing: { ...input.tracing, tracingId },
+        },
+      );
+    } catch (error) {
+      const runtimeTRPCError = createRuntimeTRPCError(error);
+      if (runtimeTRPCError) throw runtimeTRPCError;
+
+      throw error;
+    }
 
     log('generateObject completed, result: %O', data);
     return { data, tracingId };

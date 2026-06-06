@@ -574,7 +574,7 @@ export const createRuntimeExecutors = (
         if (agentId && ctx.serverDB && ctx.userId) {
           try {
             const agentDocService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
-            const docs = await agentDocService.getAgentDocuments(agentId);
+            const docs = await agentDocService.getAgentContextDocuments(agentId);
             if (docs.length > 0) {
               agentDocuments = toAgentContextDocuments(docs);
               log('Resolved %d agent documents for agent %s', agentDocuments.length, agentId);
@@ -3372,6 +3372,107 @@ export const createRuntimeExecutors = (
       events,
       newState,
       // Do not provide nextContext as it requires waiting for human intervention
+    };
+  },
+
+  /**
+   * Resolve tools blocked in headless mode.
+   * Creates tool results without executing the tools, then continues the loop.
+   */
+  resolve_blocked_tools: async (instruction, state) => {
+    const { payload } = instruction as Extract<AgentInstruction, { type: 'resolve_blocked_tools' }>;
+    const { parentMessageId, toolsCalling } = payload;
+    const { operationId, stepIndex, streamManager } = ctx;
+    const events: AgentEvent[] = [];
+    const newState = structuredClone(state);
+    const toolResults: Array<{ data: ToolExecutionResultResponse; toolCallId: string }> = [];
+    const toolMessageIds: string[] = [];
+
+    log('[%s:%d] Resolving %d blocked tools', operationId, stepIndex, toolsCalling.length);
+
+    for (const toolPayload of toolsCalling) {
+      const result: ToolExecutionResultResponse = {
+        content: 'Blocked by security/privacy.',
+        error: 'blocked_by_security_privacy',
+        executionTime: 0,
+        state: { type: 'blocked' },
+        success: false,
+      };
+
+      await streamManager.publishStreamEvent(operationId, {
+        data: {
+          executionTime: 0,
+          isSuccess: false,
+          attempts: 0,
+          maxAttempts: 0,
+          payload: { parentMessageId, toolCalling: toolPayload },
+          phase: 'tool_execution',
+          result,
+        },
+        stepIndex,
+        type: 'tool_end',
+      });
+
+      try {
+        const toolMessage = await ctx.messageModel.create({
+          agentId: state.metadata!.agentId!,
+          content: result.content,
+          metadata: { toolExecutionTimeMs: 0 },
+          parentId: parentMessageId,
+          plugin: toolPayload as any,
+          pluginError: result.error,
+          pluginIntervention: { rejectedReason: result.error, status: 'rejected' },
+          pluginState: result.state,
+          role: 'tool',
+          threadId: state.metadata?.threadId,
+          tool_call_id: toolPayload.id,
+          topicId: state.metadata?.topicId,
+        });
+        toolMessageIds.push(toolMessage.id);
+      } catch (error) {
+        console.error('[resolve_blocked_tools] Failed to create blocked tool message: %O', error);
+        const fatal = isMidOperationReferenceMissingError(error)
+          ? createConversationParentMissingError(parentMessageId, error)
+          : error instanceof Error
+            ? error
+            : new Error(String(error));
+        await streamManager.publishStreamEvent(operationId, {
+          data: formatErrorEventData(fatal, 'tool_message_persist'),
+          stepIndex,
+          type: 'error',
+        });
+        throw fatal;
+      }
+
+      newState.messages.push({
+        content: result.content,
+        role: 'tool',
+        tool_call_id: toolPayload.id,
+      });
+      events.push({ id: toolPayload.id, result, type: 'tool_result' });
+      toolResults.push({ data: result, toolCallId: toolPayload.id });
+    }
+
+    newState.lastModified = new Date().toISOString();
+
+    return {
+      events,
+      newState,
+      nextContext: {
+        payload: {
+          parentMessageId: toolMessageIds.at(-1) ?? parentMessageId,
+          toolCount: toolsCalling.length,
+          toolResults,
+        },
+        phase: 'tools_batch_result',
+        session: {
+          eventCount: events.length,
+          messageCount: newState.messages.length,
+          sessionId: operationId,
+          status: 'running',
+          stepCount: state.stepCount + 1,
+        },
+      },
     };
   },
 

@@ -6,6 +6,7 @@ import {
   agentSignalFeedbackIntentManifest,
   agentSignalReflectionManifest,
   agentSignalReviewManifest,
+  agentSignalSkillManagementManifest,
 } from '@lobechat/builtin-tool-agent-signal';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
@@ -44,6 +45,7 @@ export const builtinToolIdentifiers: string[] = [
   agentSignalReviewManifest.identifier,
   agentSignalReflectionManifest.identifier,
   agentSignalFeedbackIntentManifest.identifier,
+  agentSignalSkillManagementManifest.identifier,
   SkillsManifest.identifier,
   SkillStoreManifest.identifier,
   TopicReferenceManifest.identifier,

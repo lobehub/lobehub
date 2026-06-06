@@ -1,3 +1,4 @@
+import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 import { type DocumentItem } from '@lobechat/database/schemas';
 import { type SWRResponse } from 'swr';
 
@@ -33,7 +34,7 @@ const documentItemToLobeDocument = (document: DocumentItem): LobeDocument => ({
 const n = setNamespace('page/list');
 
 const ALLOWED_PAGE_SOURCE_TYPES = new Set(['editor', 'file', 'api']);
-const ALLOWED_PAGE_FILE_TYPES = new Set(['custom/document', 'application/pdf']);
+const ALLOWED_PAGE_FILE_TYPES = new Set([CUSTOM_DOCUMENT_FILE_TYPE, 'application/pdf']);
 
 /**
  * Check if a page should be displayed in the page list

@@ -81,6 +81,46 @@ export interface AgentDocumentWithRules extends AgentDocument, AgentDocumentDeri
   loadRules: DocumentLoadRules;
 }
 
+export interface AgentDocumentContextRow extends AgentDocumentDerivedFields {
+  content: string;
+  contentCharCount?: number;
+  description: string | null;
+  documentId: string;
+  editorData: Record<string, any> | null;
+  filename: string;
+  fileType: string;
+  id: string;
+  loadRules: DocumentLoadRules;
+  parentId: string | null;
+  policy: AgentDocumentPolicy | null;
+  policyLoad: PolicyLoad;
+  policyLoadFormat: DocumentLoadFormat;
+  policyLoadPosition: string;
+  policyLoadRule: string;
+  sourceType: AgentDocumentSourceType;
+  templateId: string | null;
+  title: string;
+  updatedAt: Date;
+}
+
+export interface AgentDocumentContextPayload {
+  content: string;
+  contentCharCount?: number;
+  description: string | null;
+  filename: string;
+  id: string;
+  isFolder: boolean;
+  loadRules: DocumentLoadRules;
+  policy: AgentDocumentPolicy | null;
+  policyLoad: PolicyLoad;
+  policyLoadFormat: DocumentLoadFormat;
+  policyLoadPosition: string;
+  sourceType: AgentDocumentSourceType;
+  templateId: string | null;
+  title: string;
+  updatedAt: Date;
+}
+
 export interface ToolUpdateLoadRule {
   keywordMatchMode?: 'all' | 'any';
   keywords?: string[];

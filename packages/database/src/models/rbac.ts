@@ -175,6 +175,7 @@ export class RbacModel {
         metadata: roles.metadata,
         name: roles.name,
         updatedAt: roles.updatedAt,
+        workspaceId: roles.workspaceId,
       })
       .from(userRoles)
       .innerJoin(roles, eq(userRoles.roleId, roles.id))

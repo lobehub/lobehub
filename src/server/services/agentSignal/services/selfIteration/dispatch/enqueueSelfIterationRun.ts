@@ -4,11 +4,12 @@ import { type AgentSignalOperationMarker, RequestTrigger, ThreadType } from '@lo
 import { ThreadModel } from '@/database/models/thread';
 import type { LobeChatDatabase } from '@/database/type';
 
-/** The three builtin self-iteration agent slugs an execAgent run can dispatch to. */
+/** The builtin self-iteration agent slugs an execAgent run can dispatch to. */
 export type SelfIterationSlug =
   | typeof BUILTIN_AGENT_SLUGS.nightlyReview
   | typeof BUILTIN_AGENT_SLUGS.selfFeedbackIntent
-  | typeof BUILTIN_AGENT_SLUGS.selfReflection;
+  | typeof BUILTIN_AGENT_SLUGS.selfReflection
+  | typeof BUILTIN_AGENT_SLUGS.skillManagement;
 
 export interface EnqueueSelfIterationRunInput {
   /** The user agent being reviewed — owns the run, marker, and isolated thread. */

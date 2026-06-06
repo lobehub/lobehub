@@ -1,23 +1,26 @@
+import type { CustomPluginParams, ToolManifest } from '@lobechat/types';
 import {
   boolean,
   index,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   uniqueIndex,
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
 
-import { timestamps, timestamptz } from './_helpers';
+import { timestamps, timestamptz, varchar255 } from './_helpers';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // user_connectors — types & consts
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface OIDCConfig {
-  scheme: 'pre_registration' | 'dcr' | 'client_id_metadata_document';
+  authorizationEndpoint?: string;
 
   /**
    * Client identifier.
@@ -29,16 +32,16 @@ export interface OIDCConfig {
 
   /** OIDC discovery issuer URL — preferred over manual endpoint overrides */
   issuer?: string;
-  authorizationEndpoint?: string;
-  tokenEndpoint?: string;
-
-  scopes?: string[];
   redirectUri?: string;
-  /** Recommended for public clients */
-  usePKCE?: boolean;
-
   /** DCR only (RFC 7591) — dynamic client registration endpoint */
   registrationEndpoint?: string;
+
+  scheme: 'pre_registration' | 'dcr' | 'client_id_metadata_document';
+  scopes?: string[];
+  tokenEndpoint?: string;
+
+  /** Recommended for public clients */
+  usePKCE?: boolean;
 }
 
 /**
@@ -109,6 +112,7 @@ export const userConnectors = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     // ── Connector identity ────────────────────────────────────────────────
     /** Fixed slug for built-ins (e.g. "linear"); nanoid for custom ones */
@@ -150,6 +154,7 @@ export const userConnectors = pgTable(
     index('user_connectors_user_id_idx').on(t.userId),
     /** Scanned by background token-refresh worker */
     index('user_connectors_token_expires_at_idx').on(t.tokenExpiresAt),
+    index('user_connectors_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -208,6 +213,7 @@ export const userConnectorTools = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     // ── Tool definition (synced from MCP manifest) ────────────────────────
     toolName: varchar('tool_name', { length: 255 }).notNull(),
@@ -267,14 +273,37 @@ export const userConnectorTools = pgTable(
   },
   (t) => [
     /** One permission row per (connector, tool) */
-    uniqueIndex('user_connector_tools_connector_tool_unique').on(
-      t.userConnectorId,
-      t.toolName,
-    ),
+    uniqueIndex('user_connector_tools_connector_tool_unique').on(t.userConnectorId, t.toolName),
     index('user_connector_tools_user_id_idx').on(t.userId),
     index('user_connector_tools_connector_id_idx').on(t.userConnectorId),
+    index('user_connector_tools_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
 export type NewUserConnectorTool = typeof userConnectorTools.$inferInsert;
 export type UserConnectorToolItem = typeof userConnectorTools.$inferSelect;
+
+export const userInstalledPlugins = pgTable(
+  'user_installed_plugins',
+  {
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    identifier: text('identifier').notNull(),
+    type: text('type', { enum: ['plugin', 'customPlugin'] }).notNull(),
+    manifest: jsonb('manifest').$type<ToolManifest>(),
+    settings: jsonb('settings'),
+    customParams: jsonb('custom_params').$type<CustomPluginParams>(),
+    source: varchar255('source'),
+    ...timestamps,
+  },
+  (self) => ({
+    id: primaryKey({ columns: [self.userId, self.identifier] }),
+    workspaceIdIdx: index('user_installed_plugins_workspace_id_idx').on(self.workspaceId),
+  }),
+);
+
+export type NewInstalledPlugin = typeof userInstalledPlugins.$inferInsert;
+export type InstalledPluginItem = typeof userInstalledPlugins.$inferSelect;

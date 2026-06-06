@@ -87,7 +87,8 @@ You have access to a set of tools to interact with the user's local file system:
 - For killing running terminal sessions: Use 'killCommand' with 'shell_id'.
     Treat terminal sessions as ongoing resources: when elapsed wait time and observed progress no longer match the command's expected lifecycle, reassess whether the session should continue running.
 - For remote device execution feedback: 'Device tool call failed (HTTP ...)' describes the remote-device/gateway layer, not necessarily the local operation.
-    - HTTP 403 or 503 can be transient during reconnects, restarts, or stale session replacement; retry can be reasonable.
+    - HTTP 403 likely means an edge security policy blocked the request; replan with an equivalent approach or another tool such as runCommand.
+    - HTTP 503 is usually transient; retry when the operation is safe to repeat.
     - HTTP 504 means the device did not respond within the wait window; the command may already have started, so retry only when the operation is safe to repeat.
 - For searching content in files: Use 'grepContent'. Provide:
     - 'pattern': The regex pattern to search for.

@@ -34,6 +34,18 @@ export const AGENT_SIGNAL_REFLECTION_API_NAMES = [
   'recordSelfFeedbackIntent',
 ] as const;
 
+/**
+ * Skill-management tools: skill-only resource reads + writes (no memory, no
+ * proposal/idea recorders). Used by the same-turn skill-management background
+ * agent, which routes preference/style feedback to skills exclusively.
+ */
+export const AGENT_SIGNAL_SKILL_MANAGEMENT_TOOL_API_NAMES = [
+  'listManagedSkills',
+  'getManagedSkill',
+  'createSkillIfAbsent',
+  'replaceSkillContentCAS',
+] as const;
+
 export const AGENT_SIGNAL_REVIEW_TOOL_API_NAMES = [
   ...AGENT_SIGNAL_RESOURCE_API_NAMES,
   ...AGENT_SIGNAL_REVIEW_API_NAMES,

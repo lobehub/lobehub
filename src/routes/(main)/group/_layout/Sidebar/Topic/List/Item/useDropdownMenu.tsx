@@ -164,11 +164,14 @@ export const useTopicItemDropdownMenu = ({
         label: t('delete', { ns: 'common' }),
         onClick: () => {
           confirmModal({
+            cancelText: t('cancel', { ns: 'common' }),
+            content: t('actions.confirmRemoveTopic'),
             okButtonProps: { danger: true },
+            okText: t('delete', { ns: 'common' }),
             onOk: async () => {
               await removeTopic(id);
             },
-            title: t('actions.confirmRemoveTopic'),
+            title: t('delete', { ns: 'common' }),
           });
         },
       },

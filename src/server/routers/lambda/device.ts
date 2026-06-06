@@ -1,3 +1,4 @@
+import type { WorkingDirEntry } from '@lobechat/database/schemas';
 import { REMOTE_HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
 import { z } from 'zod';
 
@@ -173,8 +174,8 @@ export const deviceRouter = router({
         lastSeen: d.lastSeenAt.toISOString(),
         online: channels.length > 0,
         platform: d.platform ?? live?.platform ?? null,
-        recentCwds: d.recentCwds,
         registered: true,
+        workingDirs: d.workingDirs ?? [],
       };
     });
 
@@ -191,8 +192,8 @@ export const deviceRouter = router({
         lastSeen: channels[0]?.connectedAt ?? new Date().toISOString(),
         online: true,
         platform: channels[0]?.platform ?? null,
-        recentCwds: [] as string[],
         registered: false,
+        workingDirs: [] as WorkingDirEntry[],
       }));
 
     return [...fromDb, ...ghosts];
@@ -234,7 +235,10 @@ export const deviceRouter = router({
         defaultCwd: z.string().nullable().optional(),
         deviceId: z.string(),
         friendlyName: z.string().max(100).nullable().optional(),
-        recentCwds: z.array(z.string()).max(20).optional(),
+        workingDirs: z
+          .array(z.object({ path: z.string(), repoType: z.enum(['git', 'github']).optional() }))
+          .max(20)
+          .optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

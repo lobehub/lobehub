@@ -280,6 +280,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       result: {
         content: result.content,
         error: result.error,
+        state: result.state,
         success: result.success,
       },
     });

@@ -1,11 +1,12 @@
 import type { SkillManifest, SkillResourceMeta } from '@lobechat/types';
-import { relations } from 'drizzle-orm';
+import { isNotNull, isNull, relations } from 'drizzle-orm';
 import { index, jsonb, pgTable, text, uniqueIndex, varchar } from 'drizzle-orm/pg-core';
 
 import { idGenerator } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
 import { globalFiles } from './file';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 export const agentSkills = pgTable(
   'agent_skills',
@@ -44,15 +45,20 @@ export const agentSkills = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     ...timestamps,
   },
   (t) => [
-    uniqueIndex('agent_skills_user_name_idx').on(t.userId, t.name),
+    uniqueIndex('agent_skills_user_name_idx').on(t.userId, t.name).where(isNull(t.workspaceId)),
     index('agent_skills_identifier_idx').on(t.identifier),
     index('agent_skills_user_id_idx').on(t.userId),
     index('agent_skills_source_idx').on(t.source),
     index('agent_skills_zip_hash_idx').on(t.zipFileHash),
+    index('agent_skills_workspace_id_idx').on(t.workspaceId),
+    uniqueIndex('agent_skills_name_workspace_id_unique')
+      .on(t.workspaceId, t.name)
+      .where(isNotNull(t.workspaceId)),
   ],
 );
 

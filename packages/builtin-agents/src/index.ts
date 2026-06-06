@@ -6,6 +6,7 @@ import { NIGHTLY_REVIEW } from './agents/nightly-review';
 import { PAGE_AGENT } from './agents/page-agent';
 import { SELF_FEEDBACK_INTENT } from './agents/self-feedback-intent';
 import { SELF_REFLECTION } from './agents/self-reflection';
+import { SKILL_MANAGEMENT } from './agents/skill-management';
 import { TASK_AGENT } from './agents/task-agent';
 import { WEB_ONBOARDING } from './agents/web-onboarding';
 import type { BuiltinAgentDefinition, BuiltinAgentSlug, RuntimeContext } from './types';
@@ -22,6 +23,7 @@ export { NIGHTLY_REVIEW } from './agents/nightly-review';
 export { PAGE_AGENT } from './agents/page-agent';
 export { SELF_FEEDBACK_INTENT } from './agents/self-feedback-intent';
 export { SELF_REFLECTION } from './agents/self-reflection';
+export { SKILL_MANAGEMENT } from './agents/skill-management';
 export { TASK_AGENT } from './agents/task-agent';
 export { WEB_ONBOARDING } from './agents/web-onboarding';
 
@@ -37,6 +39,7 @@ export const BUILTIN_AGENTS: Record<BuiltinAgentSlug, BuiltinAgentDefinition> = 
   [BUILTIN_AGENT_SLUGS.pageAgent]: PAGE_AGENT,
   [BUILTIN_AGENT_SLUGS.selfFeedbackIntent]: SELF_FEEDBACK_INTENT,
   [BUILTIN_AGENT_SLUGS.selfReflection]: SELF_REFLECTION,
+  [BUILTIN_AGENT_SLUGS.skillManagement]: SKILL_MANAGEMENT,
   [BUILTIN_AGENT_SLUGS.taskAgent]: TASK_AGENT,
   [BUILTIN_AGENT_SLUGS.webOnboarding]: WEB_ONBOARDING,
 };
@@ -52,6 +55,7 @@ export const SELF_ITERATION_AGENT_SLUGS = new Set<BuiltinAgentSlug>([
   BUILTIN_AGENT_SLUGS.nightlyReview,
   BUILTIN_AGENT_SLUGS.selfFeedbackIntent,
   BUILTIN_AGENT_SLUGS.selfReflection,
+  BUILTIN_AGENT_SLUGS.skillManagement,
 ]);
 
 /**

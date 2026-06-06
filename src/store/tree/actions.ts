@@ -1,3 +1,5 @@
+import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
+
 import { fileService } from '@/services/file';
 import { resourceService } from '@/services/resource';
 import type { StoreSetter } from '@/store/types';
@@ -24,7 +26,7 @@ export const toTreeItem = (item: {
 }): TreeItem => ({
   fileType: item.fileType,
   id: item.id,
-  isFolder: item.fileType === 'custom/folder',
+  isFolder: item.fileType === CUSTOM_FOLDER_FILE_TYPE,
   metadata: item.metadata ?? undefined,
   name: item.name,
   slug: item.slug,

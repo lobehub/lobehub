@@ -194,6 +194,10 @@ export interface SearchAgentParams {
    */
   limit?: number;
   /**
+   * Number of workspace agents to skip, for paginating beyond the per-call limit
+   */
+  offset?: number;
+  /**
    * Search source: 'user' (own agents), 'market' (marketplace), 'all' (both)
    */
   source?: SearchAgentSource;
@@ -232,15 +236,23 @@ export interface SearchAgentState {
    */
   agents: AgentSearchItem[];
   /**
+   * Whether more workspace agents exist beyond the returned page
+   */
+  hasMore?: boolean;
+  /**
    * The search keyword used
    */
   keyword?: string;
+  /**
+   * The offset used for this page of workspace agents
+   */
+  offset?: number;
   /**
    * The search source used
    */
   source: SearchAgentSource;
   /**
-   * Total count of matching agents
+   * Real total of matching agents across the searched sources (not just the returned page)
    */
   totalCount: number;
 }

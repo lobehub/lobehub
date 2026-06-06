@@ -469,6 +469,7 @@ export default {
   'plus.search.modelSearchDesc': 'May cause unexpected behavior when enabled, not recommended.',
   'plus.search.off': 'Off',
   'plus.search.offDesc': '',
+  'plus.addAttachments': 'Attachments',
   'plus.addSkills': 'Add Skills...',
   'plus.title': 'Add',
   'plus.tooltip': 'Add files, skills, and more context...',
@@ -713,7 +714,9 @@ export default {
   'taskDetail.comment.save': 'Save',
   'taskDetail.commentPlaceholder':
     'Leave feedback to guide the agent — your comments shape the next run...',
-  'taskDetail.commentSubmitAndRun': 'Send & run now',
+  'taskDetail.replyInThread': 'Reply in this thread',
+  'taskDetail.replyPlaceholder': 'Reply in this thread...',
+  'taskDetail.sendFollowUp': 'Send follow up message',
   'taskDetail.deleteConfirm.content': 'This action cannot be undone.',
   'taskDetail.deleteConfirm.ok': 'Delete',
   'taskDetail.deleteConfirm.title': 'Delete this task?',

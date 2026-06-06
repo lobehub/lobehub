@@ -52,7 +52,10 @@ export const useRecentItemDropdownMenu = (
     };
 
     confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: confirmMessages[item.type],
       okButtonProps: { danger: true },
+      okText: t('delete', { ns: 'common' }),
       onOk: async () => {
         switch (item.type) {
           case 'topic': {
@@ -71,7 +74,7 @@ export const useRecentItemDropdownMenu = (
         }
         await refreshRecents();
       },
-      title: confirmMessages[item.type] || t('delete', { ns: 'common' }),
+      title: t('delete', { ns: 'common' }),
     });
   }, [item, t, refreshRecents]);
 

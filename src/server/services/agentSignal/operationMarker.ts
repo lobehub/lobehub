@@ -21,6 +21,7 @@ const VALID_KINDS = new Set<AgentSignalOperationKind>([
   'nightly-review',
   'self-feedback-intent',
   'self-reflection',
+  'skill',
 ]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

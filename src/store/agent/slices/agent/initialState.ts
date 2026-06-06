@@ -2,6 +2,7 @@ import type { AgentContextDocument } from '@lobechat/context-engine';
 import type { PartialDeep } from 'type-fest';
 
 import { type AgentSettingsInstance } from '@/features/AgentSetting';
+import { type AvailableAgentItem } from '@/services/agent';
 import { type AgentItem } from '@/types/agent';
 import { type MetaData } from '@/types/meta';
 
@@ -15,6 +16,7 @@ export interface AgentSliceState {
   agentDocumentsMap: Record<string, AgentContextDocument[]>;
   agentMap: Record<string, PartialDeep<AgentItem>>;
   agentSettingInstance?: AgentSettingsInstance | null;
+  availableAgents?: AvailableAgentItem[];
   /**
    * Whether the agent panel is pinned (UI state)
    */
@@ -53,6 +55,7 @@ export interface AgentSliceState {
 export const initialAgentSliceState: AgentSliceState = {
   agentDocumentsMap: {},
   agentMap: {},
+  availableAgents: undefined,
   isAgentPinned: false,
   lastUpdatedTime: null,
   localAgentWorkingDirectoryMap: readAllLocalAgentWorkingDirectories(),
