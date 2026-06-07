@@ -13,7 +13,7 @@ import {
  * E2E tests for `lh agent-signal trigger`.
  *
  * The "golden fixture" block runs fully offline — it is the structural
- * regression baseline that the execAgent migration (LOBE-9434 #5/#7) asserts
+ * regression baseline that the execAgent migration asserts
  * against. The "live trigger" block requires a running server + authenticated
  * CLI and is gated behind AGENT_SIGNAL_AGENT_ID (or AGENT_ID).
  *

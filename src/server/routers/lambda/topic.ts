@@ -8,6 +8,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { after } from 'next/server';
 import { z } from 'zod';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
@@ -31,6 +32,7 @@ const topicProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   return opts.next({
     ctx: {
       agentMigrationRepo: new AgentMigrationRepo(ctx.serverDB, ctx.userId),
+      agentOperationModel: new AgentOperationModel(ctx.serverDB, ctx.userId),
       topicImporterRepo: new TopicImporterRepo(ctx.serverDB, ctx.userId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId),
       topicShareModel: new TopicShareModel(ctx.serverDB, ctx.userId),
@@ -352,6 +354,10 @@ export const topicRouter = router({
 
       return result;
     }),
+
+  getMaxTaskDuration: topicProcedure.query(async ({ ctx }) => {
+    return ctx.agentOperationModel.getMaxDurationSeconds();
+  }),
 
   rankTopics: topicProcedure.input(z.number().max(50).optional()).query(async ({ ctx, input }) => {
     return ctx.topicModel.rank(input);

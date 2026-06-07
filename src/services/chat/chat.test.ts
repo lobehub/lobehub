@@ -1584,7 +1584,7 @@ describe('ChatService', () => {
           .spyOn(mechaModule, 'contextEngineering')
           .mockResolvedValue([]);
         vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
-        vi.spyOn(agentDocumentService, 'getDocuments').mockResolvedValue([
+        vi.spyOn(agentDocumentService, 'getContextDocuments').mockResolvedValue([
           {
             content: 'Project setup steps',
             filename: 'setup.md',
@@ -1604,7 +1604,9 @@ describe('ChatService', () => {
           resolvedAgentConfig: createMockResolvedConfig(),
         });
 
-        expect(agentDocumentService.getDocuments).toHaveBeenCalledWith({ agentId: 'agent-1' });
+        expect(agentDocumentService.getContextDocuments).toHaveBeenCalledWith({
+          agentId: 'agent-1',
+        });
         expect(contextEngineeringSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             agentDocuments: [
@@ -1623,7 +1625,7 @@ describe('ChatService', () => {
           .spyOn(mechaModule, 'contextEngineering')
           .mockResolvedValue([]);
         vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
-        vi.spyOn(agentDocumentService, 'getDocuments').mockResolvedValue([
+        vi.spyOn(agentDocumentService, 'getContextDocuments').mockResolvedValue([
           {
             content: 'Edited agent setup',
             filename: 'builder-target.md',
@@ -1647,7 +1649,9 @@ describe('ChatService', () => {
           }),
         });
 
-        expect(agentDocumentService.getDocuments).toHaveBeenCalledWith({ agentId: 'edited-agent' });
+        expect(agentDocumentService.getContextDocuments).toHaveBeenCalledWith({
+          agentId: 'edited-agent',
+        });
         expect(contextEngineeringSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             agentDocuments: [
@@ -1827,7 +1831,7 @@ describe('ChatService', () => {
   describe('fetchPresetTaskResult', () => {
     it('should not wait for agent documents on preset task chains', async () => {
       vi.spyOn(chatService, 'getChatCompletion').mockResolvedValue(new Response(''));
-      vi.spyOn(agentDocumentService, 'getDocuments').mockResolvedValue([]);
+      vi.spyOn(agentDocumentService, 'getContextDocuments').mockResolvedValue([]);
 
       await chatService.fetchPresetTaskResult({
         abortController: new AbortController(),
@@ -1838,7 +1842,7 @@ describe('ChatService', () => {
         },
       });
 
-      expect(agentDocumentService.getDocuments).not.toHaveBeenCalled();
+      expect(agentDocumentService.getContextDocuments).not.toHaveBeenCalled();
     });
 
     it('should handle successful chat completion response', async () => {

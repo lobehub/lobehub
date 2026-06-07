@@ -1,6 +1,6 @@
 import { and, desc, eq } from 'drizzle-orm';
 
-import type { DeviceItem } from '../schemas';
+import type { DeviceItem, WorkingDirEntry } from '../schemas';
 import { devices } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
@@ -15,7 +15,7 @@ export interface RegisterDeviceParams {
 export interface UpdateDeviceParams {
   defaultCwd?: string | null;
   friendlyName?: string | null;
-  recentCwds?: string[];
+  workingDirs?: WorkingDirEntry[];
 }
 
 export class DeviceModel {
@@ -30,7 +30,7 @@ export class DeviceModel {
   /**
    * Auto-register from desktop/CLI. Upserts on the (userId, deviceId) unique
    * index. On conflict only the machine-reported fields + lastSeenAt are
-   * refreshed — friendlyName / defaultCwd / recentCwds are user-owned and
+   * refreshed — friendlyName / defaultCwd / workingDirs are user-owned and
    * must survive re-registration.
    */
   register = async (params: RegisterDeviceParams) => {

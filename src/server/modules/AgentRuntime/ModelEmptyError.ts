@@ -3,7 +3,7 @@ import { AgentRuntimeErrorType } from '@lobechat/types';
 /**
  * Thrown by the `call_llm` executor when the model returns an empty completion
  * — no text content, no reasoning, no tool calls, no images, and ~0 output
- * tokens. This is the LOBE-9834 failure mode: after a stalled tool loop the
+ * tokens. This is the "empty completion" failure mode: after a stalled tool loop the
  * model effectively gives up and emits a blank turn, which the harness used to
  * silently finalize to `done` while persisting an empty assistant message
  * (empty bubble, `status=done, error=null`).

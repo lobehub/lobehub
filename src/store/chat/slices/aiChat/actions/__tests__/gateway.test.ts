@@ -2,6 +2,7 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { RequestTrigger } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type * as ConstVersion from '@/const/version';
 import { aiAgentService } from '@/services/aiAgent';
 
 import type { GatewayConnection } from '../gateway';
@@ -31,6 +32,35 @@ vi.mock('@/store/user', () => ({
   useUserStore: {
     getState: vi.fn(() => ({ preference: { lab: {} } })),
   },
+}));
+
+// ─── Local-device activation (本机) test seams ───
+// Controlled per-test; default off so the rest of the suite runs as web (no
+// device resolution, no electron IPC).
+const mockEnv = vi.hoisted(() => ({ isDesktop: false }));
+const mockGateway = vi.hoisted(() => ({ getDeviceInfo: vi.fn() }));
+// Effective runtime mode === 'local' (what isLocalSystemEnabledById returns).
+const mockRuntime = vi.hoisted(() => ({ isLocal: false }));
+
+vi.mock('@/const/version', async (importOriginal) => {
+  const actual = await importOriginal<typeof ConstVersion>();
+  return {
+    ...actual,
+    get isDesktop() {
+      return mockEnv.isDesktop;
+    },
+  };
+});
+
+vi.mock('@/services/electron/gatewayConnection', () => ({
+  gatewayConnectionService: { getDeviceInfo: mockGateway.getDeviceInfo },
+}));
+
+vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({}) }));
+
+vi.mock('@/store/agent/selectors', () => ({
+  agentSelectors: { currentAgentWorkingDirectory: () => undefined },
+  chatConfigByIdSelectors: { isLocalSystemEnabledById: () => () => mockRuntime.isLocal },
 }));
 
 // ─── Mock Client Factory ───
@@ -747,6 +777,85 @@ describe('GatewayActionImpl', () => {
       expect(interruptTaskSpy).toHaveBeenCalledWith({
         operationId: 'server-op-xyz',
         topicId: 'topic-1',
+      });
+    });
+
+    // When the desktop runs against 本机 (effective runtime mode 'local'), the
+    // client must forward this machine's own gateway deviceId so the server can
+    // preset activeDeviceId and inject lobe-local-system into the first LLM
+    // payload — skipping the activateDevice round-trip. It must NOT do so for a
+    // cloud/none run, otherwise that run would be wrongly routed to the device.
+    describe('local device activation (本机)', () => {
+      const successResult = {
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created' as const,
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      };
+
+      afterEach(() => {
+        mockEnv.isDesktop = false;
+        mockRuntime.isLocal = false;
+        mockGateway.getDeviceInfo.mockReset();
+      });
+
+      const send = async () => {
+        const { action } = createExecuteTestAction();
+        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue(successResult);
+        await action.executeGatewayAgent({
+          context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
+          message: 'list files in cwd',
+        });
+      };
+
+      it('forwards this desktop deviceId when local execution is selected', async () => {
+        mockEnv.isDesktop = true;
+        mockRuntime.isLocal = true;
+        mockGateway.getDeviceInfo.mockResolvedValue({ deviceId: 'device-local-1' });
+
+        await send();
+
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+          expect.objectContaining({ deviceId: 'device-local-1' }),
+          expect.anything(),
+        );
+      });
+
+      // Regression guard: the legacy ModeSelector writes only runtimeMode, so an
+      // explicit cloud/none run leaves executionTarget unset. Gating on the
+      // effective runtime mode (not the unset target) keeps it off the device.
+      it('does not resolve a deviceId when a non-local runtime mode is selected', async () => {
+        mockEnv.isDesktop = true;
+        mockRuntime.isLocal = false;
+
+        await send();
+
+        expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+          expect.objectContaining({ deviceId: undefined }),
+          expect.anything(),
+        );
+      });
+
+      it('never resolves a deviceId off desktop, even when local mode is set', async () => {
+        mockEnv.isDesktop = false;
+        mockRuntime.isLocal = true;
+
+        await send();
+
+        expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+          expect.objectContaining({ deviceId: undefined }),
+          expect.anything(),
+        );
       });
     });
   });

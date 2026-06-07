@@ -1,4 +1,6 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gte, isNotNull, sql } from 'drizzle-orm';
+
+import { today } from '@/utils/time';
 
 import type {
   AgentOperationAppContext,
@@ -14,6 +16,12 @@ export interface RecordOperationStartParams {
   appContext?: AgentOperationAppContext;
   chatGroupId?: string | null;
   maxSteps?: number;
+  /**
+   * Durable per-run metadata persisted on the operation row (jsonb). Carries the
+   * Agent Signal run marker so server-side tools can read it back from the row
+   * (`metadata.agentSignal`) at tool-call time.
+   */
+  metadata?: Record<string, unknown>;
   model?: string;
   modelRuntimeConfig?: Record<string, unknown>;
   operationId: string;
@@ -34,13 +42,20 @@ export interface RecordOperationCompletionParams {
     | 'interrupted'
     | 'max_steps'
     | 'cost_limit'
-    | 'waiting_for_human';
+    | 'waiting_for_human'
+    | 'waiting_for_async_tool';
   cost?: Record<string, unknown> | null;
   error?: AgentOperationError | null;
   interruption?: AgentOperationInterruption | null;
   llmCalls?: number | null;
   processingTimeMs?: number | null;
-  status: 'running' | 'waiting_for_human' | 'done' | 'error' | 'interrupted';
+  status:
+    | 'running'
+    | 'waiting_for_human'
+    | 'waiting_for_async_tool'
+    | 'done'
+    | 'error'
+    | 'interrupted';
   stepCount?: number | null;
   toolCalls?: number | null;
   totalCost?: number | null;
@@ -72,6 +87,7 @@ export class AgentOperationModel {
       chatGroupId: params.chatGroupId ?? null,
       id: params.operationId,
       maxSteps: params.maxSteps,
+      ...(params.metadata ? { metadata: params.metadata } : {}),
       model: params.model,
       modelRuntimeConfig: params.modelRuntimeConfig,
       parentOperationId: params.parentOperationId ?? null,
@@ -134,5 +150,55 @@ export class AgentOperationModel {
       .where(and(eq(agentOperations.id, operationId), eq(agentOperations.userId, this.userId)))
       .limit(1);
     return row ?? null;
+  }
+
+  /**
+   * Longest single operation (agent run) wall-clock execution time over the last
+   * year, in seconds. Wall clock (`completedAt - startedAt`) is the most faithful
+   * "task duration" — it spans the whole run including tool calls and waiting,
+   * not just LLM compute. Returns 0 when there are no completed operations.
+   */
+  async getMaxDurationSeconds(): Promise<number> {
+    const startDate = today().subtract(1, 'year').startOf('day').toDate();
+
+    const [row] = await this.db
+      .select({
+        seconds:
+          sql<number>`COALESCE(MAX(EXTRACT(EPOCH FROM (${agentOperations.completedAt} - ${agentOperations.startedAt}))), 0)`.mapWith(
+            Number,
+          ),
+      })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.userId, this.userId),
+          isNotNull(agentOperations.startedAt),
+          isNotNull(agentOperations.completedAt),
+          gte(agentOperations.createdAt, startDate),
+        ),
+      );
+
+    return row?.seconds ?? 0;
+  }
+
+  /**
+   * Atomically flip a parked parent op from `waiting_for_async_tool` back to
+   * `running`. Returns true only for the single winner (affected === 1) so
+   * concurrent sub-op completions that lose the race no-op instead of
+   * double-resuming the parent.
+   */
+  async tryResumeFromAsyncTool(operationId: string): Promise<boolean> {
+    const rows = await this.db
+      .update(agentOperations)
+      .set({ status: 'running' })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.userId, this.userId),
+          eq(agentOperations.status, 'waiting_for_async_tool'),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return rows.length === 1;
   }
 }

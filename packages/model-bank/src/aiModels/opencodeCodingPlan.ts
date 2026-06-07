@@ -113,33 +113,9 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'USD',
       units: [
-        {
-          name: 'textInput',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 0.4, upTo: 256_000 },
-            { rate: 0.8, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textOutput',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 2, upTo: 256_000 },
-            { rate: 4, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textInput_cacheRead',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 0.08, upTo: 256_000 },
-            { rate: 0.16, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
+        { name: 'textInput', rate: 0.14, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0.28, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0028, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-04-22',
@@ -161,33 +137,9 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     pricing: {
       currency: 'USD',
       units: [
-        {
-          name: 'textInput',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 1, upTo: 256_000 },
-            { rate: 2, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textOutput',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 3, upTo: 256_000 },
-            { rate: 6, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
-        {
-          name: 'textInput_cacheRead',
-          strategy: 'tiered',
-          tiers: [
-            { rate: 0.2, upTo: 256_000 },
-            { rate: 0.4, upTo: 'infinity' },
-          ],
-          unit: 'millionTokens',
-        },
+        { name: 'textInput', rate: 1.74, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3.48, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.0145, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     releasedAt: '2026-04-22',
@@ -245,26 +197,25 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
   },
   {
     abilities: { functionCall: true, reasoning: true, vision: true },
-    contextWindowTokens: 262_144,
+    contextWindowTokens: 512_000,
     description:
-      'Qwen3.5-Plus by Alibaba — cost-effective coding model with vision support for image and video input.',
-    displayName: 'Qwen3.5 Plus',
+      'MiniMax M3 — latest MiniMax model with vision support, strong reasoning, and improved tool use.',
+    displayName: 'MiniMax M3',
     enabled: false,
-    id: 'qwen3.5-plus',
-    maxOutput: 65_536,
-    organization: 'Alibaba',
+    id: 'minimax-m3',
+    maxOutput: 131_072,
+    organization: 'MiniMax',
     pricing: {
       currency: 'USD',
       units: [
-        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheWrite', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2.4, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheRead', rate: 0.12, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2026-02-16',
+    releasedAt: '2026-05-31',
     settings: {
-      extendParams: ['reasoningEffort'],
+      extendParams: ['reasoningBudgetToken32k'],
     },
     type: 'chat',
   },

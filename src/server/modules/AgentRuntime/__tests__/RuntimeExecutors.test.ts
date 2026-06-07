@@ -38,7 +38,7 @@ const mockBuiltinModels = vi.hoisted(() => [
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn().mockResolvedValue({
     // Emit a minimal non-empty completion so the call_llm empty-completion
-    // guard (LOBE-9834) doesn't treat the default mock as a "gave up" turn and
+    // guard doesn't treat the default mock as a "gave up" turn and
     // throw ModelEmptyError. Tests that exercise real output override this.
     chat: vi.fn().mockImplementation(async (_payload: any, options: any) => {
       await options?.callback?.onText?.('done');
@@ -595,9 +595,9 @@ describe('RuntimeExecutors', () => {
       });
     });
 
-    it('retries empty completions on the branded provider then throws ModelEmptyError (LOBE-9834)', async () => {
+    it('retries empty completions on the branded provider then throws ModelEmptyError', async () => {
       // A "gave up" turn: no onText / onThinking / onToolsCalling and ~0 output
-      // tokens — mirrors the LOBE-9834 repro (provider=lobehub, `out=1 token`).
+      // tokens — mirrors the empty completion repro (provider=lobehub, `out=1 token`).
       // The branded provider has 0 general retries, but empty completions get a
       // dedicated budget so the request is still re-issued before failing.
       vi.useFakeTimers();
@@ -3435,6 +3435,74 @@ describe('RuntimeExecutors', () => {
           toolCallId: 'tool-call-1',
         }),
       );
+    });
+  });
+
+  describe('resolve_blocked_tools executor', () => {
+    const createMockState = (overrides?: Partial<AgentState>): AgentState => ({
+      cost: createMockCost(),
+      createdAt: new Date().toISOString(),
+      lastModified: new Date().toISOString(),
+      maxSteps: 100,
+      messages: [],
+      metadata: {
+        agentId: 'agent-123',
+        threadId: 'thread-123',
+        topicId: 'topic-123',
+      },
+      operationId: 'op-123',
+      status: 'running',
+      stepCount: 0,
+      toolManifestMap: {},
+      usage: createMockUsage(),
+      ...overrides,
+    });
+
+    it('should create rejected tool messages and continue execution', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolsCalling: [
+            {
+              apiName: 'bash',
+              arguments: '{"command":"rm -rf /"}',
+              id: 'tool-call-1',
+              identifier: 'bash',
+              type: 'builtin' as const,
+            },
+          ],
+        },
+        type: 'resolve_blocked_tools' as const,
+      };
+
+      const result = await executors.resolve_blocked_tools!(instruction, state);
+
+      expect(mockToolExecutionService.executeTool).not.toHaveBeenCalled();
+      expect(mockMessageModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'agent-123',
+          content: 'Blocked by security/privacy.',
+          parentId: 'assistant-msg-123',
+          pluginError: 'blocked_by_security_privacy',
+          pluginIntervention: {
+            rejectedReason: 'blocked_by_security_privacy',
+            status: 'rejected',
+          },
+          role: 'tool',
+          threadId: 'thread-123',
+          tool_call_id: 'tool-call-1',
+          topicId: 'topic-123',
+        }),
+      );
+      expect(result.newState.status).toBe('running');
+      expect(result.nextContext?.phase).toBe('tools_batch_result');
+      expect(result.nextContext?.payload).toMatchObject({
+        parentMessageId: 'msg-123',
+        toolCount: 1,
+      });
     });
   });
 

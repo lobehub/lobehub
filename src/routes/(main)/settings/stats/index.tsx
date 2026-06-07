@@ -17,8 +17,8 @@ import {
   ShareButton,
   TotalAssistants,
   TotalMessages,
+  TotalTokens,
   TotalTopics,
-  TotalWords,
   Welcome,
 } from './features/overview';
 import { AssistantsRank, ModelsRank, TopicsRank } from './features/rankings';
@@ -70,7 +70,7 @@ const StatsSetting = memo<{ mobile?: boolean }>(({ mobile }) => {
           <TotalAssistants mobile={mobile} />
           <TotalTopics mobile={mobile} />
           <TotalMessages mobile={mobile} />
-          <TotalWords />
+          <TotalTokens />
         </Grid>
         <Divider dashed />
         <AiHeatmaps mobile={mobile} />

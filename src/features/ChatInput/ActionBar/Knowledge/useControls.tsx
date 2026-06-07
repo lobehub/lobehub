@@ -14,7 +14,10 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useAgentId } from '../../hooks/useAgentId';
 import CheckboxItem from '../components/CheckboxWithLoading';
 
-const labelMaxWidth = 'min(400px, 56vw)';
+// Cap so the widest library/file row (icon + label + checkbox + paddings) stays within the
+// submenu's 320px footer-driven width, keeping it level with the skill submenu instead of
+// growing past it.
+const labelMaxWidth = 'min(210px, 45vw)';
 
 const styles = createStaticStyles(({ css }) => ({
   viewMore: css`
@@ -24,9 +27,17 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 8px;
     align-items: center;
 
-    width: calc(100% + 8px);
+    /* width 320 + margin-inline -12 anchors the submenu to 320px (matching the skill
+       submenu) and lets the row span full width; padding-inline 12 lines its icon/text
+       up with the menu items above. */
+    width: 320px;
     min-height: 32px;
-    margin-inline-start: -4px;
+
+    /* The footer wrapper adds padding-block: 8px top & bottom; the top keeps it separated
+       from the list, but the bottom leaves a dead gap against the popup edge — cancel it. */
+    margin-block-end: -8px;
+    margin-inline: -12px;
+    padding-inline: 12px;
     border: 0;
     border-radius: 6px;
 
@@ -107,28 +118,11 @@ export const useControls = ({
     ),
   }));
 
+  // Flat list (no "Libraries" / "Files" group headers): libraries first, then files.
   const relatedGroups: ItemType[] = [
-    ...(libraryItems.length > 0
-      ? [
-          {
-            children: libraryItems,
-            key: 'relativeLibraries',
-            label: t('knowledgeBase.libraries'),
-            type: 'group' as const,
-          },
-        ]
-      : []),
+    ...libraryItems,
     ...(libraryItems.length > 0 && fileItems.length > 0 ? [{ type: 'divider' as const }] : []),
-    ...(fileItems.length > 0
-      ? [
-          {
-            children: fileItems,
-            key: 'relativeFiles',
-            label: t('knowledgeBase.files'),
-            type: 'group' as const,
-          },
-        ]
-      : []),
+    ...fileItems,
   ];
 
   const footer = (

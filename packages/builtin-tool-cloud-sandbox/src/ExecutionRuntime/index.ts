@@ -18,7 +18,7 @@ import type {
  *
  * Dependency Injection:
  * - Client: Inject codeInterpreterService (uses tRPC client)
- * - Server: Inject ServerSandboxService (uses MarketSDK directly)
+ * - Server: Inject configured sandbox provider (Market, Onlyboxes, etc.)
  */
 export class CloudSandboxExecutionRuntime extends ComputerRuntime {
   private sandboxService: ISandboxService;

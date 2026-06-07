@@ -2,6 +2,7 @@
 import { createSource } from '@lobechat/agent-signal';
 import type { SourceAgentSelfReflectionRequested } from '@lobechat/agent-signal/source';
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createDefaultAgentSignalPolicies } from '../../../../policies';
@@ -11,8 +12,7 @@ import type {
   AgentSignalSignalHandlerDefinition,
   AgentSignalSourceHandlerDefinition,
 } from '../../../../runtime/middleware';
-import type { ExecuteSelfIterationResult } from '../../execute';
-import { ReviewRunStatus, Scope } from '../../types';
+import { ReviewRunStatus } from '../../types';
 import type {
   CreateSelfReflectionSourceHandlerDependencies,
   SelfReflectionReviewContext,
@@ -73,176 +73,70 @@ const reflectionContext = {
   windowStart: reflectionPayload.windowStart,
 } satisfies SelfReflectionReviewContext;
 
-const runtimeResult = {
-  actions: [
-    {
-      result: {
-        receiptId: 'runtime-receipt-1',
-        resourceId: 'memory-1',
-        status: 'applied',
-        summary: 'Memory written.',
-      },
-      toolName: 'writeMemory',
-    },
-  ],
-  content: 'Runtime reflection wrote one memory.',
-  ideas: [],
-  intents: [
-    {
-      confidence: 0.82,
-      evidenceRefs: [{ id: 'task-1', type: 'task' }],
-      idempotencyKey: `${reflectionSourceId}:intent:memory`,
-      intentType: 'memory',
-      mode: 'reflection',
-      rationale: 'Capture the same-turn preference.',
-      risk: 'low',
-      urgency: 'soon',
-    },
-  ],
-  status: ReviewRunStatus.Completed,
-  stepCount: 2,
-  toolCalls: [
-    {
-      apiName: 'writeMemory',
-      arguments: JSON.stringify({
-        content: 'User prefers scoped task follow-up.',
-        evidenceRefs: [{ id: 'task-1', type: 'task' }],
-        idempotencyKey: `${reflectionSourceId}:writeMemory:tool-call-1`,
-      }),
-      id: 'tool-call-1',
-      identifier: 'agent-signal-self-iteration',
-      type: 'builtin',
-    },
-  ],
-  usage: [],
-  writeOutcomes: [
-    {
-      result: {
-        receiptId: 'runtime-receipt-1',
-        resourceId: 'memory-1',
-        status: 'applied',
-        summary: 'Memory written.',
-      },
-      toolName: 'writeMemory',
-    },
-  ],
-} satisfies ExecuteSelfIterationResult;
-
 const createDependencies = (
   overrides: Partial<CreateSelfReflectionSourceHandlerDependencies> = {},
 ): CreateSelfReflectionSourceHandlerDependencies => ({
   acquireReviewGuard: vi.fn(async () => true),
   canRunReview: vi.fn(async () => true),
   collectContext: vi.fn(async () => reflectionContext),
-  executeSelfIteration: vi.fn(async () => runtimeResult),
+  db: {} as never,
+  dispatch: vi.fn(async () => ({ operationId: 'op-self-iter-1', topicId: 'topic-1' })),
   maxSteps: 3,
-  model: 'gpt-test',
-  modelRuntime: { chat: vi.fn() },
-  tools: {} as never,
-  writeReceipt: vi.fn(async () => {}),
   ...overrides,
 });
 
 describe('self-reflection source handler', () => {
-  /**
-   * @example
-   * expect(deps.executeSelfIteration).toHaveBeenCalledWith(expect.objectContaining({ mode: 'reflection' }));
-   * expect(deps.executeSelfIteration).toHaveBeenCalledWith(expect.objectContaining({ mode: 'reflection' }));
-   */
-  it('runs self-iteration executor for reflection and records reflection metadata on receipts', async () => {
-    const deps = createDependencies({ writeReceipts: vi.fn(async () => {}) });
-    const handler = createSelfReflectionSourceHandler(deps);
-
-    const result = await handler.handle(createReflectionSource());
-
-    expect(deps.executeSelfIteration).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agentId: 'agent-1',
-        context: reflectionContext,
-        maxSteps: 3,
-        mode: 'reflection',
-        sourceId: reflectionSourceId,
-        userId: 'user-1',
-        window: {
-          end: reflectionPayload.windowEnd,
-          start: reflectionPayload.windowStart,
-        },
-      }),
-    );
-    expect(deps.writeReceipts).toHaveBeenCalledWith([
-      expect.objectContaining({
-        id: `${reflectionSourceId}:review-summary`,
-        metadata: expect.objectContaining({
-          selfIteration: expect.objectContaining({
-            intents: runtimeResult.intents,
-            mode: 'reflection',
-            reason: 'failed_tool_count',
-            sourceId: reflectionSourceId,
-          }),
-        }),
-      }),
-      expect.objectContaining({ id: `${reflectionSourceId}:writeMemory:tool-call-1:action` }),
-    ]);
-    expect(result).toEqual(
-      expect.objectContaining({
-        plannedActionCount: 1,
-        planSummary: 'Runtime reflection wrote one memory.',
-        status: ReviewRunStatus.Completed,
-      }),
-    );
-  });
-
-  /**
-   * @example
-   * expect(runtimeFactory.createRuntime).toHaveBeenCalledWith(expect.objectContaining({ context }));
-   * expect(executeSelfIteration).toHaveBeenCalledWith(expect.objectContaining({ tools }));
-   */
-  it('builds self-iteration executor dependencies through the per-source runtime factory', async () => {
-    const executeSelfIteration = vi.fn(async () => runtimeResult);
-    const modelRuntime = { chat: vi.fn() };
-    const tools = {} as never;
-    const runtimeFactory = {
-      createRuntime: vi.fn(async () => ({
-        executeSelfIteration,
-        maxSteps: 4,
-        model: 'gpt-factory',
-        modelRuntime,
-        tools,
-      })),
-    };
-    const deps = createDependencies({
-      runtimeFactory,
-      writeReceipts: vi.fn(async () => {}),
-    });
-    const handler = createSelfReflectionSourceHandler(deps);
-
-    await handler.handle(createReflectionSource());
-
-    expect(runtimeFactory.createRuntime).toHaveBeenCalledWith({
-      context: reflectionContext,
-      payload: reflectionPayload,
-      source: expect.objectContaining({ sourceId: reflectionSourceId }),
-    });
-    expect(executeSelfIteration).toHaveBeenCalledWith(
-      expect.objectContaining({
-        maxSteps: 4,
-        model: 'gpt-factory',
-        modelRuntime,
-        mode: 'reflection',
-        tools,
-      }),
-    );
-  });
-
-  /**
-   * @example
-   * expect(result.status).toBe('completed');
-   */
-  it('orchestrates scoped collector self-iteration executor and receipt writer', async () => {
+  it('dispatches an async self-iteration run under the builtin self-reflection slug', async () => {
     const deps = createDependencies();
     const handler = createSelfReflectionSourceHandler(deps);
 
     const result = await handler.handle(createReflectionSource());
+
+    expect(deps.collectContext).toHaveBeenCalledWith({
+      agentId: 'agent-1',
+      operationId: 'operation-1',
+      scopeId: 'task-1',
+      scopeType: 'task',
+      taskId: 'task-1',
+      topicId: 'topic-1',
+      userId: 'user-1',
+      windowEnd: reflectionPayload.windowEnd,
+      windowStart: reflectionPayload.windowStart,
+    });
+    expect(deps.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'agent-1',
+        db: deps.db,
+        marker: {
+          agentId: 'agent-1',
+          kind: 'self-reflection',
+          sourceId: reflectionSourceId,
+          topicId: 'topic-1',
+        },
+        maxSteps: 3,
+        // The bounded evidence is rendered into the prompt (no collector at run time).
+        prompt: expect.stringContaining(reflectionSourceId),
+        slug: BUILTIN_AGENT_SLUGS.selfReflection,
+        topicId: 'topic-1',
+        userId: 'user-1',
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        agentId: 'agent-1',
+        operationId: 'op-self-iter-1',
+        sourceId: reflectionSourceId,
+        status: ReviewRunStatus.Dispatched,
+        userId: 'user-1',
+      }),
+    );
+  });
+
+  it('re-checks the gate then acquires the idempotency guard before dispatching', async () => {
+    const deps = createDependencies();
+    const handler = createSelfReflectionSourceHandler(deps);
+
+    await handler.handle(createReflectionSource());
 
     expect(deps.canRunReview).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -257,110 +151,9 @@ describe('self-reflection source handler', () => {
     expect(deps.acquireReviewGuard).toHaveBeenCalledWith(
       expect.objectContaining({ guardKey: reflectionSourceId }),
     );
-    expect(deps.collectContext).toHaveBeenCalledWith({
-      agentId: 'agent-1',
-      operationId: 'operation-1',
-      scopeId: 'task-1',
-      scopeType: 'task',
-      taskId: 'task-1',
-      topicId: 'topic-1',
-      userId: 'user-1',
-      windowEnd: reflectionPayload.windowEnd,
-      windowStart: reflectionPayload.windowStart,
-    });
-    expect(deps.executeSelfIteration).toHaveBeenCalledWith(
-      expect.objectContaining({
-        context: reflectionContext,
-        mode: 'reflection',
-        sourceId: reflectionSourceId,
-      }),
-    );
-    expect(deps.writeReceipt).toHaveBeenCalledWith(
-      expect.objectContaining({
-        execution: expect.objectContaining({
-          status: runtimeResult.status,
-          summaryReceiptId: `${reflectionSourceId}:review-summary`,
-        }),
-        intents: runtimeResult.intents,
-        plan: expect.objectContaining({
-          reviewScope: Scope.SelfReflection,
-          summary: runtimeResult.content,
-        }),
-        reason: 'failed_tool_count',
-        scopeId: 'task-1',
-        scopeType: 'task',
-        sourceId: reflectionSourceId,
-      }),
-    );
-    expect(result).toEqual(
-      expect.objectContaining({
-        agentId: 'agent-1',
-        execution: expect.objectContaining({ status: runtimeResult.status }),
-        plannedActionCount: 1,
-        planSummary: 'Runtime reflection wrote one memory.',
-        sourceId: reflectionSourceId,
-        status: ReviewRunStatus.Completed,
-        userId: 'user-1',
-      }),
-    );
   });
 
-  /**
-   * @example
-   * expect(deps.writeReceipt).toHaveBeenCalledTimes(1);
-   */
-  it('emits receipts without requiring a daily brief dependency', async () => {
-    const deps = createDependencies({ writeReceipts: vi.fn(async () => {}) });
-    const handler = createSelfReflectionSourceHandler(deps);
-
-    await handler.handle(createReflectionSource());
-
-    expect(deps.writeReceipts).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ id: `${reflectionSourceId}:review-summary` }),
-        expect.objectContaining({
-          id: `${reflectionSourceId}:writeMemory:tool-call-1:action`,
-        }),
-      ]),
-    );
-    expect(deps.writeReceipt).toHaveBeenCalledTimes(1);
-    expect('writeDailyBrief' in deps).toBe(false);
-  });
-
-  /**
-   * @example
-   * expect(result.status).toBe('completed');
-   */
-  it('keeps applied self-reflection runs completed when receipt writing fails', async () => {
-    const receiptError = new Error('receipt store unavailable');
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const deps = createDependencies({
-      writeReceipt: vi.fn(async () => {
-        throw receiptError;
-      }),
-    });
-    const handler = createSelfReflectionSourceHandler(deps);
-
-    const result = await handler.handle(createReflectionSource());
-
-    expect(result).toEqual(
-      expect.objectContaining({
-        execution: expect.objectContaining({ status: runtimeResult.status }),
-        status: ReviewRunStatus.Completed,
-      }),
-    );
-    expect(consoleError).toHaveBeenCalledWith(
-      '[AgentSignal] Failed to write self-reflection receipt:',
-      receiptError,
-    );
-    consoleError.mockRestore();
-  });
-
-  /**
-   * @example
-   * expect(result.status).toBe('deduped');
-   */
-  it('returns deduped without collecting when the review guard is already held', async () => {
+  it('returns deduped without collecting or dispatching when the review guard is held', async () => {
     const deps = createDependencies({
       acquireReviewGuard: vi.fn(async () => false),
     });
@@ -375,14 +168,9 @@ describe('self-reflection source handler', () => {
       }),
     );
     expect(deps.collectContext).not.toHaveBeenCalled();
-    expect(deps.executeSelfIteration).not.toHaveBeenCalled();
-    expect(deps.writeReceipt).not.toHaveBeenCalled();
+    expect(deps.dispatch).not.toHaveBeenCalled();
   });
 
-  /**
-   * @example
-   * expect(result.reason).toBe('gate_disabled');
-   */
   it('returns skipped without acquiring the guard when gates reject the review', async () => {
     const deps = createDependencies({
       canRunReview: vi.fn(async () => false),
@@ -399,12 +187,9 @@ describe('self-reflection source handler', () => {
     );
     expect(deps.acquireReviewGuard).not.toHaveBeenCalled();
     expect(deps.collectContext).not.toHaveBeenCalled();
+    expect(deps.dispatch).not.toHaveBeenCalled();
   });
 
-  /**
-   * @example
-   * expect(result.reason).toBe('invalid_payload');
-   */
   it('returns skipped invalid without throwing for invalid payloads', async () => {
     const deps = createDependencies();
     const handler = createSelfReflectionSourceHandler(deps);
@@ -422,12 +207,9 @@ describe('self-reflection source handler', () => {
     expect(deps.canRunReview).not.toHaveBeenCalled();
     expect(deps.acquireReviewGuard).not.toHaveBeenCalled();
     expect(deps.collectContext).not.toHaveBeenCalled();
+    expect(deps.dispatch).not.toHaveBeenCalled();
   });
 
-  /**
-   * @example
-   * expect(result.reason).toBe('invalid_payload');
-   */
   it('returns skipped invalid when scope type is outside the supported set', async () => {
     const deps = createDependencies();
     const handler = createSelfReflectionSourceHandler(deps);
@@ -448,10 +230,6 @@ describe('self-reflection source handler', () => {
     expect(deps.canRunReview).not.toHaveBeenCalled();
   });
 
-  /**
-   * @example
-   * expect(result.reason).toBe('invalid_payload');
-   */
   it('returns skipped invalid when source id does not match the expected self-reflection key', async () => {
     const deps = createDependencies();
     const handler = createSelfReflectionSourceHandler(deps);
@@ -476,10 +254,6 @@ describe('self-reflection source handler', () => {
     expect(deps.collectContext).not.toHaveBeenCalled();
   });
 
-  /**
-   * @example
-   * expect(sourceHandlers[0].listen).toBe('agent.self_reflection.requested');
-   */
   it('installs an optional self-reflection source policy through default policy composition', async () => {
     const sourceHandlers: AgentSignalSourceHandlerDefinition[] = [];
     const deps = createDependencies();
@@ -529,16 +303,12 @@ describe('self-reflection source handler', () => {
 
     expect(runtimeResult).toEqual(
       expect.objectContaining({
-        concluded: expect.objectContaining({ status: ReviewRunStatus.Completed }),
+        concluded: expect.objectContaining({ status: ReviewRunStatus.Dispatched }),
         status: 'conclude',
       }),
     );
   });
 
-  /**
-   * @example
-   * expect(selfReflectionHandler).toBeUndefined();
-   */
   it('does not install self-reflection source handlers without self-reflection dependencies', async () => {
     const sourceHandlers: AgentSignalSourceHandlerDefinition[] = [];
     const policies = createDefaultAgentSignalPolicies({
@@ -577,10 +347,6 @@ describe('self-reflection source handler', () => {
 });
 
 describe('self-reflection source policy handler', () => {
-  /**
-   * @example
-   * expect(handler.listen).toBe('agent.self_reflection.requested');
-   */
   it('listens to the self-reflection requested source type', () => {
     const handler = createSelfReflectionSourcePolicyHandler(createDependencies());
 

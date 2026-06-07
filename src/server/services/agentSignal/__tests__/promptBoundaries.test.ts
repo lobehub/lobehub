@@ -11,18 +11,6 @@ const read = (filePath: string) => readFileSync(path.join(root, filePath), 'utf8
 describe('agent signal prompt boundaries', () => {
   /**
    * @example
-   * Self-iteration execute delegates model-facing runtime prompt text to @lobechat/prompts.
-   */
-  it('keeps self-iteration runtime prompt words out of execute service', () => {
-    const source = read('src/server/services/agentSignal/services/selfIteration/execute.ts');
-
-    expect(source).not.toContain('const SELF_ITERATION_SYSTEM_ROLE');
-    expect(source).not.toContain('const createNightlyReviewPromptXml');
-    expect(source).toContain('createAgentSignalSelfIterationPrompt');
-  });
-
-  /**
-   * @example
    * Memory writer delegates model-facing prompt words to @lobechat/prompts.
    */
   it('keeps memory writer prompt words out of user memory action service', () => {

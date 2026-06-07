@@ -1,6 +1,6 @@
 ---
 name: response-compliance
-description: OpenResponses API compliance testing. Use when testing the Response API endpoint, running compliance tests, or debugging Response API schema issues. Triggers on 'compliance', 'response api test', 'openresponses test'.
+description: 'OpenResponses API compliance testing. Use for Response API endpoint tests, compliance runs, schema debugging, response api test, or openresponses test tasks.'
 ---
 
 # OpenResponses Compliance Test

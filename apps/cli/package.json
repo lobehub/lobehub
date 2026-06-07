@@ -33,6 +33,7 @@
     "@lobechat/device-identity": "workspace:*",
     "@lobechat/heterogeneous-agents": "workspace:*",
     "@lobechat/local-file-shell": "workspace:*",
+    "@lobechat/tool-runtime": "workspace:*",
     "@trpc/client": "^11.8.1",
     "@types/node": "^22.13.5",
     "@types/ws": "^8.18.1",

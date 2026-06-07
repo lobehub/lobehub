@@ -42,7 +42,7 @@ export const useAgentDropdownMenu = ({
   pinned,
   title,
 }: UseAgentDropdownMenuParams): (() => MenuProps['items']) => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'common']);
   const { message } = App.useApp();
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
@@ -133,12 +133,15 @@ export const useAgentDropdownMenu = ({
           onClick: ({ domEvent }: any) => {
             domEvent.stopPropagation();
             confirmModal({
+              cancelText: t('cancel', { ns: 'common' }),
+              content: t('confirmRemoveSessionItemAlert'),
               okButtonProps: { danger: true },
+              okText: t('delete', { ns: 'common' }),
               onOk: async () => {
                 await removeAgent(id);
                 message.success(t('confirmRemoveSessionSuccess'));
               },
-              title: t('confirmRemoveSessionItemAlert'),
+              title: t('delete', { ns: 'common' }),
             });
           },
         },

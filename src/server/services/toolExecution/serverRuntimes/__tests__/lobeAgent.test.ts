@@ -488,4 +488,73 @@ describe('lobeAgentRuntime', () => {
     });
     expect(mockChat).not.toHaveBeenCalled();
   });
+
+  describe('callSubAgent', () => {
+    it('returns a deferred result and kicks off the sub-agent via the injected runner', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi
+        .fn()
+        .mockResolvedValue({ started: true, subOperationId: 'sub-op-1', threadId: 'thread-1' });
+
+      const result = await runtime.callSubAgent(
+        { description: 'Research', instruction: 'Find the answer', timeout: 1000 },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(run).toHaveBeenCalledWith({
+        description: 'Research',
+        instruction: 'Find the answer',
+        timeout: 1000,
+      });
+      expect(result).toMatchObject({
+        content: '',
+        deferred: true,
+        state: { status: 'pending', subOperationId: 'sub-op-1', threadId: 'thread-1' },
+        success: true,
+      });
+    });
+
+    it('returns a non-deferred error when the sub-agent fails to start', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      // Child op never started: no completion bridge will fire, so the parent
+      // must not park — surface an inline tool error instead.
+      const run = vi.fn().mockResolvedValue({ started: false, threadId: '' });
+
+      const result = await runtime.callSubAgent(
+        { description: 'Research', instruction: 'Find the answer' },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.deferred).toBeUndefined();
+      expect(result).toMatchObject({ error: { code: 'SUB_AGENT_START_FAILED' } });
+    });
+
+    it('fails (not deferred) when no sub-agent runner is available', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+
+      const result = await runtime.callSubAgent(
+        { description: 'Research', instruction: 'Find the answer' },
+        baseContext,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.deferred).toBeUndefined();
+      expect(result).toMatchObject({ error: { code: 'SUB_AGENT_UNAVAILABLE' } });
+    });
+
+    it('fails when instruction is missing', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi.fn();
+
+      const result = await runtime.callSubAgent(
+        { description: 'Research' } as any,
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result).toMatchObject({ error: { code: 'INVALID_ARGUMENTS' } });
+      expect(run).not.toHaveBeenCalled();
+    });
+  });
 });

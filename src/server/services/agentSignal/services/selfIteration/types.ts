@@ -129,6 +129,8 @@ export enum ReviewRunStatus {
   Collected = 'collected',
   Completed = 'completed',
   Deduped = 'deduped',
+  /** Background self-iteration run was enqueued via execAgent; outcome lands on completion. */
+  Dispatched = 'dispatched',
   Failed = 'failed',
   PartiallyApplied = 'partially_applied',
   Planned = 'planned',

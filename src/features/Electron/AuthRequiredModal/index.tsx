@@ -1,8 +1,14 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { type ModalInstance } from '@lobehub/ui';
-import { Button, createModal, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Flexbox, Icon } from '@lobehub/ui';
+import {
+  createModal,
+  type ImperativeModalProps,
+  ModalFooter,
+  type ModalInstance,
+} from '@lobehub/ui/base-ui';
+import { t as i18nt } from 'i18next';
 import { AlertCircle, LogIn } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,12 +16,13 @@ import { useTranslation } from 'react-i18next';
 import { useElectronStore } from '@/store/electron';
 
 interface AuthRequiredModalContentProps {
+  onActionReady: (api: { signIn: () => Promise<void> }) => void;
   onClose: () => void;
   onSigningInChange?: (isSigningIn: boolean) => void;
 }
 
 const AuthRequiredModalContent = memo<AuthRequiredModalContentProps>(
-  ({ onClose, onSigningInChange }) => {
+  ({ onActionReady, onClose, onSigningInChange }) => {
     const { t } = useTranslation('auth');
     const [isSigningIn, setIsSigningIn] = useState(false);
     const isClosingRef = useRef(false);
@@ -32,7 +39,6 @@ const AuthRequiredModalContent = memo<AuthRequiredModalContentProps>(
       onSigningInChange?.(isSigningIn);
     }, [isSigningIn, onSigningInChange]);
 
-    // Listen for successful authorization to close the modal
     useWatchBroadcast('authorizationSuccessful', async () => {
       if (isClosingRef.current) return;
       isClosingRef.current = true;
@@ -41,12 +47,11 @@ const AuthRequiredModalContent = memo<AuthRequiredModalContentProps>(
       await refreshServerConfig();
     });
 
-    // Listen for authorization failure
     useWatchBroadcast('authorizationFailed', () => {
       setIsSigningIn(false);
     });
 
-    const handleSignIn = useCallback(async () => {
+    const signIn = useCallback(async () => {
       setIsSigningIn(true);
       clearRemoteServerSyncError();
 
@@ -56,81 +61,93 @@ const AuthRequiredModalContent = memo<AuthRequiredModalContentProps>(
       });
     }, [clearRemoteServerSyncError, connectRemoteServer, dataSyncConfig]);
 
-    const handleLater = useCallback(() => {
-      if (isClosingRef.current) return;
-      isClosingRef.current = true;
-      onClose();
-    }, [onClose]);
+    useEffect(() => {
+      onActionReady({ signIn });
+    }, [onActionReady, signIn]);
 
-    return (
-      <Flexbox gap={16} style={{ padding: 16 }}>
-        <p style={{ margin: 0 }}>{t('authModal.description')}</p>
-        <Flexbox horizontal gap={8} justify="flex-end">
-          <Button disabled={isSigningIn} onClick={handleLater}>
-            {t('authModal.later')}
-          </Button>
-          <Button
-            icon={<Icon icon={LogIn} />}
-            loading={isSigningIn}
-            type="primary"
-            onClick={handleSignIn}
-          >
-            {isSigningIn ? t('authModal.signingIn') : t('authModal.signIn')}
-          </Button>
-        </Flexbox>
-      </Flexbox>
-    );
+    return <p style={{ margin: 0 }}>{t('authModal.description')}</p>;
   },
 );
 
 AuthRequiredModalContent.displayName = 'AuthRequiredModalContent';
 
-/**
- * Hook to create and manage the auth required modal
- */
-export const useAuthRequiredModal = () => {
+interface FooterProps {
+  isSigningIn: boolean;
+  onLater: () => void;
+  onSignIn: () => void;
+}
+
+const AuthRequiredFooter = memo<FooterProps>(({ isSigningIn, onLater, onSignIn }) => {
   const { t } = useTranslation('auth');
+  return (
+    <ModalFooter>
+      <Button disabled={isSigningIn} onClick={onLater}>
+        {t('authModal.later')}
+      </Button>
+      <Button icon={<Icon icon={LogIn} />} loading={isSigningIn} type="primary" onClick={onSignIn}>
+        {isSigningIn ? t('authModal.signingIn') : t('authModal.signIn')}
+      </Button>
+    </ModalFooter>
+  );
+});
+AuthRequiredFooter.displayName = 'AuthRequiredFooter';
+
+export const useAuthRequiredModal = () => {
   const instanceRef = useRef<ModalInstance | null>(null);
 
   const open = useCallback(() => {
     if (instanceRef.current) return;
 
+    let isSigningIn = false;
+    const isClosingRef = { current: false };
+    let signIn: () => Promise<void> = async () => {};
+
     const handleClose = () => {
+      if (isClosingRef.current) return;
+      isClosingRef.current = true;
       instanceRef.current?.close();
       instanceRef.current = null;
     };
 
-    const handleSigningInChange = (isSigningIn: boolean) => {
-      instanceRef.current?.update?.({
-        closable: !isSigningIn,
-        keyboard: !isSigningIn,
-        maskClosable: !isSigningIn,
-      });
-    };
+    const renderFooter = () => (
+      <AuthRequiredFooter
+        isSigningIn={isSigningIn}
+        onLater={handleClose}
+        onSignIn={() => signIn()}
+      />
+    );
 
     instanceRef.current = createModal({
-      children: (
-        <AuthRequiredModalContent onClose={handleClose} onSigningInChange={handleSigningInChange} />
+      content: (
+        <AuthRequiredModalContent
+          onClose={handleClose}
+          onActionReady={(api) => {
+            signIn = api.signIn;
+          }}
+          onSigningInChange={(next) => {
+            if (isSigningIn === next) return;
+            isSigningIn = next;
+            instanceRef.current?.update?.({
+              footer: renderFooter(),
+              maskClosable: !next,
+            } as Partial<ImperativeModalProps>);
+          }}
+        />
       ),
-      closable: false,
-      footer: null,
-      keyboard: false,
+      footer: renderFooter(),
       maskClosable: false,
       title: (
         <Flexbox horizontal align="center" gap={8}>
           <Icon icon={AlertCircle} />
-          {t('authModal.title')}
+          {i18nt('authModal.title', { ns: 'auth' })}
         </Flexbox>
       ),
     });
-  }, [t]);
+  }, []);
 
   return { open };
 };
 
-/**
- * Component that listens for authorizationRequired IPC events and opens the modal
- */
 const AuthRequiredModal = memo(() => {
   const { open } = useAuthRequiredModal();
 

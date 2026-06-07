@@ -1,6 +1,6 @@
 ---
 name: trpc-router
-description: TRPC router development guide. Use when creating or modifying TRPC routers (src/server/routers/**), adding procedures, or working with server-side API endpoints. Triggers on TRPC router creation, procedure implementation, or API endpoint tasks.
+description: 'TRPC router development guide. Use when creating or modifying src/server/routers, adding procedures, or implementing server-side API endpoints.'
 user-invocable: false
 ---
 

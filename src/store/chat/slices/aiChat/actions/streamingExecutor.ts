@@ -152,12 +152,10 @@ export const streamingExecutor = (set: Setter, get: () => ChatStore, _api?: unkn
 
 export class StreamingExecutorActionImpl {
   readonly #get: () => ChatStore;
-  // eslint-disable-next-line no-unused-private-class-members
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
+    void set;
     void _api;
-    this.#set = set;
     this.#get = get;
   }
 
@@ -496,7 +494,6 @@ export class StreamingExecutorActionImpl {
 
     // Extract values from context
     const { agentId, topicId, threadId, subAgentId, groupId, scope } = context;
-
     // Determine effectiveAgentId for agent config retrieval:
     // - subAgentId is used when present (behavior depends on scope)
     // - agentId: Default
@@ -897,6 +894,7 @@ export class StreamingExecutorActionImpl {
               context: execContext,
               editorData: merged.editorData,
               files: mergedFiles,
+              ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
               message: mergedContent,
               metadata: merged.metadata,
             })

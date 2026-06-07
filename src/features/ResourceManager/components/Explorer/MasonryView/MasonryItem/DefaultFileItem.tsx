@@ -1,3 +1,4 @@
+import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import { Button, Flexbox, stopPropagation, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { isNull } from 'es-toolkit/compat';
@@ -74,7 +75,7 @@ const DefaultFileItem = memo<DefaultFileItemProps>(
       s.parseFilesToChunks,
     ]);
 
-    const isFolder = fileType === 'custom/folder';
+    const isFolder = fileType === CUSTOM_FOLDER_FILE_TYPE;
     const isSupportedForChunking = !isChunkingUnsupported(fileType || '');
 
     return (

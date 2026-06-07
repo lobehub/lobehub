@@ -1,6 +1,47 @@
 import type { TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
 
+export type AgentSignalOperationKind =
+  | 'memory'
+  | 'nightly-review'
+  | 'self-feedback-intent'
+  | 'self-reflection'
+  | 'skill';
+
+/**
+ * Run-scoped Agent Signal marker stamped onto a background agent operation at
+ * dispatch. It travels on `appContext.agentSignal`, lands in
+ * `state.metadata.agentSignal`, and is read back on the completion path to
+ * project receipts / briefs (the `agent.execution.completed` payload itself only
+ * carries `agentId/operationId/topicId`). Runtime parsing/validation helpers live
+ * server-side in `operationMarker.ts`.
+ */
+export interface AgentSignalOperationMarker {
+  /**
+   * The reviewed user agent a resulting receipt should be attributed to. Needed
+   * when the run executes under a builtin self-iteration slug (whose resolved
+   * operation agentId is the builtin agent, not the user's agent); the
+   * completion projector prefers this over the run's agentId.
+   */
+  agentId?: string;
+  /** Assistant message a resulting receipt should anchor to. */
+  anchorMessageId?: string;
+  /** Discriminator the completion handler dispatches on. */
+  kind: AgentSignalOperationKind;
+  /** Local review date (YYYY-MM-DD) for nightly review brief/receipt writes. */
+  localDate?: string;
+  /** Review window end (ISO) — lets tools re-derive the evidence digest. */
+  reviewWindowEnd?: string;
+  /** Review window start (ISO). */
+  reviewWindowStart?: string;
+  /** Stable producer source id of the originating signal. */
+  sourceId?: string;
+  /** Topic the run is scoped to. */
+  topicId?: string;
+  /** User message that initiated the originating feedback. */
+  triggerMessageId?: string;
+}
+
 /**
  * Application context for message storage
  */
@@ -13,6 +54,11 @@ export interface ExecAgentAppContext {
    * for downstream tool calls.
    */
   agentDocumentId?: string | null;
+  /**
+   * Run-scoped Agent Signal marker for background self-iteration / memory runs.
+   * Forwarded into the operation so the completion path can project receipts.
+   */
+  agentSignal?: AgentSignalOperationMarker;
   /** Optional default assignee candidate for task manager prompts */
   defaultTaskAssigneeAgentId?: string;
   /** Current document ID for page-scoped conversations */
@@ -64,6 +110,43 @@ export interface ProjectSkillMeta {
 }
 
 /**
+ * A single project-root agent instructions file (`AGENTS.md` / `CLAUDE.md`) read
+ * from the device filesystem during workspace init. Unlike skills (metadata
+ * only), the full body is carried so it can be injected into the system role and
+ * rendered in web without a second device round-trip. Carried as a list on
+ * {@link WorkspaceInitResult} since multiple files can coexist (e.g. both
+ * `AGENTS.md` and `CLAUDE.md`, or future nested files).
+ */
+export interface WorkspaceInstructions {
+  /** Full file content (capped at read time, e.g. 64KB). */
+  content: string;
+  /** Source file the instructions were read from. */
+  source: 'AGENTS.md' | 'CLAUDE.md';
+}
+
+/**
+ * Result of scanning a bound project directory ("workspace init"): the agent
+ * instructions file plus the project-level skills discovered under
+ * `.agents/skills` + `.claude/skills`. Produced in a single device round-trip
+ * (`deviceGateway.initWorkspace`) and cached on `devices.workingDirs[].workspace`
+ * so subsequent runs within the TTL — and the web UI — reuse it without
+ * re-scanning. Intentionally open to growth (env info, git status, …) as more
+ * environment-preparation logic lands.
+ *
+ * The scanned root is not stored here — it is always the enclosing
+ * `WorkingDirEntry.path`.
+ */
+export interface WorkspaceInitResult {
+  /**
+   * Project-root agent instructions files (`AGENTS.md` / `CLAUDE.md`). Empty
+   * when none are present.
+   */
+  instructions: WorkspaceInstructions[];
+  /** Project-level skills discovered under the project root (metadata only). */
+  skills: ProjectSkillMeta[];
+}
+
+/**
  * Parameters for execAgent - execute a single Agent
  * Either agentId or slug must be provided
  */
@@ -96,13 +179,6 @@ export interface ExecAgentParams {
    * sub-tree back to its root.
    */
   parentOperationId?: string;
-  /**
-   * Project-level skills discovered on the device filesystem
-   * (`.agents/skills` / `.claude/skills`) at request time. Surfaced in the
-   * `<available_skills>` list and loaded on demand via the readFile tool.
-   * Only applied when a device is active for this run.
-   */
-  projectSkills?: ProjectSkillMeta[];
   /** The user input/prompt */
   prompt: string;
   /** Override the agent's default provider */
@@ -242,6 +318,14 @@ export interface ExecSubAgentTaskParams {
   parentMessageId: string;
   /** Parent operation ID for dispatching callAgent hooks */
   parentOperationId?: string;
+  /**
+   * When true, register the completion bridge that backfills the parent's
+   * placeholder tool message with this sub-agent's result and resumes the
+   * parked parent op (`waiting_for_async_tool` → running). Used by the server
+   * `callSubAgent` deferred-tool path; left false for the legacy fire-and-forget
+   * task dispatch.
+   */
+  resumeParentOnComplete?: boolean;
   /** Timeout in milliseconds (optional) */
   timeout?: number;
   /** Task title (shown in UI, used as thread title) */

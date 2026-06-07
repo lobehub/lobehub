@@ -112,6 +112,14 @@ export interface SendMessageParams {
   editorData?: Record<string, any>;
   files?: UploadFileItem[];
   /**
+   * Force the agent runtime regardless of the agent's local/cloud/hetero
+   * config. Injected straight into `selectRuntimeType` as `parentRuntime`,
+   * so it wins over every other signal. Used by task topics (which were
+   * spawned server-side via `runTask`) to keep follow-up sends pinned to
+   * the gateway path even if the user's global runtime preference is local.
+   */
+  forceRuntime?: 'client' | 'gateway' | 'hetero';
+  /**
    *
    * https://github.com/lobehub/lobe-chat/pull/2086
    */

@@ -1,16 +1,15 @@
 import type { SourceAgentSelfFeedbackIntentDeclared } from '@lobechat/agent-signal/source';
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
-import type { ModelRuntime } from '@lobechat/model-runtime';
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { createAgentSignalSelfIterationPrompt } from '@lobechat/prompts';
 import { isNonEmptyString } from '@lobechat/utils';
 
+import type { LobeChatDatabase } from '@/database/type';
+
 import { defineSourceHandler } from '../../../runtime/middleware';
-import type { AgentSignalReceipt } from '../../receiptService';
-import { createSelfFeedbackReceipts } from '../../receiptService';
-import type { ExecuteSelfIterationInput, ExecuteSelfIterationResult } from '../execute';
-import { projectRun } from '../projection';
-import type { ToolSet } from '../tools/shared';
-import type { EvidenceRef, Idea, Plan, RunResult, SelfFeedbackIntent } from '../types';
-import { buildSelfFeedbackIntentSourceId, ReviewRunStatus, Scope } from '../types';
+import { enqueueSelfIterationRun } from '../dispatch/enqueueSelfIterationRun';
+import type { EvidenceRef } from '../types';
+import { buildSelfFeedbackIntentSourceId, ReviewRunStatus } from '../types';
 
 /** Source scope supported by self-feedback intent declarations. */
 export type SelfFeedbackIntentSourceScopeType = 'operation' | 'topic';
@@ -107,84 +106,16 @@ export interface SelfFeedbackIntentEvidenceEnrichment {
 }
 
 /**
- * Per-run runtime dependencies for the self-iteration executor.
- */
-export interface SelfFeedbackIntentRuntimeConfig {
-  /** Runs the self-iteration executor. */
-  executeSelfIteration: (input: ExecuteSelfIterationInput) => Promise<ExecuteSelfIterationResult>;
-  /**
-   * Maximum self-iteration runtime steps.
-   *
-   * @default 10
-   */
-  maxSteps?: number;
-  /** Model name used by the self-iteration runtime. */
-  model: string;
-  /** Model runtime used by the self-iteration runtime. */
-  modelRuntime: Pick<ModelRuntime, 'chat'>;
-  /** Source-scoped safe tools exposed to the self-iteration runtime. */
-  tools: ToolSet;
-}
-
-/**
- * Input used to create source-scoped runtime dependencies for declared intent handling.
- */
-export interface SelfFeedbackIntentRuntimeFactoryInput {
-  /** Evidence enrichment already collected for this declaration source. */
-  enrichment: SelfFeedbackIntentEvidenceEnrichment;
-  /** Validated declaration payload. */
-  payload: SelfFeedbackIntentSourcePayload;
-  /** Source event that triggered the handler. */
-  source: SourceAgentSelfFeedbackIntentDeclared;
-}
-
-/**
- * Class-backed boundary that creates source-scoped runtime dependencies.
- */
-export interface SelfFeedbackIntentRuntimeFactory {
-  /** Builds the model/runtime/tools bundle for one declared intent source. */
-  createRuntime: (
-    input: SelfFeedbackIntentRuntimeFactoryInput,
-  ) => Promise<SelfFeedbackIntentRuntimeConfig> | SelfFeedbackIntentRuntimeConfig;
-}
-
-/**
- * Receipt input emitted after one self-feedback execution.
- */
-export interface SelfFeedbackIntentReceiptInput {
-  /** Executor result for the completed declaration run. */
-  execution: RunResult;
-  /** Non-actionable ideas captured by the self-iteration runtime. */
-  ideas?: Idea[];
-  /** Immediate intents captured by the self-iteration runtime. */
-  intents?: SelfFeedbackIntent[];
-  /** Normalized self-iteration plan sent to the executor. */
-  plan: Plan;
-  /** Runtime scope id reviewed by the run. */
-  scopeId: string;
-  /** Runtime scope family reviewed by the run. */
-  scopeType: SelfFeedbackIntentSourceScopeType;
-  /** Source id that triggered the run. */
-  sourceId: string;
-  /** Tool-call id that produced the declaration. */
-  toolCallId: string;
-}
-
-/**
  * Result returned by the self-feedback intent source handler.
  */
 export interface SelfFeedbackIntentSourceHandlerResult extends Record<string, unknown> {
   /** Stable agent id being reviewed when payload validation succeeds. */
   agentId?: string;
-  /** Executor result for completed runs. */
-  execution?: RunResult;
   /** Stable guard key used for idempotency when payload validation succeeds. */
   guardKey?: string;
-  /** Number of planned self-review actions before execution. */
-  plannedActionCount?: number;
-  /** Planner summary for receipt construction. */
-  planSummary?: string;
-  /** Machine-readable skip reason for non-completed runs. */
+  /** Operation id of the enqueued background self-iteration run, when dispatched. */
+  operationId?: string;
+  /** Machine-readable skip reason for non-dispatched runs. */
   reason?: 'gate_disabled' | 'invalid_payload';
   /** Runtime scope id reviewed by the run. */
   scopeId?: string;
@@ -208,30 +139,20 @@ export interface CreateSelfFeedbackIntentSourceHandlerDependencies {
   acquireReviewGuard: (input: SelfFeedbackIntentSourceGuardInput) => Promise<boolean>;
   /** Re-checks runtime gates before doing reviewer work. */
   canRunReview: (input: SelfFeedbackIntentSourceGuardInput) => Promise<boolean>;
+  /** Postgres handle used by the dispatch helper to enqueue the execAgent run. */
+  db: LobeChatDatabase;
+  /** Enqueues the async self-iteration run. Overridable for tests. */
+  dispatch?: typeof enqueueSelfIterationRun;
   /** Adds topic or operation evidence without mutating shared resources. */
   enrichEvidence?: (
     input: EnrichSelfFeedbackIntentEvidenceInput,
   ) => Promise<SelfFeedbackIntentEvidenceEnrichment>;
-  /** Runs the self-iteration runtime when no source-scoped factory is injected. */
-  executeSelfIteration?: (input: ExecuteSelfIterationInput) => Promise<ExecuteSelfIterationResult>;
   /**
    * Maximum self-iteration runtime steps.
    *
-   * @default 10
+   * @default builtin agent default
    */
   maxSteps?: number;
-  /** Model name used by the self-iteration runtime. */
-  model?: string;
-  /** Model runtime used by the self-iteration runtime. */
-  modelRuntime?: Pick<ModelRuntime, 'chat'>;
-  /** Builds source-scoped shared-runtime dependencies for intent mode. */
-  runtimeFactory?: SelfFeedbackIntentRuntimeFactory;
-  /** Safe tools exposed to the self-iteration runtime. */
-  tools?: ToolSet;
-  /** Writes durable receipt metadata for the declaration run. */
-  writeReceipt: (input: SelfFeedbackIntentReceiptInput) => Promise<void>;
-  /** Writes durable receipt records for the review summary and action outcomes. */
-  writeReceipts?: (receipts: AgentSignalReceipt[]) => Promise<void>;
 }
 
 const isValidConfidence = (value: unknown): value is number =>
@@ -369,61 +290,11 @@ const toBaseResult = (
   userId: guardInput.userId,
 });
 
-const writeSelfFeedbackIntentReceipt = async (
-  deps: CreateSelfFeedbackIntentSourceHandlerDependencies,
-  input: SelfFeedbackIntentReceiptInput,
-) => {
-  try {
-    await deps.writeReceipt(input);
-  } catch (error) {
-    console.error('[AgentSignal] Failed to write self-feedback intent receipt:', error);
-  }
-};
-
-const writeSelfFeedbackIntentReceipts = async (
-  deps: CreateSelfFeedbackIntentSourceHandlerDependencies,
-  receipts: AgentSignalReceipt[],
-) => {
-  if (!deps.writeReceipts || receipts.length === 0) return;
-
-  try {
-    await deps.writeReceipts(receipts);
-  } catch (error) {
-    console.error('[AgentSignal] Failed to write self-feedback intent receipts:', error);
-  }
-};
-
-const applyReceiptIdsToExecution = (
-  execution: RunResult,
-  receipts: AgentSignalReceipt[],
-): RunResult => {
-  const receiptByActionKey = new Map(
-    receipts
-      .filter((receipt) => receipt.id.endsWith(':action'))
-      .map((receipt) => [receipt.id.slice(0, -':action'.length), receipt.id]),
-  );
-
-  return {
-    ...execution,
-    actions: execution.actions.map((action) => ({
-      ...action,
-      ...(receiptByActionKey.get(action.idempotencyKey)
-        ? { receiptId: receiptByActionKey.get(action.idempotencyKey) }
-        : {}),
-    })),
-    summaryReceiptId: `${execution.sourceId ?? receipts[0]?.sourceId}:review-summary`,
-  };
-};
-
-const canExecuteSharedSelfIteration = (
-  deps: CreateSelfFeedbackIntentSourceHandlerDependencies,
-): deps is CreateSelfFeedbackIntentSourceHandlerDependencies & {
-  executeSelfIteration: (input: ExecuteSelfIterationInput) => Promise<ExecuteSelfIterationResult>;
-  model: string;
-  modelRuntime: Pick<ModelRuntime, 'chat'>;
-  tools: ToolSet;
-} => Boolean(deps.executeSelfIteration && deps.model && deps.modelRuntime && deps.tools);
-
+/**
+ * Builds the bounded self-iteration context embedded in the run prompt. Combines
+ * the declared intent with any enrichment evidence, mirroring the old in-runtime
+ * context — the builtin agent reads it from the prompt (no run-time collector).
+ */
 const createIntentRuntimeContext = ({
   enrichment,
   payload,
@@ -440,82 +311,6 @@ const createIntentRuntimeContext = ({
   userId: payload.userId,
 });
 
-const runSharedSelfFeedbackIntent = async ({
-  deps,
-  enrichment,
-  payload,
-  runtime,
-  source,
-}: {
-  deps: CreateSelfFeedbackIntentSourceHandlerDependencies;
-  enrichment: SelfFeedbackIntentEvidenceEnrichment;
-  payload: SelfFeedbackIntentSourcePayload;
-  runtime: SelfFeedbackIntentRuntimeConfig;
-  source: SourceAgentSelfFeedbackIntentDeclared;
-}) => {
-  const timestamp = new Date(source.timestamp).toISOString();
-  const runtimeResult = await runtime.executeSelfIteration({
-    agentId: payload.agentId,
-    context: createIntentRuntimeContext({ enrichment, payload, sourceId: source.sourceId }),
-    maxSteps: runtime.maxSteps ?? deps.maxSteps ?? 10,
-    mode: 'feedback',
-    model: runtime.model,
-    modelRuntime: runtime.modelRuntime,
-    sourceId: source.sourceId,
-    tools: runtime.tools,
-    userId: payload.userId,
-    window: {
-      end: timestamp,
-      start: timestamp,
-    },
-  });
-  const projected = projectRun({
-    content: runtimeResult.content,
-    outcomes: runtimeResult.writeOutcomes.map((outcome) => ({
-      ...outcome.result,
-      toolName: outcome.toolName,
-    })),
-    reviewScope: Scope.SelfFeedback,
-    sourceId: source.sourceId,
-    toolCalls: runtimeResult.toolCalls,
-    userId: payload.userId,
-  });
-
-  return {
-    execution: projected.execution,
-    ideas: runtimeResult.ideas,
-    plan: projected.projectionPlan,
-    runtimeIntents: runtimeResult.intents,
-    window: { end: timestamp, start: timestamp },
-  };
-};
-
-const resolveSharedSelfFeedbackIntentRuntime = async ({
-  deps,
-  enrichment,
-  payload,
-  source,
-}: {
-  deps: CreateSelfFeedbackIntentSourceHandlerDependencies;
-  enrichment: SelfFeedbackIntentEvidenceEnrichment;
-  payload: SelfFeedbackIntentSourcePayload;
-  source: SourceAgentSelfFeedbackIntentDeclared;
-}): Promise<SelfFeedbackIntentRuntimeConfig | undefined> => {
-  if (deps.runtimeFactory) {
-    return deps.runtimeFactory.createRuntime({ enrichment, payload, source });
-  }
-
-  if (!canExecuteSharedSelfIteration(deps)) return;
-
-  return {
-    executeSelfIteration: deps.executeSelfIteration,
-    maxSteps: deps.maxSteps,
-    model: deps.model,
-    modelRuntime: deps.modelRuntime,
-    tools: deps.tools,
-  };
-};
-
 /**
  * Creates the DI-friendly handler for self-feedback intent declaration sources.
  *
@@ -525,23 +320,18 @@ const resolveSharedSelfFeedbackIntentRuntime = async ({
  *   -> `agent.self_feedback_intent.declared`
  *     -> {@link createSelfFeedbackIntentSourceHandler}
  *
- * Upstream:
- * - `agent.self_feedback_intent.declared`
- *
- * Downstream:
- * - injected self-iteration executor
- * - injected `writeReceipt`
- *
- * Use when:
- * - Tests need to run declared-intent orchestration without DB or LLM dependencies
- * - Runtime policy composition needs a side-effect boundary before executing self-iteration plans
+ * The handler validates the declaration, re-checks gates + idempotency, enriches
+ * bounded evidence, then enqueues an async `execAgent` run under the builtin
+ * `self-feedback-intent` agent. Receipts are projected by the completion path —
+ * this handler does not run the model or write receipts inline.
  *
  * Expects:
  * - `source` is an `agent.self_feedback_intent.declared` source with service-produced payload
- * - Dependencies enforce gates, idempotency, executor persistence, and receipts
+ * - Dependencies enforce gates, idempotency, and provide a db handle for dispatch
  *
  * Returns:
- * - A run result with status and enough plan metadata for self-feedback intent receipts
+ * - A run result with `Dispatched` status + the enqueued operation id, or a
+ *   `Skipped` / `Deduped` status when gates / idempotency reject the run
  */
 export const createSelfFeedbackIntentSourceHandler = (
   deps: CreateSelfFeedbackIntentSourceHandlerDependencies,
@@ -588,76 +378,38 @@ export const createSelfFeedbackIntentSourceHandler = (
     const enrichment = (await deps.enrichEvidence?.(toEnrichEvidenceInput(payload))) ?? {
       evidenceRefs: [],
     };
-    const runtime = await resolveSharedSelfFeedbackIntentRuntime({
-      deps,
-      enrichment,
-      payload,
-      source,
-    });
 
-    if (!runtime) throw new Error('Self-iteration intent self-iteration runtime is required.');
-
-    const runtimeRun = await runSharedSelfFeedbackIntent({
-      deps,
-      enrichment,
-      payload,
-      runtime,
-      source,
-    });
-    const plan: Plan = runtimeRun.plan;
-    const execution: RunResult = runtimeRun.execution;
-
-    const receipts = createSelfFeedbackReceipts({
+    const timestamp = new Date(source.timestamp).toISOString();
+    const prompt = createAgentSignalSelfIterationPrompt({
       agentId: payload.agentId,
-      createdAt: source.timestamp,
-      plan,
-      result: {
-        ...execution,
-        sourceId: source.sourceId,
-      },
-      selfIteration: {
-        ideas: runtimeRun.ideas,
-        intents: runtimeRun.runtimeIntents,
-        mode: 'feedback',
-        scope: { id: payload.scopeId, type: payload.scopeType },
-        sourceId: source.sourceId,
-        toolCallId: payload.toolCallId,
-        window: runtimeRun.window,
-      },
-      scopeId: payload.scopeId,
-      scopeType: payload.scopeType,
+      context: createIntentRuntimeContext({ enrichment, payload, sourceId: source.sourceId }),
+      mode: 'feedback',
       sourceId: source.sourceId,
-      sourceType: source.sourceType,
+      userId: payload.userId,
+      window: { end: timestamp, start: timestamp },
+    });
+
+    const dispatch = deps.dispatch ?? enqueueSelfIterationRun;
+    const { operationId } = await dispatch({
+      agentId: payload.agentId,
+      db: deps.db,
+      marker: {
+        agentId: payload.agentId,
+        kind: 'self-feedback-intent',
+        sourceId: source.sourceId,
+        ...(payload.topicId ? { topicId: payload.topicId } : {}),
+      },
+      ...(deps.maxSteps ? { maxSteps: deps.maxSteps } : {}),
+      prompt,
+      slug: BUILTIN_AGENT_SLUGS.selfFeedbackIntent,
       ...(payload.topicId ? { topicId: payload.topicId } : {}),
       userId: payload.userId,
-    });
-    const executionWithReceipts = applyReceiptIdsToExecution(
-      {
-        ...execution,
-        sourceId: source.sourceId,
-      },
-      receipts,
-    );
-
-    await writeSelfFeedbackIntentReceipts(deps, receipts);
-
-    await writeSelfFeedbackIntentReceipt(deps, {
-      execution: executionWithReceipts,
-      ideas: runtimeRun?.ideas,
-      intents: runtimeRun?.runtimeIntents,
-      plan,
-      scopeId: payload.scopeId,
-      scopeType: payload.scopeType,
-      sourceId: source.sourceId,
-      toolCallId: payload.toolCallId,
     });
 
     return {
       ...baseResult,
-      execution: executionWithReceipts,
-      plannedActionCount: plan.actions.length,
-      planSummary: plan.summary,
-      status: execution.status,
+      operationId,
+      status: ReviewRunStatus.Dispatched,
     };
   },
 });
@@ -671,21 +423,12 @@ export const createSelfFeedbackIntentSourceHandler = (
  *   -> `agent.self_feedback_intent.declared`
  *     -> {@link createSelfFeedbackIntentSourcePolicyHandler}
  *
- * Upstream:
- * - `agent.self_feedback_intent.declared`
- *
- * Downstream:
- * - {@link createSelfFeedbackIntentSourceHandler}
- *
  * Use when:
  * - Default Agent Signal policies are composed with self-feedback intent dependencies
  * - The runtime source registry needs an installable source handler definition
  *
- * Expects:
- * - All server-only dependencies are injected by the caller
- *
  * Returns:
- * - A source handler that concludes the runtime chain with the review run metadata
+ * - A source handler that concludes the runtime chain with the dispatch metadata
  */
 export const createSelfFeedbackIntentSourcePolicyHandler = (
   deps: CreateSelfFeedbackIntentSourceHandlerDependencies,

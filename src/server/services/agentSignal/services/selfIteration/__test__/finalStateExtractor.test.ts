@@ -37,6 +37,39 @@ describe('extractFromFinalState', () => {
     ]);
   });
 
+  it('recovers apiName from the result content (real persisted shape, no message-level apiName)', () => {
+    // The agent runtime persists tool messages with only content/role/tool_call_id
+    // — there is NO message-level apiName in live runs. The tool runtime stamps
+    // apiName into the content (alongside kind), so the extractor must read it from
+    // there. This guards the bug where action receipts were silently dropped.
+    const state = buildState([
+      {
+        content: JSON.stringify({
+          apiName: 'createSkillIfAbsent',
+          kind: 'mutation',
+          resourceId: 'skill_1',
+          summary: 'New skill',
+        }),
+        role: 'tool',
+        tool_call_id: 'call_1',
+      },
+    ]);
+
+    expect(extractFromFinalState(state, 'mutation')).toEqual([
+      {
+        apiName: 'createSkillIfAbsent',
+        data: {
+          apiName: 'createSkillIfAbsent',
+          kind: 'mutation',
+          resourceId: 'skill_1',
+          summary: 'New skill',
+        },
+        kind: 'mutation',
+        toolCallId: 'call_1',
+      },
+    ]);
+  });
+
   it('falls back to pluginState.kind when content is not a JSON object', () => {
     const state = buildState([
       {

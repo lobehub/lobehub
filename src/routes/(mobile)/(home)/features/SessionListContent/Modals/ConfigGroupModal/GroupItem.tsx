@@ -24,7 +24,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const GroupItem = memo<SessionGroupItem>(({ id, name }) => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'common']);
   const { message } = App.useApp();
 
   const [editing, setEditing] = useState(false);
@@ -45,13 +45,16 @@ const GroupItem = memo<SessionGroupItem>(({ id, name }) => {
             size={'small'}
             onClick={() => {
               confirmModal({
+                cancelText: t('cancel', { ns: 'common' }),
+                content: t('sessionGroup.confirmRemoveGroupAlert'),
                 okButtonProps: {
                   danger: true,
                 },
+                okText: t('delete', { ns: 'common' }),
                 onOk: async () => {
                   await removeSessionGroup(id);
                 },
-                title: t('sessionGroup.confirmRemoveGroupAlert'),
+                title: t('delete', { ns: 'common' }),
               });
             }}
           />

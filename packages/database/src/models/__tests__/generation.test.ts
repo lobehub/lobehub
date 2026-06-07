@@ -512,6 +512,7 @@ describe('GenerationModel', () => {
       const generationWithTask = {
         id: 'test-gen-id',
         userId,
+        workspaceId: null,
         generationBatchId: 'batch-id',
         asyncTaskId: '550e8400-e29b-41d4-a716-446655440000',
         fileId: 'file-id',
@@ -537,6 +538,7 @@ describe('GenerationModel', () => {
           createdAt: new Date(),
           updatedAt: new Date(),
           userId,
+          workspaceId: null,
         },
       };
 
@@ -566,6 +568,7 @@ describe('GenerationModel', () => {
       const generationWithoutAsset = {
         id: 'test-gen-id',
         userId,
+        workspaceId: null,
         generationBatchId: 'batch-id',
         asyncTaskId: '550e8400-e29b-41d4-a716-446655440000',
         fileId: null,
@@ -585,6 +588,7 @@ describe('GenerationModel', () => {
           createdAt: new Date(),
           updatedAt: new Date(),
           userId,
+          workspaceId: null,
         },
       };
 
@@ -608,6 +612,7 @@ describe('GenerationModel', () => {
       const generationWithoutTask = {
         id: 'test-gen-id',
         userId,
+        workspaceId: null,
         generationBatchId: 'batch-id',
         asyncTaskId: null,
         fileId: null,
@@ -639,6 +644,7 @@ describe('GenerationModel', () => {
       const generationWithAsset = {
         id: 'test-gen-id',
         userId,
+        workspaceId: null,
         generationBatchId: 'batch-id',
         asyncTaskId: null,
         fileId: null,
@@ -666,6 +672,7 @@ describe('GenerationModel', () => {
       const generationWithError = {
         id: 'test-gen-id',
         userId,
+        workspaceId: null,
         generationBatchId: 'batch-id',
         asyncTaskId: '550e8400-e29b-41d4-a716-446655440000',
         fileId: null,
@@ -686,6 +693,7 @@ describe('GenerationModel', () => {
           createdAt: new Date(),
           updatedAt: new Date(),
           userId,
+          workspaceId: null,
         },
       };
 
@@ -699,6 +707,7 @@ describe('GenerationModel', () => {
       const generationWithNullError = {
         id: 'test-gen-id',
         userId,
+        workspaceId: null,
         generationBatchId: 'batch-id',
         asyncTaskId: '550e8400-e29b-41d4-a716-446655440000',
         fileId: null,
@@ -719,6 +728,7 @@ describe('GenerationModel', () => {
           createdAt: new Date(),
           updatedAt: new Date(),
           userId,
+          workspaceId: null,
         },
       };
 
@@ -740,6 +750,7 @@ describe('GenerationModel', () => {
       const generationWithVideo = {
         id: 'test-gen-id',
         userId,
+        workspaceId: null,
         generationBatchId: 'batch-id',
         asyncTaskId: null,
         fileId: null,
@@ -776,6 +787,7 @@ describe('GenerationModel', () => {
       const generationWithVideo = {
         id: 'test-gen-id',
         userId,
+        workspaceId: null,
         generationBatchId: 'batch-id',
         asyncTaskId: null,
         fileId: null,

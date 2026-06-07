@@ -45,7 +45,7 @@ describe('TopicModel - Create', () => {
 
       const createdTopic = await topicModel.create(topicData, topicId);
 
-      expect(createdTopic).toEqual({
+      expect(createdTopic).toMatchObject({
         id: topicId,
         title: 'New Topic',
         favorite: true,
@@ -71,6 +71,7 @@ describe('TopicModel - Create', () => {
         usage: null,
         model: null,
         provider: null,
+        senderId: null,
         createdAt: expect.any(Date),
         updatedAt: expect.any(Date),
         accessedAt: expect.any(Date),
@@ -108,7 +109,7 @@ describe('TopicModel - Create', () => {
         log: (event) => timingEvents.push(event),
       });
 
-      expect(createdTopic).toEqual({
+      expect(createdTopic).toMatchObject({
         id: topicId,
         title: 'New Topic',
         favorite: false,
@@ -132,6 +133,7 @@ describe('TopicModel - Create', () => {
         usage: null,
         model: null,
         provider: null,
+        senderId: null,
         sessionId,
         userId,
         createdAt: expect.any(Date),

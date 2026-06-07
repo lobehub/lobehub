@@ -78,7 +78,7 @@ describe('DeviceModel', () => {
       await deviceModel.update('dev-1', {
         defaultCwd: '/Users/me/work',
         friendlyName: 'My Work Mac',
-        recentCwds: ['/Users/me/work', '/Users/me/tmp'],
+        workingDirs: [{ path: '/Users/me/work' }, { path: '/Users/me/tmp', repoType: 'github' }],
       });
 
       // Re-register (e.g. user logs in again / reconnects)
@@ -93,7 +93,7 @@ describe('DeviceModel', () => {
       expect(row).toMatchObject({
         defaultCwd: '/Users/me/work',
         friendlyName: 'My Work Mac',
-        recentCwds: ['/Users/me/work', '/Users/me/tmp'],
+        workingDirs: [{ path: '/Users/me/work' }, { path: '/Users/me/tmp', repoType: 'github' }],
       });
     });
   });

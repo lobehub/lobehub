@@ -15,7 +15,12 @@ interface ActionProps {
   toggleEditing: (visible?: boolean) => void;
 }
 
-export const useDropdownMenu = ({ id, name, description, toggleEditing }: ActionProps): (() => MenuProps['items']) => {
+export const useDropdownMenu = ({
+  id,
+  name,
+  description,
+  toggleEditing,
+}: ActionProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['file', 'common']);
   const removeKnowledgeBase = useKnowledgeBaseStore((s) => s.removeKnowledgeBase);
   const { open } = useCreateNewModal();
@@ -24,11 +29,14 @@ export const useDropdownMenu = ({ id, name, description, toggleEditing }: Action
     if (!id) return;
 
     confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('library.list.confirmRemoveLibrary'),
       okButtonProps: { danger: true },
+      okText: t('delete', { ns: 'common' }),
       onOk: async () => {
         await removeKnowledgeBase(id);
       },
-      title: t('library.list.confirmRemoveLibrary'),
+      title: t('header.actions.deleteLibrary'),
     });
   };
 
@@ -69,6 +77,16 @@ export const useDropdownMenu = ({ id, name, description, toggleEditing }: Action
           onClick: handleDelete,
         },
       ].filter(Boolean) as MenuProps['items'],
-    [t, id, name, description, removeKnowledgeBase, toggleEditing, handleDelete, handleEditDescription, open],
+    [
+      t,
+      id,
+      name,
+      description,
+      removeKnowledgeBase,
+      toggleEditing,
+      handleDelete,
+      handleEditDescription,
+      open,
+    ],
   );
 };

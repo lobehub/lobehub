@@ -23,6 +23,9 @@ const handleError = (error: unknown, message: string): ToolExecutionResult => {
   return { content: `${message}: ${err.message}`, success: false };
 };
 
+/** Max results per searchAgent call (mirrored in the tool manifest: "max: 20") */
+const MAX_SEARCH_AGENT_LIMIT = 20;
+
 export const agentManagementRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
     if (!context.userId || !context.serverDB) {
@@ -205,7 +208,8 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
       searchAgent: async (params: SearchAgentParams): Promise<ToolExecutionResult> => {
         try {
           const source = params.source || 'all';
-          const limit = Math.min(params.limit || 10, 20);
+          const limit = Math.min(params.limit || 10, MAX_SEARCH_AGENT_LIMIT);
+          const offset = Math.max(params.offset || 0, 0);
           const results: Array<{
             avatar?: string | null;
             backgroundColor?: string | null;
@@ -215,17 +219,26 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
             title?: string | null;
           }> = [];
 
+          let userTotal = 0;
+          let marketTotal = 0;
+
           if (source === 'user' || source === 'all') {
-            const userAgents = await agentModel.queryAgents({ keyword: params.keyword, limit });
+            const [userAgents, total] = await Promise.all([
+              agentModel.queryAgents({ keyword: params.keyword, limit, offset }),
+              agentModel.countAgents({ keyword: params.keyword }),
+            ]);
+            userTotal = total;
             results.push(...userAgents.map((a) => ({ ...a, isMarket: false })));
           }
 
+          // Marketplace search returns the first page only — offset does not apply
           if (source === 'market' || source === 'all') {
             const marketResult = await discoverService.getAssistantList({
               pageSize: limit,
               q: params.keyword,
               ...(params.category && { category: params.category }),
             });
+            marketTotal = marketResult.totalCount ?? marketResult.items.length;
             results.push(
               ...marketResult.items.map((a) => ({
                 avatar: a.avatar,
@@ -239,20 +252,53 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           }
 
           const sliced = results.slice(0, limit);
-          const list = sliced
-            .map((a) => `- ${a.title || 'Untitled'} (${a.id})${a.isMarket ? ' [Market]' : ''}`)
-            .join('\n');
+          const totalCount = userTotal + marketTotal;
+
+          // hasMore tracks workspace agents only: marketplace results are not offset-paged
+          const shownUserCount = sliced.filter((a) => !a.isMarket).length;
+          const hasMore = offset + shownUserCount < userTotal;
+
+          const headerBySource: Record<typeof source, string> = {
+            all: `Found ${userTotal} agents in your workspace and ${marketTotal} in the marketplace, showing ${sliced.length}:`,
+            market: `Found ${marketTotal} agents in the marketplace, showing the first ${sliced.length}:`,
+            user: `Found ${userTotal} agents in your workspace, showing ${offset + 1}-${offset + sliced.length}:`,
+          };
+
+          const notes: string[] = [];
+          if (params.limit && params.limit > MAX_SEARCH_AGENT_LIMIT) {
+            notes.push(
+              `Note: requested limit ${params.limit} exceeds the maximum of ${MAX_SEARCH_AGENT_LIMIT}, so results were capped at ${MAX_SEARCH_AGENT_LIMIT} per call.`,
+            );
+          }
+          if (hasMore) {
+            notes.push(
+              `More workspace agents available: call searchAgent with offset=${offset + shownUserCount}${source === 'all' ? ` and source="user"` : ''} to get the next page.`,
+            );
+          }
+
+          let content: string;
+          if (sliced.length === 0) {
+            content =
+              totalCount === 0
+                ? 'No agents found matching your search criteria.'
+                : `No agents at offset ${offset}; only ${totalCount} agents match. Retry with a smaller offset.`;
+          } else {
+            const list = sliced
+              .map((a) => `- ${a.title || 'Untitled'} (${a.id})${a.isMarket ? ' [Market]' : ''}`)
+              .join('\n');
+            content = `${headerBySource[source]}\n${list}`;
+          }
+          if (notes.length > 0) content += `\n\n${notes.join('\n')}`;
 
           return {
-            content:
-              sliced.length > 0
-                ? `Found ${sliced.length} agents:\n${list}`
-                : 'No agents found matching your search criteria.',
+            content,
             state: {
               agents: sliced,
+              hasMore,
               keyword: params.keyword,
+              offset,
               source,
-              totalCount: sliced.length,
+              totalCount,
             },
             success: true,
           };

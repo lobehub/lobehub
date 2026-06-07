@@ -829,13 +829,9 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * Handle a subagent assistant event (tagged with `parent_tool_use_id`).
    *
    * Subagent events are a side-channel of the main agent's stream and have
-   * two hard constraints:
-   *  - no main-agent step boundary (each subagent turn introduces a new
-   *    `message.id`; flushing that as a newStep would orphan main-agent
-   *    bubbles)
-   *  - no model / usage tracking on the main agent (CC's `result` event
-   *    carries the authoritative grand total; re-summing per-turn deltas
-   *    here would double-count against the main agent)
+   * one hard constraint: no main-agent step boundary (each subagent turn
+   * introduces a new `message.id`; flushing that as a newStep would orphan
+   * main-agent bubbles).
    *
    * Text / reasoning from subagent events ARE emitted — as `stream_chunk`
    * events tagged with the `subagent` peer field — so the executor can
@@ -843,6 +839,17 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * Thread view a readable subagent conversation (user → assistant text
    * → tools → assistant text → ...). Without this the thread only ever
    * shows tool calls with no closing reasoning / summary.
+   *
+   * Usage on `raw.message.usage` is also emitted, as a
+   * `step_complete{phase:turn_metadata, subagent}` event so the executor
+   * can route the per-turn delta onto the subagent's in-thread assistant
+   * (and bump the subagent run's running totalTokens for the inspector
+   * chip). Note this is the FULL message.usage (subagent assistant events
+   * are not partial-streamed, unlike main-agent assistant events which
+   * carry stale `message_start` snapshots), so no de-stale logic is
+   * needed here. The subagent ctx tag prevents the executor from writing
+   * the same usage to the main agent's assistant — CC's `result` event
+   * remains the grand total across main + subagents.
    *
    * Subagent lineage lives as event-level **peer fields** on each chunk
    * (`subagent.parentToolCallId` + `subagent.subagentMessageId`), not on
@@ -920,6 +927,20 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       );
     }
     events.push(...this.emitToolChunk(newToolCalls, messageId, subagentCtx));
+
+    const usage = toUsageData(raw.message?.usage);
+    if (usage) {
+      events.push(
+        this.makeEvent('step_complete', {
+          model: raw.message?.model,
+          phase: 'turn_metadata',
+          provider: 'claude-code',
+          subagent: subagentCtx,
+          usage,
+        }),
+      );
+    }
+
     return events;
   }
 

@@ -9,6 +9,7 @@ import type {
 import type { ChatTopicBotContext, UserInterventionConfig } from '@lobechat/types';
 
 import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
+import type { AgentSignalOperationMarker } from '@/server/services/agentSignal/operationMarker';
 import type { DeviceAccessReason } from '@/server/services/aiAgent/deviceAccessPolicy';
 
 import { type AgentHook } from './hooks/types';
@@ -112,7 +113,8 @@ export type StepCompletionReason =
   | 'interrupted'
   | 'max_steps'
   | 'cost_limit'
-  | 'waiting_for_human';
+  | 'waiting_for_human'
+  | 'waiting_for_async_tool';
 
 // ==================== Execution Params ====================
 
@@ -129,6 +131,12 @@ export interface AgentExecutionParams {
    */
   rejectAndContinue?: boolean;
   rejectionReason?: string;
+  /**
+   * Resume a `waiting_for_async_tool` op after its deferred tools (e.g. server
+   * sub-agents) have all delivered results. Scheduled by the completion bridge
+   * via `tryResumeParentFromAsyncTool`.
+   */
+  resumeAsyncTool?: boolean;
   stepIndex: number;
   /** ID of the pending tool message targeted by the intervention. */
   toolMessageId?: string;
@@ -151,6 +159,12 @@ export interface OperationCreationParams {
   agentConfig?: any;
   appContext: {
     agentId?: string;
+    /**
+     * Run-scoped Agent Signal marker. Stamped at dispatch for background
+     * self-iteration / memory runs; lands in `state.metadata.agentSignal` and is
+     * read on the completion path to project receipts.
+     */
+    agentSignal?: AgentSignalOperationMarker;
     defaultTaskAssigneeAgentId?: string;
     documentId?: string | null;
     groupId?: string | null;

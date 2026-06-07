@@ -22,6 +22,8 @@ const DEFAULT_MINIMAX_ANTHROPIC_BASE_URL = 'https://api.minimax.io/anthropic';
 const MINIMAX_ANTHROPIC_BASE_URL_PATTERN = /\/anthropic\/?$/;
 const MINIMAX_ANTHROPIC_MESSAGES_PATH_PATTERN = /\/v1\/messages\/?$/;
 
+const isMiniMaxM3Model = (model: string) => model.toLowerCase() === 'minimax-m3';
+
 type MiniMaxSDKType = 'anthropic' | 'openai';
 
 const isEmptyContent = (content: unknown) =>
@@ -106,7 +108,9 @@ export const buildMiniMaxAnthropicPayload = async (
 };
 
 export const buildMiniMaxOpenAIPayload = (payload: ChatStreamPayload) => {
-  const { enabledSearch, max_tokens, messages, temperature, top_p, ...params } = payload;
+  const { enabledSearch, max_tokens, messages, temperature, thinking, top_p, ...params } = payload;
+
+  const isM3 = isMiniMaxM3Model(payload.model);
 
   // Interleaved thinking
   const processedMessages = messages.map((message: any) => {
@@ -153,23 +157,39 @@ export const buildMiniMaxOpenAIPayload = (payload: ChatStreamPayload) => {
       top_p,
     },
     {
-      normalizeTemperature: true,
-      topPRange: { max: 1, min: 0.01 },
+      normalizeTemperature: !isM3,
+      temperatureRange: isM3 ? { max: 2, min: 0 } : undefined,
+      topPRange: isM3 ? { max: 1, min: 0 } : { max: 1, min: 0.01 },
     },
   );
 
   // Minimax doesn't support temperature <= 0
   const finalTemperature =
-    resolvedParams.temperature !== undefined && resolvedParams.temperature <= 0
+    !isM3 && resolvedParams.temperature !== undefined && resolvedParams.temperature <= 0
       ? undefined
       : resolvedParams.temperature;
 
+  const finalThinking = isM3
+    ? thinking?.type === 'disabled'
+      ? { thinking: { type: 'disabled' } }
+      : thinking?.type === 'enabled' || thinking?.type === 'adaptive'
+        ? { thinking: { type: 'adaptive' } }
+        : {}
+    : thinking
+      ? { thinking }
+      : {};
+
+  const outputLimitParam = isM3
+    ? { max_completion_tokens: resolvedParams.max_tokens }
+    : { max_tokens: resolvedParams.max_tokens };
+
   return {
     ...params,
-    max_tokens: resolvedParams.max_tokens,
+    ...outputLimitParam,
     messages: processedMessages,
     reasoning_split: true,
     temperature: finalTemperature,
+    ...finalThinking,
     top_p: resolvedParams.top_p,
   } as any;
 };
@@ -178,6 +198,92 @@ export const openAIParams = {
   baseURL: DEFAULT_MINIMAX_BASE_URL,
   chatCompletion: {
     handlePayload: buildMiniMaxOpenAIPayload,
+    handleTransformResponseToStream: (data) => {
+      const choices = data.choices || [];
+      const first = choices[0];
+      const message = first?.message as any;
+      const reasoningText = Array.isArray(message?.reasoning_details)
+        ? message.reasoning_details
+            .filter((detail: any) => detail.text)
+            .map((detail: any) => detail.text)
+            .join('')
+        : undefined;
+
+      return new ReadableStream({
+        start(controller) {
+          if (reasoningText) {
+            controller.enqueue({
+              choices: [
+                {
+                  delta: {
+                    content: null,
+                    reasoning_details: message.reasoning_details,
+                    role: 'assistant',
+                  } as any,
+                  finish_reason: null,
+                  index: first?.index ?? 0,
+                  logprobs: first?.logprobs ?? null,
+                },
+              ],
+              created: data.created,
+              id: data.id,
+              model: data.model,
+              object: 'chat.completion.chunk',
+            });
+          }
+
+          controller.enqueue({
+            choices: choices.map((choice: any) => ({
+              delta: {
+                content: choice.message.content,
+                role: choice.message.role,
+                tool_calls: choice.message.tool_calls?.map((tool: any, index: number) => ({
+                  function: tool.function,
+                  id: tool.id,
+                  index,
+                  type: tool.type,
+                })),
+              },
+              finish_reason: null,
+              index: choice.index,
+              logprobs: choice.logprobs,
+            })),
+            created: data.created,
+            id: data.id,
+            model: data.model,
+            object: 'chat.completion.chunk',
+          });
+
+          if (data.usage) {
+            controller.enqueue({
+              choices: [],
+              created: data.created,
+              id: data.id,
+              model: data.model,
+              object: 'chat.completion.chunk',
+              usage: data.usage,
+            });
+          }
+
+          controller.enqueue({
+            choices: choices.map((choice: any) => ({
+              delta: {
+                content: null,
+                role: choice.message.role,
+              },
+              finish_reason: choice.finish_reason,
+              index: choice.index,
+              logprobs: choice.logprobs,
+            })),
+            created: data.created,
+            id: data.id,
+            model: data.model,
+            object: 'chat.completion.chunk',
+          });
+          controller.close();
+        },
+      });
+    },
   },
   createImage: createMiniMaxImage,
   createVideo: createMiniMaxVideo,

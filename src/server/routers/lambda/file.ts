@@ -1,3 +1,8 @@
+import {
+  CUSTOM_DOCUMENT_FILE_TYPE,
+  CUSTOM_FOLDER_FILE_TYPE,
+  DERIVED_DOCUMENT_SOURCE_TYPE,
+} from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -27,7 +32,13 @@ const filterKnowledgeItems = <
   knowledgeBaseId?: string,
 ) => {
   return !knowledgeBaseId
-    ? items.filter((item) => !(item.sourceType === 'document' && item.fileType === 'custom/folder'))
+    ? items.filter(
+        (item) =>
+          !(
+            item.sourceType === DERIVED_DOCUMENT_SOURCE_TYPE &&
+            item.fileType === CUSTOM_FOLDER_FILE_TYPE
+          ),
+      )
     : items;
 };
 
@@ -433,7 +444,7 @@ export const fileRouter = router({
         const filteredItems = filterKnowledgeItems(itemsToProcess, input.knowledgeBaseId);
 
         for (const item of filteredItems) {
-          if (item.sourceType === 'document') {
+          if (item.sourceType === DERIVED_DOCUMENT_SOURCE_TYPE) {
             documentIds.push(item.documentId ?? item.id);
             continue;
           }
@@ -475,7 +486,7 @@ export const fileRouter = router({
       // Query recent items and filter for files only (exclude documents/pages)
       const allItems = await ctx.knowledgeRepo.queryRecent(limit * 3); // Query more to ensure we have enough files after filtering
       const fileItems = allItems
-        .filter((item) => item.sourceType === 'file' && item.fileType !== 'custom/document')
+        .filter((item) => item.sourceType === 'file' && item.fileType !== CUSTOM_DOCUMENT_FILE_TYPE)
         .slice(0, limit);
 
       if (fileItems.length === 0) return [];
@@ -535,7 +546,11 @@ export const fileRouter = router({
       // Query recent items and filter for pages (documents) only, exclude folders
       const allItems = await ctx.knowledgeRepo.queryRecent(limit * 3); // Query more to ensure we have enough pages after filtering
       return allItems
-        .filter((item) => item.sourceType === 'document' && item.fileType !== 'custom/folder')
+        .filter(
+          (item) =>
+            item.sourceType === DERIVED_DOCUMENT_SOURCE_TYPE &&
+            item.fileType !== CUSTOM_FOLDER_FILE_TYPE,
+        )
         .slice(0, limit);
     }),
 

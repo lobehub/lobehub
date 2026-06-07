@@ -1,6 +1,7 @@
 // @vitest-environment node
 import type { CreateMessageParams } from '@lobechat/types';
-import { ThreadType } from '@lobechat/types';
+import { AgentRuntimeErrorType, ThreadType } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentModel } from '@/database/models/agent';
@@ -973,6 +974,62 @@ describe('aiChatRouter', () => {
       );
       expect(result.data).toEqual(mockResult);
       expect(result.tracingId).toMatch(/^[0-9a-f-]{36}$/);
+    });
+
+    it('maps provider auth runtime errors to UNAUTHORIZED instead of leaking as internal errors', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const runtimeError = {
+        error: undefined,
+        errorType: AgentRuntimeErrorType.InvalidProviderAPIKey,
+      };
+
+      vi.mocked(initModelRuntimeFromDB).mockRejectedValueOnce(runtimeError);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      try {
+        await caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'gpt-4o',
+          provider: 'openai',
+        });
+        throw new Error('Expected outputJSON to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TRPCError);
+        expect(error).toMatchObject({
+          cause: runtimeError,
+          code: 'UNAUTHORIZED',
+          message: AgentRuntimeErrorType.InvalidProviderAPIKey,
+        });
+      }
+    });
+
+    it('maps known runtime errors with their configured transport status', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const runtimeError = {
+        error: { message: 'rate limited' },
+        errorType: AgentRuntimeErrorType.RateLimitExceeded,
+      };
+
+      vi.mocked(initModelRuntimeFromDB).mockRejectedValueOnce(runtimeError);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      try {
+        await caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'gpt-4o',
+          provider: 'openai',
+        });
+        throw new Error('Expected outputJSON to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TRPCError);
+        expect(error).toMatchObject({
+          cause: runtimeError,
+          code: 'TOO_MANY_REQUESTS',
+          message: AgentRuntimeErrorType.RateLimitExceeded,
+        });
+      }
     });
 
     it('should handle tools parameter when provided', async () => {

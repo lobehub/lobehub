@@ -2,6 +2,35 @@
 
 # Changelog
 
+## [Version 2.2.1](https://github.com/lobehub/lobe-chat/compare/v0.0.0-nightly.pr15228.13999...v2.2.1)
+
+<sup>Released on **2026-05-29**</sup>
+
+#### ✨ Features
+
+- **device**: device registry TRPC (register / list / update / remove).
+- **bot**: add iMessage Desktop setup and bridge.
+- **desktop**: show zoom level HUD on Cmd+/- and Cmd+0.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **device**: device registry TRPC (register / list / update / remove), closes [#15299](https://github.com/lobehub/lobe-chat/issues/15299) ([671b252](https://github.com/lobehub/lobe-chat/commit/671b252))
+- **bot**: add iMessage Desktop setup and bridge, closes [#15228](https://github.com/lobehub/lobe-chat/issues/15228) ([6d94635](https://github.com/lobehub/lobe-chat/commit/6d94635))
+- **desktop**: show zoom level HUD on Cmd+/- and Cmd+0, closes [#15294](https://github.com/lobehub/lobe-chat/issues/15294) ([109545c](https://github.com/lobehub/lobe-chat/commit/109545c))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ### [Version 2.2.0](https://github.com/lobehub/lobe-chat/compare/v2.1.59-canary.27...v2.2.0)
 
 <sup>Released on **2026-05-18**</sup>

@@ -1,6 +1,6 @@
 ---
 name: linear
-description: "Linear issue management. Use when the user mentions LOBE-xxx issue IDs (e.g. LOBE-4540), says 'linear' / 'linear issue' / 'link linear', or when creating PRs that reference Linear issues. Covers retrieving issues, updating status, adding completion comments, and creating sub-issue trees."
+description: 'Linear issue management. Use for LOBE-xxx issues, Linear links, PRs referencing Linear, retrieving issues, updating status, completion comments, or sub-issue trees.'
 user-invocable: false
 ---
 

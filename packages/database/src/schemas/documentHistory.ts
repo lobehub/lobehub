@@ -4,6 +4,7 @@ import { createNanoId } from '../utils/idGenerator';
 import { timestamptz, varchar255 } from './_helpers';
 import { documents } from './file';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 export const documentHistories = pgTable(
   'document_histories',
@@ -18,6 +19,7 @@ export const documentHistories = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     editorData: jsonb('editor_data').$type<Record<string, any>>().notNull(),
     saveSource: text('save_source', {
@@ -29,6 +31,7 @@ export const documentHistories = pgTable(
     index('document_histories_document_id_idx').on(table.documentId),
     index('document_histories_user_id_idx').on(table.userId),
     index('document_histories_saved_at_idx').on(table.savedAt),
+    index('document_histories_workspace_id_idx').on(table.workspaceId),
   ],
 );
 

@@ -3,6 +3,7 @@ export default {
   'actions.expand.on': 'Expand',
   'actions.typobar.off': 'Hide formatting toolbar',
   'actions.typobar.on': 'Show formatting toolbar',
+  'actions.typobar.title': 'Formatting Tool',
   'autoSave.latest': 'Latest version loaded',
   'autoSave.saved': 'Saved',
   'autoSave.saving': 'Auto-saving...',

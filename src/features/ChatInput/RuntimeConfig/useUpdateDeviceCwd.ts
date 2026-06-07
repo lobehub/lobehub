@@ -2,11 +2,11 @@ import { useCallback } from 'react';
 
 import { lambdaQuery } from '@/libs/trpc/client';
 
-import { nextRecentCwds } from './deviceCwd';
+import { nextWorkingDirs, type WorkingDirEntry } from './deviceCwd';
 
 /**
  * Persist a working-directory choice to a device's registry record
- * (`defaultCwd` + `recentCwds`) with an **optimistic** update of the
+ * (`defaultCwd` + `workingDirs`) with an **optimistic** update of the
  * `listDevices` cache, so the picker reflects the pick instantly and the
  * server's `device.defaultCwd` (read by the hetero device-dispatch branch)
  * stays in sync. Rolls back on error.
@@ -15,7 +15,7 @@ export const useUpdateDeviceCwd = () => {
   const utils = lambdaQuery.useUtils();
 
   const mutation = lambdaQuery.device.updateDevice.useMutation({
-    onMutate: async ({ defaultCwd, deviceId, recentCwds }) => {
+    onMutate: async ({ defaultCwd, deviceId, workingDirs }) => {
       // Optimistic write: cancel in-flight refetches so they don't clobber it,
       // then patch the touched device in place. onSettled re-fetches the truth
       // afterwards (on both success and error), so a failed write self-corrects
@@ -31,7 +31,7 @@ export const useUpdateDeviceCwd = () => {
             ? {
                 ...device,
                 defaultCwd: defaultCwd ?? device.defaultCwd,
-                recentCwds: recentCwds ?? device.recentCwds,
+                workingDirs: workingDirs ?? device.workingDirs,
               }
             : device,
         ) as typeof old;
@@ -43,19 +43,19 @@ export const useUpdateDeviceCwd = () => {
   return useCallback(
     (
       deviceId: string,
-      cwd: string,
-      currentRecentCwds: readonly string[] = [],
-      // Local-mode runs only want to record the dir in the recent list, not
-      // repoint the device's default working directory.
+      entry: WorkingDirEntry,
+      currentWorkingDirs: readonly WorkingDirEntry[] = [],
+      // Local-mode runs only want to record the dir in the working-dirs list,
+      // not repoint the device's default working directory.
       options: { setDefault?: boolean } = {},
     ) => {
-      const trimmed = cwd.trim();
+      const trimmed = entry.path.trim();
       if (!trimmed) return;
       const setDefault = options.setDefault ?? true;
       return mutation.mutateAsync({
         ...(setDefault ? { defaultCwd: trimmed } : {}),
         deviceId,
-        recentCwds: nextRecentCwds(trimmed, currentRecentCwds),
+        workingDirs: nextWorkingDirs(entry, currentWorkingDirs),
       });
     },
     [mutation],

@@ -10,6 +10,10 @@ export const agentExecutionCompletedRenderer = {
       payload: {
         agentId: typeof input.payload.agentId === 'string' ? input.payload.agentId : undefined,
         operationId: String(input.payload.operationId ?? input.sourceId),
+        // Compact self-iteration tool outcomes extracted from finalState by the
+        // completion lifecycle. Opaque here (validated downstream); MUST be
+        // carried through so the completion policy can project receipts/briefs.
+        selfIteration: input.payload.selfIteration,
         serializedContext:
           typeof input.payload.serializedContext === 'string'
             ? input.payload.serializedContext

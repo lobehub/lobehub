@@ -5,11 +5,13 @@ import { agents } from './agent';
 import { chatGroups } from './chatGroup';
 import { tasks } from './task';
 import { threads, topics } from './topic';
+import { workspaces } from './workspace';
 
 const operationStatuses = [
   'idle',
   'running',
   'waiting_for_human',
+  'waiting_for_async_tool',
   'done',
   'error',
   'interrupted',
@@ -22,6 +24,7 @@ const completionReasons = [
   'max_steps',
   'cost_limit',
   'waiting_for_human',
+  'waiting_for_async_tool',
 ] as const;
 
 export interface AgentOperationInterruption {
@@ -57,6 +60,7 @@ export const agentOperations = pgTable(
      * so this column is intentionally not a foreign key.
      */
     userId: text('user_id').notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     agentId: text('agent_id').references(() => agents.id, { onDelete: 'set null' }),
     topicId: text('topic_id').references(() => topics.id, { onDelete: 'set null' }),
@@ -136,6 +140,7 @@ export const agentOperations = pgTable(
     index('agent_operations_status_idx').on(t.status),
     index('agent_operations_user_id_created_at_idx').on(t.userId, t.createdAt),
     index('agent_operations_metadata_idx').using('gin', t.metadata),
+    index('agent_operations_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

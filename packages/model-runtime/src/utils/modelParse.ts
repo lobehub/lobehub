@@ -74,7 +74,7 @@ export const MODEL_LIST_CONFIGS = {
   minimax: {
     functionCallKeywords: ['minimax'],
     reasoningKeywords: ['-m'],
-    visionKeywords: ['-vl', 'Text-01'],
+    visionKeywords: ['-vl', 'Text-01', '-m3'],
   },
   mistral: {
     functionCallKeywords: ['mistral', 'ministral', 'pixtral'],

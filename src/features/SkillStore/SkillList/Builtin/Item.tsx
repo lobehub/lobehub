@@ -28,7 +28,7 @@ interface ItemProps {
 }
 
 const Item = memo<ItemProps>(({ avatar, description, identifier, onOpenDetail, title }) => {
-  const { t } = useTranslation(['setting', 'plugin']);
+  const { t } = useTranslation(['setting', 'plugin', 'common']);
   const styles = itemStyles;
 
   const [installBuiltinTool, uninstallBuiltinTool, isInstalled] = useToolStore((s) => [
@@ -43,11 +43,14 @@ const Item = memo<ItemProps>(({ avatar, description, identifier, onOpenDetail, t
 
   const handleUninstall = () => {
     confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('store.actions.confirmUninstall', { ns: 'plugin' }),
       okButtonProps: { danger: true },
+      okText: t('store.actions.uninstall', { ns: 'plugin' }),
       onOk: async () => {
         await uninstallBuiltinTool(identifier);
       },
-      title: t('store.actions.confirmUninstall', { ns: 'plugin' }),
+      title: t('store.actions.uninstall', { ns: 'plugin' }),
     });
   };
 

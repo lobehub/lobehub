@@ -261,11 +261,14 @@ export const useMenu = (): { menuItems: DropdownItem[] } => {
           label: t('delete', { ns: 'common' }),
           onClick: () => {
             confirmModal({
+              cancelText: t('cancel', { ns: 'common' }),
+              content: t('actions.confirmRemoveTopic', { ns: 'topic' }),
               okButtonProps: { danger: true },
+              okText: t('delete', { ns: 'common' }),
               onOk: async () => {
                 await removeTopic(topicId);
               },
-              title: t('actions.confirmRemoveTopic', { ns: 'topic' }),
+              title: t('delete', { ns: 'common' }),
             });
           },
         },

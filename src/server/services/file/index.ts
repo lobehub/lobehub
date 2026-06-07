@@ -11,7 +11,7 @@ import { TempFileManager } from '@/server/utils/tempFileManager';
 import { isDev } from '@/utils/env';
 
 import { createFileServiceModule } from './impls';
-import { type FileServiceImpl } from './impls/type';
+import type { FileServiceImpl, PreSignedUpload } from './impls/type';
 
 export const getFileProxyUrl = (fileId: string): string => `${appEnv.APP_URL}/f/${fileId}`;
 
@@ -70,6 +70,13 @@ export class FileService {
    */
   public async createPreSignedUrl(key: string): Promise<string> {
     return this.impl.createPreSignedUrl(key);
+  }
+
+  /**
+   * Create pre-signed upload descriptor
+   */
+  public async createPreSignedUpload(key: string): Promise<PreSignedUpload> {
+    return this.impl.createPreSignedUpload(key);
   }
 
   /**

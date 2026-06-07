@@ -15,6 +15,9 @@ export default {
   'inbox.filterUnread': 'Show unread only',
   'inbox.markAllRead': 'Mark all as read',
   'inbox.title': 'Notifications',
+  'storage_overage_cap_reached':
+    'Your storage pay-as-you-go monthly cap of ${{monthlyCap}} has been reached. Estimated charges this cycle are ${{estimatedCycleCharge}}. New uploads beyond your included storage will be blocked until the next billing cycle or until you increase the cap.',
+  'storage_overage_cap_reached_title': 'Storage pay-as-you-go cap reached',
   'video_generation_completed': 'Your video "{{prompt}}" is ready.',
   'video_generation_completed_title': 'Video generation completed',
 };

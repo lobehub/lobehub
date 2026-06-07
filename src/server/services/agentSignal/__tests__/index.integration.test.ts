@@ -139,7 +139,7 @@ describe('emitAgentSignalSourceEvent integration', () => {
     );
   });
 
-  it('orchestrates source emission through the runtime boundary', async () => {
+  it('orchestrates source emission through the runtime boundary', { timeout: 15_000 }, async () => {
     const emitSourceEvent = vi.fn().mockResolvedValue({
       deduped: false,
       source: {

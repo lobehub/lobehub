@@ -1,18 +1,18 @@
-import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
+import type { AgentRuntimeContext } from '@lobechat/agent-runtime';
 import type {
   AgenticAttempt,
   BaseAction,
   ExecutorResult,
   SignalAttempt,
 } from '@lobechat/agent-signal';
-import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
+import { MemoryIdentifier } from '@lobechat/builtin-tool-memory';
 import type { LobeToolManifest, ToolExecutor, ToolSource } from '@lobechat/context-engine';
 import {
   createAgentSignalMemoryWriterPrompt,
   createAgentSignalMemoryWriterSystemRole,
 } from '@lobechat/prompts';
-import { LayersEnum, RequestTrigger, ThreadType } from '@lobechat/types';
-import { isRecord, nanoid, pickTrimmedString } from '@lobechat/utils';
+import { RequestTrigger, ThreadType } from '@lobechat/types';
+import { nanoid } from '@lobechat/utils';
 
 import { PluginModel } from '@/database/models/plugin';
 import { ThreadModel } from '@/database/models/thread';
@@ -27,6 +27,7 @@ import {
   type ServerAgentToolsContext,
 } from '@/server/modules/Mecha';
 import { AgentService } from '@/server/services/agent';
+import type { AgentSignalOperationMarker } from '@/server/services/agentSignal/operationMarker';
 
 import type { RuntimeProcessorContext } from '../../../runtime/context';
 import { defineActionHandler } from '../../../runtime/middleware';
@@ -42,49 +43,19 @@ import type {
   AgentSignalFeedbackSourceHints,
 } from '../../types';
 import { AGENT_SIGNAL_POLICY_ACTION_TYPES } from '../../types';
+import {
+  type MemoryActionTarget,
+  type MemoryAgentActionResult,
+  resolveMemoryActionResultFromState,
+  resolveMemoryActionTargetFromState,
+} from './memoryActionResult';
 
 const MEMORY_AGENT_MAX_STEPS = 8;
 
-const MEMORY_WRITE_API_NAMES = [
-  MemoryApiName.addActivityMemory,
-  MemoryApiName.addContextMemory,
-  MemoryApiName.addExperienceMemory,
-  MemoryApiName.addIdentityMemory,
-  MemoryApiName.addPreferenceMemory,
-  MemoryApiName.removeIdentityMemory,
-  MemoryApiName.updateIdentityMemory,
-] as const;
-
-const MEMORY_WRITE_TOOL_NAMES = new Set(
-  MEMORY_WRITE_API_NAMES.map((apiName) => `${MemoryIdentifier}/${apiName}`),
-);
-
-const MEMORY_WRITE_API_NAME_SET = new Set<string>(MEMORY_WRITE_API_NAMES);
-const MEMORY_WRITE_TARGET_BY_API_NAME: Record<string, { idKey: string; layer: LayersEnum }> = {
-  [MemoryApiName.addActivityMemory]: { idKey: 'activityId', layer: LayersEnum.Activity },
-  [MemoryApiName.addContextMemory]: { idKey: 'contextId', layer: LayersEnum.Context },
-  [MemoryApiName.addExperienceMemory]: { idKey: 'experienceId', layer: LayersEnum.Experience },
-  [MemoryApiName.addIdentityMemory]: { idKey: 'identityId', layer: LayersEnum.Identity },
-  [MemoryApiName.addPreferenceMemory]: { idKey: 'preferenceId', layer: LayersEnum.Preference },
-  [MemoryApiName.removeIdentityMemory]: { idKey: 'identityId', layer: LayersEnum.Identity },
-  [MemoryApiName.updateIdentityMemory]: { idKey: 'identityId', layer: LayersEnum.Identity },
-};
-const TOOL_NAME_SEPARATOR = '____';
-
-export interface MemoryActionTarget {
-  id?: string;
-  memoryId?: string;
-  memoryLayer?: LayersEnum;
-  summary?: string;
-  title: string;
-  type: 'memory';
-}
-
-export interface MemoryAgentActionResult {
-  detail?: string;
-  status: 'applied' | 'failed' | 'skipped';
-  target?: MemoryActionTarget;
-}
+// Backward-compatible re-export: the memory finalState helpers + result types
+// now live in the dependency-light ./memoryActionResult module.
+export type { MemoryActionTarget, MemoryAgentActionResult };
+export { resolveMemoryActionResultFromState, resolveMemoryActionTargetFromState };
 
 export interface UserMemoryActionHandlerOptions {
   agentService?: Pick<AgentService, 'getAgentConfig'>;
@@ -161,209 +132,9 @@ const createFunctionCallSupportChecker = async () => {
   };
 };
 
-const hasSuccessfulMemoryWrite = (state: AgentState) => {
-  const byTool = state.usage?.tools?.byTool ?? [];
-
-  return byTool.some(
-    (entry) => MEMORY_WRITE_TOOL_NAMES.has(entry.name) && entry.calls > entry.errors,
-  );
-};
-
-const hasFailedMemoryWrite = (state: AgentState) => {
-  const byTool = state.usage?.tools?.byTool ?? [];
-
-  return byTool.some(
-    (entry) =>
-      MEMORY_WRITE_TOOL_NAMES.has(entry.name) && entry.calls > 0 && entry.calls === entry.errors,
-  );
-};
-
-const getString = (value: unknown) => {
-  return pickTrimmedString(value);
-};
-
-const parseToolArguments = (value: unknown): Record<string, unknown> | undefined => {
-  if (isRecord(value)) return value;
-
-  if (typeof value !== 'string') return;
-
-  try {
-    const parsed: unknown = JSON.parse(value);
-
-    return isRecord(parsed) ? parsed : undefined;
-  } catch {
-    return;
-  }
-};
-
-interface MemoryToolCallSnapshot {
-  apiName?: string;
-  arguments?: unknown;
-  id?: string;
-  identifier?: string;
-}
-
-const getToolCallsFromMessage = (message: unknown): MemoryToolCallSnapshot[] => {
-  if (!isRecord(message)) return [];
-
-  const toolCalls: MemoryToolCallSnapshot[] = [];
-  const persistedTools = Array.isArray(message.tools) ? message.tools : [];
-
-  for (const tool of persistedTools) {
-    if (!isRecord(tool)) continue;
-
-    toolCalls.push({
-      apiName: getString(tool.apiName),
-      arguments: tool.arguments,
-      id: getString(tool.id),
-      identifier: getString(tool.identifier),
-    });
-  }
-
-  const rawToolCalls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
-
-  for (const toolCall of rawToolCalls) {
-    if (!isRecord(toolCall)) continue;
-
-    const fn = isRecord(toolCall.function) ? toolCall.function : undefined;
-    const name = getString(fn?.name);
-    if (!name) continue;
-
-    const [identifier, apiName] = name.split(TOOL_NAME_SEPARATOR);
-
-    toolCalls.push({
-      apiName: apiName || name,
-      arguments: fn?.arguments,
-      id: getString(toolCall.id),
-      identifier: apiName ? identifier : undefined,
-    });
-  }
-
-  return toolCalls;
-};
-
-const isMemoryWriteToolCall = (
-  toolCall: MemoryToolCallSnapshot,
-): toolCall is MemoryToolCallSnapshot & { apiName: string } => {
-  if (!toolCall.apiName || !MEMORY_WRITE_API_NAME_SET.has(toolCall.apiName)) return false;
-
-  return !toolCall.identifier || toolCall.identifier === MemoryIdentifier;
-};
-
-const getToolMessageCallId = (message: unknown) => {
-  if (!isRecord(message)) return;
-
-  const plugin = isRecord(message.plugin) ? message.plugin : undefined;
-
-  return getString(message.tool_call_id) ?? getString(plugin?.id);
-};
-
-const getMemoryIdsFromToolMessage = (message: unknown) => {
-  if (!isRecord(message)) return;
-
-  const ids: Record<string, string> = {};
-  const addId = (key: string, value: unknown) => {
-    if (!key.endsWith('Id')) return;
-
-    const id = getString(value);
-    if (id) ids[key] = id;
-  };
-
-  const pluginState = isRecord(message.pluginState) ? message.pluginState : undefined;
-  if (pluginState) {
-    for (const [key, value] of Object.entries(pluginState)) {
-      addId(key, value);
-    }
-  }
-
-  const content = getString(message.content);
-  if (content) {
-    for (const match of content.matchAll(/([A-Za-z]\w*Id):\s*"([^"]+)"/g)) {
-      addId(match[1], match[2]);
-    }
-  }
-
-  return Object.keys(ids).length > 0 ? ids : undefined;
-};
-
-const getMemoryToolResultIds = (state: AgentState) => {
-  const resultIds = new Map<string, Record<string, string>>();
-
-  for (const message of state.messages ?? []) {
-    const callId = getToolMessageCallId(message);
-    const ids = getMemoryIdsFromToolMessage(message);
-
-    if (callId && ids) resultIds.set(callId, ids);
-  }
-
-  return resultIds;
-};
-
-const getNestedString = (payload: Record<string, unknown>, keys: string[]) => {
-  let current: unknown = payload;
-
-  for (const key of keys) {
-    if (!isRecord(current)) return;
-
-    current = current[key];
-  }
-
-  return getString(current);
-};
-
-const getToolArgumentString = (args: Record<string, unknown>, key: string) => {
-  return getString(args[key]) ?? getNestedString(args, ['set', key]);
-};
-
-const createTargetFromToolArguments = (
-  args: Record<string, unknown>,
-  toolCall: MemoryToolCallSnapshot & { apiName: string },
-  resultIds?: Record<string, string>,
-): MemoryActionTarget | undefined => {
-  const title = getToolArgumentString(args, 'title');
-  if (!title) return;
-
-  const targetConfig = MEMORY_WRITE_TARGET_BY_API_NAME[toolCall.apiName];
-  const id = targetConfig ? resultIds?.[targetConfig.idKey] : undefined;
-  const memoryId = resultIds?.memoryId;
-  const summary =
-    getToolArgumentString(args, 'summary') ??
-    getToolArgumentString(args, 'details') ??
-    getNestedString(args, ['withPreference', 'conclusionDirectives']);
-
-  return {
-    ...((id ?? memoryId) ? { id: id ?? memoryId } : {}),
-    ...(memoryId ? { memoryId } : {}),
-    ...(targetConfig ? { memoryLayer: targetConfig.layer } : {}),
-    ...(summary ? { summary } : {}),
-    title,
-    type: 'memory',
-  };
-};
-
-export const resolveMemoryActionTargetFromState = (
-  state: AgentState,
-): MemoryActionTarget | undefined => {
-  const resultIds = getMemoryToolResultIds(state);
-
-  for (const message of [...(state.messages ?? [])].reverse()) {
-    const toolCalls = getToolCallsFromMessage(message).reverse();
-
-    for (const toolCall of toolCalls) {
-      if (!isMemoryWriteToolCall(toolCall)) continue;
-      if (!toolCall.id) continue;
-
-      const confirmedResultIds = resultIds.get(toolCall.id);
-      if (!confirmedResultIds) continue;
-
-      const args = parseToolArguments(toolCall.arguments);
-      if (!args) continue;
-
-      const target = createTargetFromToolArguments(args, toolCall, confirmedResultIds);
-      if (target) return target;
-    }
-  }
-};
+// Memory finalState parsing (tool-call/result walking, target resolution) lives
+// in ./memoryActionResult — kept dependency-light so the completion path can
+// reuse it without dragging this heavy module into its graph.
 
 export const runMemoryActionAgent = async (
   input: {
@@ -386,6 +157,15 @@ export const runMemoryActionAgent = async (
     topicId?: string;
   },
   options: UserMemoryActionHandlerOptions,
+  /**
+   * When provided, the memory writer runs as an async (queued) execAgent run
+   * instead of a blocking `executeSync`: the operation is enqueued with the
+   * agent-signal marker stamped onto `appContext`, and the durable receipt is
+   * projected later on the completion path. Returns immediately with an
+   * `applied` (enqueued) status. Absent → the legacy synchronous path (still
+   * used by the self-iteration tool primitives until they migrate in S4).
+   */
+  dispatch?: { marker: AgentSignalOperationMarker },
 ): Promise<MemoryAgentActionResult> => {
   if (!input.agentId) {
     return {
@@ -451,17 +231,8 @@ export const runMemoryActionAgent = async (
   const manifestMap = toolsEngine.getEnabledPluginManifests([MemoryIdentifier]);
   const operationId = `agent-signal-memory-${nanoid()}`;
   const initialContext = createInitialContext(operationId);
-  const streamEventManager = new InMemoryStreamEventManager();
   const { AgentRuntimeService } =
     await import('@/server/services/agentRuntime/AgentRuntimeService');
-  const runtimeService = new AgentRuntimeService(options.db, options.userId, {
-    coordinatorOptions: {
-      stateManager: new InMemoryAgentStateManager(),
-      streamEventManager,
-    },
-    queueService: null,
-    streamEventManager,
-  });
 
   // Create a child thread under the triggering assistant message so that
   // memory-agent messages are isolated from the main topic conversation
@@ -484,17 +255,8 @@ export const runMemoryActionAgent = async (
     }
   }
 
-  await runtimeService.createOperation({
+  const createParams = {
     agentConfig: memoryRuntimeAgentConfig,
-    appContext: {
-      agentId: input.agentId,
-      scope: 'chat',
-      sourceMessageId: input.sourceMessageId,
-      threadId: threadId ?? null,
-      topicId: input.topicId ?? null,
-      trigger: RequestTrigger.AgentSignal,
-    },
-    autoStart: false,
     initialContext,
     initialMessages: [
       {
@@ -515,6 +277,46 @@ export const runMemoryActionAgent = async (
       tools: toolsResult.tools,
     },
     userId: options.userId,
+  };
+  const baseAppContext = {
+    agentId: input.agentId,
+    scope: 'chat',
+    sourceMessageId: input.sourceMessageId,
+    threadId: threadId ?? null,
+    topicId: input.topicId ?? null,
+    trigger: RequestTrigger.AgentSignal,
+  };
+
+  // Async (queued execAgent) path: enqueue the run with the marker stamped onto
+  // appContext (it lands in state.metadata.agentSignal), then return immediately.
+  // The durable receipt is projected on the completion path from the run's
+  // finalState — no blocking executeSync.
+  if (dispatch) {
+    const runtimeService = new AgentRuntimeService(options.db, options.userId);
+    await runtimeService.createOperation({
+      ...createParams,
+      appContext: { ...baseAppContext, agentSignal: dispatch.marker },
+      autoStart: true,
+      userInterventionConfig: { approvalMode: 'headless' },
+    });
+
+    return { detail: 'Memory write enqueued.', status: 'applied' };
+  }
+
+  // Legacy synchronous path (self-iteration tool primitives, until S4).
+  const streamEventManager = new InMemoryStreamEventManager();
+  const runtimeService = new AgentRuntimeService(options.db, options.userId, {
+    coordinatorOptions: {
+      stateManager: new InMemoryAgentStateManager(),
+      streamEventManager,
+    },
+    queueService: null,
+    streamEventManager,
+  });
+  await runtimeService.createOperation({
+    ...createParams,
+    appContext: baseAppContext,
+    autoStart: false,
     userInterventionConfig: { approvalMode: 'headless' },
   });
 
@@ -523,34 +325,7 @@ export const runMemoryActionAgent = async (
     maxSteps: MEMORY_AGENT_MAX_STEPS,
   });
 
-  if (finalState.status === 'error') {
-    return {
-      detail: 'Memory action agent finished with an error.',
-      status: 'failed',
-    };
-  }
-
-  if (hasSuccessfulMemoryWrite(finalState)) {
-    const target = resolveMemoryActionTargetFromState(finalState);
-
-    return {
-      ...(target?.summary ? { detail: target.summary } : {}),
-      status: 'applied',
-      ...(target ? { target } : {}),
-    };
-  }
-
-  if (hasFailedMemoryWrite(finalState)) {
-    return {
-      detail: 'Memory tool call failed during memory action agent execution.',
-      status: 'failed',
-    };
-  }
-
-  return {
-    detail: 'Memory action agent did not issue a durable memory write.',
-    status: 'skipped',
-  };
+  return resolveMemoryActionResultFromState(finalState);
 };
 
 export const handleUserMemoryAction = async (
@@ -617,17 +392,33 @@ export const handleUserMemoryAction = async (
         typeof action.payload.sourceHints === 'object' && action.payload.sourceHints
           ? action.payload.sourceHints
           : undefined,
-      // The assistant message that completed the turn — used to anchor the
-      // memory-agent child thread under that message instead of the main topic.
-      // Populated by planUserMemory via extractAssistantMessageIdFromSourceId;
-      // absent for non-clientRuntimeComplete sources where no assistant boundary exists.
+      // The message to anchor the memory-agent child thread under, so its
+      // messages stay isolated from the main topic instead of being flattened
+      // into it. Prefer the assistant message that completed the turn (set by
+      // planUserMemory via extractAssistantMessageIdFromSourceId — only present
+      // for clientRuntimeComplete sources whose id is
+      // `${assistantMessageId}:completion:${parentMessageId}`). Other sources
+      // carry no assistant boundary, so fall back to the triggering user
+      // message id; without this fallback no thread is created and the run
+      // leaks into the active conversation.
       sourceMessageId:
         typeof action.payload.assistantMessageId === 'string'
           ? action.payload.assistantMessageId
-          : undefined,
+          : typeof action.payload.messageId === 'string'
+            ? action.payload.messageId
+            : undefined,
       topicId: typeof action.payload.topicId === 'string' ? action.payload.topicId : undefined,
     };
-    const runner = options.memoryActionRunner ?? ((input) => runMemoryActionAgent(input, options));
+    // Stamp the run so the completion path can project the memory receipt (the
+    // memory write is now enqueued async, not resolved synchronously here).
+    const marker: AgentSignalOperationMarker = {
+      kind: 'memory',
+      ...(runnerInput.sourceMessageId ? { anchorMessageId: runnerInput.sourceMessageId } : {}),
+      sourceId: idempotencyKey ?? action.actionId,
+      ...(runnerInput.topicId ? { topicId: runnerInput.topicId } : {}),
+    };
+    const runner =
+      options.memoryActionRunner ?? ((input) => runMemoryActionAgent(input, options, { marker }));
     let memoryActionResult: MemoryAgentActionResult | undefined;
     const memoryService = createMemoryService({
       writeMemory: async () => {

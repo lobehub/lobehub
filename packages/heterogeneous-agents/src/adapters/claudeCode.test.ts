@@ -2014,7 +2014,7 @@ describe('ClaudeCodeAdapter', () => {
       expect(starts.some((e) => e.data?.newStep)).toBe(false);
     });
 
-    it('does NOT emit turn_metadata step_complete for subagent events', () => {
+    it('emits subagent-tagged turn_metadata step_complete carrying message.usage', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt(init);
       adapter.adapt(
@@ -2032,6 +2032,41 @@ describe('ClaudeCodeAdapter', () => {
           id: 'msg_sub',
           model: 'claude-sonnet-4-6',
           usage: { input_tokens: 5, output_tokens: 10 },
+        },
+        parent_tool_use_id: 'toolu_parent',
+        type: 'assistant',
+      });
+
+      const meta = events.find(
+        (e) => e.type === 'step_complete' && e.data?.phase === 'turn_metadata',
+      );
+      expect(meta).toBeDefined();
+      // Subagent ctx tag is what stops the executor from writing this usage
+      // onto the main agent (which would double-count vs the result event).
+      expect(meta?.data?.subagent?.parentToolCallId).toBe('toolu_parent');
+      expect(meta?.data?.subagent?.subagentMessageId).toBe('msg_sub');
+      expect(meta?.data?.model).toBe('claude-sonnet-4-6');
+      expect(meta?.data?.usage?.totalInputTokens).toBe(5);
+      expect(meta?.data?.usage?.totalOutputTokens).toBe(10);
+    });
+
+    it('does NOT emit turn_metadata for subagent events without message.usage', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_parent',
+          input: {},
+          name: 'Agent',
+          type: 'tool_use',
+        }),
+      );
+
+      const events = adapter.adapt({
+        message: {
+          content: [{ id: 'toolu_child', input: {}, name: 'Bash', type: 'tool_use' }],
+          id: 'msg_sub',
+          model: 'claude-sonnet-4-6',
         },
         parent_tool_use_id: 'toolu_parent',
         type: 'assistant',

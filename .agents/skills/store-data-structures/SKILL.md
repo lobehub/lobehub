@@ -1,6 +1,6 @@
 ---
 name: store-data-structures
-description: "Zustand store data-shape patterns for LobeHub — List vs Detail split, Map + Reducer, type definitions sourced from `@lobechat/types` (not `@lobechat/database`). Use when designing store state, choosing between Array (list) and `Record<string, Detail>` (detail map), or implementing a list/detail page pair. Triggers on `messagesMap`, `topicsMap`, `Record<string, Detail>`, 'list vs detail', 'store data shape', 'normalize state', 'state structure'."
+description: 'LobeHub Zustand store data-shape patterns. Use when designing store state, list/detail splits, normalized maps, reducers, messagesMap, topicsMap, or choosing shared type sources.'
 user-invocable: false
 ---
 

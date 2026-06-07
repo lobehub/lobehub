@@ -2,6 +2,7 @@
 import { createSource } from '@lobechat/agent-signal';
 import type { SourceAgentSelfFeedbackIntentDeclared } from '@lobechat/agent-signal/source';
 import { AGENT_SIGNAL_SOURCE_TYPES } from '@lobechat/agent-signal/source';
+import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createDefaultAgentSignalPolicies } from '../../../../policies';
@@ -11,7 +12,6 @@ import type {
   AgentSignalSignalHandlerDefinition,
   AgentSignalSourceHandlerDefinition,
 } from '../../../../runtime/middleware';
-import type { ExecuteSelfIterationResult } from '../../execute';
 import type { EvidenceRef } from '../../types';
 import { ReviewRunStatus } from '../../types';
 import type { CreateSelfFeedbackIntentSourceHandlerDependencies } from '../handler';
@@ -47,61 +47,6 @@ const topicEvidence = {
   type: 'topic',
 } satisfies EvidenceRef;
 
-const runtimeResult = {
-  actions: [
-    {
-      result: {
-        receiptId: 'runtime-memory-receipt',
-        resourceId: 'memory-1',
-        status: 'applied',
-        summary: 'Memory written.',
-      },
-      toolName: 'writeMemory',
-    },
-  ],
-  content: 'Runtime intent wrote one memory.',
-  ideas: [],
-  intents: [
-    {
-      confidence: 0.94,
-      evidenceRefs: [intentPayload.evidenceRefs[0]],
-      idempotencyKey: `${intentSourceId}:intent:memory`,
-      intentType: 'memory',
-      mode: 'reflection',
-      rationale: 'The user gave a durable preference.',
-      risk: 'low',
-      urgency: 'immediate',
-    },
-  ],
-  status: ReviewRunStatus.Completed,
-  stepCount: 2,
-  toolCalls: [
-    {
-      apiName: 'writeMemory',
-      arguments: JSON.stringify({
-        content: 'User prefers concise release summaries.',
-        evidenceRefs: [intentPayload.evidenceRefs[0]],
-        idempotencyKey: `${intentSourceId}:writeMemory:tool-call-1`,
-      }),
-      id: 'tool-call-1',
-      identifier: 'agent-signal-self-iteration',
-      type: 'builtin',
-    },
-  ],
-  usage: [],
-  writeOutcomes: [
-    {
-      result: {
-        receiptId: 'runtime-memory-receipt',
-        resourceId: 'memory-1',
-        status: 'applied',
-        summary: 'Memory written.',
-      },
-      toolName: 'writeMemory',
-    },
-  ],
-} satisfies ExecuteSelfIterationResult;
-
 const runtimeContext = {
   now: () => 100,
   runtimeState: {
@@ -130,25 +75,18 @@ const createDependencies = (
 ): CreateSelfFeedbackIntentSourceHandlerDependencies => ({
   acquireReviewGuard: vi.fn(async () => true),
   canRunReview: vi.fn(async () => true),
+  db: {} as never,
+  dispatch: vi.fn(async () => ({ operationId: 'op-self-iter-1', topicId: 'topic-1' })),
   enrichEvidence: vi.fn(async () => ({
     evidenceRefs: [topicEvidence],
   })),
-  executeSelfIteration: vi.fn(async () => runtimeResult),
   maxSteps: 3,
-  model: 'gpt-test',
-  modelRuntime: { chat: vi.fn() },
-  tools: {} as never,
-  writeReceipt: vi.fn(async () => {}),
   ...overrides,
 });
 
 describe('self-feedback intent source handler', () => {
-  /**
-   * @example
-   * expect(deps.executeSelfIteration).toHaveBeenCalledWith(expect.objectContaining({ mode: 'feedback' }));
-   */
-  it('runs self-iteration executor for declared intent and records intent metadata on receipts', async () => {
-    const deps = createDependencies({ writeReceipts: vi.fn(async () => {}) });
+  it('enriches evidence then dispatches an async run under the builtin self-feedback-intent slug', async () => {
+    const deps = createDependencies();
     const handler = createSelfFeedbackIntentSourceHandler(deps);
 
     const result = await handler.handle(createIntentSource());
@@ -157,99 +95,47 @@ describe('self-feedback intent source handler', () => {
       action: 'write',
       agentId: 'agent-1',
       kind: 'memory',
-      operationId: undefined,
       scopeId: 'topic-1',
       scopeType: 'topic',
       toolCallId: 'tool-call-1',
       topicId: 'topic-1',
       userId: 'user-1',
     });
-    expect(deps.executeSelfIteration).toHaveBeenCalledWith(
+    expect(deps.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         agentId: 'agent-1',
-        context: expect.objectContaining({
-          evidenceRefs: [intentPayload.evidenceRefs[0], topicEvidence],
-          intent: expect.objectContaining({ summary: intentPayload.summary }),
+        db: deps.db,
+        marker: {
+          agentId: 'agent-1',
+          kind: 'self-feedback-intent',
           sourceId: intentSourceId,
-        }),
+          topicId: 'topic-1',
+        },
         maxSteps: 3,
-        mode: 'feedback',
-        sourceId: intentSourceId,
+        // The intent + enrichment evidence is rendered into the prompt.
+        prompt: expect.stringContaining(intentSourceId),
+        slug: BUILTIN_AGENT_SLUGS.selfFeedbackIntent,
+        topicId: 'topic-1',
         userId: 'user-1',
       }),
     );
-    expect(deps.writeReceipts).toHaveBeenCalledWith([
-      expect.objectContaining({
-        id: `${intentSourceId}:review-summary`,
-        metadata: expect.objectContaining({
-          selfIteration: expect.objectContaining({
-            intents: runtimeResult.intents,
-            mode: 'feedback',
-            sourceId: intentSourceId,
-            toolCallId: 'tool-call-1',
-          }),
-        }),
-      }),
-      expect.objectContaining({ id: `${intentSourceId}:writeMemory:tool-call-1:action` }),
-    ]);
+    // The combined evidence (declared + enrichment) rides in the prompt JSON.
+    const dispatchArg = (deps.dispatch as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(dispatchArg.prompt).toContain('topic-1');
+    expect(dispatchArg.prompt).toContain('msg-1');
+
     expect(result).toEqual(
       expect.objectContaining({
-        plannedActionCount: 1,
-        planSummary: 'Runtime intent wrote one memory.',
-        status: ReviewRunStatus.Completed,
+        agentId: 'agent-1',
+        operationId: 'op-self-iter-1',
+        sourceId: intentSourceId,
+        status: ReviewRunStatus.Dispatched,
+        toolCallId: 'tool-call-1',
+        userId: 'user-1',
       }),
     );
   });
 
-  /**
-   * @example
-   * expect(runtimeFactory.createRuntime).toHaveBeenCalledWith(expect.objectContaining({ enrichment }));
-   */
-  it('builds self-iteration executor dependencies through the per-source runtime factory', async () => {
-    const executeSelfIteration = vi.fn(async () => runtimeResult);
-    const modelRuntime = { chat: vi.fn() };
-    const tools = {} as never;
-    const runtimeFactory = {
-      createRuntime: vi.fn(async () => ({
-        executeSelfIteration,
-        maxSteps: 4,
-        model: 'gpt-factory',
-        modelRuntime,
-        tools,
-      })),
-    };
-    const deps = createDependencies({
-      executeSelfIteration: undefined,
-      model: undefined,
-      modelRuntime: undefined,
-      runtimeFactory,
-      tools: undefined,
-      writeReceipts: vi.fn(async () => {}),
-    });
-    const handler = createSelfFeedbackIntentSourceHandler(deps);
-
-    await handler.handle(createIntentSource());
-
-    expect(runtimeFactory.createRuntime).toHaveBeenCalledWith({
-      enrichment: { evidenceRefs: [topicEvidence] },
-      payload: expect.objectContaining(intentPayload),
-      source: expect.objectContaining({ sourceId: intentSourceId }),
-    });
-    expect(executeSelfIteration).toHaveBeenCalledWith(
-      expect.objectContaining({
-        maxSteps: 4,
-        model: 'gpt-factory',
-        modelRuntime,
-        mode: 'feedback',
-        tools,
-      }),
-    );
-  });
-
-  /**
-   * @example
-   * await handler.handle(operationSource);
-   */
   it('validates operation-scoped source ids and forwards operation context', async () => {
     const deps = createDependencies();
     const handler = createSelfFeedbackIntentSourceHandler(deps);
@@ -274,49 +160,14 @@ describe('self-feedback intent source handler', () => {
         topicId: 'topic-1',
       }),
     );
-    expect(deps.executeSelfIteration).toHaveBeenCalledWith(
+    expect(deps.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
-        context: expect.objectContaining({
-          sourceId: operationSourceId,
-        }),
-        sourceId: operationSourceId,
+        marker: expect.objectContaining({ sourceId: operationSourceId }),
+        prompt: expect.stringContaining(operationSourceId),
       }),
     );
   });
 
-  /**
-   * @example
-   * expect(deps.writeReceipt).toHaveBeenCalledTimes(1);
-   */
-  it('keeps completed runs completed when receipt writing fails', async () => {
-    const receiptError = new Error('receipt store unavailable');
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const deps = createDependencies({
-      writeReceipt: vi.fn(async () => {
-        throw receiptError;
-      }),
-    });
-    const handler = createSelfFeedbackIntentSourceHandler(deps);
-
-    const result = await handler.handle(createIntentSource());
-
-    expect(result).toEqual(
-      expect.objectContaining({
-        execution: expect.objectContaining({ status: ReviewRunStatus.Completed }),
-        status: ReviewRunStatus.Completed,
-      }),
-    );
-    expect(consoleError).toHaveBeenCalledWith(
-      '[AgentSignal] Failed to write self-feedback intent receipt:',
-      receiptError,
-    );
-    consoleError.mockRestore();
-  });
-
-  /**
-   * @example
-   * expect(result.reason).toBe('invalid_payload');
-   */
   it('requires the service-emitted tool call id for stable source verification', async () => {
     const deps = createDependencies();
     const handler = createSelfFeedbackIntentSourceHandler(deps);
@@ -335,14 +186,10 @@ describe('self-feedback intent source handler', () => {
       }),
     );
     expect(deps.canRunReview).not.toHaveBeenCalled();
-    expect(deps.executeSelfIteration).not.toHaveBeenCalled();
+    expect(deps.dispatch).not.toHaveBeenCalled();
   });
 
-  /**
-   * @example
-   * expect(result.status).toBe('skipped');
-   */
-  it('skips without enrichment or execution when the review gate is disabled', async () => {
+  it('skips without enrichment or dispatch when the review gate is disabled', async () => {
     const deps = createDependencies({
       canRunReview: vi.fn(async () => false),
     });
@@ -358,14 +205,10 @@ describe('self-feedback intent source handler', () => {
     );
     expect(deps.acquireReviewGuard).not.toHaveBeenCalled();
     expect(deps.enrichEvidence).not.toHaveBeenCalled();
-    expect(deps.executeSelfIteration).not.toHaveBeenCalled();
+    expect(deps.dispatch).not.toHaveBeenCalled();
   });
 
-  /**
-   * @example
-   * expect(result.status).toBe('deduped');
-   */
-  it('dedupes without enrichment or execution when the declaration guard already exists', async () => {
+  it('dedupes without enrichment or dispatch when the declaration guard already exists', async () => {
     const deps = createDependencies({
       acquireReviewGuard: vi.fn(async () => false),
     });
@@ -380,13 +223,9 @@ describe('self-feedback intent source handler', () => {
       }),
     );
     expect(deps.enrichEvidence).not.toHaveBeenCalled();
-    expect(deps.executeSelfIteration).not.toHaveBeenCalled();
+    expect(deps.dispatch).not.toHaveBeenCalled();
   });
 
-  /**
-   * @example
-   * expect(result.reason).toBe('invalid_payload');
-   */
   it('returns skipped invalid when source id does not match the expected declaration key', async () => {
     const deps = createDependencies();
     const handler = createSelfFeedbackIntentSourceHandler(deps);
@@ -403,13 +242,9 @@ describe('self-feedback intent source handler', () => {
       }),
     );
     expect(deps.canRunReview).not.toHaveBeenCalled();
-    expect(deps.executeSelfIteration).not.toHaveBeenCalled();
+    expect(deps.dispatch).not.toHaveBeenCalled();
   });
 
-  /**
-   * @example
-   * expect(sourceHandlers[0].listen).toBe('agent.self_feedback_intent.declared');
-   */
   it('installs an optional self-feedback intent source policy through default policy composition', async () => {
     const sourceHandlers: AgentSignalSourceHandlerDefinition[] = [];
     const deps = createDependencies();
@@ -459,7 +294,7 @@ describe('self-feedback intent source handler', () => {
 
     expect(runtimeResult).toEqual(
       expect.objectContaining({
-        concluded: expect.objectContaining({ status: ReviewRunStatus.Completed }),
+        concluded: expect.objectContaining({ status: ReviewRunStatus.Dispatched }),
         status: 'conclude',
       }),
     );
@@ -467,10 +302,6 @@ describe('self-feedback intent source handler', () => {
 });
 
 describe('self-feedback intent source policy handler', () => {
-  /**
-   * @example
-   * expect(handler.listen).toBe('agent.self_feedback_intent.declared');
-   */
   it('listens to the self-feedback intent declared source type', () => {
     const handler = createSelfFeedbackIntentSourcePolicyHandler(createDependencies());
 

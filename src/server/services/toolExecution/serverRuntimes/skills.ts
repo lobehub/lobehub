@@ -1,8 +1,12 @@
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { LocalSystemApiName, LocalSystemIdentifier } from '@lobechat/builtin-tool-local-system';
-// Note: only `readFile` is wired through deviceProxy. Directory enumeration is
+// Note: only `readFile` is wired through deviceGateway. Directory enumeration is
 // left to the model via `local-system.listFiles` so we don't double-fetch.
-import { type CommandResult, SkillsIdentifier } from '@lobechat/builtin-tool-skills';
+import {
+  type CommandResult,
+  type ExecScriptActivatedSkill,
+  SkillsIdentifier,
+} from '@lobechat/builtin-tool-skills';
 import {
   type DeviceFileAccess,
   type ExportFileResult,
@@ -10,25 +14,29 @@ import {
   SkillsExecutionRuntime,
 } from '@lobechat/builtin-tool-skills/executionRuntime';
 import type { BuiltinSkill, SkillItem, SkillListItem, SkillResourceContent } from '@lobechat/types';
-import type { CodeInterpreterToolName } from '@lobehub/market-sdk';
 import debug from 'debug';
-import { sha256 } from 'js-sha256';
 
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
 import { UserModel } from '@/database/models/user';
 import { filterBuiltinSkills } from '@/helpers/skillFilters';
-import { FileS3 } from '@/server/modules/S3';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
+import { createSandboxService, normalizeSandboxCommandResult } from '@/server/services/sandbox';
 import { SkillResourceService } from '@/server/services/skill/resource';
 import { preprocessLhCommand } from '@/server/services/toolExecution/preprocessLhCommand';
 
-import { deviceProxy } from '../deviceProxy';
+import { deviceGateway } from '../deviceGateway';
 import { type ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:skills-runtime');
+
+interface UserSettingsWithMarketToken {
+  market?: {
+    accessToken?: string;
+  };
+}
 
 class SkillServerRuntimeService implements SkillRuntimeService {
   private resourceService: SkillResourceService;
@@ -88,12 +96,13 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     }
 
     try {
-      const market = this.marketService.market;
-      const response = await market.plugins.runBuildInTool(
-        'runCommand' as any,
-        { command: lhResult.command },
-        { topicId: this.topicId, userId: this.userId },
-      );
+      const sandboxService = createSandboxService({
+        fileService: this.fileService,
+        marketService: this.marketService,
+        topicId: this.topicId,
+        userId: this.userId,
+      });
+      const response = await sandboxService.callTool('runCommand', { command: lhResult.command });
 
       log('runCommand response: %O', response);
 
@@ -106,14 +115,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         };
       }
 
-      const result = response.data?.result || {};
-
-      return {
-        exitCode: result.exitCode ?? (response.success ? 0 : 1),
-        output: result.stdout || result.output || '',
-        stderr: result.stderr || '',
-        success: response.success && (result.exitCode === 0 || result.exitCode === undefined),
-      };
+      return normalizeSandboxCommandResult(response);
     } catch (error) {
       log('Error running command: %O', error);
       return {
@@ -128,69 +130,61 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   execScript = async (
     command: string,
     options: {
-      config?: { description?: string; id?: string; name?: string };
+      activatedSkills?: ExecScriptActivatedSkill[];
       description: string;
-      runInClient?: boolean;
     },
   ): Promise<CommandResult> => {
-    const { config, description } = options;
+    const { activatedSkills, description } = options;
 
     if (!this.topicId) {
       throw new Error('topicId is required for execScript');
     }
 
     try {
-      // Look up skill zipUrl if config is provided (same logic as market.ts)
-      const enhancedParams: any = {
+      const enhancedParams: Record<string, unknown> = {
+        activatedSkills,
         command,
-        config,
         description,
       };
 
-      if (config?.name) {
-        const skill = await this.skillModel.findByName(config.name);
+      if (activatedSkills?.length) {
+        const skillZipUrls: Record<string, string> = {};
 
-        // If skill not found, return error with available skills
-        if (!skill) {
-          const allSkills = await this.skillModel.findAll();
-          const availableSkills = allSkills.data.map((s) => s.name).join(', ');
+        for (const activatedSkill of activatedSkills) {
+          if (!activatedSkill.name) continue;
 
-          const errorMessage = availableSkills
-            ? `Skill "${config.name}" not found. Available skills: ${availableSkills}`
-            : `Skill "${config.name}" not found. No skills available. Please import a skill first.`;
+          const skill = await this.skillModel.findByName(activatedSkill.name);
 
-          log('Skill not found: %s. Available skills: %s', config.name, availableSkills);
+          if (!skill) {
+            log('No persisted skill bundle found for activated skill: %s', activatedSkill.name);
+            continue;
+          }
 
-          return {
-            exitCode: 1,
-            output: '',
-            stderr: errorMessage,
-            success: false,
-          };
+          if (!skill.zipFileHash) continue;
+
+          const fileInfo = await this.fileModel.checkHash(skill.zipFileHash);
+          if (!fileInfo.isExist || !fileInfo.url) continue;
+
+          const fullUrl = await this.fileService.getFullFileUrl(fileInfo.url);
+          if (fullUrl) {
+            skillZipUrls[skill.name] = fullUrl;
+            log('Resolved zipUrl for skill %s', skill.name);
+          }
         }
 
-        if (skill.zipFileHash) {
-          // Get S3 key from globalFiles
-          const fileInfo = await this.fileModel.checkHash(skill.zipFileHash);
-
-          if (fileInfo.isExist && fileInfo.url) {
-            // Convert S3 key to full URL
-            const fullUrl = await this.fileService.getFullFileUrl(fileInfo.url);
-            if (fullUrl) {
-              enhancedParams.zipUrl = fullUrl;
-              log('Added zipUrl to execScript params for skill %s: %s', skill.name, fullUrl);
-            }
-          }
+        if (Object.keys(skillZipUrls).length > 0) {
+          enhancedParams.skillZipUrls = skillZipUrls;
+          log('Added skillZipUrls to execScript params: %O', Object.keys(skillZipUrls));
         }
       }
 
-      // Call market-sdk's runBuildInTool
-      const market = this.marketService.market;
-      const response = await market.plugins.runBuildInTool(
-        'execScript' as CodeInterpreterToolName,
-        enhancedParams,
-        { topicId: this.topicId, userId: this.userId },
-      );
+      const sandboxService = createSandboxService({
+        fileService: this.fileService,
+        marketService: this.marketService,
+        topicId: this.topicId,
+        userId: this.userId,
+      });
+      const response = await sandboxService.callTool('execScript', enhancedParams);
 
       log('execScript response: %O', response);
 
@@ -203,14 +197,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
         };
       }
 
-      const result = response.data?.result || {};
-
-      return {
-        exitCode: result.exitCode ?? (response.success ? 0 : 1),
-        output: result.stdout || result.output || '',
-        stderr: result.stderr || '',
-        success: response.success && (result.exitCode === 0 || result.exitCode === undefined),
-      };
+      return normalizeSandboxCommandResult(response);
     } catch (error) {
       log('Error executing script: %O', error);
       return {
@@ -228,68 +215,21 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     }
 
     try {
-      const s3 = new FileS3();
-
-      // Use date-based sharding (same as market.ts)
-      const today = new Date().toISOString().split('T')[0];
-      const key = `code-interpreter-exports/${today}/${this.topicId}/${filename}`;
-
-      // Step 1: Generate pre-signed upload URL
-      const uploadUrl = await s3.createPreSignedUrl(key);
-      log('Generated upload URL for key: %s', key);
-
-      // Step 2: Call sandbox's exportFile tool with the upload URL
-      const market = this.marketService.market;
-      const response = await market.plugins.runBuildInTool(
-        'exportFile' as CodeInterpreterToolName,
-        { path, uploadUrl },
-        { topicId: this.topicId, userId: this.userId },
-      );
-
-      log('Sandbox exportFile response: %O', response);
-
-      if (!response.success) {
-        return {
-          filename,
-          success: false,
-        };
-      }
-
-      const result = response.data?.result;
-      const uploadSuccess = result?.success !== false;
-
-      if (!uploadSuccess) {
-        return {
-          filename,
-          success: false,
-        };
-      }
-
-      // Step 3: Get file metadata from S3
-      const metadata = await s3.getFileMetadata(key);
-      const fileSize = metadata.contentLength;
-      const mimeType = metadata.contentType || result?.mimeType || 'application/octet-stream';
-
-      // Step 4: Create persistent file record
-      const fileHash = sha256(key + Date.now().toString());
-
-      const { fileId, url } = await this.fileService.createFileRecord({
-        fileHash,
-        fileType: mimeType,
-        name: filename,
-        size: fileSize,
-        url: key, // Store S3 key
+      const sandboxService = createSandboxService({
+        fileService: this.fileService,
+        marketService: this.marketService,
+        topicId: this.topicId,
+        userId: this.userId,
       });
-
-      log('Created file record: fileId=%s, url=%s', fileId, url);
+      const result = await sandboxService.exportAndUploadFile(path, filename);
 
       return {
-        fileId,
-        filename,
-        mimeType,
-        size: fileSize,
-        success: true,
-        url, // This is the permanent /f:id URL
+        fileId: result.fileId,
+        filename: result.filename,
+        mimeType: result.mimeType,
+        size: result.size,
+        success: result.success,
+        url: result.url,
       };
     } catch (error) {
       log('Error exporting file: %O', error);
@@ -319,7 +259,8 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     try {
       const userModel = new UserModel(context.serverDB, context.userId);
       const userSettings = await userModel.getUserSettings();
-      marketAccessToken = (userSettings?.market as any)?.accessToken;
+      marketAccessToken = (userSettings as UserSettingsWithMarketToken | undefined)?.market
+        ?.accessToken;
       log(
         'Fetched market accessToken for user %s: %s',
         context.userId,
@@ -379,7 +320,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
 
     // Project skills live on the device filesystem. Read them through the
     // device gateway by reusing the local-system tools — no special
-    // file-read primitive, just the existing capabilities over deviceProxy.
+    // file-read primitive, just the existing capabilities over deviceGateway.
     //   - `readFile`  loads SKILL.md and validated reference files.
     //   - `globFiles` enumerates the skill directory so `readReference` can
     //     reject paths the model guessed (e.g. `.env`) instead of trusting
@@ -391,7 +332,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       const userId = context.userId;
       deviceFileAccess = {
         listFiles: async (dir: string) => {
-          const result = await deviceProxy.executeToolCall(
+          const result = await deviceGateway.executeToolCall(
             { deviceId: activeDeviceId, userId },
             {
               apiName: LocalSystemApiName.globFiles,
@@ -420,7 +361,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
             .map((f) => (f.startsWith(dir) ? f.slice(dir.length).replace(/^[/\\]+/, '') : f));
         },
         readFile: async (filePath: string) => {
-          const result = await deviceProxy.executeToolCall(
+          const result = await deviceGateway.executeToolCall(
             { deviceId: activeDeviceId, userId },
             {
               apiName: LocalSystemApiName.readFile,

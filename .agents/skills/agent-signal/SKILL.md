@@ -1,6 +1,6 @@
 ---
 name: agent-signal
-description: Build or extend LobeHub Agent Signal pipelines for background or quiet agent work driven by event sources, semantic signals, and action handlers. Use when adding a new Agent Signal source, signal or action type, policy, middleware handler, workflow handoff, dedupe or scope behavior, or observability around `src/server/services/agentSignal/**`, `packages/agent-signal`, or `packages/observability-otel/src/modules/agent-signal`.
+description: 'Build or extend LobeHub Agent Signal pipelines. Use for signal sources, signal/action types, policies, middleware, workflow handoff, dedupe, scope behavior, or observability.'
 ---
 
 # Agent Signal

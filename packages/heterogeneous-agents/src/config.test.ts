@@ -26,8 +26,12 @@ describe('heterogeneous agent config', () => {
 
   it('derives display labels from the shared config source', () => {
     expect(HETEROGENEOUS_TYPE_LABELS).toEqual({
+      'amp': 'Amp',
       'claude-code': 'Claude Code',
       'codex': 'Codex',
+      'hermes': 'Hermes',
+      'openclaw': 'OpenClaw',
+      'opencode': 'OpenCode',
     });
   });
 });

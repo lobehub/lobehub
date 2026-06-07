@@ -1,45 +1,34 @@
-import { SendButton, useEditor } from '@lobehub/editor/react';
-import { Avatar, Flexbox } from '@lobehub/ui';
+import { ChatInput, ChatInputActionBar, SendButton, useEditor } from '@lobehub/editor/react';
+import { Button } from '@lobehub/ui';
 import { $getRoot } from 'lexical';
-import { memo, useCallback, useState } from 'react';
+import { MessageCirclePlus } from 'lucide-react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { shallow } from 'zustand/shallow';
 
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
+import { useConversationStore } from '@/features/Conversation';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
   insertFilesIntoEditor,
 } from '@/features/EditorCanvas/editorAttachments';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
-import { useUserAvatar } from '@/hooks/useUserAvatar';
-import { useTaskStore } from '@/store/task';
 
-import { styles } from '../../shared/style';
-
-interface FeedbackInputProps {
-  taskId: string;
-  topicId: string;
-}
-
-const FeedbackInput = memo<FeedbackInputProps>(({ taskId, topicId }) => {
+const FeedbackInput = memo(() => {
   const { t } = useTranslation('chat');
   const editor = useEditor();
-  const userAvatar = useUserAvatar();
-  const { addComment, runTask, closeTopicDrawer } = useTaskStore(
-    (s) => ({
-      addComment: s.addComment,
-      closeTopicDrawer: s.closeTopicDrawer,
-      runTask: s.runTask,
-    }),
-    shallow,
-  );
+  const sendMessage = useConversationStore((s) => s.sendMessage);
   const [submitting, setSubmitting] = useState(false);
   const [hasContent, setHasContent] = useState(false);
   const [hasAttachments, setHasAttachments] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const shouldSendOnEnter = useEnterToSend();
 
   const canSubmit = hasContent || hasAttachments;
+
+  useEffect(() => {
+    if (expanded) editor?.focus?.();
+  }, [expanded, editor]);
 
   const handleContentChange = useCallback(() => {
     const lexicalEditor = editor?.getLexicalEditor?.();
@@ -60,67 +49,81 @@ const FeedbackInput = memo<FeedbackInputProps>(({ taskId, topicId }) => {
 
   const handleSubmit = useCallback(async () => {
     if (submitting) return;
-    const json = editor?.getDocument?.('json') as unknown;
+    const editorData = editor?.getDocument?.('json') as Record<string, any> | undefined;
     const markdown = String(editor?.getDocument?.('markdown') ?? '').trim();
     const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
     if (!markdown && !hasFiles) return;
 
+    // Clear the editor synchronously BEFORE await so the input feels
+    // responsive — sendMessage's optimistic-update pipeline keeps a copy
+    // of the captured markdown / editorData for rendering. Keep the
+    // ChatInput expanded after send: once the user has opened the reply
+    // composer, treat it as the new resting state for this drawer session.
+    editor?.cleanDocument?.();
+    setHasContent(false);
+    setHasAttachments(false);
+
     setSubmitting(true);
     try {
-      await addComment(taskId, markdown, {
-        editorData: json,
-        topicId,
-      });
-      // Start a NEW topic run that picks up the comment we just attached to the
-      // current topic. Do NOT pass continueTopicId — that would flip the
-      // already-completed topic back to running and overwrite its operation id.
-      try {
-        await runTask(taskId);
-      } catch (error) {
-        console.warn('[FeedbackInput] runTask failed', error);
-      }
-      editor?.cleanDocument?.();
-      setHasContent(false);
-      setHasAttachments(false);
-      closeTopicDrawer();
+      // sendMessage is bound to this drawer's ConversationProvider context
+      // (agentId + topicId + isolatedTopic), so the message continues this
+      // topic's conversation. Files attached inline in the editor travel as
+      // part of editorData / markdown — no separate files array needed.
+      // Force the gateway runtime so the follow-up runs on the same
+      // server-side path as the original `runTask` that spawned this topic,
+      // regardless of the user's global local/cloud preference.
+      await sendMessage({ editorData, forceRuntime: 'gateway', message: markdown });
     } finally {
       setSubmitting(false);
     }
-  }, [taskId, topicId, editor, addComment, runTask, closeTopicDrawer, submitting]);
+  }, [editor, sendMessage, submitting]);
+
+  if (!expanded) {
+    return (
+      <Button block icon={MessageCirclePlus} variant={'filled'} onClick={() => setExpanded(true)}>
+        {t('taskDetail.sendFollowUp')}
+      </Button>
+    );
+  }
 
   return (
-    <Flexbox className={styles.commentInputCard} gap={6}>
-      <Flexbox horizontal align={'flex-start'} gap={8}>
-        <Avatar avatar={userAvatar} size={24} style={{ flexShrink: 0, marginBlockStart: 4 }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <EditorCanvas
-            editor={editor}
-            floatingToolbar={false}
-            placeholder={t('taskDetail.commentPlaceholder')}
-            style={{ paddingBottom: 4 }}
-            onContentChange={handleContentChange}
-            onPressEnter={({ event }) => {
-              if (shouldSendOnEnter(event)) {
-                handleSubmit();
-                return true;
-              }
-            }}
-          />
-        </div>
-        <Flexbox horizontal align={'center'} gap={4} style={{ flexShrink: 0 }}>
-          <AttachmentUploadButton onFiles={handleAttach} />
-          <SendButton
-            disabled={!canSubmit && !submitting}
-            loading={submitting}
-            shape={'round'}
-            title={t('taskDetail.commentSubmitAndRun')}
-            type={'text'}
-            onClick={handleSubmit}
-          />
-        </Flexbox>
-      </Flexbox>
-    </Flexbox>
+    <ChatInput
+      maxHeight={240}
+      minHeight={64}
+      footer={
+        <ChatInputActionBar
+          left={<AttachmentUploadButton onFiles={handleAttach} />}
+          style={{ paddingInline: 8 }}
+          right={
+            <SendButton
+              disabled={!canSubmit && !submitting}
+              loading={submitting}
+              shape={'round'}
+              title={t('taskDetail.replyInThread')}
+              type={'primary'}
+              onClick={handleSubmit}
+            />
+          }
+        />
+      }
+    >
+      <EditorCanvas
+        editor={editor}
+        floatingToolbar={false}
+        placeholder={t('taskDetail.replyPlaceholder')}
+        style={{ paddingBlock: 0 }}
+        onContentChange={handleContentChange}
+        onPressEnter={({ event }) => {
+          if (shouldSendOnEnter(event)) {
+            handleSubmit();
+            return true;
+          }
+        }}
+      />
+    </ChatInput>
   );
 });
+
+FeedbackInput.displayName = 'FeedbackInput';
 
 export default FeedbackInput;

@@ -1,4 +1,8 @@
-import { runtimeManagedToolIds } from '@lobechat/builtin-tools';
+import {
+  alwaysOnToolIds,
+  manualModeExcludeToolIds,
+  runtimeManagedToolIds,
+} from '@lobechat/builtin-tools';
 import { type BuiltinSkill, type LobeToolMeta } from '@lobechat/types';
 
 import {
@@ -228,6 +232,32 @@ const installedAllMetaList = (s: ToolStoreState): LobeToolMetaWithAvailability[]
   return [...builtinMetas, ...getKlavisMetasWithAvailability(s)];
 };
 
+const MANUAL_MODE_EXCLUDE_TOOL_IDS = new Set(manualModeExcludeToolIds);
+
+/**
+ * Get meta for the application-fixed tools (always-on, not user-controllable) that should
+ * be shown read-only in the chat-input Tools popover's "Pinned" section.
+ *
+ * These tools are normally `hidden` (and some are `discoverable: false`), so they never
+ * appear in `metaList` / `metaListIncludingHidden`. Here we read them directly from
+ * `builtinTools` by identifier, preserving the `alwaysOnToolIds` order and dropping any
+ * that aren't available in the current environment.
+ *
+ * The list must match what the engine actually enables: in manual skill-activate mode the
+ * discovery tools in `manualModeExcludeToolIds` (activator, skill-store) are stripped from
+ * the defaults before the enable checker runs, so they are NOT on — exclude them here too,
+ * otherwise the UI would claim a fixed tool that the runtime omits.
+ */
+const fixedDisplayMetaList =
+  ({ isManualMode }: { isManualMode: boolean } = { isManualMode: false }) =>
+  (s: ToolStoreState): LobeToolMeta[] =>
+    alwaysOnToolIds
+      .filter((id) => !(isManualMode && MANUAL_MODE_EXCLUDE_TOOL_IDS.has(id)))
+      .map((id) => s.builtinTools.find((tool) => tool.identifier === id))
+      .filter((tool): tool is ToolStoreState['builtinTools'][number] => !!tool)
+      .filter((tool) => isBuiltinToolAvailableInCurrentEnv(tool.identifier))
+      .map(toBuiltinMeta);
+
 /**
  * Get installed builtin skills (excludes uninstalled ones)
  */
@@ -253,6 +283,7 @@ const isBuiltinToolInstalled = (identifier: string) => (s: ToolStoreState) =>
 export const builtinToolSelectors = {
   allMetaList,
   discoverableMetaList,
+  fixedDisplayMetaList,
   installedAllMetaList,
   installedBuiltinSkills,
   isBuiltinToolInstalled,

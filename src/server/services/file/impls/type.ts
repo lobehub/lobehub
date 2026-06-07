@@ -1,3 +1,7 @@
+import type { PreSignedUpload } from '@/server/modules/S3';
+
+export type { PreSignedUpload };
+
 /**
  * File service implementation interface
  */
@@ -6,6 +10,12 @@ export interface FileServiceImpl {
    * Create cached pre-signed preview URL
    */
   createCachedPreSignedUrlForPreview: (url?: string | null, expiresIn?: number) => Promise<string>;
+
+  /**
+   * Create pre-signed upload descriptor
+   */
+  createPreSignedUpload: (key: string) => Promise<PreSignedUpload>;
+
   /**
    * Create pre-signed upload URL
    */

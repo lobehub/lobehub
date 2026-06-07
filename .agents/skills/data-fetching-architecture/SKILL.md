@@ -1,6 +1,6 @@
 ---
 name: data-fetching-architecture
-description: Standardized data-fetching pipeline guide — Service layer + Zustand Store + SWR. Use when implementing a data-fetching feature, creating a `xxxService`, adding a `useFetchXxx` hook, wiring `useClientDataSWR`, or migrating ad-hoc `useEffect + fetch` to the standard pipeline. Triggers on `lambdaClient`, `useClientDataSWR`, `xxxService`, `useFetchXxx`, 'data fetching', 'fetch architecture', 'service layer', 'SWR hook', 'migrate useEffect'.
+description: 'LobeHub data-fetching pipeline guide. Use for service layer, Zustand store, SWR, lambdaClient, useClientDataSWR, useFetchXxx hooks, or migrating useEffect fetches.'
 user-invocable: false
 ---
 

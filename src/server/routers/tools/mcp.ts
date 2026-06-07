@@ -6,6 +6,9 @@ import {
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorToolModel } from '@/database/models/connectorTool';
+import { ConnectorToolPermission } from '@/database/schemas';
 import { type ToolCallContent } from '@/libs/mcp';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase, telemetry } from '@/libs/trpc/lambda/middleware';
@@ -133,6 +136,44 @@ export const mcpRouter = router({
     .mutation(async ({ input, ctx }) => {
       // Stdio check can be done here or rely on the service/client layer
       checkStdioEnvironment(input.params);
+
+      // ── Connector tool permission gate ────────────────────────────────────
+      // If the connector identifier matches a user_connectors entry, check whether
+      // this specific tool has been disabled by the user. Disabled tools are still
+      // present in the AI manifest (so the AI knows they exist) but are hard-blocked
+      // here at execution time so the MCP server is never actually called.
+      const connectorId = input.params.name;
+      if (connectorId && ctx.userId) {
+        const connectorModel = new ConnectorModel(ctx.serverDB, ctx.userId);
+        const [connector] = await connectorModel.queryByIdentifiers([connectorId]);
+        if (connector) {
+          const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId);
+          const tools = await connectorToolModel.queryByConnector(connector.id);
+          const tool = tools.find((t) => t.toolName === input.toolName);
+          if (tool?.permission === ConnectorToolPermission.disabled) {
+            return {
+              content:
+                `The tool "${input.toolName}" has been disabled by the user and cannot be executed. ` +
+                `Please inform the user that this tool is currently disabled. ` +
+                `They can re-enable it in Settings > Connectors.`,
+              state: {
+                content: [
+                  {
+                    text:
+                      `The tool "${input.toolName}" has been disabled by the user and cannot be executed. ` +
+                      `Please inform the user that this tool is currently disabled. ` +
+                      `They can re-enable it in Settings > Connectors.`,
+                    type: 'text',
+                  },
+                ],
+                isError: false,
+              },
+              success: true,
+            };
+          }
+        }
+      }
+      // ── End permission gate ───────────────────────────────────────────────
 
       const startTime = Date.now();
       let success = true;

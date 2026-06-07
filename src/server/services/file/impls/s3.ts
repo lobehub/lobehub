@@ -8,7 +8,7 @@ import { getRedisConfig } from '@/envs/redis';
 import { initializeRedis, isRedisEnabled } from '@/libs/redis';
 import { FileS3 } from '@/server/modules/S3';
 
-import { type FileServiceImpl } from './type';
+import type { FileServiceImpl, PreSignedUpload } from './type';
 
 const log = debug('lobe-file:s3');
 
@@ -62,6 +62,10 @@ export class S3StaticFileImpl implements FileServiceImpl {
 
   async createPreSignedUrl(key: string): Promise<string> {
     return this.s3.createPreSignedUrl(key);
+  }
+
+  async createPreSignedUpload(key: string): Promise<PreSignedUpload> {
+    return this.s3.createPreSignedUpload(key);
   }
 
   async getFileMetadata(key: string): Promise<{ contentLength: number; contentType?: string }> {

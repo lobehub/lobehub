@@ -110,8 +110,8 @@ vi.mock('@/server/modules/Mecha', () => ({
   }),
 }));
 
-vi.mock('@/server/services/toolExecution/deviceProxy', () => ({
-  deviceProxy: {
+vi.mock('@/server/services/toolExecution/deviceGateway', () => ({
+  deviceGateway: {
     isConfigured: false,
     queryDeviceList: vi.fn().mockResolvedValue([]),
   },

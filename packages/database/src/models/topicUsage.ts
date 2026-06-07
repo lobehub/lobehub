@@ -39,8 +39,9 @@ const num = (v: unknown): number => (v == null ? 0 : Number(v));
  * Recompute a topic's denormalized usage/cost rollup from its assistant messages.
  *
  * Pure derived projection: SUM over the topic's `role='assistant'` messages
- * (thread messages count too — they also carry `topic_id`), reading the
- * canonical `metadata.usage`. The stored shape mirrors `agent_operations`:
+ * (thread messages count too — they also carry `topic_id`), preferring the
+ * dedicated `usage` column and falling back to legacy `metadata.usage`. The
+ * stored shape mirrors `agent_operations`:
  *   - scalar columns : total_input_tokens / total_output_tokens / total_tokens / total_cost
  *   - `usage` jsonb  : flat aggregate { llm: { apiCalls, processingTimeMs, tokens }, tools, humanInteraction }
  *   - `cost`  jsonb  : { total, currency, llm: { total, currency, byModel[] }, tools } — or NULL when no model reported cost
@@ -60,8 +61,10 @@ export const recomputeTopicUsage = async (
   userId: string,
   topicId: string,
 ): Promise<void> => {
+  // Reads prefer the dedicated `usage` column, falling back to legacy
+  // `metadata->'usage'` for rows written before the migration.
   const fieldSelects = USAGE_FIELDS.map(
-    (f) => `sum((metadata->'usage'->>'${f}')::numeric) AS "${f}"`,
+    (f) => `sum((COALESCE(usage, metadata->'usage')->>'${f}')::numeric) AS "${f}"`,
   ).join(',\n      ');
 
   const { rows } = await trx.execute(sql`
@@ -69,14 +72,14 @@ export const recomputeTopicUsage = async (
       provider,
       model,
       count(*)::int AS "msgCount",
-      sum((metadata->'usage'->>'cost')::numeric) AS "cost",
+      sum((COALESCE(usage, metadata->'usage')->>'cost')::numeric) AS "cost",
       sum((metadata->'performance'->>'duration')::numeric) AS "durationMs",
       ${sql.raw(fieldSelects)}
     FROM messages
     WHERE topic_id = ${topicId}
       AND user_id = ${userId}
       AND role = 'assistant'
-      AND metadata ? 'usage'
+      AND (usage IS NOT NULL OR metadata ? 'usage')
     GROUP BY provider, model
   `);
 

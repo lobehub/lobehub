@@ -703,6 +703,27 @@ export class HeterogeneousPersistenceHandler {
 
   private async handleTurnMetadata(state: OperationState, event: AgentStreamEvent) {
     const { model, provider, usage } = event.data ?? {};
+    const subagentCtx = (event.data as any)?.subagent as SubagentEventContext | undefined;
+
+    if (subagentCtx) {
+      // Subagent-tagged usage: write it (plus the subagent's own model/provider)
+      // onto the subagent's in-thread assistant. The chip's totals are derived
+      // from these per-message `usage` snapshots on read (live aggregation +
+      // SQL rollup in `threadModel.queryByTopicId`), so nothing is tracked on
+      // the run. Do NOT touch `state.lastModel` / `state.lastProvider` — those
+      // carry main-agent step boundary state and would contaminate the next
+      // main-agent assistant create.
+      if (!usage) return;
+      const run = state.subagentRuns.get(subagentCtx.parentToolCallId);
+      if (!run) return;
+      await this.deps.messageModel.update(run.currentAssistantMsgId, {
+        metadata: { usage },
+        ...(model && { model }),
+        ...(provider && { provider }),
+      });
+      return;
+    }
+
     if (model) state.lastModel = model;
     if (provider) state.lastProvider = provider;
 
@@ -1236,8 +1257,11 @@ export class HeterogeneousPersistenceHandler {
       run.lastChainParentId = terminal.id;
     }
 
-    // Mark the thread completed. Idempotent — re-running on a retry just
-    // re-writes the same status; downstream UI badges are derived state.
+    // Mark the thread complete (created as `Processing`). The chip's
+    // tool-count / token / model metrics are NOT denormalized here — they're
+    // derived on read from the child messages (`threadModel.queryByTopicId`
+    // aggregates them in SQL, mirroring the live `aggregateSubagentMetrics`),
+    // so finalize owns only the status transition. Idempotent.
     await this.deps.threadModel.update(run.threadId, { status: ThreadStatus.Active });
 
     state.subagentRuns.delete(parentToolCallId);

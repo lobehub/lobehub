@@ -8,11 +8,25 @@ import { AgentRuntimeErrorType } from '@lobechat/types';
 const PG_FOREIGN_KEY_VIOLATION = '23503';
 
 /**
- * Constraint name drizzle generates for the `messages.parent_id` self-FK.
- * Hard-coded because we only use it as a signature — no need to reflect over
- * the schema at runtime.
+ * Constraint names drizzle generates for the `messages` foreign keys that point
+ * at rows a user can delete *while an operation is still running* — the parent /
+ * quota message, the topic, the agent, the session, the thread. When any of
+ * these rows is removed mid-flight, the assistant/tool-message INSERT fails with
+ * a 23503 foreign_key_violation. That's a lost race against the user, not a
+ * runtime bug.
+ *
+ * Hard-coded because we only use them as signatures — no need to reflect over
+ * the schema at runtime. An entry for a constraint that doesn't exist is a
+ * harmless no-op.
  */
-const MESSAGES_PARENT_FK_CONSTRAINT = 'messages_parent_id_messages_id_fk';
+const MID_OPERATION_DELETABLE_FK_CONSTRAINTS = new Set([
+  'messages_parent_id_messages_id_fk', // parent message deleted
+  'messages_quota_id_messages_id_fk', // quota (root) message deleted
+  'messages_topic_id_topics_id_fk', // topic deleted
+  'messages_agent_id_agents_id_fk', // agent deleted
+  'messages_session_id_sessions_id_fk', // session deleted
+  'messages_thread_id_threads_id_fk', // thread deleted
+]);
 
 /**
  * Internal property the runtime uses to mark a thrown error as coming from
@@ -23,15 +37,21 @@ const MESSAGES_PARENT_FK_CONSTRAINT = 'messages_parent_id_messages_id_fk';
 export const PERSIST_FATAL_MARKER = 'persistFatal';
 
 /**
- * Detect whether an error returned by `messageModel.create` is a `parent_id`
- * FK violation — meaning the parent message no longer exists. Most commonly
- * caused by the parent being deleted concurrently with agent execution
- * (see ).
+ * Detect whether an error returned by `messageModel.create` is a foreign-key
+ * violation on one of the mid-operation-deletable `messages` references — the
+ * parent / quota message, topic, agent, session or thread no longer exists,
+ * almost always because the user deleted that context concurrently with agent
+ * execution.
+ *
+ * Previously this only matched the `parent_id` self-FK, so topic / agent / etc.
+ * deletions slipped through as raw `Failed query: insert into "messages"` 500s
+ * (DatabasePersistError noise on the dashboard) instead of the typed user-side
+ * error.
  *
  * `drizzle` + `postgres-js` wrap the raw PG error as `.cause`, so the check
  * looks at both the top level and the cause.
  */
-export const isParentMessageMissingError = (error: unknown): boolean => {
+export const isMidOperationReferenceMissingError = (error: unknown): boolean => {
   if (!error || typeof error !== 'object') return false;
   const err = error as any;
   const code = err?.code ?? err?.cause?.code;
@@ -40,7 +60,11 @@ export const isParentMessageMissingError = (error: unknown): boolean => {
     err?.constraint ??
     err?.cause?.constraint_name ??
     err?.cause?.constraint;
-  return code === PG_FOREIGN_KEY_VIOLATION && constraint === MESSAGES_PARENT_FK_CONSTRAINT;
+  return (
+    code === PG_FOREIGN_KEY_VIOLATION &&
+    typeof constraint === 'string' &&
+    MID_OPERATION_DELETABLE_FK_CONSTRAINTS.has(constraint)
+  );
 };
 
 /**

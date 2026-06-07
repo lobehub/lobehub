@@ -61,6 +61,7 @@ vi.stubGlobal('fetch', mockFetch);
 vi.mock('@/server/services/file/impls', () => ({
   createFileServiceModule: vi.fn().mockImplementation(() => ({
     createPreSignedUrl: vi.fn().mockResolvedValue('mock-presigned-url'),
+    createPreSignedUpload: vi.fn().mockResolvedValue({ url: 'mock-presigned-url' }),
     createPreSignedUrlForPreview: vi.fn().mockResolvedValue('mock-preview-url'),
     deleteFile: vi.fn().mockResolvedValue(undefined),
     deleteFiles: vi.fn().mockResolvedValue(undefined),
@@ -573,6 +574,7 @@ describe('SkillImporter', () => {
       const mockUploadBuffer = vi.fn().mockResolvedValue({ key: 'mock-key' });
       (createFileServiceModule as any).mockReturnValue({
         createPreSignedUrl: vi.fn(),
+        createPreSignedUpload: vi.fn(),
         createPreSignedUrlForPreview: vi.fn(),
         deleteFile: vi.fn(),
         deleteFiles: vi.fn(),
@@ -645,6 +647,7 @@ describe('SkillImporter', () => {
       const mockUploadBuffer = vi.fn().mockResolvedValue({ key: 'mock-key' });
       (createFileServiceModule as any).mockReturnValue({
         createPreSignedUrl: vi.fn(),
+        createPreSignedUpload: vi.fn(),
         createPreSignedUrlForPreview: vi.fn(),
         deleteFile: vi.fn(),
         deleteFiles: vi.fn(),
@@ -748,6 +751,7 @@ describe('SkillImporter', () => {
       const mockUploadBuffer = vi.fn().mockResolvedValue({ key: 'mock-key' });
       (createFileServiceModule as any).mockReturnValue({
         createPreSignedUrl: vi.fn(),
+        createPreSignedUpload: vi.fn(),
         createPreSignedUrlForPreview: vi.fn(),
         deleteFile: vi.fn(),
         deleteFiles: vi.fn(),
@@ -1013,6 +1017,7 @@ description: A nested skill
       const { createFileServiceModule } = await import('@/server/services/file/impls');
       (createFileServiceModule as any).mockReturnValue({
         createPreSignedUrl: vi.fn().mockResolvedValue('mock-presigned-url'),
+        createPreSignedUpload: vi.fn().mockResolvedValue({ url: 'mock-presigned-url' }),
         createPreSignedUrlForPreview: vi.fn().mockResolvedValue('mock-preview-url'),
         deleteFile: vi.fn().mockResolvedValue(undefined),
         deleteFiles: vi.fn().mockResolvedValue(undefined),

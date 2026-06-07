@@ -11,7 +11,8 @@
     "./styles": "./src/styles.ts"
   },
   "dependencies": {
-    "@lobechat/tool-runtime": "workspace:*"
+    "@lobechat/tool-runtime": "workspace:*",
+    "anser": "^2.3.5"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

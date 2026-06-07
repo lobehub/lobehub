@@ -8,11 +8,11 @@ import type { ConversationContext, ExecAgentResult, MessageMetadata } from '@lob
 
 import { isDesktop } from '@/const/version';
 import { aiAgentService, type ResumeApprovalParam } from '@/services/aiAgent';
-import { localFileService } from '@/services/electron/localFileService';
+import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
@@ -22,32 +22,34 @@ import { useUserStore } from '@/store/user';
 import { createGatewayEventHandler } from './gatewayEventHandler';
 
 /**
- * Scan the active working directory for project-level skills
- * (`.agents/skills` / `.claude/skills`) so the server can surface them in
- * `<available_skills>`. Desktop-only and best-effort: a failed scan must not
- * block the send.
+ * When the agent runs against the local machine ("本机"), resolve this desktop's
+ * own gateway deviceId so it can be passed as the run's `deviceId`. The server
+ * then presets `activeDeviceId` and injects `lobe-local-system` into the very
+ * first LLM payload — skipping the extra `activateDevice` round-trip the model
+ * is otherwise forced to make whenever more than one device is online (with a
+ * single device the server's heuristic already covered it).
+ *
+ * Gated on the effective runtime mode (`isLocalSystemEnabledById`), NOT on
+ * `agencyConfig.executionTarget`: the latter is only written by the newer
+ * HeteroDeviceSwitcher, whereas the legacy ModeSelector writes just
+ * `runtimeMode`. Resolving a device whenever the target is unset would override
+ * an explicit `cloud` / `none` choice and wrongly route a cloud run to the
+ * local machine. `runtimeMode` is the single source of truth both selectors
+ * agree on (and what the server gates CloudSandbox on).
+ *
+ * Desktop-only and best-effort: any failure falls back to the server-side
+ * device-resolution heuristics. We don't pre-check online status here — an
+ * offline id simply fails the server's `onlineDevices` guard and stays unrouted.
  */
-const resolveProjectSkills = async (
-  get: () => ChatStore,
-): Promise<{ description?: string; name: string; path: string }[] | undefined> => {
-  if (!isDesktop) return undefined;
+const resolveLocalDeviceId = async (agentId?: string): Promise<string | undefined> => {
+  if (!isDesktop || !agentId) return undefined;
 
-  const topicWorkingDirectory = topicSelectors.currentTopicWorkingDirectory(get());
-  const agentWorkingDirectory = agentSelectors.currentAgentWorkingDirectory(getAgentStoreState());
-  const workingDirectory = topicWorkingDirectory ?? agentWorkingDirectory;
-  if (!workingDirectory) return undefined;
+  const isLocal = chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(getAgentStoreState());
+  if (!isLocal) return undefined;
 
   try {
-    const { skills } = await localFileService.listProjectSkills({ scope: workingDirectory });
-    if (skills.length === 0) return undefined;
-    // The directory tree is enumerated lazily at activation time by the Skills
-    // runtime (via the local-system `listFiles` tool), so we drop `files` here
-    // — keeps the op-param payload small.
-    return skills.map((skill) => ({
-      description: skill.description,
-      name: skill.name,
-      path: skill.path,
-    }));
+    const info = await gatewayConnectionService.getDeviceInfo();
+    return info?.deviceId;
   } catch {
     return undefined;
   }
@@ -353,7 +355,7 @@ export class GatewayActionImpl {
       ? this.#get().getOperationAbortSignal(parentOperationId)
       : undefined;
 
-    const projectSkills = await resolveProjectSkills(this.#get);
+    const localDeviceId = await resolveLocalDeviceId(context.agentId);
 
     const result = await aiAgentService.execAgentTask(
       {
@@ -369,9 +371,9 @@ export class GatewayActionImpl {
           threadId: context.threadId,
           topicId: context.topicId,
         },
+        deviceId: localDeviceId,
         fileIds,
         parentMessageId,
-        projectSkills,
         prompt: message,
         resumeApproval,
         trigger: metadata?.trigger,

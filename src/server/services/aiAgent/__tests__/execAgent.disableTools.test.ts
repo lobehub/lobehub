@@ -57,6 +57,20 @@ vi.mock('@/database/models/plugin', () => ({
   })),
 }));
 
+vi.mock('@/database/models/connector', () => ({
+  ConnectorModel: vi.fn().mockImplementation(() => ({
+    queryByIdentifiers: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
+vi.mock('@/database/models/connectorTool', () => ({
+  ConnectorToolModel: vi.fn().mockImplementation(() => ({
+    queryByConnector: vi.fn().mockResolvedValue([]),
+    queryByConnectorIds: vi.fn().mockResolvedValue([]),
+    queryAllByConnectorIds: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn().mockImplementation(() => ({
     create: vi.fn().mockResolvedValue({ id: 'topic-1' }),
@@ -100,8 +114,8 @@ vi.mock('@/server/modules/Mecha', () => ({
   serverMessagesEngine: vi.fn().mockResolvedValue([{ content: 'test', role: 'user' }]),
 }));
 
-vi.mock('@/server/services/toolExecution/deviceProxy', () => ({
-  deviceProxy: {
+vi.mock('@/server/services/toolExecution/deviceGateway', () => ({
+  deviceGateway: {
     isConfigured: false,
     queryDeviceList: vi.fn().mockResolvedValue([]),
   },

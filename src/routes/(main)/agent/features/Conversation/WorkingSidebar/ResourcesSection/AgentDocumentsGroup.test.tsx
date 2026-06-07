@@ -1,3 +1,9 @@
+import {
+  AGENT_DOCUMENT_CATEGORY,
+  AGENT_DOCUMENT_FILE_TYPE,
+  AGENT_DOCUMENT_SKILL_CATEGORY,
+  AGENT_SIGNAL_SOURCE_TYPE,
+} from '@lobechat/const';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -192,7 +198,7 @@ vi.mock('@/store/chat/selectors', () => ({
 }));
 
 const skillBundleRow = {
-  category: 'skill',
+  category: AGENT_DOCUMENT_SKILL_CATEGORY,
   createdAt: new Date('2026-05-09T00:00:00Z'),
   description: 'Use for YouTube comments',
   documentId: 'skill-bundle-doc',
@@ -203,14 +209,14 @@ const skillBundleRow = {
   isSkillBundle: true,
   isSkillIndex: false,
   parentId: null,
-  sourceType: 'agent-signal',
+  sourceType: AGENT_SIGNAL_SOURCE_TYPE,
   templateId: 'agent-skill',
   title: 'YouTube Comment Retrieval Workflow',
   updatedAt: new Date(),
 };
 
 const skillIndexRow = {
-  category: 'skill',
+  category: AGENT_DOCUMENT_SKILL_CATEGORY,
   createdAt: new Date('2026-05-09T00:00:00Z'),
   description: 'Use for YouTube comments',
   documentId: 'skill-index-doc',
@@ -221,18 +227,18 @@ const skillIndexRow = {
   isSkillBundle: false,
   isSkillIndex: true,
   parentId: 'skill-bundle-doc',
-  sourceType: 'agent-signal',
+  sourceType: AGENT_SIGNAL_SOURCE_TYPE,
   templateId: 'agent-skill',
   title: 'SKILL.md',
   updatedAt: new Date(),
 };
 
 const fileDocRow = {
-  category: 'document',
+  category: AGENT_DOCUMENT_CATEGORY,
   createdAt: new Date('2026-04-16T00:00:00Z'),
   description: 'A short brief',
   documentId: 'doc-content-1',
-  fileType: 'agent/document',
+  fileType: AGENT_DOCUMENT_FILE_TYPE,
   filename: 'brief.md',
   id: 'doc-1',
   isFolder: false,

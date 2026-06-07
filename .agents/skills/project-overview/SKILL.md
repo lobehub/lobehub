@@ -1,6 +1,6 @@
 ---
 name: project-overview
-description: "LobeHub open-source monorepo architecture map — flat `apps/` + `packages/@lobechat/*` + `src/` layout, per-layer location table, and `src/business/` stubs that the cloud repo overrides. Use when exploring an unfamiliar part of the codebase, locating where a layer lives (store / service / router / schema / etc.), or onboarding to the monorepo. Triggers on 'where does X live', 'project structure', 'monorepo layout', `src/business/` stub, 'architecture overview', '项目结构', '架构总览'."
+description: 'LobeHub open-source monorepo architecture map. Use when locating code layers, understanding apps/packages/src layout, business stubs, project structure, or onboarding to the repository.'
 user-invocable: false
 ---
 

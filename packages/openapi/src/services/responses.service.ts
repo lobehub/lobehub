@@ -322,7 +322,7 @@ export class ResponsesService extends BaseService {
       const usage = this.extractUsage(finalState);
 
       const isClientToolInterrupt =
-        finalState.status === 'interrupted' &&
+        finalState.status === 'waiting_for_async_tool' &&
         finalState.interruption?.reason === 'client_tool_execution';
 
       return this.buildResponseObject({
@@ -753,7 +753,7 @@ export class ResponsesService extends BaseService {
 
       // Determine if agent was interrupted for client tool execution
       const isClientToolInterrupt =
-        finalState?.status === 'interrupted' &&
+        finalState?.status === 'waiting_for_async_tool' &&
         finalState?.interruption?.reason === 'client_tool_execution';
 
       if (isClientToolInterrupt) {

@@ -13,6 +13,8 @@
   "inbox.filterUnread": "仅显示未读",
   "inbox.markAllRead": "全部标为已读",
   "inbox.title": "通知",
+  "storage_overage_cap_reached": "您的存储按量付费月度上限 ${{monthlyCap}} 已触达。本周期预计费用为 ${{estimatedCycleCharge}}。超出套餐存储额度的新上传会被阻止，直到下个账单周期或您提高上限。",
+  "storage_overage_cap_reached_title": "存储按量付费上限已触达",
   "video_generation_completed": "视频「{{prompt}}」已生成。",
   "video_generation_completed_title": "视频生成完成"
 }

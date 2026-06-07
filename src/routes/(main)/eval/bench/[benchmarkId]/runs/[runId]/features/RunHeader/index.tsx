@@ -20,7 +20,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
-import RunEditModal from '@/routes/(main)/eval/bench/[benchmarkId]/features/RunEditModal';
+import { createRunEditModal } from '@/routes/(main)/eval/bench/[benchmarkId]/features/RunEditModal';
 import StatusBadge from '@/routes/(main)/eval/features/StatusBadge';
 import { useEvalStore } from '@/store/eval';
 
@@ -125,7 +125,6 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
   const canStart = run.status === 'idle' || run.status === 'failed' || run.status === 'aborted';
   const [starting, setStarting] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
 
   const snapshot = run.config?.agentSnapshot;
   const agentTitle = run.targetAgent?.title || t('run.detail.agent.unnamed');
@@ -278,7 +277,7 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
               icon={Pencil}
               size="small"
               title={t('run.actions.edit')}
-              onClick={() => setEditOpen(true)}
+              onClick={() => createRunEditModal({ run })}
             />
             {isActive && (
               <ActionIcon
@@ -358,8 +357,6 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
           </Flexbox>
         )}
       </Card>
-
-      <RunEditModal open={editOpen} run={run} onClose={() => setEditOpen(false)} />
     </Flexbox>
   );
 });

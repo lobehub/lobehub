@@ -1,6 +1,6 @@
 import { LocalSystemIdentifier, LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 
-import { deviceProxy } from '../deviceProxy';
+import { deviceGateway } from '../deviceGateway';
 import { type ServerRuntimeRegistration } from './types';
 
 export const localSystemRuntime: ServerRuntimeRegistration = {
@@ -16,7 +16,7 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
 
     for (const api of LocalSystemManifest.api) {
       proxy[api.name] = async (args: any) => {
-        return deviceProxy.executeToolCall(
+        return deviceGateway.executeToolCall(
           { deviceId: context.activeDeviceId!, userId: context.userId! },
           {
             apiName: api.name,

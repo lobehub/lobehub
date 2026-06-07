@@ -15,7 +15,5 @@
   "features.imessage.title": "iMessage 채널",
   "features.inputMarkdown.desc": "입력 영역에서 실시간으로 Markdown을 렌더링합니다 (굵은 글씨, 코드 블록, 표 등).",
   "features.inputMarkdown.title": "입력창 Markdown 렌더링",
-  "features.platformAgent.desc": "생성 메뉴에서 \"플랫폼 에이전트 추가\" 항목을 표시합니다. 플랫폼 에이전트(예: OpenClaw, Hermes)는 연결된 장치에서 실행되며 lh connect를 통해 다시 통신합니다.",
-  "features.platformAgent.title": "플랫폼 에이전트 생성",
   "title": "실험실"
 }

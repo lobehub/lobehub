@@ -49,6 +49,7 @@ import type {
   InstallPluginState,
   MarketToolItem,
   SearchAgentParams,
+  SearchAgentSource,
   SearchAgentState,
   SearchMarketToolsParams,
   SearchMarketToolsState,
@@ -57,6 +58,9 @@ import type {
   UpdatePromptParams,
   UpdatePromptState,
 } from './types';
+
+/** Max results per searchAgents call (mirrored in the tool manifests: "max: 20") */
+const MAX_SEARCH_AGENT_LIMIT = 20;
 
 export class AgentManagerRuntime {
   private agentService: IAgentService;
@@ -382,15 +386,20 @@ export class AgentManagerRuntime {
   async searchAgents(params: SearchAgentParams): Promise<BuiltinToolResult> {
     try {
       const source = params.source || 'all';
-      const limit = Math.min(params.limit || 10, 20);
+      const limit = Math.min(params.limit || 10, MAX_SEARCH_AGENT_LIMIT);
+      const offset = Math.max(params.offset || 0, 0);
       const agents: AgentSearchItem[] = [];
+
+      let userTotal = 0;
+      let marketTotal = 0;
 
       // Search user's agents
       if (source === 'user' || source === 'all') {
-        const userAgents = await this.agentService.queryAgents({
-          keyword: params.keyword,
-          limit,
-        });
+        const [userAgents, total] = await Promise.all([
+          this.agentService.queryAgents({ keyword: params.keyword, limit, offset }),
+          this.agentService.countAgents({ keyword: params.keyword }),
+        ]);
+        userTotal = total;
 
         agents.push(
           ...userAgents.map(
@@ -412,13 +421,14 @@ export class AgentManagerRuntime {
         );
       }
 
-      // Search marketplace agents
+      // Search marketplace agents (first page only — offset does not apply)
       if (source === 'market' || source === 'all') {
         const marketAgents = await this.discoverService.getAssistantList({
           pageSize: limit,
           q: params.keyword,
           ...(params.category && { category: params.category }),
         });
+        marketTotal = marketAgents.totalCount ?? marketAgents.items.length;
 
         agents.push(
           ...marketAgents.items.map((agent) => ({
@@ -433,21 +443,53 @@ export class AgentManagerRuntime {
       }
 
       const uniqueAgents = agents.slice(0, limit);
+      const totalCount = userTotal + marketTotal;
 
-      const agentList = uniqueAgents
-        .map((a) => `- ${a.title || 'Untitled'} (${a.id})${a.isMarket ? ' [Market]' : ''}`)
-        .join('\n');
+      // hasMore tracks workspace agents only: marketplace results are not offset-paged
+      const shownUserCount = uniqueAgents.filter((a) => !a.isMarket).length;
+      const hasMore = offset + shownUserCount < userTotal;
+
+      const headerBySource: Record<SearchAgentSource, string> = {
+        all: `Found ${userTotal} agents in your workspace and ${marketTotal} in the marketplace, showing ${uniqueAgents.length}:`,
+        market: `Found ${marketTotal} agents in the marketplace, showing the first ${uniqueAgents.length}:`,
+        user: `Found ${userTotal} agents in your workspace, showing ${offset + 1}-${offset + uniqueAgents.length}:`,
+      };
+
+      const notes: string[] = [];
+      if (params.limit && params.limit > MAX_SEARCH_AGENT_LIMIT) {
+        notes.push(
+          `Note: requested limit ${params.limit} exceeds the maximum of ${MAX_SEARCH_AGENT_LIMIT}, so results were capped at ${MAX_SEARCH_AGENT_LIMIT} per call.`,
+        );
+      }
+      if (hasMore) {
+        notes.push(
+          `More workspace agents available: call searchAgent with offset=${offset + shownUserCount}${source === 'all' ? ` and source="user"` : ''} to get the next page.`,
+        );
+      }
+
+      let content: string;
+      if (uniqueAgents.length === 0) {
+        content =
+          totalCount === 0
+            ? 'No agents found matching your search criteria.'
+            : `No agents at offset ${offset}; only ${totalCount} agents match. Retry with a smaller offset.`;
+      } else {
+        const agentList = uniqueAgents
+          .map((a) => `- ${a.title || 'Untitled'} (${a.id})${a.isMarket ? ' [Market]' : ''}`)
+          .join('\n');
+        content = `${headerBySource[source]}\n${agentList}`;
+      }
+      if (notes.length > 0) content += `\n\n${notes.join('\n')}`;
 
       return {
-        content:
-          uniqueAgents.length > 0
-            ? `Found ${uniqueAgents.length} agents:\n${agentList}`
-            : 'No agents found matching your search criteria.',
+        content,
         state: {
           agents: uniqueAgents,
+          hasMore,
           keyword: params.keyword,
+          offset,
           source,
-          totalCount: uniqueAgents.length,
+          totalCount,
         } as SearchAgentState,
         success: true,
       };

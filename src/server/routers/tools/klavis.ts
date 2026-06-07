@@ -1,13 +1,17 @@
 import { z } from 'zod';
 
+import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorToolModel } from '@/database/models/connectorTool';
+import { ConnectorToolPermission } from '@/database/schemas';
 import { getKlavisClient } from '@/libs/klavis';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
+import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MCPService } from '@/server/services/mcp';
 
 /**
  * Klavis procedure with client initialized in context
  */
-const klavisProcedure = authedProcedure.use(async (opts) => {
+const klavisProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const klavisClient = getKlavisClient();
 
   return opts.next({
@@ -26,12 +30,49 @@ export const klavisRouter = router({
   callTool: klavisProcedure
     .input(
       z.object({
+        /** Klavis server identifier (e.g. 'gmail', 'google-calendar') for precise permission lookup */
+        identifier: z.string().optional(),
         serverUrl: z.string(),
         toolArgs: z.record(z.unknown()).optional(),
         toolName: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // ── Connector tool permission gate ────────────────────────────────────
+      // Use identifier + toolName when available for a precise lookup (avoids
+      // same-name collisions across connectors). Falls back to toolName-only
+      // if identifier is absent (legacy callers).
+      if (ctx.userId && ctx.serverDB) {
+        const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId);
+        let connectorTool:
+          | Awaited<ReturnType<typeof connectorToolModel.findByToolName>>
+          | undefined;
+
+        if (input.identifier) {
+          const connectorModel = new ConnectorModel(ctx.serverDB, ctx.userId);
+          const [connector] = await connectorModel.queryByIdentifiers([input.identifier]);
+          if (connector) {
+            const tools = await connectorToolModel.queryByConnector(connector.id);
+            connectorTool = tools.find((t) => t.toolName === input.toolName);
+          }
+        } else {
+          connectorTool = await connectorToolModel.findByToolName(input.toolName);
+        }
+
+        if (connectorTool?.permission === ConnectorToolPermission.disabled) {
+          const message =
+            `The tool "${input.toolName}" has been disabled by the user and cannot be executed. ` +
+            `Please inform the user that this tool is currently disabled. ` +
+            `They can re-enable it in Settings > Connectors.`;
+          return {
+            content: message,
+            state: { content: [{ text: message, type: 'text' }], isError: false },
+            success: true,
+          };
+        }
+      }
+      // ── End permission gate ───────────────────────────────────────────────
+
       const response = await ctx.klavisClient.mcpServer.callTools({
         serverUrl: input.serverUrl,
         toolArgs: input.toolArgs,

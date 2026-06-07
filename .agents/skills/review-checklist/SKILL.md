@@ -1,6 +1,6 @@
 ---
 name: review-checklist
-description: "Common recurring mistakes in LobeHub code review — `console.*` leftovers, missing `return await`, hardcoded secrets, hardcoded i18n strings, desktop router pair drift, antd vs `@lobehub/ui`, non-idempotent migrations, cloud impact red flags. Use as a quick checklist when reviewing a PR, diff, or branch change. Triggers on 'code review', 'review the diff', 'review this PR', 'review changes', 'PR review checklist', '审一下', '审 PR'."
+description: 'LobeHub code review checklist. Use when reviewing a PR, diff, or branch for console leftovers, return await, secrets, i18n, desktop router drift, UI imports, migrations, or cloud impact.'
 user-invocable: false
 ---
 

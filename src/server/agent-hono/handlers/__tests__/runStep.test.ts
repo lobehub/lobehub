@@ -122,6 +122,40 @@ describe('runStep handler', () => {
     );
   });
 
+  it('unwraps QStash `body.payload` resume/intervention fields into executeStep', async () => {
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
+    mockExecuteStep.mockResolvedValue({
+      nextStepScheduled: false,
+      state: { cost: { total: 0 }, status: 'running', stepCount: 2 },
+      success: true,
+    });
+
+    // QStash nests these under `body.payload`, not the top level.
+    const { ctx } = buildContext({
+      body: {
+        context: { foo: 'bar' },
+        operationId: 'op-1',
+        payload: {
+          approvedToolCall: { id: 'tc1' },
+          resumeAsyncTool: true,
+          toolMessageId: 'msg-1',
+        },
+        stepIndex: 2,
+      },
+    });
+    await runStep(ctx);
+
+    expect(mockExecuteStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approvedToolCall: { id: 'tc1' },
+        operationId: 'op-1',
+        resumeAsyncTool: true,
+        stepIndex: 2,
+        toolMessageId: 'msg-1',
+      }),
+    );
+  });
+
   it('shapes the success response with status, totals and pending fields', async () => {
     mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
     mockExecuteStep.mockResolvedValue({

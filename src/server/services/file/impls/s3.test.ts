@@ -49,6 +49,10 @@ vi.mock('@/server/modules/S3', () => ({
     getFileMetadata: vi.fn().mockResolvedValue({ contentLength: 1024, contentType: 'image/png' }),
     deleteFile: vi.fn().mockResolvedValue({}),
     deleteFiles: vi.fn().mockResolvedValue({}),
+    createPreSignedUpload: vi.fn().mockResolvedValue({
+      headers: { 'x-amz-acl': 'public-read' },
+      url: 'https://upload.example.com/test.jpg',
+    }),
     createPreSignedUrl: vi.fn().mockResolvedValue('https://upload.example.com/test.jpg'),
     uploadContent: vi.fn().mockResolvedValue({}),
     uploadMedia: vi.fn().mockResolvedValue({}),
@@ -278,6 +282,18 @@ describe('S3StaticFileImpl', () => {
     it('应该调用S3的createPreSignedUrl方法', async () => {
       const result = await fileService.createPreSignedUrl('test.jpg');
       expect(result).toBe('https://upload.example.com/test.jpg');
+    });
+  });
+
+  describe('createPreSignedUpload', () => {
+    it('should call S3 createPreSignedUpload and return upload headers', async () => {
+      const result = await fileService.createPreSignedUpload('test.jpg');
+
+      expect(fileService['s3'].createPreSignedUpload).toHaveBeenCalledWith('test.jpg');
+      expect(result).toEqual({
+        headers: { 'x-amz-acl': 'public-read' },
+        url: 'https://upload.example.com/test.jpg',
+      });
     });
   });
 

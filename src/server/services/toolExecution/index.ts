@@ -2,7 +2,12 @@ import { type ChatToolPayload } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
-import { type CloudMCPParams, type ToolCallContent } from '@/libs/mcp';
+import { ConnectorToolPermission } from '@/database/schemas';
+import { type CloudMCPParams, type StdioMCPParams, type ToolCallContent } from '@/libs/mcp';
+import {
+  buildBlockedToolResponse,
+  getConnectorToolPermission,
+} from '@/libs/mcp/connectorPermissionCheck';
 import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
 import {
   DEFAULT_TOOL_RESULT_MAX_LENGTH,
@@ -12,6 +17,7 @@ import {
 import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
 import { type BuiltinToolsExecutor } from './builtin';
+import { deviceGateway } from './deviceGateway';
 import { classifyToolError } from './errorClassification';
 import {
   type ToolExecutionContext,
@@ -73,6 +79,27 @@ export class ToolExecutionService {
     const { identifier, apiName, type } = payload;
 
     log('Executing tool: %s:%s (type: %s)', identifier, apiName, type);
+
+    // ── Connector tool permission gate (covers ALL paths + qstash) ────────
+    // Check before any execution so that disabled tools are blocked universally:
+    // Lobehub market skills, Klavis, MCP connectors, and execAgent/qstash alike.
+    // needs_approval is handled via humanIntervention in the manifest; we only
+    // hard-block 'disabled' here (and needs_approval in headless/qstash context
+    // since the manifest's humanIntervention auto-rejects them there already).
+    if (context.serverDB && context.userId && identifier && apiName) {
+      const permission = await getConnectorToolPermission(
+        context.serverDB,
+        context.userId,
+        identifier,
+        apiName,
+      );
+      if (permission === ConnectorToolPermission.disabled) {
+        log('Tool %s:%s is disabled by user — blocking execution', identifier, apiName);
+        const blocked = buildBlockedToolResponse(apiName);
+        return { ...blocked, executionTime: 0 };
+      }
+    }
+    // ── End permission gate ───────────────────────────────────────────────
 
     const startTime = Date.now();
     try {
@@ -191,7 +218,21 @@ export class ToolExecutionService {
         return await this.executeCloudMCPTool(payload, context, mcpParams);
       }
 
-      // For stdio/http/sse types, use standard MCP service
+      // Stdio MCP can't run on the cloud server — the binary lives on the
+      // user's machine. When a device gateway is configured and a device is
+      // active, tunnel the call to that device, which spawns the stdio server
+      // locally. Standalone Electron (no gateway) falls through to the
+      // in-process MCP service below, where spawning is on the user's machine.
+      if (
+        mcpParams.type === 'stdio' &&
+        deviceGateway.isConfigured &&
+        context.activeDeviceId &&
+        context.userId
+      ) {
+        return await this.executeMcpViaDevice(payload, context, mcpParams);
+      }
+
+      // For stdio (in-process) / http/sse types, use standard MCP service
       const result = await this.mcpService.callTool({
         argsStr: args,
         clientParams: mcpParams,
@@ -216,6 +257,62 @@ export class ToolExecutionService {
         success: false,
       };
     }
+  }
+
+  /**
+   * Execute a stdio MCP tool call on the user's device via the device gateway.
+   * Forwards the stdio connection params (command/args/env) so the device can
+   * spawn the local MCP server and run the call — something the cloud server
+   * cannot do. Callers must ensure `activeDeviceId` and `userId` are set.
+   */
+  private async executeMcpViaDevice(
+    payload: ChatToolPayload,
+    context: ToolExecutionContext,
+    mcpParams: StdioMCPParams,
+  ): Promise<ToolExecutionResult> {
+    const { identifier, apiName, arguments: args } = payload;
+
+    log(
+      'Executing stdio MCP tool via device: %s:%s (device=%s)',
+      identifier,
+      apiName,
+      context.activeDeviceId,
+    );
+
+    const result = await deviceGateway.executeMcpCall(
+      {
+        apiName,
+        arguments: args,
+        deviceId: context.activeDeviceId!,
+        identifier,
+        params: {
+          args: mcpParams.args ?? [],
+          command: mcpParams.command,
+          env: mcpParams.env,
+          name: mcpParams.name,
+          type: 'stdio',
+        },
+        userId: context.userId!,
+      },
+      context.executionTimeoutMs,
+    );
+
+    if (!result.success) {
+      return {
+        content: result.content,
+        error: {
+          code: 'MCP_DEVICE_EXECUTION_ERROR',
+          message: result.error || result.content,
+        },
+        success: false,
+      };
+    }
+
+    return {
+      content: result.content,
+      state: (result.state as Record<string, any>) ?? undefined,
+      success: true,
+    };
   }
 
   private async executeCloudMCPTool(

@@ -1,7 +1,7 @@
 /**
  * Standalone structural assertions for self-iteration finalState snapshots.
  *
- * Dependency-free on purpose: the execAgent migration PRs (LOBE-9434 #5/#7)
+ * Dependency-free on purpose: the execAgent migration PRs
  * import this from server tests AND the CLI e2e suite, so it must not pull in
  * vitest or any server-only module. Mirrors the `kind` discrimination used by
  * `src/server/services/agentSignal/services/selfIteration/finalStateExtractor.ts`.

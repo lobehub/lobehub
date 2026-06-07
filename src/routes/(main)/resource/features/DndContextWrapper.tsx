@@ -1,5 +1,6 @@
 'use client';
 
+import { CUSTOM_DOCUMENT_FILE_TYPE, CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import { Icon, useAppElement } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
@@ -263,9 +264,9 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
                       justifyContent: 'center',
                     }}
                   >
-                    {currentDrag.data.fileType === 'custom/folder' ? (
+                    {currentDrag.data.fileType === CUSTOM_FOLDER_FILE_TYPE ? (
                       <Icon icon={FolderIcon} size={20} />
-                    ) : currentDrag.data.fileType === 'custom/document' ? (
+                    ) : currentDrag.data.fileType === CUSTOM_DOCUMENT_FILE_TYPE ? (
                       <Icon icon={FileText} size={20} />
                     ) : (
                       <FileIcon

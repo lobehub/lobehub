@@ -1749,6 +1749,70 @@ describe('AgentModel', () => {
     });
   });
 
+  describe('countAgents', () => {
+    it('should count all non-virtual agents regardless of pagination', async () => {
+      for (let i = 1; i <= 5; i++) {
+        await agentModel.create({
+          title: `Agent ${i}`,
+          virtual: false,
+        });
+      }
+      await agentModel.create({
+        title: 'Virtual Agent',
+        virtual: true,
+      });
+
+      const total = await agentModel.countAgents();
+
+      expect(total).toBe(5);
+      // count stays the full total even when queryAgents is limited
+      const limitedResults = await agentModel.queryAgents({ limit: 2 });
+      expect(limitedResults.length).toBe(2);
+    });
+
+    it('should apply the same keyword filter as queryAgents', async () => {
+      await agentModel.create({
+        title: 'Code Assistant',
+        description: 'Helps with coding',
+        virtual: false,
+      });
+      await agentModel.create({
+        title: 'Writer',
+        description: 'Helps with writing tasks',
+        virtual: false,
+      });
+      await agentModel.create({
+        title: 'Designer',
+        description: 'Helps with design code review',
+        virtual: false,
+      });
+
+      // matches 'Code Assistant' (title) and 'Designer' (description)
+      expect(await agentModel.countAgents({ keyword: 'code' })).toBe(2);
+      expect(await agentModel.countAgents({ keyword: 'writing' })).toBe(1);
+      expect(await agentModel.countAgents({ keyword: 'nonexistent' })).toBe(0);
+    });
+
+    it('should only count agents for the current user', async () => {
+      await agentModel.create({ title: 'User1 Agent', virtual: false });
+      await agentModel2.create({ title: 'User2 Agent', virtual: false });
+
+      expect(await agentModel.countAgents()).toBe(1);
+      expect(await agentModel2.countAgents()).toBe(1);
+    });
+
+    it('should count agents with null virtual field (treat as non-virtual)', async () => {
+      await serverDB.insert(agents).values({
+        id: 'null-virtual-agent-count',
+        title: 'Null Virtual Agent',
+        userId,
+        virtual: null as unknown as boolean,
+      });
+
+      expect(await agentModel.countAgents()).toBe(1);
+    });
+  });
+
   describe('checkByMarketIdentifier', () => {
     it('should return true when agent with marketIdentifier exists', async () => {
       await serverDB.insert(agents).values({
