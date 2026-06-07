@@ -777,20 +777,6 @@
       "when": 1780832120210,
       "tag": "0110_add_verify_tables_and_ai_infra_id",
       "breakpoints": true
-    },
-    {
-      "idx": 111,
-      "version": "7",
-      "when": 1780759298030,
-      "tag": "0111_verify_criteria_add_description",
-      "breakpoints": true
-    },
-    {
-      "idx": 112,
-      "version": "7",
-      "when": 1780811206204,
-      "tag": "0112_nifty_forgotten_one",
-      "breakpoints": true
     }
   ],
   "version": "6"
