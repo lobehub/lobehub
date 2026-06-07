@@ -9,12 +9,16 @@ import { systemRoleTemplate } from './systemRole';
 export const VERIFY_AGENT: BuiltinAgentDefinition = {
   avatar: '/avatars/lobe-ai.png',
   persist: {
-    // Chat mode = strict tool whitelist: the verifier gets ONLY its writeback
-    // tool, not the default agent toolset (web/sandbox/skills), so it judges and
-    // submits instead of wandering off investigating. Search off for the same reason.
+    // Custom tool mode: the verifier's toolset is EXACTLY its declared plugins
+    // (its writeback tool + any investigation tools the run injects), with no
+    // default agent toolset (web/sandbox/skills/always-on) so it judges and
+    // submits instead of wandering off. `enableAgentMode: false` keeps the
+    // chat-style minimal injectors (no skill discovery / agent-management).
+    // Search off for the same reason.
     chatConfig: {
       enableAgentMode: false,
       searchMode: 'off',
+      toolMode: 'custom',
     },
     model: DEFAULT_MODEL,
     provider: DEFAULT_PROVIDER,

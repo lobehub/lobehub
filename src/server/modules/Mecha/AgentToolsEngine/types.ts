@@ -62,6 +62,11 @@ export interface ServerCreateAgentToolsEngineParams {
       enableAgentMode?: boolean;
       runtimeEnv?: RuntimeEnvConfig;
       searchMode?: 'off' | 'on' | 'auto';
+      /**
+       * Overrides the `enableAgentMode` derivation. `custom` = the toolset is
+       * exactly the agent's declared plugins (focused builtin sub-agents).
+       */
+      toolMode?: 'agent' | 'chat' | 'custom';
     };
     /** Plugin IDs enabled for this agent */
     plugins?: string[];

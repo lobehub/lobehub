@@ -16,7 +16,6 @@ import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest } from '@lobechat/builtin-tool-message';
 import { RemoteDeviceManifest } from '@lobechat/builtin-tool-remote-device';
-import { VerifyToolManifest } from '@lobechat/builtin-tool-verify';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import {
   alwaysOnToolIds,
@@ -157,7 +156,13 @@ export const createServerAgentToolsEngine = (
 
   const searchMode = agentConfig.chatConfig?.searchMode ?? 'auto';
   const isSearchEnabled = searchMode !== 'off';
-  const isChatMode = agentConfig.chatConfig?.enableAgentMode === false;
+  // Tool mode: explicit `toolMode` wins; otherwise derive from `enableAgentMode`
+  // (undefined = agent). `custom` = toolset is exactly the agent's plugins.
+  const toolMode: 'agent' | 'chat' | 'custom' =
+    agentConfig.chatConfig?.toolMode ??
+    (agentConfig.chatConfig?.enableAgentMode === false ? 'chat' : 'agent');
+  const isChatMode = toolMode === 'chat';
+  const isCustomMode = toolMode === 'custom';
 
   log(
     'Creating agent tools engine model=%s provider=%s searchMode=%s platform=%s runtimeMode=%s additionalManifests=%d hasDeviceProxy=%s canUseDevice=%s isChatMode=%s',
@@ -180,10 +185,14 @@ export const createServerAgentToolsEngine = (
   const chatModeRules = {
     [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
     [MemoryManifest.identifier]: globalMemoryEnabled,
-    // The verify agent's writeback tool — always available in its (chat-mode) run.
-    [VerifyToolManifest.identifier]: true,
     [WebBrowsingManifest.identifier]: isSearchEnabled,
   };
+
+  // Custom mode: the tool set is EXACTLY the agent's declared plugins — no
+  // alwaysOn tools, no default/runtime-managed injection, no activator. Used by
+  // focused builtin sub-agents (e.g. the verify agent, which mounts only its
+  // writeback tool) that need a precise, self-configured toolset.
+  const customModeRules = Object.fromEntries((agentConfig.plugins ?? []).map((id) => [id, true]));
 
   const agentModeRules = {
     // User-selected plugins
@@ -230,8 +239,13 @@ export const createServerAgentToolsEngine = (
     // activation could resolve the manifest and bypass the rule-layer
     // gates below ().
     builtinTools: buildAllowedBuiltinTools({ canUseDevice, disableLocalSystem }),
-    // Add default tools based on configuration
-    defaultToolIds: isChatMode ? chatModeAllowedToolIds : defaultToolIds,
+    // Add default tools based on configuration. Custom mode = exactly the
+    // agent's plugins; chat mode = strict allow-list; agent mode = full defaults.
+    defaultToolIds: isCustomMode
+      ? (agentConfig.plugins ?? [])
+      : isChatMode
+        ? chatModeAllowedToolIds
+        : defaultToolIds,
     // Post-merge wall: a plugin or Skill/Klavis manifest claiming a
     // device identifier survives `buildAllowedBuiltinTools` (which only
     // filters the builtin source). Excluding the identifiers here drops
@@ -240,9 +254,9 @@ export const createServerAgentToolsEngine = (
     excludeIdentifiers: canUseDevice ? undefined : DEVICE_TOOL_IDENTIFIERS,
     enableChecker: createEnableChecker({
       // Allow lobe-activator to dynamically enable tools at runtime (e.g., lobe-creds, lobe-cron).
-      // Disabled in chat mode so the activator can't bypass the whitelist.
-      allowExplicitActivation: !isChatMode,
-      rules: isChatMode ? chatModeRules : agentModeRules,
+      // Only in agent mode; chat/custom modes can't let the activator bypass their fixed set.
+      allowExplicitActivation: toolMode === 'agent',
+      rules: isCustomMode ? customModeRules : isChatMode ? chatModeRules : agentModeRules,
     }),
   });
 };
