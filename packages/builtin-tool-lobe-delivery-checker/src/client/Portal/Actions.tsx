@@ -8,7 +8,7 @@ import { memo } from 'react';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors, dbMessageSelectors } from '@/store/chat/selectors';
 
-import { LobeAgentIdentifier } from '../../types';
+import { LobeDeliveryCheckerIdentifier } from '../../types';
 
 /**
  * Portal header right-actions for the delivery-check config: step to the prev /
@@ -28,7 +28,8 @@ const PortalActions = memo(() => {
   // The rubric-config view has no per-criterion stepper.
   if (!messageId || params?.view === 'rubric' || total <= 1) return null;
 
-  const go = (next: number) => openToolUI(messageId, LobeAgentIdentifier, { index: next });
+  const go = (next: number) =>
+    openToolUI(messageId, LobeDeliveryCheckerIdentifier, { index: next });
 
   return (
     <Flexbox horizontal gap={2}>
@@ -48,6 +49,6 @@ const PortalActions = memo(() => {
   );
 });
 
-PortalActions.displayName = 'LobeAgentPortalActions';
+PortalActions.displayName = 'LobeDeliveryCheckerPortalActions';
 
 export default PortalActions;

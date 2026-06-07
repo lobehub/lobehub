@@ -50,7 +50,7 @@ export const GenerateVerifyPlanInspector = memo<
     <div
       className={cx(inspectorTextStyles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
     >
-      <span>{t('builtins.lobe-agent.apiName.generateVerifyPlan')}</span>
+      <span>{t('builtins.lobe-delivery-checker.apiName.generateVerifyPlan')}</span>
       {title && (
         <span className={styles.chip}>
           <Icon className={styles.chipIcon} icon={ListChecks} size={13} />

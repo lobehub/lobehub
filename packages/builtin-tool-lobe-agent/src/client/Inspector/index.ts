@@ -7,7 +7,6 @@ import { CallSubAgentsInspector } from './CallSubAgents';
 import { ClearTodosInspector } from './ClearTodos';
 import { CreatePlanInspector } from './CreatePlan';
 import { CreateTodosInspector } from './CreateTodos';
-import { GenerateVerifyPlanInspector } from './GenerateVerifyPlan';
 import { UpdatePlanInspector } from './UpdatePlan';
 import { UpdateTodosInspector } from './UpdateTodos';
 
@@ -24,7 +23,6 @@ export const LobeAgentInspectors: Record<string, BuiltinInspector> = {
   [LobeAgentApiName.clearTodos]: ClearTodosInspector as BuiltinInspector,
   [LobeAgentApiName.createPlan]: CreatePlanInspector as BuiltinInspector,
   [LobeAgentApiName.createTodos]: CreateTodosInspector as BuiltinInspector,
-  [LobeAgentApiName.generateVerifyPlan]: GenerateVerifyPlanInspector as BuiltinInspector,
   [LobeAgentApiName.updatePlan]: UpdatePlanInspector as BuiltinInspector,
   [LobeAgentApiName.updateTodos]: UpdateTodosInspector as BuiltinInspector,
 };

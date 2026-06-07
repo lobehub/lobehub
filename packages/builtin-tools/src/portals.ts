@@ -1,9 +1,9 @@
 import {
-  LobeAgentManifest,
-  LobeAgentPortal,
-  LobeAgentPortalActions,
-  LobeAgentPortalTitle,
-} from '@lobechat/builtin-tool-lobe-agent/client';
+  LobeDeliveryCheckerManifest,
+  LobeDeliveryCheckerPortal,
+  LobeDeliveryCheckerPortalActions,
+  LobeDeliveryCheckerPortalTitle,
+} from '@lobechat/builtin-tool-lobe-delivery-checker/client';
 import {
   WebBrowsingManifest,
   WebBrowsingPortal,
@@ -12,17 +12,17 @@ import {
 import { type BuiltinPortal, type BuiltinPortalTitle } from '@lobechat/types';
 
 export const BuiltinToolsPortals: Record<string, BuiltinPortal> = {
-  [LobeAgentManifest.identifier]: LobeAgentPortal as BuiltinPortal,
+  [LobeDeliveryCheckerManifest.identifier]: LobeDeliveryCheckerPortal as BuiltinPortal,
   [WebBrowsingManifest.identifier]: WebBrowsingPortal as BuiltinPortal,
 };
 
 /** Optional custom header content per tool, rendered in the portal title slot. */
 export const BuiltinToolsPortalTitles: Record<string, BuiltinPortalTitle> = {
-  [LobeAgentManifest.identifier]: LobeAgentPortalTitle,
+  [LobeDeliveryCheckerManifest.identifier]: LobeDeliveryCheckerPortalTitle,
   [WebBrowsingManifest.identifier]: WebBrowsingPortalTitle,
 };
 
 /** Optional header right-actions per tool, rendered next to the portal close. */
 export const BuiltinToolsPortalActions: Record<string, BuiltinPortalTitle> = {
-  [LobeAgentManifest.identifier]: LobeAgentPortalActions,
+  [LobeDeliveryCheckerManifest.identifier]: LobeDeliveryCheckerPortalActions,
 };

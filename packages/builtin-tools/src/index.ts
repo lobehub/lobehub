@@ -16,6 +16,7 @@ import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-bu
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
+import { LobeDeliveryCheckerManifest } from '@lobechat/builtin-tool-lobe-delivery-checker';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest } from '@lobechat/builtin-tool-message';
@@ -328,6 +329,11 @@ export const builtinTools: LobeBuiltinTool[] = [
     hidden: true,
     identifier: LobeAgentManifest.identifier,
     manifest: LobeAgentManifest,
+    type: 'builtin',
+  },
+  {
+    identifier: LobeDeliveryCheckerManifest.identifier,
+    manifest: LobeDeliveryCheckerManifest,
     type: 'builtin',
   },
 ];

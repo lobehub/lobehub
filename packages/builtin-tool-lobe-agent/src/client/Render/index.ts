@@ -2,7 +2,6 @@ import { LobeAgentApiName } from '../../types';
 import CallSubAgentRender from './CallSubAgent';
 import CallSubAgentsRender from './CallSubAgents';
 import CreatePlan from './CreatePlan';
-import GenerateVerifyPlanRender from './GenerateVerifyPlan';
 import TodoListRender from './TodoList';
 
 /**
@@ -20,9 +19,6 @@ export const LobeAgentRenders = {
   [LobeAgentApiName.createPlan]: CreatePlan,
   [LobeAgentApiName.updatePlan]: CreatePlan,
 
-  // Verify plan renders the generated delivery checks
-  [LobeAgentApiName.generateVerifyPlan]: GenerateVerifyPlanRender,
-
   // All todo operations render the same TodoList UI
   [LobeAgentApiName.clearTodos]: TodoListRender,
   [LobeAgentApiName.createTodos]: TodoListRender,
@@ -32,6 +28,5 @@ export const LobeAgentRenders = {
 export { default as CallSubAgentRender } from './CallSubAgent';
 export { default as CallSubAgentsRender } from './CallSubAgents';
 export { default as CreatePlan, PlanCard } from './CreatePlan';
-export { default as GenerateVerifyPlanRender } from './GenerateVerifyPlan';
 export type { TodoListRenderState } from './TodoList';
 export { default as TodoListRender, TodoListUI } from './TodoList';

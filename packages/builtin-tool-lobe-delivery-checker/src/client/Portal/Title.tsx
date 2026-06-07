@@ -30,8 +30,8 @@ const PortalTitle = memo(() => {
       <Icon icon={SlidersHorizontal} size={16} />
       <Text style={{ fontSize: 16 }} type={'secondary'}>
         {isRubricView
-          ? t('builtins.lobe-agent.verifyPlan.portal.rubric.title')
-          : t('builtins.lobe-agent.verifyPlan.portal.title')}
+          ? t('builtins.lobe-delivery-checker.verifyPlan.portal.rubric.title')
+          : t('builtins.lobe-delivery-checker.verifyPlan.portal.title')}
       </Text>
       {!isRubricView && total > 0 && (
         <Text style={{ fontSize: 13 }} type={'secondary'}>
@@ -43,6 +43,6 @@ const PortalTitle = memo(() => {
   );
 });
 
-PortalTitle.displayName = 'LobeAgentPortalTitle';
+PortalTitle.displayName = 'LobeDeliveryCheckerPortalTitle';
 
 export default PortalTitle;

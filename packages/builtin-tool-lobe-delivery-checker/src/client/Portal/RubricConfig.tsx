@@ -64,7 +64,7 @@ const RubricConfig = memo<RubricConfigProps>(({ rubricId }) => {
         <Flexbox horizontal align="center" gap={6}>
           <Icon className={styles.fieldIcon} icon={Type} size={14} />
           <span className={styles.fieldLabel}>
-            {t('builtins.lobe-agent.verifyPlan.portal.rubric.name')}
+            {t('builtins.lobe-delivery-checker.verifyPlan.portal.rubric.name')}
           </span>
         </Flexbox>
         <Input value={title} onChange={(e) => updateRubricTitle(rubricId, e.target.value)} />
@@ -76,11 +76,11 @@ const RubricConfig = memo<RubricConfigProps>(({ rubricId }) => {
           <Flexbox horizontal align="center" gap={6}>
             <Icon className={styles.fieldIcon} icon={RefreshCw} size={14} />
             <span className={styles.rowTitle}>
-              {t('builtins.lobe-agent.verifyPlan.portal.rubric.maxRepairRounds.title')}
+              {t('builtins.lobe-delivery-checker.verifyPlan.portal.rubric.maxRepairRounds.title')}
             </span>
           </Flexbox>
           <span className={styles.desc}>
-            {t('builtins.lobe-agent.verifyPlan.portal.rubric.maxRepairRounds.desc')}
+            {t('builtins.lobe-delivery-checker.verifyPlan.portal.rubric.maxRepairRounds.desc')}
           </span>
         </Flexbox>
         <InputNumber

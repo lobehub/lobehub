@@ -213,7 +213,7 @@ const CriterionDetail = memo<CriterionDetailProps>(({ criterion }) => {
         <TextArea
           autoSize={{ minRows: 1 }}
           className={styles.title}
-          placeholder={t('builtins.lobe-agent.verifyPlan.portal.fields.title')}
+          placeholder={t('builtins.lobe-delivery-checker.verifyPlan.portal.fields.title')}
           readOnly={!editable}
           value={title}
           variant="borderless"
@@ -222,7 +222,7 @@ const CriterionDetail = memo<CriterionDetailProps>(({ criterion }) => {
         <TextArea
           autoSize={{ minRows: 1 }}
           className={styles.description}
-          placeholder={t('builtins.lobe-agent.verifyPlan.portal.fields.description')}
+          placeholder={t('builtins.lobe-delivery-checker.verifyPlan.portal.fields.description')}
           readOnly={!editable}
           value={description}
           variant="borderless"
@@ -233,7 +233,7 @@ const CriterionDetail = memo<CriterionDetailProps>(({ criterion }) => {
       {/* Judging rubric — rich editor */}
       <Field
         icon={ListChecks}
-        label={t('builtins.lobe-agent.verifyPlan.portal.fields.instruction')}
+        label={t('builtins.lobe-delivery-checker.verifyPlan.portal.fields.instruction')}
       >
         <div className={styles.editorBlock}>
           <Editor
@@ -259,17 +259,20 @@ const CriterionDetail = memo<CriterionDetailProps>(({ criterion }) => {
       >
         <Flexbox gap={2} style={{ minWidth: 0 }}>
           <span className={styles.switchTitle}>
-            {t('builtins.lobe-agent.verifyPlan.portal.required.title')}
+            {t('builtins.lobe-delivery-checker.verifyPlan.portal.required.title')}
           </span>
           <span className={styles.switchDesc}>
-            {t('builtins.lobe-agent.verifyPlan.portal.required.desc')}
+            {t('builtins.lobe-delivery-checker.verifyPlan.portal.required.desc')}
           </span>
         </Flexbox>
         <Switch checked={required} disabled={!editable} onChange={(c) => patch({ required: c })} />
       </Flexbox>
 
       {/* Verifier type */}
-      <Field icon={ShieldCheck} label={t('builtins.lobe-agent.verifyPlan.portal.verifier.title')}>
+      <Field
+        icon={ShieldCheck}
+        label={t('builtins.lobe-delivery-checker.verifyPlan.portal.verifier.title')}
+      >
         <Flexbox horizontal gap={8}>
           {VERIFIERS.map(({ type, icon }) => (
             <Flexbox
@@ -281,11 +284,13 @@ const CriterionDetail = memo<CriterionDetailProps>(({ criterion }) => {
               <Flexbox horizontal align="center" gap={6}>
                 <Icon className={styles.verifierIcon} icon={icon} size={15} />
                 <span className={styles.cardTitle}>
-                  {t(`builtins.lobe-agent.verifyPlan.portal.verifier.${type}.title` as any)}
+                  {t(
+                    `builtins.lobe-delivery-checker.verifyPlan.portal.verifier.${type}.title` as any,
+                  )}
                 </span>
               </Flexbox>
               <span className={styles.cardDesc}>
-                {t(`builtins.lobe-agent.verifyPlan.portal.verifier.${type}.desc` as any)}
+                {t(`builtins.lobe-delivery-checker.verifyPlan.portal.verifier.${type}.desc` as any)}
               </span>
             </Flexbox>
           ))}
@@ -293,7 +298,10 @@ const CriterionDetail = memo<CriterionDetailProps>(({ criterion }) => {
       </Field>
 
       {/* On failure */}
-      <Field icon={RotateCcw} label={t('builtins.lobe-agent.verifyPlan.portal.onFail.title')}>
+      <Field
+        icon={RotateCcw}
+        label={t('builtins.lobe-delivery-checker.verifyPlan.portal.onFail.title')}
+      >
         <Flexbox horizontal gap={8}>
           {ON_FAILS.map(({ type, icon }) => (
             <Flexbox
@@ -305,11 +313,11 @@ const CriterionDetail = memo<CriterionDetailProps>(({ criterion }) => {
               <Flexbox horizontal align="center" gap={6}>
                 <Icon className={styles.verifierIcon} icon={icon} size={15} />
                 <span className={styles.cardTitle}>
-                  {t(`builtins.lobe-agent.verifyPlan.portal.onFail.${type}` as any)}
+                  {t(`builtins.lobe-delivery-checker.verifyPlan.portal.onFail.${type}` as any)}
                 </span>
               </Flexbox>
               <span className={styles.cardDesc}>
-                {t(`builtins.lobe-agent.verifyPlan.portal.onFail.${type}Desc` as any)}
+                {t(`builtins.lobe-delivery-checker.verifyPlan.portal.onFail.${type}Desc` as any)}
               </span>
             </Flexbox>
           ))}

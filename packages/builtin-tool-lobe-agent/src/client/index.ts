@@ -4,11 +4,6 @@ export { lobeAgentExecutor } from './executor';
 // Inspector components (customized tool call headers)
 export { LobeAgentInspectors } from './Inspector';
 
-// Portal component (detailed view in the side panel)
-export { default as LobeAgentPortal } from './Portal';
-export { default as LobeAgentPortalActions } from './Portal/Actions';
-export { default as LobeAgentPortalTitle } from './Portal/Title';
-
 // Render components (read-only snapshots)
 export type { TodoListRenderState } from './Render';
 export {

@@ -5,7 +5,7 @@ import { Center } from '@lobehub/ui';
 import { memo } from 'react';
 
 import type { GenerateVerifyPlanParams, GenerateVerifyPlanState } from '../../types';
-import { LobeAgentApiName } from '../../types';
+import { LobeDeliveryCheckerApiName } from '../../types';
 import CriterionDetail, { type CriterionView } from './CriterionDetail';
 import RubricConfig from './RubricConfig';
 
@@ -16,7 +16,7 @@ import RubricConfig from './RubricConfig';
  */
 const Portal = memo<BuiltinPortalProps>(({ apiName, arguments: args, params, state }) => {
   switch (apiName) {
-    case LobeAgentApiName.generateVerifyPlan: {
+    case LobeDeliveryCheckerApiName.generateVerifyPlan: {
       const index = typeof params?.index === 'number' ? params.index : 0;
       const planArgs = args as GenerateVerifyPlanParams | undefined;
       const planState = state as GenerateVerifyPlanState | undefined;
@@ -55,6 +55,6 @@ const Portal = memo<BuiltinPortalProps>(({ apiName, arguments: args, params, sta
   return <Center height={'100%'} />;
 });
 
-Portal.displayName = 'LobeAgentPortal';
+Portal.displayName = 'LobeDeliveryCheckerPortal';
 
 export default Portal;

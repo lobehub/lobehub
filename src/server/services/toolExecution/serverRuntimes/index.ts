@@ -21,6 +21,7 @@ import { cloudSandboxRuntime } from './cloudSandbox';
 import { credsRuntime } from './creds';
 import { knowledgeBaseRuntime } from './knowledgeBase';
 import { lobeAgentRuntime } from './lobeAgent';
+import { lobeDeliveryCheckerRuntime } from './lobeDeliveryChecker';
 import { localSystemRuntime } from './localSystem';
 import { memoryRuntime } from './memory';
 import { messageRuntime } from './message';
@@ -85,6 +86,7 @@ registerRuntimes([
   agentSignalFeedbackIntentRuntime,
   pageAgentRuntime,
   verifyResultRuntime,
+  lobeDeliveryCheckerRuntime,
 ]);
 
 // ==================== Registry API ====================

@@ -16,7 +16,7 @@ import type {
   GenerateVerifyPlanState,
   VerifyVerifierType,
 } from '../../types';
-import { LobeAgentIdentifier } from '../../types';
+import { LobeDeliveryCheckerIdentifier } from '../../types';
 
 /** Verifier-type icon, matching the config panel: agent → bot, llm → scale. */
 const VERIFIER_ICON: Record<VerifyVerifierType, LucideIcon> = {
@@ -121,8 +121,10 @@ const GenerateVerifyPlanRender = memo<
             <ActionIcon
               icon={SlidersHorizontal}
               size="small"
-              title={t('builtins.lobe-agent.verifyPlan.portal.rubric.title')}
-              onClick={() => openToolUI(messageId, LobeAgentIdentifier, { view: 'rubric' })}
+              title={t('builtins.lobe-delivery-checker.verifyPlan.portal.rubric.title')}
+              onClick={() =>
+                openToolUI(messageId, LobeDeliveryCheckerIdentifier, { view: 'rubric' })
+              }
             />
           )}
         </Flexbox>
@@ -136,7 +138,7 @@ const GenerateVerifyPlanRender = memo<
             gap={8}
             justify="space-between"
             key={index}
-            onClick={() => openToolUI(messageId, LobeAgentIdentifier, { index })}
+            onClick={() => openToolUI(messageId, LobeDeliveryCheckerIdentifier, { index })}
           >
             <Flexbox horizontal align="flex-start" gap={8} style={{ minWidth: 0 }}>
               <Icon
@@ -151,8 +153,8 @@ const GenerateVerifyPlanRender = memo<
             </Flexbox>
             <span className={`${styles.tag} ${item.required ? styles.tagRequired : ''}`}>
               {item.required
-                ? t('builtins.lobe-agent.verifyPlan.required')
-                : t('builtins.lobe-agent.verifyPlan.optional')}
+                ? t('builtins.lobe-delivery-checker.verifyPlan.required')
+                : t('builtins.lobe-delivery-checker.verifyPlan.optional')}
             </span>
           </Flexbox>
         ))}
