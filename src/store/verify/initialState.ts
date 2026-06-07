@@ -1,4 +1,4 @@
-import type { VerifierType, VerifyOnFailStrategy } from '@/database/schemas/verify';
+import type { VerifierType, VerifyOnFailStrategy, VerifyRubricConfig } from '@lobechat/types';
 
 /** The criterion fields the portal can edit. */
 export interface VerifyCriterionEdit {
@@ -21,9 +21,15 @@ export interface State {
    * the latest rubric text pending a debounced document save.
    */
   instructionEdits: Record<string, string>;
+  /**
+   * Per-rubric run-policy edit overlay, keyed by `verify_rubrics.id`. Holds the
+   * in-flight config edits (e.g. maxRepairRounds) pending a debounced save.
+   */
+  rubricConfigEdits: Record<string, VerifyRubricConfig>;
 }
 
 export const initialState: State = {
   criterionEdits: {},
   instructionEdits: {},
+  rubricConfigEdits: {},
 };

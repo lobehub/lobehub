@@ -1,13 +1,34 @@
+import type { VerifyCheckItem } from '@lobechat/types';
+import { DEFAULT_MAX_REPAIR_ROUNDS } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { MessageModel } from '@/database/models/message';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
-import type { VerifyCheckItem, VerifyCheckResultItem } from '@/database/schemas/verify';
+import { VerifyRubricModel } from '@/database/models/verifyRubric';
+import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { VerifyStatusService } from './statusService';
 
 const log = debug('lobe-server:verify-repair');
+
+/**
+ * Resolve the run's repair-round cap from the rubric the plan was instantiated
+ * from (live read via the plan items' `sourceRubricId`). Falls back to
+ * {@link DEFAULT_MAX_REPAIR_ROUNDS} for agent-generated / rubric-less plans.
+ */
+const resolveMaxRepairRounds = async (
+  db: LobeChatDatabase,
+  userId: string,
+  plan: VerifyCheckItem[],
+): Promise<number> => {
+  const rubricId = plan.find((i) => i.sourceRubricId)?.sourceRubricId;
+  if (!rubricId) return DEFAULT_MAX_REPAIR_ROUNDS;
+
+  const rubric = await new VerifyRubricModel(db, userId).findById(rubricId);
+  return rubric?.config?.maxRepairRounds ?? DEFAULT_MAX_REPAIR_ROUNDS;
+};
 
 /**
  * Spawns a repair sub agent_operations (parent = the failed run) seeded with the
@@ -20,11 +41,10 @@ export interface RepairSpawner {
     failedItemIds: string[];
     instruction: string;
     operationId: string;
+    /** The failed round's `role=verify` message carrying the persisted feedback. */
+    verifyMessageId?: string;
   }): Promise<{ repairOperationId: string } | null>;
 }
-
-/** Cap on automatic repair rounds (parent-chain depth) to prevent runaway loops. */
-const MAX_REPAIR_ROUNDS = 2;
 
 /** Count how many repair rounds already precede this operation (parent-chain depth). */
 const countRepairRounds = async (
@@ -43,41 +63,51 @@ const countRepairRounds = async (
 
 /**
  * Build a {@link RepairSpawner} for a run: when checks fail with `auto_repair`,
- * re-run the SAME agent in the same topic with the failure feedback as the prompt
- * (a second iteration that fixes the deliverable), then re-snapshot the plan onto
- * the repair operation and confirm it so it re-verifies on completion (next round).
- * Caps the chain at {@link MAX_REPAIR_ROUNDS} to avoid infinite repair loops.
+ * re-run the SAME agent in the same topic. The failure feedback is persisted on
+ * the failed round's `role=verify` message (see VerifyRepairService) and surfaced
+ * into the repair run's context by the VerifyMessageProcessor — so the repair op
+ * runs off history (`suppressUserMessage`) rather than injecting a fake user turn.
+ * Then it re-snapshots the plan onto the repair operation and confirms it so it
+ * re-verifies on completion (next round). Caps the chain at `maxRepairRounds` to
+ * avoid infinite repair loops.
  */
 export const createRepairRunner = (params: {
   agentId?: string | null;
   db: LobeChatDatabase;
+  maxRepairRounds: number;
   model?: string | null;
   provider?: string | null;
   topicId?: string | null;
   userId: string;
 }): RepairSpawner | undefined => {
-  const { agentId, db, model, provider, topicId, userId } = params;
+  const { agentId, db, maxRepairRounds, model, provider, topicId, userId } = params;
   if (!agentId || !topicId) return undefined;
 
-  return async ({ instruction, operationId }) => {
+  return async ({ instruction, operationId, verifyMessageId }) => {
     const operationModel = new AgentOperationModel(db, userId);
 
     const round = await countRepairRounds(operationModel, operationId);
-    if (round >= MAX_REPAIR_ROUNDS) {
-      log('op %s reached max repair rounds (%d), not repairing', operationId, MAX_REPAIR_ROUNDS);
+    if (round >= maxRepairRounds) {
+      log('op %s reached max repair rounds (%d), not repairing', operationId, maxRepairRounds);
       return null;
     }
 
-    // Re-run the original agent in the same topic with the failure feedback.
+    // Re-run the original agent in the same topic. The feedback lives on the
+    // verify message (surfaced into context by VerifyMessageProcessor), so we run
+    // off history instead of injecting a user turn; `instruction` is passed only
+    // for the operation title / logs. `verifyMessageId` parents the new turn under
+    // the verify card it responds to.
     const { AiAgentService } = await import('@/server/services/aiAgent');
     const result = await new AiAgentService(db, userId).execAgent({
       agentId,
       appContext: { topicId },
       autoStart: true,
       ...(model ? { model } : {}),
+      ...(verifyMessageId ? { parentMessageId: verifyMessageId } : {}),
       parentOperationId: operationId,
       prompt: instruction,
       ...(provider ? { provider } : {}),
+      suppressUserMessage: true,
       userInterventionConfig: { approvalMode: 'headless' },
     });
     const repairOperationId = result.operationId;
@@ -130,6 +160,7 @@ export const maybeAutoRepair = async (
   const spawner = createRepairRunner({
     agentId: op?.agentId,
     db,
+    maxRepairRounds: await resolveMaxRepairRounds(db, userId, plan),
     model: op?.model,
     provider: op?.provider,
     topicId: op?.topicId,
@@ -155,11 +186,13 @@ const buildInstruction = (
 };
 
 export class VerifyRepairService {
+  private readonly messageModel: MessageModel;
   private readonly operationModel: AgentOperationModel;
   private readonly resultModel: VerifyCheckResultModel;
   private readonly statusService: VerifyStatusService;
 
   constructor(db: LobeChatDatabase, userId: string) {
+    this.messageModel = new MessageModel(db, userId);
     this.operationModel = new AgentOperationModel(db, userId);
     this.resultModel = new VerifyCheckResultModel(db, userId);
     this.statusService = new VerifyStatusService(db, userId);
@@ -193,10 +226,24 @@ export class VerifyRepairService {
     }
 
     const failedItemIds = failures.map((f) => f.item.id);
+    const instruction = buildInstruction(failures);
+
+    // Persist the failure feedback onto this round's verify card so it (a) renders
+    // and (b) is surfaced into the repair run's context by VerifyMessageProcessor
+    // — the durable home of the round's repair prompt (structured backing data
+    // still lives per-check on verify_check_results.suggestion / toulmin).
+    const verifyMessage = await this.messageModel.findVerifyMessageByOperationId(operationId);
+    if (verifyMessage) {
+      await this.messageModel.update(verifyMessage.id, { content: instruction });
+    } else {
+      log('no verify message found for op %s — repair feedback not persisted to card', operationId);
+    }
+
     const spawned = await spawner({
       failedItemIds,
-      instruction: buildInstruction(failures),
+      instruction,
       operationId,
+      verifyMessageId: verifyMessage?.id,
     });
     if (!spawned) return null;
 

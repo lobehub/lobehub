@@ -173,6 +173,10 @@ export default {
   'builtins.lobe-agent.verifyPlan.portal.required.desc':
     'When on, a failure on this check blocks the run from being delivered.',
   'builtins.lobe-agent.verifyPlan.portal.required.title': 'Required',
+  'builtins.lobe-agent.verifyPlan.portal.rubric.maxRepairRounds.desc':
+    'How many times a failing run is automatically re-run with the failure feedback before it stops. Set to 0 to disable auto-repair.',
+  'builtins.lobe-agent.verifyPlan.portal.rubric.maxRepairRounds.title': 'Max repair rounds',
+  'builtins.lobe-agent.verifyPlan.portal.rubric.title': 'Standard settings',
   'builtins.lobe-agent.verifyPlan.portal.title': 'Check configuration',
   'builtins.lobe-agent.verifyPlan.portal.verifier.agent.desc':
     'A dedicated agent reads the trace, files, diff and PR before judging.',

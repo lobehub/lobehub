@@ -1,0 +1,1 @@
+ALTER TABLE "verify_rubrics" ADD COLUMN "config" jsonb DEFAULT '{}'::jsonb;

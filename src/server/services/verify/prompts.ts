@@ -1,4 +1,4 @@
-import type { VerifyCheckItem } from '@/database/schemas/verify';
+import type { VerifyCheckItem } from '@lobechat/types';
 
 /** Bump when the plan-gen prompt meaningfully changes (tracing partition key). */
 export const VERIFY_PLAN_PROMPT_VERSION = '1';

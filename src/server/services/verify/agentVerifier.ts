@@ -1,11 +1,11 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import type { VerifyCheckItem } from '@lobechat/types';
 import { ThreadType } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentModel } from '@/database/models/agent';
 import { DocumentModel } from '@/database/models/document';
 import { ThreadModel } from '@/database/models/thread';
-import type { VerifyCheckItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 
 import type { VerifierAgentRunner } from './executor';

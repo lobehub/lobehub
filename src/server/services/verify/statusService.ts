@@ -1,9 +1,9 @@
+import type { VerifyCheckItem } from '@lobechat/types';
 import debug from 'debug';
 
 import type { VerifyStatus } from '@/database/models/agentOperation';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
-import type { VerifyCheckItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 
 const log = debug('lobe-server:verify-status');

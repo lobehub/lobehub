@@ -18,6 +18,11 @@ const onFailSchema = z.enum(['manual', 'auto_repair']);
 const decisionSchema = z.enum(['accepted', 'rejected', 'overridden']);
 const modelConfigSchema = z.object({ model: z.string(), provider: z.string() });
 
+/** Run-policy knobs persisted on a rubric (see VerifyRubricConfig). */
+const rubricConfigSchema = z.object({
+  maxRepairRounds: z.number().int().min(0).max(5).optional(),
+});
+
 const checkItemSchema = z.object({
   id: z.string(),
   index: z.number(),
@@ -86,12 +91,22 @@ export const verifyRouter = router({
 
   // ---- rubrics (named criteria groups) ----
   createRubric: verifyProcedure
-    .input(z.object({ description: z.string().optional(), title: z.string() }))
+    .input(
+      z.object({
+        config: rubricConfigSchema.optional(),
+        description: z.string().optional(),
+        title: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => ctx.rubricModel.create(input)),
 
   deleteRubric: verifyProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => ctx.rubricModel.delete(input.id)),
+
+  getRubric: verifyProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => ctx.rubricModel.findById(input.id)),
 
   getRubricCriteria: verifyProcedure
     .input(z.object({ rubricId: z.string() }))
@@ -115,6 +130,7 @@ export const verifyRouter = router({
       z.object({
         id: z.string(),
         value: z.object({
+          config: rubricConfigSchema.optional(),
           description: z.string().nullable().optional(),
           title: z.string().optional(),
         }),

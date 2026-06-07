@@ -2,18 +2,18 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import type {
+  ToulminVerdict,
+  VerifyCheckItem,
+  VerifyCheckResultStatus,
+  VerifyVerdict,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DocumentModel } from '@/database/models/document';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
-import type {
-  NewVerifyCheckResult,
-  ToulminVerdict,
-  VerifyCheckItem,
-  VerifyCheckResultStatus,
-  VerifyVerdict,
-} from '@/database/schemas/verify';
+import type { NewVerifyCheckResult } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 

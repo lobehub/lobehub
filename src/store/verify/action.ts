@@ -1,3 +1,4 @@
+import type { VerifyRubricConfig } from '@lobechat/types';
 import { debounce } from 'es-toolkit/compat';
 import { type StateCreator } from 'zustand';
 
@@ -27,6 +28,7 @@ export class ActionImpl {
   /** Pending writes coalesced per id and flushed together on a debounce. */
   #pendingCriteria = new Map<string, VerifyCriterionEdit>();
   #pendingInstructions = new Map<string, string>();
+  #pendingRubricConfigs = new Map<string, VerifyRubricConfig>();
   #flush: ReturnType<typeof debounce>;
 
   constructor(set: Setter, get: () => Store, _api?: unknown) {
@@ -43,8 +45,10 @@ export class ActionImpl {
   #persist = async (): Promise<void> => {
     const criteria = [...this.#pendingCriteria.entries()];
     const instructions = [...this.#pendingInstructions.entries()];
+    const rubricConfigs = [...this.#pendingRubricConfigs.entries()];
     this.#pendingCriteria.clear();
     this.#pendingInstructions.clear();
+    this.#pendingRubricConfigs.clear();
 
     await Promise.all([
       ...criteria.map(([id, value]) =>
@@ -55,6 +59,11 @@ export class ActionImpl {
       ...instructions.map(([id, content]) =>
         documentService.updateDocument({ content, id }).catch((error) => {
           console.error('[verify] failed to persist instruction document', id, error);
+        }),
+      ),
+      ...rubricConfigs.map(([id, config]) =>
+        verifyService.updateRubricConfig(id, config).catch((error) => {
+          console.error('[verify] failed to persist rubric config', id, error);
         }),
       ),
     ]);
@@ -83,6 +92,23 @@ export class ActionImpl {
     this.#set({ instructionEdits: { ...instructionEdits, [documentId]: content } });
 
     this.#pendingInstructions.set(documentId, content);
+    this.#flush();
+  };
+
+  /** Edit a rubric's run-policy config, e.g. maxRepairRounds (optimistic + debounced). */
+  updateRubricConfig = (rubricId: string, patch: VerifyRubricConfig): void => {
+    const { rubricConfigEdits } = this.#get();
+    this.#set({
+      rubricConfigEdits: {
+        ...rubricConfigEdits,
+        [rubricId]: { ...rubricConfigEdits[rubricId], ...patch },
+      },
+    });
+
+    this.#pendingRubricConfigs.set(rubricId, {
+      ...this.#pendingRubricConfigs.get(rubricId),
+      ...patch,
+    });
     this.#flush();
   };
 }

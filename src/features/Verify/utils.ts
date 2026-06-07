@@ -1,5 +1,7 @@
+import type { VerifyCheckItem } from '@lobechat/types';
+
 import type { VerifyStatus } from '@/database/models/agentOperation';
-import type { VerifyCheckItem, VerifyCheckResultItem } from '@/database/schemas/verify';
+import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 
 export type DockPhase = 'idle' | 'draft' | 'verifying' | 'failed' | 'repairing' | 'passed';
 

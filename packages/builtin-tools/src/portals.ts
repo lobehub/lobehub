@@ -1,6 +1,7 @@
 import {
   LobeAgentManifest,
   LobeAgentPortal,
+  LobeAgentPortalActions,
   LobeAgentPortalTitle,
 } from '@lobechat/builtin-tool-lobe-agent/client';
 import {
@@ -19,4 +20,9 @@ export const BuiltinToolsPortals: Record<string, BuiltinPortal> = {
 export const BuiltinToolsPortalTitles: Record<string, BuiltinPortalTitle> = {
   [LobeAgentManifest.identifier]: LobeAgentPortalTitle,
   [WebBrowsingManifest.identifier]: WebBrowsingPortalTitle,
+};
+
+/** Optional header right-actions per tool, rendered next to the portal close. */
+export const BuiltinToolsPortalActions: Record<string, BuiltinPortalTitle> = {
+  [LobeAgentManifest.identifier]: LobeAgentPortalActions,
 };

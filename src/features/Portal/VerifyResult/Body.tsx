@@ -1,3 +1,4 @@
+import type { VerifierType } from '@lobechat/types';
 import { Button, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { ListTree } from 'lucide-react';
@@ -5,7 +6,6 @@ import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { VerifierType } from '@/database/schemas/verify';
 import {
   useVerifierTracing,
   useVerifyInstruction,
@@ -59,7 +59,7 @@ const useStyles = createStyles(({ css, token }) => ({
   text: css`
     font-size: 13px;
     line-height: 1.7;
-    color: ${token.colorTextSecondary};
+    color: ${token.colorText};
   `,
   track: css`
     overflow: hidden;

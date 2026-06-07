@@ -1,3 +1,4 @@
+import type { VerifyCheckItem } from '@lobechat/types';
 import { and, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 
 import { today } from '@/utils/time';
@@ -9,7 +10,6 @@ import type {
   NewAgentOperation,
 } from '../schemas/agentOperations';
 import { agentOperations } from '../schemas/agentOperations';
-import type { VerifyCheckItem } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
 
 /** Verify rollup states, mirrors the `verify_status` enum column. */

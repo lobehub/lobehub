@@ -1,9 +1,9 @@
 // @vitest-environment node
+import type { VerifyCheckItem } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
 import { agentOperations, users, verifyCheckResults } from '../../schemas';
-import type { VerifyCheckItem } from '../../schemas/verify';
 import type { LobeChatDatabase } from '../../type';
 import { AgentOperationModel } from '../agentOperation';
 import { VerifyCheckResultModel } from '../verifyCheckResult';

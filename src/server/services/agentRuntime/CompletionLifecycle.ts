@@ -329,18 +329,21 @@ export class CompletionLifecycle {
         const goal = firstUserMessage
           ? (extractTextFromMessageContent(firstUserMessage.content) ?? '')
           : '';
+        // Surface the delivery-checker card first (a role='verify' message that
+        // renders the run's plan + results). Awaited before verification so
+        // auto-repair can persist its failure feedback onto this card (the
+        // VerifyMessageProcessor then surfaces it into the repair run's context).
+        // Self-guarded — failures never affect the run.
+        await this.createVerifyMessage(
+          operationId,
+          metadata?.assistantMessageId,
+          metadata?.userId || this.userId,
+        );
         void runVerifyOnCompletion(this.serverDB, metadata?.userId || this.userId, {
           deliverable: event.lastAssistantContent ?? '',
           goal,
           operationId,
         });
-        // Surface the delivery-checker card in the conversation (a role='verify'
-        // message that renders the run's plan + results). Self-guarded.
-        void this.createVerifyMessage(
-          operationId,
-          metadata?.assistantMessageId,
-          metadata?.userId || this.userId,
-        );
       }
 
       if (reason === 'error') {

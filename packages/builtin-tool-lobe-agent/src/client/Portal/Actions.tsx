@@ -1,28 +1,32 @@
 'use client';
 
-import type { BuiltinPortalTitleProps } from '@lobechat/types';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
+import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { memo } from 'react';
 
 import { useChatStore } from '@/store/chat';
-import { dbMessageSelectors } from '@/store/chat/selectors';
+import { chatPortalSelectors, dbMessageSelectors } from '@/store/chat/selectors';
 
 import { LobeAgentIdentifier } from '../../types';
 
 /**
  * Portal header right-actions for the delivery-check config: step to the prev /
- * next criterion. Rendered in the header's right slot (next to close), so it
- * stays out of the title and tool-agnostic at the framework layer.
+ * next criterion. Reads the focused index straight from the portal store (not via
+ * props) so every click re-renders with the up-to-date index — otherwise the nav
+ * would only fire once.
  */
-const PortalActions = memo<BuiltinPortalTitleProps>(({ messageId, params }) => {
+const PortalActions = memo(() => {
   const openToolUI = useChatStore((s) => s.openToolUI);
-  const message = useChatStore(dbMessageSelectors.getDbMessageById(messageId || ''));
+  const messageId = useChatStore(chatPortalSelectors.toolMessageId);
+  const params = useChatStore(chatPortalSelectors.toolUIParams, isEqual);
+  const message = useChatStore(dbMessageSelectors.getDbMessageById(messageId || ''), isEqual);
 
   const index = typeof params?.index === 'number' ? params.index : 0;
   const total = (message?.pluginState as { items?: unknown[] } | undefined)?.items?.length ?? 0;
 
-  if (total <= 1) return null;
+  // The rubric-config view has no per-criterion stepper.
+  if (!messageId || params?.view === 'rubric' || total <= 1) return null;
 
   const go = (next: number) => openToolUI(messageId, LobeAgentIdentifier, { index: next });
 

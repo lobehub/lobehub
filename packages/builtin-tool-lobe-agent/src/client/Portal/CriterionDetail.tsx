@@ -15,7 +15,7 @@ import { Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
 import { Bot, Hand, ListChecks, RefreshCw, RotateCcw, Scale, ShieldCheck } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useVerifyStore, verifySelectors } from '@/store/verify';
@@ -177,6 +177,14 @@ const CriterionDetail = memo<CriterionDetailProps>(({ criterion }) => {
   const edit = useVerifyStore(verifySelectors.criterionEdit(criterionId));
 
   const editor = useEditor();
+
+  // The panel updates in place (no remount) when switching criteria, so push the
+  // new rubric into the editor imperatively — keeps the title/description from
+  // re-measuring and jittering on nav.
+  useEffect(() => {
+    if (editor) editor.setDocument('text', criterion.instruction ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, criterionId, documentId]);
 
   const editable = !!criterionId;
   const title = edit.title ?? criterion.title;

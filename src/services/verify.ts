@@ -1,12 +1,16 @@
-import type { VerifyStatus } from '@/database/models/agentOperation';
 import type {
   VerifierType,
   VerifyCheckItem,
+  VerifyOnFailStrategy,
+  VerifyRubricConfig,
+  VerifyUserDecision,
+} from '@lobechat/types';
+
+import type { VerifyStatus } from '@/database/models/agentOperation';
+import type {
   VerifyCheckResultItem,
   VerifyCriterionItem,
-  VerifyOnFailStrategy,
   VerifyRubricItem,
-  VerifyUserDecision,
 } from '@/database/schemas/verify';
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -100,6 +104,13 @@ export class VerifyService {
 
   listRubrics = (): Promise<VerifyRubricItem[]> =>
     lambdaClient.verify.listRubrics.query() as Promise<VerifyRubricItem[]>;
+
+  getRubric = (id: string): Promise<VerifyRubricItem | undefined> =>
+    lambdaClient.verify.getRubric.query({ id }) as Promise<VerifyRubricItem | undefined>;
+
+  /** Update a rubric's run-policy config (e.g. maxRepairRounds). */
+  updateRubricConfig = (id: string, config: VerifyRubricConfig): Promise<unknown> =>
+    lambdaClient.verify.updateRubric.mutate({ id, value: { config } });
 }
 
 export const verifyService = new VerifyService();

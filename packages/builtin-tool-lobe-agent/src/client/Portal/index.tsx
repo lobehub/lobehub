@@ -7,6 +7,7 @@ import { memo } from 'react';
 import type { GenerateVerifyPlanParams, GenerateVerifyPlanState } from '../../types';
 import { LobeAgentApiName } from '../../types';
 import CriterionDetail, { type CriterionView } from './CriterionDetail';
+import RubricConfig from './RubricConfig';
 
 /**
  * One Portal per tool, routed on `apiName`. Currently only `generateVerifyPlan`
@@ -19,6 +20,12 @@ const Portal = memo<BuiltinPortalProps>(({ apiName, arguments: args, params, sta
       const index = typeof params?.index === 'number' ? params.index : 0;
       const planArgs = args as GenerateVerifyPlanParams | undefined;
       const planState = state as GenerateVerifyPlanState | undefined;
+
+      // Rubric-level run-policy config (maxRepairRounds, …) — opened from the
+      // Render card's settings affordance.
+      if (params?.view === 'rubric') {
+        return planState?.rubricId ? <RubricConfig rubricId={planState.rubricId} /> : null;
+      }
 
       const input = planArgs?.criteria?.[index];
       const item = planState?.items?.[index];
@@ -41,7 +48,7 @@ const Portal = memo<BuiltinPortalProps>(({ apiName, arguments: args, params, sta
 
       if (!criterion) return null;
 
-      return <CriterionDetail criterion={criterion} key={index} />;
+      return <CriterionDetail criterion={criterion} />;
     }
   }
 

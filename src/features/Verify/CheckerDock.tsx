@@ -1,3 +1,4 @@
+import type { VerifyCheckItem } from '@lobechat/types';
 import { ActionIcon, Button, Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import {
@@ -19,7 +20,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import RingLoadingIcon from '@/components/RingLoading';
-import type { VerifyCheckItem, VerifyCheckResultItem } from '@/database/schemas/verify';
+import type { VerifyCheckResultItem } from '@/database/schemas/verify';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 
@@ -35,6 +36,11 @@ const useStyles = createStyles(({ css, token }) => ({
     padding-block: 0 12px;
     padding-inline: 12px;
     border-block-start: 1px solid ${token.colorBorderSecondary};
+  `,
+  /* In the merged verify card the RunResult header already draws the divider —
+     drop our own top border so they don't stack into a 2px line. */
+  bodyEmbedded: css`
+    border-block-start: none;
   `,
   checkRow: css`
     display: grid;
@@ -343,7 +349,7 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
   };
 
   const body = (
-    <div className={styles.body}>
+    <div className={cx(styles.body, embedded && styles.bodyEmbedded)}>
       {editing ? (
         renderEditor()
       ) : (

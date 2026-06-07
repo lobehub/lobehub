@@ -1,5 +1,6 @@
+import type { VerifyUserDecision, VerifyVerdict } from '@lobechat/types';
+
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
-import type { VerifyUserDecision, VerifyVerdict } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 
 /**

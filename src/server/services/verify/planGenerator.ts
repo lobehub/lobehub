@@ -2,13 +2,14 @@ import { randomUUID } from 'node:crypto';
 
 import { TRACING_SCENARIOS, VERIFY_INSTRUCTION_FILE_TYPE } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import type { VerifyCheckItem } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DocumentModel } from '@/database/models/document';
 import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
 import { VerifyRubricModel } from '@/database/models/verifyRubric';
-import type { VerifyCheckItem, VerifyCriterionItem } from '@/database/schemas/verify';
+import type { VerifyCriterionItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
