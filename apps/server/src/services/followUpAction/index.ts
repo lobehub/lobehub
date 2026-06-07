@@ -12,6 +12,7 @@ import debug from 'debug';
 
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
+import { getLLMGenerationTracingService } from '@/server/services/llmGenerationTracing';
 
 import { RawResponseSchema } from './schema';
 
@@ -68,7 +69,12 @@ export class FollowUpActionService {
     // Pre-allocate the tracing row id so it can be returned to the client
     // synchronously — the client holds it for the chip's lifetime to report a
     // click (positive) / dismissal (negative) back via `recordFeedback`.
-    const tracingId = randomUUID();
+    //
+    // Gate on the tracing store actually being configured: when it isn't (e.g.
+    // prod without ENABLE_LLM_GENERATION_TRACING_S3), the tracing hook is a
+    // no-op and never inserts a row, so handing the client an id would make
+    // every feedback call resolve to NOT_FOUND.
+    const tracingId = getLLMGenerationTracingService().isEnabled() ? randomUUID() : undefined;
     let raw: unknown;
     try {
       raw = await ai.generateObject(
@@ -109,9 +115,9 @@ export class FollowUpActionService {
       )
       .slice(0, 4);
 
-    // Only surface the tracingId when chips actually rendered — an empty result
-    // gives the user nothing to act on, so there's no feedback to collect.
-    return chips.length > 0
+    // Only surface the tracingId when chips actually rendered (nothing to act
+    // on otherwise) AND tracing is enabled (a row exists to attach feedback to).
+    return chips.length > 0 && tracingId
       ? { chips, messageId: row.id, tracingId }
       : { chips, messageId: row.id };
   }

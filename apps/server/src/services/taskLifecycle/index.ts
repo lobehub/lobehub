@@ -43,6 +43,7 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { translation } from '@/libs/i18n/serverTranslation';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { getLLMGenerationTracingService } from '@/server/services/llmGenerationTracing';
 import { SystemAgentService } from '@/server/services/systemAgent';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 import { createTaskSchedulerModule } from '@/server/services/taskScheduler';
@@ -978,7 +979,13 @@ export class TaskLifecycleService {
       // Pre-allocate the tracing row id so it can be stamped onto the brief —
       // the user's later resolve action (approve / feedback / ignore) is then
       // reported back as implicit feedback against this exact generation.
-      const briefTracingId = randomUUID();
+      //
+      // Gate on tracing being enabled: with no store configured the hook never
+      // writes a row, so stamping an id would make every resolve's feedback
+      // call resolve to NOT_FOUND.
+      const briefTracingId = getLLMGenerationTracingService().isEnabled()
+        ? randomUUID()
+        : undefined;
       const result = await modelRuntime.generateObject(
         {
           messages: payload.messages as any[],
@@ -1015,7 +1022,7 @@ export class TaskLifecycleService {
         actions,
         agentId: currentTask.assigneeAgentId || undefined,
         artifacts,
-        metadata: { tracingId: briefTracingId },
+        metadata: briefTracingId ? { tracingId: briefTracingId } : undefined,
         priority,
         summary: generated.summary,
         taskId,
