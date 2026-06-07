@@ -1,5 +1,6 @@
 'use client';
 
+import { AnimatedNumber } from '@lobechat/shared-tool-ui/components';
 import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/styles';
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Tooltip } from '@lobehub/ui';
@@ -175,7 +176,11 @@ export const AgentInspector = memo<BuiltinInspectorProps<AgentArgs>>(
             {metrics.toolCalls > 0 && metrics.totalTokens > 0 && (
               <span className={styles.metricsDot}>·</span>
             )}
-            {metrics.totalTokens > 0 && <span>{formatTokens(metrics.totalTokens)}</span>}
+            {metrics.totalTokens > 0 && (
+              <span>
+                <AnimatedNumber formatter={formatTokens} value={metrics.totalTokens} />
+              </span>
+            )}
           </span>
         </Tooltip>
       ) : null;
