@@ -71,6 +71,7 @@ import { type MessageModel, MessageModel as MessageModelClass } from '@/database
 import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { type LobeChatDatabase } from '@/database/type';
+import { fileEnv } from '@/envs/file';
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -91,6 +92,7 @@ import {
 } from '@/server/services/toolExecution';
 import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archiveToolResult';
 import { toAgentContextDocuments } from '@/utils/agentDocumentContextMapping';
+import { nanoid } from '@/utils/uuid';
 
 import { dispatchClientTool } from './dispatchClientTool';
 import { formatErrorEventData } from './formatErrorEventData';
@@ -1084,6 +1086,50 @@ export const createRuntimeExecutors = (
         }
       };
 
+      // File service + date shard used to persist model-generated images
+      // (Gemini multimodal `content_part`/`reasoning_part` images) to object
+      // storage, built once and reused across parts. The `userId` check only
+      // satisfies its optional type — it is always present in this executor.
+      // A missing-S3-config failure surfaces later at uploadBase64 (caught per
+      // image in uploadPartImage), never at construction.
+      const imageUploadService = ctx.userId ? new FileService(ctx.serverDB, ctx.userId) : undefined;
+      const imageUploadDate = new Date().toISOString().split('T')[0];
+
+      // Coalesce a streamed text chunk into the trailing text part (mirrors the
+      // client StreamingHandler) so serialized multimodal content stays compact
+      // and preserves text/image ordering.
+      const appendTextPart = (parts: ContentPart[], text: string) => {
+        const last = parts.at(-1);
+        if (last && last.type === 'text') {
+          parts[parts.length - 1] = { text: last.text + text, type: 'text' };
+        } else {
+          parts.push({ text, type: 'text' });
+        }
+      };
+
+      // Persist a base64 image part to object storage and swap the placeholder
+      // part for one referencing the uploaded URL. Runs concurrently with the
+      // rest of the stream; a failed upload leaves the inline data-URI so the
+      // image still renders. Never stores raw base64 in the message on success.
+      const uploadPartImage = (
+        parts: ContentPart[],
+        partIndex: number,
+        base64: string,
+        mimeType: string | undefined,
+      ): Promise<void> => {
+        if (!imageUploadService) return Promise.resolve();
+        const ext = mimeType?.split('/')[1] || 'png';
+        const pathname = `${fileEnv.NEXT_PUBLIC_S3_FILE_PATH}/generations/${imageUploadDate}/${nanoid()}.${ext}`;
+        return imageUploadService
+          .uploadBase64(base64, pathname)
+          .then(({ url }) => {
+            parts[partIndex] = { image: url, type: 'image' };
+          })
+          .catch((error) => {
+            console.error(`[${operationLogId}][content_part] image upload failed:`, error);
+          });
+      };
+
       const maxAttempts = resolveLLMMaxAttempts(provider);
 
       // OTel chat span — wraps all retry attempts; TTFT recorded on the first
@@ -1119,8 +1165,10 @@ export const createRuntimeExecutors = (
             let streamError: any = undefined;
             const contentParts: ContentPart[] = [];
             const reasoningParts: ContentPart[] = [];
-            const hasContentImages = false;
-            const hasReasoningImages = false;
+            const contentImageUploads: Promise<void>[] = [];
+            const reasoningImageUploads: Promise<void>[] = [];
+            let hasContentImages = false;
+            let hasReasoningImages = false;
             textBuffer = '';
             reasoningBuffer = '';
 
@@ -1222,6 +1270,74 @@ export const createRuntimeExecutors = (
                       }, BUFFER_INTERVAL);
                     }
                   },
+                  // Gemini 2.5+/3 multimodal streams deliver assistant text and
+                  // reasoning as `content_part`/`reasoning_part` events (triggered by
+                  // thought parts / thoughtSignature) instead of plain `text`/
+                  // `reasoning`. Without these handlers the text is silently dropped:
+                  // `onCompletion` still reports usage tokens, so the empty-completion
+                  // guard sees outputTokens > 0 and finalizes the turn to a blank
+                  // `done`. Mirror onText/onThinking for text parts so streaming,
+                  // persistence and tracing all capture the content; upload image
+                  // parts to object storage and serialize the multimodal content
+                  // (text + image URLs, in order) — never persist raw base64.
+                  onContentPart: async (part) => {
+                    if (firstChunkAt === undefined) {
+                      firstChunkAt = Date.now() - llmStartTime;
+                    }
+
+                    if (part.partType === 'image') {
+                      const partIndex = contentParts.length;
+                      contentParts.push({
+                        image: `data:${part.mimeType || 'image/png'};base64,${part.content}`,
+                        type: 'image',
+                      });
+                      hasContentImages = true;
+                      contentImageUploads.push(
+                        uploadPartImage(contentParts, partIndex, part.content, part.mimeType),
+                      );
+                      return;
+                    }
+
+                    content += part.content;
+                    appendTextPart(contentParts, part.content);
+                    textBuffer += part.content;
+
+                    if (!textBufferTimer) {
+                      textBufferTimer = setTimeout(async () => {
+                        await flushTextBuffer();
+                        textBufferTimer = null;
+                      }, BUFFER_INTERVAL);
+                    }
+                  },
+                  onReasoningPart: async (part) => {
+                    if (firstChunkAt === undefined) {
+                      firstChunkAt = Date.now() - llmStartTime;
+                    }
+
+                    if (part.partType === 'image') {
+                      const partIndex = reasoningParts.length;
+                      reasoningParts.push({
+                        image: `data:${part.mimeType || 'image/png'};base64,${part.content}`,
+                        type: 'image',
+                      });
+                      hasReasoningImages = true;
+                      reasoningImageUploads.push(
+                        uploadPartImage(reasoningParts, partIndex, part.content, part.mimeType),
+                      );
+                      return;
+                    }
+
+                    thinkingContent += part.content;
+                    appendTextPart(reasoningParts, part.content);
+                    reasoningBuffer += part.content;
+
+                    if (!reasoningBufferTimer) {
+                      reasoningBufferTimer = setTimeout(async () => {
+                        await flushReasoningBuffer();
+                        reasoningBufferTimer = null;
+                      }, BUFFER_INTERVAL);
+                    }
+                  },
                   onToolsCalling: async ({ toolsCalling: raw }) => {
                     const resolvedCalls = new ToolNameResolver().resolve(raw, resolved.manifestMap);
                     // Attach source (origin) and executor (dispatch target) for routing.
@@ -1285,6 +1401,12 @@ export const createRuntimeExecutors = (
               await flushTextBuffer();
               await flushReasoningBuffer();
               clearAttemptBuffers();
+
+              // Wait for any model-generated image uploads to finish so the
+              // persisted multimodal content references S3 URLs, not base64.
+              if (contentImageUploads.length > 0 || reasoningImageUploads.length > 0) {
+                await Promise.allSettled([...contentImageUploads, ...reasoningImageUploads]);
+              }
 
               // Empty-completion guard: if the model produced
               // nothing actionable — no content, reasoning, tool calls, images,
