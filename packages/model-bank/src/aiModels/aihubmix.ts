@@ -2110,7 +2110,6 @@ const aihubmixVideoModels: AIVideoModelCard[] = [
         enum: ['720P', '1080P'],
       },
       seed: { default: null },
-      promptExtend: { default: false },
       watermark: { default: false },
     },
     pricing: {
@@ -2142,7 +2141,6 @@ const aihubmixVideoModels: AIVideoModelCard[] = [
         enum: ['720P', '1080P'],
       },
       seed: { default: null },
-      promptExtend: { default: false },
       watermark: { default: false },
     },
     pricing: {
@@ -2170,7 +2168,6 @@ const aihubmixVideoModels: AIVideoModelCard[] = [
         enum: ['720P', '1080P'],
       },
       seed: { default: null },
-      promptExtend: { default: false },
       watermark: { default: false },
     },
     pricing: {

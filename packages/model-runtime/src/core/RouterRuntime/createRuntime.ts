@@ -395,6 +395,7 @@ export const createRouterRuntime = ({
         resolvedApiType === router.apiType
           ? (router.runtime ?? baseRuntimeMap[resolvedApiType] ?? LobeOpenAI)
           : (baseRuntimeMap[resolvedApiType] ?? LobeOpenAI);
+
       const runtime: LobeRuntimeAI = new providerAI({ ...finalOptions, id: this._id });
 
       if (this._id === 'lobehub') {

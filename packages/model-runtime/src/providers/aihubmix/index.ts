@@ -2,9 +2,11 @@ import { LOBE_DEFAULT_MODEL_LIST, ModelProvider } from 'model-bank';
 import urlJoin from 'url-join';
 
 import { responsesAPIModels } from '../../const/models';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
 import { detectModelProvider, processMultiProviderModelList } from '../../utils/modelParse';
+import { createAiHubMixVideo } from './createVideo';
 
 /**
  * Response schema for GET https://aihubmix.com/api/v1/models
@@ -142,6 +144,40 @@ const mapAiHubMixModel = (m: any): { [key: string]: any; id: string } => {
 
 const baseURL = 'https://aihubmix.com';
 
+/**
+ * Custom OpenAI-compatible runtime with AiHubMix video parameter mapping.
+ * Uses `createAiHubMixVideo` to handle model-specific differences
+ * (Seedance extra_body, resolution+aspectRatio → size, multi-image R2V).
+ */
+const LobeAiHubMixVideoRuntime = createOpenAICompatibleRuntime({
+  createVideo: createAiHubMixVideo,
+  provider: ModelProvider.AiHubMix,
+});
+
+/**
+ * All known AiHubMix video model IDs.
+ * When a model matches this list it is routed to the video-specific runtime
+ * that maps the full RuntimeVideoGenParams surface onto AiHubMix's
+ * unified `/v1/videos` endpoint.
+ */
+const AIHUBMIX_VIDEO_MODELS = [
+  // HappyHorse
+  'happyhorse-1.0-i2v',
+  'happyhorse-1.0-r2v',
+  'happyhorse-1.0-t2v',
+  // Wan 2.7
+  'wan2.7-i2v',
+  'wan2.7-r2v',
+  'wan2.7-t2v',
+  // Veo 3.1
+  'veo-3.1-generate-preview',
+  'veo-3.1-fast-generate-preview',
+  'veo-3.1-lite-generate-preview',
+  // Seedance 2.0
+  'doubao-seedance-2-0-260128',
+  'doubao-seedance-2-0-fast-260128',
+];
+
 export const params: CreateRouterRuntimeOptions = {
   debug: {
     chatCompletion: () => process.env.DEBUG_AIHUBMIX_CHAT_COMPLETION === '1',
@@ -216,6 +252,15 @@ export const params: CreateRouterRuntimeOptions = {
       apiType: 'deepseek',
       models: ['deepseek-chat', 'deepseek-reasoner'],
       options: { baseURL: urlJoin(baseURL, '/v1') },
+    },
+    // Video models — uses custom runtime with full param mapping
+    // (resolution+aspectRatio → size, imageUrls → extra_body.content, Seedance support)
+    {
+      apiType: 'openai',
+      id: 'aihubmix-video',
+      models: AIHUBMIX_VIDEO_MODELS,
+      options: { baseURL: urlJoin(baseURL, '/v1') },
+      runtime: LobeAiHubMixVideoRuntime,
     },
     {
       apiType: 'openai',
