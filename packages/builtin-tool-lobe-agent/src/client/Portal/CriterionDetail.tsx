@@ -78,6 +78,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadiusLG};
+
+    font-size: 14px;
+    line-height: 1.6;
   `,
   fieldIcon: css`
     color: ${cssVar.colorTextTertiary};

@@ -144,14 +144,64 @@ export function registerVerifyCommand(program: Command) {
     .description('Create a rubric')
     .requiredOption('-t, --title <title>', 'Rubric title')
     .option('-d, --description <text>', 'Rubric description')
-    .action(async (options: { description?: string; title: string }) => {
+    .option('--max-repair-rounds <n>', 'Cap on automatic repair rounds (0-5)')
+    .action(async (options: { description?: string; maxRepairRounds?: string; title: string }) => {
       const client = await getTrpcClient();
       const result = await client.verify.createRubric.mutate({
+        config:
+          options.maxRepairRounds !== undefined
+            ? { maxRepairRounds: Number(options.maxRepairRounds) }
+            : undefined,
         description: options.description,
         title: options.title,
       });
       console.log(`${pc.green('✓')} Created rubric ${pc.bold((result as any).id)}`);
     });
+
+  rubric
+    .command('view <id>')
+    .description('Show a rubric and its run-policy config')
+    .option('--json [fields]', 'Output JSON')
+    .action(async (id: string, options: { json?: boolean | string }) => {
+      const client = await getTrpcClient();
+      const item = await client.verify.getRubric.query({ id });
+      if (!item) return void log.error('Rubric not found.');
+      if (options.json !== undefined) {
+        outputJson(item, typeof options.json === 'string' ? options.json : undefined);
+        return;
+      }
+      console.log(`${pc.bold('ID')}            ${item.id}`);
+      console.log(`${pc.bold('Title')}         ${item.title}`);
+      if (item.description) console.log(`${pc.bold('Description')}   ${item.description}`);
+      const maxRepairRounds = (item.config as { maxRepairRounds?: number } | null)?.maxRepairRounds;
+      console.log(`${pc.bold('Repair rounds')} ${maxRepairRounds ?? pc.dim('default')}`);
+    });
+
+  rubric
+    .command('update <id>')
+    .description('Update a rubric (title / description / run-policy config)')
+    .option('-t, --title <title>', 'New title')
+    .option('-d, --description <text>', 'New description')
+    .option('--max-repair-rounds <n>', 'Cap on automatic repair rounds (0-5)')
+    .action(
+      async (
+        id: string,
+        options: { description?: string; maxRepairRounds?: string; title?: string },
+      ) => {
+        const client = await getTrpcClient();
+        const value: {
+          config?: { maxRepairRounds?: number };
+          description?: string;
+          title?: string;
+        } = {};
+        if (options.title !== undefined) value.title = options.title;
+        if (options.description !== undefined) value.description = options.description;
+        if (options.maxRepairRounds !== undefined)
+          value.config = { maxRepairRounds: Number(options.maxRepairRounds) };
+        await client.verify.updateRubric.mutate({ id, value });
+        console.log(`${pc.green('✓')} Updated rubric ${pc.bold(id)}`);
+      },
+    );
 
   rubric
     .command('delete <id>')
