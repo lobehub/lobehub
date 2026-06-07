@@ -1,35 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getShellConfig, MAX_OUTPUT_LENGTH, stripAnsi, truncateOutput } from '../utils';
-
-describe('stripAnsi', () => {
-  it('should strip ANSI color codes', () => {
-    expect(stripAnsi('\x1B[31mred\x1B[0m')).toBe('red');
-  });
-
-  it('should strip complex ANSI sequences', () => {
-    expect(stripAnsi('\x1B[38;5;250m███████╗\x1B[0m')).toBe('███████╗');
-  });
-
-  it('should strip bold/bright codes', () => {
-    expect(stripAnsi('\x1B[1;32mSuccess\x1B[0m')).toBe('Success');
-  });
-
-  it('should handle string without ANSI codes', () => {
-    expect(stripAnsi('plain text')).toBe('plain text');
-  });
-
-  it('should handle empty string', () => {
-    expect(stripAnsi('')).toBe('');
-  });
-
-  it('should strip multiple ANSI sequences', () => {
-    const input = '\x1B[33mwarning:\x1B[0m something \x1B[31mhappened\x1B[0m';
-    expect(input).toContain('\x1B[');
-    expect(stripAnsi(input)).toBe('warning: something happened');
-    expect(stripAnsi(input)).not.toContain('\x1B[');
-  });
-});
+import { getShellConfig, MAX_OUTPUT_LENGTH, truncateOutput } from '../utils';
 
 describe('truncateOutput', () => {
   it('should return string as-is when within limit', () => {
@@ -45,10 +16,11 @@ describe('truncateOutput', () => {
     expect(result).toContain('more characters');
   });
 
-  it('should strip ANSI before checking length', () => {
+  it('should preserve ANSI escape codes so the client can render colors', () => {
     const colored = '\x1B[31m' + 'x'.repeat(50) + '\x1B[0m';
     const result = truncateOutput(colored, 100);
-    expect(result).toBe('x'.repeat(50));
+    expect(result).toBe(colored);
+    expect(result).toContain('\x1B[');
   });
 
   it('should use MAX_OUTPUT_LENGTH as default', () => {
