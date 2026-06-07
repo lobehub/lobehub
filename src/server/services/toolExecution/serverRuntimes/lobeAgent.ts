@@ -1,4 +1,8 @@
-import type { VisualFileItem, VisualSourceMessage } from '@lobechat/builtin-tool-lobe-agent';
+import type {
+  CallSubAgentParams,
+  VisualFileItem,
+  VisualSourceMessage,
+} from '@lobechat/builtin-tool-lobe-agent';
 import {
   buildAnalyzeVisualMediaContent,
   createUrlVisualFileItems,
@@ -22,6 +26,7 @@ import { toolsEnv } from '@/envs/tools';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { FileService } from '@/server/services/file';
 
+import type { ToolExecutionContext } from '../types';
 import { createServerPlanRuntimeService } from './lobeAgentPlan';
 import type { ServerRuntimeRegistration } from './types';
 
@@ -104,6 +109,56 @@ class LobeAgentExecutionRuntime {
 
   clearTodos = (params: any) =>
     this.planRuntime.clearTodos(params, { messageId: this.messageId, topicId: this.topicId });
+
+  // ==================== Sub-agent (async suspend/resume) ====================
+
+  /**
+   * Fork a sub-agent as an independent async operation.
+   *
+   * Returns a `deferred` result instead of a tool_result: the agent runtime
+   * parks the parent op (`waiting_for_async_tool`) until the sub-op finishes,
+   * at which point the completion bridge backfills the placeholder tool message
+   * and resumes the parent. The placeholder + child-op kickoff are handled by
+   * the injected `ctx.subAgent` runner (which owns the parent message anchor).
+   */
+  callSubAgent = async (
+    params: CallSubAgentParams,
+    ctx: ToolExecutionContext,
+  ): Promise<BuiltinServerRuntimeOutput> => {
+    if (!ctx.subAgent) {
+      return buildError(
+        'Sub-agent execution is not available in this runtime.',
+        'SUB_AGENT_UNAVAILABLE',
+      );
+    }
+
+    const { description, instruction, timeout } = params;
+    if (!instruction || typeof instruction !== 'string') {
+      return buildError('instruction is required.', 'INVALID_ARGUMENTS');
+    }
+
+    const { started, threadId, subOperationId } = await ctx.subAgent.run({
+      description,
+      instruction,
+      timeout,
+    });
+
+    // The child op failed to start — no completion bridge will ever fire to
+    // backfill a placeholder, so we must NOT defer/park here. Return a normal
+    // (non-deferred) tool error so the parent's LLM sees the failure and the
+    // batch continues instead of hanging in `waiting_for_async_tool`.
+    if (!started) {
+      return buildError('Sub-agent failed to start.', 'SUB_AGENT_START_FAILED');
+    }
+
+    return {
+      // No tool_result yet — the bridge fills this in when the sub-op completes.
+      content: '',
+      deferred: true,
+      state: { status: 'pending', subOperationId, threadId },
+      success: true,
+    };
+  };
 
   private queryScopeMessages = (
     messageModel: MessageModel,

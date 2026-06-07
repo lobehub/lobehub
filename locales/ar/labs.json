@@ -15,7 +15,5 @@
   "features.imessage.title": "قناة iMessage",
   "features.inputMarkdown.desc": "عرض Markdown في منطقة الإدخال في الوقت الفعلي (نص عريض، كتل الشيفرة، جداول، إلخ).",
   "features.inputMarkdown.title": "عرض Markdown في الإدخال",
-  "features.platformAgent.desc": "عرض خيار \"إضافة وكيل منصة\" في قائمة الإنشاء. يعمل وكلاء المنصة (مثل OpenClaw، Hermes) على جهاز متصل ويتواصلون عبر lh connect.",
-  "features.platformAgent.title": "إنشاء وكيل منصة",
   "title": "المختبرات"
 }

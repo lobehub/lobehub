@@ -42,13 +42,20 @@ export interface RecordOperationCompletionParams {
     | 'interrupted'
     | 'max_steps'
     | 'cost_limit'
-    | 'waiting_for_human';
+    | 'waiting_for_human'
+    | 'waiting_for_async_tool';
   cost?: Record<string, unknown> | null;
   error?: AgentOperationError | null;
   interruption?: AgentOperationInterruption | null;
   llmCalls?: number | null;
   processingTimeMs?: number | null;
-  status: 'running' | 'waiting_for_human' | 'done' | 'error' | 'interrupted';
+  status:
+    | 'running'
+    | 'waiting_for_human'
+    | 'waiting_for_async_tool'
+    | 'done'
+    | 'error'
+    | 'interrupted';
   stepCount?: number | null;
   toolCalls?: number | null;
   totalCost?: number | null;
@@ -172,5 +179,26 @@ export class AgentOperationModel {
       );
 
     return row?.seconds ?? 0;
+  }
+
+  /**
+   * Atomically flip a parked parent op from `waiting_for_async_tool` back to
+   * `running`. Returns true only for the single winner (affected === 1) so
+   * concurrent sub-op completions that lose the race no-op instead of
+   * double-resuming the parent.
+   */
+  async tryResumeFromAsyncTool(operationId: string): Promise<boolean> {
+    const rows = await this.db
+      .update(agentOperations)
+      .set({ status: 'running' })
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          eq(agentOperations.userId, this.userId),
+          eq(agentOperations.status, 'waiting_for_async_tool'),
+        ),
+      )
+      .returning({ id: agentOperations.id });
+    return rows.length === 1;
   }
 }

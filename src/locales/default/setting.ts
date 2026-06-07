@@ -241,9 +241,9 @@ export default {
   // Heterogeneous agent — Desktop tab
   'heterogeneousStatus.desktop.tabLabel': 'Desktop',
 
-  // Remote platform agent profile config panel (openclaw / hermes)
-  'platformAgentConfig.title': 'Platform Configuration',
-  'platformAgentConfig.platform.label': 'Platform',
+  // Connected agent profile config panel (openclaw / hermes)
+  'platformAgentConfig.title': 'Connection',
+  'platformAgentConfig.platform.label': 'Connected to',
   'platformAgentConfig.device.label': 'Bound Device',
   'platformAgentConfig.device.none': 'None',
   'platformAgentConfig.device.online': 'Online',
@@ -1213,6 +1213,9 @@ When I am ___, I need ___
   'tools.builtins.lobe-agent-documents.title': 'Documents',
   'tools.builtins.lobe-agent-management.description': 'Create, manage, and orchestrate AI agents',
   'tools.builtins.lobe-agent-management.title': 'Agent Management',
+  'tools.builtins.lobe-agent.description':
+    'Built-in Lobe Agent capabilities: plan and todo management, sub-agent dispatch, and visual media analysis',
+  'tools.builtins.lobe-agent.title': 'Lobe Agent',
   'tools.builtins.lobe-brief.description':
     'Report progress, deliver results, and request user decisions',
   'tools.builtins.lobe-brief.title': 'Brief Tools',
@@ -1501,6 +1504,7 @@ When I am ___, I need ___
   'tools.search': 'Search skills...',
   'tools.activation.auto': 'Auto',
   'tools.activation.auto.desc': 'Smart',
+  'tools.activation.fixed.hint': 'Always on — managed by the app and can’t be turned off',
   'tools.activation.pinned': 'Pinned',
   'tools.activation.pinned.desc': 'Always On',
   'tools.skillActivateMode.auto.desc':

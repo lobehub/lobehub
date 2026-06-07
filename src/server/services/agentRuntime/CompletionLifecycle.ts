@@ -1,3 +1,4 @@
+import { isParkedStatus } from '@lobechat/agent-runtime';
 import debug from 'debug';
 
 import {
@@ -66,10 +67,12 @@ export class CompletionLifecycle {
 
   /**
    * Map a completion reason to the terminal `agent_operations.status` value.
-   * `waiting_for_human` keeps `status='waiting_for_human'` so analytics can
-   * distinguish paused ops from terminal ones.
+   * `waiting_for_human` / `waiting_for_async_tool` keep their own status so
+   * analytics can distinguish paused ops from terminal ones.
    */
-  private statusForReason(reason: string): 'done' | 'error' | 'interrupted' | 'waiting_for_human' {
+  private statusForReason(
+    reason: string,
+  ): 'done' | 'error' | 'interrupted' | 'waiting_for_human' | 'waiting_for_async_tool' {
     switch (reason) {
       case 'error': {
         return 'error';
@@ -79,6 +82,9 @@ export class CompletionLifecycle {
       }
       case 'waiting_for_human': {
         return 'waiting_for_human';
+      }
+      case 'waiting_for_async_tool': {
+        return 'waiting_for_async_tool';
       }
       default: {
         return 'done';
@@ -93,7 +99,10 @@ export class CompletionLifecycle {
    */
   private async persistCompletion(operationId: string, state: any, reason: string): Promise<void> {
     const completionReason: any =
-      reason === 'max_steps' || reason === 'cost_limit' || reason === 'waiting_for_human'
+      reason === 'max_steps' ||
+      reason === 'cost_limit' ||
+      reason === 'waiting_for_human' ||
+      reason === 'waiting_for_async_tool'
         ? reason
         : this.statusForReason(reason);
 
@@ -108,11 +117,10 @@ export class CompletionLifecycle {
       : null;
 
     const status = this.statusForReason(reason);
-    // `waiting_for_human` is a pause, not a true terminal state — leave
-    // completedAt null so analytics doesn't read a paused op as completed.
-    // The next dispatchHooks call (when the human resumes and the op truly
-    // ends) will overwrite both fields.
-    const completedAt = status === 'waiting_for_human' ? undefined : new Date();
+    // Parked statuses are pauses, not true terminal states — leave completedAt
+    // null so analytics doesn't read a paused op as completed. The next
+    // dispatchHooks call (when the op resumes and truly ends) overwrites both.
+    const completedAt = isParkedStatus(status) ? undefined : new Date();
 
     try {
       await this.agentOperationModel.recordCompletion(operationId, {
@@ -258,12 +266,22 @@ export class CompletionLifecycle {
    * Fire-and-forget; always unregisters the operation from the dispatcher.
    */
   async dispatchHooks(operationId: string, state: any, reason: string): Promise<void> {
+    // `waiting_for_async_tool` parks the SAME operation: it persists the parked
+    // status (the async-tool resume CAS reads it) but must NOT fire `onComplete`
+    // or unregister hooks — the op resumes under this same id and reaches its
+    // real terminal state later, which is when consumers should be notified.
+    // (`waiting_for_human` differs: its resume runs under a NEW operationId, so
+    // firing + unregistering on the park is correct there.)
+    const isAsyncToolPark = reason === 'waiting_for_async_tool';
+
     try {
       const { event, metadata } = this.buildLifecycleEvent(operationId, state, reason);
 
       // Finalize the agent_operations row before user hooks fire so
       // downstream consumers see the row in its terminal shape.
       await this.persistCompletion(operationId, state, reason);
+
+      if (isAsyncToolPark) return;
 
       await hookDispatcher.dispatch(operationId, 'onComplete', event, metadata._hooks);
 
@@ -293,7 +311,9 @@ export class CompletionLifecycle {
     } catch (error) {
       log('[%s] Hook dispatch error (non-fatal): %O', operationId, error);
     } finally {
-      hookDispatcher.unregister(operationId);
+      // Keep hooks registered across an async-tool park so the eventual resume
+      // (same operationId) can still fire onComplete/onError.
+      if (!isAsyncToolPark) hookDispatcher.unregister(operationId);
     }
   }
 

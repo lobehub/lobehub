@@ -25,6 +25,7 @@ vi.mock('../impls', () => ({
     getFileContent: vi.fn(),
     getFileByteArray: vi.fn(),
     getFileMetadata: vi.fn(),
+    createPreSignedUpload: vi.fn(),
     createPreSignedUrl: vi.fn(),
     createPreSignedUrlForPreview: vi.fn(),
     createCachedPreSignedUrlForPreview: vi.fn(),
@@ -205,6 +206,20 @@ describe('FileService', () => {
 
     expect(service['impl'].createPreSignedUrl).toHaveBeenCalledWith(testKey);
     expect(result).toBe(expectedUrl);
+  });
+
+  it('should delegate createPreSignedUpload to implementation', async () => {
+    const testKey = 'test-key';
+    const expectedUpload = {
+      headers: { 'x-amz-acl': 'public-read' },
+      url: 'https://example.com/signed-url',
+    };
+    vi.mocked(service['impl'].createPreSignedUpload).mockResolvedValue(expectedUpload);
+
+    const result = await service.createPreSignedUpload(testKey);
+
+    expect(service['impl'].createPreSignedUpload).toHaveBeenCalledWith(testKey);
+    expect(result).toBe(expectedUpload);
   });
 
   it('should delegate createPreSignedUrlForPreview to implementation', async () => {

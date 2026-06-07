@@ -15,7 +15,5 @@
   "features.imessage.title": "Canal iMessage",
   "features.inputMarkdown.desc": "Affichez le Markdown dans la zone de saisie en temps réel (texte en gras, blocs de code, tableaux, etc.).",
   "features.inputMarkdown.title": "Rendu Markdown dans la saisie",
-  "features.platformAgent.desc": "Afficher l'entrée \"Ajouter un Agent de Plateforme\" dans le menu de création. Les agents de plateforme (par exemple, OpenClaw, Hermes) fonctionnent sur un appareil connecté et communiquent via lh connect.",
-  "features.platformAgent.title": "Création d'Agent de Plateforme",
   "title": "Laboratoires"
 }

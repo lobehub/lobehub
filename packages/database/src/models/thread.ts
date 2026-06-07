@@ -1,10 +1,53 @@
 import type { CreateThreadParams } from '@lobechat/types';
 import { ThreadStatus } from '@lobechat/types';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 
 import type { ThreadItem } from '../schemas';
-import { threads } from '../schemas';
+import { messages, threads } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+
+/**
+ * Per-thread subagent metrics, derived from the child messages at read time
+ * (single source of truth = the messages, not a denormalized write). Mirrors
+ * `aggregateSubagentMetrics` in the app: SUM of assistant `usage.totalTokens`
+ * (prefer the promoted `usage` column, fall back to legacy `metadata.usage`),
+ * COUNT of `role='tool'`, and a pinned model. Folded onto `metadata.*` so the
+ * subagent inspector chip can read it without hydrating the child messages.
+ */
+const subagentMetricColumns = {
+  _model: sql<
+    string | null
+  >`MAX(CASE WHEN ${messages.role} = 'assistant' THEN ${messages.model} END)`.as('_sa_model'),
+  _totalToolCalls: sql<number>`COUNT(CASE WHEN ${messages.role} = 'tool' THEN 1 END)`.as(
+    '_sa_tool_calls',
+  ),
+  _totalTokens:
+    sql<number>`COALESCE(SUM(CASE WHEN ${messages.role} = 'assistant' THEN (COALESCE(${messages.usage}, ${messages.metadata} -> 'usage') ->> 'totalTokens')::numeric END), 0)`.as(
+      '_sa_total_tokens',
+    ),
+};
+
+type ThreadMetricRow = ThreadItem & {
+  _model: string | null;
+  _totalToolCalls: number | string;
+  _totalTokens: number | string;
+};
+
+/** Fold the SQL-derived metric columns onto `metadata` and drop the temp keys. */
+const foldSubagentMetrics = (rows: ThreadMetricRow[]): ThreadItem[] =>
+  rows.map(({ _model, _totalToolCalls, _totalTokens, ...thread }) => {
+    const totalToolCalls = Number(_totalToolCalls);
+    const totalTokens = Number(_totalTokens);
+    return {
+      ...thread,
+      metadata: {
+        ...thread.metadata,
+        ...(totalToolCalls > 0 && { totalToolCalls }),
+        ...(totalTokens > 0 && { totalTokens }),
+        ...(_model && { model: _model }),
+      },
+    };
+  });
 
 const queryColumns = {
   agentId: threads.agentId,
@@ -60,13 +103,18 @@ export class ThreadModel {
   };
 
   queryByTopicId = async (topicId: string) => {
+    // LEFT JOIN + GROUP BY threads.id (PK ⇒ Postgres lets us select the plain
+    // thread columns alongside the per-thread aggregates). `threadId` join
+    // naturally scopes to in-thread rows, excluding the spawning parent.
     const data = await this.db
-      .select(queryColumns)
+      .select({ ...queryColumns, ...subagentMetricColumns })
       .from(threads)
+      .leftJoin(messages, eq(messages.threadId, threads.id))
       .where(and(eq(threads.topicId, topicId), eq(threads.userId, this.userId)))
+      .groupBy(threads.id)
       .orderBy(desc(threads.updatedAt));
 
-    return data as ThreadItem[];
+    return foldSubagentMetrics(data as ThreadMetricRow[]);
   };
 
   findById = async (id: string) => {

@@ -575,6 +575,7 @@ const ensureSubagentRun = async (
   if (!run) {
     const { spawnMetadata } = subagentCtx;
     const threadId = generateThreadId();
+    const startedAt = new Date().toISOString();
     const title =
       spawnMetadata?.description?.slice(0, 80) || spawnMetadata?.subagentType || 'Subagent';
 
@@ -583,7 +584,7 @@ const ensureSubagentRun = async (
         id: threadId,
         metadata: {
           sourceToolCallId: subagentCtx.parentToolCallId,
-          startedAt: new Date().toISOString(),
+          startedAt,
           subagentType: spawnMetadata?.subagentType,
         },
         sourceMessageId: mainAssistantMessageId,
@@ -972,6 +973,18 @@ const finalizeSubagentRun = async ({
     } catch (err) {
       console.error('[HeterogeneousAgent] Failed to create subagent terminal assistant:', err);
     }
+  }
+
+  // Mark the subagent Thread complete (created as `Processing`). The chip's
+  // tool-count / token / model metrics are NOT written here — they're derived
+  // on read from the child messages (live: `aggregateSubagentMetrics` over
+  // `dbMessagesMap`; cold-load: the same aggregation in SQL via
+  // `threadModel.queryByTopicId`), so finalize owns only the status transition.
+  // Best-effort — a failure here must not break finalize.
+  try {
+    await threadService.updateThread(run.threadId, { status: ThreadStatus.Active });
+  } catch (err) {
+    console.error('[HeterogeneousAgent] Failed to mark subagent thread complete:', err);
   }
 
   completeSubOp(run.subOperationId);
@@ -1515,9 +1528,48 @@ export const executeHeterogeneousAgent = async (
       // of all prior steps. Sum of turn_metadata equals result_usage for
       // a healthy run.
       if (event.type === 'step_complete' && event.data?.phase === 'turn_metadata') {
+        const subagentCtx = event.data.subagent as SubagentEventContext | undefined;
+        const turnUsage = event.data.usage;
+
+        if (subagentCtx) {
+          // Subagent-tagged usage: write it (plus the subagent's own
+          // model/provider) onto the subagent's in-thread assistant — NOT the
+          // main agent's. The chip derives its totals from these per-message
+          // `usage` snapshots (live + cold-load both aggregate the messages),
+          // so nothing is tracked on the run. Don't touch the MAIN agent's
+          // `lastModel` / `lastProvider` — those are main-agent step state and
+          // would contaminate the next main turn's create.
+          const turnModel = event.data.model as string | undefined;
+          const turnProvider = event.data.provider as string | undefined;
+          if (turnUsage) {
+            persistQueue = persistQueue.then(async () => {
+              const run = subagentRuns.get(subagentCtx.parentToolCallId);
+              if (!run) return;
+
+              const update = {
+                metadata: { usage: turnUsage },
+                ...(turnModel && { model: turnModel }),
+                ...(turnProvider && { provider: turnProvider }),
+              };
+              // Mirror the DB write into the thread's local message bucket
+              // so the inspector chip's live aggregation sees the usage as
+              // it lands. Without this `run.stream.update`, dbMessagesMap
+              // only learns the new metadata.usage after the next thread
+              // refresh — i.e. the chip stays at 0 tokens during streaming.
+              run.stream.update(run.currentAssistantMsgId, update as Partial<UIChatMessage>);
+              await messageService
+                .updateMessage(run.currentAssistantMsgId, update, {
+                  agentId: context.agentId,
+                  topicId: context.topicId,
+                })
+                .catch(console.error);
+            });
+          }
+          return;
+        }
+
         if (event.data.model) lastModel = event.data.model;
         if (event.data.provider) lastProvider = event.data.provider;
-        const turnUsage = event.data.usage;
         if (turnUsage) {
           persistQueue = persistQueue.then(async () => {
             await messageService

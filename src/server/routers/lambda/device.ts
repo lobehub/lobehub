@@ -5,7 +5,9 @@ import { z } from 'zod';
 import { DeviceModel } from '@/database/models/device';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { deviceProxy } from '@/server/services/toolExecution/deviceProxy';
+import { deviceGateway } from '@/server/services/toolExecution/deviceGateway';
+
+import { preserveWorkspaceCache } from './deviceWorkingDirs';
 
 // Derive the zod enum from the canonical config so new platforms are
 // automatically covered without touching this file.
@@ -49,7 +51,7 @@ export const deviceRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const result = await deviceProxy.executeToolCall(
+      const result = await deviceGateway.executeToolCall(
         { deviceId: input.deviceId, userId: ctx.userId },
         {
           apiName: 'checkPlatformCapability',
@@ -87,7 +89,7 @@ export const deviceRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const result = await deviceProxy.executeToolCall(
+      const result = await deviceGateway.executeToolCall(
         { deviceId: input.deviceId, userId: ctx.userId },
         {
           apiName: 'getAgentProfile',
@@ -113,7 +115,7 @@ export const deviceRouter = router({
   getDeviceSystemInfo: deviceProcedure
     .input(z.object({ deviceId: z.string() }))
     .query(async ({ ctx, input }) => {
-      return deviceProxy.queryDeviceSystemInfo(ctx.userId, input.deviceId);
+      return deviceGateway.queryDeviceSystemInfo(ctx.userId, input.deviceId);
     }),
 
   /**
@@ -131,7 +133,7 @@ export const deviceRouter = router({
   listDevices: deviceProcedure.query(async ({ ctx }) => {
     const [registered, onlineList] = await Promise.all([
       ctx.deviceModel.query(),
-      deviceProxy.queryDeviceList(ctx.userId),
+      deviceGateway.queryDeviceList(ctx.userId),
     ]);
 
     // The gateway already groups by device, exposing live sessions as nested
@@ -225,7 +227,7 @@ export const deviceRouter = router({
     }),
 
   status: deviceProcedure.query(async ({ ctx }) => {
-    return deviceProxy.queryDeviceStatus(ctx.userId);
+    return deviceGateway.queryDeviceStatus(ctx.userId);
   }),
 
   /** User-editable fields only — never the machine-reported identity columns. */
@@ -242,8 +244,19 @@ export const deviceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { deviceId, ...value } = input;
-      await ctx.deviceModel.update(deviceId, value);
+      const { deviceId, workingDirs, ...value } = input;
+
+      // The workspace-init cache (workspace / workspaceScannedAt) is stripped
+      // from `workingDirs` by the strict schema above, so re-attach it from the
+      // stored row by path — otherwise an ordinary cwd save wipes the cache.
+      const nextWorkingDirs = workingDirs
+        ? preserveWorkspaceCache(
+            workingDirs,
+            (await ctx.deviceModel.findByDeviceId(deviceId))?.workingDirs ?? [],
+          )
+        : undefined;
+
+      await ctx.deviceModel.update(deviceId, { ...value, workingDirs: nextWorkingDirs });
       return { success: true };
     }),
 });

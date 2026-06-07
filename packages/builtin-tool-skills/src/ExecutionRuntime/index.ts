@@ -380,7 +380,7 @@ export class SkillsExecutionRuntime {
         // Don't enumerate the directory here — let the model do it on demand
         // via `local-system.listFiles`. Just point at the skill's directory so
         // it knows where to look. Keeps the op-param payload small and avoids
-        // a second deviceProxy round-trip at activation time.
+        // a second deviceGateway round-trip at activation time.
         const skillDir = getDirname(projectSkill.location);
         if (skillDir) {
           content += '\n\n' + buildProjectDirectoryHint(name, skillDir);

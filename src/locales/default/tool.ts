@@ -42,6 +42,7 @@ export default {
   'agentMarketplace.render.alreadyInLibrary_other': '{{count}} already in library',
   'agentMarketplace.picker.failedToLoad': 'Failed to load templates. Please try again later.',
   'agentMarketplace.picker.summary': '{{filtered}} / {{total}} templates available.',
+  'claudeCode.askUserQuestion.customOption.placeholder': 'Or write your own…',
   'claudeCode.askUserQuestion.escape.back': 'Back to options',
   'claudeCode.askUserQuestion.escape.enter': 'Or type directly',
   'claudeCode.askUserQuestion.escape.placeholder': 'Type your answer here…',

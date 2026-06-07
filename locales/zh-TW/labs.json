@@ -15,7 +15,5 @@
   "features.imessage.title": "iMessage 通道",
   "features.inputMarkdown.desc": "在輸入區即時渲染 Markdown（粗體、程式碼區塊、表格等）。",
   "features.inputMarkdown.title": "輸入框 Markdown 渲染",
-  "features.platformAgent.desc": "在建立選單中顯示「新增平台代理」項目。平台代理（例如 OpenClaw、Hermes）運行於連接的設備上，並通過 lh connect 回傳通信。",
-  "features.platformAgent.title": "平台代理建立",
   "title": "實驗室"
 }

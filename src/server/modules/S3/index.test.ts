@@ -380,6 +380,24 @@ describe('FileS3', () => {
     });
   });
 
+  describe('createPreSignedUpload', () => {
+    it('should return upload headers required by the signed PUT request', async () => {
+      const s3 = new FileS3();
+
+      const result = await s3.createPreSignedUpload('upload-file.txt');
+
+      expect(PutObjectCommand).toHaveBeenCalledWith({
+        ACL: 'public-read',
+        Bucket: 'test-bucket',
+        Key: 'upload-file.txt',
+      });
+      expect(result).toEqual({
+        headers: { 'x-amz-acl': 'public-read' },
+        url: 'https://presigned-url.example.com',
+      });
+    });
+  });
+
   describe('createPreSignedUrlForPreview', () => {
     it('should create presigned URL for preview with default expiration', async () => {
       const s3 = new FileS3();

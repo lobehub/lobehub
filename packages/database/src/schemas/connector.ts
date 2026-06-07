@@ -241,7 +241,7 @@ export const userConnectorTools = pgTable(
      * Three-state permission:
      * - 'auto'            — allow AI to call without confirmation
      * - 'needs_approval'  — require human approval before execution
-     * - 'disabled'        — not injected; AI cannot see or call this tool
+     * - 'disabled'        — injected with blocking description; AI knows it is disabled and cannot call it
      */
     permission: text('permission').notNull(),
 

@@ -157,6 +157,17 @@ const styles = createStaticStyles(({ css }) => ({
   iconPinned: css`
     color: ${cssVar.colorInfo};
   `,
+  fixedIndicator: css`
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 24px;
+    height: 24px;
+
+    color: ${cssVar.colorTextQuaternary};
+  `,
   policyButton: css`
     cursor: pointer;
 
@@ -426,6 +437,14 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     isManualSkillMode
       ? builtinToolSelectors.metaListIncludingHidden
       : builtinToolSelectors.metaList,
+    isEqual,
+  );
+  // Application-fixed tools (always-on, not user-controllable, e.g. lobe-agent).
+  // Rendered read-only at the top of the "Pinned" section so users can see what the
+  // app keeps active for every conversation. Mode-aware: in manual skill-activate mode the
+  // discovery tools the engine strips (activator, skill-store) are dropped from the list.
+  const fixedDisplayList = useToolStore(
+    builtinToolSelectors.fixedDisplayMetaList({ isManualMode: isManualSkillMode }),
     isEqual,
   );
   const plugins = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
@@ -943,6 +962,70 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [filteredBuiltinList, t, createManagedSkillItem, uninstallBuiltinTool],
   );
 
+  // Application-fixed tool items (read-only). Always-on tools owned by the runtime
+  // (lobe-agent + always-on infra), so they get a fixed indicator instead of the policy
+  // menu and can't be switched to "auto" or uninstalled.
+  const fixedItems = useMemo(
+    () =>
+      fixedDisplayList.map((item) => {
+        const title = t(`tools.builtins.${item.identifier}.title` as any, {
+          defaultValue: item.meta?.title || item.identifier,
+        });
+        const icon = item.meta?.avatar ? (
+          <Avatar avatar={item.meta.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
+        ) : (
+          <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />
+        );
+        const popoverContent = (
+          <ToolItemDetailPopover
+            identifier={item.identifier}
+            sourceLabel={t('skillStore.tabs.lobehub')}
+            title={title}
+            description={t(`tools.builtins.${item.identifier}.description` as any, {
+              defaultValue: item.meta?.description || '',
+            })}
+            icon={
+              item.meta?.avatar ? (
+                <Avatar
+                  avatar={item.meta.avatar}
+                  shape={'square'}
+                  size={36}
+                  style={{ flex: 'none', marginInlineEnd: 0 }}
+                />
+              ) : (
+                <Icon icon={SkillsIcon} size={36} />
+              )
+            }
+          />
+        );
+
+        return {
+          closeOnClick: false,
+          key: item.identifier,
+          label: (
+            <span className={cx(styles.toolRow)}>
+              <span className={cx(styles.toolLabel)}>
+                {icon}
+                <span className={cx(styles.toolLabelText)}>{title}</span>
+                {officialTag}
+                <span className={cx(styles.typeTag)}>
+                  <Icon icon={Wrench} size={12} />
+                </span>
+              </span>
+              <Tooltip placement={'top'} title={t('tools.activation.fixed.hint')}>
+                <span className={cx(styles.fixedIndicator)}>
+                  <Icon icon={Pin} size={15} />
+                </span>
+              </Tooltip>
+            </span>
+          ),
+          popoverContent,
+          searchText: `${title} ${item.identifier}`,
+        } as SkillMenuItem;
+      }),
+    [fixedDisplayList, t],
+  );
+
   // Builtin Agent Skills list items (grouped under LobeHub)
   const builtinAgentSkillItems = useMemo(
     () =>
@@ -1190,7 +1273,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   };
   const allPinnedItems = allSkillItems.filter((item) => checkedSet.has(String(item.key)));
   const allAutoItems = allSkillItems.filter((item) => !checkedSet.has(String(item.key)));
-  const pinnedItems = filterBySearch(allPinnedItems);
+  // App-fixed tools always lead the pinned section, ahead of user-pinned plugins.
+  const pinnedItems = filterBySearch([...fixedItems, ...allPinnedItems]);
   const autoItems = filterBySearch(allAutoItems);
 
   const renderActivationGroupLabel = ({
@@ -1270,11 +1354,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   );
 
   const marketFooter =
-    allSkillItems.length > 0 ? (
+    allSkillItems.length > 0 || fixedItems.length > 0 ? (
       <div className={cx(styles.statsFooter)}>
         <span className={cx(styles.statsItem)}>
           <Icon icon={Pin} size={12} />
-          {allPinnedItems.length}
+          {allPinnedItems.length + fixedItems.length}
         </span>
         <span className={cx(styles.statsItem)}>
           <Icon icon={Zap} size={12} />
@@ -1703,6 +1787,6 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     marketFooter,
     marketHeader,
     marketItems,
-    pinnedCount: allPinnedItems.length,
+    pinnedCount: allPinnedItems.length + fixedItems.length,
   };
 };

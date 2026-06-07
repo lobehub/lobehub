@@ -1,3 +1,5 @@
+import type { WorkspaceInitResult } from '@lobechat/types';
+
 /** Max number of working directories persisted per device. Matches the
  * `workingDirs` cap enforced by the `device.updateDevice` tRPC input. */
 export const WORKING_DIRS_MAX = 20;
@@ -10,6 +12,10 @@ export const WORKING_DIRS_MAX = 20;
 export interface WorkingDirEntry {
   path: string;
   repoType?: 'git' | 'github';
+  /** Cached "workspace init" scan (AGENTS.md + project skills). See DB `WorkingDirEntry`. */
+  workspace?: WorkspaceInitResult;
+  /** Epoch ms of the last `workspace` scan (top-level for cheap freshness checks). */
+  workspaceScannedAt?: number;
 }
 
 /**

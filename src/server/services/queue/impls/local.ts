@@ -13,6 +13,7 @@ export type LocalExecutionCallback = (
   operationId: string,
   stepIndex: number,
   context: any,
+  payload?: any,
 ) => Promise<void>;
 
 /**
@@ -37,7 +38,7 @@ export class LocalQueueServiceImpl implements QueueServiceImpl {
   }
 
   async scheduleMessage(message: QueueMessage): Promise<string> {
-    const { operationId, stepIndex, context, delay = 50 } = message;
+    const { operationId, stepIndex, context, payload, delay = 50 } = message;
 
     const taskId = `local-${operationId}-${stepIndex}-${Date.now()}`;
 
@@ -60,7 +61,7 @@ export class LocalQueueServiceImpl implements QueueServiceImpl {
 
       try {
         log('Starting local execution for step %d of operation %s', stepIndex, operationId);
-        await this.executionCallback(operationId, stepIndex, context);
+        await this.executionCallback(operationId, stepIndex, context, payload);
         log('Completed local execution for step %d of operation %s', stepIndex, operationId);
       } catch (error) {
         log(

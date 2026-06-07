@@ -6,10 +6,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { type ToolExecutionContext } from '../../types';
 
-// Mock deviceProxy
+// Mock deviceGateway
 const mockQueryDeviceList = vi.fn();
-vi.mock('../../deviceProxy', () => ({
-  deviceProxy: {
+vi.mock('../../deviceGateway', () => ({
+  deviceGateway: {
     queryDeviceList: (...args: any[]) => mockQueryDeviceList(...args),
   },
 }));
@@ -44,7 +44,7 @@ describe('remoteDeviceRuntime', () => {
       expect(runtime).toBeInstanceOf(RemoteDeviceExecutionRuntime);
     });
 
-    it('should pass queryDeviceList that calls deviceProxy with the userId', async () => {
+    it('should pass queryDeviceList that calls deviceGateway with the userId', async () => {
       const context: ToolExecutionContext = {
         toolManifestMap: {},
         userId: 'user-1',

@@ -14,6 +14,7 @@ import path from 'node:path';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import type { AgentEventAdapter } from '@lobechat/heterogeneous-agents';
 import { createAdapter } from '@lobechat/heterogeneous-agents';
+import { ThreadStatus } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createGatewayEventHandler } from '../gatewayEventHandler';
@@ -41,9 +42,11 @@ vi.mock('@/services/message', () => ({
 
 // threadService — subagent Thread creation (CC `Task` tool_use)
 const mockCreateThread = vi.fn();
+const mockUpdateThread = vi.fn();
 vi.mock('@/services/thread', () => ({
   threadService: {
-    createThread: (...args: any[]) => mockCreateThread(...args),
+    createThread: (...args: unknown[]) => mockCreateThread(...args),
+    updateThread: (...args: unknown[]) => mockUpdateThread(...args),
   },
 }));
 
@@ -2424,6 +2427,74 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ([id, val]: any) => id !== 'ast-initial' && val.content === 'final summary text',
       );
       expect(finalizeWrite).toBeDefined();
+    });
+
+    it('marks the subagent thread Active on finalize without denormalizing metrics', async () => {
+      // Under read-time derivation the chip metrics (tool count / tokens /
+      // model) are NOT written onto `thread.metadata` at finalize — they're
+      // aggregated from the child messages on read. Finalize only flips the
+      // thread status Processing → Active.
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        ccSubagentToolUse('msg_sub_1', 'toolu_task', 'toolu_child', 'Bash', { command: 'ls' }),
+        ccSubagentToolResult('toolu_child', 'toolu_task', 'file list'),
+        {
+          message: {
+            content: [{ text: 'summary', type: 'text' }],
+            id: 'msg_sub_2',
+            model: 'claude-opus-4-8',
+            role: 'assistant',
+            usage: { input_tokens: 1000, output_tokens: 200 },
+          },
+          parent_tool_use_id: 'toolu_task',
+          type: 'assistant',
+        },
+        ccSubagentSpawnResult('toolu_task', 'final answer'),
+        ccResult(),
+      ]);
+
+      const threadId = mockCreateThread.mock.calls[0][0].id;
+      const finalize = mockUpdateThread.mock.calls.find(([id]: any) => id === threadId);
+      expect(finalize).toBeDefined();
+      // Status-only — no metrics denormalized onto metadata.
+      expect(finalize![1]).toEqual({ status: ThreadStatus.Active });
+    });
+
+    it('writes the subagent model onto the in-thread assistant for the live tooltip', async () => {
+      // The chip tooltip derives the model from the child assistant's `model`
+      // field live (before finalize). The turn_metadata branch must persist it.
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        {
+          message: {
+            content: [{ text: 'summary', type: 'text' }],
+            id: 'msg_sub',
+            model: 'claude-opus-4-8',
+            role: 'assistant',
+            usage: { input_tokens: 1000, output_tokens: 200 },
+          },
+          parent_tool_use_id: 'toolu_task',
+          type: 'assistant',
+        },
+        ccSubagentSpawnResult('toolu_task', 'final answer'),
+        ccResult(),
+      ]);
+
+      const modelWrite = mockUpdateMessage.mock.calls.find(
+        ([, val]: any) => val.model === 'claude-opus-4-8' && val.metadata?.usage,
+      );
+      expect(modelWrite).toBeDefined();
+      expect(modelWrite![1].provider).toBe('claude-code');
     });
 
     it('retains subagent buffers + pinned target when the finalize flush fails', async () => {

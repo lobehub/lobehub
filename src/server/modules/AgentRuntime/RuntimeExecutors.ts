@@ -85,6 +85,7 @@ import { FileService } from '@/server/services/file';
 import { MessageService } from '@/server/services/message';
 import { OnboardingService } from '@/server/services/onboarding';
 import {
+  type ServerSubAgentRunner,
   type ToolExecutionResultResponse,
   type ToolExecutionService,
 } from '@/server/services/toolExecution';
@@ -233,6 +234,88 @@ const buildPostProcessUrl = (ctx: Pick<RuntimeExecutorContext, 'serverDB' | 'use
   }
   return (path: string | null, file: { id?: string | null }) =>
     fileService!.getFileAccessUrl({ id: file.id, url: path });
+};
+
+/**
+ * Build the per-tool-call server sub-agent runner injected into the tool
+ * execution context. Closes over the current tool payload + parent message so
+ * the `callSubAgent` server tool can fork a child op without re-deriving the
+ * message anchor (which it cannot do correctly from its own context).
+ *
+ * The runner creates the pending placeholder tool message that anchors the
+ * isolation thread (so the UI shows a loading state and the completion bridge
+ * has a message to backfill), then kicks off the child op asynchronously and
+ * returns immediately. Returns `undefined` when sub-agent execution is not
+ * available (no `execSubAgentTask` callback, or missing agent/topic context).
+ */
+const buildServerSubAgentRunner = (
+  ctx: RuntimeExecutorContext,
+  state: AgentState,
+  chatToolPayload: ChatToolPayload,
+  parentMessageId: string,
+): ServerSubAgentRunner | undefined => {
+  const execSubAgentTask = ctx.execSubAgentTask;
+  if (!execSubAgentTask) return undefined;
+
+  const agentId = state.metadata?.agentId;
+  const topicId = ctx.topicId ?? state.metadata?.topicId;
+  if (!agentId || !topicId) return undefined;
+
+  return {
+    run: async ({ agentId: targetAgentId, description, instruction, timeout }) => {
+      // 1. Create the pending placeholder tool message (mirrors the normal
+      //    tool-message shape in call_tool) that anchors the isolation thread
+      //    and renders a loading state until the bridge backfills it.
+      const placeholder = await ctx.messageModel.create({
+        agentId,
+        content: '',
+        parentId: parentMessageId,
+        plugin: chatToolPayload as any,
+        pluginState: { status: 'pending' },
+        role: 'tool',
+        threadId: state.metadata?.threadId,
+        tool_call_id: chatToolPayload.id,
+        topicId,
+      });
+
+      // 2. Fork the child op anchored to the placeholder. `resumeParentOnComplete`
+      //    tells execSubAgentTask to register the completion bridge that
+      //    backfills this tool message and resumes the parent op.
+      const result = (await execSubAgentTask({
+        agentId: targetAgentId ?? agentId,
+        groupId: state.metadata?.groupId ?? undefined,
+        instruction,
+        parentMessageId: placeholder.id,
+        parentOperationId: ctx.operationId,
+        resumeParentOnComplete: true,
+        timeout,
+        title: description,
+        topicId,
+      })) as { operationId?: string; success?: boolean; threadId?: string } | undefined;
+
+      // 3. If the child op never started, no completion bridge will fire — parking
+      //    the parent on it would hang forever. Drop the placeholder and signal
+      //    `started: false` so callSubAgent surfaces an inline tool error instead.
+      if (!result?.success) {
+        try {
+          await ctx.messageModel.deleteMessage(placeholder.id);
+        } catch (error) {
+          log(
+            'buildServerSubAgentRunner: failed to clean up placeholder %s: %O',
+            placeholder.id,
+            error,
+          );
+        }
+        return { started: false, subOperationId: result?.operationId, threadId: '' };
+      }
+
+      return {
+        started: true,
+        subOperationId: result?.operationId,
+        threadId: result?.threadId ?? '',
+      };
+    },
+  };
 };
 
 const shouldRetryLLM = (kind: LLMErrorKind, attempt: number, maxRetries: number) =>
@@ -1923,7 +2006,7 @@ export const createRuntimeExecutors = (
 
           const newState = structuredClone(state);
           newState.lastModified = new Date().toISOString();
-          newState.status = 'interrupted';
+          newState.status = 'waiting_for_async_tool';
           newState.interruption = {
             canResume: true,
             interruptedAt: new Date().toISOString(),
@@ -2061,6 +2144,7 @@ export const createRuntimeExecutors = (
                 activeDeviceId: state.metadata?.activeDeviceId,
                 agentId: state.metadata?.agentId,
                 documentId: state.metadata?.documentId,
+                execSubAgentTask: ctx.execSubAgentTask,
                 executionTimeoutMs: timeoutMs,
                 groupId: state.metadata?.groupId,
                 memoryToolPermission: agentConfig?.chatConfig?.memory?.toolPermission,
@@ -2078,6 +2162,12 @@ export const createRuntimeExecutors = (
                 scope: state.metadata?.scope,
                 serverDB: ctx.serverDB,
                 skipResultTruncation: true,
+                subAgent: buildServerSubAgentRunner(
+                  ctx,
+                  state,
+                  chatToolPayload,
+                  payload.parentMessageId,
+                ),
                 taskId: state.metadata?.taskId,
                 threadId: state.metadata?.threadId,
                 toolCallId: chatToolPayload.id,
@@ -2093,6 +2183,42 @@ export const createRuntimeExecutors = (
               toolName,
             },
           );
+        }
+
+        // Deferred tool (e.g. async sub-agent): the executor performed its
+        // side-effect and created a pending placeholder; the real result is
+        // delivered out-of-band later by a completion bridge. Park like a
+        // client tool — surface the pending call, hold it in pendingToolsCalling,
+        // and do not write a tool_result now.
+        if (execution.result.deferred) {
+          log(`[${operationLogId}] Tool ${toolName} deferred; parking for async result`);
+          await streamManager.publishStreamChunk(operationId, stepIndex, {
+            chunkType: 'tools_calling',
+            toolsCalling: [chatToolPayload] as any,
+          });
+          executeToolSpan.setAttributes(
+            buildExecuteToolResultAttributes({ attempts: execution.attempts, success: true }),
+          );
+          const newState = structuredClone(state);
+          newState.lastModified = new Date().toISOString();
+          newState.status = 'waiting_for_async_tool';
+          newState.interruption = {
+            canResume: true,
+            interruptedAt: new Date().toISOString(),
+            reason: 'async_tool',
+          };
+          newState.pendingToolsCalling = [chatToolPayload];
+          return {
+            events: [
+              {
+                canResume: true,
+                interruptedAt: new Date().toISOString(),
+                reason: 'async_tool',
+                type: 'interrupted',
+              },
+            ],
+            newState,
+          };
         }
 
         const executionResult = await archiveRuntimeToolResult(execution.result, {
@@ -2417,7 +2543,7 @@ export const createRuntimeExecutors = (
 
       const newState = structuredClone(state);
       newState.lastModified = new Date().toISOString();
-      newState.status = 'interrupted';
+      newState.status = 'waiting_for_async_tool';
       newState.interruption = {
         canResume: true,
         interruptedAt: new Date().toISOString(),
@@ -2441,6 +2567,9 @@ export const createRuntimeExecutors = (
     // Track all tool message IDs created during execution
     const toolMessageIds: string[] = [];
     const toolResults: any[] = [];
+    // Deferred (async) tools whose result is delivered out-of-band later;
+    // collected here so the batch parks for them after server tools finish.
+    const deferredTools: ChatToolPayload[] = [];
 
     // Execute server tools concurrently (skip client tools in mixed batch)
     const toolsToExecute = serverTools.length > 0 ? serverTools : toolsCalling;
@@ -2593,6 +2722,7 @@ export const createRuntimeExecutors = (
                     activeDeviceId: state.metadata?.activeDeviceId,
                     agentId: state.metadata?.agentId,
                     documentId: state.metadata?.documentId,
+                    execSubAgentTask: ctx.execSubAgentTask,
                     executionTimeoutMs: timeoutMs,
                     groupId: state.metadata?.groupId,
                     memoryToolPermission: batchAgentConfig?.chatConfig?.memory?.toolPermission,
@@ -2601,6 +2731,12 @@ export const createRuntimeExecutors = (
                     scope: state.metadata?.scope,
                     serverDB: ctx.serverDB,
                     skipResultTruncation: true,
+                    subAgent: buildServerSubAgentRunner(
+                      ctx,
+                      state,
+                      chatToolPayload,
+                      payload.parentMessageId,
+                    ),
                     taskId: state.metadata?.taskId,
                     threadId: state.metadata?.threadId,
                     toolCallId: chatToolPayload.id,
@@ -2616,6 +2752,18 @@ export const createRuntimeExecutors = (
                   toolName,
                 },
               );
+            }
+
+            // Deferred (async) tool: executor created a pending placeholder and
+            // the real result arrives out-of-band. Skip the tool_result write;
+            // the batch parks for it after all server tools settle.
+            if (execution.result.deferred) {
+              log(`[${operationLogId}] Tool ${toolName} deferred; will park after batch`);
+              deferredTools.push(chatToolPayload);
+              batchExecuteToolSpan.setAttributes(
+                buildExecuteToolResultAttributes({ attempts: execution.attempts, success: true }),
+              );
+              return;
             }
 
             const executionResult = await archiveRuntimeToolResult(execution.result, {
@@ -2872,24 +3020,31 @@ export const createRuntimeExecutors = (
     // Get the last tool message ID as parentMessageId for next LLM call
     const lastToolMessageId = toolMessageIds.at(-1);
 
-    // If there are remaining client tools in a mixed batch, interrupt after server tools
-    if (clientTools.length > 0) {
+    // Park if any tools still owe an out-of-band result: client tools (run on
+    // the client) and/or deferred async tools (e.g. sub-agents). The operation
+    // resumes once every pending tool's result is delivered.
+    const pendingTools = [...deferredTools, ...clientTools];
+    if (pendingTools.length > 0) {
+      // Prefer the async-tool reason when any deferred tool is present; the
+      // individual pending payloads still carry their own identity for the
+      // resume gate.
+      const pauseReason = deferredTools.length > 0 ? 'async_tool' : 'client_tool_execution';
       log(
-        `[${operationLogId}][call_tools_batch] Mixed batch: ${serverTools.length} server tools done, pausing for ${clientTools.length} client tools`,
+        `[${operationLogId}][call_tools_batch] Pausing after ${serverTools.length} server tools: ${deferredTools.length} deferred + ${clientTools.length} client`,
       );
 
       await streamManager.publishStreamChunk(operationId, stepIndex, {
         chunkType: 'tools_calling',
-        toolsCalling: clientTools as any,
+        toolsCalling: pendingTools as any,
       });
 
-      newState.status = 'interrupted';
+      newState.status = 'waiting_for_async_tool';
       newState.interruption = {
         canResume: true,
         interruptedAt: new Date().toISOString(),
-        reason: 'client_tool_execution',
+        reason: pauseReason,
       };
-      newState.pendingToolsCalling = clientTools;
+      newState.pendingToolsCalling = pendingTools;
 
       return {
         events: [
@@ -2897,7 +3052,7 @@ export const createRuntimeExecutors = (
           {
             canResume: true,
             interruptedAt: new Date().toISOString(),
-            reason: 'client_tool_execution',
+            reason: pauseReason,
             type: 'interrupted',
           },
         ],

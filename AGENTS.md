@@ -125,8 +125,9 @@ bun run type-check
 ### i18n
 
 - Add keys to a namespace file under `src/locales/default/` (e.g. `agent.ts`, `auth.ts`)
-- For dev preview: translate `locales/zh-CN/` and `locales/en-US/`
-- `pnpm i18n` is slow; run it manually when locale keys need updating (e.g. before opening a PR).
+- Ship en-US and zh-CN by hand in the same PR: write the English source in `src/locales/default/*.ts` and mirror it to `locales/en-US/`; hand-translate `locales/zh-CN/`. Leave all other locales to CI.
+- Don't run `pnpm i18n` manually by default — a daily CI workflow (`auto-i18n.yml`) runs it and opens an automated translation PR for any missing keys.
+- Run `pnpm i18n` manually only when your branch needs the translated locales immediately, instead of waiting for the daily job (slow; requires `OPENAI_API_KEY`). Note it only fills keys missing from other locales — value-only edits never need it.
 
 ### Code Style
 

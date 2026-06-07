@@ -44,7 +44,7 @@ export interface LogDeviceToolAuditParams {
  * Reason for being a logger (not a DB table): the goal here is post-incident
  * forensics ("who triggered this read_file?"), not real-time risk control.
  * The debug namespace keeps it cheap, fire-and-forget, and consistent with
- * the existing `lobe-server:device-proxy` line at the actual proxy dispatch.
+ * the existing `lobe-server:device-gateway` line at the actual proxy dispatch.
  *
  * Sensitive payloads (file contents, shell stdout, tool args) are NEVER
  * recorded here — only identity + decision metadata.

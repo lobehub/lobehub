@@ -113,7 +113,8 @@ export type StepCompletionReason =
   | 'interrupted'
   | 'max_steps'
   | 'cost_limit'
-  | 'waiting_for_human';
+  | 'waiting_for_human'
+  | 'waiting_for_async_tool';
 
 // ==================== Execution Params ====================
 
@@ -130,6 +131,12 @@ export interface AgentExecutionParams {
    */
   rejectAndContinue?: boolean;
   rejectionReason?: string;
+  /**
+   * Resume a `waiting_for_async_tool` op after its deferred tools (e.g. server
+   * sub-agents) have all delivered results. Scheduled by the completion bridge
+   * via `tryResumeParentFromAsyncTool`.
+   */
+  resumeAsyncTool?: boolean;
   stepIndex: number;
   /** ID of the pending tool message targeted by the intervention. */
   toolMessageId?: string;

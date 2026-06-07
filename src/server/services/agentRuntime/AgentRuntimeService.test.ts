@@ -5,6 +5,8 @@ import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import type * as ModelBankModule from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
+
 import { AgentRuntimeService } from './AgentRuntimeService';
 import { hookDispatcher } from './hooks';
 import {
@@ -100,6 +102,14 @@ vi.mock('@lobechat/agent-runtime', () => ({
   AgentRuntime: vi.fn().mockImplementation((_agent, _options) => ({
     step: vi.fn(),
   })),
+  // Mirror the real status predicates (packages/agent-runtime/src/utils/status.ts)
+  // so completion-lifecycle / getOperationStatus paths don't crash on the mock.
+  isBlockedStatus: (status: string) =>
+    status === 'waiting_for_human' ||
+    status === 'waiting_for_async_tool' ||
+    status === 'interrupted',
+  isParkedStatus: (status: string) =>
+    status === 'waiting_for_human' || status === 'waiting_for_async_tool',
 }));
 
 vi.mock('@/server/services/queue', () => ({
@@ -1533,6 +1543,86 @@ describe('AgentRuntimeService', () => {
       } as any);
 
       expect(result).toBeUndefined();
+    });
+  });
+
+  describe('tryResumeParentFromAsyncTool', () => {
+    const parentOpId = 'parent-op-async';
+
+    const fulfilledPlugin = { id: 'msg-tc1', state: { status: 'completed' }, toolCallId: 'tc1' };
+
+    const stubFulfilled = () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        pendingToolsCalling: [{ id: 'tc1' }],
+        status: 'waiting_for_async_tool',
+        stepCount: 3,
+      });
+      (service as any).serverDB.query = {
+        messagePlugins: { findFirst: vi.fn().mockResolvedValue(fulfilledPlugin) },
+      };
+      (service as any).messageModel.findById = vi.fn().mockResolvedValue({ content: 'answer' });
+    };
+
+    it('wins the CAS and schedules the resume step when all pending tools are fulfilled', async () => {
+      stubFulfilled();
+      const casSpy = vi
+        .spyOn(AgentOperationModel.prototype, 'tryResumeFromAsyncTool')
+        .mockResolvedValue(true);
+
+      const won = await service.tryResumeParentFromAsyncTool({ parentOperationId: parentOpId });
+
+      expect(won).toBe(true);
+      expect(casSpy).toHaveBeenCalledWith(parentOpId);
+      expect(mockQueueService.scheduleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operationId: parentOpId,
+          payload: { resumeAsyncTool: true },
+          priority: 'high',
+          stepIndex: 3,
+        }),
+      );
+    });
+
+    it('holds (no CAS, no schedule) when a pending tool is not yet fulfilled', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        pendingToolsCalling: [{ id: 'tc1' }],
+        status: 'waiting_for_async_tool',
+        stepCount: 1,
+      });
+      (service as any).serverDB.query = {
+        messagePlugins: { findFirst: vi.fn().mockResolvedValue(null) },
+      };
+      const casSpy = vi.spyOn(AgentOperationModel.prototype, 'tryResumeFromAsyncTool');
+
+      const won = await service.tryResumeParentFromAsyncTool({ parentOperationId: parentOpId });
+
+      expect(won).toBe(false);
+      expect(casSpy).not.toHaveBeenCalled();
+      expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
+    });
+
+    it('does not schedule when it loses the CAS to a concurrent sibling', async () => {
+      stubFulfilled();
+      vi.spyOn(AgentOperationModel.prototype, 'tryResumeFromAsyncTool').mockResolvedValue(false);
+
+      const won = await service.tryResumeParentFromAsyncTool({ parentOperationId: parentOpId });
+
+      expect(won).toBe(false);
+      expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
+    });
+
+    it('skips when the parent is no longer parked', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        pendingToolsCalling: [],
+        status: 'running',
+        stepCount: 1,
+      });
+      const casSpy = vi.spyOn(AgentOperationModel.prototype, 'tryResumeFromAsyncTool');
+
+      const won = await service.tryResumeParentFromAsyncTool({ parentOperationId: parentOpId });
+
+      expect(won).toBe(false);
+      expect(casSpy).not.toHaveBeenCalled();
     });
   });
 });

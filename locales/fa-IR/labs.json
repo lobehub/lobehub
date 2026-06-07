@@ -15,7 +15,5 @@
   "features.imessage.title": "کانال iMessage",
   "features.inputMarkdown.desc": "نمایش زنده Markdown در ناحیه ورودی (متن پررنگ، بلوک‌های کد، جدول‌ها و غیره).",
   "features.inputMarkdown.title": "نمایش Markdown در ورودی",
-  "features.platformAgent.desc": "نمایش گزینه \"افزودن نماینده پلتفرم\" در منوی ایجاد. نمایندگان پلتفرم (مانند OpenClaw، Hermes) روی یک دستگاه متصل اجرا می‌شوند و از طریق lh connect ارتباط برقرار می‌کنند.",
-  "features.platformAgent.title": "ایجاد نماینده پلتفرم",
   "title": "آزمایشگاه‌ها"
 }

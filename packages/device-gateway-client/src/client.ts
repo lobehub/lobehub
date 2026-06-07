@@ -12,6 +12,8 @@ import type {
   GatewayClientEvents,
   MessageApiRequestMessage,
   MessageApiResponseMessage,
+  RpcRequestMessage,
+  RpcResponseMessage,
   ServerMessage,
   SystemInfoRequestMessage,
   SystemInfoResponseMessage,
@@ -184,6 +186,13 @@ export class GatewayClient extends EventEmitter {
     });
   }
 
+  sendRpcResponse(response: Omit<RpcResponseMessage, 'type'>): void {
+    this.sendMessage({
+      ...response,
+      type: 'rpc_response',
+    });
+  }
+
   sendAgentRunAck(response: Omit<AgentRunAckMessage, 'type'>): void {
     this.sendMessage({
       ...response,
@@ -299,6 +308,11 @@ export class GatewayClient extends EventEmitter {
 
         case 'system_info_request': {
           this.emit('system_info_request', message as SystemInfoRequestMessage);
+          break;
+        }
+
+        case 'rpc_request': {
+          this.emit('rpc_request', message as RpcRequestMessage);
           break;
         }
 

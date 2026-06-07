@@ -303,6 +303,12 @@ export interface BuiltinInspectorProps<Arguments = any, State = any> {
   partialArgs?: Arguments;
   pluginState?: State;
   result?: { content: string | null; error?: any; state?: any };
+  /**
+   * Stable id of this tool call. Required for inspectors that need to correlate
+   * with side data — e.g. CC's `Agent` inspector joining to the subagent Thread
+   * via `metadata.sourceToolCallId`.
+   */
+  toolCallId?: string;
 }
 
 export type BuiltinInspector = <A = any, S = any>(props: BuiltinInspectorProps<A, S>) => ReactNode;
@@ -326,6 +332,13 @@ export type BuiltinStreaming = <A = any>(props: BuiltinStreamingProps<A>) => Rea
 
 export interface BuiltinServerRuntimeOutput {
   content: string;
+  /**
+   * When true, the tool executed a side-effect but its result is delivered
+   * out-of-band later (e.g. an async sub-agent). The agent runtime parks the
+   * operation instead of writing a tool_result, mirroring the client-tool
+   * pause path. The deferred result is filled in by a completion bridge.
+   */
+  deferred?: boolean;
   error?: any;
   state?: any;
   success: boolean;

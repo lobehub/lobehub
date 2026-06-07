@@ -15,7 +15,5 @@
   "features.imessage.title": "Kênh iMessage",
   "features.inputMarkdown.desc": "Hiển thị Markdown trong khu vực nhập liệu theo thời gian thực (văn bản in đậm, khối mã, bảng, v.v.).",
   "features.inputMarkdown.title": "Hiển Thị Markdown Trong Ô Nhập",
-  "features.platformAgent.desc": "Hiển thị mục \"Thêm Đại Lý Nền Tảng\" trong menu tạo. Các đại lý nền tảng (ví dụ: OpenClaw, Hermes) chạy trên một thiết bị được kết nối và giao tiếp lại thông qua lh connect.",
-  "features.platformAgent.title": "Tạo Đại Lý Nền Tảng",
   "title": "Phòng Thí Nghiệm"
 }

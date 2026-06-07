@@ -2,6 +2,7 @@ import debug from 'debug';
 
 import { appEnv } from '@/envs/app';
 import type { MarketService } from '@/server/services/market';
+import { createSandboxService } from '@/server/services/sandbox';
 
 const log = debug('lobe-server:hetero-sandbox-runner');
 
@@ -96,8 +97,8 @@ function buildRepoSetupScript(repos: string[], githubToken?: string): string | n
 /**
  * Launches `lh hetero exec` inside the cloud sandbox via `runCommand`.
  *
- * Uses the same MarketService path as ServerSandboxService.callTool —
- * `marketService.getSDK().plugins.runBuildInTool('runCommand', params, ctx)`.
+ * Uses the configured sandbox provider so cloud, third-party, and self-hosted
+ * sandboxes share the same launch path.
  *
  * The sandbox container already has `lh` (the LobeHub CLI) installed.
  * The operation-scoped JWT is injected as `LOBEHUB_JWT` so the CLI can
@@ -192,7 +193,14 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
     topicId,
   );
 
-  await marketService
-    .getSDK()
-    .plugins.runBuildInTool('runCommand', { command: shellCommand } as any, { topicId, userId });
+  const sandboxService = createSandboxService({ marketService, topicId, userId });
+  const result = await sandboxService.callTool('runCommand', {
+    background: true,
+    command: shellCommand,
+    timeout: 600_000,
+  });
+
+  if (!result.success) {
+    throw new Error(result.error?.message || 'Failed to spawn heterogeneous sandbox');
+  }
 }

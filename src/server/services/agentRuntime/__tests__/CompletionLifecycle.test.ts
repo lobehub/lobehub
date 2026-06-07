@@ -1,7 +1,8 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CompletionLifecycle } from '../CompletionLifecycle';
+import { hookDispatcher } from '../hooks';
 
 const buildLifecycle = () => new CompletionLifecycle({} as any, 'user-1');
 
@@ -193,5 +194,42 @@ describe('CompletionLifecycle.buildLifecycleEvent', () => {
     expect(event.lastAssistantContent).toBeUndefined();
     expect(event.attachments).toBeUndefined();
     expect(event.agentId).toBe('a');
+  });
+});
+
+describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const parkedState = {
+    metadata: { agentId: 'a', _hooks: [] },
+    status: 'waiting_for_async_tool',
+  };
+
+  it('persists the parked status but does NOT fire onComplete or unregister hooks', async () => {
+    const lifecycle = buildLifecycle();
+    const persistSpy = vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    const unregisterSpy = vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+
+    await lifecycle.dispatchHooks('op-1', parkedState, 'waiting_for_async_tool');
+
+    expect(persistSpy).toHaveBeenCalledWith('op-1', parkedState, 'waiting_for_async_tool');
+    expect(dispatchSpy).not.toHaveBeenCalled();
+    expect(unregisterSpy).not.toHaveBeenCalled();
+  });
+
+  it('fires onComplete and unregisters on a terminal completion', async () => {
+    const lifecycle = buildLifecycle();
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    const unregisterSpy = vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+
+    const doneState = { metadata: { agentId: 'a', _hooks: [] }, status: 'done' };
+    await lifecycle.dispatchHooks('op-1', doneState, 'done');
+
+    expect(dispatchSpy).toHaveBeenCalledWith('op-1', 'onComplete', expect.anything(), []);
+    expect(unregisterSpy).toHaveBeenCalledWith('op-1');
   });
 });

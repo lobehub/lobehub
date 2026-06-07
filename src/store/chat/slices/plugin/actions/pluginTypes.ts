@@ -12,6 +12,7 @@ import { archiveToolResultViaServer } from '@/services/toolResultArchive';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation';
 import { type ChatStore } from '@/store/chat/store';
 import { useToolStore } from '@/store/tool';
+import { klavisStoreSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
 import { hasExecutor } from '@/store/tool/slices/builtin/executors';
 import { type StoreSetter } from '@/store/types';
 import { safeParseJSON } from '@/utils/safeParseJSON';
@@ -45,14 +46,33 @@ export class PluginTypesActionImpl {
     payload: ChatToolPayload,
     stepContext?: RuntimeStepContext,
   ): Promise<any> => {
-    // Check if this is a Klavis tool by source field
-    if (payload.source === 'klavis') {
-      return await this.#get().invokeKlavisTypePlugin(id, payload);
+    // When the tool call comes from a DB-stored message (e.g. after humanIntervention approval),
+    // the `source` field is not persisted and arrives as undefined. Fall back to a live store
+    // lookup so Klavis / LobeHub Skill tools still route correctly.
+    let effectiveSource = payload.source;
+    if (!effectiveSource) {
+      const toolStoreState = useToolStore.getState();
+      const klavisTools = klavisStoreSelectors.klavisAsLobeTools(toolStoreState);
+      if (klavisTools.some((t) => t.identifier === payload.identifier)) {
+        effectiveSource = 'klavis';
+      } else {
+        const lobehubSkillTools =
+          lobehubSkillStoreSelectors.lobehubSkillAsLobeTools(toolStoreState);
+        if (lobehubSkillTools.some((t) => t.identifier === payload.identifier)) {
+          effectiveSource = 'lobehubSkill';
+        }
+      }
     }
 
-    // Check if this is a LobeHub Skill tool by source field
-    if (payload.source === 'lobehubSkill') {
-      return await this.#get().invokeLobehubSkillTypePlugin(id, payload);
+    if (effectiveSource === 'klavis') {
+      return await this.#get().invokeKlavisTypePlugin(id, { ...payload, source: effectiveSource });
+    }
+
+    if (effectiveSource === 'lobehubSkill') {
+      return await this.#get().invokeLobehubSkillTypePlugin(id, {
+        ...payload,
+        source: effectiveSource,
+      });
     }
 
     const params = safeParseJSON(payload.arguments);

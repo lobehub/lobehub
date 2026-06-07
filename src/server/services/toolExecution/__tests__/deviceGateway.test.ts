@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Import after mocks are set up
-import { DeviceProxy } from '../deviceProxy';
+import { DeviceGateway } from '../deviceGateway';
 
 const mockEnv = vi.hoisted(() => ({
   DEVICE_GATEWAY_SERVICE_TOKEN: undefined as string | undefined,
@@ -13,6 +13,7 @@ const mockClient = vi.hoisted(() => ({
   executeMessageApi: vi.fn(),
   executeToolCall: vi.fn(),
   getDeviceSystemInfo: vi.fn(),
+  invokeRpc: vi.fn(),
   queryDeviceList: vi.fn(),
   queryDeviceStatus: vi.fn(),
 }));
@@ -27,7 +28,7 @@ vi.mock('@lobechat/device-gateway-client', () => ({
   GatewayHttpClient: MockGatewayHttpClient,
 }));
 
-describe('DeviceProxy', () => {
+describe('DeviceGateway', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockEnv.DEVICE_GATEWAY_URL = undefined;
@@ -36,20 +37,20 @@ describe('DeviceProxy', () => {
 
   describe('isConfigured', () => {
     it('should return false when DEVICE_GATEWAY_URL is not set', () => {
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       expect(proxy.isConfigured).toBe(false);
     });
 
     it('should return true when DEVICE_GATEWAY_URL is set', () => {
       mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       expect(proxy.isConfigured).toBe(true);
     });
   });
 
   describe('queryDeviceStatus', () => {
     it('should return offline status when not configured', async () => {
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.queryDeviceStatus('user-1');
       expect(result).toEqual({ deviceCount: 0, online: false });
     });
@@ -60,7 +61,7 @@ describe('DeviceProxy', () => {
       const expected = { deviceCount: 2, online: true };
       mockClient.queryDeviceStatus.mockResolvedValue(expected);
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.queryDeviceStatus('user-1');
 
       expect(result).toEqual(expected);
@@ -72,7 +73,7 @@ describe('DeviceProxy', () => {
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
       mockClient.queryDeviceStatus.mockRejectedValue(new Error('network error'));
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.queryDeviceStatus('user-1');
 
       expect(result).toEqual({ deviceCount: 0, online: false });
@@ -81,7 +82,7 @@ describe('DeviceProxy', () => {
 
   describe('queryDeviceList', () => {
     it('should return empty array when not configured', async () => {
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.queryDeviceList('user-1');
       expect(result).toEqual([]);
     });
@@ -111,7 +112,7 @@ describe('DeviceProxy', () => {
         },
       ]);
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.queryDeviceList('user-1');
 
       expect(result).toEqual([
@@ -146,7 +147,7 @@ describe('DeviceProxy', () => {
         { connectedAt, deviceId: 'dev-1', hostname: 'my-laptop', platform: 'darwin' },
       ]);
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.queryDeviceList('user-1');
 
       expect(result).toEqual([
@@ -166,7 +167,7 @@ describe('DeviceProxy', () => {
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
       mockClient.queryDeviceList.mockRejectedValue(new Error('fail'));
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.queryDeviceList('user-1');
 
       expect(result).toEqual([]);
@@ -175,7 +176,7 @@ describe('DeviceProxy', () => {
 
   describe('queryDeviceSystemInfo', () => {
     it('should return undefined when not configured', async () => {
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.queryDeviceSystemInfo('user-1', 'dev-1');
       expect(result).toBeUndefined();
     });
@@ -186,7 +187,7 @@ describe('DeviceProxy', () => {
       const systemInfo = { cpuModel: 'Apple M1', os: 'macOS', totalMemory: 16384 };
       mockClient.getDeviceSystemInfo.mockResolvedValue({ success: true, systemInfo });
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.queryDeviceSystemInfo('user-1', 'dev-1');
 
       expect(result).toEqual(systemInfo);
@@ -198,7 +199,7 @@ describe('DeviceProxy', () => {
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
       mockClient.getDeviceSystemInfo.mockResolvedValue({ success: false });
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.queryDeviceSystemInfo('user-1', 'dev-1');
 
       expect(result).toBeUndefined();
@@ -209,7 +210,7 @@ describe('DeviceProxy', () => {
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
       mockClient.getDeviceSystemInfo.mockRejectedValue(new Error('timeout'));
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.queryDeviceSystemInfo('user-1', 'dev-1');
 
       expect(result).toBeUndefined();
@@ -221,7 +222,7 @@ describe('DeviceProxy', () => {
     const toolCall = { apiName: 'listFiles', arguments: '{}', identifier: 'file-manager' };
 
     it('should return error when not configured', async () => {
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.executeToolCall(params, toolCall);
 
       expect(result).toEqual({
@@ -237,7 +238,7 @@ describe('DeviceProxy', () => {
       const expected = { content: 'file list', success: true };
       mockClient.executeToolCall.mockResolvedValue(expected);
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.executeToolCall(params, toolCall);
 
       expect(result).toEqual(expected);
@@ -252,7 +253,7 @@ describe('DeviceProxy', () => {
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
       mockClient.executeToolCall.mockResolvedValue({ content: 'ok', success: true });
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       await proxy.executeToolCall(params, toolCall, 60_000);
 
       expect(mockClient.executeToolCall).toHaveBeenCalledWith(
@@ -266,7 +267,7 @@ describe('DeviceProxy', () => {
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
       mockClient.executeToolCall.mockRejectedValue(new Error('connection refused'));
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.executeToolCall(params, toolCall);
 
       expect(result).toEqual({
@@ -281,7 +282,7 @@ describe('DeviceProxy', () => {
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
       mockClient.executeToolCall.mockRejectedValue('string error');
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.executeToolCall(params, toolCall);
 
       expect(result).toEqual({
@@ -309,7 +310,7 @@ describe('DeviceProxy', () => {
     };
 
     it('should return error when not configured', async () => {
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.executeMcpCall(mcpCall);
 
       expect(result).toEqual({
@@ -325,7 +326,7 @@ describe('DeviceProxy', () => {
       const expected = { content: 'stock data', state: { rows: 3 }, success: true };
       mockClient.executeMcpCall.mockResolvedValue(expected);
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.executeMcpCall(mcpCall);
 
       expect(result).toEqual(expected);
@@ -337,7 +338,7 @@ describe('DeviceProxy', () => {
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
       mockClient.executeMcpCall.mockResolvedValue({ content: 'ok', success: true });
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       await proxy.executeMcpCall(mcpCall, 60_000);
 
       expect(mockClient.executeMcpCall).toHaveBeenCalledWith({ ...mcpCall, timeout: 60_000 });
@@ -348,7 +349,7 @@ describe('DeviceProxy', () => {
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
       mockClient.executeMcpCall.mockRejectedValue(new Error('connection refused'));
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.executeMcpCall(mcpCall);
 
       expect(result).toEqual({
@@ -364,7 +365,7 @@ describe('DeviceProxy', () => {
     const api = { apiName: 'sendText', payload: { chatGuid: 'chat-1' }, platform: 'imessage' };
 
     it('should return error when not configured', async () => {
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.executeMessageApi(params, api);
 
       expect(result).toEqual({
@@ -380,7 +381,7 @@ describe('DeviceProxy', () => {
       const expected = { content: '{"ok":true}', success: true };
       mockClient.executeMessageApi.mockResolvedValue(expected);
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.executeMessageApi(params, api);
 
       expect(result).toEqual(expected);
@@ -395,7 +396,7 @@ describe('DeviceProxy', () => {
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
       mockClient.executeMessageApi.mockResolvedValue({ content: 'ok', success: true });
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       await proxy.executeMessageApi(params, api, 60_000);
 
       expect(mockClient.executeMessageApi).toHaveBeenCalledWith(
@@ -409,7 +410,7 @@ describe('DeviceProxy', () => {
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
       mockClient.executeMessageApi.mockRejectedValue(new Error('connection refused'));
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.executeMessageApi(params, api);
 
       expect(result).toEqual({
@@ -420,10 +421,120 @@ describe('DeviceProxy', () => {
     });
   });
 
+  describe('initWorkspace', () => {
+    const configure = () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+    };
+
+    it('should return undefined when not configured', async () => {
+      const proxy = new DeviceGateway();
+      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+      expect(result).toBeUndefined();
+      expect(mockClient.invokeRpc).not.toHaveBeenCalled();
+    });
+
+    it('narrows device skills to metadata and passes instructions through', async () => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({
+        data: {
+          instructions: [{ content: '# Rules', source: 'AGENTS.md' }],
+          // Device returns rich ProjectSkillItems; only name/description/path survive.
+          skills: [
+            {
+              description: 'spa',
+              fileCount: 3,
+              files: ['SKILL.md'],
+              name: 'spa-routes',
+              path: '/proj/.agents/skills/spa-routes/SKILL.md',
+              skillDir: '/proj/.agents/skills/spa-routes',
+              source: '.agents/skills',
+            },
+          ],
+        },
+        success: true,
+      });
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+
+      expect(result).toEqual({
+        instructions: [{ content: '# Rules', source: 'AGENTS.md' }],
+        skills: [
+          {
+            description: 'spa',
+            name: 'spa-routes',
+            path: '/proj/.agents/skills/spa-routes/SKILL.md',
+          },
+        ],
+      });
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+        { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
+        { method: 'initWorkspace', params: { scope: '/proj' } },
+      );
+    });
+
+    it('defaults instructions and skills to empty arrays when absent', async () => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({ data: {}, success: true });
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+
+      expect(result).toEqual({ instructions: [], skills: [] });
+    });
+
+    it('returns undefined when the rpc reports failure', async () => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({ error: 'offline', success: false });
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+
+      expect(result).toBeUndefined();
+    });
+
+    it('returns undefined when the rpc succeeds without data', async () => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({ success: true });
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+
+      expect(result).toBeUndefined();
+    });
+
+    it('returns undefined on exception', async () => {
+      configure();
+      mockClient.invokeRpc.mockRejectedValue(new Error('timeout'));
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+
+      expect(result).toBeUndefined();
+    });
+
+    it('forwards a custom timeout', async () => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({
+        data: { instructions: [], skills: [] },
+        success: true,
+      });
+
+      const proxy = new DeviceGateway();
+      await proxy.initWorkspace('user-1', 'dev-1', '/proj', 60_000);
+
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+        { deviceId: 'dev-1', timeout: 60_000, userId: 'user-1' },
+        { method: 'initWorkspace', params: { scope: '/proj' } },
+      );
+    });
+  });
+
   describe('getClient (lazy initialization)', () => {
     it('should return null when URL is missing', async () => {
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.queryDeviceStatus('user-1');
 
       expect(result).toEqual({ deviceCount: 0, online: false });
@@ -432,7 +543,7 @@ describe('DeviceProxy', () => {
 
     it('should return null when token is missing', async () => {
       mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       const result = await proxy.queryDeviceStatus('user-1');
 
       expect(result).toEqual({ deviceCount: 0, online: false });
@@ -444,7 +555,7 @@ describe('DeviceProxy', () => {
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
       mockClient.queryDeviceStatus.mockResolvedValue({ deviceCount: 1, online: true });
 
-      const proxy = new DeviceProxy();
+      const proxy = new DeviceGateway();
       await proxy.queryDeviceStatus('user-1');
       await proxy.queryDeviceStatus('user-2');
 

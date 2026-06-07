@@ -118,8 +118,8 @@ vi.mock('@/server/modules/Mecha', () => ({
   serverMessagesEngine: vi.fn().mockResolvedValue([{ content: 'test', role: 'user' }]),
 }));
 
-vi.mock('@/server/services/toolExecution/deviceProxy', () => ({
-  deviceProxy: mockDeviceProxy,
+vi.mock('@/server/services/toolExecution/deviceGateway', () => ({
+  deviceGateway: mockDeviceProxy,
 }));
 
 vi.mock('model-bank', async (importOriginal) => {

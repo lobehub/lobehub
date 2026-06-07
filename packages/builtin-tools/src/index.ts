@@ -55,8 +55,20 @@ export const defaultToolIds = [
 /**
  * Tool IDs that are always enabled regardless of user selection.
  * These are core system tools that the agent needs to function properly.
+ *
+ * `lobe-agent` is listed first: its built-in capabilities (plan + todo management,
+ * sub-agent dispatch, visual-media fallback) should be available on every agent-mode turn,
+ * not gated behind explicit injection. NOTE: these rules only apply in agent mode — chat
+ * mode (`enableAgentMode === false`) drops `alwaysOnToolIds` entirely. In manual
+ * skill-activate mode the discovery tools in `manualModeExcludeToolIds` are still removed
+ * from the defaults before the enable checker runs, so they end up disabled there.
+ *
+ * This list is also the source for the chat-input Tools popover's read-only "Pinned"
+ * section (`builtinToolSelectors.fixedDisplayMetaList`), so users can see what the app
+ * keeps active — that selector applies the same manual-mode exclusion to stay truthful.
  */
 export const alwaysOnToolIds = [
+  LobeAgentManifest.identifier,
   LobeActivatorManifest.identifier,
   SkillsManifest.identifier,
   SkillStoreManifest.identifier,

@@ -24,6 +24,12 @@ export const listFileSchema = z.array(fileSchema);
 export type FileType = z.infer<typeof fileSchema>;
 
 const DEFAULT_S3_REGION = 'us-east-1';
+const PUBLIC_READ_ACL_HEADER = 'public-read';
+
+export interface PreSignedUpload {
+  headers?: Record<string, string>;
+  url: string;
+}
 
 export class S3 {
   private readonly client: S3Client;
@@ -133,13 +139,23 @@ export class S3 {
   }
 
   public async createPreSignedUrl(key: string): Promise<string> {
+    const upload = await this.createPreSignedUpload(key);
+    return upload.url;
+  }
+
+  public async createPreSignedUpload(key: string): Promise<PreSignedUpload> {
     const command = new PutObjectCommand({
-      ACL: this.setAcl ? 'public-read' : undefined,
+      ACL: this.setAcl ? PUBLIC_READ_ACL_HEADER : undefined,
       Bucket: this.bucket,
       Key: key,
     });
 
-    return getSignedUrl(this.client, command, { expiresIn: 3600 });
+    const url = await getSignedUrl(this.client, command, { expiresIn: 3600 });
+
+    return {
+      headers: this.setAcl ? { 'x-amz-acl': PUBLIC_READ_ACL_HEADER } : undefined,
+      url,
+    };
   }
 
   public async createPreSignedUrlForPreview(key: string, expiresIn?: number): Promise<string> {
