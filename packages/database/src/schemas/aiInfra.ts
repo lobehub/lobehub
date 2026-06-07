@@ -7,6 +7,7 @@ import {
   pgTable,
   primaryKey,
   text,
+  uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
 import type { AiModelSettings } from 'model-bank';
@@ -20,6 +21,13 @@ export const aiProviders = pgTable(
   {
     id: varchar('id', { length: 64 }).notNull(),
     name: text('name'),
+
+    /**
+     * Surrogate key for the online workspace-scoped rebuild (LOBE-10056). Added
+     * nullable + DEFAULT so it's a catalog-only change (no table rewrite); a
+     * later manual step backfills history and adds NOT NULL.
+     */
+    _id: uuid('_id').defaultRandom(),
 
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
@@ -61,6 +69,14 @@ export const aiModels = pgTable(
   'ai_models',
   {
     id: varchar('id', { length: 150 }).notNull(),
+
+    /**
+     * Surrogate key for the online workspace-scoped rebuild (LOBE-10056). Added
+     * nullable + DEFAULT so it's a catalog-only change (no table rewrite); a
+     * later manual step backfills history and adds NOT NULL.
+     */
+    _id: uuid('_id').defaultRandom(),
+
     displayName: varchar('display_name', { length: 200 }),
     description: text('description'),
     organization: varchar('organization', { length: 100 }),
