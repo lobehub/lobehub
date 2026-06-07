@@ -11,10 +11,10 @@ import {
 } from '@lobehub/editor';
 import { Editor, useEditor } from '@lobehub/editor/react';
 import { Flexbox, Icon, TextArea } from '@lobehub/ui';
-import { Select, Switch } from '@lobehub/ui/base-ui';
+import { Switch } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
-import { Bot, ListChecks, RotateCcw, Scale, ShieldCheck, SquareTerminal } from 'lucide-react';
+import { Bot, Hand, ListChecks, RefreshCw, RotateCcw, Scale, ShieldCheck } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -36,16 +36,20 @@ export interface CriterionView {
   verifierType: VerifyVerifierType;
 }
 
+// `program` checks aren't executed in v1, so the picker only offers agent / llm.
 const VERIFIERS: { icon: LucideIcon; type: VerifyVerifierType }[] = [
-  { icon: SquareTerminal, type: 'program' },
   { icon: Bot, type: 'agent' },
   { icon: Scale, type: 'llm' },
+];
+
+const ON_FAILS: { icon: LucideIcon; type: VerifyOnFailStrategy }[] = [
+  { icon: RefreshCw, type: 'auto_repair' },
+  { icon: Hand, type: 'manual' },
 ];
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   cardActive: css`
     border-color: ${cssVar.colorPrimary};
-    background: ${cssVar.colorPrimaryBg};
   `,
   cardDesc: css`
     font-size: 12px;
@@ -215,8 +219,6 @@ const CriterionDetail = memo<CriterionDetailProps>(({ criterion }) => {
         />
       </Flexbox>
 
-      <div className={styles.divider} />
-
       {/* Judging rubric — rich editor */}
       <Field
         icon={ListChecks}
@@ -233,6 +235,8 @@ const CriterionDetail = memo<CriterionDetailProps>(({ criterion }) => {
           />
         </div>
       </Field>
+
+      <div className={styles.divider} />
 
       {/* Required */}
       <Flexbox
@@ -279,21 +283,26 @@ const CriterionDetail = memo<CriterionDetailProps>(({ criterion }) => {
 
       {/* On failure */}
       <Field icon={RotateCcw} label={t('builtins.lobe-agent.verifyPlan.portal.onFail.title')}>
-        <Select
-          disabled={!editable}
-          value={onFail}
-          options={[
-            {
-              label: t('builtins.lobe-agent.verifyPlan.portal.onFail.auto_repair'),
-              value: 'auto_repair',
-            },
-            {
-              label: t('builtins.lobe-agent.verifyPlan.portal.onFail.manual'),
-              value: 'manual',
-            },
-          ]}
-          onChange={(value) => patch({ onFail: value as VerifyOnFailStrategy })}
-        />
+        <Flexbox horizontal gap={8}>
+          {ON_FAILS.map(({ type, icon }) => (
+            <Flexbox
+              className={cx(styles.verifierCard, onFail === type && styles.cardActive)}
+              gap={6}
+              key={type}
+              onClick={() => patch({ onFail: type })}
+            >
+              <Flexbox horizontal align="center" gap={6}>
+                <Icon className={styles.verifierIcon} icon={icon} size={15} />
+                <span className={styles.cardTitle}>
+                  {t(`builtins.lobe-agent.verifyPlan.portal.onFail.${type}` as any)}
+                </span>
+              </Flexbox>
+              <span className={styles.cardDesc}>
+                {t(`builtins.lobe-agent.verifyPlan.portal.onFail.${type}Desc` as any)}
+              </span>
+            </Flexbox>
+          ))}
+        </Flexbox>
       </Field>
     </Flexbox>
   );

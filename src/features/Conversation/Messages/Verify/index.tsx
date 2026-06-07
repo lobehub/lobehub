@@ -1,11 +1,9 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { Info } from 'lucide-react';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { CheckerDock, RunResult } from '@/features/Verify';
 import { useVerifyState } from '@/features/Verify/hooks';
@@ -20,18 +18,6 @@ const useStyles = createStyles(({ css, token }) => ({
     border-radius: 16px;
     background: ${token.colorBgElevated};
   `,
-  foot: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-
-    padding-block: 10px;
-    padding-inline: 16px;
-    border-block-start: 1px solid ${token.colorBorderSecondary};
-
-    font-size: 12px;
-    color: ${token.colorTextTertiary};
-  `,
 }));
 
 interface VerifyMessageProps {
@@ -43,15 +29,15 @@ interface VerifyMessageProps {
  * Renders a `role='verify'` message — the Agent Run delivery-checker card. The
  * run's `operationId` is carried on `metadata.verifyOperationId`. Renders as a
  * single card: the run result header (round + status) on top, then the checker
- * results + actions, then the snapshot note. Unlike assistant/user messages this
- * is a standalone card group (no avatar bubble).
+ * results + actions. Unlike assistant/user messages this is a standalone card
+ * group (no avatar bubble).
  */
 const VerifyMessage = memo<VerifyMessageProps>(({ id }) => {
   const { styles, theme } = useStyles();
-  const { t } = useTranslation('verify');
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual);
   const operationId = item?.metadata?.verifyOperationId;
-  const round = item?.metadata?.verifyRound ?? 1;
+  // Sequence number among all verify messages in the thread (not the repair round).
+  const ordinal = useConversationStore(dataSelectors.getVerifyOrdinal(id));
 
   const { data: state } = useVerifyState(operationId ?? null);
   const phase = phaseFromStatus(state?.verifyStatus);
@@ -61,12 +47,8 @@ const VerifyMessage = memo<VerifyMessageProps>(({ id }) => {
   return (
     <Flexbox paddingBlock={8}>
       <div className={styles.card} style={{ background: phaseCardBackground(phase, theme) }}>
-        <RunResult embedded operationId={operationId} round={round} />
+        <RunResult embedded operationId={operationId} round={ordinal} />
         <CheckerDock embedded operationId={operationId} />
-        <div className={styles.foot}>
-          <Icon icon={Info} size={14} />
-          <span>{t('result.foot')}</span>
-        </div>
       </div>
     </Flexbox>
   );

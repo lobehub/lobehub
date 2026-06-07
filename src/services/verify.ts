@@ -52,6 +52,17 @@ export class VerifyService {
   ): Promise<{ threadId: string | null; topicId: string | null } | null> =>
     lambdaClient.verify.getVerifierThread.query({ operationId });
 
+  /** Model / token / latency of an LLM verifier's judgment (by tracing id). */
+  getVerifierTracing = (
+    tracingId: string,
+  ): Promise<{
+    inputTokens: number | null;
+    latencyMs: number | null;
+    model: string | null;
+    outputTokens: number | null;
+    provider: string | null;
+  } | null> => lambdaClient.verify.getVerifierTracing.query({ tracingId });
+
   generateDraftPlan = (input: GenerateDraftPlanInput): Promise<VerifyCheckItem[]> =>
     lambdaClient.verify.generateDraftPlan.mutate(input) as Promise<VerifyCheckItem[]>;
 

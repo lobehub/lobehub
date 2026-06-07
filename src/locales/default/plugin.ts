@@ -164,7 +164,11 @@ export default {
   'builtins.lobe-agent.verifyPlan.portal.fields.instruction': 'Judging rubric',
   'builtins.lobe-agent.verifyPlan.portal.fields.title': 'Check title',
   'builtins.lobe-agent.verifyPlan.portal.onFail.auto_repair': 'Auto repair',
+  'builtins.lobe-agent.verifyPlan.portal.onFail.auto_repairDesc':
+    'On failure, automatically start a repair round and re-run the check.',
   'builtins.lobe-agent.verifyPlan.portal.onFail.manual': 'Handle manually',
+  'builtins.lobe-agent.verifyPlan.portal.onFail.manualDesc':
+    'On failure, stop and leave the next step to you.',
   'builtins.lobe-agent.verifyPlan.portal.onFail.title': 'On failure',
   'builtins.lobe-agent.verifyPlan.portal.required.desc':
     'When on, a failure on this check blocks the run from being delivered.',

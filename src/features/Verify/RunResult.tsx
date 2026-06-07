@@ -8,6 +8,19 @@ import { useVerifyResults, useVerifyState } from './hooks';
 import { countResults, type DockPhase, phaseFromStatus } from './utils';
 
 const useStyles = createStyles(({ css, token }) => ({
+  badge: css`
+    display: inline-flex;
+    flex: none;
+    gap: 5px;
+    align-items: center;
+
+    padding-block: 4px;
+    padding-inline: 10px;
+    border-radius: 999px;
+
+    font-size: 12px;
+    font-weight: 600;
+  `,
   body: css`
     padding-block: 12px;
     padding-inline: 16px;
@@ -123,6 +136,13 @@ const RunResult = memo<RunResultProps>(({ operationId, round = 1, embedded }) =>
     success: theme.colorSuccess,
     warning: theme.colorWarning,
   } as const;
+  // Deeper, more readable text color over the tinted badge fill.
+  const badgeTextMap = {
+    default: theme.colorTextSecondary,
+    error: theme.colorErrorTextActive,
+    success: theme.colorSuccessTextActive,
+    warning: theme.colorWarningTextActive,
+  } as const;
 
   const header = (
     <div className={styles.head}>
@@ -135,15 +155,16 @@ const RunResult = memo<RunResultProps>(({ operationId, round = 1, embedded }) =>
           {t(meta.subKey as any, { passed: counts.passed, total: counts.total } as any)}
         </div>
       </Flexbox>
-      <Flexbox
-        horizontal
-        align="center"
-        gap={5}
-        style={{ color: badgeColorMap[meta.badge.color], fontSize: 12, fontWeight: 600 }}
+      <span
+        className={styles.badge}
+        style={{
+          background: `color-mix(in srgb, ${badgeColorMap[meta.badge.color]} 12%, transparent)`,
+          color: badgeTextMap[meta.badge.color],
+        }}
       >
         <Icon icon={meta.badge.icon} size={14} />
         {t(`badge.${meta.badge.key}` as any)}
-      </Flexbox>
+      </span>
     </div>
   );
 

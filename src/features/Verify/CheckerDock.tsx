@@ -27,8 +27,13 @@ import { useVerifyResults, useVerifyState } from './hooks';
 import { countResults, phaseFromStatus } from './utils';
 
 const useStyles = createStyles(({ css, token }) => ({
+  actions: css`
+    margin-block-start: 12px;
+    border-block-start: 1px solid ${token.colorBorderSecondary};
+  `,
   body: css`
-    padding: 12px;
+    padding-block: 0 12px;
+    padding-inline: 12px;
     border-block-start: 1px solid ${token.colorBorderSecondary};
   `,
   checkRow: css`
@@ -37,11 +42,11 @@ const useStyles = createStyles(({ css, token }) => ({
     gap: 8px;
     align-items: start;
 
-    padding: 8px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: 10px;
+    padding-block: 12px;
 
-    background: ${token.colorFillQuaternary};
+    &:not(:last-child) {
+      border-block-end: 1px solid ${token.colorBorderSecondary};
+    }
   `,
   chevron: css`
     flex: none;
@@ -49,10 +54,10 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   clickable: css`
     cursor: pointer;
-    transition: filter 150ms ${token.motionEaseOut};
+    transition: background 150ms ${token.motionEaseOut};
 
     &:hover {
-      filter: brightness(1.06);
+      background: ${token.colorFillQuaternary};
     }
   `,
   desc: css`
@@ -343,8 +348,11 @@ const CheckerDock = memo<CheckerDockProps>(({ operationId, embedded }) => {
         renderEditor()
       ) : (
         <>
-          <Flexbox gap={7}>{plan.map((item) => renderCheckRow(item))}</Flexbox>
-          {renderActions()}
+          <Flexbox gap={0}>{plan.map((item) => renderCheckRow(item))}</Flexbox>
+          {(() => {
+            const actions = renderActions();
+            return actions ? <div className={styles.actions}>{actions}</div> : null;
+          })()}
         </>
       )}
     </div>
