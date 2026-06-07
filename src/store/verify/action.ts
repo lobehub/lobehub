@@ -29,6 +29,7 @@ export class ActionImpl {
   #pendingCriteria = new Map<string, VerifyCriterionEdit>();
   #pendingInstructions = new Map<string, string>();
   #pendingRubricConfigs = new Map<string, VerifyRubricConfig>();
+  #pendingRubricTitles = new Map<string, string>();
   #flush: ReturnType<typeof debounce>;
 
   constructor(set: Setter, get: () => Store, _api?: unknown) {
@@ -46,9 +47,11 @@ export class ActionImpl {
     const criteria = [...this.#pendingCriteria.entries()];
     const instructions = [...this.#pendingInstructions.entries()];
     const rubricConfigs = [...this.#pendingRubricConfigs.entries()];
+    const rubricTitles = [...this.#pendingRubricTitles.entries()];
     this.#pendingCriteria.clear();
     this.#pendingInstructions.clear();
     this.#pendingRubricConfigs.clear();
+    this.#pendingRubricTitles.clear();
 
     await Promise.all([
       ...criteria.map(([id, value]) =>
@@ -64,6 +67,11 @@ export class ActionImpl {
       ...rubricConfigs.map(([id, config]) =>
         verifyService.updateRubricConfig(id, config).catch((error) => {
           console.error('[verify] failed to persist rubric config', id, error);
+        }),
+      ),
+      ...rubricTitles.map(([id, title]) =>
+        verifyService.updateRubricTitle(id, title).catch((error) => {
+          console.error('[verify] failed to persist rubric title', id, error);
         }),
       ),
     ]);
@@ -109,6 +117,15 @@ export class ActionImpl {
       ...this.#pendingRubricConfigs.get(rubricId),
       ...patch,
     });
+    this.#flush();
+  };
+
+  /** Rename a rubric (the delivery-standard title) — optimistic + debounced. */
+  updateRubricTitle = (rubricId: string, title: string): void => {
+    const { rubricTitleEdits } = this.#get();
+    this.#set({ rubricTitleEdits: { ...rubricTitleEdits, [rubricId]: title } });
+
+    this.#pendingRubricTitles.set(rubricId, title);
     this.#flush();
   };
 }

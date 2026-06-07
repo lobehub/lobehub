@@ -111,6 +111,10 @@ export class VerifyService {
   /** Update a rubric's run-policy config (e.g. maxRepairRounds). */
   updateRubricConfig = (id: string, config: VerifyRubricConfig): Promise<unknown> =>
     lambdaClient.verify.updateRubric.mutate({ id, value: { config } });
+
+  /** Rename a rubric (the delivery-standard title). */
+  updateRubricTitle = (id: string, title: string): Promise<unknown> =>
+    lambdaClient.verify.updateRubric.mutate({ id, value: { title } });
 }
 
 export const verifyService = new VerifyService();

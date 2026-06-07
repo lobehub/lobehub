@@ -1,9 +1,9 @@
 'use client';
 
 import { DEFAULT_MAX_REPAIR_ROUNDS } from '@lobechat/types';
-import { Flexbox, Icon, InputNumber } from '@lobehub/ui';
+import { Flexbox, Icon, Input, InputNumber } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Type } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -40,23 +40,37 @@ interface RubricConfigProps {
 }
 
 /**
- * The right-side config panel for the rubric (delivery-standard) run policy.
- * Currently exposes `maxRepairRounds` — the cap on automatic repair iterations
- * before a failing run stops. Writes through the verify store (optimistic +
- * debounced) so the edit is reflected immediately and persisted to the rubric.
+ * The right-side config panel for the rubric (delivery-standard): its name plus
+ * the run policy (`maxRepairRounds`). Writes through the verify store (optimistic
+ * + debounced) so edits reflect immediately and persist to the rubric.
  */
 const RubricConfig = memo<RubricConfigProps>(({ rubricId }) => {
   const { t } = useTranslation('plugin');
 
   const { data: rubric } = useRubric(rubricId);
   const updateRubricConfig = useVerifyStore((s) => s.updateRubricConfig);
-  const edit = useVerifyStore(verifySelectors.rubricConfigEdit(rubricId));
+  const updateRubricTitle = useVerifyStore((s) => s.updateRubricTitle);
+  const configEdit = useVerifyStore(verifySelectors.rubricConfigEdit(rubricId));
+  const titleEdit = useVerifyStore(verifySelectors.rubricTitleEdit(rubricId));
 
+  const title = titleEdit ?? rubric?.title ?? '';
   const maxRepairRounds =
-    edit.maxRepairRounds ?? rubric?.config?.maxRepairRounds ?? DEFAULT_MAX_REPAIR_ROUNDS;
+    configEdit.maxRepairRounds ?? rubric?.config?.maxRepairRounds ?? DEFAULT_MAX_REPAIR_ROUNDS;
 
   return (
     <Flexbox gap={16} paddingBlock={16} style={{ height: '100%' }}>
+      {/* Standard name */}
+      <Flexbox gap={8}>
+        <Flexbox horizontal align="center" gap={6}>
+          <Icon className={styles.fieldIcon} icon={Type} size={14} />
+          <span className={styles.fieldLabel}>
+            {t('builtins.lobe-agent.verifyPlan.portal.rubric.name')}
+          </span>
+        </Flexbox>
+        <Input value={title} onChange={(e) => updateRubricTitle(rubricId, e.target.value)} />
+      </Flexbox>
+
+      {/* Max repair rounds */}
       <Flexbox horizontal align="center" className={styles.row} gap={12} justify="space-between">
         <Flexbox gap={2} style={{ minWidth: 0 }}>
           <Flexbox horizontal align="center" gap={6}>

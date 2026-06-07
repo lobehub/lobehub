@@ -103,6 +103,7 @@
   "builtins.lobe-agent.verifyPlan.portal.required.title": "必须完成",
   "builtins.lobe-agent.verifyPlan.portal.rubric.maxRepairRounds.desc": "未通过时，最多带着失败反馈自动重跑几轮后停止。设为 0 则关闭自动修复。",
   "builtins.lobe-agent.verifyPlan.portal.rubric.maxRepairRounds.title": "最大修复轮数",
+  "builtins.lobe-agent.verifyPlan.portal.rubric.name": "验收标准名称",
   "builtins.lobe-agent.verifyPlan.portal.rubric.title": "验收标准设置",
   "builtins.lobe-agent.verifyPlan.portal.title": "检查项配置",
   "builtins.lobe-agent.verifyPlan.portal.verifier.agent.desc": "独立检查 Agent 读取轨迹、文件、diff、PR 后判断。",

@@ -176,6 +176,7 @@ export default {
   'builtins.lobe-agent.verifyPlan.portal.rubric.maxRepairRounds.desc':
     'How many times a failing run is automatically re-run with the failure feedback before it stops. Set to 0 to disable auto-repair.',
   'builtins.lobe-agent.verifyPlan.portal.rubric.maxRepairRounds.title': 'Max repair rounds',
+  'builtins.lobe-agent.verifyPlan.portal.rubric.name': 'Standard name',
   'builtins.lobe-agent.verifyPlan.portal.rubric.title': 'Standard settings',
   'builtins.lobe-agent.verifyPlan.portal.title': 'Check configuration',
   'builtins.lobe-agent.verifyPlan.portal.verifier.agent.desc':

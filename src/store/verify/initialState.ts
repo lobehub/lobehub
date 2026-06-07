@@ -26,10 +26,16 @@ export interface State {
    * in-flight config edits (e.g. maxRepairRounds) pending a debounced save.
    */
   rubricConfigEdits: Record<string, VerifyRubricConfig>;
+  /**
+   * Per-rubric title edit overlay, keyed by `verify_rubrics.id`. Holds the
+   * in-flight delivery-standard rename pending a debounced save.
+   */
+  rubricTitleEdits: Record<string, string>;
 }
 
 export const initialState: State = {
   criterionEdits: {},
   instructionEdits: {},
   rubricConfigEdits: {},
+  rubricTitleEdits: {},
 };

@@ -1,8 +1,7 @@
 import { BuiltinToolsPortalTitles } from '@lobechat/builtin-tools/portals';
 import type { BuiltinPortalTitle } from '@lobechat/types';
-import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { ArrowLeft } from 'lucide-react';
 
 import PluginAvatar from '@/features/PluginAvatar';
 import { useChatStore } from '@/store/chat';
@@ -11,8 +10,7 @@ import { pluginHelpers, useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 
 const Title = () => {
-  const [closeToolUI, toolUIIdentifier = '', messageId] = useChatStore((s) => [
-    s.closeToolUI,
+  const [toolUIIdentifier = '', messageId] = useChatStore((s) => [
     chatPortalSelectors.toolUIIdentifier(s),
     chatPortalSelectors.toolMessageId(s),
   ]);
@@ -23,27 +21,27 @@ const Title = () => {
   const pluginTitle = pluginHelpers.getPluginTitle(pluginMeta) ?? toolUIIdentifier;
 
   // A tool may ship its own portal header content; otherwise fall back to the
-  // generic plugin avatar + title. The framework keeps owning the back chrome.
+  // generic plugin avatar + title. The back/close chrome is owned by the header
+  // wrapper (HeaderChrome), so the title slot must not add its own back arrow.
   const CustomTitle = BuiltinToolsPortalTitles[toolUIIdentifier] as BuiltinPortalTitle | undefined;
 
+  if (CustomTitle) {
+    return (
+      <CustomTitle
+        apiName={message?.plugin?.apiName}
+        identifier={toolUIIdentifier}
+        messageId={messageId || ''}
+        params={toolUIParams}
+      />
+    );
+  }
+
   return (
-    <Flexbox horizontal align={'center'} gap={CustomTitle ? 8 : 4}>
-      <ActionIcon icon={ArrowLeft} size={'small'} onClick={() => closeToolUI()} />
-      {CustomTitle ? (
-        <CustomTitle
-          apiName={message?.plugin?.apiName}
-          identifier={toolUIIdentifier}
-          messageId={messageId || ''}
-          params={toolUIParams}
-        />
-      ) : (
-        <>
-          <PluginAvatar identifier={toolUIIdentifier} size={28} />
-          <Text style={{ fontSize: 16 }} type={'secondary'}>
-            {pluginTitle}
-          </Text>
-        </>
-      )}
+    <Flexbox horizontal align={'center'} gap={8}>
+      <PluginAvatar identifier={toolUIIdentifier} size={28} />
+      <Text style={{ fontSize: 16 }} type={'secondary'}>
+        {pluginTitle}
+      </Text>
     </Flexbox>
   );
 };

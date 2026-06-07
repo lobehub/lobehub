@@ -15,8 +15,12 @@ const instructionEdit = (documentId?: string) => (s: Store) =>
 const rubricConfigEdit = (rubricId?: string) => (s: Store) =>
   (rubricId ? s.rubricConfigEdits[rubricId] : undefined) ?? EMPTY_RUBRIC_CONFIG;
 
+const rubricTitleEdit = (rubricId?: string) => (s: Store) =>
+  rubricId ? s.rubricTitleEdits[rubricId] : undefined;
+
 export const verifySelectors = {
   criterionEdit,
   instructionEdit,
   rubricConfigEdit,
+  rubricTitleEdit,
 };
