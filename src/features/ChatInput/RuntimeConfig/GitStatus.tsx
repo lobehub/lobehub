@@ -6,17 +6,17 @@ import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
 import RingLoadingIcon from '@/components/RingLoading';
-import { deviceService } from '@/services/device';
-import { electronGitService } from '@/services/electron/git';
 import { electronSystemService } from '@/services/electron/system';
+import { gitService } from '@/services/git';
+import {
+  useFetchGitAheadBehind,
+  useFetchGitInfo,
+  useFetchGitWorkingTreeStatus,
+} from '@/store/device';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 import BranchSwitcher from './BranchSwitcher';
-import { useDeviceGitInfo } from './useDeviceGitInfo';
-import { useGitAheadBehind } from './useGitAheadBehind';
-import { useGitInfo } from './useGitInfo';
-import { useWorkingTreeStatus } from './useWorkingTreeStatus';
 
 const styles = createStaticStyles(({ css }) => {
   return {
@@ -148,19 +148,14 @@ interface GitStatusProps {
 const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
   const { t } = useTranslation('device');
   const local = !deviceId;
-  // Local machine probes its own filesystem; a remote device answers over RPC.
-  const { data: localInfo, mutate } = useGitInfo(local ? path : undefined, isGithub);
-  const { data: localWorkingStatus, mutate: mutateWorkingStatus } = useWorkingTreeStatus(
-    local ? path : undefined,
+  // Transport (Electron IPC vs device RPC) is decided inside the service; the
+  // component just reads, identically for local and remote.
+  const { data, mutate } = useFetchGitInfo(deviceId, path, isGithub);
+  const { data: workingStatus, mutate: mutateWorkingStatus } = useFetchGitWorkingTreeStatus(
+    deviceId,
+    path,
   );
-  const { data: localAheadBehind, mutate: mutateAheadBehind } = useGitAheadBehind(
-    local ? path : undefined,
-  );
-  const { data: remoteGit, refetch: refetchRemoteGit } = useDeviceGitInfo(deviceId, path, isGithub);
-
-  const data = local ? localInfo : remoteGit?.info;
-  const workingStatus = local ? localWorkingStatus : remoteGit?.workingStatus;
-  const aheadBehind = local ? localAheadBehind : remoteGit?.aheadBehind;
+  const { data: aheadBehind, mutate: mutateAheadBehind } = useFetchGitAheadBehind(deviceId, path);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [pulling, setPulling] = useState(false);
   const [pushing, setPushing] = useState(false);
@@ -185,12 +180,8 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
   }, [showRightPanel, workingSidebarTab, setWorkingSidebarTab, toggleRightPanel]);
 
   const refreshAfterSync = useCallback(async () => {
-    if (local) {
-      await Promise.all([mutate(), mutateWorkingStatus(), mutateAheadBehind()]);
-    } else {
-      await refetchRemoteGit();
-    }
-  }, [local, mutate, mutateWorkingStatus, mutateAheadBehind, refetchRemoteGit]);
+    await Promise.all([mutate(), mutateWorkingStatus(), mutateAheadBehind()]);
+  }, [mutate, mutateWorkingStatus, mutateAheadBehind]);
 
   const syncBusy = pulling || pushing;
 
@@ -198,10 +189,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
     if (pulling || pushing) return;
     setPulling(true);
     try {
-      // Local pulls over IPC; a remote device pulls over RPC.
-      const result = deviceId
-        ? await deviceService.pullGitBranch(deviceId, path)
-        : await electronGitService.pullGitBranch({ path });
+      const result = await gitService.pullGitBranch({ deviceId, path });
       if (result.success) {
         if (result.noop) {
           message.info(t('workingDirectory.pullNoop'));
@@ -221,10 +209,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
     if (pulling || pushing) return;
     setPushing(true);
     try {
-      // Local pushes over IPC; a remote device pushes over RPC.
-      const result = deviceId
-        ? await deviceService.pushGitBranch(deviceId, path)
-        : await electronGitService.pushGitBranch({ path });
+      const result = await gitService.pushGitBranch({ deviceId, path });
       if (result.success) {
         if (result.noop) {
           message.info(t('workingDirectory.pushNoop'));
@@ -290,17 +275,12 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
       deviceId={deviceId}
       open={switcherOpen}
       path={path}
-      workingStatus={workingStatus}
       onExternalRefresh={refreshAfterSync}
       onOpenChange={setSwitcherOpen}
       onAfterCheckout={() => {
-        if (local) {
-          void mutate();
-          void mutateWorkingStatus();
-          void mutateAheadBehind();
-        } else {
-          void refetchRemoteGit();
-        }
+        void mutate();
+        void mutateWorkingStatus();
+        void mutateAheadBehind();
       }}
     >
       <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>

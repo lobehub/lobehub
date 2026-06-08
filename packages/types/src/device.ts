@@ -103,37 +103,60 @@ export interface DeviceListItem {
 }
 
 /**
- * Git status of a device's working directory, returned by the `gitInfo` device
- * RPC so a remote device (or web client) can render branch / file changes / PR
- * the same way the local desktop does. Field shapes mirror the desktop git
- * service so the UI consumes both paths interchangeably.
+ * Branch name + detached-HEAD flag for a working directory, returned by the
+ * `getGitBranch` device RPC. Mirrors the desktop `GitBranchInfo`.
  */
-export interface DeviceGitInfo {
-  /** Commit divergence vs the upstream tracking ref. */
-  aheadBehind: {
-    ahead: number;
-    behind: number;
-    hasUpstream: boolean;
-    pushTarget?: string;
-    pushTargetExists?: boolean;
-    upstream?: string;
-  };
-  /** Branch name + linked GitHub pull request (when the repo is a GitHub remote). */
-  info: {
-    branch?: string;
-    detached?: boolean;
-    extraCount?: number;
-    ghMissing?: boolean;
-    pullRequest?: { number: number; state: string; title: string; url: string } | null;
-  };
-  /** Working-tree dirty-file counts. */
-  workingStatus: {
-    added: number;
-    clean: boolean;
-    deleted: number;
-    modified: number;
-    total: number;
-  };
+export interface DeviceGitBranchInfo {
+  /** Branch short name, or short SHA when in detached HEAD state. */
+  branch?: string;
+  /** True when HEAD is detached (no branch ref). */
+  detached?: boolean;
+}
+
+/** A GitHub pull request linked to a branch. */
+export interface DeviceGitLinkedPullRequest {
+  number: number;
+  state: string;
+  title: string;
+  url: string;
+}
+
+/**
+ * Result of the `getLinkedPullRequest` device RPC: the PR linked to a branch
+ * (when the repo is a GitHub remote). Mirrors the desktop shape.
+ */
+export interface DeviceGitLinkedPullRequestResult {
+  /** Additional open PRs targeting the same head branch, beyond the primary one. */
+  extraCount?: number;
+  /** Null when no open PR is linked to the branch. */
+  pullRequest: DeviceGitLinkedPullRequest | null;
+  /** 'ok' — lookup succeeded; 'gh-missing' — gh CLI unavailable; 'error' — other failure. */
+  status: 'error' | 'gh-missing' | 'ok';
+}
+
+/**
+ * Working-tree dirty-file counts for a working directory, returned by the
+ * `getGitWorkingTreeStatus` device RPC. Mirrors the desktop shape.
+ */
+export interface DeviceGitWorkingTreeStatus {
+  added: number;
+  clean: boolean;
+  deleted: number;
+  modified: number;
+  total: number;
+}
+
+/**
+ * Commit divergence vs the upstream tracking ref, returned by the
+ * `getGitAheadBehind` device RPC. Mirrors the desktop shape.
+ */
+export interface DeviceGitAheadBehind {
+  ahead: number;
+  behind: number;
+  hasUpstream: boolean;
+  pushTarget?: string;
+  pushTargetExists?: boolean;
+  upstream?: string;
 }
 
 /**

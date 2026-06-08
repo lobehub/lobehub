@@ -22,8 +22,8 @@ import { Fragment, memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import { useGitInfo } from '@/features/ChatInput/RuntimeConfig/useGitInfo';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
+import { useFetchGitInfo } from '@/store/device';
 
 import FileRow from './FileRow';
 import GroupHeader from './GroupHeader';
@@ -232,8 +232,10 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
   const headRef = data?.mode === 'branch' ? data.headRef : undefined;
   // Parent branch — only needed for the group header label, so we only fetch
   // it when there's at least one submodule group to render alongside it.
-  // SWR-deduped under the hood by `useGitInfo`'s own cache key.
-  const { data: parentGitInfo } = useGitInfo(
+  // SWR-deduped under the hood by `useFetchGitInfo`'s own cache key. This review
+  // sidebar is local-only, so no deviceId.
+  const { data: parentGitInfo } = useFetchGitInfo(
+    undefined,
     submoduleGroups.length > 0 ? workingDirectory : undefined,
   );
   const [viewMode, setViewMode] = useLocalStorageState<'unified' | 'split'>(

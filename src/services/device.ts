@@ -26,26 +26,6 @@ class DeviceService {
     return lambdaClient.device.statPath.query({ deviceId, path });
   }
 
-  /** Local branches of a directory on a remote device. */
-  listGitBranches(deviceId: string, path: string) {
-    return lambdaClient.device.listGitBranches.query({ deviceId, path });
-  }
-
-  /** Checkout (or create) a branch in a directory on a remote device. */
-  checkoutGitBranch(input: Parameters<DeviceClient['checkoutGitBranch']['mutate']>[0]) {
-    return lambdaClient.device.checkoutGitBranch.mutate(input);
-  }
-
-  /** Pull (`--ff-only`) the current branch of a directory on a remote device. */
-  pullGitBranch(deviceId: string, path: string) {
-    return lambdaClient.device.pullGitBranch.mutate({ deviceId, path });
-  }
-
-  /** Push the current branch of a directory on a remote device. */
-  pushGitBranch(deviceId: string, path: string) {
-    return lambdaClient.device.pushGitBranch.mutate({ deviceId, path });
-  }
-
   /** Probe whether an agent platform (openclaw / hermes) is available on a device. */
   checkCapability(input: Parameters<DeviceClient['checkCapability']['query']>[0]) {
     return lambdaClient.device.checkCapability.query(input);

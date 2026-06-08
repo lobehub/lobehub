@@ -361,8 +361,20 @@ export default class GatewayConnectionCtr extends ControllerModule {
         return this.workspaceCtr.initWorkspace(params as InitWorkspaceParams);
       }
 
-      case 'gitInfo': {
-        return this.gitCtr.gitInfo(params as { isGithub?: boolean; scope: string });
+      case 'getGitBranch': {
+        return this.gitCtr.getGitBranch((params as { path: string }).path);
+      }
+
+      case 'getLinkedPullRequest': {
+        return this.gitCtr.getLinkedPullRequest(params as { branch: string; path: string });
+      }
+
+      case 'getGitWorkingTreeStatus': {
+        return this.gitCtr.getGitWorkingTreeStatus((params as { path: string }).path);
+      }
+
+      case 'getGitAheadBehind': {
+        return this.gitCtr.getGitAheadBehind((params as { path: string }).path);
       }
 
       case 'listGitBranches': {

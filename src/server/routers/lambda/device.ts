@@ -69,24 +69,51 @@ export const deviceRouter = router({
     }),
 
   /**
-   * Git status (branch / file changes / linked PR) for a directory on a remote
-   * device, fetched via the device's `gitInfo` RPC. Lets the UI render a remote
-   * device's git the same as the local desktop. Returns `null` when offline /
-   * the directory isn't a git repo.
+   * Granular git reads for a directory on a remote device, each via its own
+   * device RPC so the web/remote git status bar mirrors the local desktop's
+   * separate, differently-cadenced SWR hooks. Return `null` when offline / the
+   * directory isn't a git repo.
    */
-  gitInfo: deviceProcedure
-    .input(
-      z.object({
-        deviceId: z.string(),
-        isGithub: z.boolean().optional(),
-        scope: z.string(),
-      }),
-    )
+  gitBranch: deviceProcedure
+    .input(z.object({ deviceId: z.string(), path: z.string() }))
     .query(async ({ ctx, input }) => {
-      const result = await deviceGateway.gitInfo({
+      const result = await deviceGateway.gitBranch({
         deviceId: input.deviceId,
-        isGithub: input.isGithub,
-        scope: input.scope,
+        path: input.path,
+        userId: ctx.userId,
+      });
+      return result ?? null;
+    }),
+
+  gitLinkedPullRequest: deviceProcedure
+    .input(z.object({ branch: z.string(), deviceId: z.string(), path: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.gitLinkedPullRequest({
+        branch: input.branch,
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+      });
+      return result ?? null;
+    }),
+
+  gitWorkingTreeStatus: deviceProcedure
+    .input(z.object({ deviceId: z.string(), path: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.gitWorkingTreeStatus({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+      });
+      return result ?? null;
+    }),
+
+  gitAheadBehind: deviceProcedure
+    .input(z.object({ deviceId: z.string(), path: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.gitAheadBehind({
+        deviceId: input.deviceId,
+        path: input.path,
         userId: ctx.userId,
       });
       return result ?? null;

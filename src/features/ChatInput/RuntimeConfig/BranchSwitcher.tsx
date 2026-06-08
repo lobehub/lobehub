@@ -21,11 +21,10 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { message } from '@/components/AntdStaticMethods';
-import { deviceService } from '@/services/device';
-import { electronGitService } from '@/services/electron/git';
+import { gitService } from '@/services/git';
+import { useFetchGitWorkingTreeStatus } from '@/store/device';
 
 import { openCreateBranchModal } from './CreateBranchModal';
-import { useWorkingTreeStatus } from './useWorkingTreeStatus';
 
 const styles = createStaticStyles(({ css }) => ({
   branchLabel: css`
@@ -164,8 +163,6 @@ interface BranchSwitcherProps {
   onOpenChange: (open: boolean) => void;
   open: boolean;
   path: string;
-  /** Remote working-tree status, supplied by the caller when `deviceId` is set. */
-  workingStatus?: { clean: boolean; total: number };
 }
 
 const BranchSwitcher = memo<BranchSwitcherProps>(
@@ -177,7 +174,6 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     onOpenChange,
     onAfterCheckout,
     onExternalRefresh,
-    workingStatus: remoteWorkingStatus,
     children,
   }) => {
     const { t } = useTranslation('device');
@@ -191,19 +187,13 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
       mutate: mutateBranches,
     } = useSWR(
       open ? ['git-branches', deviceId ?? 'local', path] : null,
-      // Desktop talks to Electron over IPC; web / remote device goes through RPC.
-      () =>
-        deviceId
-          ? deviceService.listGitBranches(deviceId, path)
-          : electronGitService.listGitBranches(path),
+      () => gitService.listGitBranches({ deviceId, path }),
       { revalidateOnFocus: false, shouldRetryOnError: false },
     );
-    // The local working tree is probed over IPC; a remote device's status is
-    // passed in by the caller (it can't probe a remote fs here).
-    const { data: localWorkingStatus, mutate: mutateWorkingStatus } = useWorkingTreeStatus(
-      deviceId ? undefined : path,
+    const { data: workingStatus, mutate: mutateWorkingStatus } = useFetchGitWorkingTreeStatus(
+      deviceId,
+      path,
     );
-    const workingStatus = deviceId ? remoteWorkingStatus : localWorkingStatus;
     const [isRefreshing, setIsRefreshing] = useState(false);
 
     const handleRefresh = useCallback(async () => {
@@ -239,9 +229,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
         }
         setBusyBranch(branch);
         try {
-          const result = deviceId
-            ? await deviceService.checkoutGitBranch({ branch, create, deviceId, path })
-            : await electronGitService.checkoutGitBranch({ branch, create, path });
+          const result = await gitService.checkoutGitBranch({ branch, create, deviceId, path });
           if (result.success) {
             onAfterCheckout?.();
             onOpenChange(false);
@@ -259,9 +247,12 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     // for inline display (keeps the modal open), or undefined on success.
     const handleCreateBranch = useCallback(
       async (name: string): Promise<string | undefined> => {
-        const result = deviceId
-          ? await deviceService.checkoutGitBranch({ branch: name, create: true, deviceId, path })
-          : await electronGitService.checkoutGitBranch({ branch: name, create: true, path });
+        const result = await gitService.checkoutGitBranch({
+          branch: name,
+          create: true,
+          deviceId,
+          path,
+        });
         if (result.success) {
           onAfterCheckout?.();
           onOpenChange(false);

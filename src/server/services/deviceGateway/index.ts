@@ -9,10 +9,13 @@ import {
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type {
+  DeviceGitAheadBehind,
+  DeviceGitBranchInfo,
   DeviceGitBranchListItem,
   DeviceGitCheckoutResult,
-  DeviceGitInfo,
+  DeviceGitLinkedPullRequestResult,
   DeviceGitSyncResult,
+  DeviceGitWorkingTreeStatus,
   ProjectSkillMeta,
   WorkspaceInitResult,
 } from '@lobechat/types';
@@ -136,37 +139,62 @@ export class DeviceGateway {
   }
 
   /**
-   * Fetch git status (branch / file changes / PR) for a directory on a remote
-   * device, via the same generic `invokeRpc` channel as `initWorkspace`. Lets
-   * the UI render a remote device's git the same as the local desktop.
+   * Generic helper for the granular git read RPCs (branch / PR / working-tree /
+   * ahead-behind). Returns `undefined` when the gateway is unconfigured, the
+   * device is offline, or the call fails — callers treat that as "unknown".
    */
-  async gitInfo(params: {
-    deviceId: string;
-    isGithub?: boolean;
-    scope: string;
-    timeout?: number;
-    userId: string;
-  }): Promise<DeviceGitInfo | undefined> {
-    const { userId, deviceId, scope, isGithub = false, timeout = 15_000 } = params;
+  private async invokeGitRead<T>(
+    method: string,
+    params: { deviceId: string; timeout?: number; userId: string },
+    rpcParams: Record<string, unknown>,
+  ): Promise<T | undefined> {
+    const { userId, deviceId, timeout = 15_000 } = params;
     const client = this.getClient();
     if (!client) return undefined;
 
     try {
-      const result = await client.invokeRpc<DeviceGitInfo>(
+      const result = await client.invokeRpc<T>(
         { deviceId, timeout, userId },
-        { method: 'gitInfo', params: { isGithub, scope } },
+        { method, params: rpcParams },
       );
 
-      if (!result.success || !result.data) {
-        log('gitInfo: failed for deviceId=%s — %s', deviceId, result.error);
+      if (!result.success || result.data === undefined) {
+        log('%s: failed for deviceId=%s — %s', method, deviceId, result.error);
         return undefined;
       }
 
       return result.data;
     } catch (error) {
-      log('gitInfo: error for deviceId=%s — %O', deviceId, error);
+      log('%s: error for deviceId=%s — %O', method, deviceId, error);
       return undefined;
     }
+  }
+
+  /** Branch name + detached flag for a directory on a remote device. */
+  gitBranch(params: { deviceId: string; path: string; userId: string }) {
+    return this.invokeGitRead<DeviceGitBranchInfo>('getGitBranch', params, { path: params.path });
+  }
+
+  /** The GitHub PR linked to a branch in a directory on a remote device. */
+  gitLinkedPullRequest(params: { branch: string; deviceId: string; path: string; userId: string }) {
+    return this.invokeGitRead<DeviceGitLinkedPullRequestResult>('getLinkedPullRequest', params, {
+      branch: params.branch,
+      path: params.path,
+    });
+  }
+
+  /** Working-tree dirty-file counts for a directory on a remote device. */
+  gitWorkingTreeStatus(params: { deviceId: string; path: string; userId: string }) {
+    return this.invokeGitRead<DeviceGitWorkingTreeStatus>('getGitWorkingTreeStatus', params, {
+      path: params.path,
+    });
+  }
+
+  /** Ahead/behind commit counts for a directory on a remote device. */
+  gitAheadBehind(params: { deviceId: string; path: string; userId: string }) {
+    return this.invokeGitRead<DeviceGitAheadBehind>('getGitAheadBehind', params, {
+      path: params.path,
+    });
   }
 
   /**
