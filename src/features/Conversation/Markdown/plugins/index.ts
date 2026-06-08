@@ -1,4 +1,5 @@
 import ImageSearchRef from './ImageSearchRef';
+import Link from './Link';
 import LobeAgents from './LobeAgents';
 import LobeArtifact from './LobeArtifact';
 import LobeThinking from './LobeThinking';
@@ -25,4 +26,5 @@ export const markdownElements: MarkdownElement[] = [
   UserFeedback,
   ImageSearchRef,
   LobeAgents,
+  Link,
 ];
