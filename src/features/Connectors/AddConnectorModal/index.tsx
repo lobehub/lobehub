@@ -1,10 +1,11 @@
 import { Modal } from '@lobehub/ui/base-ui';
 import { App, Input } from 'antd';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ConnectorSourceType } from '@/database/schemas';
+import { lambdaClient } from '@/libs/trpc/client';
 import { useToolStore } from '@/store/tool';
 
 interface AddConnectorModalProps {
@@ -18,6 +19,8 @@ interface OAuthPopupResult {
   // 'success' — authorized; 'error' — provider/exchange failure (reason in
   // `error`); 'dismissed' — popup closed without a result (user cancelled).
   status: 'success' | 'error' | 'dismissed';
+  /** On success, whether the tool list synced (false = authorized but unusable). */
+  synced?: boolean;
 }
 
 /**
@@ -43,7 +46,11 @@ const waitForOAuthPopup = (popup: Window, connectorId: string): Promise<OAuthPop
       if (!data || data.type !== 'lobe-connector-oauth') return;
       if (data.connectorId && data.connectorId !== connectorId) return;
       cleanup();
-      resolve(data.success ? { status: 'success' } : { error: data.error, status: 'error' });
+      resolve(
+        data.success
+          ? { status: 'success', synced: data.synced }
+          : { error: data.error, status: 'error' },
+      );
     };
 
     window.addEventListener('message', onMessage);
@@ -71,8 +78,27 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose }) => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const redirectUri =
-    typeof window === 'undefined' ? '' : `${window.location.origin}/oauth/connector/callback`;
+  // Show the exact redirect URI the SERVER will use (APP_URL-based), so what the
+  // user registers matches what is sent at authorize time. Fall back to the
+  // current origin only if the query fails.
+  const [redirectUri, setRedirectUri] = useState('');
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    lambdaClient.connector.getRedirectUri
+      .query()
+      .then((r) => {
+        if (!cancelled) setRedirectUri(r.redirectUri);
+      })
+      .catch(() => {
+        if (!cancelled && typeof window !== 'undefined') {
+          setRedirectUri(`${window.location.origin}/oauth/connector/callback`);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const reset = () => {
     setName('');
@@ -129,7 +155,16 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose }) => {
         // (window.close is often blocked for cross-origin-navigated popups).
         await fetchConnectors();
         if (result.status === 'success') {
-          message.success(t('connector.add.success', 'Connector connected'));
+          if (result.synced === false) {
+            message.warning(
+              t(
+                'connector.add.syncFailed',
+                'Authorized, but tools could not be synced. Click Sync to retry.',
+              ),
+            );
+          } else {
+            message.success(t('connector.add.success', 'Connector connected'));
+          }
         } else if (result.status === 'error') {
           message.error(
             t('connector.add.authError', 'Authorization failed: {{reason}}', {

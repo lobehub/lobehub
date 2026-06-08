@@ -1203,12 +1203,6 @@ export class AiAgentService {
       const connectorsMcp = connectors.filter(
         (c) => c.mcpServerUrl || c.mcpConnectionType === 'stdio',
       );
-      const connectorIdentifierSet = new Set(connectorsMcp.map((c) => c.identifier));
-
-      // Filter out plugin entries that are now handled by real MCP connectors
-      const pluginsWithoutConnectors = installedPlugins.filter(
-        (p) => !connectorIdentifierSet.has(p.identifier),
-      );
 
       // Fetch ALL tools for all real-MCP connectors (including disabled tools) so that
       // buildConnectorManifests can show blocking descriptions for disabled tools.
@@ -1219,6 +1213,17 @@ export class AiAgentService {
           : [];
 
       connectorManifests = buildConnectorManifests(connectorsMcp, connectorTools);
+
+      // Only connectors that ACTUALLY produced a manifest (enabled + with synced
+      // tools) replace a same-named plugin. Deriving the set from connectorsMcp
+      // instead would let a disabled / not-yet-synced connector evict the plugin
+      // while contributing no tools — leaving the runtime with nothing to call.
+      const connectorIdentifierSet = new Set(connectorManifests.map((m) => m.identifier));
+
+      // Filter out plugin entries that are now handled by real MCP connectors
+      const pluginsWithoutConnectors = installedPlugins.filter(
+        (p) => !connectorIdentifierSet.has(p.identifier),
+      );
       log('execAgent: got %d connector manifests', connectorManifests.length);
 
       // 5b. Get model abilities from model-bank for function calling support check

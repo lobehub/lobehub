@@ -41,6 +41,8 @@ const renderResultPage = (result: {
   connectorId?: string;
   error?: string;
   success: boolean;
+  /** Whether the tool list synced. `false` = authorized but tools unavailable. */
+  synced?: boolean;
 }): NextResponse => {
   const payload = jsonForScript({ type: 'lobe-connector-oauth', ...result });
   const html = `<!doctype html>
@@ -127,19 +129,22 @@ export const GET = async (req: NextRequest) => {
     // no dependency on the popup/postMessage round-trip. This also sets the
     // connector status (connected on success, error on failure).
     const connectorToolModel = new ConnectorToolModel(serverDB, payload.lobeUserId);
+    let synced = false;
     try {
       const { toolCount } = await syncConnectorToolsById(payload.connectorId, {
         connectorModel,
         connectorToolModel,
       });
+      synced = true;
       log('connector %s authorized + synced %d tools', payload.connectorId, toolCount);
     } catch (err) {
       // Auth succeeded but the tool list could not be fetched; the user can
-      // retry via the Sync button. Still report success to close the popup.
+      // retry via the Sync button. Report success (auth is valid) but flag the
+      // missing sync so the UI doesn't claim a fully-working connector.
       log('post-OAuth tool sync failed for connector=%s: %O', payload.connectorId, err);
     }
 
-    return renderResultPage({ connectorId: payload.connectorId, success: true });
+    return renderResultPage({ connectorId: payload.connectorId, success: true, synced });
   } catch (err) {
     log('connector OAuth callback error: %O', err);
     const message = err instanceof Error ? err.message : 'internal_error';

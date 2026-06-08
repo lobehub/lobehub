@@ -101,6 +101,13 @@ export const connectorRouter = router({
     return toolsByConnector;
   }),
 
+  /**
+   * The exact redirect URI the server will send to the OAuth/DCR endpoints.
+   * The Add modal must display THIS value (not a client-derived origin) so the
+   * URI the user registers matches the one used at authorize time.
+   */
+  getRedirectUri: authedProcedure.query(() => ({ redirectUri: getConnectorRedirectUri() })),
+
   // ── Mutations ─────────────────────────────────────────────────────────────
 
   create: connectorProcedure.input(createConnectorSchema).mutation(async ({ input, ctx }) => {
