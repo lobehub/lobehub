@@ -18,7 +18,7 @@ import {
   resolveAgentWorkingDirectory,
   resolveTargetDeviceId,
 } from '@/helpers/agentWorkingDirectory';
-import { lambdaClient } from '@/libs/trpc/client';
+import { deviceService } from '@/services/device';
 import { electronSystemService } from '@/services/electron/system';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -195,7 +195,7 @@ const AddRemoteFolderRow = memo<{
   // as "can't verify" and allowed through.
   const validate = async (path: string): Promise<string | undefined> => {
     if (!deviceId) return undefined;
-    const result = await lambdaClient.device.statPath.query({ deviceId, path });
+    const result = await deviceService.statPath(deviceId, path);
     if (!result) return undefined;
     if (!result.exists) return t('localSystem.workingDirectory.pathNotExist');
     if (!result.isDirectory) return t('localSystem.workingDirectory.pathNotDirectory');
