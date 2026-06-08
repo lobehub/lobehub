@@ -63,10 +63,10 @@ function extractKeysFromObject(obj: any, namespace: string, prefix: string = '')
 }
 
 /**
- * Load all i18n keys from src/locales/default
+ * Load all i18n keys from packages/locales/src/default
  */
 function loadAllI18nKeys(): I18nKey[] {
-  const defaultLocalesPath = path.join(process.cwd(), 'src/locales/default');
+  const defaultLocalesPath = path.join(process.cwd(), 'packages/locales/src/default');
   const allKeys: I18nKey[] = [];
 
   // Get all TypeScript files except index.ts and ignored files
@@ -255,7 +255,7 @@ async function findAllTranslationCalls(): Promise<Set<string>> {
           // e.g., t(`mcp.details.${var}.title`) -> "mcp.details." and ".title"
           // e.g., t(`${var}.title`) -> ".title"
           let prefix = '';
-          let suffix = '';
+          let suffix: string;
 
           if (match[2] !== undefined) {
             // Pattern has both prefix and suffix: match[1] = prefix, match[2] = suffix
@@ -346,7 +346,7 @@ function findUnusedKeys(allKeys: I18nKey[], usedKeys: Set<string>): UnusedKey[] 
     if (isProtectedKey(keyInfo.namespace, keyInfo.key)) {
       protectedKeys.push({
         ...keyInfo,
-        filePath: `src/locales/default/${keyInfo.namespace}.ts`,
+        filePath: `packages/locales/src/default/${keyInfo.namespace}.ts`,
       });
       continue;
     }
@@ -363,7 +363,7 @@ function findUnusedKeys(allKeys: I18nKey[], usedKeys: Set<string>): UnusedKey[] 
     if (matchesPrefix) {
       protectedKeys.push({
         ...keyInfo,
-        filePath: `src/locales/default/${keyInfo.namespace}.ts`,
+        filePath: `packages/locales/src/default/${keyInfo.namespace}.ts`,
       });
       continue;
     }
@@ -372,7 +372,7 @@ function findUnusedKeys(allKeys: I18nKey[], usedKeys: Set<string>): UnusedKey[] 
     if (!usedKeys.has(keyInfo.fullKey)) {
       unused.push({
         ...keyInfo,
-        filePath: `src/locales/default/${keyInfo.namespace}.ts`,
+        filePath: `packages/locales/src/default/${keyInfo.namespace}.ts`,
       });
     }
   }

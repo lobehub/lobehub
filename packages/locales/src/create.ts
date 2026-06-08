@@ -22,7 +22,7 @@ import { normalizeLocale } from '@/locales/resources';
 import { isOnServerSide } from '@/utils/env';
 import { unwrapESMModule } from '@/utils/esm/unwrapESMModule';
 
-import { loadI18nNamespaceModule } from '../utils/i18n/loadI18nNamespaceModule';
+import { loadI18nNamespaceModule } from '@/utils/i18n/loadI18nNamespaceModule';
 
 const mergeNamespace = (
   fallbackResources: Record<string, string>,

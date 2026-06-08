@@ -5,11 +5,11 @@ import type {
 
 // Use import.meta.glob so Vite can statically analyze and avoid CJS/dynamic import issues
 const defaultLoaders = import.meta.glob<{ default: Record<string, string> }>(
-  '/src/locales/default/*.ts',
+  '/packages/locales/src/default/*.ts',
 );
 const localeLoaders = import.meta.glob<{ default: Record<string, string> }>('/locales/*/*.json');
 
-const getDefaultKey = (ns: string) => `/src/locales/default/${ns}.ts`;
+const getDefaultKey = (ns: string) => `/packages/locales/src/default/${ns}.ts`;
 const getLocaleKey = (lng: string, ns: string) => `/locales/${lng}/${ns}.json`;
 
 export const loadI18nNamespaceModule = async (

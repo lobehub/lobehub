@@ -1,7 +1,6 @@
+import { type RedisConfig } from '@lobechat/types';
 import { createEnv } from '@t3-oss/env-core';
 import { z } from 'zod';
-
-import { type RedisConfig } from '@/libs/redis';
 
 const parseNumber = (value?: string) => {
   const parsed = Number.parseInt(value ?? '', 10);

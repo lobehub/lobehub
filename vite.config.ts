@@ -123,11 +123,12 @@ export default defineConfig({
   plugins: [
     vercelSkewProtection(),
     viteEnvRestartKeys(['APP_URL']),
-    enableViteDevTools && DevTools({
-      build: {
-        withApp: true,
-      },
-    }),
+    enableViteDevTools &&
+      DevTools({
+        build: {
+          withApp: true,
+        },
+      }),
     ...sharedRendererPlugins({ platform }),
 
     isDev && {
@@ -308,15 +309,12 @@ export default defineConfig({
         './src/spa/**/*.tsx',
         './src/business/**/*.{ts,tsx}',
         './src/components/**/*.{ts,tsx}',
-        './src/config/**/*.ts',
         './src/const/**/*.ts',
-        './src/envs/**/*.ts',
         './src/features/**/*.{ts,tsx}',
         './src/helpers/**/*.ts',
         './src/hooks/**/*.{ts,tsx}',
         './src/layout/**/*.{ts,tsx}',
         './src/libs/**/*.{ts,tsx}',
-        './src/locales/**/*.ts',
         './src/routes/**/*.{ts,tsx}',
         './src/services/**/*.ts',
         './src/store/**/*.{ts,tsx}',
@@ -339,9 +337,14 @@ export default defineConfig({
         './packages/builtin-tool-*/src/**/*.ts',
         './packages/builtin-tools/src/**/*.ts',
         './packages/business/*/src/**/*.ts',
+        './packages/business-server/src/**/*.ts',
         './packages/config/src/**/*.ts',
         './packages/edge-config/src/**/*.ts',
         './packages/editor-runtime/src/**/*.ts',
+        './packages/env/src/**/*.ts',
+        './packages/trpc/src/**/*.{ts,tsx}',
+        './packages/app-config/src/**/*.ts',
+        './packages/locales/src/**/*.ts',
         './packages/fetch-sse/src/**/*.ts',
         './packages/desktop-bridge/src/**/*.ts',
         './packages/python-interpreter/src/**/*.ts',
