@@ -5,10 +5,6 @@ import { timestamps, timestamptz } from './_helpers';
 import { users } from './user';
 import { workspaces } from './workspace';
 
-// `WorkingDirEntry` is defined in `@lobechat/types`; re-exported here so existing
-// `@lobechat/database/schemas` consumers keep importing it from the schema barrel.
-export type { WorkingDirEntry } from '@lobechat/types';
-
 /**
  * Stable device identity anchor — one row per physical machine per user.
  *

@@ -15,6 +15,7 @@
   "workingDirectory.chooseDifferentFolder": "选择其他文件夹",
   "workingDirectory.clear": "清除目录",
   "workingDirectory.createBranchAction": "检出新分支…",
+  "workingDirectory.createBranchTitle": "创建新分支",
   "workingDirectory.current": "当前工作目录",
   "workingDirectory.detachedHead": "游离 HEAD，当前提交 {{sha}}",
   "workingDirectory.diffStatTooltip": "新增 {{added}} · 修改 {{modified}} · 删除 {{deleted}}",

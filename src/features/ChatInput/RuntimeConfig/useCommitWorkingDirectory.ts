@@ -1,3 +1,4 @@
+import type { WorkingDirEntry } from '@lobechat/types';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,7 +9,6 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useDeviceStore } from '@/store/device';
-import { type WorkingDirEntry } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 
 /**

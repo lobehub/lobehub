@@ -1,7 +1,5 @@
 import type { DeviceListItem } from '@lobechat/types';
 
-export type { DeviceListItem };
-
 export interface DeviceState {
   devices: DeviceListItem[];
   isDevicesInit: boolean;

@@ -1,16 +1,11 @@
+import type { DeviceListItem, WorkingDirEntry } from '@lobechat/types';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { deviceService } from '@/services/device';
 import { type StoreSetter } from '@/store/types';
 
-import {
-  nextWorkingDirs,
-  removeWorkingDir,
-  WORKING_DIRS_MAX,
-  type WorkingDirEntry,
-} from './deviceCwd';
-import { type DeviceListItem } from './initialState';
+import { nextWorkingDirs, removeWorkingDir, WORKING_DIRS_MAX } from './deviceCwd';
 import { type DeviceStore } from './store';
 
 const FETCH_DEVICES_KEY = 'device:listDevices';

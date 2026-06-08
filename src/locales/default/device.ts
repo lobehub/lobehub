@@ -17,6 +17,7 @@ export default {
   'workingDirectory.chooseDifferentFolder': 'Choose a folder...',
   'workingDirectory.clear': 'Clear',
   'workingDirectory.createBranchAction': 'Checkout new branch…',
+  'workingDirectory.createBranchTitle': 'Create new branch',
   'workingDirectory.current': 'Current working directory',
   'workingDirectory.detachedHead': 'Detached HEAD at {{sha}}',
   'workingDirectory.diffStatTooltip':

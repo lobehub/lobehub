@@ -1,5 +1,4 @@
-import type { WorkingDirEntry } from '@lobechat/database/schemas';
-import type { WorkspaceInitResult } from '@lobechat/types';
+import type { WorkingDirEntry, WorkspaceInitResult } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {

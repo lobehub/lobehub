@@ -1,6 +1,7 @@
+import type { WorkingDirEntry } from '@lobechat/types';
 import { and, desc, eq } from 'drizzle-orm';
 
-import type { DeviceItem, WorkingDirEntry } from '../schemas';
+import type { DeviceItem } from '../schemas';
 import { devices } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 

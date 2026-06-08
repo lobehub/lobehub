@@ -1,4 +1,6 @@
-import type { DeviceListItem, DeviceState } from './initialState';
+import type { DeviceListItem } from '@lobechat/types';
+
+import type { DeviceState } from './initialState';
 
 const deviceList = (s: DeviceState): DeviceListItem[] => s.devices;
 

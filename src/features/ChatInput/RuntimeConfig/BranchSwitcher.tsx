@@ -1,4 +1,4 @@
-import { Button, Icon, Input } from '@lobehub/ui';
+import { Icon, Input } from '@lobehub/ui';
 import {
   DropdownMenuItem,
   DropdownMenuPopup,
@@ -16,7 +16,7 @@ import {
   RefreshCwIcon,
   SearchIcon,
 } from 'lucide-react';
-import { memo, type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, type ReactElement, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
@@ -24,6 +24,7 @@ import { message } from '@/components/AntdStaticMethods';
 import { deviceService } from '@/services/device';
 import { electronGitService } from '@/services/electron/git';
 
+import { openCreateBranchModal } from './CreateBranchModal';
 import { useWorkingTreeStatus } from './useWorkingTreeStatus';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -42,24 +43,12 @@ const styles = createStaticStyles(({ css }) => ({
     /* Cancel DropdownMenuPopup's default 4px padding so our sections align edge-to-edge */
     margin: -4px;
   `,
-  createFooter: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-block-start: 1px solid ${cssVar.colorSplit};
-  `,
   createItemWrapper: css`
     padding: 4px;
     border-block-start: 1px solid ${cssVar.colorSplit};
   `,
   createItem: css`
     border-radius: calc(${cssVar.borderRadius} - 4px);
-  `,
-  createInput: css`
-    flex: 1;
   `,
   emptyState: css`
     padding-block: 12px;
@@ -193,10 +182,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
   }) => {
     const { t } = useTranslation('device');
     const [search, setSearch] = useState('');
-    const [isCreating, setIsCreating] = useState(false);
-    const [newBranch, setNewBranch] = useState('');
     const [busyBranch, setBusyBranch] = useState<string | null>(null);
-    const createInputRef = useRef<HTMLInputElement>(null);
 
     const {
       data: branches = [],
@@ -235,18 +221,8 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     }, [isRefreshing, mutateBranches, mutateWorkingStatus, onExternalRefresh]);
 
     useEffect(() => {
-      if (!open) {
-        setSearch('');
-        setIsCreating(false);
-        setNewBranch('');
-      }
+      if (!open) setSearch('');
     }, [open]);
-
-    useEffect(() => {
-      if (isCreating) {
-        createInputRef.current?.focus();
-      }
-    }, [isCreating]);
 
     const filtered = useMemo(() => {
       const query = search.trim().toLowerCase();
@@ -279,11 +255,27 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
       [busyBranch, currentBranch, deviceId, onAfterCheckout, onOpenChange, path, t],
     );
 
-    const handleCreateSubmit = useCallback(() => {
-      const name = newBranch.trim();
-      if (!name) return;
-      void handleCheckout(name, true);
-    }, [handleCheckout, newBranch]);
+    // Create + checkout a new branch from the modal. Returns an error message
+    // for inline display (keeps the modal open), or undefined on success.
+    const handleCreateBranch = useCallback(
+      async (name: string): Promise<string | undefined> => {
+        const result = deviceId
+          ? await deviceService.checkoutGitBranch({ branch: name, create: true, deviceId, path })
+          : await electronGitService.checkoutGitBranch({ branch: name, create: true, path });
+        if (result.success) {
+          onAfterCheckout?.();
+          onOpenChange(false);
+          return undefined;
+        }
+        return result.error || t('workingDirectory.checkoutFailed');
+      },
+      [deviceId, onAfterCheckout, onOpenChange, path, t],
+    );
+
+    const openCreateBranch = useCallback(() => {
+      onOpenChange(false);
+      openCreateBranchModal({ onSubmit: handleCreateBranch });
+    }, [handleCreateBranch, onOpenChange]);
 
     return (
       <DropdownMenuRoot open={open} onOpenChange={onOpenChange}>
@@ -368,53 +360,17 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                   })}
                 </div>
 
-                {isCreating ? (
-                  <div className={styles.createFooter}>
-                    <Input
-                      className={styles.createInput}
-                      placeholder={t('workingDirectory.newBranchPlaceholder')}
-                      ref={createInputRef as any}
-                      size="small"
-                      value={newBranch}
-                      variant="filled"
-                      onChange={(e) => setNewBranch(e.target.value)}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      onPressEnter={handleCreateSubmit}
-                    />
-                    <Button
-                      disabled={!newBranch.trim() || !!busyBranch}
-                      loading={!!busyBranch}
-                      size="small"
-                      type="primary"
-                      onClick={handleCreateSubmit}
-                    >
-                      {t('workingDirectory.checkoutAction')}
-                    </Button>
-                    <Button
-                      size="small"
-                      type="text"
-                      onClick={() => {
-                        setIsCreating(false);
-                        setNewBranch('');
-                      }}
-                    >
-                      {t('workingDirectory.cancel')}
-                    </Button>
-                  </div>
-                ) : (
-                  <div className={styles.createItemWrapper}>
-                    <DropdownMenuItem
-                      className={cx(styles.item, styles.createItem)}
-                      closeOnClick={false}
-                      onClick={() => setIsCreating(true)}
-                    >
-                      <Icon className={styles.itemIcon} icon={GitBranchPlusIcon} size={14} />
-                      <div className={styles.itemMain}>
-                        {t('workingDirectory.createBranchAction')}
-                      </div>
-                    </DropdownMenuItem>
-                  </div>
-                )}
+                <div className={styles.createItemWrapper}>
+                  <DropdownMenuItem
+                    className={cx(styles.item, styles.createItem)}
+                    onClick={openCreateBranch}
+                  >
+                    <Icon className={styles.itemIcon} icon={GitBranchPlusIcon} size={14} />
+                    <div className={styles.itemMain}>
+                      {t('workingDirectory.createBranchAction')}
+                    </div>
+                  </DropdownMenuItem>
+                </div>
               </div>
             </DropdownMenuPopup>
           </DropdownMenuPositioner>

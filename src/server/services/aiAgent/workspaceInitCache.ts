@@ -1,5 +1,4 @@
-import type { WorkingDirEntry } from '@lobechat/database/schemas';
-import type { WorkspaceInitResult } from '@lobechat/types';
+import type { WorkingDirEntry, WorkspaceInitResult } from '@lobechat/types';
 
 /** Reuse a cached workspace-init scan for this long before re-scanning the device. */
 export const WORKSPACE_INIT_TTL_MS = 60 * 60 * 1000;
