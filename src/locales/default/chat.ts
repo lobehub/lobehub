@@ -183,7 +183,7 @@ export default {
   'heteroAgent.executionTarget.noDevices':
     'No remote devices yet. Run `lh connect` on another machine to add one.',
   'heteroAgent.executionTarget.none': 'No device',
-  'heteroAgent.executionTarget.noneDesc': 'No device enabled — the agent cannot operate a computer',
+  'heteroAgent.executionTarget.noneDesc': 'No device enabled',
   'heteroAgent.executionTarget.offline': 'Offline',
   'heteroAgent.executionTarget.online': 'Online',
   'heteroAgent.executionTarget.sandbox': 'Cloud sandbox',

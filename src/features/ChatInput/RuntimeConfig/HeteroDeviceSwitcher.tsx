@@ -334,25 +334,25 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const content = (
     <Flexbox gap={2} style={{ maxWidth: 320, minWidth: 280 }}>
       <div className={styles.header}>
-        <span className={styles.headerTitle}>{t('heteroAgent.executionTarget.title')}</span>
-        <Flexbox horizontal align={'center'} gap={6}>
-          {showWebDownloadCard ? null : (
-            <a
-              className={styles.headerLink}
-              href="https://lobehub.com/downloads"
-              rel="noreferrer"
-              target="_blank"
-            >
-              <Icon icon={ExternalLinkIcon} size={11} />
-              <span>{t('heteroAgent.executionTarget.downloadDesktop')}</span>
-            </a>
-          )}
+        <Flexbox horizontal align={'center'} gap={4}>
+          <span className={styles.headerTitle}>{t('heteroAgent.executionTarget.title')}</span>
           <Tooltip title={t('heteroAgent.executionTarget.infoTooltip')}>
             <span className={styles.headerInfo}>
               <Icon icon={InfoIcon} size={12} />
             </span>
           </Tooltip>
         </Flexbox>
+        {showWebDownloadCard ? null : (
+          <a
+            className={styles.headerLink}
+            href="https://lobehub.com/downloads"
+            rel="noreferrer"
+            target="_blank"
+          >
+            <Icon icon={ExternalLinkIcon} size={11} />
+            <span>{t('heteroAgent.executionTarget.downloadDesktop')}</span>
+          </a>
+        )}
       </div>
       <OptionRow
         active={isActive('none')}
