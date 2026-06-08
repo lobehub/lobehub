@@ -1220,8 +1220,10 @@ export class AiAgentService {
       // while contributing no tools — leaving the runtime with nothing to call.
       const connectorIdentifierSet = new Set(connectorManifests.map((m) => m.identifier));
 
-      // Filter out plugin entries that are now handled by real MCP connectors
-      const pluginsWithoutConnectors = installedPlugins.filter(
+      // Filter out plugin entries that are now handled by real MCP connectors.
+      // `let` because community-MCP plugins may be patched with connector
+      // permissions below (their connector row has no endpoint, so they stay here).
+      let pluginsWithoutConnectors = installedPlugins.filter(
         (p) => !connectorIdentifierSet.has(p.identifier),
       );
       log('execAgent: got %d connector manifests', connectorManifests.length);
@@ -1248,11 +1250,18 @@ export class AiAgentService {
       }
       log('execAgent: got %d klavis manifests', klavisManifests.length);
 
-      // 5d-1. Patch Lobehub/Klavis manifests with connector tool permissions.
-      // This enables needs_approval (→ humanIntervention: 'required') and disabled
-      // (→ blocking description) for skills that are managed via the connector system.
-      // The humanIntervention system already handles headless auto-rejection for qstash.
-      if (lobehubSkillManifests.length > 0 || klavisManifests.length > 0) {
+      // 5d-1. Patch Lobehub/Klavis manifests AND community-MCP plugin manifests
+      // with connector tool permissions. This enables needs_approval (→
+      // humanIntervention: 'required') and disabled (→ blocking description) for
+      // any tool managed via the connector system but executed through a
+      // non-connector path (Lobehub/Klavis skills, community MCP plugins).
+      // The 'disabled' hard-block is already enforced universally in
+      // ToolExecutionService; this surfaces the permission to the model too.
+      if (
+        lobehubSkillManifests.length > 0 ||
+        klavisManifests.length > 0 ||
+        pluginsWithoutConnectors.length > 0
+      ) {
         try {
           const { patchManifestWithPermissions } =
             await import('@/libs/mcp/connectorPermissionCheck');
@@ -1260,6 +1269,7 @@ export class AiAgentService {
           const allIdentifiers = [
             ...lobehubSkillManifests.map((m) => m.identifier),
             ...klavisManifests.map((m) => m.identifier),
+            ...pluginsWithoutConnectors.map((p) => p.identifier),
           ];
           const connectorEntries =
             allIdentifiers.length > 0
@@ -1289,6 +1299,19 @@ export class AiAgentService {
               return perms && perms.size > 0
                 ? (patchManifestWithPermissions(m as any, perms as any) as any)
                 : m;
+            });
+
+            // Community-MCP plugins execute via the plugin path, so patch their
+            // manifest in place (the connector row holds the user's permissions).
+            pluginsWithoutConnectors = pluginsWithoutConnectors.map((p) => {
+              const perms = connectorToolsMap.get(p.identifier);
+              if (perms && perms.size > 0 && (p as any).manifest?.api) {
+                return {
+                  ...p,
+                  manifest: patchManifestWithPermissions((p as any).manifest, perms as any) as any,
+                };
+              }
+              return p;
             });
           }
         } catch (err) {

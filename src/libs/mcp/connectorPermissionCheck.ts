@@ -2,7 +2,10 @@ import type { LobeChatDatabase } from '@lobechat/database';
 
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
-import { ConnectorToolPermission } from '@/database/schemas';
+import type { ConnectorToolPermission } from '@/database/schemas';
+
+// Re-exported from a pure module so the same patch logic is usable client-side.
+export { patchManifestWithPermissions } from './patchManifestPermissions';
 
 /**
  * Look up the user's permission setting for a specific connector tool.
@@ -49,42 +52,4 @@ export function buildBlockedToolResponse(toolName: string): {
     state: { content: [{ text: message, type: 'text' }], isError: false },
     success: true,
   };
-}
-
-/**
- * Patch a LobeToolManifest's api[] with connector tool permissions.
- *
- * - needs_approval → humanIntervention: 'required'  (handled by intervention system)
- * - disabled       → blocking description + humanIntervention: 'required'
- *   (AI sees the tool is disabled; executor-level check also prevents execution)
- */
-export function patchManifestWithPermissions(
-  manifest: {
-    api: Array<{
-      description?: string;
-      humanIntervention?: unknown;
-      name: string;
-      [k: string]: unknown;
-    }>;
-  },
-  toolPermissions: Map<string, ConnectorToolPermission>,
-): typeof manifest {
-  const patchedApi = manifest.api.map((api) => {
-    const permission = toolPermissions.get(api.name);
-    if (permission === ConnectorToolPermission.disabled) {
-      return {
-        ...api,
-        description:
-          `[TOOL DISABLED] The user has disabled this tool and it cannot be executed. ` +
-          `Do NOT call this tool. If the user asks to perform this action, inform them ` +
-          `that they have manually disabled "${api.name}" and can re-enable it in Settings > Connectors.`,
-        humanIntervention: 'required' as const,
-      };
-    }
-    if (permission === ConnectorToolPermission.needs_approval) {
-      return { ...api, humanIntervention: 'required' as const };
-    }
-    return api;
-  });
-  return { ...manifest, api: patchedApi };
 }

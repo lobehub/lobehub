@@ -11,7 +11,9 @@ import { createEnableChecker, type PluginEnableChecker } from '@lobechat/context
 import { ToolsEngine } from '@lobechat/context-engine';
 import { type ChatCompletionTool, type ToolManifest, type WorkingModel } from '@lobechat/types';
 
+import type { ConnectorToolPermission } from '@/database/schemas';
 import { isToolAvailableInCurrentEnv } from '@/helpers/toolAvailability';
+import { patchManifestWithPermissions } from '@/libs/mcp/patchManifestPermissions';
 import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { getToolStoreState } from '@/store/tool';
@@ -93,10 +95,30 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
   );
   const connectorIdentifiers = new Set(connectorManifests.map((m) => m.identifier));
 
-  // Get all available plugin manifests (excluding ones now covered by a connector)
+  // Per-connector tool permissions, keyed by connector identifier. Used to patch
+  // community-MCP plugin manifests below so the user's needs_approval / disabled
+  // settings surface as humanIntervention (custom connectors are handled by their
+  // own manifests above; disabled is also hard-blocked at the mcp router).
+  const connectorPermsByIdentifier = new Map(
+    connectorSelectors
+      .connectorList(toolStoreState)
+      .map((c) => [c.identifier, new Map(c.tools.map((t) => [t.toolName, t.permission]))] as const),
+  );
+
+  // Get all available plugin manifests (excluding ones now covered by a connector),
+  // patched with their connector tool permissions when a connector row exists.
   const pluginManifests = pluginSelectors
     .installedPluginManifestList(toolStoreState)
-    .filter((m) => !connectorIdentifiers.has(m.identifier));
+    .filter((m) => !connectorIdentifiers.has(m.identifier))
+    .map((m) => {
+      const perms = connectorPermsByIdentifier.get(m.identifier);
+      return perms && perms.size > 0
+        ? (patchManifestWithPermissions(
+            m as any,
+            perms as Map<string, ConnectorToolPermission>,
+          ) as ToolManifest)
+        : m;
+    });
 
   // Get all builtin tool manifests
   const builtinManifests = toolStoreState.builtinTools.map((tool) => tool.manifest as ToolManifest);
