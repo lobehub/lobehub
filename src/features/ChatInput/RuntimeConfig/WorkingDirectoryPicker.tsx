@@ -151,6 +151,59 @@ const styles = createStaticStyles(({ css }) => ({
 
 const getDirName = (path: string) => path.split('/').findLast(Boolean) || path;
 
+type FolderEntry = { path: string; repoType?: 'git' | 'github' };
+
+/** This machine: browse the filesystem via the native Electron folder dialog. */
+const ChooseLocalFolderRow = memo<{ defaultPath?: string; onPick: (entry: FolderEntry) => void }>(
+  ({ defaultPath, onPick }) => {
+    const { t } = useTranslation('plugin');
+    const handleClick = async () => {
+      const result = await electronSystemService.selectFolder({
+        defaultPath: defaultPath || undefined,
+        title: t('localSystem.workingDirectory.selectFolder'),
+      });
+      if (result) onPick({ path: result.path, repoType: result.repoType });
+    };
+    return (
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={styles.chooseFolderItem}
+        gap={8}
+        onClick={handleClick}
+      >
+        <Icon icon={FolderOpenIcon} size={14} />
+        <span>{t('localSystem.workingDirectory.chooseDifferentFolder')}</span>
+      </Flexbox>
+    );
+  },
+);
+ChooseLocalFolderRow.displayName = 'ChooseLocalFolderRow';
+
+/** Web / remote device: filesystem isn't browsable here — enter an absolute path. */
+const AddRemoteFolderRow = memo<{ onBeforeOpen: () => void; onPick: (entry: FolderEntry) => void }>(
+  ({ onBeforeOpen, onPick }) => {
+    const { t } = useTranslation('plugin');
+    const handleClick = () => {
+      onBeforeOpen();
+      openAddWorkingDirModal((path) => onPick({ path }));
+    };
+    return (
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={styles.chooseFolderItem}
+        gap={8}
+        onClick={handleClick}
+      >
+        <Icon icon={FolderPlusIcon} size={14} />
+        <span>{t('localSystem.workingDirectory.addFolder')}</span>
+      </Flexbox>
+    );
+  },
+);
+AddRemoteFolderRow.displayName = 'AddRemoteFolderRow';
+
 interface WorkingDirectoryPickerProps {
   agentId: string;
 }
@@ -200,26 +253,6 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   const pick = async (entry: { path: string; repoType?: 'git' | 'github' }) => {
     await commit(entry);
     setOpen(false);
-  };
-
-  const handleChooseFolder = async () => {
-    const result = await electronSystemService.selectFolder({
-      defaultPath: selectedDir || undefined,
-      title: t('localSystem.workingDirectory.selectFolder'),
-    });
-    if (result) await pick({ path: result.path, repoType: result.repoType });
-  };
-
-  // Local desktop machine → native folder dialog. Otherwise (web / a remote
-  // device) the filesystem isn't browsable here, so open a modal for manual
-  // absolute-path entry instead.
-  const handleAddFolder = () => {
-    if (isLocalDevice) {
-      void handleChooseFolder();
-      return;
-    }
-    setOpen(false);
-    openAddWorkingDirModal((path) => pick({ path }));
   };
 
   const handleRemoveRecent = (e: React.MouseEvent, path: string) => {
@@ -284,22 +317,11 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
         )}
       </div>
 
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={styles.chooseFolderItem}
-        gap={8}
-        onClick={handleAddFolder}
-      >
-        <Icon icon={isLocalDevice ? FolderOpenIcon : FolderPlusIcon} size={14} />
-        <span>
-          {t(
-            isLocalDevice
-              ? 'localSystem.workingDirectory.chooseDifferentFolder'
-              : 'localSystem.workingDirectory.addFolder',
-          )}
-        </span>
-      </Flexbox>
+      {isLocalDevice ? (
+        <ChooseLocalFolderRow defaultPath={selectedDir} onPick={pick} />
+      ) : (
+        <AddRemoteFolderRow onBeforeOpen={() => setOpen(false)} onPick={pick} />
+      )}
     </Flexbox>
   );
 
