@@ -23,9 +23,12 @@ export const aiProviders = pgTable(
     name: text('name'),
 
     /**
-     * Surrogate key for the online workspace-scoped rebuild (LOBE-10056). Added
-     * nullable + DEFAULT so it's a catalog-only change (no table rewrite); a
-     * later manual step backfills history and adds NOT NULL.
+     * Surrogate primary key for the ai_providers workspace-scoped unique
+     * constraints migration. The original composite PK (id, user_id) was
+     * incompatible with workspace-scoped duplicates because workspace_id can
+     * be NULL for personal rows. Added nullable + DEFAULT to avoid a full
+     * table rewrite; a later manual step backfills history and adds NOT NULL
+     * before the unique index + PK swap.
      */
     _id: uuid('_id').defaultRandom(),
 
@@ -71,9 +74,12 @@ export const aiModels = pgTable(
     id: varchar('id', { length: 150 }).notNull(),
 
     /**
-     * Surrogate key for the online workspace-scoped rebuild (LOBE-10056). Added
-     * nullable + DEFAULT so it's a catalog-only change (no table rewrite); a
-     * later manual step backfills history and adds NOT NULL.
+     * Surrogate primary key for the ai_models workspace-scoped unique
+     * constraints migration. The original composite PK (id, provider_id,
+     * user_id) was incompatible with workspace-scoped duplicates because
+     * workspace_id can be NULL for personal rows. Added nullable + DEFAULT
+     * to avoid a full table rewrite (~4M rows); a later manual step
+     * backfills history and adds NOT NULL before the unique index + PK swap.
      */
     _id: uuid('_id').defaultRandom(),
 
