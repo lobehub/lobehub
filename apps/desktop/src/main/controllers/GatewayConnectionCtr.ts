@@ -29,6 +29,7 @@ import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
 
+import GitCtr from './GitCtr';
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, IpcMethod } from './index';
 import LocalFileCtr from './LocalFileCtr';
@@ -166,6 +167,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   private get workspaceCtr() {
     return this.app.getController(WorkspaceCtr);
+  }
+
+  private get gitCtr() {
+    return this.app.getController(GitCtr);
   }
 
   private get shellCommandCtr() {
@@ -354,6 +359,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
     switch (method) {
       case 'initWorkspace': {
         return this.workspaceCtr.initWorkspace(params as InitWorkspaceParams);
+      }
+
+      case 'gitInfo': {
+        return this.gitCtr.gitInfo(params as { isGithub?: boolean; scope: string });
       }
 
       default: {
