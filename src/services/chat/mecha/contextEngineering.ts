@@ -1,6 +1,7 @@
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
+import { formatUploadedFilesPrompt } from '@lobechat/builtin-tool-cloud-sandbox';
 import {
   CredsIdentifier,
   type CredSummary,
@@ -56,7 +57,7 @@ import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra';
 import { getChatStoreState } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { chatSelectors, topicSelectors } from '@/store/chat/selectors';
 import { getToolStoreState } from '@/store/tool';
 import {
   builtinToolSelectors,
@@ -734,6 +735,13 @@ export const contextEngineering = async ({
           year: 'numeric',
         }).format(new Date()),
       sandbox_enabled: () => String(tools?.includes('lobe-cloud-sandbox') ?? false),
+      // NOTICE: required by builtin-tool-cloud-sandbox/src/systemRole.ts —
+      // lists the topic files synced into the sandbox upload dir. Read lazily
+      // from the chat store so we only pay the cost when the placeholder renders.
+      sandbox_uploaded_files: () =>
+        tools?.includes('lobe-cloud-sandbox')
+          ? formatUploadedFilesPrompt(chatSelectors.currentUserFiles(getChatStoreState()))
+          : '',
       // NOTICE(@nekomeowww): required by builtin-tool-memory/src/systemRole.ts
       memory_effort: () => (userMemoryConfig ? (memoryContext?.effort ?? '') : ''),
       // Current agent + topic identity — referenced by the LobeHub builtin

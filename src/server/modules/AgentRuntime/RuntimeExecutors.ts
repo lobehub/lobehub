@@ -790,6 +790,23 @@ export const createRuntimeExecutors = (
         // {{sandbox_enabled}} — mirrors client-side check for lobe-cloud-sandbox.
         const sandboxEnabled = String(resolved.enabledToolIds.includes('lobe-cloud-sandbox'));
 
+        // {{sandbox_uploaded_files}} — lists the topic/session files that are
+        // synced into the sandbox upload dir, so the agent knows they exist.
+        // Mirrors the bootstrap query in SandboxMiddlewareService.
+        let sandboxUploadedFiles = '';
+        if (sandboxEnabled === 'true' && ctx.serverDB && ctx.userId && lobehubSkillTopicId) {
+          try {
+            const { FileModel } = await import('@/database/models/file');
+            const { formatUploadedFilesPrompt } =
+              await import('@lobechat/builtin-tool-cloud-sandbox');
+            const fileModel = new FileModel(ctx.serverDB, ctx.userId);
+            const uploadedFiles = await fileModel.findFilesToInitInSandbox(lobehubSkillTopicId);
+            sandboxUploadedFiles = formatUploadedFilesPrompt(uploadedFiles);
+          } catch (error) {
+            log('Failed to resolve files for {{sandbox_uploaded_files}} substitution: %O', error);
+          }
+        }
+
         // {{session_date}} — current date formatted for user's timezone.
         const sessionDate = new Intl.DateTimeFormat('en-US', {
           day: 'numeric',
@@ -879,6 +896,7 @@ export const createRuntimeExecutors = (
             session_date: sessionDate,
             // Creds tool variables
             sandbox_enabled: sandboxEnabled,
+            sandbox_uploaded_files: sandboxUploadedFiles,
             CREDS_LIST: credsListStr,
             KLAVIS_SERVICES_LIST: klavisServicesListStr,
             // Memory tool variables
