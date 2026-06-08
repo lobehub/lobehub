@@ -298,7 +298,7 @@ const updateValues = compactUndefined({
 });
 await db.insert(userSignupLogs).values(values).onConflictDoUpdate({
   set: { ...updateValues, stageResults: appendStageResult(stage, result), updatedAt: now },
-  target: userSignupLogs.signupAttemptId,
+  target: userSignupLogs.id,
 });
 
 // ❌ Every scalar becomes SQL plumbing.
