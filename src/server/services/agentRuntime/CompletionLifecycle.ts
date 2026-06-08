@@ -11,6 +11,7 @@ import { buildFinalSnapshotKey } from '@/server/modules/AgentTracing';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
 import { extractSelfIterationCompletionPayload } from '@/server/services/agentSignal/services/selfIteration/completion';
+import { runVerifyOnCompletion } from '@/server/services/verify';
 
 import { hookDispatcher } from './hooks';
 
@@ -260,6 +261,40 @@ export class CompletionLifecycle {
   }
 
   /**
+   * Insert a `role='verify'` message that renders the Agent Run delivery-checker
+   * card (plan + results, read off `metadata.verifyOperationId`). Only created
+   * when the run actually has a verify plan. Self-guarded — failures never affect
+   * the run; the card is purely additive UI.
+   */
+  private async createVerifyMessage(
+    operationId: string,
+    assistantMessageId: string | undefined,
+    userId: string,
+  ): Promise<void> {
+    try {
+      const operationModel = new AgentOperationModel(this.serverDB, userId);
+      const state = await operationModel.getVerifyState(operationId);
+      if (!state?.verifyPlan?.length) return;
+
+      const op = await operationModel.findById(operationId);
+      if (!op?.topicId) return;
+
+      const messageModel = new MessageModel(this.serverDB, userId);
+      await messageModel.create({
+        agentId: op.agentId ?? undefined,
+        content: '',
+        metadata: { verifyOperationId: operationId },
+        parentId: assistantMessageId,
+        role: 'verify',
+        threadId: op.threadId ?? undefined,
+        topicId: op.topicId,
+      });
+    } catch (error) {
+      log('createVerifyMessage failed for op %s (non-fatal): %O', operationId, error);
+    }
+  }
+
+  /**
    * Dispatch `onComplete` (and `onError` for `reason='error'`) hooks via
    * the global `hookDispatcher`. On the error path, also writes the error
    * back onto the assistant message row so the frontend can render it.
@@ -284,6 +319,32 @@ export class CompletionLifecycle {
       if (isAsyncToolPark) return;
 
       await hookDispatcher.dispatch(operationId, 'onComplete', event, metadata._hooks);
+
+      // Delivery checker: on a successful completion, run the confirmed verify
+      // plan against the deliverable. Fire-and-forget and self-guarded — a run
+      // without an opted-in plan is a no-op, and failures never affect the run.
+      if (reason === 'done') {
+        const messages: any[] = Array.isArray(state?.messages) ? state.messages : [];
+        const firstUserMessage = messages.find((m) => m?.role === 'user');
+        const goal = firstUserMessage
+          ? (extractTextFromMessageContent(firstUserMessage.content) ?? '')
+          : '';
+        // Surface the delivery-checker card first (a role='verify' message that
+        // renders the run's plan + results). Awaited before verification so
+        // auto-repair can persist its failure feedback onto this card (the
+        // VerifyMessageProcessor then surfaces it into the repair run's context).
+        // Self-guarded — failures never affect the run.
+        await this.createVerifyMessage(
+          operationId,
+          metadata?.assistantMessageId,
+          metadata?.userId || this.userId,
+        );
+        void runVerifyOnCompletion(this.serverDB, metadata?.userId || this.userId, {
+          deliverable: event.lastAssistantContent ?? '',
+          goal,
+          operationId,
+        });
+      }
 
       if (reason === 'error') {
         await hookDispatcher.dispatch(operationId, 'onError', event, metadata._hooks);

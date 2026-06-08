@@ -16,6 +16,7 @@ export const BUILTIN_AGENT_SLUGS = {
   selfReflection: 'self-reflection',
   skillManagement: 'skill-management',
   taskAgent: 'task-agent',
+  verifyAgent: 'verify-agent',
   webOnboarding: 'web-onboarding',
 } as const;
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { Button, Icon, Text } from '@lobehub/ui';
 import { Form, Input, type InputRef } from 'antd';
 import { Lock, Mail } from 'lucide-react';
@@ -10,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AuthCard } from '../../../../../features/AuthCard';
 import { trackLoginOrSignupClicked } from '../../../../../features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
+import AuthAgreement from '../../_layout/AuthAgreement';
 import { type SignUpFormValues } from './useSignUp';
 import { useSignUp } from './useSignUp';
 
@@ -51,11 +53,7 @@ const BetterAuthSignUpForm = () => {
   );
 
   return (
-    <AuthCard
-      footer={footer}
-      subtitle={t('betterAuth.signup.subtitle')}
-      title={t('betterAuth.signup.title')}
-    >
+    <AuthCard footer={footer} title={t('betterAuth.signup.cardTitle', { appName: BRANDING_NAME })}>
       <Form form={form} layout="vertical" onFinish={onSubmit}>
         <Form.Item
           name="email"
@@ -146,6 +144,7 @@ const BetterAuthSignUpForm = () => {
           </Button>
         </Form.Item>
       </Form>
+      <AuthAgreement />
     </AuthCard>
   );
 };

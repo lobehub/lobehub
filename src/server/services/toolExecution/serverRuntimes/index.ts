@@ -21,10 +21,12 @@ import { cloudSandboxRuntime } from './cloudSandbox';
 import { credsRuntime } from './creds';
 import { knowledgeBaseRuntime } from './knowledgeBase';
 import { lobeAgentRuntime } from './lobeAgent';
+import { lobeDeliveryCheckerRuntime } from './lobeDeliveryChecker';
 import { localSystemRuntime } from './localSystem';
 import { memoryRuntime } from './memory';
 import { messageRuntime } from './message';
 import { notebookRuntime } from './notebook';
+import { pageAgentRuntime } from './pageAgent';
 import { remoteDeviceRuntime } from './remoteDevice';
 import { selfFeedbackIntentRuntime } from './selfFeedbackIntent';
 import { skillManagementRuntime } from './skillManagement';
@@ -34,6 +36,7 @@ import { taskRuntime } from './task';
 import { topicReferenceRuntime } from './topicReference';
 import type { ServerRuntimeFactory, ServerRuntimeRegistration } from './types';
 import { userInteractionRuntime } from './userInteraction';
+import { verifyResultRuntime } from './verifyResult';
 import { webBrowsingRuntime } from './webBrowsing';
 import { webOnboardingRuntime } from './webOnboarding';
 
@@ -81,6 +84,9 @@ registerRuntimes([
   agentSignalReviewRuntime,
   agentSignalReflectionRuntime,
   agentSignalFeedbackIntentRuntime,
+  pageAgentRuntime,
+  verifyResultRuntime,
+  lobeDeliveryCheckerRuntime,
 ]);
 
 // ==================== Registry API ====================

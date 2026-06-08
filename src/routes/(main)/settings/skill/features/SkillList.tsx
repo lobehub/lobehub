@@ -413,8 +413,9 @@ const SkillList = memo<SkillListProps>(
     // Skills tab: prompt/agent-based skills (show description/content)
     const hasBuiltinTools = builtinToolItems.length > 0 && isConnectorView;
     const hasBuiltinSkills = builtinSkillItems.length > 0 && !isConnectorView;
-    const hasCommunitySkills =
-      !isConnectorView && (communitySkillItems.length > 0 || marketAgentSkills.length > 0);
+    // Skills tab only shows agent-based community skills; Lobehub/Klavis OAuth
+    // connectors live exclusively in the Connectors view (hasCommunityConnectors).
+    const hasCommunitySkills = !isConnectorView && marketAgentSkills.length > 0;
     const hasCommunityTools = communityMCPs.length > 0 && isConnectorView;
     // In connector view: custom MCPs. In skill view: user agent skills
     const hasCustomConnectors = customMCPs.length > 0 && isConnectorView;
@@ -502,40 +503,12 @@ const SkillList = memo<SkillListProps>(
             }),
           )}
 
-        {/* Skill view: community skills */}
+        {/* Skill view: community agent skills only (OAuth connectors are in the Connectors view) */}
         {hasCommunitySkills &&
           renderSection(
             'communitySkills',
             t('skillGroup.communitySkills', '社区 Skill'),
-            <>
-              {communitySkillItems.map((item) => {
-                if (item.type === 'lobehub') {
-                  return (
-                    <LobehubSkillItem
-                      isSelected={selectedIdentifier === item.provider.id}
-                      key={item.provider.id}
-                      provider={item.provider}
-                      server={getLobehubSkillServerByProvider(item.provider.id)}
-                      onSelect={
-                        onSelect ? () => onSelect(item.provider.id, 'lobehub-connector') : undefined
-                      }
-                    />
-                  );
-                }
-                return (
-                  <KlavisSkillItem
-                    isSelected={selectedIdentifier === item.serverType.identifier}
-                    key={item.serverType.identifier}
-                    server={getKlavisServerByIdentifier(item.serverType.identifier)}
-                    serverType={item.serverType}
-                    onSelect={
-                      onSelect ? () => onSelect(item.serverType.identifier, 'plugin') : undefined
-                    }
-                  />
-                );
-              })}
-              {renderMarketAgentSkills()}
-            </>,
+            renderMarketAgentSkills(),
           )}
 
         {hasCommunityTools &&

@@ -1298,6 +1298,22 @@ export class MessageModel {
   };
 
   /**
+   * Resolve the `role='verify'` delivery-checker card for an Agent Run (created
+   * with `metadata.verifyOperationId = operationId`). Used by auto-repair to
+   * persist the failure feedback onto the card it belongs to.
+   */
+  findVerifyMessageByOperationId = async (operationId: string) => {
+    return this.db.query.messages.findFirst({
+      where: and(
+        eq(messages.userId, this.userId),
+        eq(messages.role, 'verify'),
+        sql`${messages.metadata}->>'verifyOperationId' = ${operationId}`,
+      ),
+      orderBy: [desc(messages.createdAt)],
+    });
+  };
+
+  /**
    * Get parent messages for a thread
    *
    * @param params - Parameters for getting parent messages

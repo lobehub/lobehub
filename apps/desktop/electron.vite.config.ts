@@ -223,5 +223,19 @@ export default defineConfig({
       dedupe: ['react', 'react-dom'],
       tsconfigPaths: true,
     },
+    // In dev the BrowserWindow loads `app://renderer/` and the Electron main process
+    // proxies non-backend requests to this Vite dev server via `net.fetch`. The HMR
+    // WebSocket still connects directly (browser → ws://localhost:<port>) — so the
+    // port MUST be deterministic. `strictPort` fails fast on conflict instead of
+    // silently sliding, and `clientPort` baked into the HMR injection has to match.
+    server: {
+      hmr: {
+        clientPort: 5173,
+        host: 'localhost',
+        protocol: 'ws',
+      },
+      port: 5173,
+      strictPort: true,
+    },
   },
 });

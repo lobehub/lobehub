@@ -315,6 +315,13 @@ export class GatewayActionImpl {
      * a fresh user prompt.
      */
     resumeApproval?: ResumeApprovalParam;
+    /**
+     * Temporary message IDs created during the initial sendMessage phase.
+     * These are associated with the new gateway operation so the UI doesn't
+     * show a blank loading state while waiting for the first `step_start`
+     * event to call `replaceMessages` with the server's real message IDs.
+     */
+    tempMessageIds?: string[];
   }): Promise<ExecAgentResult> => {
     const {
       context,
@@ -325,6 +332,7 @@ export class GatewayActionImpl {
       parentMessageId,
       parentOperationId,
       resumeApproval,
+      tempMessageIds,
     } = params;
 
     const agentGatewayUrl =
@@ -449,6 +457,15 @@ export class GatewayActionImpl {
 
     // Associate the server-created assistant message with the gateway operation
     this.#get().associateMessageWithOperation(result.assistantMessageId, gatewayOpId);
+
+    // Also associate temp message IDs so the UI doesn't show a blank loading
+    // state while waiting for the first `step_start` event to call
+    // `replaceMessages` with the server's real message IDs.
+    if (tempMessageIds?.length) {
+      for (const tempId of tempMessageIds) {
+        this.#get().associateMessageWithOperation(tempId, gatewayOpId);
+      }
+    }
 
     // Phase-1 init done: child op is running. Hand off loading state from
     // the caller's op (e.g. `sendMessage`) to the child without a gap.

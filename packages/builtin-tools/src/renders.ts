@@ -21,6 +21,10 @@ import {
 } from '@lobechat/builtin-tool-knowledge-base/client';
 import { LobeAgentManifest, LobeAgentRenders } from '@lobechat/builtin-tool-lobe-agent/client';
 import {
+  LobeDeliveryCheckerManifest,
+  LobeDeliveryCheckerRenders,
+} from '@lobechat/builtin-tool-lobe-delivery-checker/client';
+import {
   LocalSystemManifest,
   LocalSystemRenders,
 } from '@lobechat/builtin-tool-local-system/client';
@@ -69,6 +73,10 @@ const BuiltinToolsRenders: Record<string, Record<string, BuiltinRender>> = {
   [GroupManagementManifest.identifier]: GroupManagementRenders as Record<string, BuiltinRender>,
   [KnowledgeBaseManifest.identifier]: KnowledgeBaseRenders as Record<string, BuiltinRender>,
   [LobeAgentManifest.identifier]: LobeAgentRenders as Record<string, BuiltinRender>,
+  [LobeDeliveryCheckerManifest.identifier]: LobeDeliveryCheckerRenders as Record<
+    string,
+    BuiltinRender
+  >,
   [LocalSystemManifest.identifier]: LocalSystemRenders as Record<string, BuiltinRender>,
   [MemoryManifest.identifier]: MemoryRenders as Record<string, BuiltinRender>,
   [MessageManifest.identifier]: MessageRenders as Record<string, BuiltinRender>,

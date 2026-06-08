@@ -6,7 +6,6 @@ import debug from 'debug';
 import { type ModelProvider } from 'model-bank';
 import superjson from 'superjson';
 
-import { withElectronProtocolIfElectron } from '@/const/protocol';
 import { isDesktop } from '@/const/version';
 import { type LambdaRouter } from '@/server/routers/lambda';
 
@@ -98,19 +97,7 @@ const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
 const linkOptions = {
   fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
     // Ensure credentials are included to send cookies (like mp_token)
-
-    const fetchOptions: RequestInit = {
-      ...init,
-      credentials: 'include',
-    };
-
-    if (isDesktop) {
-      const res = await fetch(input as string, fetchOptions);
-
-      if (res) return res;
-    }
-
-    return await fetch(input, fetchOptions);
+    return fetch(input, { ...init, credentials: 'include' });
   },
   headers: async () => {
     // dynamic import to avoid circular dependency
@@ -134,7 +121,7 @@ const linkOptions = {
     return headers;
   },
   transformer: superjson,
-  url: withElectronProtocolIfElectron('/trpc/lambda'),
+  url: '/trpc/lambda',
 };
 
 // Procedures that should skip batching for faster initial load

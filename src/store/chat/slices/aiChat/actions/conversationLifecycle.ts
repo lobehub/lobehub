@@ -705,6 +705,10 @@ export class ConversationLifecycleActionImpl {
           message,
           metadata: requestMetadata,
           parentOperationId: operationId,
+          // Pass temp message IDs so the UI doesn't show a blank loading
+          // state while waiting for the first step_start event to replace
+          // messages with the server's real IDs.
+          tempMessageIds: [tempAssistantId],
         });
 
         return {

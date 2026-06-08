@@ -158,6 +158,39 @@ export default {
   'builtins.lobe-agent.apiName.updatePlan.completed': 'Completed',
   'builtins.lobe-agent.apiName.updatePlan.modified': 'Modified',
   'builtins.lobe-agent.apiName.updateTodos': 'Update todos',
+  'builtins.lobe-delivery-checker.apiName.generateVerifyPlan': 'Create automated checks',
+  'builtins.lobe-delivery-checker.verifyPlan.optional': 'Optional',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.fields.description': 'Summary',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.fields.instruction': 'Judging rubric',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.fields.title': 'Check title',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.onFail.auto_repair': 'Auto repair',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.onFail.auto_repairDesc':
+    'On failure, automatically start a repair round and re-run the check.',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.onFail.manual': 'Handle manually',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.onFail.manualDesc':
+    'On failure, stop and leave the next step to you.',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.onFail.title': 'On failure',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.required.desc':
+    'When on, a failure on this check blocks the run from being delivered.',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.required.title': 'Required',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.rubric.maxRepairRounds.desc':
+    'How many times a failing run is automatically re-run with the failure feedback before it stops. Set to 0 to disable auto-repair.',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.rubric.maxRepairRounds.title':
+    'Max repair rounds',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.rubric.name': 'Standard name',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.rubric.title': 'Standard settings',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.title': 'Check configuration',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.verifier.agent.desc':
+    'A dedicated agent reads the trace, files, diff and PR before judging.',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.verifier.agent.title': 'Agent check',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.verifier.llm.desc':
+    'Judge against the text result and the run context.',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.verifier.llm.title': 'LLM judgment',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.verifier.program.desc':
+    'Validate via commands, APIs or status results. Good for tests, type-check, PR existence.',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.verifier.program.title': 'Program check',
+  'builtins.lobe-delivery-checker.verifyPlan.portal.verifier.title': 'Verification method',
+  'builtins.lobe-delivery-checker.verifyPlan.required': 'Required',
   'builtins.lobe-knowledge-base.apiName.readKnowledge': 'Read Library content',
   'builtins.lobe-knowledge-base.apiName.searchKnowledgeBase': 'Search Library',
   'builtins.lobe-knowledge-base.inspector.andMoreFiles': 'and {{count}} more',

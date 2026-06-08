@@ -275,10 +275,30 @@ export interface BuiltinPortalProps<Arguments = Record<string, any>, State = any
   arguments: Arguments;
   identifier: string;
   messageId: string;
+  /**
+   * Extra params the opener passed to `openToolUI` — e.g. which list item the
+   * user clicked. Optional; portals that don't need a focused target ignore it.
+   */
+  params?: Record<string, any>;
   state: State;
 }
 
 export type BuiltinPortal = <T = any>(props: BuiltinPortalProps<T>) => ReactNode;
+
+/**
+ * Props for a tool's optional portal header content. The framework owns the
+ * back/close chrome and renders this in the title slot, so a tool can name and
+ * decorate its own portal without the framework hard-coding tool knowledge.
+ */
+export interface BuiltinPortalTitleProps {
+  apiName?: string;
+  identifier: string;
+  messageId: string;
+  /** Extra params the opener passed to `openToolUI` (e.g. focused item index). */
+  params?: Record<string, any>;
+}
+
+export type BuiltinPortalTitle = (props: BuiltinPortalTitleProps) => ReactNode;
 
 export interface BuiltinPlaceholderProps<T extends Record<string, any> = any> {
   apiName: string;

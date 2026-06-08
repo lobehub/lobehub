@@ -289,17 +289,6 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1;
     text-align: start;
   `,
-  searchBox: css`
-    display: flex;
-    align-items: center;
-
-    height: 36px;
-    margin-inline: -8px;
-    padding-inline: 4px;
-    border-radius: 10px;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
   toolLabel: css`
     display: flex;
     flex: 1;
@@ -341,50 +330,44 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorFillQuaternary};
   `,
-  statsFooter: css`
-    display: flex;
-    gap: 14px;
-    align-items: center;
-
-    margin-block-end: -4px;
-    margin-inline: -8px;
-    padding-inline: 8px;
-  `,
-  statsSettingsButton: css`
+  addSkillRow: css`
     cursor: pointer;
 
-    display: inline-flex;
-    flex: none;
+    display: flex;
+    gap: 8px;
     align-items: center;
-    justify-content: center;
 
-    width: 24px;
-    height: 24px;
-    padding: 0;
+    /* width: 320px + margin-inline: -12px anchors the submenu to 320px so it
+       matches the attachment submenu, and lets the row break out of the footer's
+       12px inline padding to span full width; padding-inline: 12px then re-aligns
+       the icon/text to the same column as the menu rows above. */
+    width: 320px;
+    min-height: 32px;
+    margin-inline: -12px;
+    padding-inline: 12px;
     border: 0;
     border-radius: 6px;
 
-    color: ${cssVar.colorTextTertiary};
+    font-size: 14px;
+    color: ${cssVar.colorText};
 
     background: transparent;
 
-    transition:
-      color 0.2s,
-      background 0.2s;
+    transition: background 150ms ${cssVar.motionEaseOut};
 
     &:hover {
-      color: ${cssVar.colorTextSecondary};
       background: ${cssVar.colorFillTertiary};
     }
-  `,
-  statsItem: css`
-    display: inline-flex;
-    gap: 5px;
-    align-items: center;
 
-    font-size: 12px;
-    line-height: 18px;
-    color: ${cssVar.colorTextTertiary};
+    /* The footer adds 8px block padding; cancel it on the last action row so the
+       bottom row sits flush against the popup edge instead of leaving a gap. */
+    &:last-child {
+      margin-block-end: -8px;
+    }
+  `,
+  addSkillLabel: css`
+    flex: 1;
+    text-align: start;
   `,
 }));
 
@@ -1279,12 +1262,14 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
   const renderActivationGroupLabel = ({
     autoSwitch,
+    count,
     icon,
     open,
     title,
     onToggle,
   }: {
     autoSwitch?: boolean;
+    count?: number;
     icon: ReactNode;
     open: boolean;
     title: string;
@@ -1303,6 +1288,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       <div className={cx(styles.activationGroupTitleBlock)}>
         {icon}
         <span className={cx(styles.activationGroupTitleText)}>{title}</span>
+        {typeof count === 'number' && <span className={cx(styles.count)}>{count}</span>}
       </div>
       <div className={cx(styles.activationGroupActions)}>
         {autoSwitch && (
@@ -1339,69 +1325,50 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   );
 
   const marketHeader = (
-    <div className={cx(styles.searchBox)} onClick={stopPropagation} onKeyDown={stopPropagation}>
-      <SearchBar
-        allowClear
-        placeholder={t('tools.search')}
-        size="small"
-        style={{ flex: 1 }}
-        value={searchKeyword}
-        variant="borderless"
-        onChange={(event) => setSearchKeyword(event.target.value)}
-        onKeyDown={stopPropagation}
-      />
-    </div>
+    <SearchBar
+      allowClear
+      className="lobe-skill-submenu-search"
+      placeholder={t('tools.search')}
+      size="small"
+      style={{ width: '100%' }}
+      value={searchKeyword}
+      variant="borderless"
+      onChange={(event) => setSearchKeyword(event.target.value)}
+      onClick={stopPropagation}
+      onKeyDown={stopPropagation}
+    />
   );
 
   const marketFooter =
     allSkillItems.length > 0 || fixedItems.length > 0 ? (
-      <div className={cx(styles.statsFooter)}>
-        <span className={cx(styles.statsItem)}>
-          <Icon icon={Pin} size={12} />
-          {allPinnedItems.length + fixedItems.length}
-        </span>
-        <span className={cx(styles.statsItem)}>
-          <Icon icon={Zap} size={12} />
-          {allAutoItems.length}
-        </span>
-        <span
-          style={{
-            alignItems: 'center',
-            display: 'inline-flex',
-            gap: 2,
-            marginInlineStart: 'auto',
+      <>
+        <button
+          aria-label={t('plus.addSkills', { ns: 'chat' })}
+          className={cx(styles.addSkillRow)}
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            closeDropdown?.();
+            createSkillStoreModal();
           }}
         >
-          <Tooltip placement="top" title={t('plus.addSkills', { ns: 'chat' })}>
-            <button
-              aria-label={t('plus.addSkills', { ns: 'chat' })}
-              className={cx(styles.statsSettingsButton)}
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                closeDropdown?.();
-                createSkillStoreModal();
-              }}
-            >
-              <Icon icon={Store} size={14} />
-            </button>
-          </Tooltip>
-          <Tooltip placement="top" title={t('tools.plugins.management')}>
-            <button
-              aria-label={t('tools.plugins.management')}
-              className={cx(styles.statsSettingsButton)}
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                closeDropdown?.();
-                navigate('/settings/skill');
-              }}
-            >
-              <Icon icon={Settings} size={14} />
-            </button>
-          </Tooltip>
-        </span>
-      </div>
+          <Icon icon={Store} size={SKILL_ICON_SIZE} />
+          <span className={cx(styles.addSkillLabel)}>{t('plus.addSkills', { ns: 'chat' })}</span>
+        </button>
+        <button
+          aria-label={t('tools.plugins.management')}
+          className={cx(styles.addSkillRow)}
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            closeDropdown?.();
+            navigate('/settings/skill');
+          }}
+        >
+          <Icon icon={Settings} size={SKILL_ICON_SIZE} />
+          <span className={cx(styles.addSkillLabel)}>{t('tools.plugins.management')}</span>
+        </button>
+      </>
     ) : undefined;
 
   const marketItems: ItemType[] = [
@@ -1411,6 +1378,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             children: pinnedOpen ? pinnedItems : [],
             key: 'pinned',
             label: renderActivationGroupLabel({
+              count: allPinnedItems.length,
               icon: <Icon icon={Pin} size={14} />,
               open: pinnedOpen,
               title: t('tools.activation.pinned'),
@@ -1435,6 +1403,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             key: 'auto',
             label: renderActivationGroupLabel({
               autoSwitch: true,
+              count: allAutoItems.length,
               icon: <Icon icon={Zap} size={14} />,
               open: autoOpen,
               title: t('tools.activation.auto'),

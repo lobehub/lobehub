@@ -170,16 +170,21 @@ const messageDetailId = (s: ChatStoreState): string | undefined => {
 // Tool UI / Plugin selectors
 const currentToolUI = (
   s: ChatStoreState,
-): { identifier: string; messageId: string } | undefined => {
+): { identifier: string; messageId: string; params?: Record<string, any> } | undefined => {
   const view = getViewData(s, PortalViewType.ToolUI);
   if (view) {
-    return { identifier: view.identifier, messageId: view.messageId };
+    return { identifier: view.identifier, messageId: view.messageId, params: view.params };
   }
   return undefined;
 };
 
 const toolMessageId = (s: ChatStoreState) => currentToolUI(s)?.messageId;
 const toolUIIdentifier = (s: ChatStoreState) => currentToolUI(s)?.identifier;
+const toolUIParams = (s: ChatStoreState) => currentToolUI(s)?.params;
+
+const currentVerifyResult = (s: ChatStoreState) => getViewData(s, PortalViewType.VerifyResult);
+const verifyResultOperationId = (s: ChatStoreState) => currentVerifyResult(s)?.operationId;
+const verifyResultCheckItemId = (s: ChatStoreState) => currentVerifyResult(s)?.checkItemId;
 const isPluginUIOpen = (id: string) => (s: ChatStoreState) =>
   toolMessageId(s) === id && showPortal(s);
 
@@ -237,7 +242,12 @@ export const chatPortalSelectors = {
   currentToolUI,
   toolMessageId,
   toolUIIdentifier,
+  toolUIParams,
   isPluginUIOpen,
+
+  // Verify result detail data
+  verifyResultOperationId,
+  verifyResultCheckItemId,
 };
 
 export * from './selectors/thread';

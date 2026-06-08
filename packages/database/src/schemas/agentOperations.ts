@@ -1,3 +1,4 @@
+import type { VerifyCheckItem } from '@lobechat/types';
 import { boolean, index, integer, jsonb, pgTable, text } from 'drizzle-orm/pg-core';
 
 import { amountNumeric, timestamps, timestamptz } from './_helpers';
@@ -25,6 +26,23 @@ const completionReasons = [
   'cost_limit',
   'waiting_for_human',
   'waiting_for_async_tool',
+] as const;
+
+/**
+ * Denormalized rollup of the operation's verify (delivery checker) state.
+ * Lets the operation list page render badges / filter without joining the
+ * verify_* tables. It is a rollup of plan.status + result aggregation and MUST
+ * be updated through the service layer (on plan confirm / each result / repair)
+ * to avoid drift.
+ */
+const verifyStatuses = [
+  'unverified',
+  'planned',
+  'verifying',
+  'passed',
+  'failed',
+  'repairing',
+  'delivered',
 ] as const;
 
 export interface AgentOperationInterruption {
@@ -74,6 +92,18 @@ export const agentOperations = pgTable(
     // ---- Lifecycle ----
     status: text('status', { enum: operationStatuses }).notNull(),
     completionReason: text('completion_reason', { enum: completionReasons }),
+
+    // ---- Verify (delivery checker) ----
+    /** Denormalized rollup of the verify pipeline state. */
+    verifyStatus: text('verify_status', { enum: verifyStatuses }),
+    /**
+     * Immutable check-plan snapshot for this run (1:1, instantiated from rubrics /
+     * agent-generated, frozen on confirm). verify_check_results relate to its items
+     * via check_item_id. auto-repair spawns a NEW operation, so this stays 1:1.
+     */
+    verifyPlan: jsonb('verify_plan').$type<VerifyCheckItem[]>(),
+    /** When the user confirmed (froze) the plan. */
+    verifyPlanConfirmedAt: timestamptz('verify_plan_confirmed_at'),
 
     startedAt: timestamptz('started_at'),
     completedAt: timestamptz('completed_at'),

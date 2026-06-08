@@ -36,6 +36,10 @@ import {
 } from '@lobechat/builtin-tool-knowledge-base/client';
 import { LobeAgentInspectors, LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent/client';
 import {
+  LobeDeliveryCheckerInspectors,
+  LobeDeliveryCheckerManifest,
+} from '@lobechat/builtin-tool-lobe-delivery-checker/client';
+import {
   LocalSystemInspectors,
   LocalSystemManifest,
 } from '@lobechat/builtin-tool-local-system/client';
@@ -94,6 +98,10 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   >,
   [KnowledgeBaseManifest.identifier]: KnowledgeBaseInspectors as Record<string, BuiltinInspector>,
   [LobeAgentManifest.identifier]: LobeAgentInspectors as Record<string, BuiltinInspector>,
+  [LobeDeliveryCheckerManifest.identifier]: LobeDeliveryCheckerInspectors as Record<
+    string,
+    BuiltinInspector
+  >,
   [LocalSystemManifest.identifier]: LocalSystemInspectors as Record<string, BuiltinInspector>,
   [MemoryManifest.identifier]: MemoryInspectors as Record<string, BuiltinInspector>,
   [MessageManifest.identifier]: MessageInspectors as Record<string, BuiltinInspector>,

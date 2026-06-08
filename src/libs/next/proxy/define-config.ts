@@ -239,6 +239,13 @@ export function defineConfig() {
           signInUrl.searchParams.set('hl', hl);
           logBetterAuth('Preserving locale to sign-in: hl=%s', hl);
         }
+        // Preserve marketing attribution (e.g. sign-ups originating from Market)
+        // so it survives the auth detour and reaches the sign-up page.
+        const utmSource = req.nextUrl.searchParams.get('utm_source');
+        if (utmSource) {
+          signInUrl.searchParams.set('utm_source', utmSource);
+          logBetterAuth('Preserving utm_source to sign-in: %s', utmSource);
+        }
         return Response.redirect(signInUrl);
       }
       logBetterAuth('Request a free route but not login, allow visit without auth header');
