@@ -5,8 +5,6 @@
   "features.agentSelfIteration.title": "Agenten-Selbstiteration",
   "features.assistantMessageGroup.desc": "Agenten-Nachrichten und deren Tool-Ergebnisse gemeinsam anzeigen",
   "features.assistantMessageGroup.title": "Agenten-Nachrichten gruppieren",
-  "features.executionDeviceSwitcher.desc": "Zeigen Sie den Ausführungsgeräte-Umschalter in der heterogenen Agenten-Toolbar an, damit Sie Läufe auf dieses Gerät, eine Cloud-Sandbox oder ein verbundenes Remote-Gerät leiten können.",
-  "features.executionDeviceSwitcher.title": "Ausführungsgeräte-Umschalter",
   "features.gatewayMode.desc": "Führt Agentenaufgaben über die Gateway-WebSocket-Verbindung auf dem Server aus, statt sie lokal auszuführen. Ermöglicht eine schnellere Ausführung und verringert die Client-Ressourcennutzung.",
   "features.gatewayMode.title": "Serverseitige Agentenausführung (Gateway)",
   "features.groupChat.desc": "Koordination von Gruppenchats mit mehreren Agenten aktivieren.",

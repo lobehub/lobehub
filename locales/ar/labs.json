@@ -5,8 +5,6 @@
   "features.agentSelfIteration.title": "التكرار الذاتي للوكيل",
   "features.assistantMessageGroup.desc": "تجميع رسائل الوكيل ونتائج استدعاء الأدوات معًا للعرض",
   "features.assistantMessageGroup.title": "تجميع رسائل الوكيل",
-  "features.executionDeviceSwitcher.desc": "إظهار مفتاح تبديل جهاز التنفيذ في شريط أدوات الوكيل المتنوع بحيث يمكنك توجيه العمليات إلى هذا الجهاز أو إلى سحابة تجريبية أو إلى جهاز بعيد مرتبط.",
-  "features.executionDeviceSwitcher.title": "مفتاح تبديل جهاز التنفيذ",
   "features.gatewayMode.desc": "تنفيذ مهام الوكيل على الخادم عبر بوابة WebSocket بدلًا من التشغيل محليًا، مما يتيح تنفيذًا أسرع ويقلل من استهلاك موارد العميل.",
   "features.gatewayMode.title": "تنفيذ الوكيل من جانب الخادم (البوابة)",
   "features.groupChat.desc": "تمكين تنسيق الدردشة الجماعية متعددة الوكلاء.",

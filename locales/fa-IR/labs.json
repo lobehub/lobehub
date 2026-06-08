@@ -5,8 +5,6 @@
   "features.agentSelfIteration.title": "خود‌تکراری عامل",
   "features.assistantMessageGroup.desc": "نمایش گروهی پیام‌های عامل و نتایج ابزارهای فراخوانی‌شده به‌صورت یکجا",
   "features.assistantMessageGroup.title": "گروه‌بندی پیام‌های عامل",
-  "features.executionDeviceSwitcher.desc": "نمایش تغییر‌دهنده دستگاه اجرا در نوار ابزار نماینده ناهمگن تا بتوانید اجراها را به این دستگاه، یک محیط ابری یا یک دستگاه راه دور متصل هدایت کنید.",
-  "features.executionDeviceSwitcher.title": "تغییر‌دهنده دستگاه اجرا",
   "features.gatewayMode.desc": "اجرای وظایف ایجنت روی سرور از طریق وب‌سوکت Gateway به‌جای اجرای محلی. این کار سرعت اجرا را افزایش داده و مصرف منابع در دستگاه کاربر را کاهش می‌دهد.",
   "features.gatewayMode.title": "اجرای ایجنت در سمت سرور (Gateway)",
   "features.groupChat.desc": "فعال‌سازی هماهنگی گفت‌وگوی گروهی چندعاملی.",
