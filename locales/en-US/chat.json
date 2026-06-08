@@ -211,7 +211,7 @@
   "heteroAgent.executionTarget.downloadDesktop": "Get Desktop App",
   "heteroAgent.executionTarget.downloadDesktopDesc": "Run agents with access to your computer",
   "heteroAgent.executionTarget.downloadDesktopTitle": "Get the desktop app",
-  "heteroAgent.executionTarget.infoTooltip": "Pick a device and the agent uses it as its runtime environment — reading and writing files and operating the computer. Cloud sandbox devices are provided by LobeHub Marketplace.",
+  "heteroAgent.executionTarget.infoTooltip": "Pick a device and the agent uses it as its runtime environment — reading and writing files and operating the computer. Cloud sandbox is provided by LobeHub Marketplace.",
   "heteroAgent.executionTarget.loading": "Loading devices…",
   "heteroAgent.executionTarget.local": "This device",
   "heteroAgent.executionTarget.localDesc": "Run as a local process on this desktop app",
