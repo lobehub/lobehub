@@ -209,7 +209,7 @@
   "heteroAgent.cloudRepo.notSet": "未选择仓库",
   "heteroAgent.cloudRepo.sectionTitle": "代码仓库",
   "heteroAgent.executionTarget.downloadDesktop": "下载桌面端",
-  "heteroAgent.executionTarget.downloadDesktopDesc": "在本机运行 Agent，可访问你的电脑",
+  "heteroAgent.executionTarget.downloadDesktopDesc": "让 Agent 直接连接你的电脑",
   "heteroAgent.executionTarget.downloadDesktopTitle": "下载桌面端",
   "heteroAgent.executionTarget.infoTooltip": "选择「远程设备」后可在网页中驱动该机器；「本机」仅在桌面端内运行 agent。",
   "heteroAgent.executionTarget.loading": "正在加载设备…",

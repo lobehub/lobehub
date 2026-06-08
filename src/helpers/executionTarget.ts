@@ -1,4 +1,4 @@
-import type { HeteroExecutionTarget, LobeAgentAgencyConfig, RuntimeEnvMode } from '@lobechat/types';
+import type { DeviceExecutionTarget, LobeAgentAgencyConfig, RuntimeEnvMode } from '@lobechat/types';
 
 /**
  * Single source of truth for where an agent executes. Replaces the old
@@ -17,7 +17,7 @@ import type { HeteroExecutionTarget, LobeAgentAgencyConfig, RuntimeEnvMode } fro
 export const resolveExecutionTarget = (
   agencyConfig: LobeAgentAgencyConfig | undefined,
   isDesktop: boolean,
-): HeteroExecutionTarget => {
+): DeviceExecutionTarget => {
   const stored = agencyConfig?.executionTarget;
   const effective = stored ?? (isDesktop ? 'local' : 'none');
   if (!isDesktop && effective === 'local') return 'sandbox';
@@ -31,7 +31,7 @@ export const resolveExecutionTarget = (
  * chat). `device`/`none` both gate to `'none'` — device tools are routed
  * separately via `executionTarget === 'device'` + `boundDeviceId`.
  */
-export const executionTargetToRuntimeMode = (target: HeteroExecutionTarget): RuntimeEnvMode => {
+export const executionTargetToRuntimeMode = (target: DeviceExecutionTarget): RuntimeEnvMode => {
   switch (target) {
     case 'local': {
       return 'local';

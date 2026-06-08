@@ -45,7 +45,7 @@ export interface HeterogeneousProviderConfig {
  *
  * Remote hetero agents (`openclaw` | `hermes`) are always `device`.
  */
-export type HeteroExecutionTarget = 'device' | 'local' | 'none' | 'sandbox';
+export type DeviceExecutionTarget = 'device' | 'local' | 'none' | 'sandbox';
 
 /**
  * Agent agency configuration.
@@ -63,7 +63,7 @@ export interface LobeAgentAgencyConfig {
    * platform default: `'local'` on desktop, `'none'` on web (or `'device'` for
    * remote hetero providers).
    */
-  executionTarget?: HeteroExecutionTarget;
+  executionTarget?: DeviceExecutionTarget;
   heterogeneousProvider?: HeterogeneousProviderConfig;
   /**
    * Ad-hoc verify criteria mounted directly on this agent, in addition to any

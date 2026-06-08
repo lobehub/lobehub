@@ -3,7 +3,7 @@
 import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
 import { isDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
-import type { HeteroExecutionTarget } from '@lobechat/types';
+import type { DeviceExecutionTarget } from '@lobechat/types';
 import { Microsoft } from '@lobehub/icons';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -274,15 +274,15 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const storedTarget = agencyConfig?.executionTarget;
   const boundDeviceId = agencyConfig?.boundDeviceId;
 
-  // Effective target: falls back to local on desktop, sandbox on web
-  const executionTarget: HeteroExecutionTarget = storedTarget ?? (isDesktop ? 'local' : 'none');
+  // Effective target: falls back to local on desktop, no device on web
+  const executionTarget: DeviceExecutionTarget = storedTarget ?? (isDesktop ? 'local' : 'none');
 
   const { data: devices, isLoading } = lambdaQuery.device.listDevices.useQuery(undefined, {
     staleTime: 30_000,
   });
 
   const handleSelect = useCallback(
-    async (target: HeteroExecutionTarget, deviceId?: string) => {
+    async (target: DeviceExecutionTarget, deviceId?: string) => {
       setOpen(false);
 
       // `executionTarget` is the single source of truth now — the server tool
@@ -326,7 +326,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       t('heteroAgent.executionTarget.unknownDevice');
   }
 
-  const isActive = (target: HeteroExecutionTarget, deviceId?: string) => {
+  const isActive = (target: DeviceExecutionTarget, deviceId?: string) => {
     if (target === 'device') return executionTarget === 'device' && boundDeviceId === deviceId;
     return executionTarget === target;
   };
@@ -354,13 +354,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           </Tooltip>
         </Flexbox>
       </div>
-      <OptionRow
-        active={isActive('none')}
-        desc={t('heteroAgent.executionTarget.noneDesc')}
-        icon={<Icon icon={CircleSlashIcon} size={14} />}
-        label={t('heteroAgent.executionTarget.none')}
-        onClick={() => void handleSelect('none')}
-      />
       {isDesktop ? (
         <OptionRow
           active={isActive('local')}
@@ -397,6 +390,13 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           onClick={() => void handleSelect('device', d.deviceId)}
         />
       ))}
+      <OptionRow
+        active={isActive('none')}
+        desc={t('heteroAgent.executionTarget.noneDesc')}
+        icon={<Icon icon={CircleSlashIcon} size={14} />}
+        label={t('heteroAgent.executionTarget.none')}
+        onClick={() => void handleSelect('none')}
+      />
       {hasNoDevices && isLoading ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.loading')}</div>
       ) : null}
