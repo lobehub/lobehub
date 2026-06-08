@@ -15,11 +15,11 @@ describe('resolveExecutionTarget', () => {
     expect(resolveExecutionTarget(cfg({ executionTarget: 'sandbox' }), true)).toBe('sandbox');
   });
 
-  it('defaults to local on desktop, sandbox on web when unset', () => {
+  it('defaults to local on desktop, none on web when unset', () => {
     expect(resolveExecutionTarget(undefined, true)).toBe('local');
-    expect(resolveExecutionTarget(undefined, false)).toBe('sandbox');
+    expect(resolveExecutionTarget(undefined, false)).toBe('none');
     expect(resolveExecutionTarget(cfg(), true)).toBe('local');
-    expect(resolveExecutionTarget(cfg(), false)).toBe('sandbox');
+    expect(resolveExecutionTarget(cfg(), false)).toBe('none');
   });
 
   it('coerces a stored `local` to `sandbox` on web (no local filesystem)', () => {
@@ -31,6 +31,11 @@ describe('resolveExecutionTarget', () => {
   it('keeps `device` on web (a bound device is reachable from anywhere)', () => {
     expect(resolveExecutionTarget(cfg({ executionTarget: 'device' }), false)).toBe('device');
   });
+
+  it('keeps an explicit `none` on both platforms', () => {
+    expect(resolveExecutionTarget(cfg({ executionTarget: 'none' }), true)).toBe('none');
+    expect(resolveExecutionTarget(cfg({ executionTarget: 'none' }), false)).toBe('none');
+  });
 });
 
 describe('executionTargetToRuntimeMode', () => {
@@ -38,6 +43,7 @@ describe('executionTargetToRuntimeMode', () => {
     expect(executionTargetToRuntimeMode('local')).toBe('local');
     expect(executionTargetToRuntimeMode('sandbox')).toBe('cloud');
     expect(executionTargetToRuntimeMode('device')).toBe('none');
+    expect(executionTargetToRuntimeMode('none')).toBe('none');
   });
 });
 
@@ -51,15 +57,15 @@ describe('resolveRuntimeMode', () => {
   it('derives from the default target when neither executionTarget nor legacy is set', () => {
     // desktop default → local
     expect(resolveRuntimeMode(undefined, undefined, true)).toBe('local');
-    // web default → sandbox → cloud (graduates the execution-device feature: an
-    // unconfigured web agent now gets cloud sandbox tools instead of 'none')
-    expect(resolveRuntimeMode(undefined, undefined, false)).toBe('cloud');
+    // web default → none (an unconfigured web agent is plain chat, no run tools)
+    expect(resolveRuntimeMode(undefined, undefined, false)).toBe('none');
   });
 
   it('lets an explicit executionTarget override the legacy runtimeMode', () => {
     expect(resolveRuntimeMode(cfg({ executionTarget: 'sandbox' }), 'local', true)).toBe('cloud');
     expect(resolveRuntimeMode(cfg({ executionTarget: 'device' }), 'cloud', true)).toBe('none');
     expect(resolveRuntimeMode(cfg({ executionTarget: 'local' }), 'none', true)).toBe('local');
+    expect(resolveRuntimeMode(cfg({ executionTarget: 'none' }), 'local', true)).toBe('none');
   });
 
   it('applies the web `local`→`sandbox` coercion before mapping to runtime mode', () => {

@@ -216,6 +216,8 @@
   "heteroAgent.executionTarget.local": "本机",
   "heteroAgent.executionTarget.localDesc": "在当前桌面端以本地进程运行",
   "heteroAgent.executionTarget.noDevices": "暂无远程设备。在另一台机器上执行 `lh connect` 即可接入。",
+  "heteroAgent.executionTarget.none": "无设备",
+  "heteroAgent.executionTarget.noneDesc": "纯对话，不使用任何执行环境",
   "heteroAgent.executionTarget.offline": "离线",
   "heteroAgent.executionTarget.online": "在线",
   "heteroAgent.executionTarget.sandbox": "云端沙箱",

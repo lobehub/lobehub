@@ -10,6 +10,7 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   CheckIcon,
   ChevronDownIcon,
+  CircleSlashIcon,
   CloudIcon,
   ExternalLinkIcon,
   InfoIcon,
@@ -274,7 +275,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const boundDeviceId = agencyConfig?.boundDeviceId;
 
   // Effective target: falls back to local on desktop, sandbox on web
-  const executionTarget: HeteroExecutionTarget = storedTarget ?? (isDesktop ? 'local' : 'sandbox');
+  const executionTarget: HeteroExecutionTarget = storedTarget ?? (isDesktop ? 'local' : 'none');
 
   const { data: devices, isLoading } = lambdaQuery.device.listDevices.useQuery(undefined, {
     staleTime: 30_000,
@@ -311,7 +312,10 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // Compute chip
   let chipIcon: ReactNode = <Icon icon={CloudIcon} size={14} />;
   let chipLabel = t('heteroAgent.executionTarget.sandbox');
-  if (executionTarget === 'local') {
+  if (executionTarget === 'none') {
+    chipIcon = <Icon icon={CircleSlashIcon} size={14} />;
+    chipLabel = t('heteroAgent.executionTarget.none');
+  } else if (executionTarget === 'local') {
     chipIcon = <Icon icon={LaptopIcon} size={14} />;
     chipLabel = t('heteroAgent.executionTarget.local');
   } else if (executionTarget === 'device') {
@@ -350,6 +354,13 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           </Tooltip>
         </Flexbox>
       </div>
+      <OptionRow
+        active={isActive('none')}
+        desc={t('heteroAgent.executionTarget.noneDesc')}
+        icon={<Icon icon={CircleSlashIcon} size={14} />}
+        label={t('heteroAgent.executionTarget.none')}
+        onClick={() => void handleSelect('none')}
+      />
       {isDesktop ? (
         <OptionRow
           active={isActive('local')}

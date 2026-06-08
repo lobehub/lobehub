@@ -38,13 +38,14 @@ export interface HeterogeneousProviderConfig {
 
 /**
  * Where a hetero agent runs.
+ * - `none`    : no execution environment — plain chat, no built-in run tools
  * - `local`   : in-process spawn on the user's Electron desktop (desktop only)
  * - `device`  : dispatched to an `lh connect` device identified by `boundDeviceId`
  * - `sandbox` : server-spawned cloud sandbox
  *
  * Remote hetero agents (`openclaw` | `hermes`) are always `device`.
  */
-export type HeteroExecutionTarget = 'device' | 'local' | 'sandbox';
+export type HeteroExecutionTarget = 'device' | 'local' | 'none' | 'sandbox';
 
 /**
  * Agent agency configuration.
@@ -58,8 +59,9 @@ export interface LobeAgentAgencyConfig {
    */
   boundDeviceId?: string;
   /**
-   * Execution target for the hetero agent. When omitted, the server falls back
-   * to `'sandbox'` (or `'device'` for remote hetero providers).
+   * Execution target for the hetero agent. When omitted, resolves to a
+   * platform default: `'local'` on desktop, `'none'` on web (or `'device'` for
+   * remote hetero providers).
    */
   executionTarget?: HeteroExecutionTarget;
   heterogeneousProvider?: HeterogeneousProviderConfig;

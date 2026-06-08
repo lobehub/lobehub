@@ -182,6 +182,8 @@ export default {
   'heteroAgent.executionTarget.localDesc': 'Run as a local process on this desktop app',
   'heteroAgent.executionTarget.noDevices':
     'No remote devices yet. Run `lh connect` on another machine to add one.',
+  'heteroAgent.executionTarget.none': 'No device',
+  'heteroAgent.executionTarget.noneDesc': 'Plain chat, no execution environment',
   'heteroAgent.executionTarget.offline': 'Offline',
   'heteroAgent.executionTarget.online': 'Online',
   'heteroAgent.executionTarget.sandbox': 'Cloud sandbox',
