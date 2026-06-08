@@ -259,7 +259,7 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
             >
               <DesktopChatInput
                 inputContainerProps={inputContainerProps}
-                showRuntimeConfig={false}
+                showControlBar={false}
                 placeholder={
                   isAgent ? t('createModal.placeholder') : t('createModal.groupPlaceholder')
                 }

@@ -133,9 +133,9 @@ const HeterogeneousChatInput = memo(() => {
       {renderDeviceGuard()}
       <ChatInput
         skipScrollMarginWithList
+        controlBarSlot={<WorkingDirectoryBar />}
         leftActions={leftActions}
         rightActions={rightActions}
-        runtimeConfigSlot={<WorkingDirectoryBar />}
         sendButtonProps={{ disabled: inputDisabled, shape: 'round' }}
         onEditorReady={(instance) => {
           // Sync to global ChatStore for compatibility with other features

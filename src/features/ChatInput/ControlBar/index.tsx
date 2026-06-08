@@ -23,10 +23,8 @@ const styles = createStaticStyles(({ css }) => ({
   // scrollbar is hidden — trackpad / wheel still works.
   leftGroup: css`
     scrollbar-width: none;
-
     overflow: auto hidden;
     flex: 1;
-
     min-width: 0;
 
     &::-webkit-scrollbar {
@@ -39,7 +37,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const RuntimeConfig = memo(() => {
+const ControlBar = memo(() => {
   const agentId = useAgentId();
   const showContextWindow = useChatInputStore((s) =>
     s.rightActions.flat().includes('contextWindow'),
@@ -76,6 +74,6 @@ const RuntimeConfig = memo(() => {
   );
 });
 
-RuntimeConfig.displayName = 'RuntimeConfig';
+ControlBar.displayName = 'ControlBar';
 
-export default RuntimeConfig;
+export default ControlBar;

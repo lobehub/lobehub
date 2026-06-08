@@ -25,7 +25,7 @@ interface WorkspaceControlsProps {
  * Workspace/Project control strip shared by the chat-input runtime bars:
  * device selector + working directory + git branch / file changes / PR info.
  *
- * Both RuntimeConfig (normal agents) and the heterogeneous WorkingDirectoryBar
+ * Both ControlBar (normal agents) and the heterogeneous WorkingDirectoryBar
  * compose this, so the Device / Branch / diff / PR cluster can't drift between
  * them. The bar-specific bits (ModeSelector, ApprovalMode, ContextWindow, the
  * full-access badge) stay in their respective bars.

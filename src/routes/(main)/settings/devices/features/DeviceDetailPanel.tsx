@@ -9,7 +9,7 @@ import { FolderOpenIcon, FolderPlusIcon, XIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import DirIcon from '@/features/ChatInput/RuntimeConfig/DirIcon';
+import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { electronSystemService } from '@/services/electron/system';
 import { nextWorkingDirs } from '@/store/device';
