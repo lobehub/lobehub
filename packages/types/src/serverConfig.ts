@@ -74,6 +74,7 @@ export interface GlobalServerConfig {
   enableUploadFileToServer?: boolean;
   enableVisualUnderstanding?: boolean;
   image?: PartialDeep<UserImageConfig>;
+  includeFileUrlInContext?: boolean;
   memory?: GlobalMemoryConfig;
   oAuthSSOProviders?: string[];
   systemAgent?: PartialDeep<UserServiceModelConfig>;
