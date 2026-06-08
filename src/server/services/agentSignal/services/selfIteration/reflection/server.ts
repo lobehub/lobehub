@@ -82,8 +82,9 @@ export const createServerSelfReflectionPolicyOptions = ({
   db,
   selfIterationEnabled = false,
   userId,
+  workspaceId,
 }: CreateServerSelfIterationPolicyOptions): CreateSelfReflectionSourceHandlerDependencies => {
-  const reviewContextModel = new AgentSignalReviewContextModel(db, userId);
+  const reviewContextModel = new AgentSignalReviewContextModel(db, userId, workspaceId);
 
   return {
     acquireReviewGuard: (input) =>
@@ -103,6 +104,7 @@ export const createServerSelfReflectionPolicyOptions = ({
     },
     collectContext: (input) => collectSelfReflectionContext(reviewContextModel, input),
     db,
+    workspaceId,
   };
 };
 
@@ -132,8 +134,9 @@ export const createServerProcedurePolicyOptions = ({
   db,
   selfIterationEnabled = false,
   userId,
+  workspaceId,
 }: CreateServerSelfIterationPolicyOptions) => {
-  const reviewContextModel = new AgentSignalReviewContextModel(db, userId);
+  const reviewContextModel = new AgentSignalReviewContextModel(db, userId, workspaceId);
 
   return createProcedurePolicyOptions({
     policyStateStore: redisPolicyStateStore,
@@ -162,6 +165,7 @@ export const createServerProcedurePolicyOptions = ({
           return enqueueAgentSignalSourceEvent(event, {
             agentId,
             userId,
+            workspaceId,
           });
         },
       }),

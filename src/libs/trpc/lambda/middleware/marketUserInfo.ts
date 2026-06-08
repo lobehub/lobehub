@@ -9,6 +9,7 @@ interface ContextWithServerDB {
   marketAccessToken?: string;
   serverDB?: LobeChatDatabase;
   userId?: string | null;
+  workspaceId?: string | null;
 }
 
 /**
@@ -38,6 +39,9 @@ export const marketUserInfo = trpc.middleware(async (opts) => {
       email: user.email,
       name: user.fullName || user.username || undefined,
       userId: ctx.userId,
+      // In a workspace context, the token acts as the workspace's mirrored
+      // organization; absent for personal requests.
+      ...(ctx.workspaceId ? { workspaceId: ctx.workspaceId } : {}),
     };
 
     // Fetch market access token from user_settings.market

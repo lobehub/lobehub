@@ -5,6 +5,7 @@ import { desc, eq } from 'drizzle-orm';
 import { messages } from '@/database/schemas';
 import { type LobeChatDatabase } from '@/database/type';
 import { genRangeWhere, genWhere } from '@/database/utils/genWhere';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { type MessageMetadata } from '@/types/message';
 import { type UsageLog, type UsageRecordItem } from '@/types/usage/usageRecord';
 import { formatDate } from '@/utils/format';
@@ -13,9 +14,11 @@ const log = debug('lobe-usage:service');
 
 export class UsageRecordService {
   private userId: string;
+  private workspaceId?: string;
   private db: LobeChatDatabase;
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
+    this.workspaceId = workspaceId;
     this.db = db;
   }
 
@@ -38,7 +41,10 @@ export class UsageRecordService {
       .from(messages)
       .where(
         genWhere([
-          eq(messages.userId, this.userId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            { userId: messages.userId, workspaceId: messages.workspaceId },
+          ),
           eq(messages.role, 'assistant'),
           genRangeWhere([startAt, endAt], messages.createdAt, (date) => date.toDate()),
         ]),

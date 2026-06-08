@@ -21,6 +21,7 @@ interface DocumentServiceResult {
 export interface NotebookRuntimeServiceOptions {
   serverDB: LobeChatDatabase;
   userId: string;
+  workspaceId?: string;
 }
 
 const toServiceResult = (doc: {
@@ -53,9 +54,17 @@ export class NotebookRuntimeService {
   private topicDocumentModel: TopicDocumentModel;
 
   constructor(options: NotebookRuntimeServiceOptions) {
-    this.documentService = new DocumentService(options.serverDB, options.userId);
-    this.documentModel = new DocumentModel(options.serverDB, options.userId);
-    this.topicDocumentModel = new TopicDocumentModel(options.serverDB, options.userId);
+    this.documentService = new DocumentService(
+      options.serverDB,
+      options.userId,
+      options.workspaceId,
+    );
+    this.documentModel = new DocumentModel(options.serverDB, options.userId, options.workspaceId);
+    this.topicDocumentModel = new TopicDocumentModel(
+      options.serverDB,
+      options.userId,
+      options.workspaceId,
+    );
   }
 
   associateDocumentWithTopic = async (documentId: string, topicId: string): Promise<void> => {

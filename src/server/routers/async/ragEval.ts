@@ -1,6 +1,7 @@
 import { chainAnswerWithContext } from '@lobechat/prompts';
 import { EvalEvaluationStatus, RequestTrigger } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
+import { eq } from 'drizzle-orm';
 import { ModelProvider } from 'model-bank';
 import type OpenAI from 'openai';
 import { z } from 'zod';
@@ -14,6 +15,7 @@ import {
   EvalEvaluationModel,
   EvaluationRecordModel,
 } from '@/database/models/ragEval';
+import { evaluationRecords } from '@/database/schemas';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { ChunkService } from '@/server/services/chunk';
@@ -43,7 +45,22 @@ export const ragEvalRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const evalRecord = await ctx.evalRecordModel.findById(input.evalRecordId);
+      // System-level async dispatch: resolve workspace from the eval-record row
+      // and re-instantiate models so ownership-filtered reads/writes match the
+      // record's workspace (the procedure middleware defaults to personal mode).
+      const [rawRow] = await ctx.serverDB
+        .select({ workspaceId: evaluationRecords.workspaceId })
+        .from(evaluationRecords)
+        .where(eq(evaluationRecords.id, input.evalRecordId))
+        .limit(1);
+      const wsId = rawRow?.workspaceId ?? undefined;
+      const evalRecordModel = new EvaluationRecordModel(ctx.serverDB, ctx.userId, wsId);
+      const evaluationModel = new EvalEvaluationModel(ctx.serverDB, ctx.userId, wsId);
+      const datasetRecordModel = new EvalDatasetRecordModel(ctx.serverDB, ctx.userId, wsId);
+      const scopedEmbeddingModel = new EmbeddingModel(ctx.serverDB, ctx.userId, wsId);
+      const scopedChunkModel = new ChunkModel(ctx.serverDB, ctx.userId, wsId);
+
+      const evalRecord = await evalRecordModel.findById(input.evalRecordId);
 
       if (!evalRecord) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Evaluation not found' });
@@ -56,6 +73,7 @@ export const ragEvalRouter = router({
           ctx.serverDB,
           ctx.userId,
           ModelProvider.OpenAI,
+          wsId,
         );
 
         const { question, languageModel, embeddingModel } = evalRecord;
@@ -74,12 +92,12 @@ export const ragEvalRouter = router({
             { metadata: { trigger: RequestTrigger.Eval }, user: ctx.userId },
           );
 
-          const embeddingId = await ctx.embeddingModel.create({
+          const embeddingId = await scopedEmbeddingModel.create({
             embeddings: embeddings?.[0],
             model: embeddingModel,
           });
 
-          await ctx.evalRecordModel.update(evalRecord.id, {
+          await evalRecordModel.update(evalRecord.id, {
             questionEmbeddingId: embeddingId,
           });
 
@@ -88,18 +106,18 @@ export const ragEvalRouter = router({
 
         // If context does not exist, perform a retrieval
         if (!context || context.length === 0) {
-          const datasetRecord = await ctx.datasetRecordModel.findById(evalRecord.datasetRecordId);
+          const datasetRecord = await datasetRecordModel.findById(evalRecord.datasetRecordId);
 
-          const embeddingItem = await ctx.embeddingModel.findById(questionEmbeddingId);
+          const embeddingItem = await scopedEmbeddingModel.findById(questionEmbeddingId);
 
-          const chunks = await ctx.chunkModel.semanticSearchForChat({
+          const chunks = await scopedChunkModel.semanticSearchForChat({
             embedding: embeddingItem!.embeddings!,
             fileIds: datasetRecord!.referenceFiles!,
             query: evalRecord.question,
           });
 
           context = chunks.map((item) => item.text).filter(Boolean) as string[];
-          await ctx.evalRecordModel.update(evalRecord.id, { context });
+          await evalRecordModel.update(evalRecord.id, { context });
         }
 
         // Generate LLM answer
@@ -120,7 +138,7 @@ export const ragEvalRouter = router({
 
         const answer = data.choices[0].message.content;
 
-        await ctx.evalRecordModel.update(input.evalRecordId, {
+        await evalRecordModel.update(input.evalRecordId, {
           answer,
           duration: Date.now() - now,
           languageModel,
@@ -129,12 +147,12 @@ export const ragEvalRouter = router({
 
         return { success: true };
       } catch (e) {
-        await ctx.evalRecordModel.update(input.evalRecordId, {
+        await evalRecordModel.update(input.evalRecordId, {
           error: new AsyncTaskError((e as Error).name, (e as Error).message),
           status: EvalEvaluationStatus.Error,
         });
 
-        await ctx.evaluationModel.update(evalRecord.evaluationId, {
+        await evaluationModel.update(evalRecord.evaluationId, {
           status: EvalEvaluationStatus.Error,
         });
 

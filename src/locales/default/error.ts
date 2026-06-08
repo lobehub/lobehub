@@ -178,6 +178,14 @@ export default {
     'The group host is unable to function. Please check your host configuration to ensure the correct model, API Key, and API endpoint are set.',
   'testConnectionFailed': 'Test connection failed: {{error}}',
   'tts.responseError': 'Service request failed, please check the configuration or try again',
+  'transfer.noPermission': "You don't have permission to move this resource.",
+  'transfer.ownerOnly': 'Only workspace owners can transfer resources created by other members.',
+  'transfer.resourceNotFound':
+    'This resource no longer exists or you no longer have access. Refresh and try again.',
+  'transfer.sameWorkspace':
+    'This resource is already in the selected workspace. Choose another target.',
+  'transfer.targetNoWriteAccess':
+    'You need Member or Owner access to move resources into the target workspace.',
   'unlock.addProxyUrl': 'Add OpenAI proxy URL (optional)',
   'unlock.apiKey.description': 'Enter your {{name}} API Key to start the session',
   'unlock.apiKey.imageGenerationDescription': 'Enter your {{name}} API Key to start generating',
@@ -218,6 +226,7 @@ export default {
   'upload.storageBlock.upgradeRequired':
     'Your file storage has reached the plan limit. Please upgrade your plan or delete unused files.',
   'upload.storageBlock.viewPlans': 'View plans',
+  'upload.permissionDenied': "You don't have permission to upload files in this workspace.",
   'upload.storageLimitExceeded':
     'Your file storage has reached the plan limit. Please upgrade your plan or delete unused files to free up space.',
   'upload.title': 'File upload failed. Please check your network connection or try again later',

@@ -1,17 +1,20 @@
 import { type ToolManifest } from '@lobechat/types';
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { PluginModel } from '@/database/models/plugin';
 import { getKlavisClient } from '@/libs/klavis';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
 /**
  * Klavis procedure with API key validation and database access
  */
-const klavisProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const klavisProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const client = getKlavisClient();
-  const pluginModel = new PluginModel(opts.ctx.serverDB, opts.ctx.userId);
+  const wsId = opts.ctx.workspaceId ?? undefined;
+  const pluginModel = new PluginModel(opts.ctx.serverDB, opts.ctx.userId, wsId);
 
   return opts.next({
     ctx: { ...opts.ctx, klavisClient: client, pluginModel },
@@ -24,6 +27,7 @@ export const klavisRouter = router({
    * Returns: { serverUrl, instanceId, oauthUrl?, identifier, serverName }
    */
   createServerInstance: klavisProcedure
+    .use(withScopedPermission('agent:update'))
     .input(
       z.object({
         /** Identifier for storage (e.g., 'google-calendar') */
@@ -96,6 +100,7 @@ export const klavisRouter = router({
    * Delete a server instance
    */
   deleteServerInstance: klavisProcedure
+    .use(withScopedPermission('agent:update'))
     .input(
       z.object({
         /** Identifier for storage (e.g., 'google-calendar') */
@@ -190,6 +195,7 @@ export const klavisRouter = router({
    * Remove Klavis plugin from database by identifier
    */
   removeKlavisPlugin: klavisProcedure
+    .use(withScopedPermission('agent:update'))
     .input(
       z.object({
         /** Identifier for storage (e.g., 'google-calendar') */
@@ -205,6 +211,7 @@ export const klavisRouter = router({
    * Update Klavis plugin with tools and auth status in database
    */
   updateKlavisPlugin: klavisProcedure
+    .use(withScopedPermission('agent:update'))
     .input(
       z.object({
         /** Identifier for storage (e.g., 'google-calendar') */

@@ -880,7 +880,7 @@ describe('messageRuntime', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(mockLinkSetActiveAgent).toHaveBeenCalledWith('slack', 'agent_x', 'T1');
+      expect(mockLinkSetActiveAgent).toHaveBeenCalledWith('slack', 'agent_x', null, 'T1');
     });
 
     it('rejects when the agent does not belong to the caller', async () => {
@@ -906,7 +906,7 @@ describe('messageRuntime', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(mockLinkSetActiveAgent).toHaveBeenCalledWith('telegram', null, undefined);
+      expect(mockLinkSetActiveAgent).toHaveBeenCalledWith('telegram', null, null, undefined);
     });
 
     it('returns NOT_FOUND when the link does not exist', async () => {

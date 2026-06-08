@@ -22,6 +22,14 @@ export const devices = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    // NOTE: devices are a USER-LEVEL identity, not workspace-scoped content. A
+    // physical machine belongs to the user across all of their workspaces (the
+    // unique key is (userId, deviceId), see below). `workspaceId` here only
+    // records which workspace the device was registered from — it is NOT used to
+    // filter device lookups. So `DeviceModel`/`deviceRouter` intentionally scope
+    // by userId only and do NOT use `buildWorkspaceWhere`. Do not "fix" them to
+    // workspace-scope reads, or a user's device would disappear inside their own
+    // workspaces.
     workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     /** Machine-derived id (sha256 truncated to 32 chars; 64 leaves room for fallback randomUUID) */

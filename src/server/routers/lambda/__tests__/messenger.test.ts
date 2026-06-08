@@ -11,7 +11,10 @@ const {
   mockFindByPlatform,
   mockFindByPlatformUser,
   mockGetServerDB,
+  mockGetServerFeatureFlagsStateFromRuntimeConfig,
+  mockHasAnyPermission,
   mockInitWithEnvKey,
+  mockListUserWorkspaces,
   mockListByInstallerUserId,
   mockMarkRevoked,
   mockNotifyTelegramLinkSuccess,
@@ -24,7 +27,10 @@ const {
   mockFindByPlatform: vi.fn(),
   mockFindByPlatformUser: vi.fn(),
   mockGetServerDB: vi.fn(),
+  mockGetServerFeatureFlagsStateFromRuntimeConfig: vi.fn(),
+  mockHasAnyPermission: vi.fn(),
   mockInitWithEnvKey: vi.fn(),
+  mockListUserWorkspaces: vi.fn(),
   mockListByInstallerUserId: vi.fn(),
   mockMarkRevoked: vi.fn(),
   mockNotifyTelegramLinkSuccess: vi.fn(),
@@ -36,6 +42,18 @@ const {
 
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: mockGetServerDB,
+}));
+
+vi.mock('@/database/models/workspace', () => ({
+  WorkspaceModel: class {
+    listUserWorkspaces = (...args: any[]) => mockListUserWorkspaces(...args);
+  },
+}));
+
+vi.mock('@/database/models/rbac', () => ({
+  RbacModel: class {
+    hasAnyPermission = (...args: any[]) => mockHasAnyPermission(...args);
+  },
 }));
 
 vi.mock('@/database/models/messengerInstallation', () => ({
@@ -60,6 +78,10 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   KeyVaultsGateKeeper: {
     initWithEnvKey: mockInitWithEnvKey,
   },
+}));
+
+vi.mock('@/server/featureFlags', () => ({
+  getServerFeatureFlagsStateFromRuntimeConfig: mockGetServerFeatureFlagsStateFromRuntimeConfig,
 }));
 
 vi.mock('@/server/services/messenger', () => ({
@@ -105,6 +127,16 @@ const createSelectBuilder = <T>(result: T) => {
   const builder = {
     from: vi.fn(() => builder),
     limit: vi.fn().mockResolvedValue(result),
+    where: vi.fn(() => builder),
+  };
+
+  return builder;
+};
+
+const createAgentListBuilder = <T>(result: T) => {
+  const builder = {
+    from: vi.fn(() => builder),
+    orderBy: vi.fn().mockResolvedValue(result),
     where: vi.fn(() => builder),
   };
 
@@ -229,6 +261,7 @@ describe('messengerRouter.peekLinkToken', () => {
 describe('messengerRouter.confirmLink', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({ enableWorkspace: true });
     mockInitWithEnvKey.mockResolvedValue(undefined);
   });
 
@@ -323,7 +356,9 @@ describe('messengerRouter.confirmLink', () => {
   });
 
   it('allows re-confirming the same Telegram account', async () => {
-    const selectBuilder = createSelectBuilder([{ id: 'agent-1', title: 'Agent 1' }]);
+    const selectBuilder = createSelectBuilder([
+      { id: 'agent-1', title: 'Agent 1', userId: 'user-1', workspaceId: null },
+    ]);
     const serverDB = { select: vi.fn(() => selectBuilder) };
     const linkPayload = {
       platform: 'telegram',
@@ -354,6 +389,90 @@ describe('messengerRouter.confirmLink', () => {
       platformUserId: 'tg-same',
       platformUsername: '@same',
       tenantId: '',
+      workspaceId: null,
     });
+  });
+
+  it('blocks binding a workspace agent when workspace feature is disabled', async () => {
+    const selectBuilder = createSelectBuilder([
+      {
+        id: 'agent-1',
+        title: 'Workspace Agent',
+        userId: 'owner-1',
+        workspaceId: 'workspace-1',
+      },
+    ]);
+    const serverDB = { select: vi.fn(() => selectBuilder) };
+    const linkPayload = {
+      platform: 'telegram',
+      platformUserId: 'tg-same',
+      platformUsername: '@same',
+      tenantId: '',
+    };
+
+    mockGetServerDB.mockResolvedValue(serverDB);
+    mockGetServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({ enableWorkspace: false });
+    mockPeekLinkToken.mockResolvedValue(linkPayload);
+    mockFindByPlatformUser.mockResolvedValue(undefined);
+    mockFindByPlatform.mockResolvedValue(undefined);
+    mockListUserWorkspaces.mockResolvedValue([{ id: 'workspace-1', name: 'Workspace 1' }]);
+    mockHasAnyPermission.mockResolvedValue(true);
+
+    const caller = createCaller(await createContextInner({ userId: 'user-1' }));
+
+    await expect(
+      caller.confirmLink({ initialAgentId: 'agent-1', randomId: 'rand-1234' }),
+    ).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+      message: 'Workspace feature is not enabled for this user',
+    });
+
+    expect(mockConsumeLinkToken).not.toHaveBeenCalled();
+    expect(mockUpsertForPlatform).not.toHaveBeenCalled();
+  });
+});
+
+describe('messengerRouter.listBindingScopes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetServerDB.mockResolvedValue({});
+  });
+
+  it('returns no workspace scopes when workspace feature is disabled', async () => {
+    mockGetServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({ enableWorkspace: false });
+    mockListUserWorkspaces.mockResolvedValue([{ id: 'workspace-1', name: 'Workspace 1' }]);
+
+    const caller = createCaller(await createContextInner({ userId: 'user-1' }));
+    const result = await caller.listBindingScopes();
+
+    expect(result).toEqual([]);
+    expect(mockListUserWorkspaces).not.toHaveBeenCalled();
+  });
+});
+
+describe('messengerRouter.listAgentsForBinding', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetServerDB.mockResolvedValue({});
+  });
+
+  it('rejects workspace-scoped agent listing when workspace feature is disabled', async () => {
+    const selectBuilder = createAgentListBuilder([]);
+    const serverDB = { select: vi.fn(() => selectBuilder) };
+
+    mockGetServerDB.mockResolvedValue(serverDB);
+    mockGetServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({ enableWorkspace: false });
+    mockListUserWorkspaces.mockResolvedValue([{ id: 'workspace-1', name: 'Workspace 1' }]);
+
+    const caller = createCaller(await createContextInner({ userId: 'user-1' }));
+
+    await expect(caller.listAgentsForBinding({ workspaceId: 'workspace-1' })).rejects.toMatchObject(
+      {
+        code: 'FORBIDDEN',
+        message: 'Workspace feature is not enabled for this user',
+      },
+    );
+
+    expect(mockListUserWorkspaces).not.toHaveBeenCalled();
   });
 });

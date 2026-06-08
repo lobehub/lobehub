@@ -12,6 +12,7 @@ import type {
   AgentPickerEntry,
   CallbackAcknowledgement,
   InboundCallbackAction,
+  MessengerPickerAction,
   MessengerPlatformBinder,
   UnlinkedMessageContext,
 } from '../../types';
@@ -54,9 +55,10 @@ const buildVerifyImUrl = (params: {
 
 const buildSwitchButtons = (
   entries: AgentPickerEntry[],
+  action: MessengerPickerAction = 'switch',
 ): Array<{ actionId: string; style?: 'primary'; text: string; value: string }> =>
   entries.map((entry) => ({
-    actionId: `${ACTION_PREFIX}switch:${entry.id}`,
+    actionId: `${ACTION_PREFIX}${action}:${entry.id}`,
     text: entry.isActive ? `✅ ${entry.title}` : entry.title,
     value: entry.id,
     ...(entry.isActive ? { style: 'primary' as const } : {}),
@@ -262,7 +264,12 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
 
   async sendAgentPicker(
     chatId: string,
-    params: { entries: AgentPickerEntry[]; ephemeralTo?: string; text: string },
+    params: {
+      action?: MessengerPickerAction;
+      entries: AgentPickerEntry[];
+      ephemeralTo?: string;
+      text: string;
+    },
   ): Promise<void> {
     if (!this.creds) {
       log('sendAgentPicker: no creds, skipping');
@@ -270,7 +277,7 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
     }
     try {
       const api = new SlackApi(this.creds.botToken);
-      const buttons = buildSwitchButtons(params.entries);
+      const buttons = buildSwitchButtons(params.entries, params.action);
       // Channel invocation → ephemeral so the user's personal agent list
       // isn't broadcast. Slack's `chat.postEphemeral` accepts blocks and
       // delivers interactive button taps just like `chat.postMessage` —
@@ -384,7 +391,7 @@ export class MessengerSlackBinder implements MessengerPlatformBinder {
     // only when the response_url is somehow absent and we have a permanent
     // ts to point at.
     if (ack.updatedPicker) {
-      const buttons = buildSwitchButtons(ack.updatedPicker.entries);
+      const buttons = buildSwitchButtons(ack.updatedPicker.entries, ack.updatedPicker.action);
       try {
         if (action.callbackId) {
           await api.updateEphemeralButtonGrid(action.callbackId, ack.updatedPicker.text, buttons);

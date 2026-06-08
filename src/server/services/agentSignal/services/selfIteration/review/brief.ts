@@ -557,8 +557,12 @@ export const createBriefSelfReviewService = () => ({
  * Returns:
  * - A writer whose `writeDailyBrief` method creates or refreshes proposal briefs
  */
-export const createServerSelfReviewBriefWriter = (db: LobeChatDatabase, userId: string) => {
-  const model = new BriefModel(db, userId);
+export const createServerSelfReviewBriefWriter = (
+  db: LobeChatDatabase,
+  userId: string,
+  workspaceId?: string,
+) => {
+  const model = new BriefModel(db, userId, workspaceId);
 
   return {
     writeDailyBrief: (brief: SelfReviewBriefProjection) => {

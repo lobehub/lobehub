@@ -5,6 +5,7 @@ import { and, desc, eq, sql } from 'drizzle-orm';
 import type { ThreadItem } from '../schemas';
 import { messages, threads } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
  * Per-thread subagent metrics, derived from the child messages at read time
@@ -67,17 +68,27 @@ const queryColumns = {
 export class ThreadModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, threads);
 
   create = async (params: CreateThreadParams) => {
     // @ts-ignore
     const [result] = await this.db
       .insert(threads)
-      .values({ status: ThreadStatus.Active, ...params, userId: this.userId })
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { status: ThreadStatus.Active, ...params },
+        ),
+      )
       .onConflictDoNothing()
       .returning();
 
@@ -85,18 +96,18 @@ export class ThreadModel {
   };
 
   delete = async (id: string) => {
-    return this.db.delete(threads).where(and(eq(threads.id, id), eq(threads.userId, this.userId)));
+    return this.db.delete(threads).where(and(eq(threads.id, id), this.ownership()));
   };
 
   deleteAll = async () => {
-    return this.db.delete(threads).where(eq(threads.userId, this.userId));
+    return this.db.delete(threads).where(this.ownership());
   };
 
   query = async () => {
     const data = await this.db
       .select(queryColumns)
       .from(threads)
-      .where(eq(threads.userId, this.userId))
+      .where(this.ownership())
       .orderBy(desc(threads.updatedAt));
 
     return data as ThreadItem[];
@@ -110,7 +121,7 @@ export class ThreadModel {
       .select({ ...queryColumns, ...subagentMetricColumns })
       .from(threads)
       .leftJoin(messages, eq(messages.threadId, threads.id))
-      .where(and(eq(threads.topicId, topicId), eq(threads.userId, this.userId)))
+      .where(and(eq(threads.topicId, topicId), this.ownership()))
       .groupBy(threads.id)
       .orderBy(desc(threads.updatedAt));
 
@@ -119,7 +130,7 @@ export class ThreadModel {
 
   findById = async (id: string) => {
     return this.db.query.threads.findFirst({
-      where: and(eq(threads.id, id), eq(threads.userId, this.userId)),
+      where: and(eq(threads.id, id), this.ownership()),
     });
   };
 
@@ -127,6 +138,6 @@ export class ThreadModel {
     return this.db
       .update(threads)
       .set({ ...value, updatedAt: new Date() })
-      .where(and(eq(threads.id, id), eq(threads.userId, this.userId)));
+      .where(and(eq(threads.id, id), this.ownership()));
   };
 }

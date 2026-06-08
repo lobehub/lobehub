@@ -2,6 +2,7 @@
 import type {
   AgentBuilderContext,
   AgentContextDocument,
+  AgentGroupConfig,
   AgentManagementContext,
   BotPlatformContext,
   DiscordContext,
@@ -78,6 +79,8 @@ export interface ServerMessagesEngineParams {
   // ========== Extended contexts ==========
   /** Agent Builder context (optional, for editing agents) */
   agentBuilderContext?: AgentBuilderContext;
+  /** Agent identity context for bot/group-originated runs */
+  agentGroup?: AgentGroupConfig;
   /** Agent Management context (optional, available models and plugins) */
   agentManagementContext?: AgentManagementContext;
   // ========== Capability injection ==========

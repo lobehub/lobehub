@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentModel } from '@/database/models/agent';
+import { PluginModel } from '@/database/models/plugin';
+
 import { agentManagementRuntime } from '../agentManagement';
 
 const { mockCountAgents, mockGetAssistantList, mockQueryAgents } = vi.hoisted(() => ({
@@ -32,6 +35,14 @@ const createRuntime = () =>
     userId: 'user-1',
   });
 
+const createWorkspaceRuntime = () =>
+  agentManagementRuntime.factory({
+    serverDB: {} as never,
+    toolManifestMap: {},
+    userId: 'user-1',
+    workspaceId: 'workspace-1',
+  });
+
 const makeAgents = (count: number, startIndex = 0) =>
   Array.from({ length: count }, (_, i) => ({
     avatar: null,
@@ -54,6 +65,13 @@ describe('agentManagementRuntime', () => {
     expect(() => agentManagementRuntime.factory({ toolManifestMap: {} })).toThrow(
       'userId and serverDB are required for Agent Management execution',
     );
+  });
+
+  it('scopes agent and plugin models to workspace context', () => {
+    createWorkspaceRuntime();
+
+    expect(AgentModel).toHaveBeenCalledWith(expect.anything(), 'user-1', 'workspace-1');
+    expect(PluginModel).toHaveBeenCalledWith(expect.anything(), 'user-1', 'workspace-1');
   });
 
   describe('searchAgent', () => {

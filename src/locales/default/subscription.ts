@@ -175,6 +175,12 @@ export default {
   'limitation.insufficientBudget.retry': 'Retry',
   'limitation.insufficientBudget.shortfall': 'Credit Shortfall',
   'limitation.insufficientBudget.title': 'Insufficient Credits',
+  'limitation.workspace.insufficientBudget.available': 'Available Credits',
+  'limitation.workspace.insufficientBudget.desc':
+    'Credits are not enough to continue. Top up credits or upgrade the plan.',
+  'limitation.workspace.insufficientBudget.title': 'Workspace Credits Insufficient',
+  'limitation.workspace.insufficientBudget.topup': 'Top Up Credits',
+  'limitation.workspace.insufficientBudget.upgradeToPro': 'Upgrade to Pro',
   'limitation.hobby.action': 'Configured, continue chatting',
   'limitation.hobby.configAPI': 'Configure API',
   'limitation.hobby.desc':
@@ -281,6 +287,7 @@ export default {
   'plans.credit.tip': '{{credit}} free credits per month',
   'plans.credit.title': 'Credits',
   'plans.credit.tooltip': 'Monthly model message credits',
+  'plans.creditPackage.available': 'Additional credit packages available (${{price}}/M)',
   'plans.current': 'Current Plan',
   'plans.downgradePlan': 'Target Downgrade Plan',
   'plans.downgradeTip':
@@ -298,10 +305,16 @@ export default {
   'plans.features.agents': 'Curated Agent Market',
   'plans.features.ceAgents': 'Community Agent Market',
   'plans.features.cePlugins': 'Community Plugin Market',
+  'plans.features.earlyAccess': 'Early Access to SOTA Model',
+  'plans.features.earlyAccessTooltip':
+    'Some frontier models may only be open to subscribed users when the model is initially launched. This does not affect custom API keys.',
+  'plans.features.imageGeneration': 'Image Generation',
   'plans.features.internet': 'Smart Web Search',
   'plans.features.plugins': 'Exclusive Premium Plugins',
   'plans.features.showAll': 'View All Features',
   'plans.features.title': 'Premium Features',
+  'plans.features.unlimitedPages': 'Unlimited Pages',
+  'plans.features.videoGeneration': 'Video Generation',
   'plans.fileStorage.title': 'File Storage',
   'plans.fileStorage.storagePayAsYouGo': 'Storage overages support pay-as-you-go billing',
   'plans.fileStorage.tooltip': 'File storage for storing files, images, and other data',
@@ -358,6 +371,13 @@ export default {
   'plans.support.starter': 'Email and Community Forum',
   'plans.support.title': 'Support',
   'plans.support.ultimate': 'Priority Chat and Email Support',
+  'plans.workspace.features.inviteMembers': 'Invite Members',
+  'plans.workspace.features.roles': 'Roles & Permissions',
+  'plans.workspace.includesFrom.hobby': 'Everything in Hobby, plus:',
+  'plans.workspace.maxMembers': 'Up to {{count}} members',
+  'plans.workspace.noSharedCredits': 'No shared credits',
+  'plans.workspace.sharedCredits': '~{{count}} Credits / mo',
+  'plans.workspace.solo': 'Solo (1 member)',
   'plans.target': 'Target Plan',
   'plans.unlimited': 'Unlimited',
   'qa.desc':
@@ -384,6 +404,25 @@ export default {
   'qa.support.community': 'Community Support',
   'qa.support.email': 'Email Support',
   'qa.title': 'FAQ',
+  'qa.workspace.list.cancel.a':
+    'Click "Cancel subscription" on the Billing tab. Auto-renewal stops at the end of the current billing cycle and the workspace falls back to the {{hobby}} plan. Pro features remain available until then.',
+  'qa.workspace.list.cancel.q': 'How do I cancel a workspace subscription?',
+  'qa.workspace.list.credits.a':
+    'Each workspace has its own shared credit pool, separate from any member’s personal credits. Every member’s usage draws from this pool, and the owner can monitor consumption on the Billing page.',
+  'qa.workspace.list.credits.q': 'How are credits shared between workspace members?',
+  'qa.workspace.list.intro.a':
+    'A workspace is a shared space for team collaboration. Members share computing credits, agents, and knowledge bases inside the workspace, and it is billed independently from personal accounts.',
+  'qa.workspace.list.intro.q': 'What is a workspace?',
+  'qa.workspace.list.personalVsWorkspace.a':
+    'Yes. They are billed independently — personal subscriptions only apply to your personal space, and workspace subscriptions only apply inside the workspace. Usage in a workspace does not deduct from your personal credits.',
+  'qa.workspace.list.personalVsWorkspace.q':
+    'Can workspace and personal subscriptions be used at the same time?',
+  'qa.workspace.list.plans.a':
+    '{{hobby}} is free and includes a single seat, ideal for solo use to try out the workspace experience. {{pro}} provides a monthly credit allowance and unlocks team seats, seat management, priority support, and other advanced features.',
+  'qa.workspace.list.plans.q': 'What is the difference between {{hobby}} and {{pro}}?',
+  'qa.workspace.list.seats.a':
+    'Pro workspace owners can adjust the seat count from the Billing tab; each additional seat is billed monthly. Seat limits adjust automatically when downgrading to {{hobby}}.',
+  'qa.workspace.list.seats.q': 'How do I add or manage seats?',
   'recurring.day': 'Daily',
   'recurring.fullYear': 'Full Year',
   'recurring.monthly': 'Monthly Billing',

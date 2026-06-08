@@ -116,6 +116,14 @@ export interface ToolExecutionContext {
   /** Topic ID for sandbox session management */
   topicId?: string;
   userId?: string;
+  /**
+   * Workspace ID that scopes ownership for any model/service the runtime
+   * instantiates. When unset the runtime falls back to personal mode
+   * (`workspace_id IS NULL`). Threaded from the chat/task router through
+   * `state.metadata.workspaceId` so tool side-effects (createBrief, pinTask,
+   * etc.) land in the same workspace the request originated from.
+   */
+  workspaceId?: string;
 }
 
 export interface ToolExecutionResult {

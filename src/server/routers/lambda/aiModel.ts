@@ -7,17 +7,20 @@ import {
 } from 'model-bank';
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AiModelModel } from '@/database/models/aiModel';
 import { UserModel } from '@/database/models/user';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { type ProviderConfig } from '@/types/user/settings';
 
-const aiModelProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const aiModelProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const wsId = ctx.workspaceId ?? undefined;
 
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
   const { aiProvider } = await getServerGlobalConfig();
@@ -38,6 +41,7 @@ const aiModelProcedure = authedProcedure.use(serverDatabase).use(async (opts) =>
 
 export const aiModelRouter = router({
   batchToggleAiModels: aiModelProcedure
+    .use(withScopedPermission('ai_model:update'))
     .input(
       z.object({
         enabled: z.boolean(),
@@ -49,6 +53,7 @@ export const aiModelRouter = router({
       return ctx.aiModelModel.batchToggleAiModels(input.id, input.models, input.enabled);
     }),
   batchUpdateAiModels: aiModelProcedure
+    .use(withScopedPermission('ai_model:update'))
     .input(
       z.object({
         id: z.string(),
@@ -61,21 +66,26 @@ export const aiModelRouter = router({
     }),
 
   clearModelsByProvider: aiModelProcedure
+    .use(withScopedPermission('ai_model:delete'))
     .input(z.object({ providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.clearModelsByProvider(input.providerId);
     }),
   clearRemoteModels: aiModelProcedure
+    .use(withScopedPermission('ai_model:delete'))
     .input(z.object({ providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.clearRemoteModels(input.providerId);
     }),
 
-  createAiModel: aiModelProcedure.input(CreateAiModelSchema).mutation(async ({ input, ctx }) => {
-    const data = await ctx.aiModelModel.create(input);
+  createAiModel: aiModelProcedure
+    .use(withScopedPermission('ai_model:create'))
+    .input(CreateAiModelSchema)
+    .mutation(async ({ input, ctx }) => {
+      const data = await ctx.aiModelModel.create(input);
 
-    return data?.id;
-  }),
+      return data?.id;
+    }),
 
   getAiModelById: aiModelProcedure
     .input(z.object({ id: z.string() }))
@@ -104,18 +114,21 @@ export const aiModelRouter = router({
     }),
 
   removeAiModel: aiModelProcedure
+    .use(withScopedPermission('ai_model:delete'))
     .input(z.object({ id: z.string(), providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.delete(input.id, input.providerId);
     }),
 
   toggleModelEnabled: aiModelProcedure
+    .use(withScopedPermission('ai_model:update'))
     .input(ToggleAiModelEnableSchema)
     .mutation(async ({ input, ctx }) => {
       return ctx.aiModelModel.toggleModelEnabled(input);
     }),
 
   updateAiModel: aiModelProcedure
+    .use(withScopedPermission('ai_model:update'))
     .input(
       z.object({
         id: z.string(),
@@ -128,6 +141,7 @@ export const aiModelRouter = router({
     }),
 
   updateAiModelOrder: aiModelProcedure
+    .use(withScopedPermission('ai_model:update'))
     .input(
       z.object({
         providerId: z.string(),

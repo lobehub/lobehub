@@ -2,25 +2,29 @@ import { marked } from 'marked';
 import PDFDocument from 'pdfkit';
 import { z } from 'zod';
 
+import { withRbacPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { DrizzleMigrationModel } from '@/database/models/drizzleMigration';
 import { MessageModel } from '@/database/models/message';
 import { SessionModel } from '@/database/models/session';
 import { DataExporterRepos } from '@/database/repositories/dataExporter';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type ExportDatabaseData } from '@/types/export';
 
-const exportProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const exportProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
-  const dataExporterRepos = new DataExporterRepos(ctx.serverDB, ctx.userId);
+  const wsId = ctx.workspaceId ?? undefined;
+  const dataExporterRepos = new DataExporterRepos(ctx.serverDB, ctx.userId, wsId);
   const drizzleMigration = new DrizzleMigrationModel(ctx.serverDB);
-  const messageModel = new MessageModel(ctx.serverDB, ctx.userId);
-  const sessionModel = new SessionModel(ctx.serverDB, ctx.userId);
+  const messageModel = new MessageModel(ctx.serverDB, ctx.userId, wsId);
+  const sessionModel = new SessionModel(ctx.serverDB, ctx.userId, wsId);
 
   return opts.next({
     ctx: { dataExporterRepos, drizzleMigration, messageModel, sessionModel },
   });
 });
+const workspaceExportProcedure = exportProcedure.use(withRbacPermission('workspace:update:all'));
 
 const REGULAR_FONT_URL =
   'https://cdn.jsdelivr.net/gh/adobe-fonts/source-han-sans@2.004R/OTF/SimplifiedChinese/SourceHanSansSC-Regular.otf';
@@ -168,13 +172,13 @@ const generatePdfFromMarkdown = async (
 };
 
 export const exporterRouter = router({
-  exportData: exportProcedure.mutation(async ({ ctx }): Promise<ExportDatabaseData> => {
+  exportData: workspaceExportProcedure.mutation(async ({ ctx }): Promise<ExportDatabaseData> => {
     const data = await ctx.dataExporterRepos.export(5);
     const schemaHash = await ctx.drizzleMigration.getLatestMigrationHash();
     return { data, schemaHash };
   }),
 
-  exportPdf: exportProcedure
+  exportPdf: workspaceExportProcedure
     .input(
       z.object({
         content: z.string(),

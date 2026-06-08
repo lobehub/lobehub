@@ -33,7 +33,11 @@ export const skillManagementRuntime: ServerRuntimeRegistration = {
       throw new Error('userId and serverDB are required for Skill Management execution');
     }
 
-    const service = new SkillManagementDocumentService(context.serverDB, context.userId);
+    const service = new SkillManagementDocumentService(
+      context.serverDB,
+      context.userId,
+      context.workspaceId,
+    );
 
     const runtimeService: SkillMaintainerRuntimeService = {
       createSkill: (params: CreateSkillArgs & { agentId: string }) => service.createSkill(params),

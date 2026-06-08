@@ -39,12 +39,17 @@ describe('llmGenerationTracingRouter.recordFeedback', () => {
     });
 
     expect(result).toEqual({ ok: true });
-    expect(recordFeedback).toHaveBeenCalledWith('u1', tracingId, {
-      data: { accepted_text: 'hello' },
-      score: 1,
-      signal: 'positive',
-      source: 'explicit_thumbs',
-    });
+    expect(recordFeedback).toHaveBeenCalledWith(
+      'u1',
+      tracingId,
+      {
+        data: { accepted_text: 'hello' },
+        score: 1,
+        signal: 'positive',
+        source: 'explicit_thumbs',
+      },
+      undefined,
+    );
   });
 
   it('translates LLMGenerationFeedbackError(not_found) into TRPCError NOT_FOUND', async () => {

@@ -14,6 +14,7 @@ interface ChargeParams {
   provider: string;
   usage?: { completionTokens: number; totalTokens: number };
   userId: string;
+  workspaceId?: string;
 }
 
 // eslint-disable-next-line unused-imports/no-unused-vars

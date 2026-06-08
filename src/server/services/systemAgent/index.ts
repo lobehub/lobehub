@@ -36,10 +36,12 @@ const TOPIC_TITLE_SCHEMA = {
 export class SystemAgentService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
+  private readonly workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
 
   /**
@@ -66,7 +68,12 @@ export class SystemAgentService {
 
       const payload = chainSummaryTitle(messages, locale);
 
-      const modelRuntime = await initModelRuntimeFromDB(this.db, this.userId, provider);
+      const modelRuntime = await initModelRuntimeFromDB(
+        this.db,
+        this.userId,
+        provider,
+        this.workspaceId,
+      );
       const result = await modelRuntime.generateObject(
         {
           messages: payload.messages as any[],

@@ -13,17 +13,19 @@ import {
 
 export class ChunkService {
   private userId: string;
+  private workspaceId?: string;
   private chunkClient: ContentChunk;
   private fileModel: FileModel;
   private asyncTaskModel: AsyncTaskModel;
 
-  constructor(serverDB: LobeChatDatabase, userId: string) {
+  constructor(serverDB: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
+    this.workspaceId = workspaceId;
 
     this.chunkClient = new ContentChunk();
 
-    this.fileModel = new FileModel(serverDB, userId);
-    this.asyncTaskModel = new AsyncTaskModel(serverDB, userId);
+    this.fileModel = new FileModel(serverDB, userId, workspaceId);
+    this.asyncTaskModel = new AsyncTaskModel(serverDB, userId, workspaceId);
   }
 
   async chunkContent(params: ChunkContentParams) {
@@ -50,7 +52,11 @@ export class ChunkService {
 
     // trigger embedding task asynchronously
     try {
-      await asyncCaller.file.embeddingChunks({ fileId, taskId: asyncTaskId });
+      await asyncCaller.file.embeddingChunks({
+        fileId,
+        taskId: asyncTaskId,
+        workspaceId: this.workspaceId,
+      });
     } catch (e) {
       console.error('[embeddingFileChunks] error:', e);
 
@@ -91,17 +97,19 @@ export class ChunkService {
     const asyncCaller = await createAsyncCaller({ userId: this.userId });
 
     // trigger parse file task asynchronously
-    asyncCaller.file.parseFileToChunks({ fileId, taskId: asyncTaskId }).catch(async (e) => {
-      console.error('[ParseFileToChunks] error:', e);
+    asyncCaller.file
+      .parseFileToChunks({ fileId, taskId: asyncTaskId, workspaceId: this.workspaceId })
+      .catch(async (e) => {
+        console.error('[ParseFileToChunks] error:', e);
 
-      await this.asyncTaskModel.update(asyncTaskId, {
-        error: new AsyncTaskError(
-          AsyncTaskErrorType.TaskTriggerError,
-          'trigger chunk embedding async task error. Please make sure the APP_URL is available from your server. You can check the proxy config or WAF blocking',
-        ),
-        status: AsyncTaskStatus.Error,
+        await this.asyncTaskModel.update(asyncTaskId, {
+          error: new AsyncTaskError(
+            AsyncTaskErrorType.TaskTriggerError,
+            'trigger chunk embedding async task error. Please make sure the APP_URL is available from your server. You can check the proxy config or WAF blocking',
+          ),
+          status: AsyncTaskStatus.Error,
+        });
       });
-    });
 
     return asyncTaskId;
   }

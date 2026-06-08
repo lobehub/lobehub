@@ -5,7 +5,7 @@ import type { PlatformDefinition } from '@/server/services/bot/platforms';
 import { GatewayManager } from '../GatewayManager';
 
 const mockFindEnabledByPlatform = vi.hoisted(() => vi.fn());
-const mockFindEnabledByApplicationId = vi.hoisted(() => vi.fn());
+const mockFindEnabledByPlatformAndAppId = vi.hoisted(() => vi.fn());
 const mockInitWithEnvKey = vi.hoisted(() => vi.fn());
 const mockGetServerDB = vi.hoisted(() => vi.fn());
 
@@ -14,10 +14,9 @@ vi.mock('@/database/core/db-adaptor', () => ({
 }));
 
 vi.mock('@/database/models/agentBotProvider', () => {
-  const MockModel = vi.fn().mockImplementation(() => ({
-    findEnabledByApplicationId: mockFindEnabledByApplicationId,
-  }));
+  const MockModel = vi.fn();
   (MockModel as any).findEnabledByPlatform = mockFindEnabledByPlatform;
+  (MockModel as any).findEnabledByPlatformAndAppId = mockFindEnabledByPlatformAndAppId;
   return { AgentBotProviderModel: MockModel };
 });
 
@@ -65,7 +64,7 @@ describe('GatewayManager', () => {
     mockGetServerDB.mockResolvedValue(FAKE_DB);
     mockInitWithEnvKey.mockResolvedValue(FAKE_GATEKEEPER);
     mockFindEnabledByPlatform.mockResolvedValue([]);
-    mockFindEnabledByApplicationId.mockResolvedValue(null);
+    mockFindEnabledByPlatformAndAppId.mockResolvedValue(null);
 
     manager = new GatewayManager({ definitions: [fakeDefinition] });
   });
@@ -137,7 +136,7 @@ describe('GatewayManager', () => {
     it('should handle missing provider gracefully', async () => {
       await manager.start();
 
-      await expect(manager.startClient('fakeplatform', 'app-1', 'user-1')).resolves.toBeUndefined();
+      await expect(manager.startClient('fakeplatform', 'app-1')).resolves.toBeUndefined();
     });
   });
 

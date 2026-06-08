@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
 
+import { createRuntimeExecutors } from '@/server/modules/AgentRuntime/RuntimeExecutors';
+
 import { AgentRuntimeService } from '../AgentRuntimeService';
 import { hookDispatcher } from '../hooks';
 
@@ -168,6 +170,27 @@ describe('AgentRuntimeService.executeStep - early exit on terminal state', () =>
 
     dispatchSpy.mockRestore();
     unregisterSpy.mockRestore();
+  });
+
+  it('threads workspaceId into runtime executors for workspace-scoped agent runs', async () => {
+    const service = new AgentRuntimeService({} as any, 'user-1', {
+      queueService: null,
+      workspaceId: 'ws-1',
+    });
+
+    await (service as any).createAgentRuntime({
+      metadata: {
+        agentConfig: {},
+        modelRuntimeConfig: { model: 'gpt-test', provider: 'lobehub' },
+        userId: 'user-1',
+      },
+      operationId: 'op-workspace',
+      stepIndex: 0,
+    });
+
+    expect(createRuntimeExecutors).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 'ws-1' }),
+    );
   });
 
   it('should NOT skip step when operation status is "running"', async () => {

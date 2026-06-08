@@ -27,6 +27,13 @@ export interface AgentOperationMetadata {
   totalCost: number;
   totalSteps: number;
   userId?: string;
+  /**
+   * Workspace the operation runs in (null/undefined = personal). Persisted so
+   * queue workers (e.g. QStash `runStep`) can reconstruct a workspace-scoped
+   * runtime; without it the runtime is personal-scoped and message/topic
+   * lookups miss workspace-scoped rows.
+   */
+  workspaceId?: string;
 }
 
 export class AgentStateManager {
@@ -194,6 +201,7 @@ export class AgentStateManager {
         totalCost: parseFloat(metadata.totalCost) || 0,
         totalSteps: parseInt(metadata.totalSteps) || 0,
         userId: metadata.userId,
+        workspaceId: metadata.workspaceId,
       };
     } catch (error) {
       console.error('Failed to get operation metadata:', error);
@@ -210,6 +218,7 @@ export class AgentStateManager {
       agentConfig?: any;
       modelRuntimeConfig?: any;
       userId?: string;
+      workspaceId?: string;
     },
   ): Promise<void> {
     const metaKey = `${this.METADATA_PREFIX}:${operationId}`;
@@ -224,6 +233,7 @@ export class AgentStateManager {
         totalCost: 0,
         totalSteps: 0,
         userId: data.userId,
+        workspaceId: data.workspaceId,
       };
 
       // Serialize complex objects
@@ -236,6 +246,7 @@ export class AgentStateManager {
       };
 
       if (metadata.userId) redisData.userId = metadata.userId;
+      if (metadata.workspaceId) redisData.workspaceId = metadata.workspaceId;
       if (metadata.modelRuntimeConfig)
         redisData.modelRuntimeConfig = JSON.stringify(metadata.modelRuntimeConfig);
       if (metadata.agentConfig) redisData.agentConfig = JSON.stringify(metadata.agentConfig);

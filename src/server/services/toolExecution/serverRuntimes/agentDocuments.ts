@@ -1,8 +1,10 @@
 import type { DocumentLoadRule } from '@lobechat/agent-templates';
 import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
 import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-documents/executionRuntime';
+import { eq } from 'drizzle-orm';
 
 import { TaskModel } from '@/database/models/task';
+import { tasks } from '@/database/schemas';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocuments/toolOutcome';
 
@@ -14,9 +16,9 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
       throw new Error('userId and serverDB are required for Agent Documents execution');
     }
 
-    const service = new AgentDocumentsService(context.serverDB, context.userId);
+    const db = context.serverDB;
     const userId = context.userId;
-    const taskModel = new TaskModel(context.serverDB, context.userId);
+    const service = new AgentDocumentsService(db, userId, context.workspaceId);
     const { taskId } = context;
     const emitDocumentOutcome = async (input: {
       agentId?: string;
@@ -90,6 +92,18 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
 
     const pinToTask = async <T extends { documentId?: string } | undefined>(doc: T): Promise<T> => {
       if (taskId && doc?.documentId) {
+        // Prefer the workspaceId already threaded through the pipeline; fall
+        // back to the owning task row for legacy callers.
+        let wsId = context.workspaceId;
+        if (!wsId) {
+          const [row] = await db
+            .select({ workspaceId: tasks.workspaceId })
+            .from(tasks)
+            .where(eq(tasks.id, taskId))
+            .limit(1);
+          wsId = row?.workspaceId ?? undefined;
+        }
+        const taskModel = new TaskModel(db, userId, wsId);
         await taskModel.pinDocument(taskId, doc.documentId, 'agent');
       }
       return doc;

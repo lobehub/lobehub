@@ -10,6 +10,7 @@ import isEqual from 'fast-deep-equal';
 
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { normalizeEditorDataDiffNodes } from '@/libs/editor/normalizeDiffNodes';
 import { type LobeDocument } from '@/types/document';
@@ -51,21 +52,28 @@ export class DocumentService {
   private fileServiceInstance?: FileService;
   private db: LobeChatDatabase;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  private workspaceId?: string;
+
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
-    this.fileModel = new FileModel(db, userId);
-    this.documentModel = new DocumentModel(db, userId);
+    this.workspaceId = workspaceId;
+    this.fileModel = new FileModel(db, userId, workspaceId);
+    this.documentModel = new DocumentModel(db, userId, workspaceId);
   }
 
   private get fileService() {
-    this.fileServiceInstance ??= new FileService(this.db, this.userId);
+    this.fileServiceInstance ??= new FileService(this.db, this.userId, this.workspaceId);
 
     return this.fileServiceInstance;
   }
 
   private get documentHistoryService() {
-    this.documentHistoryServiceInstance ??= new DocumentHistoryService(this.db, this.userId);
+    this.documentHistoryServiceInstance ??= new DocumentHistoryService(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    );
 
     return this.documentHistoryServiceInstance;
   }
@@ -278,7 +286,10 @@ export class DocumentService {
     // If it's a folder, recursively delete all children first
     if (document.fileType === CUSTOM_FOLDER_FILE_TYPE) {
       const children = await this.db.query.documents.findMany({
-        where: eq(documents.parentId, id),
+        where: and(
+          eq(documents.parentId, id),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
+        ),
       });
 
       // Recursively delete all children
@@ -288,7 +299,10 @@ export class DocumentService {
 
       // Also delete all files in this folder
       const childFiles = await this.db.query.files.findMany({
-        where: and(eq(files.parentId, id), eq(files.userId, this.userId)),
+        where: and(
+          eq(files.parentId, id),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
+        ),
       });
 
       for (const file of childFiles) {
@@ -319,9 +333,13 @@ export class DocumentService {
   async updateDocument(id: string, params: UpdateDocumentParams): Promise<UpdateDocumentResult> {
     return this.db.transaction(async (tx) => {
       const transactionDb = tx as unknown as LobeChatDatabase;
-      const documentModel = new DocumentModel(transactionDb, this.userId);
-      const fileModel = new FileModel(transactionDb, this.userId);
-      const documentHistoryService = new DocumentHistoryService(transactionDb, this.userId);
+      const documentModel = new DocumentModel(transactionDb, this.userId, this.workspaceId);
+      const fileModel = new FileModel(transactionDb, this.userId, this.workspaceId);
+      const documentHistoryService = new DocumentHistoryService(
+        transactionDb,
+        this.userId,
+        this.workspaceId,
+      );
 
       const currentDocument = await documentModel.findById(id);
       if (!currentDocument) {

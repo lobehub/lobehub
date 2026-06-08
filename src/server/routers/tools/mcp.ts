@@ -6,11 +6,12 @@ import {
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { ConnectorToolPermission } from '@/database/schemas';
 import { type ToolCallContent } from '@/libs/mcp';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase, telemetry } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
@@ -66,13 +67,13 @@ const metaSchema = z
   })
   .optional();
 
-const mcpProcedure = authedProcedure
+const mcpProcedure = wsCompatProcedure
   .use(serverDatabase)
   .use(telemetry)
   .use(async ({ ctx, next }) => {
     return next({
       ctx: {
-        fileService: new FileService(ctx.serverDB, ctx.userId),
+        fileService: new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
       },
     });
   });
@@ -144,10 +145,11 @@ export const mcpRouter = router({
       // here at execution time so the MCP server is never actually called.
       const connectorId = input.params.name;
       if (connectorId && ctx.userId) {
-        const connectorModel = new ConnectorModel(ctx.serverDB, ctx.userId);
+        const wsId = ctx.workspaceId ?? undefined;
+        const connectorModel = new ConnectorModel(ctx.serverDB, ctx.userId, wsId);
         const [connector] = await connectorModel.queryByIdentifiers([connectorId]);
         if (connector) {
-          const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId);
+          const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId);
           const tools = await connectorToolModel.queryByConnector(connector.id);
           const tool = tools.find((t) => t.toolName === input.toolName);
           if (tool?.permission === ConnectorToolPermission.disabled) {

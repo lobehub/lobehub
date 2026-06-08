@@ -1,5 +1,5 @@
 import type { SQL } from 'drizzle-orm';
-import { and, count, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, count, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import type { RoleItem } from '@/database/schemas/rbac';
 import { permissions, rolePermissions, roles, userRoles } from '@/database/schemas/rbac';
@@ -19,8 +19,20 @@ import type {
 } from '../types/role.type';
 
 export class RoleService extends BaseService {
-  constructor(db: LobeChatDatabase, userId: string | null) {
-    super(db, userId);
+  constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
+    super(db, userId, workspaceId);
+  }
+
+  private getRoleScopeWhere() {
+    return this.workspaceId
+      ? or(eq(roles.workspaceId, this.workspaceId), isNull(roles.workspaceId))
+      : isNull(roles.workspaceId);
+  }
+
+  private getUserRoleScopeWhere() {
+    return this.workspaceId
+      ? eq(userRoles.workspaceId, this.workspaceId)
+      : isNull(userRoles.workspaceId);
   }
 
   /**
@@ -53,6 +65,8 @@ export class RoleService extends BaseService {
           ),
         );
       }
+
+      conditions.push(this.getRoleScopeWhere());
 
       const { limit, offset } = processPaginationConditions(request);
 
@@ -91,7 +105,7 @@ export class RoleService extends BaseService {
     try {
       return await this.db.query.roles.findMany({
         orderBy: [roles.isSystem, roles.createdAt],
-        where: eq(roles.isActive, true),
+        where: and(eq(roles.isActive, true), this.getRoleScopeWhere()),
       });
     } catch (error) {
       this.handleServiceError(error, '获取活跃角色列表');
@@ -112,7 +126,7 @@ export class RoleService extends BaseService {
 
     try {
       const role = await this.db.query.roles.findFirst({
-        where: eq(roles.id, id),
+        where: and(eq(roles.id, id), this.getRoleScopeWhere()),
       });
       return role || null;
     } catch (error) {
@@ -134,7 +148,7 @@ export class RoleService extends BaseService {
 
     try {
       const role = await this.db.query.roles.findFirst({
-        where: eq(roles.name, name),
+        where: and(eq(roles.name, name), this.getRoleScopeWhere()),
       });
       return role || null;
     } catch (error) {
@@ -157,7 +171,7 @@ export class RoleService extends BaseService {
       return await this.db.transaction(async (tx) => {
         // Ensure role name is unique
         const existingRole = await tx.query.roles.findFirst({
-          where: eq(roles.name, payload.name),
+          where: and(eq(roles.name, payload.name), this.getRoleScopeWhere()),
         });
         if (existingRole) {
           throw this.createBusinessError(`角色名称 "${payload.name}" 已存在`);
@@ -171,6 +185,7 @@ export class RoleService extends BaseService {
             isActive: payload.isActive ?? true,
             isSystem: payload.isSystem ?? false,
             name: payload.name,
+            workspaceId: this.workspaceId ?? null,
           })
           .returning();
 
@@ -375,7 +390,7 @@ export class RoleService extends BaseService {
       return await this.db.transaction(async (tx) => {
         // Check if the role exists
         const existingRole = await tx.query.roles.findFirst({
-          where: eq(roles.id, id),
+          where: and(eq(roles.id, id), this.getRoleScopeWhere()),
         });
 
         if (!existingRole) {
@@ -390,7 +405,7 @@ export class RoleService extends BaseService {
         // If the role name is being modified, check whether the new name already exists
         if (updateData.name && updateData.name !== existingRole.name) {
           const duplicateRole = await tx.query.roles.findFirst({
-            where: eq(roles.name, updateData.name),
+            where: and(eq(roles.name, updateData.name), this.getRoleScopeWhere()),
           });
 
           if (duplicateRole) {
@@ -412,7 +427,7 @@ export class RoleService extends BaseService {
         const [updatedRole] = await tx
           .update(roles)
           .set(updateFields)
-          .where(eq(roles.id, id))
+          .where(and(eq(roles.id, id), this.getRoleScopeWhere()))
           .returning();
 
         this.log('info', '角色更新成功', { roleId: id, roleName: updatedRole.name });
@@ -437,7 +452,9 @@ export class RoleService extends BaseService {
 
     try {
       // Check if the role exists
-      const existingRole = await this.db.query.roles.findFirst({ where: eq(roles.id, roleId) });
+      const existingRole = await this.db.query.roles.findFirst({
+        where: and(eq(roles.id, roleId), this.getRoleScopeWhere()),
+      });
       if (!existingRole) {
         throw this.createNotFoundError(`角色 ID "${roleId}" 不存在`);
       }
@@ -469,7 +486,9 @@ export class RoleService extends BaseService {
 
     try {
       return await this.db.transaction(async (tx) => {
-        const existingRole = await tx.query.roles.findFirst({ where: eq(roles.id, id) });
+        const existingRole = await tx.query.roles.findFirst({
+          where: and(eq(roles.id, id), this.getRoleScopeWhere()),
+        });
 
         if (!existingRole) {
           throw this.createNotFoundError(`角色 ID "${id}" 不存在`);
@@ -479,14 +498,16 @@ export class RoleService extends BaseService {
           throw this.createBusinessError('系统角色不允许删除');
         }
 
-        const linkedUser = await tx.query.userRoles.findFirst({ where: eq(userRoles.roleId, id) });
+        const linkedUser = await tx.query.userRoles.findFirst({
+          where: and(eq(userRoles.roleId, id), this.getUserRoleScopeWhere()),
+        });
         if (linkedUser) {
           throw this.createBusinessError('角色仍然关联用户，无法删除');
         }
 
         const [deletedRole] = await tx
           .delete(roles)
-          .where(eq(roles.id, id))
+          .where(and(eq(roles.id, id), this.getRoleScopeWhere()))
           .returning({ id: roles.id });
 
         if (!deletedRole) {

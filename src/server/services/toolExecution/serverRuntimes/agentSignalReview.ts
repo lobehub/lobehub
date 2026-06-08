@@ -35,12 +35,14 @@ const resolveBriefTextTranslator = async (db: LobeChatDatabase, userId: string) 
  */
 export const agentSignalReviewRuntime: ServerRuntimeRegistration = {
   factory: async (context) => {
-    const { agentId, operationId, serverDB, userId } = context;
+    const { agentId, operationId, serverDB, userId, workspaceId } = context;
     if (!agentId || !userId || !operationId || !serverDB) {
       throw new Error('agent-signal-review requires agentId, userId, operationId and serverDB');
     }
 
-    const operation = await new AgentOperationModel(serverDB, userId).findById(operationId);
+    const operation = await new AgentOperationModel(serverDB, userId, workspaceId).findById(
+      operationId,
+    );
     const marker = readAgentSignalMarker(operation?.metadata);
 
     const reviewWindowEnd = marker?.reviewWindowEnd ?? new Date(0).toISOString();
@@ -50,16 +52,17 @@ export const agentSignalReviewRuntime: ServerRuntimeRegistration = {
 
     const service = createReviewRuntimePrimitives({
       agentId,
-      briefModel: new BriefModel(serverDB, userId),
+      briefModel: new BriefModel(serverDB, userId, workspaceId),
       briefTextTranslator: await resolveBriefTextTranslator(serverDB, userId),
       db: serverDB,
       localDate,
-      proposalBriefWriter: createServerSelfReviewBriefWriter(serverDB, userId),
+      proposalBriefWriter: createServerSelfReviewBriefWriter(serverDB, userId, workspaceId),
       reviewWindowEnd,
       reviewWindowStart,
-      skillDocumentService: new SkillManagementDocumentService(serverDB, userId),
+      skillDocumentService: new SkillManagementDocumentService(serverDB, userId, workspaceId),
       sourceId,
       userId,
+      workspaceId,
     });
 
     return new AgentSignalToolExecutionRuntime({

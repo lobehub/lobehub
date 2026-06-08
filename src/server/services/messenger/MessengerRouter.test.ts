@@ -28,6 +28,12 @@ vi.mock('./oauth/slackOAuth', () => ({
   verifySignature: (...args: any[]) => mockVerifySignature(...args),
 }));
 
+const mockGetServerFeatureFlagsStateFromRuntimeConfig = vi.fn();
+vi.mock('@/server/featureFlags', () => ({
+  getServerFeatureFlagsStateFromRuntimeConfig: (...args: any[]) =>
+    mockGetServerFeatureFlagsStateFromRuntimeConfig(...args),
+}));
+
 vi.mock('@/config/messenger', () => ({
   getEnabledMessengerPlatforms: vi.fn().mockReturnValue(['slack', 'telegram']),
   getMessengerSlackConfig: vi.fn().mockReturnValue({
@@ -89,21 +95,37 @@ vi.mock('@chat-adapter/state-ioredis', () => ({
 // reused — see the comment in `MessengerRouter.dispatchToAgent`.
 const mockHandleMention = vi.fn();
 const mockHandleSubscribed = vi.fn();
+const mockAgentBridgeConstructor = vi.fn();
 vi.mock('@/server/services/bot/AgentBridgeService', () => ({
   AgentBridgeService: class {
     static clearActiveThread = vi.fn();
     static getActiveOperationId = vi.fn();
     static isThreadActive = vi.fn();
     static requestStop = vi.fn();
+    constructor(...args: unknown[]) {
+      mockAgentBridgeConstructor(...args);
+    }
     handleMention = mockHandleMention;
     handleSubscribedMessage = mockHandleSubscribed;
   },
 }));
 
 const mockFindLink = vi.fn();
+const mockSetActiveScope = vi.fn();
 vi.mock('@/database/models/messengerAccountLink', () => ({
   MessengerAccountLinkModel: {
     findByPlatformUser: (...args: any[]) => mockFindLink(...args),
+    setActiveScope: (...args: any[]) => mockSetActiveScope(...args),
+  },
+}));
+
+// `/switch` and the dispatch-time membership re-validation both enumerate the
+// user's workspaces. Default to membership of `workspace-1` so the existing
+// workspace-scoped dispatch tests pass; individual tests can override.
+const mockListUserWorkspaces = vi.fn();
+vi.mock('@/database/models/workspace', () => ({
+  WorkspaceModel: class {
+    listUserWorkspaces = (...args: any[]) => mockListUserWorkspaces(...args);
   },
 }));
 vi.mock('@/server/services/aiAgent', () => ({
@@ -184,6 +206,14 @@ beforeEach(() => {
     telegram: mockWebhookHandler,
   };
   mockFindLink.mockReset();
+  mockSetActiveScope.mockReset();
+  mockListUserWorkspaces.mockReset();
+  mockListUserWorkspaces.mockResolvedValue([
+    { id: 'workspace-1', name: 'Workspace 1', role: 'owner' },
+  ]);
+  mockGetServerFeatureFlagsStateFromRuntimeConfig.mockReset();
+  mockGetServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({ enableWorkspace: true });
+  mockAgentBridgeConstructor.mockReset();
   mockHandleMention.mockReset();
   mockHandleSubscribed.mockReset();
   mockOpenDM.mockReset();
@@ -412,6 +442,7 @@ describe('MessengerRouter channel @mention', () => {
       platformUserId: 'U_ALICE',
       tenantId: 'T_ACME',
       userId: 'user_alice',
+      workspaceId: 'workspace-1',
     });
 
     const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
@@ -427,6 +458,11 @@ describe('MessengerRouter channel @mention', () => {
     // first-touch entry, so dispatch goes through `handleMention` (mirrors
     // BotMessageRouter).
     expect(mockHandleMention).toHaveBeenCalledTimes(1);
+    expect(mockAgentBridgeConstructor).toHaveBeenCalledWith(
+      expect.anything(),
+      'user_alice',
+      'workspace-1',
+    );
     expect(mockHandleMention.mock.calls[0][2]).toMatchObject({ agentId: 'agt_main' });
     expect(mockHandleSubscribed).not.toHaveBeenCalled();
     // We deliberately do NOT subscribe channel threads — see comment in
@@ -434,6 +470,35 @@ describe('MessengerRouter channel @mention', () => {
     expect(thread.subscribe).not.toHaveBeenCalled();
     expect(mockSlackBinder.handleUnlinkedMessage).not.toHaveBeenCalled();
     expect(mockSlackBinder.replyEphemeral).not.toHaveBeenCalled();
+  });
+
+  it('skips dispatch and prompts /switch when the active workspace is no longer accessible', async () => {
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue({
+      activeAgentId: 'agt_main',
+      id: 'link_1',
+      platformUserId: 'U_ALICE',
+      tenantId: 'T_ACME',
+      userId: 'user_alice',
+      workspaceId: 'workspace-removed',
+    });
+    // The user is only a member of workspace-1 now — not workspace-removed.
+    mockListUserWorkspaces.mockResolvedValue([
+      { id: 'workspace-1', name: 'Workspace 1', role: 'owner' },
+    ]);
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(fakeChannelThread(), fakeMessage({ isMention: true, text: '<@U_BOT> hi' }));
+
+    expect(mockHandleMention).not.toHaveBeenCalled();
+    expect(mockSlackBinder.replyEphemeral).toHaveBeenCalledTimes(1);
+    expect(mockSlackBinder.replyEphemeral.mock.calls[0][0]).toMatchObject({
+      channelId: 'C_GENERAL',
+      userId: 'U_ALICE',
+    });
   });
 
   it('routes an unlinked channel mention through handleUnlinkedMessage with channelMentionThreadId', async () => {
@@ -958,5 +1023,135 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
     );
 
     expect(mockHandleSubscribed).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('MessengerRouter /switch', () => {
+  const personalLink = {
+    activeAgentId: 'agt_main',
+    id: 'link_1',
+    platformUserId: 'U_ALICE',
+    tenantId: '',
+    userId: 'user_alice',
+    workspaceId: null,
+  };
+
+  it('renders the scope picker with the current scope marked', async () => {
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue(personalLink);
+    mockListUserWorkspaces.mockResolvedValue([
+      { id: 'workspace-1', name: 'Workspace 1', role: 'owner' },
+    ]);
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(fakeDmThread(), fakeMessage({ isMention: true, text: '/switch' }));
+
+    // Picker-capable binder → buttons, not a numbered text list, and no switch
+    // happens just from listing.
+    expect(mockSetActiveScope).not.toHaveBeenCalled();
+    expect(mockSlackBinder.sendAgentPicker).toHaveBeenCalledTimes(1);
+    const params = mockSlackBinder.sendAgentPicker.mock.calls[0][1];
+    expect(params.action).toBe('scope');
+    expect(params.text).toContain('Tap a scope');
+    // Personal (the active scope) carries the marker; workspaces follow.
+    expect(params.entries).toEqual([
+      { id: 'personal', isActive: true, title: 'Personal' },
+      { id: 'workspace-1', isActive: false, title: 'Workspace 1' },
+    ]);
+  });
+
+  it('hides workspace scopes from /switch when workspace feature is disabled', async () => {
+    await loadSlackBot();
+    mockFindLink.mockResolvedValue(personalLink);
+    mockGetServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({ enableWorkspace: false });
+    mockListUserWorkspaces.mockResolvedValue([
+      { id: 'workspace-1', name: 'Workspace 1', role: 'owner' },
+    ]);
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(fakeDmThread(), fakeMessage({ isMention: true, text: '/switch' }));
+
+    expect(mockSetActiveScope).not.toHaveBeenCalled();
+    expect(mockListUserWorkspaces).not.toHaveBeenCalled();
+    expect(mockSlackBinder.sendAgentPicker).toHaveBeenCalledTimes(1);
+    const params = mockSlackBinder.sendAgentPicker.mock.calls[0][1];
+    expect(params.entries).toEqual([{ id: 'personal', isActive: true, title: 'Personal' }]);
+  });
+
+  it('rejects workspace scope button callbacks when workspace feature is disabled', async () => {
+    mockFindLink.mockResolvedValue(personalLink);
+    mockGetServerFeatureFlagsStateFromRuntimeConfig.mockResolvedValue({ enableWorkspace: false });
+    mockListUserWorkspaces.mockResolvedValue([
+      { id: 'workspace-1', name: 'Workspace 1', role: 'owner' },
+    ]);
+
+    const router = new MessengerRouter();
+    const ack = vi.fn();
+    await (router as any).handleScopeCallback(
+      { platform: 'slack', tenantId: '' },
+      {
+        callbackId: '',
+        chatId: 'D_DM',
+        data: 'messenger:scope:workspace-1',
+        fromUserId: 'U_ALICE',
+      },
+      'workspace-1',
+      ack,
+    );
+
+    expect(mockSetActiveScope).not.toHaveBeenCalled();
+    expect(mockListUserWorkspaces).not.toHaveBeenCalled();
+    expect(ack).toHaveBeenCalledWith({ toast: 'Scope not found.' });
+  });
+
+  it('persists the scope switch and re-renders the picker when a scope button is tapped', async () => {
+    mockFindLink.mockResolvedValue(personalLink);
+    mockListUserWorkspaces.mockResolvedValue([
+      { id: 'workspace-1', name: 'Workspace 1', role: 'owner' },
+    ]);
+    // `fetchUserAgents` pins the inbox/LobeAI first; the switch lands on it.
+    vi.spyOn(MessengerRouter.prototype as any, 'fetchUserAgents').mockResolvedValue([
+      { id: 'agt_inbox', title: 'LobeAI' },
+    ]);
+
+    const router = new MessengerRouter();
+    const ack = vi.fn();
+    await (router as any).handleScopeCallback(
+      { platform: 'slack', tenantId: '' },
+      {
+        callbackId: '',
+        chatId: 'D_DM',
+        data: 'messenger:scope:workspace-1',
+        fromUserId: 'U_ALICE',
+      },
+      'workspace-1',
+      ack,
+    );
+
+    // Active agent is set to the target scope's default (the inbox), not cleared.
+    expect(mockSetActiveScope).toHaveBeenCalledWith(
+      expect.anything(),
+      'link_1',
+      'workspace-1',
+      'agt_inbox',
+    );
+    expect(ack).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toast: expect.stringContaining('Workspace 1'),
+        updatedPicker: expect.objectContaining({
+          action: 'scope',
+          entries: [
+            { id: 'personal', isActive: false, title: 'Personal' },
+            { id: 'workspace-1', isActive: true, title: 'Workspace 1' },
+          ],
+        }),
+      }),
+    );
   });
 });

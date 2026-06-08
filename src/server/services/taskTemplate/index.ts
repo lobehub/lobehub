@@ -1,6 +1,7 @@
 import type { TaskTemplate, TaskTemplateSkillSource } from '@lobechat/const';
 import {
   TASK_TEMPLATE_FALLBACK_CATEGORIES,
+  TASK_TEMPLATE_PERSONAL_ONLY_CATEGORIES,
   TASK_TEMPLATE_RECOMMEND_COUNT,
   taskTemplates,
 } from '@lobechat/const';
@@ -82,6 +83,12 @@ export class TaskTemplateService {
       excludeIds?: string[];
       now?: Date;
       refreshSeed?: string;
+      /**
+       * When true, drop every template under `TASK_TEMPLATE_PERSONAL_ONLY_CATEGORIES`
+       * and use the workspace-flavored fallback pool. Used by the cloud router
+       * whenever the request is bound to a workspace context.
+       */
+      workspaceMode?: boolean;
     } = {},
   ): Promise<TaskTemplate[]> {
     const {
@@ -90,14 +97,22 @@ export class TaskTemplateService {
       excludeIds,
       now = new Date(),
       refreshSeed,
+      workspaceMode = false,
     } = options;
     const limit = Math.max(1, count);
     const excluded = new Set(excludeIds ?? []);
-    const seedBase = `${this.userId}:${getUtcDateStr(now)}`;
+    const seedBase = workspaceMode
+      ? `${this.userId}:ws:${getUtcDateStr(now)}`
+      : `${this.userId}:${getUtcDateStr(now)}`;
     const seed = hashString(refreshSeed ? `${seedBase}:${refreshSeed}` : seedBase);
 
+    const personalOnly = new Set<string>(TASK_TEMPLATE_PERSONAL_ONLY_CATEGORIES);
+
     const candidates = taskTemplates.filter(
-      (t) => !excluded.has(t.id) && isTemplateSkillSourceEligible(t, enabledSkillSources),
+      (t) =>
+        !excluded.has(t.id) &&
+        isTemplateSkillSourceEligible(t, enabledSkillSources) &&
+        (!workspaceMode || !personalOnly.has(t.category)),
     );
     const matched = candidates.filter((t) => hasIntersection(t, interestKeys));
     const result: TaskTemplate[] = [];
@@ -108,10 +123,18 @@ export class TaskTemplateService {
       // Not enough interest matches: fold the fallback pool in so refreshSeed
       // can reorder the whole batch — otherwise a single-match interest pins
       // that template to position 0 forever.
+      //
+      // Personal mode keeps the narrow `personal-life + learning-research`
+      // fallback (it's the existing vibe). Workspace mode uses the full
+      // non-personal candidate set — the original 2-category workspace
+      // fallback resolved to ~4 templates after skill gating and made
+      // "换一批" a no-op.
       const matchedIds = new Set(matched.map((t) => t.id));
-      const fallback = candidates.filter(
-        (t) => TASK_TEMPLATE_FALLBACK_CATEGORIES.includes(t.category) && !matchedIds.has(t.id),
-      );
+      const fallback = workspaceMode
+        ? candidates.filter((t) => !matchedIds.has(t.id))
+        : candidates.filter(
+            (t) => TASK_TEMPLATE_FALLBACK_CATEGORIES.includes(t.category) && !matchedIds.has(t.id),
+          );
       const pool = [...matched, ...fallback];
       result.push(...seededShuffle(pool, seed).slice(0, limit));
     }

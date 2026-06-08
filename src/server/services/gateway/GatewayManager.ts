@@ -74,7 +74,7 @@ export class GatewayManager {
   // Client operations (point-to-point)
   // ------------------------------------------------------------------
 
-  async startClient(platform: string, applicationId: string, userId: string): Promise<void> {
+  async startClient(platform: string, applicationId: string): Promise<void> {
     const key = buildRuntimeKey(platform, applicationId);
 
     // Stop existing if any
@@ -85,11 +85,16 @@ export class GatewayManager {
       this.clients.delete(key);
     }
 
-    // Load from DB (user-scoped, single row)
+    // Load from DB (system-wide single row — platform + applicationId is globally
+    // unique; the caller is already authorized at the router boundary).
     const serverDB = await getServerDB();
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-    const model = new AgentBotProviderModel(serverDB, userId, gateKeeper);
-    const provider = await model.findEnabledByApplicationId(platform, applicationId);
+    const provider = await AgentBotProviderModel.findEnabledByPlatformAndAppId(
+      serverDB,
+      platform,
+      applicationId,
+      gateKeeper,
+    );
 
     if (!provider) {
       log('No enabled provider found for %s', key);

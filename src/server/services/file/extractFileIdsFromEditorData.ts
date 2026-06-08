@@ -1,7 +1,8 @@
 import { files } from '@lobechat/database/schemas';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, inArray } from 'drizzle-orm';
 
 import type { LobeChatDatabase } from '@/database/type';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
 
 /**
  * Walks a serialized Lexical editor state, collects every URL referenced by
@@ -86,7 +87,7 @@ function extractStorageKeyFromUrl(url: string): string | undefined {
 
 export async function extractFileIdsFromEditorData(
   json: unknown,
-  ctx: { db: LobeChatDatabase; userId: string },
+  ctx: { db: LobeChatDatabase; userId: string; workspaceId?: string },
 ): Promise<string[]> {
   const urls = collectAttachmentUrlsFromEditorData(json);
   if (urls.length === 0) return [];
@@ -115,7 +116,7 @@ export async function extractFileIdsFromEditorData(
       const rows = await ctx.db
         .select({ id: files.id, url: files.url })
         .from(files)
-        .where(and(eq(files.userId, ctx.userId), inArray(files.url, keys)));
+        .where(and(buildWorkspaceWhere(ctx, files), inArray(files.url, keys)));
 
       const firstIdPerUrl = new Map<string, string>();
       for (const row of rows) {

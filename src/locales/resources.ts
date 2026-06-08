@@ -30,10 +30,14 @@ export type Locales = (typeof locales)[number];
 export const normalizeLocale = (locale?: string): Locales => {
   if (!locale) return DEFAULT_LANG;
 
-  if (locale.startsWith('ar')) return 'ar';
-  if (locale.startsWith('fa')) return 'fa-IR';
+  const lowerLocale = locale.toLowerCase();
 
-  if (locale.startsWith('cn')) return 'zh-CN';
+  if (lowerLocale.startsWith('ar')) return 'ar';
+  if (lowerLocale.startsWith('fa')) return 'fa-IR';
+
+  if (lowerLocale.startsWith('cn')) return 'zh-CN';
+  if (lowerLocale.startsWith('zh-hans')) return 'zh-CN';
+  if (lowerLocale.startsWith('zh-hant')) return 'zh-TW';
 
   for (const l of locales) {
     if (l.startsWith(locale)) {

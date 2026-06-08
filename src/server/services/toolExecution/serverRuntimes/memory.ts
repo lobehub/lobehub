@@ -87,7 +87,11 @@ const applySearchLimitsByEffort = (
   };
 };
 
-const getEmbeddingRuntime = async (serverDB: LobeChatDatabase, userId: string) => {
+const getEmbeddingRuntime = async (
+  serverDB: LobeChatDatabase,
+  userId: string,
+  workspaceId?: string,
+) => {
   const { provider, model: embeddingModel } =
     getServerDefaultFilesConfig().embeddingModel || DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM;
 
@@ -95,6 +99,7 @@ const getEmbeddingRuntime = async (serverDB: LobeChatDatabase, userId: string) =
     serverDB,
     userId,
     ENABLE_BUSINESS_FEATURES ? BRANDING_PROVIDER : provider,
+    workspaceId,
   );
 
   return { agentRuntime, embeddingModel };
@@ -133,6 +138,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
   private memoryEffort: MemoryEffort;
   private memoryEmbeddingRuntime?: ToolExecutionMemoryEmbeddingRuntime;
   private userId: string;
+  private workspaceId?: string;
 
   constructor(options: {
     agentId?: string;
@@ -147,6 +153,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
     toolCallId?: string;
     topicId?: string;
     userId: string;
+    workspaceId?: string;
   }) {
     this.agentId = options.agentId;
     this.emitOutcome = options.emitOutcome;
@@ -160,6 +167,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
     this.memoryEffort = options.memoryEffort;
     this.memoryEmbeddingRuntime = options.memoryEmbeddingRuntime;
     this.userId = options.userId;
+    this.workspaceId = options.workspaceId;
   }
 
   private emitUserMemoryOutcome = async (input: {
@@ -212,7 +220,12 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
           this.memoryEmbeddingRuntime.payload,
           { userId: this.userId },
         )
-      : await initModelRuntimeFromDB(this.serverDB, this.userId, defaultEmbeddingConfig.provider);
+      : await initModelRuntimeFromDB(
+          this.serverDB,
+          this.userId,
+          defaultEmbeddingConfig.provider,
+          this.workspaceId,
+        );
     const normalizedQueries = [
       ...new Set((normalizedParams.queries ?? []).map((query) => query.trim()).filter(Boolean)),
     ];
@@ -263,6 +276,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
       const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
         this.serverDB,
         this.userId,
+        this.workspaceId,
       );
       const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
@@ -334,6 +348,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
       const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
         this.serverDB,
         this.userId,
+        this.workspaceId,
       );
       const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
@@ -412,6 +427,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
       const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
         this.serverDB,
         this.userId,
+        this.workspaceId,
       );
       const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
@@ -484,6 +500,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
       const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
         this.serverDB,
         this.userId,
+        this.workspaceId,
       );
       const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
@@ -568,6 +585,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
       const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
         this.serverDB,
         this.userId,
+        this.workspaceId,
       );
       const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
@@ -644,6 +662,7 @@ class MemoryServerRuntimeService implements MemoryRuntimeService {
       const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
         this.serverDB,
         this.userId,
+        this.workspaceId,
       );
       const embed = createEmbedder(agentRuntime, embeddingModel, this.userId);
 
@@ -873,6 +892,7 @@ export const memoryRuntime: ServerRuntimeRegistration = {
       toolCallId: context.toolCallId,
       topicId: context.topicId,
       userId: context.userId,
+      workspaceId: context.workspaceId,
     });
 
     return new MemoryExecutionRuntime({

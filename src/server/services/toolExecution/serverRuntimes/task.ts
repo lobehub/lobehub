@@ -1,4 +1,5 @@
 import { normalizeListTasksParams, TaskIdentifier } from '@lobechat/builtin-tool-task';
+import type { LobeChatDatabase } from '@lobechat/database';
 import {
   formatDependencyAdded,
   formatDependencyRemoved,
@@ -10,35 +11,56 @@ import {
   priorityLabel,
 } from '@lobechat/prompts';
 import type { TaskAutomationMode, TaskStatus } from '@lobechat/types';
+import { eq } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
 import { TaskModel } from '@/database/models/task';
+import { tasks } from '@/database/schemas';
 import { taskRouter } from '@/server/routers/lambda/task';
 import { TaskService } from '@/server/services/task';
 
 import { type ServerRuntimeRegistration } from './types';
 
-export const createTaskRuntime = ({
-  agentModel,
-  agentId,
-  scope,
-  taskId,
-  taskCaller,
-  taskModel,
-  taskService,
-}: {
-  agentModel: AgentModel;
+// Row-level workspace resolution: the agent runtime hasn't threaded
+// `workspaceId` into `ToolExecutionContext` yet. When the tool fires inside a
+// task we derive the workspace from that task row; otherwise we fall back to
+// personal mode.
+const resolveWorkspaceId = async (
+  db: LobeChatDatabase,
+  taskId: string | undefined,
+): Promise<string | undefined> => {
+  if (!taskId) return undefined;
+  const [row] = await db
+    .select({ workspaceId: tasks.workspaceId })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+  return row?.workspaceId ?? undefined;
+};
+
+export interface TaskRuntimeDeps {
   agentId?: string;
+  agentModel: AgentModel;
   scope?: string | null;
-  taskId?: string;
   taskCaller: ReturnType<typeof taskRouter.createCaller>;
+  taskId?: string;
   taskModel: TaskModel;
   taskService: TaskService;
-}) => {
+}
+
+export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
+  const { agentId, scope, taskId } = deps;
+  // Models are read through `deps` (not destructured) so callers can swap them
+  // in lazily — e.g. after async workspace resolution in the runtime factory.
+  const agentModel = () => deps.agentModel;
+  const taskModel = () => deps.taskModel;
+  const taskService = () => deps.taskService;
+  const taskCaller = () => deps.taskCaller;
+
   const resolveAssigneeAgent = async (assigneeAgentId?: string | null) => {
     if (!assigneeAgentId) return { success: true } as const;
 
-    const exists = await agentModel.existsById(assigneeAgentId);
+    const exists = await agentModel().existsById(assigneeAgentId);
     if (exists) return { success: true } as const;
 
     return {
@@ -65,7 +87,7 @@ export const createTaskRuntime = ({
     // and label, and pass the resolved id straight through to the service.
     let parentTaskId: string | undefined;
     if (args.parentIdentifier) {
-      const parent = await taskModel.resolve(args.parentIdentifier);
+      const parent = await taskModel().resolve(args.parentIdentifier);
       if (!parent)
         return { content: `Parent task not found: ${args.parentIdentifier}`, success: false };
       parentTaskId = parent.id;
@@ -75,7 +97,7 @@ export const createTaskRuntime = ({
     const assigneeResult = await resolveAssigneeAgent(args.assigneeAgentId);
     if (!assigneeResult.success) return { content: assigneeResult.content, success: false };
 
-    const task = await taskService.createTask({
+    const task = await taskService().createTask({
       assigneeAgentId: args.assigneeAgentId ?? (scope === 'task' ? undefined : agentId),
       createdByAgentId: agentId,
       instruction: args.instruction,
@@ -110,7 +132,7 @@ export const createTaskRuntime = ({
       }
 
       try {
-        const result = await taskCaller.addComment({
+        const result = await taskCaller().addComment({
           authorAgentId: agentId,
           content: args.content,
           id,
@@ -174,10 +196,10 @@ export const createTaskRuntime = ({
     },
 
     deleteTask: async (args: { identifier: string }) => {
-      const task = await taskModel.resolve(args.identifier);
+      const task = await taskModel().resolve(args.identifier);
       if (!task) return { content: `Task not found: ${args.identifier}`, success: false };
 
-      await taskModel.delete(task.id);
+      await taskModel().delete(task.id);
 
       return {
         content: formatTaskDeleted(task.identifier, task.name),
@@ -187,7 +209,7 @@ export const createTaskRuntime = ({
 
     deleteTaskComment: async (args: { commentId: string }) => {
       try {
-        await taskCaller.deleteComment({ commentId: args.commentId });
+        await taskCaller().deleteComment({ commentId: args.commentId });
         return {
           content: `Comment ${args.commentId} deleted.`,
           success: true,
@@ -210,7 +232,7 @@ export const createTaskRuntime = ({
       priority?: number;
       removeDependencies?: string[];
     }) => {
-      const task = await taskModel.resolve(args.identifier);
+      const task = await taskModel().resolve(args.identifier);
       if (!task) return { content: `Task not found: ${args.identifier}`, success: false };
 
       const updateData: {
@@ -256,7 +278,7 @@ export const createTaskRuntime = ({
       }
 
       if (Object.keys(updateData).length > 0) {
-        ops.push(taskCaller.update({ id: task.id, ...updateData }));
+        ops.push(taskCaller().update({ id: task.id, ...updateData }));
       }
 
       const applyDeps = async (
@@ -265,7 +287,11 @@ export const createTaskRuntime = ({
         onChange: (depIdentifier: string) => void,
       ): Promise<string | undefined> => {
         const resolved = await Promise.all(
-          ids.map((id) => taskModel.resolve(id).then((r) => ({ id, resolved: r }))),
+          ids.map((id) =>
+            taskModel()
+              .resolve(id)
+              .then((r) => ({ id, resolved: r })),
+          ),
         );
         const missing = resolved.find((r) => !r.resolved);
         if (missing) return `Dependency task not found: ${missing.id}`;
@@ -279,7 +305,7 @@ export const createTaskRuntime = ({
         depResults.push(
           applyDeps(
             args.addDependencies,
-            (depId) => taskModel.addDependency(task.id, depId),
+            (depId) => taskModel().addDependency(task.id, depId),
             (depIdentifier) => changes.push(formatDependencyAdded(task.identifier, depIdentifier)),
           ),
         );
@@ -288,7 +314,7 @@ export const createTaskRuntime = ({
         depResults.push(
           applyDeps(
             args.removeDependencies,
-            (depId) => taskModel.removeDependency(task.id, depId),
+            (depId) => taskModel().removeDependency(task.id, depId),
             (depIdentifier) =>
               changes.push(formatDependencyRemoved(task.identifier, depIdentifier)),
           ),
@@ -316,7 +342,7 @@ export const createTaskRuntime = ({
       });
 
       try {
-        const result = await taskCaller.list(normalized.query);
+        const result = await taskCaller().list(normalized.query);
 
         return {
           content: formatTaskList(result.data, normalized.displayFilters),
@@ -340,7 +366,7 @@ export const createTaskRuntime = ({
       schedulePattern?: string | null;
       scheduleTimezone?: string | null;
     }) => {
-      const task = await taskModel.resolve(args.identifier);
+      const task = await taskModel().resolve(args.identifier);
       if (!task) return { content: `Task not found: ${args.identifier}`, success: false };
 
       const changes: string[] = [];
@@ -386,12 +412,12 @@ export const createTaskRuntime = ({
         );
       }
       if (Object.keys(scheduleUpdate).length > 0) {
-        ops.push(taskCaller.update({ id: task.id, ...scheduleUpdate }));
+        ops.push(taskCaller().update({ id: task.id, ...scheduleUpdate }));
       }
 
       if (args.maxExecutions !== undefined) {
         ops.push(
-          taskCaller.updateConfig({
+          taskCaller().updateConfig({
             config: { schedule: { maxExecutions: args.maxExecutions } },
             id: task.id,
           }),
@@ -422,7 +448,7 @@ export const createTaskRuntime = ({
       }
 
       try {
-        const result = await taskCaller.run({
+        const result = await taskCaller().run({
           continueTopicId: args.continueTopicId,
           id,
           prompt: args.prompt,
@@ -456,7 +482,7 @@ export const createTaskRuntime = ({
 
       for (const [index, identifier] of identifiers.entries()) {
         try {
-          const result = await taskCaller.run({ id: identifier });
+          const result = await taskCaller().run({ id: identifier });
           const topicId = (result as { topicId?: string } | undefined)?.topicId;
           succeeded += 1;
           lines.push(
@@ -482,7 +508,7 @@ export const createTaskRuntime = ({
 
     updateTaskComment: async (args: { commentId: string; content: string }) => {
       try {
-        await taskCaller.updateComment({ commentId: args.commentId, content: args.content });
+        await taskCaller().updateComment({ commentId: args.commentId, content: args.content });
         return {
           content: `Comment ${args.commentId} updated.`,
           success: true,
@@ -504,7 +530,7 @@ export const createTaskRuntime = ({
       }
 
       try {
-        const result = await taskCaller.updateStatus({
+        const result = await taskCaller().updateStatus({
           error: args.error,
           id,
           status: args.status,
@@ -536,7 +562,7 @@ export const createTaskRuntime = ({
         };
       }
 
-      const detail = await taskService.getTaskDetail(id);
+      const detail = await taskService().getTaskDetail(id);
       if (!detail) return { content: `Task not found: ${id}`, success: false };
 
       return {
@@ -553,20 +579,53 @@ export const taskRuntime: ServerRuntimeRegistration = {
       throw new Error('userId and serverDB are required for Task tool execution');
     }
 
-    const agentModel = new AgentModel(context.serverDB, context.userId);
-    const taskModel = new TaskModel(context.serverDB, context.userId);
-    const taskService = new TaskService(context.serverDB, context.userId);
-    const taskCaller = taskRouter.createCaller({ userId: context.userId });
+    const db = context.serverDB;
+    const userId = context.userId;
+    const { agentId, taskId, scope } = context;
 
-    return createTaskRuntime({
-      agentModel,
-      agentId: context.agentId,
-      scope: context.scope,
-      taskCaller,
-      taskId: context.taskId,
-      taskModel,
-      taskService,
-    });
+    // Models are wired in lazily after the workspaceId is resolved from the
+    // owning task row. `createTaskRuntime` reads them through this shared
+    // `deps` object, so re-assigning the fields below propagates into every
+    // method without re-creating the runtime.
+    const deps = {
+      agentId,
+      scope,
+      taskId,
+      // Initial personal-mode models cover the no-task-context case. Replaced
+      // before the first call when `taskId` is set.
+      agentModel: new AgentModel(db, userId),
+      taskModel: new TaskModel(db, userId),
+      taskService: new TaskService(db, userId),
+      taskCaller: taskRouter.createCaller({ userId }),
+    } as TaskRuntimeDeps;
+
+    let resolved = false;
+    const ensureModels = async () => {
+      if (resolved) return;
+      resolved = true;
+      // Prefer pipeline-threaded `context.workspaceId`. Fall back to looking
+      // up the owning task row for callers that pre-date the propagation work
+      // and still construct `ToolExecutionContext` without `workspaceId`.
+      const wsId = context.workspaceId ?? (await resolveWorkspaceId(db, taskId));
+      deps.agentModel = new AgentModel(db, userId, wsId);
+      deps.taskModel = new TaskModel(db, userId, wsId);
+      deps.taskService = new TaskService(db, userId, wsId);
+      deps.taskCaller = taskRouter.createCaller({ userId, workspaceId: wsId });
+    };
+
+    const baseRuntime = createTaskRuntime(deps);
+
+    // Wrap every method so that workspaceId + models are resolved before the
+    // delegate runs. Preserves the existing tool API shape.
+    return Object.fromEntries(
+      Object.entries(baseRuntime).map(([name, fn]) => [
+        name,
+        async (...args: unknown[]) => {
+          await ensureModels();
+          return (fn as (...a: unknown[]) => unknown)(...args);
+        },
+      ]),
+    ) as typeof baseRuntime;
   },
   identifier: TaskIdentifier,
 };

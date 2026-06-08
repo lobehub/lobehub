@@ -404,8 +404,11 @@ export const initModelRuntimeFromDB = async (
   db: LobeChatDatabase,
   userId: string,
   provider: string,
+  workspaceId?: string,
 ): Promise<ModelRuntime> => {
   // 1. Get user's provider configuration from database
+  // NOTE: workspace-scoped ai_infra is deferred until the ai_infra surrogate-`_id`
+  // PK migration (LOBE-10056) lands; AiProviderModel stays personal-scoped for now.
   const aiProviderModel = new AiProviderModel(db, userId);
 
   // Use getAiProviderById with KeyVaultsGateKeeper.getUserKeyVaults as decryptor
@@ -425,11 +428,11 @@ export const initModelRuntimeFromDB = async (
   const payload = buildPayloadFromKeyVaults(keyVaults, runtimeProvider);
 
   // 4. Get business hooks (billing in cloud, undefined in OSS)
-  const businessHooks = getBusinessModelRuntimeHooks(userId, provider);
+  const businessHooks = getBusinessModelRuntimeHooks(userId, provider, workspaceId);
 
   // 5. Compose with the per-call llm_generation_tracing hook (no-op when the
   //    service is unconfigured, so OSS / self-hosted setups pay nothing for it).
-  const tracingHooks = createLLMGenerationTracingHook(userId, provider);
+  const tracingHooks = createLLMGenerationTracingHook(userId, provider, workspaceId);
   const hooks = mergeModelRuntimeHooks(businessHooks, tracingHooks);
 
   // 6. Initialize ModelRuntime with the payload and hooks

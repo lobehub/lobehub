@@ -1,23 +1,26 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { type AsyncTaskError } from '@/types/asyncTask';
 import { AsyncTaskStatus } from '@/types/asyncTask';
 import { type Generation } from '@/types/generation';
 
-const generationProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const generationProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const wsId = ctx.workspaceId ?? undefined;
 
   return opts.next({
     ctx: {
-      asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
-      fileService: new FileService(ctx.serverDB, ctx.userId),
-      generationModel: new GenerationModel(ctx.serverDB, ctx.userId),
+      asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId, wsId),
+      fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
+      generationModel: new GenerationModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -30,6 +33,7 @@ export type GetGenerationStatusResult = {
 
 export const generationRouter = router({
   deleteGeneration: generationProcedure
+    .use(withScopedPermission('file:delete'))
     .input(z.object({ generationId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       // Delete the generation record from database and get the deleted data

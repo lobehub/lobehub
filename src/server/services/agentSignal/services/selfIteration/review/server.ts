@@ -412,6 +412,7 @@ export interface ReviewRuntimePrimitiveDeps {
   skillDocumentService: SkillManagementDocumentService;
   sourceId: string;
   userId: string;
+  workspaceId?: string;
 }
 
 /**
@@ -440,6 +441,7 @@ export const createReviewRuntimePrimitives = (
     skillDocumentService,
     sourceId,
     userId,
+    workspaceId,
   } = deps;
 
   const isSkillNameAvailable = async ({
@@ -681,7 +683,7 @@ export const createReviewRuntimePrimitives = (
               message: content,
               reason: `Agent Signal self-review memory candidate from ${evidenceRefs.length} evidence refs.`,
             },
-            { db, userId },
+            { db, userId, workspaceId },
           );
 
           if (result.status !== 'applied') {
@@ -739,11 +741,12 @@ export const createServerSelfReviewPolicyOptions = ({
   db,
   selfIterationEnabled = false,
   userId,
+  workspaceId,
 }: CreateServerSelfIterationPolicyOptions): CreateNightlyReviewSourceHandlerDependencies => {
   const nightlyReviewModel = new AgentSignalNightlyReviewModel(db);
-  const reviewContextModel = new AgentSignalReviewContextModel(db, userId);
-  const briefModel = new BriefModel(db, userId);
-  const skillDocumentService = new SkillManagementDocumentService(db, userId);
+  const reviewContextModel = new AgentSignalReviewContextModel(db, userId, workspaceId);
+  const briefModel = new BriefModel(db, userId, workspaceId);
+  const skillDocumentService = new SkillManagementDocumentService(db, userId, workspaceId);
   const collector = createSelfReviewContextService({
     listDocumentActivity: async ({ agentId: targetAgentId, reviewWindowEnd, reviewWindowStart }) =>
       tracer.startActiveSpan(
@@ -972,5 +975,6 @@ export const createServerSelfReviewPolicyOptions = ({
     },
     collectContext: (input) => collector.collect(input),
     db,
+    workspaceId,
   };
 };

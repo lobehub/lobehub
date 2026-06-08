@@ -94,6 +94,7 @@ export class AgentRuntimeCoordinator {
       agentConfig?: any;
       modelRuntimeConfig?: any;
       userId?: string;
+      workspaceId?: string;
     },
   ): Promise<void> {
     try {

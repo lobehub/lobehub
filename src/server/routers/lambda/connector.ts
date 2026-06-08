@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
@@ -12,7 +13,7 @@ import {
   ConnectorToolPermission,
 } from '@/database/schemas';
 import { inferCrudType } from '@/libs/mcp/utils';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { callConnectorToolById, ConnectorToolCallError } from '@/server/services/connector/exec';
@@ -28,15 +29,16 @@ import {
 } from '@/server/services/connector/stateStore';
 import { syncConnectorToolsById } from '@/server/services/connector/sync';
 
-const connectorProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const connectorProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   // Credentials (OAuth tokens) are encrypted at rest — give the model a gatekeeper.
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+  const wsId = ctx.workspaceId ?? undefined;
   return opts.next({
     ctx: {
-      connectorModel: new ConnectorModel(ctx.serverDB, ctx.userId, gateKeeper),
-      connectorToolModel: new ConnectorToolModel(ctx.serverDB, ctx.userId),
-      pluginModel: new PluginModel(ctx.serverDB, ctx.userId),
+      connectorModel: new ConnectorModel(ctx.serverDB, ctx.userId, wsId, gateKeeper),
+      connectorToolModel: new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId),
+      pluginModel: new PluginModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
@@ -106,7 +108,7 @@ export const connectorRouter = router({
    * The Add modal must display THIS value (not a client-derived origin) so the
    * URI the user registers matches the one used at authorize time.
    */
-  getRedirectUri: authedProcedure.query(() => ({ redirectUri: getConnectorRedirectUri() })),
+  getRedirectUri: wsCompatProcedure.query(() => ({ redirectUri: getConnectorRedirectUri() })),
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 

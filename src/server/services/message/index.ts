@@ -53,10 +53,10 @@ export class MessageService {
   private fileService: FileService;
   private compressionRepository: CompressionRepository;
 
-  constructor(db: LobeChatDatabase, userId: string) {
-    this.messageModel = new MessageModel(db, userId);
-    this.fileService = new FileService(db, userId);
-    this.compressionRepository = new CompressionRepository(db, userId);
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.messageModel = new MessageModel(db, userId, workspaceId);
+    this.fileService = new FileService(db, userId, workspaceId);
+    this.compressionRepository = new CompressionRepository(db, userId, workspaceId);
   }
 
   /**

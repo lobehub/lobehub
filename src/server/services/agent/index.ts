@@ -46,16 +46,18 @@ export class AgentService {
   private readonly db: LobeChatDatabase;
   private readonly agentModel: AgentModel;
   private readonly userModel: UserModel;
+  private readonly workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
-    this.agentModel = new AgentModel(db, userId);
+    this.workspaceId = workspaceId;
+    this.agentModel = new AgentModel(db, userId, workspaceId);
     this.userModel = new UserModel(db, userId);
   }
 
   async createInbox() {
-    const sessionModel = new SessionModel(this.db, this.userId);
+    const sessionModel = new SessionModel(this.db, this.userId, this.workspaceId);
     const defaultAgentConfig = getServerDefaultAgentConfig();
     await sessionModel.createInbox(defaultAgentConfig);
   }

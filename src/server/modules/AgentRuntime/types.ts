@@ -38,6 +38,7 @@ export interface IAgentStateManager {
       agentConfig?: any;
       modelRuntimeConfig?: any;
       userId?: string;
+      workspaceId?: string;
     },
   ) => Promise<void>;
 

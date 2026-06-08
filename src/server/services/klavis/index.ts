@@ -16,11 +16,13 @@ export interface KlavisToolExecuteParams {
   /** Tool identifier (same as Klavis server identifier, e.g., 'google-calendar') */
   identifier: string;
   toolName: string;
+  workspaceId?: string;
 }
 
 export interface KlavisServiceOptions {
   db?: LobeChatDatabase;
   userId?: string;
+  workspaceId?: string;
 }
 
 /**
@@ -43,15 +45,17 @@ export class KlavisService {
   private db?: LobeChatDatabase;
   private userId?: string;
   private pluginModel?: PluginModel;
+  private workspaceId?: string;
 
   constructor(options: KlavisServiceOptions = {}) {
-    const { db, userId } = options;
+    const { db, userId, workspaceId } = options;
 
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
 
     if (db && userId) {
-      this.pluginModel = new PluginModel(db, userId);
+      this.pluginModel = new PluginModel(db, userId, workspaceId);
     }
 
     log(
@@ -68,7 +72,7 @@ export class KlavisService {
    * @returns Tool execution result
    */
   async executeKlavisTool(params: KlavisToolExecuteParams): Promise<ToolExecutionResult> {
-    const { identifier, toolName, args } = params;
+    const { identifier, toolName, args, workspaceId } = params;
 
     log('executeKlavisTool: %s/%s with args: %O', identifier, toolName, args);
 
@@ -95,7 +99,11 @@ export class KlavisService {
 
     try {
       // Get plugin from database to retrieve serverUrl
-      const plugin = await this.pluginModel.findById(identifier);
+      const pluginModel =
+        workspaceId && this.db && this.userId
+          ? new PluginModel(this.db, this.userId, workspaceId)
+          : this.pluginModel;
+      const plugin = await pluginModel.findById(identifier);
       if (!plugin) {
         return {
           content: `Klavis server "${identifier}" not found in database`,

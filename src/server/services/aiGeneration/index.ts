@@ -47,17 +47,21 @@ export interface AiGenerationObjectOptions {
 export class AiGenerationService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
+  private readonly workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
 
   async generateObject<T = unknown>(
     input: AiGenerationObjectInput,
     options: AiGenerationObjectOptions = {},
   ): Promise<T> {
-    const runtime = await initModelRuntimeFromDB(this.db, this.userId, input.provider);
+    const runtime = this.workspaceId
+      ? await initModelRuntimeFromDB(this.db, this.userId, input.provider, this.workspaceId)
+      : await initModelRuntimeFromDB(this.db, this.userId, input.provider);
     return (await runtime.generateObject(
       {
         messages: input.messages as GenerateObjectPayload['messages'],

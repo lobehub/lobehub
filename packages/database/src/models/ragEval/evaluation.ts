@@ -3,36 +3,35 @@ import { EvalEvaluationStatus } from '@lobechat/types';
 import type { SQL } from 'drizzle-orm';
 import { and, count, desc, eq, inArray } from 'drizzle-orm';
 
-import type {
-  NewEvalEvaluationItem} from '../../schemas';
-import {
-  evalDatasets,
-  evalEvaluation,
-  evaluationRecords
-} from '../../schemas';
+import type { NewEvalEvaluationItem } from '../../schemas';
+import { evalDatasets, evalEvaluation, evaluationRecords } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 
 export class EvalEvaluationModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, evalEvaluation);
 
   create = async (params: NewEvalEvaluationItem) => {
     const [result] = await this.db
       .insert(evalEvaluation)
-      .values({ ...params, userId: this.userId })
+      .values({ ...params, userId: this.userId, workspaceId: this.workspaceId ?? null })
       .returning();
     return result;
   };
 
   delete = async (id: string) => {
-    return this.db
-      .delete(evalEvaluation)
-      .where(and(eq(evalEvaluation.id, id), eq(evalEvaluation.userId, this.userId)));
+    return this.db.delete(evalEvaluation).where(and(eq(evalEvaluation.id, id), this.ownership()));
   };
 
   queryByKnowledgeBaseId = async (knowledgeBaseId: string) => {
@@ -52,12 +51,7 @@ export class EvalEvaluationModel {
       .from(evalEvaluation)
       .leftJoin(evalDatasets, eq(evalDatasets.id, evalEvaluation.datasetId))
       .orderBy(desc(evalEvaluation.createdAt))
-      .where(
-        and(
-          eq(evalEvaluation.userId, this.userId),
-          eq(evalEvaluation.knowledgeBaseId, knowledgeBaseId),
-        ),
-      );
+      .where(and(this.ownership(), eq(evalEvaluation.knowledgeBaseId, knowledgeBaseId)));
 
     // Then query record statistics for each evaluation
     const evaluationIds = evaluations.map((evals) => evals.id);
@@ -88,7 +82,7 @@ export class EvalEvaluationModel {
 
   findById = async (id: string) => {
     return this.db.query.evalEvaluation.findFirst({
-      where: and(eq(evalEvaluation.id, id), eq(evalEvaluation.userId, this.userId)),
+      where: and(eq(evalEvaluation.id, id), this.ownership()),
     });
   };
 
@@ -96,6 +90,6 @@ export class EvalEvaluationModel {
     return this.db
       .update(evalEvaluation)
       .set(value)
-      .where(and(eq(evalEvaluation.id, id), eq(evalEvaluation.userId, this.userId)));
+      .where(and(eq(evalEvaluation.id, id), this.ownership()));
   };
 }

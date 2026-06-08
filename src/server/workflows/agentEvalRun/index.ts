@@ -235,12 +235,12 @@ export class AgentEvalRunWorkflow {
    */
   static async filterTestCasesNeedingExecution(
     db: LobeChatDatabase,
-    params: { runId: string; testCaseIds: string[]; userId: string },
+    params: { runId: string; testCaseIds: string[]; userId: string; workspaceId?: string },
   ): Promise<string[]> {
-    const { runId, testCaseIds, userId } = params;
+    const { runId, testCaseIds, userId, workspaceId } = params;
     if (testCaseIds.length === 0) return [];
 
-    const agentEvalRunTopicModel = new AgentEvalRunTopicModel(db, userId);
+    const agentEvalRunTopicModel = new AgentEvalRunTopicModel(db, userId, workspaceId);
 
     // Get existing RunTopics for this run
     const existingRunTopics = await agentEvalRunTopicModel.findByRunId(runId);

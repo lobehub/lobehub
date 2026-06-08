@@ -159,6 +159,7 @@ describe('FollowUpActionService.extract', () => {
       threadId: { col: 'threadId' },
       topicId: { col: 'topicId' },
       userId: { col: 'userId' },
+      workspaceId: { col: 'workspaceId' },
     };
     const ops = {
       and: (...parts: any[]) => ({ op: 'and', parts }),
@@ -189,6 +190,34 @@ describe('FollowUpActionService.extract', () => {
     const { parts, table } = captureWhereOps();
     expect(parts).toContainEqual({ col: table.threadId, op: 'isNull' });
     expect(parts.some((p) => p.op === 'eq' && p.col === table.threadId)).toBe(false);
+  });
+
+  it('filters personal mode by userId and null workspaceId', async () => {
+    queryFindFirstSpy.mockResolvedValue(undefined);
+    await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
+    const { parts, table } = captureWhereOps();
+    const ownership = parts.find((p) => p.op === 'and' && p.parts?.length === 2);
+    expect(ownership.parts).toEqual([
+      { col: table.userId, op: 'eq', value: TEST_USER },
+      { col: table.workspaceId, op: 'isNull' },
+    ]);
+  });
+
+  it('filters workspace mode by workspaceId and forwards it to model runtime', async () => {
+    svc = new FollowUpActionService(dbMock, TEST_USER, 'workspace-1');
+    queryFindFirstSpy.mockResolvedValue({ id: FOUND_MSG, content: 'q?' });
+    runtimeMock.generateObject.mockResolvedValue({ chips: [] });
+
+    await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
+
+    const { parts, table } = captureWhereOps();
+    expect(parts).toContainEqual({ col: table.workspaceId, op: 'eq', value: 'workspace-1' });
+    expect(ModelRuntimeModule.initModelRuntimeFromDB).toHaveBeenCalledWith(
+      dbMock,
+      TEST_USER,
+      MODEL_CONFIG.provider,
+      'workspace-1',
+    );
   });
 
   it('appends onboarding addendum to system prompt when hint is onboarding', async () => {

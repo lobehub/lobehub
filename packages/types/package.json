@@ -10,7 +10,7 @@
     "test:update": "vitest -u"
   },
   "dependencies": {
-    "@lobehub/market-sdk": "0.33.3",
+    "@lobehub/market-sdk": "0.34.0",
     "@lobehub/market-types": "^1.12.3",
     "model-bank": "workspace:*",
     "type-fest": "^4.41.0",

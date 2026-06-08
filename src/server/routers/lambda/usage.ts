@@ -1,14 +1,19 @@
 import { z } from 'zod';
 
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { UsageRecordService } from '@/server/services/usage';
 
-const usageProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const usageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   return opts.next({
     ctx: {
-      usageRecordService: new UsageRecordService(ctx.serverDB, ctx.userId),
+      usageRecordService: new UsageRecordService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ),
     },
   });
 });

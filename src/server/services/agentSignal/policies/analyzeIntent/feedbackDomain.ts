@@ -48,10 +48,12 @@ export interface CreateFeedbackDomainJudgePolicyOptions {
   feedbackDomainJudge?: Partial<FeedbackDomainJudgeAgentModelConfig> & {
     db: LobeChatDatabase;
     userId: string;
+    workspaceId?: string;
   };
   skillIntentClassifier?: Partial<FeedbackDomainJudgeAgentModelConfig> & {
     db: LobeChatDatabase;
     userId: string;
+    workspaceId?: string;
   };
 }
 
@@ -67,6 +69,7 @@ const createDomainResolver = (
       runtimeDeps.db,
       runtimeDeps.userId,
       runtimeDeps,
+      runtimeDeps.workspaceId,
     );
 
     return (
@@ -88,7 +91,12 @@ export const createSkillIntentClassifier = (
 
   if (!runtimeDeps) return undefined;
 
-  return new SkillIntentClassifierAgentService(runtimeDeps.db, runtimeDeps.userId, runtimeDeps);
+  return new SkillIntentClassifierAgentService(
+    runtimeDeps.db,
+    runtimeDeps.userId,
+    runtimeDeps,
+    runtimeDeps.workspaceId,
+  );
 };
 
 /**

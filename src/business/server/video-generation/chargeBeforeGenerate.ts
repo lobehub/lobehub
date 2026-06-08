@@ -7,6 +7,7 @@ interface ChargeParams {
   params: CreateVideoServicePayload['params'];
   provider: string;
   userId: string;
+  workspaceId?: string;
 }
 
 interface ErrorBatch {

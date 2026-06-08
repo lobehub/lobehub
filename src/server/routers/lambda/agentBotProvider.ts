@@ -3,6 +3,8 @@ import { fetchQrCode, pollQrStatus } from '@lobechat/chat-adapter-wechat';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -17,16 +19,23 @@ import { mergeWithDefaults, platformRegistry } from '@/server/services/bot/platf
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
-const agentBotProviderProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const agentBotProviderProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const wsId = ctx.workspaceId ?? undefined;
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
 
   return opts.next({
     ctx: {
-      agentBotProviderModel: new AgentBotProviderModel(ctx.serverDB, ctx.userId, gateKeeper),
+      agentBotProviderModel: new AgentBotProviderModel(ctx.serverDB, ctx.userId, gateKeeper, wsId),
     },
   });
 });
+
+// Write variant gates viewers out of bot-provider mutations
+// (create/update/delete + start/test connections). Reads keep the bare proc.
+const agentBotProviderProcedureWrite = agentBotProviderProcedure.use(
+  withScopedPermission('agent:update'),
+);
 
 /**
  * Wrap the shared access-policy validator so violations surface as
@@ -49,7 +58,7 @@ export const agentBotProviderRouter = router({
     return platformRegistry.listSerializedPlatforms();
   }),
 
-  create: agentBotProviderProcedure
+  create: agentBotProviderProcedureWrite
     .input(
       z.object({
         agentId: z.string(),
@@ -79,7 +88,7 @@ export const agentBotProviderRouter = router({
       }
     }),
 
-  delete: agentBotProviderProcedure
+  delete: agentBotProviderProcedureWrite
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       // Load record before delete to get platform + applicationId
@@ -118,18 +127,18 @@ export const agentBotProviderRouter = router({
       return getBotRuntimeStatus(input.platform, input.applicationId);
     }),
 
-  refreshRuntimeStatus: authedProcedure
+  refreshRuntimeStatus: agentBotProviderProcedureWrite
     .input(z.object({ applicationId: z.string(), platform: z.string() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       const service = new GatewayService();
-      return service.refreshBotRuntimeStatus(input.platform, input.applicationId, ctx.userId);
+      return service.refreshBotRuntimeStatus(input.platform, input.applicationId);
     }),
 
-  refreshRuntimeStatusesByAgent: authedProcedure
+  refreshRuntimeStatusesByAgent: agentBotProviderProcedureWrite
     .input(z.object({ agentId: z.string() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       const service = new GatewayService();
-      await service.refreshBotRuntimeStatusesByAgent(input.agentId, ctx.userId);
+      await service.refreshBotRuntimeStatusesByAgent(input.agentId);
       return { ok: true as const };
     }),
 
@@ -155,7 +164,7 @@ export const agentBotProviderRouter = router({
       }));
     }),
 
-  connectBot: agentBotProviderProcedure
+  connectBot: agentBotProviderProcedureWrite
     .input(z.object({ applicationId: z.string(), platform: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const service = new GatewayService();
@@ -164,7 +173,7 @@ export const agentBotProviderRouter = router({
       return { status };
     }),
 
-  testConnection: agentBotProviderProcedure
+  testConnection: agentBotProviderProcedureWrite
     .input(z.object({ applicationId: z.string(), platform: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const { platform, applicationId } = input;
@@ -251,7 +260,7 @@ export const agentBotProviderRouter = router({
       return pollQrStatus(input.qrcode);
     }),
 
-  update: agentBotProviderProcedure
+  update: agentBotProviderProcedureWrite
     .input(
       z.object({
         applicationId: z.string().optional(),

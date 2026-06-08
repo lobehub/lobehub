@@ -1113,11 +1113,14 @@ export default {
 
   'tab.user': 'User',
 
+  'tab.workspace': 'Workspace',
+
   'user.agents': 'Agents',
 
   'user.downloads': 'Downloads',
 
   'user.editProfile': 'Edit Profile',
+  'user.editWorkspaceProfile': 'Settings',
 
   'user.favoriteAgents': 'Saved Agents',
 
@@ -1138,7 +1141,103 @@ export default {
 
   'user.logout': 'Logout',
 
+  'user.openWorkspacePublicProfile': 'Open Public Link',
+
+  'user.setupWorkspaceProfile': 'Set up Community Profile',
+
   'user.myProfile': 'My Profile',
+
+  'user.workspaceProfile.cancel': 'Cancel',
+  'user.workspaceProfile.description': 'Update the public workspace profile shown in Community.',
+  'user.workspaceProfile.errors.displayName': 'Enter a workspace name',
+  'user.workspaceProfile.errors.fileTooLarge': 'Image must be smaller than 2 MB',
+  'user.workspaceProfile.errors.namespace.length': 'Handle must be 3-32 characters',
+  'user.workspaceProfile.errors.namespace.pattern':
+    'Use lowercase letters, numbers, and hyphens. Start and end with a letter or number.',
+  'user.workspaceProfile.errors.namespace.required': 'Enter a Community handle',
+  'user.workspaceProfile.errors.uploadFailed': 'Failed to upload avatar',
+  'user.workspaceProfile.errors.url': 'Enter a valid URL',
+  'user.workspaceProfile.failed': 'Failed to update workspace profile',
+  'user.workspaceProfile.fields.avatar': 'Avatar',
+  'user.workspaceProfile.fields.bannerUrl': 'Banner Image',
+  'user.workspaceProfile.fields.bannerUrl.clickToUpload': 'Click to upload banner image',
+  'user.workspaceProfile.fields.bannerUrl.remove': 'Remove banner',
+  'user.workspaceProfile.fields.bannerUrl.tooltip':
+    'The banner is shown at the top of your community profile (16:9 ratio recommended).',
+  'user.workspaceProfile.fields.bannerUrl.uploading': 'Uploading...',
+  'user.workspaceProfile.fields.description': 'Description',
+  'user.workspaceProfile.fields.description.maxLength': 'Description can be up to 200 characters',
+  'user.workspaceProfile.fields.description.placeholder': 'Introduce your workspace…',
+  'user.workspaceProfile.fields.displayName': 'Workspace name',
+  'user.workspaceProfile.fields.displayName.maxLength': 'Workspace name can be up to 50 characters',
+  'user.workspaceProfile.fields.displayName.placeholder': 'Enter the workspace name',
+  'user.workspaceProfile.fields.namespace': 'Public Community URL',
+  'user.workspaceProfile.fields.namespace.available': 'This URL is available',
+  'user.workspaceProfile.fields.namespace.checking': 'Checking availability…',
+  'user.workspaceProfile.fields.namespace.placeholder': 'workspace-handle',
+  'user.workspaceProfile.fields.namespace.taken': 'This URL is already taken',
+  'user.workspaceProfile.fields.websiteUrl': 'Website',
+  'user.workspaceProfile.fields.websiteUrl.placeholder': 'Workspace website link',
+  'user.workspaceProfile.optional.toggle': 'More settings',
+  'user.workspaceProfile.save': 'Save',
+  'user.workspaceProfile.setup.description':
+    'Create a public Community profile for this workspace. This workspace profile and published resources will be visible.',
+  'user.workspaceProfile.setup.empty.description':
+    'Set up a public Community profile before publishing or showing workspace resources.',
+  'user.workspaceProfile.setup.empty.title': 'Set up this workspace for Community',
+  'user.workspaceProfile.setup.failed': 'Failed to set up Community profile',
+  'user.workspaceProfile.setup.privacyAlert':
+    'Members, chats, billing, credentials, and private resources stay private.',
+  'user.workspaceProfile.setup.save': 'Set up profile',
+  'user.workspaceProfile.setup.success': 'Community profile created',
+  'user.workspaceProfile.setup.title': 'Set up Community Profile',
+  'user.workspaceProfile.settings.avatar.description':
+    'Use a workspace avatar for the Community profile.',
+  'user.workspaceProfile.settings.avatar.hint': 'Upload an image or choose an emoji.',
+  'user.workspaceProfile.settings.back': 'Back',
+  'user.workspaceProfile.settings.banner.description':
+    'Show a banner at the top of the Community profile.',
+  'user.workspaceProfile.settings.description.description':
+    'Describe what this workspace publishes or works on.',
+  'user.workspaceProfile.settings.displayName.description':
+    'This name appears on the Community profile.',
+  'user.workspaceProfile.settings.members.column.member': 'Member',
+  'user.workspaceProfile.settings.members.column.role': 'Role',
+  'user.workspaceProfile.settings.members.description':
+    'Members currently mirrored into this workspace’s Community organization.',
+  'user.workspaceProfile.settings.members.empty':
+    'No members synced yet. Sync to mirror the current workspace members.',
+  'user.workspaceProfile.settings.members.role.admin': 'Admin',
+  'user.workspaceProfile.settings.members.role.member': 'Member',
+  'user.workspaceProfile.settings.members.sync': 'Sync members',
+  'user.workspaceProfile.settings.members.syncFailed': 'Failed to sync members',
+  'user.workspaceProfile.settings.members.syncHint':
+    'Sync the current workspace members to the Community organization.',
+  'user.workspaceProfile.settings.members.syncSuccess': 'Members synced',
+  'user.workspaceProfile.settings.members.title': 'Community Members',
+  'user.workspaceProfile.settings.namespace.description':
+    'Set the public Community URL for this workspace.',
+  'user.workspaceProfile.settings.namespace.hint': 'Use up to {{max}} characters.',
+  'user.workspaceProfile.settings.namespaceTaken':
+    'This Community URL is already taken. Choose another one.',
+  'user.workspaceProfile.settings.noPermission':
+    'Only workspace owners can manage the Community profile.',
+  'user.workspaceProfile.settings.noProfile.description':
+    'Set up the Community profile before editing its settings.',
+  'user.workspaceProfile.settings.subtitle':
+    'Manage the public Community profile for this workspace.',
+  'user.workspaceProfile.settings.tabs.members': 'Members',
+  'user.workspaceProfile.settings.tabs.profile': 'Profile',
+  'user.workspaceProfile.settings.title': 'Community Profile Settings',
+  'user.workspaceProfile.settings.updateFailed': 'Failed to update Community profile',
+  'user.workspaceProfile.settings.updateSuccess': 'Community profile updated',
+  'user.workspaceProfile.settings.website.description':
+    'Add a website shown on the Community profile.',
+  'user.workspaceProfile.settings.website.hint': 'Use a public http(s) URL.',
+  'user.workspaceProfile.success': 'Workspace profile updated',
+  'user.workspaceProfile.title': 'Edit Workspace',
+
+  'user.accountType.organization': 'Organization',
 
   'user.noAgents': 'This user hasn’t published any Agents yet',
 
@@ -1146,9 +1245,18 @@ export default {
 
   'user.noAgents.title': 'No Agents yet',
 
+  'user.org.noAgents': 'This organization hasn’t published any Agents yet',
+
+  'user.workspace.noAgents': 'This organization has not published any Agents to Community yet.',
+
   'user.noFavoriteAgents': 'No saved Agents yet',
 
   'user.noFavoritePlugins': 'No saved Skills yet',
+
+  'user.noGroups.title': 'No Agent Groups yet',
+
+  'user.workspace.noGroups':
+    'This organization has not published any Agent Groups to Community yet.',
 
   'user.noForkedAgentGroups': 'No forked Agent Groups yet',
 

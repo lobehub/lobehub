@@ -239,6 +239,12 @@ export interface OperationCreationParams {
   userMemory?: ServerUserMemoryConfig;
   /** User's timezone from settings (e.g. 'Asia/Shanghai') */
   userTimezone?: string;
+  /**
+   * Workspace ID propagated down from the originating chat/task router so
+   * tool executions (createBrief / pinTask / etc.) ownership-filter to the
+   * caller's workspace. Stored on `state.metadata.workspaceId`.
+   */
+  workspaceId?: string;
 }
 
 export interface OperationCreationResult {

@@ -21,6 +21,8 @@ export interface ResourceRuntimePrimitiveDeps {
   memoryReason: (evidenceCount: number) => string;
   skillDocumentService: SkillManagementDocumentService;
   userId: string;
+  /** Workspace id, so memory-write operations target the correct workspace. */
+  workspaceId?: string;
 }
 
 /**
@@ -39,6 +41,7 @@ export const createResourceRuntimePrimitives = ({
   memoryReason,
   skillDocumentService,
   userId,
+  workspaceId,
 }: ResourceRuntimePrimitiveDeps): AgentSignalRuntimeService => {
   const isSkillNameAvailable = async ({
     agentId: targetAgentId,
@@ -178,7 +181,7 @@ export const createResourceRuntimePrimitives = ({
         writeMemory: async ({ content, evidenceRefs, idempotencyKey }) => {
           const result = await runMemoryActionAgent(
             { agentId, message: content, reason: memoryReason(evidenceRefs.length) },
-            { db, userId },
+            { db, userId, workspaceId },
           );
 
           if (result.status !== 'applied') {

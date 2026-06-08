@@ -1,26 +1,28 @@
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { AsyncTaskStatus, AsyncTaskType } from '@/types/asyncTask';
 import { type FileListItem } from '@/types/files';
 import { QueryFileListSchema } from '@/types/files';
 
-const knowledgeProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const knowledgeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const wsId = ctx.workspaceId ?? undefined;
 
   return opts.next({
     ctx: {
-      asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
-      chunkModel: new ChunkModel(ctx.serverDB, ctx.userId),
-      documentModel: new DocumentModel(ctx.serverDB, ctx.userId),
-      fileModel: new FileModel(ctx.serverDB, ctx.userId),
-      fileService: new FileService(ctx.serverDB, ctx.userId),
-      knowledgeRepo: new KnowledgeRepo(ctx.serverDB, ctx.userId),
+      asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId, wsId),
+      chunkModel: new ChunkModel(ctx.serverDB, ctx.userId, wsId),
+      documentModel: new DocumentModel(ctx.serverDB, ctx.userId, wsId),
+      fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
+      fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
+      knowledgeRepo: new KnowledgeRepo(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });

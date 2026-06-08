@@ -59,7 +59,12 @@ export async function runStep(c: Context): Promise<Response> {
     }
 
     const serverDB = await getServerDB();
-    const agentRuntimeService = new AgentRuntimeService(serverDB, metadata.userId);
+    // Thread the operation's workspace through so the runtime's models stay
+    // workspace-scoped. Without it the worker is personal-scoped and the
+    // parent-message lookup misses workspace-scoped rows → ConversationParentMissing.
+    const agentRuntimeService = new AgentRuntimeService(serverDB, metadata.userId, {
+      workspaceId: metadata.workspaceId,
+    });
 
     const result = await agentRuntimeService.executeStep({
       approvedToolCall,

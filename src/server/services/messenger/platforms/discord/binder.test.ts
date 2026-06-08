@@ -70,6 +70,20 @@ describe('buildDiscordSwitchButtons', () => {
       { customId: 'messenger:switch:agt_2', isPrimary: true, label: '✓ Coding' },
     ]);
   });
+
+  it('uses the scope action namespace so /switch buttons are distinct from /agents', () => {
+    const buttons = buildDiscordSwitchButtons(
+      [
+        { id: 'personal', isActive: true, title: 'Personal' },
+        { id: 'workspace-1', isActive: false, title: 'love' },
+      ],
+      'scope',
+    );
+    expect(buttons).toEqual([
+      { customId: 'messenger:scope:personal', isPrimary: true, label: '✓ Personal' },
+      { customId: 'messenger:scope:workspace-1', isPrimary: false, label: 'love' },
+    ]);
+  });
 });
 
 describe('MessengerDiscordBinder', () => {

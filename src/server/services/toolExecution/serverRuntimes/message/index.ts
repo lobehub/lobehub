@@ -346,10 +346,7 @@ export const messageRuntime: ServerRuntimeRegistration = {
               ((row.metadata as Record<string, unknown> | null)?.tenantName as string) ?? '',
           }));
 
-        const telegramView = await maybeSynthesizeTelegramInstall(
-          context.serverDB,
-          context.userId,
-        );
+        const telegramView = await maybeSynthesizeTelegramInstall(context.serverDB, context.userId);
         if (telegramView) installations.push(telegramView);
 
         return installations;
@@ -506,9 +503,13 @@ export const messageRuntime: ServerRuntimeRegistration = {
           }
         }
         const linkModel = new MessengerAccountLinkModel(context.serverDB, context.userId);
+        // This in-chat tool only resolves personal-owned agents (validated
+        // above via `agents.userId === userId`), so the active scope is always
+        // personal (`workspaceId: null`).
         const updated = await linkModel.setActiveAgent(
           params.platform,
           params.agentId,
+          null,
           params.tenantId,
         );
         if (!updated) {

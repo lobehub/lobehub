@@ -66,6 +66,7 @@ export interface RecordLLMGenerationCallParams {
   trigger?: string | null;
   userId: string;
   validationFailed?: boolean;
+  workspaceId?: string | null;
 }
 
 /**
@@ -99,7 +100,7 @@ export class LLMGenerationTracingService {
       return null;
     }
 
-    const model = new LlmGenerationTracingModel(db, params.userId);
+    const model = new LlmGenerationTracingModel(db, params.userId, params.workspaceId ?? undefined);
 
     // Allocate the id up-front so the route can return it synchronously to
     // the client (e.g. for feedback wiring) even though the actual `record()`
@@ -210,6 +211,7 @@ export class LLMGenerationTracingService {
     userId: string,
     tracingId: string,
     params: UpdateLlmGenerationFeedbackParams,
+    workspaceId?: string,
   ): Promise<void> {
     let db: Awaited<ReturnType<typeof getServerDB>>;
     try {
@@ -220,7 +222,7 @@ export class LLMGenerationTracingService {
         cause: err,
       });
     }
-    const model = new LlmGenerationTracingModel(db, userId);
+    const model = new LlmGenerationTracingModel(db, userId, workspaceId);
     let result: { updated: boolean };
     try {
       result = await model.updateFeedback(tracingId, params);

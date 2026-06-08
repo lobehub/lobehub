@@ -16,14 +16,14 @@ export const webBrowsingRuntime: ServerRuntimeRegistration = {
       documentService: canSaveDocuments
         ? {
             associateDocument: async (documentId) => {
-              const service = new AgentDocumentsService(serverDB, userId);
+              const service = new AgentDocumentsService(serverDB, userId, context.workspaceId);
               await service.associateDocument(agentId, documentId);
             },
             createDocument: async (params) => {
               // Same service the client trpc procedure uses — dedupe by URL,
               // short-circuit on byte-identical content, write a history
               // snapshot when content actually changed ().
-              const service = new WebBrowsingDocumentService(serverDB, userId);
+              const service = new WebBrowsingDocumentService(serverDB, userId, context.workspaceId);
               return service.upsertCrawledDocument(params);
             },
           }

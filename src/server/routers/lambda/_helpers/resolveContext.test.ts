@@ -6,13 +6,22 @@ import {
   resolveContext,
 } from './resolveContext';
 
+const { mockBuildWorkspaceWhere } = vi.hoisted(() => ({
+  mockBuildWorkspaceWhere: vi.fn(() => 'workspace-where'),
+}));
+
 // Mock the database module
 vi.mock('@/database/schemas', () => ({
   agentsToSessions: {
     agentId: 'agent_id',
     sessionId: 'session_id',
     userId: 'user_id',
+    workspaceId: 'workspace_id',
   },
+}));
+
+vi.mock('@/database/utils/workspace', () => ({
+  buildWorkspaceWhere: mockBuildWorkspaceWhere,
 }));
 
 describe('resolveContext', () => {
@@ -63,6 +72,18 @@ describe('resolveContext', () => {
 
       expect(result.sessionId).toBe('resolved-session-1');
       expect(mockDb.select).toHaveBeenCalled();
+    });
+
+    it('should scope agentId resolution by workspaceId when provided', async () => {
+      const mockDb = createMockDb([{ sessionId: 'workspace-session-1' }]);
+
+      const result = await resolveContext({ agentId: 'agent-1' }, mockDb, mockUserId, 'ws-1');
+
+      expect(result.sessionId).toBe('workspace-session-1');
+      expect(mockBuildWorkspaceWhere).toHaveBeenCalledWith(
+        { userId: mockUserId, workspaceId: 'ws-1' },
+        expect.objectContaining({ workspaceId: 'workspace_id' }),
+      );
     });
 
     it('should prefer agentId over sessionId when both are provided', async () => {
@@ -191,6 +212,18 @@ describe('resolveContext', () => {
       expect(mockWhere).toHaveBeenCalled();
       // The where clause should be called with userId filter
     });
+
+    it('should scope session reverse lookup by workspaceId when provided', async () => {
+      const mockDb = createMockDb([{ agentId: 'agent-1' }]);
+
+      const result = await resolveAgentIdFromSession('session-1', mockDb, mockUserId, 'ws-1');
+
+      expect(result).toBe('agent-1');
+      expect(mockBuildWorkspaceWhere).toHaveBeenCalledWith(
+        { userId: mockUserId, workspaceId: 'ws-1' },
+        expect.objectContaining({ workspaceId: 'workspace_id' }),
+      );
+    });
   });
 
   describe('batchResolveAgentIdFromSessions', () => {
@@ -232,6 +265,18 @@ describe('resolveContext', () => {
       expect(result.size).toBe(2);
       expect(result.get('session-1')).toBe('agent-1');
       expect(result.get('session-2')).toBe('agent-2');
+    });
+
+    it('should scope batch reverse lookup by workspaceId when provided', async () => {
+      const mockDb = createBatchMockDb([{ sessionId: 'session-1', agentId: 'agent-1' }]);
+
+      const result = await batchResolveAgentIdFromSessions(['session-1'], mockDb, 'user-1', 'ws-1');
+
+      expect(result.get('session-1')).toBe('agent-1');
+      expect(mockBuildWorkspaceWhere).toHaveBeenCalledWith(
+        { userId: 'user-1', workspaceId: 'ws-1' },
+        expect.objectContaining({ workspaceId: 'workspace_id' }),
+      );
     });
 
     it('should handle partial matches', async () => {

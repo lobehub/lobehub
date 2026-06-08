@@ -4,6 +4,7 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 
 import { agents, chatGroups, chatGroupsAgents, topics, topicShares } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspaceWhere } from '../utils/workspace';
 
 export type TopicShareData = NonNullable<
   Awaited<ReturnType<(typeof TopicShareModel)['findByShareId']>>
@@ -12,11 +13,16 @@ export type TopicShareData = NonNullable<
 export class TopicShareModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topicShares);
 
   /**
    * Create or get existing share for a topic.
@@ -24,9 +30,12 @@ export class TopicShareModel {
    * If record already exists, returns the existing one.
    */
   create = async (topicId: string, visibility: ShareVisibility = 'private') => {
-    // First verify the topic belongs to the user
+    // First verify the topic belongs to the user (or workspace).
     const topic = await this.db.query.topics.findFirst({
-      where: and(eq(topics.id, topicId), eq(topics.userId, this.userId)),
+      where: and(
+        eq(topics.id, topicId),
+        buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+      ),
     });
 
     if (!topic) {
@@ -39,6 +48,7 @@ export class TopicShareModel {
         topicId,
         userId: this.userId,
         visibility,
+        workspaceId: this.workspaceId ?? null,
       })
       .onConflictDoNothing({ target: topicShares.topicId })
       .returning();
@@ -58,7 +68,7 @@ export class TopicShareModel {
     const [result] = await this.db
       .update(topicShares)
       .set({ updatedAt: new Date(), visibility })
-      .where(and(eq(topicShares.topicId, topicId), eq(topicShares.userId, this.userId)))
+      .where(and(eq(topicShares.topicId, topicId), this.ownership()))
       .returning();
 
     return result || null;
@@ -70,7 +80,7 @@ export class TopicShareModel {
   deleteByTopicId = async (topicId: string) => {
     return this.db
       .delete(topicShares)
-      .where(and(eq(topicShares.topicId, topicId), eq(topicShares.userId, this.userId)));
+      .where(and(eq(topicShares.topicId, topicId), this.ownership()));
   };
 
   /**
@@ -85,7 +95,7 @@ export class TopicShareModel {
         visibility: topicShares.visibility,
       })
       .from(topicShares)
-      .where(and(eq(topicShares.topicId, topicId), eq(topicShares.userId, this.userId)))
+      .where(and(eq(topicShares.topicId, topicId), this.ownership()))
       .limit(1);
 
     return result[0] || null;

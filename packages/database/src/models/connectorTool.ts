@@ -8,6 +8,7 @@ import type {
 } from '../schemas';
 import { ConnectorToolPermission as Permission, userConnectorTools } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface SyncToolInput {
   crudType: ToolCRUDType;
@@ -24,11 +25,16 @@ export interface SyncToolInput {
 export class ConnectorToolModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, userConnectorTools);
 
   /**
    * Batch-upsert tools from a manifest sync.
@@ -41,19 +47,23 @@ export class ConnectorToolModel {
   upsertMany = async (userConnectorId: string, tools: SyncToolInput[]): Promise<void> => {
     if (tools.length === 0) return;
 
-    const values: NewUserConnectorTool[] = tools.map((t) => ({
-      crudType: t.crudType,
-      description: t.description ?? null,
-      displayName: t.displayName ?? null,
-      inputSchema: t.inputSchema ?? null,
-      isWorkArtifact: false,
-      outputSchema: t.outputSchema ?? null,
-      permission: t.defaultPermission ?? Permission.auto,
-      renderConfig: t.renderConfig ?? null,
-      toolName: t.toolName,
-      userConnectorId,
-      userId: this.userId,
-    }));
+    const values: NewUserConnectorTool[] = tools.map((t) =>
+      buildWorkspacePayload(
+        { userId: this.userId, workspaceId: this.workspaceId },
+        {
+          crudType: t.crudType,
+          description: t.description ?? null,
+          displayName: t.displayName ?? null,
+          inputSchema: t.inputSchema ?? null,
+          isWorkArtifact: false,
+          outputSchema: t.outputSchema ?? null,
+          permission: t.defaultPermission ?? Permission.auto,
+          renderConfig: t.renderConfig ?? null,
+          toolName: t.toolName,
+          userConnectorId,
+        },
+      ),
+    );
 
     await this.db
       .insert(userConnectorTools)
@@ -80,19 +90,14 @@ export class ConnectorToolModel {
     await this.db
       .update(userConnectorTools)
       .set({ permission, updatedAt: new Date() })
-      .where(and(eq(userConnectorTools.id, toolId), eq(userConnectorTools.userId, this.userId)));
+      .where(and(eq(userConnectorTools.id, toolId), this.ownership()));
   };
 
   queryByConnector = async (userConnectorId: string): Promise<UserConnectorToolItem[]> => {
     return this.db
       .select()
       .from(userConnectorTools)
-      .where(
-        and(
-          eq(userConnectorTools.userConnectorId, userConnectorId),
-          eq(userConnectorTools.userId, this.userId),
-        ),
-      );
+      .where(and(eq(userConnectorTools.userConnectorId, userConnectorId), this.ownership()));
   };
 
   /**
@@ -107,7 +112,7 @@ export class ConnectorToolModel {
       .from(userConnectorTools)
       .where(
         and(
-          eq(userConnectorTools.userId, this.userId),
+          this.ownership(),
           inArray(userConnectorTools.userConnectorId, connectorIds),
           ne(userConnectorTools.permission, Permission.disabled),
         ),
@@ -124,12 +129,7 @@ export class ConnectorToolModel {
     return this.db
       .select()
       .from(userConnectorTools)
-      .where(
-        and(
-          eq(userConnectorTools.userId, this.userId),
-          inArray(userConnectorTools.userConnectorId, connectorIds),
-        ),
-      );
+      .where(and(this.ownership(), inArray(userConnectorTools.userConnectorId, connectorIds)));
   };
 
   /**
@@ -140,9 +140,7 @@ export class ConnectorToolModel {
     const results = await this.db
       .select()
       .from(userConnectorTools)
-      .where(
-        and(eq(userConnectorTools.userId, this.userId), eq(userConnectorTools.toolName, toolName)),
-      )
+      .where(and(this.ownership(), eq(userConnectorTools.toolName, toolName)))
       .limit(1);
     return results[0];
   };

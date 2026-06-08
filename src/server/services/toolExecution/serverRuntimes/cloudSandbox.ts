@@ -24,7 +24,7 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
     }
 
     const marketService = new MarketService({ userInfo: { userId: context.userId } });
-    const fileService = new FileService(context.serverDB, context.userId);
+    const fileService = new FileService(context.serverDB, context.userId, context.workspaceId);
     const sandboxService = createSandboxService({
       fileService,
       marketService,

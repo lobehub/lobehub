@@ -131,16 +131,19 @@ export class AgentSignalSelfReviewBriefService {
   private db: LobeChatDatabase;
   private selfReviewProposalResolver?: AgentSignalSelfReviewBriefServiceOptions['selfReviewProposalResolver'];
   private userId: string;
+  private workspaceId?: string;
 
   constructor(
     db: LobeChatDatabase,
     userId: string,
+    workspaceId: string | undefined,
     options: AgentSignalSelfReviewBriefServiceOptions = {},
   ) {
     this.db = db;
     this.userId = userId;
-    this.briefService = new BriefService(db, userId);
-    this.briefModel = new BriefModel(db, userId);
+    this.workspaceId = workspaceId;
+    this.briefService = new BriefService(db, userId, workspaceId);
+    this.briefModel = new BriefModel(db, userId, workspaceId);
     this.selfReviewProposalResolver = options.selfReviewProposalResolver;
   }
 
@@ -211,7 +214,11 @@ export class AgentSignalSelfReviewBriefService {
       typeof metadata?.sourceId === 'string'
         ? metadata.sourceId
         : `self-review-proposal-approve:${brief.id}`;
-    const skillDocumentService = new SkillManagementDocumentService(this.db, this.userId);
+    const skillDocumentService = new SkillManagementDocumentService(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    );
     const preflight = createSelfReviewProposalPreflightService({
       isSkillNameAvailable: async ({ name }) => {
         const skill = await skillDocumentService.getSkill({
@@ -375,9 +382,11 @@ export class AgentSignalSelfReviewBriefService {
       checkGates: () =>
         briefSelfReview.canApplySelfReviewProposal({
           checkAgentGate: () =>
-            new AgentSignalReviewContextModel(this.db, this.userId).canAgentRunSelfIteration(
-              brief.agentId ?? '',
-            ),
+            new AgentSignalReviewContextModel(
+              this.db,
+              this.userId,
+              this.workspaceId,
+            ).canAgentRunSelfIteration(brief.agentId ?? ''),
           checkServerGate: () => true,
           checkUserGate: () => isAgentSignalEnabledForUser(this.db, this.userId),
         }),

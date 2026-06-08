@@ -3,6 +3,8 @@ import { RequestTrigger, SemanticSearchSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
@@ -10,7 +12,7 @@ import { EmbeddingModel } from '@/database/models/embedding';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
 import { SearchRepo } from '@/database/repositories/search';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -18,27 +20,29 @@ import { ChunkService } from '@/server/services/chunk';
 import { DocumentService } from '@/server/services/document';
 import { KnowledgeBaseSearchService } from '@/server/services/knowledgeBase';
 
-const chunkProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const chunkProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const wsId = ctx.workspaceId ?? undefined;
 
   return opts.next({
     ctx: {
-      asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
-      chunkModel: new ChunkModel(ctx.serverDB, ctx.userId),
-      chunkService: new ChunkService(ctx.serverDB, ctx.userId),
-      documentModel: new DocumentModel(ctx.serverDB, ctx.userId),
-      documentService: new DocumentService(ctx.serverDB, ctx.userId),
-      embeddingModel: new EmbeddingModel(ctx.serverDB, ctx.userId),
-      fileModel: new FileModel(ctx.serverDB, ctx.userId),
-      knowledgeBaseSearchService: new KnowledgeBaseSearchService(ctx.serverDB, ctx.userId),
-      messageModel: new MessageModel(ctx.serverDB, ctx.userId),
-      searchRepo: new SearchRepo(ctx.serverDB, ctx.userId),
+      asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId, wsId),
+      chunkModel: new ChunkModel(ctx.serverDB, ctx.userId, wsId),
+      chunkService: new ChunkService(ctx.serverDB, ctx.userId, wsId),
+      documentModel: new DocumentModel(ctx.serverDB, ctx.userId, wsId),
+      documentService: new DocumentService(ctx.serverDB, ctx.userId, wsId),
+      embeddingModel: new EmbeddingModel(ctx.serverDB, ctx.userId, wsId),
+      fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
+      knowledgeBaseSearchService: new KnowledgeBaseSearchService(ctx.serverDB, ctx.userId, wsId),
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
+      searchRepo: new SearchRepo(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
 
 export const chunkRouter = router({
   createEmbeddingChunksTask: chunkProcedure
+    .use(withScopedPermission('knowledge_base:update'))
     .input(
       z.object({
         id: z.string(),
@@ -51,6 +55,7 @@ export const chunkRouter = router({
     }),
 
   createParseFileTask: chunkProcedure
+    .use(withScopedPermission('knowledge_base:update'))
     .input(
       z.object({
         id: z.string(),
@@ -90,6 +95,7 @@ export const chunkRouter = router({
     }),
 
   retryParseFileTask: chunkProcedure
+    .use(withScopedPermission('knowledge_base:update'))
     .input(
       z.object({
         id: z.string(),
@@ -122,7 +128,12 @@ export const chunkRouter = router({
       const { model, provider } =
         getServerDefaultFilesConfig().embeddingModel || DEFAULT_FILE_EMBEDDING_MODEL_ITEM;
       // Read user's provider config from database
-      const agentRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
+      const agentRuntime = await initModelRuntimeFromDB(
+        ctx.serverDB,
+        ctx.userId,
+        provider,
+        ctx.workspaceId ?? undefined,
+      );
 
       const embeddings = await agentRuntime.embeddings(
         {

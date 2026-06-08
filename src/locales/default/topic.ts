@@ -57,6 +57,8 @@ export default {
   'importInvalidFormat': 'Invalid file format. Please ensure it is a valid JSON file.',
   'importLoading': 'Importing conversation...',
   'importSuccess': 'Successfully imported {{count}} messages',
+  'info.title': 'Topic Info',
+  'info.updatedAt': 'Updated at {{time}}',
   'inPopup.description':
     'This topic is currently open in a separate window. Continue the conversation there to keep messages in sync.',
   'inPopup.focus': 'Focus Popup Window',

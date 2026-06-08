@@ -7,6 +7,7 @@
     "./currency": "./src/currency.ts",
     "./desktopGlobalShortcuts": "./src/desktopGlobalShortcuts.ts",
     "./hotkeys": "./src/hotkeys.ts",
+    "./rbac": "./src/rbac.ts",
     "./visualRef": "./src/visualRef.ts"
   },
   "main": "./src/index.ts",

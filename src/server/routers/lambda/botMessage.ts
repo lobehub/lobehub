@@ -11,12 +11,14 @@ import {
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { getMessengerTelegramConfig } from '@/config/messenger';
 import type { DecryptedBotProvider } from '@/database/models/agentBotProvider';
 import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { mergeWithDefaults, platformRegistry } from '@/server/services/bot/platforms';
@@ -33,16 +35,18 @@ import { TELEGRAM_INSTALLATION_KEY } from '@/server/services/messenger/installat
 
 // ── Middleware ────────────────────────────────────────────
 
-const botMessageProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const botMessageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+  const wsId = ctx.workspaceId ?? undefined;
 
   return opts.next({
     ctx: {
-      agentBotProviderModel: new AgentBotProviderModel(ctx.serverDB, ctx.userId, gateKeeper),
+      agentBotProviderModel: new AgentBotProviderModel(ctx.serverDB, ctx.userId, gateKeeper, wsId),
     },
   });
 });
+const botMessageWriteProcedure = botMessageProcedure.use(withScopedPermission('message:create'));
 
 // ── Shared input schemas ─────────────────────────────────
 
@@ -262,7 +266,7 @@ const resolveSendTarget = async (
 export const botMessageRouter = router({
   // ==================== Direct Messaging ====================
 
-  sendDirectMessage: botMessageProcedure
+  sendDirectMessage: botMessageWriteProcedure
     .input(
       z
         .object({
@@ -294,7 +298,7 @@ export const botMessageRouter = router({
 
   // ==================== Core Message Operations ====================
 
-  sendMessage: botMessageProcedure
+  sendMessage: botMessageWriteProcedure
     .input(
       z
         .object({
@@ -359,7 +363,7 @@ export const botMessageRouter = router({
       });
     }),
 
-  editMessage: botMessageProcedure
+  editMessage: botMessageWriteProcedure
     .input(
       z.object({
         botId: z.string(),
@@ -378,7 +382,7 @@ export const botMessageRouter = router({
       });
     }),
 
-  deleteMessage: botMessageProcedure
+  deleteMessage: botMessageWriteProcedure
     .input(
       z.object({
         botId: z.string(),
@@ -418,7 +422,7 @@ export const botMessageRouter = router({
 
   // ==================== Reactions ====================
 
-  reactToMessage: botMessageProcedure
+  reactToMessage: botMessageWriteProcedure
     .input(
       z.object({
         botId: z.string(),
@@ -456,7 +460,7 @@ export const botMessageRouter = router({
 
   // ==================== Pin Management ====================
 
-  pinMessage: botMessageProcedure
+  pinMessage: botMessageWriteProcedure
     .input(
       z.object({
         botId: z.string(),
@@ -473,7 +477,7 @@ export const botMessageRouter = router({
       });
     }),
 
-  unpinMessage: botMessageProcedure
+  unpinMessage: botMessageWriteProcedure
     .input(
       z.object({
         botId: z.string(),
@@ -560,7 +564,7 @@ export const botMessageRouter = router({
 
   // ==================== Thread Operations ====================
 
-  createThread: botMessageProcedure
+  createThread: botMessageWriteProcedure
     .input(
       z.object({
         botId: z.string(),
@@ -596,7 +600,7 @@ export const botMessageRouter = router({
       });
     }),
 
-  replyToThread: botMessageProcedure
+  replyToThread: botMessageWriteProcedure
     .input(
       z
         .object({
@@ -622,7 +626,7 @@ export const botMessageRouter = router({
 
   // ==================== Polls ====================
 
-  createPoll: botMessageProcedure
+  createPoll: botMessageWriteProcedure
     .input(
       z.object({
         botId: z.string(),

@@ -205,6 +205,22 @@ describe('lobeAgentRuntime', () => {
     );
   });
 
+  it('should pass workspaceId when initializing visual model runtime', async () => {
+    const runtime = lobeAgentRuntime.factory({ ...baseContext, workspaceId: 'workspace-1' });
+
+    await runtime.analyzeVisualMedia({
+      question: 'what is this?',
+      urls: ['https://example.com/generated.png'],
+    });
+
+    expect(mockInitModelRuntimeFromDB).toHaveBeenCalledWith(
+      baseContext.serverDB,
+      'user-1',
+      'test-provider',
+      'workspace-1',
+    );
+  });
+
   it('should accumulate text content_part chunks from the visual model', async () => {
     mockChat.mockImplementationOnce(async (_payload, options) => {
       options?.callback?.onContentPart?.({

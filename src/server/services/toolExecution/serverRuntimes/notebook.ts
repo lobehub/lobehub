@@ -18,6 +18,7 @@ export const notebookRuntime: ServerRuntimeRegistration = {
     const notebookService = new NotebookRuntimeService({
       serverDB: context.serverDB,
       userId: context.userId,
+      workspaceId: context.workspaceId,
     });
 
     return new NotebookExecutionRuntime(notebookService);

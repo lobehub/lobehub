@@ -11,6 +11,7 @@ import type {
 } from '../schemas/agentOperations';
 import { agentOperations } from '../schemas/agentOperations';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspaceWhere } from '../utils/workspace';
 
 /** Verify rollup states, mirrors the `verify_status` enum column. */
 export type VerifyStatus =
@@ -80,11 +81,16 @@ export interface RecordOperationCompletionParams {
 export class AgentOperationModel {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
+  private readonly workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentOperations);
 
   /**
    * Insert the initial row when an operation is created. Idempotent via
@@ -110,6 +116,7 @@ export class AgentOperationModel {
       topicId: params.topicId ?? null,
       trigger: params.trigger,
       userId: this.userId,
+      workspaceId: this.workspaceId ?? null,
     };
 
     await this.db.insert(agentOperations).values(values).onConflictDoNothing();
@@ -151,14 +158,14 @@ export class AgentOperationModel {
     await this.db
       .update(agentOperations)
       .set(updates)
-      .where(and(eq(agentOperations.id, operationId), eq(agentOperations.userId, this.userId)));
+      .where(and(eq(agentOperations.id, operationId), this.ownership()));
   }
 
   async findById(operationId: string) {
     const [row] = await this.db
       .select()
       .from(agentOperations)
-      .where(and(eq(agentOperations.id, operationId), eq(agentOperations.userId, this.userId)))
+      .where(and(eq(agentOperations.id, operationId), this.ownership()))
       .limit(1);
     return row ?? null;
   }
@@ -182,7 +189,7 @@ export class AgentOperationModel {
       .from(agentOperations)
       .where(
         and(
-          eq(agentOperations.userId, this.userId),
+          this.ownership(),
           isNotNull(agentOperations.startedAt),
           isNotNull(agentOperations.completedAt),
           gte(agentOperations.createdAt, startDate),

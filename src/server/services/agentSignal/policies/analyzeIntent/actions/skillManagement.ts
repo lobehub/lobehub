@@ -30,6 +30,8 @@ export interface SkillManagementActionHandlerOptions {
   responseLanguage?: string;
   selfIterationEnabled: boolean;
   userId: string;
+  /** Workspace id when the run belongs to a team workspace; scopes the skill write. */
+  workspaceId?: string;
 }
 
 const finalizeAttempt = (
@@ -185,6 +187,7 @@ export const executeSkillManagementAction = async (
       threadTitle: 'Agent Signal Skill',
       ...(topicId ? { topicId } : {}),
       userId: options.userId,
+      ...(options.workspaceId ? { workspaceId: options.workspaceId } : {}),
     });
 
     await markAppliedActionIdempotency(context, idempotencyKey);

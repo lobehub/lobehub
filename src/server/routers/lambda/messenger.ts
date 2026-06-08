@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { and, desc, eq, ne, or } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import {
   getEnabledMessengerPlatforms,
   getMessengerDiscordConfig,
@@ -18,10 +19,14 @@ import {
 } from '@/database/models/messengerAccountLink';
 import type { DecryptedMessengerInstallation } from '@/database/models/messengerInstallation';
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
+import { RbacModel } from '@/database/models/rbac';
+import { WorkspaceModel } from '@/database/models/workspace';
 import { agents, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { SlackApi } from '@/server/services/bot/platforms/slack/api';
 import {
@@ -52,6 +57,22 @@ const extractSlackAuthErrorCode = (error: unknown): string | null => {
 
   const match = error.message.match(/Slack API auth\.test failed: ([a-z_]+)/);
   return match?.[1] ?? null;
+};
+
+const WORKSPACE_FEATURE_DISABLED_MESSAGE = 'Workspace feature is not enabled for this user';
+
+const isWorkspaceFeatureEnabledForUser = async (userId: string): Promise<boolean> => {
+  const featureFlags = await getServerFeatureFlagsStateFromRuntimeConfig(userId);
+  return featureFlags.enableWorkspace === true;
+};
+
+const assertWorkspaceFeatureEnabledForUser = async (userId: string): Promise<void> => {
+  if (await isWorkspaceFeatureEnabledForUser(userId)) return;
+
+  throw new TRPCError({
+    code: 'FORBIDDEN',
+    message: WORKSPACE_FEATURE_DISABLED_MESSAGE,
+  });
 };
 
 const reconcileSlackInstallation = async (
@@ -95,10 +116,70 @@ const messengerProcedure = authedProcedure.use(serverDatabase).use(async (opts) 
   const { ctx } = opts;
   return opts.next({
     ctx: {
+      // The System Bot is a single shared bot; the workspace a conversation
+      // runs in is derived from the *active agent*, not the ambient
+      // `X-Workspace-Id` header. So the link model is identity-scoped (by
+      // userId), and per-agent authorization happens in-handler via
+      // `resolveAuthorizedAgentScope`.
       messengerLinkModel: new MessengerAccountLinkModel(ctx.serverDB, ctx.userId),
     },
   });
 });
+const messengerWriteProcedure = messengerProcedure.use(withScopedPermission('agent:update'));
+
+/**
+ * Resolve the workspace scope of an agent the user wants to route the System
+ * Bot to, authorizing access along the way. Because the bot is shared and
+ * which LobeHub context a conversation runs in is derived from the *active
+ * agent*, every place that sets the active agent must re-authorize against
+ * that agent's own workspace:
+ *
+ * - personal agent (`workspace_id IS NULL`): must be owned by the caller.
+ * - workspace agent: caller must be a member AND hold `agent:update` in that
+ *   workspace (mirrors `withScopedPermission('agent:update')`).
+ *
+ * Returns the derived `workspaceId` (null for personal) + the agent title.
+ * Throws `NOT_FOUND` / `FORBIDDEN`.
+ */
+const resolveAuthorizedAgentScope = async (
+  serverDB: LobeChatDatabase,
+  userId: string,
+  agentId: string,
+): Promise<{ title: string | null; workspaceId: string | null }> => {
+  const [agentRow] = await serverDB
+    .select({ title: agents.title, userId: agents.userId, workspaceId: agents.workspaceId })
+    .from(agents)
+    .where(eq(agents.id, agentId))
+    .limit(1);
+  if (!agentRow) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'messenger.error.agentNotFound' });
+  }
+
+  // Personal agent — only the owner may route the bot to it.
+  if (!agentRow.workspaceId) {
+    if (agentRow.userId !== userId) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'messenger.error.agentNotFound' });
+    }
+    return { title: agentRow.title, workspaceId: null };
+  }
+
+  // Workspace agent — caller must be a member with `agent:update`.
+  await assertWorkspaceFeatureEnabledForUser(userId);
+
+  const userWorkspaces = await new WorkspaceModel(serverDB, userId).listUserWorkspaces();
+  const isMember = userWorkspaces.some((w) => w.id === agentRow.workspaceId);
+  if (!isMember) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'messenger.error.agentNotFound' });
+  }
+  const allowed = await new RbacModel(serverDB, userId).hasAnyPermission(
+    ['agent:update:all', 'agent:update:owner'],
+    { workspaceId: agentRow.workspaceId },
+  );
+  if (!allowed) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'messenger.error.agentNotFound' });
+  }
+  return { title: agentRow.title, workspaceId: agentRow.workspaceId };
+};
 
 export const messengerRouter = router({
   /**
@@ -280,14 +361,13 @@ export const messengerRouter = router({
         });
       }
 
-      const [agentRow] = await ctx.serverDB
-        .select({ id: agents.id, title: agents.title })
-        .from(agents)
-        .where(and(eq(agents.id, input.initialAgentId), eq(agents.userId, ctx.userId)))
-        .limit(1);
-      if (!agentRow) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'messenger.error.agentNotFound' });
-      }
+      // Authorize the chosen initial agent against its own workspace (personal
+      // or a workspace the user can access) and derive the active scope.
+      const agentScope = await resolveAuthorizedAgentScope(
+        ctx.serverDB,
+        ctx.userId,
+        input.initialAgentId,
+      );
 
       // Now safe to consume — token is single-use; do this last so any error
       // above leaves the token available for retry.
@@ -304,11 +384,12 @@ export const messengerRouter = router({
       let link;
       try {
         link = await ctx.messengerLinkModel.upsertForPlatform({
-          activeAgentId: agentRow.id,
+          activeAgentId: input.initialAgentId,
           platform: payload.platform,
           platformUserId: payload.platformUserId,
           platformUsername: payload.platformUsername ?? null,
           tenantId: payload.tenantId ?? '',
+          workspaceId: agentScope.workspaceId,
         });
       } catch (error) {
         // Race backstop: the IM identity got bound to another LobeHub user
@@ -331,7 +412,7 @@ export const messengerRouter = router({
 
       // Best-effort confirmation back to the IM platform.
       void notifyLinkSuccess(payload.platform, {
-        activeAgentName: agentRow.title ?? undefined,
+        activeAgentName: agentScope.title ?? undefined,
         platformUserId: payload.platformUserId,
         tenantId: payload.tenantId,
       });
@@ -352,42 +433,80 @@ export const messengerRouter = router({
    * inbox agent resolves to `"LobeAI"` + default avatar; everything else falls
    * back on the client via `common.defaultSession`.
    */
-  listAgentsForBinding: messengerProcedure.query(async ({ ctx }) => {
-    const rows = await ctx.serverDB
-      .select({
-        avatar: agents.avatar,
-        backgroundColor: agents.backgroundColor,
-        id: agents.id,
-        slug: agents.slug,
-        title: agents.title,
-      })
-      .from(agents)
-      .where(
-        and(
-          eq(agents.userId, ctx.userId),
-          or(ne(agents.virtual, true), eq(agents.slug, INBOX_SESSION_ID)),
-        ),
-      )
-      .orderBy(desc(agents.updatedAt));
+  listAgentsForBinding: messengerProcedure
+    .input(z.object({ workspaceId: z.string().nullish() }).optional())
+    .query(async ({ ctx, input }) => {
+      const { serverDB, userId } = ctx;
+      // Cascading scope: the caller picks a scope (personal or one of the
+      // workspaces they belong to) and we return just that scope's agents.
+      // Omitting `workspaceId` (or `null`) means personal.
+      const workspaceId = input?.workspaceId ?? null;
 
-    const mapped = rows
-      .filter((row) => row.id)
-      .map((row) => ({
-        avatar: row.avatar || (row.slug === INBOX_SESSION_ID ? DEFAULT_INBOX_AVATAR : null),
-        backgroundColor: row.backgroundColor,
-        id: row.id,
-        slug: row.slug,
-        title: row.title || (row.slug === INBOX_SESSION_ID ? 'LobeAI' : null),
+      // Authorize the requested scope. Personal is always the caller's own; a
+      // workspace scope requires membership, otherwise the caller could
+      // enumerate another workspace's agents.
+      if (workspaceId) {
+        await assertWorkspaceFeatureEnabledForUser(userId);
+
+        const userWorkspaces = await new WorkspaceModel(serverDB, userId).listUserWorkspaces();
+        if (!userWorkspaces.some((w) => w.id === workspaceId)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'messenger.error.agentNotFound' });
+        }
+      }
+
+      const rows = await serverDB
+        .select({
+          avatar: agents.avatar,
+          backgroundColor: agents.backgroundColor,
+          id: agents.id,
+          slug: agents.slug,
+          title: agents.title,
+        })
+        .from(agents)
+        .where(
+          and(
+            buildWorkspaceWhere({ userId, workspaceId: workspaceId ?? undefined }, agents),
+            or(ne(agents.virtual, true), eq(agents.slug, INBOX_SESSION_ID)),
+          ),
+        )
+        .orderBy(desc(agents.updatedAt));
+
+      const mapped = rows
+        .filter((row) => row.id)
+        .map((row) => ({
+          avatar: row.avatar || (row.slug === INBOX_SESSION_ID ? DEFAULT_INBOX_AVATAR : null),
+          backgroundColor: row.backgroundColor,
+          id: row.id,
+          slug: row.slug,
+          title: row.title || (row.slug === INBOX_SESSION_ID ? 'LobeAI' : null),
+        }));
+
+      // Pin the inbox/LobeAI agent to the top regardless of updatedAt — it's
+      // the implicit "default" agent and should always be the first option.
+      const inboxIdx = mapped.findIndex((row) => row.slug === INBOX_SESSION_ID);
+      if (inboxIdx > 0) {
+        const [inbox] = mapped.splice(inboxIdx, 1);
+        mapped.unshift(inbox);
+      }
+      return mapped.map(({ slug, ...rest }) => ({
+        ...rest,
+        isInbox: slug === INBOX_SESSION_ID,
       }));
+    }),
 
-    // Pin the inbox/LobeAI agent to the top regardless of updatedAt — it's the
-    // implicit "default" agent and should always be the first option.
-    const inboxIdx = mapped.findIndex((row) => row.slug === INBOX_SESSION_ID);
-    if (inboxIdx > 0) {
-      const [inbox] = mapped.splice(inboxIdx, 1);
-      mapped.unshift(inbox);
-    }
-    return mapped.map(({ slug: _slug, ...rest }) => rest);
+  /**
+   * List the scopes the user can route the System Bot to: their personal space
+   * plus every workspace they belong to. Drives the connection card's
+   * first-level "scope" selector; the second level then calls
+   * `listAgentsForBinding({ workspaceId })` for the picked scope. Personal scope
+   * is implicit (the client prepends it) — this only returns workspaces, so in
+   * OSS / personal-only deployments it's simply an empty array.
+   */
+  listBindingScopes: messengerProcedure.query(async ({ ctx }) => {
+    if (!(await isWorkspaceFeatureEnabledForUser(ctx.userId))) return [];
+
+    const workspaces = await new WorkspaceModel(ctx.serverDB, ctx.userId).listUserWorkspaces();
+    return workspaces.map((w) => ({ avatar: w.avatar, id: w.id, name: w.name }));
   }),
 
   /**
@@ -419,21 +538,19 @@ export const messengerRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      // Validate ownership when setting a non-null agent.
+      // Authorize the target agent against its own workspace and derive the
+      // active scope (personal → null). Clearing (`agentId: null`) resets to
+      // personal scope.
+      let workspaceId: string | null = null;
       if (input.agentId !== null) {
-        const [agentRow] = await ctx.serverDB
-          .select({ id: agents.id })
-          .from(agents)
-          .where(and(eq(agents.id, input.agentId), eq(agents.userId, ctx.userId)))
-          .limit(1);
-        if (!agentRow) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'messenger.error.agentNotFound' });
-        }
+        const scope = await resolveAuthorizedAgentScope(ctx.serverDB, ctx.userId, input.agentId);
+        workspaceId = scope.workspaceId;
       }
 
       const updated = await ctx.messengerLinkModel.setActiveAgent(
         input.platform,
         input.agentId,
+        workspaceId,
         input.tenantId,
       );
       if (!updated) {
@@ -446,7 +563,7 @@ export const messengerRouter = router({
     }),
 
   /** Remove the user's account link for a platform (optionally scoped to one tenant). */
-  unlink: messengerProcedure
+  unlink: messengerWriteProcedure
     .input(z.object({ platform: platformEnum, tenantId: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       if (!(await isMessengerPlatformEnabled(input.platform))) {
@@ -509,7 +626,7 @@ export const messengerRouter = router({
    * Slack's `auth.revoke` to invalidate the token server-side is a
    * nice-to-have (frees a workspace bot slot), deferred to PR3.
    */
-  uninstallInstallation: messengerProcedure
+  uninstallInstallation: messengerWriteProcedure
     .input(z.object({ installationId: z.string().min(1) }))
     .mutation(async ({ input, ctx }) => {
       const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey().catch(() => undefined);

@@ -153,6 +153,8 @@ export interface CreateSelfFeedbackIntentSourceHandlerDependencies {
    * @default builtin agent default
    */
   maxSteps?: number;
+  /** Workspace id, threaded so the enqueued run targets the correct workspace. */
+  workspaceId?: string;
 }
 
 const isValidConfidence = (value: unknown): value is number =>
@@ -404,6 +406,7 @@ export const createSelfFeedbackIntentSourceHandler = (
       slug: BUILTIN_AGENT_SLUGS.selfFeedbackIntent,
       ...(payload.topicId ? { topicId: payload.topicId } : {}),
       userId: payload.userId,
+      workspaceId: deps.workspaceId,
     });
 
     return {

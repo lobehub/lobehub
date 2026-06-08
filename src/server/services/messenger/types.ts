@@ -24,6 +24,15 @@ export interface AgentPickerEntry {
   title: string;
 }
 
+/**
+ * Which tap-action a picker's buttons emit. `switch` re-targets the active
+ * agent (`/agents`); `scope` re-targets the active workspace scope
+ * (`/switch`). The keyword becomes the middle segment of the button id —
+ * `messenger:switch:<agentId>` vs `messenger:scope:<scopeId>` — so the
+ * router's callback dispatch can tell the two pickers apart.
+ */
+export type MessengerPickerAction = 'switch' | 'scope';
+
 /** Raw inbound platform update used for actions chat-sdk doesn't surface. */
 export interface InboundCallbackAction {
   /** Platform-specific raw id needed to acknowledge the action. */
@@ -42,8 +51,10 @@ export interface InboundCallbackAction {
 export interface CallbackAcknowledgement {
   /** Optional toast text shown above the user's keyboard. */
   toast?: string;
-  /** When set, edit the picker message in place to reflect the new state. */
-  updatedPicker?: { entries: AgentPickerEntry[]; text: string };
+  /** When set, edit the picker message in place to reflect the new state.
+   *  `action` defaults to `switch` so existing agent pickers re-render with
+   *  the same button namespace they were posted with. */
+  updatedPicker?: { action?: MessengerPickerAction; entries: AgentPickerEntry[]; text: string };
 }
 
 /**
@@ -179,6 +190,8 @@ export interface MessengerPlatformBinder {
   sendAgentPicker?: (
     chatId: string,
     params: {
+      /** Tap-action the buttons emit; defaults to `switch` (agent picker). */
+      action?: MessengerPickerAction;
       entries: AgentPickerEntry[];
       ephemeralTo?: string;
       interaction?: { applicationId: string; token: string };

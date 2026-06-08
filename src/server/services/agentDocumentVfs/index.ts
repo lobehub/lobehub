@@ -96,9 +96,9 @@ export class AgentDocumentVfsService {
   private agentDocumentModel: AgentDocumentModel;
   private skillMount: SkillMount;
 
-  constructor(db: LobeChatDatabase, userId: string) {
-    this.agentDocumentModel = new AgentDocumentModel(db, userId);
-    this.skillMount = createSkillMount(db, userId);
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.agentDocumentModel = new AgentDocumentModel(db, userId, workspaceId);
+    this.skillMount = createSkillMount(db, userId, workspaceId);
   }
 
   /**

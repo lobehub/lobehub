@@ -223,8 +223,8 @@ const findCycleMembers = (unplaced: string[], downstream: Map<string, string[]>)
 export class TaskGraphService {
   private taskModel: TaskModel;
 
-  constructor(db: LobeChatDatabase, userId: string) {
-    this.taskModel = new TaskModel(db, userId);
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.taskModel = new TaskModel(db, userId, workspaceId);
   }
 
   /**

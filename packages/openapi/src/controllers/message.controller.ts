@@ -27,7 +27,7 @@ export class MessageController extends BaseController {
       };
 
       const db = await this.getDatabase();
-      const messageService = new MessageService(db, userId);
+      const messageService = new MessageService(db, userId, this.getWorkspaceId(c));
       const result = await messageService.countMessages(processedQuery);
 
       return this.success(c, result, 'Message count retrieved successfully');
@@ -47,7 +47,7 @@ export class MessageController extends BaseController {
       const request = this.getQuery<MessagesListQuery>(c);
 
       const db = await this.getDatabase();
-      const messageService = new MessageService(db, userId);
+      const messageService = new MessageService(db, userId, this.getWorkspaceId(c));
       const result = await messageService.getMessages(request);
 
       return this.success(c, result, 'Message list retrieved successfully');
@@ -67,7 +67,7 @@ export class MessageController extends BaseController {
       const { id } = this.getParams<{ id: string }>(c);
 
       const db = await this.getDatabase();
-      const messageService = new MessageService(db, userId);
+      const messageService = new MessageService(db, userId, this.getWorkspaceId(c));
       const message = await messageService.getMessageById(id);
 
       if (!message) {
@@ -91,7 +91,7 @@ export class MessageController extends BaseController {
       const messageData = (await this.getBody<MessagesCreateRequest>(c))!;
 
       const db = await this.getDatabase();
-      const messageService = new MessageService(db, userId);
+      const messageService = new MessageService(db, userId, this.getWorkspaceId(c));
       const result = await messageService.createMessage(messageData);
 
       return this.success(c, result, 'Message created successfully');
@@ -111,7 +111,7 @@ export class MessageController extends BaseController {
       const messageData = (await this.getBody<MessagesCreateRequest>(c))!;
 
       const db = await this.getDatabase();
-      const messageService = new MessageService(db, userId);
+      const messageService = new MessageService(db, userId, this.getWorkspaceId(c));
       const result = await messageService.createMessageWithAIReply(messageData);
 
       return this.success(c, result, 'Message created and AI reply generated successfully');
@@ -131,7 +131,7 @@ export class MessageController extends BaseController {
       const { id } = this.getParams<{ id: string }>(c);
 
       const db = await this.getDatabase();
-      const messageService = new MessageService(db, userId);
+      const messageService = new MessageService(db, userId, this.getWorkspaceId(c));
       await messageService.deleteMessage(id);
 
       return this.success(c, null, 'Message deleted successfully');
@@ -151,7 +151,7 @@ export class MessageController extends BaseController {
       const { messageIds } = (await this.getBody<MessagesDeleteBatchRequest>(c))!;
 
       const db = await this.getDatabase();
-      const messageService = new MessageService(db, userId);
+      const messageService = new MessageService(db, userId, this.getWorkspaceId(c));
       const result = await messageService.deleteBatchMessages(messageIds);
 
       return this.success(c, result, 'Messages deleted in batch successfully');

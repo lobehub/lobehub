@@ -273,14 +273,17 @@ export class SkillIntentClassifierAgentService implements SkillIntentClassifierS
   private readonly db: LobeChatDatabase;
   private readonly modelConfig: SkillIntentClassifierAgentModelConfig;
   private readonly userId: string;
+  private readonly workspaceId?: string;
 
   constructor(
     db: LobeChatDatabase,
     userId: string,
     modelConfig: Partial<SkillIntentClassifierAgentModelConfig> = {},
+    workspaceId?: string,
   ) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
     this.modelConfig = {
       model: modelConfig.model ?? DEFAULT_MINI_SYSTEM_AGENT_ITEM.model,
       provider: modelConfig.provider ?? DEFAULT_MINI_SYSTEM_AGENT_ITEM.provider,
@@ -305,6 +308,7 @@ export class SkillIntentClassifierAgentService implements SkillIntentClassifierS
       this.db,
       this.userId,
       this.modelConfig.provider,
+      this.workspaceId,
     );
 
     log(

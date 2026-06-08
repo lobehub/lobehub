@@ -24,10 +24,10 @@ export class AgentGroupService {
   private readonly chatGroupModel: ChatGroupModel;
   private readonly agentGroupRepo: AgentGroupRepository;
 
-  constructor(db: LobeChatDatabase, userId: string) {
-    this.agentModel = new AgentModel(db, userId);
-    this.chatGroupModel = new ChatGroupModel(db, userId);
-    this.agentGroupRepo = new AgentGroupRepository(db, userId);
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.agentModel = new AgentModel(db, userId, workspaceId);
+    this.chatGroupModel = new ChatGroupModel(db, userId, workspaceId);
+    this.agentGroupRepo = new AgentGroupRepository(db, userId, workspaceId);
   }
 
   /**

@@ -111,11 +111,13 @@ const createPolicyOptions = (
       db: context.db,
       ...policyOptions?.feedbackDomainJudge,
       userId: context.userId,
+      workspaceId: context.workspaceId,
     },
     feedbackSatisfactionJudge: {
       db: context.db,
       ...policyOptions?.feedbackSatisfactionJudge,
       userId: context.userId,
+      workspaceId: context.workspaceId,
     },
     classifierDiagnostics: policyOptions?.classifierDiagnostics,
     nightlyReview: policyOptions?.nightlyReview,
@@ -126,17 +128,20 @@ const createPolicyOptions = (
       db: context.db,
       ...policyOptions?.userMemory,
       userId: context.userId,
+      workspaceId: context.workspaceId,
     },
     skillManagement: {
       db: context.db,
       ...policyOptions?.skillManagement,
       selfIterationEnabled: policyOptions?.skillManagement?.selfIterationEnabled ?? false,
       userId: context.userId,
+      workspaceId: context.workspaceId,
     },
     skillIntentClassifier: {
       db: context.db,
       ...policyOptions?.skillIntentClassifier,
       userId: context.userId,
+      workspaceId: context.workspaceId,
     },
   };
 };

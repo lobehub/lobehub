@@ -58,6 +58,10 @@ export interface DiscoverAssistantItem extends Omit<LobeAgentSettings, 'meta'>, 
   installCount?: number;
   isValidated?: boolean;
   knowledgeCount: number;
+  /**
+   * Owner account type, used to resolve the author profile link
+   */
+  ownerType?: 'user' | 'organization';
   pluginCount: number;
   status?: AgentStatus;
   tokenUsage: number;

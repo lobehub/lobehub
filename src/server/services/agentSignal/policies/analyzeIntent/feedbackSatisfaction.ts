@@ -153,6 +153,7 @@ export interface CreateFeedbackSatisfactionJudgePolicyOptions {
   model?: string;
   provider?: string;
   userId?: string;
+  workspaceId?: string;
 }
 
 /**
@@ -172,14 +173,17 @@ export class FeedbackSatisfactionJudgeAgentService implements FeedbackSatisfacti
   private readonly db: LobeChatDatabase;
   private readonly modelConfig: FeedbackSatisfactionJudgeAgentModelConfig;
   private readonly userId: string;
+  private readonly workspaceId?: string;
 
   constructor(
     db: LobeChatDatabase,
     userId: string,
     modelConfig: Partial<FeedbackSatisfactionJudgeAgentModelConfig> = {},
+    workspaceId?: string,
   ) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
     this.modelConfig = {
       model: modelConfig.model ?? DEFAULT_MINI_SYSTEM_AGENT_ITEM.model,
       provider: modelConfig.provider ?? DEFAULT_MINI_SYSTEM_AGENT_ITEM.provider,
@@ -206,6 +210,7 @@ export class FeedbackSatisfactionJudgeAgentService implements FeedbackSatisfacti
       this.db,
       this.userId,
       this.modelConfig.provider,
+      this.workspaceId,
     );
 
     log(
@@ -240,10 +245,15 @@ const resolveJudge = (
     );
   }
 
-  return new FeedbackSatisfactionJudgeAgentService(options.db, options.userId, {
-    model: options.model,
-    provider: options.provider,
-  });
+  return new FeedbackSatisfactionJudgeAgentService(
+    options.db,
+    options.userId,
+    {
+      model: options.model,
+      provider: options.provider,
+    },
+    options.workspaceId,
+  );
 };
 
 /**

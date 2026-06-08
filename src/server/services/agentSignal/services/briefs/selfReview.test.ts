@@ -134,7 +134,7 @@ describe('AgentSignalSelfReviewBriefService', () => {
     const brief = (await mockBriefModel.findById(id)) as BriefItem | null;
     if (!brief) return null;
 
-    return new AgentSignalSelfReviewBriefService(db, userId, {
+    return new AgentSignalSelfReviewBriefService(db, userId, undefined, {
       selfReviewProposalResolver,
     }).resolve(brief, options);
   };

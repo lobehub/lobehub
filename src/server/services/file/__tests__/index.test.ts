@@ -82,6 +82,14 @@ describe('FileService', () => {
     consoleErrorSpy?.mockRestore();
   });
 
+  it('scopes FileModel to workspace when workspaceId is provided', () => {
+    vi.clearAllMocks();
+
+    new FileService(mockDb, mockUserId, 'workspace-1');
+
+    expect(FileModel).toHaveBeenCalledWith(mockDb, mockUserId, 'workspace-1');
+  });
+
   describe('downloadFileToLocal', () => {
     const mockFile = {
       id: 'test-file-id',

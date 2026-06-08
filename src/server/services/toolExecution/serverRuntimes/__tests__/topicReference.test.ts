@@ -20,6 +20,8 @@ vi.mock('@/database/models/message', () => ({
 }));
 
 // Import after mock setup
+const { MessageModel } = await import('@/database/models/message');
+const { TopicModel } = await import('@/database/models/topic');
 const { topicReferenceRuntime } = await import('../topicReference');
 
 describe('topicReferenceRuntime', () => {
@@ -61,6 +63,24 @@ describe('topicReferenceRuntime', () => {
       const runtime = topicReferenceRuntime.factory(context);
       expect(runtime).toBeDefined();
       expect(typeof runtime.getTopicContext).toBe('function');
+    });
+
+    it('should scope models to workspace context', async () => {
+      const serverDB = {} as any;
+      const runtime = topicReferenceRuntime.factory({
+        serverDB,
+        toolManifestMap: {},
+        userId: 'user-1',
+        workspaceId: 'workspace-1',
+      });
+
+      mockTopicModelFindById.mockResolvedValue({ id: 'topic-1', title: 'Topic' });
+      mockMessageModelQuery.mockResolvedValue([]);
+
+      await runtime.getTopicContext({ topicId: 'topic-1' });
+
+      expect(TopicModel).toHaveBeenCalledWith(serverDB, 'user-1', 'workspace-1');
+      expect(MessageModel).toHaveBeenCalledWith(serverDB, 'user-1', 'workspace-1');
     });
   });
 

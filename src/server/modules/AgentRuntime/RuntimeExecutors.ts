@@ -24,6 +24,7 @@ import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
 import {
   type AgentContextDocument,
+  type AgentGroupConfig,
   type BotPlatformContext,
   buildStepSkillDelta,
   buildStepToolDelta,
@@ -131,6 +132,38 @@ const LLM_RETRY_MAX_DELAY_MS = 30_000;
  */
 const EMPTY_COMPLETION_MAX_RETRIES = 2;
 
+const buildBotAgentGroupContext = (params: {
+  agentConfig?: any;
+  agentId?: string;
+  botContext?: unknown;
+}): AgentGroupConfig | undefined => {
+  if (!params.botContext || !params.agentId) return undefined;
+
+  const title = params.agentConfig?.title;
+  const description = params.agentConfig?.description;
+  const name = typeof title === 'string' && title.trim() ? title.trim() : 'Current Agent';
+
+  return {
+    agentMap: {
+      [params.agentId]: {
+        name,
+        role: 'participant',
+      },
+    },
+    currentAgentId: params.agentId,
+    currentAgentName: name,
+    currentAgentRole: 'participant',
+    members: [
+      {
+        id: params.agentId,
+        name,
+        role: 'participant',
+      },
+    ],
+    systemPrompt: typeof description === 'string' ? description : undefined,
+  };
+};
+
 /**
  * Output-token count at or below this — combined with no content, reasoning,
  * tool calls, or images — marks a turn as an empty completion.
@@ -193,6 +226,7 @@ const archiveRuntimeToolResult = async (
     toolCallId,
     topicId,
     userId,
+    workspaceId,
   }: {
     agentId?: string | null;
     identifier?: string;
@@ -201,6 +235,7 @@ const archiveRuntimeToolResult = async (
     toolCallId?: string;
     topicId?: string | null;
     userId?: string;
+    workspaceId?: string;
   },
 ): Promise<ToolExecutionResultResponse> => {
   const archive = await archiveToolResultIfNeeded({
@@ -212,6 +247,7 @@ const archiveRuntimeToolResult = async (
     toolCallId,
     topicId,
     userId,
+    workspaceId,
   });
 
   return archive.content === result.content ? result : { ...result, content: archive.content };
@@ -226,11 +262,13 @@ const archiveRuntimeToolResult = async (
 // FileService is constructed lazily so environments without S3 config (unit
 // tests) don't fail at context-build time; failure returns undefined, which
 // leaves URLs as raw keys — same behavior as before this helper existed.
-const buildPostProcessUrl = (ctx: Pick<RuntimeExecutorContext, 'serverDB' | 'userId'>) => {
+const buildPostProcessUrl = (
+  ctx: Pick<RuntimeExecutorContext, 'serverDB' | 'userId' | 'workspaceId'>,
+) => {
   if (!ctx.userId || !ctx.serverDB) return undefined;
   let fileService: FileService | undefined;
   try {
-    fileService = new FileService(ctx.serverDB, ctx.userId);
+    fileService = new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId);
   } catch {
     return undefined;
   }
@@ -433,6 +471,7 @@ const buildToolDiscoveryConfig = (operationToolSet: OperationToolSet, enabledToo
 
 export interface RuntimeExecutorContext {
   agentConfig?: any;
+  botContext?: unknown;
   botPlatformContext?: BotPlatformContext;
   discordContext?: any;
   evalContext?: EvalContext;
@@ -466,6 +505,13 @@ export interface RuntimeExecutorContext {
   tracingContextEngine?: (input: unknown, output: unknown) => void;
   userId?: string;
   userTimezone?: string;
+  /**
+   * Workspace scoping for ownership filters on models/services constructed
+   * inside the agent runtime. Threaded down from the originating request
+   * (chat/task router) and forwarded to tool executions via
+   * `ToolExecutionContext.workspaceId`.
+   */
+  workspaceId?: string;
 }
 
 export const createRuntimeExecutors = (
@@ -634,8 +680,8 @@ export const createRuntimeExecutors = (
         );
 
         if (!alreadyHasTopicRefs && ctx.serverDB && ctx.userId) {
-          const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
-          const messageModel = new MessageModelClass(ctx.serverDB, ctx.userId);
+          const topicModel = new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
+          const messageModel = new MessageModelClass(ctx.serverDB, ctx.userId, ctx.workspaceId);
           topicReferences = await resolveTopicReferences(
             llmPayload.messages as Array<{ content: string | unknown }>,
             async (topicId) => topicModel.findById(topicId),
@@ -658,7 +704,11 @@ export const createRuntimeExecutors = (
         const agentId = state.metadata?.agentId;
         if (agentId && ctx.serverDB && ctx.userId) {
           try {
-            const agentDocService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+            const agentDocService = new AgentDocumentsService(
+              ctx.serverDB,
+              ctx.userId,
+              state.metadata?.workspaceId ?? ctx.workspaceId,
+            );
             const docs = await agentDocService.getAgentContextDocuments(agentId);
             if (docs.length > 0) {
               agentDocuments = toAgentContextDocuments(docs);
@@ -692,7 +742,11 @@ export const createRuntimeExecutors = (
               await import('@lobechat/builtin-tool-web-onboarding/utils');
             const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
             const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
-            const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+            const docService = new AgentDocumentsService(
+              ctx.serverDB,
+              ctx.userId,
+              state.metadata?.workspaceId ?? ctx.workspaceId,
+            );
             const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
 
             const [onboardingState, soulDoc, persona, userInfo] = await Promise.all([
@@ -752,7 +806,7 @@ export const createRuntimeExecutors = (
         let lobehubSkillTopicTitle = '';
         if (lobehubSkillTopicId && ctx.serverDB && ctx.userId) {
           try {
-            const topicModelForLobehub = new TopicModel(ctx.serverDB, ctx.userId);
+            const topicModelForLobehub = new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
             const topicRecord = await topicModelForLobehub.findById(lobehubSkillTopicId);
             lobehubSkillTopicTitle = topicRecord?.title ?? '';
           } catch (error) {
@@ -836,7 +890,7 @@ export const createRuntimeExecutors = (
         if (ctx.serverDB && ctx.userId && !!klavisEnv.KLAVIS_API_KEY) {
           try {
             const { PluginModel } = await import('@/database/models/plugin');
-            const pluginModel = new PluginModel(ctx.serverDB, ctx.userId);
+            const pluginModel = new PluginModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
             const allPlugins = await pluginModel.query();
             const validKlavisIds = new Set(KLAVIS_SERVER_TYPES.map((t) => t.identifier));
             const connectedIds = new Set(
@@ -870,6 +924,11 @@ export const createRuntimeExecutors = (
 
         const contextEngineInput = {
           agentDocuments,
+          agentGroup: buildBotAgentGroupContext({
+            agentConfig,
+            agentId: state.metadata?.agentId,
+            botContext: state.metadata?.botContext ?? ctx.botContext,
+          }),
           additionalVariables: {
             ...state.metadata?.deviceSystemInfo,
             ...lobehubSkillVariables,
@@ -1016,7 +1075,12 @@ export const createRuntimeExecutors = (
       }
 
       // Initialize ModelRuntime (read user's keyVaults from database)
-      const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId!, provider);
+      const modelRuntime = await initModelRuntimeFromDB(
+        ctx.serverDB,
+        ctx.userId!,
+        provider,
+        ctx.workspaceId,
+      );
 
       // Construct ChatStreamPayload
       const stream = ctx.stream ?? true;
@@ -1856,7 +1920,11 @@ export const createRuntimeExecutors = (
       }
 
       const latestAssistantMessage = dbMessages.findLast((message) => message.role === 'assistant');
-      const messageService = new MessageService(ctx.serverDB, ctx.userId);
+      const messageService = new MessageService(
+        ctx.serverDB,
+        ctx.userId,
+        state.metadata?.workspaceId ?? ctx.workspaceId,
+      );
       const compressionResult = await messageService.createCompressionGroup(topicId, messageIds, {
         agentId: state.metadata?.agentId,
         threadId: state.metadata?.threadId,
@@ -1893,6 +1961,7 @@ export const createRuntimeExecutors = (
         ctx.serverDB,
         ctx.userId,
         compressionModel.provider,
+        ctx.workspaceId,
       );
 
       let summaryContent = '';
@@ -2297,6 +2366,7 @@ export const createRuntimeExecutors = (
                 toolResultMaxLength,
                 topicId: ctx.topicId,
                 userId: ctx.userId,
+                workspaceId: state.metadata?.workspaceId ?? ctx.workspaceId,
               }),
             {
               isInterrupted: () => isOperationInterrupted(ctx),
@@ -2351,6 +2421,7 @@ export const createRuntimeExecutors = (
           toolCallId: chatToolPayload.id,
           topicId: ctx.topicId ?? state.metadata?.topicId,
           userId: ctx.userId,
+          workspaceId: state.metadata?.workspaceId ?? ctx.workspaceId,
         });
         const executionTime = executionResult.executionTime;
         const isSuccess = executionResult.success;
@@ -2866,6 +2937,7 @@ export const createRuntimeExecutors = (
                     toolResultMaxLength: batchAgentConfig?.chatConfig?.toolResultMaxLength,
                     topicId: ctx.topicId,
                     userId: ctx.userId,
+                    workspaceId: state.metadata?.workspaceId ?? ctx.workspaceId,
                   }),
                 {
                   isInterrupted: () => isOperationInterrupted(ctx),
@@ -2896,6 +2968,7 @@ export const createRuntimeExecutors = (
               toolCallId: chatToolPayload.id,
               topicId: ctx.topicId ?? state.metadata?.topicId,
               userId: ctx.userId,
+              workspaceId: state.metadata?.workspaceId ?? ctx.workspaceId,
             });
             const executionTime = executionResult.executionTime;
             const isSuccess = executionResult.success;
@@ -3419,7 +3492,7 @@ export const createRuntimeExecutors = (
     // Clear runningOperation from topic metadata so reconnect doesn't trigger after completion
     if (ctx.topicId && ctx.userId) {
       try {
-        const topicModel = new TopicModel(ctx.serverDB, ctx.userId);
+        const topicModel = new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
         await topicModel.updateMetadata(ctx.topicId, { runningOperation: null });
       } catch (e) {
         log('[%s] Failed to clear runningOperation metadata: %O', operationId, e);

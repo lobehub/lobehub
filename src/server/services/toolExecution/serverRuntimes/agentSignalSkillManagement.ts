@@ -18,7 +18,7 @@ import type { ServerRuntimeRegistration } from './types';
  */
 export const agentSignalSkillManagementRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    const { agentId, serverDB, userId } = context;
+    const { agentId, serverDB, userId, workspaceId } = context;
     if (!agentId || !userId || !serverDB) {
       throw new Error('agent-signal-skill-management requires agentId, userId and serverDB');
     }
@@ -28,7 +28,7 @@ export const agentSignalSkillManagementRuntime: ServerRuntimeRegistration = {
       db: serverDB,
       memoryReason: (count) =>
         `Agent Signal skill-management memory candidate from ${count} evidence refs.`,
-      skillDocumentService: new SkillManagementDocumentService(serverDB, userId),
+      skillDocumentService: new SkillManagementDocumentService(serverDB, userId, workspaceId),
       userId,
     });
 

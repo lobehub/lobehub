@@ -89,17 +89,24 @@ export class KnowledgeBaseSearchService {
   private searchRepo: SearchRepo;
   private documentServiceInstance?: DocumentService;
 
-  constructor(serverDB: LobeChatDatabase, userId: string) {
+  private workspaceId?: string;
+
+  constructor(serverDB: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.serverDB = serverDB;
     this.userId = userId;
-    this.chunkModel = new ChunkModel(serverDB, userId);
-    this.documentModel = new DocumentModel(serverDB, userId);
-    this.fileModel = new FileModel(serverDB, userId);
-    this.searchRepo = new SearchRepo(serverDB, userId);
+    this.workspaceId = workspaceId;
+    this.chunkModel = new ChunkModel(serverDB, userId, workspaceId);
+    this.documentModel = new DocumentModel(serverDB, userId, workspaceId);
+    this.fileModel = new FileModel(serverDB, userId, workspaceId);
+    this.searchRepo = new SearchRepo(serverDB, userId, workspaceId);
   }
 
   private get documentService() {
-    this.documentServiceInstance ??= new DocumentService(this.serverDB, this.userId);
+    this.documentServiceInstance ??= new DocumentService(
+      this.serverDB,
+      this.userId,
+      this.workspaceId,
+    );
     return this.documentServiceInstance;
   }
 
@@ -113,7 +120,12 @@ export class KnowledgeBaseSearchService {
     const vectorPath = async (): Promise<ChatSemanticSearchChunk[]> => {
       const { model, provider } =
         getServerDefaultFilesConfig().embeddingModel || DEFAULT_FILE_EMBEDDING_MODEL_ITEM;
-      const modelRuntime = await initModelRuntimeFromDB(this.serverDB, this.userId, provider);
+      const modelRuntime = await initModelRuntimeFromDB(
+        this.serverDB,
+        this.userId,
+        provider,
+        this.workspaceId,
+      );
 
       // slice content to make sure in the context window limit
       const query = input.query.length > 8000 ? input.query.slice(0, 8000) : input.query;

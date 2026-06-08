@@ -5,7 +5,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { uuid } from '@/utils/uuid';
 
 import { getTestDB } from '../../core/getTestDB';
-import { chunks, embeddings, fileChunks, files, unstructuredChunks, users } from '../../schemas';
+import {
+  chunks,
+  embeddings,
+  fileChunks,
+  files,
+  unstructuredChunks,
+  users,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ChunkModel } from '../chunk';
 import { codeEmbedding, designThinkingQuery, designThinkingQuery2 } from './fixtures/embedding';
@@ -13,6 +21,7 @@ import { codeEmbedding, designThinkingQuery, designThinkingQuery2 } from './fixt
 const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'chunk-model-test-user-id';
+const workspaceId = 'chunk-model-workspace';
 const chunkModel = new ChunkModel(serverDB, userId);
 const sharedFileList = [
   {
@@ -44,6 +53,12 @@ const sharedFileList = [
 beforeEach(async () => {
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }]);
+  await serverDB.insert(workspaces).values({
+    id: workspaceId,
+    name: 'Chunk Workspace',
+    primaryOwnerId: userId,
+    slug: workspaceId,
+  });
   await serverDB.insert(files).values(sharedFileList);
 });
 
@@ -381,6 +396,27 @@ describe('ChunkModel', () => {
       const result = await chunkModel.countByFileIds([]);
 
       expect(result).toHaveLength(0);
+    });
+
+    it('should not count workspace chunks from personal scope', async () => {
+      await serverDB.insert(files).values({
+        id: 'workspace-file',
+        name: 'workspace.pdf',
+        url: 'https://example.com/workspace.pdf',
+        size: 1000,
+        fileType: 'application/pdf',
+        userId,
+        workspaceId,
+      });
+      const [chunk] = await serverDB
+        .insert(chunks)
+        .values({ text: 'Workspace Chunk', userId, workspaceId })
+        .returning();
+      await serverDB
+        .insert(fileChunks)
+        .values({ chunkId: chunk.id, fileId: 'workspace-file', userId, workspaceId });
+
+      await expect(chunkModel.countByFileIds(['workspace-file'])).resolves.toHaveLength(0);
     });
   });
 

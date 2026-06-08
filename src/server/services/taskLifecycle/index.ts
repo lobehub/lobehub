@@ -86,14 +86,17 @@ export class TaskLifecycleService {
   private topicModel: TopicModel;
   private userId: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  private workspaceId?: string;
+
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
-    this.taskModel = new TaskModel(db, userId);
-    this.taskTopicModel = new TaskTopicModel(db, userId);
-    this.briefModel = new BriefModel(db, userId);
-    this.topicModel = new TopicModel(db, userId);
-    this.systemAgentService = new SystemAgentService(db, userId);
+    this.workspaceId = workspaceId;
+    this.taskModel = new TaskModel(db, userId, workspaceId);
+    this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
+    this.briefModel = new BriefModel(db, userId, workspaceId);
+    this.topicModel = new TopicModel(db, userId, workspaceId);
+    this.systemAgentService = new SystemAgentService(db, userId, workspaceId);
   }
 
   /**
@@ -354,7 +357,12 @@ export class TaskLifecycleService {
         taskName: currentTask?.name || taskIdentifier,
       });
 
-      const modelRuntime = await initModelRuntimeFromDB(this.db, this.userId, provider);
+      const modelRuntime = await initModelRuntimeFromDB(
+        this.db,
+        this.userId,
+        provider,
+        this.workspaceId,
+      );
       const result = await modelRuntime.generateObject(
         {
           messages: payload.messages as any[],
@@ -461,7 +469,12 @@ export class TaskLifecycleService {
           taskName: currentTask.name || taskIdentifier,
         });
 
-        const modelRuntime = await initModelRuntimeFromDB(this.db, this.userId, provider);
+        const modelRuntime = await initModelRuntimeFromDB(
+          this.db,
+          this.userId,
+          provider,
+          this.workspaceId,
+        );
         const judgeResult = (await modelRuntime.generateObject(
           {
             messages: judgePayload.messages as any[],
@@ -521,7 +534,12 @@ export class TaskLifecycleService {
         taskName: currentTask.name || taskIdentifier,
       });
 
-      const modelRuntime = await initModelRuntimeFromDB(this.db, this.userId, provider);
+      const modelRuntime = await initModelRuntimeFromDB(
+        this.db,
+        this.userId,
+        provider,
+        this.workspaceId,
+      );
       const result = await modelRuntime.generateObject(
         {
           messages: payload.messages as any[],
@@ -596,7 +614,7 @@ export class TaskLifecycleService {
       const targetTopic = topicLinks.find((t) => t.topicId === topicId);
       const iteration = (targetTopic?.reviewIteration || 0) + 1;
 
-      const reviewService = new TaskReviewService(this.db, this.userId);
+      const reviewService = new TaskReviewService(this.db, this.userId, this.workspaceId);
       const reviewResult = await reviewService.review({
         content,
         iteration,
@@ -689,7 +707,7 @@ export class TaskLifecycleService {
   private async cascadeAfterAutoComplete(completedTaskId: string): Promise<void> {
     try {
       const { TaskRunnerService } = await import('@/server/services/taskRunner');
-      const runner = new TaskRunnerService(this.db, this.userId);
+      const runner = new TaskRunnerService(this.db, this.userId, this.workspaceId);
       await runner.cascadeOnCompletion(completedTaskId);
     } catch (e) {
       console.warn('[TaskLifecycle] dependency cascade failed:', e);

@@ -3,6 +3,7 @@ import debug from 'debug';
 import { customAlphabet } from 'nanoid/non-secure';
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { marketSDK, marketUserInfo, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
@@ -82,6 +83,28 @@ const fetchMarketUserInfo = async (
   }
 };
 
+const withActingAccountHeader = async <T>(
+  marketSDK: unknown,
+  actAs: number | undefined,
+  operation: () => Promise<T>,
+): Promise<T> => {
+  const headers = (marketSDK as { headers?: Record<string, string> }).headers;
+  if (actAs === undefined || !headers) return operation();
+
+  const previous = headers['x-lobe-owner-account-id'];
+  headers['x-lobe-owner-account-id'] = String(actAs);
+
+  try {
+    return await operation();
+  } finally {
+    if (previous === undefined) {
+      delete headers['x-lobe-owner-account-id'];
+    } else {
+      headers['x-lobe-owner-account-id'] = previous;
+    }
+  }
+};
+
 // Authenticated procedure for agent group management
 const agentGroupProcedure = authedProcedure
   .use(serverDatabase)
@@ -106,6 +129,7 @@ const agentGroupProcedure = authedProcedure
       },
     });
   });
+const agentGroupWriteProcedure = agentGroupProcedure.use(withScopedPermission('agent:create'));
 
 // Schema definitions
 const memberAgentSchema = z.object({
@@ -121,6 +145,7 @@ const memberAgentSchema = z.object({
 });
 
 const publishOrCreateGroupSchema = z.object({
+  actAs: z.number().int().positive().optional(),
   avatar: z.string().nullish(),
   backgroundColor: z.string().nullish(),
   category: z.string().optional(),
@@ -146,7 +171,7 @@ export const agentGroupRouter = router({
    * Check if current user owns the specified group
    */
   checkOwnership: agentGroupProcedure
-    .input(z.object({ identifier: z.string() }))
+    .input(z.object({ actAs: z.number().int().positive().optional(), identifier: z.string() }))
     .query(async ({ input, ctx }) => {
       log('checkOwnership input: %O', input);
 
@@ -169,12 +194,14 @@ export const agentGroupRouter = router({
         currentAccountId = marketUserInfoResult?.accountId ?? null;
 
         const ownerId = groupDetail.group.ownerId;
-        const isOwner = currentAccountId !== null && `${ownerId}` === `${currentAccountId}`;
+        const actingAccountId = input.actAs ?? currentAccountId;
+        const isOwner = actingAccountId !== null && `${ownerId}` === `${actingAccountId}`;
 
         log(
-          'checkOwnership result: isOwner=%s, currentAccountId=%s, ownerId=%s',
+          'checkOwnership result: isOwner=%s, currentAccountId=%s, actingAccountId=%s, ownerId=%s',
           isOwner,
           currentAccountId,
+          actingAccountId,
           ownerId,
         );
 
@@ -205,7 +232,7 @@ export const agentGroupRouter = router({
    * Deprecate agent group
    * POST /market/agent-group/:identifier/deprecate
    */
-  deprecateAgentGroup: agentGroupProcedure
+  deprecateAgentGroup: agentGroupWriteProcedure
     .input(z.object({ identifier: z.string() }))
     .mutation(async ({ input, ctx }) => {
       log('deprecateAgentGroup input: %O', input);
@@ -263,9 +290,10 @@ export const agentGroupRouter = router({
    * Fork an agent group
    * POST /market/agent-group/:identifier/fork
    */
-  forkAgentGroup: agentGroupProcedure
+  forkAgentGroup: agentGroupWriteProcedure
     .input(
       z.object({
+        actAs: z.number().int().positive().optional(),
         identifier: z.string(),
         name: z.string().optional(),
         sourceIdentifier: z.string(),
@@ -298,6 +326,10 @@ export const agentGroupRouter = router({
 
         if (!headers['x-lobe-trust-token'] && accessToken) {
           headers['Authorization'] = `Bearer ${accessToken}`;
+        }
+
+        if (input.actAs !== undefined) {
+          headers['x-lobe-owner-account-id'] = String(input.actAs);
         }
 
         const response = await fetch(forkUrl, {
@@ -590,7 +622,7 @@ export const agentGroupRouter = router({
    * Publish agent group
    * POST /market/agent-group/:identifier/publish
    */
-  publishAgentGroup: agentGroupProcedure
+  publishAgentGroup: agentGroupWriteProcedure
     .input(z.object({ identifier: z.string() }))
     .mutation(async ({ input, ctx }) => {
       log('publishAgentGroup input: %O', input);
@@ -650,12 +682,12 @@ export const agentGroupRouter = router({
    * 2. If not owner or no identifier, create new group
    * 3. Create new version for the group if updating
    */
-  publishOrCreate: agentGroupProcedure
+  publishOrCreate: agentGroupWriteProcedure
     .input(publishOrCreateGroupSchema)
     .mutation(async ({ input, ctx }) => {
       log('publishOrCreate input: %O', input);
 
-      const { identifier: inputIdentifier, name, memberAgents, ...groupData } = input;
+      const { actAs, identifier: inputIdentifier, name, memberAgents, ...groupData } = input;
       let finalIdentifier = inputIdentifier;
       let isNewGroup = false;
 
@@ -679,7 +711,9 @@ export const agentGroupRouter = router({
 
             log('Ownership check: currentAccountId=%s, ownerId=%s', currentAccountId, ownerId);
 
-            if (!currentAccountId || `${ownerId}` !== `${currentAccountId}`) {
+            const actingAccountId = actAs ?? currentAccountId;
+
+            if (!actingAccountId || `${ownerId}` !== `${actingAccountId}`) {
               // Not the owner, need to create a new group
               log('User is not owner, will create new group');
               finalIdentifier = undefined;
@@ -703,24 +737,28 @@ export const agentGroupRouter = router({
 
           log('Creating new group with identifier: %s', finalIdentifier);
 
-          await ctx.marketSDK.agentGroups.createAgentGroup({
-            ...groupData,
-            identifier: finalIdentifier,
-            // @ts-ignore
-            memberAgents,
-            name,
-          });
+          await withActingAccountHeader(ctx.marketSDK, actAs, () =>
+            ctx.marketSDK.agentGroups.createAgentGroup({
+              ...groupData,
+              identifier: finalIdentifier!,
+              // @ts-ignore
+              memberAgents,
+              name,
+            }),
+          );
         } else {
           // Update existing group - create new version
           log('Creating new version for group: %s', finalIdentifier);
 
-          await ctx.marketSDK.agentGroups.createAgentGroupVersion({
-            ...groupData,
-            identifier: finalIdentifier,
-            // @ts-ignore
-            memberAgents,
-            name,
-          });
+          await withActingAccountHeader(ctx.marketSDK, actAs, () =>
+            ctx.marketSDK.agentGroups.createAgentGroupVersion({
+              ...groupData,
+              identifier: finalIdentifier!,
+              // @ts-ignore
+              memberAgents,
+              name,
+            }),
+          );
         }
 
         return {
@@ -742,7 +780,7 @@ export const agentGroupRouter = router({
    * Unpublish agent group
    * POST /market/agent-group/:identifier/unpublish
    */
-  unpublishAgentGroup: agentGroupProcedure
+  unpublishAgentGroup: agentGroupWriteProcedure
     .input(z.object({ identifier: z.string() }))
     .mutation(async ({ input, ctx }) => {
       log('unpublishAgentGroup input: %O', input);

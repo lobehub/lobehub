@@ -1,14 +1,19 @@
 import { z } from 'zod';
 
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { WebBrowsingDocumentService } from '@/server/services/webBrowsing';
 
-const webBrowsingProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const webBrowsingProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   return opts.next({
     ctx: {
-      webBrowsingService: new WebBrowsingDocumentService(ctx.serverDB, ctx.userId),
+      webBrowsingService: new WebBrowsingDocumentService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ),
     },
   });
 });

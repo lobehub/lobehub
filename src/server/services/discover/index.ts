@@ -291,15 +291,18 @@ export class DiscoverService {
     return result;
   };
 
-  private normalizeAuthorField = (author: unknown): { name: string; userName?: string } => {
+  private normalizeAuthorField = (
+    author: unknown,
+  ): { name: string; ownerType?: 'user' | 'organization'; userName?: string } => {
     if (!author) return { name: '' };
 
     if (typeof author === 'string') return { name: author };
 
     if (typeof author === 'object') {
-      const { avatar, url, name, userName } = author as {
+      const { avatar, url, name, userName, type } = author as {
         avatar?: unknown;
         name?: unknown;
+        type?: unknown;
         url?: unknown;
         userName?: unknown;
       };
@@ -312,6 +315,7 @@ export class DiscoverService {
 
       return {
         name: authorName,
+        ownerType: type === 'organization' ? 'organization' : 'user',
         userName: typeof userName === 'string' ? userName : undefined,
       };
     }
@@ -599,6 +603,7 @@ export class DiscoverService {
         pluginCount: (data.config as any)?.plugins?.length || (data as any).pluginCount || 0,
         readme: data.documentationUrl || '',
         schemaVersion: 1,
+        ownerType: normalizedAuthor.ownerType,
         status: (data.status as AgentStatus) || undefined,
         summary: data.summary || '',
         systemRole: (data.config as any)?.systemRole || '',

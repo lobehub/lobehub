@@ -1,5 +1,5 @@
 import { type LobeToolManifest } from '@lobechat/context-engine';
-import { MarketSDK } from '@lobehub/market-sdk';
+import { MarketSDK, type OrgRef, orgRefToPathSegment } from '@lobehub/market-sdk';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
 
@@ -46,6 +46,15 @@ export interface MarketServiceOptions {
     clientId: string;
     clientSecret: string;
   };
+  /**
+   * Owner account id for organization-scoped operations.
+   *
+   * When set, Market attributes reads/writes (currently: creds and inject-creds)
+   * to the given organization account instead of the actor's personal account.
+   * Used by the workspace creds router after resolving a cloud workspace to
+   * its Market organization via {@link WorkspaceMarketIdentityService}.
+   */
+  ownerAccountId?: number;
   /** Pre-generated trusted client token (alternative to userInfo) */
   trustedClientToken?: string;
   /** User info for generating trusted client token */
@@ -81,7 +90,8 @@ export class MarketService {
   market: MarketSDK;
 
   constructor(options: MarketServiceOptions = {}) {
-    const { accessToken, userInfo, clientCredentials, trustedClientToken } = options;
+    const { accessToken, userInfo, clientCredentials, trustedClientToken, ownerAccountId } =
+      options;
 
     // Use provided trustedClientToken or generate from userInfo
     const resolvedTrustedClientToken =
@@ -92,15 +102,17 @@ export class MarketService {
       baseURL: MARKET_BASE_URL,
       clientId: clientCredentials?.clientId,
       clientSecret: clientCredentials?.clientSecret,
+      ownerAccountId,
       trustedClientToken: resolvedTrustedClientToken,
     });
 
     log(
-      'MarketService initialized: baseURL=%s, hasAccessToken=%s, hasTrustedToken=%s, hasClientCredentials=%s',
+      'MarketService initialized: baseURL=%s, hasAccessToken=%s, hasTrustedToken=%s, hasClientCredentials=%s, ownerAccountId=%s',
       MARKET_BASE_URL,
       !!accessToken,
       !!resolvedTrustedClientToken,
       !!clientCredentials,
+      ownerAccountId ?? 'none',
     );
   }
 
@@ -589,22 +601,37 @@ export class MarketService {
   // ============================== Creds Methods ==============================
 
   /**
-   * Upload credential file to Market API
-   * This method directly calls the Market API since SDK doesn't support file upload yet
+   * Upload a credential file to Market.
    *
-   * @param file - File content as base64 string
-   * @param fileName - Original file name
-   * @param fileType - MIME type of the file
+   * The SDK doesn't expose multipart upload so this method calls the REST
+   * endpoint directly. Pass `orgId` to upload to an organization's cred
+   * bucket (`/api/v1/organizations/:orgId/creds/upload`); omit it for a
+   * personal upload (`/api/v1/user/creds/upload`).
+   *
+   * @param params.file - File content as base64 string
+   * @param params.fileName - Original file name
+   * @param params.fileType - MIME type of the file
+   * @param params.orgId - Optional organization account id. When set, the
+   *   upload is attributed to the org via the org-scoped URL; org membership
+   *   (admin) is enforced server-side by `requireOrgMembership`.
    * @returns Upload result with fileHashId
    */
   async uploadCredFile(params: {
     file: string; // base64 encoded file content
     fileName: string;
     fileType: string;
+    orgId?: OrgRef;
   }): Promise<{ fileHashId: string; fileName: string; fileSize: number; fileType: string }> {
-    const { file, fileName, fileType } = params;
+    const { file, fileName, fileType, orgId } = params;
+    // Numeric account id or `workspace:<workspaceId>` path segment.
+    const orgSegment = orgId === undefined ? undefined : orgRefToPathSegment(orgId);
 
-    log('uploadCredFile: fileName=%s, fileType=%s', fileName, fileType);
+    log(
+      'uploadCredFile: fileName=%s, fileType=%s, orgId=%s',
+      fileName,
+      fileType,
+      orgSegment ?? 'none',
+    );
 
     // Convert base64 to Blob
     const binaryString = atob(file);
@@ -618,19 +645,25 @@ export class MarketService {
     const formData = new FormData();
     formData.append('file', blob, fileName);
 
-    // Extract only auth headers (not Content-Type, which would break multipart/form-data)
+    // Extract only auth headers (not Content-Type, which would break multipart/form-data).
+    // We deliberately also strip `x-lobe-owner-account-id` for the org path —
+    // ownership is in the URL now, the header is ignored by the org route.
     // @ts-ignore - market.headers contains auth headers
     const sdkHeaders = this.market.headers as Record<string, string>;
     const authHeaders: Record<string, string> = {};
     for (const [key, value] of Object.entries(sdkHeaders)) {
-      // Only include authorization-related headers, skip Content-Type
-      if (key.toLowerCase() !== 'content-type') {
-        authHeaders[key] = value;
-      }
+      const lower = key.toLowerCase();
+      if (lower === 'content-type') continue;
+      if (lower === 'x-lobe-owner-account-id' && orgSegment !== undefined) continue;
+      authHeaders[key] = value;
     }
 
     // Call Market API directly
-    const uploadUrl = `${MARKET_BASE_URL}/api/v1/user/creds/upload`;
+    const uploadPath =
+      orgSegment === undefined
+        ? '/api/v1/user/creds/upload'
+        : `/api/v1/organizations/${orgSegment}/creds/upload`;
+    const uploadUrl = `${MARKET_BASE_URL}${uploadPath}`;
     const response = await fetch(uploadUrl, {
       body: formData,
       headers: authHeaders,

@@ -136,7 +136,12 @@ describe('feedbackSatisfactionJudge', () => {
       ctx,
     );
 
-    expect(initModelRuntimeFromDB).toHaveBeenCalledWith({} as LobeChatDatabase, 'user_1', 'openai');
+    expect(initModelRuntimeFromDB).toHaveBeenCalledWith(
+      {} as LobeChatDatabase,
+      'user_1',
+      'openai',
+      undefined,
+    );
     expect(mockGenerateObject).toHaveBeenCalledWith(
       expect.objectContaining({
         messages: [

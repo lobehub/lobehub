@@ -65,6 +65,7 @@ describe('fileRouter.parseFileToChunks — NoSuchKey + internal:// branches', ()
     vi.mocked(DocumentService).mockImplementation(() => documentServiceMock);
     vi.mocked(ChunkModel).mockImplementation(() => chunkModelMock);
     vi.mocked(EmbeddingModel).mockImplementation(() => ({}) as any);
+    Reflect.set(FileModel, 'getFileById', undefined);
 
     mockCtx = { serverDB: {}, userId };
   });
@@ -115,6 +116,36 @@ describe('fileRouter.parseFileToChunks — NoSuchKey + internal:// branches', ()
       expect.objectContaining({ status: AsyncTaskStatus.Error }),
     );
     expect(result).toMatchObject({ success: false });
+  });
+
+  it('resolves workspaceId from the file row when async payload omits it', async () => {
+    Reflect.set(
+      FileModel,
+      'getFileById',
+      vi.fn().mockResolvedValue({
+        id: 'file_workspace',
+        userId,
+        workspaceId: 'workspace-1',
+      }),
+    );
+    fileModelMock.findById.mockResolvedValue({
+      id: 'file_workspace',
+      name: 'workspace note',
+      url: 'internal://document/placeholder',
+    });
+
+    const caller = fileRouter.createCaller(mockCtx);
+
+    await caller.parseFileToChunks({
+      fileId: 'file_workspace',
+      taskId: 'task_workspace',
+    });
+
+    expect(AsyncTaskModel).toHaveBeenCalledWith(mockCtx.serverDB, userId, 'workspace-1');
+    expect(ChunkModel).toHaveBeenCalledWith(mockCtx.serverDB, userId, 'workspace-1');
+    expect(ChunkService).toHaveBeenCalledWith(mockCtx.serverDB, userId, 'workspace-1');
+    expect(DocumentService).toHaveBeenCalledWith(mockCtx.serverDB, userId, 'workspace-1');
+    expect(FileModel).toHaveBeenCalledWith(mockCtx.serverDB, userId, 'workspace-1');
   });
 
   it('marks task Error and propagates for non-NoSuchKey storage errors (does not delete)', async () => {

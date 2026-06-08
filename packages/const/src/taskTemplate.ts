@@ -63,6 +63,19 @@ export const TASK_TEMPLATE_FALLBACK_CATEGORIES: TaskTemplateCategory[] = [
   'learning-research',
 ];
 
+/**
+ * Categories that only make sense in a personal context. When the recommendation
+ * is requested from inside a workspace, every template under these categories
+ * is removed from the candidate pool — both matched and fallback — so a team
+ * dashboard never surfaces "bedtime gratitude" / "weekly family finance" etc.
+ */
+export const TASK_TEMPLATE_PERSONAL_ONLY_CATEGORIES: TaskTemplateCategory[] = [
+  'parenting',
+  'health',
+  'hobbies',
+  'personal-life',
+];
+
 export const TASK_TEMPLATE_RECOMMEND_COUNT = 3;
 
 export const taskTemplates: TaskTemplate[] = [

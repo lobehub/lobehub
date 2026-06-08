@@ -89,7 +89,7 @@ export const GET = async (req: NextRequest) => {
     }
 
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-    const connectorModel = new ConnectorModel(serverDB, payload.lobeUserId, gateKeeper);
+    const connectorModel = new ConnectorModel(serverDB, payload.lobeUserId, undefined, gateKeeper);
 
     const connector = await connectorModel.findById(payload.connectorId);
     if (!connector) {

@@ -72,6 +72,7 @@ const tryScheduleAfter = (work: () => Promise<void> | void): void => {
 export const createLLMGenerationTracingHook = (
   userId: string,
   provider: string,
+  workspaceId?: string,
 ): Pick<ModelRuntimeHooks, 'onGenerateObjectComplete'> => {
   const service = getLLMGenerationTracingService();
   if (!service.isEnabled()) return {};
@@ -144,6 +145,7 @@ export const createLLMGenerationTracingHook = (
             trigger,
             userId,
             validationFailed,
+            workspaceId,
           });
           persistedTracingId = result?.tracingId ?? null;
         } catch (err) {

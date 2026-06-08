@@ -75,6 +75,7 @@ export interface UserMemoryActionHandlerOptions {
   }) => Promise<MemoryAgentActionResult>;
   pluginModel?: Pick<PluginModel, 'query'>;
   userId: string;
+  workspaceId?: string;
 }
 
 const finalizeAttempt = (
@@ -174,8 +175,10 @@ export const runMemoryActionAgent = async (
     };
   }
 
-  const agentService = options.agentService ?? new AgentService(options.db, options.userId);
-  const pluginModel = options.pluginModel ?? new PluginModel(options.db, options.userId);
+  const agentService =
+    options.agentService ?? new AgentService(options.db, options.userId, options.workspaceId);
+  const pluginModel =
+    options.pluginModel ?? new PluginModel(options.db, options.userId, options.workspaceId);
   const agentConfig = await agentService.getAgentConfig(input.agentId);
   const memoryLanguage = input.memoryLanguage ?? 'English';
 
@@ -240,7 +243,7 @@ export const runMemoryActionAgent = async (
   let threadId: string | undefined;
   if (input.topicId && input.sourceMessageId) {
     try {
-      const threadModel = new ThreadModel(options.db, options.userId);
+      const threadModel = new ThreadModel(options.db, options.userId, options.workspaceId);
       const thread = await threadModel.create({
         agentId: input.agentId,
         metadata: { operationId },
@@ -292,7 +295,9 @@ export const runMemoryActionAgent = async (
   // The durable receipt is projected on the completion path from the run's
   // finalState — no blocking executeSync.
   if (dispatch) {
-    const runtimeService = new AgentRuntimeService(options.db, options.userId);
+    const runtimeService = new AgentRuntimeService(options.db, options.userId, {
+      workspaceId: options.workspaceId,
+    });
     await runtimeService.createOperation({
       ...createParams,
       appContext: { ...baseAppContext, agentSignal: dispatch.marker },
@@ -312,6 +317,7 @@ export const runMemoryActionAgent = async (
     },
     queueService: null,
     streamEventManager,
+    workspaceId: options.workspaceId,
   });
   await runtimeService.createOperation({
     ...createParams,

@@ -11,6 +11,7 @@ interface ChargeParams {
   modelUsage?: ModelUsage;
   provider: string;
   userId: string;
+  workspaceId?: string;
 }
 
 // eslint-disable-next-line unused-imports/no-unused-vars

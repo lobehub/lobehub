@@ -237,6 +237,31 @@ describe('RuntimeExecutors', () => {
       );
     });
 
+    it('passes workspaceId to model runtime initialization', async () => {
+      const workspaceCtx = { ...ctx, workspaceId: 'ws-1' };
+      const executors = createRuntimeExecutors(workspaceCtx);
+      const state = createMockState();
+
+      const instruction = {
+        payload: {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'gpt-4',
+          provider: 'openai',
+          tools: [],
+        },
+        type: 'call_llm' as const,
+      };
+
+      await executors.call_llm!(instruction, state);
+
+      expect(initModelRuntimeFromDB).toHaveBeenCalledWith(
+        workspaceCtx.serverDB,
+        'user-123',
+        'openai',
+        'ws-1',
+      );
+    });
+
     it('should pass parentId from payload.parentMessageId to messageModel.create', async () => {
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();
@@ -1447,6 +1472,68 @@ describe('RuntimeExecutors', () => {
         await executors.call_llm!(instruction, state);
 
         expect(engineSpy).toHaveBeenCalledWith(expect.objectContaining({ evalContext }));
+      });
+
+      it('should inject current agent identity for bot-originated runs', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            description: 'Answers customer support questions.',
+            plugins: [],
+            systemRole: 'test',
+            title: 'Support Bot',
+          },
+          botContext: {
+            applicationId: 'discord-app',
+            isOwner: true,
+            platform: 'discord',
+            platformThreadId: 'discord:channel-1',
+            senderExternalUserId: 'user-platform-id',
+          },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState({
+          metadata: {
+            agentId: 'agent-support',
+            botContext: ctxWithConfig.botContext,
+            topicId: 'topic-123',
+          },
+        });
+
+        const instruction = {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        expect(engineSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            agentGroup: {
+              agentMap: {
+                'agent-support': {
+                  name: 'Support Bot',
+                  role: 'participant',
+                },
+              },
+              currentAgentId: 'agent-support',
+              currentAgentName: 'Support Bot',
+              currentAgentRole: 'participant',
+              members: [
+                {
+                  id: 'agent-support',
+                  name: 'Support Bot',
+                  role: 'participant',
+                },
+              ],
+              systemPrompt: 'Answers customer support questions.',
+            },
+          }),
+        );
       });
 
       it('should build capabilities from LOBE_DEFAULT_MODEL_LIST', async () => {

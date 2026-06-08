@@ -2,6 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { agentsToSessions } from '@/database/schemas';
 import { type LobeChatDatabase } from '@/database/type';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
 
 import { type ConversationContextInput } from '../_schema/context';
 
@@ -28,6 +29,7 @@ export const resolveContext = async (
   input: ConversationContextInput,
   db: LobeChatDatabase,
   userId: string,
+  workspaceId?: string,
 ): Promise<ResolvedContext> => {
   let resolvedSessionId: string | null = input.sessionId ?? null;
 
@@ -36,7 +38,12 @@ export const resolveContext = async (
     const [relation] = await db
       .select({ sessionId: agentsToSessions.sessionId })
       .from(agentsToSessions)
-      .where(and(eq(agentsToSessions.agentId, input.agentId), eq(agentsToSessions.userId, userId)))
+      .where(
+        and(
+          eq(agentsToSessions.agentId, input.agentId),
+          buildWorkspaceWhere({ userId, workspaceId }, agentsToSessions),
+        ),
+      )
       .limit(1);
 
     if (relation) {
@@ -67,11 +74,17 @@ export const resolveAgentIdFromSession = async (
   sessionId: string,
   db: LobeChatDatabase,
   userId: string,
+  workspaceId?: string,
 ): Promise<string | undefined> => {
   const [relation] = await db
     .select({ agentId: agentsToSessions.agentId })
     .from(agentsToSessions)
-    .where(and(eq(agentsToSessions.sessionId, sessionId), eq(agentsToSessions.userId, userId)))
+    .where(
+      and(
+        eq(agentsToSessions.sessionId, sessionId),
+        buildWorkspaceWhere({ userId, workspaceId }, agentsToSessions),
+      ),
+    )
     .limit(1);
 
   return relation?.agentId;
@@ -91,6 +104,7 @@ export const batchResolveAgentIdFromSessions = async (
   sessionIds: string[],
   db: LobeChatDatabase,
   userId: string,
+  workspaceId?: string,
 ): Promise<Map<string, string>> => {
   if (sessionIds.length === 0) return new Map();
 
@@ -98,7 +112,10 @@ export const batchResolveAgentIdFromSessions = async (
     .select({ agentId: agentsToSessions.agentId, sessionId: agentsToSessions.sessionId })
     .from(agentsToSessions)
     .where(
-      and(eq(agentsToSessions.userId, userId), inArray(agentsToSessions.sessionId, sessionIds)),
+      and(
+        buildWorkspaceWhere({ userId, workspaceId }, agentsToSessions),
+        inArray(agentsToSessions.sessionId, sessionIds),
+      ),
     );
 
   return new Map(relations.map((r) => [r.sessionId, r.agentId]));

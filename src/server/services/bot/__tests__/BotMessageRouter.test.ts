@@ -102,16 +102,14 @@ vi.mock('@/server/services/aiAgent', () => ({
 
 const mockHandleMention = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const mockHandleSubscribedMessage = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const mockAgentBridgeServiceCtor = vi.hoisted(() => vi.fn());
 // Default to "platform does not opt into thread isolation" so existing tests
 // keep their pre-behaviour. Individual tests can replace this via
 // `.mockResolvedValueOnce(...)` to simulate Discord's auto-thread upgrade.
 const mockOpenThreadForChannelWake = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock('../AgentBridgeService', () => ({
-  AgentBridgeService: vi.fn().mockImplementation(() => ({
-    handleMention: mockHandleMention,
-    handleSubscribedMessage: mockHandleSubscribedMessage,
-  })),
+  AgentBridgeService: mockAgentBridgeServiceCtor,
 }));
 
 // Mock platform entries
@@ -435,6 +433,10 @@ describe('BotMessageRouter', () => {
     mockFindEnabledByPlatform.mockResolvedValue([]);
     mockHandleMention.mockResolvedValue(undefined);
     mockHandleSubscribedMessage.mockResolvedValue(undefined);
+    mockAgentBridgeServiceCtor.mockImplementation(() => ({
+      handleMention: mockHandleMention,
+      handleSubscribedMessage: mockHandleSubscribedMessage,
+    }));
     mockOpenThreadForChannelWake.mockResolvedValue(undefined);
     // participant tracking — restore defaults wiped by
     // clearAllMocks. Empty list = fresh single-human thread; individual
@@ -490,6 +492,20 @@ describe('BotMessageRouter', () => {
       // Chat SDK should be initialized
       expect(mockInitialize).toHaveBeenCalled();
       expect(mockCreateAdapter).toHaveBeenCalled();
+    });
+
+    it('passes provider workspaceId to AgentBridgeService', async () => {
+      mockFindEnabledByPlatform.mockResolvedValue([
+        makeProvider({ applicationId: 'tg-bot-123', workspaceId: 'workspace-1' }),
+      ]);
+
+      const router = new BotMessageRouter();
+      const handler = router.getWebhookHandler('telegram', 'tg-bot-123');
+
+      const req = new Request('https://example.com/webhook', { body: '{}', method: 'POST' });
+      await handler(req);
+
+      expect(mockAgentBridgeServiceCtor).toHaveBeenCalledWith(FAKE_DB, 'user-1', 'workspace-1');
     });
 
     it('should return cached bot on subsequent requests', async () => {

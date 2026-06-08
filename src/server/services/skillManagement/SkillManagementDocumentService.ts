@@ -99,12 +99,14 @@ export class SkillManagementDocumentService {
   constructor(
     private db: LobeChatDatabase,
     userId: string,
+    workspaceId?: string,
     deps?: SkillManagementDocumentServiceDeps,
   ) {
-    this.agentDocumentModel = deps?.agentDocumentModel ?? new AgentDocumentModel(db, userId);
+    this.agentDocumentModel =
+      deps?.agentDocumentModel ?? new AgentDocumentModel(db, userId, workspaceId);
     this.createMarkdownEditorSnapshot =
       deps?.createMarkdownEditorSnapshot ?? createDefaultMarkdownEditorSnapshot;
-    this.documentService = deps?.documentService ?? new DocumentService(db, userId);
+    this.documentService = deps?.documentService ?? new DocumentService(db, userId, workspaceId);
   }
 
   /**

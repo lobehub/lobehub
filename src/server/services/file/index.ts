@@ -31,9 +31,9 @@ export class FileService {
 
   private impl: FileServiceImpl;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
-    this.fileModel = new FileModel(db, userId);
+    this.fileModel = new FileModel(db, userId, workspaceId);
     this.impl = createFileServiceModule(db);
   }
 

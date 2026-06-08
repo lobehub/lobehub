@@ -45,14 +45,17 @@ export class TaskRunnerService {
   private taskTopicModel: TaskTopicModel;
   private userId: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  private workspaceId?: string;
+
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
-    this.agentModel = new AgentModel(db, userId);
-    this.taskModel = new TaskModel(db, userId);
-    this.taskTopicModel = new TaskTopicModel(db, userId);
-    this.briefModel = new BriefModel(db, userId);
-    this.taskLifecycle = new TaskLifecycleService(db, userId);
+    this.workspaceId = workspaceId;
+    this.agentModel = new AgentModel(db, userId, workspaceId);
+    this.taskModel = new TaskModel(db, userId, workspaceId);
+    this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
+    this.briefModel = new BriefModel(db, userId, workspaceId);
+    this.taskLifecycle = new TaskLifecycleService(db, userId, workspaceId);
   }
 
   async runTask(params: RunTaskParams): Promise<RunTaskResult> {
@@ -118,6 +121,7 @@ export class TaskRunnerService {
           taskModel: this.taskModel,
           taskTopicModel: this.taskTopicModel,
           userId: this.userId,
+          workspaceId: this.workspaceId,
         },
         extraPrompt,
       );
@@ -135,7 +139,9 @@ export class TaskRunnerService {
       const agentRef = task.assigneeAgentId!;
       const isSlug = !agentRef.startsWith('agt_');
 
-      const aiAgentService = new AiAgentService(this.db, this.userId);
+      const aiAgentService = new AiAgentService(this.db, this.userId, {
+        workspaceId: this.workspaceId,
+      });
       const taskId = task.id;
       const taskIdentifier = task.identifier;
       const taskLifecycle = this.taskLifecycle;

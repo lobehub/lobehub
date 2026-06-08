@@ -270,14 +270,18 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       log('Failed to fetch market accessToken for user %s: %O', context.userId, error);
     }
 
-    const skillModel = new AgentSkillModel(context.serverDB, context.userId);
-    const resourceService = new SkillResourceService(context.serverDB, context.userId);
+    const skillModel = new AgentSkillModel(context.serverDB, context.userId, context.workspaceId);
+    const resourceService = new SkillResourceService(
+      context.serverDB,
+      context.userId,
+      context.workspaceId,
+    );
     const marketService = new MarketService({
       accessToken: marketAccessToken,
       userInfo: { userId: context.userId },
     });
-    const fileService = new FileService(context.serverDB, context.userId);
-    const fileModel = new FileModel(context.serverDB, context.userId);
+    const fileService = new FileService(context.serverDB, context.userId, context.workspaceId);
+    const fileModel = new FileModel(context.serverDB, context.userId, context.workspaceId);
 
     const service = new SkillServerRuntimeService({
       fileModel,
@@ -300,7 +304,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
     // result based on the identifier prefix so the inspector can show
     // "Activate Agent Skill" + the friendly `title`.
     const agentSkillBuiltins: BuiltinSkill[] = context.agentId
-      ? await new AgentDocumentsService(context.serverDB, context.userId)
+      ? await new AgentDocumentsService(context.serverDB, context.userId, context.workspaceId)
           .getAgentSkills(context.agentId)
           .then((skills) =>
             skills.map((skill) => ({

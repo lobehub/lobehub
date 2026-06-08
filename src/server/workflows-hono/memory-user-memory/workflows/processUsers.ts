@@ -29,9 +29,11 @@ export const processUsersHandler = async (
     // If root task has cancelRequestedAt, this stage stops scheduling child workflows.
     const cancelled = await context.run('memory:user-memory:extract:cancel-check:root', () =>
       getServerDB().then((db) =>
-        new AsyncTaskModel(db, params.userIds[0]!).isUserMemoryExtractionCancellationRequested(
-          params.asyncTaskId!,
-        ),
+        new AsyncTaskModel(
+          db,
+          params.userIds[0]!,
+          params.workspaceId,
+        ).isUserMemoryExtractionCancellationRequested(params.asyncTaskId!),
       ),
     );
     if (cancelled) {

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 interface LoadIndexIntegrationModuleOptions {
   featureGateEnabled?: boolean;
+  mockCreateDefaultAgentSignalPolicies?: Mock;
   mockEmitSourceEvent?: Mock;
   mockInitModelRuntimeFromDB?: Mock;
   mockProjectObservability?: Mock;
@@ -37,6 +38,7 @@ const loadIndexIntegrationModule = async (options: LoadIndexIntegrationModuleOpt
   vi.doUnmock('../observability/projector');
   vi.doUnmock('../observability/store');
   vi.doUnmock('../orchestrator');
+  vi.doUnmock('../policies');
   vi.doUnmock('../runtime/AgentSignalRuntime');
   vi.doUnmock('../sources');
   vi.doUnmock('@/server/services/agentDocuments');
@@ -73,6 +75,12 @@ const loadIndexIntegrationModule = async (options: LoadIndexIntegrationModuleOpt
   if (options.mockProjectObservability) {
     vi.doMock('../observability/projector', () => ({
       projectAgentSignalObservability: options.mockProjectObservability,
+    }));
+  }
+
+  if (options.mockCreateDefaultAgentSignalPolicies) {
+    vi.doMock('../policies', () => ({
+      createDefaultAgentSignalPolicies: options.mockCreateDefaultAgentSignalPolicies,
     }));
   }
 
@@ -214,6 +222,72 @@ describe('emitAgentSignalSourceEvent integration', () => {
     expect(emitSourceEvent).toHaveBeenCalledTimes(1);
     expect(emitNormalized).toHaveBeenCalledTimes(1);
     expect(mocks.persistAgentSignalObservability).toHaveBeenCalledTimes(1);
+  });
+
+  it('threads workspaceId into default policy options for workspace-scoped skill management', async () => {
+    const emitSourceEvent = vi.fn().mockResolvedValue({
+      deduped: false,
+      source: {
+        chain: { chainId: 'chain:workspace', rootSourceId: 'workspace-source' },
+        payload: {},
+        scopeKey: 'topic:topic-1',
+        sourceId: 'workspace-source',
+        sourceType: 'agent.user.message',
+        timestamp: 1_710_000_000_000,
+      },
+      trigger: {
+        scopeKey: 'topic:topic-1',
+        token: 'trigger:workspace-source',
+        windowEventCount: 1,
+      },
+    });
+    const createDefaultAgentSignalPolicies = vi.fn().mockReturnValue([]);
+    const emitNormalized = vi.fn().mockResolvedValue({
+      status: 'completed',
+      trace: {
+        actions: [],
+        results: [],
+        signals: [],
+        source: {
+          chain: { chainId: 'chain:workspace', rootSourceId: 'workspace-source' },
+          payload: {},
+          scopeKey: 'topic:topic-1',
+          sourceId: 'workspace-source',
+          sourceType: 'agent.user.message',
+          timestamp: 1_710_000_000_000,
+        },
+      },
+    });
+
+    const { emitAgentSignalSourceEvent } = await loadIndexIntegrationModule({
+      mockCreateDefaultAgentSignalPolicies: createDefaultAgentSignalPolicies,
+      mockEmitSourceEvent: emitSourceEvent,
+      mockRuntimeFactory: vi.fn().mockReturnValue({ emitNormalized }),
+    });
+
+    await emitAgentSignalSourceEvent(
+      {
+        payload: { message: 'Create a reusable skill.', messageId: 'msg-workspace-skill' },
+        scopeKey: 'topic:topic-1',
+        sourceId: 'workspace-source',
+        sourceType: 'agent.user.message',
+        timestamp: 1_710_000_000_000,
+      },
+      {
+        agentId: 'agent-1',
+        db: {} as never,
+        userId: 'user-1',
+        workspaceId: 'ws-1',
+      },
+    );
+
+    expect(createDefaultAgentSignalPolicies).toHaveBeenCalledWith(
+      expect.objectContaining({
+        skillManagement: expect.objectContaining({
+          workspaceId: 'ws-1',
+        }),
+      }),
+    );
   });
 
   it(

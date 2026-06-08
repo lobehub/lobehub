@@ -15,8 +15,8 @@ import type {
 } from '../types/permission.type';
 
 export class PermissionService extends BaseService {
-  constructor(db: LobeChatDatabase, userId: string | null) {
-    super(db, userId);
+  constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
+    super(db, userId, workspaceId);
   }
 
   /**

@@ -34,8 +34,9 @@ export const createServerSelfFeedbackIntentPolicyOptions = ({
   db,
   selfIterationEnabled = false,
   userId,
+  workspaceId,
 }: CreateServerSelfIterationPolicyOptions): CreateSelfFeedbackIntentSourceHandlerDependencies => {
-  const reviewContextModel = new AgentSignalReviewContextModel(db, userId);
+  const reviewContextModel = new AgentSignalReviewContextModel(db, userId, workspaceId);
 
   return {
     acquireReviewGuard: (input) =>
@@ -62,5 +63,6 @@ export const createServerSelfFeedbackIntentPolicyOptions = ({
         },
       ],
     }),
+    workspaceId,
   };
 };

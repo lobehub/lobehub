@@ -8,6 +8,7 @@ import {
   AgentEvalRunWorkflow,
   type OnTrajectoryCompletePayload,
 } from '@/server/workflows/agentEvalRun';
+import { resolveAgentEvalRunWorkspace } from '@/server/workflows/agentEvalRun/utils';
 
 const log = debug('lobe-server:workflows:on-trajectory-complete');
 
@@ -58,16 +59,17 @@ export async function POST(req: Request) {
     );
 
     const db = await getServerDB();
+    const wsId = await resolveAgentEvalRunWorkspace(db, runId);
 
     // Check if run was aborted — skip processing to avoid overwriting abort state
-    const runModel = new AgentEvalRunModel(db, userId);
+    const runModel = new AgentEvalRunModel(db, userId, wsId);
     const run = await runModel.findById(runId);
     if (run?.status === 'aborted') {
       log('Run aborted, skipping: runId=%s testCaseId=%s', runId, testCaseId);
       return NextResponse.json({ cancelled: true });
     }
 
-    const service = new AgentEvalRunService(db, userId);
+    const service = new AgentEvalRunService(db, userId, wsId);
 
     const { allDone, completedCount } = await service.recordTrajectoryCompletion({
       runId,

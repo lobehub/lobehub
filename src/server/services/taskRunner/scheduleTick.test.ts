@@ -9,8 +9,18 @@ import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TaskRunnerService } from './index';
 import { runScheduleTick } from './scheduleTick';
 
+const mockSelectTask = vi.fn();
+
 vi.mock('@/database/server', () => ({
-  getServerDB: vi.fn().mockResolvedValue({}),
+  getServerDB: vi.fn().mockResolvedValue({
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: () => mockSelectTask(),
+        }),
+      }),
+    }),
+  }),
 }));
 
 vi.mock('@/database/models/task', () => ({
@@ -34,7 +44,6 @@ describe('runScheduleTick', () => {
   const userId = 'user-1';
 
   const mockTaskModel = {
-    findById: vi.fn(),
     updateStatus: vi.fn(),
   };
   const mockTaskTopicModel = {
@@ -60,6 +69,7 @@ describe('runScheduleTick', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSelectTask.mockResolvedValue([]);
     mockBriefModel.hasUnresolvedUrgentByTask.mockResolvedValue(false);
     (TaskModel as any).mockImplementation(() => mockTaskModel);
     (TaskTopicModel as any).mockImplementation(() => mockTaskTopicModel);
@@ -68,7 +78,7 @@ describe('runScheduleTick', () => {
   });
 
   it('skips not-found tasks', async () => {
-    mockTaskModel.findById.mockResolvedValue(null);
+    mockSelectTask.mockResolvedValue([]);
 
     const outcome = await runScheduleTick(taskId, userId);
 
@@ -77,7 +87,7 @@ describe('runScheduleTick', () => {
   });
 
   it('skips when automationMode has been changed away from schedule', async () => {
-    mockTaskModel.findById.mockResolvedValue(baseTask({ automationMode: 'heartbeat' }));
+    mockSelectTask.mockResolvedValue([baseTask({ automationMode: 'heartbeat' })]);
 
     const outcome = await runScheduleTick(taskId, userId);
 
@@ -86,7 +96,7 @@ describe('runScheduleTick', () => {
   });
 
   it('skips terminal / paused tasks before checking maxExecutions', async () => {
-    mockTaskModel.findById.mockResolvedValue(baseTask({ status: 'paused' }));
+    mockSelectTask.mockResolvedValue([baseTask({ status: 'paused' })]);
 
     const outcome = await runScheduleTick(taskId, userId);
 
@@ -95,7 +105,7 @@ describe('runScheduleTick', () => {
   });
 
   it('runs the task when no maxExecutions is configured', async () => {
-    mockTaskModel.findById.mockResolvedValue(baseTask({ config: {} }));
+    mockSelectTask.mockResolvedValue([baseTask({ config: {} })]);
     mockRunner.runTask.mockResolvedValue(undefined);
 
     const outcome = await runScheduleTick(taskId, userId);
@@ -106,9 +116,7 @@ describe('runScheduleTick', () => {
   });
 
   it('runs the task when the run count is still under maxExecutions', async () => {
-    mockTaskModel.findById.mockResolvedValue(
-      baseTask({ config: { schedule: { maxExecutions: 10 } } }),
-    );
+    mockSelectTask.mockResolvedValue([baseTask({ config: { schedule: { maxExecutions: 10 } } })]);
     mockTaskTopicModel.countByTask.mockResolvedValue(7);
     mockRunner.runTask.mockResolvedValue(undefined);
 
@@ -123,9 +131,7 @@ describe('runScheduleTick', () => {
   });
 
   it('marks the task completed and skips when the run count has reached maxExecutions', async () => {
-    mockTaskModel.findById.mockResolvedValue(
-      baseTask({ config: { schedule: { maxExecutions: 10 } } }),
-    );
+    mockSelectTask.mockResolvedValue([baseTask({ config: { schedule: { maxExecutions: 10 } } })]);
     mockTaskTopicModel.countByTask.mockResolvedValue(10);
 
     const outcome = await runScheduleTick(taskId, userId);
@@ -141,9 +147,9 @@ describe('runScheduleTick', () => {
     // Pre-existing scheduled tasks (created before this PR) won't have a
     // scheduleStartedAt stamp. They should still tick normally; the cap will
     // start enforcing once the user pauses + restarts.
-    mockTaskModel.findById.mockResolvedValue(
+    mockSelectTask.mockResolvedValue([
       baseTask({ config: { schedule: { maxExecutions: 10 } }, context: {} }),
-    );
+    ]);
     mockRunner.runTask.mockResolvedValue(undefined);
 
     const outcome = await runScheduleTick(taskId, userId);
@@ -154,7 +160,7 @@ describe('runScheduleTick', () => {
   });
 
   it('returns in-flight when runTask raises a CONFLICT', async () => {
-    mockTaskModel.findById.mockResolvedValue(baseTask({ config: {} }));
+    mockSelectTask.mockResolvedValue([baseTask({ config: {} })]);
     mockRunner.runTask.mockRejectedValue(new TRPCError({ code: 'CONFLICT', message: 'busy' }));
 
     const outcome = await runScheduleTick(taskId, userId);
@@ -163,7 +169,7 @@ describe('runScheduleTick', () => {
   });
 
   it('skips when a human is waiting on an urgent brief', async () => {
-    mockTaskModel.findById.mockResolvedValue(baseTask({ config: {} }));
+    mockSelectTask.mockResolvedValue([baseTask({ config: {} })]);
     mockBriefModel.hasUnresolvedUrgentByTask.mockResolvedValue(true);
 
     const outcome = await runScheduleTick(taskId, userId);

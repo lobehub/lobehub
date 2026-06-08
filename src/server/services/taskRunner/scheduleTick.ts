@@ -1,9 +1,11 @@
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
+import { and, eq } from 'drizzle-orm';
 
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { tasks } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 
 import { TaskRunnerService } from './index';
@@ -40,12 +42,20 @@ export async function runScheduleTick(
 ): Promise<ScheduleTickOutcome> {
   const db = await getServerDB();
 
-  const taskModel = new TaskModel(db, userId);
-  const task = await taskModel.findById(taskId);
+  // System-level dispatch: we don't have the workspace context here. Read the
+  // task row directly (creator-scoped, workspace-agnostic) to learn
+  // `task.workspaceId`, then use it to instantiate downstream models so brief
+  // writes / lifecycle hits land in the right workspace.
+  const [task] = await db
+    .select()
+    .from(tasks)
+    .where(and(eq(tasks.id, taskId), eq(tasks.createdByUserId, userId)))
+    .limit(1);
   if (!task) {
     log('skip task=%s reason=not-found', taskId);
     return { ran: false, reason: 'not-found' };
   }
+  const wsId = task.workspaceId ?? undefined;
   if (task.automationMode !== 'schedule') {
     log('skip task=%s reason=mode-changed (mode=%s)', taskId, task.automationMode);
     return { ran: false, reason: 'mode-changed' };
@@ -63,7 +73,7 @@ export async function runScheduleTick(
     return { ran: false, reason: 'paused' };
   }
 
-  const briefModel = new BriefModel(db, userId);
+  const briefModel = new BriefModel(db, userId, wsId);
   if (await briefModel.hasUnresolvedUrgentByTask(taskId)) {
     log('skip task=%s reason=human-waiting', taskId);
     return { ran: false, reason: 'human-waiting' };
@@ -90,7 +100,7 @@ export async function runScheduleTick(
     const startedAtIso = scheduler.scheduleStartedAt;
     if (startedAtIso) {
       const startedAt = new Date(startedAtIso);
-      const topicModel = new TaskTopicModel(db, userId);
+      const topicModel = new TaskTopicModel(db, userId, wsId);
       const runCount = await topicModel.countByTask(taskId, { since: startedAt });
       if (runCount >= maxExecutions) {
         log(
@@ -99,13 +109,14 @@ export async function runScheduleTick(
           runCount,
           maxExecutions,
         );
+        const taskModel = new TaskModel(db, userId, wsId);
         await taskModel.updateStatus(taskId, 'completed', { completedAt: new Date() });
         return { ran: false, reason: 'max-executions-reached' };
       }
     }
   }
 
-  const runner = new TaskRunnerService(db, userId);
+  const runner = new TaskRunnerService(db, userId, wsId);
   try {
     await runner.runTask({ taskId });
   } catch (e) {

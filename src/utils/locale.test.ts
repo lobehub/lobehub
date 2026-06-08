@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
+import { normalizeLocale } from '@/locales/resources';
+
 import { parseBrowserLanguage } from './locale';
+
+describe('normalizeLocale', () => {
+  it('should normalize simplified Chinese script locales to zh-CN', () => {
+    expect(normalizeLocale('zh-Hans')).toBe('zh-CN');
+    expect(normalizeLocale('zh-Hans-CN')).toBe('zh-CN');
+  });
+
+  it('should normalize traditional Chinese script locales to zh-TW', () => {
+    expect(normalizeLocale('zh-Hant')).toBe('zh-TW');
+    expect(normalizeLocale('zh-Hant-TW')).toBe('zh-TW');
+  });
+});
 
 describe('parseBrowserLanguage', () => {
   // Helper function to create Headers with accept-language
@@ -37,6 +51,16 @@ describe('parseBrowserLanguage', () => {
       const headers = createHeaders('zh-CN,zh;q=0.9,en;q=0.8');
       // This expectation might need to be adjusted based on your locales configuration
       expect(parseBrowserLanguage(headers)).toBe('zh-CN');
+    });
+
+    it('should normalize simplified Chinese script language preferences', () => {
+      const headers = createHeaders('zh-Hans-CN,zh-Hans;q=0.9,en;q=0.8');
+      expect(parseBrowserLanguage(headers)).toBe('zh-CN');
+    });
+
+    it('should normalize traditional Chinese script language preferences', () => {
+      const headers = createHeaders('zh-Hant-TW,zh-Hant;q=0.9,en;q=0.8');
+      expect(parseBrowserLanguage(headers)).toBe('zh-TW');
     });
   });
 

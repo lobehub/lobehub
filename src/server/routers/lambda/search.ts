@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { SearchRepo } from '@/database/repositories/search';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DiscoverService } from '@/server/services/discover';
 
@@ -19,13 +20,14 @@ function calculateMarketplaceRelevance(query: string, title: string): number {
   return 4;
 }
 
-const searchProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const searchProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const wsId = ctx.workspaceId ?? undefined;
 
   return opts.next({
     ctx: {
       discoverService: new DiscoverService({ accessToken: ctx.marketAccessToken }),
-      searchRepo: new SearchRepo(ctx.serverDB, ctx.userId),
+      searchRepo: new SearchRepo(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });

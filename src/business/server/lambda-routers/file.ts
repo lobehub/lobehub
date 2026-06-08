@@ -7,8 +7,19 @@ export interface BusinessFileUploadCheckParams {
   transaction?: Transaction;
   url: string;
   userId: string;
+  workspaceId?: string | null;
 }
 
 export async function businessFileUploadCheck(
   _params: BusinessFileUploadCheckParams,
+): Promise<void> {}
+
+export interface BusinessFileTransferStorageCheckParams {
+  additionalSize: number;
+  targetUserId: string;
+  targetWorkspaceId: string | null;
+}
+
+export async function businessFileTransferStorageCheck(
+  _params: BusinessFileTransferStorageCheckParams,
 ): Promise<void> {}

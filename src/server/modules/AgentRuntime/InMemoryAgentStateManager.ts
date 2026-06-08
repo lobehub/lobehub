@@ -122,6 +122,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
       agentConfig?: any;
       modelRuntimeConfig?: any;
       userId?: string;
+      workspaceId?: string;
     },
   ): Promise<void> {
     const metadata: AgentOperationMetadata = {
@@ -133,6 +134,7 @@ export class InMemoryAgentStateManager implements IAgentStateManager {
       totalCost: 0,
       totalSteps: 0,
       userId: data.userId,
+      workspaceId: data.workspaceId,
     };
 
     this.metadata.set(operationId, metadata);

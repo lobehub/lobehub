@@ -16,10 +16,12 @@ const EMPTY_RESULT = (messageId: string): FollowUpExtractResult => ({ chips: [],
 export class FollowUpActionService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
+  private readonly workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
 
   async extract({
@@ -35,7 +37,9 @@ export class FollowUpActionService {
       orderBy: (m, { desc }) => desc(m.createdAt),
       where: (m, { and, eq, isNotNull, isNull, ne }) =>
         and(
-          eq(m.userId, this.userId),
+          this.workspaceId
+            ? eq(m.workspaceId, this.workspaceId)
+            : and(eq(m.userId, this.userId), isNull(m.workspaceId)),
           eq(m.topicId, topicId),
           // Discriminate thread vs main topic: an absent threadId must NOT
           // surface a thread reply that lives under the same topicId.
@@ -54,7 +58,7 @@ export class FollowUpActionService {
     const { system, user } = buildSuggestionPrompt({ assistantText: text, hint });
     const { model, provider } = modelConfig;
 
-    const ai = new AiGenerationService(this.db, this.userId);
+    const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
     let raw: unknown;
     try {
       raw = await ai.generateObject(

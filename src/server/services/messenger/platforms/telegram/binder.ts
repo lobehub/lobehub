@@ -11,6 +11,7 @@ import type {
   AgentPickerEntry,
   CallbackAcknowledgement,
   InboundCallbackAction,
+  MessengerPickerAction,
   MessengerPlatformBinder,
   UnlinkedMessageContext,
 } from '../../types';
@@ -24,10 +25,11 @@ const CALLBACK_PREFIX = 'messenger:';
 
 const buildSwitchKeyboard = (
   entries: AgentPickerEntry[],
+  action: MessengerPickerAction = 'switch',
 ): Array<Array<{ callback_data: string; text: string }>> =>
   entries.map((entry) => [
     {
-      callback_data: `${CALLBACK_PREFIX}switch:${entry.id}`,
+      callback_data: `${CALLBACK_PREFIX}${action}:${entry.id}`,
       text: entry.isActive ? `✅ ${entry.title}` : entry.title,
     },
   ]);
@@ -180,7 +182,7 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
 
   async sendAgentPicker(
     chatId: string,
-    params: { entries: AgentPickerEntry[]; text: string },
+    params: { action?: MessengerPickerAction; entries: AgentPickerEntry[]; text: string },
   ): Promise<void> {
     const config = await getMessengerTelegramConfig();
     if (!config) return;
@@ -189,7 +191,7 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
       await api.sendMessageWithCallbackKeyboard(
         chatId,
         escapeHtml(params.text),
-        buildSwitchKeyboard(params.entries),
+        buildSwitchKeyboard(params.entries, params.action),
       );
     } catch (error) {
       log('sendAgentPicker: failed for chat=%s: %O', chatId, error);
@@ -244,7 +246,7 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
             action.chatId,
             messageId as number,
             escapeHtml(ack.updatedPicker.text),
-            buildSwitchKeyboard(ack.updatedPicker.entries),
+            buildSwitchKeyboard(ack.updatedPicker.entries, ack.updatedPicker.action),
           );
         } catch (error) {
           log('acknowledgeCallback: edit picker failed: %O', error);

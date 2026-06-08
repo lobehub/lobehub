@@ -19,6 +19,17 @@ export interface UpdateDeviceParams {
   workingDirs?: WorkingDirEntry[];
 }
 
+/**
+ * Devices are intentionally USER-LEVEL, not workspace-scoped.
+ *
+ * Even though the `devices` table carries a nullable `workspace_id` column, a
+ * physical machine belongs to the user across every workspace they're in (the
+ * unique key is `(userId, deviceId)`). This model therefore scopes all reads
+ * and writes by `userId` only and deliberately does NOT take a `workspaceId`
+ * argument or use `buildWorkspaceWhere` / `buildWorkspacePayload`. Switching it
+ * to workspace-scoped lookups would hide a user's own device inside their
+ * workspaces. See the matching note on `devices.workspaceId` in the schema.
+ */
 export class DeviceModel {
   private userId: string;
   private db: LobeChatDatabase;

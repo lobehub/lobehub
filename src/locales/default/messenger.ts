@@ -1,6 +1,9 @@
 export default {
   'messenger.activeAgent': 'Active agent',
   'messenger.activeAgentPlaceholder': 'Select an agent',
+  'messenger.scope': 'Workspace',
+  'messenger.scopePersonal': 'Personal',
+  'messenger.scopePersonalTag': 'personal',
   'messenger.detail.addServer': 'Add server',
   'messenger.detail.addWorkspace': 'Add workspace',
   'messenger.detail.connections.connected': 'Connected',

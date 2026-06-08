@@ -3,6 +3,7 @@ import debug from 'debug';
 import { customAlphabet } from 'nanoid/non-secure';
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { marketSDK, marketUserInfo, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
@@ -117,7 +118,36 @@ const buildMarketAuthHeaders = (ctx: {
   return headers;
 };
 
+const withActingAccountHeader = async <T>(
+  marketSDK: unknown,
+  actAs: number | undefined,
+  operation: () => Promise<T>,
+): Promise<T> => {
+  const headers = (marketSDK as { headers?: Record<string, string> }).headers;
+  if (actAs === undefined || !headers) return operation();
+
+  const previous = headers['x-lobe-owner-account-id'];
+  headers['x-lobe-owner-account-id'] = String(actAs);
+
+  try {
+    return await operation();
+  } finally {
+    if (previous === undefined) {
+      delete headers['x-lobe-owner-account-id'];
+    } else {
+      headers['x-lobe-owner-account-id'] = previous;
+    }
+  }
+};
+
 interface ForkAgentItemInput {
+  /**
+   * When present, fork is attributed to the given Market organization account.
+   * Forwarded as `X-Lobe-Owner-Account-Id` so the Market resolves writes to the
+   * organization instead of the calling user. The actor must be a member of the
+   * target org (enforced server-side by `resolveActingAccount`).
+   */
+  actAs?: number;
   identifier: string;
   name?: string;
   sourceIdentifier: string;
@@ -128,10 +158,15 @@ interface ForkAgentItemInput {
 
 const forkOneAgent = async (
   item: ForkAgentItemInput,
-  headers: Record<string, string>,
+  baseHeaders: Record<string, string>,
 ): Promise<AgentForkBatchResult> => {
   try {
     const forkUrl = `${MARKET_BASE_URL}/api/v1/agents/${item.sourceIdentifier}/fork`;
+    // Clone so per-item actAs doesn't leak across the batch.
+    const headers = { ...baseHeaders };
+    if (item.actAs !== undefined) {
+      headers['x-lobe-owner-account-id'] = String(item.actAs);
+    }
     const response = await fetch(forkUrl, {
       body: JSON.stringify({
         identifier: item.identifier,
@@ -180,6 +215,12 @@ const forkOneAgent = async (
 };
 
 const forkAgentItemSchema = z.object({
+  /**
+   * Optional Market organization account id to attribute the fork to. Triggers
+   * `X-Lobe-Owner-Account-Id` on the fork request. Caller is responsible for
+   * resolving the organization account id before passing this field.
+   */
+  actAs: z.number().int().positive().optional(),
   identifier: z.string(),
   name: z.string().optional(),
   sourceIdentifier: z.string(),
@@ -216,9 +257,11 @@ const agentProcedure = authedProcedure
       },
     });
   });
+const agentWriteProcedure = agentProcedure.use(withScopedPermission('agent:create'));
 
 // Schema definitions
 const createAgentSchema = z.object({
+  actAs: z.number().int().positive().optional(),
   homepage: z.string().optional(),
   identifier: z.string(),
   isFeatured: z.boolean().optional(),
@@ -229,6 +272,7 @@ const createAgentSchema = z.object({
 });
 
 const createAgentVersionSchema = z.object({
+  actAs: z.number().int().positive().optional(),
   a2aProtocolVersion: z.string().optional(),
   avatar: z.string().optional(),
   category: z.string().optional(),
@@ -263,6 +307,7 @@ const paginationSchema = z.object({
 
 // Schema for the unified publish/create flow
 const publishOrCreateSchema = z.object({
+  actAs: z.number().int().positive().optional(),
   // Version data
   avatar: z.string().optional(),
 
@@ -352,11 +397,14 @@ export const agentRouter = router({
    * Create a new agent in the marketplace
    * POST /market/agent/create
    */
-  createAgent: agentProcedure.input(createAgentSchema).mutation(async ({ input, ctx }) => {
+  createAgent: agentWriteProcedure.input(createAgentSchema).mutation(async ({ input, ctx }) => {
     log('createAgent input: %O', input);
 
     try {
-      const response = await ctx.marketSDK.agents.createAgent(input);
+      const { actAs, ...agentData } = input;
+      const response = await withActingAccountHeader(ctx.marketSDK, actAs, () =>
+        ctx.marketSDK.agents.createAgent(agentData),
+      );
       return response;
     } catch (error) {
       log('Error creating agent: %O', error);
@@ -372,13 +420,16 @@ export const agentRouter = router({
    * Create a new version for an existing agent
    * POST /market/agent/versions/create
    */
-  createAgentVersion: agentProcedure
+  createAgentVersion: agentWriteProcedure
     .input(createAgentVersionSchema)
     .mutation(async ({ input, ctx }) => {
       log('createAgentVersion input: %O', input);
 
       try {
-        const response = await ctx.marketSDK.agents.createAgentVersion(input);
+        const { actAs, ...versionData } = input;
+        const response = await withActingAccountHeader(ctx.marketSDK, actAs, () =>
+          ctx.marketSDK.agents.createAgentVersion(versionData),
+        );
         return response;
       } catch (error) {
         log('Error creating agent version: %O', error);
@@ -394,7 +445,7 @@ export const agentRouter = router({
    * Deprecate an agent (permanently hide, cannot be republished)
    * POST /market/agent/:identifier/deprecate
    */
-  deprecateAgent: agentProcedure
+  deprecateAgent: agentWriteProcedure
     .input(z.object({ identifier: z.string() }))
     .mutation(async ({ input, ctx }) => {
       log('deprecateAgent input: %O', input);
@@ -419,7 +470,7 @@ export const agentRouter = router({
    * Best-effort: single-item failures are returned in-line as
    * `{ success: false, error }` and do not abort the rest of the batch.
    */
-  forkAgent: agentProcedure
+  forkAgent: agentWriteProcedure
     .input(z.object({ items: z.array(forkAgentItemSchema).min(1) }))
     .mutation(async ({ input, ctx }) => {
       log('forkAgent batch size: %d', input.items.length);
@@ -649,7 +700,7 @@ export const agentRouter = router({
    * Publish an agent (make it visible in marketplace)
    * POST /market/agent/:identifier/publish
    */
-  publishAgent: agentProcedure
+  publishAgent: agentWriteProcedure
     .input(z.object({ identifier: z.string() }))
     .mutation(async ({ input, ctx }) => {
       log('publishAgent input: %O', input);
@@ -676,93 +727,101 @@ export const agentRouter = router({
    *
    * Returns: { identifier, isNewAgent, success }
    */
-  publishOrCreate: agentProcedure.input(publishOrCreateSchema).mutation(async ({ input, ctx }) => {
-    log('publishOrCreate input: %O', input);
+  publishOrCreate: agentWriteProcedure
+    .input(publishOrCreateSchema)
+    .mutation(async ({ input, ctx }) => {
+      log('publishOrCreate input: %O', input);
 
-    const { identifier: inputIdentifier, name, ...versionData } = input;
-    let finalIdentifier = inputIdentifier;
-    let isNewAgent = false;
+      const { actAs, identifier: inputIdentifier, name, ...versionData } = input;
+      let finalIdentifier = inputIdentifier;
+      let isNewAgent = false;
 
-    try {
-      // Step 1: Check ownership if identifier is provided
-      if (inputIdentifier) {
-        try {
-          const agentDetail = await ctx.marketSDK.agents.getAgentDetail(inputIdentifier);
-          log('Agent detail for ownership check: ownerId=%s', agentDetail?.ownerId);
+      try {
+        // Step 1: Check ownership if identifier is provided
+        if (inputIdentifier) {
+          try {
+            const agentDetail = await ctx.marketSDK.agents.getAgentDetail(inputIdentifier);
+            log('Agent detail for ownership check: ownerId=%s', agentDetail?.ownerId);
 
-          // Get Market user info to get accountId (Market's user ID)
-          // Support both trustedClientToken and OIDC accessToken authentication
-          const userInfo = ctx.marketUserInfo as TrustedClientUserInfo | undefined;
-          const accessToken = (ctx as { marketOidcAccessToken?: string }).marketOidcAccessToken;
-          let currentAccountId: number | null = null;
+            // Get Market user info to get accountId (Market's user ID)
+            // Support both trustedClientToken and OIDC accessToken authentication
+            const userInfo = ctx.marketUserInfo as TrustedClientUserInfo | undefined;
+            const accessToken = (ctx as { marketOidcAccessToken?: string }).marketOidcAccessToken;
+            let currentAccountId: number | null = null;
 
-          const marketUserInfoResult = await fetchMarketUserInfo({ accessToken, userInfo });
-          currentAccountId = marketUserInfoResult?.accountId ?? null;
-          log('Market user info: accountId=%s', currentAccountId);
+            const marketUserInfoResult = await fetchMarketUserInfo({ accessToken, userInfo });
+            currentAccountId = marketUserInfoResult?.accountId ?? null;
+            log('Market user info: accountId=%s', currentAccountId);
 
-          const ownerId = agentDetail?.ownerId;
+            const ownerId = agentDetail?.ownerId;
 
-          log('Ownership check: currentAccountId=%s, ownerId=%s', currentAccountId, ownerId);
+            log('Ownership check: currentAccountId=%s, ownerId=%s', currentAccountId, ownerId);
 
-          if (!currentAccountId || `${ownerId}` !== `${currentAccountId}`) {
-            // Not the owner, need to create a new agent
-            log('User is not owner, will create new agent');
+            const actingAccountId = actAs ?? currentAccountId;
+
+            if (!actingAccountId || `${ownerId}` !== `${actingAccountId}`) {
+              // Not the owner, need to create a new agent
+              log('User is not owner, will create new agent');
+              finalIdentifier = undefined;
+              isNewAgent = true;
+            }
+          } catch (detailError) {
+            // Agent not found or error, create new
+            log('Agent not found or error, will create new: %O', detailError);
             finalIdentifier = undefined;
             isNewAgent = true;
           }
-        } catch (detailError) {
-          // Agent not found or error, create new
-          log('Agent not found or error, will create new: %O', detailError);
-          finalIdentifier = undefined;
+        } else {
           isNewAgent = true;
         }
-      } else {
-        isNewAgent = true;
-      }
 
-      // Step 2: Create new agent if needed
-      if (!finalIdentifier) {
-        // Generate a unique 8-character identifier
-        finalIdentifier = generateMarketIdentifier();
-        isNewAgent = true;
+        // Step 2: Create new agent if needed
+        if (!finalIdentifier) {
+          // Generate a unique 8-character identifier
+          finalIdentifier = generateMarketIdentifier();
+          isNewAgent = true;
 
-        log('Creating new agent with identifier: %s', finalIdentifier);
+          log('Creating new agent with identifier: %s', finalIdentifier);
 
-        await ctx.marketSDK.agents.createAgent({
+          await withActingAccountHeader(ctx.marketSDK, actAs, () =>
+            ctx.marketSDK.agents.createAgent({
+              identifier: finalIdentifier!,
+              name,
+            }),
+          );
+        }
+
+        // Step 3: Create version for the agent
+        log('Creating version for agent: %s', finalIdentifier);
+
+        await withActingAccountHeader(ctx.marketSDK, actAs, () =>
+          ctx.marketSDK.agents.createAgentVersion({
+            ...versionData,
+            identifier: finalIdentifier!,
+            name,
+          }),
+        );
+
+        return {
           identifier: finalIdentifier,
-          name,
+          isNewAgent,
+          success: true,
+        };
+      } catch (error) {
+        log('Error in publishOrCreate: %O', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to publish agent',
         });
       }
-
-      // Step 3: Create version for the agent
-      log('Creating version for agent: %s', finalIdentifier);
-
-      await ctx.marketSDK.agents.createAgentVersion({
-        ...versionData,
-        identifier: finalIdentifier,
-        name,
-      });
-
-      return {
-        identifier: finalIdentifier,
-        isNewAgent,
-        success: true,
-      };
-    } catch (error) {
-      log('Error in publishOrCreate: %O', error);
-      throw new TRPCError({
-        cause: error,
-        code: 'INTERNAL_SERVER_ERROR',
-        message: error instanceof Error ? error.message : 'Failed to publish agent',
-      });
-    }
-  }),
+    }),
 
   /**
    * Unpublish an agent (hide from marketplace, can be republished)
    * POST /market/agent/:identifier/unpublish
    */
-  unpublishAgent: agentProcedure
+  unpublishAgent: agentWriteProcedure
     .input(z.object({ identifier: z.string() }))
     .mutation(async ({ input, ctx }) => {
       log('unpublishAgent input: %O', input);

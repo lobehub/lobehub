@@ -53,6 +53,7 @@ describe('AgentService', () => {
   let service: AgentService;
   const mockDb = {} as any;
   const mockUserId = 'test-user-id';
+  const mockWorkspaceId = 'workspace-1';
 
   // Default mock for UserModel that returns empty settings
   const mockUserModel = {
@@ -79,7 +80,7 @@ describe('AgentService', () => {
 
       await service.createInbox();
 
-      expect(SessionModel).toHaveBeenCalledWith(mockDb, mockUserId);
+      expect(SessionModel).toHaveBeenCalledWith(mockDb, mockUserId, undefined);
       expect(parseAgentConfig).toHaveBeenCalledWith('model=gpt-4;temperature=0.7');
       expect(mockSessionModel.createInbox).toHaveBeenCalledWith(mockConfig);
     });
@@ -94,8 +95,23 @@ describe('AgentService', () => {
 
       await service.createInbox();
 
-      expect(SessionModel).toHaveBeenCalledWith(mockDb, mockUserId);
+      expect(SessionModel).toHaveBeenCalledWith(mockDb, mockUserId, undefined);
       expect(parseAgentConfig).toHaveBeenCalledWith('model=gpt-4;temperature=0.7');
+      expect(mockSessionModel.createInbox).toHaveBeenCalledWith({});
+    });
+
+    it('should create workspace inbox in the active workspace scope', async () => {
+      const mockSessionModel = {
+        createInbox: vi.fn(),
+      };
+
+      (SessionModel as any).mockImplementation(() => mockSessionModel);
+      (parseAgentConfig as any).mockReturnValue({});
+
+      const workspaceService = new AgentService(mockDb, mockUserId, mockWorkspaceId);
+      await workspaceService.createInbox();
+
+      expect(SessionModel).toHaveBeenCalledWith(mockDb, mockUserId, mockWorkspaceId);
       expect(mockSessionModel.createInbox).toHaveBeenCalledWith({});
     });
   });

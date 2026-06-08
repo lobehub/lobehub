@@ -66,6 +66,7 @@ import { UserMemoryModel } from '@/database/models/userMemory';
 import { UserMemorySourceBenchmarkLoCoMoModel } from '@/database/models/userMemory/sources/benchmarkLoCoMo';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { getServerDB } from '@/database/server';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { type MemoryAgentConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
@@ -145,6 +146,7 @@ export interface MemoryExtractionNormalizedPayload {
   userId?: string;
   userIds: string[];
   userInitiated?: boolean;
+  workspaceId?: string;
 }
 
 export const memoryExtractionPayloadSchema = z.object({
@@ -176,6 +178,7 @@ export const memoryExtractionPayloadSchema = z.object({
   userId: z.string().optional(),
   userIds: z.array(z.string()).optional(),
   userInitiated: z.boolean().optional(),
+  workspaceId: z.string().optional(),
 });
 
 export type MemoryExtractionPayloadInput = z.infer<typeof memoryExtractionPayloadSchema>;
@@ -228,6 +231,7 @@ export const normalizeMemoryExtractionPayload = (
       new Set([...(parsed.userIds || []), ...(parsed.userId ? [parsed.userId] : [])]),
     ).filter(Boolean),
     userInitiated: parsed.userInitiated ?? false,
+    workspaceId: parsed.workspaceId,
   };
 };
 
@@ -263,6 +267,7 @@ export const buildWorkflowPayloadInput = (
   userId: payload.userId ?? payload.userIds[0],
   userIds: payload.userIds,
   userInitiated: payload.userInitiated,
+  workspaceId: payload.workspaceId,
 });
 
 const normalizeProvider = (provider: string) => provider.toLowerCase();
@@ -628,6 +633,7 @@ export interface TopicExtractionJob {
   topicId: string;
   userId: string;
   userInitiated?: boolean;
+  workspaceId?: string;
 }
 
 export interface TopicPaginationJob {
@@ -637,6 +643,7 @@ export interface TopicPaginationJob {
   from?: Date;
   to?: Date;
   userId: string;
+  workspaceId?: string;
 }
 
 export interface UserPaginationResult {
@@ -1327,7 +1334,12 @@ export class MemoryExtractionExecutor {
     return { errors: [], ids: insertedIds } satisfies PersistLayerResult;
   }
 
-  async listConversationsForTopic(userId: string, topicId: string, topicUpdatedAt: Date) {
+  async listConversationsForTopic(
+    userId: string,
+    topicId: string,
+    topicUpdatedAt: Date,
+    workspaceId?: string,
+  ) {
     const db = await this.db;
     const rows = await db
       .select({
@@ -1337,7 +1349,9 @@ export class MemoryExtractionExecutor {
         role: messages.role,
       })
       .from(messages)
-      .where(and(eq(messages.userId, userId), eq(messages.topicId, topicId)))
+      .where(
+        and(buildWorkspaceWhere({ userId, workspaceId }, messages), eq(messages.topicId, topicId)),
+      )
       .orderBy(asc(messages.createdAt));
 
     const conversation = rows
@@ -1442,7 +1456,7 @@ export class MemoryExtractionExecutor {
 
     try {
       const db = await this.db;
-      const asyncTaskModel = new AsyncTaskModel(db, job.userId);
+      const asyncTaskModel = new AsyncTaskModel(db, job.userId, job.workspaceId);
       await asyncTaskModel.incrementUserMemoryExtractionProgress(job.asyncTaskId);
     } catch (error) {
       console.error('[memory-extraction] failed to update async task progress', error);
@@ -1492,7 +1506,10 @@ export class MemoryExtractionExecutor {
           const db = await this.db;
           const topic = await db.query.topics.findFirst({
             columns: { createdAt: true, id: true, metadata: true, updatedAt: true, userId: true },
-            where: and(eq(topics.id, job.topicId), eq(topics.userId, job.userId)),
+            where: and(
+              eq(topics.id, job.topicId),
+              buildWorkspaceWhere({ userId: job.userId, workspaceId: job.workspaceId }, topics),
+            ),
           });
 
           if (!topic) {
@@ -1541,7 +1558,7 @@ export class MemoryExtractionExecutor {
           const userModel = new UserModel(db, job.userId);
           const [userState, aiProviderRuntimeState] = await Promise.all([
             userModel.getUserState(KeyVaultsGateKeeper.getUserKeyVaults),
-            this.getAiProviderRuntimeState(job.userId),
+            this.getAiProviderRuntimeState(job.userId, job.workspaceId),
           ]);
           const memoryServiceConfig = this.resolveUserMemoryServiceConfig(
             userState.settings?.systemAgent as Partial<UserServiceModelConfig> | undefined,
@@ -1558,6 +1575,7 @@ export class MemoryExtractionExecutor {
             job.userId,
             topic.id,
             topic.updatedAt,
+            job.workspaceId,
           );
           if (!conversations || conversations.length === 0) {
             if (extractionJob) {
@@ -1848,7 +1866,7 @@ export class MemoryExtractionExecutor {
           }
           if (job.asyncTaskId && job.userInitiated) {
             try {
-              const asyncTaskModel = new AsyncTaskModel(await this.db, job.userId);
+              const asyncTaskModel = new AsyncTaskModel(await this.db, job.userId, job.workspaceId);
               await asyncTaskModel.update(job.asyncTaskId, {
                 error: buildAsyncTaskErrorFrom(error),
                 status: AsyncTaskStatus.Error,
@@ -1946,7 +1964,11 @@ export class MemoryExtractionExecutor {
       }
 
       for (const userId of payload.userIds) {
-        const topicIds = await this.filterTopicIdsForUser(userId, payload.topicIds);
+        const topicIds = await this.filterTopicIdsForUser(
+          userId,
+          payload.topicIds,
+          payload.workspaceId,
+        );
         for (const topicId of topicIds) {
           const extracted = await this.extractTopic({
             asyncTaskId: payload.asyncTaskId,
@@ -1959,6 +1981,7 @@ export class MemoryExtractionExecutor {
             topicId,
             userId,
             userInitiated: payload.userInitiated,
+            workspaceId: payload.workspaceId,
           });
 
           results.push({ ...extracted, topicId, userId });
@@ -2010,7 +2033,7 @@ export class MemoryExtractionExecutor {
     pageSize: number,
   ): Promise<{ cursor?: ListTopicsForMemoryExtractorCursor; ids: string[] }> {
     const db = await this.db;
-    const topicModel = new TopicModel(db, job.userId);
+    const topicModel = new TopicModel(db, job.userId, job.workspaceId);
     const rows = await topicModel.listTopicsForMemoryExtractor({
       cursor: job.cursor,
       endDate: job.to,
@@ -2094,13 +2117,16 @@ export class MemoryExtractionExecutor {
     };
   }
 
-  async filterTopicIdsForUser(userId: string, topicIds: string[]) {
+  async filterTopicIdsForUser(userId: string, topicIds: string[], workspaceId?: string) {
     if (!topicIds.length) return [];
 
     const db = await this.db;
     const rows = await db.query.topics.findMany({
       columns: { id: true },
-      where: and(eq(topics.userId, userId), inArray(topics.id, topicIds)),
+      where: and(
+        buildWorkspaceWhere({ userId, workspaceId }, topics),
+        inArray(topics.id, topicIds),
+      ),
     });
 
     return rows.map((row) => row.id);
@@ -2322,7 +2348,10 @@ export class MemoryExtractionExecutor {
     };
   }
 
-  private async getAiProviderRuntimeState(userId: string): Promise<AiProviderRuntimeState> {
+  private async getAiProviderRuntimeState(
+    userId: string,
+    workspaceId?: string,
+  ): Promise<AiProviderRuntimeState> {
     const db = await this.db;
     const aiInfraRepos = new AiInfraRepos(db, userId, this.aiProviderConfig);
 

@@ -20,7 +20,7 @@ export class ProviderController extends BaseController {
     try {
       const query = this.getQuery<ProviderListQuery>(c);
       const db = await this.getDatabase();
-      const providerService = new ProviderService(db, this.getUserId(c));
+      const providerService = new ProviderService(db, this.getUserId(c), this.getWorkspaceId(c));
 
       const result = await providerService.getProviders(query);
 
@@ -36,7 +36,7 @@ export class ProviderController extends BaseController {
       const request: GetProviderDetailRequest = { id };
 
       const db = await this.getDatabase();
-      const providerService = new ProviderService(db, this.getUserId(c));
+      const providerService = new ProviderService(db, this.getUserId(c), this.getWorkspaceId(c));
       const provider = await providerService.getProviderDetail(request);
 
       return this.success(c, provider, 'Provider details retrieved successfully');
@@ -50,7 +50,7 @@ export class ProviderController extends BaseController {
       const body = await this.getBody<CreateProviderRequest>(c);
 
       const db = await this.getDatabase();
-      const providerService = new ProviderService(db, this.getUserId(c));
+      const providerService = new ProviderService(db, this.getUserId(c), this.getWorkspaceId(c));
       const created = await providerService.createProvider({ ...body, source: 'custom' });
 
       return this.success(c, created, 'Provider created successfully');
@@ -70,7 +70,7 @@ export class ProviderController extends BaseController {
       };
 
       const db = await this.getDatabase();
-      const providerService = new ProviderService(db, this.getUserId(c));
+      const providerService = new ProviderService(db, this.getUserId(c), this.getWorkspaceId(c));
       const updated = await providerService.updateProvider(request);
 
       return this.success(c, updated, 'Provider updated successfully');
@@ -85,7 +85,7 @@ export class ProviderController extends BaseController {
       const request: DeleteProviderRequest = { id };
 
       const db = await this.getDatabase();
-      const providerService = new ProviderService(db, this.getUserId(c));
+      const providerService = new ProviderService(db, this.getUserId(c), this.getWorkspaceId(c));
       const result = await providerService.deleteProvider(request);
 
       return this.success(c, result, 'Provider deleted successfully');

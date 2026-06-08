@@ -1,17 +1,18 @@
 import { z } from 'zod';
 
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { ConnectorToolPermission } from '@/database/schemas';
 import { getKlavisClient } from '@/libs/klavis';
-import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
+import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MCPService } from '@/server/services/mcp';
 
 /**
  * Klavis procedure with client initialized in context
  */
-const klavisProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const klavisProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const klavisClient = getKlavisClient();
 
   return opts.next({
@@ -43,13 +44,14 @@ export const klavisRouter = router({
       // same-name collisions across connectors). Falls back to toolName-only
       // if identifier is absent (legacy callers).
       if (ctx.userId && ctx.serverDB) {
-        const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId);
+        const wsId = ctx.workspaceId ?? undefined;
+        const connectorToolModel = new ConnectorToolModel(ctx.serverDB, ctx.userId, wsId);
         let connectorTool:
           | Awaited<ReturnType<typeof connectorToolModel.findByToolName>>
           | undefined;
 
         if (input.identifier) {
-          const connectorModel = new ConnectorModel(ctx.serverDB, ctx.userId);
+          const connectorModel = new ConnectorModel(ctx.serverDB, ctx.userId, wsId);
           const [connector] = await connectorModel.queryByIdentifiers([input.identifier]);
           if (connector) {
             const tools = await connectorToolModel.queryByConnector(connector.id);

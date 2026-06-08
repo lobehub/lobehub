@@ -54,7 +54,7 @@ const getTrustedScopeKey = (
  */
 export const resolveClientRuntimeStartFeedbackSource = async (
   sourceEvent: SourceEventClientRuntimeStart,
-  input: { db: LobeChatDatabase; userId: string },
+  input: { db: LobeChatDatabase; userId: string; workspaceId?: string },
 ): Promise<ClientRuntimeStartHydrationResult> => {
   if (sourceEvent.payload.parentMessageType !== 'user') {
     return { diagnostic: { reason: 'non-user-parent', status: 'skipped' } };
@@ -64,7 +64,7 @@ export const resolveClientRuntimeStartFeedbackSource = async (
     return { diagnostic: { reason: 'missing-parent-message-id', status: 'skipped' } };
   }
 
-  const messageModel = new MessageModel(input.db, input.userId);
+  const messageModel = new MessageModel(input.db, input.userId, input.workspaceId);
   const parentMessage = await messageModel.findById(sourceEvent.payload.parentMessageId);
 
   if (!parentMessage) {

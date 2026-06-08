@@ -16,6 +16,7 @@ import {
 } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { sanitizeBm25Query } from '../../utils/bm25';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 
 // Re-export types for backward compatibility
 export type {
@@ -30,11 +31,17 @@ export type {
  */
 export class HomeRepository {
   private userId: string;
+  private workspaceId?: string;
   private db: LobeChatDatabase;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
+    this.workspaceId = workspaceId;
     this.db = db;
+  }
+
+  private get scope() {
+    return { userId: this.userId, workspaceId: this.workspaceId };
   }
 
   /**
@@ -60,7 +67,7 @@ export class HomeRepository {
       .from(agents)
       .leftJoin(agentsToSessions, eq(agents.id, agentsToSessions.agentId))
       .leftJoin(sessions, eq(agentsToSessions.sessionId, sessions.id))
-      .where(and(eq(agents.userId, this.userId), not(eq(agents.virtual, true))))
+      .where(and(buildWorkspaceWhere(this.scope, agents), not(eq(agents.virtual, true))))
       .orderBy(desc(agents.updatedAt));
 
     // 2. Query all chatGroups (group chats)
@@ -76,7 +83,7 @@ export class HomeRepository {
         updatedAt: chatGroups.updatedAt,
       })
       .from(chatGroups)
-      .where(eq(chatGroups.userId, this.userId))
+      .where(buildWorkspaceWhere(this.scope, chatGroups))
       .orderBy(desc(chatGroups.updatedAt));
 
     // 2.1 Query member avatars for each chat group
@@ -90,7 +97,7 @@ export class HomeRepository {
         sort: sessionGroups.sort,
       })
       .from(sessionGroups)
-      .where(eq(sessionGroups.userId, this.userId))
+      .where(buildWorkspaceWhere(this.scope, sessionGroups))
       .orderBy(sessionGroups.sort);
 
     // 4. Process and categorize
@@ -225,7 +232,7 @@ export class HomeRepository {
         .leftJoin(sessions, eq(agentsToSessions.sessionId, sessions.id))
         .where(
           and(
-            eq(agents.userId, this.userId),
+            buildWorkspaceWhere(this.scope, agents),
             not(eq(agents.virtual, true)),
             sql`(${agents.title} @@@ ${bm25Query} OR ${agents.description} @@@ ${bm25Query})`,
           ),
@@ -245,7 +252,7 @@ export class HomeRepository {
         .from(chatGroups)
         .where(
           and(
-            eq(chatGroups.userId, this.userId),
+            buildWorkspaceWhere(this.scope, chatGroups),
             sql`(${chatGroups.title} @@@ ${bm25Query} OR ${chatGroups.description} @@@ ${bm25Query})`,
           ),
         )

@@ -2,15 +2,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getServerDB } from '@/database/core/db-adaptor';
-import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import type { PlatformClient, PlatformDefinition } from '@/server/services/bot/platforms';
 
 import { createGatewayManager, GatewayManager, getGatewayManager } from './GatewayManager';
 
 // Mock database and external dependencies
-const { mockFindEnabledByPlatform } = vi.hoisted(() => ({
+const { mockFindEnabledByPlatform, mockFindEnabledByPlatformAndAppId } = vi.hoisted(() => ({
   mockFindEnabledByPlatform: vi.fn().mockResolvedValue([]),
+  mockFindEnabledByPlatformAndAppId: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({
@@ -20,6 +20,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
 vi.mock('@/database/models/agentBotProvider', () => ({
   AgentBotProviderModel: Object.assign(vi.fn(), {
     findEnabledByPlatform: mockFindEnabledByPlatform,
+    findEnabledByPlatformAndAppId: mockFindEnabledByPlatformAndAppId,
   }),
 }));
 
@@ -66,19 +67,15 @@ const createFakeDefinition = (
 describe('GatewayManager', () => {
   let mockDb: any;
   let mockGateKeeper: any;
-  let mockAgentBotProviderModel: any;
 
   beforeEach(() => {
     mockDb = {};
     mockGateKeeper = {};
-    mockAgentBotProviderModel = {
-      findEnabledByApplicationId: vi.fn(),
-    };
 
     vi.mocked(getServerDB).mockResolvedValue(mockDb as any);
     vi.mocked(KeyVaultsGateKeeper.initWithEnvKey).mockResolvedValue(mockGateKeeper as any);
-    vi.mocked(AgentBotProviderModel).mockImplementation(() => mockAgentBotProviderModel);
     mockFindEnabledByPlatform.mockResolvedValue([]);
+    mockFindEnabledByPlatformAndAppId.mockResolvedValue(null);
 
     // Clean up global singleton between tests
     const globalForGateway = globalThis as any;
@@ -166,7 +163,7 @@ describe('GatewayManager', () => {
       const factory = vi.fn().mockReturnValueOnce(mockBot1).mockReturnValueOnce(mockBot2);
 
       // Pre-load two bots by calling startClient
-      mockAgentBotProviderModel.findEnabledByApplicationId.mockResolvedValue({
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue({
         applicationId: 'app-1',
         credentials: { token: 'tok1' },
       });
@@ -174,8 +171,8 @@ describe('GatewayManager', () => {
       const manager = new GatewayManager({ definitions: [createFakeDefinition('slack', factory)] });
       await manager.start();
 
-      await manager.startClient('slack', 'app-1', 'user-1');
-      await manager.startClient('slack', 'app-2', 'user-2');
+      await manager.startClient('slack', 'app-1');
+      await manager.startClient('slack', 'app-2');
 
       await manager.stop();
 
@@ -187,50 +184,50 @@ describe('GatewayManager', () => {
 
   describe('startClient', () => {
     it('should do nothing when no provider is found in DB', async () => {
-      mockAgentBotProviderModel.findEnabledByApplicationId.mockResolvedValue(null);
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue(null);
       const factory = vi.fn();
 
       const manager = new GatewayManager({ definitions: [createFakeDefinition('slack', factory)] });
 
-      await manager.startClient('slack', 'app-123', 'user-abc');
+      await manager.startClient('slack', 'app-123');
 
       expect(factory).not.toHaveBeenCalled();
     });
 
     it('should do nothing when the platform is not registered', async () => {
-      mockAgentBotProviderModel.findEnabledByApplicationId.mockResolvedValue({
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue({
         applicationId: 'app-123',
         credentials: { token: 'tok' },
       });
 
       const manager = new GatewayManager({ definitions: [] }); // empty definitions
 
-      await manager.startClient('unsupported', 'app-123', 'user-abc');
+      await manager.startClient('unsupported', 'app-123');
 
-      // No bot should be created
-      expect(vi.mocked(AgentBotProviderModel)).toHaveBeenCalled();
+      // No bot should be created, but the provider lookup still ran
+      expect(mockFindEnabledByPlatformAndAppId).toHaveBeenCalled();
     });
 
     it('should start a bot and register it', async () => {
       const mockBot = createMockBot();
       const factory = vi.fn().mockReturnValue(mockBot);
-      mockAgentBotProviderModel.findEnabledByApplicationId.mockResolvedValue({
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue({
         applicationId: 'app-123',
         credentials: { token: 'tok123' },
       });
 
       const manager = new GatewayManager({ definitions: [createFakeDefinition('slack', factory)] });
 
-      await manager.startClient('slack', 'app-123', 'user-abc');
+      await manager.startClient('slack', 'app-123');
 
       expect(factory).toHaveBeenCalled();
       expect(mockBot.start).toHaveBeenCalled();
     });
 
-    it('should scope lookup by the requested user but build runtime context from the provider row', async () => {
+    it('should look up the provider system-wide and build runtime context from the provider row', async () => {
       const mockBot = createMockBot();
       const factory = vi.fn().mockReturnValue(mockBot);
-      mockAgentBotProviderModel.findEnabledByApplicationId.mockResolvedValue({
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue({
         applicationId: 'app-123',
         credentials: { token: 'tok123' },
         settings: {},
@@ -239,11 +236,12 @@ describe('GatewayManager', () => {
 
       const manager = new GatewayManager({ definitions: [createFakeDefinition('slack', factory)] });
 
-      await manager.startClient('slack', 'app-123', 'requested-user');
+      await manager.startClient('slack', 'app-123');
 
-      expect(vi.mocked(AgentBotProviderModel)).toHaveBeenCalledWith(
+      expect(mockFindEnabledByPlatformAndAppId).toHaveBeenCalledWith(
         mockDb,
-        'requested-user',
+        'slack',
+        'app-123',
         mockGateKeeper,
       );
       expect(factory.mock.calls[0][1]).toMatchObject({ userId: 'provider-user' });
@@ -255,7 +253,7 @@ describe('GatewayManager', () => {
       const mockBot2 = createMockBot();
       const factory = vi.fn().mockReturnValueOnce(mockBot1).mockReturnValueOnce(mockBot2);
 
-      mockAgentBotProviderModel.findEnabledByApplicationId.mockResolvedValue({
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue({
         applicationId: 'app-123',
         credentials: { token: 'tok' },
       });
@@ -263,11 +261,11 @@ describe('GatewayManager', () => {
       const manager = new GatewayManager({ definitions: [createFakeDefinition('slack', factory)] });
 
       // Start bot first time
-      await manager.startClient('slack', 'app-123', 'user-abc');
+      await manager.startClient('slack', 'app-123');
       expect(mockBot1.start).toHaveBeenCalled();
 
       // Start bot second time for same key — should stop first
-      await manager.startClient('slack', 'app-123', 'user-abc');
+      await manager.startClient('slack', 'app-123');
       expect(mockBot1.stop).toHaveBeenCalled();
       expect(mockBot2.start).toHaveBeenCalled();
     });
@@ -284,7 +282,7 @@ describe('GatewayManager', () => {
     it('should stop and remove a running bot', async () => {
       const mockBot = createMockBot();
       const factory = vi.fn().mockReturnValue(mockBot);
-      mockAgentBotProviderModel.findEnabledByApplicationId.mockResolvedValue({
+      mockFindEnabledByPlatformAndAppId.mockResolvedValue({
         applicationId: 'app-123',
         credentials: { token: 'tok' },
       });
@@ -292,7 +290,7 @@ describe('GatewayManager', () => {
       const manager = new GatewayManager({ definitions: [createFakeDefinition('slack', factory)] });
 
       // First start the bot
-      await manager.startClient('slack', 'app-123', 'user-abc');
+      await manager.startClient('slack', 'app-123');
       expect(mockBot.start).toHaveBeenCalled();
 
       // Then stop it
@@ -305,14 +303,14 @@ describe('GatewayManager', () => {
       const mockBot2 = createMockBot();
       const factory = vi.fn().mockReturnValueOnce(mockBot1).mockReturnValueOnce(mockBot2);
 
-      mockAgentBotProviderModel.findEnabledByApplicationId
+      mockFindEnabledByPlatformAndAppId
         .mockResolvedValueOnce({ applicationId: 'app-1', credentials: {} })
         .mockResolvedValueOnce({ applicationId: 'app-2', credentials: {} });
 
       const manager = new GatewayManager({ definitions: [createFakeDefinition('slack', factory)] });
 
-      await manager.startClient('slack', 'app-1', 'user-1');
-      await manager.startClient('slack', 'app-2', 'user-2');
+      await manager.startClient('slack', 'app-1');
+      await manager.startClient('slack', 'app-2');
 
       await manager.stopClient('slack', 'app-1');
 

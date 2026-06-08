@@ -3,9 +3,11 @@ import { skillManifestSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
@@ -51,28 +53,42 @@ const handleSkillImportError = (error: unknown): never => {
   throw error;
 };
 
-// ===== Procedure with Context =====
+// ===== Procedures with Context =====
 
-const skillProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+// Reads: workspace-aware, any member can read. In personal mode the request
+// runs without workspace context (legacy behavior preserved).
+const skillProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
-  const skillModel = new AgentSkillModel(ctx.serverDB, ctx.userId);
+  const workspaceId = ctx.workspaceId ?? undefined;
+  const skillModel = new AgentSkillModel(ctx.serverDB, ctx.userId, workspaceId);
 
   return opts.next({
     ctx: {
-      fileModel: new FileModel(ctx.serverDB, ctx.userId),
-      fileService: new FileService(ctx.serverDB, ctx.userId),
+      fileModel: new FileModel(ctx.serverDB, ctx.userId, workspaceId),
+      fileService: new FileService(ctx.serverDB, ctx.userId, workspaceId),
       marketService: new MarketService({ userInfo: { userId: ctx.userId } }),
-      skillImporter: new SkillImporter(ctx.serverDB, ctx.userId),
+      skillImporter: new SkillImporter(ctx.serverDB, ctx.userId, workspaceId),
       skillModel,
     },
   });
 });
+
+// Writes: workspace mode goes through RBAC (`agent:update:all | :owner`),
+// gating viewers out while letting members and owners install/edit skills.
+// Personal mode is unrestricted (middleware passes through when no
+// workspaceId). Replaces the legacy `requireWorkspaceRoleWhenScoped('owner')`
+// which was overly restrictive (member should be able to manage skills they
+// own, per the role-permission matrix in @lobechat/const/rbac).
+const skillWriteProcedure = skillProcedure.use(withScopedPermission('agent:update'));
 
 const skillResourceProcedure = skillProcedure.use(async (opts) => {
   const { ctx } = opts;
 
   return opts.next({
     ctx: {
+      // workspace-audit: intentionally personal-scoped (no workspaceId). This service
+      // only reads skill resource files by content hash (global, deduplicated files),
+      // never runs a per-workspace row query, so workspace scoping is a no-op here.
       skillResourceService: new SkillResourceService(ctx.serverDB, ctx.userId),
     },
   });
@@ -99,7 +115,7 @@ const updateSkillSchema = z.object({
 export const agentSkillsRouter = router({
   // ===== Create =====
 
-  create: skillProcedure.input(createSkillSchema).mutation(async ({ ctx, input }) => {
+  create: skillWriteProcedure.input(createSkillSchema).mutation(async ({ ctx, input }) => {
     try {
       return await ctx.skillImporter.createUserSkill(input);
     } catch (error) {
@@ -109,9 +125,11 @@ export const agentSkillsRouter = router({
 
   // ===== Delete =====
 
-  delete: skillProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
-    return ctx.skillModel.delete(input.id);
-  }),
+  delete: skillWriteProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.skillModel.delete(input.id);
+    }),
 
   // ===== Query =====
 
@@ -150,7 +168,7 @@ export const agentSkillsRouter = router({
     return ctx.skillModel.findByName(input.name);
   }),
 
-  importFromGitHub: skillProcedure
+  importFromGitHub: skillWriteProcedure
     .input(
       z.object({
         branch: z.string().optional(),
@@ -165,7 +183,7 @@ export const agentSkillsRouter = router({
       }
     }),
 
-  importFromUrl: skillProcedure
+  importFromUrl: skillWriteProcedure
     .input(z.object({ url: z.string().url() }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -175,7 +193,7 @@ export const agentSkillsRouter = router({
       }
     }),
 
-  importFromZip: skillProcedure
+  importFromZip: skillWriteProcedure
     .input(z.object({ zipFileId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -185,7 +203,7 @@ export const agentSkillsRouter = router({
       }
     }),
 
-  importFromMarket: skillProcedure
+  importFromMarket: skillWriteProcedure
     .input(z.object({ identifier: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -266,7 +284,7 @@ export const agentSkillsRouter = router({
 
   // ===== Update =====
 
-  update: skillProcedure.input(updateSkillSchema).mutation(async ({ ctx, input }) => {
+  update: skillWriteProcedure.input(updateSkillSchema).mutation(async ({ ctx, input }) => {
     const { id, content, manifest } = input;
     return ctx.skillModel.update(id, {
       content,

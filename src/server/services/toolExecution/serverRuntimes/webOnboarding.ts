@@ -13,7 +13,11 @@ export const webOnboardingRuntime: ServerRuntimeRegistration = {
     }
 
     const onboardingService = new OnboardingService(context.serverDB, context.userId);
-    const docService = new AgentDocumentsService(context.serverDB, context.userId);
+    const docService = new AgentDocumentsService(
+      context.serverDB,
+      context.userId,
+      context.workspaceId,
+    );
 
     return new WebOnboardingExecutionRuntime({
       finishOnboarding: () => onboardingService.finishOnboarding(),

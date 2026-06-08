@@ -89,6 +89,8 @@ export interface CreateNightlyReviewSourceHandlerDependencies {
    * @default builtin agent default
    */
   maxSteps?: number;
+  /** Workspace id, threaded so the enqueued run targets the correct workspace. */
+  workspaceId?: string;
 }
 
 interface NightlyReviewSpanLike {
@@ -342,6 +344,7 @@ export const createNightlyReviewSourceHandler = (
               prompt,
               slug: BUILTIN_AGENT_SLUGS.nightlyReview,
               userId: payload.userId,
+              workspaceId: deps.workspaceId,
             });
           },
           (span, result) => {

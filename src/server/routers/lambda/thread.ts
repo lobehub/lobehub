@@ -1,10 +1,12 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { insertThreadSchema } from '@/database/schemas';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type ThreadItem } from '@/types/topic/thread';
 import { createThreadSchema } from '@/types/topic/thread';
@@ -33,35 +35,40 @@ const ensureThreadCreated = <T extends { id: string } | undefined>(
   });
 };
 
-const threadProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const threadProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const wsId = ctx.workspaceId ?? undefined;
 
   return opts.next({
     ctx: {
-      messageModel: new MessageModel(ctx.serverDB, ctx.userId),
-      threadModel: new ThreadModel(ctx.serverDB, ctx.userId),
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
+      threadModel: new ThreadModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
 
 export const threadRouter = router({
-  createThread: threadProcedure.input(createThreadSchema).mutation(async ({ input, ctx }) => {
-    const thread = ensureThreadCreated(
-      await ctx.threadModel.create({
-        id: input.id,
-        metadata: input.metadata,
-        parentThreadId: input.parentThreadId,
-        sourceMessageId: input.sourceMessageId,
-        title: input.title,
-        topicId: input.topicId,
-        type: input.type,
-      }),
-      input.id,
-    );
+  createThread: threadProcedure
+    .use(withScopedPermission('topic:create'))
+    .input(createThreadSchema)
+    .mutation(async ({ input, ctx }) => {
+      const thread = ensureThreadCreated(
+        await ctx.threadModel.create({
+          id: input.id,
+          metadata: input.metadata,
+          parentThreadId: input.parentThreadId,
+          sourceMessageId: input.sourceMessageId,
+          title: input.title,
+          topicId: input.topicId,
+          type: input.type,
+        }),
+        input.id,
+      );
 
-    return thread.id;
-  }),
+      return thread.id;
+    }),
   createThreadWithMessage: threadProcedure
+    .use(withScopedPermission('topic:create'))
     .input(
       createThreadSchema.extend({
         message: z.any(),
@@ -95,17 +102,21 @@ export const threadRouter = router({
       return ctx.threadModel.queryByTopicId(input.topicId);
     }),
 
-  removeAllThreads: threadProcedure.mutation(async ({ ctx }) => {
-    return ctx.threadModel.deleteAll();
-  }),
+  removeAllThreads: threadProcedure
+    .use(withScopedPermission('topic:delete'))
+    .mutation(async ({ ctx }) => {
+      return ctx.threadModel.deleteAll();
+    }),
 
   removeThread: threadProcedure
+    .use(withScopedPermission('topic:delete'))
     .input(z.object({ id: z.string(), removeChildren: z.boolean().optional() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.threadModel.delete(input.id);
     }),
 
   updateThread: threadProcedure
+    .use(withScopedPermission('topic:update'))
     .input(
       z.object({
         id: z.string(),

@@ -1,25 +1,32 @@
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { NotificationModel } from '@/database/models/notification';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
-const notificationProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const notificationProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
   return opts.next({
-    ctx: { notificationModel: new NotificationModel(ctx.serverDB, ctx.userId) },
+    ctx: {
+      notificationModel: new NotificationModel(ctx.serverDB, ctx.userId),
+    },
   });
 });
+const notificationWriteProcedure = notificationProcedure.use(
+  withScopedPermission('message:create'),
+);
 
 export const notificationRouter = router({
-  archive: notificationProcedure
+  archive: notificationWriteProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.notificationModel.archive(input.id);
     }),
 
-  archiveAll: notificationProcedure.mutation(async ({ ctx }) => {
+  archiveAll: notificationWriteProcedure.mutation(async ({ ctx }) => {
     return ctx.notificationModel.archiveAll();
   }),
 
@@ -36,11 +43,11 @@ export const notificationRouter = router({
       return ctx.notificationModel.list(input);
     }),
 
-  markAllAsRead: notificationProcedure.mutation(async ({ ctx }) => {
+  markAllAsRead: notificationWriteProcedure.mutation(async ({ ctx }) => {
     return ctx.notificationModel.markAllAsRead();
   }),
 
-  markAsRead: notificationProcedure
+  markAsRead: notificationWriteProcedure
     .input(z.object({ ids: z.array(z.string()).min(1) }))
     .mutation(async ({ ctx, input }) => {
       return ctx.notificationModel.markAsRead(input.ids);

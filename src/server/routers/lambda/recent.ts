@@ -1,9 +1,10 @@
 import type { TaskStatus } from '@lobechat/types';
 import { z } from 'zod';
 
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { RecentModel } from '@/database/models/recent';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import type { ChatTopicMetadata } from '@/types/topic';
 
@@ -20,11 +21,11 @@ export interface RecentItem {
   updatedAt: Date;
 }
 
-const recentProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const recentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   return opts.next({
     ctx: {
-      recentModel: new RecentModel(ctx.serverDB, ctx.userId),
+      recentModel: new RecentModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
     },
   });
 });

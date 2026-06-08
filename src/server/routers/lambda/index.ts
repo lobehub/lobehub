@@ -9,6 +9,13 @@ import { storageOverageRouter } from '@/business/server/lambda-routers/storageOv
 import { subscriptionRouter } from '@/business/server/lambda-routers/subscription';
 import { taskTemplateRouter } from '@/business/server/lambda-routers/taskTemplate';
 import { topUpRouter } from '@/business/server/lambda-routers/topUp';
+import { workspaceRouter } from '@/business/server/lambda-routers/workspace';
+import { workspaceAuditLogRouter } from '@/business/server/lambda-routers/workspaceAuditLog';
+import { workspaceCreditsRouter } from '@/business/server/lambda-routers/workspaceCredits';
+import { workspaceCredsRouter } from '@/business/server/lambda-routers/workspaceCreds';
+import { workspaceDataRouter } from '@/business/server/lambda-routers/workspaceData';
+import { workspaceMemberRouter } from '@/business/server/lambda-routers/workspaceMember';
+import { workspaceUsageRouter } from '@/business/server/lambda-routers/workspaceUsage';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 
 import { agentRouter } from './agent';
@@ -136,6 +143,13 @@ export const lambdaRouter = router({
   verify: verifyRouter,
   video: videoRouter,
   webBrowsing: webBrowsingRouter,
+  workspace: workspaceRouter,
+  workspaceAuditLog: workspaceAuditLogRouter,
+  workspaceCreds: workspaceCredsRouter,
+  workspaceCredits: workspaceCreditsRouter,
+  workspaceData: workspaceDataRouter,
+  workspaceMember: workspaceMemberRouter,
+  workspaceUsage: workspaceUsageRouter,
   accountDeletion: accountDeletionRouter,
   pageShare: pageShareRouter,
   referral: referralRouter,

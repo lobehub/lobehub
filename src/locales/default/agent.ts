@@ -303,4 +303,22 @@ export default {
   'channel.statusFailed': 'Failed',
   'channel.statusQueued': 'Queued',
   'channel.statusStarting': 'Starting',
+
+  'transfer.title': 'Transfer',
+  'transfer.copyTo': 'Copy To',
+  'transfer.desc': 'Transfer this agent to another workspace or your personal account.',
+  'transfer.button': 'Transfer',
+  'transfer.selectTarget': 'Transfer Agent To',
+  'transfer.searchWorkspace': 'Search workspaces...',
+  'transfer.personalAccount': 'Personal Account',
+  'transfer.confirm.title': 'Transfer Agent',
+  'transfer.confirm.desc':
+    'This will move the agent and all associated data (topics, messages, files, etc.) to the target workspace.',
+  'transfer.confirm.warning': "Some features don't transfer:",
+  'transfer.confirm.plugins': 'Custom plugins may not be available in the target workspace',
+  'transfer.confirm.chatGroups': 'Multi-agent group associations will be removed',
+  'transfer.confirm.botChannels': 'Bot channel connections may need to be refreshed after transfer',
+  'transfer.success': 'Agent transferred successfully',
+  'transfer.transferTo': 'Transfer To',
+  'transfer.error': 'Failed to transfer agent',
 } as const;

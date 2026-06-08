@@ -58,6 +58,7 @@ vi.mock('@/server/services/bot/platforms', async (importOriginal) => {
 });
 
 const { AgentBridgeService } = await import('../AgentBridgeService');
+const { AiAgentService } = await import('@/server/services/aiAgent');
 
 const FAKE_DB = {} as any;
 const USER_ID = 'user-123';
@@ -141,6 +142,34 @@ describe('AgentBridgeService', () => {
         hooks: expect.arrayContaining([
           expect.objectContaining({ id: 'bot-step-progress', type: 'afterStep' }),
           expect.objectContaining({ id: 'bot-completion', type: 'onComplete' }),
+        ]),
+      }),
+    );
+  });
+
+  it('constructs AiAgentService with workspaceId for workspace bot runs', async () => {
+    const service = new AgentBridgeService(FAKE_DB, USER_ID, 'workspace-1');
+    const thread = createThread();
+    const message = createMessage();
+    const client = createClient();
+
+    await service.handleMention(thread, message, {
+      agentId: 'agent-1',
+      botContext: { platformThreadId: THREAD_ID } as any,
+      client,
+    });
+
+    expect(AiAgentService).toHaveBeenCalledWith(FAKE_DB, USER_ID, {
+      workspaceId: 'workspace-1',
+    });
+    expect(mockExecAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hooks: expect.arrayContaining([
+          expect.objectContaining({
+            webhook: expect.objectContaining({
+              body: expect.objectContaining({ workspaceId: 'workspace-1' }),
+            }),
+          }),
         ]),
       }),
     );

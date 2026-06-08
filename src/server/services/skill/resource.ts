@@ -31,8 +31,8 @@ function isTextMimeType(mimeType: string): boolean {
 export class SkillResourceService {
   private fileService: FileService;
 
-  constructor(db: LobeChatDatabase, userId: string) {
-    this.fileService = new FileService(db, userId);
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.fileService = new FileService(db, userId, workspaceId);
   }
 
   /**

@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
 
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
 import { type ToolCallContent } from '@/libs/mcp';
@@ -50,7 +51,7 @@ const throwSandboxAuthError = () => {
 };
 
 // ============================== Common Procedure ==============================
-const marketToolProcedure = authedProcedure
+const marketToolProcedure = wsCompatProcedure
   .use(serverDatabase)
   .use(telemetry)
   .use(marketUserInfo)
@@ -58,18 +59,23 @@ const marketToolProcedure = authedProcedure
     const { UserModel } = await import('@/database/models/user');
     const userModel = new UserModel(ctx.serverDB, ctx.userId);
 
+    // In a workspace context, sandbox runtime calls are attributed to the
+    // workspace's Market organization via the workspaceId carried in the trust
+    // token (`ctx.marketUserInfo.workspaceId`, set by the marketUserInfo
+    // middleware). Falls back to the personal account when there's no workspace.
     return next({
       ctx: {
         discoverService: new DiscoverService({
           accessToken: ctx.marketAccessToken,
           userInfo: ctx.marketUserInfo,
         }),
-        fileService: new FileService(ctx.serverDB, ctx.userId),
+        fileService: new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
         marketService: new MarketService({
           accessToken: ctx.marketAccessToken,
           userInfo: ctx.marketUserInfo,
         }),
         userModel,
+        workspaceId: ctx.workspaceId,
       },
     });
   });
@@ -165,7 +171,13 @@ const execInSandboxHandler = async ({
   input,
   ctx,
 }: {
-  ctx: { fileService: FileService; marketService: MarketService; serverDB: any; userId: string };
+  ctx: {
+    fileService: FileService;
+    marketService: MarketService;
+    serverDB: any;
+    userId: string;
+    workspaceId?: string | null;
+  };
   input: ExecInSandboxInput;
 }): Promise<CallToolResult> => {
   const { toolName, params, topicId } = input;
@@ -198,8 +210,9 @@ const execInSandboxHandler = async ({
 
     // For execScript tool, look up skill zipUrls from activatedSkills
     if (toolName === 'execScript' && enhancedParams.activatedSkills?.length) {
-      const agentSkillModel = new AgentSkillModel(ctx.serverDB, userId);
-      const fileModel = new FileModel(ctx.serverDB, userId);
+      const wsId = ctx.workspaceId ?? undefined;
+      const agentSkillModel = new AgentSkillModel(ctx.serverDB, userId, wsId);
+      const fileModel = new FileModel(ctx.serverDB, userId, wsId);
 
       // Resolve zipUrls for all activated skills
       const skillZipUrls: Record<string, string> = {};

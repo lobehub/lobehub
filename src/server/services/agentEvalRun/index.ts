@@ -86,18 +86,21 @@ export class AgentEvalRunService {
   private readonly topicModel: TopicModel;
   private readonly agentService: AgentService;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  private workspaceId?: string;
+
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
-    this.runModel = new AgentEvalRunModel(db, userId);
-    this.benchmarkModel = new AgentEvalBenchmarkModel(db, userId);
-    this.datasetModel = new AgentEvalDatasetModel(db, userId);
-    this.runTopicModel = new AgentEvalRunTopicModel(db, userId);
-    this.testCaseModel = new AgentEvalTestCaseModel(db, userId);
-    this.messageModel = new MessageModel(db, userId);
-    this.threadModel = new ThreadModel(db, userId);
-    this.topicModel = new TopicModel(db, userId);
-    this.agentService = new AgentService(db, userId);
+    this.workspaceId = workspaceId;
+    this.runModel = new AgentEvalRunModel(db, userId, workspaceId);
+    this.benchmarkModel = new AgentEvalBenchmarkModel(db, userId, workspaceId);
+    this.datasetModel = new AgentEvalDatasetModel(db, userId, workspaceId);
+    this.runTopicModel = new AgentEvalRunTopicModel(db, userId, workspaceId);
+    this.testCaseModel = new AgentEvalTestCaseModel(db, userId, workspaceId);
+    this.messageModel = new MessageModel(db, userId, workspaceId);
+    this.threadModel = new ThreadModel(db, userId, workspaceId);
+    this.topicModel = new TopicModel(db, userId, workspaceId);
+    this.agentService = new AgentService(db, userId, workspaceId);
   }
 
   async createRun(params: {
@@ -531,7 +534,9 @@ export class AgentEvalRunService {
 
     await this.runModel.update(runId, { startedAt: now, status: 'running' });
 
-    const aiAgentService = new AiAgentService(this.db, this.userId);
+    const aiAgentService = new AiAgentService(this.db, this.userId, {
+      workspaceId: this.workspaceId,
+    });
     const webhookUrl = '/api/workflows/agent-eval-run/on-trajectory-complete';
     const userId = this.userId;
     const db = this.db;
@@ -546,7 +551,7 @@ export class AgentEvalRunService {
           {
             handler: async (event) => {
               // Local mode: directly record completion
-              const service = new AgentEvalRunService(db, userId);
+              const service = new AgentEvalRunService(db, userId, this.workspaceId);
               await service.recordTrajectoryCompletion({
                 runId,
                 status: event.status || event.reason || 'done',
@@ -673,7 +678,9 @@ export class AgentEvalRunService {
 
     await this.runModel.update(runId, { startedAt: now, status: 'running' });
 
-    const aiAgentService = new AiAgentService(this.db, this.userId);
+    const aiAgentService = new AiAgentService(this.db, this.userId, {
+      workspaceId: this.workspaceId,
+    });
     const webhookUrl = '/api/workflows/agent-eval-run/on-thread-complete';
     const userId = this.userId;
     const db = this.db;
@@ -688,7 +695,7 @@ export class AgentEvalRunService {
           {
             handler: async (event) => {
               // Local mode: directly record thread completion
-              const service = new AgentEvalRunService(db, userId);
+              const service = new AgentEvalRunService(db, userId, this.workspaceId);
               await service.recordThreadCompletion({
                 runId,
                 status: event.status || event.reason || 'done',
@@ -955,7 +962,9 @@ export class AgentEvalRunService {
     // Update status from 'pending' to 'running'
     await this.runTopicModel.updateByRunAndTopic(runId, topicId, { status: 'running' });
 
-    const aiAgentService = new AiAgentService(this.db, this.userId);
+    const aiAgentService = new AiAgentService(this.db, this.userId, {
+      workspaceId: this.workspaceId,
+    });
     const webhookUrl = '/api/workflows/agent-eval-run/on-trajectory-complete';
     const userId = this.userId;
     const db = this.db;
@@ -970,7 +979,7 @@ export class AgentEvalRunService {
           {
             handler: async (event) => {
               // Local mode: directly record completion
-              const service = new AgentEvalRunService(db, userId);
+              const service = new AgentEvalRunService(db, userId, this.workspaceId);
               await service.recordTrajectoryCompletion({
                 runId,
                 status: event.status || event.reason || 'done',
@@ -1112,7 +1121,9 @@ export class AgentEvalRunService {
   }) {
     const { envPrompt, run, runId, testCaseId, threadId, topicId } = params;
 
-    const aiAgentService = new AiAgentService(this.db, this.userId);
+    const aiAgentService = new AiAgentService(this.db, this.userId, {
+      workspaceId: this.workspaceId,
+    });
     const webhookUrl = '/api/workflows/agent-eval-run/on-thread-complete';
     const userId = this.userId;
     const db = this.db;
@@ -1127,7 +1138,7 @@ export class AgentEvalRunService {
           {
             handler: async (event) => {
               // Local mode: directly record thread completion
-              const service = new AgentEvalRunService(db, userId);
+              const service = new AgentEvalRunService(db, userId, this.workspaceId);
               await service.recordThreadCompletion({
                 runId,
                 status: event.status || event.reason || 'done',

@@ -16,15 +16,21 @@ import {
   knowledgeBaseFiles,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export class FileModel {
   private readonly userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files);
 
   /**
    * Get file by ID without userId filter (public access)
@@ -66,17 +72,26 @@ export class FileModel {
 
       const result = (await tx
         .insert(files)
-        .values({ ...params, userId: this.userId })
+        .values(
+          buildWorkspacePayload(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            { ...params },
+          ),
+        )
         .returning()) as FileItem[];
 
       const item = result[0]!;
 
       if (params.knowledgeBaseId) {
-        await tx.insert(knowledgeBaseFiles).values({
-          fileId: item.id,
-          knowledgeBaseId: params.knowledgeBaseId,
-          userId: this.userId,
-        });
+        await tx.insert(knowledgeBaseFiles).values(
+          buildWorkspacePayload(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            {
+              fileId: item.id,
+              knowledgeBaseId: params.knowledgeBaseId,
+            },
+          ),
+        );
       }
 
       return item;
@@ -134,7 +149,7 @@ export class FileModel {
         .where(
           and(
             eq(documents.fileId, id),
-            eq(documents.userId, this.userId),
+            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
             eq(documents.sourceType, 'file'),
           ),
         );
@@ -150,7 +165,7 @@ export class FileModel {
       }
 
       // 4. Delete file record
-      await tx.delete(files).where(and(eq(files.id, id), eq(files.userId, this.userId)));
+      await tx.delete(files).where(and(eq(files.id, id), this.ownership()));
 
       if (!fileHash) return;
 
@@ -184,7 +199,7 @@ export class FileModel {
         totalSize: sum(files.size),
       })
       .from(files)
-      .where(eq(files.userId, this.userId));
+      .where(this.ownership());
 
     return parseInt(result[0].totalSize!) || 0;
   };
@@ -195,7 +210,7 @@ export class FileModel {
     return await this.db.transaction(async (trx) => {
       // 1. First get the file list to return the deleted files
       const fileList = await trx.query.files.findMany({
-        where: and(inArray(files.id, ids), eq(files.userId, this.userId)),
+        where: and(inArray(files.id, ids), this.ownership()),
       });
 
       if (fileList.length === 0) return [];
@@ -213,7 +228,7 @@ export class FileModel {
         .where(
           and(
             inArray(documents.fileId, ids),
-            eq(documents.userId, this.userId),
+            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
             eq(documents.sourceType, 'file'),
           ),
         );
@@ -227,7 +242,7 @@ export class FileModel {
       }
 
       // 5. Delete file records
-      await trx.delete(files).where(and(inArray(files.id, ids), eq(files.userId, this.userId)));
+      await trx.delete(files).where(and(inArray(files.id, ids), this.ownership()));
 
       // If global files don't need to be deleted, no storage object should be removed.
       if (!removeGlobalFile || hashList.length === 0) return [];
@@ -259,7 +274,7 @@ export class FileModel {
   };
 
   clear = async () => {
-    return this.db.delete(files).where(eq(files.userId, this.userId));
+    return this.db.delete(files).where(this.ownership());
   };
 
   query = async ({
@@ -271,10 +286,7 @@ export class FileModel {
     showFilesInKnowledgeBase,
   }: QueryFileListParams = {}) => {
     // 1. Build where clause
-    let whereClause = and(
-      q ? ilike(files.name, `%${q}%`) : undefined,
-      eq(files.userId, this.userId),
-    );
+    let whereClause = and(q ? ilike(files.name, `%${q}%`) : undefined, this.ownership());
     if (category && category !== FilesTabs.All && category !== FilesTabs.Home) {
       const fileTypePrefix = this.getFileTypePrefix(category as FilesTabs);
       if (Array.isArray(fileTypePrefix)) {
@@ -317,6 +329,7 @@ export class FileModel {
         size: files.size,
         updatedAt: files.updatedAt,
         url: files.url,
+        userId: files.userId,
       })
       .from(files);
 
@@ -349,14 +362,14 @@ export class FileModel {
 
   findByIds = async (ids: string[]) => {
     return this.db.query.files.findMany({
-      where: and(inArray(files.id, ids), eq(files.userId, this.userId)),
+      where: and(inArray(files.id, ids), this.ownership()),
     });
   };
 
   findById = async (id: string, trx?: Transaction) => {
     const database = trx || this.db;
     return database.query.files.findFirst({
-      where: and(eq(files.id, id), eq(files.userId, this.userId)),
+      where: and(eq(files.id, id), this.ownership()),
     });
   };
 
@@ -375,7 +388,7 @@ export class FileModel {
     this.db
       .update(files)
       .set({ ...value, updatedAt: new Date() })
-      .where(and(eq(files.id, id), eq(files.userId, this.userId)));
+      .where(and(eq(files.id, id), this.ownership()));
 
   /**
    * get the corresponding file type prefix according to FilesTabs
@@ -405,10 +418,7 @@ export class FileModel {
 
   findByNames = async (fileNames: string[]) =>
     this.db.query.files.findMany({
-      where: and(
-        or(...fileNames.map((name) => like(files.name, `${name}%`))),
-        eq(files.userId, this.userId),
-      ),
+      where: and(or(...fileNames.map((name) => like(files.name, `${name}%`))), this.ownership()),
     });
 
   // Abstract common method for deleting chunks
@@ -459,5 +469,82 @@ export class FileModel {
     await trx.delete(fileChunks).where(inArray(fileChunks.fileId, fileIds));
 
     return chunkIds;
+  };
+
+  // ========== Transfer / Copy ==========
+
+  /**
+   * Transfer a single file (not a folder — folders live in `documents` and are
+   * handled by `DocumentModel.transferTo`, which already cascades into `files`
+   * via `parentId`). Updates ownership + knowledgeBaseFiles linkage so the
+   * file remains visible in the target scope's resource manager.
+   */
+  transferTo = async (
+    fileId: string,
+    targetWorkspaceId: string | null,
+    targetUserId: string,
+  ): Promise<{ fileId: string }> => {
+    return this.db.transaction(async (trx) => {
+      const file = await trx.query.files.findFirst({
+        where: and(eq(files.id, fileId), this.ownership()),
+      });
+      if (!file) throw new Error('File not found');
+
+      const ownershipUpdate = { userId: targetUserId, workspaceId: targetWorkspaceId };
+
+      await trx
+        .update(files)
+        .set({ ...ownershipUpdate, updatedAt: new Date() })
+        .where(eq(files.id, fileId));
+
+      // Knowledge base links are scoped per-user; keep them pointed at the new owner.
+      await trx
+        .update(knowledgeBaseFiles)
+        .set({ userId: targetUserId })
+        .where(eq(knowledgeBaseFiles.fileId, fileId));
+
+      return { fileId };
+    });
+  };
+
+  /**
+   * Clone a file record into another workspace / personal scope. The physical
+   * blob is shared via `fileHash` → `globalFiles`, so we only copy the row. AI
+   * index references (`chunkTaskId` / `embeddingTaskId`) are reset; the new
+   * scope is expected to re-index lazily.
+   */
+  copyToWorkspace = async (
+    fileId: string,
+    targetWorkspaceId: string | null,
+    targetUserId: string,
+  ): Promise<{ fileId: string }> => {
+    return this.db.transaction(async (trx) => {
+      const file = await trx.query.files.findFirst({
+        where: and(eq(files.id, fileId), this.ownership()),
+      });
+      if (!file) throw new Error('File not found');
+
+      const inserted = (await trx
+        .insert(files)
+        .values({
+          chunkTaskId: null,
+          clientId: null,
+          embeddingTaskId: null,
+          fileHash: file.fileHash,
+          fileType: file.fileType,
+          metadata: { ...(file.metadata as Record<string, unknown>), duplicatedFrom: file.id },
+          name: file.name,
+          // parentId would dangle in target scope; the user can drag it under a folder later.
+          parentId: null,
+          size: file.size,
+          source: file.source,
+          url: file.url,
+          userId: targetUserId,
+          workspaceId: targetWorkspaceId,
+        } as NewFile)
+        .returning({ id: files.id })) as { id: string }[];
+
+      return { fileId: inserted[0]!.id };
+    });
   };
 }

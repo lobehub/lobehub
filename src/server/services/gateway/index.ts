@@ -262,8 +262,12 @@ export class GatewayService {
       const definition = platformRegistry.getPlatform(platform);
       const serverDB = await getServerDB();
       const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-      const model = new AgentBotProviderModel(serverDB, userId, gateKeeper);
-      const provider = await model.findEnabledByApplicationId(platform, applicationId);
+      const provider = await AgentBotProviderModel.findEnabledByPlatformAndAppId(
+        serverDB,
+        platform,
+        applicationId,
+        gateKeeper,
+      );
 
       const connectionMode = resolveConnectionMode(definition, provider?.settings);
 
@@ -287,7 +291,7 @@ export class GatewayService {
       }
 
       const manager = createGatewayManager({ definitions: platformRegistry.listPlatforms() });
-      await manager.startClient(platform, applicationId, userId);
+      await manager.startClient(platform, applicationId);
       log('Started client %s:%s (direct)', platform, applicationId);
       return 'started';
     }
@@ -299,7 +303,7 @@ export class GatewayService {
       manager = getGatewayManager();
     }
 
-    await manager!.startClient(platform, applicationId, userId);
+    await manager!.startClient(platform, applicationId);
     log('Started client %s:%s', platform, applicationId);
     return 'started';
   }
@@ -310,13 +314,12 @@ export class GatewayService {
    * disabled; webhook-mode providers are skipped (they have no persistent
    * gateway connection to query).
    */
-  async refreshBotRuntimeStatusesByAgent(agentId: string, userId: string): Promise<void> {
+  async refreshBotRuntimeStatusesByAgent(agentId: string): Promise<void> {
     if (!this.useMessageGateway) return;
 
     const serverDB = await getServerDB();
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-    const model = new AgentBotProviderModel(serverDB, userId, gateKeeper);
-    const providers = await model.findByAgentId(agentId);
+    const providers = await AgentBotProviderModel.findByAgentId(serverDB, agentId, gateKeeper);
     const client = getMessageGatewayClient();
 
     await Promise.all(
@@ -355,7 +358,6 @@ export class GatewayService {
   async refreshBotRuntimeStatus(
     platform: string,
     applicationId: string,
-    userId: string,
   ): Promise<BotRuntimeStatusSnapshot> {
     const cached = await getBotRuntimeStatus(platform, applicationId);
 
@@ -363,8 +365,12 @@ export class GatewayService {
 
     const serverDB = await getServerDB();
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-    const model = new AgentBotProviderModel(serverDB, userId, gateKeeper);
-    const provider = await model.findEnabledByApplicationId(platform, applicationId);
+    const provider = await AgentBotProviderModel.findEnabledByPlatformAndAppId(
+      serverDB,
+      platform,
+      applicationId,
+      gateKeeper,
+    );
 
     if (!provider) return cached;
 
@@ -406,8 +412,12 @@ export class GatewayService {
       if (userId) {
         const serverDB = await getServerDB();
         const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-        const model = new AgentBotProviderModel(serverDB, userId, gateKeeper);
-        const provider = await model.findEnabledByApplicationId(platform, applicationId);
+        const provider = await AgentBotProviderModel.findEnabledByPlatformAndAppId(
+          serverDB,
+          platform,
+          applicationId,
+          gateKeeper,
+        );
         connectionMode = resolveConnectionMode(definition, provider?.settings);
       } else {
         connectionMode = resolveConnectionMode(definition, undefined);
@@ -549,8 +559,12 @@ export class GatewayService {
 
     const serverDB = await getServerDB();
     const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-    const model = new AgentBotProviderModel(serverDB, userId, gateKeeper);
-    const provider = await model.findEnabledByApplicationId(platform, applicationId);
+    const provider = await AgentBotProviderModel.findEnabledByPlatformAndAppId(
+      serverDB,
+      platform,
+      applicationId,
+      gateKeeper,
+    );
 
     if (!provider) {
       log('No enabled provider found for %s:%s', platform, applicationId);
@@ -565,7 +579,7 @@ export class GatewayService {
     // perform its own initialization (e.g. Telegram calls setWebhook).
     if (connectionMode === 'webhook') {
       const manager = createGatewayManager({ definitions: platformRegistry.listPlatforms() });
-      await manager.startClient(platform, applicationId, userId);
+      await manager.startClient(platform, applicationId);
       log('Started webhook-mode client locally %s:%s', platform, applicationId);
       return 'started';
     }

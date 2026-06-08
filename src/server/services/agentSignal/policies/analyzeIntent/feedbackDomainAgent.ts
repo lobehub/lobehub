@@ -157,14 +157,17 @@ export class FeedbackDomainJudgeAgentService {
   private readonly db: LobeChatDatabase;
   private readonly modelConfig: FeedbackDomainJudgeAgentModelConfig;
   private readonly userId: string;
+  private readonly workspaceId?: string;
 
   constructor(
     db: LobeChatDatabase,
     userId: string,
     modelConfig: Partial<FeedbackDomainJudgeAgentModelConfig> = {},
+    workspaceId?: string,
   ) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
     this.modelConfig = {
       model: modelConfig.model ?? DEFAULT_MINI_SYSTEM_AGENT_ITEM.model,
       provider: modelConfig.provider ?? DEFAULT_MINI_SYSTEM_AGENT_ITEM.provider,
@@ -190,6 +193,7 @@ export class FeedbackDomainJudgeAgentService {
       this.db,
       this.userId,
       this.modelConfig.provider,
+      this.workspaceId,
     );
 
     log('judgeDomains model=%s provider=%s', this.modelConfig.model, this.modelConfig.provider);

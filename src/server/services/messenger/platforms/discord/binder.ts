@@ -12,6 +12,7 @@ import type {
   AgentPickerEntry,
   CallbackAcknowledgement,
   InboundCallbackAction,
+  MessengerPickerAction,
   MessengerPlatformBinder,
   UnlinkedMessageContext,
 } from '../../types';
@@ -28,9 +29,10 @@ export const DISCORD_ACTION_PREFIX = 'messenger:';
 
 export const buildDiscordSwitchButtons = (
   entries: AgentPickerEntry[],
+  action: MessengerPickerAction = 'switch',
 ): Array<{ customId: string; isPrimary: boolean; label: string }> =>
   entries.map((entry) => ({
-    customId: `${DISCORD_ACTION_PREFIX}switch:${entry.id}`,
+    customId: `${DISCORD_ACTION_PREFIX}${action}:${entry.id}`,
     isPrimary: entry.isActive,
     // Prepend a check so the active option is recognizable on clients that
     // ignore the primary-style highlight (most Discord clients do honor it,
@@ -229,6 +231,7 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
     chatId: string,
     params: {
       entries: AgentPickerEntry[];
+      action?: MessengerPickerAction;
       ephemeralTo?: string;
       interaction?: { applicationId: string; token: string };
       text: string;
@@ -241,7 +244,7 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
     }
     try {
       const api = new DiscordApi(config.botToken);
-      const buttons = buildDiscordSwitchButtons(params.entries);
+      const buttons = buildDiscordSwitchButtons(params.entries, params.action);
       if (params.interaction) {
         await api.editInteractionOriginalWithButtons(
           params.interaction.applicationId,
@@ -266,7 +269,7 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
   async updateAgentPicker(
     chatId: string,
     messageId: string,
-    params: { entries: AgentPickerEntry[]; text: string },
+    params: { action?: MessengerPickerAction; entries: AgentPickerEntry[]; text: string },
   ): Promise<void> {
     const config = await getMessengerDiscordConfig();
     if (!config) return;
@@ -276,7 +279,7 @@ export class MessengerDiscordBinder implements MessengerPlatformBinder {
         chatId,
         messageId,
         params.text,
-        buildDiscordSwitchButtons(params.entries),
+        buildDiscordSwitchButtons(params.entries, params.action),
       );
     } catch (error) {
       log('updateAgentPicker: failed for chat=%s msg=%s: %O', chatId, messageId, error);

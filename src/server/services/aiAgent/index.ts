@@ -272,29 +272,34 @@ export class AiAgentService {
   private readonly marketService: MarketService;
   private readonly klavisService: KlavisService;
 
+  private readonly workspaceId?: string;
+
   constructor(
     db: LobeChatDatabase,
     userId: string,
-    options?: { runtimeOptions?: AgentRuntimeServiceOptions },
+    options?: { runtimeOptions?: AgentRuntimeServiceOptions; workspaceId?: string },
   ) {
     this.userId = userId;
     this.db = db;
-    this.agentDocumentsService = new AgentDocumentsService(db, userId);
-    this.agentModel = new AgentModel(db, userId);
-    this.agentService = new AgentService(db, userId);
-    this.messageModel = new MessageModel(db, userId);
-    this.connectorModel = new ConnectorModel(db, userId);
-    this.connectorToolModel = new ConnectorToolModel(db, userId);
-    this.pluginModel = new PluginModel(db, userId);
-    this.taskModel = new TaskModel(db, userId);
-    this.threadModel = new ThreadModel(db, userId);
-    this.topicModel = new TopicModel(db, userId);
+    this.workspaceId = options?.workspaceId;
+    const wsId = this.workspaceId;
+    this.agentDocumentsService = new AgentDocumentsService(db, userId, wsId);
+    this.agentModel = new AgentModel(db, userId, wsId);
+    this.agentService = new AgentService(db, userId, wsId);
+    this.messageModel = new MessageModel(db, userId, wsId);
+    this.connectorModel = new ConnectorModel(db, userId, wsId);
+    this.connectorToolModel = new ConnectorToolModel(db, userId, wsId);
+    this.pluginModel = new PluginModel(db, userId, wsId);
+    this.taskModel = new TaskModel(db, userId, wsId);
+    this.threadModel = new ThreadModel(db, userId, wsId);
+    this.topicModel = new TopicModel(db, userId, wsId);
     this.agentRuntimeService = new AgentRuntimeService(db, userId, {
       ...options?.runtimeOptions,
       execSubAgentTask: this.execSubAgentTask.bind(this),
+      workspaceId: wsId,
     });
     this.marketService = new MarketService({ userInfo: { userId } });
-    this.klavisService = new KlavisService({ db, userId });
+    this.klavisService = new KlavisService({ db, userId, workspaceId: wsId });
   }
 
   private async resolveOperationTaskId(
@@ -822,7 +827,9 @@ export class AiAgentService {
       assistantMessageRef.current = assistantMsg.id;
 
       // Read resume session id for next-turn continuity.
-      const heteroService = new HeterogeneousAgentService(this.db, this.userId);
+      const heteroService = new HeterogeneousAgentService(this.db, this.userId, {
+        workspaceId: this.workspaceId,
+      });
       const resumeSessionId = await heteroService.getHeterogeneousResumeSessionId(topicId);
       // Sign an operation-scoped JWT so the CLI can authenticate against
       // heteroIngest / heteroFinish without full user credentials.
@@ -1233,7 +1240,7 @@ export class AiAgentService {
     const { loadModels } = await import('@/business/client/model-bank/loadModels');
     const builtinModels = await loadModels();
     // Resolve file URLs before visual tool activation checks and context build.
-    const fileService = new FileService(this.db, this.userId);
+    const fileService = new FileService(this.db, this.userId, this.workspaceId);
     const postProcessUrl = (path: string | null, file: { id?: string | null }) =>
       fileService.getFileAccessUrl({ id: file.id, url: path });
     let historyMessagesCache: any[] | undefined;
@@ -1370,7 +1377,7 @@ export class AiAgentService {
               : [];
 
           if (connectorEntries.length > 0) {
-            const toolModel = new ConnectorToolModel(this.db, this.userId);
+            const toolModel = new ConnectorToolModel(this.db, this.userId, this.workspaceId);
             const connectorToolsMap = new Map<string, Map<string, string>>();
             await Promise.all(
               connectorEntries.map(async (c) => {
@@ -1455,7 +1462,7 @@ export class AiAgentService {
       const externalFileTypes = files?.map((file) => file.mimeType ?? '') ?? [];
       let attachedFileTypes: string[] = [];
       if (attachedFileIds && attachedFileIds.length > 0) {
-        const fileModel = new FileModel(this.db, this.userId);
+        const fileModel = new FileModel(this.db, this.userId, this.workspaceId);
         const fileRecords = await fileModel.findByIds(Array.from(new Set(attachedFileIds)));
         attachedFileTypes = fileRecords.map((file) => file.fileType || '');
       }
@@ -1974,7 +1981,7 @@ export class AiAgentService {
       imageList = [];
       videoList = [];
       fileList = [];
-      const documentService = new DocumentService(this.db, this.userId);
+      const documentService = new DocumentService(this.db, this.userId, this.workspaceId);
 
       for (const file of files) {
         await throwIfExecutionAborted('file upload');
@@ -2061,6 +2068,7 @@ export class AiAgentService {
         db: this.db,
         fileIds: attachedFileIds,
         userId: this.userId,
+        workspaceId: this.workspaceId,
       });
 
       warnings.push(...resolved.warnings);
@@ -2329,7 +2337,7 @@ export class AiAgentService {
         identifier: s.identifier,
         name: s.name,
       }));
-      const skillModel = new AgentSkillModel(this.db, this.userId);
+      const skillModel = new AgentSkillModel(this.db, this.userId, this.workspaceId);
       const { data: dbSkills } = await skillModel.findAll();
       const dbMetas = dbSkills.map((s) => ({
         description: s.description ?? '',
@@ -2493,6 +2501,7 @@ export class AiAgentService {
         userId: this.userId,
         userInterventionConfig,
         userMemory,
+        workspaceId: this.workspaceId,
       });
 
       log('execAgent: created operation %s (autoStarted: %s)', operationId, result.autoStarted);
@@ -2733,9 +2742,11 @@ export class AiAgentService {
     let inheritedTrigger: string | undefined;
     if (parentOperationId) {
       try {
-        const parentOp = await new AgentOperationModel(this.db, this.userId).findById(
-          parentOperationId,
-        );
+        const parentOp = await new AgentOperationModel(
+          this.db,
+          this.userId,
+          this.workspaceId,
+        ).findById(parentOperationId);
         inheritedTrigger = parentOp?.trigger ?? undefined;
       } catch (error) {
         log('execSubAgentTask: failed to read parent operation trigger: %O', error);

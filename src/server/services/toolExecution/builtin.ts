@@ -84,6 +84,7 @@ export class BuiltinToolsExecutor implements IToolExecutor {
         args,
         identifier,
         toolName: apiName,
+        workspaceId: context.workspaceId,
       });
     }
 

@@ -4,23 +4,39 @@ import {
   DERIVED_DOCUMENT_SOURCE_TYPE,
 } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
+import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { businessFileUploadCheck } from '@/business/server/lambda-routers/file';
+import {
+  businessFileTransferStorageCheck,
+  businessFileUploadCheck,
+} from '@/business/server/lambda-routers/file';
 import { checkFileStorageUsage } from '@/business/server/trpc-middlewares/lambda';
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { serverDBEnv } from '@/config/db';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { ChunkModel } from '@/database/models/chunk';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeRepo } from '@/database/repositories/knowledge';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { workspaceMembers } from '@/database/schemas';
+import { appEnv } from '@/envs/app';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { AsyncTaskStatus, AsyncTaskType, type IAsyncTaskError } from '@/types/asyncTask';
 import type { FileListItem, KnowledgeItemStatus } from '@/types/files';
 import { QueryFileListSchema, UploadFileSchema } from '@/types/files';
+import { TransferErrorCode } from '@/types/transferError';
+
+/**
+ * Generate file proxy URL
+ * Returns a unified proxy URL format: ${APP_URL}/f/:id
+ */
+const getFileProxyUrl = (fileId: string): string => `${appEnv.APP_URL}/f/${fileId}`;
+const fileTransferEntityTypeSchema = z.enum(['document', 'file', 'folder']);
 
 const filterKnowledgeItems = <
   T extends {
@@ -119,24 +135,26 @@ const isStoredObjectAvailable = async (fileService: FileService, url: string): P
   }
 };
 
-const fileProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const fileProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const wsId = ctx.workspaceId ?? undefined;
 
   return opts.next({
     ctx: {
-      asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
-      chunkModel: new ChunkModel(ctx.serverDB, ctx.userId),
-      documentModel: new DocumentModel(ctx.serverDB, ctx.userId),
-      documentService: new DocumentService(ctx.serverDB, ctx.userId),
-      fileModel: new FileModel(ctx.serverDB, ctx.userId),
-      fileService: new FileService(ctx.serverDB, ctx.userId),
-      knowledgeRepo: new KnowledgeRepo(ctx.serverDB, ctx.userId),
+      asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId, wsId),
+      chunkModel: new ChunkModel(ctx.serverDB, ctx.userId, wsId),
+      documentModel: new DocumentModel(ctx.serverDB, ctx.userId, wsId),
+      documentService: new DocumentService(ctx.serverDB, ctx.userId, wsId),
+      fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
+      fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
+      knowledgeRepo: new KnowledgeRepo(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
 
 export const fileRouter = router({
   checkFileHash: fileProcedure
+    .use(withScopedPermission('file:upload'))
     .use(checkFileStorageUsage)
     .input(z.object({ hash: z.string() }))
     .mutation(async ({ ctx, input }) => {
@@ -150,6 +168,7 @@ export const fileRouter = router({
     }),
 
   createFile: fileProcedure
+    .use(withScopedPermission('file:upload'))
     .use(checkFileStorageUsage)
     .input(
       UploadFileSchema.omit({ url: true }).extend({
@@ -187,6 +206,7 @@ export const fileRouter = router({
           inputSize: input.size,
           url: input.url,
           userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
         });
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'File size cannot be negative' });
       }
@@ -199,6 +219,7 @@ export const fileRouter = router({
           transaction: trx,
           url: input.url,
           userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
         });
 
         let shouldRefreshGlobalFile = false;
@@ -424,6 +445,7 @@ export const fileRouter = router({
     }),
 
   deleteKnowledgeItemsByQuery: fileProcedure
+    .use(withScopedPermission('file:delete'))
     .input(QueryFileListSchema)
     .mutation(async ({ ctx, input }): Promise<{ count: number }> => {
       const fileIds: string[] = [];
@@ -554,33 +576,39 @@ export const fileRouter = router({
         .slice(0, limit);
     }),
 
-  removeAllFiles: fileProcedure.mutation(async ({ ctx }) => {
-    // Get all file IDs for this user
-    const allFiles = await ctx.fileModel.query({ showFilesInKnowledgeBase: true });
-    const fileIds = allFiles.map((f) => f.id);
+  removeAllFiles: fileProcedure
+    .use(withScopedPermission('file:delete'))
+    .mutation(async ({ ctx }) => {
+      // Get all file IDs for this user
+      const allFiles = await ctx.fileModel.query({ showFilesInKnowledgeBase: true });
+      const fileIds = allFiles.map((f) => f.id);
 
-    // Use deleteMany to properly handle shared files (globalFiles reference counting)
-    const needToRemoveFileList = await ctx.fileModel.deleteMany(
-      fileIds,
-      serverDBEnv.REMOVE_GLOBAL_FILE,
-    );
+      // Use deleteMany to properly handle shared files (globalFiles reference counting)
+      const needToRemoveFileList = await ctx.fileModel.deleteMany(
+        fileIds,
+        serverDBEnv.REMOVE_GLOBAL_FILE,
+      );
 
-    // Delete S3 files only if no other users reference them
-    if (needToRemoveFileList && needToRemoveFileList.length > 0) {
-      await ctx.fileService.deleteFiles(needToRemoveFileList.map((file) => file.url!));
-    }
-  }),
+      // Delete S3 files only if no other users reference them
+      if (needToRemoveFileList && needToRemoveFileList.length > 0) {
+        await ctx.fileService.deleteFiles(needToRemoveFileList.map((file) => file.url!));
+      }
+    }),
 
-  removeFile: fileProcedure.input(z.object({ id: z.string() })).mutation(async ({ input, ctx }) => {
-    const file = await ctx.fileModel.delete(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
+  removeFile: fileProcedure
+    .use(withScopedPermission('file:delete'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const file = await ctx.fileModel.delete(input.id, serverDBEnv.REMOVE_GLOBAL_FILE);
 
-    if (!file) return;
+      if (!file) return;
 
-    // delete the file from S3 if it is not used by other files
-    await ctx.fileService.deleteFile(file.url!);
-  }),
+      // delete the file from S3 if it is not used by other files
+      await ctx.fileService.deleteFile(file.url!);
+    }),
 
   removeFileAsyncTask: fileProcedure
+    .use(withScopedPermission('file:update'))
     .input(
       z.object({
         id: z.string(),
@@ -600,6 +628,7 @@ export const fileRouter = router({
     }),
 
   removeFiles: fileProcedure
+    .use(withScopedPermission('file:delete'))
     .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ input, ctx }) => {
       const needToRemoveFileList = await ctx.fileModel.deleteMany(
@@ -614,6 +643,7 @@ export const fileRouter = router({
     }),
 
   updateFile: fileProcedure
+    .use(withScopedPermission('file:update'))
     .input(
       z.object({
         id: z.string(),
@@ -653,6 +683,142 @@ export const fileRouter = router({
       }
 
       return { success: true };
+    }),
+
+  transferEntity: fileProcedure
+    .use(withScopedPermission('file:upload'))
+    .input(
+      z.object({
+        entityType: fileTransferEntityTypeSchema,
+        id: z.string(),
+        targetWorkspaceId: z.string().nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.targetWorkspaceId === (ctx.workspaceId ?? null)) {
+        throw new TRPCError({
+          cause: { data: { code: TransferErrorCode.SameWorkspace } },
+          code: 'BAD_REQUEST',
+          message: 'Cannot transfer to the same workspace',
+        });
+      }
+
+      if (input.targetWorkspaceId) {
+        const [targetMembership] = await ctx.serverDB
+          .select({ role: workspaceMembers.role })
+          .from(workspaceMembers)
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, input.targetWorkspaceId),
+              eq(workspaceMembers.userId, ctx.userId),
+              isNull(workspaceMembers.deletedAt),
+            ),
+          )
+          .limit(1);
+        if (!targetMembership || targetMembership.role === 'viewer') {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
+            code: 'FORBIDDEN',
+            message: 'No write access to target workspace',
+          });
+        }
+      }
+
+      if (input.entityType === 'folder' || input.entityType === 'document') {
+        const document = await ctx.documentModel.findById(input.id);
+        if (!document) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.ResourceNotFound } },
+            code: 'NOT_FOUND',
+            message: input.entityType === 'folder' ? 'Folder not found' : 'Document not found',
+          });
+        }
+        const additionalSize = await ctx.documentModel.countFileUsageInSubtree(input.id);
+        await businessFileTransferStorageCheck({
+          additionalSize,
+          targetUserId: ctx.userId,
+          targetWorkspaceId: input.targetWorkspaceId,
+        });
+        return ctx.documentModel.transferTo(input.id, input.targetWorkspaceId, ctx.userId);
+      }
+
+      const file = await ctx.fileModel.findById(input.id);
+      if (!file)
+        throw new TRPCError({
+          cause: { data: { code: TransferErrorCode.ResourceNotFound } },
+          code: 'NOT_FOUND',
+          message: 'File not found',
+        });
+      await businessFileTransferStorageCheck({
+        additionalSize: file.size,
+        targetUserId: ctx.userId,
+        targetWorkspaceId: input.targetWorkspaceId,
+      });
+      return ctx.fileModel.transferTo(input.id, input.targetWorkspaceId, ctx.userId);
+    }),
+
+  copyEntityToWorkspace: fileProcedure
+    .use(withScopedPermission('file:upload'))
+    .input(
+      z.object({
+        entityType: fileTransferEntityTypeSchema,
+        id: z.string(),
+        targetWorkspaceId: z.string().nullable(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.targetWorkspaceId) {
+        const [targetMembership] = await ctx.serverDB
+          .select({ role: workspaceMembers.role })
+          .from(workspaceMembers)
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, input.targetWorkspaceId),
+              eq(workspaceMembers.userId, ctx.userId),
+              isNull(workspaceMembers.deletedAt),
+            ),
+          )
+          .limit(1);
+        if (!targetMembership || targetMembership.role === 'viewer') {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
+            code: 'FORBIDDEN',
+            message: 'No write access to target workspace',
+          });
+        }
+      }
+
+      if (input.entityType === 'folder' || input.entityType === 'document') {
+        const document = await ctx.documentModel.findById(input.id);
+        if (!document) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.ResourceNotFound } },
+            code: 'NOT_FOUND',
+            message: input.entityType === 'folder' ? 'Folder not found' : 'Document not found',
+          });
+        }
+        const additionalSize = await ctx.documentModel.countFileUsageInSubtree(input.id);
+        await businessFileTransferStorageCheck({
+          additionalSize,
+          targetUserId: ctx.userId,
+          targetWorkspaceId: input.targetWorkspaceId,
+        });
+        return ctx.documentModel.copyToWorkspace(input.id, input.targetWorkspaceId, ctx.userId);
+      }
+
+      const file = await ctx.fileModel.findById(input.id);
+      if (!file)
+        throw new TRPCError({
+          cause: { data: { code: TransferErrorCode.ResourceNotFound } },
+          code: 'NOT_FOUND',
+          message: 'File not found',
+        });
+      await businessFileTransferStorageCheck({
+        additionalSize: file.size,
+        targetUserId: ctx.userId,
+        targetWorkspaceId: input.targetWorkspaceId,
+      });
+      return ctx.fileModel.copyToWorkspace(input.id, input.targetWorkspaceId, ctx.userId);
     }),
 });
 

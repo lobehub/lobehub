@@ -12,6 +12,7 @@ const {
   mockAsyncTaskModelUpdate,
   mockChargeBeforeGenerate,
   mockCreateAsyncCaller,
+  mockInsertValues,
   mockLoadModels,
   mockResolveBusinessModelMapping,
 } = vi.hoisted(() => ({
@@ -23,6 +24,7 @@ const {
   mockAsyncTaskModelUpdate: vi.fn(),
   mockChargeBeforeGenerate: vi.fn(),
   mockCreateAsyncCaller: vi.fn(),
+  mockInsertValues: [] as unknown[],
   mockLoadModels: vi.fn(),
   mockResolveBusinessModelMapping: vi.fn(),
 }));
@@ -114,6 +116,7 @@ describe('imageRouter', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockInsertValues.length = 0;
 
     // Default mock implementations
     mockResolveBusinessModelMapping.mockImplementation(
@@ -159,15 +162,18 @@ describe('imageRouter', () => {
       insertCallCount = 0;
       const tx = {
         insert: vi.fn().mockReturnValue({
-          values: vi.fn().mockReturnValue({
-            returning: vi.fn().mockImplementation(() => {
-              insertCallCount++;
-              if (insertCallCount === 1) return [mockBatch];
-              if (insertCallCount === 2) return mockGenerations;
-              // For async tasks, return one at a time
-              const taskIndex = insertCallCount - 3;
-              return [mockAsyncTasks[taskIndex] || mockAsyncTasks[0]];
-            }),
+          values: vi.fn((value) => {
+            mockInsertValues.push(value);
+            return {
+              returning: vi.fn().mockImplementation(() => {
+                insertCallCount++;
+                if (insertCallCount === 1) return [mockBatch];
+                if (insertCallCount === 2) return mockGenerations;
+                // For async tasks, return one at a time
+                const taskIndex = insertCallCount - 3;
+                return [mockAsyncTasks[taskIndex] || mockAsyncTasks[0]];
+              }),
+            };
           }),
         }),
         update: vi.fn().mockReturnValue({
@@ -374,6 +380,24 @@ describe('imageRouter', () => {
       await caller.createImage(input);
 
       expect(mockCreateAsyncCaller).toHaveBeenCalledWith({ userId: mockUserId });
+    });
+
+    it('should persist and forward workspaceId for background image tasks', async () => {
+      const ctx = createMockCtx({ workspaceId: 'workspace-1' });
+      const input = createDefaultInput();
+
+      const caller = imageRouter.createCaller(ctx);
+      await caller.createImage(input);
+
+      expect(mockInsertValues[0]).toEqual(expect.objectContaining({ workspaceId: 'workspace-1' }));
+      expect(mockInsertValues[1]).toEqual(
+        expect.arrayContaining([expect.objectContaining({ workspaceId: 'workspace-1' })]),
+      );
+      expect(mockInsertValues[2]).toEqual(expect.objectContaining({ workspaceId: 'workspace-1' }));
+      expect(mockInsertValues[3]).toEqual(expect.objectContaining({ workspaceId: 'workspace-1' }));
+      expect(mockAsyncCallerCreateImage).toHaveBeenCalledWith(
+        expect.objectContaining({ workspaceId: 'workspace-1' }),
+      );
     });
 
     it('should handle async caller creation failure', async () => {

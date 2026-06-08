@@ -1,23 +1,27 @@
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { SessionGroupModel } from '@/database/models/sessionGroup';
 import { insertSessionGroupSchema } from '@/database/schemas';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type SessionGroupItem } from '@/types/session';
 
-const sessionProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const sessionProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const wsId = ctx.workspaceId ?? undefined;
 
   return opts.next({
     ctx: {
-      sessionGroupModel: new SessionGroupModel(ctx.serverDB, ctx.userId),
+      sessionGroupModel: new SessionGroupModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
 
 export const sessionGroupRouter = router({
   createSessionGroup: sessionProcedure
+    .use(withScopedPermission('session_group:create'))
     .input(
       z.object({
         name: z.string(),
@@ -37,17 +41,21 @@ export const sessionGroupRouter = router({
     return ctx.sessionGroupModel.query() as any;
   }),
 
-  removeAllSessionGroups: sessionProcedure.mutation(async ({ ctx }) => {
-    return ctx.sessionGroupModel.deleteAll();
-  }),
+  removeAllSessionGroups: sessionProcedure
+    .use(withScopedPermission('session_group:delete'))
+    .mutation(async ({ ctx }) => {
+      return ctx.sessionGroupModel.deleteAll();
+    }),
 
   removeSessionGroup: sessionProcedure
+    .use(withScopedPermission('session_group:delete'))
     .input(z.object({ id: z.string(), removeChildren: z.boolean().optional() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.sessionGroupModel.delete(input.id);
     }),
 
   updateSessionGroup: sessionProcedure
+    .use(withScopedPermission('session_group:update'))
     .input(
       z.object({
         id: z.string(),
@@ -58,6 +66,7 @@ export const sessionGroupRouter = router({
       return ctx.sessionGroupModel.update(input.id, input.value);
     }),
   updateSessionGroupOrder: sessionProcedure
+    .use(withScopedPermission('session_group:update'))
     .input(
       z.object({
         sortMap: z.array(

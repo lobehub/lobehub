@@ -46,6 +46,7 @@ interface LobeAgentRuntimeContext {
   threadId?: string | null;
   topicId?: string;
   userId: string;
+  workspaceId?: string;
 }
 
 const buildError = (content: string, code: string): BuiltinServerRuntimeOutput => ({
@@ -82,6 +83,7 @@ class LobeAgentExecutionRuntime {
   private threadId?: string | null;
   private topicId?: string;
   private planRuntime: PlanExecutionRuntime;
+  private workspaceId?: string;
 
   constructor(context: LobeAgentRuntimeContext) {
     this.agentId = context.agentId;
@@ -92,8 +94,9 @@ class LobeAgentExecutionRuntime {
     this.threadId = context.threadId;
     this.topicId = context.topicId;
     this.userId = context.userId;
+    this.workspaceId = context.workspaceId;
     this.planRuntime = new PlanExecutionRuntime(
-      createServerPlanRuntimeService(context.serverDB, context.userId),
+      createServerPlanRuntimeService(context.serverDB, context.userId, context.workspaceId),
     );
   }
 
@@ -238,8 +241,8 @@ class LobeAgentExecutionRuntime {
     let selectedRefItems: VisualFileItem[] = [];
 
     if (requestedRefs.length > 0) {
-      const fileService = new FileService(this.db, this.userId);
-      const messageModel = new MessageModel(this.db, this.userId);
+      const fileService = new FileService(this.db, this.userId, this.workspaceId);
+      const messageModel = new MessageModel(this.db, this.userId, this.workspaceId);
       const postProcessUrl = (
         path: string | null,
         file: { fileType: string; id?: string | null },
@@ -317,7 +320,7 @@ class LobeAgentExecutionRuntime {
 
     let content = '';
     let usage: unknown;
-    const runtime = await initModelRuntimeFromDB(this.db, this.userId, provider);
+    const runtime = await initModelRuntimeFromDB(this.db, this.userId, provider, this.workspaceId);
     const payload = {
       messages: [
         {
@@ -383,6 +386,7 @@ export const lobeAgentRuntime: ServerRuntimeRegistration = {
       threadId: context.threadId,
       topicId: context.topicId,
       userId: context.userId,
+      workspaceId: context.workspaceId,
     });
   },
   identifier: LobeAgentIdentifier,

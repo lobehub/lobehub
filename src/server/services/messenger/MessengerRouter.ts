@@ -13,9 +13,12 @@ import { and, desc, eq, ne, or } from 'drizzle-orm';
 import type { MessengerPlatform } from '@/config/messenger';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
+import { WorkspaceModel } from '@/database/models/workspace';
 import type { MessengerAccountLinkItem } from '@/database/schemas';
 import { agents } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
+import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { AgentBridgeService } from '@/server/services/bot/AgentBridgeService';
@@ -31,9 +34,22 @@ import {
 import { getInstallationStore } from './installations';
 import type { InstallationCredentials } from './installations/types';
 import { messengerPlatformRegistry } from './platforms';
-import type { AgentPickerEntry, InboundCallbackAction, MessengerPlatformBinder } from './types';
+import type {
+  AgentPickerEntry,
+  CallbackAcknowledgement,
+  InboundCallbackAction,
+  MessengerPlatformBinder,
+} from './types';
 
 const log = debug('lobe-server:messenger:router');
+
+/**
+ * Sentinel scope token for the Personal scope (whose real `workspaceId` is
+ * `null`) so it can ride inside a button id (`messenger:scope:personal`),
+ * which can't carry a null. Real workspaces use their own id. Workspace ids
+ * are generated nanoids, so they never collide with this literal.
+ */
+const PERSONAL_SCOPE_ID = 'personal';
 
 interface RegisteredMessengerBot {
   binder: MessengerPlatformBinder;
@@ -116,6 +132,7 @@ interface MessengerCommand {
 const HELP_TEXT = [
   'Commands:',
   '• /start — bind (or rebind) your LobeHub account',
+  '• /switch — switch the active scope (personal or a workspace)',
   '• /agents — list your agents and switch the active one',
   '• /new — start a new conversation',
   '• /stop — stop the current execution',
@@ -170,6 +187,27 @@ const reconstructRequest = (req: Request, rawBody: string): Request =>
     headers: req.headers,
     method: req.method,
   } as RequestInit);
+
+/**
+ * Whether `userId` is still a member of `workspaceId`. The link's active scope
+ * may point at a workspace the user has since been removed from; dispatch must
+ * re-check before running that workspace's agent.
+ */
+const userIsWorkspaceMember = async (
+  db: LobeChatDatabase,
+  userId: string,
+  workspaceId: string,
+): Promise<boolean> => {
+  if (!(await isWorkspaceFeatureEnabledForUser(userId))) return false;
+
+  const workspaces = await new WorkspaceModel(db, userId).listUserWorkspaces();
+  return workspaces.some((w) => w.id === workspaceId);
+};
+
+const isWorkspaceFeatureEnabledForUser = async (userId: string): Promise<boolean> => {
+  const featureFlags = await getServerFeatureFlagsStateFromRuntimeConfig(userId);
+  return featureFlags.enableWorkspace === true;
+};
 
 /**
  * Routes inbound messages from the shared Messenger bots to the right
@@ -506,6 +544,29 @@ export class MessengerRouter {
           return;
         }
 
+        // Re-validate the active scope: it may point at a workspace the user
+        // has since been removed from. Don't run another workspace's agent for
+        // a non-member — prompt them to /switch back to a scope they can use.
+        if (
+          link.workspaceId &&
+          !(await userIsWorkspaceMember(serverDB, link.userId, link.workspaceId))
+        ) {
+          const staleScopeText =
+            'Your active workspace is no longer available. Send /switch to choose another scope.';
+          if (isChannelMention && binder.replyEphemeral) {
+            const threadTs = String(thread.id).split(':')[2];
+            await binder.replyEphemeral({
+              channelId: chatId,
+              text: staleScopeText,
+              threadTs,
+              userId: senderId,
+            });
+          } else {
+            await binder.sendDmText(chatId, staleScopeText);
+          }
+          return;
+        }
+
         await this.dispatchToAgent(
           thread,
           message,
@@ -773,6 +834,22 @@ export class MessengerRouter {
         name: 'agents',
       },
       {
+        description: 'Switch the active scope (personal or a workspace)',
+        // Declared so Discord/Slack surface a `/switch <n>` argument in the
+        // slash picker; the no-arg form just lists the scopes.
+        options: [
+          {
+            description: 'Scope number from the /switch list',
+            name: 'scope',
+            required: false,
+          },
+        ],
+        handler: async (ctx) => {
+          await this.runSwitchCommand(ctx);
+        },
+        name: 'switch',
+      },
+      {
         description: 'Start a new conversation',
         handler: async (ctx) => {
           if (!ctx.link) {
@@ -818,7 +895,9 @@ export class MessengerRouter {
           const operationId = AgentBridgeService.getActiveOperationId(ctx.thread.id);
           if (operationId) {
             try {
-              const aiAgentService = new AiAgentService(ctx.serverDB, ctx.link.userId);
+              const aiAgentService = new AiAgentService(ctx.serverDB, ctx.link.userId, {
+                workspaceId: ctx.link.workspaceId ?? undefined,
+              });
               const result = await aiAgentService.interruptTask({ operationId });
               if (!result.success) {
                 log('command /stop: runtime interrupt rejected for op=%s', operationId);
@@ -1022,7 +1101,7 @@ export class MessengerRouter {
       return;
     }
 
-    const userAgents = await this.fetchUserAgents(serverDB, link.userId);
+    const userAgents = await this.fetchUserAgents(serverDB, link.userId, link.workspaceId);
     if (userAgents.length === 0) {
       await ctx.reply('You have no agents yet. Create one in LobeHub, then come back to /agents.');
       return;
@@ -1074,6 +1153,122 @@ export class MessengerRouter {
     await ctx.reply(
       `Your agents:\n${lines.join('\n')}\n\nReply with /agents <n> to switch the active agent.`,
     );
+  }
+
+  /**
+   * `/switch` changes the active *scope* of the IM session — personal or one
+   * of the workspaces the user belongs to. The bot is a single shared bot, so
+   * which LobeHub context a conversation runs in is the active agent's scope;
+   * switching scope clears the active agent and the user re-picks via /agents.
+   *
+   * Mirrors `/agents`: on platforms that implement `sendAgentPicker` the bot
+   * replies with a tap-to-switch keyboard (buttons emit `messenger:scope:<id>`
+   * so the callback path can tell them apart from agent switches). Platforms
+   * without keyboard support fall back to a numbered text list + `/switch <n>`.
+   */
+  private async runSwitchCommand(ctx: MessengerCommandContext): Promise<void> {
+    const { binder, chatId, link, serverDB } = ctx;
+    if (!link) {
+      await ctx.reply('You need to /start to bind your account first.');
+      return;
+    }
+
+    const scopes = await this.fetchUserScopes(serverDB, link.userId);
+
+    // Text-fallback path: `/switch 2` switches without needing the keyboard,
+    // for platforms (or clients) where tap-buttons aren't available.
+    const arg = ctx.args.trim();
+    if (arg && !binder.sendAgentPicker) {
+      const index = Number.parseInt(arg, 10);
+      if (!Number.isInteger(index) || index < 1 || index > scopes.length) {
+        await ctx.reply(`Usage: /switch <n>, where n is between 1 and ${scopes.length}.`);
+        return;
+      }
+      const target = scopes[index - 1];
+      if ((link.workspaceId ?? null) === target.id) {
+        await ctx.reply(`You're already in ${target.name}.`);
+        return;
+      }
+      const defaultAgent = await this.applyScopeSwitch(serverDB, link.id, link.userId, target);
+      await ctx.reply(this.scopeSwitchedText(target.name, defaultAgent?.title));
+      return;
+    }
+
+    if (binder.sendAgentPicker) {
+      await binder.sendAgentPicker(chatId, {
+        action: 'scope',
+        entries: this.toScopeEntries(scopes, link.workspaceId ?? null),
+        // Channel invocation → ephemeral so the user's personal workspace list
+        // isn't broadcast (mirrors the `/agents` picker rationale).
+        ephemeralTo: ctx.isDM ? undefined : ctx.authorUserId,
+        // Discord-only: forward the slash interaction so the binder can
+        // complete the deferred reply via the follow-up webhook.
+        interaction: ctx.interaction,
+        text: 'Tap a scope to switch:',
+      });
+      return;
+    }
+
+    // Final fallback: numbered list + usage hint for `/switch <n>`.
+    const lines = scopes.map((scope, i) => {
+      const marker = (link.workspaceId ?? null) === scope.id ? ' (current)' : '';
+      return `${i + 1}. ${scope.name}${marker}`;
+    });
+    await ctx.reply(`Scopes:\n${lines.join('\n')}\n\nReply with /switch <n> to switch scope.`);
+  }
+
+  /**
+   * Resolve the user's switchable scopes: Personal (id `null`) followed by
+   * each workspace they belong to.
+   */
+  private async fetchUserScopes(
+    serverDB: LobeChatDatabase,
+    userId: string,
+  ): Promise<{ id: string | null; name: string }[]> {
+    if (!(await isWorkspaceFeatureEnabledForUser(userId))) return [{ id: null, name: 'Personal' }];
+
+    const workspaces = await new WorkspaceModel(serverDB, userId).listUserWorkspaces();
+    return [{ id: null, name: 'Personal' }, ...workspaces.map((w) => ({ id: w.id, name: w.name }))];
+  }
+
+  /**
+   * Persist a scope switch and land on the new scope's default agent
+   * (inbox/LobeAI is pinned first by `fetchUserAgents`) so switching never
+   * leaves the session agent-less. Falls back to `null` only when the target
+   * scope has no agents yet.
+   */
+  private async applyScopeSwitch(
+    serverDB: LobeChatDatabase,
+    linkId: string,
+    userId: string,
+    target: { id: string | null; name: string },
+  ): Promise<AgentSummary | undefined> {
+    const scopeAgents = await this.fetchUserAgents(serverDB, userId, target.id);
+    const defaultAgent = scopeAgents[0];
+    await MessengerAccountLinkModel.setActiveScope(
+      serverDB,
+      linkId,
+      target.id,
+      defaultAgent?.id ?? null,
+    );
+    return defaultAgent;
+  }
+
+  private scopeSwitchedText(scopeName: string, defaultAgentTitle?: string): string {
+    return defaultAgentTitle
+      ? `Switched to ${scopeName}. Now chatting with ${defaultAgentTitle}. Send /agents to change.`
+      : `Switched to ${scopeName}. No agents here yet — create one in LobeHub, then /agents.`;
+  }
+
+  private toScopeEntries(
+    scopes: { id: string | null; name: string }[],
+    currentScopeId: string | null,
+  ): AgentPickerEntry[] {
+    return scopes.map((scope) => ({
+      id: scope.id ?? PERSONAL_SCOPE_ID,
+      isActive: scope.id === currentScopeId,
+      title: scope.name,
+    }));
   }
 
   private toPickerEntries(
@@ -1134,7 +1329,7 @@ export class MessengerRouter {
 
       let activeAgentName: string | undefined;
       if (link.activeAgentId) {
-        const userAgents = await this.fetchUserAgents(serverDB, link.userId);
+        const userAgents = await this.fetchUserAgents(serverDB, link.userId, link.workspaceId);
         activeAgentName = userAgents.find((a) => a.id === link.activeAgentId)?.title;
       }
 
@@ -1194,8 +1389,9 @@ export class MessengerRouter {
    * (Slack/Telegram) or chat-sdk's `onAction` event (Discord). Both paths
    * normalize to the same `InboundCallbackAction` shape and delegate the
    * outbound ack (toast + picker re-render) to `binder.acknowledgeCallback`.
-   * Today only `messenger:switch:<agentId>` is recognized; new actions can
-   * be added by extending the dispatch below.
+   * Recognizes `messenger:switch:<agentId>` (agent picker) and
+   * `messenger:scope:<scopeId>` (scope picker); new actions can be added by
+   * extending the dispatch below.
    */
   private async handleCallbackAction(
     binder: MessengerPlatformBinder,
@@ -1205,6 +1401,12 @@ export class MessengerRouter {
     if (!binder.acknowledgeCallback) return;
 
     const ack = binder.acknowledgeCallback.bind(binder, action);
+
+    const scopeMatch = action.data.match(/^messenger:scope:(.+)$/);
+    if (scopeMatch) {
+      await this.handleScopeCallback(creds, action, scopeMatch[1], ack);
+      return;
+    }
 
     const switchMatch = action.data.match(/^messenger:switch:(.+)$/);
     if (!switchMatch) {
@@ -1225,7 +1427,7 @@ export class MessengerRouter {
       return;
     }
 
-    const userAgents = await this.fetchUserAgents(serverDB, link.userId);
+    const userAgents = await this.fetchUserAgents(serverDB, link.userId, link.workspaceId);
     const target = userAgents.find((agent) => agent.id === targetAgentId);
     if (!target) {
       await ack({ toast: 'Agent not found.' });
@@ -1248,6 +1450,54 @@ export class MessengerRouter {
   }
 
   /**
+   * Handle a tap on a `/switch` scope button (`messenger:scope:<scopeId>`).
+   * `scopeToken` is the workspace id, or `PERSONAL_SCOPE_ID` for Personal.
+   * Switches the active scope (landing on the scope's default agent) and
+   * re-renders the picker with the new current marker.
+   */
+  private async handleScopeCallback(
+    creds: InstallationCredentials,
+    action: InboundCallbackAction,
+    scopeToken: string,
+    ack: (ack: CallbackAcknowledgement) => Promise<void>,
+  ): Promise<void> {
+    const serverDB = await getServerDB();
+    const link = await MessengerAccountLinkModel.findByPlatformUser(
+      serverDB,
+      creds.platform,
+      action.fromUserId,
+      creds.tenantId,
+    );
+    if (!link) {
+      await ack({ toast: 'Not linked. Send /start first.' });
+      return;
+    }
+
+    const targetScopeId = scopeToken === PERSONAL_SCOPE_ID ? null : scopeToken;
+    const scopes = await this.fetchUserScopes(serverDB, link.userId);
+    const target = scopes.find((scope) => scope.id === targetScopeId);
+    if (!target) {
+      await ack({ toast: 'Scope not found.' });
+      return;
+    }
+
+    if ((link.workspaceId ?? null) === target.id) {
+      await ack({ toast: `You're already in ${target.name}.` });
+      return;
+    }
+
+    const defaultAgent = await this.applyScopeSwitch(serverDB, link.id, link.userId, target);
+    await ack({
+      toast: this.scopeSwitchedText(target.name, defaultAgent?.title),
+      updatedPicker: {
+        action: 'scope',
+        entries: this.toScopeEntries(scopes, target.id),
+        text: 'Tap a scope to switch:',
+      },
+    });
+  }
+
+  /**
    * Fetch a user's agents for `/agents`. Mirrors the web
    * verify-im picker (and the home sidebar):
    *  - excludes virtual agents but explicitly keeps the inbox/LobeAI agent
@@ -1259,13 +1509,14 @@ export class MessengerRouter {
   private async fetchUserAgents(
     serverDB: LobeChatDatabase,
     userId: string,
+    workspaceId?: string | null,
   ): Promise<AgentSummary[]> {
     const rows = await serverDB
       .select({ id: agents.id, slug: agents.slug, title: agents.title })
       .from(agents)
       .where(
         and(
-          eq(agents.userId, userId),
+          buildWorkspaceWhere({ userId, workspaceId: workspaceId ?? undefined }, agents),
           or(ne(agents.virtual, true), eq(agents.slug, INBOX_SESSION_ID)),
         ),
       )
@@ -1308,7 +1559,7 @@ export class MessengerRouter {
     );
 
     const serverDB = await getServerDB();
-    const bridge = new AgentBridgeService(serverDB, link.userId);
+    const bridge = new AgentBridgeService(serverDB, link.userId, link.workspaceId ?? undefined);
 
     // Messenger account-link routing already binds platform sender →
     // LobeHub user; the dispatch only fires for the linked sender. So

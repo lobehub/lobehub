@@ -8,6 +8,7 @@ import { documents, files } from '../../schemas/file';
 import { chunks, embeddings } from '../../schemas/rag';
 import { fileChunks } from '../../schemas/relations';
 import { users } from '../../schemas/user';
+import { workspaces } from '../../schemas/workspace';
 import type { LobeChatDatabase } from '../../type';
 import { KnowledgeRepo } from './index';
 
@@ -254,6 +255,78 @@ describe('KnowledgeRepo', () => {
 
       expect(otherUserFile).toBeUndefined();
       expect(otherUserDoc).toBeUndefined();
+    });
+  });
+
+  describe('query - workspace isolation', () => {
+    const workspaceId = 'knowledge-workspace';
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Knowledge Workspace',
+        primaryOwnerId: userId,
+        slug: workspaceId,
+      });
+
+      await serverDB.insert(files).values([
+        {
+          fileType: 'application/pdf',
+          name: 'workspace-owner-file.pdf',
+          size: 1024,
+          url: 'workspace-owner-file-url',
+          userId,
+          workspaceId,
+        },
+        {
+          fileType: 'application/pdf',
+          name: 'viewer-personal-file.pdf',
+          size: 1024,
+          url: 'viewer-personal-file-url',
+          userId: otherUserId,
+        },
+      ]);
+
+      await serverDB.insert(documents).values([
+        {
+          content: 'Workspace owner document',
+          fileType: 'application/pdf',
+          filename: 'workspace-owner-doc.pdf',
+          source: 'workspace-owner-source',
+          sourceType: 'api',
+          totalCharCount: 100,
+          totalLineCount: 10,
+          userId,
+          workspaceId,
+        },
+        {
+          content: 'Viewer personal document',
+          fileType: 'application/pdf',
+          filename: 'viewer-personal-doc.pdf',
+          source: 'viewer-personal-source',
+          sourceType: 'api',
+          totalCharCount: 100,
+          totalLineCount: 10,
+          userId: otherUserId,
+        },
+      ]);
+    });
+
+    it('should return workspace items regardless of the creator user', async () => {
+      const workspaceRepo = new KnowledgeRepo(serverDB, otherUserId, workspaceId);
+
+      const results = await workspaceRepo.query({ category: FilesTabs.All });
+
+      const names = results.map((item) => item.name).sort();
+      expect(names).toEqual(['workspace-owner-doc.pdf', 'workspace-owner-file.pdf']);
+    });
+
+    it('should not return workspace items in personal mode', async () => {
+      const results = await knowledgeRepo.query({ category: FilesTabs.All });
+
+      const names = results.map((item) => item.name).sort();
+      expect(names).not.toContain('workspace-owner-doc.pdf');
+      expect(names).not.toContain('workspace-owner-file.pdf');
     });
   });
 

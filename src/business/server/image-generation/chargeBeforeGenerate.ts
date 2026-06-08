@@ -10,6 +10,7 @@ interface ChargeParams {
   model: string;
   provider: string;
   userId: string;
+  workspaceId?: string;
 }
 
 type ChargeResult =

@@ -69,7 +69,11 @@ export class AbandonOperationService {
     }
     result.found = true;
 
-    const metadata = (state.metadata ?? {}) as { assistantMessageId?: string; userId?: string };
+    const metadata = (state.metadata ?? {}) as {
+      assistantMessageId?: string;
+      userId?: string;
+      workspaceId?: string;
+    };
     const message = `Operation abandoned: ${reason}`;
     const error: ChatMessageError = {
       body: { message },
@@ -105,7 +109,7 @@ export class AbandonOperationService {
 
     if (metadata.userId && metadata.assistantMessageId) {
       try {
-        const messageModel = new MessageModel(this.db, metadata.userId);
+        const messageModel = new MessageModel(this.db, metadata.userId, metadata.workspaceId);
         await messageModel.update(metadata.assistantMessageId, { error });
         result.assistantMessageUpdated = true;
       } catch (e) {

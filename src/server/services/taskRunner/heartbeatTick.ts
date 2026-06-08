@@ -1,8 +1,9 @@
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
+import { and, eq } from 'drizzle-orm';
 
 import { BriefModel } from '@/database/models/brief';
-import { TaskModel } from '@/database/models/task';
+import { tasks } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import { setTaskSchedulerExecutionCallback } from '@/server/services/taskScheduler';
 
@@ -39,8 +40,13 @@ export async function runHeartbeatTick(
 ): Promise<HeartbeatTickOutcome> {
   const db = await getServerDB();
 
-  const taskModel = new TaskModel(db, userId);
-  const task = await taskModel.findById(taskId);
+  // System-level dispatch: read the task row directly to learn its
+  // `workspaceId` before constructing downstream models.
+  const [task] = await db
+    .select()
+    .from(tasks)
+    .where(and(eq(tasks.id, taskId), eq(tasks.createdByUserId, userId)))
+    .limit(1);
   if (!task) {
     log('skip task=%s reason=not-found', taskId);
     return { ran: false, reason: 'not-found' };
@@ -58,13 +64,14 @@ export async function runHeartbeatTick(
     return { ran: false, reason: 'no-interval' };
   }
 
-  const briefModel = new BriefModel(db, userId);
+  const wsId = task.workspaceId ?? undefined;
+  const briefModel = new BriefModel(db, userId, wsId);
   if (await briefModel.hasUnresolvedUrgentByTask(taskId)) {
     log('skip task=%s reason=human-waiting', taskId);
     return { ran: false, reason: 'human-waiting' };
   }
 
-  const runner = new TaskRunnerService(db, userId);
+  const runner = new TaskRunnerService(db, userId, wsId);
   try {
     await runner.runTask({ taskId });
   } catch (e) {

@@ -43,12 +43,17 @@ export const llmGenerationTracingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       try {
-        await getLLMGenerationTracingService().recordFeedback(ctx.userId, input.tracingId, {
-          data: input.data,
-          score: input.score,
-          signal: input.signal,
-          source: input.source,
-        });
+        await getLLMGenerationTracingService().recordFeedback(
+          ctx.userId,
+          input.tracingId,
+          {
+            data: input.data,
+            score: input.score,
+            signal: input.signal,
+            source: input.source,
+          },
+          ctx.workspaceId ?? undefined,
+        );
       } catch (err) {
         if (err instanceof LLMGenerationFeedbackError) {
           throw new TRPCError({

@@ -33,14 +33,15 @@ describe('skillManagementRuntime', () => {
    * @example
    * The registration factory creates a package-level runtime backed by SkillManagementDocumentService.
    */
-  it('constructs a SkillMaintainerExecutionRuntime', () => {
+  it('constructs a SkillMaintainerExecutionRuntime backed by a workspace-scoped document service', () => {
     const runtime = skillManagementRuntime.factory({
       serverDB: {} as never,
       toolManifestMap: {},
       userId: 'user-1',
+      workspaceId: 'ws-1',
     });
 
     expect(runtime).toBeInstanceOf(SkillMaintainerExecutionRuntime);
-    expect(SkillManagementDocumentService).toHaveBeenCalledWith({}, 'user-1');
+    expect(SkillManagementDocumentService).toHaveBeenCalledWith({}, 'user-1', 'ws-1');
   });
 });

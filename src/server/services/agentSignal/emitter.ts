@@ -27,6 +27,12 @@ export interface AgentSignalExecutionContext {
   agentId?: string;
   db: LobeChatDatabase;
   userId: string;
+  /**
+   * Workspace id when the originating producer ran inside a team workspace.
+   * Threaded through to action handlers so workspace-scoped writes (e.g.
+   * `userMemories`) can target the correct workspace.
+   */
+  workspaceId?: string;
 }
 
 type RuntimeProducerSourceType =
@@ -132,7 +138,7 @@ export const emitAgentSignalSourceEvent = async <TSourceType extends AgentSignal
  */
 export const enqueueAgentSignalSourceEvent = async <TSourceType extends AgentSignalSourceType>(
   input: AgentSignalSourceEventInput<TSourceType>,
-  context: Pick<AgentSignalExecutionContext, 'agentId' | 'userId'>,
+  context: Pick<AgentSignalExecutionContext, 'agentId' | 'userId' | 'workspaceId'>,
 ): Promise<QueuedAgentSignalEmissionResult> => {
   const db = await getServerDB();
 
@@ -160,6 +166,7 @@ export const enqueueAgentSignalSourceEvent = async <TSourceType extends AgentSig
     agentId: context.agentId,
     sourceEvent,
     userId: context.userId,
+    workspaceId: context.workspaceId,
   });
 
   return {

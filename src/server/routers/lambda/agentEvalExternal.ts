@@ -3,6 +3,8 @@ import { TRPCError } from '@trpc/server';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import {
   AgentEvalDatasetModel,
   AgentEvalRunModel,
@@ -11,7 +13,8 @@ import {
 } from '@/database/models/agentEval';
 import { ThreadModel } from '@/database/models/thread';
 import { messages } from '@/database/schemas';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 
@@ -35,20 +38,24 @@ const reportResultItemSchema = z.object({
 
 const toIsoString = (value?: Date | null) => (value ? value.toISOString() : undefined);
 
-const agentEvalExternalProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const agentEvalExternalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const wsId = ctx.workspaceId ?? undefined;
 
   return opts.next({
     ctx: {
-      datasetModel: new AgentEvalDatasetModel(ctx.serverDB, ctx.userId),
-      runModel: new AgentEvalRunModel(ctx.serverDB, ctx.userId),
-      runService: new AgentEvalRunService(ctx.serverDB, ctx.userId),
-      runTopicModel: new AgentEvalRunTopicModel(ctx.serverDB, ctx.userId),
-      testCaseModel: new AgentEvalTestCaseModel(ctx.serverDB, ctx.userId),
-      threadModel: new ThreadModel(ctx.serverDB, ctx.userId),
+      datasetModel: new AgentEvalDatasetModel(ctx.serverDB, ctx.userId, wsId),
+      runModel: new AgentEvalRunModel(ctx.serverDB, ctx.userId, wsId),
+      runService: new AgentEvalRunService(ctx.serverDB, ctx.userId, wsId),
+      runTopicModel: new AgentEvalRunTopicModel(ctx.serverDB, ctx.userId, wsId),
+      testCaseModel: new AgentEvalTestCaseModel(ctx.serverDB, ctx.userId, wsId),
+      threadModel: new ThreadModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
+const agentEvalExternalWriteProcedure = agentEvalExternalProcedure.use(
+  withScopedPermission('agent:update'),
+);
 
 type ReportResultInput = z.infer<typeof reportResultItemSchema> & { runId: string };
 
@@ -307,7 +314,10 @@ export const agentEvalExternalRouter = router({
     .input(z.object({ threadId: z.string().optional(), topicId: z.string() }))
     .query(async ({ ctx, input }) => {
       const conditions = [
-        eq(messages.userId, ctx.userId),
+        buildWorkspaceWhere(
+          { userId: ctx.userId, workspaceId: ctx.workspaceId ?? undefined },
+          messages,
+        ),
         eq(messages.topicId, input.topicId),
         isNull(messages.messageGroupId),
       ];
@@ -336,7 +346,7 @@ export const agentEvalExternalRouter = router({
       }));
     }),
 
-  reportResult: agentEvalExternalProcedure
+  reportResult: agentEvalExternalWriteProcedure
     .input(
       z.object({
         correct: z.boolean(),
@@ -349,7 +359,7 @@ export const agentEvalExternalRouter = router({
     )
     .mutation(async ({ ctx, input }) => applyReportResult(ctx, input, true)),
 
-  reportResultsBatch: agentEvalExternalProcedure
+  reportResultsBatch: agentEvalExternalWriteProcedure
     .input(z.object({ items: z.array(reportResultItemSchema).min(1), runId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const receipts = [];
@@ -390,7 +400,7 @@ export const agentEvalExternalRouter = router({
       };
     }),
 
-  runSetStatus: agentEvalExternalProcedure
+  runSetStatus: agentEvalExternalWriteProcedure
     .input(z.object({ runId: z.string(), status: runStatusSchema }))
     .mutation(async ({ ctx, input }) => {
       const run = await ctx.runModel.findById(input.runId);
@@ -449,7 +459,7 @@ export const agentEvalExternalRouter = router({
       };
     }),
 
-  runTopicReportResult: agentEvalExternalProcedure
+  runTopicReportResult: agentEvalExternalWriteProcedure
     .input(
       z.object({
         correct: z.boolean(),

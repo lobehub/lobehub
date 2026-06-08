@@ -16,10 +16,12 @@ interface GetTopicContextParams {
 class TopicReferenceExecutionRuntime {
   private db: LobeChatDatabase;
   private userId: string;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
 
   getTopicContext = async (params: GetTopicContextParams): Promise<BuiltinServerRuntimeOutput> => {
@@ -30,7 +32,7 @@ class TopicReferenceExecutionRuntime {
     }
 
     try {
-      const topicModel = new TopicModel(this.db, this.userId);
+      const topicModel = new TopicModel(this.db, this.userId, this.workspaceId);
       const topic = await topicModel.findById(topicId);
 
       if (!topic) {
@@ -51,7 +53,7 @@ class TopicReferenceExecutionRuntime {
 
       // Fallback: fetch recent messages
       // Must pass agentId/groupId from topic, otherwise query filters by isNull(sessionId/groupId)
-      const messageModel = new MessageModel(this.db, this.userId);
+      const messageModel = new MessageModel(this.db, this.userId, this.workspaceId);
       const messages = await messageModel.query({
         agentId: topic.agentId ?? undefined,
         groupId: topic.groupId ?? undefined,
@@ -87,7 +89,11 @@ export const topicReferenceRuntime: ServerRuntimeRegistration = {
     if (!context.userId) {
       throw new Error('userId is required for TopicReference execution');
     }
-    return new TopicReferenceExecutionRuntime(context.serverDB, context.userId);
+    return new TopicReferenceExecutionRuntime(
+      context.serverDB,
+      context.userId,
+      context.workspaceId,
+    );
   },
   identifier: TopicReferenceIdentifier,
 };

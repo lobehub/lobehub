@@ -22,7 +22,7 @@ import type { ServerRuntimeRegistration } from './types';
  */
 export const agentSignalFeedbackIntentRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
-    const { agentId, serverDB, userId } = context;
+    const { agentId, serverDB, userId, workspaceId } = context;
     if (!agentId || !userId || !serverDB) {
       throw new Error('agent-signal-feedback-intent requires agentId, userId and serverDB');
     }
@@ -32,8 +32,9 @@ export const agentSignalFeedbackIntentRuntime: ServerRuntimeRegistration = {
       db: serverDB,
       memoryReason: (count) =>
         `Agent Signal self-feedback intent memory candidate from ${count} evidence refs.`,
-      skillDocumentService: new SkillManagementDocumentService(serverDB, userId),
+      skillDocumentService: new SkillManagementDocumentService(serverDB, userId, workspaceId),
       userId,
+      workspaceId,
     });
 
     return new AgentSignalToolExecutionRuntime({

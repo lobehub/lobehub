@@ -179,6 +179,7 @@ export const socialProfileRouter = router({
   submitRepo: socialProfileAuthProcedure
     .input(
       z.object({
+        actAs: z.number().int().positive().optional(),
         branch: z.string().optional(),
         gitUrl: z.string().url(),
         type: z.enum(['skill', 'plugin']).default('skill'),
@@ -200,6 +201,9 @@ export const socialProfileRouter = router({
           headers: {
             ...headers,
             'Content-Type': 'application/json',
+            ...(input.actAs === undefined
+              ? {}
+              : { 'x-lobe-owner-account-id': String(input.actAs) }),
           },
           method: 'POST',
         });

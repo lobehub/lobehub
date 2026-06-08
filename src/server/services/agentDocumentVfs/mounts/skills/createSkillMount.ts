@@ -25,11 +25,11 @@ import { SkillMount } from './SkillMount';
  * Returns:
  * - A skill mount that routes unified skill paths to namespace-specific providers.
  */
-export const createSkillMount = (db: LobeChatDatabase, userId: string) => {
-  const agentModel = new AgentModel(db, userId);
-  const agentDocumentModel = new AgentDocumentModel(db, userId);
-  const documentService = new DocumentService(db, userId);
-  const skillModel = new AgentSkillModel(db, userId);
+export const createSkillMount = (db: LobeChatDatabase, userId: string, workspaceId?: string) => {
+  const agentModel = new AgentModel(db, userId, workspaceId);
+  const agentDocumentModel = new AgentDocumentModel(db, userId, workspaceId);
+  const documentService = new DocumentService(db, userId, workspaceId);
+  const skillModel = new AgentSkillModel(db, userId, workspaceId);
   const skillResourceService = new SkillResourceService(db, userId);
   return new SkillMount({
     'agent': new ProviderSkillsAgentDocument('agent', {

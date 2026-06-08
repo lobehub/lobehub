@@ -12,6 +12,7 @@ import { ChunkModel } from '@/database/models/chunk';
 import { EmbeddingModel } from '@/database/models/embedding';
 import { FileModel } from '@/database/models/file';
 import { type NewChunkItem, type NewEmbeddingsItem } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 import { fileEnv } from '@/envs/file';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
@@ -40,6 +41,22 @@ const fileProcedure = asyncAuthedProcedure.use(async (opts) => {
   });
 });
 
+const resolveWorkspaceIdFromFile = async (
+  serverDB: LobeChatDatabase,
+  userId: string,
+  fileId: string,
+  workspaceId?: string,
+) => {
+  if (workspaceId) return workspaceId;
+
+  if (typeof FileModel.getFileById !== 'function') return undefined;
+
+  const file = await FileModel.getFileById(serverDB, fileId);
+  if (!file || file.userId !== userId) return undefined;
+
+  return file.workspaceId ?? undefined;
+};
+
 export const fileRouter = router({
   embeddingChunks: fileProcedure
     .use(checkEmbeddingUsage)
@@ -47,16 +64,27 @@ export const fileRouter = router({
       z.object({
         fileId: z.string(),
         taskId: z.string(),
+        workspaceId: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const file = await ctx.fileModel.findById(input.fileId);
+      const workspaceId = await resolveWorkspaceIdFromFile(
+        ctx.serverDB,
+        ctx.userId,
+        input.fileId,
+        input.workspaceId,
+      );
+      const asyncTaskModel = new AsyncTaskModel(ctx.serverDB, ctx.userId, workspaceId);
+      const chunkModel = new ChunkModel(ctx.serverDB, ctx.userId, workspaceId);
+      const embeddingModel = new EmbeddingModel(ctx.serverDB, ctx.userId, workspaceId);
+      const fileModel = new FileModel(ctx.serverDB, ctx.userId, workspaceId);
+      const file = await fileModel.findById(input.fileId);
 
       if (!file) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' });
       }
 
-      const asyncTask = await ctx.asyncTaskModel.findById(input.taskId);
+      const asyncTask = await asyncTaskModel.findById(input.taskId);
 
       const { model, provider } =
         getServerDefaultFilesConfig().embeddingModel || DEFAULT_FILE_EMBEDDING_MODEL_ITEM;
@@ -77,7 +105,7 @@ export const fileRouter = router({
 
         const embeddingPromise = async () => {
           // update the task status to success
-          await ctx.asyncTaskModel.update(input.taskId, {
+          await asyncTaskModel.update(input.taskId, {
             status: AsyncTaskStatus.Processing,
           });
 
@@ -86,7 +114,7 @@ export const fileRouter = router({
           const CHUNK_SIZE = fileEnv.EMBEDDING_BATCH_SIZE;
           const CONCURRENCY = fileEnv.EMBEDDING_CONCURRENCY;
 
-          const chunks = await ctx.chunkModel.getChunksTextByFileId(input.fileId);
+          const chunks = await chunkModel.getChunksTextByFileId(input.fileId);
           const requestArray = chunk(chunks, CHUNK_SIZE);
           try {
             await pMap(
@@ -97,6 +125,7 @@ export const fileRouter = router({
                   ctx.serverDB,
                   ctx.userId,
                   provider,
+                  workspaceId,
                 );
 
                 const embeddings = await modelRuntime.embeddings(
@@ -116,7 +145,7 @@ export const fileRouter = router({
                     model,
                   })) || [];
 
-                await ctx.embeddingModel.bulkCreate(items);
+                await embeddingModel.bulkCreate(items);
               },
               { concurrency: CONCURRENCY },
             );
@@ -129,7 +158,7 @@ export const fileRouter = router({
 
           const duration = Date.now() - startAt;
           // update the task status to success
-          await ctx.asyncTaskModel.update(input.taskId, {
+          await asyncTaskModel.update(input.taskId, {
             duration,
             status: AsyncTaskStatus.Success,
           });
@@ -142,7 +171,7 @@ export const fileRouter = router({
       } catch (e) {
         console.error('embeddingChunks error', e);
 
-        await ctx.asyncTaskModel.update(input.taskId, {
+        await asyncTaskModel.update(input.taskId, {
           error: new AsyncTaskError((e as Error).name, (e as Error).message),
           status: AsyncTaskStatus.Error,
         });
@@ -159,10 +188,23 @@ export const fileRouter = router({
       z.object({
         fileId: z.string(),
         taskId: z.string(),
+        workspaceId: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const file = await ctx.fileModel.findById(input.fileId);
+      const workspaceId = await resolveWorkspaceIdFromFile(
+        ctx.serverDB,
+        ctx.userId,
+        input.fileId,
+        input.workspaceId,
+      );
+      const asyncTaskModel = new AsyncTaskModel(ctx.serverDB, ctx.userId, workspaceId);
+      const chunkModel = new ChunkModel(ctx.serverDB, ctx.userId, workspaceId);
+      const chunkService = new ChunkService(ctx.serverDB, ctx.userId, workspaceId);
+      const documentService = new DocumentService(ctx.serverDB, ctx.userId, workspaceId);
+      const fileModel = new FileModel(ctx.serverDB, ctx.userId, workspaceId);
+      const fileService = new FileService(ctx.serverDB, ctx.userId, workspaceId);
+      const file = await fileModel.findById(input.fileId);
       if (!file) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' });
       }
@@ -171,7 +213,7 @@ export const fileRouter = router({
       // `internal://document/placeholder` marker. Their content lives on documents.content
       // and is intentionally not chunked — searching is handled by BM25 instead.
       if (file.url.startsWith('internal://')) {
-        await ctx.asyncTaskModel.update(input.taskId, {
+        await asyncTaskModel.update(input.taskId, {
           error: new AsyncTaskError(
             AsyncTaskErrorType.TaskTriggerError,
             'Inline documents (custom/document) do not require chunking; content is searched via BM25.',
@@ -186,7 +228,7 @@ export const fileRouter = router({
 
       let content: Uint8Array | undefined;
       try {
-        content = await ctx.fileService.getFileByteArray(file.url);
+        content = await fileService.getFileByteArray(file.url);
       } catch (e) {
         console.error(e);
         const errorCode = (e as any).Code;
@@ -195,7 +237,7 @@ export const fileRouter = router({
         // into destroying chunks/embeddings/documents. Mark the task as Error
         // so users see a clear message and can re-upload or retry.
         if (errorCode === 'NoSuchKey') {
-          await ctx.asyncTaskModel.update(input.taskId, {
+          await asyncTaskModel.update(input.taskId, {
             error: new AsyncTaskError(
               AsyncTaskErrorType.TaskTriggerError,
               'File content unavailable in storage. Verify storage access or re-upload.',
@@ -209,7 +251,7 @@ export const fileRouter = router({
         }
         // Other fetch errors (network, IAM, etc.) — mark the task as Error so
         // the user surface stays consistent, then propagate.
-        await ctx.asyncTaskModel.update(input.taskId, {
+        await asyncTaskModel.update(input.taskId, {
           error: new AsyncTaskError(
             AsyncTaskErrorType.TaskTriggerError,
             `Failed to fetch file content: ${(e as Error)?.message ?? errorCode ?? 'unknown error'}`,
@@ -221,7 +263,7 @@ export const fileRouter = router({
 
       if (!content) return;
 
-      const asyncTask = await ctx.asyncTaskModel.findById(input.taskId);
+      const asyncTask = await asyncTaskModel.findById(input.taskId);
 
       if (!asyncTask) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Async Task not found' });
 
@@ -240,13 +282,12 @@ export const fileRouter = router({
         });
 
         const chunkingPromise = async () => {
-          const chunkService = ctx.chunkService;
           // update the task status to processing
-          await ctx.asyncTaskModel.update(input.taskId, { status: AsyncTaskStatus.Processing });
+          await asyncTaskModel.update(input.taskId, { status: AsyncTaskStatus.Processing });
 
           // parse file to document record first (for detailed content viewing)
           try {
-            await ctx.documentService.parseFile(input.fileId);
+            await documentService.parseFile(input.fileId);
           } catch (e) {
             // document parsing failure should not block chunking
             console.warn(
@@ -268,6 +309,7 @@ export const fileRouter = router({
               ...item,
               text: text ? sanitizeUTF8(text) : '',
               userId: ctx.userId,
+              workspaceId,
             }),
           );
 
@@ -282,17 +324,22 @@ export const fileRouter = router({
             };
           }
 
-          await ctx.chunkModel.bulkCreate(chunks, input.fileId);
+          await chunkModel.bulkCreate(chunks, input.fileId);
 
           if (chunkResult.unstructuredChunks) {
             const unstructuredChunks = chunkResult.unstructuredChunks.map(
-              (item): NewChunkItem => ({ ...item, fileId: input.fileId, userId: ctx.userId }),
+              (item): NewChunkItem => ({
+                ...item,
+                fileId: input.fileId,
+                userId: ctx.userId,
+                workspaceId,
+              }),
             );
-            await ctx.chunkModel.bulkCreateUnstructuredChunks(unstructuredChunks);
+            await chunkModel.bulkCreateUnstructuredChunks(unstructuredChunks);
           }
 
           // update the task status to success
-          await ctx.asyncTaskModel.update(input.taskId, {
+          await asyncTaskModel.update(input.taskId, {
             duration,
             status: AsyncTaskStatus.Success,
           });
@@ -314,7 +361,7 @@ export const fileRouter = router({
           : new AsyncTaskError((error as Error).name, error.message);
 
         console.error('[Chunking Error]', asyncTaskError);
-        await ctx.asyncTaskModel.update(input.taskId, {
+        await asyncTaskModel.update(input.taskId, {
           error: asyncTaskError,
           status: AsyncTaskStatus.Error,
         });

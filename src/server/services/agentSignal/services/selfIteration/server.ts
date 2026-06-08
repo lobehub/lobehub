@@ -39,6 +39,8 @@ export interface CreateServerSelfIterationPolicyOptions {
   selfIterationEnabled?: boolean;
   /** User id from the workflow payload. */
   userId: string;
+  /** Workspace id from the workflow payload, when running inside a team workspace. */
+  workspaceId?: string;
 }
 
 /**

@@ -47,6 +47,7 @@ const createVideoInputSchema = z.object({
   model: z.string(),
   prechargeResult: z.any().optional(),
   provider: z.string(),
+  workspaceId: z.string().optional(),
 });
 
 const checkAbortSignal = (signal: AbortSignal) => {
@@ -133,7 +134,11 @@ export const videoRouter = router({
       model,
       prechargeResult,
       provider,
+      workspaceId,
     } = input;
+    const asyncTaskModel = new AsyncTaskModel(ctx.serverDB, ctx.userId, workspaceId);
+    const generationModel = new GenerationModel(ctx.serverDB, ctx.userId, workspaceId);
+    const videoService = new VideoGenerationService(ctx.serverDB, ctx.userId, workspaceId);
 
     log('Starting async video polling: %O', {
       asyncTaskId,
@@ -150,12 +155,13 @@ export const videoRouter = router({
 
     try {
       const pollingPromise = async (signal: AbortSignal) => {
-        const asyncTaskModel = ctx.asyncTaskModel;
-        const generationModel = ctx.generationModel;
-        const videoService = ctx.videoService;
-
         log('Initializing agent runtime for provider: %s', provider);
-        const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
+        const modelRuntime = await initModelRuntimeFromDB(
+          ctx.serverDB,
+          ctx.userId,
+          provider,
+          workspaceId,
+        );
 
         checkAbortSignal(signal);
 
@@ -276,7 +282,7 @@ export const videoRouter = router({
         userId: ctx.userId,
       });
 
-      await ctx.asyncTaskModel.update(asyncTaskId, {
+      await asyncTaskModel.update(asyncTaskId, {
         error: new AsyncTaskError(
           providerContentPolicyMessage
             ? AsyncTaskErrorType.ProviderContentModeration

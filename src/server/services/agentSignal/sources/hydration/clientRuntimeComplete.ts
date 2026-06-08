@@ -78,7 +78,7 @@ const getTrustedScopeKey = (
  */
 export const resolveClientRuntimeCompleteFeedbackSource = async (
   sourceEvent: AgentSignalSourceEvent<typeof AGENT_SIGNAL_SOURCE_TYPES.clientRuntimeComplete>,
-  input: { db: LobeChatDatabase; userId: string },
+  input: { db: LobeChatDatabase; userId: string; workspaceId?: string },
 ): Promise<ClientRuntimeCompleteHydrationResult> => {
   if (sourceEvent.payload.status !== 'completed') {
     return skipped('non-completed-status');
@@ -90,7 +90,7 @@ export const resolveClientRuntimeCompleteFeedbackSource = async (
     return skipped('missing-assistant-message-id');
   }
 
-  const messageModel = new MessageModel(input.db, input.userId);
+  const messageModel = new MessageModel(input.db, input.userId, input.workspaceId);
   const assistantMessage = await messageModel.findById(assistantMessageId);
 
   if (!assistantMessage) {

@@ -2,6 +2,7 @@ import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { z } from 'zod';
 
+import { withRbacPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, requireMarketAuth, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MarketService } from '@/server/services/market';
@@ -23,10 +24,11 @@ const credsProcedure = publicProcedure
       },
     });
   });
+const credsManageProcedure = credsProcedure.use(withRbacPermission('workspace:update:all'));
 
 export const credsRouter = router({
   // Create file credential
-  createFile: credsProcedure
+  createFile: credsManageProcedure
     .input(
       z.object({
         description: z.string().optional(),
@@ -54,7 +56,7 @@ export const credsRouter = router({
     }),
 
   // Create KV credential (kv-env or kv-header)
-  createKV: credsProcedure
+  createKV: credsManageProcedure
     .input(
       z.object({
         description: z.string().optional(),
@@ -82,7 +84,7 @@ export const credsRouter = router({
     }),
 
   // Create OAuth credential
-  createOAuth: credsProcedure
+  createOAuth: credsManageProcedure
     .input(
       z.object({
         description: z.string().optional(),
@@ -109,25 +111,27 @@ export const credsRouter = router({
     }),
 
   // Delete credential by ID
-  delete: credsProcedure.input(z.object({ id: z.number() })).mutation(async ({ ctx, input }) => {
-    log('delete input: %O', input);
+  delete: credsManageProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      log('delete input: %O', input);
 
-    try {
-      const result = await ctx.marketService.market.creds.delete(input.id);
-      log('delete success');
-      return result;
-    } catch (error) {
-      log('delete error: %O', error);
-      throw new TRPCError({
-        cause: error,
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to delete credential',
-      });
-    }
-  }),
+      try {
+        const result = await ctx.marketService.market.creds.delete(input.id);
+        log('delete success');
+        return result;
+      } catch (error) {
+        log('delete error: %O', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to delete credential',
+        });
+      }
+    }),
 
   // Delete credential by key
-  deleteByKey: credsProcedure
+  deleteByKey: credsManageProcedure
     .input(z.object({ key: z.string() }))
     .mutation(async ({ ctx, input }) => {
       log('deleteByKey input: %O', input);
@@ -147,7 +151,7 @@ export const credsRouter = router({
     }),
 
   // Get single credential (optionally with decrypted values)
-  get: credsProcedure
+  get: credsManageProcedure
     .input(
       z.object({
         decrypt: z.boolean().optional(),
@@ -174,7 +178,7 @@ export const credsRouter = router({
     }),
 
   // Get single credential by key (optionally with decrypted values)
-  getByKey: credsProcedure
+  getByKey: credsManageProcedure
     .input(
       z.object({
         decrypt: z.boolean().optional(),
@@ -326,7 +330,7 @@ export const credsRouter = router({
   }),
 
   // List OAuth connections (for creating OAuth credentials)
-  listOAuthConnections: credsProcedure.query(async ({ ctx }) => {
+  listOAuthConnections: credsManageProcedure.query(async ({ ctx }) => {
     log('listOAuthConnections called');
 
     try {
@@ -344,7 +348,7 @@ export const credsRouter = router({
   }),
 
   // Upload credential file
-  uploadFile: credsProcedure
+  uploadFile: credsManageProcedure
     .input(
       z.object({
         file: z.string(), // base64 encoded file content
@@ -370,7 +374,7 @@ export const credsRouter = router({
     }),
 
   // Update credential
-  update: credsProcedure
+  update: credsManageProcedure
     .input(
       z.object({
         description: z.string().optional(),

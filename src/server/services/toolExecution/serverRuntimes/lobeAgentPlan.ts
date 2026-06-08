@@ -15,9 +15,10 @@ import { TopicDocumentModel } from '@/database/models/topicDocument';
 export const createServerPlanRuntimeService = (
   serverDB: LobeChatDatabase,
   userId: string,
+  workspaceId?: string,
 ): PlanRuntimeService => {
-  const documentModel = new DocumentModel(serverDB, userId);
-  const topicDocumentModel = new TopicDocumentModel(serverDB, userId);
+  const documentModel = new DocumentModel(serverDB, userId, workspaceId);
+  const topicDocumentModel = new TopicDocumentModel(serverDB, userId, workspaceId);
 
   const toPlanDocument = (doc: {
     content: string | null;

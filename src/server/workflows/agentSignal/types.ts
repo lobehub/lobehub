@@ -19,4 +19,10 @@ export interface AgentSignalWorkflowRunPayload {
   sourceEvent: AgentSignalWorkflowSourceEventInput;
   /** Owner of the source event and all database lookups performed by the workflow worker. */
   userId: string;
+  /**
+   * Workspace id when the source event originated inside a team workspace.
+   * Forwarded into the action handler context so workspace-scoped writes
+   * land in the correct workspace.
+   */
+  workspaceId?: string;
 }

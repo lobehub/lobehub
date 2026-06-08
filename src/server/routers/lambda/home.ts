@@ -1,21 +1,24 @@
 import { after } from 'next/server';
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
 import { AgentMigrationRepo } from '@/database/repositories/agentMigration';
 import { HomeRepository } from '@/database/repositories/home';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type HomeBriefData, HomeService } from '@/server/services/home';
 
-const homeProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const homeProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const workspaceId = ctx.workspaceId ?? undefined;
 
   return opts.next({
     ctx: {
-      agentMigrationRepo: new AgentMigrationRepo(ctx.serverDB, ctx.userId),
-      agentModel: new AgentModel(ctx.serverDB, ctx.userId),
-      homeRepository: new HomeRepository(ctx.serverDB, ctx.userId),
+      agentMigrationRepo: new AgentMigrationRepo(ctx.serverDB, ctx.userId, workspaceId),
+      agentModel: new AgentModel(ctx.serverDB, ctx.userId, workspaceId),
+      homeRepository: new HomeRepository(ctx.serverDB, ctx.userId, workspaceId),
       homeService: new HomeService(ctx.userId),
     },
   });
@@ -51,6 +54,7 @@ export const homeRouter = router({
     }),
 
   updateAgentSessionGroupId: homeProcedure
+    .use(withScopedPermission('agent:update'))
     .input(
       z.object({
         agentId: z.string(),

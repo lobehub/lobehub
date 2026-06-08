@@ -64,12 +64,20 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
     vi.mocked(TaskModel).mockImplementation(() => ({ pinDocument }) as any);
   });
 
-  const buildContext = (taskId?: string) => ({
-    serverDB: {} as never,
-    taskId,
-    toolManifestMap: {},
-    userId: 'user-1',
-  });
+  const buildContext = (taskId?: string) => {
+    // Mock the workspace lookup chain that `pinToTask` runs against the task
+    // row. Returning `workspaceId: null` reproduces personal-mode behavior.
+    const limit = vi.fn().mockResolvedValue([{ workspaceId: null }]);
+    const where = vi.fn().mockReturnValue({ limit });
+    const from = vi.fn().mockReturnValue({ where });
+    const select = vi.fn().mockReturnValue({ from });
+    return {
+      serverDB: { select } as never,
+      taskId,
+      toolManifestMap: {},
+      userId: 'user-1',
+    };
+  };
 
   it('pins newly created document when taskId is in context', async () => {
     const runtime = agentDocumentsRuntime.factory(buildContext('task-1'));

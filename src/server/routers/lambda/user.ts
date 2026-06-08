@@ -29,6 +29,7 @@ import {
   onUserActivityForBusiness,
 } from '@/business/server/user';
 import { MessageModel } from '@/database/models/message';
+import { RbacModel } from '@/database/models/rbac';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
@@ -47,6 +48,10 @@ const usernameSchema = z
   .regex(/^\w+$/, { message: 'USERNAME_INVALID' });
 
 const AVATAR_WEBAPI_PREFIX = '/webapi/';
+const OWNER_SETTING_KEYS = ['defaultAgent', 'image', 'memory', 'systemAgent', 'tts'] as const;
+const MEMBER_SETTING_KEYS = ['tool'] as const;
+const WORKSPACE_UPDATE_PERMISSION = 'workspace:update:all';
+const WORKSPACE_CONTENT_PERMISSIONS = ['agent:update:all', 'agent:update:owner'] as const;
 
 // Accept only: base64 data URL, absolute http(s) URL, empty string,
 // or an internal /webapi/user/avatar/<userId>/... path scoped to the caller.
@@ -70,10 +75,19 @@ const assertSafeAvatarInput = (input: string, userId: string) => {
   throw new TRPCError({ code: 'BAD_REQUEST', message: 'INVALID_AVATAR_URL' });
 };
 
+const hasOwnerSettingChange = (input: Partial<UserSettings>) =>
+  OWNER_SETTING_KEYS.some((key) => input[key] !== undefined);
+
+const hasMemberSettingChange = (input: Partial<UserSettings>) =>
+  MEMBER_SETTING_KEYS.some((key) => input[key] !== undefined);
+
 const userProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
   return next({
     ctx: {
       fileService: new FileService(ctx.serverDB, ctx.userId),
+      // workspace-audit: intentionally personal-scoped (no workspaceId). These models
+      // only feed `getUserState`'s user-lifetime onboarding gates (hasConversation /
+      // canEnablePWAGuide / canEnableTrace), which are per-user, not per-workspace.
       messageModel: new MessageModel(ctx.serverDB, ctx.userId),
       sessionModel: new SessionModel(ctx.serverDB, ctx.userId),
       userModel: new UserModel(ctx.serverDB, ctx.userId),
@@ -271,7 +285,11 @@ export const userRouter = router({
 
   getOnboardingAgentContext: userProcedure.query(async ({ ctx }) => {
     const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
-    const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+    const docService = new AgentDocumentsService(
+      ctx.serverDB,
+      ctx.userId,
+      ctx.workspaceId ?? undefined,
+    );
     const { UserPersonaModel } = await import('@/database/models/userMemory/persona');
     const personaModel = new UserPersonaModel(ctx.serverDB, ctx.userId);
 
@@ -315,7 +333,11 @@ export const userRouter = router({
     .query(async ({ ctx, input }) => {
       if (input.type === 'soul') {
         const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
-        const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+        const docService = new AgentDocumentsService(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        );
         const inboxAgentId = await onboardingService.getInboxAgentId();
         const doc = await docService.getDocumentByFilename(inboxAgentId, 'SOUL.md');
 
@@ -342,7 +364,11 @@ export const userRouter = router({
     .mutation(async ({ ctx, input }) => {
       if (input.type === 'soul') {
         const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
-        const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+        const docService = new AgentDocumentsService(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        );
         const inboxAgentId = await onboardingService.getInboxAgentId();
         const doc = await docService.upsertDocumentByFilename({
           agentId: inboxAgentId,
@@ -407,7 +433,11 @@ export const userRouter = router({
       const readCurrent = async (): Promise<string> => {
         if (input.type === 'soul') {
           const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
-          const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+          const docService = new AgentDocumentsService(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          );
           const inboxAgentId = await onboardingService.getInboxAgentId();
           const doc = await docService.getDocumentByFilename(inboxAgentId, 'SOUL.md');
           return doc?.content ?? '';
@@ -431,7 +461,11 @@ export const userRouter = router({
 
       if (input.type === 'soul') {
         const onboardingService = new OnboardingService(ctx.serverDB, ctx.userId);
-        const docService = new AgentDocumentsService(ctx.serverDB, ctx.userId);
+        const docService = new AgentDocumentsService(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        );
         const inboxAgentId = await onboardingService.getInboxAgentId();
         const doc = await docService.upsertDocumentByFilename({
           agentId: inboxAgentId,
@@ -475,6 +509,24 @@ export const userRouter = router({
 
   updateSettings: userProcedure.input(UserSettingsSchema).mutation(async ({ ctx, input }) => {
     const { keyVaults, ...res } = input as Partial<UserSettings>;
+
+    if (ctx.workspaceId && (hasOwnerSettingChange(res) || hasMemberSettingChange(res))) {
+      const rbac = new RbacModel(ctx.serverDB, ctx.userId);
+      const allowed = hasOwnerSettingChange(res)
+        ? await rbac.hasPermission(WORKSPACE_UPDATE_PERMISSION, {
+            workspaceId: ctx.workspaceId,
+          })
+        : await rbac.hasAnyPermission([...WORKSPACE_CONTENT_PERMISSIONS], {
+            workspaceId: ctx.workspaceId,
+          });
+
+      if (!allowed) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'You do not have permission to perform this action.',
+        });
+      }
+    }
 
     // Encrypt keyVaults
     let encryptedKeyVaults: string | null = null;

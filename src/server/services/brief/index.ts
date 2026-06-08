@@ -35,13 +35,15 @@ export class BriefService {
   private db: LobeChatDatabase;
   private taskModel: TaskModel;
   private userId: string;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
-    this.agentModel = new AgentModel(db, userId);
-    this.briefModel = new BriefModel(db, userId);
-    this.taskModel = new TaskModel(db, userId);
+    this.workspaceId = workspaceId;
+    this.agentModel = new AgentModel(db, userId, workspaceId);
+    this.briefModel = new BriefModel(db, userId, workspaceId);
+    this.taskModel = new TaskModel(db, userId, workspaceId);
   }
 
   /**
@@ -208,7 +210,7 @@ export class BriefService {
         // Lazy-loaded to avoid pulling ModelRuntime into BriefService's
         // import graph (TaskRunner → TaskLifecycle → ModelRuntime).
         const { TaskRunnerService } = await import('@/server/services/taskRunner');
-        const runner = new TaskRunnerService(this.db, this.userId);
+        const runner = new TaskRunnerService(this.db, this.userId, this.workspaceId);
         await runner.cascadeOnCompletion(brief.taskId);
       }
     }

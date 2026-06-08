@@ -96,6 +96,9 @@ export class UserPersonaService {
 
   async composeWriting(payload: UserPersonaAgentPayload): Promise<UserPersonaAgentResult> {
     const agentConfig = await this.resolveAgentConfig(payload.userId);
+    // workspace-audit: intentionally personal-scoped (no workspaceId). Persona is a
+    // purely user-level feature with no workspace concept; the payload carries no
+    // workspaceId, so provider config is resolved against the user's personal scope.
     const aiInfraRepos = new AiInfraRepos(this.db, payload.userId, {});
     const runtimeState = await aiInfraRepos.getAiProviderRuntimeState(
       KeyVaultsGateKeeper.getUserKeyVaults,

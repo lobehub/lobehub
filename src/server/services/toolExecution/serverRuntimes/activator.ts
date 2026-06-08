@@ -67,7 +67,7 @@ export const activatorRuntime: ServerRuntimeRegistration = {
     // Create SkillsExecutionRuntime for activateSkill delegation
     let skillsRuntime: SkillsExecutionRuntime | undefined;
     if (context.serverDB && context.userId) {
-      const skillModel = new AgentSkillModel(context.serverDB, context.userId);
+      const skillModel = new AgentSkillModel(context.serverDB, context.userId, context.workspaceId);
       skillsRuntime = new SkillsExecutionRuntime({
         builtinSkills: filterBuiltinSkills(builtinSkills),
         service: {

@@ -1,3 +1,4 @@
+import { buildWorkspaceWhere } from '@lobechat/database';
 import type { DocumentItem } from '@lobechat/database/schemas';
 import { documentHistories, documents } from '@lobechat/database/schemas';
 import { and, desc, eq, gte, inArray, lt, or } from 'drizzle-orm';
@@ -30,11 +31,19 @@ const getDocumentEditorData = (document: DocumentItem | undefined): Record<strin
 export class DocumentHistoryService {
   private readonly db: DatabaseLike;
   private readonly userId: string;
+  private readonly workspaceId?: string;
 
-  constructor(db: DatabaseLike, userId: string) {
+  constructor(db: DatabaseLike, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
+
+  private documentsOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents);
+
+  private historiesOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documentHistories);
 
   createHistory = async (params: {
     documentId: string;
@@ -45,7 +54,7 @@ export class DocumentHistoryService {
     const [document] = await this.db
       .select({ id: documents.id })
       .from(documents)
-      .where(and(eq(documents.id, params.documentId), eq(documents.userId, this.userId)))
+      .where(and(eq(documents.id, params.documentId), this.documentsOwnership()))
       .limit(1);
 
     if (!document) {
@@ -58,6 +67,7 @@ export class DocumentHistoryService {
       saveSource: params.saveSource,
       savedAt: params.savedAt,
       userId: this.userId,
+      workspaceId: this.workspaceId ?? null,
     });
 
     await this.trimHistoryBySource(params.documentId, params.saveSource);
@@ -106,7 +116,7 @@ export class DocumentHistoryService {
       where: and(
         eq(documentHistories.id, params.historyId),
         eq(documentHistories.documentId, params.documentId),
-        eq(documentHistories.userId, this.userId),
+        this.historiesOwnership(),
         options?.historySince ? gte(documentHistories.savedAt, options.historySince) : undefined,
       ),
     });
@@ -151,7 +161,7 @@ export class DocumentHistoryService {
       orderBy: [desc(documentHistories.savedAt), desc(documentHistories.id)],
       where: and(
         eq(documentHistories.documentId, params.documentId),
-        eq(documentHistories.userId, this.userId),
+        this.historiesOwnership(),
         options?.historySince ? gte(documentHistories.savedAt, options.historySince) : undefined,
         params.beforeSavedAt !== undefined && params.beforeId !== undefined
           ? or(
@@ -212,7 +222,7 @@ export class DocumentHistoryService {
 
   private findHeadDocument = async (documentId: string) => {
     return this.db.query.documents.findFirst({
-      where: and(eq(documents.id, documentId), eq(documents.userId, this.userId)),
+      where: and(eq(documents.id, documentId), this.documentsOwnership()),
     });
   };
 
@@ -229,7 +239,7 @@ export class DocumentHistoryService {
       .where(
         and(
           eq(documentHistories.documentId, documentId),
-          eq(documentHistories.userId, this.userId),
+          this.historiesOwnership(),
           eq(documentHistories.saveSource, saveSource),
         ),
       )
@@ -242,7 +252,7 @@ export class DocumentHistoryService {
     await this.db.delete(documentHistories).where(
       and(
         eq(documentHistories.documentId, documentId),
-        eq(documentHistories.userId, this.userId),
+        this.historiesOwnership(),
         eq(documentHistories.saveSource, saveSource),
         inArray(
           documentHistories.id,

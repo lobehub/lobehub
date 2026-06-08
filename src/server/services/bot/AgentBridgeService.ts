@@ -180,6 +180,7 @@ interface ActiveReaction {
 export class AgentBridgeService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
+  private readonly workspaceId?: string;
 
   private timezone: string | undefined;
   private timezoneLoaded = false;
@@ -351,13 +352,16 @@ export class AgentBridgeService {
     }
   }
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
 
   private async interruptTrackedOperation(threadId: string, operationId: string): Promise<void> {
-    const aiAgentService = new AiAgentService(this.db, this.userId);
+    const aiAgentService = new AiAgentService(this.db, this.userId, {
+      workspaceId: this.workspaceId,
+    });
     const result = await aiAgentService.interruptTask({ operationId });
     if (!result.success) {
       throw new Error(`Failed to interrupt operation ${operationId}`);
@@ -575,7 +579,7 @@ export class AgentBridgeService {
     // Wrapped in try/catch so transient DB errors fall through to the
     // existing topicId rather than rejecting before the guarded section.
     try {
-      const topicModel = new TopicModel(this.db, this.userId);
+      const topicModel = new TopicModel(this.db, this.userId, this.workspaceId);
       const existingTopic = await topicModel.findById(topicId);
       if (existingTopic) {
         const elapsed = Date.now() - new Date(existingTopic.updatedAt).getTime();
@@ -728,7 +732,9 @@ export class AgentBridgeService {
     } = opts;
 
     const queueMode = isQueueAgentRuntimeEnabled();
-    const aiAgentService = new AiAgentService(this.db, this.userId);
+    const aiAgentService = new AiAgentService(this.db, this.userId, {
+      workspaceId: this.workspaceId,
+    });
     const timezone = await this.loadTimezone();
 
     // When the message-gateway is configured AND the platform supports typing
@@ -852,6 +858,7 @@ export class AgentBridgeService {
       // alarm timeout instead of stopping at completion.
       userId: this.userId,
       userMessageId: userMessage.id,
+      workspaceId: this.workspaceId,
     };
 
     log(
@@ -1330,13 +1337,17 @@ export class AgentBridgeService {
                     // title generation (the prompt itself still drives it on
                     // the next round).
                     if (resolvedTopicId && prompt && lastAssistantContent) {
-                      const topicModel = new TopicModel(this.db, this.userId);
+                      const topicModel = new TopicModel(this.db, this.userId, this.workspaceId);
                       topicModel
                         .findById(resolvedTopicId)
                         .then(async (topic) => {
                           if (topic?.title) return;
 
-                          const systemAgent = new SystemAgentService(this.db, this.userId);
+                          const systemAgent = new SystemAgentService(
+                            this.db,
+                            this.userId,
+                            this.workspaceId,
+                          );
                           const title = await systemAgent.generateTopicTitle({
                             lastAssistantContent,
                             userPrompt: prompt,

@@ -46,19 +46,21 @@ const hashContent = (content: string): string => Md5.hashStr(content);
 export class WebBrowsingDocumentService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
+  private readonly workspaceId?: string;
   private readonly documentModel: DocumentModel;
   private readonly topicDocumentModel: TopicDocumentModel;
   private documentServiceInstance?: DocumentService;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
-    this.documentModel = new DocumentModel(db, userId);
-    this.topicDocumentModel = new TopicDocumentModel(db, userId);
+    this.workspaceId = workspaceId;
+    this.documentModel = new DocumentModel(db, userId, workspaceId);
+    this.topicDocumentModel = new TopicDocumentModel(db, userId, workspaceId);
   }
 
   private get documentService() {
-    this.documentServiceInstance ??= new DocumentService(this.db, this.userId);
+    this.documentServiceInstance ??= new DocumentService(this.db, this.userId, this.workspaceId);
     return this.documentServiceInstance;
   }
 

@@ -1,14 +1,20 @@
 import { InsertChatGroupSchema } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
+import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { UserModel } from '@/database/models/user';
 import { AgentGroupRepository } from '@/database/repositories/agentGroup';
+import { workspaceMembers } from '@/database/schemas';
 import { type ChatGroupConfig } from '@/database/types/chatGroup';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentGroupService } from '@/server/services/agentGroup';
+import { TransferErrorCode } from '@/types/transferError';
 
 /**
  * Custom schema for agent member input, replacing drizzle-generated insertAgentSchema
@@ -39,22 +45,27 @@ const agentMemberInputSchema = z
   })
   .partial();
 
-const agentGroupProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const agentGroupProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const wsId = ctx.workspaceId ?? undefined;
 
   return opts.next({
     ctx: {
-      agentGroupRepo: new AgentGroupRepository(ctx.serverDB, ctx.userId),
-      agentGroupService: new AgentGroupService(ctx.serverDB, ctx.userId),
-      agentModel: new AgentModel(ctx.serverDB, ctx.userId),
-      chatGroupModel: new ChatGroupModel(ctx.serverDB, ctx.userId),
+      agentGroupRepo: new AgentGroupRepository(ctx.serverDB, ctx.userId, wsId),
+      agentGroupService: new AgentGroupService(ctx.serverDB, ctx.userId, wsId),
+      agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
+      chatGroupModel: new ChatGroupModel(ctx.serverDB, ctx.userId, wsId),
       userModel: new UserModel(ctx.serverDB, ctx.userId),
     },
   });
 });
 
+// Write variant gates viewers out of chat-group mutations (create/update/
+// delete + member adds/removes). Reads keep the bare proc.
+const agentGroupProcedureWrite = agentGroupProcedure.use(withScopedPermission('agent:update'));
+
 export const agentGroupRouter = router({
-  addAgentsToGroup: agentGroupProcedure
+  addAgentsToGroup: agentGroupProcedureWrite
     .input(
       z.object({
         agentIds: z.array(z.string()),
@@ -69,7 +80,7 @@ export const agentGroupRouter = router({
    * Batch create virtual agents and add them to an existing group.
    * This is more efficient than calling createAgentOnly multiple times.
    */
-  batchCreateAgentsInGroup: agentGroupProcedure
+  batchCreateAgentsInGroup: agentGroupProcedureWrite
     .input(
       z.object({
         agents: z.array(agentMemberInputSchema),
@@ -114,14 +125,16 @@ export const agentGroupRouter = router({
    * The supervisor agent is automatically created as a virtual agent.
    * Returns the groupId and supervisorAgentId.
    */
-  createGroup: agentGroupProcedure.input(InsertChatGroupSchema).mutation(async ({ input, ctx }) => {
-    const { group, supervisorAgentId } = await ctx.agentGroupRepo.createGroupWithSupervisor({
-      ...input,
-      config: ctx.agentGroupService.normalizeGroupConfig(input.config as ChatGroupConfig | null),
-    });
+  createGroup: agentGroupProcedureWrite
+    .input(InsertChatGroupSchema)
+    .mutation(async ({ input, ctx }) => {
+      const { group, supervisorAgentId } = await ctx.agentGroupRepo.createGroupWithSupervisor({
+        ...input,
+        config: ctx.agentGroupService.normalizeGroupConfig(input.config as ChatGroupConfig | null),
+      });
 
-    return { group, supervisorAgentId };
-  }),
+      return { group, supervisorAgentId };
+    }),
 
   /**
    * Create a group with virtual member agents in one request.
@@ -132,7 +145,7 @@ export const agentGroupRouter = router({
    * 3. Create the group with supervisor and member agents
    * Returns the groupId, supervisorAgentId, and created member agentIds.
    */
-  createGroupWithMembers: agentGroupProcedure
+  createGroupWithMembers: agentGroupProcedureWrite
     .input(
       z.object({
         groupConfig: InsertChatGroupSchema,
@@ -188,7 +201,7 @@ export const agentGroupRouter = router({
       return { agentIds: memberAgentIds, groupId: group.id, supervisorAgentId };
     }),
 
-  deleteGroup: agentGroupProcedure
+  deleteGroup: agentGroupProcedureWrite
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.agentGroupService.deleteGroup(input.id);
@@ -199,7 +212,7 @@ export const agentGroupRouter = router({
    * Creates a new group with the same config, a new supervisor, and copies of virtual members.
    * Non-virtual members are referenced (not copied).
    */
-  duplicateGroup: agentGroupProcedure
+  duplicateGroup: agentGroupProcedureWrite
     .input(
       z.object({
         groupId: z.string(),
@@ -273,7 +286,7 @@ export const agentGroupRouter = router({
    * @param agentIds - Array of agent IDs to remove
    * @param deleteVirtualAgents - Whether to delete virtual agents (default: true)
    */
-  removeAgentsFromGroup: agentGroupProcedure
+  removeAgentsFromGroup: agentGroupProcedureWrite
     .input(
       z.object({
         agentIds: z.array(z.string()),
@@ -289,7 +302,83 @@ export const agentGroupRouter = router({
       );
     }),
 
-  updateAgentInGroup: agentGroupProcedure
+  transferGroup: agentGroupProcedureWrite
+    .input(
+      z.object({
+        groupId: z.string(),
+        targetWorkspaceId: z.string().nullable(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const group = await ctx.chatGroupModel.findById(input.groupId);
+      if (!group) {
+        throw new TRPCError({
+          cause: { data: { code: TransferErrorCode.ResourceNotFound } },
+          code: 'NOT_FOUND',
+          message: 'Agent group not found',
+        });
+      }
+
+      if (ctx.workspaceId && group.userId !== ctx.userId) {
+        const [membership] = await ctx.serverDB
+          .select({ role: workspaceMembers.role })
+          .from(workspaceMembers)
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, ctx.workspaceId),
+              eq(workspaceMembers.userId, ctx.userId),
+              isNull(workspaceMembers.deletedAt),
+            ),
+          )
+          .limit(1);
+
+        if (!membership || membership.role !== 'owner') {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.OwnerOnly } },
+            code: 'FORBIDDEN',
+            message: 'Only workspace owners can transfer agent groups created by others',
+          });
+        }
+      }
+
+      if (input.targetWorkspaceId) {
+        const [targetMembership] = await ctx.serverDB
+          .select({ role: workspaceMembers.role })
+          .from(workspaceMembers)
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, input.targetWorkspaceId),
+              eq(workspaceMembers.userId, ctx.userId),
+              isNull(workspaceMembers.deletedAt),
+            ),
+          )
+          .limit(1);
+
+        if (!targetMembership || targetMembership.role === 'viewer') {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.TargetNoWriteAccess } },
+            code: 'FORBIDDEN',
+            message: 'No write access to target workspace',
+          });
+        }
+      }
+
+      if (input.targetWorkspaceId === ctx.workspaceId) {
+        throw new TRPCError({
+          cause: { data: { code: TransferErrorCode.SameWorkspace } },
+          code: 'BAD_REQUEST',
+          message: 'Cannot transfer agent group to the same workspace',
+        });
+      }
+
+      return ctx.agentGroupRepo.transferToWorkspace(
+        input.groupId,
+        input.targetWorkspaceId,
+        ctx.userId,
+      );
+    }),
+
+  updateAgentInGroup: agentGroupProcedureWrite
     .input(
       z.object({
         agentId: z.string(),
@@ -305,7 +394,7 @@ export const agentGroupRouter = router({
       return ctx.chatGroupModel.updateAgentInGroup(input.groupId, input.agentId, input.updates);
     }),
 
-  updateGroup: agentGroupProcedure
+  updateGroup: agentGroupProcedureWrite
     .input(
       z.object({
         id: z.string(),

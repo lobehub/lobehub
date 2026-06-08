@@ -2,8 +2,10 @@ import { TRPCError } from '@trpc/server';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AiProviderModel } from '@/database/models/aiProvider';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
@@ -11,8 +13,9 @@ import {
   GithubCopilotOAuthService,
 } from '@/server/services/oauthDeviceFlow/providers/githubCopilot';
 
-const oauthProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const oauthProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const wsId = ctx.workspaceId ?? undefined;
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
 
   return opts.next({
@@ -22,6 +25,7 @@ const oauthProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
     },
   });
 });
+const oauthWriteProcedure = oauthProcedure.use(withScopedPermission('ai_provider:update'));
 
 /**
  * Get OAuth Device Flow config for a provider
@@ -70,7 +74,7 @@ export const oauthDeviceFlowRouter = router({
   /**
    * Initiate OAuth Device Flow - request a device code
    */
-  initiateDeviceCode: oauthProcedure
+  initiateDeviceCode: oauthWriteProcedure
     .input(z.object({ providerId: z.string() }))
     .mutation(async ({ input }) => {
       const config = getOAuthConfig(input.providerId);
@@ -97,7 +101,7 @@ export const oauthDeviceFlowRouter = router({
   /**
    * Poll for authorization status and exchange tokens if authorized
    */
-  pollAuthStatus: oauthProcedure
+  pollAuthStatus: oauthWriteProcedure
     .input(
       z.object({
         deviceCode: z.string(),
@@ -177,7 +181,7 @@ export const oauthDeviceFlowRouter = router({
   /**
    * Revoke OAuth authorization for a provider
    */
-  revokeAuth: oauthProcedure
+  revokeAuth: oauthWriteProcedure
     .input(z.object({ providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
       // Clear OAuth tokens and user info from keyVaults

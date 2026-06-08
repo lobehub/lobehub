@@ -61,6 +61,7 @@ const createImageInputSchema = z.object({
     .passthrough(),
   provider: z.string(),
   taskId: z.string(),
+  workspaceId: z.string().optional(),
 });
 
 /**
@@ -85,7 +86,12 @@ export const imageRouter = router({
         provider,
         model,
         params,
+        workspaceId,
       } = input;
+      const asyncTaskModel = new AsyncTaskModel(ctx.serverDB, ctx.userId, workspaceId);
+      const generationBatchModel = new GenerationBatchModel(ctx.serverDB, ctx.userId, workspaceId);
+      const generationModel = new GenerationModel(ctx.serverDB, ctx.userId, workspaceId);
+      const generationService = new GenerationService(ctx.serverDB, ctx.userId, workspaceId);
 
       log('Starting async image generation: %O', {
         generationId,
@@ -102,14 +108,14 @@ export const imageRouter = router({
       });
 
       // Check if generationBatch exists before processing
-      const generationBatch = await ctx.generationBatchModel.findById(generationBatchId);
+      const generationBatch = await generationBatchModel.findById(generationBatchId);
       if (!generationBatch) {
         log('Generation batch not found: %s, skipping image generation', generationBatchId);
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Invalid Request!' });
       }
 
       log('Updating task status to Processing: %s', taskId);
-      await ctx.asyncTaskModel.update(taskId, { status: AsyncTaskStatus.Processing });
+      await asyncTaskModel.update(taskId, { status: AsyncTaskStatus.Processing });
 
       // Use AbortController to prevent resource leaks
       const abortController = new AbortController();
@@ -128,7 +134,12 @@ export const imageRouter = router({
           );
 
           // Read user's provider config from database
-          const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
+          const modelRuntime = await initModelRuntimeFromDB(
+            ctx.serverDB,
+            ctx.userId,
+            provider,
+            workspaceId,
+          );
 
           // Check if operation has been cancelled
           checkAbortSignal(signal);
@@ -189,7 +200,7 @@ export const imageRouter = router({
             }
           }
 
-          const { image, thumbnailImage } = await ctx.generationService.transformImageForGeneration(
+          const { image, thumbnailImage } = await generationService.transformImageForGeneration(
             imageUrl,
             authHeaders,
           );
@@ -199,13 +210,13 @@ export const imageRouter = router({
 
           log('Uploading image for generation');
           const { imageUrl: uploadedImageUrl, thumbnailImageUrl } =
-            await ctx.generationService.uploadImageForGeneration(image, thumbnailImage);
+            await generationService.uploadImageForGeneration(image, thumbnailImage);
 
           // Check if operation has been cancelled
           checkAbortSignal(signal);
 
           log('Updating generation asset and file');
-          await ctx.generationModel.createAssetAndFile(
+          await generationModel.createAssetAndFile(
             generationId,
             {
               height: height ?? image.height,
@@ -234,7 +245,7 @@ export const imageRouter = router({
           const duration = Date.now() - generationBatch.createdAt.getTime();
 
           log('Updating task status to Success: %s, duration: %dms', taskId, duration);
-          await ctx.asyncTaskModel.update(taskId, {
+          await asyncTaskModel.update(taskId, {
             duration,
             status: AsyncTaskStatus.Success,
           });
@@ -316,7 +327,7 @@ export const imageRouter = router({
           providerContentPolicyMessage,
         });
 
-        await ctx.asyncTaskModel.update(taskId, {
+        await asyncTaskModel.update(taskId, {
           error: new AsyncTaskError(errorType, errorMessage),
           status: AsyncTaskStatus.Error,
         });

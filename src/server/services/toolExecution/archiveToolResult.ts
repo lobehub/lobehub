@@ -28,6 +28,7 @@ interface ArchiveToolResultParams {
   toolCallId?: string;
   topicId?: string | null;
   userId?: string;
+  workspaceId?: string;
 }
 
 const buildArchivePath = (topicId: string, toolCallId: string) =>
@@ -45,6 +46,7 @@ export const archiveToolResultIfNeeded = async ({
   toolCallId,
   topicId,
   userId,
+  workspaceId,
 }: ArchiveToolResultParams): Promise<ToolResultArchiveOutcome> => {
   if (identifier && ARCHIVE_BYPASS_IDENTIFIERS.has(identifier)) {
     return { archived: false, content };
@@ -65,12 +67,12 @@ export const archiveToolResultIfNeeded = async ({
   const archivePath = buildArchivePath(topicId, toolCallId);
 
   try {
-    const vfsService = new AgentDocumentVfsService(serverDB, userId);
+    const vfsService = new AgentDocumentVfsService(serverDB, userId, workspaceId);
     await vfsService.mkdir(TOOL_RESULTS_DIR, { agentId, topicId }, { recursive: true });
     const stats = await vfsService.write(archivePath, content, { agentId, topicId });
 
     if (stats.documentId) {
-      const topicDocumentModel = new TopicDocumentModel(serverDB, userId);
+      const topicDocumentModel = new TopicDocumentModel(serverDB, userId, workspaceId);
       const associated = await topicDocumentModel.isAssociated(stats.documentId, topicId);
       if (!associated) {
         await topicDocumentModel.associate({

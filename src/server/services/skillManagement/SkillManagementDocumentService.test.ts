@@ -272,6 +272,7 @@ const createService = () => {
         callback({} as Transaction),
     } as LobeChatDatabase,
     'user-1',
+    undefined,
     {
       agentDocumentModel,
       createMarkdownEditorSnapshot: createSnapshot,

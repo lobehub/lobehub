@@ -25,6 +25,7 @@ import { and, desc, eq, isNull, lte } from 'drizzle-orm';
 
 import { MessageModel } from '@/database/models/message';
 import { getServerDB } from '@/database/server';
+import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { extractTraceContext } from '@/libs/observability/traceparent';
 import { isAgentSignalEnabledForUser } from '@/server/services/agentSignal/featureGate';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
@@ -283,7 +284,12 @@ const persistWorkflowHydrationSkippedSnapshot = async (
 
 const buildFeedbackSourceSerializedContext = async (
   sourceEvent: SourceEventAgentUserMessage,
-  input: { contextEndAt?: Date; db: Awaited<ReturnType<typeof getServerDB>>; userId: string },
+  input: {
+    contextEndAt?: Date;
+    db: Awaited<ReturnType<typeof getServerDB>>;
+    userId: string;
+    workspaceId?: string;
+  },
 ): Promise<string | undefined> => {
   if (typeof sourceEvent.payload.serializedContext === 'string') {
     return sourceEvent.payload.serializedContext;
@@ -291,7 +297,7 @@ const buildFeedbackSourceSerializedContext = async (
 
   if (typeof sourceEvent.payload.topicId !== 'string') return undefined;
 
-  const messageModel = new MessageModel(input.db, input.userId);
+  const messageModel = new MessageModel(input.db, input.userId, input.workspaceId);
   const anchorMessage = await messageModel.findById(sourceEvent.payload.messageId);
 
   if (!anchorMessage?.createdAt) return undefined;
@@ -306,7 +312,7 @@ const buildFeedbackSourceSerializedContext = async (
     limit: 10,
     orderBy: [desc(messages.createdAt)],
     where: and(
-      eq(messages.userId, input.userId),
+      buildWorkspaceWhere({ userId: input.userId, workspaceId: input.workspaceId }, messages),
       eq(messages.topicId, sourceEvent.payload.topicId),
       lte(messages.createdAt, contextEndAt),
       threadScopeFilter,
@@ -328,7 +334,12 @@ const buildFeedbackSourceSerializedContext = async (
 
 const enrichFeedbackSourceSerializedContext = async (
   sourceEvent: AgentSignalWorkflowRunPayload['sourceEvent'],
-  input: { contextEndAt?: Date; db: Awaited<ReturnType<typeof getServerDB>>; userId: string },
+  input: {
+    contextEndAt?: Date;
+    db: Awaited<ReturnType<typeof getServerDB>>;
+    userId: string;
+    workspaceId?: string;
+  },
 ): Promise<AgentSignalWorkflowRunPayload['sourceEvent']> => {
   if (!isAgentUserMessageSource(sourceEvent)) return sourceEvent;
 
@@ -370,7 +381,7 @@ const enrichFeedbackSourceSerializedContext = async (
  */
 const normalizeWorkflowSourceEvent = async (
   sourceEvent: AgentSignalWorkflowRunPayload['sourceEvent'],
-  input: { db: Awaited<ReturnType<typeof getServerDB>>; userId: string },
+  input: { db: Awaited<ReturnType<typeof getServerDB>>; userId: string; workspaceId?: string },
 ): Promise<{
   hydration?: WorkflowHydrationDiagnostic;
   sourceEvent: AgentSignalWorkflowRunPayload['sourceEvent'];
@@ -519,6 +530,7 @@ export const runAgentSignalWorkflow = async (
                 const result = await normalizeWorkflowSourceEvent(payload.sourceEvent, {
                   db,
                   userId: payload.userId,
+                  workspaceId: payload.workspaceId,
                 });
                 if (result.hydration) {
                   hydrationDiagnostic = result.hydration;
@@ -567,6 +579,7 @@ export const runAgentSignalWorkflow = async (
                       db,
                       selfIterationEnabled,
                       userId: payload.userId,
+                      workspaceId: payload.workspaceId,
                     })
                   : undefined;
                 const selfReflection = isSelfReflectionSource(normalizedSourceEvent)
@@ -575,6 +588,7 @@ export const runAgentSignalWorkflow = async (
                       db,
                       selfIterationEnabled,
                       userId: payload.userId,
+                      workspaceId: payload.workspaceId,
                     })
                   : undefined;
                 const selfFeedbackIntent = isSelfFeedbackIntentSource(normalizedSourceEvent)
@@ -583,6 +597,7 @@ export const runAgentSignalWorkflow = async (
                       db,
                       selfIterationEnabled,
                       userId: payload.userId,
+                      workspaceId: payload.workspaceId,
                     })
                   : undefined;
                 const procedure = isToolOutcomeSource(normalizedSourceEvent)
@@ -591,6 +606,7 @@ export const runAgentSignalWorkflow = async (
                       db,
                       selfIterationEnabled,
                       userId: payload.userId,
+                      workspaceId: payload.workspaceId,
                     })
                   : undefined;
                 const executionResult = await context.run(
@@ -602,6 +618,7 @@ export const runAgentSignalWorkflow = async (
                         agentId: payload.agentId,
                         db,
                         userId: payload.userId,
+                        workspaceId: payload.workspaceId,
                       },
                       {
                         policyOptions: {

@@ -31,8 +31,8 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
       throw new Error('userId and serverDB are required for Agent Builder execution');
     }
 
-    const agentModel = new AgentModel(context.serverDB, context.userId);
-    const pluginModel = new PluginModel(context.serverDB, context.userId);
+    const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
+    const pluginModel = new PluginModel(context.serverDB, context.userId, context.workspaceId);
     const aiInfraRepos = new AiInfraRepos(context.serverDB, context.userId, {});
     const discoverService = new DiscoverService();
 

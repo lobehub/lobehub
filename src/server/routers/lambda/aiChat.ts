@@ -9,12 +9,14 @@ import { getStatusKeyFromCode } from '@trpc/server/unstable-core-do-not-import';
 import debug from 'debug';
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { LOADING_FLAT } from '@/const/message';
 import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { resolveContext } from '@/server/routers/lambda/_helpers/resolveContext';
 import { AiChatService } from '@/server/services/aiChat';
@@ -59,24 +61,27 @@ const createRuntimeTRPCError = (error: unknown): TRPCError | undefined => {
   });
 };
 
-const aiChatProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const aiChatProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const wsId = ctx.workspaceId ?? undefined;
 
   return opts.next({
     ctx: {
-      agentModel: new AgentModel(ctx.serverDB, ctx.userId),
-      aiChatService: new AiChatService(ctx.serverDB, ctx.userId),
-      aiGenerationService: new AiGenerationService(ctx.serverDB, ctx.userId),
-      fileService: new FileService(ctx.serverDB, ctx.userId),
-      messageModel: new MessageModel(ctx.serverDB, ctx.userId),
-      threadModel: new ThreadModel(ctx.serverDB, ctx.userId),
-      topicModel: new TopicModel(ctx.serverDB, ctx.userId),
+      agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
+      aiChatService: new AiChatService(ctx.serverDB, ctx.userId, wsId),
+      aiGenerationService: new AiGenerationService(ctx.serverDB, ctx.userId, wsId),
+      fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
+      messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
+      threadModel: new ThreadModel(ctx.serverDB, ctx.userId, wsId),
+      topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
 
+const aiChatWriteProcedure = aiChatProcedure.use(withScopedPermission('message:create'));
+
 export const aiChatRouter = router({
-  outputJSON: aiChatProcedure.input(StructureOutputSchema).mutation(async ({ input, ctx }) => {
+  outputJSON: aiChatWriteProcedure.input(StructureOutputSchema).mutation(async ({ input, ctx }) => {
     log('outputJSON called with provider: %s, model: %s', input.provider, input.model);
     log('messages count: %d', input.messages.length);
     log('schema: %O', input.schema);
@@ -118,7 +123,7 @@ export const aiChatRouter = router({
     return { data, tracingId };
   }),
 
-  sendMessageInServer: aiChatProcedure
+  sendMessageInServer: aiChatWriteProcedure
     .input(AiSendMessageServerSchema)
     .mutation(async ({ input, ctx }) => {
       const timingContext =
@@ -144,7 +149,7 @@ export const aiChatRouter = router({
         const context = await runTimedStage(
           timingContext,
           'lambda.aiChat.resolveContext',
-          () => resolveContext(input, ctx.serverDB, ctx.userId),
+          () => resolveContext(input, ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
           { hasAgentId: !!input.agentId },
         );
         if (!!context.sessionId) sessionId = context.sessionId;
@@ -405,6 +410,7 @@ export const aiChatRouter = router({
         ...input,
         serverDB: ctx.serverDB,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
       });
     }),
 });

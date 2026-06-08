@@ -25,6 +25,7 @@ interface ResolveArgs {
   db: LobeChatDatabase;
   fileIds: string[];
   userId: string;
+  workspaceId?: string;
 }
 
 const dedupe = (ids: string[]) => Array.from(new Set(ids));
@@ -41,6 +42,7 @@ export const resolveAttachmentsByFileIds = async ({
   db,
   fileIds,
   userId,
+  workspaceId,
 }: ResolveArgs): Promise<ResolvedAttachments> => {
   const result: ResolvedAttachments = {
     fileList: [],
@@ -52,15 +54,15 @@ export const resolveAttachmentsByFileIds = async ({
   if (fileIds.length === 0) return result;
 
   const dedupedFileIds = dedupe(fileIds);
-  const fileModel = new FileModel(db, userId);
-  const fileService = new FileService(db, userId);
+  const fileModel = new FileModel(db, userId, workspaceId);
+  const fileService = new FileService(db, userId, workspaceId);
   const fileRecords = await fileModel.findByIds(dedupedFileIds);
   if (fileRecords.length === 0) {
     log('no file records found for fileIds=%O', dedupedFileIds);
     return result;
   }
 
-  const documentService = new DocumentService(db, userId);
+  const documentService = new DocumentService(db, userId, workspaceId);
   const recordById = new Map(fileRecords.map((f) => [f.id, f]));
 
   // Resolve every file in parallel — URL signing + PDF parsing can both be
@@ -145,18 +147,19 @@ export const resolveAttachmentMetadata = async ({
   fileIds,
   signUrls = true,
   userId,
+  workspaceId,
 }: ResolveArgs & { signUrls?: boolean }): Promise<ChatFileItem[]> => {
   if (fileIds.length === 0) return [];
 
   const dedupedFileIds = dedupe(fileIds);
-  const fileModel = new FileModel(db, userId);
+  const fileModel = new FileModel(db, userId, workspaceId);
   const fileRecords = await fileModel.findByIds(dedupedFileIds);
   if (fileRecords.length === 0) {
     log('no file records found for fileIds=%O', dedupedFileIds);
     return [];
   }
 
-  const fileService = signUrls ? new FileService(db, userId) : null;
+  const fileService = signUrls ? new FileService(db, userId, workspaceId) : null;
   const recordById = new Map(fileRecords.map((f) => [f.id, f]));
   const items = await Promise.all(
     dedupedFileIds.map(async (id) => {

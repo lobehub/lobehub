@@ -3,6 +3,7 @@ import { and, desc, eq, lt, or } from 'drizzle-orm';
 import type { DocumentHistoryItem, NewDocumentHistory } from '../schemas';
 import { documentHistories, documents } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface QueryDocumentHistoryParams {
   beforeId?: string;
@@ -13,18 +14,32 @@ export interface QueryDocumentHistoryParams {
 
 export class DocumentHistoryModel {
   private userId: string;
+  private workspaceId?: string;
   private db: LobeChatDatabase;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
+    this.workspaceId = workspaceId;
     this.db = db;
+  }
+
+  private ownership() {
+    return buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      documentHistories,
+    );
   }
 
   create = async (params: Omit<NewDocumentHistory, 'userId'>): Promise<DocumentHistoryItem> => {
     const [document] = await this.db
       .select({ id: documents.id })
       .from(documents)
-      .where(and(eq(documents.id, params.documentId), eq(documents.userId, this.userId)))
+      .where(
+        and(
+          eq(documents.id, params.documentId),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
+        ),
+      )
       .limit(1);
 
     if (!document) {
@@ -33,7 +48,7 @@ export class DocumentHistoryModel {
 
     const [result] = await this.db
       .insert(documentHistories)
-      .values({ ...params, userId: this.userId })
+      .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, params))
       .returning();
 
     return result!;
@@ -42,29 +57,24 @@ export class DocumentHistoryModel {
   delete = async (id: string) => {
     return this.db
       .delete(documentHistories)
-      .where(and(eq(documentHistories.id, id), eq(documentHistories.userId, this.userId)));
+      .where(and(eq(documentHistories.id, id), this.ownership()));
   };
 
   deleteByDocumentId = async (documentId: string) => {
     return this.db
       .delete(documentHistories)
-      .where(
-        and(
-          eq(documentHistories.documentId, documentId),
-          eq(documentHistories.userId, this.userId),
-        ),
-      );
+      .where(and(eq(documentHistories.documentId, documentId), this.ownership()));
   };
 
   deleteAll = async () => {
-    return this.db.delete(documentHistories).where(eq(documentHistories.userId, this.userId));
+    return this.db.delete(documentHistories).where(this.ownership());
   };
 
   findById = async (id: string): Promise<DocumentHistoryItem | undefined> => {
     const [result] = await this.db
       .select()
       .from(documentHistories)
-      .where(and(eq(documentHistories.id, id), eq(documentHistories.userId, this.userId)))
+      .where(and(eq(documentHistories.id, id), this.ownership()))
       .limit(1);
 
     return result;
@@ -74,12 +84,7 @@ export class DocumentHistoryModel {
     const [result] = await this.db
       .select()
       .from(documentHistories)
-      .where(
-        and(
-          eq(documentHistories.documentId, documentId),
-          eq(documentHistories.userId, this.userId),
-        ),
-      )
+      .where(and(eq(documentHistories.documentId, documentId), this.ownership()))
       .orderBy(desc(documentHistories.savedAt), desc(documentHistories.id))
       .limit(1);
 
@@ -92,10 +97,7 @@ export class DocumentHistoryModel {
     documentId,
     limit = 50,
   }: QueryDocumentHistoryParams): Promise<DocumentHistoryItem[]> => {
-    const conditions = [
-      eq(documentHistories.documentId, documentId),
-      eq(documentHistories.userId, this.userId),
-    ];
+    const conditions = [eq(documentHistories.documentId, documentId), this.ownership()];
 
     if (beforeSavedAt !== undefined) {
       if (beforeId !== undefined) {

@@ -71,6 +71,23 @@ describe('defineSkillManagementActionHandler', () => {
     expect(context.runtimeState.touchGuardState).toHaveBeenCalledTimes(1);
   });
 
+  it('forwards the workspaceId onto the dispatched run so the write stays workspace-scoped', async () => {
+    dispatch.mockResolvedValue({ operationId: 'op_1', topicId: 'topic_1' });
+
+    const handler = defineSkillManagementActionHandler({
+      db: {} as never,
+      dispatch,
+      selfIterationEnabled: true,
+      userId: 'user_1',
+      workspaceId: 'ws_1',
+    });
+
+    await handler.handle(skillAction, createContext());
+
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch.mock.calls[0][0].workspaceId).toBe('ws_1');
+  });
+
   it('skips when self-iteration is disabled (no dispatch)', async () => {
     const handler = defineSkillManagementActionHandler({
       db: {} as never,

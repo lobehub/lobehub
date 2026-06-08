@@ -1,6 +1,7 @@
 import { type ComfyUIKeyVault } from '@lobechat/types';
 import { z } from 'zod';
 
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 // Import Framework layer services
 import { ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClientService';
@@ -26,6 +27,7 @@ export const comfyuiRouter = router({
    * Create image with complete business logic
    */
   createImage: authedProcedure
+    .use(withScopedPermission('file:upload'))
     .input(
       z.object({
         model: z.string(),
