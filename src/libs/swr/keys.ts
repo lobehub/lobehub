@@ -739,11 +739,12 @@ export const homeKeys = {
 export const taskTemplateKeys = {
   listDailyRecommend: def(
     'taskTemplate:listDailyRecommend',
-    (interestsKey: string, refreshSeed: unknown, recommendationCount: number) => [
+    (interestsKey: string, refreshSeed: unknown, recommendationCount: number, locale: string) => [
       'taskTemplate:listDailyRecommend',
       interestsKey,
       refreshSeed,
       recommendationCount,
+      locale,
     ],
   ),
 };

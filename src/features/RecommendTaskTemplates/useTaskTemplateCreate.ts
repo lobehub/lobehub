@@ -15,7 +15,7 @@ import { SkillConnectionPopupBlockedError, useSkillConnection } from './useSkill
 
 interface UseTaskTemplateCreateOptions {
   description: string;
-  onCreated: (templateId: string) => void;
+  onCreated: (templateId: number) => void;
   template: TaskTemplate;
   title: string;
 }
@@ -51,12 +51,11 @@ export const useTaskTemplateCreate = ({
     if (!inboxAgentId) return;
     setLoading(true);
     try {
-      const instruction = t(`${template.id}.instruction`, { defaultValue: '' });
       const createdTask = await createTask({
         assigneeAgentId: inboxAgentId,
         automationMode: 'schedule',
         description,
-        instruction,
+        instruction: template.instruction,
         name: title,
         schedulePattern: template.cronPattern,
         scheduleTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -87,6 +86,7 @@ export const useTaskTemplateCreate = ({
     t,
     template.cronPattern,
     template.id,
+    template.instruction,
     title,
     canCreateTask,
   ]);

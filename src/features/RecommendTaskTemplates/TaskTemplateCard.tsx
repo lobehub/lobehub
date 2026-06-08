@@ -19,8 +19,8 @@ import { useTaskTemplateCreate } from './useTaskTemplateCreate';
 import { useVisibleAuthSpecs } from './useVisibleAuthSpecs';
 
 interface TaskTemplateCardProps {
-  onCreated: (templateId: string) => void;
-  onDismiss: (templateId: string) => void;
+  onCreated: (templateId: number) => void;
+  onDismiss: (templateId: number) => void;
   template: TaskTemplate;
 }
 
@@ -30,8 +30,8 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
 
     const iconSpec = useMemo(() => resolveTemplateIcon(template, INTEREST_ICON_MAP), [template]);
     const visibleAuthSpecs = useVisibleAuthSpecs(template, { hideMainIconProvider: true });
-    const title = t(`${template.id}.title`, { defaultValue: '' });
-    const description = t(`${template.id}.description`, { defaultValue: '' });
+    const title = template.title;
+    const description = template.description;
 
     const {
       created,

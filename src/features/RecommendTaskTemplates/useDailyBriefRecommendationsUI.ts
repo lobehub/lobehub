@@ -25,8 +25,8 @@ export type DailyBriefRecommendationsUIState =
   | { mode: 'skeleton'; skeletonCount: number }
   | {
       mode: 'cards';
-      onCreated: (templateId: string) => void;
-      onDismiss: (templateId: string) => void;
+      onCreated: (templateId: number) => void;
+      onDismiss: (templateId: number) => void;
       onRefresh: () => void;
       templates: TaskTemplate[];
     };
@@ -40,7 +40,8 @@ export function useDailyBriefRecommendationsUI(
 ): DailyBriefRecommendationsUIState {
   const { count } = options;
   const recommendationCount = count ?? TASK_TEMPLATE_RECOMMEND_COUNT;
-  const { t } = useTranslation('taskTemplate');
+  const { i18n, t } = useTranslation('taskTemplate');
+  const locale = i18n.resolvedLanguage || i18n.language;
   const { message } = App.useApp();
   const isLogin = useUserStore(authSelectors.isLogin);
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
@@ -57,11 +58,12 @@ export function useDailyBriefRecommendationsUI(
 
   const { data, isLoading, mutate } = useSWR(
     swrEnabled
-      ? taskTemplateKeys.listDailyRecommend(swrKey, refreshSeed, recommendationCount)
+      ? taskTemplateKeys.listDailyRecommend(swrKey, refreshSeed, recommendationCount, locale)
       : null,
     async () =>
       taskTemplateService.listDailyRecommend(interestKeys ?? [], {
         count: recommendationCount,
+        locale,
         refreshSeed: refreshSeed || undefined,
       }),
     { revalidateOnFocus: false, revalidateOnReconnect: false },
@@ -72,7 +74,7 @@ export function useDailyBriefRecommendationsUI(
   }, [setRefreshSeed]);
 
   const removeTemplateFromList = useCallback(
-    (templateId: string) => {
+    (templateId: number) => {
       mutate(
         (current) =>
           current
@@ -85,14 +87,14 @@ export function useDailyBriefRecommendationsUI(
   );
 
   const handleCreated = useCallback(
-    (templateId: string) => {
+    (templateId: number) => {
       removeTemplateFromList(templateId);
     },
     [removeTemplateFromList],
   );
 
   const handleDismiss = useCallback(
-    async (templateId: string) => {
+    async (templateId: number) => {
       removeTemplateFromList(templateId);
       try {
         await taskTemplateService.dismiss(templateId);

@@ -8,9 +8,12 @@ import { resolveTemplateIcon } from './resolveTemplateIcon';
 const baseTemplate = {
   category: 'engineering',
   cronPattern: '0 9 * * *',
-  id: 'test-template',
+  description: 'Description',
+  id: 101,
+  instruction: 'Instruction',
   interests: [],
-} satisfies Pick<TaskTemplate, 'category' | 'cronPattern' | 'id' | 'interests'>;
+  title: 'Title',
+} satisfies TaskTemplate;
 
 const make = (overrides: Partial<TaskTemplate>): TaskTemplate =>
   ({ ...baseTemplate, ...overrides }) as TaskTemplate;
