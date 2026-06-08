@@ -20,11 +20,13 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
 import { getSearchConfig } from '../getSearchConfig';
 import { isCanUseFC } from '../isCanUseFC';
+import { buildClientConnectorManifests } from './buildClientConnectorManifests';
 
 /**
  * Tools engine configuration options
@@ -83,8 +85,18 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
 
   const toolStoreState = getToolStoreState();
 
-  // Get all available plugin manifests
-  const pluginManifests = pluginSelectors.installedPluginManifestList(toolStoreState);
+  // Get custom connector manifests (user-added MCP servers). Connectors take
+  // priority over plugins: any plugin sharing a connector identifier is dropped
+  // so the connector (server-side execution with its stored token) wins.
+  const connectorManifests = buildClientConnectorManifests(
+    connectorSelectors.customConnectors(toolStoreState),
+  );
+  const connectorIdentifiers = new Set(connectorManifests.map((m) => m.identifier));
+
+  // Get all available plugin manifests (excluding ones now covered by a connector)
+  const pluginManifests = pluginSelectors
+    .installedPluginManifestList(toolStoreState)
+    .filter((m) => !connectorIdentifiers.has(m.identifier));
 
   // Get all builtin tool manifests
   const builtinManifests = toolStoreState.builtinTools.map((tool) => tool.manifest as ToolManifest);
@@ -106,6 +118,7 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
     ...dropInvalidManifests(builtinManifests, 'builtinTools'),
     ...dropInvalidManifests(klavisManifests, 'klavis'),
     ...dropInvalidManifests(lobehubSkillManifests, 'lobehubSkills'),
+    ...dropInvalidManifests(connectorManifests, 'connectors'),
     ...dropInvalidManifests(additionalManifests, 'additionalManifests'),
   ];
 

@@ -12,8 +12,17 @@ interface AddConnectorModalProps {
   open: boolean;
 }
 
-/** Open the authorize URL in a popup and resolve once it reports back. */
-const runOAuthPopup = (authorizationUrl: string, connectorId: string): Promise<boolean> =>
+type OAuthPopupResult = 'success' | 'closed';
+
+/**
+ * Open the authorize URL in a popup and resolve once it reports back.
+ *
+ * The callback page posts a message before attempting `window.close()`, so the
+ * 'success' signal is reliable even when the browser refuses to close a popup
+ * that navigated cross-origin. The popup-closed path is a fallback for when the
+ * user dismisses the window without finishing.
+ */
+const runOAuthPopup = (authorizationUrl: string, connectorId: string): Promise<OAuthPopupResult> =>
   new Promise((resolve) => {
     const popup = window.open(authorizationUrl, 'lobe-connector-oauth', 'width=600,height=720');
 
@@ -28,16 +37,15 @@ const runOAuthPopup = (authorizationUrl: string, connectorId: string): Promise<b
       if (!data || data.type !== 'lobe-connector-oauth') return;
       if (data.connectorId && data.connectorId !== connectorId) return;
       cleanup();
-      resolve(Boolean(data.success));
+      resolve(data.success ? 'success' : 'closed');
     };
 
     window.addEventListener('message', onMessage);
 
-    // Resolve (as failure) if the user closes the popup without authorizing.
     const timer = setInterval(() => {
       if (popup?.closed) {
         cleanup();
-        resolve(false);
+        resolve('closed');
       }
     }, 800);
   });
@@ -48,6 +56,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose }) => {
   const createConnector = useToolStore((s) => s.createConnector);
   const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
   const syncConnectorTools = useToolStore((s) => s.syncConnectorTools);
+  const fetchConnectors = useToolStore((s) => s.fetchConnectors);
 
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
@@ -90,20 +99,20 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose }) => {
         sourceType: ConnectorSourceType.custom,
       });
 
-      // Kick off the OAuth flow. If the server turns out not to require OAuth
-      // (no authorization server discovered), fall back to a plain tool sync.
+      // Kick off the OAuth flow. The callback exchanges the code and syncs the
+      // tool list server-side, so we only need to refresh once it reports back.
+      // If the server turns out not to require OAuth (no authorization server
+      // discovered), fall back to a plain tool sync for public MCP servers.
       try {
         const authorizationUrl = await startConnectorOAuth(connectorId);
-        const ok = await runOAuthPopup(authorizationUrl, connectorId);
-        if (ok) {
-          await syncConnectorTools(connectorId);
+        const result = await runOAuthPopup(authorizationUrl, connectorId);
+        // Reflect the server-side state regardless of how the popup ended
+        // (window.close is often blocked for cross-origin-navigated popups).
+        await fetchConnectors();
+        if (result === 'success') {
           message.success(t('connector.add.success', 'Connector connected'));
-        } else {
-          message.warning(t('connector.add.cancelled', 'Authorization was not completed'));
         }
       } catch {
-        // Not an OAuth server (or DCR unsupported without a client id) — try a
-        // direct sync so non-auth MCP servers still connect.
         try {
           await syncConnectorTools(connectorId);
           message.success(t('connector.add.success', 'Connector connected'));
