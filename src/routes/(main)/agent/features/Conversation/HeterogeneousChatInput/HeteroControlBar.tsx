@@ -56,7 +56,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const WorkingDirectoryBar = memo(() => {
+const HeteroControlBar = memo(() => {
   const { t: tChat } = useTranslation('chat');
   const agentId = useAgentId();
 
@@ -102,6 +102,6 @@ const WorkingDirectoryBar = memo(() => {
   );
 });
 
-WorkingDirectoryBar.displayName = 'HeterogeneousWorkingDirectoryBar';
+HeteroControlBar.displayName = 'HeteroControlBar';
 
-export default WorkingDirectoryBar;
+export default HeteroControlBar;

@@ -19,7 +19,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
-import WorkingDirectoryBar from './WorkingDirectoryBar';
+import HeteroControlBar from './HeteroControlBar';
 
 // Heterogeneous agents (e.g. Claude Code) bring their own toolchain, memory,
 // and model, so LobeHub-side pickers don't apply. Typo is kept so the user
@@ -133,7 +133,7 @@ const HeterogeneousChatInput = memo(() => {
       {renderDeviceGuard()}
       <ChatInput
         skipScrollMarginWithList
-        controlBarSlot={<WorkingDirectoryBar />}
+        controlBarSlot={<HeteroControlBar />}
         leftActions={leftActions}
         rightActions={rightActions}
         sendButtonProps={{ disabled: inputDisabled, shape: 'round' }}
