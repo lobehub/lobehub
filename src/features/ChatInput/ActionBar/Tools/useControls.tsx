@@ -317,6 +317,12 @@ const styles = createStaticStyles(({ css }) => ({
     width: 100%;
     min-width: 0;
   `,
+  toolTrailing: css`
+    display: inline-flex;
+    flex: none;
+    gap: 8px;
+    align-items: center;
+  `,
   typeTag: css`
     display: inline-flex;
     flex: none;
@@ -614,9 +620,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           {icon}
           <span className={cx(styles.toolLabelText)}>{label}</span>
           {extraTag}
-          {badge && <span className={cx(styles.typeTag)}>{badge}</span>}
         </span>
-        {action}
+        <span className={cx(styles.toolTrailing)}>
+          {badge && <span className={cx(styles.typeTag)}>{badge}</span>}
+          {action}
+        </span>
       </span>
     ),
     [openSkillPolicyMenu],
@@ -1000,15 +1008,17 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
                 {icon}
                 <span className={cx(styles.toolLabelText)}>{title}</span>
                 {officialTag}
+              </span>
+              <span className={cx(styles.toolTrailing)}>
                 <span className={cx(styles.typeTag)}>
                   <Icon icon={Wrench} size={12} />
                 </span>
+                <Tooltip placement={'top'} title={t('tools.activation.fixed.hint')}>
+                  <span className={cx(styles.fixedIndicator)}>
+                    <Icon icon={Pin} size={15} />
+                  </span>
+                </Tooltip>
               </span>
-              <Tooltip placement={'top'} title={t('tools.activation.fixed.hint')}>
-                <span className={cx(styles.fixedIndicator)}>
-                  <Icon icon={Pin} size={15} />
-                </span>
-              </Tooltip>
             </span>
           ),
           popoverContent,

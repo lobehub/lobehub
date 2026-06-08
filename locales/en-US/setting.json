@@ -1018,6 +1018,7 @@
   "tools.activation.pinned": "Pinned",
   "tools.activation.pinned.desc": "Always On",
   "tools.add": "Add Skill",
+  "tools.addSkillOrConnector": "Add Skills / Connector",
   "tools.builtins.configure": "Configure",
   "tools.builtins.find-skills.description": "Helps users discover and install agent skills when they ask \"how do I do X\", \"find a skill for X\", or want to extend capabilities",
   "tools.builtins.find-skills.title": "Find Skills",
