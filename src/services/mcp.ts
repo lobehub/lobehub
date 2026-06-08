@@ -51,7 +51,11 @@ class MCPService {
     // original executor path.
     const { connectorSelectors } = await import('@/store/tool/slices/connector');
     const connector = connectorSelectors.connectorByIdentifier(identifier)(s);
-    if (connector && (connector.mcpServerUrl || connector.mcpConnectionType === 'stdio')) {
+    if (
+      connector &&
+      connector.isEnabled &&
+      (connector.mcpServerUrl || connector.mcpConnectionType === 'stdio')
+    ) {
       const { lambdaClient } = await import('@/libs/trpc/client');
       return (await lambdaClient.connector.callTool.mutate(
         { args, identifier, toolName: apiName },

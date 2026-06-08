@@ -15,6 +15,7 @@ import { inferCrudType } from '@/libs/mcp/utils';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import { callConnectorToolById, ConnectorToolCallError } from '@/server/services/connector/exec';
 import {
   buildAuthorizationUrl,
   discoverConnectorOAuth,
@@ -25,9 +26,7 @@ import {
   generateConnectorOAuthState,
   saveConnectorOAuthState,
 } from '@/server/services/connector/stateStore';
-import { buildConnectorMcpParams, syncConnectorToolsById } from '@/server/services/connector/sync';
-import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
-import { mcpService } from '@/server/services/mcp';
+import { syncConnectorToolsById } from '@/server/services/connector/sync';
 
 const connectorProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -259,30 +258,12 @@ export const connectorRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      const [connector] = await ctx.connectorModel.queryByIdentifiers([input.identifier]);
-      if (!connector) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
-      }
-
-      // Hard-block disabled tools server-side (defense beyond the manifest hint).
-      const tools = await ctx.connectorToolModel.queryByConnector(connector.id);
-      const tool = tools.find((t) => t.toolName === input.toolName);
-      if (tool?.permission === ConnectorToolPermission.disabled) {
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: `Tool '${input.toolName}' is disabled for this connector`,
-        });
-      }
-
-      const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);
-
       try {
-        return await mcpService.callTool({
-          argsStr: input.args ?? '{}',
-          clientParams: buildConnectorMcpParams(fresh),
-          toolName: input.toolName,
-        });
+        return await callConnectorToolById(input, ctx);
       } catch (err: any) {
+        if (err instanceof ConnectorToolCallError) {
+          throw new TRPCError({ cause: err, code: err.code, message: err.message });
+        }
         throw new TRPCError({
           cause: err,
           code: 'INTERNAL_SERVER_ERROR',

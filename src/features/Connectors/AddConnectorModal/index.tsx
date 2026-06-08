@@ -12,7 +12,13 @@ interface AddConnectorModalProps {
   open: boolean;
 }
 
-type OAuthPopupResult = 'success' | 'closed';
+interface OAuthPopupResult {
+  /** Provider/exchange error reason when status === 'error'. */
+  error?: string;
+  // 'success' — authorized; 'error' — provider/exchange failure (reason in
+  // `error`); 'dismissed' — popup closed without a result (user cancelled).
+  status: 'success' | 'error' | 'dismissed';
+}
 
 /**
  * Wait for an already-opened popup to report the OAuth result.
@@ -20,7 +26,7 @@ type OAuthPopupResult = 'success' | 'closed';
  * The popup MUST be opened synchronously from the user's click (browsers block
  * `window.open` once an async boundary is crossed), then navigated to the
  * authorize URL. The callback page posts a message before attempting
- * `window.close()`, so the 'success' signal is reliable even when the browser
+ * `window.close()`, so the message signal is reliable even when the browser
  * refuses to close a popup that navigated cross-origin. The popup-closed path is
  * a fallback for when the user dismisses the window without finishing.
  */
@@ -37,7 +43,7 @@ const waitForOAuthPopup = (popup: Window, connectorId: string): Promise<OAuthPop
       if (!data || data.type !== 'lobe-connector-oauth') return;
       if (data.connectorId && data.connectorId !== connectorId) return;
       cleanup();
-      resolve(data.success ? 'success' : 'closed');
+      resolve(data.success ? { status: 'success' } : { error: data.error, status: 'error' });
     };
 
     window.addEventListener('message', onMessage);
@@ -45,7 +51,7 @@ const waitForOAuthPopup = (popup: Window, connectorId: string): Promise<OAuthPop
     const timer = setInterval(() => {
       if (popup.closed) {
         cleanup();
-        resolve('closed');
+        resolve({ status: 'dismissed' });
       }
     }, 800);
   });
@@ -122,8 +128,16 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose }) => {
         // Reflect the server-side state regardless of how the popup ended
         // (window.close is often blocked for cross-origin-navigated popups).
         await fetchConnectors();
-        if (result === 'success') {
+        if (result.status === 'success') {
           message.success(t('connector.add.success', 'Connector connected'));
+        } else if (result.status === 'error') {
+          message.error(
+            t('connector.add.authError', 'Authorization failed: {{reason}}', {
+              reason: result.error || t('connector.add.unknownError', 'unknown error'),
+            }),
+          );
+        } else {
+          message.warning(t('connector.add.cancelled', 'Authorization was not completed'));
         }
       } catch {
         popup.close();
