@@ -14,6 +14,7 @@ import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
 import {
   AGENT_PLAN_FILE_TYPE,
+  isDesktop,
   KLAVIS_SERVER_TYPES,
   LOBEHUB_SKILL_PROVIDERS,
 } from '@lobechat/const';
@@ -658,8 +659,8 @@ export const contextEngineering = async ({
       isCanUseVision,
     },
 
-    // File context configuration
-    fileContext: { enabled: true, includeFileUrl: false },
+    // Desktop local/static URLs are not fetchable by remote providers or cloud tools.
+    fileContext: { enabled: true, includeFileUrl: !isDesktop },
 
     // Knowledge injection
     knowledge: {
