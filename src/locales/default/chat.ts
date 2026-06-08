@@ -176,14 +176,14 @@ export default {
   'heteroAgent.cloudRepo.noRepos': 'No repositories configured. Add them in agent settings.',
   'heteroAgent.cloudRepo.multiSelected': '{{count}} repos selected',
   'heteroAgent.executionTarget.infoTooltip':
-    'Pick a remote device to drive that machine from the web. "This device" runs the agent locally and is only available inside the desktop app.',
+    'The cloud sandbox runs on the centralized LobeHub Marketplace. Pick a device and the agent uses it as its runtime environment — reading and writing files and operating the computer.',
   'heteroAgent.executionTarget.loading': 'Loading devices…',
   'heteroAgent.executionTarget.local': 'This device',
   'heteroAgent.executionTarget.localDesc': 'Run as a local process on this desktop app',
   'heteroAgent.executionTarget.noDevices':
     'No remote devices yet. Run `lh connect` on another machine to add one.',
   'heteroAgent.executionTarget.none': 'No device',
-  'heteroAgent.executionTarget.noneDesc': 'Plain chat, no execution environment',
+  'heteroAgent.executionTarget.noneDesc': 'No device enabled — the agent cannot operate a computer',
   'heteroAgent.executionTarget.offline': 'Offline',
   'heteroAgent.executionTarget.online': 'Online',
   'heteroAgent.executionTarget.sandbox': 'Cloud sandbox',
