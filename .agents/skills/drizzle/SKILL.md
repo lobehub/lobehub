@@ -43,11 +43,24 @@ export const workspaceSignupRecords = pgTable('workspace_signup_records', { ... 
 
 ### Primary Keys
 
+Do not use auto-incrementing primary keys (`serial`, `bigserial`, generated
+identity columns). They create sequence-state problems during cross-database
+migrations, restores, and data copy jobs. Prefer text IDs from application
+generators (`idGenerator`, `createNanoId`) or `uuid` for internal tables.
+
+Keep `$defaultFn(...)` when a table normally owns ID generation. Callers can
+still pass an explicit `id`; the default only runs when the insert omits it. Do
+not remove the default just because one flow needs to supply a request-scoped ID.
+
 ```typescript
+// ✅ Good: app-generated text ID; explicit inserts can still override it.
 id: text('id')
   .primaryKey()
   .$defaultFn(() => idGenerator('agents'))
   .notNull(),
+
+// ❌ Bad: sequence state is fragile across DB migrations and restores.
+id: serial('id').primaryKey(),
 ```
 
 ID prefixes make entity types distinguishable. For internal tables, use `uuid`.
@@ -86,6 +99,37 @@ finalDecision: varchar('final_decision', { length: 32 })
   .$type<UserSignupLogFinalDecision>()
   .notNull()
   .default('unknown');
+```
+
+### Field Descriptions
+
+For columns whose meaning is not obvious from the name alone, add JSDoc on the
+schema field. Include a concrete example when it clarifies the stored value or
+the lifecycle moment that writes it. This is especially important for external
+IDs, lifecycle statuses, denormalized snapshots, JSONB signals, and fields whose
+name could mean either a request ID or a persisted row ID.
+
+```typescript
+// ✅ Good: explain the table's business object first, then only document
+// non-obvious lifecycle or risk-control fields.
+/**
+ * User signup logs - one row per signup flow, collecting stage-level
+ * risk-control decisions before and after the auth provider creates a user.
+ */
+export const userSignupLogs = pgTable('user_signup_logs', {
+  /** Final signup outcome reason, for example user_created, llm_block, or guard_error */
+  finalReason: text('final_reason'),
+
+  /** Aggregated risk level derived from stage decisions, for example block -> high */
+  riskLevel: varchar('risk_level', { length: 16 }).$type<UserSignupLogRiskLevel>(),
+
+  /** Ordered stage-level decisions and metadata grouped by signup review stage */
+  stageResults: jsonb('stage_results').$type<UserSignupLogStageResults>(),
+});
+
+// ❌ Bad: comments restate obvious column names without adding domain meaning.
+/** User email */
+email: text('email'),
 ```
 
 ### JSONB Types
