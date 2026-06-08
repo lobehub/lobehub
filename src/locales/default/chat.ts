@@ -187,7 +187,7 @@ export default {
   'heteroAgent.executionTarget.sandbox': 'Cloud sandbox',
   'heteroAgent.executionTarget.sandboxDesc': 'Run in an ephemeral cloud sandbox',
   'heteroAgent.executionTarget.downloadDesktop': 'Get Desktop App',
-  'heteroAgent.executionTarget.downloadDesktopDesc': 'Run agents locally with file access',
+  'heteroAgent.executionTarget.downloadDesktopDesc': 'Run agents with access to your computer',
   'heteroAgent.executionTarget.downloadDesktopTitle': 'Get the desktop app',
   'heteroAgent.executionTarget.title': 'Execution Device',
   'heteroAgent.executionTarget.unknownDevice': 'Unknown device',
