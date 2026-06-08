@@ -18,8 +18,10 @@ import type {
   DeviceGitLinkedPullRequestResult,
   DeviceGitRemoteBranchListItem,
   DeviceGitSyncResult,
+  DeviceGitWorkingTreeFiles,
   DeviceGitWorkingTreePatches,
   DeviceGitWorkingTreeStatus,
+  DeviceProjectFileIndexResult,
   ProjectSkillMeta,
   WorkspaceInitResult,
 } from '@lobechat/types';
@@ -394,6 +396,71 @@ export class DeviceGateway {
       return result.data;
     } catch (error) {
       log('getGitBranchDiff: error for deviceId=%s — %O', deviceId, error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Repo-relative paths of dirty working-tree files for a directory on a remote
+   * device via the `getGitWorkingTreeFiles` device RPC — the Files tab's git
+   * status overlay.
+   */
+  async getGitWorkingTreeFiles(params: {
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+  }): Promise<DeviceGitWorkingTreeFiles | undefined> {
+    const { userId, deviceId, path, timeout = 15_000 } = params;
+    const client = this.getClient();
+    if (!client) return undefined;
+
+    try {
+      const result = await client.invokeRpc<DeviceGitWorkingTreeFiles>(
+        { deviceId, timeout, userId },
+        { method: 'getGitWorkingTreeFiles', params: { path } },
+      );
+
+      if (!result.success || !result.data) {
+        log('getGitWorkingTreeFiles: failed for deviceId=%s — %s', deviceId, result.error);
+        return undefined;
+      }
+
+      return result.data;
+    } catch (error) {
+      log('getGitWorkingTreeFiles: error for deviceId=%s — %O', deviceId, error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Project file index (tree) for a directory on a remote device via the
+   * `getProjectFileIndex` device RPC — the Files tab's tree.
+   */
+  async getProjectFileIndex(params: {
+    deviceId: string;
+    scope: string;
+    timeout?: number;
+    userId: string;
+  }): Promise<DeviceProjectFileIndexResult | undefined> {
+    const { userId, deviceId, scope, timeout = 30_000 } = params;
+    const client = this.getClient();
+    if (!client) return undefined;
+
+    try {
+      const result = await client.invokeRpc<DeviceProjectFileIndexResult>(
+        { deviceId, timeout, userId },
+        { method: 'getProjectFileIndex', params: { scope } },
+      );
+
+      if (!result.success || !result.data) {
+        log('getProjectFileIndex: failed for deviceId=%s — %s', deviceId, result.error);
+        return undefined;
+      }
+
+      return result.data;
+    } catch (error) {
+      log('getProjectFileIndex: error for deviceId=%s — %O', deviceId, error);
       return undefined;
     }
   }

@@ -399,6 +399,14 @@ export default class GatewayConnectionCtr extends ControllerModule {
         return this.gitCtr.getGitWorkingTreePatches((params as { path: string }).path);
       }
 
+      case 'getGitWorkingTreeFiles': {
+        return this.gitCtr.getGitWorkingTreeFiles((params as { path: string }).path);
+      }
+
+      case 'getProjectFileIndex': {
+        return this.localFileCtr.getProjectFileIndex(params as { scope?: string });
+      }
+
       case 'getGitBranchDiff': {
         return this.gitCtr.getGitBranchDiff(params as { baseRef?: string; path: string });
       }

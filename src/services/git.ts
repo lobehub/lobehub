@@ -2,6 +2,7 @@ import type {
   GitBranchDiffPatches,
   GitFileRevertResult,
   GitRemoteBranchListItem,
+  GitWorkingTreeFiles,
   GitWorkingTreePatches,
 } from '@lobechat/electron-client-ipc';
 import type {
@@ -165,6 +166,19 @@ class GitService {
       ? ((await lambdaClient.device.getGitWorkingTreePatches.query({ deviceId, path })) ??
           undefined)
       : electronGitService.getGitWorkingTreePatches(path);
+  }
+
+  /** Repo-relative paths of dirty working-tree files (the Files tab git overlay). */
+  async getGitWorkingTreeFiles({
+    deviceId,
+    path,
+  }: {
+    deviceId?: string;
+    path: string;
+  }): Promise<GitWorkingTreeFiles | undefined> {
+    return deviceId
+      ? ((await lambdaClient.device.getGitWorkingTreeFiles.query({ deviceId, path })) ?? undefined)
+      : electronGitService.getGitWorkingTreeFiles(path);
   }
 
   /** Branch diff (current branch vs base ref) per-file patches for a working directory. */

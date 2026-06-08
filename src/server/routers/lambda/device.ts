@@ -239,6 +239,38 @@ export const deviceRouter = router({
     }),
 
   /**
+   * Repo-relative paths of dirty working-tree files for a directory on a remote
+   * device, via the device's `getGitWorkingTreeFiles` RPC. Powers the Files tab's
+   * git-status overlay. Returns `null` when offline / not a git repo.
+   */
+  getGitWorkingTreeFiles: deviceProcedure
+    .input(z.object({ deviceId: z.string(), path: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.getGitWorkingTreeFiles({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+      });
+      return result ?? null;
+    }),
+
+  /**
+   * Project file index (tree) for a directory on a remote device, via the
+   * device's `getProjectFileIndex` RPC. Powers the Files tab's tree. Returns
+   * `null` when offline.
+   */
+  getProjectFileIndex: deviceProcedure
+    .input(z.object({ deviceId: z.string(), scope: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.getProjectFileIndex({
+        deviceId: input.deviceId,
+        scope: input.scope,
+        userId: ctx.userId,
+      });
+      return result ?? null;
+    }),
+
+  /**
    * Revert a single file in a directory on a remote device, via the device's
    * `revertGitFile` RPC.
    */

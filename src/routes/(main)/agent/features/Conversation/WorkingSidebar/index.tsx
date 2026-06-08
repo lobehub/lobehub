@@ -8,14 +8,13 @@ import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useRepoType } from '@/features/ChatInput/RuntimeConfig/useRepoType';
 import RightPanel from '@/features/RightPanel';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
+import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
 import {
   agentByIdSelectors,
   agentSelectors,
   chatConfigByIdSelectors,
 } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
 import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 
@@ -82,16 +81,16 @@ const AgentWorkingSidebar = memo(() => {
   const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
   const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
   const storedTab = useGlobalStore((s) => s.status.workingSidebarTab);
-  const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const agentWorkingDirectory = useAgentStore((s) =>
-    activeAgentId ? agentByIdSelectors.getAgentWorkingDirectoryById(activeAgentId)(s) : undefined,
-  );
   const isLocalSystemEnabled = useAgentStore((s) =>
     activeAgentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(activeAgentId)(s) : false,
   );
   const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
-  const workingDirectory = topicWorkingDirectory || agentWorkingDirectory;
+  // Unified precedence (topic > per-device choice > legacy > device default), so
+  // the sidebar resolves the same directory the runtime bar / git status do.
+  // The old `topicCwd || legacy agentCwd` pattern missed `workingDirByDevice`,
+  // landing on the home fallback for device-bound agents and hiding Review.
+  const workingDirectory = useEffectiveWorkingDirectory(activeAgentId);
   // Effective target device for git ops — bound device for remote agents, this
   // machine otherwise. Resolved the same way WorkingDirectoryPicker / GitStatus do.
   const agencyConfig = useAgentStore((s) =>
@@ -101,11 +100,11 @@ const AgentWorkingSidebar = memo(() => {
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
   const repoType = useRepoType(workingDirectory, targetDeviceId);
 
-  // Running against a bound device (remote, or this machine as a device): git
-  // reads go over RPC, so Review is reachable even though runtimeMode isn't
-  // `local`. Files data isn't RPC-routed yet, so it stays local-system-only.
+  // Running against a bound device (remote, or this machine as a device): file
+  // tree + git reads go over RPC, so both Review and Files are reachable even
+  // when runtimeMode isn't `local`.
   const isDeviceMode = agencyConfig?.executionTarget === 'device' && !!agencyConfig?.boundDeviceId;
-  const filesAvailable = isLocalSystemEnabled && !!workingDirectory;
+  const filesAvailable = (isLocalSystemEnabled || isDeviceMode) && !!workingDirectory;
   const reviewAvailable =
     (isLocalSystemEnabled || isDeviceMode) && !!workingDirectory && !!repoType;
   const paramsAvailable = !isHetero;
@@ -187,7 +186,7 @@ const AgentWorkingSidebar = memo(() => {
           )}
           {filesAvailable && (
             <Flexbox className={activeTab === 'files' ? styles.pane : styles.paneHidden}>
-              <Files workingDirectory={workingDirectory} />
+              <Files deviceId={targetDeviceId} workingDirectory={workingDirectory} />
             </Flexbox>
           )}
           <Flexbox

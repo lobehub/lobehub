@@ -269,3 +269,37 @@ export interface DeviceGitFileRevertResult {
   error?: string;
   success: boolean;
 }
+
+/**
+ * Repo-relative paths of dirty working-tree files for a directory on a remote
+ * device, returned by the `getGitWorkingTreeFiles` device RPC. Powers the Files
+ * tab's git-status overlay. Mirrors the desktop `GitWorkingTreeFiles`.
+ */
+export interface DeviceGitWorkingTreeFiles {
+  added: string[];
+  deleted: string[];
+  modified: string[];
+}
+
+/** One entry in a device's project file index. Mirrors `ProjectFileIndexEntry`. */
+export interface DeviceProjectFileIndexEntry {
+  isDirectory: boolean;
+  name: string;
+  /** Absolute path on the device filesystem. */
+  path: string;
+  /** Path relative to the project root; directories end with `/`. */
+  relativePath: string;
+}
+
+/**
+ * Project file index (tree) for a directory on a remote device, returned by the
+ * `getProjectFileIndex` device RPC. Powers the Files tab's tree. Mirrors the
+ * desktop `ProjectFileIndexResult`.
+ */
+export interface DeviceProjectFileIndexResult {
+  entries: DeviceProjectFileIndexEntry[];
+  indexedAt: string;
+  root: string;
+  source: 'git' | 'glob';
+  totalCount: number;
+}
