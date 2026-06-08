@@ -6,6 +6,7 @@ import { createAgentToolsEngine, createToolsEngine, getEnabledTools } from './in
 // Mock the store and helper dependencies
 vi.mock('@/store/tool', () => ({
   getToolStoreState: () => ({
+    connectors: [],
     builtinTools: [
       {
         identifier: 'search',

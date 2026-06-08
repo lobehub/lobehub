@@ -1,7 +1,9 @@
 import type { ToolStore } from '../../store';
 import type { ConnectorTool, ConnectorWithTools } from './types';
 
-const connectorList = (s: ToolStore): ConnectorWithTools[] => s.connectors;
+// `?? []` tolerates a partially-initialized store (e.g. in unit-test mocks);
+// the real store always seeds `connectors: []` via initialState.
+const connectorList = (s: ToolStore): ConnectorWithTools[] => s.connectors ?? [];
 
 const connectorById =
   (id: string) =>
@@ -21,7 +23,7 @@ const connectedConnectors = (s: ToolStore): ConnectorWithTools[] =>
 
 /** User-added custom connectors (sourceType 'custom'), e.g. OAuth MCP servers. */
 const customConnectors = (s: ToolStore): ConnectorWithTools[] =>
-  s.connectors.filter((c) => c.sourceType === 'custom');
+  (s.connectors ?? []).filter((c) => c.sourceType === 'custom');
 
 const notConnectedConnectors = (s: ToolStore): ConnectorWithTools[] =>
   s.connectors.filter((c) => c.status !== 'connected');
