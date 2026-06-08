@@ -61,6 +61,26 @@ const getModelProperty = async <T>(
   return getModelPropertyWithFallback<T | undefined>(model.id, propertyName, model.providerId);
 };
 
+const hasParameters = (
+  parameters?: ModelParamsSchema,
+): parameters is ModelParamsSchema => !!parameters && Object.keys(parameters).length > 0;
+
+const resolveModelParameters = async (
+  model: EnabledAiModel,
+): Promise<ModelParamsSchema | undefined> => {
+  // The `parameters` DB column defaults to `{}`, and enabling a model never
+  // populates it. An empty object is truthy, so a naive truthy check would skip
+  // the fallback and leave required fields (e.g. `prompt`) missing, which later
+  // fails schema validation. Treat an empty object as "no inline parameters".
+  if (hasParameters(model.parameters)) return model.parameters;
+
+  return getModelPropertyWithFallback<ModelParamsSchema | undefined>(
+    model.id,
+    'parameters',
+    model.providerId,
+  );
+};
+
 const dedupeById = (models: ProviderModelListItem[]) => uniqBy(models, 'id');
 
 const createProviderModelCollector = (
@@ -99,26 +119,12 @@ export const normalizeChatModel = async (model: EnabledAiModel): Promise<Provide
 export const normalizeImageModel = async (
   model: EnabledAiModel,
 ): Promise<ProviderModelListItem> => {
-  const fallbackParametersPromise = model.parameters
-    ? Promise.resolve<ModelParamsSchema | undefined>(model.parameters)
-    : getModelPropertyWithFallback<ModelParamsSchema | undefined>(
-        model.id,
-        'parameters',
-        model.providerId,
-      );
-
-  const fallbackPricingPromise = getModelProperty<Pricing>(model, 'pricing');
-  const fallbackDescriptionPromise = getModelProperty<string>(model, 'description');
-
-  const [fallbackParameters, fallbackPricing, fallbackDescription] = await Promise.all([
-    fallbackParametersPromise,
-    fallbackPricingPromise,
-    fallbackDescriptionPromise,
+  const [parameters, pricing, description] = await Promise.all([
+    resolveModelParameters(model),
+    getModelProperty<Pricing>(model, 'pricing'),
+    getModelProperty<string>(model, 'description'),
   ]);
 
-  const parameters = model.parameters ?? fallbackParameters;
-  const pricing = fallbackPricing;
-  const description = fallbackDescription;
   const { price, approximatePrice } = resolveImageSinglePrice(pricing);
 
   return {
@@ -138,26 +144,12 @@ export const normalizeImageModel = async (
 export const normalizeVideoModel = async (
   model: EnabledAiModel,
 ): Promise<ProviderModelListItem> => {
-  const fallbackParametersPromise = model.parameters
-    ? Promise.resolve<ModelParamsSchema | undefined>(model.parameters)
-    : getModelPropertyWithFallback<ModelParamsSchema | undefined>(
-        model.id,
-        'parameters',
-        model.providerId,
-      );
-
-  const fallbackPricingPromise = getModelProperty<Pricing>(model, 'pricing');
-  const fallbackDescriptionPromise = getModelProperty<string>(model, 'description');
-
-  const [fallbackParameters, fallbackPricing, fallbackDescription] = await Promise.all([
-    fallbackParametersPromise,
-    fallbackPricingPromise,
-    fallbackDescriptionPromise,
+  const [parameters, pricing, description] = await Promise.all([
+    resolveModelParameters(model),
+    getModelProperty<Pricing>(model, 'pricing'),
+    getModelProperty<string>(model, 'description'),
   ]);
 
-  const parameters = model.parameters ?? fallbackParameters;
-  const pricing = fallbackPricing;
-  const description = fallbackDescription;
   const { approximatePrice } = resolveVideoSinglePrice(pricing);
 
   return {
