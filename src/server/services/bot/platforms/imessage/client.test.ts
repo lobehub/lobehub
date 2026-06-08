@@ -4,7 +4,7 @@ import { ImessageClientFactory } from './client';
 
 const mockExecuteMessageApi = vi.hoisted(() => vi.fn());
 
-vi.mock('@/server/services/toolExecution/deviceGateway', () => ({
+vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     executeMessageApi: mockExecuteMessageApi,
   },

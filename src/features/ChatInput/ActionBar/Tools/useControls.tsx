@@ -26,7 +26,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -45,6 +45,7 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
@@ -673,6 +674,14 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
 
+  // Custom connectors (user-added OAuth MCP servers) from the connector store
+  const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+  const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
+  const fetchConnectors = useToolStore((s) => s.fetchConnectors);
+  useEffect(() => {
+    if (!isConnectorsInit) fetchConnectors();
+  }, [isConnectorsInit, fetchConnectors]);
+
   const [
     useFetchUserKlavisServers,
     useFetchLobehubSkillConnections,
@@ -1120,6 +1129,36 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [userAgentSkills, t, createManagedSkillItem, deleteAgentSkill],
   );
 
+  // Custom connector list items (user-added OAuth MCP servers).
+  // Toggling adds the connector identifier to agents.plugins[] — the same field
+  // the runtime resolves connectors from, so they become callable immediately.
+  const customConnectorItems = useMemo(
+    () =>
+      customConnectors.map((connector) => {
+        const title = connector.name || connector.identifier;
+        const icon = <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />;
+        const popoverContent = (
+          <ToolItemDetailPopover
+            description={connector.mcpServerUrl ?? ''}
+            icon={<Icon icon={McpIcon} size={36} />}
+            identifier={connector.identifier}
+            sourceLabel={t('skillStore.tabs.custom')}
+            title={title}
+          />
+        );
+
+        return createManagedSkillItem({
+          badge: <Icon icon={McpIcon} size={12} />,
+          icon,
+          id: connector.identifier,
+          popoverContent,
+          searchText: `${title} ${connector.identifier}`,
+          title,
+        });
+      }),
+    [customConnectors, t, createManagedSkillItem],
+  );
+
   // Skills list items (including LobeHub Skill and Klavis)
   // Connected items listed first, deduplicated by key (LobeHub takes priority)
   const skillItems = useMemo(() => {
@@ -1230,10 +1269,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     ...communityPlugins.map(mapPluginToItem),
   ];
 
-  // Build Custom group children (User Agent Skills + custom plugins)
+  // Build Custom group children (User Agent Skills + custom plugins + custom connectors)
   const customGroupChildren: ItemType[] = [
     ...userAgentSkillItems,
     ...customPlugins.map(mapPluginToItem),
+    ...customConnectorItems,
   ];
 
   const normalizedSearchKeyword = searchKeyword.trim().toLowerCase();

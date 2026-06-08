@@ -147,6 +147,40 @@ export interface WorkspaceInitResult {
 }
 
 /**
+ * Git status of a device's working directory, returned by the `gitInfo` device
+ * RPC so a remote device (or web client) can render branch / file changes / PR
+ * the same way the local desktop does. Field shapes mirror the desktop git
+ * service so the UI consumes both paths interchangeably.
+ */
+export interface DeviceGitInfo {
+  /** Commit divergence vs the upstream tracking ref. */
+  aheadBehind: {
+    ahead: number;
+    behind: number;
+    hasUpstream: boolean;
+    pushTarget?: string;
+    pushTargetExists?: boolean;
+    upstream?: string;
+  };
+  /** Branch name + linked GitHub pull request (when the repo is a GitHub remote). */
+  info: {
+    branch?: string;
+    detached?: boolean;
+    extraCount?: number;
+    ghMissing?: boolean;
+    pullRequest?: { number: number; state: string; title: string; url: string } | null;
+  };
+  /** Working-tree dirty-file counts. */
+  workingStatus: {
+    added: number;
+    clean: boolean;
+    deleted: number;
+    modified: number;
+    total: number;
+  };
+}
+
+/**
  * Parameters for execAgent - execute a single Agent
  * Either agentId or slug must be provided
  */

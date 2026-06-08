@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 // Import after mocks are set up
-import { DeviceGateway } from '../deviceGateway';
+import { DeviceGateway } from '../index';
 
 const mockEnv = vi.hoisted(() => ({
   DEVICE_GATEWAY_SERVICE_TOKEN: undefined as string | undefined,

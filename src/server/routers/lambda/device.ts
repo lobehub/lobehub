@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { DeviceModel } from '@/database/models/device';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { deviceGateway } from '@/server/services/toolExecution/deviceGateway';
+import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { preserveWorkspaceCache } from './deviceWorkingDirs';
 
@@ -74,6 +74,30 @@ export const deviceRouter = router({
       } catch {
         return { available: false, reason: 'Invalid response from device' };
       }
+    }),
+
+  /**
+   * Git status (branch / file changes / linked PR) for a directory on a remote
+   * device, fetched via the device's `gitInfo` RPC. Lets the UI render a remote
+   * device's git the same as the local desktop. Returns `null` when offline /
+   * the directory isn't a git repo.
+   */
+  gitInfo: deviceProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        isGithub: z.boolean().optional(),
+        scope: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.gitInfo(
+        ctx.userId,
+        input.deviceId,
+        input.scope,
+        input.isGithub,
+      );
+      return result ?? null;
     }),
 
   /**

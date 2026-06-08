@@ -8,7 +8,7 @@ import {
   type GatewayMcpStdioParams,
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
-import type { ProjectSkillMeta, WorkspaceInitResult } from '@lobechat/types';
+import type { DeviceGitInfo, ProjectSkillMeta, WorkspaceInitResult } from '@lobechat/types';
 import debug from 'debug';
 
 import { gatewayEnv } from '@/envs/gateway';
@@ -123,6 +123,39 @@ export class DeviceGateway {
       };
     } catch (error) {
       log('initWorkspace: error for deviceId=%s — %O', deviceId, error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Fetch git status (branch / file changes / PR) for a directory on a remote
+   * device, via the same generic `invokeRpc` channel as `initWorkspace`. Lets
+   * the UI render a remote device's git the same as the local desktop.
+   */
+  async gitInfo(
+    userId: string,
+    deviceId: string,
+    scope: string,
+    isGithub = false,
+    timeout = 15_000,
+  ): Promise<DeviceGitInfo | undefined> {
+    const client = this.getClient();
+    if (!client) return undefined;
+
+    try {
+      const result = await client.invokeRpc<DeviceGitInfo>(
+        { deviceId, timeout, userId },
+        { method: 'gitInfo', params: { isGithub, scope } },
+      );
+
+      if (!result.success || !result.data) {
+        log('gitInfo: failed for deviceId=%s — %s', deviceId, result.error);
+        return undefined;
+      }
+
+      return result.data;
+    } catch (error) {
+      log('gitInfo: error for deviceId=%s — %O', deviceId, error);
       return undefined;
     }
   }

@@ -62,6 +62,7 @@ import { toolsEnv } from '@/envs/tools';
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { signOperationJwt, signUserJWT } from '@/libs/trpc/utils/internalJwt';
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import type { EvalContext, ServerAgentToolsContext } from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 import type { ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
@@ -80,6 +81,7 @@ import {
   resolveAgentSelfIterationCapability,
 } from '@/server/services/agentSignal/featureGate';
 import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSignal';
+import { deviceGateway } from '@/server/services/deviceGateway';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
@@ -87,7 +89,6 @@ import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent'
 import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
-import { deviceGateway } from '@/server/services/toolExecution/deviceGateway';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { resolveDeviceAccessPolicy } from './deviceAccessPolicy';
@@ -1212,6 +1213,7 @@ export class AiAgentService {
     // These are needed outside the tools block (for agent management context, skill engine, etc.)
     let lobehubSkillManifests: LobeToolManifest[] = [];
     let klavisManifests: LobeToolManifest[] = [];
+    let connectorManifests: ReturnType<typeof buildConnectorManifests> = [];
     let agentPlugins: string[] = [...(agentConfig?.plugins ?? []), ...(additionalPluginIds || [])];
 
     // Model metadata is needed both for tool support checks and agent-management context.
@@ -1260,9 +1262,19 @@ export class AiAgentService {
       const installedPlugins = await this.pluginModel.query();
       log('execAgent: got %d installed plugins', installedPlugins.length);
 
-      // 5a-1. Resolve connectors — connector identifier takes priority over plugin
+      // 5a-1. Resolve connectors — connector identifier takes priority over plugin.
+      // Credentials (OAuth tokens) are encrypted at rest, so decrypt them with a
+      // gatekeeper; otherwise buildConnectorManifests gets no auth and tool calls 401.
+      let connectorGateKeeper: KeyVaultsGateKeeper | undefined;
+      try {
+        connectorGateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+      } catch (err) {
+        log('execAgent: failed to init gatekeeper for connector credentials: %O', err);
+      }
       const connectors =
-        agentPlugins.length > 0 ? await this.connectorModel.queryByIdentifiers(agentPlugins) : [];
+        agentPlugins.length > 0
+          ? await this.connectorModel.queryByIdentifiers(agentPlugins, connectorGateKeeper)
+          : [];
 
       // Only connectors WITH a real MCP endpoint (mcpServerUrl or stdio) can replace plugins in the
       // manifest. Connectors WITHOUT an endpoint (e.g. Lobehub/Klavis OAuth skills synced via
@@ -1270,12 +1282,6 @@ export class AiAgentService {
       // after humanIntervention approval the runtime tries to call mcpServerUrl='' and returns empty.
       const connectorsMcp = connectors.filter(
         (c) => c.mcpServerUrl || c.mcpConnectionType === 'stdio',
-      );
-      const connectorIdentifierSet = new Set(connectorsMcp.map((c) => c.identifier));
-
-      // Filter out plugin entries that are now handled by real MCP connectors
-      const pluginsWithoutConnectors = installedPlugins.filter(
-        (p) => !connectorIdentifierSet.has(p.identifier),
       );
 
       // Fetch ALL tools for all real-MCP connectors (including disabled tools) so that
@@ -1286,7 +1292,20 @@ export class AiAgentService {
           ? await this.connectorToolModel.queryAllByConnectorIds(connectorsMcp.map((c) => c.id))
           : [];
 
-      const connectorManifests = buildConnectorManifests(connectorsMcp, connectorTools);
+      connectorManifests = buildConnectorManifests(connectorsMcp, connectorTools);
+
+      // Only connectors that ACTUALLY produced a manifest (enabled + with synced
+      // tools) replace a same-named plugin. Deriving the set from connectorsMcp
+      // instead would let a disabled / not-yet-synced connector evict the plugin
+      // while contributing no tools — leaving the runtime with nothing to call.
+      const connectorIdentifierSet = new Set(connectorManifests.map((m) => m.identifier));
+
+      // Filter out plugin entries that are now handled by real MCP connectors.
+      // `let` because community-MCP plugins may be patched with connector
+      // permissions below (their connector row has no endpoint, so they stay here).
+      let pluginsWithoutConnectors = installedPlugins.filter(
+        (p) => !connectorIdentifierSet.has(p.identifier),
+      );
       log('execAgent: got %d connector manifests', connectorManifests.length);
 
       // 5b. Get model abilities from model-bank for function calling support check
@@ -1311,11 +1330,18 @@ export class AiAgentService {
       }
       log('execAgent: got %d klavis manifests', klavisManifests.length);
 
-      // 5d-1. Patch Lobehub/Klavis manifests with connector tool permissions.
-      // This enables needs_approval (→ humanIntervention: 'required') and disabled
-      // (→ blocking description) for skills that are managed via the connector system.
-      // The humanIntervention system already handles headless auto-rejection for qstash.
-      if (lobehubSkillManifests.length > 0 || klavisManifests.length > 0) {
+      // 5d-1. Patch Lobehub/Klavis manifests AND community-MCP plugin manifests
+      // with connector tool permissions. This enables needs_approval (→
+      // humanIntervention: 'required') and disabled (→ blocking description) for
+      // any tool managed via the connector system but executed through a
+      // non-connector path (Lobehub/Klavis skills, community MCP plugins).
+      // The 'disabled' hard-block is already enforced universally in
+      // ToolExecutionService; this surfaces the permission to the model too.
+      if (
+        lobehubSkillManifests.length > 0 ||
+        klavisManifests.length > 0 ||
+        pluginsWithoutConnectors.length > 0
+      ) {
         try {
           const { patchManifestWithPermissions } =
             await import('@/libs/mcp/connectorPermissionCheck');
@@ -1323,6 +1349,7 @@ export class AiAgentService {
           const allIdentifiers = [
             ...lobehubSkillManifests.map((m) => m.identifier),
             ...klavisManifests.map((m) => m.identifier),
+            ...pluginsWithoutConnectors.map((p) => p.identifier),
           ];
           const connectorEntries =
             allIdentifiers.length > 0
@@ -1352,6 +1379,19 @@ export class AiAgentService {
               return perms && perms.size > 0
                 ? (patchManifestWithPermissions(m as any, perms as any) as any)
                 : m;
+            });
+
+            // Community-MCP plugins execute via the plugin path, so patch their
+            // manifest in place (the connector row holds the user's permissions).
+            pluginsWithoutConnectors = pluginsWithoutConnectors.map((p) => {
+              const perms = connectorToolsMap.get(p.identifier);
+              if (perms && perms.size > 0 && (p as any).manifest?.api) {
+                return {
+                  ...p,
+                  manifest: patchManifestWithPermissions((p as any).manifest, perms as any) as any,
+                };
+              }
+              return p;
             });
           }
         } catch (err) {
@@ -1838,6 +1878,13 @@ export class AiAgentService {
           identifier: manifest.identifier,
           name: manifest.meta?.title || manifest.identifier,
           type: 'klavis' as const,
+        })),
+        // Custom connectors (user-added MCP servers)
+        ...connectorManifests.map((manifest) => ({
+          description: manifest.meta?.description,
+          identifier: manifest.identifier,
+          name: manifest.meta?.title || manifest.identifier,
+          type: 'custom' as const,
         })),
       ];
 
