@@ -157,11 +157,11 @@ type FolderEntry = { path: string; repoType?: 'git' | 'github' };
 /** This machine: browse the filesystem via the native Electron folder dialog. */
 const ChooseLocalFolderRow = memo<{ defaultPath?: string; onPick: (entry: FolderEntry) => void }>(
   ({ defaultPath, onPick }) => {
-    const { t } = useTranslation('plugin');
+    const { t } = useTranslation('device');
     const handleClick = async () => {
       const result = await electronSystemService.selectFolder({
         defaultPath: defaultPath || undefined,
-        title: t('localSystem.workingDirectory.selectFolder'),
+        title: t('workingDirectory.selectFolder'),
       });
       if (result) onPick({ path: result.path, repoType: result.repoType });
     };
@@ -174,7 +174,7 @@ const ChooseLocalFolderRow = memo<{ defaultPath?: string; onPick: (entry: Folder
         onClick={handleClick}
       >
         <Icon icon={FolderOpenIcon} size={14} />
-        <span>{t('localSystem.workingDirectory.chooseDifferentFolder')}</span>
+        <span>{t('workingDirectory.chooseDifferentFolder')}</span>
       </Flexbox>
     );
   },
@@ -188,7 +188,7 @@ const AddRemoteFolderRow = memo<{
   onBeforeOpen: () => void;
   onPick: (entry: FolderEntry) => void;
 }>(({ defaultCwd, deviceId, onBeforeOpen, onPick }) => {
-  const { t } = useTranslation('plugin');
+  const { t } = useTranslation('device');
 
   // Validate the entered path on the target device (it can't be browsed here).
   // Block only on a definitive negative; an unreachable device (null) is treated
@@ -197,8 +197,8 @@ const AddRemoteFolderRow = memo<{
     if (!deviceId) return undefined;
     const result = await deviceService.statPath(deviceId, path);
     if (!result) return undefined;
-    if (!result.exists) return t('localSystem.workingDirectory.pathNotExist');
-    if (!result.isDirectory) return t('localSystem.workingDirectory.pathNotDirectory');
+    if (!result.exists) return t('workingDirectory.pathNotExist');
+    if (!result.isDirectory) return t('workingDirectory.pathNotDirectory');
     return undefined;
   };
 
@@ -219,7 +219,7 @@ const AddRemoteFolderRow = memo<{
       onClick={handleClick}
     >
       <Icon icon={FolderPlusIcon} size={14} />
-      <span>{t('localSystem.workingDirectory.addFolder')}</span>
+      <span>{t('workingDirectory.addFolder')}</span>
     </Flexbox>
   );
 });
@@ -237,7 +237,7 @@ interface WorkingDirectoryPickerProps {
  * device falls back to manual path entry (its filesystem isn't browsable here).
  */
 const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) => {
-  const { t } = useTranslation('plugin');
+  const { t } = useTranslation('device');
   const [open, setOpen] = useState(false);
 
   // Populate the device store (SWR dedupes across callers).
@@ -284,10 +284,10 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   const content = (
     <Flexbox gap={4} style={{ minWidth: 280 }}>
       <Flexbox horizontal align={'center'} distribution={'space-between'}>
-        <div className={styles.sectionTitle}>{t('localSystem.workingDirectory.recent')}</div>
+        <div className={styles.sectionTitle}>{t('workingDirectory.recent')}</div>
         {selectedDir && (
           <div className={styles.clearText} onClick={() => void clear().then(() => setOpen(false))}>
-            {t('localSystem.workingDirectory.clear')}
+            {t('workingDirectory.clear')}
           </div>
         )}
       </Flexbox>
@@ -298,7 +298,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
             justify={'center'}
             style={{ color: cssVar.colorTextQuaternary, fontSize: 12, padding: '12px 8px' }}
           >
-            {t('localSystem.workingDirectory.noRecent')}
+            {t('workingDirectory.noRecent')}
           </Flexbox>
         ) : (
           recents.map((entry) => {
@@ -326,7 +326,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
                 ) : (
                   <div
                     className={styles.removeBtn}
-                    title={t('localSystem.workingDirectory.removeRecent')}
+                    title={t('workingDirectory.removeRecent')}
                     onClick={(e) => handleRemoveRecent(e, entry.path)}
                   >
                     <Icon icon={XIcon} size={12} />
@@ -351,9 +351,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
     </Flexbox>
   );
 
-  const displayName = selectedDir
-    ? getDirName(selectedDir)
-    : t('localSystem.workingDirectory.notSet');
+  const displayName = selectedDir ? getDirName(selectedDir) : t('workingDirectory.notSet');
 
   const trigger = (
     <div className={styles.button}>
@@ -380,9 +378,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
         {open ? (
           trigger
         ) : (
-          <Tooltip title={selectedDir || t('localSystem.workingDirectory.notSet')}>
-            {trigger}
-          </Tooltip>
+          <Tooltip title={selectedDir || t('workingDirectory.notSet')}>{trigger}</Tooltip>
         )}
       </div>
     </Popover>

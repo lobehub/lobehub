@@ -137,15 +137,15 @@ const styles = createStaticStyles(({ css }) => {
 });
 
 interface GitStatusProps {
-  /** When set, git status is read from this remote device via RPC (read-only —
-   * no branch switch / pull / push). Omit for the local machine. */
+  /** When set, git status + branch switch run against this remote device via RPC
+   * (pull / push stay local-only for now). Omit for the local machine. */
   deviceId?: string;
   isGithub: boolean;
   path: string;
 }
 
 const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
-  const { t } = useTranslation('plugin');
+  const { t } = useTranslation('device');
   const local = !deviceId;
   // Local machine probes its own filesystem; a remote device answers over RPC.
   const { data: localInfo, mutate } = useGitInfo(local ? path : undefined, isGithub);
@@ -155,7 +155,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
   const { data: localAheadBehind, mutate: mutateAheadBehind } = useGitAheadBehind(
     local ? path : undefined,
   );
-  const { data: remoteGit } = useDeviceGitInfo(deviceId, path, isGithub);
+  const { data: remoteGit, refetch: refetchRemoteGit } = useDeviceGitInfo(deviceId, path, isGithub);
 
   const data = local ? localInfo : remoteGit?.info;
   const workingStatus = local ? localWorkingStatus : remoteGit?.workingStatus;
@@ -196,13 +196,13 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
       const result = await electronGitService.pullGitBranch({ path });
       if (result.success) {
         if (result.noop) {
-          message.info(t('localSystem.workingDirectory.pullNoop'));
+          message.info(t('workingDirectory.pullNoop'));
         } else {
-          message.success(t('localSystem.workingDirectory.pullSuccess'));
+          message.success(t('workingDirectory.pullSuccess'));
         }
         await refreshAfterSync();
       } else {
-        message.error(result.error || t('localSystem.workingDirectory.pullFailed'));
+        message.error(result.error || t('workingDirectory.pullFailed'));
       }
     } finally {
       setPulling(false);
@@ -216,13 +216,13 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
       const result = await electronGitService.pushGitBranch({ path });
       if (result.success) {
         if (result.noop) {
-          message.info(t('localSystem.workingDirectory.pushNoop'));
+          message.info(t('workingDirectory.pushNoop'));
         } else {
-          message.success(t('localSystem.workingDirectory.pushSuccess'));
+          message.success(t('workingDirectory.pushSuccess'));
         }
         await refreshAfterSync();
       } else {
-        message.error(result.error || t('localSystem.workingDirectory.pushFailed'));
+        message.error(result.error || t('workingDirectory.pushFailed'));
       }
     } finally {
       setPushing(false);
@@ -232,24 +232,24 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
   if (!data?.branch) return null;
 
   const branchTooltip = data.detached
-    ? t('localSystem.workingDirectory.detachedHead', { sha: data.branch })
+    ? t('workingDirectory.detachedHead', { sha: data.branch })
     : data.branch;
 
   const prTooltip = data.pullRequest
     ? data.extraCount
-      ? t('localSystem.workingDirectory.prTooltipWithExtra', {
+      ? t('workingDirectory.prTooltipWithExtra', {
           count: data.extraCount,
           title: data.pullRequest.title,
         })
       : data.pullRequest.title
     : data.ghMissing
-      ? t('localSystem.workingDirectory.ghMissing')
+      ? t('workingDirectory.ghMissing')
       : undefined;
 
   const hasChanges = !!workingStatus && !workingStatus.clean;
 
   const diffStatTooltip = hasChanges
-    ? t('localSystem.workingDirectory.diffStatTooltip', {
+    ? t('workingDirectory.diffStatTooltip', {
         added: workingStatus!.added,
         deleted: workingStatus!.deleted,
         modified: workingStatus!.modified,
@@ -269,45 +269,46 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
     </div>
   );
 
-  const branchNode =
-    data.detached || !local ? (
-      // Detached HEAD, or a remote device (read-only) → plain branch label.
-      <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
-    ) : (
-      <BranchSwitcher
-        currentBranch={data.branch}
-        open={switcherOpen}
-        path={path}
-        onExternalRefresh={refreshAfterSync}
-        onOpenChange={setSwitcherOpen}
-        onAfterCheckout={() => {
+  const branchNode = data.detached ? (
+    // Detached HEAD → plain branch label (nothing to switch to).
+    <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
+  ) : (
+    // Local switches over IPC; a remote device switches over RPC (deviceId set).
+    <BranchSwitcher
+      currentBranch={data.branch}
+      deviceId={deviceId}
+      open={switcherOpen}
+      path={path}
+      workingStatus={workingStatus}
+      onExternalRefresh={refreshAfterSync}
+      onOpenChange={setSwitcherOpen}
+      onAfterCheckout={() => {
+        if (local) {
           void mutate();
           void mutateWorkingStatus();
           void mutateAheadBehind();
-        }}
-      >
-        <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
-      </BranchSwitcher>
-    );
+        } else {
+          void refetchRemoteGit();
+        }
+      }}
+    >
+      <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
+    </BranchSwitcher>
+  );
 
   const pullTooltip = pulling
-    ? t('localSystem.workingDirectory.pullInProgress')
-    : t('localSystem.workingDirectory.pullAction', {
+    ? t('workingDirectory.pullInProgress')
+    : t('workingDirectory.pullAction', {
         count: aheadBehind?.behind ?? 0,
         upstream: upstreamName,
       });
 
   const pushTooltip = pushing
-    ? t('localSystem.workingDirectory.pushInProgress')
-    : t(
-        pushTargetExists
-          ? 'localSystem.workingDirectory.pushAction'
-          : 'localSystem.workingDirectory.pushActionNew',
-        {
-          count: aheadBehind?.ahead ?? 0,
-          target: pushTargetName || upstreamName,
-        },
-      );
+    ? t('workingDirectory.pushInProgress')
+    : t(pushTargetExists ? 'workingDirectory.pushAction' : 'workingDirectory.pushActionNew', {
+        count: aheadBehind?.ahead ?? 0,
+        target: pushTargetName || upstreamName,
+      });
 
   const pullNode = local && showBehind && (
     <Tooltip title={pullTooltip}>

@@ -8,7 +8,13 @@ import {
   type GatewayMcpStdioParams,
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
-import type { DeviceGitInfo, ProjectSkillMeta, WorkspaceInitResult } from '@lobechat/types';
+import type {
+  DeviceGitBranchListItem,
+  DeviceGitCheckoutResult,
+  DeviceGitInfo,
+  ProjectSkillMeta,
+  WorkspaceInitResult,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import { gatewayEnv } from '@/envs/gateway';
@@ -89,12 +95,13 @@ export class DeviceGateway {
    * Returns `undefined` when the gateway is unconfigured, the device is offline,
    * or the call fails — callers fall back to the cached scan.
    */
-  async initWorkspace(
-    userId: string,
-    deviceId: string,
-    scope: string,
-    timeout = 30_000,
-  ): Promise<WorkspaceInitResult | undefined> {
+  async initWorkspace(params: {
+    deviceId: string;
+    scope: string;
+    timeout?: number;
+    userId: string;
+  }): Promise<WorkspaceInitResult | undefined> {
+    const { userId, deviceId, scope, timeout = 30_000 } = params;
     const client = this.getClient();
     if (!client) return undefined;
 
@@ -132,13 +139,14 @@ export class DeviceGateway {
    * device, via the same generic `invokeRpc` channel as `initWorkspace`. Lets
    * the UI render a remote device's git the same as the local desktop.
    */
-  async gitInfo(
-    userId: string,
-    deviceId: string,
-    scope: string,
-    isGithub = false,
-    timeout = 15_000,
-  ): Promise<DeviceGitInfo | undefined> {
+  async gitInfo(params: {
+    deviceId: string;
+    isGithub?: boolean;
+    scope: string;
+    timeout?: number;
+    userId: string;
+  }): Promise<DeviceGitInfo | undefined> {
+    const { userId, deviceId, scope, isGithub = false, timeout = 15_000 } = params;
     const client = this.getClient();
     if (!client) return undefined;
 
@@ -161,18 +169,86 @@ export class DeviceGateway {
   }
 
   /**
+   * List the local branches of a directory on a remote device via the
+   * `listGitBranches` device RPC, so the web/remote branch switcher can populate
+   * the same dropdown the local desktop renders over IPC.
+   */
+  async listGitBranches(params: {
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+  }): Promise<DeviceGitBranchListItem[] | undefined> {
+    const { userId, deviceId, path, timeout = 15_000 } = params;
+    const client = this.getClient();
+    if (!client) return undefined;
+
+    try {
+      const result = await client.invokeRpc<DeviceGitBranchListItem[]>(
+        { deviceId, timeout, userId },
+        { method: 'listGitBranches', params: { path } },
+      );
+
+      if (!result.success || !result.data) {
+        log('listGitBranches: failed for deviceId=%s — %s', deviceId, result.error);
+        return undefined;
+      }
+
+      return result.data;
+    } catch (error) {
+      log('listGitBranches: error for deviceId=%s — %O', deviceId, error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Checkout (or create) a branch in a directory on a remote device via the
+   * `checkoutGitBranch` device RPC.
+   */
+  async checkoutGitBranch(params: {
+    branch: string;
+    create?: boolean;
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+  }): Promise<DeviceGitCheckoutResult> {
+    const { userId, deviceId, branch, create, path, timeout = 30_000 } = params;
+    const client = this.getClient();
+    if (!client) return { error: 'Device gateway not configured', success: false };
+
+    try {
+      const result = await client.invokeRpc<DeviceGitCheckoutResult>(
+        { deviceId, timeout, userId },
+        { method: 'checkoutGitBranch', params: { branch, create, path } },
+      );
+
+      if (!result.success || !result.data) {
+        log('checkoutGitBranch: failed for deviceId=%s — %s', deviceId, result.error);
+        return { error: result.error || 'Checkout failed', success: false };
+      }
+
+      return result.data;
+    } catch (error) {
+      log('checkoutGitBranch: error for deviceId=%s — %O', deviceId, error);
+      return { error: (error as Error)?.message || 'Checkout failed', success: false };
+    }
+  }
+
+  /**
    * Check whether a path exists on the device and is a directory, via the same
    * generic `invokeRpc` channel as `gitInfo`. Lets a web / remote client
    * validate a manually-entered working directory before binding it. Returns
    * `undefined` when the gateway is unconfigured or the device is unreachable
    * (the caller treats "can't verify" as non-blocking).
    */
-  async statPath(
-    userId: string,
-    deviceId: string,
-    path: string,
-    timeout = 8000,
-  ): Promise<{ exists: boolean; isDirectory: boolean } | undefined> {
+  async statPath(params: {
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+  }): Promise<{ exists: boolean; isDirectory: boolean } | undefined> {
+    const { userId, deviceId, path, timeout = 8000 } = params;
     const client = this.getClient();
     if (!client) return undefined;
 

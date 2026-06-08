@@ -1,4 +1,3 @@
-import type { GitBranchListItem } from '@lobechat/electron-client-ipc';
 import { Button, Icon, Input } from '@lobehub/ui';
 import {
   DropdownMenuItem,
@@ -22,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { message } from '@/components/AntdStaticMethods';
+import { lambdaClient } from '@/libs/trpc/client';
 import { electronGitService } from '@/services/electron/git';
 
 import { useWorkingTreeStatus } from './useWorkingTreeStatus';
@@ -165,16 +165,33 @@ const styles = createStaticStyles(({ css }) => ({
 interface BranchSwitcherProps {
   children: ReactElement;
   currentBranch?: string;
+  /**
+   * When set, branch list + checkout go through the `device.*` RPCs (web / remote
+   * device). Omit for the local machine, which talks to Electron over IPC.
+   */
+  deviceId?: string;
   onAfterCheckout?: () => void;
   onExternalRefresh?: () => void | Promise<void>;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   path: string;
+  /** Remote working-tree status, supplied by the caller when `deviceId` is set. */
+  workingStatus?: { clean: boolean; total: number };
 }
 
 const BranchSwitcher = memo<BranchSwitcherProps>(
-  ({ path, currentBranch, open, onOpenChange, onAfterCheckout, onExternalRefresh, children }) => {
-    const { t } = useTranslation('plugin');
+  ({
+    path,
+    currentBranch,
+    deviceId,
+    open,
+    onOpenChange,
+    onAfterCheckout,
+    onExternalRefresh,
+    workingStatus: remoteWorkingStatus,
+    children,
+  }) => {
+    const { t } = useTranslation('device');
     const [search, setSearch] = useState('');
     const [isCreating, setIsCreating] = useState(false);
     const [newBranch, setNewBranch] = useState('');
@@ -187,11 +204,20 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
       error: branchesError,
       mutate: mutateBranches,
     } = useSWR(
-      open ? ['git-branches', path] : null,
-      () => electronGitService.listGitBranches(path),
+      open ? ['git-branches', deviceId ?? 'local', path] : null,
+      // Desktop talks to Electron over IPC; web / remote device goes through RPC.
+      () =>
+        deviceId
+          ? lambdaClient.device.listGitBranches.query({ deviceId, path })
+          : electronGitService.listGitBranches(path),
       { revalidateOnFocus: false, shouldRetryOnError: false },
     );
-    const { data: workingStatus, mutate: mutateWorkingStatus } = useWorkingTreeStatus(path);
+    // The local working tree is probed over IPC; a remote device's status is
+    // passed in by the caller (it can't probe a remote fs here).
+    const { data: localWorkingStatus, mutate: mutateWorkingStatus } = useWorkingTreeStatus(
+      deviceId ? undefined : path,
+    );
+    const workingStatus = deviceId ? remoteWorkingStatus : localWorkingStatus;
     const [isRefreshing, setIsRefreshing] = useState(false);
 
     const handleRefresh = useCallback(async () => {
@@ -237,22 +263,20 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
         }
         setBusyBranch(branch);
         try {
-          const result = await electronGitService.checkoutGitBranch({
-            branch,
-            create,
-            path,
-          });
+          const result = deviceId
+            ? await lambdaClient.device.checkoutGitBranch.mutate({ branch, create, deviceId, path })
+            : await electronGitService.checkoutGitBranch({ branch, create, path });
           if (result.success) {
             onAfterCheckout?.();
             onOpenChange(false);
           } else {
-            message.error(result.error || t('localSystem.workingDirectory.checkoutFailed'));
+            message.error(result.error || t('workingDirectory.checkoutFailed'));
           }
         } finally {
           setBusyBranch(null);
         }
       },
-      [busyBranch, currentBranch, onAfterCheckout, onOpenChange, path, t],
+      [busyBranch, currentBranch, deviceId, onAfterCheckout, onOpenChange, path, t],
     );
 
     const handleCreateSubmit = useCallback(() => {
@@ -271,7 +295,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                 <div className={styles.searchBar}>
                   <Input
                     autoFocus
-                    placeholder={t('localSystem.workingDirectory.branchSearchPlaceholder')}
+                    placeholder={t('workingDirectory.branchSearchPlaceholder')}
                     prefix={<Icon icon={SearchIcon} size={14} />}
                     size="small"
                     value={search}
@@ -283,9 +307,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
 
                 <div className={styles.list}>
                   <div className={styles.sectionRow}>
-                    <div className={styles.section}>
-                      {t('localSystem.workingDirectory.branchesHeading')}
-                    </div>
+                    <div className={styles.section}>{t('workingDirectory.branchesHeading')}</div>
                     <div className={styles.refreshButton} role="button" onClick={handleRefresh}>
                       <Icon
                         className={cx(isRefreshing && styles.spinning)}
@@ -296,27 +318,24 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                   </div>
 
                   {isLoading && branches.length === 0 && (
-                    <div className={styles.emptyState}>
-                      {t('localSystem.workingDirectory.branchesLoading')}
-                    </div>
+                    <div className={styles.emptyState}>{t('workingDirectory.branchesLoading')}</div>
                   )}
 
                   {!isLoading && branchesError && (
                     <div className={styles.emptyState}>
-                      {(branchesError as Error)?.message ||
-                        t('localSystem.workingDirectory.branchesEmpty')}
+                      {(branchesError as Error)?.message || t('workingDirectory.branchesEmpty')}
                     </div>
                   )}
 
                   {!isLoading && !branchesError && filtered.length === 0 && (
                     <div className={styles.emptyState}>
                       {search.trim()
-                        ? t('localSystem.workingDirectory.branchesNoMatch')
-                        : t('localSystem.workingDirectory.branchesEmpty')}
+                        ? t('workingDirectory.branchesNoMatch')
+                        : t('workingDirectory.branchesEmpty')}
                     </div>
                   )}
 
-                  {filtered.map((branch: GitBranchListItem) => {
+                  {filtered.map((branch) => {
                     const isCurrent = branch.name === currentBranch;
                     const isBusy = busyBranch === branch.name;
                     return (
@@ -335,7 +354,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                           <div className={styles.branchLabel}>{branch.name}</div>
                           {isCurrent && workingStatus && !workingStatus.clean && (
                             <div className={styles.itemMeta}>
-                              {t('localSystem.workingDirectory.uncommittedChanges', {
+                              {t('workingDirectory.uncommittedChanges', {
                                 count: workingStatus.total,
                               })}
                             </div>
@@ -353,7 +372,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                   <div className={styles.createFooter}>
                     <Input
                       className={styles.createInput}
-                      placeholder={t('localSystem.workingDirectory.newBranchPlaceholder')}
+                      placeholder={t('workingDirectory.newBranchPlaceholder')}
                       ref={createInputRef as any}
                       size="small"
                       value={newBranch}
@@ -369,7 +388,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                       type="primary"
                       onClick={handleCreateSubmit}
                     >
-                      {t('localSystem.workingDirectory.checkoutAction')}
+                      {t('workingDirectory.checkoutAction')}
                     </Button>
                     <Button
                       size="small"
@@ -379,7 +398,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                         setNewBranch('');
                       }}
                     >
-                      {t('localSystem.workingDirectory.cancel')}
+                      {t('workingDirectory.cancel')}
                     </Button>
                   </div>
                 ) : (
@@ -391,7 +410,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                     >
                       <Icon className={styles.itemIcon} icon={GitBranchPlusIcon} size={14} />
                       <div className={styles.itemMain}>
-                        {t('localSystem.workingDirectory.createBranchAction')}
+                        {t('workingDirectory.createBranchAction')}
                       </div>
                     </DropdownMenuItem>
                   </div>

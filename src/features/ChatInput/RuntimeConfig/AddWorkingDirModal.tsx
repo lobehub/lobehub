@@ -17,7 +17,7 @@ interface AddWorkingDirContentProps {
 
 const AddWorkingDirContent = memo<AddWorkingDirContentProps>(
   ({ onSubmit, placeholder, validate }) => {
-    const { t: tPlugin } = useTranslation('plugin');
+    const { t: tPlugin } = useTranslation('device');
     const { t: tCommon } = useTranslation('common');
     const { close } = useModalContext();
     const [value, setValue] = useState('');
@@ -53,11 +53,11 @@ const AddWorkingDirContent = memo<AddWorkingDirContentProps>(
     return (
       <Flexbox gap={16}>
         <Text style={{ marginTop: -8 }} type={'secondary'}>
-          {tPlugin('localSystem.workingDirectory.addFolderDesc')}
+          {tPlugin('workingDirectory.addFolderDesc')}
         </Text>
         <Flexbox gap={6}>
           <Input
-            placeholder={placeholder || tPlugin('localSystem.workingDirectory.placeholder')}
+            placeholder={placeholder || tPlugin('workingDirectory.placeholder')}
             ref={inputRef}
             value={value}
             onPressEnter={handleSubmit}
@@ -104,6 +104,6 @@ export const openAddWorkingDirModal = (options: {
     footer: null,
     maskClosable: true,
     styles: { header: { borderBottom: 'none' } },
-    title: t('localSystem.workingDirectory.addFolderTitle', { ns: 'plugin' }),
+    title: t('workingDirectory.addFolderTitle', { ns: 'device' }),
     width: 'min(90vw, 480px)',
   });

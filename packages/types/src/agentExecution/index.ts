@@ -181,6 +181,23 @@ export interface DeviceGitInfo {
 }
 
 /**
+ * One local branch on a device's working directory, returned by the
+ * `listGitBranches` device RPC. Mirrors the desktop `GitBranchListItem` so the
+ * branch switcher consumes the IPC and RPC paths interchangeably.
+ */
+export interface DeviceGitBranchListItem {
+  current: boolean;
+  name: string;
+  upstream?: string;
+}
+
+/** Result of the `checkoutGitBranch` device RPC. Mirrors the desktop shape. */
+export interface DeviceGitCheckoutResult {
+  error?: string;
+  success: boolean;
+}
+
+/**
  * Parameters for execAgent - execute a single Agent
  * Either agentId or slug must be provided
  */

@@ -101,6 +101,44 @@ export const deviceRouter = router({
     }),
 
   /**
+   * List the local branches of a directory on a remote device, via the device's
+   * `listGitBranches` RPC. Lets the web/remote branch switcher populate the same
+   * dropdown the local desktop renders over IPC.
+   */
+  listGitBranches: deviceProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        path: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.listGitBranches(ctx.userId, input.deviceId, input.path);
+      return result ?? [];
+    }),
+
+  /**
+   * Checkout (or create) a branch in a directory on a remote device, via the
+   * device's `checkoutGitBranch` RPC.
+   */
+  checkoutGitBranch: deviceProcedure
+    .input(
+      z.object({
+        branch: z.string(),
+        create: z.boolean().optional(),
+        deviceId: z.string(),
+        path: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      deviceGateway.checkoutGitBranch(ctx.userId, input.deviceId, {
+        branch: input.branch,
+        create: input.create,
+        path: input.path,
+      }),
+    ),
+
+  /**
    * Check whether a path exists on a remote device and is a directory, via the
    * device's `statPath` RPC. Lets a web client validate a manually-entered
    * working directory before binding it. Returns `null` when the device is

@@ -365,6 +365,16 @@ export default class GatewayConnectionCtr extends ControllerModule {
         return this.gitCtr.gitInfo(params as { isGithub?: boolean; scope: string });
       }
 
+      case 'listGitBranches': {
+        return this.gitCtr.listGitBranches((params as { path: string }).path);
+      }
+
+      case 'checkoutGitBranch': {
+        return this.gitCtr.checkoutGitBranch(
+          params as { branch: string; create?: boolean; path: string },
+        );
+      }
+
       case 'statPath': {
         return this.workspaceCtr.statPath(params as { path: string });
       }
