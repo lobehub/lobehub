@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
 import RingLoadingIcon from '@/components/RingLoading';
-import { lambdaClient } from '@/libs/trpc/client';
+import { deviceService } from '@/services/device';
 import { electronGitService } from '@/services/electron/git';
 import { electronSystemService } from '@/services/electron/system';
 import { useGlobalStore } from '@/store/global';
@@ -200,7 +200,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
     try {
       // Local pulls over IPC; a remote device pulls over RPC.
       const result = deviceId
-        ? await lambdaClient.device.pullGitBranch.mutate({ deviceId, path })
+        ? await deviceService.pullGitBranch(deviceId, path)
         : await electronGitService.pullGitBranch({ path });
       if (result.success) {
         if (result.noop) {
@@ -223,7 +223,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
     try {
       // Local pushes over IPC; a remote device pushes over RPC.
       const result = deviceId
-        ? await lambdaClient.device.pushGitBranch.mutate({ deviceId, path })
+        ? await deviceService.pushGitBranch(deviceId, path)
         : await electronGitService.pushGitBranch({ path });
       if (result.success) {
         if (result.noop) {
