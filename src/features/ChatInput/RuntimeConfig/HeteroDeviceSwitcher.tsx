@@ -91,21 +91,16 @@ const styles = createStaticStyles(({ css }) => ({
     gap: 10px;
     align-items: center;
 
-    margin-block-start: 2px;
-    padding-block: 10px;
+    padding-block: 8px;
     padding-inline: 8px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius};
 
     text-decoration: none;
 
-    background: ${cssVar.colorFillQuaternary};
-
-    transition: all 0.2s;
+    transition: background-color 0.2s;
 
     &:hover {
-      border-color: ${cssVar.colorPrimaryBorderHover};
-      background: ${cssVar.colorPrimaryBg};
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   downloadCardArrow: css`
