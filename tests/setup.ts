@@ -27,7 +27,7 @@ class TestMemoryStorage implements Storage {
   }
 
   getItem(key: string) {
-    return this.store.get(key) ?? null;
+    return this.store.get(String(key)) ?? null;
   }
 
   key(index: number) {
@@ -35,11 +35,11 @@ class TestMemoryStorage implements Storage {
   }
 
   removeItem(key: string) {
-    this.store.delete(key);
+    this.store.delete(String(key));
   }
 
   setItem(key: string, value: string) {
-    this.store.set(key, String(value));
+    this.store.set(String(key), String(value));
   }
 }
 
