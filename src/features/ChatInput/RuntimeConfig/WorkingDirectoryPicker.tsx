@@ -1,9 +1,16 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, Icon, Input, Popover, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { CheckIcon, ChevronDownIcon, FolderIcon, FolderOpenIcon, XIcon } from 'lucide-react';
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  FolderPlusIcon,
+  XIcon,
+} from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,6 +26,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 
+import { openAddWorkingDirModal } from './AddWorkingDirModal';
 import { renderDirIcon } from './dirIcon';
 import { useCommitWorkingDirectory } from './useCommitWorkingDirectory';
 import { useMigrateDeviceRecents } from './useMigrateDeviceRecents';
@@ -157,7 +165,6 @@ interface WorkingDirectoryPickerProps {
 const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) => {
   const { t } = useTranslation('plugin');
   const [open, setOpen] = useState(false);
-  const [input, setInput] = useState('');
 
   // Populate the device store (SWR dedupes across callers).
   useDeviceStore((s) => s.useFetchDevices)();
@@ -192,7 +199,6 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
 
   const pick = async (entry: { path: string; repoType?: 'git' | 'github' }) => {
     await commit(entry);
-    setInput('');
     setOpen(false);
   };
 
@@ -202,6 +208,18 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
       title: t('localSystem.workingDirectory.selectFolder'),
     });
     if (result) await pick({ path: result.path, repoType: result.repoType });
+  };
+
+  // Local desktop machine → native folder dialog. Otherwise (web / a remote
+  // device) the filesystem isn't browsable here, so open a modal for manual
+  // absolute-path entry instead.
+  const handleAddFolder = () => {
+    if (isLocalDevice) {
+      void handleChooseFolder();
+      return;
+    }
+    setOpen(false);
+    openAddWorkingDirModal((path) => pick({ path }));
   };
 
   const handleRemoveRecent = (e: React.MouseEvent, path: string) => {
@@ -266,25 +284,22 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
         )}
       </div>
 
-      {isLocalDevice ? (
-        <Flexbox
-          horizontal
-          align={'center'}
-          className={styles.chooseFolderItem}
-          gap={8}
-          onClick={handleChooseFolder}
-        >
-          <Icon icon={FolderOpenIcon} size={14} />
-          <span>{t('localSystem.workingDirectory.chooseDifferentFolder')}</span>
-        </Flexbox>
-      ) : (
-        <Input
-          placeholder={t('localSystem.workingDirectory.placeholder')}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onPressEnter={() => void pick({ path: input })}
-        />
-      )}
+      <Flexbox
+        horizontal
+        align={'center'}
+        className={styles.chooseFolderItem}
+        gap={8}
+        onClick={handleAddFolder}
+      >
+        <Icon icon={isLocalDevice ? FolderOpenIcon : FolderPlusIcon} size={14} />
+        <span>
+          {t(
+            isLocalDevice
+              ? 'localSystem.workingDirectory.chooseDifferentFolder'
+              : 'localSystem.workingDirectory.addFolder',
+          )}
+        </span>
+      </Flexbox>
     </Flexbox>
   );
 

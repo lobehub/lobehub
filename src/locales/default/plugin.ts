@@ -575,6 +575,10 @@ export default {
   'localSystem.workingDirectory.agentDescription':
     'Default working directory for all conversations with this Agent',
   'localSystem.workingDirectory.agentLevel': 'Agent Working Directory',
+  'localSystem.workingDirectory.addFolder': 'Add folder…',
+  'localSystem.workingDirectory.addFolderDesc':
+    'Enter an absolute path on the target device, e.g. /Users/name/projects',
+  'localSystem.workingDirectory.addFolderTitle': 'Add working directory',
   'localSystem.workingDirectory.branchesEmpty': 'No local branches',
   'localSystem.workingDirectory.branchesHeading': 'Branches',
   'localSystem.workingDirectory.branchesLoading': 'Loading branches…',
