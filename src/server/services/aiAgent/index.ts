@@ -1781,7 +1781,7 @@ export class AiAgentService {
           description: manifest.meta?.description,
           identifier: manifest.identifier,
           name: manifest.meta?.title || manifest.identifier,
-          type: 'connector' as const,
+          type: 'custom' as const,
         })),
       ];
 
