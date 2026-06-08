@@ -287,6 +287,43 @@ export class StaticRendererFallback implements RendererFallbackStrategy {
 }
 
 /**
+ * Minimal FIFO semaphore: bounds the number of concurrently-held slots and hands
+ * waiters their turn in arrival order. `acquire()` resolves with an idempotent
+ * release function.
+ */
+class Semaphore {
+  private active = 0;
+  private readonly waiters: Array<() => void> = [];
+
+  constructor(private readonly max: number) {}
+
+  async acquire(): Promise<() => void> {
+    if (this.active >= this.max) {
+      await new Promise<void>((resolve) => this.waiters.push(resolve));
+    }
+    this.active += 1;
+
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.active -= 1;
+      this.waiters.shift()?.();
+    };
+  }
+}
+
+/**
+ * Cap on concurrent dev-server fetches. Since #15304 unified dev under `app://`,
+ * every renderer asset round-trips through the main process `net` stack instead
+ * of being fetched straight from Vite by the renderer. A cold start (thousands of
+ * module requests) or a non-default UI language (every i18n namespace fetched
+ * over HTTP, ~50 at once) can otherwise exhaust the net request pool and surface
+ * as `ERR_INSUFFICIENT_RESOURCES`. Bound the in-flight burst instead.
+ */
+const VITE_FETCH_CONCURRENCY = 64;
+
+/**
  * Development fallback: forward the request to the electron-vite dev server.
  * Non-backend `app://renderer/<path>` requests get round-tripped through the
  * Vite middleware (HTML rewrites, module transforms, optimized deps) and
@@ -299,6 +336,7 @@ export class StaticRendererFallback implements RendererFallbackStrategy {
 export class ViteRendererFallback implements RendererFallbackStrategy {
   private readonly viteOrigin: string;
   private readonly logger = createLogger('core:ViteRendererFallback');
+  private readonly gate = new Semaphore(VITE_FETCH_CONCURRENCY);
 
   constructor(viteOrigin: string) {
     this.viteOrigin = viteOrigin.replace(/\/+$/, '');
@@ -322,11 +360,39 @@ export class ViteRendererFallback implements RendererFallbackStrategy {
       init.duplex = 'half';
     }
 
+    const release = await this.gate.acquire();
     try {
-      return await net.fetch(target, init);
+      const response = await net.fetch(target, init);
+      // Hold the slot until the body is fully drained (or cancelled) so streaming
+      // responses count against the limit for their whole lifetime, not just until
+      // headers arrive. Bodyless responses release immediately.
+      return this.releaseOnBodyDone(response, release);
     } catch (error) {
+      release();
       this.logger.error(`Vite dev server fetch failed: ${target}`, error);
       return new Response('Vite Dev Server Unavailable', { status: 502 });
     }
+  }
+
+  /**
+   * Wrap the response body in a passthrough that invokes `release` once the stream
+   * closes, errors, or is cancelled downstream — keeping the semaphore slot held
+   * for the request's true lifetime without buffering (so media Range/streaming is
+   * preserved). Returns a new Response carrying the wrapped body.
+   */
+  private releaseOnBodyDone(response: Response, release: () => void): Response {
+    if (!response.body) {
+      release();
+      return response;
+    }
+
+    const passthrough = new TransformStream();
+    void response.body.pipeTo(passthrough.writable).then(release, release);
+
+    return new Response(passthrough.readable, {
+      headers: response.headers,
+      status: response.status,
+      statusText: response.statusText,
+    });
   }
 }
