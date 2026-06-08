@@ -75,4 +75,18 @@ export interface LobeAgentAgencyConfig {
    * any `verifyCriteriaIds` — into its check plan. References `verify_rubrics.id`.
    */
   verifyRubricId?: string;
+  /**
+   * Per-device working directory chosen for this agent. Key = `deviceId` (the
+   * local machine uses its own gateway deviceId, so local and remote share one
+   * model). This is the **agent-level** cwd in the resolution precedence:
+   *
+   *   `topic.metadata.workingDirectory`
+   *     > `workingDirByDevice[targetDeviceId]`
+   *     > `device.defaultCwd`
+   *
+   * Keyed per device so switching the bound device never resolves a path that
+   * only exists on another machine. Persisted (server-synced) so the choice
+   * follows the user across sessions / ends.
+   */
+  workingDirByDevice?: Record<string, string>;
 }
