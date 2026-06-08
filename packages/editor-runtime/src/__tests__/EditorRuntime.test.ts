@@ -79,7 +79,7 @@ describe('EditorRuntime', () => {
       runtime.setEditor(null);
 
       await expect(runtime.initPage({ markdown: 'Test' })).rejects.toThrow(
-        'Editor not initialized',
+        'The Page Editor is not open',
       );
     });
   });

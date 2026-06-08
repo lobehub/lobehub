@@ -241,7 +241,9 @@ export class EditorRuntime {
    */
   private getEditor(): IEditor {
     if (!this.editor) {
-      throw new Error('Editor not initialized. Please set the editor instance first.');
+      throw new Error(
+        'The Page Editor is not open. Please navigate to a page document before using editing tools.',
+      );
     }
     return this.editor;
   }
