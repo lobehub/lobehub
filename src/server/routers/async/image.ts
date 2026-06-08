@@ -19,7 +19,7 @@ import { FileModel } from '@/database/models/file';
 import { GenerationModel } from '@/database/models/generation';
 import { GenerationBatchModel } from '@/database/models/generationBatch';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { findDeploymentName, initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { GenerationService } from '@/server/services/generation';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
@@ -127,6 +127,25 @@ export const imageRouter = router({
             model,
           );
 
+          // Resolve the provider-specific deployment name so that providers
+          // which use a separate deployment id (Azure OpenAI, Volcengine,
+          // Qwen/Bailian, ...) receive the configured deployment name instead
+          // of the raw model id. Mirrors the chat flow's `findDeploymentName`.
+          // See https://github.com/lobehub/lobehub/issues/14450
+          const deploymentModelId = await findDeploymentName(
+            ctx.serverDB,
+            ctx.userId,
+            resolvedModelId,
+            provider,
+          );
+
+          log(
+            'Resolved image model: requested=%s businessResolved=%s deployment=%s',
+            model,
+            resolvedModelId,
+            deploymentModelId,
+          );
+
           // Read user's provider config from database
           const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId, provider);
 
@@ -135,7 +154,7 @@ export const imageRouter = router({
           log('Agent runtime initialized, calling createImage');
           const response = await modelRuntime.createImage!(
             {
-              model: resolvedModelId,
+              model: deploymentModelId,
               params: params as unknown as RuntimeImageGenParams,
             },
             {
