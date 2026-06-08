@@ -181,14 +181,14 @@ export default {
   'heteroAgent.executionTarget.local': 'This device',
   'heteroAgent.executionTarget.localDesc': 'Run as a local process on this desktop app',
   'heteroAgent.executionTarget.noDevices':
-    'No remote devices yet. Install the desktop app or run `lh connect` on another machine.',
+    'No remote devices yet. Run `lh connect` on another machine to add one.',
   'heteroAgent.executionTarget.offline': 'Offline',
   'heteroAgent.executionTarget.online': 'Online',
   'heteroAgent.executionTarget.sandbox': 'Cloud sandbox',
   'heteroAgent.executionTarget.sandboxDesc': 'Run in an ephemeral cloud sandbox',
   'heteroAgent.executionTarget.downloadDesktop': 'Get Desktop App',
   'heteroAgent.executionTarget.downloadDesktopDesc':
-    'Run agents locally on your machine, or connect remote devices with `lh connect`.',
+    'Run agents on your computer with direct access to local files.',
   'heteroAgent.executionTarget.downloadDesktopTitle': 'Get the desktop app',
   'heteroAgent.executionTarget.title': 'Execution Device',
   'heteroAgent.executionTarget.unknownDevice': 'Unknown device',
