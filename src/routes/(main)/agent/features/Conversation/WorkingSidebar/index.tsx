@@ -99,7 +99,7 @@ const AgentWorkingSidebar = memo(() => {
   );
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
-  const repoType = useRepoType(workingDirectory);
+  const repoType = useRepoType(workingDirectory, targetDeviceId);
 
   const filesAvailable = isLocalSystemEnabled && !!workingDirectory;
   const reviewAvailable = isLocalSystemEnabled && !!workingDirectory && !!repoType;
