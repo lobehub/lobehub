@@ -219,6 +219,15 @@ interface InternalExecAgentParams extends ExecAgentParams {
    * Defaults to true. Set to false for non-streaming scenarios (e.g., bot integrations).
    */
   stream?: boolean;
+  /**
+   * Run the turn off existing topic history without injecting a new user message
+   * (no user-message row, no Agent Signal source event). The agent responds to
+   * whatever the context engine surfaces as the latest turn. Used by auto-repair,
+   * where the failure feedback already lives on the verify card in history.
+   * `prompt` is still used for the operation title / logs. Unlike `resume`, this
+   * starts a fresh operation and skips the resume-specific validation.
+   */
+  suppressUserMessage?: boolean;
   /** Task ID that triggered this execution (if trigger is 'task') */
   taskId?: string;
   /**
@@ -409,6 +418,7 @@ export class AiAgentService {
       parentOperationId,
       resume,
       resumeApproval,
+      suppressUserMessage,
     } = params;
 
     // Validate that either agentId or slug is provided
@@ -592,6 +602,12 @@ export class AiAgentService {
     // flag so downstream resume branches don't need to know about approval.
     const effectiveResume = resume || !!resumeApproval;
 
+    // Both resume and suppressUserMessage run the turn off existing history
+    // instead of appending a new user message — share the message-construction
+    // branches below. Resume-specific validation/approval stays gated on
+    // `effectiveResume` only.
+    const runFromHistory = effectiveResume || !!suppressUserMessage;
+
     if (effectiveResume) {
       if (!parentMessageId) {
         throw new Error('parentMessageId is required when resume is true');
@@ -768,7 +784,7 @@ export class AiAgentService {
       const operationId = nanoid();
 
       // Create user message so the conversation is visible in the UI immediately.
-      const userMsg = effectiveResume
+      const userMsg = runFromHistory
         ? undefined
         : await this.messageModel.create({
             agentId: resolvedAgentId,
@@ -2013,7 +2029,7 @@ export class AiAgentService {
 
     // 13. Create user message in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
-    const userMessageRecord = effectiveResume
+    const userMessageRecord = runFromHistory
       ? undefined
       : await this.messageModel.create({
           agentId: persistAgentId,
@@ -2095,7 +2111,7 @@ export class AiAgentService {
     };
 
     // Combine history messages with user message
-    const allMessages = effectiveResume ? historyMessages : [...historyMessages, userMessage];
+    const allMessages = runFromHistory ? historyMessages : [...historyMessages, userMessage];
 
     log('execAgent: prepared evalContext for executor');
 
@@ -2111,7 +2127,7 @@ export class AiAgentService {
         // Pass assistant message ID so agent runtime knows which message to update
         assistantMessageId: assistantMessageRecord.id,
         isFirstMessage: true,
-        message: effectiveResume ? [{ content: '' }] : [{ content: prompt }],
+        message: runFromHistory ? [{ content: '' }] : [{ content: prompt }],
         // Pass user message ID as parentMessageId for reference
         parentMessageId: parentMessageId ?? userMessageRecord?.id ?? '',
         // Include tools for initial LLM call

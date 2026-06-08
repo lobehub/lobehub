@@ -100,9 +100,20 @@ export const createLLMGenerationTracingHook = (
       const validationFailed =
         !data.success && typeof errorMessage === 'string' && /zod|validation/i.test(errorMessage);
 
+      // In-process completion callback (not persisted): lets a caller late-bind
+      // a hard FK onto the tracing row, which only exists after this deferred
+      // record() commits. Carried on the raw `tracing` bag, so it survives
+      // `parseTracingOptions` (which keeps only serializable string fields).
+      const rawTracing = (context.options?.tracing ?? {}) as Record<string, unknown>;
+      const onPersisted =
+        typeof rawTracing.onPersisted === 'function'
+          ? (rawTracing.onPersisted as (tracingId: string | null) => void | Promise<void>)
+          : undefined;
+
       tryScheduleAfter(async () => {
+        let persistedTracingId: string | null = null;
         try {
-          await service.record({
+          const result = await service.record({
             agentId: tracing.agentId,
             costUsd: (data.usage as { cost?: number } | undefined)?.cost,
             errorCode: data.error?.code,
@@ -134,8 +145,19 @@ export const createLLMGenerationTracingHook = (
             userId,
             validationFailed,
           });
+          persistedTracingId = result?.tracingId ?? null;
         } catch (err) {
           log('Tracing service threw: %O', err);
+        }
+
+        // Signal completion after the row is committed (or null if it wasn't),
+        // so the caller's backfill never references a non-existent row.
+        if (onPersisted) {
+          try {
+            await onPersisted(persistedTracingId);
+          } catch (err) {
+            log('onPersisted callback threw: %O', err);
+          }
         }
       });
     },

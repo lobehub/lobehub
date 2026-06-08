@@ -40,6 +40,8 @@ interface LobeAgentRuntimeContext {
   agentId?: string | null;
   groupId?: string | null;
   messageId: string;
+  /** The current Agent Run (`agent_operations.id`). */
+  operationId?: string;
   serverDB: LobeChatDatabase;
   threadId?: string | null;
   topicId?: string;
@@ -76,6 +78,7 @@ class LobeAgentExecutionRuntime {
   private groupId?: string | null;
   private userId: string;
   private messageId: string;
+  private operationId?: string;
   private threadId?: string | null;
   private topicId?: string;
   private planRuntime: PlanExecutionRuntime;
@@ -85,6 +88,7 @@ class LobeAgentExecutionRuntime {
     this.db = context.serverDB;
     this.groupId = context.groupId;
     this.messageId = context.messageId;
+    this.operationId = context.operationId;
     this.threadId = context.threadId;
     this.topicId = context.topicId;
     this.userId = context.userId;
@@ -374,6 +378,7 @@ export const lobeAgentRuntime: ServerRuntimeRegistration = {
       agentId: context.agentId,
       groupId: context.groupId,
       messageId: context.messageId,
+      operationId: context.operationId,
       serverDB: context.serverDB,
       threadId: context.threadId,
       topicId: context.topicId,

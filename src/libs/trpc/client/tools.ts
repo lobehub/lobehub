@@ -2,7 +2,6 @@ import { createTRPCClient, httpBatchLink, type TRPCLink } from '@trpc/client';
 import { observable } from '@trpc/server/observable';
 import superjson from 'superjson';
 
-import { withElectronProtocolIfElectron } from '@/const/protocol';
 import { type ToolsRouter } from '@/server/routers/tools';
 
 // 401 error debouncing for market auth
@@ -62,7 +61,7 @@ export const toolsClient = createTRPCClient<ToolsRouter>({
       },
       maxURLLength: 2083,
       transformer: superjson,
-      url: withElectronProtocolIfElectron('/trpc/tools'),
+      url: '/trpc/tools',
     }),
   ],
 });

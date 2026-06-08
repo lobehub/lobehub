@@ -115,6 +115,10 @@ vi.mock('./GroupItem', () => ({
   ),
 }));
 
+vi.mock('@/features/Conversation/Messages/components/ContentLoading', () => ({
+  default: ({ id }: { id: string }) => <div data-id={id} data-testid="tail-running" />,
+}));
+
 const blk = (p: Partial<AssistantContentBlock> & { id: string }): AssistantContentBlock =>
   ({ content: '', ...p }) as AssistantContentBlock;
 
@@ -349,6 +353,63 @@ describe('Group', () => {
         toolCount: 1,
       },
     ]);
+  });
+
+  it('shows a running indicator below a settled single inline tool while still generating', () => {
+    mockIsGenerating = true;
+    render(
+      <Group
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: '',
+            id: 'block-1',
+            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId('tail-running')).toHaveAttribute('data-id', 'assistant-1');
+  });
+
+  it('hides the running indicator while the inline tool is still executing', () => {
+    mockIsGenerating = true;
+    render(
+      <Group
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: '',
+            id: 'block-1',
+            tools: [{ apiName: 'bash', id: 'tool-1' } as any],
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByTestId('tail-running')).not.toBeInTheDocument();
+  });
+
+  it('hides the running indicator once generation has finished', () => {
+    mockIsGenerating = false;
+    render(
+      <Group
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: '',
+            id: 'block-1',
+            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByTestId('tail-running')).not.toBeInTheDocument();
   });
 
   it('only animates the last block in a multi-block group', () => {

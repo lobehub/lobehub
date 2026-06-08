@@ -30,7 +30,8 @@ export type UIMessageRoleType =
   | 'assistantGroup'
   | 'agentCouncil'
   | 'compressedGroup'
-  | 'compareGroup';
+  | 'compareGroup'
+  | 'verify';
 
 export interface ChatFileItem {
   content?: string;

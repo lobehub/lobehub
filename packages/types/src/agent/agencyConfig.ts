@@ -63,4 +63,16 @@ export interface LobeAgentAgencyConfig {
    */
   executionTarget?: HeteroExecutionTarget;
   heterogeneousProvider?: HeterogeneousProviderConfig;
+  /**
+   * Ad-hoc verify criteria mounted directly on this agent, in addition to any
+   * `verifyRubricId`. Use for one-off checks that don't warrant a reusable
+   * rubric. References `verify_criteria.id`.
+   */
+  verifyCriteriaIds?: string[];
+  /**
+   * Verify (delivery checker) rubric (reusable criteria template) mounted on
+   * this agent. Every run instantiates this rubric's criteria — together with
+   * any `verifyCriteriaIds` — into its check plan. References `verify_rubrics.id`.
+   */
+  verifyRubricId?: string;
 }

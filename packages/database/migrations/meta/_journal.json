@@ -770,6 +770,13 @@
       "when": 1780571940776,
       "tag": "0109_migrate_unique_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1780832120210,
+      "tag": "0110_add_verify_tables_and_ai_infra_id",
+      "breakpoints": true
     }
   ],
   "version": "6"

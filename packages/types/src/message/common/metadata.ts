@@ -185,6 +185,9 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   subAgentId: z.string().optional(),
   toolExecutionTimeMs: z.number().optional(),
   trigger: z.nativeEnum(RequestTrigger).optional(),
+  // role='verify' card: which Agent Run (agent_operations.id) it renders.
+  verifyOperationId: z.string().optional(),
+  verifyRound: z.number().optional(),
   // @deprecated token usage moved to the top-level `usage` column. Still listed
   // so zod doesn't strip `metadata.usage` from legacy writes during migration.
   usage: ModelUsageSchema.optional(),
@@ -280,7 +283,6 @@ export interface MessageMetadata {
    * Flag indicating if message content is multimodal (serialized MessageContentPart[])
    */
   isMultimodal?: boolean;
-
   /**
    * Flag indicating if message is from the Supervisor agent in group orchestration
    * Used by conversation-flow to transform role to 'supervisor' for UI rendering
@@ -288,6 +290,7 @@ export interface MessageMetadata {
   isSupervisor?: boolean;
   /** @deprecated use `metadata.performance` instead */
   latency?: number;
+
   /**
    * Local-system tool snapshots materialized when the user sent @file mentions.
    */
@@ -374,6 +377,13 @@ export interface MessageMetadata {
    * but new writers should target the top-level `usage` instead.
    */
   usage?: ModelUsage;
+  /**
+   * Agent Run operation id this verify card belongs to (for role='verify' messages).
+   * References `agent_operations.id`; the card reads the verify plan + results off it.
+   */
+  verifyOperationId?: string;
+  /** Display round number for the verify card (1-based; repair rounds are separate). */
+  verifyRound?: number;
 }
 
 /**

@@ -69,6 +69,7 @@ import { usageRouter } from './usage';
 import { userRouter } from './user';
 import { userMemoriesRouter } from './userMemories';
 import { userMemoryRouter } from './userMemory';
+import { verifyRouter } from './verify';
 import { videoRouter } from './video';
 import { webBrowsingRouter } from './webBrowsing';
 
@@ -132,6 +133,7 @@ export const lambdaRouter = router({
   user: userRouter,
   userMemories: userMemoriesRouter,
   userMemory: userMemoryRouter,
+  verify: verifyRouter,
   video: videoRouter,
   webBrowsing: webBrowsingRouter,
   accountDeletion: accountDeletionRouter,

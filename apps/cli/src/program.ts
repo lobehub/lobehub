@@ -34,6 +34,7 @@ import { registerTaskCommand } from './commands/task';
 import { registerThreadCommand } from './commands/thread';
 import { registerTopicCommand } from './commands/topic';
 import { registerUserCommand } from './commands/user';
+import { registerVerifyCommand } from './commands/verify';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json');
@@ -75,6 +76,7 @@ export function createProgram() {
   registerProviderCommand(program);
   registerPluginCommand(program);
   registerUserCommand(program);
+  registerVerifyCommand(program);
   registerConfigCommand(program);
   registerEvalCommand(program);
   registerMigrateCommand(program);

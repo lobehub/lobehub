@@ -18,6 +18,7 @@ export enum PortalViewType {
   Notebook = 'notebook',
   Thread = 'thread',
   ToolUI = 'toolUI',
+  VerifyResult = 'verifyResult',
 }
 
 export interface PortalFile {
@@ -34,9 +35,15 @@ export type PortalViewData =
   | { file: PortalFile; type: PortalViewType.FilePreview }
   | { type: PortalViewType.LocalFile }
   | { messageId: string; type: PortalViewType.MessageDetail }
-  | { identifier: string; messageId: string; type: PortalViewType.ToolUI }
+  | {
+      identifier: string;
+      messageId: string;
+      params?: Record<string, any>;
+      type: PortalViewType.ToolUI;
+    }
   | { startMessageId?: string; threadId?: string; type: PortalViewType.Thread }
-  | { agentId: string; type: PortalViewType.GroupThread };
+  | { agentId: string; type: PortalViewType.GroupThread }
+  | { checkItemId: string; operationId: string; type: PortalViewType.VerifyResult };
 
 // ============== Portal State ==============
 

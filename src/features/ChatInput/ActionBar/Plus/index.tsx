@@ -9,6 +9,7 @@ import { css, cssVar, cx } from 'antd-style';
 import {
   Brain,
   CheckIcon,
+  ChevronRight,
   CloudCog,
   FileUp,
   Globe,
@@ -437,6 +438,9 @@ const PlusAction = memo(() => {
         ? [
             {
               children: skillMenuItems,
+              // Trailing chevron (replaces base-ui's default triangle submenu arrow,
+              // which is hidden via the .lobe-submenu-chevron rule in ActionDropdown).
+              extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
               footer: skillMarketFooter,
               header: skillMarketHeader,
               icon: SkillsIcon,
@@ -560,6 +564,9 @@ const PlusAction = memo(() => {
                 ? [{ type: 'divider' as const }, ...knowledgeItems]
                 : []),
             ],
+            // Trailing chevron (replaces base-ui's default triangle submenu arrow,
+            // which is hidden via the .lobe-submenu-chevron rule in ActionDropdown).
+            extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
             footer: knowledgeFooter,
             icon: LibraryBig,
             key: 'attachments',

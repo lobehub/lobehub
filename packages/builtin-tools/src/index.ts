@@ -16,6 +16,7 @@ import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-bu
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
+import { LobeDeliveryCheckerManifest } from '@lobechat/builtin-tool-lobe-delivery-checker';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MemoryManifest } from '@lobechat/builtin-tool-memory';
 import { MessageManifest } from '@lobechat/builtin-tool-message';
@@ -28,6 +29,7 @@ import { SkillsManifest } from '@lobechat/builtin-tool-skills';
 import { TaskManifest } from '@lobechat/builtin-tool-task';
 import { TopicReferenceManifest } from '@lobechat/builtin-tool-topic-reference';
 import { UserInteractionManifest } from '@lobechat/builtin-tool-user-interaction';
+import { VerifyToolManifest } from '@lobechat/builtin-tool-verify';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
 import { isDesktop, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
@@ -127,6 +129,13 @@ export const runtimeManagedToolIds = [
 ];
 
 export const builtinTools: LobeBuiltinTool[] = [
+  {
+    discoverable: false,
+    hidden: true,
+    identifier: VerifyToolManifest.identifier,
+    manifest: VerifyToolManifest,
+    type: 'builtin',
+  },
   {
     discoverable: false,
     hidden: true,
@@ -317,6 +326,11 @@ export const builtinTools: LobeBuiltinTool[] = [
     hidden: true,
     identifier: LobeAgentManifest.identifier,
     manifest: LobeAgentManifest,
+    type: 'builtin',
+  },
+  {
+    identifier: LobeDeliveryCheckerManifest.identifier,
+    manifest: LobeDeliveryCheckerManifest,
     type: 'builtin',
   },
 ];

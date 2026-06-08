@@ -76,6 +76,22 @@ vi.mock('@/config/klavis', () => ({
   klavisEnv: { KLAVIS_API_KEY: undefined },
 }));
 
+// fileEnv uses @t3-oss/env-core; stub the only field the runtime reads so the
+// generated-image upload pathname is deterministic.
+vi.mock('@/envs/file', () => ({
+  fileEnv: { NEXT_PUBLIC_S3_FILE_PATH: 'files' },
+}));
+
+// FileService is constructed by the runtime to persist model-generated images.
+// `mockUploadBase64` is the spy multimodal-image tests assert against.
+const { mockUploadBase64 } = vi.hoisted(() => ({ mockUploadBase64: vi.fn() }));
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn().mockImplementation(() => ({
+    getFileAccessUrl: vi.fn().mockResolvedValue('https://files.example/access'),
+    uploadBase64: mockUploadBase64,
+  })),
+}));
+
 describe('RuntimeExecutors', () => {
   let mockMessageModel: any;
   let mockStreamManager: any;
@@ -475,6 +491,141 @@ describe('RuntimeExecutors', () => {
       expect(result.newState.messages.at(-1)).toEqual(
         expect.objectContaining({ content: 'Here is your answer.', role: 'assistant' }),
       );
+    });
+
+    // Gemini 2.5+/3 thinking streams deliver assistant text/reasoning as
+    // content_part / reasoning_part events instead of plain text / reasoning.
+    // These must be captured or the turn finalizes to a blank `done`.
+    describe('multimodal content_part / reasoning_part', () => {
+      const geminiInstruction = (overrides?: any) => ({
+        payload: {
+          messages: [{ content: 'Hi', role: 'user' }],
+          model: 'gemini-3.1-flash-lite-preview',
+          provider: 'google',
+          tools: [],
+          ...overrides,
+        },
+        type: 'call_llm' as const,
+      });
+
+      it('captures assistant text delivered via content_part', async () => {
+        const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+          await options?.callback?.onContentPart?.({
+            content: 'Hello from Gemini.',
+            partType: 'text',
+          });
+          await options?.callback?.onCompletion?.({
+            finishReason: 'STOP',
+            usage: { totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 },
+          });
+          return new Response('done');
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+        const executors = createRuntimeExecutors(ctx);
+        const result = await executors.call_llm!(geminiInstruction(), createMockState());
+
+        // Previously the text was dropped → persisted/state content was '' (blank done).
+        expect(mockMessageModel.update).toHaveBeenCalledWith(
+          'msg-123',
+          expect.objectContaining({ content: 'Hello from Gemini.' }),
+        );
+        expect(result.newState.messages.at(-1)).toEqual(
+          expect.objectContaining({ content: 'Hello from Gemini.', role: 'assistant' }),
+        );
+      });
+
+      it('captures reasoning delivered via reasoning_part', async () => {
+        const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+          await options?.callback?.onReasoningPart?.({
+            content: 'Let me think about this.',
+            partType: 'text',
+          });
+          await options?.callback?.onContentPart?.({ content: 'The answer.', partType: 'text' });
+          await options?.callback?.onCompletion?.({
+            usage: { totalInputTokens: 10, totalOutputTokens: 8, totalTokens: 18 },
+          });
+          return new Response('done');
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+        const executors = createRuntimeExecutors(ctx);
+        const result = await executors.call_llm!(geminiInstruction(), createMockState());
+
+        expect(result.newState.messages.at(-1)).toEqual(
+          expect.objectContaining({
+            content: 'The answer.',
+            reasoning: { content: 'Let me think about this.' },
+            role: 'assistant',
+          }),
+        );
+      });
+
+      it('coalesces consecutive content_part text chunks', async () => {
+        const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+          await options?.callback?.onContentPart?.({ content: 'Hello ', partType: 'text' });
+          await options?.callback?.onContentPart?.({ content: 'world.', partType: 'text' });
+          await options?.callback?.onCompletion?.({
+            usage: { totalInputTokens: 10, totalOutputTokens: 4, totalTokens: 14 },
+          });
+          return new Response('done');
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+        const executors = createRuntimeExecutors(ctx);
+        const result = await executors.call_llm!(geminiInstruction(), createMockState());
+
+        expect(result.newState.messages.at(-1)).toEqual(
+          expect.objectContaining({ content: 'Hello world.', role: 'assistant' }),
+        );
+      });
+
+      it('uploads content_part images to object storage and serializes URLs, never base64', async () => {
+        mockUploadBase64.mockResolvedValue({
+          fileId: 'file-1',
+          key: 'files/generations/2026/abc.png',
+          url: 'https://files.example/generations/abc.png',
+        });
+
+        const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
+          await options?.callback?.onContentPart?.({
+            content: 'Here is an image:',
+            partType: 'text',
+          });
+          await options?.callback?.onContentPart?.({
+            content: 'BASE64IMAGEDATA',
+            mimeType: 'image/png',
+            partType: 'image',
+          });
+          await options?.callback?.onCompletion?.({
+            usage: { totalInputTokens: 10, totalOutputTokens: 6, totalTokens: 16 },
+          });
+          return new Response('done');
+        });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
+
+        const executors = createRuntimeExecutors(ctx);
+        await executors.call_llm!(geminiInstruction(), createMockState());
+
+        // Raw base64 is uploaded to storage, pathname carries the right extension.
+        expect(mockUploadBase64).toHaveBeenCalledWith(
+          'BASE64IMAGEDATA',
+          expect.stringMatching(/generations\/.+\.png$/),
+        );
+
+        // Persisted content is serialized multimodal parts referencing the S3
+        // URL — text + image in order — and never contains the raw base64.
+        const updateCall = mockMessageModel.update.mock.calls.find(
+          (c: any[]) => c[0] === 'msg-123' && typeof c[1]?.content === 'string',
+        );
+        expect(updateCall).toBeTruthy();
+        expect(updateCall![1].metadata).toEqual(expect.objectContaining({ isMultimodal: true }));
+        expect(updateCall![1].content).not.toContain('BASE64IMAGEDATA');
+        expect(JSON.parse(updateCall![1].content)).toEqual([
+          { text: 'Here is an image:', type: 'text' },
+          { image: 'https://files.example/generations/abc.png', type: 'image' },
+        ]);
+      });
     });
 
     it('should push assistant message with persisted DB id so request_human_approve can find parent', async () => {

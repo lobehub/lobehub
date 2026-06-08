@@ -347,6 +347,31 @@ describe('createServerAgentToolsEngine', () => {
     expect(result.enabledToolIds).toContain(KnowledgeBaseManifest.identifier);
   });
 
+  it('custom mode: enables exactly the declared plugins, no always-on / defaults', () => {
+    const context = createMockContext();
+    const engine = createServerAgentToolsEngine(context, {
+      agentConfig: {
+        plugins: ['test-plugin'],
+        chatConfig: { searchMode: 'on', toolMode: 'custom' },
+      },
+      hasEnabledKnowledgeBases: true,
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    const result = engine.generateToolsDetailed({
+      model: 'gpt-4',
+      provider: 'openai',
+      toolIds: ['test-plugin', LobeAgentManifest.identifier, WebBrowsingManifest.identifier],
+    });
+
+    // Exactly the declared plugin — no always-on lobe-agent, no default web/KB.
+    expect(result.enabledToolIds).toContain('test-plugin');
+    expect(result.enabledToolIds).not.toContain(LobeAgentManifest.identifier);
+    expect(result.enabledToolIds).not.toContain(WebBrowsingManifest.identifier);
+    expect(result.enabledToolIds).not.toContain(KnowledgeBaseManifest.identifier);
+  });
+
   it('should return undefined tools when model does not support function calling', () => {
     const context = createMockContext({
       isModelSupportToolUse: () => false,
