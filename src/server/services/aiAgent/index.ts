@@ -35,6 +35,7 @@ import type {
   ExecGroupAgentResult,
   ExecSubAgentTaskParams,
   ExecSubAgentTaskResult,
+  LobeAgentAgencyConfig,
   MessagePluginItem,
   UserInterventionConfig,
   WorkspaceInitResult,
@@ -320,10 +321,11 @@ export class AiAgentService {
    */
   private async resolveWorkspaceInit(params: {
     activeDeviceId: string | undefined;
+    agencyConfig?: LobeAgentAgencyConfig;
     topicId: string;
   }): Promise<WorkspaceInitResult> {
     const empty: WorkspaceInitResult = { instructions: [], skills: [] };
-    const { activeDeviceId, topicId } = params;
+    const { activeDeviceId, agencyConfig, topicId } = params;
     if (!activeDeviceId) return empty;
 
     try {
@@ -331,10 +333,15 @@ export class AiAgentService {
       const device = await deviceModel.findByDeviceId(activeDeviceId);
       if (!device) return empty;
 
-      // The bound project root: a topic-pinned cwd wins, else the device default
-      // (mirrors the hetero dispatch resolution). This is the directory we scan.
+      // The bound project root (unified precedence, mirrors hetero dispatch):
+      //   topic override > agent's per-device choice > device default.
+      // This is the directory we scan.
       const topic = await this.topicModel.findById(topicId);
-      const boundCwd = topic?.metadata?.workingDirectory || device.defaultCwd || undefined;
+      const boundCwd =
+        topic?.metadata?.workingDirectory ||
+        agencyConfig?.workingDirByDevice?.[activeDeviceId] ||
+        device.defaultCwd ||
+        undefined;
       if (!boundCwd) return empty;
 
       const workingDirs = device.workingDirs ?? [];
@@ -1065,12 +1072,14 @@ export class AiAgentService {
           const boundDevice = await new DeviceModel(this.db, this.userId).findByDeviceId(
             dispatchDeviceId,
           );
-          // Prefer the topic's own pinned cwd — an existing topic carries it in
-          // `metadata.workingDirectory`, whereas `initialTopicMetadata` is only
-          // populated for a brand-new topic. Fall back to the device default.
+          // Working-directory precedence (unified across client + server):
+          //   topic override > agent's per-device choice > device default.
+          // An existing topic carries its pinned cwd in `metadata.workingDirectory`;
+          // `initialTopicMetadata` is only populated for a brand-new topic.
           const deviceCwd =
             topic?.metadata?.workingDirectory ||
             appContext?.initialTopicMetadata?.workingDirectory ||
+            agentConfig.agencyConfig?.workingDirByDevice?.[dispatchDeviceId] ||
             boundDevice?.defaultCwd ||
             undefined;
 
@@ -2346,7 +2355,11 @@ export class AiAgentService {
       // re-gates on `activeDeviceId`). Only `location` (the absolute SKILL.md
       // path) flows through; the directory tree is enumerated lazily, keeping the
       // op-param payload small.
-      const workspaceInit = await this.resolveWorkspaceInit({ activeDeviceId, topicId });
+      const workspaceInit = await this.resolveWorkspaceInit({
+        activeDeviceId,
+        agencyConfig: agentConfig.agencyConfig ?? undefined,
+        topicId,
+      });
 
       const projectMetas = workspaceInit.skills.map((s) => ({
         description: s.description ?? '',
