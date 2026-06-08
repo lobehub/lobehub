@@ -42,7 +42,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   editorContent: {
-    overflowY: 'auto',
     paddingInline: DEFAULT_BLOCK_ANCHOR_PADDING,
     position: 'relative',
   },
