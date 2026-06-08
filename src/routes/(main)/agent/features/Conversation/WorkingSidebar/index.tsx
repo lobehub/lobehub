@@ -104,6 +104,11 @@ const AgentWorkingSidebar = memo(() => {
   // tree + git reads go over RPC, so both Review and Files are reachable even
   // when runtimeMode isn't `local`.
   const isDeviceMode = agencyConfig?.executionTarget === 'device' && !!agencyConfig?.boundDeviceId;
+  // `targetDeviceId` also identifies the local desktop for per-device working
+  // directory state. Files/Review only need a deviceId when routing through a
+  // remote device RPC; local "This device" must keep Electron IPC + file-open
+  // actions enabled.
+  const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;
   const filesAvailable = (isLocalSystemEnabled || isDeviceMode) && !!workingDirectory;
   const reviewAvailable =
     (isLocalSystemEnabled || isDeviceMode) && !!workingDirectory && !!repoType;
@@ -181,12 +186,12 @@ const AgentWorkingSidebar = memo(() => {
           )}
           {reviewAvailable && (
             <Flexbox className={activeTab === 'review' ? styles.pane : styles.paneHidden}>
-              <Review deviceId={targetDeviceId} workingDirectory={workingDirectory} />
+              <Review deviceId={remoteDeviceId} workingDirectory={workingDirectory} />
             </Flexbox>
           )}
           {filesAvailable && (
             <Flexbox className={activeTab === 'files' ? styles.pane : styles.paneHidden}>
-              <Files deviceId={targetDeviceId} workingDirectory={workingDirectory} />
+              <Files deviceId={remoteDeviceId} workingDirectory={workingDirectory} />
             </Flexbox>
           )}
           <Flexbox
