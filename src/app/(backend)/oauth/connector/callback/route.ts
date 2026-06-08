@@ -23,13 +23,26 @@ const targetOrigin = (): string => {
   }
 };
 
+/**
+ * Serialize a value for safe embedding inside an inline `<script>`. Plain
+ * JSON.stringify does NOT escape `</script>` or the U+2028/U+2029 line
+ * separators, so an attacker-controlled OAuth error string could break out of
+ * the script context and execute on the app origin. Escaping `<`, `>`, `&` and
+ * the JS line separators to their `\uXXXX` form closes that hole.
+ */
+const jsonForScript = (value: unknown): string =>
+  JSON.stringify(value).replaceAll(
+    /[<>&\u2028\u2029]/g,
+    (c) => '\\u' + c.codePointAt(0)!.toString(16).padStart(4, '0'),
+  );
+
 /** Auto-closing popup page that reports the result back to the opener window. */
 const renderResultPage = (result: {
   connectorId?: string;
   error?: string;
   success: boolean;
 }): NextResponse => {
-  const payload = JSON.stringify({ type: 'lobe-connector-oauth', ...result });
+  const payload = jsonForScript({ type: 'lobe-connector-oauth', ...result });
   const html = `<!doctype html>
 <html>
   <head><meta charset="utf-8" /><title>Connector authorization</title></head>
@@ -39,7 +52,7 @@ const renderResultPage = (result: {
       (function () {
         try {
           if (window.opener) {
-            window.opener.postMessage(${payload}, ${JSON.stringify(targetOrigin())});
+            window.opener.postMessage(${payload}, ${jsonForScript(targetOrigin())});
           }
         } catch (e) {}
         setTimeout(function () { window.close(); }, 300);

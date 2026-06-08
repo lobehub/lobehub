@@ -15,17 +15,17 @@ interface AddConnectorModalProps {
 type OAuthPopupResult = 'success' | 'closed';
 
 /**
- * Open the authorize URL in a popup and resolve once it reports back.
+ * Wait for an already-opened popup to report the OAuth result.
  *
- * The callback page posts a message before attempting `window.close()`, so the
- * 'success' signal is reliable even when the browser refuses to close a popup
- * that navigated cross-origin. The popup-closed path is a fallback for when the
- * user dismisses the window without finishing.
+ * The popup MUST be opened synchronously from the user's click (browsers block
+ * `window.open` once an async boundary is crossed), then navigated to the
+ * authorize URL. The callback page posts a message before attempting
+ * `window.close()`, so the 'success' signal is reliable even when the browser
+ * refuses to close a popup that navigated cross-origin. The popup-closed path is
+ * a fallback for when the user dismisses the window without finishing.
  */
-const runOAuthPopup = (authorizationUrl: string, connectorId: string): Promise<OAuthPopupResult> =>
+const waitForOAuthPopup = (popup: Window, connectorId: string): Promise<OAuthPopupResult> =>
   new Promise((resolve) => {
-    const popup = window.open(authorizationUrl, 'lobe-connector-oauth', 'width=600,height=720');
-
     const cleanup = () => {
       window.removeEventListener('message', onMessage);
       clearInterval(timer);
@@ -43,7 +43,7 @@ const runOAuthPopup = (authorizationUrl: string, connectorId: string): Promise<O
     window.addEventListener('message', onMessage);
 
     const timer = setInterval(() => {
-      if (popup?.closed) {
+      if (popup.closed) {
         cleanup();
         resolve('closed');
       }
@@ -79,6 +79,18 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose }) => {
 
   const handleAdd = async () => {
     if (!name.trim() || !url.trim()) return;
+
+    // Open the popup synchronously within the click handler, otherwise the
+    // browser blocks it once we cross the first `await` below. It's navigated to
+    // the real authorize URL after the connector + OAuth-start mutations resolve.
+    const popup = window.open('about:blank', 'lobe-connector-oauth', 'width=600,height=720');
+    if (!popup) {
+      message.error(
+        t('connector.add.popupBlocked', 'Please allow popups for this site and try again.'),
+      );
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -105,7 +117,8 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose }) => {
       // discovered), fall back to a plain tool sync for public MCP servers.
       try {
         const authorizationUrl = await startConnectorOAuth(connectorId);
-        const result = await runOAuthPopup(authorizationUrl, connectorId);
+        popup.location.href = authorizationUrl;
+        const result = await waitForOAuthPopup(popup, connectorId);
         // Reflect the server-side state regardless of how the popup ended
         // (window.close is often blocked for cross-origin-navigated popups).
         await fetchConnectors();
@@ -113,6 +126,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose }) => {
           message.success(t('connector.add.success', 'Connector connected'));
         }
       } catch {
+        popup.close();
         try {
           await syncConnectorTools(connectorId);
           message.success(t('connector.add.success', 'Connector connected'));
