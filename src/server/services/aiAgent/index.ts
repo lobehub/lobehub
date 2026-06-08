@@ -61,6 +61,7 @@ import { toolsEnv } from '@/envs/tools';
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { signOperationJwt, signUserJWT } from '@/libs/trpc/utils/internalJwt';
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import type { EvalContext, ServerAgentToolsContext } from '@/server/modules/Mecha';
 import { createServerAgentToolsEngine } from '@/server/modules/Mecha';
 import type { ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
@@ -1132,6 +1133,7 @@ export class AiAgentService {
     // These are needed outside the tools block (for agent management context, skill engine, etc.)
     let lobehubSkillManifests: LobeToolManifest[] = [];
     let klavisManifests: LobeToolManifest[] = [];
+    let connectorManifests: ReturnType<typeof buildConnectorManifests> = [];
     let agentPlugins: string[] = [...(agentConfig?.plugins ?? []), ...(additionalPluginIds || [])];
 
     // Model metadata is needed both for tool support checks and agent-management context.
@@ -1180,9 +1182,19 @@ export class AiAgentService {
       const installedPlugins = await this.pluginModel.query();
       log('execAgent: got %d installed plugins', installedPlugins.length);
 
-      // 5a-1. Resolve connectors — connector identifier takes priority over plugin
+      // 5a-1. Resolve connectors — connector identifier takes priority over plugin.
+      // Credentials (OAuth tokens) are encrypted at rest, so decrypt them with a
+      // gatekeeper; otherwise buildConnectorManifests gets no auth and tool calls 401.
+      let connectorGateKeeper: KeyVaultsGateKeeper | undefined;
+      try {
+        connectorGateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+      } catch (err) {
+        log('execAgent: failed to init gatekeeper for connector credentials: %O', err);
+      }
       const connectors =
-        agentPlugins.length > 0 ? await this.connectorModel.queryByIdentifiers(agentPlugins) : [];
+        agentPlugins.length > 0
+          ? await this.connectorModel.queryByIdentifiers(agentPlugins, connectorGateKeeper)
+          : [];
 
       // Only connectors WITH a real MCP endpoint (mcpServerUrl or stdio) can replace plugins in the
       // manifest. Connectors WITHOUT an endpoint (e.g. Lobehub/Klavis OAuth skills synced via
@@ -1206,7 +1218,7 @@ export class AiAgentService {
           ? await this.connectorToolModel.queryAllByConnectorIds(connectorsMcp.map((c) => c.id))
           : [];
 
-      const connectorManifests = buildConnectorManifests(connectorsMcp, connectorTools);
+      connectorManifests = buildConnectorManifests(connectorsMcp, connectorTools);
       log('execAgent: got %d connector manifests', connectorManifests.length);
 
       // 5b. Get model abilities from model-bank for function calling support check
@@ -1758,6 +1770,13 @@ export class AiAgentService {
           identifier: manifest.identifier,
           name: manifest.meta?.title || manifest.identifier,
           type: 'klavis' as const,
+        })),
+        // Custom connectors (user-added MCP servers)
+        ...connectorManifests.map((manifest) => ({
+          description: manifest.meta?.description,
+          identifier: manifest.identifier,
+          name: manifest.meta?.title || manifest.identifier,
+          type: 'connector' as const,
         })),
       ];
 

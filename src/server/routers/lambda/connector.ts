@@ -4,14 +4,13 @@ import { z } from 'zod';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
-import type { ConnectorCredentials, OIDCConfig } from '@/database/schemas';
+import type { OIDCConfig } from '@/database/schemas';
 import {
   ConnectorMcpConnectionType,
   ConnectorSourceType,
   ConnectorStatus,
   ConnectorToolPermission,
 } from '@/database/schemas';
-import type { AuthConfig } from '@/libs/mcp';
 import { inferCrudType } from '@/libs/mcp/utils';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -26,6 +25,7 @@ import {
   generateConnectorOAuthState,
   saveConnectorOAuthState,
 } from '@/server/services/connector/stateStore';
+import { buildConnectorMcpParams, syncConnectorToolsById } from '@/server/services/connector/sync';
 import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
 import { mcpService } from '@/server/services/mcp';
 
@@ -234,73 +234,61 @@ export const connectorRouter = router({
   syncTools: connectorProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
-      let connector = await ctx.connectorModel.findById(input.id);
-
-      if (!connector) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
-      }
-
-      // Refresh the OAuth access token if it has expired before connecting.
-      connector = await ensureFreshConnectorToken(connector, ctx.connectorModel);
-
-      if (
-        !connector.mcpServerUrl &&
-        connector.mcpConnectionType !== ConnectorMcpConnectionType.stdio
-      ) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Connector has no MCP server URL configured',
-        });
-      }
-
-      // Build MCPClientParams from stored connector config
-      let mcpParams: Parameters<typeof mcpService.listRawTools>[0];
-
-      if (connector.mcpConnectionType === ConnectorMcpConnectionType.stdio) {
-        if (!connector.mcpStdioConfig) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Missing stdio config' });
-        }
-        mcpParams = {
-          args: connector.mcpStdioConfig.args ?? [],
-          command: connector.mcpStdioConfig.command,
-          env: connector.mcpStdioConfig.env,
-          name: connector.name,
-          type: 'stdio',
-        };
-      } else {
-        // http or cloud — both use URL-based connection
-        const auth = buildAuthFromCredentials(connector.credentials);
-        mcpParams = {
-          auth,
-          name: connector.name,
-          type: 'http',
-          url: connector.mcpServerUrl!,
-        };
-      }
-
-      let rawTools: Awaited<ReturnType<typeof mcpService.listRawTools>>;
       try {
-        rawTools = await mcpService.listRawTools(mcpParams);
+        return await syncConnectorToolsById(input.id, ctx);
       } catch (err: any) {
-        await ctx.connectorModel.updateStatus(input.id, ConnectorStatus.error);
         throw new TRPCError({
           cause: err,
           code: 'INTERNAL_SERVER_ERROR',
           message: `Failed to fetch tools from MCP server: ${err?.message ?? 'unknown error'}`,
         });
       }
+    }),
 
-      const syncInputs = rawTools.map((t) => ({
-        crudType: inferCrudType(t.name),
-        description: t.description,
-        inputSchema: t.inputSchema as Record<string, unknown>,
-        toolName: t.name,
-      }));
+  /**
+   * Execute a single connector tool by identifier (classic chat path). Resolves
+   * the connector, hard-blocks disabled tools, refreshes the OAuth token if
+   * needed, and calls the remote MCP server with the decrypted credentials.
+   */
+  callTool: connectorProcedure
+    .input(
+      z.object({
+        args: z.string().optional(),
+        identifier: z.string().min(1),
+        toolName: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const [connector] = await ctx.connectorModel.queryByIdentifiers([input.identifier]);
+      if (!connector) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      }
 
-      await ctx.connectorToolModel.upsertMany(input.id, syncInputs);
-      await ctx.connectorModel.updateStatus(input.id, ConnectorStatus.connected);
+      // Hard-block disabled tools server-side (defense beyond the manifest hint).
+      const tools = await ctx.connectorToolModel.queryByConnector(connector.id);
+      const tool = tools.find((t) => t.toolName === input.toolName);
+      if (tool?.permission === ConnectorToolPermission.disabled) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: `Tool '${input.toolName}' is disabled for this connector`,
+        });
+      }
 
-      return { toolCount: syncInputs.length };
+      const fresh = await ensureFreshConnectorToken(connector, ctx.connectorModel);
+
+      try {
+        return await mcpService.callTool({
+          argsStr: input.args ?? '{}',
+          clientParams: buildConnectorMcpParams(fresh),
+          toolName: input.toolName,
+        });
+      } catch (err: any) {
+        throw new TRPCError({
+          cause: err,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Connector tool call failed: ${err?.message ?? 'unknown error'}`,
+        });
+      }
     }),
 
   /**
@@ -493,29 +481,4 @@ function resolveDefaultPermission(humanIntervention: unknown): ConnectorToolPerm
     return ConnectorToolPermission.needs_approval;
   }
   return ConnectorToolPermission.auto;
-}
-
-function buildAuthFromCredentials(
-  credentials: ConnectorCredentials | null,
-): AuthConfig | undefined {
-  if (!credentials) return undefined;
-
-  switch (credentials.type) {
-    case 'oauth2': {
-      return {
-        accessToken: credentials.accessToken,
-        clientId: undefined,
-        clientSecret: credentials.clientSecret,
-        refreshToken: credentials.refreshToken,
-        tokenExpiresAt: credentials.expiresAt,
-        type: 'oauth2',
-      };
-    }
-    case 'bearer': {
-      return { token: credentials.token, type: 'bearer' };
-    }
-    default: {
-      return undefined;
-    }
-  }
 }

@@ -3,12 +3,13 @@ import debug from 'debug';
 import { type NextRequest, NextResponse } from 'next/server';
 
 import { ConnectorModel } from '@/database/models/connector';
-import { ConnectorStatus } from '@/database/schemas';
+import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { serverDB } from '@/database/server';
 import { appEnv } from '@/envs/app';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { exchangeConnectorCode } from '@/server/services/connector/oauth';
 import { consumeConnectorOAuthState } from '@/server/services/connector/stateStore';
+import { syncConnectorToolsById } from '@/server/services/connector/sync';
 import { tokensToCredentials } from '@/server/services/connector/tokens';
 
 const log = debug('lobe-server:connector:oauth-callback');
@@ -106,11 +107,25 @@ export const GET = async (req: NextRequest) => {
 
     await connectorModel.update(payload.connectorId, {
       credentials: JSON.stringify(credentials),
-      status: ConnectorStatus.connected,
       tokenExpiresAt,
     });
 
-    log('connector %s authorized for user %s', payload.connectorId, payload.lobeUserId);
+    // Sync the tool list server-side so the connector is immediately usable —
+    // no dependency on the popup/postMessage round-trip. This also sets the
+    // connector status (connected on success, error on failure).
+    const connectorToolModel = new ConnectorToolModel(serverDB, payload.lobeUserId);
+    try {
+      const { toolCount } = await syncConnectorToolsById(payload.connectorId, {
+        connectorModel,
+        connectorToolModel,
+      });
+      log('connector %s authorized + synced %d tools', payload.connectorId, toolCount);
+    } catch (err) {
+      // Auth succeeded but the tool list could not be fetched; the user can
+      // retry via the Sync button. Still report success to close the popup.
+      log('post-OAuth tool sync failed for connector=%s: %O', payload.connectorId, err);
+    }
+
     return renderResultPage({ connectorId: payload.connectorId, success: true });
   } catch (err) {
     log('connector OAuth callback error: %O', err);
