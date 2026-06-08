@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { DeviceModel } from '@/database/models/device';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { deviceGateway } from '@/server/services/toolExecution/deviceGateway';
+import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { preserveWorkspaceCache } from './deviceWorkingDirs';
 
