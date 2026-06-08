@@ -101,8 +101,13 @@ const AgentWorkingSidebar = memo(() => {
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
   const repoType = useRepoType(workingDirectory, targetDeviceId);
 
+  // Running against a bound device (remote, or this machine as a device): git
+  // reads go over RPC, so Review is reachable even though runtimeMode isn't
+  // `local`. Files data isn't RPC-routed yet, so it stays local-system-only.
+  const isDeviceMode = agencyConfig?.executionTarget === 'device' && !!agencyConfig?.boundDeviceId;
   const filesAvailable = isLocalSystemEnabled && !!workingDirectory;
-  const reviewAvailable = isLocalSystemEnabled && !!workingDirectory && !!repoType;
+  const reviewAvailable =
+    (isLocalSystemEnabled || isDeviceMode) && !!workingDirectory && !!repoType;
   const paramsAvailable = !isHetero;
   const resolveActiveTab = (): Tab => {
     if (storedTab === 'params' && paramsAvailable) return 'params';

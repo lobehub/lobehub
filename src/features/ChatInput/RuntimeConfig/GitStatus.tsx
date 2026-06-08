@@ -183,6 +183,26 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
     await Promise.all([mutate(), mutateWorkingStatus(), mutateAheadBehind()]);
   }, [mutate, mutateWorkingStatus, mutateAheadBehind]);
 
+  // Flip the displayed branch instantly on checkout; clear the old branch's PR
+  // (the new branch's is unknown until revalidate). No revalidate here — the
+  // switcher's onAfterCheckout reconciles once the checkout lands.
+  const handleOptimisticCheckout = useCallback(
+    (branch: string) => {
+      void mutate(
+        (prev) => ({
+          ...prev,
+          branch,
+          detached: false,
+          extraCount: undefined,
+          ghMissing: undefined,
+          pullRequest: null,
+        }),
+        { revalidate: false },
+      );
+    },
+    [mutate],
+  );
+
   const syncBusy = pulling || pushing;
 
   const handlePull = useCallback(async () => {
@@ -277,6 +297,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
       path={path}
       onExternalRefresh={refreshAfterSync}
       onOpenChange={setSwitcherOpen}
+      onOptimisticCheckout={handleOptimisticCheckout}
       onAfterCheckout={() => {
         void mutate();
         void mutateWorkingStatus();

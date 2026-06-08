@@ -161,6 +161,8 @@ interface BranchSwitcherProps {
   onAfterCheckout?: () => void;
   onExternalRefresh?: () => void | Promise<void>;
   onOpenChange: (open: boolean) => void;
+  /** Reflect a branch switch in the UI immediately, before the checkout lands. */
+  onOptimisticCheckout?: (branch: string) => void;
   open: boolean;
   path: string;
 }
@@ -174,6 +176,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     onOpenChange,
     onAfterCheckout,
     onExternalRefresh,
+    onOptimisticCheckout,
     children,
   }) => {
     const { t } = useTranslation('device');
@@ -228,39 +231,53 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
           return;
         }
         setBusyBranch(branch);
+        // Reflect the switch instantly and close; the checkout + revalidate
+        // reconcile in the background (a failure rolls the label back).
+        onOptimisticCheckout?.(branch);
+        onOpenChange(false);
         try {
           const result = await gitService.checkoutGitBranch({ branch, create, deviceId, path });
-          if (result.success) {
-            onAfterCheckout?.();
-            onOpenChange(false);
-          } else {
+          if (!result.success) {
             message.error(result.error || t('workingDirectory.checkoutFailed'));
           }
         } finally {
+          onAfterCheckout?.();
           setBusyBranch(null);
         }
       },
-      [busyBranch, currentBranch, deviceId, onAfterCheckout, onOpenChange, path, t],
+      [
+        busyBranch,
+        currentBranch,
+        deviceId,
+        onAfterCheckout,
+        onOptimisticCheckout,
+        onOpenChange,
+        path,
+        t,
+      ],
     );
 
     // Create + checkout a new branch from the modal. Returns an error message
     // for inline display (keeps the modal open), or undefined on success.
     const handleCreateBranch = useCallback(
       async (name: string): Promise<string | undefined> => {
+        onOptimisticCheckout?.(name);
         const result = await gitService.checkoutGitBranch({
           branch: name,
           create: true,
           deviceId,
           path,
         });
+        // Reconcile either way: success fills in PR / ahead-behind, failure rolls
+        // the optimistic label back to the real branch.
+        onAfterCheckout?.();
         if (result.success) {
-          onAfterCheckout?.();
           onOpenChange(false);
           return undefined;
         }
         return result.error || t('workingDirectory.checkoutFailed');
       },
-      [deviceId, onAfterCheckout, onOpenChange, path, t],
+      [deviceId, onAfterCheckout, onOptimisticCheckout, onOpenChange, path, t],
     );
 
     const openCreateBranch = useCallback(() => {
