@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useElectronStore } from '@/store/electron';
 
 const styles = createStaticStyles(({ css }) => ({
   button: css`
@@ -169,6 +170,19 @@ const styles = createStaticStyles(({ css }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
+  tag: css`
+    flex: none;
+
+    padding-block: 0;
+    padding-inline: 5px;
+    border-radius: 4px;
+
+    font-size: 10px;
+    line-height: 16px;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillSecondary};
+  `,
   header: css`
     display: flex;
     gap: 6px;
@@ -216,9 +230,10 @@ interface OptionRowProps {
   icon: ReactNode;
   label: string;
   onClick: () => void;
+  tag?: ReactNode;
 }
 
-const OptionRow = memo<OptionRowProps>(({ active, desc, disabled, icon, label, onClick }) => {
+const OptionRow = memo<OptionRowProps>(({ active, desc, disabled, icon, label, onClick, tag }) => {
   return (
     <div
       className={cx(
@@ -232,7 +247,10 @@ const OptionRow = memo<OptionRowProps>(({ active, desc, disabled, icon, label, o
     >
       <div className={styles.optionIcon}>{icon}</div>
       <div className={styles.optionMeta}>
-        <div className={styles.optionTitle}>{label}</div>
+        <Flexbox horizontal align={'center'} gap={6}>
+          <span className={styles.optionTitle}>{label}</span>
+          {tag ? <span className={styles.tag}>{tag}</span> : null}
+        </Flexbox>
         {desc ? <div className={styles.desc}>{desc}</div> : null}
       </div>
       {active ? <Icon className={styles.check} icon={CheckIcon} size={14} /> : null}
@@ -280,6 +298,15 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const { data: devices, isLoading } = lambdaQuery.device.listDevices.useQuery(undefined, {
     staleTime: 30_000,
   });
+
+  // The current machine's own gateway deviceId (desktop only). When it shows up
+  // in the device list, that real row replaces the generic "This device" option
+  // and gets a "This device" tag instead.
+  useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
+  const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
+  const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
+  const currentMachineInList =
+    !!currentDeviceId && (devices ?? []).some((d) => d.deviceId === currentDeviceId);
 
   const handleSelect = useCallback(
     async (target: DeviceExecutionTarget, deviceId?: string) => {
@@ -361,7 +388,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         label={t('heteroAgent.executionTarget.none')}
         onClick={() => void handleSelect('none')}
       />
-      {isDesktop ? (
+      {isDesktop && !currentMachineInList ? (
         <OptionRow
           active={isActive('local')}
           desc={t('heteroAgent.executionTarget.localDesc')}
@@ -384,6 +411,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           icon={getDeviceIcon(d.platform)}
           key={d.deviceId}
           label={d.friendlyName || d.hostname || d.deviceId}
+          tag={d.deviceId === currentDeviceId ? t('heteroAgent.executionTarget.local') : undefined}
           desc={
             <>
               <span className={d.online ? styles.dotOnline : styles.dotOffline} />
