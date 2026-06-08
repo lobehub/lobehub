@@ -18,7 +18,7 @@ import {
   MonitorIcon,
   MonitorOffIcon,
 } from 'lucide-react';
-import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { lambdaQuery } from '@/libs/trpc/client';
@@ -296,26 +296,15 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     staleTime: 30_000,
   });
 
-  // The current machine's own gateway deviceId (desktop only). When it shows up
-  // in the device list, that real row replaces the generic "This device" option
-  // (hoisted above the cloud sandbox, tagged "This device").
+  // The current machine's own gateway deviceId (desktop only), used only to
+  // badge the matching device row. The dedicated local "This device" option
+  // remains visible in desktop mode.
   useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
-  const currentMachineDevice = currentDeviceId
-    ? (devices ?? []).find((d) => d.deviceId === currentDeviceId)
-    : undefined;
-  const otherDevices = (devices ?? []).filter((d) => d.deviceId !== currentDeviceId);
-  const currentMachineInList = !!currentMachineDevice;
-  const currentMachineOnline = !!currentMachineDevice?.online;
 
-  // Effective selection. Desktop with this machine enrolled defaults to running
-  // on it (executionTarget=device, bound to its own id); otherwise the legacy
-  // in-process `local`. Web defaults to no device.
-  const effectiveBoundDeviceId =
-    boundDeviceId ?? (currentMachineInList ? currentDeviceId : undefined);
-  const executionTarget: DeviceExecutionTarget =
-    storedTarget ?? (isDesktop ? (currentMachineInList ? 'device' : 'local') : 'none');
+  // Effective target: falls back to local on desktop, no device on web.
+  const executionTarget: DeviceExecutionTarget = storedTarget ?? (isDesktop ? 'local' : 'none');
 
   const handleSelect = useCallback(
     async (target: DeviceExecutionTarget, deviceId?: string) => {
@@ -335,25 +324,11 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     [agentId, agencyConfig, updateAgentConfigById],
   );
 
-  // First-run auto-bind: on desktop, when this machine is enrolled and online
-  // and the agent has no explicit target yet, persist it as the bound device so
-  // the server dispatches here without the user having to pick. Once written,
-  // `storedTarget` is set and this never fires again.
-  const autoBoundFor = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (!isDesktop || storedTarget || !currentDeviceId || !currentMachineOnline) return;
-    if (autoBoundFor.current === agentId) return;
-    autoBoundFor.current = agentId;
-    void handleSelect('device', currentDeviceId);
-  }, [agentId, isDesktop, storedTarget, currentDeviceId, currentMachineOnline, handleSelect]);
-
   // Don't render for remote hetero agents — they use RemoteAgentConfigCard in profile.
   if (heteroType && isRemoteHeterogeneousType(heteroType)) return null;
 
   const boundDevice =
-    executionTarget === 'device'
-      ? devices?.find((d) => d.deviceId === effectiveBoundDeviceId)
-      : undefined;
+    executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
   const hasNoDevices = !devices || devices.length === 0;
   // On web with no device, the prominent download card below replaces the small
   // header link — avoid showing the same CTA twice.
@@ -377,8 +352,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   }
 
   const isActive = (target: DeviceExecutionTarget, deviceId?: string) => {
-    if (target === 'device')
-      return executionTarget === 'device' && effectiveBoundDeviceId === deviceId;
+    if (target === 'device') return executionTarget === 'device' && boundDeviceId === deviceId;
     return executionTarget === target;
   };
 
@@ -434,7 +408,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         label={t('heteroAgent.executionTarget.none')}
         onClick={() => void handleSelect('none')}
       />
-      {isDesktop && !currentMachineInList ? (
+      {isDesktop ? (
         <OptionRow
           active={isActive('local')}
           desc={t('heteroAgent.executionTarget.localDesc')}
@@ -443,8 +417,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           onClick={() => void handleSelect('local')}
         />
       ) : null}
-      {/* This machine sits above the cloud sandbox: no device → this device → sandbox. */}
-      {currentMachineDevice ? renderDeviceRow(currentMachineDevice) : null}
       <OptionRow
         active={isActive('sandbox')}
         desc={t('heteroAgent.executionTarget.sandboxDesc')}
@@ -452,7 +424,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         label={t('heteroAgent.executionTarget.sandbox')}
         onClick={() => void handleSelect('sandbox')}
       />
-      {otherDevices.map((d) => renderDeviceRow(d))}
+      {(devices ?? []).map((d) => renderDeviceRow(d))}
       {hasNoDevices && isLoading ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.loading')}</div>
       ) : null}
