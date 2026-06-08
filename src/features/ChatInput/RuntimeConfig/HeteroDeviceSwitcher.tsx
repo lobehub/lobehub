@@ -18,7 +18,7 @@ import {
   MonitorIcon,
   MonitorOffIcon,
 } from 'lucide-react';
-import { memo, type ReactNode, useCallback, useState } from 'react';
+import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { lambdaQuery } from '@/libs/trpc/client';
@@ -292,21 +292,30 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const storedTarget = agencyConfig?.executionTarget;
   const boundDeviceId = agencyConfig?.boundDeviceId;
 
-  // Effective target: falls back to local on desktop, no device on web
-  const executionTarget: DeviceExecutionTarget = storedTarget ?? (isDesktop ? 'local' : 'none');
-
   const { data: devices, isLoading } = lambdaQuery.device.listDevices.useQuery(undefined, {
     staleTime: 30_000,
   });
 
   // The current machine's own gateway deviceId (desktop only). When it shows up
   // in the device list, that real row replaces the generic "This device" option
-  // and gets a "This device" tag instead.
+  // (hoisted above the cloud sandbox, tagged "This device").
   useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
-  const currentMachineInList =
-    !!currentDeviceId && (devices ?? []).some((d) => d.deviceId === currentDeviceId);
+  const currentMachineDevice = currentDeviceId
+    ? (devices ?? []).find((d) => d.deviceId === currentDeviceId)
+    : undefined;
+  const otherDevices = (devices ?? []).filter((d) => d.deviceId !== currentDeviceId);
+  const currentMachineInList = !!currentMachineDevice;
+  const currentMachineOnline = !!currentMachineDevice?.online;
+
+  // Effective selection. Desktop with this machine enrolled defaults to running
+  // on it (executionTarget=device, bound to its own id); otherwise the legacy
+  // in-process `local`. Web defaults to no device.
+  const effectiveBoundDeviceId =
+    boundDeviceId ?? (currentMachineInList ? currentDeviceId : undefined);
+  const executionTarget: DeviceExecutionTarget =
+    storedTarget ?? (isDesktop ? (currentMachineInList ? 'device' : 'local') : 'none');
 
   const handleSelect = useCallback(
     async (target: DeviceExecutionTarget, deviceId?: string) => {
@@ -326,11 +335,25 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     [agentId, agencyConfig, updateAgentConfigById],
   );
 
+  // First-run auto-bind: on desktop, when this machine is enrolled and online
+  // and the agent has no explicit target yet, persist it as the bound device so
+  // the server dispatches here without the user having to pick. Once written,
+  // `storedTarget` is set and this never fires again.
+  const autoBoundFor = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!isDesktop || storedTarget || !currentDeviceId || !currentMachineOnline) return;
+    if (autoBoundFor.current === agentId) return;
+    autoBoundFor.current = agentId;
+    void handleSelect('device', currentDeviceId);
+  }, [agentId, isDesktop, storedTarget, currentDeviceId, currentMachineOnline, handleSelect]);
+
   // Don't render for remote hetero agents — they use RemoteAgentConfigCard in profile.
   if (heteroType && isRemoteHeterogeneousType(heteroType)) return null;
 
   const boundDevice =
-    executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
+    executionTarget === 'device'
+      ? devices?.find((d) => d.deviceId === effectiveBoundDeviceId)
+      : undefined;
   const hasNoDevices = !devices || devices.length === 0;
   // On web with no device, the prominent download card below replaces the small
   // header link — avoid showing the same CTA twice.
@@ -354,9 +377,32 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   }
 
   const isActive = (target: DeviceExecutionTarget, deviceId?: string) => {
-    if (target === 'device') return executionTarget === 'device' && boundDeviceId === deviceId;
+    if (target === 'device')
+      return executionTarget === 'device' && effectiveBoundDeviceId === deviceId;
     return executionTarget === target;
   };
+
+  const renderDeviceRow = (d: NonNullable<typeof devices>[number]) => (
+    <OptionRow
+      active={isActive('device', d.deviceId)}
+      disabled={!d.online}
+      icon={getDeviceIcon(d.platform)}
+      key={d.deviceId}
+      label={d.friendlyName || d.hostname || d.deviceId}
+      tag={d.deviceId === currentDeviceId ? t('heteroAgent.executionTarget.local') : undefined}
+      desc={
+        <>
+          <span className={d.online ? styles.dotOnline : styles.dotOffline} />
+          <span>
+            {d.online
+              ? t('heteroAgent.executionTarget.online')
+              : t('heteroAgent.executionTarget.offline')}
+          </span>
+        </>
+      }
+      onClick={() => void handleSelect('device', d.deviceId)}
+    />
+  );
 
   const content = (
     <Flexbox gap={2} style={{ maxWidth: 320, minWidth: 280 }}>
@@ -397,6 +443,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           onClick={() => void handleSelect('local')}
         />
       ) : null}
+      {/* This machine sits above the cloud sandbox: no device → this device → sandbox. */}
+      {currentMachineDevice ? renderDeviceRow(currentMachineDevice) : null}
       <OptionRow
         active={isActive('sandbox')}
         desc={t('heteroAgent.executionTarget.sandboxDesc')}
@@ -404,27 +452,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         label={t('heteroAgent.executionTarget.sandbox')}
         onClick={() => void handleSelect('sandbox')}
       />
-      {(devices ?? []).map((d) => (
-        <OptionRow
-          active={isActive('device', d.deviceId)}
-          disabled={!d.online}
-          icon={getDeviceIcon(d.platform)}
-          key={d.deviceId}
-          label={d.friendlyName || d.hostname || d.deviceId}
-          tag={d.deviceId === currentDeviceId ? t('heteroAgent.executionTarget.local') : undefined}
-          desc={
-            <>
-              <span className={d.online ? styles.dotOnline : styles.dotOffline} />
-              <span>
-                {d.online
-                  ? t('heteroAgent.executionTarget.online')
-                  : t('heteroAgent.executionTarget.offline')}
-              </span>
-            </>
-          }
-          onClick={() => void handleSelect('device', d.deviceId)}
-        />
-      ))}
+      {otherDevices.map((d) => renderDeviceRow(d))}
       {hasNoDevices && isLoading ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.loading')}</div>
       ) : null}
