@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
 import { PluginModel } from '@/database/models/plugin';
-import type { ConnectorCredentials } from '@/database/schemas';
+import type { ConnectorCredentials, OIDCConfig } from '@/database/schemas';
 import {
   ConnectorMcpConnectionType,
   ConnectorSourceType,
@@ -15,17 +15,44 @@ import type { AuthConfig } from '@/libs/mcp';
 import { inferCrudType } from '@/libs/mcp/utils';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import {
+  buildAuthorizationUrl,
+  discoverConnectorOAuth,
+  getConnectorRedirectUri,
+  registerDynamicClient,
+} from '@/server/services/connector/oauth';
+import {
+  generateConnectorOAuthState,
+  saveConnectorOAuthState,
+} from '@/server/services/connector/stateStore';
+import { ensureFreshConnectorToken } from '@/server/services/connector/tokens';
 import { mcpService } from '@/server/services/mcp';
 
 const connectorProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  // Credentials (OAuth tokens) are encrypted at rest — give the model a gatekeeper.
+  const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
   return opts.next({
     ctx: {
-      connectorModel: new ConnectorModel(ctx.serverDB, ctx.userId),
+      connectorModel: new ConnectorModel(ctx.serverDB, ctx.userId, gateKeeper),
       connectorToolModel: new ConnectorToolModel(ctx.serverDB, ctx.userId),
       pluginModel: new PluginModel(ctx.serverDB, ctx.userId),
     },
   });
+});
+
+const oidcConfigSchema = z.object({
+  authorizationEndpoint: z.string().optional(),
+  clientId: z.string().optional(),
+  clientSecret: z.string().optional(),
+  issuer: z.string().optional(),
+  redirectUri: z.string().optional(),
+  registrationEndpoint: z.string().optional(),
+  scheme: z.enum(['pre_registration', 'dcr', 'client_id_metadata_document']),
+  scopes: z.array(z.string()).optional(),
+  tokenEndpoint: z.string().optional(),
+  usePKCE: z.boolean().optional(),
 });
 
 const createConnectorSchema = z.object({
@@ -48,7 +75,7 @@ const createConnectorSchema = z.object({
     .optional(),
   metadata: z.record(z.unknown()).optional(),
   name: z.string().min(1).max(255),
-  oidcConfig: z.record(z.unknown()).optional(),
+  oidcConfig: oidcConfigSchema.optional(),
   sourceType: z.enum([
     ConnectorSourceType.builtin,
     ConnectorSourceType.custom,
@@ -65,7 +92,10 @@ export const connectorRouter = router({
     const toolsByConnector = await Promise.all(
       connectors.map(async (c) => {
         const tools = await ctx.connectorToolModel.queryByConnector(c.id);
-        return { ...c, tools };
+        // Never ship decrypted OAuth tokens or the client secret to the browser.
+        const { credentials: _credentials, oidcConfig, ...rest } = c;
+        const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
+        return { ...rest, oidcConfig: safeOidcConfig, tools };
       }),
     );
 
@@ -81,10 +111,96 @@ export const connectorRouter = router({
       mcpServerUrl: input.mcpServerUrl ?? null,
       mcpStdioConfig: input.mcpStdioConfig ?? null,
       metadata: input.metadata ?? null,
-      oidcConfig: (input.oidcConfig as any) ?? null,
+      oidcConfig: input.oidcConfig ?? null,
       status: ConnectorStatus.disconnected,
     });
   }),
+
+  /**
+   * Begin the OAuth authorization-code flow for a custom MCP connector.
+   *
+   * Discovers the authorization server (RFC 9728 → RFC 8414), resolves the
+   * client (pre-registration when a client_id was provided, otherwise RFC 7591
+   * dynamic registration), persists the resolved OIDC config, and returns the
+   * authorize URL for the client to open. The PKCE verifier is stashed in Redis
+   * keyed by `state`; the callback route completes the exchange.
+   */
+  startOAuth: connectorProcedure
+    .input(z.object({ id: z.string().uuid(), returnTo: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const connector = await ctx.connectorModel.findById(input.id);
+      if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      if (!connector.mcpServerUrl) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Connector has no MCP server URL' });
+      }
+
+      const existing: OIDCConfig = connector.oidcConfig ?? { scheme: 'dcr' };
+      const redirectUri = getConnectorRedirectUri();
+
+      // 1. Discover the authorization server backing the MCP resource.
+      const { authorizationServerUrl, metadata } = await discoverConnectorOAuth(
+        connector.mcpServerUrl,
+      );
+
+      // 2. Resolve the OAuth client: pre-registration vs. DCR.
+      let clientId = existing.clientId;
+      let clientSecret = existing.clientSecret;
+      const scheme: OIDCConfig['scheme'] = clientId ? 'pre_registration' : 'dcr';
+
+      if (!clientId) {
+        if (!metadata.registration_endpoint) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message:
+              'This server does not support dynamic registration. Provide an OAuth Client ID in Advanced settings.',
+          });
+        }
+        const reg = await registerDynamicClient({
+          authorizationServerUrl,
+          metadata,
+          redirectUri,
+          scopes: existing.scopes,
+        });
+        clientId = reg.client_id;
+        clientSecret = reg.client_secret ?? undefined;
+      }
+
+      // 3. Persist the resolved config so the callback + refresh can reuse it.
+      const resolvedOidc: OIDCConfig = {
+        ...existing,
+        authorizationEndpoint: metadata.authorization_endpoint,
+        clientId,
+        clientSecret,
+        issuer: authorizationServerUrl,
+        redirectUri,
+        registrationEndpoint: metadata.registration_endpoint,
+        scheme,
+        tokenEndpoint: metadata.token_endpoint,
+      };
+      await ctx.connectorModel.update(input.id, { oidcConfig: resolvedOidc });
+
+      // 4. Build the authorize URL (with PKCE) and stash the verifier under `state`.
+      const state = generateConnectorOAuthState();
+      const { authorizationUrl, codeVerifier } = await buildAuthorizationUrl({
+        authorizationServerUrl,
+        clientInformation: { client_id: clientId, client_secret: clientSecret },
+        metadata,
+        redirectUri,
+        resource: connector.mcpServerUrl,
+        scopes: existing.scopes,
+        state,
+      });
+
+      await saveConnectorOAuthState(state, {
+        authorizationServerUrl,
+        codeVerifier,
+        connectorId: input.id,
+        lobeUserId: ctx.userId,
+        returnTo: input.returnTo,
+      });
+
+      return { authorizationUrl };
+    }),
 
   update: connectorProcedure
     .input(
@@ -111,11 +227,14 @@ export const connectorRouter = router({
   syncTools: connectorProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ input, ctx }) => {
-      const connector = await ctx.connectorModel.findById(input.id);
+      let connector = await ctx.connectorModel.findById(input.id);
 
       if (!connector) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
       }
+
+      // Refresh the OAuth access token if it has expired before connecting.
+      connector = await ensureFreshConnectorToken(connector, ctx.connectorModel);
 
       if (
         !connector.mcpServerUrl &&

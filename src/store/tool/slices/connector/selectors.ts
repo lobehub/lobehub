@@ -19,6 +19,10 @@ const enabledConnectors = (s: ToolStore): ConnectorWithTools[] =>
 const connectedConnectors = (s: ToolStore): ConnectorWithTools[] =>
   s.connectors.filter((c) => c.status === 'connected');
 
+/** User-added custom connectors (sourceType 'custom'), e.g. OAuth MCP servers. */
+const customConnectors = (s: ToolStore): ConnectorWithTools[] =>
+  s.connectors.filter((c) => c.sourceType === 'custom');
+
 const notConnectedConnectors = (s: ToolStore): ConnectorWithTools[] =>
   s.connectors.filter((c) => c.status !== 'connected');
 
@@ -56,6 +60,7 @@ export const connectorSelectors = {
   connectorByIdentifier,
   connectorList,
   connectorToolsGrouped,
+  customConnectors,
   connectorToolsGroupedByIdentifier:
     (identifier: string) =>
     (s: ToolStore): GroupedTools => {

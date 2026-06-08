@@ -1,5 +1,5 @@
 import { Modal } from '@lobehub/ui/base-ui';
-import { Input } from 'antd';
+import { App, Input } from 'antd';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,47 +12,127 @@ interface AddConnectorModalProps {
   open: boolean;
 }
 
+/** Open the authorize URL in a popup and resolve once it reports back. */
+const runOAuthPopup = (authorizationUrl: string, connectorId: string): Promise<boolean> =>
+  new Promise((resolve) => {
+    const popup = window.open(authorizationUrl, 'lobe-connector-oauth', 'width=600,height=720');
+
+    const cleanup = () => {
+      window.removeEventListener('message', onMessage);
+      clearInterval(timer);
+    };
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data;
+      if (!data || data.type !== 'lobe-connector-oauth') return;
+      if (data.connectorId && data.connectorId !== connectorId) return;
+      cleanup();
+      resolve(Boolean(data.success));
+    };
+
+    window.addEventListener('message', onMessage);
+
+    // Resolve (as failure) if the user closes the popup without authorizing.
+    const timer = setInterval(() => {
+      if (popup?.closed) {
+        cleanup();
+        resolve(false);
+      }
+    }, 800);
+  });
+
 const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose }) => {
   const { t } = useTranslation('tool');
+  const { message } = App.useApp();
   const createConnector = useToolStore((s) => s.createConnector);
-  const creating = useToolStore((s) => s.connectorCreating);
+  const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
+  const syncConnectorTools = useToolStore((s) => s.syncConnectorTools);
 
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const redirectUri =
+    typeof window === 'undefined' ? '' : `${window.location.origin}/oauth/connector/callback`;
+
+  const reset = () => {
+    setName('');
+    setUrl('');
+    setClientId('');
+    setClientSecret('');
+    setShowAdvanced(false);
+    setSubmitting(false);
+  };
 
   const handleAdd = async () => {
     if (!name.trim() || !url.trim()) return;
-    await createConnector({
-      identifier: name.toLowerCase().replaceAll(/\s+/g, '-'),
-      mcpConnectionType: 'http',
-      mcpServerUrl: url.trim(),
-      name: name.trim(),
-      oidcConfig: clientId.trim()
-        ? { clientId: clientId.trim(), scheme: 'pre_registration' }
-        : undefined,
-      sourceType: ConnectorSourceType.custom,
-    });
-    setName('');
-    setUrl('');
-    setClientId('');
-    setShowAdvanced(false);
-    onClose();
+    setSubmitting(true);
+
+    try {
+      const trimmedClientId = clientId.trim();
+      // client_id present → pre-registration; absent → dynamic client registration (DCR).
+      const scheme = trimmedClientId ? 'pre_registration' : 'dcr';
+
+      const connectorId = await createConnector({
+        identifier: name.toLowerCase().replaceAll(/\s+/g, '-'),
+        mcpConnectionType: 'http',
+        mcpServerUrl: url.trim(),
+        name: name.trim(),
+        oidcConfig: {
+          clientId: trimmedClientId || undefined,
+          clientSecret: clientSecret.trim() || undefined,
+          scheme,
+        },
+        sourceType: ConnectorSourceType.custom,
+      });
+
+      // Kick off the OAuth flow. If the server turns out not to require OAuth
+      // (no authorization server discovered), fall back to a plain tool sync.
+      try {
+        const authorizationUrl = await startConnectorOAuth(connectorId);
+        const ok = await runOAuthPopup(authorizationUrl, connectorId);
+        if (ok) {
+          await syncConnectorTools(connectorId);
+          message.success(t('connector.add.success', 'Connector connected'));
+        } else {
+          message.warning(t('connector.add.cancelled', 'Authorization was not completed'));
+        }
+      } catch {
+        // Not an OAuth server (or DCR unsupported without a client id) — try a
+        // direct sync so non-auth MCP servers still connect.
+        try {
+          await syncConnectorTools(connectorId);
+          message.success(t('connector.add.success', 'Connector connected'));
+        } catch {
+          message.error(
+            t(
+              'connector.add.authFailed',
+              'Could not connect. This server may require an OAuth Client ID in Advanced settings.',
+            ),
+          );
+        }
+      }
+
+      reset();
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleCancel = () => {
-    setName('');
-    setUrl('');
-    setClientId('');
-    setShowAdvanced(false);
+    reset();
     onClose();
   };
 
   return (
     <Modal
       cancelText={t('connector.add.cancel', 'Cancel')}
-      confirmLoading={creating}
+      confirmLoading={submitting}
       okButtonProps={{ disabled: !name.trim() || !url.trim() }}
       okText={t('connector.add.confirm', 'Add')}
       open={open}
@@ -107,7 +187,14 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose }) => {
               />
               <Input.Password
                 placeholder={t('connector.add.clientSecret', 'OAuth Client Secret (optional)')}
+                value={clientSecret}
+                onChange={(e) => setClientSecret(e.target.value)}
               />
+              <div style={{ color: 'var(--lobe-colors-neutral-500)', fontSize: 12 }}>
+                {t('connector.add.redirectHint', 'Redirect URI to register with your OAuth app:')}
+                <br />
+                <code style={{ wordBreak: 'break-all' }}>{redirectUri}</code>
+              </div>
             </div>
           )}
         </div>

@@ -27,15 +27,17 @@ type UpdateConnectorParams = Partial<
 export class ConnectorModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private gateKeeper?: GateKeeper;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, gateKeeper?: GateKeeper) {
     this.db = db;
     this.userId = userId;
+    this.gateKeeper = gateKeeper;
   }
 
   create = async (
     params: CreateConnectorParams,
-    gateKeeper?: GateKeeper,
+    gateKeeper: GateKeeper | undefined = this.gateKeeper,
   ): Promise<UserConnectorItem> => {
     const credentials = params.credentials
       ? await encryptCredentials(params.credentials, gateKeeper)
@@ -55,7 +57,9 @@ export class ConnectorModel {
       .where(and(eq(userConnectors.id, id), eq(userConnectors.userId, this.userId)));
   };
 
-  query = async (gateKeeper?: GateKeeper): Promise<DecryptedConnector[]> => {
+  query = async (
+    gateKeeper: GateKeeper | undefined = this.gateKeeper,
+  ): Promise<DecryptedConnector[]> => {
     const rows = await this.db
       .select()
       .from(userConnectors)
@@ -66,7 +70,7 @@ export class ConnectorModel {
 
   queryByIdentifiers = async (
     identifiers: string[],
-    gateKeeper?: GateKeeper,
+    gateKeeper: GateKeeper | undefined = this.gateKeeper,
   ): Promise<DecryptedConnector[]> => {
     if (identifiers.length === 0) return [];
 
@@ -83,7 +87,10 @@ export class ConnectorModel {
     return Promise.all(rows.map((r) => decryptRow(r, gateKeeper)));
   };
 
-  findById = async (id: string, gateKeeper?: GateKeeper): Promise<DecryptedConnector | null> => {
+  findById = async (
+    id: string,
+    gateKeeper: GateKeeper | undefined = this.gateKeeper,
+  ): Promise<DecryptedConnector | null> => {
     const [row] = await this.db
       .select()
       .from(userConnectors)
@@ -97,7 +104,7 @@ export class ConnectorModel {
   update = async (
     id: string,
     patch: UpdateConnectorParams,
-    gateKeeper?: GateKeeper,
+    gateKeeper: GateKeeper | undefined = this.gateKeeper,
   ): Promise<void> => {
     const credentials =
       patch.credentials !== undefined && patch.credentials !== null
