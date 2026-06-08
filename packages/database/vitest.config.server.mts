@@ -23,6 +23,8 @@ export default defineConfig({
       '@/libs/trpc': resolve(__dirname, '../trpc/src'),
       '@/locales': resolve(__dirname, '../locales/src'),
       '@/business/server': resolve(__dirname, '../business-server/src'),
+      '@/server/services': resolve(__dirname, '../../apps/server/src/services'),
+      '@/server/modules': resolve(__dirname, '../../apps/server/src/modules'),
       '@': resolve(__dirname, '../../src'),
 
     },
