@@ -415,7 +415,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
             </span>
           </Tooltip>
         </Flexbox>
-        {showWebDownloadCard ? null : (
+        {isDesktop || showWebDownloadCard ? null : (
           <a
             className={styles.headerLink}
             href="https://lobehub.com/downloads"
