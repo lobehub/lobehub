@@ -8,15 +8,15 @@ import { Microsoft } from '@lobehub/icons';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
+  BoxIcon,
   CheckIcon,
   ChevronDownIcon,
-  CircleSlashIcon,
-  CloudIcon,
   ExternalLinkIcon,
   InfoIcon,
   LaptopIcon,
   MonitorDownIcon,
   MonitorIcon,
+  MonitorOffIcon,
 } from 'lucide-react';
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -310,10 +310,10 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const showWebDownloadCard = !isDesktop && hasNoDevices && !isLoading;
 
   // Compute chip
-  let chipIcon: ReactNode = <Icon icon={CloudIcon} size={14} />;
+  let chipIcon: ReactNode = <Icon icon={BoxIcon} size={14} />;
   let chipLabel = t('heteroAgent.executionTarget.sandbox');
   if (executionTarget === 'none') {
-    chipIcon = <Icon icon={CircleSlashIcon} size={14} />;
+    chipIcon = <Icon icon={MonitorOffIcon} size={14} />;
     chipLabel = t('heteroAgent.executionTarget.none');
   } else if (executionTarget === 'local') {
     chipIcon = <Icon icon={LaptopIcon} size={14} />;
@@ -357,7 +357,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       <OptionRow
         active={isActive('none')}
         desc={t('heteroAgent.executionTarget.noneDesc')}
-        icon={<Icon icon={CircleSlashIcon} size={14} />}
+        icon={<Icon icon={MonitorOffIcon} size={14} />}
         label={t('heteroAgent.executionTarget.none')}
         onClick={() => void handleSelect('none')}
       />
@@ -373,7 +373,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       <OptionRow
         active={isActive('sandbox')}
         desc={t('heteroAgent.executionTarget.sandboxDesc')}
-        icon={<Icon icon={CloudIcon} size={14} />}
+        icon={<Icon icon={BoxIcon} size={14} />}
         label={t('heteroAgent.executionTarget.sandbox')}
         onClick={() => void handleSelect('sandbox')}
       />
