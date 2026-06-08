@@ -8,25 +8,25 @@ const connectorList = (s: ToolStore): ConnectorWithTools[] => s.connectors ?? []
 const connectorById =
   (id: string) =>
   (s: ToolStore): ConnectorWithTools | undefined =>
-    s.connectors.find((c) => c.id === id);
+    (s.connectors ?? []).find((c) => c.id === id);
 
 const connectorByIdentifier =
   (identifier: string) =>
   (s: ToolStore): ConnectorWithTools | undefined =>
-    s.connectors.find((c) => c.identifier === identifier);
+    (s.connectors ?? []).find((c) => c.identifier === identifier);
 
 const enabledConnectors = (s: ToolStore): ConnectorWithTools[] =>
-  s.connectors.filter((c) => c.isEnabled);
+  (s.connectors ?? []).filter((c) => c.isEnabled);
 
 const connectedConnectors = (s: ToolStore): ConnectorWithTools[] =>
-  s.connectors.filter((c) => c.status === 'connected');
+  (s.connectors ?? []).filter((c) => c.status === 'connected');
 
 /** User-added custom connectors (sourceType 'custom'), e.g. OAuth MCP servers. */
 const customConnectors = (s: ToolStore): ConnectorWithTools[] =>
   (s.connectors ?? []).filter((c) => c.sourceType === 'custom');
 
 const notConnectedConnectors = (s: ToolStore): ConnectorWithTools[] =>
-  s.connectors.filter((c) => c.status !== 'connected');
+  (s.connectors ?? []).filter((c) => c.status !== 'connected');
 
 interface GroupedTools {
   createTools: ConnectorTool[];
@@ -38,7 +38,7 @@ interface GroupedTools {
 const connectorToolsGrouped =
   (connectorId: string) =>
   (s: ToolStore): GroupedTools => {
-    const connector = s.connectors.find((c) => c.id === connectorId);
+    const connector = (s.connectors ?? []).find((c) => c.id === connectorId);
     if (!connector) return { createTools: [], deleteTools: [], readTools: [], updateTools: [] };
 
     // Show ALL tools in the settings UI (including disabled ones so users can re-enable them).
