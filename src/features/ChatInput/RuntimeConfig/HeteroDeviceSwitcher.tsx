@@ -354,6 +354,13 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           </Tooltip>
         </Flexbox>
       </div>
+      <OptionRow
+        active={isActive('none')}
+        desc={t('heteroAgent.executionTarget.noneDesc')}
+        icon={<Icon icon={CircleSlashIcon} size={14} />}
+        label={t('heteroAgent.executionTarget.none')}
+        onClick={() => void handleSelect('none')}
+      />
       {isDesktop ? (
         <OptionRow
           active={isActive('local')}
@@ -390,13 +397,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           onClick={() => void handleSelect('device', d.deviceId)}
         />
       ))}
-      <OptionRow
-        active={isActive('none')}
-        desc={t('heteroAgent.executionTarget.noneDesc')}
-        icon={<Icon icon={CircleSlashIcon} size={14} />}
-        label={t('heteroAgent.executionTarget.none')}
-        onClick={() => void handleSelect('none')}
-      />
       {hasNoDevices && isLoading ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.loading')}</div>
       ) : null}
