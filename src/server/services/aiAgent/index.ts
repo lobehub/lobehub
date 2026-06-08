@@ -352,7 +352,11 @@ export class AiAgentService {
         return cached.workspace;
       }
 
-      const scanned = await deviceGateway.initWorkspace(this.userId, activeDeviceId, boundCwd);
+      const scanned = await deviceGateway.initWorkspace({
+        deviceId: activeDeviceId,
+        scope: boundCwd,
+        userId: this.userId,
+      });
       if (!scanned) {
         // Scan failed (offline mid-run / parse error). Fall back to a stale
         // cache rather than dropping the project's skills + instructions.

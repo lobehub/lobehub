@@ -429,7 +429,11 @@ describe('DeviceGateway', () => {
 
     it('should return undefined when not configured', async () => {
       const proxy = new DeviceGateway();
-      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+      const result = await proxy.initWorkspace({
+        deviceId: 'dev-1',
+        scope: '/proj',
+        userId: 'user-1',
+      });
       expect(result).toBeUndefined();
       expect(mockClient.invokeRpc).not.toHaveBeenCalled();
     });
@@ -456,7 +460,11 @@ describe('DeviceGateway', () => {
       });
 
       const proxy = new DeviceGateway();
-      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+      const result = await proxy.initWorkspace({
+        deviceId: 'dev-1',
+        scope: '/proj',
+        userId: 'user-1',
+      });
 
       expect(result).toEqual({
         instructions: [{ content: '# Rules', source: 'AGENTS.md' }],
@@ -479,7 +487,11 @@ describe('DeviceGateway', () => {
       mockClient.invokeRpc.mockResolvedValue({ data: {}, success: true });
 
       const proxy = new DeviceGateway();
-      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+      const result = await proxy.initWorkspace({
+        deviceId: 'dev-1',
+        scope: '/proj',
+        userId: 'user-1',
+      });
 
       expect(result).toEqual({ instructions: [], skills: [] });
     });
@@ -489,7 +501,11 @@ describe('DeviceGateway', () => {
       mockClient.invokeRpc.mockResolvedValue({ error: 'offline', success: false });
 
       const proxy = new DeviceGateway();
-      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+      const result = await proxy.initWorkspace({
+        deviceId: 'dev-1',
+        scope: '/proj',
+        userId: 'user-1',
+      });
 
       expect(result).toBeUndefined();
     });
@@ -499,7 +515,11 @@ describe('DeviceGateway', () => {
       mockClient.invokeRpc.mockResolvedValue({ success: true });
 
       const proxy = new DeviceGateway();
-      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+      const result = await proxy.initWorkspace({
+        deviceId: 'dev-1',
+        scope: '/proj',
+        userId: 'user-1',
+      });
 
       expect(result).toBeUndefined();
     });
@@ -509,7 +529,11 @@ describe('DeviceGateway', () => {
       mockClient.invokeRpc.mockRejectedValue(new Error('timeout'));
 
       const proxy = new DeviceGateway();
-      const result = await proxy.initWorkspace('user-1', 'dev-1', '/proj');
+      const result = await proxy.initWorkspace({
+        deviceId: 'dev-1',
+        scope: '/proj',
+        userId: 'user-1',
+      });
 
       expect(result).toBeUndefined();
     });
@@ -522,7 +546,12 @@ describe('DeviceGateway', () => {
       });
 
       const proxy = new DeviceGateway();
-      await proxy.initWorkspace('user-1', 'dev-1', '/proj', 60_000);
+      await proxy.initWorkspace({
+        deviceId: 'dev-1',
+        scope: '/proj',
+        timeout: 60_000,
+        userId: 'user-1',
+      });
 
       expect(mockClient.invokeRpc).toHaveBeenCalledWith(
         { deviceId: 'dev-1', timeout: 60_000, userId: 'user-1' },

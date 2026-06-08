@@ -198,6 +198,17 @@ export interface DeviceGitCheckoutResult {
 }
 
 /**
+ * Result of the `pullGitBranch` / `pushGitBranch` device RPCs. Mirrors the
+ * desktop `GitPullResult` / `GitPushResult` (identical shapes).
+ */
+export interface DeviceGitSyncResult {
+  error?: string;
+  /** True when git reported the branch was already up-to-date. */
+  noop?: boolean;
+  success: boolean;
+}
+
+/**
  * Parameters for execAgent - execute a single Agent
  * Either agentId or slug must be provided
  */

@@ -1,7 +1,7 @@
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
-import { lambdaClient } from '@/libs/trpc/client';
+import { deviceService } from '@/services/device';
 import { type StoreSetter } from '@/store/types';
 
 import {
@@ -63,7 +63,7 @@ export class DeviceActionImpl {
     );
 
     try {
-      await lambdaClient.device.updateDevice.mutate({
+      await deviceService.updateDevice({
         deviceId,
         ...(setDefault ? { defaultCwd: trimmed } : {}),
         workingDirs: updatedDirs,
@@ -105,7 +105,7 @@ export class DeviceActionImpl {
     );
 
     try {
-      await lambdaClient.device.updateDevice.mutate({ deviceId, workingDirs: merged });
+      await deviceService.updateDevice({ deviceId, workingDirs: merged });
     } finally {
       await mutate(FETCH_DEVICES_KEY);
     }
@@ -128,7 +128,7 @@ export class DeviceActionImpl {
     );
 
     try {
-      await lambdaClient.device.updateDevice.mutate({ deviceId, workingDirs: updated });
+      await deviceService.updateDevice({ deviceId, workingDirs: updated });
     } finally {
       await mutate(FETCH_DEVICES_KEY);
     }
@@ -137,7 +137,7 @@ export class DeviceActionImpl {
   useFetchDevices = (enabled = true): SWRResponse<DeviceListItem[]> =>
     useClientDataSWR<DeviceListItem[]>(
       enabled ? FETCH_DEVICES_KEY : null,
-      () => lambdaClient.device.listDevices.query(),
+      () => deviceService.listDevices(),
       {
         fallbackData: [],
         onSuccess: (data) => {

@@ -375,6 +375,14 @@ export default class GatewayConnectionCtr extends ControllerModule {
         );
       }
 
+      case 'pullGitBranch': {
+        return this.gitCtr.pullGitBranch(params as { path: string });
+      }
+
+      case 'pushGitBranch': {
+        return this.gitCtr.pushGitBranch(params as { path: string });
+      }
+
       case 'statPath': {
         return this.workspaceCtr.statPath(params as { path: string });
       }

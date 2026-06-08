@@ -1,13 +1,11 @@
-import type { lambdaClient } from '@/libs/trpc/client';
+import type { deviceService } from '@/services/device';
 
 /**
  * A device row as returned by `device.listDevices` — either a registered device
  * or an online-only "ghost" (connected but not yet persisted). Inferred from the
- * router so the store stays in sync with the contract.
+ * service so the store stays in sync with the contract.
  */
-export type DeviceListItem = Awaited<
-  ReturnType<typeof lambdaClient.device.listDevices.query>
->[number];
+export type DeviceListItem = Awaited<ReturnType<typeof deviceService.listDevices>>[number];
 
 export interface DeviceState {
   devices: DeviceListItem[];

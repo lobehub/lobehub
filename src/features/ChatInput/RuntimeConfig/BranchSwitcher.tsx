@@ -21,7 +21,7 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { message } from '@/components/AntdStaticMethods';
-import { lambdaClient } from '@/libs/trpc/client';
+import { deviceService } from '@/services/device';
 import { electronGitService } from '@/services/electron/git';
 
 import { useWorkingTreeStatus } from './useWorkingTreeStatus';
@@ -208,7 +208,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
       // Desktop talks to Electron over IPC; web / remote device goes through RPC.
       () =>
         deviceId
-          ? lambdaClient.device.listGitBranches.query({ deviceId, path })
+          ? deviceService.listGitBranches(deviceId, path)
           : electronGitService.listGitBranches(path),
       { revalidateOnFocus: false, shouldRetryOnError: false },
     );
@@ -264,7 +264,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
         setBusyBranch(branch);
         try {
           const result = deviceId
-            ? await lambdaClient.device.checkoutGitBranch.mutate({ branch, create, deviceId, path })
+            ? await deviceService.checkoutGitBranch({ branch, create, deviceId, path })
             : await electronGitService.checkoutGitBranch({ branch, create, path });
           if (result.success) {
             onAfterCheckout?.();

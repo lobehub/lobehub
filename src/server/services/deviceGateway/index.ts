@@ -12,6 +12,7 @@ import type {
   DeviceGitBranchListItem,
   DeviceGitCheckoutResult,
   DeviceGitInfo,
+  DeviceGitSyncResult,
   ProjectSkillMeta,
   WorkspaceInitResult,
 } from '@lobechat/types';
@@ -232,6 +233,70 @@ export class DeviceGateway {
     } catch (error) {
       log('checkoutGitBranch: error for deviceId=%s — %O', deviceId, error);
       return { error: (error as Error)?.message || 'Checkout failed', success: false };
+    }
+  }
+
+  /**
+   * Pull (`--ff-only`) the current branch of a directory on a remote device via
+   * the `pullGitBranch` device RPC.
+   */
+  async pullGitBranch(params: {
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+  }): Promise<DeviceGitSyncResult> {
+    const { userId, deviceId, path, timeout = 65_000 } = params;
+    const client = this.getClient();
+    if (!client) return { error: 'Device gateway not configured', success: false };
+
+    try {
+      const result = await client.invokeRpc<DeviceGitSyncResult>(
+        { deviceId, timeout, userId },
+        { method: 'pullGitBranch', params: { path } },
+      );
+
+      if (!result.success || !result.data) {
+        log('pullGitBranch: failed for deviceId=%s — %s', deviceId, result.error);
+        return { error: result.error || 'Pull failed', success: false };
+      }
+
+      return result.data;
+    } catch (error) {
+      log('pullGitBranch: error for deviceId=%s — %O', deviceId, error);
+      return { error: (error as Error)?.message || 'Pull failed', success: false };
+    }
+  }
+
+  /**
+   * Push the current branch of a directory on a remote device via the
+   * `pushGitBranch` device RPC.
+   */
+  async pushGitBranch(params: {
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+  }): Promise<DeviceGitSyncResult> {
+    const { userId, deviceId, path, timeout = 65_000 } = params;
+    const client = this.getClient();
+    if (!client) return { error: 'Device gateway not configured', success: false };
+
+    try {
+      const result = await client.invokeRpc<DeviceGitSyncResult>(
+        { deviceId, timeout, userId },
+        { method: 'pushGitBranch', params: { path } },
+      );
+
+      if (!result.success || !result.data) {
+        log('pushGitBranch: failed for deviceId=%s — %s', deviceId, result.error);
+        return { error: result.error || 'Push failed', success: false };
+      }
+
+      return result.data;
+    } catch (error) {
+      log('pushGitBranch: error for deviceId=%s — %O', deviceId, error);
+      return { error: (error as Error)?.message || 'Push failed', success: false };
     }
   }
 

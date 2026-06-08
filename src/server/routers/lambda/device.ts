@@ -91,12 +91,12 @@ export const deviceRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const result = await deviceGateway.gitInfo(
-        ctx.userId,
-        input.deviceId,
-        input.scope,
-        input.isGithub,
-      );
+      const result = await deviceGateway.gitInfo({
+        deviceId: input.deviceId,
+        isGithub: input.isGithub,
+        scope: input.scope,
+        userId: ctx.userId,
+      });
       return result ?? null;
     }),
 
@@ -113,7 +113,11 @@ export const deviceRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const result = await deviceGateway.listGitBranches(ctx.userId, input.deviceId, input.path);
+      const result = await deviceGateway.listGitBranches({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+      });
       return result ?? [];
     }),
 
@@ -131,10 +135,12 @@ export const deviceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) =>
-      deviceGateway.checkoutGitBranch(ctx.userId, input.deviceId, {
+      deviceGateway.checkoutGitBranch({
         branch: input.branch,
         create: input.create,
+        deviceId: input.deviceId,
         path: input.path,
+        userId: ctx.userId,
       }),
     ),
 
@@ -147,7 +153,11 @@ export const deviceRouter = router({
   statPath: deviceProcedure
     .input(z.object({ deviceId: z.string(), path: z.string() }))
     .query(async ({ ctx, input }) => {
-      const result = await deviceGateway.statPath(ctx.userId, input.deviceId, input.path);
+      const result = await deviceGateway.statPath({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+      });
       return result ?? null;
     }),
 
