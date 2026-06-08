@@ -1,5 +1,5 @@
-import type { WorkingDirEntry } from '@lobechat/database/schemas';
 import { REMOTE_HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
+import type { DeviceChannel, DeviceListItem, WorkingDirEntry } from '@lobechat/types';
 import { z } from 'zod';
 
 import { DeviceModel } from '@/database/models/device';
@@ -20,14 +20,6 @@ const remotePlatformEnum = z.enum(
 
 const CAPABILITY_TIMEOUT_MS = 5_000;
 const PROFILE_TIMEOUT_MS = 5_000;
-
-/** A single live gateway WebSocket connection belonging to a device. */
-interface DeviceChannel {
-  channel: string | null;
-  connectedAt: string;
-  hostname: string | null;
-  platform: string | null;
-}
 
 const deviceProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -243,7 +235,7 @@ export const deviceRouter = router({
    * flight). Those are surfaced as transient entries so the picker never loses
    * a currently-reachable device during rollout.
    */
-  listDevices: deviceProcedure.query(async ({ ctx }) => {
+  listDevices: deviceProcedure.query(async ({ ctx }): Promise<DeviceListItem[]> => {
     const [registered, onlineList] = await Promise.all([
       ctx.deviceModel.query(),
       deviceGateway.queryDeviceList(ctx.userId),

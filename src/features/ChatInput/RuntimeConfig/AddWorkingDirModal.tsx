@@ -9,77 +9,77 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface AddWorkingDirContentProps {
-  onSubmit: (path: string) => void | Promise<void>;
+  /**
+   * Submit the entered path. Return an error message to show inline and keep the
+   * modal open; return undefined on success (the modal closes). Lets the caller
+   * validate (e.g. statPath) and enrich (repoType) in one round-trip.
+   */
+  onSubmit: (path: string) => Promise<string | undefined>;
   placeholder?: string;
-  /** Returns an error message when the path is invalid, else undefined. */
-  validate?: (path: string) => Promise<string | undefined>;
 }
 
-const AddWorkingDirContent = memo<AddWorkingDirContentProps>(
-  ({ onSubmit, placeholder, validate }) => {
-    const { t: tPlugin } = useTranslation('device');
-    const { t: tCommon } = useTranslation('common');
-    const { close } = useModalContext();
-    const [value, setValue] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string>();
-    const inputRef = useRef<InputRef>(null);
+const AddWorkingDirContent = memo<AddWorkingDirContentProps>(({ onSubmit, placeholder }) => {
+  const { t: tPlugin } = useTranslation('device');
+  const { t: tCommon } = useTranslation('common');
+  const { close } = useModalContext();
+  const [value, setValue] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>();
+  const inputRef = useRef<InputRef>(null);
 
-    useEffect(() => {
-      queueMicrotask(() => inputRef.current?.focus());
-    }, []);
+  useEffect(() => {
+    queueMicrotask(() => inputRef.current?.focus());
+  }, []);
 
-    const handleSubmit = useCallback(async () => {
-      if (loading) return;
-      const next = value.trim();
-      if (!next) {
-        close();
+  const handleSubmit = useCallback(async () => {
+    if (loading) return;
+    const next = value.trim();
+    if (!next) {
+      close();
+      return;
+    }
+    setLoading(true);
+    try {
+      const message = await onSubmit(next);
+      if (message) {
+        setError(message);
         return;
       }
-      setLoading(true);
-      try {
-        const message = validate ? await validate(next) : undefined;
-        if (message) {
-          setError(message);
-          return;
-        }
-        await onSubmit(next);
-        close();
-      } finally {
-        setLoading(false);
-      }
-    }, [close, loading, onSubmit, validate, value]);
+      close();
+    } finally {
+      setLoading(false);
+    }
+  }, [close, loading, onSubmit, value]);
 
-    return (
-      <Flexbox gap={16}>
-        <Text style={{ marginTop: -8 }} type={'secondary'}>
-          {tPlugin('workingDirectory.addFolderDesc')}
-        </Text>
-        <Flexbox gap={6}>
-          <Input
-            placeholder={placeholder || tPlugin('workingDirectory.placeholder')}
-            ref={inputRef}
-            value={value}
-            onPressEnter={handleSubmit}
-            onChange={(e) => {
-              setValue(e.target.value);
-              setError(undefined);
-            }}
-          />
-          {error ? <Text style={{ color: cssVar.colorError, fontSize: 12 }}>{error}</Text> : null}
-        </Flexbox>
-        <Flexbox horizontal gap={8} justify={'flex-end'}>
-          <Button disabled={loading} onClick={close}>
-            {tCommon('cancel')}
-          </Button>
-          <Button loading={loading} type={'primary'} onClick={handleSubmit}>
-            {tCommon('confirm')}
-          </Button>
-        </Flexbox>
+  return (
+    <Flexbox gap={16}>
+      <Text style={{ marginTop: -8 }} type={'secondary'}>
+        {tPlugin('workingDirectory.addFolderDesc')}
+      </Text>
+      <Flexbox gap={6}>
+        <Input
+          placeholder={placeholder || tPlugin('workingDirectory.placeholder')}
+          ref={inputRef}
+          value={value}
+          onPressEnter={handleSubmit}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setError(undefined);
+          }}
+        />
+        {error ? <Text style={{ color: cssVar.colorError, fontSize: 12 }}>{error}</Text> : null}
       </Flexbox>
-    );
-  },
-);
+      <Flexbox horizontal gap={8} justify={'flex-end'}>
+        <Button disabled={loading} onClick={close}>
+          {tCommon('cancel')}
+        </Button>
+        <Button loading={loading} type={'primary'} onClick={handleSubmit}>
+          {tCommon('confirm')}
+        </Button>
+      </Flexbox>
+    </Flexbox>
+  );
+});
 
 AddWorkingDirContent.displayName = 'AddWorkingDirContent';
 
@@ -89,18 +89,11 @@ AddWorkingDirContent.displayName = 'AddWorkingDirContent';
  * has no way to resolve an absolute path from its sandboxed folder picker.
  */
 export const openAddWorkingDirModal = (options: {
-  onSubmit: (path: string) => void | Promise<void>;
+  onSubmit: (path: string) => Promise<string | undefined>;
   placeholder?: string;
-  validate?: (path: string) => Promise<string | undefined>;
 }): ModalInstance =>
   createModal({
-    content: (
-      <AddWorkingDirContent
-        placeholder={options.placeholder}
-        validate={options.validate}
-        onSubmit={options.onSubmit}
-      />
-    ),
+    content: <AddWorkingDirContent placeholder={options.placeholder} onSubmit={options.onSubmit} />,
     footer: null,
     maskClosable: true,
     styles: { header: { borderBottom: 'none' } },

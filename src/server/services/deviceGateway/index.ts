@@ -312,16 +312,17 @@ export class DeviceGateway {
     path: string;
     timeout?: number;
     userId: string;
-  }): Promise<{ exists: boolean; isDirectory: boolean } | undefined> {
+  }): Promise<{ exists: boolean; isDirectory: boolean; repoType?: 'git' | 'github' } | undefined> {
     const { userId, deviceId, path, timeout = 8000 } = params;
     const client = this.getClient();
     if (!client) return undefined;
 
     try {
-      const result = await client.invokeRpc<{ exists: boolean; isDirectory: boolean }>(
-        { deviceId, timeout, userId },
-        { method: 'statPath', params: { path } },
-      );
+      const result = await client.invokeRpc<{
+        exists: boolean;
+        isDirectory: boolean;
+        repoType?: 'git' | 'github';
+      }>({ deviceId, timeout, userId }, { method: 'statPath', params: { path } });
 
       if (!result.success || !result.data) {
         log('statPath: failed for deviceId=%s — %s', deviceId, result.error);

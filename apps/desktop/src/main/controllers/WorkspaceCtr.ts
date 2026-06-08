@@ -9,6 +9,7 @@ import {
   type ProjectSkillItem,
 } from '@lobechat/electron-client-ipc';
 
+import { detectRepoType } from '@/utils/git';
 import { createLogger } from '@/utils/logger';
 
 import { ControllerModule, IpcMethod } from './index';
@@ -194,15 +195,20 @@ export default class WorkspaceCtr extends ControllerModule {
   }
 
   /**
-   * Check whether a path exists on this device and is a directory. Used to
-   * validate a manually-entered working directory from a web / remote client
-   * (which can't browse this device's filesystem) before binding it.
+   * Check whether a path exists on this device and is a directory, plus its git
+   * repo type (`git` / `github` / none). Used to validate a manually-entered
+   * working directory from a web / remote client (which can't browse this
+   * device's filesystem) before binding it, and to render the right dir icon.
    */
   @IpcMethod()
-  async statPath(params: { path: string }): Promise<{ exists: boolean; isDirectory: boolean }> {
+  async statPath(params: {
+    path: string;
+  }): Promise<{ exists: boolean; isDirectory: boolean; repoType?: 'git' | 'github' }> {
     try {
       const stats = await stat(params.path);
-      return { exists: true, isDirectory: stats.isDirectory() };
+      if (!stats.isDirectory()) return { exists: true, isDirectory: false };
+      const repoType = await detectRepoType(params.path);
+      return { exists: true, isDirectory: true, repoType };
     } catch {
       return { exists: false, isDirectory: false };
     }
