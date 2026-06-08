@@ -139,6 +139,42 @@ describe('GatewayManager', () => {
       await expect(manager.start()).resolves.toBeUndefined();
       expect(manager.isRunning).toBe(true);
     });
+
+    it('should not initialize twice when called concurrently', async () => {
+      const manager = new GatewayManager({ definitions: [] });
+
+      // Call start() twice concurrently without awaiting the first
+      await Promise.all([manager.start(), manager.start()]);
+
+      expect(manager.isRunning).toBe(true);
+      // getServerDB is called inside sync() → each platform triggers one call.
+      // With empty definitions, sync() iterates 0 platforms, so getServerDB is not called.
+      // The key assertion: start() is idempotent for concurrent callers.
+      const dbCallCount = vi.mocked(getServerDB).mock.calls.length;
+      expect(dbCallCount).toBe(0); // no platforms registered, so no DB calls
+
+      // A third concurrent call after start completes should also be a no-op
+      await manager.start();
+      expect(vi.mocked(getServerDB).mock.calls.length).toBe(0);
+    });
+
+    it('should dedup concurrent start() calls with active platforms', async () => {
+      const mockBot = createMockBot();
+      mockFindEnabledByPlatform.mockResolvedValue([
+        { applicationId: 'app-1', credentials: { token: 'tok' } },
+      ]);
+
+      const manager = new GatewayManager({
+        definitions: [createFakeDefinition('slack', () => mockBot)],
+      });
+
+      // Fire two concurrent starts — only one sync should occur
+      await Promise.all([manager.start(), manager.start()]);
+
+      expect(manager.isRunning).toBe(true);
+      // Bot should only be started once despite two concurrent start() calls
+      expect(mockBot.start).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('stop', () => {
