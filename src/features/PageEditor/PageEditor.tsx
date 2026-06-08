@@ -1,6 +1,6 @@
 'use client';
 
-import { EditorProvider } from '@lobehub/editor/react';
+import { DEFAULT_BLOCK_ANCHOR_PADDING, EditorProvider } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import type { FC, ReactNode } from 'react';
@@ -43,6 +43,7 @@ const styles = StyleSheet.create({
   },
   editorContent: {
     overflowY: 'auto',
+    paddingInline: DEFAULT_BLOCK_ANCHOR_PADDING,
     position: 'relative',
   },
 });
