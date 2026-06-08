@@ -142,6 +142,12 @@ export const connectorRouter = router({
         connector.mcpServerUrl,
       );
 
+      // Default to the scopes advertised by the server when the user did not
+      // specify any — many MCP authorization servers reject (or issue a useless
+      // token for) a scope-less request.
+      const scopes =
+        existing.scopes && existing.scopes.length > 0 ? existing.scopes : metadata.scopes_supported;
+
       // 2. Resolve the OAuth client: pre-registration vs. DCR.
       let clientId = existing.clientId;
       let clientSecret = existing.clientSecret;
@@ -159,7 +165,7 @@ export const connectorRouter = router({
           authorizationServerUrl,
           metadata,
           redirectUri,
-          scopes: existing.scopes,
+          scopes,
         });
         clientId = reg.client_id;
         clientSecret = reg.client_secret ?? undefined;
@@ -175,6 +181,7 @@ export const connectorRouter = router({
         redirectUri,
         registrationEndpoint: metadata.registration_endpoint,
         scheme,
+        scopes,
         tokenEndpoint: metadata.token_endpoint,
       };
       await ctx.connectorModel.update(input.id, { oidcConfig: resolvedOidc });
@@ -187,7 +194,7 @@ export const connectorRouter = router({
         metadata,
         redirectUri,
         resource: connector.mcpServerUrl,
-        scopes: existing.scopes,
+        scopes,
         state,
       });
 
