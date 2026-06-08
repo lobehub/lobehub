@@ -405,7 +405,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   );
 
   const content = (
-    <Flexbox gap={2} style={{ maxWidth: 320, minWidth: 280 }}>
+    <Flexbox gap={6} style={{ maxWidth: 320, minWidth: 280 }}>
       <div className={styles.header}>
         <Flexbox horizontal align={'center'} gap={4}>
           <span className={styles.headerTitle}>{t('heteroAgent.executionTarget.title')}</span>
