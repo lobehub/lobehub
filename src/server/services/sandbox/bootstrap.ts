@@ -6,21 +6,8 @@ import {
 /** Marker file written once the uploaded files have been synced for a session. */
 export const SANDBOX_FILES_INIT_MARKER = `${SANDBOX_UPLOADED_FILES_DIR}/.lobe-files-initialized`;
 
-/** Skip individual files larger than this when syncing into the sandbox. */
-export const SANDBOX_INIT_MAX_FILE_SIZE = 100 * 1024 * 1024;
-
-/** Hard cap on how many uploaded files are synced into the sandbox. */
-export const SANDBOX_INIT_MAX_FILES = 50;
-
 /** Timeout (ms) for the bootstrap download command. */
 export const SANDBOX_INIT_TIMEOUT_MS = 120_000;
-
-/**
- * TTL (seconds) for the Redis "already initialized" hint. Kept short so the
- * idempotent in-sandbox marker stays the source of truth — if the sandbox is
- * recreated the next sync re-runs within this window.
- */
-export const SANDBOX_INIT_FLAG_TTL_SEC = 300;
 
 export interface SandboxInitDownload {
   name: string;

@@ -13,11 +13,6 @@ vi.mock('@/database/models/file', () => ({
   FileModel: vi.fn().mockImplementation(() => ({ findFilesToInitInSandbox })),
 }));
 
-// Keep the optional Redis hint out of the way so we always exercise the query path.
-vi.mock('@/server/modules/AgentRuntime/redis', () => ({
-  getAgentRuntimeRedisClient: () => null,
-}));
-
 const createProvider = (): SandboxProvider =>
   ({
     capabilities: {
@@ -116,6 +111,26 @@ describe('SandboxMiddlewareService file initialization', () => {
     const service = new SandboxMiddlewareService(provider, baseOptions());
 
     await expect(service.callTool('listFiles', {})).resolves.toMatchObject({ success: true });
+    expect(provider.callTool).toHaveBeenCalledWith('listFiles', {});
+  });
+
+  it('skips files exceeding the size cap, matching what the prompt advertises', async () => {
+    findFilesToInitInSandbox.mockResolvedValue([
+      {
+        fileType: 'application/zip',
+        id: 'big',
+        name: 'huge.zip',
+        size: 200 * 1024 * 1024,
+        url: 'k',
+      },
+    ]);
+    const provider = createProvider();
+    const service = new SandboxMiddlewareService(provider, baseOptions());
+
+    await service.callTool('listFiles', {});
+
+    // oversized file is filtered out → nothing to download → only the real tool runs
+    expect(provider.callTool).toHaveBeenCalledTimes(1);
     expect(provider.callTool).toHaveBeenCalledWith('listFiles', {});
   });
 });

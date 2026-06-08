@@ -4,10 +4,27 @@
  */
 export const SANDBOX_UPLOADED_FILES_DIR = '/mnt/data';
 
+/** Skip individual files larger than this when syncing into the sandbox. */
+export const SANDBOX_INIT_MAX_FILE_SIZE = 100 * 1024 * 1024;
+
+/** Hard cap on how many uploaded files are synced into the sandbox. */
+export const SANDBOX_INIT_MAX_FILES = 50;
+
 export interface SandboxUploadedFileMeta {
   name: string;
   size?: number;
 }
+
+/**
+ * Select the files that the sandbox bootstrap will actually sync, applying the
+ * per-file size cap and the total count cap. Shared by the bootstrap (what gets
+ * downloaded) and the prompt (what the agent is told exists) so the two never
+ * drift apart. Items with an unknown size are kept (we cannot rule them out).
+ */
+export const selectSandboxInitFiles = <T extends { size?: number }>(files: T[]): T[] =>
+  files
+    .filter((file) => file.size == null || file.size <= SANDBOX_INIT_MAX_FILE_SIZE)
+    .slice(0, SANDBOX_INIT_MAX_FILES);
 
 const formatBytes = (size?: number): string => {
   if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0) return '';
@@ -49,8 +66,8 @@ export const sandboxUploadedFilePath = (name: string): string =>
  * are pre-loaded into the sandbox. Returns an empty string when there are no
  * files so the surrounding system prompt renders cleanly.
  *
- * De-dupes by resolved sandbox path so it stays consistent with what the
- * bootstrap step actually writes to disk.
+ * Applies the same size/count caps as the bootstrap and de-dupes by resolved
+ * sandbox path, so the listed files match exactly what is written to disk.
  */
 export const formatUploadedFilesPrompt = (files: SandboxUploadedFileMeta[]): string => {
   if (!files || files.length === 0) return '';
@@ -58,7 +75,7 @@ export const formatUploadedFilesPrompt = (files: SandboxUploadedFileMeta[]): str
   const seen = new Set<string>();
   const lines: string[] = [];
 
-  for (const file of files) {
+  for (const file of selectSandboxInitFiles(files)) {
     if (!file?.name) continue;
     const path = sandboxUploadedFilePath(file.name);
     if (seen.has(path)) continue;

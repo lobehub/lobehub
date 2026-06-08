@@ -19,6 +19,7 @@ import debug from 'debug';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
 import { UserModel } from '@/database/models/user';
+import type { LobeChatDatabase } from '@/database/type';
 import { filterBuiltinSkills } from '@/helpers/skillFilters';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { FileService } from '@/server/services/file';
@@ -44,6 +45,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
   private marketService: MarketService;
   private fileService: FileService;
   private fileModel: FileModel;
+  private serverDB: LobeChatDatabase;
   private topicId?: string;
   private userId: string;
 
@@ -52,6 +54,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     fileService: FileService;
     marketService: MarketService;
     resourceService: SkillResourceService;
+    serverDB: LobeChatDatabase;
     skillModel: AgentSkillModel;
     topicId?: string;
     userId: string;
@@ -61,6 +64,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
     this.marketService = options.marketService;
     this.fileService = options.fileService;
     this.fileModel = options.fileModel;
+    this.serverDB = options.serverDB;
     this.topicId = options.topicId;
     this.userId = options.userId;
   }
@@ -99,6 +103,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       const sandboxService = createSandboxService({
         fileService: this.fileService,
         marketService: this.marketService,
+        serverDB: this.serverDB,
         topicId: this.topicId,
         userId: this.userId,
       });
@@ -181,6 +186,7 @@ class SkillServerRuntimeService implements SkillRuntimeService {
       const sandboxService = createSandboxService({
         fileService: this.fileService,
         marketService: this.marketService,
+        serverDB: this.serverDB,
         topicId: this.topicId,
         userId: this.userId,
       });
@@ -284,6 +290,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
       fileService,
       marketService,
       resourceService,
+      serverDB: context.serverDB,
       skillModel,
       topicId: context.topicId,
       userId: context.userId,

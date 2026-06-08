@@ -1,18 +1,15 @@
-import type {
-  SandboxCallToolResult,
-  SandboxExportFileResult,
+import {
+  type SandboxCallToolResult,
+  type SandboxExportFileResult,
+  selectSandboxInitFiles,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import debug from 'debug';
 import { sha256 } from 'js-sha256';
 
 import { FileModel } from '@/database/models/file';
-import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 
 import {
   buildSandboxFilesInitCommand,
-  SANDBOX_INIT_FLAG_TTL_SEC,
-  SANDBOX_INIT_MAX_FILE_SIZE,
-  SANDBOX_INIT_MAX_FILES,
   SANDBOX_INIT_TIMEOUT_MS,
   type SandboxInitDownload,
 } from './bootstrap';
@@ -51,9 +48,15 @@ export class SandboxMiddlewareService implements SandboxService {
 
   /**
    * Sync the files the user uploaded in this topic/session into the sandbox the
-   * first time it is used. Best-effort: any failure is swallowed so it never
-   * blocks the actual tool call. Idempotency is guaranteed by an in-sandbox
-   * marker file; a short-lived Redis flag lets steady-state calls skip the work.
+   * first time this service instance is used. Best-effort: any failure is
+   * swallowed so it never blocks the actual tool call.
+   *
+   * The downloaded command is guarded by an in-sandbox marker file, which is the
+   * single source of truth for idempotency: it is a cheap no-op once synced, and
+   * if the sandbox session is recycled the marker disappears so the next call
+   * re-syncs automatically. We intentionally do NOT cache the "done" state out of
+   * band (e.g. in Redis), because that could skip the re-sync after a recycle and
+   * leave the agent believing files exist when /mnt/data is empty.
    */
   private async ensureFilesInitialized(): Promise<void> {
     if (this.filesInitialized) return;
@@ -63,34 +66,15 @@ export class SandboxMiddlewareService implements SandboxService {
     if (!serverDB || !fileService || !topicId || !userId) return;
     if (!this.provider.capabilities.shell) return;
 
-    const redisKey = `lobe-sandbox:files-init:${userId}:${topicId}`;
-
     try {
-      const redis = getAgentRuntimeRedisClient();
-      if (redis) {
-        const done = await redis.get(redisKey).catch(() => null);
-        if (done) return;
-      }
-
       const fileModel = new FileModel(serverDB, userId);
-      const files = await fileModel.findFilesToInitInSandbox(topicId);
+      const files = selectSandboxInitFiles(await fileModel.findFilesToInitInSandbox(topicId));
 
-      if (files.length === 0) {
-        if (redis) await redis.set(redisKey, '1', 'EX', SANDBOX_INIT_FLAG_TTL_SEC).catch(() => {});
-        return;
-      }
-
-      const capped = files
-        .filter((file) => file.size <= SANDBOX_INIT_MAX_FILE_SIZE)
-        .slice(0, SANDBOX_INIT_MAX_FILES);
-
-      if (capped.length < files.length) {
-        log('Sandbox file init capped %d uploaded files down to %d', files.length, capped.length);
-      }
+      if (files.length === 0) return;
 
       const downloads = (
         await Promise.all(
-          capped.map(async (file): Promise<SandboxInitDownload | null> => {
+          files.map(async (file): Promise<SandboxInitDownload | null> => {
             const url = await fileService
               .createCachedPreSignedUrlForPreview(file.url)
               .catch(() => '');
@@ -113,10 +97,6 @@ export class SandboxMiddlewareService implements SandboxService {
         downloads.length,
         result.success,
       );
-
-      if (result.success && redis) {
-        await redis.set(redisKey, '1', 'EX', SANDBOX_INIT_FLAG_TTL_SEC).catch(() => {});
-      }
     } catch (error) {
       log('Sandbox file init failed for topic %s: %O', topicId, error);
     }
