@@ -12,6 +12,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 import BranchSwitcher from './BranchSwitcher';
+import { useDeviceGitInfo } from './useDeviceGitInfo';
 import { useGitAheadBehind } from './useGitAheadBehind';
 import { useGitInfo } from './useGitInfo';
 import { useWorkingTreeStatus } from './useWorkingTreeStatus';
@@ -136,15 +137,29 @@ const styles = createStaticStyles(({ css }) => {
 });
 
 interface GitStatusProps {
+  /** When set, git status is read from this remote device via RPC (read-only —
+   * no branch switch / pull / push). Omit for the local machine. */
+  deviceId?: string;
   isGithub: boolean;
   path: string;
 }
 
-const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
+const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
   const { t } = useTranslation('plugin');
-  const { data, mutate } = useGitInfo(path, isGithub);
-  const { data: workingStatus, mutate: mutateWorkingStatus } = useWorkingTreeStatus(path);
-  const { data: aheadBehind, mutate: mutateAheadBehind } = useGitAheadBehind(path);
+  const local = !deviceId;
+  // Local machine probes its own filesystem; a remote device answers over RPC.
+  const { data: localInfo, mutate } = useGitInfo(local ? path : undefined, isGithub);
+  const { data: localWorkingStatus, mutate: mutateWorkingStatus } = useWorkingTreeStatus(
+    local ? path : undefined,
+  );
+  const { data: localAheadBehind, mutate: mutateAheadBehind } = useGitAheadBehind(
+    local ? path : undefined,
+  );
+  const { data: remoteGit } = useDeviceGitInfo(deviceId, path, isGithub);
+
+  const data = local ? localInfo : remoteGit?.info;
+  const workingStatus = local ? localWorkingStatus : remoteGit?.workingStatus;
+  const aheadBehind = local ? localAheadBehind : remoteGit?.aheadBehind;
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [pulling, setPulling] = useState(false);
   const [pushing, setPushing] = useState(false);
@@ -254,24 +269,26 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
     </div>
   );
 
-  const branchNode = data.detached ? (
-    <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
-  ) : (
-    <BranchSwitcher
-      currentBranch={data.branch}
-      open={switcherOpen}
-      path={path}
-      onExternalRefresh={refreshAfterSync}
-      onOpenChange={setSwitcherOpen}
-      onAfterCheckout={() => {
-        void mutate();
-        void mutateWorkingStatus();
-        void mutateAheadBehind();
-      }}
-    >
+  const branchNode =
+    data.detached || !local ? (
+      // Detached HEAD, or a remote device (read-only) → plain branch label.
       <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
-    </BranchSwitcher>
-  );
+    ) : (
+      <BranchSwitcher
+        currentBranch={data.branch}
+        open={switcherOpen}
+        path={path}
+        onExternalRefresh={refreshAfterSync}
+        onOpenChange={setSwitcherOpen}
+        onAfterCheckout={() => {
+          void mutate();
+          void mutateWorkingStatus();
+          void mutateAheadBehind();
+        }}
+      >
+        <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
+      </BranchSwitcher>
+    );
 
   const pullTooltip = pulling
     ? t('localSystem.workingDirectory.pullInProgress')
@@ -292,7 +309,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
         },
       );
 
-  const pullNode = showBehind && (
+  const pullNode = local && showBehind && (
     <Tooltip title={pullTooltip}>
       <div
         aria-busy={pulling}
@@ -309,7 +326,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
     </Tooltip>
   );
 
-  const pushNode = showAhead && (
+  const pushNode = local && showAhead && (
     <Tooltip title={pushTooltip}>
       <div
         aria-busy={pushing}
@@ -329,7 +346,11 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
   const diffNode = (() => {
     if (!hasChanges || !workingStatus) return null;
     const diffButton = (
-      <div className={styles.trigger} role="button" onClick={handleToggleReview}>
+      <div
+        className={styles.trigger}
+        role={local ? 'button' : undefined}
+        onClick={local ? handleToggleReview : undefined}
+      >
         <span className={styles.diffStat}>
           {workingStatus.added > 0 && (
             <span className={styles.diffStatAdded}>+{workingStatus.added}</span>

@@ -8,8 +8,8 @@ import { FolderIcon, MoreVerticalIcon, Trash2Icon, TriangleAlertIcon } from 'luc
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { WorkingDirEntry } from '@/features/ChatInput/RuntimeConfig/deviceCwd';
 import { lambdaQuery } from '@/libs/trpc/client';
+import type { WorkingDirEntry } from '@/store/device';
 
 import { getDeviceIcon } from './getDeviceIcon';
 

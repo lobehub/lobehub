@@ -1,57 +1,21 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Github } from '@lobehub/icons';
-import { Flexbox, Icon, Popover, Skeleton, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Skeleton, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import {
-  ChevronDownIcon,
-  CircleAlertIcon,
-  FolderIcon,
-  GitBranchIcon,
-  SquircleDashed,
-} from 'lucide-react';
-import { memo, type ReactNode, useMemo, useState } from 'react';
+import { CircleAlertIcon } from 'lucide-react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
-import CloudRepoSwitcher from '@/features/ChatInput/RuntimeConfig/CloudRepoSwitcher';
-import DeviceWorkingDirectory from '@/features/ChatInput/RuntimeConfig/DeviceWorkingDirectory';
-import GitStatus from '@/features/ChatInput/RuntimeConfig/GitStatus';
-import HeteroDeviceSwitcher from '@/features/ChatInput/RuntimeConfig/HeteroDeviceSwitcher';
-import { useRepoType } from '@/features/ChatInput/RuntimeConfig/useRepoType';
-import WorkingDirectoryContent from '@/features/ChatInput/RuntimeConfig/WorkingDirectory';
+import WorkspaceControls from '@/features/ChatInput/RuntimeConfig/WorkspaceControls';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
-import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 
 const styles = createStaticStyles(({ css }) => ({
   bar: css`
     padding-block: 0;
     padding-inline: 4px;
-  `,
-  button: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 2px;
-    padding-inline: 4px;
-    border-radius: 4px;
-
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
-
-    transition: background 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
   `,
   fullAccess: css`
     cursor: default;
@@ -70,49 +34,20 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const WorkingDirectoryBar = memo(() => {
-  const { t } = useTranslation('plugin');
   const { t: tChat } = useTranslation('chat');
   const agentId = useAgentId();
-  const [open, setOpen] = useState(false);
 
   // All hooks must be called unconditionally (Rules of Hooks)
   const isLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
-  const agentWorkingDirectory = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(s) : undefined,
-  );
-  const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
-  const effectiveWorkingDirectory = topicWorkingDirectory || agentWorkingDirectory;
-  const enableExecutionDeviceSwitcher = useUserStore(
-    labPreferSelectors.enableExecutionDeviceSwitcher,
-  );
-  const agencyConfig = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.getAgencyConfigById(agentId)(s) : undefined,
-  );
-  // Runs dispatched to a remote device can't browse the local filesystem — use
-  // the device-scoped picker (recent dirs + manual input) instead.
-  const isDeviceMode = agencyConfig?.executionTarget === 'device' && !!agencyConfig?.boundDeviceId;
 
-  const repoType = useRepoType(effectiveWorkingDirectory);
-
-  const dirIconNode = useMemo((): ReactNode => {
-    if (!effectiveWorkingDirectory) return <Icon icon={SquircleDashed} size={14} />;
-    if (repoType === 'github') return <Github size={14} />;
-    if (repoType === 'git') return <Icon icon={GitBranchIcon} size={14} />;
-    return <Icon icon={FolderIcon} size={14} />;
-  }, [effectiveWorkingDirectory, repoType]);
-
-  // On web, show the cloud repo switcher instead of the local directory picker
+  // On web there's no full-access badge / skeleton — just the workspace controls
+  // (the cloud repo switcher is rendered inside WorkspaceControls).
   if (!isDesktop) {
     if (!agentId) return null;
     return (
       <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={4}>
-          {enableExecutionDeviceSwitcher && <HeteroDeviceSwitcher agentId={agentId} />}
-          {isDeviceMode ? (
-            <DeviceWorkingDirectory agentId={agentId} />
-          ) : (
-            <CloudRepoSwitcher agentId={agentId} />
-          )}
+          <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
         </Flexbox>
       </Flexbox>
     );
@@ -127,18 +62,6 @@ const WorkingDirectoryBar = memo(() => {
     );
   }
 
-  const displayName = effectiveWorkingDirectory
-    ? effectiveWorkingDirectory.split('/').findLast(Boolean) || effectiveWorkingDirectory
-    : t('localSystem.workingDirectory.notSet');
-
-  const dirButton = (
-    <div className={styles.button}>
-      {dirIconNode}
-      <span>{displayName}</span>
-      <Icon icon={ChevronDownIcon} size={12} />
-    </div>
-  );
-
   const fullAccessBadge = (
     <div className={styles.fullAccess}>
       <Icon icon={CircleAlertIcon} size={14} />
@@ -149,39 +72,7 @@ const WorkingDirectoryBar = memo(() => {
   return (
     <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
       <Flexbox horizontal align={'center'} gap={4}>
-        {enableExecutionDeviceSwitcher && <HeteroDeviceSwitcher agentId={agentId} />}
-        {isDeviceMode ? (
-          // A remote device's filesystem isn't browsable from here — use the
-          // device-scoped picker (recent dirs + manual input) instead of the
-          // local folder picker + git status.
-          <DeviceWorkingDirectory agentId={agentId} />
-        ) : (
-          <>
-            <Popover
-              content={<WorkingDirectoryContent agentId={agentId} onClose={() => setOpen(false)} />}
-              open={open}
-              placement="bottomLeft"
-              styles={{ content: { padding: 4 } }}
-              trigger="click"
-              onOpenChange={setOpen}
-            >
-              <div>
-                {open ? (
-                  dirButton
-                ) : (
-                  <Tooltip
-                    title={effectiveWorkingDirectory || t('localSystem.workingDirectory.notSet')}
-                  >
-                    {dirButton}
-                  </Tooltip>
-                )}
-              </div>
-            </Popover>
-            {effectiveWorkingDirectory && repoType && (
-              <GitStatus isGithub={repoType === 'github'} path={effectiveWorkingDirectory} />
-            )}
-          </>
-        )}
+        <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
       </Flexbox>
       <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
     </Flexbox>

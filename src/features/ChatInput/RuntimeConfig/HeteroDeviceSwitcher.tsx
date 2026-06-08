@@ -3,7 +3,7 @@
 import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
 import { isDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
-import type { HeteroExecutionTarget, RuntimeEnvMode } from '@lobechat/types';
+import type { HeteroExecutionTarget } from '@lobechat/types';
 import { Microsoft } from '@lobehub/icons';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -259,21 +259,15 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     async (target: HeteroExecutionTarget, deviceId?: string) => {
       setOpen(false);
 
-      // Keep runtimeMode in sync so the server-side tool gate (runtimeMode === 'cloud'
-      // enables CloudSandbox) reflects the user's chosen execution target.
-      // Use a single updateAgentConfigById to persist both fields atomically — parallel
-      // calls share the same abort signal name and the second would cancel the first.
-      const platform = isDesktop ? 'desktop' : 'web';
-      const runtimeMode: RuntimeEnvMode =
-        target === 'sandbox' ? 'cloud' : target === 'local' ? 'local' : 'none';
-
+      // `executionTarget` is the single source of truth now — the server tool
+      // gate + client `getRuntimeModeById` derive `runtimeMode` from it, so we no
+      // longer write the legacy per-platform `runtimeMode` record.
       await updateAgentConfigById(agentId, {
         agencyConfig: {
           ...agencyConfig,
           executionTarget: target,
           ...(target === 'device' && deviceId ? { boundDeviceId: deviceId } : {}),
         },
-        chatConfig: { runtimeEnv: { runtimeMode: { [platform]: runtimeMode } } },
       });
     },
     [agentId, agencyConfig, updateAgentConfigById],

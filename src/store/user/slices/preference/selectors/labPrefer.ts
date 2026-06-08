@@ -9,8 +9,6 @@ export const labPreferSelectors = {
     false,
   enableAgentSelfIteration: (s: UserState): boolean =>
     s.preference.lab?.enableAgentSelfIteration ?? false,
-  enableExecutionDeviceSwitcher: (s: UserState): boolean =>
-    s.preference.lab?.enableExecutionDeviceSwitcher ?? false,
   enableGatewayMode: (s: UserState): boolean => s.preference.lab?.enableGatewayMode ?? false,
   enableImessage: (s: UserState): boolean => s.preference.lab?.enableImessage ?? false,
   enableInputMarkdown: (s: UserState): boolean =>

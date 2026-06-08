@@ -35,3 +35,10 @@ export const nextWorkingDirs = (
   if (!path) return [...current];
   return [{ ...entry, path }, ...current.filter((d) => d.path !== path)].slice(0, max);
 };
+
+/** Drop a path from a device's `workingDirs` recent list (used by the picker's
+ * remove-recent affordance). */
+export const removeWorkingDir = (
+  path: string,
+  current: readonly WorkingDirEntry[] = [],
+): WorkingDirEntry[] => current.filter((d) => d.path !== path);
