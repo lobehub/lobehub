@@ -181,27 +181,29 @@ const ChooseLocalFolderRow = memo<{ defaultPath?: string; onPick: (entry: Folder
 ChooseLocalFolderRow.displayName = 'ChooseLocalFolderRow';
 
 /** Web / remote device: filesystem isn't browsable here — enter an absolute path. */
-const AddRemoteFolderRow = memo<{ onBeforeOpen: () => void; onPick: (entry: FolderEntry) => void }>(
-  ({ onBeforeOpen, onPick }) => {
-    const { t } = useTranslation('plugin');
-    const handleClick = () => {
-      onBeforeOpen();
-      openAddWorkingDirModal((path) => onPick({ path }));
-    };
-    return (
-      <Flexbox
-        horizontal
-        align={'center'}
-        className={styles.chooseFolderItem}
-        gap={8}
-        onClick={handleClick}
-      >
-        <Icon icon={FolderPlusIcon} size={14} />
-        <span>{t('localSystem.workingDirectory.addFolder')}</span>
-      </Flexbox>
-    );
-  },
-);
+const AddRemoteFolderRow = memo<{
+  defaultCwd?: string;
+  onBeforeOpen: () => void;
+  onPick: (entry: FolderEntry) => void;
+}>(({ defaultCwd, onBeforeOpen, onPick }) => {
+  const { t } = useTranslation('plugin');
+  const handleClick = () => {
+    onBeforeOpen();
+    openAddWorkingDirModal((path) => onPick({ path }), defaultCwd || undefined);
+  };
+  return (
+    <Flexbox
+      horizontal
+      align={'center'}
+      className={styles.chooseFolderItem}
+      gap={8}
+      onClick={handleClick}
+    >
+      <Icon icon={FolderPlusIcon} size={14} />
+      <span>{t('localSystem.workingDirectory.addFolder')}</span>
+    </Flexbox>
+  );
+});
 AddRemoteFolderRow.displayName = 'AddRemoteFolderRow';
 
 interface WorkingDirectoryPickerProps {
@@ -320,7 +322,11 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
       {isLocalDevice ? (
         <ChooseLocalFolderRow defaultPath={selectedDir} onPick={pick} />
       ) : (
-        <AddRemoteFolderRow onBeforeOpen={() => setOpen(false)} onPick={pick} />
+        <AddRemoteFolderRow
+          defaultCwd={deviceDefaultCwd}
+          onBeforeOpen={() => setOpen(false)}
+          onPick={pick}
+        />
       )}
     </Flexbox>
   );

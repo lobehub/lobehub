@@ -9,9 +9,10 @@ import { useTranslation } from 'react-i18next';
 
 interface AddWorkingDirContentProps {
   onSubmit: (path: string) => void | Promise<void>;
+  placeholder?: string;
 }
 
-const AddWorkingDirContent = memo<AddWorkingDirContentProps>(({ onSubmit }) => {
+const AddWorkingDirContent = memo<AddWorkingDirContentProps>(({ onSubmit, placeholder }) => {
   const { t: tPlugin } = useTranslation('plugin');
   const { t: tCommon } = useTranslation('common');
   const { close } = useModalContext();
@@ -45,7 +46,7 @@ const AddWorkingDirContent = memo<AddWorkingDirContentProps>(({ onSubmit }) => {
         {tPlugin('localSystem.workingDirectory.addFolderDesc')}
       </Text>
       <Input
-        placeholder={tPlugin('localSystem.workingDirectory.placeholder')}
+        placeholder={placeholder || tPlugin('localSystem.workingDirectory.placeholder')}
         ref={inputRef}
         value={value}
         onChange={(e) => setValue(e.target.value)}
@@ -72,9 +73,10 @@ AddWorkingDirContent.displayName = 'AddWorkingDirContent';
  */
 export const openAddWorkingDirModal = (
   onSubmit: (path: string) => void | Promise<void>,
+  placeholder?: string,
 ): ModalInstance =>
   createModal({
-    content: <AddWorkingDirContent onSubmit={onSubmit} />,
+    content: <AddWorkingDirContent placeholder={placeholder} onSubmit={onSubmit} />,
     footer: null,
     maskClosable: true,
     styles: { header: { borderBottom: 'none' } },
