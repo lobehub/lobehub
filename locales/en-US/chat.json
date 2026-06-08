@@ -209,6 +209,8 @@
   "heteroAgent.cloudRepo.notSet": "No repo selected",
   "heteroAgent.cloudRepo.sectionTitle": "Repositories",
   "heteroAgent.executionTarget.downloadDesktop": "Get Desktop App",
+  "heteroAgent.executionTarget.downloadDesktopDesc": "Run agents locally on your machine, or connect remote devices with `lh connect`.",
+  "heteroAgent.executionTarget.downloadDesktopTitle": "Get the desktop app",
   "heteroAgent.executionTarget.infoTooltip": "Pick a remote device to drive that machine from the web. \"This device\" runs the agent locally and is only available inside the desktop app.",
   "heteroAgent.executionTarget.loading": "Loading devices…",
   "heteroAgent.executionTarget.local": "This device",
