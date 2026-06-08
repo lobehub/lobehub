@@ -160,6 +160,40 @@ export class DeviceGateway {
     }
   }
 
+  /**
+   * Check whether a path exists on the device and is a directory, via the same
+   * generic `invokeRpc` channel as `gitInfo`. Lets a web / remote client
+   * validate a manually-entered working directory before binding it. Returns
+   * `undefined` when the gateway is unconfigured or the device is unreachable
+   * (the caller treats "can't verify" as non-blocking).
+   */
+  async statPath(
+    userId: string,
+    deviceId: string,
+    path: string,
+    timeout = 8000,
+  ): Promise<{ exists: boolean; isDirectory: boolean } | undefined> {
+    const client = this.getClient();
+    if (!client) return undefined;
+
+    try {
+      const result = await client.invokeRpc<{ exists: boolean; isDirectory: boolean }>(
+        { deviceId, timeout, userId },
+        { method: 'statPath', params: { path } },
+      );
+
+      if (!result.success || !result.data) {
+        log('statPath: failed for deviceId=%s — %s', deviceId, result.error);
+        return undefined;
+      }
+
+      return result.data;
+    } catch (error) {
+      log('statPath: error for deviceId=%s — %O', deviceId, error);
+      return undefined;
+    }
+  }
+
   async dispatchAgentRun(params: {
     agentType: HeterogeneousAgentType;
     cwd?: string;

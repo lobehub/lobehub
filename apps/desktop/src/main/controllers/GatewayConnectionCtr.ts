@@ -365,6 +365,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
         return this.gitCtr.gitInfo(params as { isGithub?: boolean; scope: string });
       }
 
+      case 'statPath': {
+        return this.workspaceCtr.statPath(params as { path: string });
+      }
+
       default: {
         throw new Error(`Unknown device RPC method: ${method}`);
       }

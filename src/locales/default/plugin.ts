@@ -614,6 +614,8 @@ export default {
     'Install and log in to the GitHub CLI (`gh`) to see linked pull requests',
   'localSystem.workingDirectory.newBranchPlaceholder': 'feature/new-branch-name',
   'localSystem.workingDirectory.noRecent': 'No recent directories',
+  'localSystem.workingDirectory.pathNotDirectory': 'This path is not a directory',
+  'localSystem.workingDirectory.pathNotExist': "This path doesn't exist on the device",
   'localSystem.workingDirectory.notSet': 'Click to set working directory',
   'localSystem.workingDirectory.placeholder': 'Enter directory path, e.g. /Users/name/projects',
   'localSystem.workingDirectory.prTooltipWithExtra':

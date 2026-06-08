@@ -580,6 +580,8 @@
   "localSystem.workingDirectory.newBranchPlaceholder": "feature/new-branch-name",
   "localSystem.workingDirectory.noRecent": "No recent directories",
   "localSystem.workingDirectory.notSet": "Click to set working directory",
+  "localSystem.workingDirectory.pathNotDirectory": "This path is not a directory",
+  "localSystem.workingDirectory.pathNotExist": "This path doesn't exist on the device",
   "localSystem.workingDirectory.placeholder": "Enter directory path, e.g. /Users/name/projects",
   "localSystem.workingDirectory.prTooltipWithExtra": "{{title}} (+{{count}} more open PR on this branch)",
   "localSystem.workingDirectory.pullAction": "Click to pull {{count}} commit(s) from {{upstream}}",

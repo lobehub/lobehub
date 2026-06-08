@@ -1,4 +1,4 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -191,6 +191,21 @@ export default class WorkspaceCtr extends ControllerModule {
     await this.approveProjectRootForPreview(root);
 
     return { instructions, root, skills };
+  }
+
+  /**
+   * Check whether a path exists on this device and is a directory. Used to
+   * validate a manually-entered working directory from a web / remote client
+   * (which can't browse this device's filesystem) before binding it.
+   */
+  @IpcMethod()
+  async statPath(params: { path: string }): Promise<{ exists: boolean; isDirectory: boolean }> {
+    try {
+      const stats = await stat(params.path);
+      return { exists: true, isDirectory: stats.isDirectory() };
+    } catch {
+      return { exists: false, isDirectory: false };
+    }
   }
 
   /**

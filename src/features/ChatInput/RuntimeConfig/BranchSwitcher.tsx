@@ -139,11 +139,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   section: css`
     flex: 1;
-
     font-size: 11px;
     font-weight: 500;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
   `,
   sectionRow: css`
     display: flex;

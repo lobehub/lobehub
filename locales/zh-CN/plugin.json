@@ -580,6 +580,8 @@
   "localSystem.workingDirectory.newBranchPlaceholder": "feature/新分支名称",
   "localSystem.workingDirectory.noRecent": "暂无最近目录",
   "localSystem.workingDirectory.notSet": "点击设置工作目录",
+  "localSystem.workingDirectory.pathNotDirectory": "该路径不是一个目录",
+  "localSystem.workingDirectory.pathNotExist": "该设备上不存在此路径",
   "localSystem.workingDirectory.placeholder": "输入目录路径，如 /Users/name/projects",
   "localSystem.workingDirectory.prTooltipWithExtra": "{{title}}（此分支还有 {{count}} 个开放 PR）",
   "localSystem.workingDirectory.pullAction": "点击从 {{upstream}} 拉取 {{count}} 个提交",

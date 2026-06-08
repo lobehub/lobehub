@@ -101,6 +101,19 @@ export const deviceRouter = router({
     }),
 
   /**
+   * Check whether a path exists on a remote device and is a directory, via the
+   * device's `statPath` RPC. Lets a web client validate a manually-entered
+   * working directory before binding it. Returns `null` when the device is
+   * unreachable (caller treats "can't verify" as non-blocking).
+   */
+  statPath: deviceProcedure
+    .input(z.object({ deviceId: z.string(), path: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.statPath(ctx.userId, input.deviceId, input.path);
+      return result ?? null;
+    }),
+
+  /**
    * Fetch the agent profile (title, description, avatar) from the platform
    * installed on the given device. Used to pre-fill the creation modal.
    * Returns an empty object on failure or when the platform has no profile.

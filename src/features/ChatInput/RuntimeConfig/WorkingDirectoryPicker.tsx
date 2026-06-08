@@ -18,6 +18,7 @@ import {
   resolveAgentWorkingDirectory,
   resolveTargetDeviceId,
 } from '@/helpers/agentWorkingDirectory';
+import { lambdaClient } from '@/libs/trpc/client';
 import { electronSystemService } from '@/services/electron/system';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -183,13 +184,31 @@ ChooseLocalFolderRow.displayName = 'ChooseLocalFolderRow';
 /** Web / remote device: filesystem isn't browsable here — enter an absolute path. */
 const AddRemoteFolderRow = memo<{
   defaultCwd?: string;
+  deviceId?: string;
   onBeforeOpen: () => void;
   onPick: (entry: FolderEntry) => void;
-}>(({ defaultCwd, onBeforeOpen, onPick }) => {
+}>(({ defaultCwd, deviceId, onBeforeOpen, onPick }) => {
   const { t } = useTranslation('plugin');
+
+  // Validate the entered path on the target device (it can't be browsed here).
+  // Block only on a definitive negative; an unreachable device (null) is treated
+  // as "can't verify" and allowed through.
+  const validate = async (path: string): Promise<string | undefined> => {
+    if (!deviceId) return undefined;
+    const result = await lambdaClient.device.statPath.query({ deviceId, path });
+    if (!result) return undefined;
+    if (!result.exists) return t('localSystem.workingDirectory.pathNotExist');
+    if (!result.isDirectory) return t('localSystem.workingDirectory.pathNotDirectory');
+    return undefined;
+  };
+
   const handleClick = () => {
     onBeforeOpen();
-    openAddWorkingDirModal((path) => onPick({ path }), defaultCwd || undefined);
+    openAddWorkingDirModal({
+      onSubmit: (path) => onPick({ path }),
+      placeholder: defaultCwd || undefined,
+      validate,
+    });
   };
   return (
     <Flexbox
@@ -324,6 +343,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
       ) : (
         <AddRemoteFolderRow
           defaultCwd={deviceDefaultCwd}
+          deviceId={targetDeviceId}
           onBeforeOpen={() => setOpen(false)}
           onPick={pick}
         />
