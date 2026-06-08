@@ -145,6 +145,34 @@ export const deviceRouter = router({
     ),
 
   /**
+   * Pull (`--ff-only`) the current branch of a directory on a remote device, via
+   * the device's `pullGitBranch` RPC.
+   */
+  pullGitBranch: deviceProcedure
+    .input(z.object({ deviceId: z.string(), path: z.string() }))
+    .mutation(async ({ ctx, input }) =>
+      deviceGateway.pullGitBranch({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+      }),
+    ),
+
+  /**
+   * Push the current branch of a directory on a remote device, via the device's
+   * `pushGitBranch` RPC.
+   */
+  pushGitBranch: deviceProcedure
+    .input(z.object({ deviceId: z.string(), path: z.string() }))
+    .mutation(async ({ ctx, input }) =>
+      deviceGateway.pushGitBranch({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+      }),
+    ),
+
+  /**
    * Check whether a path exists on a remote device and is a directory, via the
    * device's `statPath` RPC. Lets a web client validate a manually-entered
    * working directory before binding it. Returns `null` when the device is

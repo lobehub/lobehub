@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
 import RingLoadingIcon from '@/components/RingLoading';
+import { lambdaClient } from '@/libs/trpc/client';
 import { electronGitService } from '@/services/electron/git';
 import { electronSystemService } from '@/services/electron/system';
 import { useGlobalStore } from '@/store/global';
@@ -137,8 +138,8 @@ const styles = createStaticStyles(({ css }) => {
 });
 
 interface GitStatusProps {
-  /** When set, git status + branch switch run against this remote device via RPC
-   * (pull / push stay local-only for now). Omit for the local machine. */
+  /** When set, git status / branch switch / pull / push all run against this
+   * remote device via RPC. Omit for the local machine (talks over IPC). */
   deviceId?: string;
   isGithub: boolean;
   path: string;
@@ -184,8 +185,12 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
   }, [showRightPanel, workingSidebarTab, setWorkingSidebarTab, toggleRightPanel]);
 
   const refreshAfterSync = useCallback(async () => {
-    await Promise.all([mutate(), mutateWorkingStatus(), mutateAheadBehind()]);
-  }, [mutate, mutateWorkingStatus, mutateAheadBehind]);
+    if (local) {
+      await Promise.all([mutate(), mutateWorkingStatus(), mutateAheadBehind()]);
+    } else {
+      await refetchRemoteGit();
+    }
+  }, [local, mutate, mutateWorkingStatus, mutateAheadBehind, refetchRemoteGit]);
 
   const syncBusy = pulling || pushing;
 
@@ -193,7 +198,10 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
     if (pulling || pushing) return;
     setPulling(true);
     try {
-      const result = await electronGitService.pullGitBranch({ path });
+      // Local pulls over IPC; a remote device pulls over RPC.
+      const result = deviceId
+        ? await lambdaClient.device.pullGitBranch.mutate({ deviceId, path })
+        : await electronGitService.pullGitBranch({ path });
       if (result.success) {
         if (result.noop) {
           message.info(t('workingDirectory.pullNoop'));
@@ -207,13 +215,16 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
     } finally {
       setPulling(false);
     }
-  }, [path, pulling, pushing, refreshAfterSync, t]);
+  }, [deviceId, path, pulling, pushing, refreshAfterSync, t]);
 
   const handlePush = useCallback(async () => {
     if (pulling || pushing) return;
     setPushing(true);
     try {
-      const result = await electronGitService.pushGitBranch({ path });
+      // Local pushes over IPC; a remote device pushes over RPC.
+      const result = deviceId
+        ? await lambdaClient.device.pushGitBranch.mutate({ deviceId, path })
+        : await electronGitService.pushGitBranch({ path });
       if (result.success) {
         if (result.noop) {
           message.info(t('workingDirectory.pushNoop'));
@@ -227,7 +238,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
     } finally {
       setPushing(false);
     }
-  }, [path, pulling, pushing, refreshAfterSync, t]);
+  }, [deviceId, path, pulling, pushing, refreshAfterSync, t]);
 
   if (!data?.branch) return null;
 
@@ -310,7 +321,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
         target: pushTargetName || upstreamName,
       });
 
-  const pullNode = local && showBehind && (
+  const pullNode = showBehind && (
     <Tooltip title={pullTooltip}>
       <div
         aria-busy={pulling}
@@ -327,7 +338,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
     </Tooltip>
   );
 
-  const pushNode = local && showAhead && (
+  const pushNode = showAhead && (
     <Tooltip title={pushTooltip}>
       <div
         aria-busy={pushing}
