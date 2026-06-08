@@ -1,6 +1,9 @@
 import type { SandboxCallToolResult } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { CodeInterpreterToolName } from '@lobehub/market-sdk';
 import debug from 'debug';
+import mime from 'mime';
+
+import { fileEnv } from '@/envs/file';
 
 import { SandboxMiddlewareService } from '../service';
 import type {
@@ -91,10 +94,17 @@ export class MarketSandboxProvider implements SandboxProvider {
   }
 
   async exportFileToUploadUrl({
+    filename,
     path,
     uploadUrl,
+    uploadHeaders,
   }: SandboxProviderFileExportRequest): Promise<SandboxProviderFileExportResult> {
     const { marketService, topicId, userId } = this.options;
+
+    // Use curl mode if enabled (for S3 providers with signature issues)
+    if (fileEnv.S3_EXPORT_CURL_MODE) {
+      return this.exportViaCurl({ filename, path, uploadUrl, uploadHeaders });
+    }
 
     try {
       const response = await marketService.exportFile({
@@ -133,6 +143,104 @@ export class MarketSandboxProvider implements SandboxProvider {
       };
     } catch (error) {
       log('Error exporting file: %O', error);
+
+      return {
+        error: { message: (error as Error).message },
+        success: false,
+      };
+    }
+  }
+
+  private async exportViaCurl({
+    path,
+    uploadUrl,
+    uploadHeaders,
+  }: SandboxProviderFileExportRequest): Promise<SandboxProviderFileExportResult> {
+    const { marketService, topicId, userId } = this.options;
+
+    log('Using curl mode for file export from path: %s', path);
+
+    try {
+      // Step 1: Verify file exists and get size
+      const statResponse = await marketService.getSDK().plugins.runBuildInTool(
+        'runCommand',
+        {
+          command: `stat -c%s "${path}" 2>&1`,
+          timeout: 5000,
+        } as never,
+        { topicId, userId },
+      );
+
+      const statOutput = statResponse.data?.result?.stdout?.trim();
+
+      if (!statResponse.success || !statOutput) {
+        return {
+          error: { message: `File not found: ${path}` },
+          success: false,
+        };
+      }
+
+      const fileSize = parseInt(statOutput, 10);
+
+      if (fileSize === 0) {
+        return {
+          error: { message: 'File is empty (0 bytes)' },
+          success: false,
+        };
+      }
+
+      // Step 2: Get file extension and infer content type
+      const filename = path.split('/').pop() || 'file';
+      const contentType = mime.getType(filename) || 'application/octet-stream';
+
+      // Step 3: Build curl command with headers
+      const headerArgs: string[] = [];
+      if (uploadHeaders) {
+        for (const [key, value] of Object.entries(uploadHeaders)) {
+          headerArgs.push(`-H "${key}: ${value}"`);
+        }
+      }
+      headerArgs.push(`-H "Content-Type: ${contentType}"`);
+
+      const curlCommand = `curl -X PUT "${uploadUrl}" ${headerArgs.join(' ')} --data-binary @${path}`;
+
+      log('Running curl upload command for file: %s', filename);
+
+      const response = await marketService.getSDK().plugins.runBuildInTool(
+        'runCommand',
+        {
+          command: curlCommand,
+          timeout: 60000,
+        } as never,
+        { topicId, userId },
+      );
+
+      log('Curl upload response: %O', response);
+
+      if (!response.success) {
+        return {
+          error: { message: response.error?.message || 'Failed to upload file via curl' },
+          success: false,
+        };
+      }
+
+      // Check if curl actually succeeded (exit code 0)
+      const curlExitCode = response.data?.result?.exitCode;
+      if (curlExitCode !== 0 && curlExitCode !== undefined) {
+        return {
+          error: {
+            message: `curl failed with exit code ${curlExitCode}: ${response.data?.result?.stdout || 'unknown error'}`,
+          },
+          success: false,
+        };
+      }
+
+      return {
+        mimeType: contentType,
+        success: true,
+      };
+    } catch (error) {
+      log('Error exporting file via curl: %O', error);
 
       return {
         error: { message: (error as Error).message },

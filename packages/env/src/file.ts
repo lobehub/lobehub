@@ -38,6 +38,7 @@ export const getFileConfig = () => {
       S3_PUBLIC_DOMAIN,
       S3_REGION: process.env.S3_REGION,
       S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY,
+      S3_EXPORT_CURL_MODE: process.env.S3_EXPORT_CURL_MODE === '1',
       S3_SET_ACL: process.env.S3_SET_ACL === '1',
     },
     server: {
@@ -55,6 +56,7 @@ export const getFileConfig = () => {
       S3_PREVIEW_URL_EXPIRE_IN: z.number(),
       S3_PUBLIC_DOMAIN: z.string().optional(),
       S3_REGION: z.string().optional(),
+      S3_EXPORT_CURL_MODE: z.boolean(),
       S3_SECRET_ACCESS_KEY: z.string().optional(),
       S3_SET_ACL: z.boolean(),
     },
