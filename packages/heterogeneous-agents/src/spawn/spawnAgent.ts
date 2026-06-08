@@ -129,7 +129,18 @@ const CLAUDE_CODE_PERMISSION_ARGS = (): string[] =>
       ]
     : ['--permission-mode', 'bypassPermissions'];
 
-const CODEX_REQUIRED_ARGS = ['--json', '--skip-git-repo-check', '--full-auto'] as const;
+export const CODEX_REQUIRED_ARGS = ['--json', '--skip-git-repo-check'] as const;
+export const CODEX_BYPASS_APPROVALS_AND_SANDBOX_ARG = '--dangerously-bypass-approvals-and-sandbox';
+export const CODEX_DEFAULT_EXECUTION_ARGS = [CODEX_BYPASS_APPROVALS_AND_SANDBOX_ARG] as const;
+export const CODEX_EXECUTION_MODE_FLAGS = [
+  '--full-auto',
+  CODEX_BYPASS_APPROVALS_AND_SANDBOX_ARG,
+  '--sandbox',
+  '-s',
+] as const;
+
+const hasAnyFlag = (args: string[], flags: readonly string[]) =>
+  args.some((arg) => flags.includes(arg as (typeof flags)[number]));
 
 interface BuildSpawnArgsParams {
   agentType: string;
@@ -157,10 +168,16 @@ const buildClaudeCodeArgs = ({
   ...extraArgs,
 ];
 
-const buildCodexArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) =>
-  resumeSessionId
-    ? ['exec', 'resume', ...CODEX_REQUIRED_ARGS, ...inputArgs, ...extraArgs, resumeSessionId, '-']
-    : ['exec', ...CODEX_REQUIRED_ARGS, ...inputArgs, ...extraArgs];
+const buildCodexArgs = ({ extraArgs, inputArgs, resumeSessionId }: BuildSpawnArgsParams) => {
+  const executionModeArgs = hasAnyFlag(extraArgs, CODEX_EXECUTION_MODE_FLAGS)
+    ? []
+    : [...CODEX_DEFAULT_EXECUTION_ARGS];
+  const optionArgs = [...CODEX_REQUIRED_ARGS, ...executionModeArgs, ...inputArgs, ...extraArgs];
+
+  return resumeSessionId
+    ? ['exec', 'resume', ...optionArgs, resumeSessionId, '-']
+    : ['exec', ...optionArgs];
+};
 
 const buildSpawnArgs = (params: BuildSpawnArgsParams): string[] => {
   switch (params.agentType) {

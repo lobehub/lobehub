@@ -176,6 +176,94 @@ describe('CodexAdapter', () => {
     });
   });
 
+  it('keeps consecutive agent_message items in the same Codex step', () => {
+    const adapter = new CodexAdapter();
+
+    adapter.adapt({ type: 'turn.started' });
+    adapter.adapt({
+      item: {
+        id: 'item_0',
+        text: 'First status update.',
+        type: 'agent_message',
+      },
+      type: 'item.completed',
+    });
+
+    const secondMessage = adapter.adapt({
+      item: {
+        id: 'item_1',
+        text: 'Second status update.',
+        type: 'agent_message',
+      },
+      type: 'item.completed',
+    });
+
+    expect(secondMessage).toHaveLength(1);
+    expect(secondMessage[0]).toMatchObject({
+      data: { chunkType: 'text', content: '\n\nSecond status update.' },
+      stepIndex: 0,
+      type: 'stream_chunk',
+    });
+  });
+
+  it('does not start a new step for an old pending tool completion', () => {
+    const adapter = new CodexAdapter();
+
+    adapter.adapt({ type: 'turn.started' });
+    adapter.adapt({
+      item: {
+        id: 'item_0',
+        text: 'Starting a long search.',
+        type: 'agent_message',
+      },
+      type: 'item.completed',
+    });
+    adapter.adapt({
+      item: {
+        command: '/bin/zsh -lc find .',
+        id: 'item_1',
+        status: 'in_progress',
+        type: 'command_execution',
+      },
+      type: 'item.started',
+    });
+    adapter.adapt({
+      item: {
+        id: 'item_2',
+        text: 'Continuing with narrower checks.',
+        type: 'agent_message',
+      },
+      type: 'item.completed',
+    });
+    adapter.adapt({
+      item: {
+        aggregated_output: '',
+        command: '/bin/zsh -lc find .',
+        exit_code: 0,
+        id: 'item_1',
+        status: 'completed',
+        type: 'command_execution',
+      },
+      type: 'item.completed',
+    });
+
+    const nextMessage = adapter.adapt({
+      item: {
+        id: 'item_3',
+        text: 'The broad search is done; continuing.',
+        type: 'agent_message',
+      },
+      type: 'item.completed',
+    });
+
+    expect(nextMessage).toHaveLength(1);
+    expect(nextMessage[0]).toMatchObject({
+      data: { chunkType: 'text', content: '\n\nThe broad search is done; continuing.' },
+      stepIndex: 1,
+      type: 'stream_chunk',
+    });
+  });
+
   it('maps command execution items into tool lifecycle events', () => {
     const adapter = new CodexAdapter();
 
@@ -469,7 +557,7 @@ describe('CodexAdapter', () => {
     });
   });
 
-  it('keeps a real collab_tool_call stream fixture readable and flushes unfinished attempts', async () => {
+  it('keeps a real collab_tool_call stream fixture readable and drains unfinished attempts', async () => {
     const adapter = new CodexAdapter();
     const rawEvents = await loadFixture('collab_tool_call.spawn_wait.jsonl');
 
@@ -496,7 +584,58 @@ describe('CodexAdapter', () => {
         }),
       ]),
     );
-    expect(flushed).toEqual([
+    expect(adapted).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          data: {
+            isSuccess: false,
+            toolCallId: 'item_1',
+          },
+          type: 'tool_end',
+        }),
+      ]),
+    );
+    expect(flushed).toEqual([]);
+  });
+
+  it('emits stream_end + agent_runtime_end on successful turn completion', () => {
+    const adapter = new CodexAdapter();
+
+    adapter.adapt({ type: 'turn.started' });
+    const events = adapter.adapt({
+      type: 'turn.completed',
+      usage: {
+        input_tokens: 10,
+        output_tokens: 3,
+      },
+    });
+
+    expect(events.map((event) => event.type)).toEqual([
+      'step_complete',
+      'stream_end',
+      'agent_runtime_end',
+    ]);
+  });
+
+  it('drains unfinished Codex tools before successful turn completion', () => {
+    const adapter = new CodexAdapter();
+
+    adapter.adapt({ type: 'turn.started' });
+    adapter.adapt({
+      item: {
+        command: '/bin/zsh -lc sleep',
+        id: 'item_1',
+        status: 'in_progress',
+        type: 'command_execution',
+      },
+      type: 'item.started',
+    });
+
+    const events = adapter.adapt({
+      type: 'turn.completed',
+    });
+
+    expect(events).toEqual([
       expect.objectContaining({
         data: {
           isSuccess: false,
@@ -504,7 +643,14 @@ describe('CodexAdapter', () => {
         },
         type: 'tool_end',
       }),
+      expect.objectContaining({
+        type: 'stream_end',
+      }),
+      expect.objectContaining({
+        type: 'agent_runtime_end',
+      }),
     ]);
+    expect(adapter.flush()).toEqual([]);
   });
 
   it('emits cumulative tools_calling within the same Codex step', () => {
