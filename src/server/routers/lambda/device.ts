@@ -192,6 +192,68 @@ export const deviceRouter = router({
     ),
 
   /**
+   * Working-tree (unstaged) per-file patches for a directory on a remote device,
+   * via the device's `getGitWorkingTreePatches` RPC. Powers the web/remote Review
+   * panel's unstaged diff. Returns `null` when offline / not a git repo.
+   */
+  getGitWorkingTreePatches: deviceProcedure
+    .input(z.object({ deviceId: z.string(), path: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.getGitWorkingTreePatches({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+      });
+      return result ?? null;
+    }),
+
+  /**
+   * Branch diff (current branch vs base ref) per-file patches for a directory on
+   * a remote device, via the device's `getGitBranchDiff` RPC.
+   */
+  getGitBranchDiff: deviceProcedure
+    .input(z.object({ baseRef: z.string().optional(), deviceId: z.string(), path: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.getGitBranchDiff({
+        baseRef: input.baseRef,
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+      });
+      return result ?? null;
+    }),
+
+  /**
+   * List the remote branches of a directory on a remote device, via the device's
+   * `listGitRemoteBranches` RPC. Populates the Review base-ref picker.
+   */
+  listGitRemoteBranches: deviceProcedure
+    .input(z.object({ deviceId: z.string(), path: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.listGitRemoteBranches({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+      });
+      return result ?? [];
+    }),
+
+  /**
+   * Revert a single file in a directory on a remote device, via the device's
+   * `revertGitFile` RPC.
+   */
+  revertGitFile: deviceProcedure
+    .input(z.object({ deviceId: z.string(), filePath: z.string(), path: z.string() }))
+    .mutation(async ({ ctx, input }) =>
+      deviceGateway.revertGitFile({
+        deviceId: input.deviceId,
+        filePath: input.filePath,
+        path: input.path,
+        userId: ctx.userId,
+      }),
+    ),
+
+  /**
    * Check whether a path exists on a remote device and is a directory, via the
    * device's `statPath` RPC. Lets a web client validate a manually-entered
    * working directory before binding it. Returns `null` when the device is

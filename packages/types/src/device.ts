@@ -186,3 +186,86 @@ export interface DeviceGitSyncResult {
   noop?: boolean;
   success: boolean;
 }
+
+/**
+ * One per-file diff block in a working-tree / branch diff. Mirrors the desktop
+ * `GitWorkingTreePatch` — shared by both the unstaged and branch-diff RPCs.
+ */
+export interface DeviceGitWorkingTreePatch {
+  /** Number of `+` lines in the patch. */
+  additions: number;
+  /** Number of `-` lines in the patch. */
+  deletions: number;
+  /** Repo-relative path of the file. */
+  filePath: string;
+  /** True when git reported `Binary files … differ` for this entry. */
+  isBinary: boolean;
+  /** Unified diff text. Empty when binary or truncated. */
+  patch: string;
+  /** Diff bucket. */
+  status: 'added' | 'modified' | 'deleted';
+  /** Patch elided because it exceeded the per-file size cap. */
+  truncated: boolean;
+}
+
+/**
+ * Patches collected from a dirty submodule. Mirrors the desktop
+ * `SubmoduleWorkingTreePatches`; composes {@link DeviceGitWorkingTreePatch}.
+ */
+export interface DeviceSubmoduleWorkingTreePatches {
+  /** Absolute path on disk — used as the `cwd` for per-submodule ops. */
+  absolutePath: string;
+  /** Current branch short name inside the submodule, or short SHA when detached. */
+  branch?: string;
+  /** True when the submodule's HEAD is detached. */
+  detached?: boolean;
+  /** Display name — the submodule's directory basename. */
+  name: string;
+  /** Per-file diff blocks inside this submodule. */
+  patches: DeviceGitWorkingTreePatch[];
+  /** Path relative to the parent repo root. */
+  relativePath: string;
+}
+
+/**
+ * Result of the `getGitWorkingTreePatches` device RPC. Mirrors the desktop
+ * `GitWorkingTreePatches`.
+ */
+export interface DeviceGitWorkingTreePatches {
+  /** All dirty file patches in the parent repo. */
+  patches: DeviceGitWorkingTreePatch[];
+  /** One group per dirty submodule. Undefined when none. */
+  submodules?: DeviceSubmoduleWorkingTreePatches[];
+}
+
+/**
+ * Result of the `getGitBranchDiff` device RPC. Mirrors the desktop
+ * `GitBranchDiffPatches`.
+ */
+export interface DeviceGitBranchDiffPatches {
+  /** Resolved base ref the diff was taken against. Undefined when unresolved. */
+  baseRef?: string;
+  /** Current branch short name, or short SHA when detached. */
+  headRef?: string;
+  /** Per-file diff blocks for the parent repo. */
+  patches: DeviceGitWorkingTreePatch[];
+  /** One group per submodule whose pointer differs. Undefined when none. */
+  submodules?: DeviceSubmoduleWorkingTreePatches[];
+}
+
+/**
+ * One remote branch under `refs/remotes/origin/*`, returned by the
+ * `listGitRemoteBranches` device RPC. Mirrors the desktop `GitRemoteBranchListItem`.
+ */
+export interface DeviceGitRemoteBranchListItem {
+  /** Whether this ref is the resolved default branch (origin/HEAD target). */
+  isDefault: boolean;
+  /** Short ref name, e.g. `origin/canary`. */
+  name: string;
+}
+
+/** Result of the `revertGitFile` device RPC. Mirrors the desktop `GitFileRevertResult`. */
+export interface DeviceGitFileRevertResult {
+  error?: string;
+  success: boolean;
+}

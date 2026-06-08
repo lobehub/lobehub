@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useRepoType } from '@/features/ChatInput/RuntimeConfig/useRepoType';
 import RightPanel from '@/features/RightPanel';
+import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
 import {
   agentByIdSelectors,
@@ -15,6 +16,7 @@ import {
 } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 
 import Files from './Files';
@@ -90,6 +92,13 @@ const AgentWorkingSidebar = memo(() => {
   );
   const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const workingDirectory = topicWorkingDirectory || agentWorkingDirectory;
+  // Effective target device for git ops — bound device for remote agents, this
+  // machine otherwise. Resolved the same way WorkingDirectoryPicker / GitStatus do.
+  const agencyConfig = useAgentStore((s) =>
+    activeAgentId ? agentByIdSelectors.getAgencyConfigById(activeAgentId)(s) : undefined,
+  );
+  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
+  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
   const repoType = useRepoType(workingDirectory);
 
   const filesAvailable = isLocalSystemEnabled && !!workingDirectory;
@@ -168,7 +177,7 @@ const AgentWorkingSidebar = memo(() => {
           )}
           {reviewAvailable && (
             <Flexbox className={activeTab === 'review' ? styles.pane : styles.paneHidden}>
-              <Review workingDirectory={workingDirectory} />
+              <Review deviceId={targetDeviceId} workingDirectory={workingDirectory} />
             </Flexbox>
           )}
           {filesAvailable && (

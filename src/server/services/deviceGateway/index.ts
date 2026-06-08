@@ -10,11 +10,15 @@ import {
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import type {
   DeviceGitAheadBehind,
+  DeviceGitBranchDiffPatches,
   DeviceGitBranchInfo,
   DeviceGitBranchListItem,
   DeviceGitCheckoutResult,
+  DeviceGitFileRevertResult,
   DeviceGitLinkedPullRequestResult,
+  DeviceGitRemoteBranchListItem,
   DeviceGitSyncResult,
+  DeviceGitWorkingTreePatches,
   DeviceGitWorkingTreeStatus,
   ProjectSkillMeta,
   WorkspaceInitResult,
@@ -325,6 +329,138 @@ export class DeviceGateway {
     } catch (error) {
       log('pushGitBranch: error for deviceId=%s — %O', deviceId, error);
       return { error: (error as Error)?.message || 'Push failed', success: false };
+    }
+  }
+
+  /**
+   * Working-tree (unstaged) per-file patches for a directory on a remote device
+   * via the `getGitWorkingTreePatches` device RPC, so the web/remote Review panel
+   * renders the same diffs the local desktop shows over IPC.
+   */
+  async getGitWorkingTreePatches(params: {
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+  }): Promise<DeviceGitWorkingTreePatches | undefined> {
+    const { userId, deviceId, path, timeout = 30_000 } = params;
+    const client = this.getClient();
+    if (!client) return undefined;
+
+    try {
+      const result = await client.invokeRpc<DeviceGitWorkingTreePatches>(
+        { deviceId, timeout, userId },
+        { method: 'getGitWorkingTreePatches', params: { path } },
+      );
+
+      if (!result.success || !result.data) {
+        log('getGitWorkingTreePatches: failed for deviceId=%s — %s', deviceId, result.error);
+        return undefined;
+      }
+
+      return result.data;
+    } catch (error) {
+      log('getGitWorkingTreePatches: error for deviceId=%s — %O', deviceId, error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Branch diff (current branch vs base ref) per-file patches for a directory on
+   * a remote device via the `getGitBranchDiff` device RPC.
+   */
+  async getGitBranchDiff(params: {
+    baseRef?: string;
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+  }): Promise<DeviceGitBranchDiffPatches | undefined> {
+    const { userId, deviceId, baseRef, path, timeout = 30_000 } = params;
+    const client = this.getClient();
+    if (!client) return undefined;
+
+    try {
+      const result = await client.invokeRpc<DeviceGitBranchDiffPatches>(
+        { deviceId, timeout, userId },
+        { method: 'getGitBranchDiff', params: { baseRef, path } },
+      );
+
+      if (!result.success || !result.data) {
+        log('getGitBranchDiff: failed for deviceId=%s — %s', deviceId, result.error);
+        return undefined;
+      }
+
+      return result.data;
+    } catch (error) {
+      log('getGitBranchDiff: error for deviceId=%s — %O', deviceId, error);
+      return undefined;
+    }
+  }
+
+  /**
+   * List the remote branches (`refs/remotes/origin/*`) of a directory on a
+   * remote device via the `listGitRemoteBranches` device RPC, so the web/remote
+   * Review base-ref picker mirrors the local desktop's.
+   */
+  async listGitRemoteBranches(params: {
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+  }): Promise<DeviceGitRemoteBranchListItem[] | undefined> {
+    const { userId, deviceId, path, timeout = 15_000 } = params;
+    const client = this.getClient();
+    if (!client) return undefined;
+
+    try {
+      const result = await client.invokeRpc<DeviceGitRemoteBranchListItem[]>(
+        { deviceId, timeout, userId },
+        { method: 'listGitRemoteBranches', params: { path } },
+      );
+
+      if (!result.success || !result.data) {
+        log('listGitRemoteBranches: failed for deviceId=%s — %s', deviceId, result.error);
+        return undefined;
+      }
+
+      return result.data;
+    } catch (error) {
+      log('listGitRemoteBranches: error for deviceId=%s — %O', deviceId, error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Revert (discard working-tree changes to) a single file in a directory on a
+   * remote device via the `revertGitFile` device RPC.
+   */
+  async revertGitFile(params: {
+    deviceId: string;
+    filePath: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+  }): Promise<DeviceGitFileRevertResult> {
+    const { userId, deviceId, filePath, path, timeout = 15_000 } = params;
+    const client = this.getClient();
+    if (!client) return { error: 'Device gateway not configured', success: false };
+
+    try {
+      const result = await client.invokeRpc<DeviceGitFileRevertResult>(
+        { deviceId, timeout, userId },
+        { method: 'revertGitFile', params: { filePath, path } },
+      );
+
+      if (!result.success || !result.data) {
+        log('revertGitFile: failed for deviceId=%s — %s', deviceId, result.error);
+        return { error: result.error || 'Revert failed', success: false };
+      }
+
+      return result.data;
+    } catch (error) {
+      log('revertGitFile: error for deviceId=%s — %O', deviceId, error);
+      return { error: (error as Error)?.message || 'Revert failed', success: false };
     }
   }
 

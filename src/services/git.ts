@@ -1,4 +1,10 @@
 import type {
+  GitBranchDiffPatches,
+  GitFileRevertResult,
+  GitRemoteBranchListItem,
+  GitWorkingTreePatches,
+} from '@lobechat/electron-client-ipc';
+import type {
   DeviceGitAheadBehind,
   DeviceGitBranchListItem,
   DeviceGitCheckoutResult,
@@ -145,6 +151,64 @@ class GitService {
     return deviceId
       ? ((await lambdaClient.device.gitAheadBehind.query({ deviceId, path })) ?? undefined)
       : electronGitService.getGitAheadBehind(path);
+  }
+
+  /** Working-tree (unstaged) per-file patches for a working directory. */
+  async getGitWorkingTreePatches({
+    deviceId,
+    path,
+  }: {
+    deviceId?: string;
+    path: string;
+  }): Promise<GitWorkingTreePatches | undefined> {
+    return deviceId
+      ? ((await lambdaClient.device.getGitWorkingTreePatches.query({ deviceId, path })) ??
+          undefined)
+      : electronGitService.getGitWorkingTreePatches(path);
+  }
+
+  /** Branch diff (current branch vs base ref) per-file patches for a working directory. */
+  async getGitBranchDiff({
+    baseRef,
+    deviceId,
+    path,
+  }: {
+    baseRef?: string;
+    deviceId?: string;
+    path: string;
+  }): Promise<GitBranchDiffPatches | undefined> {
+    return deviceId
+      ? ((await lambdaClient.device.getGitBranchDiff.query({ baseRef, deviceId, path })) ??
+          undefined)
+      : electronGitService.getGitBranchDiff({ baseRef, path });
+  }
+
+  /** Remote branches (`refs/remotes/origin/*`) of a working directory. */
+  listGitRemoteBranches({
+    deviceId,
+    path,
+  }: {
+    deviceId?: string;
+    path: string;
+  }): Promise<GitRemoteBranchListItem[]> {
+    return deviceId
+      ? lambdaClient.device.listGitRemoteBranches.query({ deviceId, path })
+      : electronGitService.listGitRemoteBranches(path);
+  }
+
+  /** Revert (discard working-tree changes to) a single file in a working directory. */
+  revertGitFile({
+    deviceId,
+    filePath,
+    path,
+  }: {
+    deviceId?: string;
+    filePath: string;
+    path: string;
+  }): Promise<GitFileRevertResult> {
+    return deviceId
+      ? lambdaClient.device.revertGitFile.mutate({ deviceId, filePath, path })
+      : electronGitService.revertGitFile({ filePath, path });
   }
 }
 
