@@ -153,16 +153,28 @@ const buildGroupedTopics = (
   const favTopics = topics.filter((topic) => topic.favorite);
   const unfavTopics = topics.filter((topic) => !topic.favorite);
 
-  return favTopics.length > 0
-    ? [
-        {
-          children: favTopics,
-          id: 'favorite',
-          title: t('favorite', { ns: 'topic' }),
-        },
-        ...groupFn(unfavTopics),
-      ]
-    : groupFn(topics);
+  const groups =
+    favTopics.length > 0
+      ? [
+          {
+            children: favTopics,
+            id: 'favorite',
+            title: t('favorite', { ns: 'topic' }),
+          },
+          ...groupFn(unfavTopics),
+        ]
+      : groupFn(topics);
+
+  // The "needs attention" bucket (byStatus mode only) is pinned to the very top,
+  // even above favorites, so failed / awaiting-input / unread topics are
+  // impossible to miss. No-op for other group modes, which have no `pending` id.
+  const pendingIndex = groups.findIndex((group) => group.id === 'pending');
+  if (pendingIndex > 0) {
+    const [pending] = groups.splice(pendingIndex, 1);
+    groups.unshift(pending);
+  }
+
+  return groups;
 };
 
 const groupedTopicsSelector =

@@ -461,5 +461,40 @@ describe('topicSelectors', () => {
       const totalChildren = grouped.reduce((sum, g) => sum + g.children.length, 0);
       expect(totalChildren).toBe(3);
     });
+
+    it('should pin the pending group to the very top, above favorites, in byStatus mode', () => {
+      const state = createStateWithTopics([
+        {
+          id: 'fav',
+          title: 'Fav',
+          favorite: true,
+          status: 'active',
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: 'failed',
+          title: 'Failed',
+          favorite: false,
+          status: 'failed',
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: 'active',
+          title: 'Active',
+          favorite: false,
+          status: 'active',
+          createdAt: now,
+          updatedAt: now,
+        },
+      ]);
+
+      const grouped = topicSelectors.groupedTopicsForSidebar(20, 'updatedAt', 'byStatus')(state);
+
+      // pending floats above the favorite group; favorite stays above the rest
+      expect(grouped.map((g) => g.id)).toEqual(['pending', 'favorite', 'active']);
+      expect(grouped[0].children.map((t) => t.id)).toEqual(['failed']);
+    });
   });
 });
