@@ -405,7 +405,7 @@ export default {
   'referral.edit.save': 'Save',
   'referral.errors.alreadyBound': 'You have already bound an invite code',
   'referral.errors.backfillExpired':
-    'Backfill period has expired. Cannot backfill after 3 days of registration',
+    'Backfill period has expired. Cannot backfill after 7 days of registration',
   'referral.errors.codeExists': 'This referral code is already in use, please choose another',
   'referral.errors.invalidCode': 'Invite code does not exist, please check and try again',
   'referral.errors.invalidFormat':
@@ -420,9 +420,9 @@ export default {
   'referral.inviteLink.title': 'Referral Link',
   'referral.rules.backfill.alreadyBound': 'You have already bound an invite code',
   'referral.rules.backfill.description':
-    'Forgot to enter invite code? You can backfill within 3 days of registration',
+    'Forgot to enter invite code? You can backfill within 7 days of registration',
   'referral.rules.backfill.expiredTip':
-    'Backfill period has expired. Cannot backfill after 3 days of registration',
+    'Backfill period has expired. Cannot backfill after 7 days of registration',
   'referral.rules.backfill.link': 'Backfill Invite Code',
   'referral.rules.backfill.placeholder': 'Enter invite code or link',
   'referral.rules.backfill.submit': 'Confirm Binding',
@@ -432,7 +432,7 @@ export default {
   'referral.rules.expiry':
     'Credit validity: Available referral credits will be cleared after 100 days of user inactivity',
   'referral.rules.missedCode':
-    'Missed invite code: You can <0>backfill</0> within 3 days of registration. After backfilling, you still need to perform a valid action to receive rewards',
+    'Missed invite code: You can <0>backfill</0> within 7 days of registration. After backfilling, you still need to perform a valid action to receive rewards',
   'referral.rules.priority':
     'Credit consumption priority: Free credits → Subscription credits → Referral credits → Top-up credits',
   'referral.rules.registration':
