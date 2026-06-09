@@ -62,6 +62,9 @@ export const getLLMConfig = () => {
       ENABLED_GROQ: z.boolean(),
       GROQ_API_KEY: z.string().optional(),
 
+      ENABLED_CHUTES: z.boolean(),
+      CHUTES_API_KEY: z.string().optional(),
+
       ENABLED_GITHUB: z.boolean(),
       GITHUB_TOKEN: z.string().optional(),
 
@@ -322,6 +325,9 @@ export const getLLMConfig = () => {
 
       ENABLED_GROQ: !!process.env.GROQ_API_KEY,
       GROQ_API_KEY: process.env.GROQ_API_KEY,
+
+      ENABLED_CHUTES: !!process.env.CHUTES_API_KEY,
+      CHUTES_API_KEY: process.env.CHUTES_API_KEY,
 
       ENABLED_GITHUB: !!process.env.GITHUB_TOKEN,
       GITHUB_TOKEN: process.env.GITHUB_TOKEN,
