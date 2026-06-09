@@ -2543,27 +2543,38 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ccResult(),
       ]);
 
-      // Streamed content landed on the FIRST in-thread assistant
-      // (`thread-ast-1`) across the failure+retry — NOT on the terminal
-      // assistant created by the resultContent branch.
+      // Ids are now caller-pre-allocated (the coordinator assigns them and the
+      // interpreter creates rows WITH that id), so we resolve the two relevant
+      // in-thread assistants by their create payloads rather than a literal id:
+      //   - the FIRST streaming-turn assistant (role assistant, empty content)
+      //   - the terminal assistant (role assistant, the resultContent)
+      const firstAssistantId = mockCreateMessage.mock.calls.find(
+        ([p]: any) =>
+          p.role === 'assistant' &&
+          p.content === '' &&
+          typeof p.threadId === 'string' &&
+          p.threadId.startsWith('thd_'),
+      )?.[0].id;
+      const terminalCreate = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'assistant' && p.content === 'terminal result',
+      );
+      expect(firstAssistantId).toBeDefined();
+      // Terminal assistant carrying the authoritative `resultContent` was still
+      // created as a fresh row (not overwritten by the retry), with its OWN id.
+      expect(terminalCreate).toBeDefined();
+      expect(terminalCreate![0].id).not.toBe(firstAssistantId);
+
       const streamedWrites = mockUpdateMessage.mock.calls.filter(
         ([, val]: any) => val.content === 'streamed text',
       );
       // At least the retry must have landed after the original failure.
       expect(streamedWrites.length).toBeGreaterThanOrEqual(2);
-      // Every attempt — including the retry — must target the SAME streaming
-      // turn's assistant (the coordinator-pre-allocated in-thread assistant id),
-      // so the terminal row's content never gets clobbered by the leftover
-      // buffer. (Ids are now caller-pre-allocated, not the mock's return.)
-      const streamedTargetIds = new Set(streamedWrites.map(([id]: any) => id));
-      expect(streamedTargetIds.size).toBe(1);
-
-      // Terminal assistant carrying the authoritative `resultContent`
-      // was still created as a fresh row (not overwritten by the retry).
-      const terminalCreate = mockCreateMessage.mock.calls.find(
-        ([p]: any) => p.role === 'assistant' && p.content === 'terminal result',
-      );
-      expect(terminalCreate).toBeDefined();
+      // Every attempt — including the retry — must target the FIRST streaming
+      // turn's assistant, NOT the terminal row, so the authoritative
+      // `resultContent` is never clobbered by the leftover streamed buffer.
+      for (const [id] of streamedWrites) {
+        expect(id).toBe(firstAssistantId);
+      }
     });
 
     it('creates a terminal in-thread assistant with the main tool_result content', async () => {
