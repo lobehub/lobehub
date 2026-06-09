@@ -462,7 +462,7 @@ describe('topicSelectors', () => {
       expect(totalChildren).toBe(3);
     });
 
-    it('should pin the pending group to the very top, above favorites, in byStatus mode', () => {
+    it('should place the pending group right below favorites in byStatus mode', () => {
       const state = createStateWithTopics([
         {
           id: 'fav',
@@ -492,9 +492,9 @@ describe('topicSelectors', () => {
 
       const grouped = topicSelectors.groupedTopicsForSidebar(20, 'updatedAt', 'byStatus')(state);
 
-      // pending floats above the favorite group; favorite stays above the rest
-      expect(grouped.map((g) => g.id)).toEqual(['pending', 'favorite', 'active']);
-      expect(grouped[0].children.map((t) => t.id)).toEqual(['failed']);
+      // favorites stay pinned at the top; pending follows right below, then the rest
+      expect(grouped.map((g) => g.id)).toEqual(['favorite', 'pending', 'active']);
+      expect(grouped[1].children.map((t) => t.id)).toEqual(['failed']);
     });
   });
 });
