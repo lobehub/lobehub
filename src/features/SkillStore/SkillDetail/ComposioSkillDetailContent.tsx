@@ -1,13 +1,12 @@
 'use client';
 
-import { type Klavis } from 'composio';
 
 import { ComposioDetailProvider } from './ComposioDetailProvider';
 import SkillDetailInner from './SkillDetailInner';
 
 export interface ComposioSkillDetailContentProps {
   identifier: string;
-  serverName: Klavis.McpServerName;
+  serverName: string;
 }
 
 export const ComposioSkillDetailContent = ({

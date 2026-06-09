@@ -1,7 +1,6 @@
 'use client';
 
 import { type ComposioAppType, type LobehubSkillProviderType } from '@lobechat/const';
-import { type Klavis } from 'composio';
 import type React from 'react';
 import { createContext, use } from 'react';
 
@@ -17,7 +16,7 @@ export interface DetailContextValue {
   localizedDescription: string;
   localizedReadme: string;
   readme: string;
-  serverName?: Klavis.McpServerName;
+  serverName?: string;
   skillContent?: string;
   tools: Array<{ description?: string; inputSchema?: any; name: string }>;
   toolsLoading: boolean;

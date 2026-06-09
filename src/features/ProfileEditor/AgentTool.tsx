@@ -266,10 +266,10 @@ const AgentTool = memo<AgentToolProps>(
               label: (
                 <ComposioServerItem
                   agentId={effectiveAgentId}
+                  appSlug={type.appSlug}
                   identifier={type.identifier}
                   label={type.label}
                   server={getServerByName(type.identifier)}
-                  serverName={type.serverName}
                 />
               ),
               popoverContent: (

@@ -147,7 +147,7 @@ const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete
       cleanup();
       setIsWaitingAuth(true);
 
-      const oauthWindow = window.open(oauthUrl, '_blank', 'width=600,height=700');
+      const oauthWindow = window.open(redirectUrl, '_blank', 'width=600,height=700');
       if (oauthWindow) {
         oauthWindowRef.current = oauthWindow;
         startWindowMonitor(oauthWindow, identifier);
@@ -169,13 +169,13 @@ const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete
     setIsConnecting(true);
     try {
       const newServer = await createComposioConnection({
+        appSlug: tool.appSlug,
         identifier: tool.identifier,
-        serverName: tool.serverName,
-        userId,
+        label: tool.label,
       });
 
       if (newServer) {
-        if (newServer.status === 'ACTIVE') {
+        if (newServer.status === ComposioServerStatus.ACTIVE) {
           await refreshComposioConnectionStatus(newServer.identifier);
           onAuthComplete();
         } else if (newServer.redirectUrl) {

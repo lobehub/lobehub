@@ -1102,7 +1102,7 @@ export class AgentManagerRuntime {
         );
       };
 
-      const oauthWindow = window.open(oauthUrl, '_blank', 'width=600,height=700');
+      const oauthWindow = window.open(redirectUrl, '_blank', 'width=600,height=700');
 
       if (oauthWindow) {
         windowCheckInterval = setInterval(async () => {
@@ -1187,7 +1187,7 @@ export class AgentManagerRuntime {
         );
       };
 
-      const oauthWindow = window.open(oauthUrl, '_blank', 'width=600,height=700');
+      const oauthWindow = window.open(redirectUrl, '_blank', 'width=600,height=700');
 
       if (oauthWindow) {
         windowCheckInterval = setInterval(async () => {

@@ -1,7 +1,6 @@
 'use client';
 
 import { createModal } from '@lobehub/ui/base-ui';
-import { type Klavis } from 'composio';
 import { t } from 'i18next';
 
 import { BuiltinAgentSkillDetailContent } from './BuiltinAgentSkillDetailContent';
@@ -39,7 +38,7 @@ export const createBuiltinSkillDetailModal = ({
 
 export interface CreateKlavisSkillDetailModalOptions {
   identifier: string;
-  serverName: Klavis.McpServerName;
+  serverName: string;
 }
 
 export const createKlavisSkillDetailModal = ({

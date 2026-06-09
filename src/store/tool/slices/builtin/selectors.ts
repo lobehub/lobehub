@@ -63,8 +63,7 @@ const getKlavisMetas = (s: ToolStoreState): LobeToolMeta[] =>
         avatar: '☁️',
         description: `LobeHub Mcp Server: ${server.label}`,
         tags: ['composio', 'mcp'],
-        // title still uses serverName to display friendly name
-        title: server.serverName,
+        title: server.label,
       },
       type: 'builtin' as const,
     }));

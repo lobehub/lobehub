@@ -199,12 +199,12 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
               isConnected={isConnected}
               key={item.serverType.identifier}
               label={item.serverType.label}
-              serverName={item.serverType.serverName}
+              serverName={item.serverType.appSlug}
               type="composio"
               onOpenDetail={() =>
                 createKlavisSkillDetailModal({
                   identifier: item.serverType.identifier,
-                  serverName: item.serverType.serverName,
+                  serverName: item.serverType.appSlug,
                 })
               }
             />

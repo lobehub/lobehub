@@ -1,7 +1,6 @@
 'use client';
 
 import { getComposioAppByIdentifier } from '@lobechat/const';
-import { type Klavis } from 'composio';
 import { type ReactNode } from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +15,7 @@ import { DetailContext } from './DetailContext';
 interface ComposioDetailProviderProps {
   children: ReactNode;
   identifier: string;
-  serverName: Klavis.McpServerName;
+  serverName: string;
 }
 
 export const ComposioDetailProvider = ({

@@ -34,10 +34,10 @@ const KlavisAuthItem = memo<KlavisAuthItemProps>(({ server }) => {
         }
       },
       title: t('profile.authorizations.revoke.title', {
-        name: serverType?.label || server.serverName,
+        name: serverType?.label || server.label,
       }),
     });
-  }, [removeComposioConnection, server.identifier, server.serverName, serverType?.label, t]);
+  }, [removeComposioConnection, server.identifier, server.label, serverType?.label, t]);
 
   // Render icon
   const renderIcon = () => {
@@ -55,7 +55,7 @@ const KlavisAuthItem = memo<KlavisAuthItemProps>(({ server }) => {
     <Tag closable onClose={handleRevoke}>
       <Flexbox horizontal align="center" gap={4} style={{ opacity: isRevoking ? 0.5 : 1 }}>
         {renderIcon()}
-        {serverType?.label || server.serverName}
+        {serverType?.label || server.label}
       </Flexbox>
     </Tag>
   );

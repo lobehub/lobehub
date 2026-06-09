@@ -24,17 +24,17 @@ interface ComposioServerItemProps {
   /**
    * Identifier used for storage (e.g., 'google-calendar')
    */
+  /**
+   * Composio toolkit slug used to call the Composio API (e.g., 'GOOGLECALENDAR')
+   */
+  appSlug: string;
   identifier: string;
   label: string;
   server?: ComposioServer;
-  /**
-   * Server name used to call Klavis API (e.g., 'Google Calendar')
-   */
-  serverName: string;
 }
 
 const ComposioServerItem = memo<ComposioServerItemProps>(
-  ({ identifier, label, server, serverName, agentId }) => {
+  ({ appSlug, identifier, label, server, agentId }) => {
     const { t } = useTranslation('setting');
     const [isConnecting, setIsConnecting] = useState(false);
     const [isToggling, setIsToggling] = useState(false);
@@ -158,7 +158,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
         setIsWaitingAuth(true);
 
         // Open OAuth window
-        const oauthWindow = window.open(oauthUrl, '_blank', 'width=600,height=700');
+        const oauthWindow = window.open(redirectUrl, '_blank', 'width=600,height=700');
         if (oauthWindow) {
           oauthWindowRef.current = oauthWindow;
           startWindowMonitor(oauthWindow, serverName);
@@ -203,9 +203,9 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
       setIsConnecting(true);
       try {
         const newServer = await createComposioConnection({
+          appSlug,
           identifier,
-          serverName,
-          userId,
+          label,
         });
 
         if (newServer) {
@@ -214,7 +214,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
           await togglePlugin(newPluginId);
 
           // If already authenticated, refresh tool list directly, skip OAuth
-          if (newServer.status === 'ACTIVE') {
+          if (newServer.status === ComposioServerStatus.ACTIVE) {
             await refreshComposioConnectionStatus(newServer.identifier);
           } else if (newServer.redirectUrl) {
             // Need OAuth, open OAuth window and monitor close

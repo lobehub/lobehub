@@ -234,7 +234,7 @@ export const useSocialConnect = ({
       setIsWaitingAuth(true);
       setError(null);
 
-      const oauthWindow = window.open(oauthUrl, '_blank', 'width=600,height=700');
+      const oauthWindow = window.open(redirectUrl, '_blank', 'width=600,height=700');
       if (oauthWindow) {
         oauthWindowRef.current = oauthWindow;
         startWindowMonitor(oauthWindow);

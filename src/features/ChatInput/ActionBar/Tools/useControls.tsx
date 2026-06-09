@@ -821,10 +821,10 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
               label: (
                 <ComposioServerItem
                   agentId={agentId}
+                  appSlug={type.appSlug}
                   identifier={type.identifier}
                   label={type.label}
                   server={server}
-                  serverName={type.serverName}
                 />
               ),
               popoverContent,

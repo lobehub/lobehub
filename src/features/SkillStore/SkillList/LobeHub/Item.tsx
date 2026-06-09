@@ -3,7 +3,6 @@
 import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import type { Klavis } from 'composio';
 import { Loader2, MoreVerticalIcon, Plus, Unplug } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,7 +17,7 @@ interface ItemProps {
   isConnected: boolean;
   label: string;
   onOpenDetail?: () => void;
-  serverName?: Klavis.McpServerName;
+  serverName?: string;
   type: 'composio' | 'lobehub';
 }
 

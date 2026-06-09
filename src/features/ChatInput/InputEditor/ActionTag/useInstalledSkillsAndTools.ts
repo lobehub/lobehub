@@ -65,7 +65,7 @@ export const useInstalledSkillsAndTools = (): ActionTagData[] => {
       if (!toolMap.has(item.identifier)) {
         toolMap.set(item.identifier, {
           icon: item.icon,
-          label: item.serverName || item.identifier,
+          label: item.label || item.identifier,
         });
       }
     }

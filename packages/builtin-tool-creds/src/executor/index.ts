@@ -305,7 +305,7 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
     identifier: string,
   ): Promise<{ success: boolean }> => {
     return new Promise((resolve) => {
-      const popup = window.open(oauthUrl, '_blank', 'width=600,height=700');
+      const popup = window.open(redirectUrl, '_blank', 'width=600,height=700');
 
       if (!popup) {
         resolve({ success: false });

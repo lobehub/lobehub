@@ -263,12 +263,12 @@ export const useSkillConnection = (
       const klavisType = COMPOSIO_APP_TYPES.find((t) => t.identifier === next.provider);
       if (!klavisType) throw new Error(`Unknown Klavis provider: ${next.provider}`);
       const newServer = await createComposioConnection({
+        appSlug: klavisType.appSlug,
         identifier: next.provider,
-        serverName: klavisType.serverName,
-        userId,
+        label: klavisType.label,
       });
       if (!newServer) throw new Error('Failed to create Klavis server');
-      if (newServer.status === 'ACTIVE') {
+      if (newServer.status === ComposioServerStatus.ACTIVE) {
         await refreshComposioConnectionStatus(newServer.identifier);
       } else if (newServer.redirectUrl) {
         openOAuthWindow(newServer.redirectUrl, next);

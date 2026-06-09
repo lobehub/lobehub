@@ -44,8 +44,8 @@ const ProfileSetting = () => {
   const enableComposio = useServerConfigStore(serverConfigSelectors.enableComposio);
   const disableEmailPassword = useServerConfigStore(serverConfigSelectors.disableEmailPassword);
   const [servers, isServersInit, useFetchUserComposioConnections] = useToolStore((s) => [
-    s.servers,
-    s.isServersInit,
+    s.composioServers,
+    s.isComposioServersInit,
     s.useFetchUserComposioConnections,
   ]);
   const connectedServers = servers.filter((s) => s.status === ComposioServerStatus.ACTIVE);

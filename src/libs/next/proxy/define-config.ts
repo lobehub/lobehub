@@ -182,6 +182,10 @@ export function defineConfig() {
     // version
     '/api/version',
     '/api/desktop/(.*)',
+    // Composio OAuth callback — hit via a cross-site redirect from the provider
+    // after Composio-managed auth; only renders a popup-closing page, so it must
+    // not be session-gated.
+    '/api/composio/oauth/callback',
     // better auth
     '/signin',
     '/signup',

@@ -83,7 +83,7 @@ export class BuiltinToolsExecutor implements IToolExecutor {
       return this.composioService.executeComposioTool({
         args,
         identifier,
-        toolName: apiName,
+        toolSlug: apiName,
       });
     }
 
