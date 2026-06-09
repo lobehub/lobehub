@@ -165,8 +165,13 @@ const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): C
         ? error
         : 'Agent execution failed';
 
+  // Surface the underlying `cause` (e.g. undici's `ENOTFOUND` / `ECONNREFUSED`
+  // hidden under a generic `TypeError: fetch failed`). The main process
+  // re-exposes it as an enumerable field so it survives IPC serialization.
+  const cause = error instanceof Error ? error.cause : undefined;
+
   return {
-    body: { message },
+    body: cause === undefined || cause === null ? { message } : { cause, message },
     message,
     type: AgentRuntimeErrorType.AgentRuntimeError,
   };
