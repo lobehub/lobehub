@@ -645,4 +645,75 @@ describe('hetero exec command', () => {
       'finish',
     ]);
   });
+
+  it('resets the per-message text accumulator at message boundaries (no cross-message duplication)', async () => {
+    // LOBE-10157 Bug 3: the `replace` snapshot accumulator must not span
+    // message boundaries. Two assistant messages separated by a
+    // stream_end/stream_start boundary must each snapshot only their OWN
+    // text — otherwise the second message re-emits the first's text verbatim.
+    const textSnapshots: string[] = [];
+    mockHeteroIngestMutate.mockImplementation(async ({ events }: any) => {
+      for (const e of events) {
+        if (e.type === 'stream_chunk' && e.data?.chunkType === 'text') {
+          textSnapshots.push(e.data.content);
+        }
+      }
+      return { ack: true };
+    });
+
+    mockSpawnAgent.mockReturnValue(
+      createFakeHandle({
+        events: [
+          {
+            data: { chunkType: 'text', content: 'first message' },
+            operationId: 'op-server',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'stream_chunk',
+          },
+          { data: {}, operationId: 'op-server', stepIndex: 0, timestamp: 2, type: 'stream_end' },
+          {
+            data: { newStep: true, provider: 'claude-code' },
+            operationId: 'op-server',
+            stepIndex: 1,
+            timestamp: 3,
+            type: 'stream_start',
+          },
+          {
+            data: { chunkType: 'text', content: 'second message' },
+            operationId: 'op-server',
+            stepIndex: 1,
+            timestamp: 4,
+            type: 'stream_chunk',
+          },
+          {
+            data: { reason: 'success' },
+            operationId: 'op-server',
+            stepIndex: 1,
+            timestamp: 5,
+            type: 'agent_runtime_end',
+          },
+        ],
+        exitCode: 0,
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-server',
+      '--render',
+      'none',
+    ]);
+
+    // Second snapshot carries ONLY the second message — not "first messagesecond message".
+    expect(textSnapshots).toEqual(['first message', 'second message']);
+  });
 });

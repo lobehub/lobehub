@@ -233,6 +233,17 @@ class SerialServerIngester {
     }
 
     this.queuePendingTextSnapshot();
+    // `accumulatedText` is a PER-MESSAGE accumulator: it coalesces the text
+    // deltas of the current assistant message into one `replace` snapshot.
+    // A new message boundary (`stream_start` / `stream_end`, emitted by the
+    // adapter's `openMainMessage`) must reset it — otherwise it spans the
+    // whole run and every later message's snapshot re-emits all prior
+    // messages' text verbatim, which the server then persists into the new
+    // DB message (LOBE-10157 Bug 3: cross-message text duplication). Reset
+    // AFTER flushing the just-ended message's pending snapshot above.
+    if (event.type === 'stream_start' || event.type === 'stream_end') {
+      this.accumulatedText = '';
+    }
     this.enqueue(async () => {
       await this.sink.ingest([event]);
     });
