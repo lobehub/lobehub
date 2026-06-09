@@ -3207,8 +3207,10 @@ export class AiAgentService {
         body: { parentOperationId, threadId, toolMessageId },
         delivery: 'qstash' as const,
         // Keep the payload lean: the endpoint reloads the child's final state
-        // from the coordinator, and default serialization would inline
-        // base64 attachments that can blow the QStash payload limit.
+        // from the coordinator, so everything beyond these ids is dead weight.
+        // The default (all event fields) would ship the child's entire final
+        // answer (`lastAssistantContent`) — and any tool-produced attachments
+        // the shared lifecycle event extractor inlines — through QStash.
         eventFields: ['operationId', 'reason', 'status'],
         url: '/api/agent/webhooks/subagent-callback',
       },
