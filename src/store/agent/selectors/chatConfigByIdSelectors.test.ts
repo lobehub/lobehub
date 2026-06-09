@@ -58,6 +58,23 @@ describe('chatConfigByIdSelectors', () => {
       // Individual selectors (like getHistoryCountById) apply defaults via ?? operator
       expect(chatConfigByIdSelectors.getChatConfigById('non-existent')(state)).toEqual({});
     });
+
+    it('should force fable to chat mode while preserving other chat config', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            chatConfig: { enableAgentMode: true, historyCount: 10 },
+            model: 'claude-fable-5',
+            provider: 'lobehub',
+          },
+        },
+      });
+
+      expect(chatConfigByIdSelectors.getChatConfigById('agent-1')(state)).toMatchObject({
+        enableAgentMode: false,
+        historyCount: 10,
+      });
+    });
   });
 
   describe('getEnableHistoryCountById', () => {

@@ -8,6 +8,7 @@ import { type LobeAgentChatConfig, type RuntimeEnvMode } from '@lobechat/types';
 import { resolveRuntimeMode } from '@/helpers/executionTarget';
 import { type AgentStoreState } from '@/store/agent/initialState';
 
+import { getChatConfigWithModelModeOverride } from './modelMode';
 import { agentSelectors } from './selectors';
 
 /**
@@ -15,14 +16,19 @@ import { agentSelectors } from './selectors';
  * Used in ChatInput components where agentId is passed as prop.
  */
 
-const getChatConfigById =
+const getStoredChatConfigById =
   (agentId: string) =>
   (s: AgentStoreState): LobeAgentChatConfig =>
     agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig || {};
 
+const getChatConfigById =
+  (agentId: string) =>
+  (s: AgentStoreState): LobeAgentChatConfig =>
+    getChatConfigWithModelModeOverride(agentSelectors.getAgentConfigById(agentId)(s));
+
 // Return raw chatConfig value without business logic overrides
 const getEnableHistoryCountById = (agentId: string) => (s: AgentStoreState) =>
-  getChatConfigById(agentId)(s).enableHistoryCount;
+  getStoredChatConfigById(agentId)(s).enableHistoryCount;
 
 const getHistoryCountById =
   (agentId: string) =>

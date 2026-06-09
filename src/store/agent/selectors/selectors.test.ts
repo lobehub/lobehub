@@ -99,6 +99,34 @@ describe('agentSelectors', () => {
     });
   });
 
+  describe('currentAgentMode', () => {
+    it('should return auto by default', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: { 'agent-1': { chatConfig: {} } },
+      });
+
+      expect(agentSelectors.currentAgentMode(state)).toBe('auto');
+      expect(agentSelectors.isAgentModeEnabled(state)).toBe(true);
+    });
+
+    it('should force fable to chat mode even when agent mode is enabled', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: {
+          'agent-1': {
+            chatConfig: { enableAgentMode: true },
+            model: 'claude-fable-5',
+            provider: 'lobehub',
+          },
+        },
+      });
+
+      expect(agentSelectors.currentAgentMode(state)).toBeUndefined();
+      expect(agentSelectors.isAgentModeEnabled(state)).toBe(false);
+    });
+  });
+
   describe('currentAgentMeta', () => {
     it('should return complete meta data', () => {
       const state = createState({

@@ -12,6 +12,7 @@ import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 
 import { type AgentStoreState } from '../initialState';
+import { isFableChatOnlyModel } from './modelMode';
 import { agentSelectors } from './selectors';
 
 /**
@@ -61,7 +62,10 @@ const isAgentConfigLoadingById = (agentId: string) => (s: AgentStoreState) =>
 const getAgentModeById =
   (agentId: string) =>
   (s: AgentStoreState): AgentMode | undefined => {
-    const chatConfig = agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig;
+    const config = agentSelectors.getAgentConfigById(agentId)(s);
+    if (isFableChatOnlyModel(config)) return;
+
+    const chatConfig = config?.chatConfig;
     return chatConfig?.enableAgentMode === false ? undefined : 'auto';
   };
 
@@ -72,7 +76,10 @@ const getAgentModeById =
 const getAgentEnableModeById =
   (agentId: string) =>
   (s: AgentStoreState): boolean => {
-    const chatConfig = agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig;
+    const config = agentSelectors.getAgentConfigById(agentId)(s);
+    if (isFableChatOnlyModel(config)) return false;
+
+    const chatConfig = config?.chatConfig;
     return chatConfig?.enableAgentMode !== false;
   };
 
