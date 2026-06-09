@@ -41,7 +41,9 @@ export const composioRouter = router({
       }
       const authConfigId: string = authConfig.id;
 
-      const connReq = await (ctx.composioClient.connectedAccounts as any).initiate(
+      // Composio-managed OAuth auth configs no longer support `initiate`; use
+      // `link` (POST /api/v3/connected_accounts/link) to get the redirect URL.
+      const connReq = await (ctx.composioClient.connectedAccounts as any).link(
         userId,
         authConfigId,
         { callbackUrl },

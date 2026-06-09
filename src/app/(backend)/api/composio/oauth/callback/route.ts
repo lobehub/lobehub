@@ -40,7 +40,8 @@ export const GET = async (req: NextRequest) => {
     searchParams.get('connectedAccountId') ?? searchParams.get('connected_account_id') ?? undefined;
   const oauthError = searchParams.get('error') ?? undefined;
 
-  const success = !oauthError;
+  // Composio appends `status=success` / `status=failed` to the callback URL.
+  const success = !oauthError && status !== 'failed';
   const payload = jsonForScript({
     connectedAccountId,
     error: oauthError,
