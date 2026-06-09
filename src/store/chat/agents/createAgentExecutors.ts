@@ -556,7 +556,14 @@ export const createAgentExecutors = (context: {
                 agentId: agentId || undefined,
                 content: '',
                 error: {
-                  body: {},
+                  body: {
+                    budget: {
+                      modelId: llmPayload.model,
+                      pricingBasis: 'unknown',
+                      providerId: llmPayload.provider,
+                      scenario: 'chat',
+                    },
+                  },
                   message: 'Upgrade to continue using this model.',
                   type: ChatErrorType.FreePlanLimit,
                 },

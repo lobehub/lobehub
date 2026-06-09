@@ -199,6 +199,14 @@ describe('call_llm executor', () => {
         expect.objectContaining({
           content: '',
           error: expect.objectContaining({
+            body: {
+              budget: {
+                modelId: 'claude-fable-5',
+                pricingBasis: 'unknown',
+                providerId: 'lobehub',
+                scenario: 'chat',
+              },
+            },
             type: ChatErrorType.FreePlanLimit,
           }),
           model: 'claude-fable-5',
