@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useBusinessAgentModeSync } from '@/business/client/hooks/useBusinessAgentMode';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useToggleAgentMode } from '@/features/ChatInput/hooks/useToggleAgentMode';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
@@ -65,6 +66,15 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
+  buttonDisabled: css`
+    cursor: not-allowed;
+    opacity: 0.5;
+
+    &:hover {
+      color: ${cssVar.colorTextSecondary};
+      background: transparent;
+    }
+  `,
   option: css`
     cursor: pointer;
 
@@ -111,6 +121,7 @@ const ModeSelector = memo(() => {
   const toggleAgentMode = useToggleAgentMode();
   useBusinessAgentModeSync(agentId);
   const [open, setOpen] = useState(false);
+  const { allowed: canCreateContent, reason } = usePermission('create_content');
 
   const enableAgentMode = useAgentStore(agentByIdSelectors.getAgentEnableModeById(agentId));
 
@@ -119,10 +130,21 @@ const ModeSelector = memo(() => {
 
   const handleSelect = useCallback(
     async (mode: 'chat' | 'agent') => {
+      if (!canCreateContent) return;
+
       setOpen(false);
       await toggleAgentMode(mode === 'agent');
     },
-    [toggleAgentMode],
+    [canCreateContent, toggleAgentMode],
+  );
+
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (!canCreateContent) return;
+
+      setOpen(nextOpen);
+    },
+    [canCreateContent],
   );
 
   const agentTooltip = (
@@ -188,23 +210,30 @@ const ModeSelector = memo(() => {
   );
 
   const button = (
-    <div className={styles.button}>
+    <div className={cx(styles.button, !canCreateContent && styles.buttonDisabled)}>
       <Icon icon={CurrentIcon} size={14} />
       <span>{t(`chatMode.${currentMode}`)}</span>
       <Icon icon={ChevronDownIcon} size={12} />
     </div>
   );
 
+  if (!canCreateContent)
+    return (
+      <Tooltip title={reason}>
+        <div>{button}</div>
+      </Tooltip>
+    );
+
   return (
     <Popover
       content={popoverContent}
-      open={open}
+      open={canCreateContent && open}
       placement="topLeft"
       trigger="click"
       styles={{
         content: { border: `1px solid ${cssVar.colorBorderSecondary}`, padding: 4 },
       }}
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
     >
       <div>
         {open ? (

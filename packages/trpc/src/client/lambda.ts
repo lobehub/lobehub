@@ -124,6 +124,12 @@ const linkOptions = {
     // Only include provider in JWT for image operations
     // For other operations (like knowledge base embedding), let server use its own config
     const headers = await createHeaderWithAuth(provider ? { provider } : undefined);
+
+    // Let business layer contribute extra headers (e.g. workspace context in Cloud).
+    // Community ships an empty stub at this slot.
+    const { getBusinessTrpcHeaders } = await import('@/business/client/trpc-headers');
+    Object.assign(headers as Record<string, string>, await getBusinessTrpcHeaders());
+
     log('Headers: %O', headers);
     return headers;
   },

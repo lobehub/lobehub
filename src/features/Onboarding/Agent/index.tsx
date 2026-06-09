@@ -10,13 +10,13 @@ import { Drawer } from 'antd';
 import { History } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { ONBOARDING_PRODUCTION_DEFAULT_MODEL } from '@/const/onboarding';
 import { type ConversationHooks } from '@/features/Conversation/types';
 import { mergeConversationHooks } from '@/features/Conversation/utils/mergeConversationHooks';
 import ModeSwitch from '@/features/Onboarding/components/ModeSwitch';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates';
 import { useClientDataSWR, useOnlyFetchOnceSWR } from '@/libs/swr';
 import OnboardingContainer from '@/routes/onboarding/_layout';
@@ -47,7 +47,7 @@ import { useOnboardingFollowUp } from './useOnboardingFollowUp';
 const CLASSIC_ONBOARDING_PATH = '/onboarding/classic';
 
 const RedirectToClassicOnboarding = memo(() => {
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   useEffect(() => {
     navigate(CLASSIC_ONBOARDING_PATH, { replace: true });

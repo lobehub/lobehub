@@ -5,6 +5,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronDownIcon } from 'lucide-react';
 import { memo } from 'react';
 
+import { useActiveIdentity } from '@/business/client/hooks/useActiveIdentity';
 import { ProductLogo } from '@/components/Branding';
 import UserAvatar from '@/features/User/UserAvatar';
 import UserPanel from '@/features/User/UserPanel';
@@ -31,6 +32,13 @@ const User = memo<{ lite?: boolean }>(({ lite }) => {
     authSelectors.isLogin(s),
   ]);
 
+  // When in a team workspace, reflect the workspace context in the header
+  // (avatar + name) instead of the user's identity. Personal workspaces and
+  // OSS builds fall back to the user-level display.
+  const activeIdentity = useActiveIdentity();
+  const displayAvatar = activeIdentity?.avatar ?? undefined;
+  const displayName = activeIdentity?.name ?? (nickname || username);
+
   return (
     <UserPanel>
       <Block
@@ -48,14 +56,19 @@ const User = memo<{ lite?: boolean }>(({ lite }) => {
           paddingInlineStart: 2,
         }}
       >
-        <UserAvatar shape={'square'} size={28} />
+        <UserAvatar
+          avatarOverride={displayAvatar}
+          nameOverride={activeIdentity?.name ?? undefined}
+          shape={'square'}
+          size={28}
+        />
         {!lite && (
           <Flexbox horizontal align={'center'} gap={4} style={{ overflow: 'hidden' }}>
-            {!isSignedIn && (nickname || username) ? (
+            {!isSignedIn && !activeIdentity ? (
               <ProductLogo color={cssVar.colorText} size={28} type={'text'} />
             ) : (
               <Text ellipsis style={{ flex: 1 }} weight={500}>
-                {nickname || username}
+                {displayName}
               </Text>
             )}
             <Icon

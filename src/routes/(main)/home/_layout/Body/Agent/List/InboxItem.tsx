@@ -6,9 +6,9 @@ import { createStaticStyles } from 'antd-style';
 import { Loader2 } from 'lucide-react';
 import { type CSSProperties } from 'react';
 import { memo } from 'react';
-import { Link } from 'react-router-dom';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
@@ -69,7 +69,7 @@ const InboxItem = memo<InboxItemProps>(({ className, style }) => {
   );
 
   return (
-    <Link aria-label={inboxAgentTitle} to={inboxUrl}>
+    <WorkspaceLink aria-label={inboxAgentTitle} to={inboxUrl}>
       <NavItem
         className={className}
         style={style}
@@ -87,7 +87,7 @@ const InboxItem = memo<InboxItemProps>(({ className, style }) => {
           )
         }
       />
-    </Link>
+    </WorkspaceLink>
   );
 });
 

@@ -4,6 +4,7 @@ import { Minimize2 } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 
 import { useConversationStore } from '../store';
@@ -16,6 +17,7 @@ interface ExceededContextWindowErrorProps {
 const ExceededContextWindowError = memo<ExceededContextWindowErrorProps>(({ id }) => {
   const { t } = useTranslation('error');
   const [loading, setLoading] = useState(false);
+  const { allowed: canCreate } = usePermission('create_content');
 
   const context = useConversationStore((s) => s.context);
   const regenerateUserMessage = useConversationStore((s) => s.regenerateUserMessage);
@@ -24,7 +26,7 @@ const ExceededContextWindowError = memo<ExceededContextWindowErrorProps>(({ id }
   );
 
   const handleCompact = useCallback(async () => {
-    if (!context.topicId || !parentId) return;
+    if (!canCreate || !context.topicId || !parentId) return;
 
     setLoading(true);
     try {
@@ -33,7 +35,7 @@ const ExceededContextWindowError = memo<ExceededContextWindowErrorProps>(({ id }
     } finally {
       setLoading(false);
     }
-  }, [context, parentId, regenerateUserMessage]);
+  }, [canCreate, context, parentId, regenerateUserMessage]);
 
   return (
     <BaseErrorForm
@@ -42,7 +44,7 @@ const ExceededContextWindowError = memo<ExceededContextWindowErrorProps>(({ id }
       title={t('exceededContext.title')}
       action={
         <Button
-          disabled={!context.topicId}
+          disabled={!canCreate || !context.topicId}
           loading={loading}
           type={'primary'}
           onClick={handleCompact}

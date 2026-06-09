@@ -13,12 +13,13 @@ const QR_POLL_INTERVAL_MS = 2000;
 interface QrCodeAuthProps {
   buttonLabel?: string;
   buttonType?: ButtonProps['type'];
+  disabled?: boolean;
   onAuthenticated: (credentials: { botId: string; botToken: string; userId: string }) => void;
   showTips?: boolean;
 }
 
 const QrCodeAuth = memo<QrCodeAuthProps>(
-  ({ buttonLabel, buttonType = 'primary', onAuthenticated, showTips = true }) => {
+  ({ buttonLabel, buttonType = 'primary', disabled, onAuthenticated, showTips = true }) => {
     const { t } = useTranslation('agent');
     const [open, setOpen] = useState(false);
     const [qrImgUrl, setQrImgUrl] = useState<string>();
@@ -93,9 +94,10 @@ const QrCodeAuth = memo<QrCodeAuthProps>(
     }, [onAuthenticated, stopPolling, t]);
 
     const handleOpen = useCallback(() => {
+      if (disabled) return;
       setOpen(true);
       startQrFlow();
-    }, [startQrFlow]);
+    }, [disabled, startQrFlow]);
 
     const handleClose = useCallback(() => {
       stopPolling();
@@ -112,7 +114,12 @@ const QrCodeAuth = memo<QrCodeAuthProps>(
     return (
       <>
         <div style={{ alignItems: 'center', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Button icon={<QrCode size={16} />} type={buttonType} onClick={handleOpen}>
+          <Button
+            disabled={disabled}
+            icon={<QrCode size={16} />}
+            type={buttonType}
+            onClick={handleOpen}
+          >
             {buttonLabel || t('channel.wechatScanToConnect')}
           </Button>
           {showTips && (

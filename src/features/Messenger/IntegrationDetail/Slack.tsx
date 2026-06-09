@@ -5,6 +5,8 @@ import { BriefcaseIcon, LinkIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
+
 import { createMessengerLinkModal } from '../LinkModal';
 import {
   ConnectionRow,
@@ -26,6 +28,8 @@ interface SlackDetailProps {
 
 const SlackDetail = memo<SlackDetailProps>(({ appId, botUsername, name, onBack }) => {
   const { t } = useTranslation('messenger');
+  const { allowed: canCreate } = usePermission('create_content');
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const data = useMessengerData('slack');
   const { handleSetActive, handleUnlink } = useLinkActions({
@@ -43,6 +47,7 @@ const SlackDetail = memo<SlackDetailProps>(({ appId, botUsername, name, onBack }
   // dispatch is token-gated, so removing the install effectively kills the
   // workspace integration even though the bot user remains in Slack.
   const handleDisconnectInstallation = (id: string) =>
+    canEdit &&
     disconnectInstallation(id, {
       confirm: t('messenger.slack.connections.disconnectConfirm'),
       failedKey: 'messenger.slack.connections.disconnectFailed',
@@ -61,6 +66,7 @@ const SlackDetail = memo<SlackDetailProps>(({ appId, botUsername, name, onBack }
 
   const headerAction = (
     <Button
+      disabled={!canCreate || !canEdit}
       icon={<Icon icon={LinkIcon} />}
       type={hasInstallations ? 'default' : 'primary'}
       onClick={handleOpenLink}
@@ -94,6 +100,7 @@ const SlackDetail = memo<SlackDetailProps>(({ appId, botUsername, name, onBack }
           action={
             <Button
               danger
+              disabled={!canEdit}
               icon={<Icon icon={Trash2Icon} />}
               size="small"
               onClick={() => handleDisconnectInstallation(install.id)}

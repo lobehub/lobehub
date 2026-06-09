@@ -6,6 +6,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
+import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { resolveMarketAuthError } from '@/layout/AuthProvider/MarketAuth/errors';
 import { useAgentStore } from '@/store/agent';
@@ -23,6 +24,7 @@ interface MarketPublishButtonProps {
 
 const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess }) => {
   const { t } = useTranslation(['setting', 'marketAuth']);
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const { isAuthenticated, isLoading, signIn } = useMarketAuth();
   const { checkOwnership, isCheckingOwnership, isPublishing, publish } = useMarketPublish({
@@ -157,10 +159,15 @@ const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess
         }}
       >
         <Button
+          disabled={!canEdit}
           icon={ShapesUploadIcon}
           loading={loading}
           title={buttonTitle}
-          onClick={handleButtonClick}
+          onClick={() => {
+            if (!canEdit) return;
+
+            handleButtonClick();
+          }}
         >
           {t('publishToCommunity')}
         </Button>

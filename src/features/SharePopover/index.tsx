@@ -20,6 +20,7 @@ import useSWR from 'swr';
 
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { usePermission } from '@/hooks/usePermission';
 import { topicService } from '@/services/topic';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
@@ -41,6 +42,7 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
   const { close } = usePopoverContext();
   const containerRef = useRef<HTMLDivElement>(null);
   const appOrigin = useAppOrigin();
+  const { allowed: canShare, reason } = usePermission('edit_own_content');
 
   const chatActiveTopicId = useChatStore((s) => s.activeTopicId);
   const activeTopicId = topicId ?? chatActiveTopicId;
@@ -54,17 +56,17 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
     isLoading,
     mutate,
   } = useSWR(
-    activeTopicId ? ['topic-share-info', activeTopicId] : null,
+    activeTopicId && canShare ? ['topic-share-info', activeTopicId] : null,
     () => topicService.getShareInfo(activeTopicId!),
     { revalidateOnFocus: false },
   );
 
   // Auto-create share record if not exists
   useEffect(() => {
-    if (!isLoading && !shareInfo && activeTopicId) {
+    if (!isLoading && !shareInfo && activeTopicId && canShare) {
       topicService.enableSharing(activeTopicId, 'private').then(() => mutate());
     }
-  }, [isLoading, shareInfo, activeTopicId, mutate]);
+  }, [isLoading, shareInfo, activeTopicId, canShare, mutate]);
 
   const shareUrl = shareInfo?.id ? `${appOrigin}/share/t/${shareInfo.id}` : '';
   const currentVisibility = (shareInfo?.visibility as Visibility) || 'private';
@@ -126,13 +128,7 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
         updateVisibility(visibility);
       }
     },
-    [
-      currentVisibility,
-      hideTopicSharePrivacyWarning,
-      t,
-      updateSystemStatus,
-      updateVisibility,
-    ],
+    [currentVisibility, hideTopicSharePrivacyWarning, t, updateSystemStatus, updateVisibility],
   );
 
   const handleCopyLink = useCallback(async () => {
@@ -145,6 +141,15 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
     close();
     onOpenModal?.();
   }, [close, onOpenModal]);
+
+  if (!canShare) {
+    return (
+      <Flexbox className={styles.container} gap={8}>
+        <Text strong>{t('share', { ns: 'common' })}</Text>
+        <Text type="secondary">{reason}</Text>
+      </Flexbox>
+    );
+  }
 
   // Loading state
   if (isLoading || !shareInfo) {

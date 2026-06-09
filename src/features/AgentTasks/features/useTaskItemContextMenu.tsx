@@ -21,7 +21,9 @@ import {
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransferMenuItem';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
@@ -58,6 +60,7 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
   const { t } = useTranslation(['chat', 'common']);
   const { message } = App.useApp();
   const appOrigin = useAppOrigin();
+  const { allowed: canEditTask } = usePermission('create_content');
 
   const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
   const updateTask = useTaskStore((s) => s.updateTask);
@@ -73,6 +76,7 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
 
   return useMemo<TaskContextMenuActions>(() => {
     const triggerDelete = (identifier: string) => {
+      if (!canEditTask) return;
       confirmModal({
         content: t('taskDetail.deleteConfirm.content'),
         okButtonProps: { danger: true },
@@ -96,8 +100,10 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
           icon: <Icon color={meta.color} icon={meta.icon} />,
           key: `status-${status}`,
           label: t(`taskDetail.status.${status}`, { defaultValue: meta.label }),
+          disabled: !canEditTask,
           onClick: ({ domEvent }: MenuInfo) => {
             domEvent.stopPropagation();
+            if (!canEditTask) return;
             if (status === currentStatus) return;
             void updateTaskStatus(task.identifier, status);
           },
@@ -116,8 +122,10 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
           ),
           key: `priority-${level}`,
           label: t(`taskDetail.${meta.labelKey}` as never, { defaultValue: meta.label }),
+          disabled: !canEditTask,
           onClick: async ({ domEvent }: MenuInfo) => {
             domEvent.stopPropagation();
+            if (!canEditTask) return;
             if (level === currentPriority) return;
             await updateTask(task.identifier, { priority: level });
             await refreshTaskList();
@@ -138,8 +146,10 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
                 icon: <Icon icon={PlayIcon} />,
                 key: 'runNow',
                 label: t('taskList.contextMenu.runNow'),
+                disabled: !canEditTask,
                 onClick: async ({ domEvent }: MenuInfo) => {
                   domEvent.stopPropagation();
+                  if (!canEditTask) return;
                   if (!task.assigneeAgentId && inboxAgentId) {
                     await updateTask(task.identifier, { assigneeAgentId: inboxAgentId });
                   }
@@ -151,6 +161,7 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
           : []),
         {
           children: statusChildren,
+          disabled: !canEditTask,
           icon: <Icon icon={CircleDashedIcon} />,
           key: 'status',
           label: t('taskList.contextMenu.status'),
@@ -160,6 +171,7 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
         },
         {
           children: priorityChildren,
+          disabled: !canEditTask,
           icon: <Icon icon={BarChart3Icon} />,
           key: 'priority',
           label: t('taskList.contextMenu.priority'),
@@ -191,11 +203,13 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
         { type: 'divider' },
         {
           danger: true,
+          disabled: !canEditTask,
           icon: <Icon icon={Trash2Icon} />,
           key: 'delete',
           label: t('delete', { ns: 'common' }),
           onClick: ({ domEvent }: MenuInfo) => {
             domEvent.stopPropagation();
+            if (!canEditTask) return;
             triggerDelete(task.identifier);
           },
         },
@@ -203,6 +217,7 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
     };
 
     const installKeyboardHandlers = (task: TaskContextMenuTarget) => {
+      if (!canEditTask) return;
       cleanupRef.current?.();
       activeSubmenuRef.current = null;
 
@@ -276,6 +291,7 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
 
     return { buildItems, installKeyboardHandlers };
   }, [
+    canEditTask,
     message,
     t,
     appOrigin,
@@ -290,7 +306,39 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
 
 export const useTaskItemContextMenu = (task: TaskContextMenuTarget): TaskItemContextMenu => {
   const { buildItems, installKeyboardHandlers } = useTaskContextMenuActions();
-  const items = useMemo(() => buildItems(task), [buildItems, task]);
+  const transferItems = useTaskTransferMenuItem(task.identifier) as ContextMenuItem[] | null;
+  const items = useMemo(() => {
+    const base = buildItems(task);
+    if (!transferItems || transferItems.length === 0) return base;
+
+    // Insert transfer/copy entries above the final divider + delete pair so
+    // they sit next to the other lifecycle actions but kept distinct from
+    // in-place state changes.
+    const deleteAnchor = base.findIndex(
+      (item) =>
+        item !== null &&
+        typeof item === 'object' &&
+        'key' in item &&
+        (item as { key?: string }).key === 'delete',
+    );
+    if (deleteAnchor === -1) return [...base, ...transferItems];
+
+    const insertAt =
+      deleteAnchor > 0 &&
+      base[deleteAnchor - 1] !== null &&
+      typeof base[deleteAnchor - 1] === 'object' &&
+      'type' in (base[deleteAnchor - 1] as object) &&
+      (base[deleteAnchor - 1] as { type?: string }).type === 'divider'
+        ? deleteAnchor - 1
+        : deleteAnchor;
+
+    return [
+      ...base.slice(0, insertAt),
+      ...transferItems,
+      { type: 'divider' } as ContextMenuItem,
+      ...base.slice(deleteAnchor),
+    ];
+  }, [buildItems, task, transferItems]);
   const onContextMenu = useCallback(
     () => installKeyboardHandlers(task),
     [installKeyboardHandlers, task],

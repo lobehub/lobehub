@@ -6,8 +6,8 @@ import { RadioTowerIcon, X } from 'lucide-react';
 import type { FC } from 'react';
 import React, { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors/builtinAgentSelectors';
@@ -82,7 +82,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const BotIntegrationBanner = memo(() => {
   const { t } = useTranslation('common');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);

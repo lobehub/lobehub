@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import { seedAttachments } from '@/features/EditorCanvas/attachmentRegistry';
 import { pickAndInsertAttachments } from '@/features/EditorCanvas/editorAttachments';
+import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
@@ -14,6 +15,7 @@ const DEBOUNCE_MS = 300;
 
 const TaskInstruction = memo(() => {
   const { t } = useTranslation('chat');
+  const { allowed: canEditTask } = usePermission('create_content');
   const instruction = useTaskStore(taskDetailSelectors.activeTaskInstruction);
   const persistedEditorData = useTaskStore(taskDetailSelectors.activeTaskEditorData);
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
@@ -47,6 +49,7 @@ const TaskInstruction = memo(() => {
   }, [taskId]);
 
   const handleContentChange = useCallback(() => {
+    if (!canEditTask) return;
     if (!editor || !taskId) return;
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -61,7 +64,7 @@ const TaskInstruction = memo(() => {
         console.error('[TaskInstruction] Failed to save:', e);
       });
     }, DEBOUNCE_MS);
-  }, [editor, taskId, updateTask]);
+  }, [canEditTask, editor, taskId, updateTask]);
 
   const handleAttach = useCallback(() => {
     pickAndInsertAttachments(editor);

@@ -42,6 +42,8 @@ export interface EditorCanvasProps {
    */
   autoSave?: boolean;
 
+  disabled?: boolean;
+
   /**
    * Document ID to load from server.
    * When provided, component will use useSWR to fetch document data.

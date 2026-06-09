@@ -21,6 +21,7 @@ import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import McpDetail from '@/features/MCP/MCPDetail';
 import McpDetailLoading from '@/features/MCP/MCPDetail/Loading';
 import MCPInstallProgress from '@/features/MCP/MCPInstallProgress';
+import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -34,6 +35,8 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
   const styles = itemStyles;
   const { t } = useTranslation('plugin');
   const [detailOpen, setDetailOpen] = useState(false);
+  const { allowed: canCreate } = usePermission('create_content');
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const [installed, installing, installMCPPlugin, cancelInstallMCPPlugin, unInstallPlugin, plugin] =
     useToolStore((s) => [
@@ -59,6 +62,7 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
   const isCloudMcp = !!((plugin as any)?.cloudEndPoint || (plugin as any)?.haveCloudEndpoint);
 
   const handleInstall = async () => {
+    if (!canCreate || !canEdit) return;
     if (isCloudMcp && !isAuthenticated) {
       try {
         await signIn('mcp');
@@ -87,10 +91,12 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
           items={[
             {
               danger: true,
+              disabled: !canEdit,
               icon: <Icon icon={Trash2} />,
               key: 'uninstall',
               label: t('store.actions.uninstall'),
               onClick: () => {
+                if (!canEdit) return;
                 confirmModal({
                   okButtonProps: { danger: true },
                   onOk: async () => {
@@ -118,7 +124,14 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
       );
     }
 
-    return <ActionIcon icon={Plus} title={t('store.actions.install')} onClick={handleInstall} />;
+    return (
+      <ActionIcon
+        disabled={!canCreate || !canEdit}
+        icon={Plus}
+        title={t('store.actions.install')}
+        onClick={handleInstall}
+      />
+    );
   };
 
   return (

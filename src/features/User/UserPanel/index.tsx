@@ -9,8 +9,6 @@ import { isDesktop } from '@/const/version';
 
 import PanelContent from './PanelContent';
 import PanelContentSkeleton from './PanelContentSkeleton';
-import UpgradeBadge from './UpgradeBadge';
-import { useNewVersion } from './useNewVersion';
 
 const styles = createStaticStyles(({ css }) => {
   return {
@@ -26,31 +24,28 @@ const styles = createStaticStyles(({ css }) => {
 });
 
 const UserPanel = memo<PropsWithChildren>(({ children }) => {
-  const hasNewVersion = useNewVersion();
   const [open, setOpen] = useState(false);
 
   return (
     <Suspense fallback={children}>
-      <UpgradeBadge showBadge={hasNewVersion}>
-        <Popover
-          arrow={false}
-          open={open}
-          placement="topLeft"
-          trigger="click"
-          classNames={{
-            root: styles.popover,
-            content: styles.popoverContent,
-          }}
-          content={
-            <Suspense fallback={<PanelContentSkeleton />}>
-              <PanelContent closePopover={() => setOpen(false)} />
-            </Suspense>
-          }
-          onOpenChange={setOpen}
-        >
-          {children}
-        </Popover>
-      </UpgradeBadge>
+      <Popover
+        arrow={false}
+        open={open}
+        placement="topLeft"
+        trigger="click"
+        classNames={{
+          root: styles.popover,
+          content: styles.popoverContent,
+        }}
+        content={
+          <Suspense fallback={<PanelContentSkeleton />}>
+            <PanelContent closePopover={() => setOpen(false)} />
+          </Suspense>
+        }
+        onOpenChange={setOpen}
+      >
+        {children}
+      </Popover>
     </Suspense>
   );
 });

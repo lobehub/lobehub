@@ -6,12 +6,12 @@ import { cssVar } from 'antd-style';
 import { BadgeCheck, BookIcon, ChevronRightIcon, KeyIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import InlineTable from '@/components/InlineTable';
 import { ModelInfoTags } from '@/components/ModelSelect';
 import { BASE_PROVIDER_DOC_URL } from '@/const/url';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { formatPriceByCurrency, formatTokenNumber } from '@/utils/format';
 import { getTextInputUnitRate, getTextOutputUnitRate } from '@/utils/pricing';
 
@@ -34,12 +34,15 @@ const ProviderList = memo(() => {
               key: 'provider',
               render: (_, record) => {
                 return (
-                  <Link style={{ color: 'inherit' }} to={urlJoin('/community/provider', record.id)}>
+                  <WorkspaceLink
+                    style={{ color: 'inherit' }}
+                    to={urlJoin('/community/provider', record.id)}
+                  >
                     <Flexbox horizontal align="center" gap={8}>
                       <ProviderIcon provider={record.id} size={24} type={'avatar'} />
                       <div style={{ fontWeight: 500 }}>{record.name}</div>
                     </Flexbox>
-                  </Link>
+                  </WorkspaceLink>
                 );
               },
               sorter: (a, b) => a.name.localeCompare(b.name),
@@ -170,7 +173,7 @@ const ProviderList = memo(() => {
                         <ActionIcon icon={BookIcon} size={'small'} variant={'filled'} />
                       </a>
                     </Tooltip>
-                    <Link
+                    <WorkspaceLink
                       style={{ color: 'inherit' }}
                       to={urlJoin('/community/provider', record.id)}
                     >
@@ -180,7 +183,7 @@ const ProviderList = memo(() => {
                         size={'small'}
                         variant={'filled'}
                       />
-                    </Link>
+                    </WorkspaceLink>
                   </Flexbox>
                 );
               },

@@ -5,9 +5,10 @@ import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { messengerService } from '@/services/messenger';
 
 import { type MessengerPlatform, PlatformAvatar } from './constants';
@@ -45,7 +46,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const MessengerSettings = memo(() => {
   const { t, ready } = useTranslation('messenger');
   const { message } = App.useApp();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const params = useParams<{ sub?: string }>();
   const selected: MessengerPlatform | null = isMessengerPlatform(params.sub) ? params.sub : null;
   // Tenant name from `?workspace=...` plus the platform it belongs to. When

@@ -14,6 +14,7 @@ import {
   getAttachmentFileIdsFromEditor,
   pickAndInsertAttachments,
 } from '@/features/EditorCanvas/editorAttachments';
+import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { useTaskStore } from '@/store/task';
 
@@ -48,6 +49,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   } = props;
   const isHero = variant === 'hero';
   const { t } = useTranslation('chat');
+  const { allowed: canCreateTask, reason } = usePermission('create_content');
 
   const createTask = useTaskStore((s) => s.createTask);
   const isCreating = useTaskStore((s) => s.isCreatingTask);
@@ -63,8 +65,9 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
 
   useEffect(() => {
+    if (!canCreateTask) return;
     if (autoFocus || isHero) editor?.focus?.();
-  }, [autoFocus, editor, isHero]);
+  }, [autoFocus, canCreateTask, editor, isHero]);
 
   const handleCollapse = useCallback(() => {
     if (onCollapse) {
@@ -75,19 +78,21 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
   }, [onCollapse, updateSystemStatus]);
 
   const handleContentChange = useCallback(() => {
+    if (!canCreateTask) return;
     const lexicalEditor = editor?.getLexicalEditor?.();
     if (!lexicalEditor) return;
     lexicalEditor.getEditorState().read(() => {
       setInstruction($getRoot().getTextContent());
     });
     setHasAttachments(getAttachmentFileIdsFromEditor(editor).length > 0);
-  }, [editor]);
+  }, [canCreateTask, editor]);
 
   const handleAttach = useCallback(() => {
     pickAndInsertAttachments(editor);
   }, [editor]);
 
   const handleSubmit = useCallback(async () => {
+    if (!canCreateTask) return;
     const markdown = String(editor?.getDocument?.('markdown') ?? '').trim();
     const trimmedText = instruction.trim();
     const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
@@ -133,6 +138,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
     onCreated,
     parentTaskId,
     priority,
+    canCreateTask,
   ]);
 
   const handleSubmitRef = useRef(handleSubmit);
@@ -170,6 +176,7 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         }}
       >
         <EditorCanvas
+          disabled={!canCreateTask}
           editor={editor}
           floatingToolbar={false}
           placeholder={placeholder ?? t('createTask.instructionPlaceholder')}
@@ -248,10 +255,11 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
         </Flexbox>
 
         <Button
-          disabled={isCreating || (!instruction.trim() && !hasAttachments)}
+          disabled={!canCreateTask || isCreating || (!instruction.trim() && !hasAttachments)}
           loading={isCreating}
           shape={'round'}
           size={'small'}
+          title={canCreateTask ? undefined : reason}
           type={'primary'}
           onClick={handleSubmit}
         >

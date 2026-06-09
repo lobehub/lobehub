@@ -160,6 +160,14 @@ class TaskService {
     lambdaClient.brief.resolve.mutate({ id, ...opts });
 
   markBriefRead = async (id: string) => lambdaClient.brief.markRead.mutate({ id });
+
+  // ── Transfer / Copy ──
+
+  transferTask = async (taskId: string, targetWorkspaceId: string | null) =>
+    lambdaClient.task.transferTask.mutate({ targetWorkspaceId, taskId });
+
+  copyTaskToWorkspace = async (taskId: string, targetWorkspaceId: string | null) =>
+    lambdaClient.task.copyTaskToWorkspace.mutate({ targetWorkspaceId, taskId });
 }
 
 export const taskService = new TaskService();

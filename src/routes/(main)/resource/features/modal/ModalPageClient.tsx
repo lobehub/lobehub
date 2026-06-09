@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import FileDetail from './FileDetail';
 import FilePreview from './FilePreview';
@@ -12,7 +13,7 @@ interface ModalPageClientProps {
 }
 
 const ModalPageClient = ({ id }: ModalPageClientProps) => {
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const handleClose = useCallback(() => {
     if (typeof window === 'undefined') return;
 

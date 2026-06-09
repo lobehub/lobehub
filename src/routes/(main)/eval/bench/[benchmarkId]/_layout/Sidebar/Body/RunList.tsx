@@ -4,10 +4,11 @@ import { AccordionItem, Flexbox, Text } from '@lobehub/ui';
 import { CheckCircle2, CircleDot, CircleSlash, Loader2, Play, XCircle } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
 const getRunIcon = (status?: string) => {
@@ -41,7 +42,7 @@ interface RunListProps {
 
 const RunList = memo<RunListProps>(({ activeKey, benchmarkId, itemKey }) => {
   const { t } = useTranslation('eval');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const runList = useEvalStore(runSelectors.runList);
   const isLoading = useEvalStore(runSelectors.isLoadingRuns);
 
@@ -76,7 +77,7 @@ const RunList = memo<RunListProps>(({ activeKey, benchmarkId, itemKey }) => {
           <SkeletonList rows={3} />
         ) : sortedRuns.length > 0 ? (
           sortedRuns.map((run) => (
-            <Link
+            <WorkspaceLink
               key={run.id}
               to={`/eval/bench/${benchmarkId}/runs/${run.id}`}
               onClick={(e) => {
@@ -91,7 +92,7 @@ const RunList = memo<RunListProps>(({ activeKey, benchmarkId, itemKey }) => {
                 loading={run.status === 'running'}
                 title={run.name || `Run ${run.id.slice(0, 8)}`}
               />
-            </Link>
+            </WorkspaceLink>
           ))
         ) : (
           <Text fontSize={12} style={{ padding: '8px 12px' }} type="secondary">

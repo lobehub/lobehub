@@ -6,6 +6,7 @@ import { type LucideIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 import { type ApprovalMode } from '@/store/user/slices/settings/selectors';
@@ -24,6 +25,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   modeButton: css`
     font-size: ${cssVar.fontSizeSM};
     color: ${cssVar.colorTextSecondary};
+  `,
+  modeButtonDisabled: css`
+    cursor: not-allowed;
+    opacity: 0.5;
   `,
   title: css`
     font-size: 14px;
@@ -54,6 +59,7 @@ const ModeItemLabel = memo<{ desc: string; icon: LucideIcon; title: string }>(
 const ModeSelector = memo(() => {
   const { t } = useTranslation('chat');
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const { allowed: canCreateContent, reason } = usePermission('create_content');
   const approvalMode = useUserStore(toolInterventionSelectors.approvalMode);
   const updateHumanIntervention = useUserStore((s) => s.updateHumanIntervention);
 
@@ -68,9 +74,20 @@ const ModeSelector = memo(() => {
 
   const handleModeChange = useCallback(
     async (mode: ApprovalMode) => {
+      if (!canCreateContent) return;
+
       await updateHumanIntervention({ approvalMode: mode });
     },
-    [updateHumanIntervention],
+    [canCreateContent, updateHumanIntervention],
+  );
+
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (!canCreateContent) return;
+
+      setDropdownOpen(nextOpen);
+    },
+    [canCreateContent],
   );
 
   const menuItems = useMemo<MenuProps['items']>(
@@ -119,6 +136,7 @@ const ModeSelector = memo(() => {
     <Button
       className={styles.modeButton}
       color={'default'}
+      disabled={!canCreateContent}
       icon={ChevronDown}
       iconPlacement="end"
       size="small"
@@ -128,12 +146,19 @@ const ModeSelector = memo(() => {
     </Button>
   );
 
+  if (!canCreateContent)
+    return (
+      <Tooltip title={reason}>
+        <div className={styles.modeButtonDisabled}>{button}</div>
+      </Tooltip>
+    );
+
   return (
     <DropdownMenu
       items={menuItems}
-      open={dropdownOpen}
+      open={canCreateContent && dropdownOpen}
       placement="bottomRight"
-      onOpenChange={setDropdownOpen}
+      onOpenChange={handleOpenChange}
     >
       <div className={styles.trigger}>
         {dropdownOpen ? (

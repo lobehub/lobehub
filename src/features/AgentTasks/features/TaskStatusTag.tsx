@@ -16,6 +16,7 @@ import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 
 import { renderMenuExtra } from './menuExtra';
@@ -90,6 +91,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       filter: brightness(0.85);
     }
   `,
+  triggerDisabled: css`
+    cursor: not-allowed;
+    display: inline-flex;
+    opacity: 0.5;
+
+    &:hover {
+      filter: none;
+    }
+  `,
 }));
 
 interface TaskStatusTagProps {
@@ -106,6 +116,7 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
     const [loading, setLoading] = useState(false);
     const [open, setOpen] = useState(false);
     const { t } = useTranslation('chat');
+    const { allowed: canEditTask, reason } = usePermission('create_content');
     const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
 
     const displayStatus = status ?? 'backlog';
@@ -113,6 +124,7 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
 
     const handleStatusChange = useCallback(
       async (nextStatus: TaskStatus) => {
+        if (!canEditTask) return;
         if (nextStatus === displayStatus) return;
         if (onChange) {
           onChange(nextStatus);
@@ -127,7 +139,7 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
           setLoading(false);
         }
       },
-      [displayStatus, onChange, taskIdentifier, updateTaskStatus],
+      [canEditTask, displayStatus, onChange, taskIdentifier, updateTaskStatus],
     );
 
     const handleStatusChangeRef = useRef(handleStatusChange);
@@ -181,6 +193,15 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
       ));
 
     if (disableDropdown) return <>{triggerNode}</>;
+
+    if (!canEditTask)
+      return (
+        <Tooltip title={reason}>
+          <span className={styles.triggerDisabled} onClick={(e) => e.stopPropagation()}>
+            {triggerNode}
+          </span>
+        </Tooltip>
+      );
 
     return (
       <DropdownMenu items={menuItems} open={open} onOpenChange={setOpen}>

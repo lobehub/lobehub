@@ -7,6 +7,7 @@ import { memo, Suspense } from 'react';
 import Loading from '@/components/Loading/BrandTextLoading';
 import AgentBuilder from '@/features/AgentBuilder';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { StyleSheet } from '@/utils/styles';
@@ -32,6 +33,7 @@ const styles = StyleSheet.create({
 const ProfileArea = memo(() => {
   const editor = useProfileStore((s) => s.editor);
   const isAgentConfigLoading = useAgentStore(agentSelectors.isAgentConfigLoading);
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   return (
     <>
@@ -44,9 +46,10 @@ const ProfileArea = memo(() => {
             <Flexbox
               horizontal
               height={'100%'}
-              style={styles.contentWrapper}
+              style={{ ...styles.contentWrapper, cursor: canEdit ? 'text' : 'default' }}
               width={'100%'}
               onClick={(e) => {
+                if (!canEdit) return;
                 // Only focus editor for clicks within this DOM element,
                 // not from React portal (e.g. Modal) whose DOM is outside this tree
                 if (e.currentTarget.contains(e.target as Node)) {

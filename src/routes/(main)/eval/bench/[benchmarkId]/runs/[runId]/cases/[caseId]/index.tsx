@@ -4,8 +4,9 @@ import type { EvalThreadResult } from '@lobechat/types';
 import { Flexbox, Tabs } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
 import CaseHeader from './features/CaseBanner';
@@ -21,7 +22,7 @@ const CaseDetail = memo(() => {
     runId: string;
   }>();
   const { t } = useTranslation('eval');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const useFetchRunDetail = useEvalStore((s) => s.useFetchRunDetail);
   const useFetchRunResults = useEvalStore((s) => s.useFetchRunResults);
   const isActive = useEvalStore(runSelectors.isRunActive(runId!));
