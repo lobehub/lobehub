@@ -1,9 +1,8 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Button, Flexbox, Icon } from '@lobehub/ui';
 import {
-  Button,
   createModal,
   type ImperativeModalProps,
   ModalFooter,
