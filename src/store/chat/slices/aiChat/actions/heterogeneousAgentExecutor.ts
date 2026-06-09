@@ -166,9 +166,19 @@ const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): C
         : 'Agent execution failed';
 
   // Surface the underlying `cause` (e.g. undici's `ENOTFOUND` / `ECONNREFUSED`
-  // hidden under a generic `TypeError: fetch failed`). The main process
-  // re-exposes it as an enumerable field so it survives IPC serialization.
-  const cause = error instanceof Error ? error.cause : undefined;
+  // hidden under a generic `TypeError: fetch failed`). The desktop IPC layer
+  // ferries `cause` across via an error envelope (see `~common/ipcError`).
+  // Flatten any Error cause to a plain object — `ChatMessageError.body` is
+  // persisted as DB JSONB, where a raw Error would serialize to `{}`.
+  const rawCause = error instanceof Error ? error.cause : undefined;
+  const cause =
+    rawCause instanceof Error
+      ? {
+          code: (rawCause as { code?: unknown }).code,
+          message: rawCause.message,
+          name: rawCause.name,
+        }
+      : rawCause;
 
   return {
     body: cause === undefined || cause === null ? { message } : { cause, message },

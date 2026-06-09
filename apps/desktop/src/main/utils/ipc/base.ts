@@ -3,6 +3,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { IpcMainInvokeEvent, WebContents } from 'electron';
 import { ipcMain } from 'electron';
 
+import { toIpcErrorEnvelope } from '~common/ipcError';
+
 // Base context for IPC methods
 export interface IpcContext {
   event: IpcMainInvokeEvent;
@@ -12,39 +14,6 @@ export interface IpcContext {
 // Metadata storage for decorated methods
 const methodMetadata = new WeakMap<any, Map<string, string>>();
 const ipcContextStorage = new AsyncLocalStorage<IpcContext>();
-
-/**
- * Electron's IPC error serialization carries an Error's `message` / `stack` /
- * `name` plus its *enumerable* own properties. A standard `cause` (set via
- * `new Error(msg, { cause })`) is non-enumerable, so the real failure reason —
- * e.g. undici wrapping `ENOTFOUND` / `ECONNREFUSED` under a generic
- * `TypeError: fetch failed` — is dropped on the way to the renderer.
- *
- * Re-expose `cause` as an enumerable, plain (clone-safe) field so callers
- * receive it alongside `message`. A nested Error is flattened to
- * `{ name, message, code }` because it would otherwise lose its own
- * non-enumerable props through the same serialization.
- */
-const exposeErrorCause = (error: unknown): unknown => {
-  if (!(error instanceof Error) || error.cause === undefined || error.cause === null) {
-    return error;
-  }
-
-  const { cause } = error;
-  const serializableCause =
-    cause instanceof Error
-      ? { code: (cause as { code?: unknown }).code, message: cause.message, name: cause.name }
-      : cause;
-
-  Object.defineProperty(error, 'cause', {
-    configurable: true,
-    enumerable: true,
-    value: serializableCause,
-    writable: true,
-  });
-
-  return error;
-};
 
 // Decorator for IPC methods
 export function IpcMethod() {
@@ -96,7 +65,11 @@ export class IpcHandler {
           return await handler(...typedArgs);
         } catch (error) {
           console.error(`Error in IPC method ${channel}:`, error);
-          throw exposeErrorCause(error);
+          // Return a clone-safe envelope rather than throwing: Electron rebuilds
+          // a thrown handler error from its string form, dropping `cause` and
+          // other structured fields. The preload `invoke` wrapper rebuilds a
+          // real Error from the envelope and re-throws it. See `~common/ipcError`.
+          return toIpcErrorEnvelope(error);
         }
       });
     });
