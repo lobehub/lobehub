@@ -53,6 +53,7 @@ import OpenAIProvider from './openai';
 import OpenCodeCodingPlanProvider from './opencodeCodingPlan';
 import OpenCodeZenProvider from './opencodeZen';
 import OpenRouterProvider from './openrouter';
+import OrcaRouterProvider from './orcarouter';
 import PerplexityProvider from './perplexity';
 import PPIOProvider from './ppio';
 import QiniuProvider from './qiniu';
@@ -157,6 +158,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   AzureAIProvider,
   AiHubMixProvider,
   OpenRouterProvider,
+  OrcaRouterProvider,
   FalProvider,
   OllamaProvider,
   OllamaCloudProvider,
@@ -286,6 +288,7 @@ export { default as OpenAIProviderCard } from './openai';
 export { default as OpenCodeCodingPlanProviderCard } from './opencodeCodingPlan';
 export { default as OpenCodeZenProviderCard } from './opencodeZen';
 export { default as OpenRouterProviderCard } from './openrouter';
+export { default as OrcaRouterProviderCard } from './orcarouter';
 export { default as PerplexityProviderCard } from './perplexity';
 export { default as PPIOProviderCard } from './ppio';
 export { default as QiniuProviderCard } from './qiniu';

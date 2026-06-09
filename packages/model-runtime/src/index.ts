@@ -59,6 +59,7 @@ export { LobeOllamaAI } from './providers/ollama';
 export { LobeOllamaCloudAI } from './providers/ollamacloud';
 export { LobeOpenAI } from './providers/openai';
 export { LobeOpenRouterAI } from './providers/openrouter';
+export { LobeOrcaRouterAI } from './providers/orcarouter';
 export { LobePerplexityAI } from './providers/perplexity';
 export { LobeQwenAI } from './providers/qwen';
 export { LobeStepfunAI } from './providers/stepfun';

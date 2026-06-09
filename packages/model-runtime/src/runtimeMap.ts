@@ -49,6 +49,7 @@ import { LobeOpenAI } from './providers/openai';
 import { LobeOpenCodeCodingPlanAI } from './providers/opencodeCodingPlan';
 import { LobeOpenCodeZenAI } from './providers/opencodeZen';
 import { LobeOpenRouterAI } from './providers/openrouter';
+import { LobeOrcaRouterAI } from './providers/orcarouter';
 import { LobePerplexityAI } from './providers/perplexity';
 import { LobePPIOAI } from './providers/ppio';
 import { LobeQiniuAI } from './providers/qiniu';
@@ -131,6 +132,7 @@ export const providerRuntimeMap = {
   opencodezen: LobeOpenCodeZenAI,
   openai: LobeOpenAI,
   openrouter: LobeOpenRouterAI,
+  orcarouter: LobeOrcaRouterAI,
   perplexity: LobePerplexityAI,
   ppio: LobePPIOAI,
   qiniu: LobeQiniuAI,
