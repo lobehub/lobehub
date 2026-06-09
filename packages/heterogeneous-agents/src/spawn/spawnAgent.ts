@@ -37,6 +37,15 @@ export interface SpawnAgentOptions {
    */
   inputOptions?: BuildAgentInputOptions;
   /**
+   * Optional tee for the child's RAW stdout bytes, invoked synchronously for
+   * every chunk BEFORE the adapter sees it. The pipeline still consumes stdout
+   * normally — this is a pure side-channel. `lh hetero exec --raw-dump` wires
+   * it to a file writer so the untouched stream-json can be inspected after the
+   * fact (e.g. to tell a CC-side empty `tool_result` apart from an adapter
+   * extraction bug, which the adapted/ingested view alone can't distinguish).
+   */
+  onRawStdout?: (chunk: Buffer) => void;
+  /**
    * Operation id stamped onto every emitted `AgentStreamEvent`. For ingest-
    * connected runs this is the server-allocated op id; for standalone runs
    * (no `--topic` / `--operation-id`) the CLI generates a fresh uuid so
@@ -332,7 +341,19 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     });
   };
 
-  stdout.on('data', enqueuePush);
+  stdout.on('data', (chunk: Buffer) => {
+    // Tee the raw bytes first so the dump captures exactly what CC emitted,
+    // independent of how the adapter later parses it. Best-effort: a throwing
+    // sink must not break the stream, so guard it.
+    if (options.onRawStdout) {
+      try {
+        options.onRawStdout(chunk);
+      } catch {
+        // raw dump is diagnostic-only; never let it disrupt the run
+      }
+    }
+    enqueuePush(chunk);
+  });
   stdout.on('end', enqueueFlush);
   stdout.on('error', (err) => {
     // Append onto the same chain so the error is surfaced strictly after any

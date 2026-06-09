@@ -1,3 +1,6 @@
+import { mkdtemp, readdir, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
 import { Command } from 'commander';
@@ -715,5 +718,57 @@ describe('hetero exec command', () => {
 
     // Second snapshot carries ONLY the second message — not "first messagesecond message".
     expect(textSnapshots).toEqual(['first message', 'second message']);
+  });
+
+  it('--raw-dump writes a session folder with meta.json, wires onRawStdout, and tees stderr', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'hetero-rawdump-'));
+
+    mockSpawnAgent.mockReturnValue(
+      createFakeHandle({
+        events: [
+          {
+            data: { chunkType: 'text', content: 'hi' },
+            operationId: 'op-raw',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'stream_chunk',
+          },
+        ],
+        exitCode: 0,
+        stderrChunks: ['warning: something happened\n'],
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--operation-id',
+      'op-raw',
+      '--render',
+      'none',
+      '--raw-dump',
+      root,
+    ]);
+
+    // The raw stdout tee is handed to spawnAgent (the package captures the
+    // pre-adapter bytes — exercised in spawnAgent.test.ts).
+    expect(typeof mockSpawnAgent.mock.calls[0][0].onRawStdout).toBe('function');
+
+    // One session folder per exec, keyed by the operation id.
+    const sessions = await readdir(root);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toContain('op-raw');
+    const sessionDir = path.join(root, sessions[0]!);
+
+    const meta = JSON.parse(await readFile(path.join(sessionDir, 'meta.json'), 'utf8'));
+    expect(meta).toMatchObject({ agentType: 'claude-code', operationId: 'op-raw' });
+
+    // stderr is teed to the attempt's log file.
+    const stderrDump = await readFile(path.join(sessionDir, 'attempt-1.stderr.log'), 'utf8');
+    expect(stderrDump).toContain('warning: something happened');
   });
 });
