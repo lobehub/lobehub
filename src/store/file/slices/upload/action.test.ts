@@ -97,7 +97,7 @@ describe('FileUploadAction', () => {
       expect(fileService.createFile).toHaveBeenCalledWith({
         fileType: mockUploadResult.fileType,
         hash: mockUploadResult.hash,
-        metadata: mockUploadResult.metadata,
+        metadata: { ...mockUploadResult.metadata, ...mockDimensions },
         name: mockMetadata.filename,
         size: mockUploadResult.size,
         url: mockMetadata.path,
@@ -241,7 +241,7 @@ describe('FileUploadAction', () => {
           {
             fileType: mockFile.type,
             hash: 'mock-hash-value',
-            metadata: mockExistingMetadata,
+            metadata: { ...mockExistingMetadata, ...mockDimensions },
             name: mockFile.name,
             size: mockFile.size,
             url: mockExistingMetadata.path, // Uses metadata.path when available
@@ -303,7 +303,7 @@ describe('FileUploadAction', () => {
           {
             fileType: mockFile.type,
             hash: 'mock-hash-value',
-            metadata: mockMetadata,
+            metadata: { ...mockMetadata, ...mockDimensions },
             name: mockFile.name,
             size: mockFile.size,
             url: mockMetadata.path,
