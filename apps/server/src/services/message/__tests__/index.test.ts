@@ -286,7 +286,7 @@ describe('MessageService', () => {
 
       const result = await messageService.createMessage(params as any);
 
-      expect(mockMessageModel.create).toHaveBeenCalledWith(params);
+      expect(mockMessageModel.create).toHaveBeenCalledWith(params, undefined);
       expect(mockMessageModel.query).toHaveBeenCalledWith(
         {
           agentId: 'agent-1',
@@ -356,7 +356,7 @@ describe('MessageService', () => {
 
       const result = await messageService.createMessage(params as any);
 
-      expect(mockMessageModel.create).toHaveBeenCalledWith(params);
+      expect(mockMessageModel.create).toHaveBeenCalledWith(params, undefined);
       expect(mockMessageModel.query).toHaveBeenCalledWith(
         {
           agentId: 'agent-1',

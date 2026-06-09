@@ -2577,6 +2577,54 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       }
     });
 
+    it('retries the lazy thread create on the next event when a create intent fails (commit-on-success)', async () => {
+      // A transient failure on createThread / createMessage must NOT advance
+      // the coordinator state: committing would make the run look alive while
+      // nothing landed, so later chunks could never recreate the thread and
+      // the streamed content would be orphaned. With commit-on-success the
+      // failed event is dropped and the NEXT subagent event re-runs the lazy
+      // create end-to-end with fresh ids.
+      mockCreateThread.mockRejectedValueOnce(new Error('transient IndexedDB failure'));
+
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        // First subagent event: createThread throws → state must not commit.
+        ccSubagentText('msg_sub', 'toolu_task', 'lost '),
+        // Next subagent event retries the lazy create.
+        ccSubagentText('msg_sub', 'toolu_task', 'kept'),
+        ccSubagentSpawnResult('toolu_task', 'terminal result'),
+        ccResult(),
+      ]);
+
+      // Lazy create attempted twice — first failed, retry landed with a fresh id.
+      expect(mockCreateThread).toHaveBeenCalledTimes(2);
+      const retryThreadId = mockCreateThread.mock.calls[1][0].id;
+      expect(retryThreadId).not.toBe(mockCreateThread.mock.calls[0][0].id);
+
+      // Every in-thread row (seed user, turn assistant, terminal assistant)
+      // belongs to the retried thread — nothing was written against the
+      // thread whose create failed.
+      const threadCreates = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => typeof p.threadId === 'string' && p.threadId.startsWith('thd_'),
+      );
+      expect(threadCreates.length).toBeGreaterThan(0);
+      for (const [p] of threadCreates) {
+        expect(p.threadId).toBe(retryThreadId);
+      }
+
+      // The run still finalized normally inside the retried thread.
+      const terminal = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'assistant' && p.content === 'terminal result',
+      );
+      expect(terminal).toBeDefined();
+      expect(terminal![0].threadId).toBe(retryThreadId);
+    });
+
     it('creates a terminal in-thread assistant with the main tool_result content', async () => {
       // CC never emits the subagent's final summary as a
       // `parent_tool_use_id`-tagged assistant event — the summary only

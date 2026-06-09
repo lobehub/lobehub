@@ -804,8 +804,10 @@ export const executeHeterogeneousAgent = async (
             type: ThreadType.Isolation,
           });
         } catch (err) {
+          // Rethrow so `reduceAndApplySubagent` skips the state commit — the
+          // run stays absent and the next chunk retries the lazy create.
           console.error('[HeterogeneousAgent] Failed to create subagent thread:', err);
-          return;
+          throw err;
         }
         onSubagentThreadCreated();
         // Open the per-spawn sub-op + dispatcher so subsequent intents for this
@@ -828,8 +830,11 @@ export const executeHeterogeneousAgent = async (
         try {
           await messageService.createMessage(msg);
         } catch (err) {
+          // Rethrow so `reduceAndApplySubagent` skips the state commit — the
+          // run keeps its pre-create shape and the next event re-emits the
+          // turn-boundary / lazy-create with fresh ids.
           console.error('[HeterogeneousAgent] Failed to create subagent message:', err);
-          return;
+          throw err;
         }
         t?.stream.create(msg as UIChatMessage);
         return;
@@ -1000,8 +1005,10 @@ export const executeHeterogeneousAgent = async (
    * Reduce one event through the shared coordinator and apply its intents.
    * `mainAssistantId` is snapshotted at event-arrival time (the spawning main
    * assistant) and threaded in as the thread/seed parent. Commit-on-success:
-   * `subagentState` advances only after all intents land, so a thrown flush
-   * leaves the run intact for the onComplete-drain retry (subsumes the old
+   * `subagentState` advances only after all intents land — a throwing create
+   * intent (createThread / createMessage) skips the commit so the next event
+   * re-emits the lazy create / turn boundary, while flush failures are pinned
+   * in `pendingSubagentFlush` for the onComplete replay (subsumes the old
    * `pendingFlushTarget`). Always invoked inside `persistQueue` so reduce reads
    * the latest committed state and ordering matches arrival.
    */
@@ -1016,7 +1023,17 @@ export const executeHeterogeneousAgent = async (
       topicId: context.topicId ?? null,
     };
     const { state: next, intents } = reduceSubagentRuns(subagentState, event, ctx);
-    for (const intent of intents) await applySubagentIntent(intent);
+    try {
+      for (const intent of intents) await applySubagentIntent(intent);
+    } catch (err) {
+      // An intent failed to land (e.g. transient IndexedDB / message-service
+      // error on createThread / createMessage). Do NOT commit `next`: keeping
+      // the prior state lets the next event re-emit the create / flush, and
+      // keeps the run visible to the onComplete orphan drain. Swallow here so
+      // the rejection doesn't poison the shared persistQueue chain.
+      console.error('[HeterogeneousAgent] Subagent intent failed, run state not advanced:', err);
+      return;
+    }
     subagentState = next;
   };
 
