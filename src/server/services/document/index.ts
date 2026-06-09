@@ -1,8 +1,8 @@
 import { CUSTOM_DOCUMENT_FILE_TYPE, CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
-import { type DocumentItem } from '@lobechat/database/schemas';
+import { type DocumentItem, type FileItem } from '@lobechat/database/schemas';
 import { documents, files } from '@lobechat/database/schemas';
-import { loadFile, UnsupportedFileTypeError } from '@lobechat/file-loaders';
+import { type FileDocument, loadFile, UnsupportedFileTypeError } from '@lobechat/file-loaders';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
@@ -16,6 +16,13 @@ import { type LobeDocument } from '@/types/document';
 
 import { FileService } from '../file';
 import { DocumentHistoryService } from './history';
+import {
+  DocumentOcrService,
+  isImageFileForOcr,
+  isPdfFileForOcr,
+  type OcrFallbackReason,
+  shouldUsePdfDocumentOcrFallback,
+} from './ocr';
 import type {
   CompareDocumentHistoryItemsParams,
   CompareDocumentHistoryItemsResult,
@@ -50,12 +57,14 @@ export class DocumentService {
   private documentHistoryServiceInstance?: DocumentHistoryService;
   private fileServiceInstance?: FileService;
   private db: LobeChatDatabase;
+  private ocrService: DocumentOcrService;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.userId = userId;
     this.db = db;
     this.fileModel = new FileModel(db, userId);
     this.documentModel = new DocumentModel(db, userId);
+    this.ocrService = new DocumentOcrService(db, userId);
   }
 
   private get fileService() {
@@ -472,8 +481,7 @@ export class DocumentService {
     log(`${logPrefix} Starting to parse file, path: ${filePath}`);
 
     try {
-      // Use loadFile to load file content
-      const fileDocument = await loadFile(filePath);
+      const fileDocument = await this.loadFileWithOcrFallback(filePath, file);
 
       log(`${logPrefix} File parsed successfully %O`, {
         fileType: fileDocument.fileType,
@@ -510,4 +518,41 @@ export class DocumentService {
       cleanup();
     }
   }
+
+  private loadFileWithOcrFallback = async (
+    filePath: string,
+    file: FileItem,
+  ): Promise<FileDocument> => {
+    if (isImageFileForOcr(file.fileType, file.name)) {
+      return await this.loadFileByOcr(filePath, file, 'image');
+    }
+
+    const fileDocument = await loadFile(filePath);
+
+    if (!isPdfFileForOcr(file.fileType, file.name)) return fileDocument;
+    if (!shouldUsePdfDocumentOcrFallback(fileDocument)) return fileDocument;
+
+    try {
+      return await this.loadFileByOcr(filePath, file, 'pdf-low-text');
+    } catch (error) {
+      console.warn(`[${file.name}] OCR fallback failed, keeping original parsed text:`, error);
+
+      return {
+        ...fileDocument,
+        metadata: {
+          ...fileDocument.metadata,
+          ocrFallbackError: (error as Error).message,
+        },
+      };
+    }
+  };
+
+  private loadFileByOcr = async (filePath: string, file: FileItem, reason: OcrFallbackReason) => {
+    return this.ocrService.extractFileDocument({
+      filePath,
+      fileType: file.fileType,
+      filename: file.name,
+      reason,
+    });
+  };
 }

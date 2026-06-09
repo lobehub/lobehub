@@ -1,6 +1,14 @@
+import { type LobeChatDatabase } from '@lobechat/database';
+
 import { type NewChunkItem, type NewUnstructuredChunkItem } from '@/database/schemas';
 import { knowledgeEnv } from '@/envs/knowledge';
 import { ChunkingLoader } from '@/libs/document-loaders';
+import {
+  DocumentOcrService,
+  isImageFileForOcr,
+  isPdfFileForOcr,
+  shouldUsePdfChunkOcrFallback,
+} from '@/server/services/document/ocr';
 
 import { type ChunkingService } from './rules';
 import { ChunkingRuleParser } from './rules';
@@ -20,10 +28,12 @@ interface ChunkResult {
 export class ContentChunk {
   private chunkingClient: ChunkingLoader;
   private chunkingRules: Record<string, ChunkingService[]>;
+  private ocrService?: DocumentOcrService;
 
-  constructor() {
+  constructor(db?: LobeChatDatabase, userId?: string) {
     this.chunkingClient = new ChunkingLoader();
     this.chunkingRules = ChunkingRuleParser.parse(knowledgeEnv.FILE_TYPE_CHUNKING_RULES || '');
+    this.ocrService = db && userId ? new DocumentOcrService(db, userId) : undefined;
   }
 
   private getChunkingServices(fileType: string): ChunkingService[] {
@@ -32,6 +42,10 @@ export class ContentChunk {
   }
 
   async chunkContent(params: ChunkContentParams): Promise<ChunkResult> {
+    if (isImageFileForOcr(params.fileType, params.filename)) {
+      return await this.chunkByOcr(params, 'image');
+    }
+
     const services = this.getChunkingServices(params.fileType);
 
     for (const service of services) {
@@ -43,7 +57,14 @@ export class ContentChunk {
           }
 
           default: {
-            return await this.chunkByDefault(params.filename, params.content);
+            const result = await this.chunkByDefault(params.filename, params.content);
+
+            if (isPdfFileForOcr(params.fileType, params.filename)) {
+              const ocrResult = await this.tryChunkByOcrForPdf(params, result);
+              if (ocrResult) return ocrResult;
+            }
+
+            return result;
           }
         }
       } catch (error) {
@@ -74,5 +95,51 @@ export class ContentChunk {
     }));
 
     return { chunks: documents };
+  };
+
+  private chunkByOcr = async (
+    params: ChunkContentParams,
+    reason: 'image' | 'pdf-low-text',
+  ): Promise<ChunkResult> => {
+    if (!this.ocrService) {
+      throw new Error('OCR fallback is unavailable because the chunking context is missing');
+    }
+
+    const fileDocument = await this.ocrService.extractFileDocument({
+      content: params.content,
+      fileType: params.fileType,
+      filename: params.filename,
+      reason,
+    });
+
+    const pages = fileDocument.pages || [];
+    const chunks = pages
+      .filter((page) => page.pageContent.trim())
+      .map((page, index) => ({
+        index,
+        metadata: page.metadata,
+        text: page.pageContent,
+        type: 'DocumentChunk',
+      }));
+
+    return { chunks };
+  };
+
+  private tryChunkByOcrForPdf = async (
+    params: ChunkContentParams,
+    result: ChunkResult,
+  ): Promise<ChunkResult | undefined> => {
+    if (!shouldUsePdfChunkOcrFallback(result.chunks)) return result;
+    if (!this.ocrService) return result;
+
+    try {
+      return await this.chunkByOcr(params, 'pdf-low-text');
+    } catch (error) {
+      console.warn(
+        `PDF OCR fallback failed for ${params.filename}, keeping default chunks:`,
+        error,
+      );
+      return result;
+    }
   };
 }
