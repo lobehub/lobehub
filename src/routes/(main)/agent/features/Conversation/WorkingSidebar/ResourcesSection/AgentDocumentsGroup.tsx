@@ -275,7 +275,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     // section layout (flat when a single source has items, sectioned otherwise).
     // Both hooks are SWR-deduped against their respective child fetches.
     const userSkillItems = useUserSkills();
-    const { items: projectSkillItems } = useProjectSkills(
+    const { items: projectSkillItems, isLoading: isProjectSkillsLoading } = useProjectSkills(
       showProjectSkills ? workingDirectory : undefined,
       deviceId,
     );
@@ -379,6 +379,16 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       const activeCount = (hasAgent ? 1 : 0) + (hasProject ? 1 : 0) + (hasUser ? 1 : 0);
 
       if (activeCount === 0) {
+        // Project skills refetch on a working-directory switch (new SWR key →
+        // empty items while in flight). Show the loader instead of flashing the
+        // empty placeholder when there's nothing else to render yet.
+        if (showProjectSkills && isProjectSkillsLoading) {
+          return (
+            <Center flex={1} paddingBlock={24}>
+              <NeuralNetworkLoading size={32} />
+            </Center>
+          );
+        }
         return (
           <Center flex={1} gap={8} paddingBlock={24}>
             <Empty description={t('workingPanel.skills.empty')} icon={SkillsIcon} />
