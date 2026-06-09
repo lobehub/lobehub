@@ -40,8 +40,11 @@ const errorHandlingLink: TRPCLink<ToolsRouter> = () => {
                 // Emit event for MarketAuthProvider to handle
                 const { marketAuthEvents } =
                   await import('@/layout/AuthProvider/MarketAuth/events');
+                const { pathToMarketAuthScene } =
+                  await import('@/layout/AuthProvider/MarketAuth/scenes');
                 marketAuthEvents.emit('market-unauthorized', {
                   path: op.path,
+                  scene: pathToMarketAuthScene(op.path),
                   timestamp: now,
                 });
               }

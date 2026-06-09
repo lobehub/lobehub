@@ -53,8 +53,11 @@ const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
                     // Dynamically import to avoid circular dependencies
                     const { marketAuthEvents } =
                       await import('@/layout/AuthProvider/MarketAuth/events');
+                    const { pathToMarketAuthScene } =
+                      await import('@/layout/AuthProvider/MarketAuth/scenes');
                     marketAuthEvents.emit('market-unauthorized', {
                       path: op.path,
+                      scene: pathToMarketAuthScene(op.path),
                       timestamp: now,
                     });
                   }
