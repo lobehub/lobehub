@@ -1631,6 +1631,14 @@ export class AiAgentService {
         agentConfig.chatConfig?.runtimeEnv?.runtimeMode?.[gatewayConfigured ? 'desktop' : 'web'],
         gatewayConfigured,
       );
+      // When sandbox is not the active runtime, remove lobe-cloud-sandbox from the
+      // manifest map. The initial seed via getEnabledPluginManifests (which includes
+      // defaultToolIds) may have already placed it there, and the allowedBuiltinTools
+      // loop below only guards the discoverable-builtin append path. Deleting here
+      // covers both sources in a single point.
+      if (agentRuntimeMode !== 'cloud') {
+        delete toolManifestMap[CloudSandboxManifest.identifier];
+      }
       for (const tool of allowedBuiltinTools) {
         // lobe-cloud-sandbox is only activator-discoverable when runtimeMode resolves
         // to 'cloud'. Handles both executionTarget='sandbox' (new) and the legacy
