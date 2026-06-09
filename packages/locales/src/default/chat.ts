@@ -606,8 +606,11 @@ export default {
   'sharePage.error.unauthorized.action': 'Sign In',
   'sharePage.error.unauthorized.subtitle': 'Please sign in to view this shared topic.',
   'sharePage.error.unauthorized.title': 'Sign In Required',
+  'sharePage.menu.goToLobeHub': 'Go to LobeHub',
+  'sharePage.menu.more': 'More',
+  'sharePage.menu.report': 'Report',
   'sharePageDisclaimer':
-    'This content is shared by a user and does not represent the views of LobeHub. LobeHub is not responsible for any consequences arising from this shared content.',
+    "Shared by a user. The content reflects their views, not LobeHub's, and LobeHub takes no responsibility for it.",
   'signalCallbacks.collapse': 'Hide details',
   'signalCallbacks.empty': 'No callback messages',
   'signalCallbacks.expand': 'Show details',

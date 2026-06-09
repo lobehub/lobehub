@@ -81,6 +81,7 @@ const ActionBar = memo<ActionBarProps>(({ data }) => {
           borderRadius: 48,
           boxShadow: '0 2px 12px -4px rgba(0, 0, 0, 0.1)',
           maxWidth: 960,
+          pointerEvents: 'auto',
         }}
       >
         <Flexbox horizontal align="center" gap={8}>

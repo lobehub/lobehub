@@ -1,6 +1,8 @@
 'use client';
 
+import { Flexbox, Text } from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { ChatList, ConversationProvider, MessageItem } from '@/features/Conversation';
 import { useChatStore } from '@/store/chat';
@@ -14,6 +16,7 @@ interface SharedMessageListProps {
 }
 
 const SharedMessageList = memo<SharedMessageListProps>(({ agentId, groupId, shareId, topicId }) => {
+  const { t } = useTranslation('chat');
   const context = useMemo(
     () => ({
       agentId: agentId ?? '',
@@ -43,7 +46,17 @@ const SharedMessageList = memo<SharedMessageListProps>(({ agentId, groupId, shar
         replaceMessages(messages, { context: ctx });
       }}
     >
-      <ChatList disableActionsBar itemContent={itemContent} />
+      <ChatList
+        disableActionsBar
+        itemContent={itemContent}
+        footerSlot={
+          <Flexbox align={'center'} paddingBlock={'16px 80px'} paddingInline={24}>
+            <Text fontSize={12} style={{ maxWidth: 480, textAlign: 'center' }} type={'secondary'}>
+              {t('sharePageDisclaimer')}
+            </Text>
+          </Flexbox>
+        }
+      />
     </ConversationProvider>
   );
 });
