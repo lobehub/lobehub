@@ -41,6 +41,7 @@ export async function runStep(c: Context): Promise<Response> {
       rejectAndContinue,
       resumeAsyncTool,
       toolMessageId,
+      verifyAsyncToolBarrier,
     } = { ...body, ...body.payload };
 
     if (!operationId) {
@@ -82,6 +83,7 @@ export async function runStep(c: Context): Promise<Response> {
       resumeAsyncTool,
       stepIndex,
       toolMessageId,
+      verifyAsyncToolBarrier,
     });
 
     // Step is currently being executed by another instance — tell QStash to retry later
