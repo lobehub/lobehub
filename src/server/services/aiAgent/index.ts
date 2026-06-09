@@ -807,14 +807,21 @@ export class AiAgentService {
           });
 
       // Create an assistant message placeholder (shows spinner in the UI).
-      // For remote hetero agents (openclaw/hermes), override provider with the hetero type
-      // so the frontend can identify the platform and display the correct name in the model tag.
+      // Use the hetero type as the provider so the frontend can identify the
+      // platform and render the correct name in the model tag — for ALL hetero
+      // agents, not just remote ones. The agent's configured chat model/provider
+      // (e.g. deepseek) is meaningless for a CLI run: the real model is reported
+      // by the CLI via `stream_start` / `turn_metadata` and backfilled by
+      // `HeterogeneousPersistenceHandler`. Seeding the placeholder with the agent
+      // model leaked it into the model tag (and got re-applied at terminal) on
+      // the device / sandbox path; mirror the client (`conversationLifecycle`),
+      // which sets only the provider and leaves the model empty until the CLI
+      // reports it.
       const assistantMsg = await this.messageModel.create({
         agentId: resolvedAgentId,
         content: LOADING_FLAT,
-        model,
         parentId: parentMessageId ?? userMsg?.id,
-        provider: isRemoteHetero ? heteroType : provider,
+        provider: heteroType,
         role: 'assistant',
         threadId: appContext?.threadId ?? undefined,
         topicId,
