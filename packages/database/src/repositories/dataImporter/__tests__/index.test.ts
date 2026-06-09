@@ -651,4 +651,101 @@ describe('DataImporter', () => {
       expect(models[0].id).toBe('model-a');
     });
   });
+
+  describe('aiProviders (preserveId dedup on same id)', () => {
+    it('should skip re-import of the same provider id via the preserveId/id match path', async () => {
+      // aiProviders has NO clientId column and preserveId=true. On re-import the existing
+      // record is discovered through the preserveId id lookup, and the dedup filter then
+      // matches on `preserveId && !isCompositeKey && record.id === item.id` (the right arm
+      // of the || at line 447, since the clientId left arm is always falsy here).
+      const data: ImportPgDataStructure = {
+        data: {
+          aiProviders: [
+            {
+              id: 'prov-keep',
+              name: 'Keep Provider',
+              source: 'custom',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+        },
+        mode: 'pglite',
+        schemaHash: 'test',
+      } as any;
+
+      const firstResult = await importer.importPgData(data);
+      expect(firstResult.success).toBe(true);
+      expect(firstResult.results.aiProviders).toMatchObject({ added: 1, errors: 0 });
+
+      // Re-import the exact same id with a fresh importer -> existing record found by id,
+      // recordsToInsert becomes empty -> early return with skips=1.
+      const importer2 = new DataImporterRepos(clientDB, userId);
+      const secondResult = await importer2.importPgData(data);
+      expect(secondResult.success).toBe(true);
+      expect(secondResult.results.aiProviders).toMatchObject({ added: 0, skips: 1 });
+
+      const providers = await clientDB.query.aiProviders.findMany({
+        where: eq(Schema.aiProviders.userId, userId),
+      });
+      expect(providers).toHaveLength(1);
+      expect(providers[0].id).toBe('prov-keep');
+    });
+  });
+
+  describe('agents slug field processor (null slug) + empty unique-constraint skip', () => {
+    it('should null out an empty slug and skip the slug unique check', async () => {
+      // agents config: fieldProcessor for `slug` returns null when the value is falsy
+      // (branch 87 false-arm). With slug=null, the unique-constraint loop hits the
+      // `if (!record.newRecord[field]) continue;` guard (branch 608) and skips the check.
+      const data: ImportPgDataStructure = {
+        data: {
+          agents: [
+            {
+              id: 'agt_nullslug',
+              slug: '',
+              model: 'gpt-4',
+              provider: 'openai',
+              systemRole: '',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+          agentsToSessions: [],
+          sessions: [],
+        },
+        mode: 'pglite',
+        schemaHash: 'test',
+      } as any;
+
+      const result = await importer.importPgData(data);
+      expect(result.success).toBe(true);
+      expect(result.results.agents).toMatchObject({ added: 1, errors: 0 });
+
+      const agents = await clientDB.query.agents.findMany({
+        where: eq(Schema.agents.userId, userId),
+      });
+      expect(agents).toHaveLength(1);
+      expect(agents[0].slug).toBeNull();
+    });
+  });
+
+  describe('extractErrorDetails fallback (no detail, non-23505)', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('should return "Unknown error details" when error has no code and no detail', async () => {
+      const bareError: any = new Error('bare failure with no detail');
+      // no .code, no .detail -> skips the 23505 block and falls to the `|| 'Unknown'` arm.
+
+      vi.spyOn(clientDB, 'transaction').mockRejectedValueOnce(bareError);
+
+      const result = await importer.importPgData(agentsData as ImportPgDataStructure);
+
+      expect(result.success).toBe(false);
+      expect((result as ImportErrorResult).error?.details).toBe('Unknown error details');
+      expect((result as ImportErrorResult).error?.message).toBe('bare failure with no detail');
+    });
+  });
 });
