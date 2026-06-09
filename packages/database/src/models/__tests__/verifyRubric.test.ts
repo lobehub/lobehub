@@ -78,8 +78,16 @@ describe('VerifyRubricModel query / delete', () => {
     const first = await model.create({ title: 'first' });
     const second = await model.create({ title: 'second' });
 
-    // make `first` the most recently updated so it sorts ahead of `second`
-    await model.update(first.id, { title: 'first-updated' });
+    // Set explicit, well-separated timestamps so `query` ordering (desc updatedAt)
+    // is deterministic — relying on create/update timing can tie within the same ms.
+    await serverDB
+      .update(verifyRubrics)
+      .set({ updatedAt: new Date('2025-01-02T00:00:00Z') })
+      .where(eq(verifyRubrics.id, first.id));
+    await serverDB
+      .update(verifyRubrics)
+      .set({ updatedAt: new Date('2025-01-01T00:00:00Z') })
+      .where(eq(verifyRubrics.id, second.id));
 
     const list = await model.query();
     expect(list).toHaveLength(2);

@@ -1,8 +1,9 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agentCronJobs, agents, tasks, users } from '../../schemas';
+import { agentCronJobs, agents, briefs, tasks, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { BriefModel } from '../brief';
 
@@ -326,6 +327,17 @@ describe('BriefModel', () => {
       // unrelated brief without the task
       await model.create({ summary: 'Other', title: 'Other', type: 'result' });
 
+      // Explicit, separated createdAt so `desc(createdAt)` ordering is deterministic
+      // (the model has no id tiebreaker; back-to-back creates can tie within a ms).
+      await serverDB
+        .update(briefs)
+        .set({ createdAt: new Date('2025-01-01T00:00:00Z') })
+        .where(eq(briefs.id, first.id));
+      await serverDB
+        .update(briefs)
+        .set({ createdAt: new Date('2025-01-02T00:00:00Z') })
+        .where(eq(briefs.id, second.id));
+
       const rows = await model.findByTaskId('task-find');
       expect(rows).toHaveLength(2);
       expect(rows.map((r) => r.id)).toEqual([second.id, first.id]);
@@ -471,6 +483,16 @@ describe('BriefModel', () => {
         type: 'result',
       });
       await model.create({ summary: 'No cron', title: 'No cron', type: 'result' });
+
+      // Explicit, separated createdAt so `desc(createdAt)` ordering is deterministic.
+      await serverDB
+        .update(briefs)
+        .set({ createdAt: new Date('2025-01-01T00:00:00Z') })
+        .where(eq(briefs.id, first.id));
+      await serverDB
+        .update(briefs)
+        .set({ createdAt: new Date('2025-01-02T00:00:00Z') })
+        .where(eq(briefs.id, second.id));
 
       const rows = await model.findByCronJobId('cron-1');
       expect(rows).toHaveLength(2);
