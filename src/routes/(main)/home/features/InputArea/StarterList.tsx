@@ -82,18 +82,24 @@ const StarterList = memo(() => {
           const currentModel = agentByIdSelectors.getAgentModelById(activeAgentId)(agentState);
           const currentProvider =
             agentByIdSelectors.getAgentModelProviderById(activeAgentId)(agentState);
-          if (currentModel === item.model && currentProvider === provider) {
+          const nextConfig = applyBusinessModelModeConfig({
+            model: item.model,
+            provider,
+          });
+          const shouldUpdateAgentMode =
+            nextConfig.chatConfig?.enableAgentMode === false &&
+            agentByIdSelectors.getAgentEnableModeById(activeAgentId)(agentState);
+
+          if (
+            currentModel === item.model &&
+            currentProvider === provider &&
+            !shouldUpdateAgentMode
+          ) {
             message.info(t('starter.modelInUse', { name: item.title }));
             return;
           }
 
-          await updateAgentConfigById(
-            activeAgentId,
-            applyBusinessModelModeConfig({
-              model: item.model,
-              provider,
-            }),
-          );
+          await updateAgentConfigById(activeAgentId, nextConfig);
           message.success(t('starter.modelSwitched', { name: item.title }));
         } finally {
           setSwitchingKey(null);
