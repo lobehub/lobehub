@@ -37,6 +37,7 @@ const ResourcesSection = memo<ResourcesSectionProps>(({ deviceId }) => {
       )}
       {!isHetero && (
         <AgentDocumentsGroup
+          deviceId={deviceId}
           style={{ flex: 1, minHeight: 0 }}
           workingDirectory={workingDirectory}
         />
