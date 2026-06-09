@@ -1,6 +1,7 @@
+import type { WorkingDirEntry } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { nextWorkingDirs, WORKING_DIRS_MAX, type WorkingDirEntry } from './deviceCwd';
+import { nextWorkingDirs, WORKING_DIRS_MAX } from './deviceCwd';
 
 const entry = (path: string, repoType?: 'git' | 'github'): WorkingDirEntry => ({ path, repoType });
 

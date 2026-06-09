@@ -99,7 +99,7 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
 
   const handleFavoriteClick = async () => {
     if (!isAuthenticated) {
-      await signIn();
+      await signIn('mcp');
       return;
     }
 

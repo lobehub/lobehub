@@ -160,7 +160,7 @@ const Header = memo(() => {
       onOk: async () => {
         if (!isAuthenticated) {
           try {
-            await signIn();
+            await signIn('publish');
             await doPublish();
           } catch (error) {
             console.error(`[MarketPublishButton][${action}] Authorization failed:`, error);

@@ -265,18 +265,34 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
   // ─── stream_start ─────────────────────────────────────────────────────────
 
   describe('stream_start', () => {
-    it('without newStep is a no-op (orchestrator already seeded the assistant id)', async () => {
+    it('without newStep (CLI init) backfills the placeholder with the CLI model/provider', async () => {
       const h = createHarness();
-      const beforeUpdates = h.messageModel.update.mock.calls.length;
       const beforeCreates = h.messageModel.create.mock.calls.length;
 
       await ingest(h, [
         buildEvent('stream_start', 0, {
-          assistantMessage: { id: 'asst-from-event' },
-          model: 'foo',
-          provider: 'bar',
+          model: 'claude-sonnet-4-5',
+          provider: 'claude-code',
         }),
       ]);
+
+      // The init event carries the CLI's authoritative model/provider — it must
+      // backfill the placeholder (which was created with only `provider`, no
+      // model) so the model tag shows the real CLI model from the first turn,
+      // even without any usage-bearing turn_metadata.
+      const asst = h.messages.get(h.assistantMessageId);
+      expect(asst?.model).toBe('claude-sonnet-4-5');
+      expect(asst?.provider).toBe('claude-code');
+      // No new assistant row is created — only the placeholder is patched.
+      expect(h.messageModel.create.mock.calls.length).toBe(beforeCreates);
+    });
+
+    it('without newStep and no model/provider is a no-op', async () => {
+      const h = createHarness();
+      const beforeUpdates = h.messageModel.update.mock.calls.length;
+      const beforeCreates = h.messageModel.create.mock.calls.length;
+
+      await ingest(h, [buildEvent('stream_start', 0, {})]);
 
       expect(h.messageModel.update.mock.calls.length).toBe(beforeUpdates);
       expect(h.messageModel.create.mock.calls.length).toBe(beforeCreates);

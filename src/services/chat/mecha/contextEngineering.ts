@@ -1,6 +1,7 @@
 import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
+import { formatUploadedFilesPrompt } from '@lobechat/builtin-tool-cloud-sandbox';
 import {
   CredsIdentifier,
   type CredSummary,
@@ -14,6 +15,7 @@ import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { WebOnboardingIdentifier } from '@lobechat/builtin-tool-web-onboarding';
 import {
   AGENT_PLAN_FILE_TYPE,
+  isDesktop,
   KLAVIS_SERVER_TYPES,
   LOBEHUB_SKILL_PROVIDERS,
 } from '@lobechat/const';
@@ -27,6 +29,7 @@ import type {
   LobeToolManifest,
   MemoryContext,
   OnboardingContext,
+  OperationSkillSet,
   PlanTodoConfig,
   ToolDiscoveryConfig,
   UserMemoryData,
@@ -56,7 +59,7 @@ import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra';
 import { getChatStoreState } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { chatSelectors, topicSelectors } from '@/store/chat/selectors';
 import { getToolStoreState } from '@/store/tool';
 import {
   builtinToolSelectors,
@@ -641,6 +644,20 @@ export const contextEngineering = async ({
     }
   }
 
+  // Resolve enabled skills (await: pinned DB skills fetch their content on demand).
+  // In auto mode: expose all installed skills so the AI can discover and activate them.
+  // In manual mode: only expose user-selected skills (filtered by pluginIds).
+  let enabledSkills: OperationSkillSet['skills'] | undefined;
+  if (plugins) {
+    const skillSet = await resolveClientSkills(plugins);
+    if (isInAutoSkillMode) {
+      enabledSkills = skillSet.skills;
+    } else {
+      const selectedIds = new Set(plugins);
+      enabledSkills = skillSet.skills.filter((s) => selectedIds.has(s.identifier));
+    }
+  }
+
   // Create MessagesEngine with injected dependencies
   const engine = new MessagesEngine({
     // Agent configuration
@@ -658,8 +675,8 @@ export const contextEngineering = async ({
       isCanUseVision,
     },
 
-    // File context configuration
-    fileContext: { enabled: true, includeFileUrl: false },
+    // Desktop local/static URLs are not fetchable by remote providers or cloud tools.
+    fileContext: { enabled: true, includeFileUrl: !isDesktop },
 
     // Knowledge injection
     knowledge: {
@@ -687,20 +704,9 @@ export const contextEngineering = async ({
     // agent-document injectors when this is `false` (chat mode).
     enableAgentMode: agentChatConfigSelectors.currentChatConfig(agentStoreState).enableAgentMode,
 
-    // Skills configuration
-    // In auto mode: expose all installed skills so the AI can discover and activate them
-    // In manual mode: only expose user-selected skills (filtered by pluginIds)
+    // Skills configuration (resolved above)
     skillsConfig: {
-      enabledSkills: plugins
-        ? (() => {
-            const skillSet = resolveClientSkills(plugins);
-            if (!isInAutoSkillMode) {
-              const selectedIds = new Set(plugins);
-              return skillSet.skills.filter((s) => selectedIds.has(s.identifier));
-            }
-            return skillSet.skills;
-          })()
-        : undefined,
+      enabledSkills,
     },
 
     // Tool Discovery configuration
@@ -734,6 +740,13 @@ export const contextEngineering = async ({
           year: 'numeric',
         }).format(new Date()),
       sandbox_enabled: () => String(tools?.includes('lobe-cloud-sandbox') ?? false),
+      // NOTICE: required by builtin-tool-cloud-sandbox/src/systemRole.ts —
+      // lists the topic files synced into the sandbox upload dir. Read lazily
+      // from the chat store so we only pay the cost when the placeholder renders.
+      sandbox_uploaded_files: () =>
+        tools?.includes('lobe-cloud-sandbox')
+          ? formatUploadedFilesPrompt(chatSelectors.currentUserFiles(getChatStoreState()))
+          : '',
       // NOTICE(@nekomeowww): required by builtin-tool-memory/src/systemRole.ts
       memory_effort: () => (userMemoryConfig ? (memoryContext?.effort ?? '') : ''),
       // Current agent + topic identity — referenced by the LobeHub builtin

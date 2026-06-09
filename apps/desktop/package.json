@@ -125,6 +125,7 @@
       "node-mac-permissions"
     ],
     "overrides": {
+      "node-gyp": "^12.4.0",
       "react": "19.2.4",
       "react-dom": "19.2.4",
       "vitest": "3.2.4"

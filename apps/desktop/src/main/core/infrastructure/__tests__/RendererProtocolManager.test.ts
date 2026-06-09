@@ -8,7 +8,7 @@ import {
 
 const {
   mockApp,
-  mockNetFetch,
+  mockFetch,
   mockPathExistsSync,
   mockProtocol,
   mockReadFile,
@@ -22,7 +22,7 @@ const {
       isReady: vi.fn().mockReturnValue(true),
       whenReady: vi.fn().mockResolvedValue(undefined),
     },
-    mockNetFetch: vi.fn(),
+    mockFetch: vi.fn(),
     mockPathExistsSync: vi.fn().mockReturnValue(true),
     mockProtocol: {
       handle: vi.fn((_scheme: string, handler: any) => {
@@ -35,11 +35,10 @@ const {
   };
 });
 
+vi.stubGlobal('fetch', mockFetch);
+
 vi.mock('electron', () => ({
   app: mockApp,
-  net: {
-    fetch: mockNetFetch,
-  },
   protocol: mockProtocol,
 }));
 
@@ -232,7 +231,7 @@ describe('ViteRendererFallback', () => {
   });
 
   it('forwards GET requests to the Vite origin preserving pathname + search', async () => {
-    mockNetFetch.mockResolvedValue(new Response('vite-served', { status: 200 }));
+    mockFetch.mockResolvedValue(new Response('vite-served', { status: 200 }));
 
     const fallback = new ViteRendererFallback('http://localhost:5173');
     const manager = new RendererProtocolManager({ fallback });
@@ -245,8 +244,8 @@ describe('ViteRendererFallback', () => {
       url: 'app://renderer/src/main.tsx?t=12345',
     } as any);
 
-    expect(mockNetFetch).toHaveBeenCalledTimes(1);
-    const [target, init] = mockNetFetch.mock.calls[0]!;
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [target, init] = mockFetch.mock.calls[0]!;
     expect(target).toBe('http://localhost:5173/src/main.tsx?t=12345');
     expect((init as RequestInit).method).toBe('GET');
     const headers = (init as RequestInit).headers as Headers;
@@ -258,7 +257,7 @@ describe('ViteRendererFallback', () => {
   });
 
   it('forwards body and sets duplex for non-GET requests', async () => {
-    mockNetFetch.mockResolvedValue(new Response('ok', { status: 200 }));
+    mockFetch.mockResolvedValue(new Response('ok', { status: 200 }));
 
     const fallback = new ViteRendererFallback('http://localhost:5173/');
     const manager = new RendererProtocolManager({ fallback });
@@ -272,14 +271,14 @@ describe('ViteRendererFallback', () => {
       url: 'app://renderer/__hmr',
     } as any);
 
-    const [target, init] = mockNetFetch.mock.calls[0]!;
+    const [target, init] = mockFetch.mock.calls[0]!;
     expect(target).toBe('http://localhost:5173/__hmr');
     expect((init as RequestInit & { duplex?: string }).duplex).toBe('half');
     expect((init as any).body).toBe('payload');
   });
 
-  it('returns 502 when net.fetch throws', async () => {
-    mockNetFetch.mockRejectedValue(new Error('ECONNREFUSED'));
+  it('returns 502 when fetch throws', async () => {
+    mockFetch.mockRejectedValue(new Error('ECONNREFUSED'));
 
     const fallback = new ViteRendererFallback('http://localhost:5173');
     const manager = new RendererProtocolManager({ fallback });

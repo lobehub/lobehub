@@ -28,6 +28,7 @@ import { ToolsEngine } from '@lobechat/context-engine';
 import { type RuntimeEnvMode, type RuntimePlatform } from '@lobechat/types';
 import debug from 'debug';
 
+import { resolveRuntimeMode } from '@/helpers/executionTarget';
 import {
   buildAllowedBuiltinTools,
   DEVICE_TOOL_IDENTIFIERS,
@@ -148,11 +149,15 @@ export const createServerAgentToolsEngine = (
   // serving desktop-class users; otherwise the caller is treated as web.
   const platform: RuntimePlatform = hasDeviceProxy ? 'desktop' : 'web';
 
-  // User-configured runtime mode for the current platform, with a
-  // platform-appropriate default when unset.
-  const runtimeMode: RuntimeEnvMode =
-    agentConfig.chatConfig?.runtimeEnv?.runtimeMode?.[platform] ??
-    (platform === 'desktop' ? 'local' : 'none');
+  // Tool gate derived from the single `agencyConfig.executionTarget` param
+  // (sandbox → cloud tools, local → local-system tools, device → gateway), with
+  // a no-regression fallback to the legacy per-platform `runtimeMode` for agents
+  // that predate `executionTarget`.
+  const runtimeMode: RuntimeEnvMode = resolveRuntimeMode(
+    agentConfig.agencyConfig,
+    agentConfig.chatConfig?.runtimeEnv?.runtimeMode?.[platform],
+    platform === 'desktop',
+  );
 
   const searchMode = agentConfig.chatConfig?.searchMode ?? 'auto';
   const isSearchEnabled = searchMode !== 'off';

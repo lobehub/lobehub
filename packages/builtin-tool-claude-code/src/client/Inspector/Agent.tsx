@@ -178,7 +178,11 @@ export const AgentInspector = memo<BuiltinInspectorProps<AgentArgs>>(
             )}
             {metrics.totalTokens > 0 && (
               <span>
-                <AnimatedNumber formatter={formatTokens} value={metrics.totalTokens} />
+                <AnimatedNumber
+                  duration={2000}
+                  formatter={formatTokens}
+                  value={metrics.totalTokens}
+                />
               </span>
             )}
           </span>

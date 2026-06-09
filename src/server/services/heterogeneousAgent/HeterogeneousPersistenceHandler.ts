@@ -675,6 +675,8 @@ export class HeterogeneousPersistenceHandler {
       case 'stream_start': {
         if (event.data?.newStep) {
           await this.handleStepStart(state);
+        } else {
+          await this.handleStreamInit(state, event);
         }
         return;
       }
@@ -700,6 +702,33 @@ export class HeterogeneousPersistenceHandler {
   }
 
   // ─── Per-event handlers ──────────────────────────────────────────────────
+
+  /**
+   * The adapter's FIRST `stream_start` (CC's system/init, `newStep` unset)
+   * carries the CLI's authoritative model/provider (e.g. claude-sonnet-x /
+   * 'claude-code'). Capture it into step state and backfill the placeholder
+   * assistant so the model tag shows the real CLI model from the very first
+   * turn — even before (or entirely without) any usage-bearing `turn_metadata`.
+   *
+   * The placeholder is created with only `provider: heteroType` and no model
+   * (see `aiAgent.execAgent`), so without this the first turn would render an
+   * empty model until `turn_metadata` lands, and a usage-less run would never
+   * resolve a real model at all.
+   */
+  private async handleStreamInit(state: OperationState, event: AgentStreamEvent) {
+    const { model, provider } = event.data ?? {};
+    const update: Record<string, any> = {};
+    if (model) {
+      state.lastModel = model;
+      update.model = model;
+    }
+    if (provider) {
+      state.lastProvider = provider;
+      update.provider = provider;
+    }
+    if (Object.keys(update).length === 0) return;
+    await this.deps.messageModel.update(state.currentAssistantMessageId, update);
+  }
 
   private async handleTurnMetadata(state: OperationState, event: AgentStreamEvent) {
     const { model, provider, usage } = event.data ?? {};

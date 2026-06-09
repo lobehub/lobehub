@@ -107,7 +107,7 @@ const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess
 
     if (!isAuthenticated) {
       try {
-        await signIn();
+        await signIn('publish');
         // After authentication, proceed with ownership check and publish
         await doPublish();
       } catch (error) {

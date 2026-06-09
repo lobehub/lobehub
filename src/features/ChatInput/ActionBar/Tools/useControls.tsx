@@ -26,7 +26,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -45,6 +45,7 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
@@ -315,6 +316,12 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 100%;
     min-width: 0;
+  `,
+  toolTrailing: css`
+    display: inline-flex;
+    flex: none;
+    gap: 8px;
+    align-items: center;
   `,
   typeTag: css`
     display: inline-flex;
@@ -613,9 +620,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           {icon}
           <span className={cx(styles.toolLabelText)}>{label}</span>
           {extraTag}
-          {badge && <span className={cx(styles.typeTag)}>{badge}</span>}
         </span>
-        {action}
+        <span className={cx(styles.toolTrailing)}>
+          {badge && <span className={cx(styles.typeTag)}>{badge}</span>}
+          {action}
+        </span>
       </span>
     ),
     [openSkillPolicyMenu],
@@ -672,6 +681,14 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const installedBuiltinSkills = useToolStore(builtinToolSelectors.installedBuiltinSkills, isEqual);
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
+
+  // Custom connectors (user-added OAuth MCP servers) from the connector store
+  const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+  const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
+  const fetchConnectors = useToolStore((s) => s.fetchConnectors);
+  useEffect(() => {
+    if (!isConnectorsInit) fetchConnectors();
+  }, [isConnectorsInit, fetchConnectors]);
 
   const [
     useFetchUserKlavisServers,
@@ -991,15 +1008,17 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
                 {icon}
                 <span className={cx(styles.toolLabelText)}>{title}</span>
                 {officialTag}
+              </span>
+              <span className={cx(styles.toolTrailing)}>
                 <span className={cx(styles.typeTag)}>
                   <Icon icon={Wrench} size={12} />
                 </span>
+                <Tooltip placement={'top'} title={t('tools.activation.fixed.hint')}>
+                  <span className={cx(styles.fixedIndicator)}>
+                    <Icon icon={Pin} size={15} />
+                  </span>
+                </Tooltip>
               </span>
-              <Tooltip placement={'top'} title={t('tools.activation.fixed.hint')}>
-                <span className={cx(styles.fixedIndicator)}>
-                  <Icon icon={Pin} size={15} />
-                </span>
-              </Tooltip>
             </span>
           ),
           popoverContent,
@@ -1120,6 +1139,36 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [userAgentSkills, t, createManagedSkillItem, deleteAgentSkill],
   );
 
+  // Custom connector list items (user-added OAuth MCP servers).
+  // Toggling adds the connector identifier to agents.plugins[] — the same field
+  // the runtime resolves connectors from, so they become callable immediately.
+  const customConnectorItems = useMemo(
+    () =>
+      customConnectors.map((connector) => {
+        const title = connector.name || connector.identifier;
+        const icon = <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />;
+        const popoverContent = (
+          <ToolItemDetailPopover
+            description={connector.mcpServerUrl ?? ''}
+            icon={<Icon icon={McpIcon} size={36} />}
+            identifier={connector.identifier}
+            sourceLabel={t('skillStore.tabs.custom')}
+            title={title}
+          />
+        );
+
+        return createManagedSkillItem({
+          badge: <Icon icon={McpIcon} size={12} />,
+          icon,
+          id: connector.identifier,
+          popoverContent,
+          searchText: `${title} ${connector.identifier}`,
+          title,
+        });
+      }),
+    [customConnectors, t, createManagedSkillItem],
+  );
+
   // Skills list items (including LobeHub Skill and Klavis)
   // Connected items listed first, deduplicated by key (LobeHub takes priority)
   const skillItems = useMemo(() => {
@@ -1230,10 +1279,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     ...communityPlugins.map(mapPluginToItem),
   ];
 
-  // Build Custom group children (User Agent Skills + custom plugins)
+  // Build Custom group children (User Agent Skills + custom plugins + custom connectors)
   const customGroupChildren: ItemType[] = [
     ...userAgentSkillItems,
     ...customPlugins.map(mapPluginToItem),
+    ...customConnectorItems,
   ];
 
   const normalizedSearchKeyword = searchKeyword.trim().toLowerCase();

@@ -10,7 +10,7 @@ import { memo, type MouseEvent, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
-import { electronGitService } from '@/services/electron/git';
+import { gitService } from '@/services/git';
 import { useGlobalStore } from '@/store/global';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -122,7 +122,7 @@ interface FileItemHeaderProps {
   /** Called after a successful revert so the parent can refresh the patch list. */
   onReverted?: () => void;
   /** When provided, enables the per-file revert button (unstaged mode only). */
-  revertContext?: { workingDirectory: string };
+  revertContext?: { deviceId?: string; workingDirectory: string };
   // Status reserved for future use (e.g. dim deleted entries) — keep on the
   // shape so the parent doesn't need to re-derive it later.
   status: GitFileDiffStatus;
@@ -162,7 +162,8 @@ export const FileItemHeader = memo<FileItemHeaderProps>(
       if (!revertContext) return;
       setReverting(true);
       try {
-        const result = await electronGitService.revertGitFile({
+        const result = await gitService.revertGitFile({
+          deviceId: revertContext.deviceId,
           filePath,
           path: revertContext.workingDirectory,
         });

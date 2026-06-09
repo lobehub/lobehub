@@ -1,5 +1,4 @@
-import type { GitBranchListItem } from '@lobechat/electron-client-ipc';
-import { Button, Icon, Input } from '@lobehub/ui';
+import { Icon, Input } from '@lobehub/ui';
 import {
   DropdownMenuItem,
   DropdownMenuPopup,
@@ -17,14 +16,15 @@ import {
   RefreshCwIcon,
   SearchIcon,
 } from 'lucide-react';
-import { memo, type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, type ReactElement, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { message } from '@/components/AntdStaticMethods';
-import { electronGitService } from '@/services/electron/git';
+import { gitService } from '@/services/git';
+import { useFetchGitWorkingTreeStatus } from '@/store/device';
 
-import { useWorkingTreeStatus } from './useWorkingTreeStatus';
+import { openCreateBranchModal } from './CreateBranchModal';
 
 const styles = createStaticStyles(({ css }) => ({
   branchLabel: css`
@@ -42,24 +42,12 @@ const styles = createStaticStyles(({ css }) => ({
     /* Cancel DropdownMenuPopup's default 4px padding so our sections align edge-to-edge */
     margin: -4px;
   `,
-  createFooter: css`
-    display: flex;
-    gap: 6px;
-    align-items: center;
-
-    padding-block: 6px;
-    padding-inline: 8px;
-    border-block-start: 1px solid ${cssVar.colorSplit};
-  `,
   createItemWrapper: css`
     padding: 4px;
     border-block-start: 1px solid ${cssVar.colorSplit};
   `,
   createItem: css`
     border-radius: calc(${cssVar.borderRadius} - 4px);
-  `,
-  createInput: css`
-    flex: 1;
   `,
   emptyState: css`
     padding-block: 12px;
@@ -139,11 +127,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   section: css`
     flex: 1;
-
     font-size: 11px;
     font-weight: 500;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
   `,
   sectionRow: css`
     display: flex;
@@ -167,21 +153,35 @@ const styles = createStaticStyles(({ css }) => ({
 interface BranchSwitcherProps {
   children: ReactElement;
   currentBranch?: string;
+  /**
+   * When set, branch list + checkout go through the `device.*` RPCs (web / remote
+   * device). Omit for the local machine, which talks to Electron over IPC.
+   */
+  deviceId?: string;
   onAfterCheckout?: () => void;
   onExternalRefresh?: () => void | Promise<void>;
   onOpenChange: (open: boolean) => void;
+  /** Reflect a branch switch in the UI immediately, before the checkout lands. */
+  onOptimisticCheckout?: (branch: string) => void;
   open: boolean;
   path: string;
 }
 
 const BranchSwitcher = memo<BranchSwitcherProps>(
-  ({ path, currentBranch, open, onOpenChange, onAfterCheckout, onExternalRefresh, children }) => {
-    const { t } = useTranslation('plugin');
+  ({
+    path,
+    currentBranch,
+    deviceId,
+    open,
+    onOpenChange,
+    onAfterCheckout,
+    onExternalRefresh,
+    onOptimisticCheckout,
+    children,
+  }) => {
+    const { t } = useTranslation('device');
     const [search, setSearch] = useState('');
-    const [isCreating, setIsCreating] = useState(false);
-    const [newBranch, setNewBranch] = useState('');
     const [busyBranch, setBusyBranch] = useState<string | null>(null);
-    const createInputRef = useRef<HTMLInputElement>(null);
 
     const {
       data: branches = [],
@@ -189,11 +189,14 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
       error: branchesError,
       mutate: mutateBranches,
     } = useSWR(
-      open ? ['git-branches', path] : null,
-      () => electronGitService.listGitBranches(path),
+      open ? ['git-branches', deviceId ?? 'local', path] : null,
+      () => gitService.listGitBranches({ deviceId, path }),
       { revalidateOnFocus: false, shouldRetryOnError: false },
     );
-    const { data: workingStatus, mutate: mutateWorkingStatus } = useWorkingTreeStatus(path);
+    const { data: workingStatus, mutate: mutateWorkingStatus } = useFetchGitWorkingTreeStatus(
+      deviceId,
+      path,
+    );
     const [isRefreshing, setIsRefreshing] = useState(false);
 
     const handleRefresh = useCallback(async () => {
@@ -211,18 +214,8 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     }, [isRefreshing, mutateBranches, mutateWorkingStatus, onExternalRefresh]);
 
     useEffect(() => {
-      if (!open) {
-        setSearch('');
-        setIsCreating(false);
-        setNewBranch('');
-      }
+      if (!open) setSearch('');
     }, [open]);
-
-    useEffect(() => {
-      if (isCreating) {
-        createInputRef.current?.focus();
-      }
-    }, [isCreating]);
 
     const filtered = useMemo(() => {
       const query = search.trim().toLowerCase();
@@ -238,30 +231,59 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
           return;
         }
         setBusyBranch(branch);
+        // Reflect the switch instantly and close; the checkout + revalidate
+        // reconcile in the background (a failure rolls the label back).
+        onOptimisticCheckout?.(branch);
+        onOpenChange(false);
         try {
-          const result = await electronGitService.checkoutGitBranch({
-            branch,
-            create,
-            path,
-          });
-          if (result.success) {
-            onAfterCheckout?.();
-            onOpenChange(false);
-          } else {
-            message.error(result.error || t('localSystem.workingDirectory.checkoutFailed'));
+          const result = await gitService.checkoutGitBranch({ branch, create, deviceId, path });
+          if (!result.success) {
+            message.error(result.error || t('workingDirectory.checkoutFailed'));
           }
         } finally {
+          onAfterCheckout?.();
           setBusyBranch(null);
         }
       },
-      [busyBranch, currentBranch, onAfterCheckout, onOpenChange, path, t],
+      [
+        busyBranch,
+        currentBranch,
+        deviceId,
+        onAfterCheckout,
+        onOptimisticCheckout,
+        onOpenChange,
+        path,
+        t,
+      ],
     );
 
-    const handleCreateSubmit = useCallback(() => {
-      const name = newBranch.trim();
-      if (!name) return;
-      void handleCheckout(name, true);
-    }, [handleCheckout, newBranch]);
+    // Create + checkout a new branch from the modal. Returns an error message
+    // for inline display (keeps the modal open), or undefined on success.
+    const handleCreateBranch = useCallback(
+      async (name: string): Promise<string | undefined> => {
+        onOptimisticCheckout?.(name);
+        const result = await gitService.checkoutGitBranch({
+          branch: name,
+          create: true,
+          deviceId,
+          path,
+        });
+        // Reconcile either way: success fills in PR / ahead-behind, failure rolls
+        // the optimistic label back to the real branch.
+        onAfterCheckout?.();
+        if (result.success) {
+          onOpenChange(false);
+          return undefined;
+        }
+        return result.error || t('workingDirectory.checkoutFailed');
+      },
+      [deviceId, onAfterCheckout, onOptimisticCheckout, onOpenChange, path, t],
+    );
+
+    const openCreateBranch = useCallback(() => {
+      onOpenChange(false);
+      openCreateBranchModal({ onSubmit: handleCreateBranch });
+    }, [handleCreateBranch, onOpenChange]);
 
     return (
       <DropdownMenuRoot open={open} onOpenChange={onOpenChange}>
@@ -273,7 +295,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                 <div className={styles.searchBar}>
                   <Input
                     autoFocus
-                    placeholder={t('localSystem.workingDirectory.branchSearchPlaceholder')}
+                    placeholder={t('workingDirectory.branchSearchPlaceholder')}
                     prefix={<Icon icon={SearchIcon} size={14} />}
                     size="small"
                     value={search}
@@ -285,9 +307,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
 
                 <div className={styles.list}>
                   <div className={styles.sectionRow}>
-                    <div className={styles.section}>
-                      {t('localSystem.workingDirectory.branchesHeading')}
-                    </div>
+                    <div className={styles.section}>{t('workingDirectory.branchesHeading')}</div>
                     <div className={styles.refreshButton} role="button" onClick={handleRefresh}>
                       <Icon
                         className={cx(isRefreshing && styles.spinning)}
@@ -298,27 +318,24 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                   </div>
 
                   {isLoading && branches.length === 0 && (
-                    <div className={styles.emptyState}>
-                      {t('localSystem.workingDirectory.branchesLoading')}
-                    </div>
+                    <div className={styles.emptyState}>{t('workingDirectory.branchesLoading')}</div>
                   )}
 
                   {!isLoading && branchesError && (
                     <div className={styles.emptyState}>
-                      {(branchesError as Error)?.message ||
-                        t('localSystem.workingDirectory.branchesEmpty')}
+                      {(branchesError as Error)?.message || t('workingDirectory.branchesEmpty')}
                     </div>
                   )}
 
                   {!isLoading && !branchesError && filtered.length === 0 && (
                     <div className={styles.emptyState}>
                       {search.trim()
-                        ? t('localSystem.workingDirectory.branchesNoMatch')
-                        : t('localSystem.workingDirectory.branchesEmpty')}
+                        ? t('workingDirectory.branchesNoMatch')
+                        : t('workingDirectory.branchesEmpty')}
                     </div>
                   )}
 
-                  {filtered.map((branch: GitBranchListItem) => {
+                  {filtered.map((branch) => {
                     const isCurrent = branch.name === currentBranch;
                     const isBusy = busyBranch === branch.name;
                     return (
@@ -337,7 +354,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                           <div className={styles.branchLabel}>{branch.name}</div>
                           {isCurrent && workingStatus && !workingStatus.clean && (
                             <div className={styles.itemMeta}>
-                              {t('localSystem.workingDirectory.uncommittedChanges', {
+                              {t('workingDirectory.uncommittedChanges', {
                                 count: workingStatus.total,
                               })}
                             </div>
@@ -351,53 +368,17 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                   })}
                 </div>
 
-                {isCreating ? (
-                  <div className={styles.createFooter}>
-                    <Input
-                      className={styles.createInput}
-                      placeholder={t('localSystem.workingDirectory.newBranchPlaceholder')}
-                      ref={createInputRef as any}
-                      size="small"
-                      value={newBranch}
-                      variant="filled"
-                      onChange={(e) => setNewBranch(e.target.value)}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      onPressEnter={handleCreateSubmit}
-                    />
-                    <Button
-                      disabled={!newBranch.trim() || !!busyBranch}
-                      loading={!!busyBranch}
-                      size="small"
-                      type="primary"
-                      onClick={handleCreateSubmit}
-                    >
-                      {t('localSystem.workingDirectory.checkoutAction')}
-                    </Button>
-                    <Button
-                      size="small"
-                      type="text"
-                      onClick={() => {
-                        setIsCreating(false);
-                        setNewBranch('');
-                      }}
-                    >
-                      {t('localSystem.workingDirectory.cancel')}
-                    </Button>
-                  </div>
-                ) : (
-                  <div className={styles.createItemWrapper}>
-                    <DropdownMenuItem
-                      className={cx(styles.item, styles.createItem)}
-                      closeOnClick={false}
-                      onClick={() => setIsCreating(true)}
-                    >
-                      <Icon className={styles.itemIcon} icon={GitBranchPlusIcon} size={14} />
-                      <div className={styles.itemMain}>
-                        {t('localSystem.workingDirectory.createBranchAction')}
-                      </div>
-                    </DropdownMenuItem>
-                  </div>
-                )}
+                <div className={styles.createItemWrapper}>
+                  <DropdownMenuItem
+                    className={cx(styles.item, styles.createItem)}
+                    onClick={openCreateBranch}
+                  >
+                    <Icon className={styles.itemIcon} icon={GitBranchPlusIcon} size={14} />
+                    <div className={styles.itemMain}>
+                      {t('workingDirectory.createBranchAction')}
+                    </div>
+                  </DropdownMenuItem>
+                </div>
               </div>
             </DropdownMenuPopup>
           </DropdownMenuPositioner>

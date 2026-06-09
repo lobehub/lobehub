@@ -91,8 +91,8 @@ export const serverMessagesEngine = async ({
     enableAgentMode,
     enableHistoryCount,
 
-    // File context refs must stay stable; media URLs are sent through structured parts.
-    fileContext: { enabled: true, includeFileUrl: false },
+    // Server-side file access URLs resolve to stable file-proxy URLs in production.
+    fileContext: { enabled: true, includeFileUrl: true },
 
     // Force finish mode (inject summary prompt when maxSteps exceeded)
     forceFinish,

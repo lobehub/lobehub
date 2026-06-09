@@ -17,7 +17,7 @@ import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import type React from 'react';
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AddSkillButton from '@/features/SkillStore/SkillList/AddSkillButton';
@@ -31,6 +31,7 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 import { type LobeToolType } from '@/types/tool/tool';
@@ -99,6 +100,9 @@ const SkillList = memo<SkillListProps>(
     const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
     const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
     const builtinSkills = useToolStore((s) => s.builtinSkills, isEqual);
+    const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+    const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
+    const fetchConnectors = useToolStore((s) => s.fetchConnectors);
     const allBuiltinTools = useToolStore((s) => s.builtinTools, isEqual);
     const uninstalledBuiltinTools = useToolStore(
       builtinToolSelectors.uninstalledBuiltinTools,
@@ -122,6 +126,12 @@ const SkillList = memo<SkillListProps>(
     useFetchUserKlavisServers(isKlavisEnabled);
     useFetchAgentSkills(true);
     useFetchUninstalledBuiltinTools(true);
+
+    // Load custom connectors (new connector store) so user-added OAuth MCP
+    // connectors appear in the Connectors tab list.
+    useEffect(() => {
+      if (!isConnectorsInit) fetchConnectors();
+    }, [isConnectorsInit, fetchConnectors]);
 
     const getLobehubSkillServerByProvider = (providerId: string) => {
       return allLobehubSkillServers.find((server) => server.identifier === providerId);
@@ -378,6 +388,20 @@ const SkillList = memo<SkillListProps>(
         />
       ));
 
+    // Custom connectors from the connector store (user-added OAuth MCP servers)
+    const renderCustomConnectors = () =>
+      customConnectors.map((c) => (
+        <McpSkillItem
+          identifier={c.identifier}
+          isSelected={selectedIdentifier === c.identifier}
+          key={c.id}
+          runtimeType="mcp"
+          title={c.name || c.identifier}
+          type={'customPlugin' as LobeToolType}
+          onSelect={onSelect ? () => onSelect(c.identifier, 'mcp-connector') : undefined}
+        />
+      ));
+
     // Split integrations into builtin tools vs builtin skills
     const builtinToolItems = integrations.filter((i) => i.type === 'builtin');
     const builtinSkillItems = integrations.filter((i) => i.type === 'builtinAgent');
@@ -417,8 +441,10 @@ const SkillList = memo<SkillListProps>(
     // connectors live exclusively in the Connectors view (hasCommunityConnectors).
     const hasCommunitySkills = !isConnectorView && marketAgentSkills.length > 0;
     const hasCommunityTools = communityMCPs.length > 0 && isConnectorView;
-    // In connector view: custom MCPs. In skill view: user agent skills
-    const hasCustomConnectors = customMCPs.length > 0 && isConnectorView;
+    // In connector view: custom MCPs (old plugins) + custom connectors (new store).
+    // In skill view: user agent skills
+    const hasCustomConnectors =
+      isConnectorView && (customMCPs.length > 0 || customConnectors.length > 0);
     const hasCustomSkills = userAgentSkills.length > 0 && !isConnectorView;
     // Lobehub/Klavis OAuth skills go in Connectors tab (they provide tools)
     const hasCommunityConnectors = communitySkillItems.length > 0 && isConnectorView;
@@ -522,7 +548,10 @@ const SkillList = memo<SkillListProps>(
           renderSection(
             'customConnectors',
             t('skillGroup.customConnectors', '自定义 Connectors'),
-            renderCustomMCPs(),
+            <>
+              {renderCustomConnectors()}
+              {renderCustomMCPs()}
+            </>,
           )}
 
         {hasCustomSkills &&

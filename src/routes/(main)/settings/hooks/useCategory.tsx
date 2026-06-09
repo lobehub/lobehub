@@ -35,7 +35,6 @@ import {
   useServerConfigStore,
 } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
-import { labPreferSelectors } from '@/store/user/selectors';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
@@ -70,9 +69,6 @@ export const useCategory = () => {
   ]);
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
-  const enableExecutionDeviceSwitcher = useUserStore(
-    labPreferSelectors.enableExecutionDeviceSwitcher,
-  );
 
   const avatarUrl = useMemo(() => {
     if (!avatar) return undefined;
@@ -102,7 +98,7 @@ export const useCategory = () => {
         key: SettingsTabs.Appearance,
         label: t('tab.appearance'),
       },
-      enableExecutionDeviceSwitcher && {
+      {
         icon: MonitorSmartphoneIcon,
         key: SettingsTabs.Devices,
         label: t('tab.devices'),
@@ -235,7 +231,6 @@ export const useCategory = () => {
     tAuth,
     tSubscription,
     enableBusinessFeatures,
-    enableExecutionDeviceSwitcher,
     hideDocs,
     mobile,
     showApiKeyManage,

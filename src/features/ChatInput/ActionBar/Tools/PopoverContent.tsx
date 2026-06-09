@@ -1,18 +1,23 @@
 import { type ItemType } from '@lobehub/ui';
 import { Flexbox, Icon, SearchBar, stopPropagation, usePopoverContext } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronRight, ExternalLink, Settings, Store } from 'lucide-react';
+import { Pin, Settings, Store, Zap } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { ScrollSignalProvider } from './ScrollSignalContext';
 import SkillActivateMode from './SkillActivateMode';
-import ToolsList, { toolsListStyles } from './ToolsList';
+import ToolsList from './ToolsList';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
-    padding: 4px;
+    display: flex;
+    gap: 14px;
+    align-items: center;
+
+    padding-block: 6px;
+    padding-inline: 12px;
     border-block-start: 1px solid ${cssVar.colorFill};
   `,
   header: css`
@@ -20,8 +25,67 @@ const styles = createStaticStyles(({ css }) => ({
     padding-inline: 8px;
     border-block-end: 1px solid ${cssVar.colorFill};
   `,
-  trailingIcon: css`
-    opacity: 0.5;
+  iconButton: css`
+    cursor: pointer;
+
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 6px;
+
+    color: ${cssVar.colorTextTertiary};
+
+    background: transparent;
+
+    transition:
+      color 0.2s,
+      background 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorTextSecondary};
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  statsItem: css`
+    display: inline-flex;
+    gap: 5px;
+    align-items: center;
+
+    font-size: 12px;
+    line-height: 18px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  storeButton: css`
+    cursor: pointer;
+
+    display: inline-flex;
+    flex: none;
+    gap: 4px;
+    align-items: center;
+
+    height: 28px;
+    padding-inline: 8px;
+    border: 0;
+    border-radius: 6px;
+
+    font-size: 13px;
+    color: ${cssVar.colorTextSecondary};
+
+    background: transparent;
+
+    transition:
+      color 0.2s,
+      background 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
+    }
   `,
 }));
 
@@ -51,80 +115,86 @@ const filterItems = (items: ItemType[], keyword: string): ItemType[] => {
 };
 
 interface PopoverContentProps {
+  autoCount: number;
   items: ItemType[];
   onOpenStore: () => void;
+  pinnedCount: number;
 }
 
-const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore }) => {
-  const { t } = useTranslation('setting');
-  const navigate = useNavigate();
-  const [searchKeyword, setSearchKeyword] = useState('');
+const PopoverContent = memo<PopoverContentProps>(
+  ({ autoCount, items, onOpenStore, pinnedCount }) => {
+    const { t } = useTranslation('setting');
+    const navigate = useNavigate();
+    const [searchKeyword, setSearchKeyword] = useState('');
 
-  const { close: closePopover } = usePopoverContext();
+    const { close: closePopover } = usePopoverContext();
 
-  const filteredItems = useMemo(
-    () => (searchKeyword ? filterItems(items, searchKeyword) : items),
-    [items, searchKeyword],
-  );
+    const filteredItems = useMemo(
+      () => (searchKeyword ? filterItems(items, searchKeyword) : items),
+      [items, searchKeyword],
+    );
 
-  return (
-    <Flexbox gap={0}>
-      <Flexbox horizontal align="center" className={styles.header} gap={4}>
-        <SearchBar
-          allowClear
-          placeholder={t('tools.search')}
-          size="small"
-          style={{ flex: 1 }}
-          value={searchKeyword}
-          variant="borderless"
-          onChange={(e) => setSearchKeyword(e.target.value)}
-          onKeyDown={stopPropagation}
-        />
-        <SkillActivateMode />
+    return (
+      <Flexbox gap={0}>
+        <Flexbox horizontal align="center" className={styles.header} gap={4}>
+          <SearchBar
+            allowClear
+            placeholder={t('tools.search')}
+            size="small"
+            style={{ flex: 1 }}
+            value={searchKeyword}
+            variant="borderless"
+            onChange={(e) => setSearchKeyword(e.target.value)}
+            onKeyDown={stopPropagation}
+          />
+          <SkillActivateMode />
+        </Flexbox>
+        <ScrollSignalProvider
+          style={{
+            height: 480,
+            overflowY: 'auto',
+          }}
+        >
+          <ToolsList items={filteredItems} />
+        </ScrollSignalProvider>
+        <div className={styles.footer}>
+          <span className={styles.statsItem}>
+            <Icon icon={Pin} size={12} />
+            {pinnedCount}
+          </span>
+          <span className={styles.statsItem}>
+            <Icon icon={Zap} size={12} />
+            {autoCount}
+          </span>
+          <Flexbox horizontal align="center" gap={2} style={{ marginInlineStart: 'auto' }}>
+            <button
+              className={styles.storeButton}
+              type="button"
+              onClick={() => {
+                closePopover();
+                onOpenStore();
+              }}
+            >
+              <Icon icon={Store} size={14} />
+              {t('tools.addSkillOrConnector')}
+            </button>
+            <button
+              aria-label={t('tools.plugins.management')}
+              className={styles.iconButton}
+              type="button"
+              onClick={() => {
+                closePopover();
+                navigate('/settings/skill');
+              }}
+            >
+              <Icon icon={Settings} size={14} />
+            </button>
+          </Flexbox>
+        </div>
       </Flexbox>
-      <ScrollSignalProvider
-        style={{
-          height: 480,
-          overflowY: 'auto',
-        }}
-      >
-        <ToolsList items={filteredItems} />
-      </ScrollSignalProvider>
-      <div className={styles.footer}>
-        <div
-          className={toolsListStyles.item}
-          role="button"
-          tabIndex={0}
-          onClick={() => {
-            closePopover();
-            onOpenStore();
-          }}
-        >
-          <div className={toolsListStyles.itemIcon}>
-            <Icon icon={Store} size={20} />
-          </div>
-          <div className={toolsListStyles.itemContent}>{t('skillStore.title')}</div>
-          <Icon className={styles.trailingIcon} icon={ChevronRight} size={16} />
-        </div>
-        <div
-          className={toolsListStyles.item}
-          role="button"
-          tabIndex={0}
-          onClick={() => {
-            closePopover();
-            navigate('/settings/skill');
-          }}
-        >
-          <div className={toolsListStyles.itemIcon}>
-            <Icon icon={Settings} size={20} />
-          </div>
-          <div className={toolsListStyles.itemContent}>{t('tools.plugins.management')}</div>
-          <Icon className={styles.trailingIcon} icon={ExternalLink} size={16} />
-        </div>
-      </div>
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 
 PopoverContent.displayName = 'PopoverContent';
 
