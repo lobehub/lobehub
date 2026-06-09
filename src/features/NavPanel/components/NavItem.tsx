@@ -47,6 +47,12 @@ export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
   actions?: ReactNode;
   active?: boolean;
   contextMenuItems?: GenericItemType[] | (() => GenericItemType[]);
+  /**
+   * Optional second line rendered under the title (e.g. a topic's project
+   * directory). When set, the row grows to fit both lines; when omitted the
+   * layout is byte-identical to a single-line row.
+   */
+  description?: ReactNode;
   disabled?: boolean;
   extra?: ReactNode;
   /**
@@ -77,6 +83,7 @@ const NavItem = memo<NavItemProps>(
     iconSize = 18,
     title,
     titleColor,
+    description,
     onClick,
     disabled,
     loading,
@@ -105,7 +112,8 @@ const NavItem = memo<NavItemProps>(
         className={cx(styles.container, className)}
         clickable={!disabled}
         gap={8}
-        height={36}
+        height={description ? undefined : 36}
+        paddingBlock={description ? 4 : undefined}
         paddingInline={4}
         variant={variant}
         onClick={(e) => {
@@ -133,15 +141,24 @@ const NavItem = memo<NavItemProps>(
         {iconPostfix}
         <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ overflow: 'hidden' }}>
           {titlePrefix}
-          <Text
-            color={textColor}
-            style={{ flex: 1 }}
-            ellipsis={{
-              tooltipWhenOverflow: true,
-            }}
-          >
-            {title}
-          </Text>
+          {description ? (
+            <Flexbox flex={1} gap={1} style={{ overflow: 'hidden' }}>
+              <Text color={textColor} ellipsis={{ tooltipWhenOverflow: true }}>
+                {title}
+              </Text>
+              {description}
+            </Flexbox>
+          ) : (
+            <Text
+              color={textColor}
+              style={{ flex: 1 }}
+              ellipsis={{
+                tooltipWhenOverflow: true,
+              }}
+            >
+              {title}
+            </Text>
+          )}
           <Flexbox
             horizontal
             align={'center'}

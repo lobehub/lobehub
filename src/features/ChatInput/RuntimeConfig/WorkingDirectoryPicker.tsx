@@ -28,7 +28,7 @@ import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
 
 import { openAddWorkingDirModal } from './AddWorkingDirModal';
-import { renderDirIcon } from './dirIcon';
+import DirIcon from './DirIcon';
 import { useCommitWorkingDirectory } from './useCommitWorkingDirectory';
 import { useMigrateDeviceRecents } from './useMigrateDeviceRecents';
 
@@ -330,7 +330,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
                 key={entry.path}
                 onClick={() => void pick(entry)}
               >
-                {renderDirIcon(entry.repoType)}
+                <DirIcon repoType={entry.repoType} />
                 <Flexbox flex={1} style={{ minWidth: 0 }}>
                   <div className={styles.dirName}>{getDirName(entry.path)}</div>
                   <div className={styles.dirPath}>{entry.path}</div>
@@ -374,7 +374,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   const trigger = (
     <div className={styles.button}>
       {selectedDir ? (
-        renderDirIcon(recents.find((r) => r.path === selectedDir)?.repoType)
+        <DirIcon repoType={recents.find((r) => r.path === selectedDir)?.repoType} />
       ) : (
         <Icon icon={FolderIcon} size={14} />
       )}

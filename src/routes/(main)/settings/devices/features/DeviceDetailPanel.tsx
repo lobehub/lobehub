@@ -9,7 +9,7 @@ import { FolderOpenIcon, FolderPlusIcon, XIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { renderDirIcon } from '@/features/ChatInput/RuntimeConfig/dirIcon';
+import DirIcon from '@/features/ChatInput/RuntimeConfig/DirIcon';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { electronSystemService } from '@/services/electron/system';
 import { nextWorkingDirs } from '@/store/device';
@@ -231,7 +231,7 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
             renderItem={(item: { id: string; repoType?: 'git' | 'github' }) => (
               <SortableList.Item className={styles.recentItem} id={item.id} variant={'filled'}>
                 <SortableList.DragHandle />
-                {renderDirIcon(item.repoType)}
+                <DirIcon repoType={item.repoType} />
                 <Text className={styles.path} title={item.id}>
                   {item.id}
                 </Text>

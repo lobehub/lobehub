@@ -54,6 +54,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, activeTopicId, activeT
       <Flexbox gap={1} paddingBlock={1}>
         {children.map((topic) => (
           <TopicItem
+            showWorkingDirectory
             active={activeTopicId === topic.id}
             fav={topic.favorite}
             id={topic.id}
