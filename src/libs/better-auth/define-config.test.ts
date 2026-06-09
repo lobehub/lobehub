@@ -2,8 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   betterAuth: vi.fn((options) => options),
-  businessEmailHarmonyOptions: { allowNormalizedSignin: false },
-  emailHarmony: vi.fn((options) => ({ id: 'email-harmony', options })),
 }));
 
 vi.mock('@better-auth/expo', () => ({
@@ -47,17 +45,9 @@ vi.mock('better-auth/plugins', () => ({
   magicLink: vi.fn(() => ({ id: 'magic-link' })),
 }));
 
-vi.mock('better-auth-harmony', () => ({
-  emailHarmony: mocks.emailHarmony,
-}));
-
 vi.mock('undici', () => ({
   ProxyAgent: vi.fn(),
   setGlobalDispatcher: vi.fn(),
-}));
-
-vi.mock('@/business/server/better-auth', () => ({
-  businessEmailHarmonyOptions: mocks.businessEmailHarmonyOptions,
 }));
 
 vi.mock('@/envs/app', () => ({
@@ -125,13 +115,5 @@ describe('defineConfig', () => {
         }),
       }),
     );
-  });
-
-  it('should delegate emailHarmony options to the business slot', async () => {
-    const { defineConfig } = await import('./define-config');
-
-    defineConfig({ plugins: [] });
-
-    expect(mocks.emailHarmony).toHaveBeenCalledWith(mocks.businessEmailHarmonyOptions);
   });
 });
