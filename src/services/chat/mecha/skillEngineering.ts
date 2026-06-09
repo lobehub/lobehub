@@ -44,8 +44,10 @@ export const resolveClientSkills = async (pluginIds?: string[]): Promise<Operati
   const pinnedIds = new Set(pluginIds ?? []);
 
   // Builtin skills keep their full content in the store, so it is always cheap
-  // to carry along; non-pinned skills simply ignore it (listed, not injected).
+  // to carry along. Pinned skills are marked `activated` so SkillContextProvider
+  // injects their content directly; non-pinned ones stay in <available_skills>.
   const builtinMetas = (toolState.builtinSkills || []).map((s) => ({
+    activated: pinnedIds.has(s.identifier) && !!s.content,
     content: s.content,
     description: s.description,
     identifier: s.identifier,
@@ -68,7 +70,9 @@ export const resolveClientSkills = async (pluginIds?: string[]): Promise<Operati
         const detail =
           toolState.agentSkillDetailMap?.[s.id] ?? (await agentSkillService.getById(s.id));
         const content = detail && buildDbSkillContent(detail);
-        return content ? { ...meta, content } : meta;
+        // Mark activated only when content is available, otherwise the skill would
+        // be excluded from both the activated and the <available_skills> lists.
+        return content ? { ...meta, activated: true, content } : meta;
       } catch (error) {
         // A single skill's content fetch must never break the whole request;
         // degrade gracefully by listing the skill without injected content.

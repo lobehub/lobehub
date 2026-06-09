@@ -32,8 +32,10 @@ const setToolState = (state: any) => {
   } as any);
 };
 
-const findSkill = (skills: { identifier: string }[], identifier: string) =>
-  skills.find((s) => s.identifier === identifier);
+const findSkill = (
+  skills: { activated?: boolean; content?: string; identifier: string }[],
+  identifier: string,
+) => skills.find((s) => s.identifier === identifier);
 
 describe('resolveClientSkills', () => {
   beforeEach(() => {
@@ -56,7 +58,10 @@ describe('resolveClientSkills', () => {
     const result = await resolveClientSkills(['artifacts']);
 
     expect(result.enabledPluginIds).toEqual(['artifacts']);
+    // activated must be set so SkillContextProvider injects content directly
+    // (the MessagesEngine path consumes these metas without running SkillResolver).
     expect(findSkill(result.skills, 'artifacts')).toMatchObject({
+      activated: true,
       content: '<artifacts_guide>build UI</artifacts_guide>',
       identifier: 'artifacts',
     });
@@ -79,6 +84,7 @@ describe('resolveClientSkills', () => {
 
     expect(mockedGetById).toHaveBeenCalledWith('db-1');
     expect(findSkill(result.skills, 'my-skill')).toMatchObject({
+      activated: true,
       content: 'full skill body',
       identifier: 'my-skill',
     });
@@ -116,7 +122,9 @@ describe('resolveClientSkills', () => {
     const result = await resolveClientSkills([]);
 
     expect(mockedGetById).not.toHaveBeenCalled();
-    expect(findSkill(result.skills, 'my-skill')?.content).toBeUndefined();
+    const skill = findSkill(result.skills, 'my-skill');
+    expect(skill?.content).toBeUndefined();
+    expect(skill?.activated).toBeFalsy();
   });
 
   it('prefers the cached skill detail over a network fetch', async () => {
@@ -130,7 +138,10 @@ describe('resolveClientSkills', () => {
     const result = await resolveClientSkills(['my-skill']);
 
     expect(mockedGetById).not.toHaveBeenCalled();
-    expect(findSkill(result.skills, 'my-skill')?.content).toBe('cached body');
+    expect(findSkill(result.skills, 'my-skill')).toMatchObject({
+      activated: true,
+      content: 'cached body',
+    });
   });
 
   it('degrades gracefully when a pinned DB skill content fetch fails', async () => {
@@ -141,8 +152,10 @@ describe('resolveClientSkills', () => {
 
     const result = await resolveClientSkills(['my-skill']);
 
-    // No throw; skill still listed, just without injected content.
-    expect(findSkill(result.skills, 'my-skill')).toMatchObject({ identifier: 'my-skill' });
-    expect(findSkill(result.skills, 'my-skill')?.content).toBeUndefined();
+    // No throw; skill still listed (available, not activated), just without content.
+    const skill = findSkill(result.skills, 'my-skill');
+    expect(skill).toMatchObject({ identifier: 'my-skill' });
+    expect(skill?.content).toBeUndefined();
+    expect(skill?.activated).toBeFalsy();
   });
 });
