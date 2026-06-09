@@ -16,25 +16,13 @@ describe('business model config', () => {
     vi.clearAllMocks();
   });
 
-  it('should preserve default model-bank availability checks for LobeHub models', async () => {
-    const loadedModels = [
-      {
-        enabled: true,
-        id: 'image-model',
-        providerId: 'lobehub',
-        type: 'image',
-      },
-    ];
-    mockLoadModelBankModels.mockResolvedValue(loadedModels);
-    mockIsProviderModelAvailable.mockReturnValue(true);
+  it('should disable LobeHub model availability by default', () => {
+    const getUserEmail = vi.fn();
 
-    await expect(isLobeHubModelAvailable('image-model', 'image')).resolves.toBe(true);
+    expect(isLobeHubModelAvailable('image-model', 'image', { getUserEmail })).toBe(false);
 
-    expect(mockIsProviderModelAvailable).toHaveBeenCalledWith(
-      loadedModels,
-      'lobehub',
-      'image-model',
-      'image',
-    );
+    expect(mockLoadModelBankModels).not.toHaveBeenCalled();
+    expect(mockIsProviderModelAvailable).not.toHaveBeenCalled();
+    expect(getUserEmail).not.toHaveBeenCalled();
   });
 });

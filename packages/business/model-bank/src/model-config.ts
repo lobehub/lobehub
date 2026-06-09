@@ -1,9 +1,5 @@
 import type { AiFullModelCard, AiModelType } from 'model-bank';
-import {
-  isProviderModelAvailable,
-  loadModels as loadModelBankModels,
-  ModelProvider,
-} from 'model-bank';
+import { loadModels as loadModelBankModels, ModelProvider } from 'model-bank';
 
 interface LobeHubModelConfig {
   models: AiFullModelCard[];
@@ -34,12 +30,11 @@ const loadLobeHubModels = async (): Promise<AiFullModelCard[]> =>
 export const loadLobeHubPlanCardModels = async (): Promise<string[]> =>
   (await loadLobeHubModelConfig()).planCardModels;
 
-export const isLobeHubModelAvailable = async (
-  id: string,
-  expectedType: AiModelType,
+export const isLobeHubModelAvailable = (
+  _id: string,
+  _expectedType: AiModelType,
   _options?: {
     getUserEmail?: () => Promise<string | null | undefined>;
     userEmail?: string | null;
   },
-): Promise<boolean> =>
-  isProviderModelAvailable(await loadModels(), ModelProvider.LobeHub, id, expectedType);
+): boolean => false;
