@@ -4,16 +4,16 @@ import { Button, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { ChevronDown, FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';
+import { FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AddConnectorModal } from '@/features/Connectors';
+import NavHeader from '@/features/NavHeader';
+import { createSkillStoreModal } from '@/features/SkillStore';
 import ImportFromGithubModal from '@/features/SkillStore/SkillList/ImportFromGithubModal';
 import ImportFromUrlModal from '@/features/SkillStore/SkillList/ImportFromUrlModal';
 import UploadSkillModal from '@/features/SkillStore/SkillList/UploadSkillModal';
-import NavHeader from '@/features/NavHeader';
-import { createSkillStoreModal } from '@/features/SkillStore';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
 
