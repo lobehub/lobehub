@@ -455,7 +455,7 @@ export default {
     'Share your exclusive referral code to invite friends to register',
   'referral.inviteCode.title': 'My Referral Code',
   'referral.inviteLink.description':
-    'Copy the link and share with friends. Complete registration to receive rewards',
+    'Copy the link and share with friends. Both of you earn credits after your friend makes a payment',
   'referral.inviteLink.title': 'Referral Link',
   'referral.rules.backfill.alreadyBound': 'You have already bound an invite code',
   'referral.rules.backfill.description':
@@ -471,17 +471,17 @@ export default {
   'referral.rules.expiry':
     'Credit validity: Available referral credits will be cleared after 100 days of user inactivity',
   'referral.rules.missedCode':
-    'Missed invite code: You can <0>backfill</0> within 7 days of registration. After backfilling, you still need to perform a valid action to receive rewards',
+    'Missed invite code: You can <0>backfill</0> within 7 days of registration. After backfilling, you still need to perform a valid action and complete a payment to receive rewards',
   'referral.rules.priority':
     'Credit consumption priority: Free credits → Subscription credits → Referral credits → Top-up credits',
   'referral.rules.registration':
     'Registration method: Invited users register via referral link or enter referral code on registration page',
   'referral.rules.reward': 'Reward: Referrer and invitee each receive {{reward}}M credits',
   'referral.rules.rewardDelay':
-    'Reward processing: Credits will be distributed after verification, which may take up to 6 hours',
+    'Reward processing: Credits will be distributed within 1 hour after the invitee completes a payment and passes verification',
   'referral.rules.title': 'Program Rules',
   'referral.rules.validInvitation':
-    'Valid invitation: Invitee registers with your referral code and performs one valid action',
+    'Valid invitation: Invitee registers with your referral code, performs one valid action, and completes a payment (subscription or credit top-up)',
   'referral.rules.antiAbuse':
     'If fraudulent activity is detected (e.g., mass registration of disposable email accounts), the associated accounts will be permanently banned',
   'referral.rules.validOperation':
@@ -497,7 +497,7 @@ export default {
   'referral.table.columns.inviterRewardAmount': 'My Reward',
   'referral.table.columns.rewardedAt': 'Reward Time',
   'referral.table.columns.status': 'Status',
-  'referral.table.status.pending_reward': 'Under Review',
+  'referral.table.status.pending_reward': 'Pending Reward',
   'referral.table.status.registered': 'Registered',
   'referral.table.status.revoked': 'Revoked',
   'referral.table.status.rewarded': 'Rewarded',
