@@ -846,7 +846,7 @@
   "upload.preview.status.pending": "업로드 준비 중…",
   "upload.preview.status.processing": "파일 처리 중…",
   "upload.validation.unsupportedFileType": "지원되지 않는 파일 형식: {{files}}. 지원되는 이미지: JPG, PNG, GIF, WebP. 지원되는 문서: PDF, Word, Excel, PowerPoint, Markdown, 텍스트, CSV, JSON 및 코드 파일.",
-  "upload.validation.videoSizeExceeded": "비디오 파일은 100MB를 초과할 수 없습니다. 현재 {{actualSize}}입니다",
+  "upload.validation.videoSizeExceeded": "비디오 파일은 {{maxSize}}를 초과할 수 없습니다. 현재 {{actualSize}}입니다",
   "viewMode.fullWidth": "전체 너비",
   "viewMode.normal": "일반",
   "viewMode.wideScreen": "와이드스크린",

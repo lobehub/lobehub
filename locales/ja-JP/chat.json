@@ -846,7 +846,7 @@
   "upload.preview.status.pending": "アップロードの準備中…",
   "upload.preview.status.processing": "ファイル処理中…",
   "upload.validation.unsupportedFileType": "サポートされていないファイルタイプ: {{files}}。サポートされている画像形式: JPG、PNG、GIF、WebP。サポートされているドキュメント形式: PDF、Word、Excel、PowerPoint、Markdown、テキスト、CSV、JSON、コードファイル。",
-  "upload.validation.videoSizeExceeded": "ビデオファイルは 100MB を超えることはできません。現在は {{actualSize}} です",
+  "upload.validation.videoSizeExceeded": "ビデオファイルは {{maxSize}} を超えることはできません。現在は {{actualSize}} です",
   "viewMode.fullWidth": "全幅表示",
   "viewMode.normal": "標準",
   "viewMode.wideScreen": "ワイドスクリーン",

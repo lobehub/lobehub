@@ -412,7 +412,10 @@ const PlusAction = memo(() => {
               const validation = validateVideoFileSize(file);
               if (!validation.isValid) {
                 message.error(
-                  t('upload.validation.videoSizeExceeded', { actualSize: validation.actualSize }),
+                  t('upload.validation.videoSizeExceeded', {
+                    actualSize: validation.actualSize,
+                    maxSize: validation.maxSize,
+                  }),
                 );
                 return false;
               }

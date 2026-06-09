@@ -11,6 +11,7 @@ describe('validateVideoFileSize', () => {
 
     expect(result.isValid).toBe(true);
     expect(result.actualSize).toBeUndefined();
+    expect(result.maxSize).toBeUndefined();
   });
 
   it('should return valid for video files under 100MB', () => {
@@ -35,6 +36,7 @@ describe('validateVideoFileSize', () => {
 
     expect(result.isValid).toBe(false);
     expect(result.actualSize).toBe('120.0 MB');
+    expect(result.maxSize).toBe('100.0 MB');
   });
 
   it('should return invalid for video files exactly at 100MB limit plus 1 byte', () => {

@@ -846,7 +846,7 @@
   "upload.preview.status.pending": "در حال آماده‌سازی برای بارگذاری...",
   "upload.preview.status.processing": "در حال پردازش فایل...",
   "upload.validation.unsupportedFileType": "نوع فایل پشتیبانی نشده: {{files}}. تصاویر پشتیبانی شده: JPG، PNG، GIF، WebP. اسناد پشتیبانی شده شامل PDF، Word، Excel، PowerPoint، Markdown، متن، CSV، JSON و فایل‌های کد هستند.",
-  "upload.validation.videoSizeExceeded": "حجم فایل ویدیو نباید بیش از ۱۰۰ مگابایت باشد. حجم فعلی: {{actualSize}}.",
+  "upload.validation.videoSizeExceeded": "حجم فایل ویدیو نباید بیش از {{maxSize}} باشد. حجم فعلی: {{actualSize}}.",
   "viewMode.fullWidth": "تمام‌عرض",
   "viewMode.normal": "استاندارد",
   "viewMode.wideScreen": "نمای عریض",

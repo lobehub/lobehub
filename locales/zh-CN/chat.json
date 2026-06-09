@@ -865,7 +865,7 @@
   "upload.preview.status.pending": "准备上传…",
   "upload.preview.status.processing": "文件处理中…",
   "upload.validation.unsupportedFileType": "不支持的文件类型：{{files}}。支持的图片格式：JPG、PNG、GIF、WebP。支持的文档包括PDF、Word、Excel、PowerPoint、Markdown、文本、CSV、JSON和代码文件。",
-  "upload.validation.videoSizeExceeded": "视频文件不能超过 100MB。当前为 {{actualSize}}",
+  "upload.validation.videoSizeExceeded": "视频文件不能超过 {{maxSize}}。当前为 {{actualSize}}",
   "viewMode.fullWidth": "全宽显示",
   "viewMode.normal": "普通",
   "viewMode.wideScreen": "宽屏",

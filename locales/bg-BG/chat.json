@@ -846,7 +846,7 @@
   "upload.preview.status.pending": "Подготовка за качване...",
   "upload.preview.status.processing": "Обработка на файла...",
   "upload.validation.unsupportedFileType": "Неподдържан тип файл: {{files}}. Поддържани изображения: JPG, PNG, GIF, WebP. Поддържани документи включват PDF, Word, Excel, PowerPoint, Markdown, текст, CSV, JSON и файлове с код.",
-  "upload.validation.videoSizeExceeded": "Размерът на видеофайла не трябва да надвишава 100MB. Текущият размер е {{actualSize}}.",
+  "upload.validation.videoSizeExceeded": "Размерът на видеофайла не трябва да надвишава {{maxSize}}. Текущият размер е {{actualSize}}.",
   "viewMode.fullWidth": "Пълна ширина",
   "viewMode.normal": "Стандартен",
   "viewMode.wideScreen": "Широкоекранен",
