@@ -40,6 +40,7 @@ export default {
   'brief.title': 'Brief',
   'brief.viewAllTasks': 'View all tasks',
   'brief.viewRun': 'View run',
+  'freeCreditBadge.label': 'Exclusive {{amount}} free credits for {{model}}',
   'project.create': 'New project',
   'project.deleteConfirm':
     "This project will be deleted and can't be recovered. Confirm to continue.",
