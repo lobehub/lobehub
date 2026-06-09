@@ -2,6 +2,9 @@
 
 import { useCallback } from 'react';
 
+import { useBusinessCanEnableAgentMode } from '@/business/client/hooks/useBusinessAgentMode';
+
+import { useAgentId } from './useAgentId';
 import { useUpdateAgentConfig } from './useUpdateAgentConfig';
 
 /**
@@ -12,10 +15,13 @@ import { useUpdateAgentConfig } from './useUpdateAgentConfig';
  * untouched — chat mode is enforced at the runtime tools engine layer.
  */
 export const useToggleAgentMode = () => {
+  const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
+  const canEnableBusinessAgentMode = useBusinessCanEnableAgentMode(agentId);
 
   return useCallback(
-    (enable: boolean) => updateAgentChatConfig({ enableAgentMode: enable }),
-    [updateAgentChatConfig],
+    (enable: boolean) =>
+      updateAgentChatConfig({ enableAgentMode: enable && canEnableBusinessAgentMode }),
+    [canEnableBusinessAgentMode, updateAgentChatConfig],
   );
 };

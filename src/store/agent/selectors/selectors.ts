@@ -26,7 +26,6 @@ import { filterToolIds } from '@/helpers/toolFilters';
 
 import { type AgentStoreState } from '../initialState';
 import { builtinAgentSelectors } from './builtinAgentSelectors';
-import { isFableChatOnlyModel } from './modelMode';
 
 // ==========   Meta   ============== //
 
@@ -246,8 +245,6 @@ const openingMessage = (s: AgentStoreState) => currentAgentConfig(s)?.openingMes
  */
 const currentAgentMode = (s: AgentStoreState): AgentMode | undefined => {
   const config = currentAgentConfig(s);
-  if (isFableChatOnlyModel(config)) return;
-
   const chatConfig = config?.chatConfig;
   return chatConfig?.enableAgentMode === false ? undefined : 'auto';
 };

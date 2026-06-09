@@ -3,6 +3,7 @@ import { Center } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useCallback } from 'react';
 
+import { useBusinessModelModeConfig } from '@/business/client/hooks/useBusinessAgentMode';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -41,12 +42,13 @@ const ModelSwitch = memo(() => {
     agentByIdSelectors.getAgentModelProviderById(agentId)(s),
     s.updateAgentConfigById,
   ]);
+  const applyBusinessModelModeConfig = useBusinessModelModeConfig();
 
   const handleModelChange = useCallback(
     async (params: { model: string; provider: string }) => {
-      await updateAgentConfigById(agentId, params);
+      await updateAgentConfigById(agentId, applyBusinessModelModeConfig(params));
     },
-    [agentId, updateAgentConfigById],
+    [agentId, applyBusinessModelModeConfig, updateAgentConfigById],
   );
 
   return (

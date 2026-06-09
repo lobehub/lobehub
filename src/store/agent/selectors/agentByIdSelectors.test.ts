@@ -80,7 +80,7 @@ describe('agentByIdSelectors', () => {
       expect(agentByIdSelectors.getAgentEnableModeById('agent-1')(state)).toBe(true);
     });
 
-    it('should force fable to chat mode even when agent mode is enabled', () => {
+    it('should keep fable in agent mode when agent mode is enabled', () => {
       const state = createState({
         agentMap: {
           'agent-1': {
@@ -91,8 +91,8 @@ describe('agentByIdSelectors', () => {
         },
       });
 
-      expect(agentByIdSelectors.getAgentModeById('agent-1')(state)).toBeUndefined();
-      expect(agentByIdSelectors.getAgentEnableModeById('agent-1')(state)).toBe(false);
+      expect(agentByIdSelectors.getAgentModeById('agent-1')(state)).toBe('auto');
+      expect(agentByIdSelectors.getAgentEnableModeById('agent-1')(state)).toBe(true);
     });
   });
 

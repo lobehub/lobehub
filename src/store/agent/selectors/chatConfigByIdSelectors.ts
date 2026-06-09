@@ -8,7 +8,6 @@ import { type LobeAgentChatConfig, type RuntimeEnvMode } from '@lobechat/types';
 import { resolveRuntimeMode } from '@/helpers/executionTarget';
 import { type AgentStoreState } from '@/store/agent/initialState';
 
-import { getChatConfigWithModelModeOverride } from './modelMode';
 import { agentSelectors } from './selectors';
 
 /**
@@ -24,9 +23,8 @@ const getStoredChatConfigById =
 const getChatConfigById =
   (agentId: string) =>
   (s: AgentStoreState): LobeAgentChatConfig =>
-    getChatConfigWithModelModeOverride(agentSelectors.getAgentConfigById(agentId)(s));
+    getStoredChatConfigById(agentId)(s);
 
-// Return raw chatConfig value without business logic overrides
 const getEnableHistoryCountById = (agentId: string) => (s: AgentStoreState) =>
   getStoredChatConfigById(agentId)(s).enableHistoryCount;
 

@@ -59,7 +59,7 @@ describe('chatConfigByIdSelectors', () => {
       expect(chatConfigByIdSelectors.getChatConfigById('non-existent')(state)).toEqual({});
     });
 
-    it('should force fable to chat mode while preserving other chat config', () => {
+    it('should return stored fable chat config without model-specific overrides', () => {
       const state = createState({
         agentMap: {
           'agent-1': {
@@ -71,7 +71,7 @@ describe('chatConfigByIdSelectors', () => {
       });
 
       expect(chatConfigByIdSelectors.getChatConfigById('agent-1')(state)).toMatchObject({
-        enableAgentMode: false,
+        enableAgentMode: true,
         historyCount: 10,
       });
     });
