@@ -1,6 +1,10 @@
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import { LOADING_FLAT } from '@lobechat/const';
-import type { ConversationContext, HeterogeneousProviderConfig } from '@lobechat/types';
+import type {
+  ChatImageItem,
+  ConversationContext,
+  HeterogeneousProviderConfig,
+} from '@lobechat/types';
 import { t } from 'i18next';
 import { type StateCreator } from 'zustand';
 
@@ -71,12 +75,15 @@ const runHeterogeneousFromExistingMessage = async (
   params: {
     context: ConversationContext;
     heterogeneousProvider: HeterogeneousProviderConfig;
+    /** Image attachments from the original user message — forwarded to the CLI for vision support */
+    imageList?: ChatImageItem[];
     parentMessageId: string;
     parentOperationId: string;
     prompt: string;
   },
 ): Promise<string> => {
-  const { context, heterogeneousProvider, parentMessageId, parentOperationId, prompt } = params;
+  const { context, heterogeneousProvider, imageList, parentMessageId, parentOperationId, prompt } =
+    params;
   const agentId = context.agentId;
   if (!agentId) throw new Error('agentId is required for heterogeneous agent');
 
@@ -132,6 +139,7 @@ const runHeterogeneousFromExistingMessage = async (
       assistantMessageId: assistantMsg.id,
       context,
       heterogeneousProvider,
+      imageList: imageList?.length ? imageList : undefined,
       message: prompt,
       operationId: heteroOpId,
       resumeSessionId,
@@ -526,6 +534,11 @@ export const generationSlice: StateCreator<
         await runHeterogeneousFromExistingMessage(chatStore, {
           context,
           heterogeneousProvider,
+          // Forward the original user message's images so regenerate re-runs
+          // the CLI with the same vision input as the first attempt. Without
+          // this, regenerate silently drops attachments (the send path reads
+          // imageList off the persisted user message; this path must too).
+          imageList: item.imageList,
           parentMessageId: messageId,
           parentOperationId: operationId,
           prompt: item.content,
