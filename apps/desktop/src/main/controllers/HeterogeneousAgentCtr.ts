@@ -41,6 +41,33 @@ import { createLogger } from '@/utils/logger';
 import { ControllerModule, IpcMethod } from './index';
 
 const logger = createLogger('controllers:HeterogeneousAgentCtr');
+
+// Anthropic auth env vars that must NOT be inherited from the desktop process
+// when spawning a local CLI agent. A developer with `ANTHROPIC_API_KEY` (or an
+// auth token / base url) exported in their shell would otherwise have it
+// forwarded to `claude`, which then switches from its own subscription login to
+// that key — an expired / wrong key surfaces as a baffling "Invalid API key"
+// and the run exits non-zero. Agents that genuinely want an API key still set
+// it through `session.env`, which is spread AFTER the inherited env below and
+// therefore wins.
+const STRIPPED_INHERITED_ENV_KEYS = [
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_BASE_URL',
+] as const;
+
+/**
+ * Inherited `process.env` with the Anthropic auth vars removed. Keep this pure
+ * and exported so the "never leak host Anthropic creds into the CLI" invariant
+ * can be unit-tested directly.
+ */
+export const buildInheritedSpawnEnv = (
+  sourceEnv: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv => {
+  const env = { ...sourceEnv };
+  for (const key of STRIPPED_INHERITED_ENV_KEYS) delete env[key];
+  return env;
+};
 const CODEX_RESUME_THREAD_NOT_FOUND_PATTERNS = [
   /no conversation found/i,
   /thread .*not found/i,
@@ -920,7 +947,10 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const spawnOptions = {
       cwd,
       detached: process.platform !== 'win32',
-      env: { ...process.env, ...proxyEnv, ...session.env },
+      // Strip host Anthropic creds from the inherited env so a developer's
+      // shell `ANTHROPIC_API_KEY` can't hijack the CLI's own auth. `session.env`
+      // is spread last, so an agent that explicitly configures a key still wins.
+      env: { ...buildInheritedSpawnEnv(), ...proxyEnv, ...session.env },
       stdio: [useStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'] as ['pipe' | 'ignore', 'pipe', 'pipe'],
     };
 

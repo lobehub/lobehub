@@ -313,6 +313,53 @@ describe('HeterogeneousAgentCtr', () => {
       ]);
     });
 
+    it('does not leak host Anthropic auth env into the spawned CLI', async () => {
+      // A developer with these exported in their shell would otherwise have them
+      // forwarded to `claude`, overriding its subscription login and surfacing
+      // as a baffling "Invalid API key" / non-zero exit. Regression guard for
+      // that env-leak.
+      const original = {
+        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+        ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
+        ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
+      };
+      process.env.ANTHROPIC_API_KEY = 'sk-host-should-not-leak';
+      process.env.ANTHROPIC_AUTH_TOKEN = 'host-token-should-not-leak';
+      process.env.ANTHROPIC_BASE_URL = 'https://host.example/should-not-leak';
+
+      try {
+        const { options } = await runSendPrompt('hello');
+
+        expect(options.env).not.toHaveProperty('ANTHROPIC_API_KEY');
+        expect(options.env).not.toHaveProperty('ANTHROPIC_AUTH_TOKEN');
+        expect(options.env).not.toHaveProperty('ANTHROPIC_BASE_URL');
+        // Unrelated inherited vars must still pass through.
+        expect(options.env.PATH).toBe(process.env.PATH);
+      } finally {
+        for (const [key, value] of Object.entries(original)) {
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        }
+      }
+    });
+
+    it('lets an agent-configured Anthropic key in session.env override the stripped host env', async () => {
+      const originalKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'sk-host-should-not-leak';
+
+      try {
+        const { options } = await runSendPrompt('hello', {
+          env: { ANTHROPIC_API_KEY: 'sk-agent-explicit' },
+        });
+
+        // Explicit per-agent config wins; the host value is never seen.
+        expect(options.env.ANTHROPIC_API_KEY).toBe('sk-agent-explicit');
+      } finally {
+        if (originalKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+        else process.env.ANTHROPIC_API_KEY = originalKey;
+      }
+    });
+
     it('captures the Claude Code session id from stream-json init events', async () => {
       const { ctr, sessionId } = await runSendPrompt('hello', {}, [
         `${JSON.stringify({ session_id: 'sess_cc_123', subtype: 'init', type: 'system' })}\n`,
