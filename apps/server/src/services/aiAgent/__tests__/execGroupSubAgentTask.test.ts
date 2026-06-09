@@ -208,6 +208,7 @@ describe('AiAgentService.execSubAgent', () => {
         agentId: 'agent-1',
         appContext: {
           groupId: 'group-1',
+          isSubAgent: true,
           threadId: 'thread-123',
           topicId: 'topic-1',
         },
