@@ -31,6 +31,7 @@ const mockBuiltinModels = vi.hoisted(() => [
     abilities: { functionCall: true, video: true, vision: true },
     id: 'gemini-3.1-flash-lite-preview',
     providerId: 'google',
+    settings: { extendParams: ['preserveThinking'] },
   },
 ]);
 
@@ -745,7 +746,14 @@ describe('RuntimeExecutors', () => {
         });
         vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
 
-        const executors = createRuntimeExecutors(ctx);
+        // Reasoning only lands in the finalized message when preserveThinking is
+        // enabled on a supported model; otherwise it is intentionally dropped.
+        // Enable it here so this still guards reasoning_part capture (not drop).
+        const ctxWithThinking: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: { chatConfig: { preserveThinking: true }, plugins: [], systemRole: 'test' },
+        };
+        const executors = createRuntimeExecutors(ctxWithThinking);
         const result = await executors.call_llm!(geminiInstruction(), createMockState());
 
         expect(result.newState.messages.at(-1)).toEqual(
