@@ -64,6 +64,11 @@ export const FileMetadataSchema = z.object({
   height: z.number().optional(),
   path: z.string(),
   /**
+   * intrinsic image aspect ratio (width / height), recorded for images so
+   * consumers can group/reserve layout by orientation without recomputing
+   */
+  ratio: z.number().optional(),
+  /**
    * intrinsic image width in pixels, recorded for images
    */
   width: z.number().optional(),

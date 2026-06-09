@@ -48,6 +48,7 @@ interface UploadWithProgressParams {
 interface UploadWithProgressResult {
   dimensions?: {
     height: number;
+    ratio: number;
     width: number;
   };
   filename?: string;
