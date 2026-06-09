@@ -795,9 +795,24 @@ export class HeterogeneousPersistenceHandler {
       await this.deps.messageModel.update(state.currentAssistantMessageId, prevUpdate);
     }
 
-    const lastToolMsgId = [...state.toolState.payloads]
+    let lastToolMsgId = [...state.toolState.payloads]
       .reverse()
       .find((p) => !!p.result_msg_id)?.result_msg_id;
+
+    // In-memory tool state can be empty or unresolved here: a different
+    // replica drained this step's `tools_calling`, or the batch-start refresh
+    // read the assistant's `tools[]` JSONB before its Phase-3 `result_msg_id`
+    // backfill was visible. Chaining off `currentAssistantMessageId` in that
+    // case forks the wire (`asst1 → asst2` with the tools as a dead branch),
+    // which renders as two disconnected bubbles. Fall back to the
+    // authoritative source — the `role:'tool'` rows themselves (Phase 2),
+    // which are committed earlier and independently of the JSONB mirror.
+    if (!lastToolMsgId) {
+      lastToolMsgId = await this.deps.messageModel.getLastChildToolMessageId(
+        state.currentAssistantMessageId,
+      );
+    }
+
     const stepParentId = lastToolMsgId || state.currentAssistantMessageId;
 
     const newMsg = await this.deps.messageModel.create({
