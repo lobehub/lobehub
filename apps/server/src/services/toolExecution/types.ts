@@ -3,7 +3,7 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import {
   type ChatToolPayload,
   type ClientSecretPayload,
-  type ExecSubAgentTaskParams,
+  type ExecSubAgentParams,
 } from '@lobechat/types';
 
 export interface ToolExecutionMemoryEmbeddingRuntime {
@@ -62,10 +62,10 @@ export interface ToolExecutionContext {
   documentId?: string | null;
   /**
    * Spawn a sub-agent as an independent async operation. Injected by the agent
-   * runtime (forwarded from `RuntimeExecutorContext.execSubAgentTask`) so the
+   * runtime (forwarded from `RuntimeExecutorContext.execSubAgent`) so the
    * `callSubAgent` server tool can fork a child op without a circular import.
    */
-  execSubAgentTask?: (params: ExecSubAgentTaskParams) => Promise<unknown>;
+  execSubAgent?: (params: ExecSubAgentParams) => Promise<unknown>;
   /** Per-call execution timeout resolved by the agent runtime. */
   executionTimeoutMs?: number;
   /** Current group ID for group chat context */

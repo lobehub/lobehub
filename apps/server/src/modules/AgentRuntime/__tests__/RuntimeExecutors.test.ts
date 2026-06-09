@@ -4717,13 +4717,13 @@ describe('RuntimeExecutors', () => {
       expect((result.nextContext?.payload as any).stop).toBe(true);
     });
 
-    it('exec_sub_agent executor creates task message and calls execSubAgentTask callback', async () => {
+    it('exec_sub_agent executor creates task message and calls execSubAgent callback', async () => {
       const mockExecSubAgentTask = vi
         .fn()
         .mockResolvedValue({ success: true, operationId: 'child-op', threadId: 'thread-child' });
       const ctxWithCallback = {
         ...ctx,
-        execSubAgentTask: mockExecSubAgentTask,
+        execSubAgent: mockExecSubAgentTask,
         topicId: 'topic-123',
       };
 
@@ -4755,7 +4755,7 @@ describe('RuntimeExecutors', () => {
         }),
       );
 
-      // execSubAgentTask callback fired with targetAgentId
+      // execSubAgent callback fired with targetAgentId
       expect(mockExecSubAgentTask).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'target-agent-id',
@@ -4769,7 +4769,7 @@ describe('RuntimeExecutors', () => {
       expect(result.nextContext?.phase).toBe('sub_agent_result');
     });
 
-    it('exec_sub_agent gracefully skips dispatch when execSubAgentTask not injected', async () => {
+    it('exec_sub_agent gracefully skips dispatch when execSubAgent not injected', async () => {
       // No callback injected (e.g. in tests that don't set it up)
       const executors = createRuntimeExecutors(ctx);
       const state = createMockState();

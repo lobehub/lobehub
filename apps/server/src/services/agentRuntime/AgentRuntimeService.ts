@@ -25,11 +25,7 @@ import {
   invokeAgentSpanName,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import {
-  type ChatToolPayload,
-  type ExecSubAgentTaskParams,
-  type UIChatMessage,
-} from '@lobechat/types';
+import { type ChatToolPayload, type ExecSubAgentParams, type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
@@ -111,7 +107,7 @@ export interface AgentRuntimeServiceOptions {
    * Injected by AiAgentService to wire up the exec_task / exec_tasks executors
    * without creating a circular import between RuntimeExecutors and AiAgentService.
    */
-  execSubAgentTask?: (params: ExecSubAgentTaskParams) => Promise<unknown>;
+  execSubAgent?: (params: ExecSubAgentParams) => Promise<unknown>;
   /**
    * Custom QueueService
    * Set to null to disable queue scheduling (for synchronous execution tests)
@@ -156,7 +152,7 @@ export class AgentRuntimeService {
   private agentFactory?: (config: GeneralAgentConfig) => Agent;
   private completionLifecycle: CompletionLifecycle;
   private coordinator: AgentRuntimeCoordinator;
-  private execSubAgentTaskCallback?: (params: ExecSubAgentTaskParams) => Promise<unknown>;
+  private execSubAgentCallback?: (params: ExecSubAgentParams) => Promise<unknown>;
   private humanIntervention: HumanInterventionHandler;
   private streamManager: IStreamEventManager;
   private queueService: QueueService | null;
@@ -207,7 +203,7 @@ export class AgentRuntimeService {
       options?.snapshotStore ?? this.createDefaultSnapshotStore(),
     );
     this.agentFactory = options?.agentFactory;
-    this.execSubAgentTaskCallback = options?.execSubAgentTask;
+    this.execSubAgentCallback = options?.execSubAgent;
     this.serverDB = db;
     this.userId = userId;
     this.workspaceId = options?.workspaceId;
@@ -1661,7 +1657,7 @@ export class AgentRuntimeService {
       discordContext: metadata?.discordContext,
       userTimezone: metadata?.userTimezone,
       evalContext: metadata?.evalContext,
-      execSubAgentTask: this.execSubAgentTaskCallback,
+      execSubAgent: this.execSubAgentCallback,
       hookDispatcher,
       loadAgentState: this.coordinator.loadAgentState.bind(this.coordinator),
       messageModel: this.messageModel,

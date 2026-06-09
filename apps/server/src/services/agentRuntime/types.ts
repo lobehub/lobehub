@@ -213,7 +213,7 @@ export interface OperationCreationParams {
   operationSkillSet?: OperationSkillSet;
   /**
    * Operation ID of the parent run when this operation is a sub-agent
-   * invocation (e.g. spawned via `execSubAgentTask`). Persisted to
+   * invocation (e.g. spawned via `execSubAgent`). Persisted to
    * `agent_operations.parent_operation_id` so analytics can join the
    * sub-tree back to its root.
    */
