@@ -95,6 +95,7 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 import { resolveDeviceAccessPolicy } from './deviceAccessPolicy';
 import { buildAllowedBuiltinTools, isDeviceToolIdentifier } from './deviceToolRegistry';
 import { ingestAttachment } from './ingestAttachment';
+import { resolveDeviceWorkingDirectory } from './resolveDeviceWorkingDirectory';
 import { isWorkspaceCacheFresh, upsertWorkspaceScan } from './workspaceInitCache';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -333,15 +334,15 @@ export class AiAgentService {
       const device = await deviceModel.findByDeviceId(activeDeviceId);
       if (!device) return empty;
 
-      // The bound project root (unified precedence, mirrors hetero dispatch):
-      //   topic override > agent's per-device choice > device default.
-      // This is the directory we scan.
+      // The bound project root we scan — resolved via the shared precedence
+      // helper so it cannot drift from hetero dispatch / topic backfill.
       const topic = await this.topicModel.findById(topicId);
-      const boundCwd =
-        topic?.metadata?.workingDirectory ||
-        agencyConfig?.workingDirByDevice?.[activeDeviceId] ||
-        device.defaultCwd ||
-        undefined;
+      const boundCwd = resolveDeviceWorkingDirectory({
+        deviceDefaultCwd: device.defaultCwd,
+        deviceId: activeDeviceId,
+        topicWorkingDirectory: topic?.metadata?.workingDirectory,
+        workingDirByDevice: agencyConfig?.workingDirByDevice,
+      });
       if (!boundCwd) return empty;
 
       const workingDirs = device.workingDirs ?? [];
@@ -725,6 +726,7 @@ export class AiAgentService {
 
     // 3. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
     let topicId = appContext?.topicId;
+    const isNewTopic = !topicId;
     const topicBoundDeviceId = requestedDeviceId;
     if (!topicId) {
       if (resume) {
@@ -1083,16 +1085,23 @@ export class AiAgentService {
           const boundDevice = await new DeviceModel(this.db, this.userId).findByDeviceId(
             dispatchDeviceId,
           );
-          // Working-directory precedence (unified across client + server):
-          //   topic override > agent's per-device choice > device default.
-          // An existing topic carries its pinned cwd in `metadata.workingDirectory`;
-          // `initialTopicMetadata` is only populated for a brand-new topic.
-          const deviceCwd =
-            topic?.metadata?.workingDirectory ||
-            appContext?.initialTopicMetadata?.workingDirectory ||
-            agentConfig.agencyConfig?.workingDirByDevice?.[dispatchDeviceId] ||
-            boundDevice?.defaultCwd ||
-            undefined;
+          // Resolve via the shared precedence helper so dispatch, workspace-init,
+          // and the new-topic backfill below all agree on the cwd.
+          const deviceCwd = resolveDeviceWorkingDirectory({
+            deviceDefaultCwd: boundDevice?.defaultCwd,
+            deviceId: dispatchDeviceId,
+            initialWorkingDirectory: appContext?.initialTopicMetadata?.workingDirectory,
+            topicWorkingDirectory: topic?.metadata?.workingDirectory,
+            workingDirByDevice: agentConfig.agencyConfig?.workingDirByDevice,
+          });
+
+          // A brand-new topic has no pinned cwd yet: the directory was only
+          // recorded at agent level (`workingDirByDevice`) when no topic existed.
+          // Persist the resolved cwd onto the topic so the sidebar groups it
+          // under the right project and the next turn reuses the same directory.
+          if (isNewTopic && deviceCwd && deviceCwd !== topic?.metadata?.workingDirectory) {
+            await this.topicModel.updateMetadata(topicId, { workingDirectory: deviceCwd });
+          }
 
           // A device is the user's own persistent machine — build a
           // device-specific context instead of reusing the cloud-sandbox one
