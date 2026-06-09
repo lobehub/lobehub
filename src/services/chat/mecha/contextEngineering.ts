@@ -29,6 +29,7 @@ import type {
   LobeToolManifest,
   MemoryContext,
   OnboardingContext,
+  OperationSkillSet,
   PlanTodoConfig,
   ToolDiscoveryConfig,
   UserMemoryData,
@@ -643,6 +644,20 @@ export const contextEngineering = async ({
     }
   }
 
+  // Resolve enabled skills (await: pinned DB skills fetch their content on demand).
+  // In auto mode: expose all installed skills so the AI can discover and activate them.
+  // In manual mode: only expose user-selected skills (filtered by pluginIds).
+  let enabledSkills: OperationSkillSet['skills'] | undefined;
+  if (plugins) {
+    const skillSet = await resolveClientSkills(plugins);
+    if (isInAutoSkillMode) {
+      enabledSkills = skillSet.skills;
+    } else {
+      const selectedIds = new Set(plugins);
+      enabledSkills = skillSet.skills.filter((s) => selectedIds.has(s.identifier));
+    }
+  }
+
   // Create MessagesEngine with injected dependencies
   const engine = new MessagesEngine({
     // Agent configuration
@@ -689,20 +704,9 @@ export const contextEngineering = async ({
     // agent-document injectors when this is `false` (chat mode).
     enableAgentMode: agentChatConfigSelectors.currentChatConfig(agentStoreState).enableAgentMode,
 
-    // Skills configuration
-    // In auto mode: expose all installed skills so the AI can discover and activate them
-    // In manual mode: only expose user-selected skills (filtered by pluginIds)
+    // Skills configuration (resolved above)
     skillsConfig: {
-      enabledSkills: plugins
-        ? (() => {
-            const skillSet = resolveClientSkills(plugins);
-            if (!isInAutoSkillMode) {
-              const selectedIds = new Set(plugins);
-              return skillSet.skills.filter((s) => selectedIds.has(s.identifier));
-            }
-            return skillSet.skills;
-          })()
-        : undefined,
+      enabledSkills,
     },
 
     // Tool Discovery configuration
