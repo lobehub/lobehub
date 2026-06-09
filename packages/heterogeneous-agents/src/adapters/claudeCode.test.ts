@@ -1291,14 +1291,20 @@ describe('ClaudeCodeAdapter', () => {
   });
 
   describe('usage and model extraction', () => {
-    // Under `--include-partial-messages`, CC emits a stale
+    // Under `--include-partial-messages` (partial mode), CC emits a stale
     // `message_start.usage` snapshot (e.g. `output_tokens: 8`) that it echoes
     // verbatim on every content-block `assistant` event. The authoritative
-    // per-turn total only arrives later as `message_delta`. So turn_metadata
-    // emission is wired to `message_delta`, not `assistant`.
-    it('does NOT emit turn_metadata on assistant events (usage there is stale)', () => {
+    // per-turn total only arrives later as `message_delta`. So in partial mode
+    // turn_metadata emission is wired to `message_delta`, not `assistant`.
+    // Seeing a `stream_event` is what tells the adapter it is in partial mode.
+    it('does NOT emit turn_metadata on assistant events in partial mode (usage there is stale)', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
+      // A stream_event marks partial mode — message_delta will own usage.
+      adapter.adapt({
+        event: { message: { id: 'msg_1', model: 'claude-sonnet-4-6' }, type: 'message_start' },
+        type: 'stream_event',
+      });
 
       const events = adapter.adapt({
         message: {
@@ -1313,6 +1319,42 @@ describe('ClaudeCodeAdapter', () => {
       expect(
         events.find((e) => e.type === 'step_complete' && e.data?.phase === 'turn_metadata'),
       ).toBeUndefined();
+    });
+
+    // BATCH mode (no `--include-partial-messages`, e.g. the `lh hetero exec`
+    // CLI used by device + sandbox runs): no `message_delta` arrives, and the
+    // `assistant` event's usage is authoritative — not a stale echo. The
+    // adapter must emit turn_metadata here so token counts land, carrying the
+    // clean `assistant` model id (NOT the `[1m]` beta-tagged `system init` one).
+    it('emits turn_metadata on assistant events in batch mode (no stream_event)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      // `system init` reports the beta-tagged id; the assistant event is clean.
+      adapter.adapt({ model: 'claude-opus-4-8[1m]', subtype: 'init', type: 'system' });
+
+      const events = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ text: 'hello', type: 'text' }],
+          model: 'claude-opus-4-8',
+          usage: { input_tokens: 100, output_tokens: 50 },
+        },
+        type: 'assistant',
+      });
+
+      const meta = events.find(
+        (e) => e.type === 'step_complete' && e.data?.phase === 'turn_metadata',
+      );
+      expect(meta).toBeDefined();
+      expect(meta!.data.model).toBe('claude-opus-4-8');
+      expect(meta!.data.provider).toBe('claude-code');
+      expect(meta!.data.usage).toEqual({
+        inputCacheMissTokens: 100,
+        inputCachedTokens: undefined,
+        inputWriteCacheTokens: undefined,
+        totalInputTokens: 100,
+        totalOutputTokens: 50,
+        totalTokens: 150,
+      });
     });
 
     it('emits turn_metadata on message_delta with authoritative usage', () => {

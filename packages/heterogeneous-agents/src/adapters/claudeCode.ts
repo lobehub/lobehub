@@ -455,6 +455,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   private pendingToolCalls = new Set<string>();
   private started = false;
   private stepIndex = 0;
+  /**
+   * True once any `stream_event` wrapper is seen — i.e. CC was spawned with
+   * `--include-partial-messages` (desktop driver). The `lh hetero exec` CLI
+   * used by device + sandbox runs spawns in BATCH mode (no partial flag), so
+   * this stays false and `handleAssistant` owns per-turn usage instead of
+   * `message_delta`.
+   */
+  private sawStreamEvent = false;
   /** Track current message.id to detect step boundaries */
   private currentMessageId: string | undefined;
   /** message.id of the stream_event delta flow currently in flight */
@@ -816,6 +824,29 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       });
     }
     events.push(...this.emitToolChunk(newToolCalls, messageId));
+
+    // BATCH mode (no `--include-partial-messages`, e.g. the `lh hetero exec`
+    // CLI used by device + sandbox runs): there is no `message_delta` to carry
+    // per-turn usage, and the `assistant` event's usage is NOT a stale
+    // message_start echo — it's the real per-message total. Emit it as
+    // turn_metadata so usage (token counts) AND the canonical model id (the
+    // `assistant` event reports a clean `claude-opus-4-8`, unlike `system init`
+    // which appends a `[1m]` beta marker) land on the assistant message. In
+    // partial mode (`sawStreamEvent`) `message_delta` owns this — skip here to
+    // avoid double-counting the stale snapshot.
+    if (!this.sawStreamEvent) {
+      const usage = toUsageData(raw.message?.usage);
+      if (usage) {
+        events.push(
+          this.makeEvent('step_complete', {
+            model: raw.message?.model,
+            phase: 'turn_metadata',
+            provider: 'claude-code',
+            usage,
+          }),
+        );
+      }
+    }
 
     return events;
   }
@@ -1285,6 +1316,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   private handleStreamEvent(raw: any): HeterogeneousAgentEvent[] {
     const event = raw?.event;
     if (!event) return [];
+
+    // Seeing any stream_event proves CC is running with
+    // `--include-partial-messages` — `message_delta` owns authoritative usage,
+    // so `handleAssistant` must NOT also emit it (the assistant block echoes a
+    // stale message_start usage snapshot in this mode).
+    this.sawStreamEvent = true;
 
     switch (event.type) {
       case 'message_start': {
