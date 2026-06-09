@@ -12,6 +12,7 @@
     "./aihubmix": "./src/aiModels/aihubmix.ts",
     "./akashchat": "./src/aiModels/akashchat.ts",
     "./anthropic": "./src/aiModels/anthropic.ts",
+    "./atlascloud": "./src/aiModels/atlascloud.ts",
     "./azureai": "./src/aiModels/azureai.ts",
     "./azure": "./src/aiModels/azure.ts",
     "./baichuan": "./src/aiModels/baichuan.ts",
