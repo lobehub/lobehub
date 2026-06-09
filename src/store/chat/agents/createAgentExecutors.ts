@@ -495,7 +495,7 @@ export const createAgentExecutors = (context: {
           });
         },
         onFinish: async (
-          content,
+          _content,
           {
             traceId,
             observationId,
@@ -508,6 +508,8 @@ export const createAgentExecutors = (context: {
             type,
           },
         ) => {
+          void _content;
+
           if (traceId) {
             messageService.updateMessage(
               assistantMessageId,
