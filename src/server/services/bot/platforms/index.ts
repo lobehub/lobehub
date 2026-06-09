@@ -9,6 +9,7 @@ import { qq } from './qq/definition';
 import { PlatformRegistry } from './registry';
 import { slack } from './slack/definition';
 import { telegram } from './telegram/definition';
+import { wati } from './wati/definition';
 import { wechat } from './wechat/definition';
 
 export {
@@ -88,6 +89,7 @@ export { line } from './line/definition';
 export { qq } from './qq/definition';
 export { slack } from './slack/definition';
 export { telegram } from './telegram/definition';
+export { wati } from './wati/definition';
 export { wechat } from './wechat/definition';
 
 export const platformRegistry = new PlatformRegistry();
@@ -101,3 +103,4 @@ platformRegistry.register(lark);
 platformRegistry.register(qq);
 platformRegistry.register(wechat);
 platformRegistry.register(line);
+platformRegistry.register(wati);

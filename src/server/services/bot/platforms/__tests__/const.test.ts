@@ -66,6 +66,7 @@ describe('getBotReplyLocale', () => {
     expect(getBotReplyLocale('feishu')).toBe('zh-CN');
     expect(getBotReplyLocale('qq')).toBe('zh-CN');
     expect(getBotReplyLocale('wechat')).toBe('zh-CN');
+    expect(getBotReplyLocale('wati')).toBe('en-US');
   });
 
   it('returns en-US for English-first platforms', () => {

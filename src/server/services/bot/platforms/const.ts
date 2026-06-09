@@ -31,6 +31,7 @@ const USER_ID_TOOLTIP_BY_PLATFORM: Record<string, string> = {
   qq: 'channel.userIdHint.qq',
   slack: 'channel.userIdHint.slack',
   telegram: 'channel.userIdHint.telegram',
+  wati: 'channel.userIdHint.wati',
 };
 
 const SERVER_ID_TOOLTIP_BY_PLATFORM: Record<string, string> = {
@@ -92,6 +93,7 @@ const PLATFORM_REPLY_LOCALES: Record<string, BotReplyLocale> = {
   qq: 'zh-CN',
   slack: 'en-US',
   telegram: 'en-US',
+  wati: 'en-US',
   wechat: 'zh-CN',
 };
 

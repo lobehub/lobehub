@@ -130,6 +130,23 @@ export default {
     'From the Basic settings tab. Required — used to verify X-Line-Signature on every inbound webhook.',
   'channel.line.webhookManualSetup':
     'LINE does not allow programmatic webhook registration. Copy this URL into the LINE Developers Console (Messaging API → Webhook URL), click "Verify", and enable "Use webhook".',
+  'channel.wati.description':
+    'Connect WhatsApp Business via the Official API (Wati). Customers text your business number and receive replies from this agent within the 24-hour session window.',
+  'channel.wati.apiBaseUrl': 'API Base URL',
+  'channel.wati.apiBaseUrlHint':
+    'Your Wati API host from the API Docs page (e.g. https://live-mt-server.wati.io).',
+  'channel.wati.tenantId': 'Tenant ID',
+  'channel.wati.tenantIdHint':
+    'Tenant ID segment in Wati API paths, shown in your Wati API documentation.',
+  'channel.wati.bearerToken': 'Bearer Token',
+  'channel.wati.bearerTokenHint':
+    'API token from Wati → API Docs. Stored encrypted. Used for outbound messages and credential validation.',
+  'channel.wati.channelPhoneNumber': 'WhatsApp Business Number',
+  'channel.wati.channelPhoneNumberHint':
+    'Your Wati-connected WhatsApp business number in international format without + (e.g. 85290000001). This is the number customers message — not a separate "channel" product. Must match a number on your Wati account.',
+  'channel.wati.channelPhoneNumberPlaceholder': 'e.g. 85290000001',
+  'channel.wati.webhookManualSetup':
+    'On connect, LobeHub registers this Webhook URL with Wati via API (message events). You can still copy it for verification. Replies use session messages within the 24-hour window.',
   'channel.openPlatform': 'Open Platform',
   'channel.platforms': 'Platforms',
   'channel.publicKey': 'Public Key',
@@ -182,6 +199,8 @@ export default {
   'channel.secretTokenPlaceholder': 'Optional secret for webhook verification',
   'channel.telegram.description': 'Connect this assistant to Telegram for private and group chats.',
   'channel.testConnection': 'Test Connection',
+  'channel.wati.testSuccess':
+    'Connection test passed. Webhook URL was registered with Wati — check Connectors → Webhooks in your Wati dashboard.',
   'channel.testFailed': 'Connection test failed',
   'channel.testSuccess': 'Connection test passed',
   'channel.updateFailed': 'Failed to update status',
@@ -295,6 +314,8 @@ export default {
   'channel.userIdHint.slack': 'Open your Slack profile → ⋮ More → Copy member ID (starts with U).',
   'channel.userIdHint.telegram':
     'Send any message to @userinfobot on Telegram — it replies with your numeric User ID.',
+  'channel.userIdHint.wati':
+    'Customer WhatsApp numbers appear as `waId` on inbound webhooks (country code, no +). Use your own number for pairing tests.',
   'channel.refreshStatus': 'Refresh status',
   'channel.runtimeDisconnected': 'Bot disconnected',
   'channel.statusConnected': 'Connected',

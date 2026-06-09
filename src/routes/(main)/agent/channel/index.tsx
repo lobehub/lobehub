@@ -61,7 +61,11 @@ const ChannelPage = memo(() => {
       ? COMING_SOON_PLATFORMS.filter((p) => p.id !== 'imessage')
       : COMING_SOON_PLATFORMS;
     const comingSoonIds = new Set(comingSoon.map((p) => p.id));
-    return [...(platforms ?? []).filter((p) => !comingSoonIds.has(p.id)), ...comingSoon];
+    const serverPlatforms = (platforms ?? []).filter(
+      (p) => !comingSoonIds.has(p.id) && p.id !== 'wati',
+    );
+    const watiPlatform = (platforms ?? []).find((p) => p.id === 'wati');
+    return [...serverPlatforms, ...comingSoon, ...(watiPlatform ? [watiPlatform] : [])];
   }, [platforms, enableImessage]);
 
   // Default to first platform once loaded

@@ -13,7 +13,9 @@ import {
   mergeBotSettingsForPersist,
 } from '@/server/services/bot/agentBotProviderSettings';
 import { getBotMessageRouter } from '@/server/services/bot/BotMessageRouter';
+import { buildBotPlatformRuntimeContext } from '@/server/services/bot/buildBotPlatformContext';
 import { mergeWithDefaults, platformRegistry } from '@/server/services/bot/platforms';
+import { registerWatiWebhook } from '@/server/services/bot/platforms/wati/client';
 import { GatewayService } from '@/server/services/gateway';
 import { getBotRuntimeStatus } from '@/server/services/gateway/runtimeStatus';
 
@@ -204,6 +206,19 @@ export const agentBotProviderRouter = router({
           message:
             result.errors?.map((e) => `${e.field}: ${e.message}`).join('; ') || 'Validation failed',
         });
+      }
+
+      if (platform === 'wati') {
+        const { url: webhookUrl } = await registerWatiWebhook(
+          {
+            applicationId: provider.applicationId,
+            credentials: provider.credentials as Record<string, string>,
+            platform,
+            settings,
+          },
+          buildBotPlatformRuntimeContext(ctx.userId),
+        );
+        return { valid: true, webhookUrl };
       }
 
       return { valid: true };
