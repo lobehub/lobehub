@@ -2,6 +2,7 @@ import { ModelProvider } from 'model-bank';
 
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import { resolveGPT5ReasoningExtendParam } from '../../utils/gptModelId';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 import type { OpenRouterModelCard, OpenRouterReasoning } from './type';
 
@@ -168,17 +169,9 @@ export const params = {
           if (model.description && model.description.includes('`reasoning` `enabled`')) {
             extendParams.push('enableReasoning');
           }
-          if (
-            hasReasoning &&
-            (model.id.includes('gpt-5.2') ||
-              model.id.includes('gpt-5.4') ||
-              model.id.includes('gpt-5.5'))
-          ) {
-            extendParams.push('gpt5_2ReasoningEffort', 'textVerbosity');
-          } else if (hasReasoning && model.id.includes('gpt-5.1')) {
-            extendParams.push('gpt5_1ReasoningEffort', 'textVerbosity');
-          } else if (hasReasoning && model.id.includes('gpt-5')) {
-            extendParams.push('gpt5ReasoningEffort', 'textVerbosity');
+          const gpt5ReasoningExtendParam = resolveGPT5ReasoningExtendParam(model.id);
+          if (hasReasoning && gpt5ReasoningExtendParam) {
+            extendParams.push(gpt5ReasoningExtendParam, 'textVerbosity');
           } else if (hasReasoning && model.id.includes('openai')) {
             extendParams.push('reasoningEffort', 'textVerbosity');
           }

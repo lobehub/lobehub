@@ -10,7 +10,7 @@ import { type OfficialToolItem } from '@lobechat/context-engine';
 import { type FetchSSEOptions } from '@lobechat/fetch-sse';
 import { fetchSSE, standardizeAnimationStyle } from '@lobechat/fetch-sse';
 import type { ChatCompletionErrorPayload } from '@lobechat/model-runtime';
-import { AgentRuntimeError, responsesAPIModels } from '@lobechat/model-runtime';
+import { AgentRuntimeError, isResponsesAPIModel } from '@lobechat/model-runtime';
 import type {
   RuntimeInitialContext,
   RuntimeStepContext,
@@ -59,7 +59,6 @@ import {
 } from './mecha';
 import { type FetchOptions } from './types';
 
-const defaultProvider = ModelProvider.OpenAI;
 const providersWithDeploymentName = new Set<string>([
   ModelProvider.Azure,
   ModelProvider.AzureAI,
@@ -368,7 +367,7 @@ class ChatService {
       ? findDeploymentName(model, provider)
       : undefined;
     const shouldUseDeploymentField =
-      (provider === ModelProvider.Azure && responsesAPIModels.has(model)) ||
+      (provider === ModelProvider.Azure && isResponsesAPIModel(model)) ||
       provider === ModelProvider.Spark;
 
     if (!shouldUseDeploymentField && deploymentName) {
@@ -573,7 +572,7 @@ class ChatService {
       throw AgentRuntimeError.createError(ChatErrorType.InvalidAccessCode);
     }
 
-    const agentRuntime = await initializeWithClientStore({
+    const agentRuntime = initializeWithClientStore({
       payload: params.payload,
       provider: params.provider,
       runtimeProvider: params.runtimeProvider,

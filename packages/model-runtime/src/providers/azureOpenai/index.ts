@@ -9,6 +9,7 @@ import type { ChatMethodOptions, ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload } from '../../types/image';
 import { AgentRuntimeError } from '../../utils/createError';
+import { isResponsesAPIModel } from '../../utils/gptModelId';
 import { sanitizeError } from '../../utils/sanitizeError';
 
 const azureImageLogger = debug('lobe-image:azure');
@@ -66,16 +67,22 @@ const normalizeAzureBaseURL = (value?: string) => {
 const maskSensitiveUrl = (url: string) => {
   const regex = /^(https:\/\/)([^.]+)(\.(?:openai\.azure\.com|cognitiveservices\.azure\.com).*)$/;
 
-  return url.replace(regex, (match, protocol, subdomain, rest) => `${protocol}***${rest}`);
+  return url.replace(regex, '$1***$3');
 };
 
 const BaseAzureOpenAI = createOpenAICompatibleRuntime({
   chatCompletion: {
     handlePayload: (payload) => {
-      const { deploymentName, enabledSearch, model, preserveThinking: _preserveThinking, ...rest } = payload;
+      const {
+        deploymentName,
+        enabledSearch,
+        model,
+        preserveThinking: _preserveThinking,
+        ...rest
+      } = payload;
       const requestModel = deploymentName ?? model;
 
-      if (responsesAPIModels.has(model) || enabledSearch) {
+      if (isResponsesAPIModel(model) || enabledSearch) {
         return {
           ...rest,
           apiMode: 'responses',
