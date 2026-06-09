@@ -1,8 +1,9 @@
 'use client';
 
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
@@ -18,6 +19,7 @@ import Body from './Body';
 import Footer from './Footer';
 import { getChannelFormValues, mergeSettingsWithDefaults } from './formState';
 import Header from './Header';
+import { type ChannelPostSave, ChannelPostSaveContext } from './postSaveContext';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   main: css`
@@ -69,7 +71,7 @@ interface PlatformDetailProps {
 const PlatformDetail = memo<PlatformDetailProps>(
   ({ platformDef, agentId, currentConfig, runtimeStatus }) => {
     const { t } = useTranslation('agent');
-    const { message: msg, modal } = App.useApp();
+    const { message: msg } = App.useApp();
     const [form] = Form.useForm<ChannelFormValues>();
 
     const [
@@ -101,6 +103,19 @@ const PlatformDetail = memo<PlatformDetailProps>(
     );
     const [refreshingStatus, setRefreshingStatus] = useState(false);
     const connectPollingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Platform-specific extras (e.g. iMessage's BlueBubbles bridge) register a
+    // side-effect here so it runs as part of the single "Save Configuration"
+    // click instead of a separate button.
+    const postSaveRef = useRef<ChannelPostSave | null>(null);
+    const postSaveRegistry = useMemo(
+      () => ({
+        register: (fn: ChannelPostSave | null) => {
+          postSaveRef.current = fn;
+        },
+      }),
+      [],
+    );
 
     const stopConnectPolling = useCallback(() => {
       if (!connectPollingTimerRef.current) return;
@@ -324,6 +339,10 @@ const PlatformDetail = memo<PlatformDetailProps>(
           });
         }
 
+        // Run any platform-specific post-save side-effect (e.g. iMessage's
+        // local BlueBubbles bridge) as part of the same save.
+        await postSaveRef.current?.({ applicationId });
+
         setSaveResult({ type: 'success' });
         setTimeout(() => setSaveResult(undefined), 3000);
         setSaving(false);
@@ -402,7 +421,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
     const handleDelete = useCallback(async () => {
       if (!currentConfig) return;
 
-      modal.confirm({
+      confirmModal({
         content: t('channel.deleteConfirmDesc'),
         okButtonProps: { danger: true },
         onOk: async () => {
@@ -416,7 +435,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
         },
         title: t('channel.deleteConfirm'),
       });
-    }, [currentConfig, agentId, deleteBotProvider, msg, t, modal, form]);
+    }, [currentConfig, agentId, deleteBotProvider, msg, t, form]);
 
     const handleToggleEnable = useCallback(
       async (enabled: boolean) => {
@@ -463,41 +482,43 @@ const PlatformDetail = memo<PlatformDetailProps>(
     }, [currentConfig, platformDef.id, testConnection, msg, t]);
 
     return (
-      <main className={styles.main}>
-        <Header
-          currentConfig={currentConfig}
-          enabledValue={pendingEnabled}
-          platformDef={platformDef}
-          refreshingStatus={refreshingStatus}
-          runtimeStatus={observedStatus}
-          toggleLoading={toggleLoading}
-          onRefreshStatus={handleRefreshStatus}
-          onToggleEnable={handleToggleEnable}
-        />
-        <Body
-          currentConfig={currentConfig}
-          form={form}
-          hasConfig={!!currentConfig}
-          platformDef={platformDef}
-          onAuthenticated={handleExternalAuth}
-        />
-        <Footer
-          connectResult={connectResult}
-          connecting={connecting}
-          currentConfig={currentConfig}
-          form={form}
-          hasConfig={!!currentConfig}
-          platformDef={platformDef}
-          saveResult={saveResult}
-          saving={saving}
-          testResult={testResult}
-          testing={testing}
-          onCopied={() => msg.success(t('channel.copied'))}
-          onDelete={handleDelete}
-          onSave={handleSave}
-          onTestConnection={handleTestConnection}
-        />
-      </main>
+      <ChannelPostSaveContext value={postSaveRegistry}>
+        <main className={styles.main}>
+          <Header
+            currentConfig={currentConfig}
+            enabledValue={pendingEnabled}
+            platformDef={platformDef}
+            refreshingStatus={refreshingStatus}
+            runtimeStatus={observedStatus}
+            toggleLoading={toggleLoading}
+            onRefreshStatus={handleRefreshStatus}
+            onToggleEnable={handleToggleEnable}
+          />
+          <Body
+            currentConfig={currentConfig}
+            form={form}
+            hasConfig={!!currentConfig}
+            platformDef={platformDef}
+            onAuthenticated={handleExternalAuth}
+          />
+          <Footer
+            connectResult={connectResult}
+            connecting={connecting}
+            currentConfig={currentConfig}
+            form={form}
+            hasConfig={!!currentConfig}
+            platformDef={platformDef}
+            saveResult={saveResult}
+            saving={saving}
+            testResult={testResult}
+            testing={testing}
+            onCopied={() => msg.success(t('channel.copied'))}
+            onDelete={handleDelete}
+            onSave={handleSave}
+            onTestConnection={handleTestConnection}
+          />
+        </main>
+      </ChannelPostSaveContext>
     );
   },
 );

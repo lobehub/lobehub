@@ -48,13 +48,10 @@
   "starter.createAgent": "도우미 만들기",
   "starter.createGroup": "그룹 만들기",
   "starter.deepResearch": "심층 연구",
-  "starter.deepseekV4Pro": "DeepSeek V4 Pro",
-  "starter.deepseekV4ProAlready": "이미 DeepSeek V4 Pro를 사용 중입니다",
-  "starter.deepseekV4ProSwitched": "DeepSeek V4 Pro로 전환되었습니다",
   "starter.developing": "개발 중",
   "starter.image": "그림 그리기",
-  "starter.imageGeneration": "이미지 생성",
+  "starter.modelInUse": "{{name}}을(를) 이미 사용 중입니다",
+  "starter.modelSwitched": "{{name}}으로(로) 전환되었습니다",
   "starter.newLabel": "새로 추가",
-  "starter.videoGeneration": "시댄스 2.0",
   "starter.write": "글쓰기"
 }

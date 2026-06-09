@@ -223,7 +223,7 @@ export class FlatListBuilder {
           processedIds,
         );
 
-        // Gather external-signal callback blocks (LOBE-8998) for any
+        // Gather external-signal callback blocks () for any
         // tool in the chain that fired toolless reactive replies
         // (Monitor stdout pushes, etc.). Snapshot now so the UI doesn't
         // need to query messageMap; mark callback messages as processed
@@ -233,7 +233,7 @@ export class FlatListBuilder {
           allMessages,
         );
 
-        // Post-task-summary turns (LOBE-8998) — toolless siblings of
+        // Post-task-summary turns () — toolless siblings of
         // the callbacks under the same tool_result, tagged with
         // `signal.type === 'task-completion'`. Belong inside the same
         // AssistantGroup, rendered AFTER the SignalCallbacks accordion.
@@ -942,7 +942,7 @@ export class FlatListBuilder {
     }
 
     // Snapshot signal-callback blocks onto the virtual group message
-    // (LOBE-8998) so AssistantGroupMessage can render `<SignalCallbacks>`
+    // () so AssistantGroupMessage can render `<SignalCallbacks>`
     // without re-querying the store. Each callback Message becomes a
     // compact UISignalCallback with content + model/provider/sequence.
     if (signalCallbackBlocks && signalCallbackBlocks.length > 0) {
@@ -961,7 +961,7 @@ export class FlatListBuilder {
       }));
     }
 
-    // Snapshot post-task-summary turns as content blocks (LOBE-8998).
+    // Snapshot post-task-summary turns as content blocks ().
     // They render after `<SignalCallbacks>` inside the same group, via
     // a second `<Group>` that pulls live content from the store using
     // the block id (no need to denormalize text here — keeps streaming

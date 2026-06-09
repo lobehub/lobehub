@@ -91,7 +91,7 @@ interface GetStreamableMcpServerManifestInput {
   url: string;
 }
 
-interface CallToolInput {
+export interface CallToolInput {
   args: any;
   env: any;
   params: GetStdioMcpServerManifestInput;
@@ -324,6 +324,19 @@ export default class McpCtr extends ControllerModule {
   @IpcMethod()
   async callTool(payload: SuperJSONSerialized<CallToolInput>) {
     const input = deserializePayload<CallToolInput>(payload);
+    return serializePayload(await this.runStdioMcpTool(input));
+  }
+
+  /**
+   * Core stdio MCP tool execution, shared by the renderer IPC path
+   * ({@link callTool}) and the device-gateway tunnel (GatewayConnectionCtr,
+   * which runs MCP calls forwarded from the cloud server). Returns the plain
+   * result envelope; callers serialize as needed. Throws on failure so each
+   * caller can shape its own error response.
+   */
+  async runStdioMcpTool(
+    input: CallToolInput,
+  ): Promise<{ content: string; state: unknown; success: boolean }> {
     const params: MCPClientParams = {
       args: input.params.args || [],
       command: input.params.command,
@@ -342,11 +355,11 @@ export default class McpCtr extends ControllerModule {
 
       const content = await toMarkdown(processed, (key) => this.fileService.getFileHTTPURL(key));
 
-      return serializePayload({
+      return {
         content,
         state: { ...raw, content: processed },
         success: true,
-      });
+      };
     } catch (error) {
       // If it's an MCPConnectionError with stderr logs, enhance the error message
       if (error instanceof MCPConnectionError && error.stderrLogs.length > 0) {

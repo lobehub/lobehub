@@ -242,7 +242,7 @@ export const AgentManagementManifest: BuiltinToolManifest = {
     // ==================== Search ====================
     {
       description:
-        "Search for agents in your workspace or the marketplace. Use 'user' source to find your own agents, 'market' for marketplace agents, or 'all' for both.",
+        "Search for agents in your workspace or the marketplace. Use 'user' source to find your own agents, 'market' for marketplace agents, or 'all' for both. Results are paginated: the response reports the real total, and you can page through workspace agents with 'offset'.",
       name: AgentManagementApiName.searchAgent,
       parameters: {
         properties: {
@@ -264,6 +264,12 @@ export const AgentManagementManifest: BuiltinToolManifest = {
           limit: {
             default: 10,
             description: 'Maximum number of results to return (default: 10, max: 20)',
+            type: 'number',
+          },
+          offset: {
+            default: 0,
+            description:
+              'Number of workspace agents to skip, for pagination (e.g. offset=20 with limit=20 returns agents 21-40). Not applied to marketplace results.',
             type: 'number',
           },
         },

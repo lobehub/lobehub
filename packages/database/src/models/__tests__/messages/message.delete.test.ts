@@ -837,4 +837,44 @@ describe('MessageModel Delete Tests', () => {
       expect(remaining[0].id).toBe('msg-keep-empty');
     });
   });
+
+  describe('topic usage rollup', () => {
+    const usageMsg = (id: string, totalTokens: number, cost: number) => ({
+      id,
+      metadata: { usage: { cost, totalInputTokens: totalTokens, totalTokens } },
+      model: 'gpt-4o',
+      provider: 'openai',
+      role: 'assistant',
+      topicId: 'usage-del-topic',
+      userId,
+    });
+
+    beforeEach(async () => {
+      await serverDB.insert(topics).values({ id: 'usage-del-topic', userId });
+    });
+
+    it('deleteMessage recomputes the topic rollup, dropping the removed message', async () => {
+      await serverDB
+        .insert(messages)
+        .values([usageMsg('keep-msg', 20, 0.01), usageMsg('drop-msg', 50, 0.02)]);
+
+      await messageModel.deleteMessage('drop-msg');
+
+      const [topic] = await serverDB.select().from(topics).where(eq(topics.id, 'usage-del-topic'));
+      expect(topic.totalTokens).toBe(20);
+      expect(topic.totalCost).toBeCloseTo(0.01, 6);
+    });
+
+    it('deleteMessages resets the rollup to NULL once all assistant usage is gone', async () => {
+      await serverDB.insert(messages).values([usageMsg('m1', 20, 0.01), usageMsg('m2', 50, 0.02)]);
+
+      await messageModel.deleteMessages(['m1', 'm2']);
+
+      const [topic] = await serverDB.select().from(topics).where(eq(topics.id, 'usage-del-topic'));
+      expect(topic.totalTokens).toBeNull();
+      expect(topic.totalCost).toBeNull();
+      expect(topic.usage).toBeNull();
+      expect(topic.cost).toBeNull();
+    });
+  });
 });

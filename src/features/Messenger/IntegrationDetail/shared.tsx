@@ -1,6 +1,7 @@
 'use client';
 
 import { Block, Button, Flexbox, Icon, Skeleton, Tag, Text } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ArrowLeftIcon, CheckCircle2Icon, Trash2Icon, UserIcon } from 'lucide-react';
@@ -294,7 +295,7 @@ export const useLinkActions = ({
   platform,
 }: UseLinkActionsArgs) => {
   const { t } = useTranslation('messenger');
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
 
   const handleSetActive = async (tenantId: string, agentId: string | null) => {
     try {
@@ -311,7 +312,7 @@ export const useLinkActions = ({
   };
 
   const handleUnlink = (tenantId: string) => {
-    modal.confirm({
+    confirmModal({
       content: t('messenger.unlinkConfirm', { platform: name }),
       okButtonProps: { danger: true },
       onOk: async () => {
@@ -359,10 +360,10 @@ export const useDisconnectInstallation = ({
   linksMutate,
 }: UseDisconnectInstallationArgs) => {
   const { t } = useTranslation('messenger');
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
 
   return (id: string, copy: DisconnectInstallationCopy) => {
-    modal.confirm({
+    confirmModal({
       content: copy.confirm,
       okButtonProps: { danger: true },
       onOk: async () => {

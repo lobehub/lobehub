@@ -20,15 +20,15 @@ export type TreeStoreHandle = StoreHandle<TreeDataState>;
 
 export interface TreeState extends TreeDataState {
   epoch: number;
+  expandAncestors: (folderIds: string[]) => Promise<void>;
   expanded: Record<string, boolean>;
+
   // actions
   init: (knowledgeBaseId: string) => void;
-
   knowledgeBaseId: string | null;
   loadChildren: (folderId: string) => Promise<void>;
   moveItem: (itemId: string, fromParent: string, toParent: string) => Promise<void>;
   moveItems: (itemIds: string[], fromParent: string, toParent: string) => Promise<void>;
-  navigateTo: (folderSlug: string) => Promise<void>;
   reconcile: (folderId: string, items: TreeItem[]) => void;
   removeItems: (itemIds: string[], parentId: string) => Promise<void>;
   renameItem: (itemId: string, parentId: string, newName: string) => Promise<void>;

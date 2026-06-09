@@ -51,7 +51,7 @@ export interface GlobalServerConfig {
 
 ### 3. Assemble Server Config (if new domain)
 
-In `src/server/globalConfig/index.ts`:
+In `apps/server/src/globalConfig/index.ts`:
 
 ```typescript
 import { <domain>Env } from '@/envs/<domain>';
@@ -97,7 +97,7 @@ AI_IMAGE_DEFAULT_IMAGE_NUM: z.coerce.number().min(1).max(20).optional(),
 // packages/types/src/serverConfig.ts
 image?: PartialDeep<UserImageConfig>;
 
-// src/server/globalConfig/index.ts
+// apps/server/src/globalConfig/index.ts
 image: cleanObject({ defaultImageNum: imageEnv.AI_IMAGE_DEFAULT_IMAGE_NUM }),
 
 // src/store/user/slices/common/action.ts

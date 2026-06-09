@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useProviderName } from '@/hooks/useProviderName';
 import { chatService } from '@/services/chat';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { getRuntimeErrorMessage } from '@/utils/locale/runtimeErrorMessage';
 
 const styles = createStaticStyles(({ css }) => ({
   popup: css`
@@ -22,14 +23,14 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 const Error = memo<{ error: ChatMessageError }>(({ error }) => {
-  const { t } = useTranslation('error');
+  const { t } = useTranslation(['error', 'modelRuntime']);
   const providerName = useProviderName(error.body?.provider);
 
   return (
     <Flexbox gap={8} style={{ maxWidth: 600, width: '100%' }}>
       <Alert
         showIcon
-        title={t(`response.${error.type}` as any, { provider: providerName })}
+        title={getRuntimeErrorMessage(t, error.type, { provider: providerName })}
         type={'error'}
         extra={
           <Flexbox paddingBlock={8} paddingInline={16}>
@@ -134,7 +135,7 @@ const Checker = memo<ConnectionCheckerProps>(
             setPass(false);
             setError({
               body: value,
-              message: t('response.ConnectionCheckFailed', { ns: 'error' }),
+              message: getRuntimeErrorMessage(t, 'ConnectionCheckFailed'),
               type: 'ConnectionCheckFailed',
             });
           }

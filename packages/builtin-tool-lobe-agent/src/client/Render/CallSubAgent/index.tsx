@@ -1,64 +1,140 @@
 'use client';
 
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Block } from '@lobehub/ui';
+import { Button, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { memo } from 'react';
+import { ListTree } from 'lucide-react';
+import { memo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useChatStore } from '@/store/chat';
+import { portalThreadSelectors, threadSelectors } from '@/store/chat/selectors';
 
 import type { CallSubAgentParams, CallSubAgentState } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  instruction: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-
+  container: css`
+    padding-block: 4px;
+  `,
+  label: css`
+    padding-inline-start: 4px;
     font-size: 12px;
-    line-height: 1.5;
     color: ${cssVar.colorTextTertiary};
   `,
-  taskContent: css`
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    gap: 2px;
-
-    min-width: 0;
+  labelRow: css`
+    margin-block-end: 4px;
   `,
-  taskItem: css`
-    display: flex;
-    gap: 8px;
-    align-items: flex-start;
-
-    padding-block: 10px;
+  openThread: css`
+    height: 22px;
+    padding-inline: 6px;
+    font-size: 12px;
+  `,
+  promptBox: css`
+    padding-block: 8px;
     padding-inline: 12px;
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillTertiary};
   `,
-  title: css`
-    font-size: 13px;
-    line-height: 1.4;
-    color: ${cssVar.colorText};
+  resultBox: css`
+    padding-block: 8px;
+    padding-inline: 12px;
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorBgContainer};
   `,
 }));
 
-export const CallSubAgentRender = memo<BuiltinRenderProps<CallSubAgentParams, CallSubAgentState>>(
-  ({ pluginState }) => {
-    const { task } = pluginState || {};
+/**
+ * Render for lobe-agent's `callSubAgent` tool.
+ *
+ * A sub-agent runs in an isolated Thread via the current runtime, so this view
+ * shows the instruction sent to it plus its closing summary (the tool result),
+ * and exposes a toggle to open / collapse that Thread in the portal. The Thread
+ * is located by the `threadId` persisted in tool state; while the run is still
+ * starting the lookup can return `undefined`, so the button is hidden rather
+ * than rendered as a dead no-op.
+ */
+export const CallSubAgentRender = memo<
+  BuiltinRenderProps<CallSubAgentParams, CallSubAgentState, string>
+>(({ args, content, pluginState }) => {
+  const { t } = useTranslation('plugin');
+  const { t: tChat } = useTranslation('chat');
+  const prompt = args?.instruction?.trim();
+  const result = typeof content === 'string' ? content.trim() : '';
+  const threadId = pluginState?.threadId;
 
-    if (!task) return null;
+  const subagentThread = useChatStore((s) =>
+    threadId
+      ? (threadSelectors.currentTopicThreads(s) ?? []).find((thread) => thread.id === threadId)
+      : undefined,
+  );
+  const openThreadInPortal = useChatStore((s) => s.openThreadInPortal);
+  const closeThreadPortal = useChatStore((s) => s.closeThreadPortal);
+  const portalThreadId = useChatStore(portalThreadSelectors.portalThreadId);
+  const isOpenInPortal = !!subagentThread && portalThreadId === subagentThread.id;
 
-    return (
-      <Block variant={'outlined'} width="100%">
-        <div className={styles.taskItem}>
-          <div className={styles.taskContent}>
-            {task.description && <div className={styles.title}>{task.description}</div>}
-            {task.instruction && <div className={styles.instruction}>{task.instruction}</div>}
-          </div>
-        </div>
-      </Block>
-    );
-  },
-);
+  const handleToggleThread = useCallback(() => {
+    if (!subagentThread) return;
+    if (isOpenInPortal) {
+      closeThreadPortal();
+    } else {
+      openThreadInPortal(subagentThread.id, subagentThread.sourceMessageId);
+    }
+  }, [subagentThread, isOpenInPortal, openThreadInPortal, closeThreadPortal]);
+
+  if (!prompt && !result && !subagentThread) return null;
+
+  const showResultSection = !!result || !!subagentThread;
+
+  return (
+    <Flexbox className={styles.container} gap={12}>
+      {prompt && (
+        <Flexbox>
+          <Text className={styles.label} style={{ marginBlockEnd: 4 }}>
+            {t('builtins.lobe-claude-code.agent.instruction')}
+          </Text>
+          <Flexbox className={styles.promptBox}>
+            <Markdown style={{ maxHeight: 240, overflow: 'auto' }} variant={'chat'}>
+              {prompt}
+            </Markdown>
+          </Flexbox>
+        </Flexbox>
+      )}
+
+      {showResultSection && (
+        <Flexbox>
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={styles.labelRow}
+            justify={'space-between'}
+          >
+            <Text className={styles.label}>{t('builtins.lobe-claude-code.agent.result')}</Text>
+            {subagentThread && (
+              <Button
+                className={styles.openThread}
+                icon={ListTree}
+                size={'small'}
+                type={'text'}
+                onClick={handleToggleThread}
+              >
+                {isOpenInPortal
+                  ? tChat('thread.closeSubagentThread')
+                  : tChat('thread.openSubagentThread')}
+              </Button>
+            )}
+          </Flexbox>
+          {result && (
+            <Flexbox className={styles.resultBox}>
+              <Markdown style={{ maxHeight: 320, overflow: 'auto' }} variant={'chat'}>
+                {result}
+              </Markdown>
+            </Flexbox>
+          )}
+        </Flexbox>
+      )}
+    </Flexbox>
+  );
+});
 
 CallSubAgentRender.displayName = 'CallSubAgentRender';
 

@@ -1,203 +1,30 @@
 'use client';
 
-import { BRANDING_EMAIL } from '@lobechat/business-const';
-import { Button, Flexbox, Icon, Modal } from '@lobehub/ui';
-import { App, Form, Input, Upload } from 'antd';
-import { ImagePlus, Send } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { createModal } from '@lobehub/ui/base-ui';
+import { t } from 'i18next';
 
-import TextArea from '@/components/TextArea';
-import { lambdaClient } from '@/libs/trpc/client';
-import { useFileStore } from '@/store/file';
-import { userProfileSelectors } from '@/store/user/selectors';
-import { useUserStore } from '@/store/user/store';
+import { useGlobalStore } from '@/store/global';
 
-interface FeedbackInitialValues {
-  message?: string;
-  title?: string;
-}
+import FeedbackContent from './FeedbackContent';
+import type { FeedbackInitialValues } from './types';
 
-interface FeedbackModalProps {
+export type { FeedbackInitialValues } from './types';
+
+interface OpenFeedbackModalOptions {
   initialValues?: FeedbackInitialValues;
-  onClose: () => void;
-  open: boolean;
 }
 
-interface FormValues {
-  message: string;
-  title: string;
-}
+export const openFeedbackModal = ({ initialValues }: OpenFeedbackModalOptions = {}) => {
+  // Close command menu when opening feedback modal
+  useGlobalStore.getState().updateSystemStatus({ showCommandMenu: false });
 
-const FeedbackModal = memo<FeedbackModalProps>(({ initialValues, onClose, open }) => {
-  const { t } = useTranslation('common');
-  const { message } = App.useApp();
-  const [form] = Form.useForm<FormValues>();
+  return createModal({
+    content: <FeedbackContent initialValues={initialValues} />,
+    footer: null,
+    maskClosable: true,
+    title: t('feedback.title', { ns: 'common' }),
+    width: 600,
+  });
+};
 
-  const [loading, setLoading] = useState(false);
-  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
-  const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
-
-  const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
-  const userEmail = useUserStore(userProfileSelectors.email);
-
-  const handleScreenshotUpload = useCallback(
-    async (file: File) => {
-      const MAX_SIZE = 5 * 1024 * 1024; // 5MB
-      if (file.size > MAX_SIZE) {
-        message.error(t('feedback.errors.fileTooLarge'));
-        return;
-      }
-
-      setUploadingScreenshot(true);
-      try {
-        const result = await uploadWithProgress({ file });
-        if (result?.url) {
-          setScreenshotUrl(result.url);
-          message.success(t('feedback.screenshotUploaded'));
-        }
-      } catch (error) {
-        console.error('[FeedbackModal] Screenshot upload failed:', error);
-        message.error(t('feedback.errors.uploadFailed'));
-      } finally {
-        setUploadingScreenshot(false);
-      }
-    },
-    [message, t, uploadWithProgress],
-  );
-
-  const handleRemoveScreenshot = useCallback(() => {
-    setScreenshotUrl(null);
-  }, []);
-
-  const handleSubmit = useCallback(async () => {
-    try {
-      const values = await form.validateFields();
-      setLoading(true);
-
-      await lambdaClient.market.submitFeedback.mutate({
-        clientInfo: {
-          language: navigator.language,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          url: window.location.href,
-          userAgent: navigator.userAgent,
-        },
-        email: userEmail || undefined,
-        message: values.message,
-        screenshotUrl: screenshotUrl || undefined,
-        title: values.title,
-      });
-
-      message.success(t('feedback.success'));
-      form.resetFields();
-      setScreenshotUrl(null);
-      onClose();
-    } catch (error: any) {
-      console.error('[FeedbackModal] Submission failed:', error);
-      message.error(t('feedback.errors.submitFailed'));
-    } finally {
-      setLoading(false);
-    }
-  }, [form, message, onClose, screenshotUrl, t, userEmail]);
-
-  const handleCancel = useCallback(() => {
-    form.resetFields();
-    setScreenshotUrl(null);
-    onClose();
-  }, [form, onClose]);
-
-  return (
-    <Modal
-      centered
-      open={open}
-      title={t('feedback.title')}
-      width={600}
-      footer={
-        <Flexbox horizontal gap={8} justify="flex-end">
-          <Button onClick={handleCancel}>{t('cancel')}</Button>
-          <Button
-            icon={<Icon icon={Send} />}
-            loading={loading}
-            type="primary"
-            onClick={handleSubmit}
-          >
-            {t('feedback.submit')}
-          </Button>
-        </Flexbox>
-      }
-      onCancel={handleCancel}
-    >
-      <p style={{ color: 'var(--colorTextSecondary)', fontSize: 14, marginBottom: 16 }}>
-        {t('feedback.emailContact', { email: BRANDING_EMAIL.business })}
-      </p>
-
-      <Form form={form} initialValues={initialValues} layout="vertical">
-        <Form.Item
-          label={t('feedback.fields.title.label')}
-          name="title"
-          rules={[
-            { message: t('feedback.fields.title.required'), required: true },
-            { max: 200, message: t('feedback.fields.title.maxLength') },
-          ]}
-        >
-          <Input showCount maxLength={200} placeholder={t('feedback.fields.title.placeholder')} />
-        </Form.Item>
-
-        <Form.Item
-          label={t('feedback.fields.message.label')}
-          name="message"
-          rules={[
-            { message: t('feedback.fields.message.required'), required: true },
-            { max: 5000, message: t('feedback.fields.message.maxLength') },
-          ]}
-        >
-          <TextArea
-            showCount
-            maxLength={5000}
-            placeholder={t('feedback.fields.message.placeholder')}
-            rows={6}
-          />
-        </Form.Item>
-
-        <Form.Item label={t('feedback.fields.screenshot.label')}>
-          <Flexbox gap={8}>
-            {screenshotUrl ? (
-              <Flexbox gap={8}>
-                <img
-                  alt="Screenshot"
-                  src={screenshotUrl}
-                  style={{ borderRadius: 8, maxHeight: 200, maxWidth: '100%' }}
-                />
-                <Button danger disabled={uploadingScreenshot} onClick={handleRemoveScreenshot}>
-                  {t('feedback.fields.screenshot.remove')}
-                </Button>
-              </Flexbox>
-            ) : (
-              <Upload
-                accept="image/*"
-                showUploadList={false}
-                beforeUpload={(file) => {
-                  handleScreenshotUpload(file);
-                  return false;
-                }}
-              >
-                <Button icon={<Icon icon={ImagePlus} />} loading={uploadingScreenshot}>
-                  {uploadingScreenshot
-                    ? t('feedback.fields.screenshot.uploading')
-                    : t('feedback.fields.screenshot.upload')}
-                </Button>
-              </Upload>
-            )}
-          </Flexbox>
-          <p style={{ color: 'var(--colorTextSecondary)', fontSize: 12, marginTop: 8 }}>
-            {t('feedback.fields.screenshot.hint')}
-          </p>
-        </Form.Item>
-      </Form>
-    </Modal>
-  );
-});
-
-FeedbackModal.displayName = 'FeedbackModal';
-
-export default FeedbackModal;
+export default openFeedbackModal;

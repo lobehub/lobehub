@@ -11,8 +11,19 @@ export type TimeGroupId =
   | `${number}-${string}`
   | `${number}`;
 
-export type TopicGroupMode = 'byTime' | 'byProject' | 'flat';
+export type TopicGroupMode = 'byTime' | 'byProject' | 'flat' | 'byStatus';
 export type TopicSortBy = 'createdAt' | 'updatedAt';
+
+/**
+ * Server-side ordering for the topic list query.
+ * - `updatedAt` (default): favorites first, then most-recently-updated.
+ * - `status`: favorites first, then by status priority
+ *   (waitingForHuman → running → active → paused → failed → completed →
+ *   archived), then most-recently-updated within each status. Backs the
+ *   sidebar "group by status" mode so the highest-priority topics stay on the
+ *   first page regardless of pagination.
+ */
+export type TopicQuerySortBy = 'updatedAt' | 'status';
 
 export interface GroupedTopic {
   children: ChatTopic[];
@@ -190,21 +201,31 @@ export type ChatTopicStatus =
 
 export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   completedAt?: Date | null;
+  /** Server-side mock until real cost aggregation lands. */
+  cost?: number | null;
+  description?: string | null;
   favorite?: boolean;
+  /** First user message (sliced server-side, used as preview fallback). */
+  firstUserMessage?: string | null;
   historySummary?: string;
+  /** Total message count for the topic. */
+  messageCount?: number | null;
   metadata?: ChatTopicMetadata;
   sessionId?: string;
   status?: ChatTopicStatus | null;
   title: string;
+  /** Server-side mock until real token aggregation lands. */
+  tokenUsage?: number | null;
   trigger?: string | null;
+  userId?: string;
 }
 
 export type ChatTopicMap = Record<string, ChatTopic>;
 
 export interface TopicRankItem {
+  agentId: string | null;
   count: number;
   id: string;
-  sessionId: string | null;
   title: string | null;
 }
 
@@ -272,9 +293,21 @@ export interface QueryTopicParams {
   isInbox?: boolean;
   pageSize?: number;
   /**
+   * Server-side ordering. Defaults to `updatedAt`. Use `status` to back the
+   * sidebar "group by status" mode so high-priority topics stay on page one.
+   */
+  sortBy?: TopicQuerySortBy;
+  /**
    * Include only topics matching the given trigger types (positive filter)
    */
   triggers?: string[];
+  /**
+   * When true, the response includes heavier card-detail fields
+   * (`firstUserMessage`, `messageCount`, `description`, `trigger`, plus mock
+   * `cost` / `tokenUsage`). Only the per-agent Topics management page opts
+   * in — sidebar paths stay lean.
+   */
+  withDetails?: boolean;
 }
 
 /**

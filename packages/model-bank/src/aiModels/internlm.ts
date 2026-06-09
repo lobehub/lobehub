@@ -11,7 +11,7 @@ const internlmChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      'By default, it points to our latest released Intern series model, currently set to intern-s1-pro.',
+      'By default, it points to our latest released Intern series model, currently set to intern-s2-preview.',
     displayName: 'Intern',
     id: 'intern-latest',
     pricing: {
@@ -20,13 +20,41 @@ const internlmChatModels: AIChatModelCard[] = [
         { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2026-02-04',
+    releasedAt: '2026-05-22',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
     type: 'chat',
   },
   {
     abilities: {
       functionCall: true,
       reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Our newly released 35B-A3B scientific multimodal reasoning model supports a 256K context window. Through task scaling and architectural optimization, it is specifically designed to enhance scientific discovery and general-purpose agent capabilities.',
+    displayName: 'Intern-S2-Preview',
+    enabled: true,
+    id: 'intern-s2-preview',
+    pricing: {
+      units: [
+        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-05-22',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
@@ -42,6 +70,10 @@ const internlmChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-02-04',
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'internal',
+    },
     type: 'chat',
   },
   {
@@ -63,6 +95,9 @@ const internlmChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-07-26',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
     type: 'chat',
   },
   {
@@ -84,6 +119,9 @@ const internlmChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-08-20',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
     type: 'chat',
   },
   {
@@ -112,7 +150,6 @@ const internlmChatModels: AIChatModelCard[] = [
     description:
       'Our newly released multimodal large model features enhanced image-and-text understanding and long-sequence image comprehension capabilities, achieving performance comparable to leading closed-source models.',
     displayName: 'InternVL3.5-241B-A28B',
-    enabled: true,
     id: 'internvl3.5-241b-a28b',
     pricing: {
       units: [

@@ -48,13 +48,10 @@
   "starter.createAgent": "Tạo Tác Nhân",
   "starter.createGroup": "Tạo Nhóm",
   "starter.deepResearch": "Nghiên cứu chuyên sâu",
-  "starter.deepseekV4Pro": "DeepSeek V4 Pro",
-  "starter.deepseekV4ProAlready": "Đang sử dụng DeepSeek V4 Pro",
-  "starter.deepseekV4ProSwitched": "Đã chuyển sang DeepSeek V4 Pro",
   "starter.developing": "Sắp ra mắt",
   "starter.image": "Hình ảnh",
-  "starter.imageGeneration": "Tạo hình ảnh",
+  "starter.modelInUse": "Đang sử dụng {{name}}",
+  "starter.modelSwitched": "Đã chuyển sang {{name}}",
   "starter.newLabel": "Mới",
-  "starter.videoGeneration": "Seedance 2.0",
   "starter.write": "Viết"
 }

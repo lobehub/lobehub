@@ -183,6 +183,59 @@ describe('routeChunkPreload', () => {
     ]);
   });
 
+  it('warms additional desktop secondary route families during idle time', () => {
+    const bundle = {
+      'assets/group-CJm8x.js': createChunk({
+        facadeModuleId: '/repo/src/routes/(main)/group/index.desktop.tsx',
+        fileName: 'assets/group-CJm8x.js',
+        moduleIds: ['/repo/src/routes/(main)/group/index.desktop.tsx'],
+      }),
+      'assets/group-profile-D8p.js': createChunk({
+        facadeModuleId: '/repo/src/routes/(main)/group/profile/index.tsx',
+        fileName: 'assets/group-profile-D8p.js',
+        moduleIds: ['/repo/src/routes/(main)/group/profile/index.tsx'],
+      }),
+      'assets/community-detail-model-B2.js': createChunk({
+        facadeModuleId: '/repo/src/routes/(main)/community/(detail)/model/index.tsx',
+        fileName: 'assets/community-detail-model-B2.js',
+        moduleIds: ['/repo/src/routes/(main)/community/(detail)/model/index.tsx'],
+      }),
+      'assets/memory-contexts-B9.js': createChunk({
+        facadeModuleId: '/repo/src/routes/(main)/memory/contexts/index.tsx',
+        fileName: 'assets/memory-contexts-B9.js',
+        moduleIds: ['/repo/src/routes/(main)/memory/contexts/index.tsx'],
+      }),
+      'assets/image-B3.js': createChunk({
+        facadeModuleId: '/repo/src/routes/(main)/(create)/image/index.tsx',
+        fileName: 'assets/image-B3.js',
+        moduleIds: ['/repo/src/routes/(main)/(create)/image/index.tsx'],
+      }),
+      'assets/eval-run-C8.js': createChunk({
+        facadeModuleId: '/repo/src/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]/index.tsx',
+        fileName: 'assets/eval-run-C8.js',
+        moduleIds: ['/repo/src/routes/(main)/eval/bench/[benchmarkId]/runs/[runId]/index.tsx'],
+      }),
+    } satisfies TestOutputBundle;
+
+    const manifest = __testing.createRoutePreloadManifest(
+      bundle,
+      '/repo',
+      __testing.defaultIdleRoutePreloadGroups,
+    );
+    const preloadByGroup = new Map(manifest.map((entry) => [entry.id, entry.preload]));
+
+    expect(preloadByGroup.get('desktop-group-chat')).toEqual([
+      'assets/group-CJm8x.js',
+      'assets/group-profile-D8p.js',
+    ]);
+    expect(preloadByGroup.get('desktop-community')).toEqual([
+      'assets/community-detail-model-B2.js',
+    ]);
+    expect(preloadByGroup.get('desktop-memory')).toEqual(['assets/memory-contexts-B9.js']);
+    expect(preloadByGroup.get('desktop-create')).toEqual(['assets/image-B3.js']);
+    expect(preloadByGroup.get('desktop-eval')).toEqual(['assets/eval-run-C8.js']);
+  });
+
   it('keeps low-probability routes out of the default preload manifest', () => {
     const bundle = {
       'assets/settings-CJm8x.js': createChunk({
@@ -255,12 +308,20 @@ describe('routeChunkPreload', () => {
 
     const result = __testing.injectRouteModulepreloadsIntoHtml(
       html,
-      [{ id: 'desktop-page', patterns: ['^/page(/|$)'], preload: ['assets/page-B9kLm.js', 'assets/existing-B2.js'] }],
+      [
+        {
+          id: 'desktop-page',
+          patterns: ['^/page(/|$)'],
+          preload: ['assets/page-B9kLm.js', 'assets/existing-B2.js'],
+        },
+      ],
       '/_spa/',
       'dpl_test',
     );
 
-    expect(result).toContain('<link rel="modulepreload" crossorigin href="/_spa/assets/page-B9kLm.js?dpl=dpl_test">');
+    expect(result).toContain(
+      '<link rel="modulepreload" crossorigin href="/_spa/assets/page-B9kLm.js?dpl=dpl_test">',
+    );
     expect(result.match(/assets\/existing-B2\.js/g)).toHaveLength(1);
     expect(result.match(/assets\/index-D8p\.js/g)).toHaveLength(1);
   });
@@ -289,14 +350,17 @@ describe('routeChunkPreload', () => {
     expect(__testing.createAssetHref('assets/page-B9kLm.js', '/_spa/', 'dpl_test')).toBe(
       '/_spa/assets/page-B9kLm.js?dpl=dpl_test',
     );
-    expect(__testing.createAssetHref('assets/page-B9kLm.js?dpl=dpl_test', '/_spa/', 'dpl_test')).toBe(
-      '/_spa/assets/page-B9kLm.js?dpl=dpl_test',
-    );
+    expect(
+      __testing.createAssetHref('assets/page-B9kLm.js?dpl=dpl_test', '/_spa/', 'dpl_test'),
+    ).toBe('/_spa/assets/page-B9kLm.js?dpl=dpl_test');
   });
 
   it('injects emitted route preloads into html with the Vite html transform hook', () => {
     const plugin = routeChunkPreload({ allJsWarmup: true });
-    const configResolved = plugin.configResolved as (config: { base: string; root: string }) => void;
+    const configResolved = plugin.configResolved as (config: {
+      base: string;
+      root: string;
+    }) => void;
     const bundle = {
       'assets/agent-CJm8x.js': createChunk({
         code: 'x'.repeat(2048),
@@ -331,7 +395,10 @@ describe('routeChunkPreload', () => {
 
   it('does not inject the all-JS warmup manifest by default', () => {
     const plugin = routeChunkPreload();
-    const configResolved = plugin.configResolved as (config: { base: string; root: string }) => void;
+    const configResolved = plugin.configResolved as (config: {
+      base: string;
+      root: string;
+    }) => void;
     const bundle = {
       'assets/agent-CJm8x.js': createChunk({
         code: 'x'.repeat(2048),
@@ -362,7 +429,10 @@ describe('routeChunkPreload', () => {
 
   it('keeps tiny route dependencies out of initial html while preserving idle warmup coverage', () => {
     const plugin = routeChunkPreload();
-    const configResolved = plugin.configResolved as (config: { base: string; root: string }) => void;
+    const configResolved = plugin.configResolved as (config: {
+      base: string;
+      root: string;
+    }) => void;
     const bundle = {
       'assets/agent-CJm8x.js': createChunk({
         code: 'x'.repeat(2048),
@@ -386,10 +456,16 @@ describe('routeChunkPreload', () => {
       bundle,
     });
 
-    expect(result).toContain('<link rel="modulepreload" crossorigin href="/_spa/assets/agent-CJm8x.js');
-    expect(result).not.toContain('<link rel="modulepreload" crossorigin href="/_spa/assets/HeaderSlot-D8p.js');
+    expect(result).toContain(
+      '<link rel="modulepreload" crossorigin href="/_spa/assets/agent-CJm8x.js',
+    );
+    expect(result).not.toContain(
+      '<link rel="modulepreload" crossorigin href="/_spa/assets/HeaderSlot-D8p.js',
+    );
     expect(result).toContain('"idleRouteFetch":[]');
-    expect(result).toContain('"idleRoutePreload":["/_spa/assets/agent-CJm8x.js","/_spa/assets/HeaderSlot-D8p.js"');
+    expect(result).toContain(
+      '"idleRoutePreload":["/_spa/assets/agent-CJm8x.js","/_spa/assets/HeaderSlot-D8p.js"',
+    );
     expect(result).toContain('"/_spa/assets/HeaderSlot-D8p.js');
   });
 
@@ -405,7 +481,10 @@ describe('routeChunkPreload', () => {
         },
       ],
     });
-    const configResolved = plugin.configResolved as (config: { base: string; root: string }) => void;
+    const configResolved = plugin.configResolved as (config: {
+      base: string;
+      root: string;
+    }) => void;
     const bundle = {
       'assets/settings-CJm8x.js': createChunk({
         code: 'x'.repeat(2048),

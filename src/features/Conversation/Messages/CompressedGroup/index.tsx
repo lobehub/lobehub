@@ -10,7 +10,7 @@ import {
   Tabs,
   type TabsProps,
 } from '@lobehub/ui';
-import { App } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp, History, Sparkles, Undo2 } from 'lucide-react';
@@ -68,7 +68,6 @@ export interface CompressedGroupMessageProps {
 
 const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   const { t } = useTranslation('chat');
-  const { modal } = App.useApp();
   const [activeTab, setActiveTab] = useState<string>(() => getStoredTab(id));
 
   const handleTabChange = useCallback(
@@ -86,13 +85,12 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   const cancelCompression = useConversationStore((s) => s.cancelCompression);
 
   const handleCancelCompression = useCallback(() => {
-    modal.confirm({
-      centered: true,
+    confirmModal({
       content: t('compression.cancelConfirm'),
       onOk: () => cancelCompression(id),
       title: t('compression.cancel'),
     });
-  }, [id, cancelCompression, modal, t]);
+  }, [id, cancelCompression, t]);
 
   const content = message?.content;
   const rawCompressedMessages = (message as UIChatMessage)?.compressedMessages;

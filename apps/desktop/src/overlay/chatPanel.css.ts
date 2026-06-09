@@ -534,3 +534,57 @@ globalStyle(`.${multiSelectionRail}::-webkit-scrollbar`, {
 globalStyle(`.${textarea}::selection`, {
   background: 'color-mix(in srgb, var(--lobe-overlay-primary) 22%, transparent)',
 });
+
+export const popupPositioner = style({
+  outline: 'none',
+  zIndex: 114_514,
+});
+
+export const popup = style({
+  background: v(vars.colorBgElevated),
+  border: `1px solid ${v(vars.colorBorderSecondary)}`,
+  borderRadius: 10,
+  boxShadow: v(vars.panelShadow),
+  color: v(vars.colorText),
+  fontSize: 12,
+  maxHeight: 240,
+  minWidth: 180,
+  outline: 'none',
+  overflowY: 'auto',
+  padding: 4,
+});
+
+export const popupItem = style({
+  alignItems: 'center',
+  borderRadius: 6,
+  color: v(vars.colorText),
+  cursor: 'pointer',
+  display: 'flex',
+  gap: 6,
+  outline: 'none',
+  padding: '6px 8px 6px 24px',
+  position: 'relative',
+  userSelect: 'none',
+  selectors: {
+    '&[data-highlighted]': {
+      background: v(vars.colorFillTertiary),
+    },
+    '&[data-disabled]': {
+      cursor: 'not-allowed',
+      opacity: 0.45,
+    },
+  },
+});
+
+export const popupItemIndicator = style({
+  alignItems: 'center',
+  color: v(vars.colorPrimary),
+  display: 'inline-flex',
+  height: 12,
+  justifyContent: 'center',
+  left: 6,
+  position: 'absolute',
+  top: '50%',
+  transform: 'translateY(-50%)',
+  width: 12,
+});

@@ -397,35 +397,60 @@ The pattern is the same for every platform:
 
 Pick the file for your target platform — each contains activation, navigation, send-message, and verification snippets specific to that app:
 
-| Platform      | Reference                                          | Quick switcher |
-| ------------- | -------------------------------------------------- | -------------- |
-| Discord       | [references/discord.md](./references/discord.md)   | `Cmd+K`        |
-| Slack         | [references/slack.md](./references/slack.md)       | `Cmd+K`        |
-| Telegram      | [references/telegram.md](./references/telegram.md) | `Cmd+F`        |
-| WeChat / 微信 | [references/wechat.md](./references/wechat.md)     | `Cmd+F`        |
-| Lark / 飞书   | [references/lark.md](./references/lark.md)         | `Cmd+K`        |
-| QQ            | [references/qq.md](./references/qq.md)             | `Cmd+F`        |
+Each channel has its own folder under `bot/<channel>/` containing an `index.md`
+(activation, navigation, send-message, and verification snippets specific to
+that app) and its test script:
 
-For **shared osascript patterns** (activate, type, paste, screenshot, read accessibility, common workflow template, gotchas), see [references/osascript-common.md](./references/osascript-common.md). Read this first if you're new to osascript automation.
+| Platform      | Reference                                        | Quick switcher |
+| ------------- | ------------------------------------------------ | -------------- |
+| Discord       | [bot/discord/index.md](./bot/discord/index.md)   | `Cmd+K`        |
+| Slack         | [bot/slack/index.md](./bot/slack/index.md)       | `Cmd+K`        |
+| Telegram      | [bot/telegram/index.md](./bot/telegram/index.md) | `Cmd+F`        |
+| WeChat / 微信 | [bot/wechat/index.md](./bot/wechat/index.md)     | `Cmd+F`        |
+| Lark / 飞书   | [bot/lark/index.md](./bot/lark/index.md)         | `Cmd+K`        |
+| QQ            | [bot/qq/index.md](./bot/qq/index.md)             | `Cmd+F`        |
+
+For **shared osascript patterns** (activate, type, paste, screenshot, read accessibility, common workflow template, gotchas), see [bot/osascript-common.md](./bot/osascript-common.md). Read this first if you're new to osascript automation.
+
+## Bridge-based channels (no native app)
+
+Some channels have no native app to drive with osascript — they connect through
+a local bridge inside the Desktop app. These are tested with agent-browser
+(IPC + UI) plus the bridge's own HTTP/REST endpoints, not osascript:
+
+| Channel  | Reference                                        | What it drives                                           |
+| -------- | ------------------------------------------------ | -------------------------------------------------------- |
+| iMessage | [bot/imessage/index.md](./bot/imessage/index.md) | `imessageBridge.*` IPC + local bridge + BlueBubbles REST |
+
+For iMessage there is a one-shot regression script — see `test-imessage-bridge.sh` below.
 
 ---
 
 # Scripts
 
-Ready-to-use scripts in `.agents/skills/local-testing/scripts/`:
+**App / recording scripts** in `.agents/skills/local-testing/scripts/`:
 
 | Script                    | Usage                                               |
 | ------------------------- | --------------------------------------------------- |
 | `electron-dev.sh`         | Manage Electron dev env (start/stop/status/restart) |
-| `capture-app-window.sh`   | Capture screenshot of a specific app window         |
 | `record-electron-demo.sh` | Record Electron app demo with ffmpeg                |
 | `record-app-screen.sh`    | Record app screen (video + screenshots, start/stop) |
-| `test-discord-bot.sh`     | Send message to Discord bot via osascript           |
-| `test-slack-bot.sh`       | Send message to Slack bot via osascript             |
-| `test-telegram-bot.sh`    | Send message to Telegram bot via osascript          |
-| `test-wechat-bot.sh`      | Send message to WeChat bot via osascript            |
-| `test-lark-bot.sh`        | Send message to Lark / 飞书 bot via osascript       |
-| `test-qq-bot.sh`          | Send message to QQ bot via osascript                |
+
+**Bot scripts** live under `.agents/skills/local-testing/bot/`, one folder per
+channel (alongside that channel's `index.md`). The shared
+`capture-app-window.sh` sits at the `bot/` root:
+
+| Script                             | Usage                                                               |
+| ---------------------------------- | ------------------------------------------------------------------- |
+| `capture-app-window.sh`            | Capture screenshot of a specific app window (used by bot tests)     |
+| `discord/test-discord-bot.sh`      | Send message to Discord bot via osascript                           |
+| `slack/test-slack-bot.sh`          | Send message to Slack bot via osascript                             |
+| `telegram/test-telegram-bot.sh`    | Send message to Telegram bot via osascript                          |
+| `wechat/test-wechat-bot.sh`        | Send message to WeChat bot via osascript                            |
+| `lark/test-lark-bot.sh`            | Send message to Lark / 飞书 bot via osascript                       |
+| `qq/test-qq-bot.sh`                | Send message to QQ bot via osascript                                |
+| `imessage/test-imessage-bridge.sh` | Regression-test the iMessage BlueBubbles bridge (IPC + HTTP)        |
+| `imessage/send-imessage-test.sh`   | Send one real iMessage (desktop → BB → iMessage) and verify it sent |
 
 ### Window Screenshot Utility
 
@@ -433,9 +458,9 @@ Ready-to-use scripts in `.agents/skills/local-testing/scripts/`:
 
 ```bash
 # Standalone usage
-./.agents/skills/local-testing/scripts/capture-app-window.sh "Discord" /tmp/discord.png
-./.agents/skills/local-testing/scripts/capture-app-window.sh "Slack" /tmp/slack.png
-./.agents/skills/local-testing/scripts/capture-app-window.sh "WeChat" /tmp/wechat.png
+./.agents/skills/local-testing/bot/capture-app-window.sh "Discord" /tmp/discord.png
+./.agents/skills/local-testing/bot/capture-app-window.sh "Slack" /tmp/slack.png
+./.agents/skills/local-testing/bot/capture-app-window.sh "WeChat" /tmp/wechat.png
 ```
 
 All bot test scripts use this utility automatically for their screenshots.
@@ -452,31 +477,47 @@ Examples:
 
 ```bash
 # Discord — test a bot in #bot-testing channel
-./.agents/skills/local-testing/scripts/test-discord-bot.sh "bot-testing" "!ping"
-./.agents/skills/local-testing/scripts/test-discord-bot.sh "bot-testing" "/ask Tell me a joke" 30
+./.agents/skills/local-testing/bot/discord/test-discord-bot.sh "bot-testing" "!ping"
+./.agents/skills/local-testing/bot/discord/test-discord-bot.sh "bot-testing" "/ask Tell me a joke" 30
 
 # Slack — test a bot in #bot-testing channel
-./.agents/skills/local-testing/scripts/test-slack-bot.sh "bot-testing" "@mybot hello"
-./.agents/skills/local-testing/scripts/test-slack-bot.sh "bot-testing" "/ask What is 2+2?" 20
+./.agents/skills/local-testing/bot/slack/test-slack-bot.sh "bot-testing" "@mybot hello"
+./.agents/skills/local-testing/bot/slack/test-slack-bot.sh "bot-testing" "/ask What is 2+2?" 20
 
 # Telegram — test a bot by username
-./.agents/skills/local-testing/scripts/test-telegram-bot.sh "MyTestBot" "/start"
-./.agents/skills/local-testing/scripts/test-telegram-bot.sh "GPTBot" "Hello" 60
+./.agents/skills/local-testing/bot/telegram/test-telegram-bot.sh "MyTestBot" "/start"
+./.agents/skills/local-testing/bot/telegram/test-telegram-bot.sh "GPTBot" "Hello" 60
 
 # WeChat — test a bot or send to a contact
-./.agents/skills/local-testing/scripts/test-wechat-bot.sh "文件传输助手" "test message" 5
-./.agents/skills/local-testing/scripts/test-wechat-bot.sh "MyBot" "Tell me a joke" 30
+./.agents/skills/local-testing/bot/wechat/test-wechat-bot.sh "文件传输助手" "test message" 5
+./.agents/skills/local-testing/bot/wechat/test-wechat-bot.sh "MyBot" "Tell me a joke" 30
 
 # Lark/飞书 — test a bot in a group chat
-./.agents/skills/local-testing/scripts/test-lark-bot.sh "bot-testing" "@MyBot hello"
-./.agents/skills/local-testing/scripts/test-lark-bot.sh "bot-testing" "Help me with this" 30
+./.agents/skills/local-testing/bot/lark/test-lark-bot.sh "bot-testing" "@MyBot hello"
+./.agents/skills/local-testing/bot/lark/test-lark-bot.sh "bot-testing" "Help me with this" 30
 
 # QQ — test a bot in a group or direct chat
-./.agents/skills/local-testing/scripts/test-qq-bot.sh "bot-testing" "Hello bot" 15
-./.agents/skills/local-testing/scripts/test-qq-bot.sh "MyBot" "/help" 10
+./.agents/skills/local-testing/bot/qq/test-qq-bot.sh "bot-testing" "Hello bot" 15
+./.agents/skills/local-testing/bot/qq/test-qq-bot.sh "MyBot" "/help" 10
 ```
 
 Each script: activates the app, navigates to the channel/contact, pastes the message via clipboard, sends, waits, and takes a screenshot. Use the `Read` tool on the screenshot for visual verification.
+
+### iMessage bridge regression script
+
+`test-imessage-bridge.sh` does **not** follow the osascript bot interface — it
+drives the Desktop bridge's IPC + HTTP layers and asserts the result, then
+self-cleans. Needs BlueBubbles running and Electron up with CDP.
+
+```bash
+./.agents/skills/local-testing/bot/imessage/test-imessage-bridge.sh '<bluebubbles_password>' [bb_url] [cdp_port]
+# defaults: bb_url=http://127.0.0.1:1234  cdp_port=9222 — exit 0 = all green
+```
+
+It guards the connect/configure flow (testConfig happy + reject paths, first-time
+`upsertConfig` save, bridge running + webhook registered, local-server secret
+enforcement). See [bot/imessage/index.md](./bot/imessage/index.md)
+for the full manual UI flow and known bugs.
 
 ---
 
@@ -517,4 +558,4 @@ Outputs to `.records/` directory (gitignored): `<name>.mp4` (video) + `<name>/` 
 
 ### osascript
 
-See [references/osascript-common.md](./references/osascript-common.md#gotchas) for the full osascript gotchas list (accessibility permissions, `keystroke` non-ASCII issues, locale-specific app names, rate limiting, etc.).
+See [bot/osascript-common.md](./bot/osascript-common.md#gotchas) for the full osascript gotchas list (accessibility permissions, `keystroke` non-ASCII issues, locale-specific app names, rate limiting, etc.).

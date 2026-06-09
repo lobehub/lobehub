@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import type { ExplorerTreeNode } from '@/features/ExplorerTree';
-import { ExplorerTree, FOLDER_ICON_CSS } from '@/features/ExplorerTree';
+import { ExplorerTree, FOLDER_ICON_CSS, getExplorerTreeStyleVars } from '@/features/ExplorerTree';
 import type { ExplorerTreeHandle } from '@/features/ExplorerTree/types';
 import { localFileService } from '@/services/electron/localFileService';
 import { useChatStore } from '@/store/chat';
@@ -21,6 +21,13 @@ import { buildGitStatusEntries, useGitWorkingTreeFiles } from './useGitWorkingTr
 import { useProjectFiles } from './useProjectFiles';
 
 interface FilesProps {
+  /**
+   * Target device the working directory lives on. Undefined for local desktop;
+   * set for a remote / web-bound device so the tree + git status route through
+   * the device RPCs. OS-level actions (open in app / reveal in Finder) are
+   * hidden for remote — there's no local filesystem to act on.
+   */
+  deviceId?: string;
   workingDirectory: string;
 }
 
@@ -101,10 +108,15 @@ const getAncestorIds = (filePath: string): string[] => {
   return ancestors;
 };
 
-const Files = memo<FilesProps>(({ workingDirectory }) => {
+const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   const { t } = useTranslation('chat');
-  const { data, isLoading, isValidating, mutate } = useProjectFiles(workingDirectory);
-  const { data: gitFiles } = useGitWorkingTreeFiles(workingDirectory, data?.source === 'git');
+  const isRemote = !!deviceId;
+  const { data, isLoading, isValidating, mutate } = useProjectFiles(deviceId, workingDirectory);
+  const { data: gitFiles } = useGitWorkingTreeFiles(
+    deviceId,
+    workingDirectory,
+    data?.source === 'git',
+  );
   const projectRoot = data?.root ?? workingDirectory;
 
   const entries = useMemo(() => data?.entries ?? [], [data]);
@@ -115,6 +127,10 @@ const Files = memo<FilesProps>(({ workingDirectory }) => {
   // paint without having to click through every folder.
   const defaultExpandedIds = useMemo(
     () => nodes.filter((node) => node.isFolder && node.parentId == null).map((node) => node.id),
+    [nodes],
+  );
+  const treeStyleVars = useMemo(
+    () => getExplorerTreeStyleVars({ reserveChevronSlot: nodes.some((node) => node.isFolder) }),
     [nodes],
   );
 
@@ -140,23 +156,15 @@ const Files = memo<FilesProps>(({ workingDirectory }) => {
     const { path, nonce: _nonce } = revealRequest;
 
     const nodeIds = new Set(nodes.map((n) => n.id));
-    if (!nodeIds.has(path)) {
-      // Data may still be loading — retry silently instead of showing a warning.
-      if (!isLoading) {
-        void message.warning(t('workingPanel.review.revealNotFound'));
-      }
-      return;
-    }
+    if (!nodeIds.has(path)) return;
 
     const ancestors = getAncestorIds(path);
     const nextExpanded = Array.from(new Set([...expandedIds, ...ancestors]));
     treeRef.current?.setExpanded(nextExpanded);
     treeRef.current?.select(path);
     treeRef.current?.focus(path);
-    // Re-run when nonce changes (user re-triggers) or when nodes/isLoading
-    // update (data arrives after initial reveal attempt).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revealRequest?.nonce, nodes, isLoading]);
+  }, [revealRequest?.nonce, nodes]);
 
   const openLocalFile = useChatStore((s) => s.openLocalFile);
 
@@ -174,10 +182,12 @@ const Files = memo<FilesProps>(({ workingDirectory }) => {
 
   const handleNodeClick = useCallback(
     (node: ExplorerTreeNode<ProjectFileIndexEntry>) => {
-      if (node.isFolder) return;
+      // Folders expand via the tree; files open the local viewer (local only —
+      // a remote device has no filesystem to open here).
+      if (node.isFolder || isRemote) return;
       openNode(node);
     },
-    [openNode],
+    [isRemote, openNode],
   );
 
   const getContextMenuItems = useCallback(
@@ -187,28 +197,39 @@ const Files = memo<FilesProps>(({ workingDirectory }) => {
       const { path, relativePath } = node.data;
       const isDirty = dirtyFilePaths.has(relativePath);
 
+      // OS-level actions (open in app / reveal in Finder) only work on the local
+      // machine — omit them for a remote device.
+      const localActions: MenuProps['items'] = isRemote
+        ? []
+        : [
+            {
+              key: 'open',
+              label: t('workingPanel.files.open'),
+              onClick: () => openNode(node),
+            },
+            { key: 'divider-reveal', type: 'divider' as const },
+            {
+              key: 'show-in-system',
+              label: t('workingPanel.files.showInSystem'),
+              onClick: () => void localFileService.openFileFolder(path),
+            },
+          ];
+
+      const reviewActions: MenuProps['items'] = isDirty
+        ? [
+            {
+              key: 'show-in-review',
+              label: t('workingPanel.files.showInReview'),
+              onClick: () => setWorkingSidebarTab('review'),
+            },
+          ]
+        : [];
+
+      const before = [...localActions, ...reviewActions];
+
       return [
-        {
-          key: 'open',
-          label: t('workingPanel.files.open'),
-          onClick: () => openNode(node),
-        },
-        { key: 'divider-reveal', type: 'divider' as const },
-        {
-          key: 'show-in-system',
-          label: t('workingPanel.files.showInSystem'),
-          onClick: () => void localFileService.openFileFolder(path),
-        },
-        ...(isDirty
-          ? [
-              {
-                key: 'show-in-review',
-                label: t('workingPanel.files.showInReview'),
-                onClick: () => setWorkingSidebarTab('review'),
-              },
-            ]
-          : []),
-        { key: 'divider-copy', type: 'divider' as const },
+        ...before,
+        ...(before.length > 0 ? [{ key: 'divider-copy', type: 'divider' as const }] : []),
         {
           key: 'copy-absolute-path',
           label: t('workingPanel.files.copyAbsolutePath'),
@@ -227,7 +248,7 @@ const Files = memo<FilesProps>(({ workingDirectory }) => {
         },
       ];
     },
-    [dirtyFilePaths, openNode, setWorkingSidebarTab, t],
+    [dirtyFilePaths, isRemote, openNode, setWorkingSidebarTab, t],
   );
 
   const fileCount = data?.totalCount ?? entries.filter((e) => !e.isDirectory).length;
@@ -258,11 +279,10 @@ const Files = memo<FilesProps>(({ workingDirectory }) => {
           <Empty description={t('workingPanel.files.empty')} icon={FileIcon} />
         </Center>
       ) : (
-        <div className={styles.tree}>
+        <div className={styles.tree} style={treeStyleVars}>
           <ExplorerTree<ProjectFileIndexEntry>
             iconsColored
             defaultExpandedIds={defaultExpandedIds}
-            density="compact"
             getContextMenuItems={getContextMenuItems}
             gitStatus={gitStatus}
             iconSet="complete"

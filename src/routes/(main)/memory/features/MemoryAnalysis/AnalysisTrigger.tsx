@@ -6,7 +6,7 @@ import { CalendarClockIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { useMemoryAnalysisAsyncTask } from '@/routes/(main)/memory/features/MemoryAnalysis/useTask';
 import { memoryExtractionService } from '@/services/userMemory/extraction';
 
@@ -55,7 +55,7 @@ const AnalysisTrigger = memo<Props>(({ footerNote, range, onRangeChange, iconOnl
         <Tooltip title={t('analysis.action.button')}>
           <ActionIcon
             icon={CalendarClockIcon}
-            size={DESKTOP_HEADER_ICON_SIZE}
+            size={DESKTOP_HEADER_ICON_SMALL_SIZE}
             tooltipProps={{ placement: 'bottom' }}
             onClick={() => setOpen(true)}
           />

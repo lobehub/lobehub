@@ -234,7 +234,7 @@
   "exportType.allAgentWithMessage": "모든 도우미 및 메시지 내보내기",
   "exportType.globalSetting": "전체 설정 내보내기",
   "feedback": "피드백 및 제안",
-  "feedback.emailContact": "{{email}}로 이메일을 보내주실 수도 있습니다",
+  "feedback.emailContact": "<email>{{email}}</email>로 이메일을 보내주실 수도 있습니다",
   "feedback.errors.fileTooLarge": "파일 크기가 5MB를 초과합니다",
   "feedback.errors.submitFailed": "제출에 실패했습니다. 다시 시도해 주세요.",
   "feedback.errors.teamNotFound": "설정 오류",
@@ -353,6 +353,7 @@
   "messengerBanner.title": "선호하는 메시징 앱에서 Lobe AI와 대화하세요",
   "more": "더보기",
   "navPanel.agent": "도우미",
+  "navPanel.bottomDivider": "아래 항목은 하단에 고정됩니다",
   "navPanel.customizeSidebar": "사이드바 사용자 지정",
   "navPanel.displayItems": "항목 표시",
   "navPanel.hidden": "숨김",
@@ -479,5 +480,6 @@
   "userPanel.setting": "앱 설정",
   "userPanel.upgradePlan": "플랜 업그레이드",
   "userPanel.usages": "사용량 통계",
-  "version": "버전"
+  "version": "버전",
+  "zoom": "확대"
 }

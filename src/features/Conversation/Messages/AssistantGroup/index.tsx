@@ -181,7 +181,7 @@ const GroupMessage = memo<GroupMessageProps>(
           the same "agent reply" block. The ChatItem body gap (16px) would
           otherwise stretch them apart and the natural narrative — initial
           reply → callbacks → summary — reads as three disconnected
-          sections (LOBE-8998).
+          sections ().
         */}
         <Flexbox gap={4}>
           {children && children.length > 0 && (
@@ -216,10 +216,10 @@ const GroupMessage = memo<GroupMessageProps>(
           </div>
         )}
         {interrupted && <InterruptedHint />}
-        {footerRender}
         {isDevMode && model && (
           <Usage model={model} performance={performance} provider={provider!} usage={usage} />
         )}
+        {footerRender}
         {reactions.length > 0 && (
           <ReactionDisplay
             isActive={isReactionActive}

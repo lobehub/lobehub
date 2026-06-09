@@ -1,4 +1,4 @@
-import { and, count, desc, eq, ilike, inArray, ne, or } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, inArray, isNull, ne, or } from 'drizzle-orm';
 
 import { ALL_SCOPE } from '@/const/rbac';
 import { RbacModel } from '@/database/models/rbac';
@@ -24,8 +24,14 @@ import type {
  * User service implementation class
  */
 export class UserService extends BaseService {
-  constructor(db: LobeChatDatabase, userId: string | null) {
-    super(db, userId);
+  constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
+    super(db, userId, workspaceId);
+  }
+
+  private getRoleScopeWhere() {
+    return this.workspaceId
+      ? or(eq(roles.workspaceId, this.workspaceId), isNull(roles.workspaceId))
+      : isNull(roles.workspaceId);
   }
 
   /**
@@ -33,7 +39,7 @@ export class UserService extends BaseService {
    * @param userId User ID
    * @returns User info and role info
    */
-  private async getUserWithRoles(userId: string): Promise<UserWithRoles> {
+  private async getUserWithRoles(userId: string, includeCount = true): Promise<UserWithRoles> {
     // Use subquery approach to avoid complex GROUP BY
     const user = await this.db.query.users.findFirst({
       where: eq(users.id, userId),
@@ -43,15 +49,31 @@ export class UserService extends BaseService {
       throw this.createNotFoundError('用户不存在');
     }
 
+    if (!includeCount) {
+      const userRoleResults = await this.db
+        .select({ roles })
+        .from(userRoles)
+        .innerJoin(roles, eq(userRoles.roleId, roles.id))
+        .where(and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId })));
+
+      return {
+        ...user,
+        roles: userRoleResults.map((r) => r.roles),
+      };
+    }
+
     // Fetch roles and message count in parallel for better efficiency
     const [userRoleResults, messageCountResult] = await Promise.all([
       this.db
         .select({ roles })
         .from(userRoles)
         .innerJoin(roles, eq(userRoles.roleId, roles.id))
-        .where(eq(userRoles.userId, userId)),
+        .where(and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId }))),
 
-      this.db.select({ count: count() }).from(messages).where(eq(messages.userId, userId)),
+      this.db
+        .select({ count: count() })
+        .from(messages)
+        .where(this.buildPermissionWhere(messages, { userId })),
     ]);
 
     return {
@@ -65,11 +87,11 @@ export class UserService extends BaseService {
    * Get the currently logged-in user info
    * @returns User info
    */
-  async getCurrentUser(): ServiceResult<UserWithRoles> {
+  async getCurrentUser(includeCount = true): ServiceResult<UserWithRoles> {
     this.log('info', '获取当前登录用户信息及角色信息');
 
     // Query basic user info
-    return this.getUserWithRoles(this.userId!);
+    return this.getUserWithRoles(this.userId!, includeCount);
   }
 
   /**
@@ -394,7 +416,11 @@ export class UserService extends BaseService {
         // 3. Validate that all roles exist and are active
         if (allRoleIds.size > 0) {
           const existingRoles = await tx.query.roles.findMany({
-            where: and(inArray(roles.id, Array.from(allRoleIds)), eq(roles.isActive, true)),
+            where: and(
+              inArray(roles.id, Array.from(allRoleIds)),
+              eq(roles.isActive, true),
+              this.getRoleScopeWhere(),
+            ),
           });
 
           const existingRoleIds = new Set(existingRoles.map((r) => r.id));
@@ -416,7 +442,11 @@ export class UserService extends BaseService {
           await tx
             .delete(userRoles)
             .where(
-              and(eq(userRoles.userId, userId), inArray(userRoles.roleId, request.removeRoles)),
+              and(
+                eq(userRoles.userId, userId),
+                inArray(userRoles.roleId, request.removeRoles),
+                this.buildPermissionWhere(userRoles, { userId }),
+              ),
             );
 
           this.log('info', '移除用户角色成功');
@@ -430,6 +460,7 @@ export class UserService extends BaseService {
               expiresAt: role.expiresAt ? new Date(role.expiresAt) : null,
               roleId: role.roleId,
               userId,
+              workspaceId: this.workspaceId ?? null,
             };
             return data;
           });
@@ -443,7 +474,9 @@ export class UserService extends BaseService {
           .from(userRoles)
           .innerJoin(roles, eq(userRoles.roleId, roles.id))
           .innerJoin(users, eq(userRoles.userId, users.id))
-          .where(eq(userRoles.userId, userId));
+          .where(
+            and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId })),
+          );
 
         this.log('info', '用户角色更新完成', {
           result,
@@ -495,7 +528,7 @@ export class UserService extends BaseService {
         .select({ role: roles, userRole: userRoles })
         .from(userRoles)
         .innerJoin(roles, eq(userRoles.roleId, roles.id))
-        .where(eq(userRoles.userId, userId));
+        .where(and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId })));
 
       return results.map((r) => ({
         expiresAt: r.userRole.expiresAt,
@@ -534,9 +567,11 @@ export class UserService extends BaseService {
       const beforeCount = await this.db
         .select({ count: count() })
         .from(userRoles)
-        .where(eq(userRoles.userId, userId));
+        .where(and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId })));
 
-      await this.db.delete(userRoles).where(eq(userRoles.userId, userId));
+      await this.db
+        .delete(userRoles)
+        .where(and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId })));
 
       return { removed: beforeCount[0]?.count || 0, userId };
     } catch (error) {

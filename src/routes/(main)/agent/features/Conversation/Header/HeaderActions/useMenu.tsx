@@ -36,7 +36,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 
 export const useMenu = (): { menuItems: DropdownItem[] } => {
   const { t } = useTranslation(['chat', 'topic', 'common', 'file']);
-  const { modal, message } = App.useApp();
+  const { message } = App.useApp();
   const { pathname } = useLocation();
 
   const [wideScreen, toggleWideScreen] = useGlobalStore((s) => [
@@ -260,13 +260,15 @@ export const useMenu = (): { menuItems: DropdownItem[] } => {
           key: 'delete',
           label: t('delete', { ns: 'common' }),
           onClick: () => {
-            modal.confirm({
-              centered: true,
+            confirmModal({
+              cancelText: t('cancel', { ns: 'common' }),
+              content: t('actions.confirmRemoveTopic', { ns: 'topic' }),
               okButtonProps: { danger: true },
+              okText: t('delete', { ns: 'common' }),
               onOk: async () => {
                 await removeTopic(topicId);
               },
-              title: t('actions.confirmRemoveTopic', { ns: 'topic' }),
+              title: t('delete', { ns: 'common' }),
             });
           },
         },
@@ -291,7 +293,6 @@ export const useMenu = (): { menuItems: DropdownItem[] } => {
     toggleWideScreen,
     openCompareModal,
     t,
-    modal,
     message,
   ]);
 

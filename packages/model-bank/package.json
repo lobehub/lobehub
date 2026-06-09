@@ -100,7 +100,7 @@
   },
   "devDependencies": {
     "tsdown": "^0.21.4",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   },
   "peerDependencies": {
     "zod": "^3.25.76"

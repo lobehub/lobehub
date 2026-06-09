@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, Flexbox } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, Card, Skeleton } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Plus } from 'lucide-react';
@@ -10,11 +11,11 @@ import { useTranslation } from 'react-i18next';
 import { agentEvalService } from '@/services/agentEval';
 import { useEvalStore } from '@/store/eval';
 
-import DatasetCreateModal from '../../../../features/DatasetCreateModal';
-import DatasetEditModal from '../../../../features/DatasetEditModal';
-import DatasetImportModal from '../../../../features/DatasetImportModal';
-import TestCaseCreateModal from '../../../../features/TestCaseCreateModal';
-import RunCreateModal from '../RunCreateModal';
+import { createDatasetCreateModal } from '../../../../features/DatasetCreateModal';
+import { createDatasetEditModal } from '../../../../features/DatasetEditModal';
+import { createDatasetImportModal } from '../../../../features/DatasetImportModal';
+import { createTestCaseCreateModal } from '../../../../features/TestCaseCreateModal';
+import { createRunCreateModal } from '../RunCreateModal';
 import DatasetCard from './DatasetCard';
 import EmptyState from './EmptyState';
 
@@ -52,18 +53,11 @@ interface DatasetsTabProps {
 const DatasetsTab = memo<DatasetsTabProps>(
   ({ benchmarkId, datasets, loading: datasetsLoading, onImport, onRefresh }) => {
     const { t } = useTranslation('eval');
-    const { modal, message } = App.useApp();
+    const { message } = App.useApp();
     const [expandedDs, setExpandedDs] = useState<string | null>(null);
     const [pagination, setPagination] = useState({ current: 1, pageSize: 5 });
     const [search, setSearch] = useState('');
     const [diffFilter, setDiffFilter] = useState<'all' | 'easy' | 'medium' | 'hard'>('all');
-
-    // Create, Edit, and Import modals
-    const [createOpen, setCreateOpen] = useState(false);
-    const [editDataset, setEditDataset] = useState<any | null>(null);
-    const [importDatasetId, setImportDatasetId] = useState<string | null>(null);
-    const [addCaseDatasetId, setAddCaseDatasetId] = useState<string | null>(null);
-    const [runDatasetId, setRunDatasetId] = useState<string | null>(null);
 
     const useFetchTestCases = useEvalStore((s) => s.useFetchTestCases);
     const refreshTestCases = useEvalStore((s) => s.refreshTestCases);
@@ -113,9 +107,53 @@ const DatasetsTab = memo<DatasetsTabProps>(
       setPagination((prev) => ({ ...prev, current: 1 }));
     }, []);
 
+    const handleCreateDataset = useCallback(() => {
+      createDatasetCreateModal({
+        benchmarkId,
+        onSuccess: (dataset) => {
+          onRefresh();
+          confirmModal({
+            cancelText: t('common.later'),
+            content: t('dataset.create.importNow'),
+            okText: t('dataset.actions.import'),
+            onOk: () => {
+              createDatasetImportModal({
+                datasetId: dataset.id,
+                onSuccess: handleRefreshTestCases,
+                presetId: dataset.preset,
+              });
+            },
+            title: t('dataset.create.successTitle'),
+          });
+        },
+      });
+    }, [benchmarkId, handleRefreshTestCases, onRefresh, t]);
+
+    const handleImportDataset = useCallback(
+      (ds: any) => {
+        createDatasetImportModal({
+          datasetId: ds.id,
+          onSuccess: handleRefreshTestCases,
+          presetId: ds.metadata?.preset,
+        });
+      },
+      [handleRefreshTestCases],
+    );
+
+    const handleRunDataset = useCallback(
+      (ds: any) => {
+        createRunCreateModal({
+          benchmarkId,
+          datasetId: ds.id,
+          datasetName: ds.name,
+        });
+      },
+      [benchmarkId],
+    );
+
     const handleDeleteCase = useCallback(
       (testCase: any) => {
-        modal.confirm({
+        confirmModal({
           content: t('testCase.delete.confirm'),
           okButtonProps: { danger: true },
           okText: t('common.delete'),
@@ -132,7 +170,7 @@ const DatasetsTab = memo<DatasetsTabProps>(
           title: t('common.delete'),
         });
       },
-      [expandedDs, message, modal, onRefresh, refreshTestCases, t],
+      [expandedDs, message, onRefresh, refreshTestCases, t],
     );
 
     return (
@@ -143,7 +181,7 @@ const DatasetsTab = memo<DatasetsTabProps>(
               <p style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 14, margin: 0 }}>
                 {t('benchmark.detail.datasetCount', { count: datasets.length })}
               </p>
-              <Button icon={Plus} size="small" type="primary" onClick={() => setCreateOpen(true)}>
+              <Button icon={Plus} size="small" type="primary" onClick={handleCreateDataset}>
                 {t('dataset.actions.addDataset')}
               </Button>
             </Flexbox>
@@ -166,7 +204,7 @@ const DatasetsTab = memo<DatasetsTabProps>(
               ))}
             </Flexbox>
           ) : datasets.length === 0 ? (
-            <EmptyState onAddDataset={() => setCreateOpen(true)} />
+            <EmptyState onAddDataset={handleCreateDataset} />
           ) : (
             <Flexbox gap={12}>
               {datasets.map((ds) => {
@@ -183,79 +221,27 @@ const DatasetsTab = memo<DatasetsTabProps>(
                     pagination={pagination}
                     search={search}
                     total={isExpanded ? total : 0}
-                    onAddCase={() => setAddCaseDatasetId(ds.id)}
                     onDeleteCase={handleDeleteCase}
                     onDiffFilterChange={handleDiffFilterChange}
-                    onEdit={setEditDataset}
                     onExpand={() => handleExpand(ds.id)}
-                    onImport={() => setImportDatasetId(ds.id)}
+                    onImport={() => handleImportDataset(ds)}
                     onPageChange={(page, pageSize) => setPagination({ current: page, pageSize })}
                     onRefresh={onRefresh}
-                    onRun={() => setRunDatasetId(ds.id)}
+                    onRun={() => handleRunDataset(ds)}
                     onSearchChange={handleSearchChange}
+                    onAddCase={() =>
+                      createTestCaseCreateModal({
+                        datasetId: ds.id,
+                        onSuccess: handleRefreshTestCases,
+                      })
+                    }
+                    onEdit={(dataset) => createDatasetEditModal({ dataset, onSuccess: onRefresh })}
                   />
                 );
               })}
             </Flexbox>
           )}
         </Flexbox>
-
-        {/* Edit Dataset Modal */}
-        {editDataset && (
-          <DatasetEditModal
-            dataset={editDataset}
-            open={!!editDataset}
-            onCancel={() => setEditDataset(null)}
-            onSuccess={onRefresh}
-          />
-        )}
-
-        {/* Create Dataset Modal */}
-        <DatasetCreateModal
-          benchmarkId={benchmarkId}
-          open={createOpen}
-          onClose={() => setCreateOpen(false)}
-          onSuccess={(dataset) => {
-            onRefresh();
-            // Ask if user wants to import data immediately
-            modal.success({
-              cancelText: t('common.later'),
-              content: t('dataset.create.importNow'),
-              okCancel: true,
-              okText: t('dataset.actions.import'),
-              onOk: () => {
-                setImportDatasetId(dataset.id);
-              },
-              title: t('dataset.create.successTitle'),
-            });
-          }}
-        />
-
-        {/* Import Dataset Modal */}
-        <DatasetImportModal
-          datasetId={importDatasetId!}
-          open={!!importDatasetId}
-          presetId={datasets.find((ds) => ds.id === importDatasetId)?.metadata?.preset}
-          onClose={() => setImportDatasetId(null)}
-          onSuccess={handleRefreshTestCases}
-        />
-
-        {/* Add Test Case Modal */}
-        <TestCaseCreateModal
-          datasetId={addCaseDatasetId!}
-          open={!!addCaseDatasetId}
-          onClose={() => setAddCaseDatasetId(null)}
-          onSuccess={handleRefreshTestCases}
-        />
-
-        {/* Create Run Modal */}
-        <RunCreateModal
-          benchmarkId={benchmarkId}
-          datasetId={runDatasetId!}
-          datasetName={datasets.find((ds) => ds.id === runDatasetId)?.name || ''}
-          open={!!runDatasetId}
-          onClose={() => setRunDatasetId(null)}
-        />
       </>
     );
   },

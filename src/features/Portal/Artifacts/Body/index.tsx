@@ -8,8 +8,6 @@ import { ArtifactType } from '@/types/artifact';
 
 import Renderer from './Renderer';
 
-const TEXT_HTML_ARTIFACT_TYPE = 'text/html';
-
 const ArtifactsUI = memo(() => {
   const [
     messageId,
@@ -34,21 +32,12 @@ const ArtifactsUI = memo(() => {
     ];
   });
 
-  const isHtmlArtifact =
-    !artifactType ||
-    artifactType === ArtifactType.Default ||
-    artifactType === TEXT_HTML_ARTIFACT_TYPE;
-
   useEffect(() => {
-    // Prefer live preview while HTML artifacts stream; reset stale code mode from previous artifacts.
-    if (
-      isMessageGenerating &&
-      displayMode === ArtifactDisplayMode.Code &&
-      (isArtifactTagClosed || (isHtmlArtifact && !isArtifactTagClosed))
-    ) {
+    // When generation completes, switch from the live source stream to the final preview.
+    if (isMessageGenerating && displayMode === ArtifactDisplayMode.Code && isArtifactTagClosed) {
       useChatStore.setState({ portalArtifactDisplayMode: ArtifactDisplayMode.Preview });
     }
-  }, [isMessageGenerating, displayMode, isArtifactTagClosed, isHtmlArtifact]);
+  }, [isMessageGenerating, displayMode, isArtifactTagClosed]);
 
   const language = useMemo(() => {
     switch (artifactType) {
@@ -70,11 +59,11 @@ const ArtifactsUI = memo(() => {
     }
   }, [artifactType, artifactCodeLanguage]);
 
-  // Keep incomplete non-HTML artifacts in code mode, but let HTML stream into the preview.
+  // Keep incomplete artifacts in code mode so users can inspect and scroll the generated source.
   const showCode =
     artifactType === ArtifactType.Code ||
-    (!isArtifactTagClosed && !isHtmlArtifact) ||
-    (displayMode === ArtifactDisplayMode.Code && !(isHtmlArtifact && !isArtifactTagClosed));
+    !isArtifactTagClosed ||
+    displayMode === ArtifactDisplayMode.Code;
   const isStreamingCode = isMessageGenerating && showCode && !isArtifactTagClosed;
   const isStreamingArtifact = isMessageGenerating && !isArtifactTagClosed;
 

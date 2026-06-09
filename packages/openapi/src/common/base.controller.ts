@@ -154,6 +154,10 @@ export abstract class BaseController {
     return c.get('userId') || null;
   }
 
+  protected getWorkspaceId(c: Context): string | undefined {
+    return c.get('workspaceId') || undefined;
+  }
+
   /**
    * Get authentication type (from context set by middleware)
    * @param c Hono Context
@@ -194,7 +198,10 @@ export abstract class BaseController {
   ): Promise<boolean> {
     const rbacModel = await this.getRbacModel(c);
 
-    return await rbacModel.hasPermission(RBAC_PERMISSIONS[permissionKey], this.getUserId(c)!);
+    return await rbacModel.hasPermission(RBAC_PERMISSIONS[permissionKey], {
+      userId: this.getUserId(c)!,
+      workspaceId: this.getWorkspaceId(c),
+    });
   }
 
   /**
@@ -212,7 +219,8 @@ export abstract class BaseController {
     const hasPermission = await this.hasPermission(c, permission);
     if (!hasPermission) {
       throw new HTTPException(403, {
-        message: errorMessage || `您没有权限执行此操作：${permission}`,
+        message:
+          errorMessage || `You do not have permission to perform this operation: ${permission}`,
       });
     }
   }
@@ -230,7 +238,10 @@ export abstract class BaseController {
     const permissions = permissionKeys.map((permission) => RBAC_PERMISSIONS[permission]);
 
     const rbacModel = await this.getRbacModel(c);
-    return await rbacModel.hasAnyPermission(permissions, this.getUserId(c)!);
+    return await rbacModel.hasAnyPermission(permissions, {
+      userId: this.getUserId(c)!,
+      workspaceId: this.getWorkspaceId(c),
+    });
   }
 
   /**
@@ -250,7 +261,7 @@ export abstract class BaseController {
       throw new HTTPException(403, {
         message:
           errorMessage ||
-          `您没有权限执行此操作，需要以下权限之一：${permissionKeys
+          `You do not have permission to perform this operation. One of the following permissions is required: ${permissionKeys
             .map((key) => RBAC_PERMISSIONS[key])
             .join(', ')}`,
       });

@@ -1,6 +1,6 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import { App } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { FileText, PencilLine, Trash } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,22 +15,28 @@ interface ActionProps {
   toggleEditing: (visible?: boolean) => void;
 }
 
-export const useDropdownMenu = ({ id, name, description, toggleEditing }: ActionProps): (() => MenuProps['items']) => {
+export const useDropdownMenu = ({
+  id,
+  name,
+  description,
+  toggleEditing,
+}: ActionProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['file', 'common']);
-  const { modal } = App.useApp();
   const removeKnowledgeBase = useKnowledgeBaseStore((s) => s.removeKnowledgeBase);
   const { open } = useCreateNewModal();
 
   const handleDelete = () => {
     if (!id) return;
 
-    modal.confirm({
-      centered: true,
+    confirmModal({
+      cancelText: t('cancel', { ns: 'common' }),
+      content: t('library.list.confirmRemoveLibrary'),
       okButtonProps: { danger: true },
+      okText: t('delete', { ns: 'common' }),
       onOk: async () => {
         await removeKnowledgeBase(id);
       },
-      title: t('library.list.confirmRemoveLibrary'),
+      title: t('header.actions.deleteLibrary'),
     });
   };
 
@@ -71,6 +77,16 @@ export const useDropdownMenu = ({ id, name, description, toggleEditing }: Action
           onClick: handleDelete,
         },
       ].filter(Boolean) as MenuProps['items'],
-    [t, id, name, description, modal, removeKnowledgeBase, toggleEditing, handleDelete, handleEditDescription, open],
+    [
+      t,
+      id,
+      name,
+      description,
+      removeKnowledgeBase,
+      toggleEditing,
+      handleDelete,
+      handleEditDescription,
+      open,
+    ],
   );
 };

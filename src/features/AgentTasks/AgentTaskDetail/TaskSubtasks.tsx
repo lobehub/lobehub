@@ -1,5 +1,6 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
 import { ActionIcon, Block, Flexbox, Icon, showContextMenu, Text } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, ConfigProvider, Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import { cssVar } from 'antd-style';
@@ -127,7 +128,7 @@ const toTreeData = (tree: TaskTreeNode[]): DataNode[] => {
 
 const TaskSubtasks = memo(() => {
   const { t } = useTranslation('chat');
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const navigate = useNavigate();
   const agentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   const subtasks = useTaskStore(taskDetailSelectors.activeTaskSubtasks);
@@ -210,9 +211,8 @@ const TaskSubtasks = memo(() => {
       }
 
       const canRun = plan.totalRunnable > 0;
-      modal.confirm({
+      confirmModal({
         cancelText: t('taskDetail.runAll.cancel'),
-        centered: true,
         content: <RunSubtasksPreview plan={plan} />,
         okButtonProps: canRun ? undefined : { disabled: true },
         okText: t('taskDetail.runAll.confirm', { count: plan.totalRunnable }),
@@ -234,7 +234,6 @@ const TaskSubtasks = memo(() => {
           }
         },
         title: t('taskDetail.runAll.title'),
-        width: 520,
       });
     } catch (error) {
       console.error('[TaskSubtasks] Failed to plan subtasks:', error);
@@ -242,7 +241,7 @@ const TaskSubtasks = memo(() => {
     } finally {
       setIsPlanning(false);
     }
-  }, [taskId, isPlanning, message, modal, t, runReadySubtasks]);
+  }, [taskId, isPlanning, message, t, runReadySubtasks]);
 
   if (!taskId) return null;
 

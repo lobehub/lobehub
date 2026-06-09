@@ -890,73 +890,6 @@ const aihubmixChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 2_000_000,
-    description:
-      'We’re excited to release Grok 4 Fast, our latest progress in cost-effective reasoning models.',
-    displayName: 'Grok 4 Fast (Non-Reasoning)',
-    id: 'grok-4-fast-non-reasoning',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-09',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 2_000_000,
-    description:
-      'We’re excited to release Grok 4 Fast, our latest progress in cost-effective reasoning models.',
-    displayName: 'Grok 4 Fast',
-    id: 'grok-4-fast-reasoning',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-09',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      vision: true,
-    },
-    contextWindowTokens: 256_000,
-    description:
-      'Latest Grok flagship with unmatched performance in language, math, and reasoning — a true all-rounder. Currently points to grok-4-0709; due to limited resources it is temporarily 10% higher than official pricing and is expected to return to official price later.',
-    displayName: 'Grok 4 0709',
-    id: 'grok-4',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 3.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-07-09',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
     },
     contextWindowTokens: 131_072,
     description:
@@ -1380,24 +1313,6 @@ const aihubmixChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.56, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 1.68, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'DeepSeek V3.1 Fast is the high-TPS fast variant of DeepSeek V3.1. Hybrid thinking mode: via chat templates, one model supports both thinking and non-thinking. Smarter tool use: post-training boosts tool and agent task performance.',
-    displayName: 'DeepSeek V3.1 (Fast)',
-    id: 'DeepSeek-V3.1-Fast',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 1.096, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3.288, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',

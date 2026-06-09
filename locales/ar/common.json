@@ -234,7 +234,7 @@
   "exportType.allAgentWithMessage": "تصدير جميع الوكلاء والرسائل",
   "exportType.globalSetting": "تصدير الإعدادات العامة",
   "feedback": "ملاحظات",
-  "feedback.emailContact": "يمكنك أيضًا مراسلتنا عبر البريد الإلكتروني على {{email}}",
+  "feedback.emailContact": "يمكنك أيضًا مراسلتنا عبر البريد الإلكتروني على <email>{{email}}</email>",
   "feedback.errors.fileTooLarge": "الملف يتجاوز الحجم المسموح به (5 ميغابايت)",
   "feedback.errors.submitFailed": "فشل في الإرسال. حاول مرة أخرى.",
   "feedback.errors.teamNotFound": "خطأ في التكوين",
@@ -353,6 +353,7 @@
   "messengerBanner.title": "تحدث إلى Lobe AI عبر تطبيقات المراسلة المفضلة لديك",
   "more": "المزيد",
   "navPanel.agent": "الوكيل",
+  "navPanel.bottomDivider": "العناصر أدناه تثبت في الأسفل",
   "navPanel.customizeSidebar": "تخصيص الشريط الجانبي",
   "navPanel.displayItems": "عناصر العرض",
   "navPanel.hidden": "مخفي",
@@ -479,5 +480,6 @@
   "userPanel.setting": "الإعدادات",
   "userPanel.upgradePlan": "ترقية الخطة",
   "userPanel.usages": "إحصائيات الاستخدام",
-  "version": "الإصدار"
+  "version": "الإصدار",
+  "zoom": "تكبير"
 }

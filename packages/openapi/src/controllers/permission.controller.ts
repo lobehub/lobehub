@@ -21,7 +21,11 @@ export class PermissionController extends BaseController {
       const query = this.getQuery<PermissionsListQuery>(c);
 
       const db = await this.getDatabase();
-      const permissionService = new PermissionService(db, this.getUserId(c));
+      const permissionService = new PermissionService(
+        db,
+        this.getUserId(c),
+        this.getWorkspaceId(c),
+      );
       const permissions = await permissionService.getPermissions(query);
 
       return this.success(c, permissions, 'Get permission list successfully');
@@ -37,7 +41,11 @@ export class PermissionController extends BaseController {
     try {
       const { id } = this.getParams<{ id: string }>(c);
       const db = await this.getDatabase();
-      const permissionService = new PermissionService(db, this.getUserId(c));
+      const permissionService = new PermissionService(
+        db,
+        this.getUserId(c),
+        this.getWorkspaceId(c),
+      );
       const permission = await permissionService.getPermissionById(id);
 
       if (!permission) {
@@ -58,11 +66,15 @@ export class PermissionController extends BaseController {
       const body = await this.getBody<CreatePermissionRequest>(c);
 
       if (!body) {
-        return this.error(c, '请求体不能为空', 400);
+        return this.error(c, 'Request body cannot be empty', 400);
       }
 
       const db = await this.getDatabase();
-      const permissionService = new PermissionService(db, this.getUserId(c));
+      const permissionService = new PermissionService(
+        db,
+        this.getUserId(c),
+        this.getWorkspaceId(c),
+      );
       const created = await permissionService.createPermission(body);
 
       return this.success(c, created, 'Permission created successfully');
@@ -80,11 +92,15 @@ export class PermissionController extends BaseController {
       const body = await this.getBody<UpdatePermissionRequest>(c);
 
       if (!body) {
-        return this.error(c, '请求体不能为空', 400);
+        return this.error(c, 'Request body cannot be empty', 400);
       }
 
       const db = await this.getDatabase();
-      const permissionService = new PermissionService(db, this.getUserId(c));
+      const permissionService = new PermissionService(
+        db,
+        this.getUserId(c),
+        this.getWorkspaceId(c),
+      );
       const updated = await permissionService.updatePermission(id, body);
 
       return this.success(c, updated, 'Permission updated successfully');
@@ -100,7 +116,11 @@ export class PermissionController extends BaseController {
     try {
       const { id } = this.getParams<{ id: string }>(c);
       const db = await this.getDatabase();
-      const permissionService = new PermissionService(db, this.getUserId(c));
+      const permissionService = new PermissionService(
+        db,
+        this.getUserId(c),
+        this.getWorkspaceId(c),
+      );
       const result = await permissionService.deletePermission(id);
 
       return this.success(c, result, 'Permission deleted successfully');

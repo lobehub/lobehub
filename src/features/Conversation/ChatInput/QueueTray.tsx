@@ -105,6 +105,7 @@ const QueuedFilePreview = memo<QueuedFilePreviewProps>(({ file }) => {
         size={PREVIEW_SIZE}
         src={file.url}
         title={file.name}
+        variant={'borderless'}
         styles={{
           image: { height: PREVIEW_SIZE, width: PREVIEW_SIZE },
           wrapper: { height: PREVIEW_SIZE, width: PREVIEW_SIZE },

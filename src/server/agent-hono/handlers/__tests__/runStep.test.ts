@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AgentRuntimeService } from '@/server/services/agentRuntime';
+
 import { runStep, runStepHealth } from '../runStep';
 
 const mockGetOperationMetadata = vi.fn();
@@ -84,6 +86,28 @@ describe('runStep handler', () => {
     expect(mockExecuteStep).not.toHaveBeenCalled();
   });
 
+  it('constructs AgentRuntimeService with the workspaceId from operation metadata', async () => {
+    // Regression: a workspace-scoped binding (e.g. Discord bot active agent) runs
+    // its steps through this QStash worker. Dropping workspaceId here makes the
+    // runtime personal-scoped, so the parent-message lookup misses the
+    // workspace-scoped row and throws ConversationParentMissing.
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1', workspaceId: 'ws-1' });
+    mockExecuteStep.mockResolvedValue({
+      nextStepScheduled: false,
+      state: { cost: { total: 0 }, status: 'done', stepCount: 1 },
+      success: true,
+    });
+
+    const { ctx } = buildContext({ body: validBody });
+    await runStep(ctx);
+
+    expect(AgentRuntimeService).toHaveBeenCalledWith(
+      expect.anything(),
+      'user-1',
+      expect.objectContaining({ workspaceId: 'ws-1' }),
+    );
+  });
+
   it('returns 429 with Retry-After header when the step is locked', async () => {
     mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
     mockExecuteStep.mockResolvedValue({
@@ -119,6 +143,40 @@ describe('runStep handler', () => {
 
     expect(mockExecuteStep).toHaveBeenCalledWith(
       expect.objectContaining({ externalRetryCount: 3, operationId: 'op-1', stepIndex: 2 }),
+    );
+  });
+
+  it('unwraps QStash `body.payload` resume/intervention fields into executeStep', async () => {
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
+    mockExecuteStep.mockResolvedValue({
+      nextStepScheduled: false,
+      state: { cost: { total: 0 }, status: 'running', stepCount: 2 },
+      success: true,
+    });
+
+    // QStash nests these under `body.payload`, not the top level.
+    const { ctx } = buildContext({
+      body: {
+        context: { foo: 'bar' },
+        operationId: 'op-1',
+        payload: {
+          approvedToolCall: { id: 'tc1' },
+          resumeAsyncTool: true,
+          toolMessageId: 'msg-1',
+        },
+        stepIndex: 2,
+      },
+    });
+    await runStep(ctx);
+
+    expect(mockExecuteStep).toHaveBeenCalledWith(
+      expect.objectContaining({
+        approvedToolCall: { id: 'tc1' },
+        operationId: 'op-1',
+        resumeAsyncTool: true,
+        stepIndex: 2,
+        toolMessageId: 'msg-1',
+      }),
     );
   });
 

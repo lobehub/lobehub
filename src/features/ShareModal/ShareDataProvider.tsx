@@ -64,7 +64,7 @@ const ShareDataProvider = memo<PropsWithChildren<ShareDataProviderProps>>(
     }, [activeAgentId, activeGroupId, activeThreadId, activeTopicId, context]);
 
     const shouldSkipFetch = !resolvedContext.agentId || !resolvedContext.topicId;
-    const { isLoading } = useFetchMessages(resolvedContext, shouldSkipFetch);
+    const { isLoading } = useFetchMessages(resolvedContext, { skipFetch: shouldSkipFetch });
 
     const messageKey = useMemo(() => {
       if (!resolvedContext.agentId) return undefined;

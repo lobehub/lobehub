@@ -10,6 +10,7 @@ import { type StoreSetter } from '@/store/types';
 
 import { type MessageMapKeyInput } from '../../../utils/messageMapKey';
 import { messageMapKey } from '../../../utils/messageMapKey';
+import { reconcileAssistantToolLinks } from '../utils/reconcileTools';
 
 const SWR_USE_FETCH_MESSAGES = 'SWR_USE_FETCH_MESSAGES';
 
@@ -84,13 +85,20 @@ export class MessageQueryActionImpl {
 
     const messagesKey = messageMapKey(ctx);
 
+    // Re-link any tool row whose parent assistant lost its tools[] entry before
+    // it lands in the raw bucket — a stale / out-of-order snapshot can drop the
+    // link while the tool row survives, which would orphan the tool bubble (see
+    // reconcileAssistantToolLinks). Keeps dbMessagesMap (SoT) consistent for
+    // optimistic updates, not just the parsed display.
+    const reconciled = reconcileAssistantToolLinks(messages);
+
     // Get raw messages from dbMessagesMap and apply reducer
-    const nextDbMap = { ...this.#get().dbMessagesMap, [messagesKey]: messages };
+    const nextDbMap = { ...this.#get().dbMessagesMap, [messagesKey]: reconciled };
 
     if (isEqual(nextDbMap, this.#get().dbMessagesMap)) return;
 
     // Parse messages using conversation-flow
-    const { flatList } = parse(messages);
+    const { flatList } = parse(reconciled);
 
     this.#set(
       {
@@ -106,8 +114,24 @@ export class MessageQueryActionImpl {
 
   useFetchMessages = (
     context: ConversationContext,
-    skipFetch?: boolean,
+    options?: {
+      /**
+       * Skip the fetch entirely (e.g. while another flow owns the data).
+       * Equivalent to passing a null SWR key.
+       */
+      skipFetch?: boolean;
+      /**
+       * Revalidate when the window regains focus. Defaults to SWR's
+       * client-data default (true). Pass `false` to suppress the focus
+       * refetch — used during streaming so the in-memory stream payload
+       * (Source of Truth) isn't clobbered by a stale DB read while DB
+       * fan-out writes are still in flight.
+       */
+      revalidateOnFocus?: boolean;
+    },
   ): SWRResponse<UIChatMessage[]> => {
+    const { skipFetch, revalidateOnFocus } = options ?? {};
+
     // Skip fetch when skipFetch is true or required fields are missing
     const shouldFetch = !skipFetch && !!context.agentId && !!context.topicId;
 
@@ -121,6 +145,7 @@ export class MessageQueryActionImpl {
           // Use replaceMessages to store the fetched messages
           this.#get().replaceMessages(data, { action: 'useFetchMessages', context });
         },
+        ...(revalidateOnFocus !== undefined && { revalidateOnFocus }),
       },
     );
   };

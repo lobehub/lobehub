@@ -1,9 +1,9 @@
 'use client';
 
 import { Center, Flexbox, Icon, Input, Text, TextArea, Tooltip } from '@lobehub/ui';
-import { Modal } from '@lobehub/ui/base-ui';
+import { confirmModal, Modal } from '@lobehub/ui/base-ui';
 import { type UploadProps } from 'antd';
-import { App, Form, Modal as AntModal, Upload } from 'antd';
+import { App, Form, Upload } from 'antd';
 import { cssVar } from 'antd-style';
 import { CircleHelp, Globe, ImagePlus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -332,7 +332,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
 
         // If userName changed and it's not first-time setup, show confirmation
         if (!isFirstTimeSetup && oldUserName && values.userName !== oldUserName) {
-          AntModal.confirm({
+          confirmModal({
             cancelText: t('profileSetup.confirmChangeUserId.cancel'),
             content: t('profileSetup.confirmChangeUserId.description', {
               newId: values.userName,
@@ -369,20 +369,22 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
         maskClosable={!isFirstTimeSetup}
         okText={isFirstTimeSetup ? t('profileSetup.getStarted') : t('profileSetup.save')}
         open={open}
-        title={false}
         width={640}
+        title={
+          <Flexbox gap={4}>
+            <Text strong fontSize={16} lineHeight={1.4}>
+              {isFirstTimeSetup ? t('profileSetup.titleFirstTime') : t('profileSetup.titleEdit')}
+            </Text>
+            <Text fontSize={13} lineHeight={1.4} type="secondary">
+              {isFirstTimeSetup
+                ? t('profileSetup.descriptionFirstTime')
+                : t('profileSetup.descriptionEdit')}
+            </Text>
+          </Flexbox>
+        }
         onCancel={handleCancel}
         onOk={handleSubmit}
       >
-        <Text strong fontSize={20} style={{ marginTop: 16 }}>
-          {isFirstTimeSetup ? t('profileSetup.titleFirstTime') : t('profileSetup.titleEdit')}
-        </Text>
-        <Text style={{ display: 'block', marginBottom: 24 }} type="secondary">
-          {isFirstTimeSetup
-            ? t('profileSetup.descriptionFirstTime')
-            : t('profileSetup.descriptionEdit')}
-        </Text>
-
         <Form form={form} layout="vertical">
           <Flexbox horizontal gap={24}>
             <Flexbox flex={1}>

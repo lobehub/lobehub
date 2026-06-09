@@ -1,5 +1,6 @@
 'use client';
 
+import { MARKDOWN_MIME_TYPES } from '@lobechat/const';
 import { type CSSProperties } from 'react';
 import { memo } from 'react';
 
@@ -160,8 +161,7 @@ const CODE_MIME_TYPES = new Set([
   // Markdown
   'md',
   'mdx',
-  'text/markdown',
-  'text/x-markdown',
+  ...MARKDOWN_MIME_TYPES,
   // Other
   'graphql',
   'txt',

@@ -1,3 +1,4 @@
+import { ThreadType } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
@@ -21,7 +22,7 @@ const ThreadList = memo(() => {
         <ThreadItem
           id={item.id}
           index={index}
-          isSubagent={!!item.metadata?.subagentType}
+          isSubagent={item.type === ThreadType.Isolation}
           key={item.id}
           title={item.title}
         />

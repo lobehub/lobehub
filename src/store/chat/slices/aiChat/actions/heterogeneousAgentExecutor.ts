@@ -218,7 +218,7 @@ const resolveAdapterType = (config: HeterogeneousProviderConfig): string => {
 };
 
 /**
- * Subscribe to Electron IPC broadcasts. As of LOBE-8516 phase 0, the main
+ * Subscribe to Electron IPC broadcasts. As of phase 0, the main
  * process runs JSONL framing + adapter conversion + `toStreamEvent` itself
  * (`AgentStreamPipeline` from `@lobechat/heterogeneous-agents/spawn`), so the
  * renderer receives ready-made `AgentStreamEvent`s with no per-event adapter
@@ -575,6 +575,7 @@ const ensureSubagentRun = async (
   if (!run) {
     const { spawnMetadata } = subagentCtx;
     const threadId = generateThreadId();
+    const startedAt = new Date().toISOString();
     const title =
       spawnMetadata?.description?.slice(0, 80) || spawnMetadata?.subagentType || 'Subagent';
 
@@ -583,7 +584,7 @@ const ensureSubagentRun = async (
         id: threadId,
         metadata: {
           sourceToolCallId: subagentCtx.parentToolCallId,
-          startedAt: new Date().toISOString(),
+          startedAt,
           subagentType: spawnMetadata?.subagentType,
         },
         sourceMessageId: mainAssistantMessageId,
@@ -974,6 +975,18 @@ const finalizeSubagentRun = async ({
     }
   }
 
+  // Mark the subagent Thread complete (created as `Processing`). The chip's
+  // tool-count / token / model metrics are NOT written here — they're derived
+  // on read from the child messages (live: `aggregateSubagentMetrics` over
+  // `dbMessagesMap`; cold-load: the same aggregation in SQL via
+  // `threadModel.queryByTopicId`), so finalize owns only the status transition.
+  // Best-effort — a failure here must not break finalize.
+  try {
+    await threadService.updateThread(run.threadId, { status: ThreadStatus.Active });
+  } catch (err) {
+    console.error('[HeterogeneousAgent] Failed to mark subagent thread complete:', err);
+  }
+
   completeSubOp(run.subOperationId);
 };
 
@@ -1146,7 +1159,7 @@ export const executeHeterogeneousAgent = async (
    * Most recent tool `result_msg_id` seen across step boundaries — survives the
    * `toolState.payloads` reset that happens on every new step.
    *
-   * Required for the **toolless middle step** case (LOBE-8993): when a step
+   * Required for the **toolless middle step** case (): when a step
    * produces only text (e.g. Monitor stdout drives Claude to reply "等一下…"
    * without invoking a tool), `toolState.payloads` is empty at the next step
    * boundary. Without this tracker, `stepParentId` would fall back to
@@ -1340,7 +1353,7 @@ export const executeHeterogeneousAgent = async (
     }
 
     /**
-     * Process a single `AgentStreamEvent` from main. As of LOBE-8516 phase 0,
+     * Process a single `AgentStreamEvent` from main. As of phase 0,
      * main runs the adapter and `toStreamEvent` itself, so each IPC arrival
      * carries exactly one already-stamped `AgentStreamEvent` (no per-line
      * batch). Per-event branches still mirror the pre-Phase-0 inner loop.
@@ -1515,9 +1528,48 @@ export const executeHeterogeneousAgent = async (
       // of all prior steps. Sum of turn_metadata equals result_usage for
       // a healthy run.
       if (event.type === 'step_complete' && event.data?.phase === 'turn_metadata') {
+        const subagentCtx = event.data.subagent as SubagentEventContext | undefined;
+        const turnUsage = event.data.usage;
+
+        if (subagentCtx) {
+          // Subagent-tagged usage: write it (plus the subagent's own
+          // model/provider) onto the subagent's in-thread assistant — NOT the
+          // main agent's. The chip derives its totals from these per-message
+          // `usage` snapshots (live + cold-load both aggregate the messages),
+          // so nothing is tracked on the run. Don't touch the MAIN agent's
+          // `lastModel` / `lastProvider` — those are main-agent step state and
+          // would contaminate the next main turn's create.
+          const turnModel = event.data.model as string | undefined;
+          const turnProvider = event.data.provider as string | undefined;
+          if (turnUsage) {
+            persistQueue = persistQueue.then(async () => {
+              const run = subagentRuns.get(subagentCtx.parentToolCallId);
+              if (!run) return;
+
+              const update = {
+                metadata: { usage: turnUsage },
+                ...(turnModel && { model: turnModel }),
+                ...(turnProvider && { provider: turnProvider }),
+              };
+              // Mirror the DB write into the thread's local message bucket
+              // so the inspector chip's live aggregation sees the usage as
+              // it lands. Without this `run.stream.update`, dbMessagesMap
+              // only learns the new metadata.usage after the next thread
+              // refresh — i.e. the chip stays at 0 tokens during streaming.
+              run.stream.update(run.currentAssistantMsgId, update as Partial<UIChatMessage>);
+              await messageService
+                .updateMessage(run.currentAssistantMsgId, update, {
+                  agentId: context.agentId,
+                  topicId: context.topicId,
+                })
+                .catch(console.error);
+            });
+          }
+          return;
+        }
+
         if (event.data.model) lastModel = event.data.model;
         if (event.data.provider) lastProvider = event.data.provider;
-        const turnUsage = event.data.usage;
         if (turnUsage) {
           persistQueue = persistQueue.then(async () => {
             await messageService
@@ -1543,13 +1595,13 @@ export const executeHeterogeneousAgent = async (
         const prevReasoning = accumulatedReasoning;
         const prevModel = lastModel;
         const prevProvider = lastProvider;
-        // External-signal context (LOBE-8998): set when the adapter
+        // External-signal context (): set when the adapter
         // detected a repeated tool_result on the same tool_use.id
         // (Monitor stdout push, etc.). Stamp on the new message's
         // `metadata.signal` so MessageCollector can route toolless
         // signal-tagged assistants into a SignalCallbacksNode.
         //
-        // Phase 1 lives in metadata; Phase 2 (LOBE-8999) promotes to a
+        // Phase 1 lives in metadata; Phase 2 () promotes to a
         // dedicated `messages.signal` column — to migrate, change THIS
         // assignment and the `getMessageSignal()` helper in
         // conversation-flow, nothing else.
@@ -1595,7 +1647,7 @@ export const executeHeterogeneousAgent = async (
             .find((p) => !!p.result_msg_id)?.result_msg_id;
           if (lastToolMsgId) lastToolMsgIdEver = lastToolMsgId;
           // Prefer this step's last tool, then the most recent tool ever seen
-          // in the run (rescues toolless middle steps — see LOBE-8993), then
+          // in the run (rescues toolless middle steps — see ), then
           // the previous assistant as a last resort.
           const stepParentId = lastToolMsgId ?? lastToolMsgIdEver ?? currentAssistantMessageId;
 
@@ -1751,7 +1803,7 @@ export const executeHeterogeneousAgent = async (
       //   - `tool_end`  → triggers `fetchAndReplaceMessages(main)` on
       //     every subagent inner tool result. Wasted work, AND it widens
       //     the in-memory ↔ DB drift window that surfaces as orphan
-      //     warnings even after the DB has settled (LOBE-8991).
+      //     warnings even after the DB has settled ().
       // DB state is already correct (the subagent persist path writes to
       // the thread scope), so dropping the forward keeps in-memory state
       // aligned with DB.
@@ -1923,7 +1975,7 @@ export const executeHeterogeneousAgent = async (
     // executed here.
     //
     // Source of truth shifted from renderer's adapter to main's pipeline as of
-    // LOBE-8516 phase 0; pull it back through the existing `getSessionInfo`
+    // phase 0; pull it back through the existing `getSessionInfo`
     // IPC, which already returns the freshest `agentSessionId` main has
     // mirrored from `pipeline.sessionId`.
     const sessionInfo = await heterogeneousAgentService
@@ -1973,6 +2025,7 @@ export const executeHeterogeneousAgent = async (
               context: { ...context },
               editorData: merged.editorData,
               files: mergedFiles,
+              ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
               message: merged.content,
               metadata: merged.metadata,
             })

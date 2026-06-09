@@ -8,13 +8,13 @@ import { Popconfirm, Switch } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Trash } from 'lucide-react';
 import { type FC } from 'react';
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import { type ApiKeyItem, type CreateApiKeyParams, type UpdateApiKeyParams } from '@/types/apiKey';
 
-import { ApiKeyDisplay, ApiKeyModal, EditableCell } from './index';
+import { ApiKeyDisplay, createApiKeyModal, EditableCell } from './index';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -39,7 +39,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const ApiKey: FC = () => {
   const { t } = useTranslation('auth');
-  const [modalOpen, setModalOpen] = useState(false);
 
   const actionRef = useRef<ActionType>(null);
 
@@ -47,7 +46,6 @@ const ApiKey: FC = () => {
     mutationFn: (params: CreateApiKeyParams) => lambdaClient.apiKey.createApiKey.mutate(params),
     onSuccess: () => {
       actionRef.current?.reload();
-      setModalOpen(false);
     },
   });
 
@@ -67,11 +65,11 @@ const ApiKey: FC = () => {
   });
 
   const handleCreate = () => {
-    setModalOpen(true);
-  };
-
-  const handleModalOk = (values: CreateApiKeyParams) => {
-    createMutation.mutate(values);
+    createApiKeyModal({
+      onSubmit: async (values) => {
+        await createMutation.mutateAsync(values);
+      },
+    });
   };
 
   const columns: ProColumns<ApiKeyItem>[] = [
@@ -196,12 +194,6 @@ const ApiKey: FC = () => {
             </Button>,
           ],
         }}
-      />
-      <ApiKeyModal
-        open={modalOpen}
-        submitLoading={createMutation.isPending}
-        onCancel={() => setModalOpen(false)}
-        onOk={handleModalOk}
       />
     </div>
   );

@@ -36,6 +36,10 @@ export default defineFixtures({
         markdown:
           '# Devtools Render Gallery\n\nA development-only preview surface for every builtin tool render.\n\n- Inspector previews mirror the chat title bar.\n- Body segments switch between Render, Streaming, Placeholder, and Intervention.\n',
       },
+      partialArgs: {
+        markdown:
+          '# Devtools Render Gallery\n\nA development-only preview surface for every builtin tool render.\n\n- Inspector previews mirror the chat title bar.\n- Body segments are still streaming',
+      },
       pluginState: { nodeCount: 6 },
     }),
     editTitle: single({

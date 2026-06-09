@@ -1,0 +1,8 @@
+{
+  "name": "@lobechat/server",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  }
+}

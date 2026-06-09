@@ -16,11 +16,11 @@ export class TopicController extends BaseController {
       const request = this.getQuery<TopicListQuery>(c);
 
       const db = await this.getDatabase();
-      const topicService = new TopicService(db, userId);
+      const topicService = new TopicService(db, userId, this.getWorkspaceId(c));
 
       const topics = await topicService.getTopics(request);
 
-      return this.success(c, topics, '获取话题列表成功');
+      return this.success(c, topics, 'Topic list retrieved successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -37,10 +37,10 @@ export class TopicController extends BaseController {
       const { id } = this.getParams<{ id: string }>(c);
 
       const db = await this.getDatabase();
-      const topicService = new TopicService(db, userId);
+      const topicService = new TopicService(db, userId, this.getWorkspaceId(c));
       const topic = await topicService.getTopicById(id);
 
-      return this.success(c, topic, '获取话题成功');
+      return this.success(c, topic, 'Topic retrieved successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -57,10 +57,10 @@ export class TopicController extends BaseController {
       const payload = await this.getBody<TopicCreateRequest>(c);
 
       const db = await this.getDatabase();
-      const topicService = new TopicService(db, userId);
+      const topicService = new TopicService(db, userId, this.getWorkspaceId(c));
       const newTopic = await topicService.createTopic(payload);
 
-      return this.success(c, newTopic, '创建话题成功');
+      return this.success(c, newTopic, 'Topic created successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -78,10 +78,10 @@ export class TopicController extends BaseController {
       const payload = await this.getBody<TopicUpdateRequest>(c);
 
       const db = await this.getDatabase();
-      const topicService = new TopicService(db, userId);
+      const topicService = new TopicService(db, userId, this.getWorkspaceId(c));
       const updatedTopic = await topicService.updateTopic(id, payload);
 
-      return this.success(c, updatedTopic, '更新话题成功');
+      return this.success(c, updatedTopic, 'Topic updated successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -98,10 +98,10 @@ export class TopicController extends BaseController {
       const { id: topicId } = this.getParams<{ id: string }>(c);
 
       const db = await this.getDatabase();
-      const topicService = new TopicService(db, userId);
+      const topicService = new TopicService(db, userId, this.getWorkspaceId(c));
       await topicService.deleteTopic(topicId);
 
-      return this.success(c, null, '删除话题成功');
+      return this.success(c, null, 'Topic deleted successfully');
     } catch (error) {
       return this.handleError(c, error);
     }

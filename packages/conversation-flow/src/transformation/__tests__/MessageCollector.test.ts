@@ -206,7 +206,7 @@ describe('MessageCollector', () => {
     });
 
     it('skips signal-tagged callbacks when locating the group tail', () => {
-      // LOBE-8998: when [signal callback, next tool-using assistant]
+      // when [signal callback, next tool-using assistant]
       // both live under the same tool, the tail finder must follow the
       // real main-chain assistant — taking children[0] blindly lands on
       // the callback (which is a leaf) and truncates the AssistantGroup.
@@ -304,7 +304,7 @@ describe('MessageCollector', () => {
   });
 
   // ────────────────────────────────────────────────────
-  // LOBE-8998: external signal callback collection
+  // external signal callback collection
   // ────────────────────────────────────────────────────
   describe('collectSignalCallbacks', () => {
     const mkAssistant = (id: string, opts?: Partial<Message>): Message => ({
@@ -522,7 +522,7 @@ describe('MessageCollector', () => {
   });
 
   // ────────────────────────────────────────────────────
-  // LOBE-8998: collectAssistantGroupMessages skips signal-tagged children
+  // collectAssistantGroupMessages skips signal-tagged children
   // ────────────────────────────────────────────────────
   describe('collectAssistantGroupMessages with signal callbacks', () => {
     it('skips signal-tagged callbacks when picking the main-chain follower', () => {
@@ -607,6 +607,117 @@ describe('MessageCollector', () => {
 
       // Main chain: ast-0 → ast-4 (cb-1 is skipped, handled separately).
       expect(children.map((c) => c.id)).toEqual(['ast-0', 'ast-4']);
+    });
+  });
+
+  // ────────────────────────────────────────────────────
+  // collectAssistantChain cycle guard (regression)
+  // ────────────────────────────────────────────────────
+  describe('collectAssistantChain', () => {
+    const mkAssistant = (id: string, opts?: Partial<Message>): Message => ({
+      agentId: 'agent-x',
+      content: '',
+      createdAt: 0,
+      id,
+      role: 'assistant',
+      updatedAt: 0,
+      ...opts,
+    });
+    const mkTool = (id: string, opts?: Partial<Message>): Message => ({
+      content: '',
+      createdAt: 0,
+      id,
+      role: 'tool',
+      updatedAt: 0,
+      ...opts,
+    });
+    const bashTool = (id: string) => ({
+      apiName: 'Bash',
+      arguments: '{}',
+      id,
+      identifier: 'claude-code',
+      type: 'default' as const,
+    });
+
+    it('terminates instead of overflowing the stack when a duplicated tool_call_id creates a cycle', () => {
+      // Regression: two assistant turns declare the SAME tool_call_id, so
+      // collectToolMessages resolves one turn's tool result for the other and
+      // the assistant→tool→assistant walk revisits an already-collected
+      // assistant. Without marking each assistant visited up front this
+      // recurses forever ("Maximum call stack size exceeded").
+      const astA = mkAssistant('ast-A', { parentId: 'user-1', tools: [bashTool('tc-dup')] });
+      const toolA = mkTool('tool-1', { parentId: 'ast-A', tool_call_id: 'tc-dup' });
+      // ast-B is the next turn (child of tool-1) and re-declares the SAME
+      // tc-dup, so collectToolMessages(ast-B) resolves tool-1 again → tool-1's
+      // child is ast-B → self-loop.
+      const astB = mkAssistant('ast-B', { parentId: 'tool-1', tools: [bashTool('tc-dup')] });
+
+      const allMessages: Message[] = [astA, toolA, astB];
+      const collector = new MessageCollector(new Map(), new Map());
+
+      const assistantChain: Message[] = [];
+      const allToolMessages: Message[] = [];
+      const processedIds = new Set<string>();
+
+      expect(() =>
+        collector.collectAssistantChain(
+          astA,
+          allMessages,
+          assistantChain,
+          allToolMessages,
+          processedIds,
+        ),
+      ).not.toThrow();
+
+      // Each assistant collected exactly once despite the cycle.
+      expect(assistantChain.map((m) => m.id)).toEqual(['ast-A', 'ast-B']);
+      expect(processedIds.has('ast-A')).toBe(true);
+      expect(processedIds.has('ast-B')).toBe(true);
+    });
+
+    it('still collects a normal (acyclic) assistant→tool→assistant chain', () => {
+      const astA = mkAssistant('ast-A', { parentId: 'user-1', tools: [bashTool('tc-1')] });
+      const toolA = mkTool('tool-1', { parentId: 'ast-A', tool_call_id: 'tc-1' });
+      const astB = mkAssistant('ast-B', { parentId: 'tool-1', tools: [bashTool('tc-2')] });
+      const toolB = mkTool('tool-2', { parentId: 'ast-B', tool_call_id: 'tc-2' });
+      const astFinal = mkAssistant('ast-final', { parentId: 'tool-2' });
+
+      const allMessages: Message[] = [astA, toolA, astB, toolB, astFinal];
+      const collector = new MessageCollector(new Map(), new Map());
+
+      const assistantChain: Message[] = [];
+      const allToolMessages: Message[] = [];
+      collector.collectAssistantChain(
+        astA,
+        allMessages,
+        assistantChain,
+        allToolMessages,
+        new Set(),
+      );
+
+      expect(assistantChain.map((m) => m.id)).toEqual(['ast-A', 'ast-B', 'ast-final']);
+      expect(allToolMessages.map((m) => m.id)).toEqual(['tool-1', 'tool-2']);
+    });
+
+    it('continues past a duplicate edge to the current turn own tool result', () => {
+      // A → tool(x) → B; B re-declares the SAME tool_call_id x and has its real
+      // continuation C under B's own tool result. collectToolMessages(B) resolves
+      // A's tool result (tool-xa) before B's own (tool-xb), and its child is the
+      // already-visited B. The walk must skip that duplicate edge and continue to
+      // tool-xb → C instead of stopping at B and dropping C.
+      const astA = mkAssistant('ast-A', { parentId: 'user-1', tools: [bashTool('tc-x')] });
+      const toolXA = mkTool('tool-xa', { parentId: 'ast-A', tool_call_id: 'tc-x' });
+      const astB = mkAssistant('ast-B', { parentId: 'tool-xa', tools: [bashTool('tc-x')] });
+      const toolXB = mkTool('tool-xb', { parentId: 'ast-B', tool_call_id: 'tc-x' });
+      const astC = mkAssistant('ast-C', { parentId: 'tool-xb' });
+
+      const allMessages: Message[] = [astA, toolXA, astB, toolXB, astC];
+      const collector = new MessageCollector(new Map(), new Map());
+
+      const assistantChain: Message[] = [];
+      collector.collectAssistantChain(astA, allMessages, assistantChain, [], new Set());
+
+      expect(assistantChain.map((m) => m.id)).toEqual(['ast-A', 'ast-B', 'ast-C']);
     });
   });
 });

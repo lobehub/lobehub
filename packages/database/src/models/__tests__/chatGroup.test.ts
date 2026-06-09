@@ -7,11 +7,18 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { NewChatGroup } from '../../schemas';
-import { agents as agentsTable, chatGroups, chatGroupsAgents, users } from '../../schemas';
+import {
+  agents as agentsTable,
+  chatGroups,
+  chatGroupsAgents,
+  users,
+  workspaces,
+} from '../../schemas';
 import { ChatGroupModel } from '../chatGroup';
 
 const userId = 'test-user';
 const otherUserId = 'other-user';
+const workspaceId = 'chat-group-workspace';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -26,11 +33,18 @@ type RelationAgent = {
 const toRelationAgents = (agents: unknown): RelationAgent[] => agents as RelationAgent[];
 
 const chatGroupModel = new ChatGroupModel(serverDB, userId);
+const workspaceChatGroupModel = new ChatGroupModel(serverDB, otherUserId, workspaceId);
 
 beforeEach(async () => {
   await serverDB.delete(users);
   // Create test users
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
+  await serverDB.insert(workspaces).values({
+    id: workspaceId,
+    name: 'Chat Group Workspace',
+    primaryOwnerId: userId,
+    slug: workspaceId,
+  });
 });
 
 afterEach(async () => {
@@ -982,6 +996,33 @@ describe('ChatGroupModel', () => {
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('user-group');
       expect(result[0].userId).toBe(userId);
+    });
+
+    it('should return workspace groups for members even when rows were created by another user', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(chatGroups).values({
+          id: 'workspace-group',
+          title: 'Workspace Group',
+          userId,
+          workspaceId,
+        });
+        await trx.insert(agentsTable).values({
+          id: 'workspace-agent',
+          title: 'Workspace Agent',
+          userId,
+          workspaceId,
+        });
+        await trx.insert(chatGroupsAgents).values({
+          agentId: 'workspace-agent',
+          chatGroupId: 'workspace-group',
+          userId,
+          workspaceId,
+        });
+      });
+
+      const result = await workspaceChatGroupModel.getGroupsWithAgents(['workspace-agent']);
+
+      expect(result).toEqual([expect.objectContaining({ id: 'workspace-group', workspaceId })]);
     });
   });
 });

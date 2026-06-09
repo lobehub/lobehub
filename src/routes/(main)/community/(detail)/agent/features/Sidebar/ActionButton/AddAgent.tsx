@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon } from 'lucide-react';
@@ -37,7 +38,7 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
   const [isLoading, setIsLoading] = useState(false);
   const createAgent = useAgentStore((s) => s.createAgent);
   const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const navigate = useNavigate();
   const { t } = useTranslation('discover');
 
@@ -56,7 +57,7 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
   };
 
   const showDuplicateConfirmation = (callback: () => void) => {
-    modal.confirm({
+    confirmModal({
       cancelText: t('cancel', { ns: 'common' }),
       content: t('assistants.duplicateAdd.content', { title }),
       okText: t('assistants.duplicateAdd.ok'),

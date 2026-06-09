@@ -48,13 +48,10 @@
   "starter.createAgent": "إنشاء وكيل",
   "starter.createGroup": "إنشاء مجموعة",
   "starter.deepResearch": "بحث معمق",
-  "starter.deepseekV4Pro": "‏DeepSeek V4 Pro",
-  "starter.deepseekV4ProAlready": "أنت تستخدم بالفعل DeepSeek V4 Pro",
-  "starter.deepseekV4ProSwitched": "تم التبديل إلى DeepSeek V4 Pro",
   "starter.developing": "قريبًا",
   "starter.image": "صورة",
-  "starter.imageGeneration": "توليد الصور",
+  "starter.modelInUse": "تستخدم بالفعل {{name}}",
+  "starter.modelSwitched": "تم التبديل إلى {{name}}",
   "starter.newLabel": "جديد",
-  "starter.videoGeneration": "Seedance 2.0",
   "starter.write": "كتابة"
 }

@@ -27,13 +27,17 @@ vi.mock('./styles', () => ({
 }));
 
 vi.mock('react-i18next', () => ({
-  useTranslation: (namespace: string) => ({
+  useTranslation: (namespace: string | string[]) => ({
     t: (key: string) => {
-      if (namespace === 'error' && key === 'response.ProviderImageContentModerationWarning') {
+      const namespaces = Array.isArray(namespace) ? namespace : [namespace];
+      if (
+        namespaces.includes('error') &&
+        key === 'response.ProviderImageContentModerationWarning'
+      ) {
         return 'Translated image moderation warning';
       }
 
-      if (namespace === 'error' && key === 'response.ProviderContentModeration') {
+      if (namespaces.includes('error') && key === 'response.ProviderContentModeration') {
         return 'Translated generic moderation';
       }
 

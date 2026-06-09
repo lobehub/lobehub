@@ -360,6 +360,50 @@ describe('agentSelectors', () => {
     });
   });
 
+  describe('canCurrentAgentPublishToCommunity', () => {
+    it('should allow publishing normal agents', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: { 'agent-1': { id: 'agent-1' } },
+      });
+
+      expect(agentSelectors.canCurrentAgentPublishToCommunity(state)).toBe(true);
+    });
+
+    it('should prevent publishing local heterogeneous agents', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: {
+          'agent-1': {
+            agencyConfig: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+            },
+            id: 'agent-1',
+          },
+        },
+      });
+
+      expect(agentSelectors.canCurrentAgentPublishToCommunity(state)).toBe(false);
+    });
+
+    it('should prevent publishing platform agents', () => {
+      const state = createState({
+        activeAgentId: 'agent-1',
+        agentMap: {
+          'agent-1': {
+            agencyConfig: {
+              boundDeviceId: 'device-1',
+              heterogeneousProvider: { type: 'openclaw' },
+            },
+            id: 'agent-1',
+          },
+        },
+      });
+
+      expect(agentSelectors.canCurrentAgentPublishToCommunity(state)).toBe(false);
+    });
+  });
+
   describe('currentKnowledgeIds', () => {
     it('should return enabled file and knowledge base IDs', () => {
       const state = createState({

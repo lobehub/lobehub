@@ -1,8 +1,10 @@
 'use client';
 
 import {
+  type BaseMenuItemType,
   type DropdownMenuPopupProps,
   type DropdownMenuProps,
+  type MenuInfo,
   type MenuItemType,
   type MenuProps,
   type PopoverTrigger,
@@ -65,7 +67,6 @@ const SubmenuScrollStyle = createGlobalStyle`
     overflow: hidden auto;
     overscroll-behavior: contain;
 
-    width: 360px;
     max-height: min(50vh, 640px);
     padding-block-end: 4px;
   }
@@ -92,11 +93,35 @@ const SubmenuScrollStyle = createGlobalStyle`
   [data-submenu] > [role='menu'] [role='group']:has([data-skill-activation-group]) > [role='presentation'] {
     padding-block: 0;
   }
+
+  /* The skill submenu is the only submenu that uses a header slot (the search
+     bar). renderDropdownMenuItems wraps it in DropdownMenuHeader's default
+     8px/12px padding — which can't be reached via props — leaving the borderless
+     search floating in a tall gap and indented past the rows below. Trim the
+     padding so the search sits snug against the divider and its icon lines up
+     with the 16px icon column shared by the menu rows. */
+  [data-submenu] > [role='menu'] > *:has(.lobe-skill-submenu-search) {
+    padding-block: 4px;
+    padding-inline: 4px;
+  }
+
+  /* Submenu triggers that opt into a custom trailing chevron (the Plus menu's
+     Skills / Attachments rows mark their extra icon with .lobe-submenu-chevron)
+     render that chevron themselves; hide base-ui's default triangle submenu arrow
+     — always the last child of the trigger's content — so the two don't stack. */
+  [role='menuitem']:has(.lobe-submenu-chevron) > * > *:last-child {
+    display: none;
+  }
 `;
 
 export type ActionDropdownMenuItem = MenuItemType;
 
-export type ActionDropdownMenuItems = MenuProps<ActionDropdownMenuItem>['items'];
+/**
+ * `renderDropdownMenuItems` accepts Base UI's full item union (`BaseMenuItemType`),
+ * which is wider than antd's `MenuProps['items']` — it also covers `type: 'switch'`
+ * and `type: 'checkbox'` items. Use it here so callers can declare those directly.
+ */
+export type ActionDropdownMenuItems = BaseMenuItemType[];
 
 type ActionDropdownMenu = Omit<
   Pick<MenuProps<ActionDropdownMenuItem>, 'className' | 'onClick' | 'style'>,
@@ -200,29 +225,40 @@ const ActionDropdown = memo<ActionDropdownProps>(
               children: item.children ? decorateMenuItems(item.children) : item.children,
             };
           }
+          // Switch / checkbox items are self-contained: they toggle via `onCheckedChange`,
+          // and Base UI already wires up "click the row or the control" for them. Pass them
+          // through untouched instead of wrapping their click handler.
+          if ('type' in item && (item.type === 'switch' || item.type === 'checkbox')) {
+            return item;
+          }
 
-          if ('children' in item && item.children) {
-            const originalOnOpenChange = (item as { onOpenChange?: unknown }).onOpenChange as
-              | ((open: boolean, details: unknown) => void)
-              | undefined;
+          // Any item carrying a `children` key is a submenu (children may be optional);
+          // route them all here so plain items never inherit a submenu's click signature.
+          if ('children' in item) {
             return {
               ...item,
-              children: decorateMenuItems(item.children),
+              children: item.children ? decorateMenuItems(item.children) : item.children,
               type: 'submenu',
-            };
+              // `children` is re-widened to the full item union; cast back to satisfy
+              // the mixed rc-menu / Base UI submenu types in `BaseMenuItemType`.
+            } as BaseMenuItemType;
           }
-          const itemOnClick = 'onClick' in item ? item.onClick : undefined;
-          const closeOnClick = 'closeOnClick' in item ? item.closeOnClick : undefined;
+          // Submenus are handled above; everything else is a plain menu item. Base UI's
+          // types keep optional-`children` submenu members in scope here, so narrow to the
+          // plain-item type before wrapping the click handler.
+          const menuItem = item as ActionDropdownMenuItem;
+          const itemOnClick = menuItem.onClick;
+          const closeOnClick = menuItem.closeOnClick;
           const keepOpenOnClick = closeOnClick === false;
-          const itemLabel = 'label' in item ? item.label : undefined;
+          const itemLabel = menuItem.label;
           const shouldKeepOpen = isValidElement(itemLabel);
 
           const resolvedCloseOnClick = closeOnClick ?? (shouldKeepOpen ? false : undefined);
 
           return {
-            ...item,
+            ...menuItem,
             ...(resolvedCloseOnClick !== undefined ? { closeOnClick: resolvedCloseOnClick } : null),
-            onClick: (info) => {
+            onClick: (info: MenuInfo) => {
               if (keepOpenOnClick) {
                 info.domEvent.stopPropagation();
                 menu.onClick?.(info);

@@ -1,9 +1,9 @@
 import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
 import { Avatar, Flexbox, Tag } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { modal } from '@/components/AntdStaticMethods';
 import { useToolStore } from '@/store/tool';
 import { type KlavisServer } from '@/store/tool/slices/klavisStore';
 
@@ -22,7 +22,7 @@ const KlavisAuthItem = memo<KlavisAuthItemProps>(({ server }) => {
 
   // Handle deauthorization
   const handleRevoke = useCallback(() => {
-    modal.confirm({
+    confirmModal({
       content: t('profile.authorizations.revoke.description'),
       okButtonProps: { danger: true },
       onOk: async () => {

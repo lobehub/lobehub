@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "Качване на папка",
   "home.uploadEntries.library.title": "Създай нова библиотека",
   "home.uploadEntries.newPage.title": "Нова страница",
+  "library.hierarchy.empty.desc": "Добавете файлове или създайте папка, за да започнете",
+  "library.hierarchy.empty.title": "Все още няма нищо тук",
   "library.list.confirmRemoveLibrary": "Ще изтриете тази библиотека. Файловете в нея няма да бъдат изтрити, а ще бъдат преместени в 'Всички файлове'. Това действие не може да бъде отменено, моля, бъдете внимателни.",
   "library.list.empty": "Натиснете <1>+</1>, за да създадете нова библиотека",
   "library.new": "Нова библиотека",

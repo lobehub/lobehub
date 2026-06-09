@@ -13,6 +13,7 @@ export const DEFAULT_PREFERENCE: UserPreference = {
     topic: true,
   },
   lab: {
+    enableAgentDocumentFloatingChatPanel: false,
     enableAgentSelfIteration: false,
     enableInputMarkdown: true,
     enablePlatformAgent: false,

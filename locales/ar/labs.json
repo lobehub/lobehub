@@ -1,4 +1,6 @@
 {
+  "features.agentDocumentFloatingChatPanel.desc": "عرض لوحة الدردشة العائمة في معاينة مستند الوكيل فقط عند تمكين هذه الميزة التجريبية.",
+  "features.agentDocumentFloatingChatPanel.title": "لوحة الدردشة العائمة لمستند الوكيل",
   "features.agentSelfIteration.desc": "السماح للمساعد بالتفكير الذاتي، وبناء الوعي الذاتي، والاستمرار في التطوير عبر المحاولات والتفاعلات المتواصلة.",
   "features.agentSelfIteration.title": "التكرار الذاتي للوكيل",
   "features.assistantMessageGroup.desc": "تجميع رسائل الوكيل ونتائج استدعاء الأدوات معًا للعرض",
@@ -7,9 +9,9 @@
   "features.gatewayMode.title": "تنفيذ الوكيل من جانب الخادم (البوابة)",
   "features.groupChat.desc": "تمكين تنسيق الدردشة الجماعية متعددة الوكلاء.",
   "features.groupChat.title": "دردشة جماعية (متعددة الوكلاء)",
+  "features.imessage.desc": "ربط الوكلاء بـ iMessage من خلال جسر BlueBubbles المحلي لتطبيق LobeHub Desktop.",
+  "features.imessage.title": "قناة iMessage",
   "features.inputMarkdown.desc": "عرض Markdown في منطقة الإدخال في الوقت الفعلي (نص عريض، كتل الشيفرة، جداول، إلخ).",
   "features.inputMarkdown.title": "عرض Markdown في الإدخال",
-  "features.messenger.desc": "تحدث إلى وكلائك عبر تطبيق تيليجرام (وتطبيقات المراسلة الأخرى) من خلال روبوت LobeHub المشترك. يضيف علامة تبويب المراسلة في الإعدادات لربط حسابك واختيار الوكيل الذي يتلقى الرسائل.",
-  "features.messenger.title": "المراسلة",
   "title": "المختبرات"
 }

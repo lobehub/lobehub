@@ -13,6 +13,7 @@ import {
   knowledgeBaseFiles,
   knowledgeBases,
   users,
+  workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { KnowledgeBaseModel } from '../knowledgeBase';
@@ -155,6 +156,15 @@ describe('KnowledgeBaseModel', () => {
       userId,
     },
   ];
+
+  const createWorkspace = async (id: string, slug: string) => {
+    await serverDB.insert(workspaces).values({
+      id,
+      name: slug,
+      primaryOwnerId: userId,
+      slug,
+    });
+  };
 
   describe('addFilesToKnowledgeBase', () => {
     it('should add files to a knowledge base', async () => {
@@ -683,30 +693,26 @@ describe('KnowledgeBaseModel', () => {
     });
 
     it('should return empty array when all files are shared', async () => {
-      await serverDB
-        .insert(globalFiles)
-        .values([
-          {
-            hashId: 'hash1',
-            url: 'https://example.com/a.pdf',
-            size: 100,
-            fileType: 'application/pdf',
-            creator: userId,
-          },
-        ]);
-      await serverDB
-        .insert(files)
-        .values([
-          {
-            id: 'file1',
-            name: 'a.pdf',
-            url: 'https://example.com/a.pdf',
-            fileHash: 'hash1',
-            size: 100,
-            fileType: 'application/pdf',
-            userId,
-          },
-        ]);
+      await serverDB.insert(globalFiles).values([
+        {
+          hashId: 'hash1',
+          url: 'https://example.com/a.pdf',
+          size: 100,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          id: 'file1',
+          name: 'a.pdf',
+          url: 'https://example.com/a.pdf',
+          fileHash: 'hash1',
+          size: 100,
+          fileType: 'application/pdf',
+          userId,
+        },
+      ]);
       const { id: kb1 } = await knowledgeBaseModel.create({ name: 'KB1' });
       const { id: kb2 } = await knowledgeBaseModel.create({ name: 'KB2' });
       await knowledgeBaseModel.addFilesToKnowledgeBase(kb1, ['file1']);
@@ -767,30 +773,26 @@ describe('KnowledgeBaseModel', () => {
 
   describe('deleteWithFiles', () => {
     it('should delete KB and its exclusive files', async () => {
-      await serverDB
-        .insert(globalFiles)
-        .values([
-          {
-            hashId: 'hash1',
-            url: 'https://example.com/a.pdf',
-            size: 100,
-            fileType: 'application/pdf',
-            creator: userId,
-          },
-        ]);
-      await serverDB
-        .insert(files)
-        .values([
-          {
-            id: 'file1',
-            name: 'a.pdf',
-            url: 'https://example.com/a.pdf',
-            fileHash: 'hash1',
-            size: 100,
-            fileType: 'application/pdf',
-            userId,
-          },
-        ]);
+      await serverDB.insert(globalFiles).values([
+        {
+          hashId: 'hash1',
+          url: 'https://example.com/a.pdf',
+          size: 100,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          id: 'file1',
+          name: 'a.pdf',
+          url: 'https://example.com/a.pdf',
+          fileHash: 'hash1',
+          size: 100,
+          fileType: 'application/pdf',
+          userId,
+        },
+      ]);
       const { id: kbId } = await knowledgeBaseModel.create({ name: 'KB1' });
       await knowledgeBaseModel.addFilesToKnowledgeBase(kbId, ['file1']);
       const result = await knowledgeBaseModel.deleteWithFiles(kbId);
@@ -931,30 +933,26 @@ describe('KnowledgeBaseModel', () => {
     });
 
     it('should delete shared file when both KBs sharing it are deleted', async () => {
-      await serverDB
-        .insert(globalFiles)
-        .values([
-          {
-            hashId: 'hash1',
-            url: 'https://example.com/a.pdf',
-            size: 100,
-            fileType: 'application/pdf',
-            creator: userId,
-          },
-        ]);
-      await serverDB
-        .insert(files)
-        .values([
-          {
-            id: 'file1',
-            name: 'a.pdf',
-            url: 'https://example.com/a.pdf',
-            fileHash: 'hash1',
-            size: 100,
-            fileType: 'application/pdf',
-            userId,
-          },
-        ]);
+      await serverDB.insert(globalFiles).values([
+        {
+          hashId: 'hash1',
+          url: 'https://example.com/a.pdf',
+          size: 100,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+      ]);
+      await serverDB.insert(files).values([
+        {
+          id: 'file1',
+          name: 'a.pdf',
+          url: 'https://example.com/a.pdf',
+          fileHash: 'hash1',
+          size: 100,
+          fileType: 'application/pdf',
+          userId,
+        },
+      ]);
       const { id: kb1 } = await knowledgeBaseModel.create({ name: 'KB1' });
       const { id: kb2 } = await knowledgeBaseModel.create({ name: 'KB2' });
       await knowledgeBaseModel.addFilesToKnowledgeBase(kb1, ['file1']);
@@ -973,6 +971,189 @@ describe('KnowledgeBaseModel', () => {
       expect(
         await serverDB.query.knowledgeBases.findFirst({ where: eq(knowledgeBases.id, otherKb) }),
       ).toBeDefined();
+    });
+  });
+
+  describe('transferTo', () => {
+    it('should transfer a knowledge base and its resources to another workspace', async () => {
+      await createWorkspace('workspace-target', 'workspace-target');
+      await serverDB.insert(globalFiles).values([
+        {
+          hashId: 'hash-transfer',
+          url: 'https://example.com/transfer.pdf',
+          size: 1000,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+      ]);
+      await serverDB.insert(files).values({
+        id: 'file-transfer',
+        name: 'transfer.pdf',
+        url: 'https://example.com/transfer.pdf',
+        fileHash: 'hash-transfer',
+        size: 1000,
+        fileType: 'application/pdf',
+        userId,
+      });
+
+      const { id: knowledgeBaseId } = await knowledgeBaseModel.create({ name: 'Transfer KB' });
+      await serverDB.insert(documents).values({
+        id: 'docs_transfer_folder',
+        title: 'Folder',
+        content: '',
+        fileType: 'custom/folder',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        sourceType: 'api',
+        source: '',
+        knowledgeBaseId,
+        userId,
+      });
+      await knowledgeBaseModel.addFilesToKnowledgeBase(knowledgeBaseId, ['file-transfer']);
+
+      await knowledgeBaseModel.transferTo(knowledgeBaseId, 'workspace-target', userId);
+
+      const transferredKb = await serverDB.query.knowledgeBases.findFirst({
+        where: eq(knowledgeBases.id, knowledgeBaseId),
+      });
+      const transferredFile = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'file-transfer'),
+      });
+      const transferredDocument = await serverDB.query.documents.findFirst({
+        where: eq(documents.id, 'docs_transfer_folder'),
+      });
+      const transferredLink = await serverDB.query.knowledgeBaseFiles.findFirst({
+        where: eq(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseId),
+      });
+
+      expect(transferredKb?.workspaceId).toBe('workspace-target');
+      expect(transferredFile?.workspaceId).toBe('workspace-target');
+      expect(transferredDocument?.workspaceId).toBe('workspace-target');
+      expect(transferredLink?.workspaceId).toBe('workspace-target');
+    });
+
+    it('should rename the transferred knowledge base when the target has the same name', async () => {
+      await createWorkspace('workspace-rename-target', 'workspace-rename-target');
+      const targetModel = new KnowledgeBaseModel(serverDB, userId, 'workspace-rename-target');
+      await targetModel.create({ name: 'Shared KB' });
+      const { id: knowledgeBaseId } = await knowledgeBaseModel.create({ name: 'Shared KB' });
+
+      await knowledgeBaseModel.transferTo(knowledgeBaseId, 'workspace-rename-target', userId);
+
+      const transferredKb = await serverDB.query.knowledgeBases.findFirst({
+        where: eq(knowledgeBases.id, knowledgeBaseId),
+      });
+
+      expect(transferredKb?.name).toBe('Shared KB (1)');
+    });
+  });
+
+  describe('copyToWorkspace', () => {
+    it('should copy a knowledge base with files and document hierarchy to another workspace', async () => {
+      await createWorkspace('workspace-copy-target', 'workspace-copy-target');
+      await serverDB.insert(globalFiles).values([
+        {
+          hashId: 'hash-copy',
+          url: 'https://example.com/copy.pdf',
+          size: 1000,
+          fileType: 'application/pdf',
+          creator: userId,
+        },
+      ]);
+
+      const { id: knowledgeBaseId } = await knowledgeBaseModel.create({ name: 'Copy KB' });
+      await serverDB.insert(documents).values([
+        {
+          id: 'docs_copy_folder',
+          title: 'Folder',
+          content: '',
+          fileType: 'custom/folder',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          sourceType: 'api',
+          source: '',
+          knowledgeBaseId,
+          userId,
+        },
+        {
+          id: 'docs_copy_note',
+          title: 'Note',
+          content: 'note content',
+          fileType: 'custom/document',
+          totalCharCount: 12,
+          totalLineCount: 1,
+          sourceType: 'api',
+          source: '',
+          knowledgeBaseId,
+          parentId: 'docs_copy_folder',
+          userId,
+        },
+      ]);
+      await serverDB.insert(files).values({
+        id: 'file-copy',
+        name: 'copy.pdf',
+        url: 'https://example.com/copy.pdf',
+        fileHash: 'hash-copy',
+        size: 1000,
+        fileType: 'application/pdf',
+        parentId: 'docs_copy_folder',
+        userId,
+      });
+      await knowledgeBaseModel.addFilesToKnowledgeBase(knowledgeBaseId, ['file-copy']);
+
+      const result = await knowledgeBaseModel.copyToWorkspace(
+        knowledgeBaseId,
+        'workspace-copy-target',
+        userId,
+      );
+
+      expect(result.id).not.toBe(knowledgeBaseId);
+
+      const copiedKb = await serverDB.query.knowledgeBases.findFirst({
+        where: eq(knowledgeBases.id, result.id),
+      });
+      const copiedLinks = await serverDB.query.knowledgeBaseFiles.findMany({
+        where: eq(knowledgeBaseFiles.knowledgeBaseId, result.id),
+      });
+      const copiedDocs = await serverDB.query.documents.findMany({
+        where: eq(documents.knowledgeBaseId, result.id),
+      });
+      const originalKb = await serverDB.query.knowledgeBases.findFirst({
+        where: eq(knowledgeBases.id, knowledgeBaseId),
+      });
+
+      expect(copiedKb).toMatchObject({
+        name: 'Copy KB',
+        workspaceId: 'workspace-copy-target',
+      });
+      expect(copiedLinks).toHaveLength(1);
+      expect(copiedLinks[0].fileId).not.toBe('file-copy');
+      expect(copiedLinks[0].workspaceId).toBe('workspace-copy-target');
+      expect(copiedDocs).toHaveLength(2);
+      expect(copiedDocs.every((doc) => doc.workspaceId === 'workspace-copy-target')).toBe(true);
+      expect(copiedDocs.find((doc) => doc.title === 'Note')?.parentId).toBe(
+        copiedDocs.find((doc) => doc.title === 'Folder')?.id,
+      );
+      expect(originalKb?.workspaceId).toBeNull();
+    });
+
+    it('should rename the copied knowledge base when the target has the same name', async () => {
+      await createWorkspace('workspace-copy-rename-target', 'workspace-copy-rename-target');
+      const targetModel = new KnowledgeBaseModel(serverDB, userId, 'workspace-copy-rename-target');
+      await targetModel.create({ name: 'Shared KB' });
+      const { id: knowledgeBaseId } = await knowledgeBaseModel.create({ name: 'Shared KB' });
+
+      const result = await knowledgeBaseModel.copyToWorkspace(
+        knowledgeBaseId,
+        'workspace-copy-rename-target',
+        userId,
+      );
+
+      const copiedKb = await serverDB.query.knowledgeBases.findFirst({
+        where: eq(knowledgeBases.id, result.id),
+      });
+
+      expect(copiedKb?.name).toBe('Shared KB (1)');
     });
   });
 

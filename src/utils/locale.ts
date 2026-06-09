@@ -6,6 +6,15 @@ import { locales, normalizeLocale } from '@/locales/resources';
 
 import { RouteVariants } from './server/routeVariants';
 
+const normalizeAcceptLanguageHeader = (acceptLanguage: string) =>
+  acceptLanguage
+    .replaceAll(/zh-Hans(?:-[a-z]{2})?/gi, 'zh-CN')
+    .replaceAll(/zh-Hant(?:-[a-z]{2})?/gi, 'zh-TW');
+
+const supportedAcceptLanguageLocales = locales.map((locale) =>
+  locale === 'ar' ? 'ar-EG' : locale,
+);
+
 export const getAntdLocale = async (lang?: string) => {
   let normalLang: any = normalizeLocale(lang);
 
@@ -36,16 +45,16 @@ export const parseBrowserLanguage = (headers: Headers, defaultLang: string = DEF
    * 3) The default locale.
    */
   let browserLang: string = resolveAcceptLanguage(
-    headers.get('accept-language') || '',
+    normalizeAcceptLanguageHeader(headers.get('accept-language') || ''),
     //  Invalid locale identifier 'ar'. A valid locale should follow the BCP 47 'language-country' format.
-    locales.map((locale) => (locale === 'ar' ? 'ar-EG' : locale)),
+    supportedAcceptLanguageLocales,
     defaultLang,
   );
 
   // if match the ar-EG then fallback to ar
   if (browserLang === 'ar-EG') browserLang = 'ar';
 
-  return browserLang;
+  return normalizeLocale(browserLang);
 };
 
 /**

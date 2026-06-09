@@ -1,5 +1,6 @@
 import { Button, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { App, Space } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
+import { Space } from 'antd';
 import { MoreHorizontalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -38,7 +39,6 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
     s.togglePlugin,
     agentSelectors.currentAgentPlugins(s).includes(identifier),
   ]);
-  const { modal } = App.useApp();
   const hasSettings = pluginHelpers.isSettingSchemaNonEmpty(plugin?.settings);
 
   const [showModal, setModal] = useState(false);
@@ -85,8 +85,7 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
                   key: 'uninstall',
                   label: t('store.actions.uninstall'),
                   onClick: () => {
-                    modal.confirm({
-                      centered: true,
+                    confirmModal({
                       okButtonProps: { danger: true },
                       onOk: async () => {
                         // If plugin is enabled in current agent, disable it first
@@ -96,7 +95,6 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
                         await unInstallPlugin(identifier);
                       },
                       title: t('store.actions.confirmUninstall'),
-                      type: 'error',
                     });
                   },
                 },

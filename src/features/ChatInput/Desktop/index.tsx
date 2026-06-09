@@ -19,10 +19,10 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { type ActionToolbarProps } from '../ActionBar';
 import ActionBar from '../ActionBar';
+import ControlBar from '../ControlBar';
 import InputEditor from '../InputEditor';
 import { useSkillDrop } from '../InputEditor/ActionTag/useSkillDrop';
 import { type PlaceholderVariant } from '../InputEditor/Placeholder';
-import RuntimeConfig from '../RuntimeConfig';
 import SendArea from '../SendArea';
 import TypoBar from '../TypoBar';
 import ContextContainer from './ContextContainer';
@@ -61,7 +61,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface DesktopChatInputProps extends ActionToolbarProps {
   actionBarStyle?: React.CSSProperties;
+  /**
+   * Custom node to render in place of the default ControlBar.
+   * When provided, used instead of `<ControlBar />` (ignores `showControlBar`).
+   */
+  controlBarSlot?: ReactNode;
   extentHeaderContent?: ReactNode;
+  hidden?: boolean;
   inputContainerProps?: ChatInputProps;
   /**
    * Swap the action bar and send area for skeleton placeholders while
@@ -73,27 +79,23 @@ interface DesktopChatInputProps extends ActionToolbarProps {
   placeholder?: ReactNode;
   placeholderVariant?: PlaceholderVariant;
   rightContent?: ReactNode;
-  /**
-   * Custom node to render in place of the default RuntimeConfig bar.
-   * When provided, used instead of `<RuntimeConfig />` (ignores `showRuntimeConfig`).
-   */
-  runtimeConfigSlot?: ReactNode;
   sendAreaPrefix?: ReactNode;
+  showControlBar?: boolean;
   showFootnote?: boolean;
-  showRuntimeConfig?: boolean;
 }
 
 const DesktopChatInput = memo<DesktopChatInputProps>(
   ({
     showFootnote,
-    showRuntimeConfig = true,
-    runtimeConfigSlot,
+    showControlBar = true,
+    controlBarSlot,
     inputContainerProps,
     extentHeaderContent,
     actionBarStyle,
     borderRadius,
     extraActionItems,
     dropdownPlacement,
+    hidden,
     isConfigLoading = false,
     leftContent,
     placeholder,
@@ -151,6 +153,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
         className={cx(styles.container, expand && styles.fullscreen)}
         gap={8}
         paddingBlock={expand ? 0 : showFootnote ? '0 12px' : '0 8px'}
+        style={{ display: hidden ? 'none' : undefined }}
         onDragOver={skillDrop.onDragOver}
         onDrop={skillDrop.onDrop}
       >
@@ -204,7 +207,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
         >
           <InputEditor placeholder={placeholder} placeholderVariant={placeholderVariant} />
         </ChatInput>
-        {runtimeConfigSlot ?? (showRuntimeConfig && <RuntimeConfig />)}
+        {controlBarSlot ?? (showControlBar && <ControlBar />)}
         {showFootnote && !expand && (
           <Center style={{ pointerEvents: 'none', zIndex: 100 }}>
             <Text className={styles.footnote} type={'secondary'}>

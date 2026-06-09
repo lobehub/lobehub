@@ -9,7 +9,6 @@ import {
   type LobeSessions,
   type LobeSessionType,
   type SessionGroupItem,
-  type SessionRankItem,
   type UpdateSessionParams,
 } from '@/types/session';
 
@@ -50,10 +49,6 @@ export class SessionService {
     startDate?: string;
   }): Promise<number> => {
     return lambdaClient.session.countSessions.query(params);
-  };
-
-  rankSessions = async (limit?: number): Promise<SessionRankItem[]> => {
-    return lambdaClient.session.rankSessions.query(limit);
   };
 
   updateSession = (id: string, data: Partial<UpdateSessionParams>) => {

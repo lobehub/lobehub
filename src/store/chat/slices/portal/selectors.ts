@@ -117,6 +117,11 @@ const portalDocumentId = (s: ChatStoreState): string | undefined => {
   return view?.documentId;
 };
 
+const portalAgentDocumentId = (s: ChatStoreState): string | undefined => {
+  const view = getViewData(s, PortalViewType.Document);
+  return view?.agentDocumentId;
+};
+
 // File Preview selectors
 const currentFile = (s: ChatStoreState): PortalFile | undefined => {
   const view = getViewData(s, PortalViewType.FilePreview);
@@ -143,6 +148,19 @@ const currentLocalFile = (
 const localFilePath = (s: ChatStoreState) => currentLocalFile(s)?.filePath;
 const localFileWorkingDirectory = (s: ChatStoreState) => currentLocalFile(s)?.workingDirectory;
 
+const localFileBuffer =
+  (filePath: string | undefined) =>
+  (s: ChatStoreState): string | undefined =>
+    filePath ? s.dirtyLocalFileContents[filePath] : undefined;
+
+const isLocalFileDirty =
+  (filePath: string | undefined) =>
+  (s: ChatStoreState): boolean =>
+    !!filePath && filePath in s.dirtyLocalFileContents;
+
+const dirtyLocalFileContents = (s: ChatStoreState): Record<string, string> =>
+  s.dirtyLocalFileContents;
+
 // Message Detail selectors
 const messageDetailId = (s: ChatStoreState): string | undefined => {
   const view = getViewData(s, PortalViewType.MessageDetail);
@@ -152,16 +170,21 @@ const messageDetailId = (s: ChatStoreState): string | undefined => {
 // Tool UI / Plugin selectors
 const currentToolUI = (
   s: ChatStoreState,
-): { identifier: string; messageId: string } | undefined => {
+): { identifier: string; messageId: string; params?: Record<string, any> } | undefined => {
   const view = getViewData(s, PortalViewType.ToolUI);
   if (view) {
-    return { identifier: view.identifier, messageId: view.messageId };
+    return { identifier: view.identifier, messageId: view.messageId, params: view.params };
   }
   return undefined;
 };
 
 const toolMessageId = (s: ChatStoreState) => currentToolUI(s)?.messageId;
 const toolUIIdentifier = (s: ChatStoreState) => currentToolUI(s)?.identifier;
+const toolUIParams = (s: ChatStoreState) => currentToolUI(s)?.params;
+
+const currentVerifyResult = (s: ChatStoreState) => getViewData(s, PortalViewType.VerifyResult);
+const verifyResultOperationId = (s: ChatStoreState) => currentVerifyResult(s)?.operationId;
+const verifyResultCheckItemId = (s: ChatStoreState) => currentVerifyResult(s)?.checkItemId;
 const isPluginUIOpen = (id: string) => (s: ChatStoreState) =>
   toolMessageId(s) === id && showPortal(s);
 
@@ -194,6 +217,7 @@ export const chatPortalSelectors = {
   isArtifactTagClosed,
 
   // Document data
+  portalAgentDocumentId,
   portalDocumentId,
 
   // File preview data
@@ -204,6 +228,9 @@ export const chatPortalSelectors = {
   // Local file data
   activeLocalFilePath,
   currentLocalFile,
+  dirtyLocalFileContents,
+  isLocalFileDirty,
+  localFileBuffer,
   localFilePath,
   localFileWorkingDirectory,
   openLocalFiles,
@@ -215,7 +242,12 @@ export const chatPortalSelectors = {
   currentToolUI,
   toolMessageId,
   toolUIIdentifier,
+  toolUIParams,
   isPluginUIOpen,
+
+  // Verify result detail data
+  verifyResultOperationId,
+  verifyResultCheckItemId,
 };
 
 export * from './selectors/thread';

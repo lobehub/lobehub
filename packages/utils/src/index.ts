@@ -8,6 +8,7 @@ export * from './env';
 export * from './error';
 export * from './folderStructure';
 export * from './format';
+export * from './imageMimeType';
 export * from './imageToBase64';
 export * from './jina';
 export * from './keyboard';

@@ -6,7 +6,7 @@ import { documents } from '../../schemas';
 import type { NewAgent } from '../../schemas/agent';
 import { agents } from '../../schemas/agent';
 import type { NewFile } from '../../schemas/file';
-import { files, knowledgeBases } from '../../schemas/file';
+import { files, knowledgeBaseFiles, knowledgeBases } from '../../schemas/file';
 import { messages } from '../../schemas/message';
 import type { NewTopic } from '../../schemas/topic';
 import { topics } from '../../schemas/topic';
@@ -965,6 +965,127 @@ describe.skipIf(!isServerDB)('SearchRepo', () => {
       results.forEach((r) => {
         expect(r.relevance).toBeGreaterThanOrEqual(1);
         expect(r.relevance).toBeLessThanOrEqual(3);
+      });
+    });
+
+    describe('file-backed documents (PDF / parsed files)', () => {
+      const pdfFileId = 'file-bm25-pdf-1';
+      const pdfDocId = 'docs-bm25-pdf-1';
+      const folderDocId = 'docs-bm25-folder-1';
+      const otherUserFileId = 'file-bm25-other-1';
+      const otherUserDocId = 'docs-bm25-other-1';
+
+      beforeEach(async () => {
+        await serverDB.insert(files).values([
+          {
+            fileType: 'application/pdf',
+            id: pdfFileId,
+            name: 'transformers-paper.pdf',
+            size: 2048,
+            url: 's3://bucket/transformers-paper.pdf',
+            userId,
+          },
+          {
+            fileType: 'application/pdf',
+            id: otherUserFileId,
+            name: 'leak-check.pdf',
+            size: 2048,
+            url: 's3://bucket/leak-check.pdf',
+            userId: otherUserId,
+          },
+        ]);
+
+        await serverDB.insert(knowledgeBaseFiles).values([
+          { fileId: pdfFileId, knowledgeBaseId: kbA, userId },
+          { fileId: otherUserFileId, knowledgeBaseId: 'kb-other-1', userId: otherUserId },
+        ]);
+
+        await serverDB.insert(documents).values([
+          {
+            content:
+              'Attention is all you need. The Transformer architecture relies on self-attention ' +
+              'and replaces recurrence with parallel multi-head attention layers.',
+            fileId: pdfFileId,
+            fileType: 'application/pdf',
+            filename: 'transformers-paper.pdf',
+            id: pdfDocId,
+            source: 's3://bucket/transformers-paper.pdf',
+            sourceType: 'file',
+            title: 'Attention Is All You Need',
+            totalCharCount: 200,
+            totalLineCount: 5,
+            userId,
+          },
+          {
+            content: '',
+            fileType: 'custom/folder',
+            filename: 'a folder',
+            id: folderDocId,
+            knowledgeBaseId: kbA,
+            source: 'internal://folder/placeholder',
+            sourceType: 'api',
+            title: 'Transformer Folder',
+            totalCharCount: 0,
+            totalLineCount: 0,
+            userId,
+          },
+          {
+            content:
+              'Attention paper in another user knowledge base — must never surface for current user.',
+            fileId: otherUserFileId,
+            fileType: 'application/pdf',
+            filename: 'leak-check.pdf',
+            id: otherUserDocId,
+            source: 's3://bucket/leak-check.pdf',
+            sourceType: 'file',
+            title: 'Attention Leak Check',
+            totalCharCount: 100,
+            totalLineCount: 3,
+            userId: otherUserId,
+          },
+        ]);
+      });
+
+      it('returns a PDF-backed document hit via knowledge_base_files join', async () => {
+        const results = await searchRepo.searchKnowledgeBaseDocuments('attention transformer', [
+          kbA,
+        ]);
+        const pdfHit = results.find((r) => r.documentId === pdfDocId);
+        expect(pdfHit).toBeDefined();
+        expect(pdfHit?.knowledgeBaseId).toBe(kbA);
+        expect(pdfHit?.fileId).toBe(pdfFileId);
+        expect(pdfHit?.title).toBe('Attention Is All You Need');
+      });
+
+      it('still matches inline custom/document hits in the same call', async () => {
+        await serverDB.insert(documents).values({
+          content: 'Attention transformer notes written inline for KB-A',
+          fileType: 'custom/document',
+          filename: 'inline-notes.md',
+          knowledgeBaseId: kbA,
+          source: 'internal://document/placeholder',
+          sourceType: 'api',
+          title: 'Inline Attention Notes',
+          totalCharCount: 60,
+          totalLineCount: 2,
+          userId,
+        });
+
+        const results = await searchRepo.searchKnowledgeBaseDocuments('attention', [kbA]);
+        expect(results.some((r) => r.title === 'Inline Attention Notes')).toBe(true);
+        expect(results.some((r) => r.documentId === pdfDocId)).toBe(true);
+      });
+
+      it('excludes folder documents even when they match the query', async () => {
+        const results = await searchRepo.searchKnowledgeBaseDocuments('transformer folder', [kbA]);
+        expect(results.every((r) => r.documentId !== folderDocId)).toBe(true);
+      });
+
+      it('does not surface another user PDF when querying their KB', async () => {
+        const results = await searchRepo.searchKnowledgeBaseDocuments('attention', [
+          'kb-other-1',
+        ]);
+        expect(results).toEqual([]);
       });
     });
   });

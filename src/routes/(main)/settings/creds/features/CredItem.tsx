@@ -2,7 +2,8 @@
 
 import { type UserCredSummary } from '@lobechat/types';
 import { Avatar, Button, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { App, Tag } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
+import { Tag } from 'antd';
 import {
   Eye,
   File,
@@ -41,17 +42,14 @@ const typeColors: Record<string, string> = {
 
 const CredItem: FC<CredItemProps> = memo(({ cred, onEdit, onDelete, onView }) => {
   const { t } = useTranslation('setting');
-  const { modal } = App.useApp();
 
   const handleDelete = () => {
-    modal.confirm({
-      centered: true,
+    confirmModal({
       content: t('creds.actions.deleteConfirm.content'),
       okButtonProps: { danger: true },
       okText: t('creds.actions.deleteConfirm.ok'),
       onOk: () => onDelete(cred.id),
       title: t('creds.actions.deleteConfirm.title'),
-      type: 'error',
     });
   };
 

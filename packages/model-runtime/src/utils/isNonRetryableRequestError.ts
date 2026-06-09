@@ -2,7 +2,11 @@ import { toRecord } from '@lobechat/utils';
 
 import { AgentRuntimeErrorType } from '../types/error';
 
-const NON_RETRYABLE_ERROR_TYPES = new Set<string>([AgentRuntimeErrorType.ExceededContextWindow]);
+const NON_RETRYABLE_ERROR_TYPES = new Set<string>([
+  AgentRuntimeErrorType.ExceededContextWindow,
+  AgentRuntimeErrorType.ProviderContentPolicyViolation,
+  AgentRuntimeErrorType.ProviderNoImageGenerated,
+]);
 const RETRYABLE_STATUS_CODES = new Set([401, 403, 404, 408, 409, 423, 425, 429]);
 const RETRYABLE_ERROR_CODES = new Set([
   'accountdeactivated',

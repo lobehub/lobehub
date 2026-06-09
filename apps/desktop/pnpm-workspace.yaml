@@ -1,6 +1,7 @@
 packages:
   - '../cli'
   - '../../packages/agent-gateway-client'
+  - '../../packages/chat-adapter-imessage'
   - '../../packages/heterogeneous-agents'
   - '../../packages/const'
   - '../../packages/electron-server-ipc'
@@ -8,7 +9,10 @@ packages:
   - '../../packages/file-loaders'
   - '../../packages/desktop-bridge'
   - '../../packages/device-gateway-client'
+  - '../../packages/device-identity'
   - '../../packages/local-file-shell'
+  - '../../packages/tool-runtime'
+  - '../../packages/prompts'
   - './stubs/business-const'
   - './stubs/types'
   - '.'

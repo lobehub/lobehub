@@ -19,7 +19,8 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 12px;
     align-items: flex-start;
 
-    padding: 12px 14px;
+    padding-block: 12px;
+    padding-inline: 14px;
     border: 1px solid ${cssVar.colorFillSecondary};
     border-radius: ${cssVar.borderRadiusLG};
 
@@ -102,7 +103,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-top: 8px;
+    margin-block-start: 8px;
   `,
   footerActions: css`
     display: flex;
@@ -118,7 +119,8 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   pill: css`
     cursor: pointer;
 
-    padding: 4px 12px;
+    padding-block: 4px;
+    padding-inline: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 999px;
 
@@ -144,10 +146,10 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   pillActive: css`
+    border-color: ${cssVar.colorFillSecondary};
     font-weight: 500;
     color: ${cssVar.colorText};
     background: ${cssVar.colorFillSecondary};
-    border-color: ${cssVar.colorFillSecondary};
 
     &:hover {
       background: ${cssVar.colorFillSecondary};
@@ -169,13 +171,15 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: ${cssVar.borderRadius};
 
     background: ${cssVar.colorFillTertiary};
+
     animation: ${pulse} 1.5s ease-in-out infinite;
   `,
   skeletonCard: css`
     display: flex;
     gap: 12px;
 
-    padding: 12px 14px;
+    padding-block: 12px;
+    padding-inline: 14px;
     border: 1px solid ${cssVar.colorFillSecondary};
     border-radius: ${cssVar.borderRadiusLG};
   `,
@@ -189,7 +193,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     width: 72px;
     height: 28px;
     border-radius: 999px;
+
     background: ${cssVar.colorFillTertiary};
+
     animation: ${pulse} 1.5s ease-in-out infinite;
   `,
 }));

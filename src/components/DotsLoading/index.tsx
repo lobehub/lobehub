@@ -1,36 +1,32 @@
-import { createStyles, keyframes } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { type CSSProperties, memo } from 'react';
 
-const fade = keyframes`
-  0%, 100% {
-    opacity: 0.3;
-  }
-  50% {
-    opacity: 1;
-  }
-`;
-
-interface StyleParams {
-  color?: string;
-  gap: number;
-  size: number;
-}
-
-const useStyles = createStyles(({ css, token }, { size, gap, color }: StyleParams) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     display: inline-flex;
     flex-direction: row;
-    gap: ${gap}px;
+    gap: var(--dots-loading-gap);
     align-items: center;
   `,
   dot: css`
-    width: ${size}px;
-    height: ${size}px;
+    width: var(--dots-loading-size);
+    height: var(--dots-loading-size);
     border-radius: 50%;
 
-    background-color: ${color || token.colorTextSecondary};
+    background-color: var(--dots-loading-color);
 
-    animation: ${fade} 1.2s ease-in-out infinite;
+    animation: dots-loading-fade 1.2s ease-in-out infinite;
+
+    @keyframes dots-loading-fade {
+      0%,
+      100% {
+        opacity: 0.3;
+      }
+
+      50% {
+        opacity: 1;
+      }
+    }
   `,
 }));
 
@@ -46,12 +42,17 @@ interface DotsLoadingProps extends StyleArgs {
 }
 
 const DotsLoading = memo<DotsLoadingProps>(({ size = 4, gap = 3, color, className, style }) => {
-  const { styles: s, cx } = useStyles({ color, gap, size });
+  const cssVars = {
+    '--dots-loading-color': color || cssVar.colorTextSecondary,
+    '--dots-loading-gap': `${gap}px`,
+    '--dots-loading-size': `${size}px`,
+  } as CSSProperties;
+
   return (
-    <div className={cx(s.container, className)} style={style}>
-      <div className={s.dot} style={{ animationDelay: '0s' }} />
-      <div className={s.dot} style={{ animationDelay: '0.15s' }} />
-      <div className={s.dot} style={{ animationDelay: '0.3s' }} />
+    <div className={cx(styles.container, className)} style={{ ...cssVars, ...style }}>
+      <div className={styles.dot} style={{ animationDelay: '0s' }} />
+      <div className={styles.dot} style={{ animationDelay: '0.15s' }} />
+      <div className={styles.dot} style={{ animationDelay: '0.3s' }} />
     </div>
   );
 });

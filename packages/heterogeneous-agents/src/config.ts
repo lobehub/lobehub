@@ -45,12 +45,14 @@ export const getHeterogeneousAgentConfig = (type: string) =>
  */
 export interface RemoteHeterogeneousAgentConfig {
   title: string;
-  type: 'hermes' | 'openclaw';
+  type: 'amp' | 'hermes' | 'opencode' | 'openclaw';
 }
 
 export const REMOTE_HETEROGENEOUS_AGENT_CONFIGS = [
   { title: 'OpenClaw', type: 'openclaw' },
   { title: 'Hermes', type: 'hermes' },
+  { title: 'Amp', type: 'amp' },
+  { title: 'OpenCode', type: 'opencode' },
 ] as const satisfies readonly RemoteHeterogeneousAgentConfig[];
 
 /** Union of all local CLI hetero types. */

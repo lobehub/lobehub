@@ -1,4 +1,6 @@
 {
+  "features.agentDocumentFloatingChatPanel.desc": "Afficher le panneau de chat flottant dans l'aperçu du document de l'agent uniquement lorsque cette fonctionnalité expérimentale est activée.",
+  "features.agentDocumentFloatingChatPanel.title": "Panneau de Chat Flottant pour Document d'Agent",
   "features.agentSelfIteration.desc": "Permet à l’assistant de réfléchir, de développer une conscience de soi et d’itérer en continu à travers des tentatives et des interactions successives.",
   "features.agentSelfIteration.title": "Auto‑itération de l’agent",
   "features.assistantMessageGroup.desc": "Regroupez les messages de l'agent et les résultats de leurs appels d'outils pour les afficher ensemble",
@@ -7,9 +9,9 @@
   "features.gatewayMode.title": "Exécution de l’agent côté serveur (Gateway)",
   "features.groupChat.desc": "Activez la coordination de discussions de groupe multi-agents.",
   "features.groupChat.title": "Discussion de groupe (multi-agents)",
+  "features.imessage.desc": "Connecter les agents à iMessage via le pont local LobeHub Desktop BlueBubbles.",
+  "features.imessage.title": "Canal iMessage",
   "features.inputMarkdown.desc": "Affichez le Markdown dans la zone de saisie en temps réel (texte en gras, blocs de code, tableaux, etc.).",
   "features.inputMarkdown.title": "Rendu Markdown dans la saisie",
-  "features.messenger.desc": "Discutez avec vos agents depuis Telegram (et d'autres messageries) via le bot partagé LobeHub. Ajoute un onglet Messagerie dans les Paramètres pour lier votre compte et choisir quel agent reçoit les messages.",
-  "features.messenger.title": "Messagerie",
   "title": "Laboratoires"
 }

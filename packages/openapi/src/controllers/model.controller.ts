@@ -15,11 +15,11 @@ export class ModelController extends BaseController {
       const query = this.getQuery<ModelsListQuery>(c);
 
       const db = await this.getDatabase();
-      const modelService = new ModelService(db, this.getUserId(c));
+      const modelService = new ModelService(db, this.getUserId(c), this.getWorkspaceId(c));
 
       const result = await modelService.getModels(query);
 
-      return this.success(c, result, '获取模型列表成功');
+      return this.success(c, result, 'Model list retrieved successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -34,10 +34,10 @@ export class ModelController extends BaseController {
       const { providerId, modelId } = this.getParams<{ modelId: string; providerId: string }>(c);
 
       const db = await this.getDatabase();
-      const modelService = new ModelService(db, this.getUserId(c));
+      const modelService = new ModelService(db, this.getUserId(c), this.getWorkspaceId(c));
       const result = await modelService.getModelDetail(providerId, modelId);
 
-      return this.success(c, result, '获取模型详情成功');
+      return this.success(c, result, 'Model details retrieved successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -52,14 +52,14 @@ export class ModelController extends BaseController {
       const body = await this.getBody<CreateModelRequest>(c);
 
       if (!body) {
-        return this.error(c, '请求体不能为空', 400);
+        return this.error(c, 'Request body cannot be empty', 400);
       }
 
       const db = await this.getDatabase();
-      const modelService = new ModelService(db, this.getUserId(c));
+      const modelService = new ModelService(db, this.getUserId(c), this.getWorkspaceId(c));
       const result = await modelService.createModel(body);
 
-      return this.success(c, result, '创建模型成功');
+      return this.success(c, result, 'Model created successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -75,14 +75,14 @@ export class ModelController extends BaseController {
       const body = await this.getBody<UpdateModelRequest>(c);
 
       if (!body) {
-        return this.error(c, '请求体不能为空', 400);
+        return this.error(c, 'Request body cannot be empty', 400);
       }
 
       const db = await this.getDatabase();
-      const modelService = new ModelService(db, this.getUserId(c));
+      const modelService = new ModelService(db, this.getUserId(c), this.getWorkspaceId(c));
       const result = await modelService.updateModel(providerId, modelId, body);
 
-      return this.success(c, result, '更新模型成功');
+      return this.success(c, result, 'Model updated successfully');
     } catch (error) {
       return this.handleError(c, error);
     }

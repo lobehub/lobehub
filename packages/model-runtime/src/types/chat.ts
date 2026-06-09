@@ -51,6 +51,7 @@ export interface OpenAIChatMessage {
     content?: string;
     duration?: number;
   };
+  reasoning_content?: string;
   role: LLMRoleType;
   tool_call_id?: string;
   tool_calls?: MessageToolCall[];
@@ -123,6 +124,7 @@ export interface ChatStreamPayload {
    * @default 0
    */
   presence_penalty?: number;
+  preserveThinking?: boolean;
   provider?: string;
   reasoning?: {
     effort?: string;

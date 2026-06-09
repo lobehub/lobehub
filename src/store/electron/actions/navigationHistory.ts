@@ -204,6 +204,16 @@ export class NavigationHistoryActionImpl {
   };
 
   setCurrentRouteMeta = (meta: DynamicRouteMeta | null, url: string | null = null): void => {
+    const { currentRouteMeta, currentRouteMetaUrl } = this.#get();
+    if (
+      currentRouteMetaUrl === url &&
+      (currentRouteMeta === null) === (meta === null) &&
+      currentRouteMeta?.avatar === meta?.avatar &&
+      currentRouteMeta?.backgroundColor === meta?.backgroundColor &&
+      currentRouteMeta?.title === meta?.title
+    ) {
+      return;
+    }
     this.#set({ currentRouteMeta: meta, currentRouteMetaUrl: url }, false, 'setCurrentRouteMeta');
   };
 

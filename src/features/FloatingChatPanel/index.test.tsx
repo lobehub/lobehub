@@ -55,13 +55,25 @@ vi.mock('@/hooks/useOperationState', () => ({
   useOperationState: () => undefined,
 }));
 
-vi.mock('@/store/chat', () => ({
-  useChatStore: (selector: any) =>
-    selector({
-      dbMessagesMap: {},
-      replaceMessages: vi.fn(),
-    }),
+const mockChatState = vi.hoisted(() => ({
+  current: {
+    dbMessagesMap: {} as Record<string, Array<{ id: string; threadId?: string | null }>>,
+    portalThreadId: undefined as string | undefined,
+    replaceMessages: vi.fn(),
+  },
 }));
+
+vi.mock('@/store/chat', () => {
+  const useChatStore: any = (selector: any) => selector(mockChatState.current);
+  useChatStore.getState = () => mockChatState.current;
+  useChatStore.setState = (patch: any) => {
+    Object.assign(
+      mockChatState.current,
+      typeof patch === 'function' ? patch(mockChatState.current) : patch,
+    );
+  };
+  return { useChatStore };
+});
 
 vi.mock('@/store/chat/utils/messageMapKey', () => ({
   messageMapKey: (ctx: any) => `${ctx.agentId}:${ctx.topicId}:${ctx.threadId}`,
@@ -70,10 +82,39 @@ vi.mock('@/store/chat/utils/messageMapKey', () => ({
 describe('FloatingChatPanel', () => {
   beforeEach(() => {
     __resetFloatingChatPanelRegistry();
+    mockChatState.current.dbMessagesMap = {};
+    mockChatState.current.portalThreadId = undefined;
   });
 
-  it('builds a main-scope context from agentId + topicId', () => {
+  it('builds an ephemeral thread context by default from agentId + topicId', () => {
     const { getByTestId } = render(<FloatingChatPanel agentId="agent-1" topicId="topic-1" />);
+    const ctx = JSON.parse(getByTestId('provider').dataset.context!);
+    expect(ctx).toEqual({
+      agentId: 'agent-1',
+      isNew: true,
+      scope: 'thread',
+      threadId: null,
+      topicId: 'topic-1',
+    });
+  });
+
+  it('drops isNew when an existing threadId is supplied', () => {
+    const { getByTestId } = render(
+      <FloatingChatPanel agentId="agent-1" threadId="thread-1" topicId="topic-1" />,
+    );
+    const ctx = JSON.parse(getByTestId('provider').dataset.context!);
+    expect(ctx).toEqual({
+      agentId: 'agent-1',
+      scope: 'thread',
+      threadId: 'thread-1',
+      topicId: 'topic-1',
+    });
+  });
+
+  it('builds a main-scope context when scope is forced to main', () => {
+    const { getByTestId } = render(
+      <FloatingChatPanel agentId="agent-1" scope="main" topicId="topic-1" />,
+    );
     const ctx = JSON.parse(getByTestId('provider').dataset.context!);
     expect(ctx).toEqual({
       agentId: 'agent-1',
@@ -83,24 +124,53 @@ describe('FloatingChatPanel', () => {
     });
   });
 
-  it('switches scope to thread when threadId is provided', () => {
-    const { getByTestId } = render(
-      <FloatingChatPanel agentId="agent-1" threadId="thread-1" topicId="topic-1" />,
-    );
+  it('anchors a new thread on the topic last main message when one is present', () => {
+    mockChatState.current.dbMessagesMap = {
+      // mocked messageMapKey: `${agentId}:${topicId}:${threadId}`; main scope
+      // omits threadId so it serializes as "agent-1:topic-1:undefined".
+      'agent-1:topic-1:undefined': [
+        { id: 'msg-1', threadId: null },
+        { id: 'msg-2', threadId: null },
+      ],
+    };
+
+    const { getByTestId } = render(<FloatingChatPanel agentId="agent-1" topicId="topic-1" />);
     const ctx = JSON.parse(getByTestId('provider').dataset.context!);
-    expect(ctx.scope).toBe('thread');
-    expect(ctx.threadId).toBe('thread-1');
+    expect(ctx).toEqual({
+      agentId: 'agent-1',
+      isNew: true,
+      scope: 'thread',
+      sourceMessageId: 'msg-2',
+      threadId: null,
+      threadType: 'standalone',
+      topicId: 'topic-1',
+    });
   });
 
-  it('supports page-scoped context with the active document id', () => {
+  it('skips thread-scoped rows when picking the source message anchor', () => {
+    mockChatState.current.dbMessagesMap = {
+      'agent-1:topic-1:undefined': [
+        { id: 'msg-1', threadId: null },
+        { id: 'msg-2', threadId: null },
+        { id: 'msg-3', threadId: 'thread-x' },
+      ],
+    };
+
+    const { getByTestId } = render(<FloatingChatPanel agentId="agent-1" topicId="topic-1" />);
+    const ctx = JSON.parse(getByTestId('provider').dataset.context!);
+    expect(ctx.sourceMessageId).toBe('msg-2');
+  });
+
+  it('forwards documentId into the conversation context for document-aware injection', () => {
     const { getByTestId } = render(
-      <FloatingChatPanel agentId="agent-1" documentId="doc-1" scope="page" topicId="topic-1" />,
+      <FloatingChatPanel agentId="agent-1" documentId="doc-1" topicId="topic-1" />,
     );
     const ctx = JSON.parse(getByTestId('provider').dataset.context!);
     expect(ctx).toEqual({
       agentId: 'agent-1',
       documentId: 'doc-1',
-      scope: 'page',
+      isNew: true,
+      scope: 'thread',
       threadId: null,
       topicId: 'topic-1',
     });

@@ -16,6 +16,7 @@ import { buildTaskDetailPrompt, buildTaskListPrompt } from '@lobechat/prompts';
 import {
   type ConversationContext,
   type MessageMetadata,
+  type RunSubAgentResult,
   type RuntimeInitialContext,
   type UIChatMessage,
 } from '@lobechat/types';
@@ -23,6 +24,7 @@ import debug from 'debug';
 import { t } from 'i18next';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
+import { aiAgentService } from '@/services/aiAgent';
 import { isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
@@ -40,6 +42,7 @@ import {
   notifyDesktopHumanApprovalRequired,
   resolveNotificationNavigatePath,
 } from '@/store/chat/utils/desktopNotification';
+import { getElectronStoreState } from '@/store/electron';
 import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
 import { getTaskStoreState } from '@/store/task';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
@@ -150,12 +153,10 @@ export const streamingExecutor = (set: Setter, get: () => ChatStore, _api?: unkn
 
 export class StreamingExecutorActionImpl {
   readonly #get: () => ChatStore;
-  // eslint-disable-next-line no-unused-private-class-members
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
+    void set;
     void _api;
-    this.#set = set;
     this.#get = get;
   }
 
@@ -331,7 +332,9 @@ export class StreamingExecutorActionImpl {
     };
 
     const topicWorkingDirectory = topicSelectors.currentTopicWorkingDirectory(this.#get());
-    const agentWorkingDirectory = agentSelectors.currentAgentWorkingDirectory(getAgentStoreState());
+    const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+    const agentWorkingDirectory =
+      agentSelectors.currentAgentWorkingDirectory(currentDeviceId)(getAgentStoreState());
     const workingDirectory = topicWorkingDirectory ?? agentWorkingDirectory;
 
     // Create initial state or use provided state
@@ -482,7 +485,7 @@ export class StreamingExecutorActionImpl {
     parentOperationId?: string;
     skipCreateFirstMessage?: boolean;
     isSubAgent?: boolean;
-  }): Promise<{ cost?: Cost; usage?: Usage } | void> => {
+  }): Promise<{ cost?: Cost; model?: string; provider?: string; usage?: Usage } | void> => {
     const {
       disableTools,
       messages: originalMessages,
@@ -494,7 +497,6 @@ export class StreamingExecutorActionImpl {
 
     // Extract values from context
     const { agentId, topicId, threadId, subAgentId, groupId, scope } = context;
-
     // Determine effectiveAgentId for agent config retrieval:
     // - subAgentId is used when present (behavior depends on scope)
     // - agentId: Default
@@ -895,6 +897,7 @@ export class StreamingExecutorActionImpl {
               context: execContext,
               editorData: merged.editorData,
               files: mergedFiles,
+              ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
               message: mergedContent,
               metadata: merged.metadata,
             })
@@ -977,7 +980,137 @@ export class StreamingExecutorActionImpl {
     }
 
     // Return usage and cost data for caller to use
-    return { cost: state.cost, usage: state.usage };
+    return { cost: state.cost, model, provider: provider ?? undefined, usage: state.usage };
+  };
+
+  /**
+   * Run a sub-agent inside an isolated thread using the *current* client
+   * runtime, then resolve with its final output so the calling tool can return
+   * a normal tool result. This is the client-side implementation behind
+   * `BuiltinToolContext.subAgent.run` — a sub-agent run is just a regular
+   * `executeClientAgent` invocation scoped to a fresh Thread, with
+   * `isSubAgent` set so the sub-agent can't recursively spawn more sub-agents.
+   */
+  runClientSubAgent = async (params: {
+    agentId: string;
+    description: string;
+    inheritMessages?: boolean;
+    instruction: string;
+    parentOperationId?: string;
+    toolMessageId: string;
+    topicId: string;
+  }): Promise<RunSubAgentResult> => {
+    const {
+      agentId,
+      topicId,
+      instruction,
+      description,
+      inheritMessages,
+      toolMessageId,
+      parentOperationId,
+    } = params;
+
+    const logId = `runClientSubAgent:${toolMessageId}`;
+
+    try {
+      // 1. Create the isolation Thread (persists thread + initial user message)
+      const threadResult = await aiAgentService.createClientTaskThread({
+        agentId,
+        instruction,
+        parentMessageId: toolMessageId,
+        title: description,
+        topicId,
+      });
+
+      if (!threadResult.success) {
+        log('[%s] Failed to create client task thread', logId);
+        return {
+          error: 'Failed to create sub-agent thread',
+          result: 'Failed to create sub-agent thread',
+          success: false,
+          threadId: '',
+        };
+      }
+
+      const { threadId, userMessageId, threadMessages } = threadResult;
+      log('[%s] Created thread %s, userMessage %s', logId, threadId, userMessageId);
+
+      // Register the freshly-created isolation thread in the client thread list
+      // so the tool Render can locate it (the "View Detail" button) and it shows
+      // in the sidebar without waiting for a topic switch to re-fetch threads.
+      void this.#get().refreshThreads();
+
+      // 2. Build the sub-agent ConversationContext (threadId provides isolation)
+      const subContext: ConversationContext = { agentId, scope: 'thread', threadId, topicId };
+
+      // 3. Create a child operation chained to the parent runtime operation
+      const { operationId: taskOperationId } = this.#get().startOperation({
+        context: subContext,
+        metadata: { executionMode: 'client', startTime: Date.now(), taskDescription: description },
+        parentOperationId,
+        type: 'execClientSubAgent',
+      });
+
+      // 4. Seed the thread message map so the persisted user message renders
+      this.#get().replaceMessages(threadMessages, { context: subContext });
+
+      // 5. Optionally inherit the parent conversation messages
+      let subMessages = [...threadMessages];
+      if (inheritMessages) {
+        const parentMessages = (
+          this.#get().dbMessagesMap[messageMapKey({ agentId, topicId })] || []
+        ).filter((m) => m.role !== 'task');
+        subMessages = [...parentMessages, ...subMessages];
+        this.#get().replaceMessages(subMessages, { context: subContext });
+      }
+
+      // 6. Run the sub-agent with the current client runtime
+      const runtimeResult = await this.#get().executeClientAgent({
+        context: subContext,
+        isSubAgent: true,
+        messages: subMessages,
+        operationId: taskOperationId,
+        parentMessageId: userMessageId,
+        parentMessageType: 'user',
+        parentOperationId,
+      });
+
+      // 7. Extract the sub-agent's final assistant output as the tool result
+      const subMessageKey = messageMapKey(subContext);
+      const subTaskMessages = this.#get().dbMessagesMap[subMessageKey] || [];
+      const lastAssistant = subTaskMessages.findLast((m) => m.role === 'assistant');
+      const resultContent = lastAssistant?.content || 'Task completed';
+      const totalToolCalls = subTaskMessages.filter((m) => m.role === 'tool').length;
+      const { usage, cost, model } = runtimeResult || {};
+      const totalTokens = usage?.llm?.tokens?.total;
+
+      // 8. Persist final Thread status + metadata
+      await aiAgentService.updateClientTaskThreadStatus({
+        completionReason: 'done',
+        metadata: {
+          totalCost: cost?.total,
+          totalMessages: subTaskMessages.length,
+          totalTokens,
+          totalToolCalls,
+        },
+        resultContent,
+        threadId,
+      });
+
+      this.#get().completeOperation(taskOperationId);
+
+      log('[%s] Completed, result %d chars', logId, resultContent.length);
+      return { model, result: resultContent, success: true, threadId, totalToolCalls, totalTokens };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      log('[%s] Error: %O', logId, error);
+      return {
+        error: errorMessage,
+        result: `Sub-agent execution failed: ${errorMessage}`,
+        success: false,
+        threadId: '',
+      };
+    }
   };
 }
 

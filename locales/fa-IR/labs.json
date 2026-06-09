@@ -1,4 +1,6 @@
 {
+  "features.agentDocumentFloatingChatPanel.desc": "نمایش پنل چت شناور در پیش‌نمایش سند نماینده تنها زمانی که این ویژگی آزمایشی فعال باشد.",
+  "features.agentDocumentFloatingChatPanel.title": "پنل چت شناور سند نماینده",
   "features.agentSelfIteration.desc": "به دستیار امکان می‌دهد درباره عملکرد خود تأمل کند، خودآگاهی ایجاد کند و از طریق تلاش‌ها و تعاملات مداوم به طور پیوسته بهبود یابد.",
   "features.agentSelfIteration.title": "خود‌تکراری عامل",
   "features.assistantMessageGroup.desc": "نمایش گروهی پیام‌های عامل و نتایج ابزارهای فراخوانی‌شده به‌صورت یکجا",
@@ -7,9 +9,9 @@
   "features.gatewayMode.title": "اجرای ایجنت در سمت سرور (Gateway)",
   "features.groupChat.desc": "فعال‌سازی هماهنگی گفت‌وگوی گروهی چندعاملی.",
   "features.groupChat.title": "گفت‌وگوی گروهی (چندعاملی)",
+  "features.imessage.desc": "اتصال نمایندگان به iMessage از طریق پل BlueBubbles دسکتاپ LobeHub محلی.",
+  "features.imessage.title": "کانال iMessage",
   "features.inputMarkdown.desc": "نمایش زنده Markdown در ناحیه ورودی (متن پررنگ، بلوک‌های کد، جدول‌ها و غیره).",
   "features.inputMarkdown.title": "نمایش Markdown در ورودی",
-  "features.messenger.desc": "با عوامل خود از طریق تلگرام (و سایر پیام‌رسان‌ها) از طریق ربات مشترک LobeHub صحبت کنید. یک تب پیام‌رسان در تنظیمات اضافه می‌کند برای اتصال حساب شما و انتخاب اینکه کدام عامل پیام‌ها را دریافت کند.",
-  "features.messenger.title": "پیام‌رسان",
   "title": "آزمایشگاه‌ها"
 }

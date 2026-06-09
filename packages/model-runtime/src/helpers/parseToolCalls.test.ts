@@ -163,7 +163,7 @@ describe('parseToolCalls', () => {
     ]);
   });
 
-  // LOBE-8199: NVIDIA NIM (z-ai/glm5, qwen3.5-MoE) and some proxies open a
+  // NVIDIA NIM (z-ai/glm5, qwen3.5-MoE) and some proxies open a
   // tool_call with function.name=null as a start marker; the real name
   // arrives in a subsequent delta.
   it('should coerce null function.name on the first delta and patch it in from a later delta', () => {

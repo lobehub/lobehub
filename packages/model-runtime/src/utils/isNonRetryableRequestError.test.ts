@@ -13,6 +13,22 @@ describe('isNonRetryableRequestError', () => {
     ).toBe(true);
   });
 
+  it('returns true for terminal image generation errors', () => {
+    expect(
+      isNonRetryableRequestError({
+        error: { message: 'Google image generation was blocked by content policy.' },
+        errorType: AgentRuntimeErrorType.ProviderContentPolicyViolation,
+      }),
+    ).toBe(true);
+
+    expect(
+      isNonRetryableRequestError({
+        error: { message: 'The provider did not return an image.' },
+        errorType: AgentRuntimeErrorType.ProviderNoImageGenerated,
+      }),
+    ).toBe(true);
+  });
+
   it('returns true for invalid request payload errors', () => {
     expect(
       isNonRetryableRequestError({

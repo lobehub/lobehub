@@ -1,6 +1,6 @@
 ---
 name: builtin-tool
-description: Build a new builtin tool package under `packages/builtin-tool-<name>/`. Use when adding a new agent-callable toolset, designing its API surface (manifest / ApiName / Params / State), implementing the Executor + ExecutionRuntime, building the Inspector / Render / Placeholder / Streaming / Intervention / Portal UI, or wiring a tool into the central registries (`packages/builtin-tools/src/{index,identifiers,inspectors,renders,placeholders,streamings,interventions,portals}.ts` and `src/store/tool/slices/builtin/executors/index.ts`). Triggers on "new builtin tool", "add a tool", "tool inspector", "tool render", "tool placeholder", "tool streaming", "tool intervention", "BuiltinToolManifest", "BaseExecutor", "ExecutionRuntime".
+description: 'Build LobeHub builtin tool packages. Use when adding agent-callable tools, manifests, executors, runtimes, inspectors, renders, placeholders, streaming, interventions, portals, or tool registries.'
 ---
 
 # Builtin Tool Authoring Guide
@@ -23,7 +23,7 @@ A builtin tool is a package the agent runtime can call. It ships **five faces**:
 | ------------------------------------------------------------------------------------ | --------------------------------------------- |
 | Where do files live? What does each face do? Wiring?                                 | [architecture.md](references/architecture.md) |
 | How do I name the tool, design APIs, write the manifest, executor, ExecutionRuntime? | [tool-design.md](references/tool-design.md)   |
-| How do I build Inspector / Render / Placeholder / Streaming / Intervention / Portal? | [ui.md](references/ui.md)                     |
+| How do I build Inspector / Render / Placeholder / Streaming / Intervention / Portal? | [ui/](references/ui/README.md)                |
 
 ---
 

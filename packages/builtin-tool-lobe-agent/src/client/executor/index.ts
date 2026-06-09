@@ -359,28 +359,41 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
 
   // ==================== Sub-Agent ====================
   //
-  // The executor only constructs the state payload that bridges the tool call
-  // to the agent-runtime instruction layer. The actual sub-agent dispatch is
-  // handled by `createAgentExecutors.ts` which reads `state.type` to emit the
-  // matching `exec_sub_agent` / `exec_client_sub_agent(s)` instruction.
+  // A sub-agent call is a normal tool call: the executor runs the sub-agent in
+  // an isolated Thread via `ctx.subAgent` (the current runtime, injected by the
+  // client) and returns the sub-agent's final output as the tool result. The
+  // Thread id is persisted in state so the Render can open it in the portal.
 
   callSubAgent = async (
     params: CallSubAgentParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const { description, instruction, inheritMessages, timeout, runInClient } = params;
+    const { description, instruction, inheritMessages, timeout } = params;
 
     if (!description || !instruction) {
       return { content: 'Sub-agent description and instruction are required.', success: false };
     }
 
-    const task = { description, inheritMessages, instruction, runInClient, timeout };
-    const stateType = runInClient ? 'execClientSubAgent' : 'execSubAgent';
+    if (!ctx.subAgent) {
+      return { content: 'Sub-agent execution is not available in this runtime.', success: false };
+    }
+
+    const { result, threadId, success, error, model, totalToolCalls, totalTokens } =
+      await ctx.subAgent.run({
+        description,
+        inheritMessages,
+        instruction,
+        timeout,
+        toolMessageId: ctx.messageId,
+      });
+
+    if (!success) {
+      return { content: error ?? 'Sub-agent execution failed.', success: false };
+    }
 
     return {
-      content: `🚀 Dispatched sub-agent for ${runInClient ? 'client-side' : ''} execution:\n- ${description}`,
-      state: { parentMessageId: ctx.messageId ?? '', task, type: stateType },
-      stop: true,
+      content: result,
+      state: { model, threadId, totalToolCalls, totalTokens },
       success: true,
     };
   };
@@ -395,16 +408,38 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
       return { content: 'No sub-agents provided to dispatch.', success: false };
     }
 
-    const taskCount = tasks.length;
-    const taskList = tasks.map((t, i) => `${i + 1}. ${t.description}`).join('\n');
-    const hasClientTasks = tasks.some((t) => t.runInClient);
-    const stateType = hasClientTasks ? 'execClientSubAgents' : 'execSubAgents';
-    const executionMode = hasClientTasks ? 'client-side' : '';
+    if (!ctx.subAgent) {
+      return { content: 'Sub-agent execution is not available in this runtime.', success: false };
+    }
+
+    const subAgent = ctx.subAgent;
+    const results = await Promise.all(
+      tasks.map((task) =>
+        subAgent.run({
+          description: task.description,
+          inheritMessages: task.inheritMessages,
+          instruction: task.instruction,
+          timeout: task.timeout,
+          toolMessageId: ctx.messageId,
+        }),
+      ),
+    );
+
+    const content = results
+      .map((r, i) => `${i + 1}. ${tasks[i].description}\n${r.success ? r.result : `❌ ${r.error}`}`)
+      .join('\n\n');
 
     return {
-      content: `🚀 Dispatched ${taskCount} sub-agent${taskCount > 1 ? 's' : ''} for ${executionMode} execution:\n${taskList}`,
-      state: { parentMessageId: ctx.messageId ?? '', tasks, type: stateType },
-      stop: true,
+      content,
+      state: {
+        subAgents: results.map((r, i) => ({
+          description: tasks[i].description,
+          model: r.model,
+          threadId: r.threadId,
+          totalToolCalls: r.totalToolCalls,
+          totalTokens: r.totalTokens,
+        })),
+      },
       success: true,
     };
   };

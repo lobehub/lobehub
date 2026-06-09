@@ -1,5 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import { imageUrlToBase64 } from '@lobechat/utils';
+import { imageUrlToBase64, resolveImageMimeTypeFromBase64 } from '@lobechat/utils';
 import type OpenAI from 'openai';
 
 import type { OpenAIChatMessage, UserMessageContentPart } from '../../types';
@@ -13,10 +13,25 @@ const ANTHROPIC_SUPPORTED_IMAGE_TYPES = new Set([
   'image/webp',
 ]);
 
-const isImageTypeSupported = (mimeType: string | null): boolean => {
-  if (!mimeType) return true;
-  return ANTHROPIC_SUPPORTED_IMAGE_TYPES.has(mimeType.toLowerCase());
-};
+interface AnthropicVideoBlockParam {
+  source:
+    | {
+        data: string;
+        media_type: string;
+        type: 'base64';
+      }
+    | {
+        type: 'url';
+        url: string;
+      };
+  type: 'video';
+}
+
+const isImageTypeSupported = (mimeType: string | null | undefined): mimeType is string =>
+  !!mimeType && ANTHROPIC_SUPPORTED_IMAGE_TYPES.has(mimeType.toLowerCase());
+
+const isVideoTypeSupported = (mimeType: string | null | undefined): mimeType is string =>
+  !!mimeType && mimeType.toLowerCase().startsWith('video/');
 
 /**
  * Check if a text value contains visible (non-whitespace) characters.
@@ -26,7 +41,9 @@ const hasVisibleText = (text: string | null | undefined): text is string => !!te
 
 export const buildAnthropicBlock = async (
   content: UserMessageContentPart,
-): Promise<Anthropic.ContentBlock | Anthropic.ImageBlockParam | undefined> => {
+): Promise<
+  Anthropic.ContentBlock | Anthropic.ImageBlockParam | AnthropicVideoBlockParam | undefined
+> => {
   switch (content.type) {
     case 'thinking': {
       // just pass-through the content
@@ -43,12 +60,14 @@ export const buildAnthropicBlock = async (
       const { mimeType, base64, type } = parseDataUri(content.image_url.url);
 
       if (type === 'base64') {
-        if (!isImageTypeSupported(mimeType)) return undefined;
+        const resolvedMimeType = await resolveImageMimeTypeFromBase64(mimeType, base64);
+
+        if (!isImageTypeSupported(resolvedMimeType)) return undefined;
 
         return {
           source: {
             data: base64 as string,
-            media_type: mimeType as Anthropic.Base64ImageSource['media_type'],
+            media_type: resolvedMimeType as Anthropic.Base64ImageSource['media_type'],
             type: 'base64',
           },
           type: 'image',
@@ -71,6 +90,47 @@ export const buildAnthropicBlock = async (
       }
 
       throw new Error(`Invalid image URL: ${content.image_url.url}`);
+    }
+
+    case 'video_url': {
+      // MiniMax M3's Anthropic-compatible API accepts video content blocks, while
+      // the upstream Anthropic SDK types do not expose a video block param yet.
+      if (content.video_url.url.startsWith('mm_file://')) {
+        return {
+          source: {
+            type: 'url',
+            url: content.video_url.url,
+          },
+          type: 'video',
+        };
+      }
+
+      const { mimeType, base64, type } = parseDataUri(content.video_url.url);
+
+      if (type === 'base64') {
+        if (!isVideoTypeSupported(mimeType)) return undefined;
+
+        return {
+          source: {
+            data: base64 as string,
+            media_type: mimeType,
+            type: 'base64',
+          },
+          type: 'video',
+        };
+      }
+
+      if (type === 'url') {
+        return {
+          source: {
+            type: 'url',
+            url: content.video_url.url,
+          },
+          type: 'video',
+        };
+      }
+
+      throw new Error(`Invalid video URL: ${content.video_url.url}`);
     }
   }
 };

@@ -13,6 +13,7 @@ import { createInsertSchema } from 'drizzle-zod';
 import { timestamps } from './_helpers';
 import { agents } from './agent';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 /**
  * Stores per-agent bot provider bindings for external chat platforms.
@@ -32,6 +33,8 @@ export const agentBotProviders = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     /** Platform identifier: 'discord' | 'slack' | 'feishu' | ... */
     platform: varchar('platform', { length: 50 }).notNull(),
@@ -55,6 +58,7 @@ export const agentBotProviders = pgTable(
     index('agent_bot_providers_platform_idx').on(t.platform),
     index('agent_bot_providers_agent_id_idx').on(t.agentId),
     index('agent_bot_providers_user_id_idx').on(t.userId),
+    index('agent_bot_providers_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

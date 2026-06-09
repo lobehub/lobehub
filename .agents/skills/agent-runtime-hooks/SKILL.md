@@ -1,6 +1,6 @@
 ---
 name: agent-runtime-hooks
-description: "Agent runtime lifecycle hooks for observing and intercepting agent execution. Use when adding hooks to agent operations, mocking tool calls, logging step events, handling human intervention, sub-agent calls, context compression, or building eval/tracing integrations. Triggers on 'hooks', 'beforeToolCall', 'afterToolCall', 'beforeStep', 'afterStep', 'onComplete', 'onError', 'tool mock', 'agent lifecycle', 'human intervention', 'callAgent', 'compact'."
+description: 'Agent runtime lifecycle hooks. Use for before/after tool or step hooks, tool mocks, human intervention, sub-agent calls, context compression, evals, tracing, callAgent, or lifecycle events.'
 user-invocable: false
 ---
 
@@ -50,14 +50,14 @@ execAgent({ hooks })
 
 ## Key Files
 
-| File                                                       | Role                                                   |
-| ---------------------------------------------------------- | ------------------------------------------------------ |
-| `packages/agent-runtime/src/types/hooks.ts`                | Type definitions (AgentHookType, all event interfaces) |
-| `src/server/services/agentRuntime/hooks/types.ts`          | Server-side types (AgentHook, re-exports)              |
-| `src/server/services/agentRuntime/hooks/HookDispatcher.ts` | Registration, dispatch, dispatchBeforeToolCall         |
-| `src/server/modules/AgentRuntime/RuntimeExecutors.ts`      | Tool/Compact/HumanIntervention hook dispatch           |
-| `src/server/services/agentRuntime/AgentRuntimeService.ts`  | Step hooks + HumanIntervention resume/reject           |
-| `src/server/services/aiAgent/index.ts`                     | CallAgent hook dispatch                                |
+| File                                                            | Role                                                   |
+| --------------------------------------------------------------- | ------------------------------------------------------ |
+| `packages/agent-runtime/src/types/hooks.ts`                     | Type definitions (AgentHookType, all event interfaces) |
+| `apps/server/src/services/agentRuntime/hooks/types.ts`          | Server-side types (AgentHook, re-exports)              |
+| `apps/server/src/services/agentRuntime/hooks/HookDispatcher.ts` | Registration, dispatch, dispatchBeforeToolCall         |
+| `apps/server/src/modules/AgentRuntime/RuntimeExecutors.ts`      | Tool/Compact/HumanIntervention hook dispatch           |
+| `apps/server/src/services/agentRuntime/AgentRuntimeService.ts`  | Step hooks + HumanIntervention resume/reject           |
+| `apps/server/src/services/aiAgent/index.ts`                     | CallAgent hook dispatch                                |
 
 ## Registration Flow
 

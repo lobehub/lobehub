@@ -81,6 +81,10 @@ vi.mock('antd-style', () => ({
   },
 }));
 
+vi.mock('@lobehub/ui/base-ui', () => ({
+  confirmModal: vi.fn(),
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));

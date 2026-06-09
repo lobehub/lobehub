@@ -72,7 +72,10 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
             key="no-provider"
             style={{ color: cssVar.colorTextTertiary }}
             variant={'borderless'}
-            onClick={() => navigate('/settings/provider/all')}
+            onClick={() => {
+              onClose();
+              navigate('/settings/provider/all');
+            }}
           >
             {t('ModelSwitchPanel.emptyProvider')}
             <Icon icon={LucideArrowRight} />
@@ -125,7 +128,10 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
             gap={8}
             key={`empty-${item.provider.id}`}
             style={{ color: cssVar.colorTextTertiary }}
-            onClick={() => navigate(`/settings/provider/${item.provider.id}`)}
+            onClick={() => {
+              onClose();
+              navigate(`/settings/provider/${item.provider.id}`);
+            }}
           >
             {t('ModelSwitchPanel.emptyModel')}
             <Icon icon={LucideArrowRight} />

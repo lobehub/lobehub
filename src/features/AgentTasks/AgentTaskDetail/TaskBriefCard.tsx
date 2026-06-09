@@ -7,7 +7,7 @@ import {
   Icon,
   Text,
 } from '@lobehub/ui';
-import { App } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Check, ChevronDownIcon, ChevronUpIcon, MoreHorizontal, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -32,15 +32,13 @@ interface TaskBriefCardProps {
 const TaskBriefCard = memo<TaskBriefCardProps>(
   ({ brief, onAfterResolve, onAfterAddComment, onAfterDelete }) => {
     const { t } = useTranslation('home');
-    const { modal } = App.useApp();
     const deleteBrief = useBriefStore((s) => s.deleteBrief);
     const isResolved = Boolean(brief.resolvedAction);
     const [expanded, setExpanded] = useState(false);
     const showFull = !isResolved || expanded;
 
     const handleDelete = useCallback(() => {
-      modal.confirm({
-        centered: true,
+      confirmModal({
         content: t('brief.deleteConfirm.content'),
         okButtonProps: { danger: true },
         okText: t('brief.deleteConfirm.ok'),
@@ -49,9 +47,8 @@ const TaskBriefCard = memo<TaskBriefCardProps>(
           await onAfterDelete?.();
         },
         title: t('brief.deleteConfirm.title'),
-        type: 'error',
       });
-    }, [brief.id, deleteBrief, modal, onAfterDelete, t]);
+    }, [brief.id, deleteBrief, onAfterDelete, t]);
 
     const menuItems = useMemo<DropdownItem[]>(
       () => [

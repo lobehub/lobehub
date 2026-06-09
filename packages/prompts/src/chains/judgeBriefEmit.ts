@@ -1,6 +1,15 @@
 import type { BriefArtifacts, ChatStreamPayload, TaskTopicHandoff } from '@lobechat/types';
 
 /**
+ * Bump when editing the system prompt or schema below. Plumbed through
+ * `tracing.promptVersion` at the call site so per-call tracing groups runs
+ * by prompt iteration.
+ */
+export const JUDGE_BRIEF_EMIT_PROMPT_VERSION = 'v1.0';
+
+export const JUDGE_BRIEF_EMIT_SCHEMA_NAME = 'task_topic_brief_judge';
+
+/**
  * Decide whether a completed topic is worth surfacing to the user as a brief.
  *
  * Split from `chainGenerateBrief` so the two stages stay independent: the

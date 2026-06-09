@@ -96,7 +96,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     font-size: 13px;
     font-weight: 500;
-    color: ${cssVar.colorText};
+    color: ${cssVar.colorTextSecondary};
   `,
 }));
 

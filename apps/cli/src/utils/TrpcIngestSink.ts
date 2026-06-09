@@ -16,6 +16,7 @@ export class TrpcIngestSink implements IngestSink {
     private readonly agentType: 'claude-code' | 'codex',
     private readonly operationId: string,
     private readonly topicId: string,
+    private readonly assistantMessageId?: string,
   ) {}
 
   async finish(params: Parameters<IngestSink['finish']>[0]): Promise<void> {
@@ -30,6 +31,7 @@ export class TrpcIngestSink implements IngestSink {
   async ingest(events: AgentStreamEvent[]): Promise<void> {
     await this.client.aiAgent.heteroIngest.mutate({
       agentType: this.agentType,
+      assistantMessageId: this.assistantMessageId,
       events: events as any,
       operationId: this.operationId,
       topicId: this.topicId,

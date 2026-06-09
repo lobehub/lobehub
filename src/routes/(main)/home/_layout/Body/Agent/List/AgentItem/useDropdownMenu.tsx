@@ -1,6 +1,7 @@
 import { SessionDefaultGroup } from '@lobechat/types';
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
 import {
@@ -41,8 +42,8 @@ export const useAgentDropdownMenu = ({
   pinned,
   title,
 }: UseAgentDropdownMenuParams): (() => MenuProps['items']) => {
-  const { t } = useTranslation('chat');
-  const { modal, message } = App.useApp();
+  const { t } = useTranslation(['chat', 'common']);
+  const { message } = App.useApp();
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
   const sessionCustomGroups = useHomeStore(homeAgentListSelectors.agentGroups, isEqual);
@@ -131,14 +132,16 @@ export const useAgentDropdownMenu = ({
           label: t('delete', { ns: 'common' }),
           onClick: ({ domEvent }: any) => {
             domEvent.stopPropagation();
-            modal.confirm({
-              centered: true,
+            confirmModal({
+              cancelText: t('cancel', { ns: 'common' }),
+              content: t('confirmRemoveSessionItemAlert'),
               okButtonProps: { danger: true },
+              okText: t('delete', { ns: 'common' }),
               onOk: async () => {
                 await removeAgent(id);
                 message.success(t('confirmRemoveSessionSuccess'));
               },
-              title: t('confirmRemoveSessionItemAlert'),
+              title: t('delete', { ns: 'common' }),
             });
           },
         },

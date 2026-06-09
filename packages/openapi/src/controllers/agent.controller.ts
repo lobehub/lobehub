@@ -25,10 +25,10 @@ export class AgentController extends BaseController {
       const request = await this.getQuery<GetAgentsRequest>(c);
 
       const db = await this.getDatabase();
-      const agentService = new AgentService(db, this.getUserId(c));
+      const agentService = new AgentService(db, this.getUserId(c), this.getWorkspaceId(c));
       const agentsList = await agentService.queryAgents(request);
 
-      return this.success(c, agentsList, '获取 Agent 列表成功');
+      return this.success(c, agentsList, 'Agent list retrieved successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -45,10 +45,10 @@ export class AgentController extends BaseController {
       const body = await this.getBody<CreateAgentRequest>(c);
 
       const db = await this.getDatabase();
-      const agentService = new AgentService(db, this.getUserId(c));
+      const agentService = new AgentService(db, this.getUserId(c), this.getWorkspaceId(c));
       const createdAgent = await agentService.createAgent(body);
 
-      return this.success(c, createdAgent, 'Agent 创建成功');
+      return this.success(c, createdAgent, 'Agent created successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -71,10 +71,10 @@ export class AgentController extends BaseController {
       };
 
       const db = await this.getDatabase();
-      const agentService = new AgentService(db, this.getUserId(c));
+      const agentService = new AgentService(db, this.getUserId(c), this.getWorkspaceId(c));
       const updatedAgent = await agentService.updateAgent(updateRequest);
 
-      return this.success(c, updatedAgent, 'Agent 更新成功');
+      return this.success(c, updatedAgent, 'Agent updated successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -92,10 +92,10 @@ export class AgentController extends BaseController {
       const request: AgentDeleteRequest = { agentId: id };
 
       const db = await this.getDatabase();
-      const agentService = new AgentService(db, this.getUserId(c));
+      const agentService = new AgentService(db, this.getUserId(c), this.getWorkspaceId(c));
       await agentService.deleteAgent(request);
 
-      return this.success(c, null, 'Agent 删除成功');
+      return this.success(c, null, 'Agent deleted successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -111,14 +111,14 @@ export class AgentController extends BaseController {
     try {
       const { id: agentId } = this.getParams<{ id: string }>(c);
       const db = await this.getDatabase();
-      const agentService = new AgentService(db, this.getUserId(c));
+      const agentService = new AgentService(db, this.getUserId(c), this.getWorkspaceId(c));
       const agent = await agentService.getAgentById(agentId);
 
       if (!agent) {
-        return this.error(c, 'Agent 不存在', 404);
+        return this.error(c, 'Agent not found', 404);
       }
 
-      return this.success(c, agent, '获取 Agent 详情成功');
+      return this.success(c, agent, 'Agent details retrieved successfully');
     } catch (error) {
       return this.handleError(c, error);
     }

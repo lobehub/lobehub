@@ -26,6 +26,7 @@
   "table.columns.trigger.enums.onboarding": "Introductie",
   "table.columns.trigger.enums.openapi": "OpenAPI",
   "table.columns.trigger.enums.semantic_search": "Kenniszoekopdracht",
+  "table.columns.trigger.enums.signup_email_llm_review": "Aanmeldings-e-mailbeoordeling",
   "table.columns.trigger.enums.topic": "Onderwerp Samenvatting",
   "table.columns.trigger.enums.video": "Videogeneratie",
   "table.columns.trigger.enums.visual_analysis": "Visuele Analyse",

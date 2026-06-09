@@ -1,6 +1,6 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import { App } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { Trash2 } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -20,7 +20,6 @@ export const useDropdownMenu = ({
   topicId,
 }: UseDropdownMenuProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['common', 'topic']);
-  const { modal } = App.useApp();
   const removeTopic = useChatStore((s) => s.removeTopic);
 
   return useCallback(
@@ -32,9 +31,8 @@ export const useDropdownMenu = ({
           key: 'delete',
           label: t('delete'),
           onClick: () => {
-            modal.confirm({
+            confirmModal({
               cancelText: t('cancel'),
-              centered: true,
               content: t('actions.confirmRemoveTopic', { ns: 'topic' }),
               okButtonProps: { danger: true },
               okText: t('delete'),
@@ -48,6 +46,6 @@ export const useDropdownMenu = ({
           },
         },
       ].filter(Boolean) as MenuProps['items'],
-    [t, modal, removeTopic, topicId, onDelete, onClose],
+    [t, removeTopic, topicId, onDelete, onClose],
   );
 };

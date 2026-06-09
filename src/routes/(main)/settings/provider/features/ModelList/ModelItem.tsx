@@ -1,5 +1,6 @@
 import { ModelIcon } from '@lobehub/icons';
 import { ActionIcon, copyToClipboard, Flexbox, Tag, Text } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, Switch } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { LucidePencil, TrashIcon } from 'lucide-react';
@@ -19,7 +20,7 @@ import {
   getTextOutputUnitRate,
 } from '@/utils/pricing';
 
-import ModelConfigModal from './ModelConfigModal';
+import { createModelConfigModal } from './ModelConfigModal';
 import { ProviderSettingsContext } from './ProviderSettingsContext';
 
 const styles = createStaticStyles(({ css, cx }) => {
@@ -79,7 +80,7 @@ const ModelItem = memo<ModelItemProps>(
     type,
   }) => {
     const { t } = useTranslation(['modelProvider', 'components', 'models', 'common']);
-    const { modelEditable } = use(ProviderSettingsContext);
+    const { modelEditable, showDeployName } = use(ProviderSettingsContext);
 
     const [activeAiProvider, isModelLoading, toggleModelEnabled, removeAiModel] = useAiInfraStore(
       (s) => [
@@ -91,7 +92,6 @@ const ModelItem = memo<ModelItemProps>(
     );
 
     const [checked, setChecked] = useState(enabled);
-    const [showConfig, setShowConfig] = useState(false);
 
     const formatPricing = (): string[] => {
       if (!pricing) return [];
@@ -154,7 +154,7 @@ const ModelItem = memo<ModelItemProps>(
       ...formatPricing(),
     ].filter(Boolean) as string[];
 
-    const { message, modal } = App.useApp();
+    const { message } = App.useApp();
     const copyModelId = async () => {
       await copyToClipboard(id);
       message.success({ content: t('copySuccess', { ns: 'common' }) });
@@ -194,7 +194,7 @@ const ModelItem = memo<ModelItemProps>(
             title={t('providerModels.item.config')}
             onClick={(e) => {
               e.stopPropagation();
-              setShowConfig(true);
+              createModelConfigModal({ id, showDeployName });
             }}
           />
           {source !== AiModelSourceEnum.Builtin && (
@@ -203,19 +203,20 @@ const ModelItem = memo<ModelItemProps>(
               size={'small'}
               title={t('providerModels.item.delete.title')}
               onClick={() => {
-                modal.confirm({
-                  centered: true,
+                confirmModal({
+                  cancelText: t('cancel', { ns: 'common' }),
+                  content: t('providerModels.item.delete.confirm', {
+                    displayName: displayName || id,
+                  }),
                   okButtonProps: {
                     danger: true,
-                    type: 'primary',
                   },
+                  okText: t('delete', { ns: 'common' }),
                   onOk: async () => {
                     await removeAiModel(id, activeAiProvider!);
                     message.success(t('providerModels.item.delete.success'));
                   },
-                  title: t('providerModels.item.delete.confirm', {
-                    displayName: displayName || id,
-                  }),
+                  title: t('providerModels.item.delete.title'),
                 });
               }}
             />
@@ -305,12 +306,7 @@ const ModelItem = memo<ModelItemProps>(
       </Flexbox>
     );
 
-    return (
-      <>
-        {dom}
-        {showConfig && <ModelConfigModal id={id} open={showConfig} setOpen={setShowConfig} />}
-      </>
-    );
+    return dom;
   },
 );
 

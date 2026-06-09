@@ -1,19 +1,43 @@
 import { execFileSync, execSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
-import type { AgentRunRequestMessage } from '@lobechat/device-gateway-client';
-import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
+import type {
+  AgentRunRequestMessage,
+  GatewayMcpStdioParams,
+} from '@lobechat/device-gateway-client';
+import type {
+  EditLocalFileParams,
+  GatewayConnectionStatus,
+  GetCommandOutputParams,
+  GlobFilesParams,
+  GrepContentParams,
+  InitWorkspaceParams,
+  KillCommandParams,
+  ListLocalFileParams,
+  ListProjectSkillsParams,
+  LocalReadFileParams,
+  LocalReadFilesParams,
+  LocalSearchFilesParams,
+  MoveLocalFilesParams,
+  RenameLocalFileParams,
+  RunCommandParams,
+  WriteLocalFileParams,
+} from '@lobechat/electron-client-ipc';
+import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat/tool-runtime';
 
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
+import ImessageBridgeService from '@/services/imessageBridgeSrv';
 
+import GitCtr from './GitCtr';
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, IpcMethod } from './index';
 import LocalFileCtr from './LocalFileCtr';
+import McpCtr from './McpCtr';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 import ShellCommandCtr from './ShellCommandCtr';
-
-const DEFAULT_HERMES_PORT = 3456;
+import WorkspaceCtr from './WorkspaceCtr';
 
 /**
  * Inject the lh-notify protocol into the first turn of a new hetero-agent session.
@@ -56,6 +80,63 @@ interface PlatformTaskEntry {
 }
 
 /**
+ * Local mirror of `@lobechat/types`' `BuiltinServerRuntimeOutput`. Inlined
+ * because the desktop tsconfig doesn't expose `@lobechat/types`, and the shape
+ * is tiny + stable.
+ */
+interface BuiltinServerRuntimeOutput {
+  content: string;
+  error?: unknown;
+  state?: unknown;
+  success: boolean;
+}
+
+/**
+ * Legacy API name aliases used by older gateway versions. Normalized to the
+ * current `LocalSystemApiEnum` names before dispatch. `renameLocalFile` is
+ * intentionally absent — it has no equivalent on the new surface and is
+ * handled by a dedicated branch below.
+ */
+const LEGACY_API_ALIASES: Record<string, string> = {
+  editLocalFile: 'editFile',
+  globLocalFiles: 'globFiles',
+  listLocalFiles: 'listFiles',
+  moveLocalFiles: 'moveFiles',
+  readLocalFile: 'readFile',
+  searchLocalFiles: 'searchFiles',
+  writeLocalFile: 'writeFile',
+};
+
+/**
+ * Parse a JSON string, returning `undefined` on failure. Used to surface the
+ * structured shape of platform-agent tool results (which return pre-stringified
+ * JSON) as `state` for the renderer, without crashing on malformed input.
+ */
+const safeJsonParse = (input: string): unknown => {
+  try {
+    return JSON.parse(input);
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Resolve a relative path against a scope (CWD). Mirrors the renderer-side
+ * `resolveArgsWithScope` helper in `@lobechat/builtin-tool-local-system` — kept
+ * here as a small inline copy to avoid pulling the renderer-side `./client`
+ * subpath (which transitively requires React + antd) into the main process.
+ */
+const resolveArgsWithScope = <T extends { scope?: string }>(args: T, pathField: string): T => {
+  const scope = args.scope;
+  const bag = args as Record<PropertyKey, unknown>;
+  const currentPath = typeof bag[pathField] === 'string' ? (bag[pathField] as string) : undefined;
+  if (!scope) return args;
+  if (!currentPath) return { ...args, [pathField]: scope };
+  if (path.isAbsolute(currentPath)) return args;
+  return { ...args, [pathField]: path.join(scope, currentPath) };
+};
+
+/**
  * GatewayConnectionCtr
  *
  * Thin IPC layer that delegates to GatewayConnectionService.
@@ -65,6 +146,11 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   /** In-memory registry for running platform agent tasks (openclaw / hermes). */
   private readonly platformTasks = new Map<string, PlatformTaskEntry>();
+
+  /** Maps topicId → hermes session_id for multi-turn conversation continuity. */
+  private readonly hermesSessionMap = new Map<string, string>();
+
+  private localSystemRuntime: LocalSystemExecutionRuntime | null = null;
 
   // ─── Service Accessor ───
 
@@ -80,12 +166,28 @@ export default class GatewayConnectionCtr extends ControllerModule {
     return this.app.getController(LocalFileCtr);
   }
 
+  private get workspaceCtr() {
+    return this.app.getController(WorkspaceCtr);
+  }
+
+  private get gitCtr() {
+    return this.app.getController(GitCtr);
+  }
+
   private get shellCommandCtr() {
     return this.app.getController(ShellCommandCtr);
   }
 
+  private get imessageBridgeSrv() {
+    return this.app.getService(ImessageBridgeService);
+  }
+
   private get heterogeneousAgentCtr() {
     return this.app.getController(HeterogeneousAgentCtr);
+  }
+
+  private get mcpCtr() {
+    return this.app.getController(McpCtr);
   }
 
   // ─── Lifecycle ───
@@ -102,8 +204,23 @@ export default class GatewayConnectionCtr extends ControllerModule {
     // Wire up tool call handler
     srv.setToolCallHandler((apiName, args) => this.executeToolCall(apiName, args));
 
+    // Wire up MCP call handler (tunneled stdio MCP calls from the cloud server)
+    srv.setMcpCallHandler((mcpCall) => this.executeMcpCall(mcpCall));
+
+    // Wire up message API handler
+    srv.setMessageApiHandler((platform, apiName, payload) =>
+      this.executeMessageApi(platform, apiName, payload),
+    );
+
     // Wire up agent run handler
     srv.setAgentRunHandler((request) => this.executeAgentRun(request));
+
+    // Wire up generic device RPC handler (server-internal method forwarding,
+    // e.g. workspace-init scans — never surfaced to the agent)
+    srv.setRpcHandler((method, params) => this.executeDeviceRpc(method, params));
+
+    // Wire up device registrar (persists this device to the server registry)
+    srv.setDeviceRegistrar((info) => this.registerDevice(info));
 
     // Auto-connect if already logged in
     this.tryAutoConnect();
@@ -172,35 +289,25 @@ export default class GatewayConnectionCtr extends ControllerModule {
     request: AgentRunRequestMessage,
   ): Promise<{ reason?: string; status: 'accepted' | 'rejected' }> {
     try {
-      const ctr = this.heterogeneousAgentCtr;
+      const serverUrl = await this.remoteServerConfigCtr.getRemoteServerUrl();
+      if (!serverUrl) {
+        return { reason: 'Remote server URL not configured', status: 'rejected' };
+      }
 
-      // Map agentType to binary name.
-      // claude-code → `claude` CLI; all other platforms use their type name as the binary.
-      const command = request.agentType === 'claude-code' ? 'claude' : request.agentType;
-
-      // Create a session for the hetero agent.
-      const { sessionId } = await ctr.startSession({
+      // Fire-and-forget: lh hetero exec handles spawn -> adapt ->
+      // BatchIngester -> heteroIngest/heteroFinish -> server -> Gateway -> clients.
+      // Same command as spawnHeteroSandbox() on the server side.
+      this.heterogeneousAgentCtr.spawnLhHeteroExec({
         agentType: request.agentType,
-        args: [],
-        command,
         cwd: request.cwd,
-        // Inject LOBEHUB_JWT so the CLI authenticates against heteroIngest.
-        env: { LOBEHUB_JWT: request.jwt },
+        jwt: request.jwt,
+        operationId: request.operationId,
+        prompt: request.prompt,
         resumeSessionId: request.resumeSessionId,
+        serverUrl,
+        systemContext: request.systemContext,
+        topicId: request.topicId,
       });
-
-      // Fire-and-forget: sendPrompt runs the CLI until completion.
-      ctr
-        .sendPrompt({
-          operationId: request.operationId,
-          prompt: request.prompt,
-          sessionId,
-        })
-        .catch((err: Error) => {
-          // Errors are surfaced via heteroFinish on the server side.
-          // Log locally for desktop debugging only.
-          console.error('[GatewayConnectionCtr] agent run failed:', err.message);
-        });
 
       return { status: 'accepted' };
     } catch (err) {
@@ -211,58 +318,329 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   // ─── Tool Call Routing ───
 
-  private async executeToolCall(apiName: string, args: any): Promise<unknown> {
-    const editFile = () => this.localFileCtr.handleEditFile(args);
-    const globFiles = () => this.localFileCtr.handleGlobFiles(args);
-    const listFiles = () => this.localFileCtr.listLocalFiles(args);
-    const moveFiles = () => this.localFileCtr.handleMoveFiles(args);
-    const readFile = () => this.localFileCtr.readFile(args);
-    const searchFiles = () => this.localFileCtr.handleLocalFilesSearch(args);
-    const writeFile = () => this.localFileCtr.handleWriteFile(args);
+  /**
+   * Lazy-construct the LocalSystemExecutionRuntime backed by a thin service
+   * adapter over the existing controllers. The runtime is the same one the
+   * renderer uses, so remote tool calls produce identical
+   * `{ content, state, success }` envelopes — `content` is the LLM-facing
+   * prompt text, `state` is the structured payload, both flow downstream
+   * intact (the gateway / DeviceGateway / RuntimeExecutors paths preserve them
+   * and write `state` to the tool message's `pluginState`).
+   */
+  private getLocalSystemRuntime(): LocalSystemExecutionRuntime {
+    if (!this.localSystemRuntime) {
+      const local = this.localFileCtr;
+      const shell = this.shellCommandCtr;
+      const service: ILocalSystemService = {
+        editLocalFile: (p) => local.handleEditFile(p),
+        getCommandOutput: (p) => shell.handleGetCommandOutput(p),
+        globFiles: (p) => local.handleGlobFiles(p),
+        grepContent: (p) => local.handleGrepContent(p),
+        killCommand: (p) => shell.handleKillCommand(p),
+        listLocalFiles: (p) => local.listLocalFiles(p),
+        moveLocalFiles: (p) => local.handleMoveFiles(p),
+        readLocalFile: (p) => local.readFile(p),
+        readLocalFiles: (p) => local.readFiles(p),
+        renameLocalFile: (p) => local.handleRenameFile(p),
+        runCommand: (p) => shell.handleRunCommand(p),
+        searchLocalFiles: (p) => local.handleLocalFilesSearch(p),
+        writeFile: (p) => local.handleWriteFile(p),
+      };
+      this.localSystemRuntime = new LocalSystemExecutionRuntime(service);
+    }
+    return this.localSystemRuntime;
+  }
 
-    const methodMap: Record<string, () => Promise<unknown>> = {
-      editFile,
-      globFiles,
-      grepContent: () => this.localFileCtr.handleGrepContent(args),
-      listFiles,
-      moveFiles,
-      readFile,
-      searchFiles,
-      writeFile,
+  /**
+   * Dispatch a generic server-internal device RPC (not an agent tool call) by
+   * method name. Currently only `initWorkspace` (scan the bound project root for
+   * skills + AGENTS.md); add new server-only device methods here.
+   */
+  private async executeDeviceRpc(method: string, params: unknown): Promise<unknown> {
+    switch (method) {
+      case 'initWorkspace': {
+        return this.workspaceCtr.initWorkspace(params as InitWorkspaceParams);
+      }
 
-      getCommandOutput: () => this.shellCommandCtr.handleGetCommandOutput(args),
-      killCommand: () => this.shellCommandCtr.handleKillCommand(args),
-      runCommand: () => this.shellCommandCtr.handleRunCommand(args),
+      case 'getGitBranch': {
+        return this.gitCtr.getGitBranch((params as { path: string }).path);
+      }
 
-      // Legacy aliases — keep these so older Gateway versions sending the long
-      // names continue to route correctly. `renameLocalFile` is also kept even
-      // though the new surface drops rename (it's now handled by `moveFiles`).
-      editLocalFile: editFile,
-      globLocalFiles: globFiles,
-      listLocalFiles: listFiles,
-      moveLocalFiles: moveFiles,
-      readLocalFile: readFile,
-      renameLocalFile: () => this.localFileCtr.handleRenameFile(args),
-      searchLocalFiles: searchFiles,
-      writeLocalFile: writeFile,
+      case 'getLinkedPullRequest': {
+        return this.gitCtr.getLinkedPullRequest(params as { branch: string; path: string });
+      }
 
-      // Platform agent capability probing
-      checkPlatformCapability: () => this.checkPlatformCapability(args),
-      getAgentProfile: () => this.getAgentProfile(args),
+      case 'getGitWorkingTreeStatus': {
+        return this.gitCtr.getGitWorkingTreeStatus((params as { path: string }).path);
+      }
 
-      // Platform agent task execution (openclaw / hermes)
-      cancelHeteroTask: () => this.cancelHeteroTask(args),
-      runHeteroTask: () => this.runHeteroTask(args),
-    };
+      case 'getGitAheadBehind': {
+        return this.gitCtr.getGitAheadBehind((params as { path: string }).path);
+      }
 
-    const handler = methodMap[apiName];
-    if (!handler) {
-      throw new Error(
-        `Tool "${apiName}" is not available on this device. It may not be supported in the current desktop version. Please skip this tool and try alternative approaches.`,
-      );
+      case 'listGitBranches': {
+        return this.gitCtr.listGitBranches((params as { path: string }).path);
+      }
+
+      case 'checkoutGitBranch': {
+        return this.gitCtr.checkoutGitBranch(
+          params as { branch: string; create?: boolean; path: string },
+        );
+      }
+
+      case 'pullGitBranch': {
+        return this.gitCtr.pullGitBranch(params as { path: string });
+      }
+
+      case 'pushGitBranch': {
+        return this.gitCtr.pushGitBranch(params as { path: string });
+      }
+
+      case 'getGitWorkingTreePatches': {
+        return this.gitCtr.getGitWorkingTreePatches((params as { path: string }).path);
+      }
+
+      case 'getGitWorkingTreeFiles': {
+        return this.gitCtr.getGitWorkingTreeFiles((params as { path: string }).path);
+      }
+
+      case 'getProjectFileIndex': {
+        return this.localFileCtr.getProjectFileIndex(params as { scope?: string });
+      }
+
+      case 'listProjectSkills': {
+        return this.workspaceCtr.listProjectSkills(params as ListProjectSkillsParams);
+      }
+
+      case 'getGitBranchDiff': {
+        return this.gitCtr.getGitBranchDiff(params as { baseRef?: string; path: string });
+      }
+
+      case 'listGitRemoteBranches': {
+        return this.gitCtr.listGitRemoteBranches((params as { path: string }).path);
+      }
+
+      case 'revertGitFile': {
+        return this.gitCtr.revertGitFile(params as { filePath: string; path: string });
+      }
+
+      case 'statPath': {
+        return this.workspaceCtr.statPath(params as { path: string });
+      }
+
+      default: {
+        throw new Error(`Unknown device RPC method: ${method}`);
+      }
+    }
+  }
+
+  private async executeToolCall(
+    apiName: string,
+    args: unknown,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    const runtime = this.getLocalSystemRuntime();
+    const normalized = LEGACY_API_ALIASES[apiName] ?? apiName;
+
+    // Each case narrows `args` to its IPC param type — the manifest guarantees
+    // the gateway sends params matching the apiName. The `as never` casts on
+    // runtime calls are legitimate widenings: the runtime's typed signatures
+    // (e.g. `ListFilesParams`) are narrower than what the IPC layer accepts
+    // (`limit`, `run_in_background`, etc.), and the same casts exist in the
+    // renderer-side `LocalSystemExecutor`.
+    switch (normalized) {
+      case 'listFiles': {
+        const p = args as ListLocalFileParams;
+        return runtime.listFiles({
+          directoryPath: p.path,
+          limit: p.limit,
+          sortBy: p.sortBy,
+          sortOrder: p.sortOrder,
+        } as never);
+      }
+
+      case 'readFile': {
+        const p = args as LocalReadFileParams;
+        return runtime.readFile({
+          endLine: p.loc?.[1],
+          path: p.path,
+          startLine: p.loc?.[0],
+        });
+      }
+
+      case 'readFiles': {
+        return runtime.readFiles(args as LocalReadFilesParams);
+      }
+
+      case 'searchFiles': {
+        const resolved = resolveArgsWithScope(args as LocalSearchFilesParams, 'directory');
+        return runtime.searchFiles({
+          ...resolved,
+          directory: resolved.directory || '',
+        });
+      }
+
+      case 'moveFiles': {
+        const p = args as MoveLocalFilesParams;
+        return runtime.moveFiles({
+          operations: p.items?.map((item) => ({
+            destination: item.newPath,
+            source: item.oldPath,
+          })),
+        });
+      }
+
+      case 'writeFile': {
+        return runtime.writeFile(args as WriteLocalFileParams);
+      }
+
+      case 'editFile': {
+        const p = args as EditLocalFileParams;
+        return runtime.editFile({
+          all: p.replace_all,
+          path: p.file_path,
+          replace: p.new_string,
+          search: p.old_string,
+        });
+      }
+
+      case 'runCommand': {
+        // ComputerRuntime's RunCommandState reads `args.background`; the manifest
+        // exposes `run_in_background`. Without this normalize the state would
+        // always show foreground even for background commands.
+        const p = args as RunCommandParams;
+        return runtime.runCommand({
+          ...p,
+          background: p.run_in_background,
+        } as never);
+      }
+
+      case 'getCommandOutput': {
+        const p = args as GetCommandOutputParams;
+        return runtime.getCommandOutput({
+          commandId: p.shell_id,
+          filter: p.filter,
+        } as never);
+      }
+
+      case 'killCommand': {
+        const p = args as KillCommandParams;
+        return runtime.killCommand({
+          commandId: p.shell_id,
+        });
+      }
+
+      case 'grepContent': {
+        const resolved = resolveArgsWithScope(args as GrepContentParams, 'path');
+        return runtime.grepContent(resolved as never);
+      }
+
+      case 'globFiles': {
+        const p = args as GlobFilesParams;
+        return runtime.globFiles({
+          directory: p.scope,
+          pattern: p.pattern,
+        });
+      }
+
+      case 'renameLocalFile': {
+        // ComputerRuntime has no public rename method — new surface uses
+        // `moveFiles`. Legacy gateway versions may still emit this name, so we
+        // call the IPC handler directly and wrap the raw result into the
+        // BuiltinServerRuntimeOutput shape so `state` still flows downstream.
+        const raw = await this.localFileCtr.handleRenameFile(args as RenameLocalFileParams);
+        return {
+          content: raw.success
+            ? `Renamed to ${raw.newPath}`
+            : `Rename failed: ${raw.error ?? 'unknown error'}`,
+          state: raw,
+          success: raw.success,
+        };
+      }
+
+      // ─── Platform agent tools (openclaw / hermes) ───
+      // These don't go through LocalSystemExecutionRuntime — they return raw
+      // domain payloads that we envelope into BuiltinServerRuntimeOutput here.
+      // `content` is the JSON-serialized payload (what the LLM reads); `state`
+      // carries the parsed object so the renderer can render structured UI.
+
+      case 'checkPlatformCapability': {
+        const result = await this.checkPlatformCapability(args as { platform: string });
+        return { content: JSON.stringify(result), state: result, success: true };
+      }
+
+      case 'getAgentProfile': {
+        const result = await this.getAgentProfile(args as { agentId?: string; platform: string });
+        return { content: JSON.stringify(result), state: result, success: true };
+      }
+
+      case 'runHeteroTask': {
+        // runHeteroTask returns a pre-stringified JSON payload — pass it through
+        // as `content` and surface the parsed shape as `state`.
+        const json = await this.runHeteroTask(
+          args as {
+            agentId?: string;
+            agentType: string;
+            cwd?: string;
+            operationId: string;
+            prompt: string;
+            taskId: string;
+            topicId: string;
+          },
+        );
+        return { content: json, state: safeJsonParse(json), success: true };
+      }
+
+      case 'cancelHeteroTask': {
+        const json = await this.cancelHeteroTask(args as { signal?: string; taskId: string });
+        return { content: json, state: safeJsonParse(json), success: true };
+      }
+
+      default: {
+        throw new Error(
+          `Tool "${apiName}" is not available on this device. It may not be supported in the current desktop version. Please skip this tool and try alternative approaches.`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Execute a stdio MCP tool call tunneled from the cloud server. The server
+   * can't spawn the user's local MCP binary, so it forwards the connection
+   * params (command/args/env); we run the call through the local MCP client,
+   * which spawns the stdio server on this machine.
+   */
+  private async executeMcpCall(mcpCall: {
+    apiName: string;
+    arguments: string;
+    identifier: string;
+    params: GatewayMcpStdioParams;
+  }): Promise<BuiltinServerRuntimeOutput> {
+    const { apiName, arguments: args, params: stdioParams } = mcpCall;
+
+    return this.mcpCtr.runStdioMcpTool({
+      args,
+      env: stdioParams.env,
+      params: {
+        args: stdioParams.args,
+        command: stdioParams.command,
+        name: stdioParams.name,
+      },
+      toolName: apiName,
+    });
+  }
+
+  private async executeMessageApi(
+    platform: string,
+    apiName: string,
+    payload: Record<string, unknown>,
+  ): Promise<unknown> {
+    if (platform === 'imessage') {
+      return this.imessageBridgeSrv.handleGatewayMessageApi(apiName, payload);
     }
 
-    return handler();
+    throw new Error(
+      `Message API "${platform}/${apiName}" is not available on this device. It may not be supported in the current desktop version.`,
+    );
   }
 
   // ─── Platform Capability Probing ───
@@ -312,8 +690,69 @@ export default class GatewayConnectionCtr extends ControllerModule {
       return this.getOpenClawProfile(agentId);
     }
 
-    // hermes and unknown platforms: not yet implemented
+    if (platform === 'hermes') {
+      return this.getHermesProfile();
+    }
+
     return {};
+  }
+
+  private getHermesProfile(): { avatar?: string; description?: string; title?: string } {
+    // Find the active profile (marked with ◆ in `hermes profile list`).
+    let profileName: string | undefined;
+    try {
+      const listOutput = execFileSync('hermes', ['profile', 'list'], {
+        encoding: 'utf8',
+        timeout: 5000,
+      });
+      profileName = listOutput.match(/◆(\S+)/)?.[1];
+    } catch {
+      return {};
+    }
+    if (!profileName) return {};
+
+    // Get the profile's filesystem path.
+    let profilePath: string | undefined;
+    try {
+      const showOutput = execFileSync('hermes', ['profile', 'show', profileName], {
+        encoding: 'utf8',
+        timeout: 5000,
+      });
+      const raw = showOutput.match(/^Path:\s+(.+)/m)?.[1]?.trim();
+      profilePath = raw?.replace(/^~(?=\/|$)/, os.homedir());
+    } catch {
+      // Profile path unavailable — still return name + avatar.
+    }
+
+    const description = profilePath
+      ? this.readHermesSoulDescription(path.join(profilePath, 'SOUL.md'))
+      : undefined;
+
+    return { avatar: '⚡', description, title: profileName };
+  }
+
+  private readHermesSoulDescription(soulPath: string): string | undefined {
+    try {
+      const content = fs.readFileSync(soulPath, 'utf8');
+      // Loop until stable to handle any malformed/nested comment sequences.
+      let stripped = content;
+      let previous: string;
+      do {
+        previous = stripped;
+        stripped = stripped
+          .replaceAll(/<!--[\s\S]*?-->/g, '') // strip complete HTML comments
+          .replaceAll(/[<>]/g, '') // strip any remaining HTML delimiter chars
+          .replaceAll(/^#+\s.*$/gm, ''); // strip Markdown headings
+      } while (stripped !== previous);
+      return (
+        stripped
+          .split('\n')
+          .map((l) => l.trim())
+          .find((l) => l.length > 0) || undefined
+      );
+    } catch {
+      return undefined;
+    }
   }
 
   private getOpenClawProfile(agentId?: string): {
@@ -391,6 +830,18 @@ export default class GatewayConnectionCtr extends ControllerModule {
     const { agentId, agentType, cwd, operationId, prompt, taskId, topicId } = args;
     const workDir = cwd || process.cwd();
 
+    const [serverUrl, accessToken] = await Promise.all([
+      this.remoteServerConfigCtr.getRemoteServerUrl(),
+      this.remoteServerConfigCtr.getAccessToken(),
+    ]);
+
+    // Inject auth into child env so `lh notify` can authenticate without CLI config.
+    const childEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      ...(accessToken && { LOBEHUB_JWT: accessToken }),
+      ...(serverUrl && { LOBEHUB_SERVER: serverUrl }),
+    };
+
     if (agentType === 'openclaw') {
       const lhPath = this.resolveLhPath();
       const openclawAgent = process.env['OPENCLAW_AGENT_ID'] ?? 'main';
@@ -426,7 +877,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
           enrichedPrompt,
           '--local',
         ],
-        { cwd: workDir, detached: true, env: { ...process.env }, stdio: 'ignore' },
+        { cwd: workDir, detached: true, env: childEnv, stdio: 'ignore' },
       );
 
       const pid = child.pid;
@@ -453,20 +904,74 @@ export default class GatewayConnectionCtr extends ControllerModule {
     }
 
     if (agentType === 'hermes') {
-      const port = this.getHermesPort();
-      if (!(await this.isHermesRunning(port))) {
-        await this.startHermesGateway(port);
+      // Kill any existing hermes process for this topicId before spawning a new one.
+      for (const [existingTaskId, entry] of this.platformTasks) {
+        if (entry.topicId === topicId && entry.agentType === 'hermes') {
+          try {
+            process.kill(entry.pid, 'SIGTERM');
+          } catch {
+            // Already exited — nothing to do.
+          }
+          this.platformTasks.delete(existingTaskId);
+        }
       }
 
-      const res = await fetch(`http://localhost:${port}/message`, {
-        body: JSON.stringify({ content: prompt, operationId }),
-        headers: { 'Content-Type': 'application/json' },
-        method: 'POST',
-      });
-      if (!res.ok) throw new Error(`Hermes gateway returned ${res.status}: ${await res.text()}`);
+      // Resume the previous session for this topic if one exists.
+      const existingSessionId = this.hermesSessionMap.get(topicId);
+      const hermesArgs: string[] = ['chat', '--query', prompt, '--quiet', '--accept-hooks'];
+      if (existingSessionId) {
+        hermesArgs.push('--resume', existingSessionId);
+      }
 
-      this.platformTasks.set(taskId, { agentId, agentType, operationId, pid: 0, topicId });
-      return JSON.stringify({ operationId, taskId });
+      // Hermes prints "session_id: <id>\n<response>" to stdout in --quiet mode.
+      const child = spawn('hermes', hermesArgs, {
+        cwd: workDir,
+        detached: true,
+        env: childEnv,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+
+      const pid = child.pid;
+      if (pid === undefined) throw new Error('Failed to get PID for hermes process');
+      child.unref();
+
+      this.platformTasks.set(taskId, { agentId, agentType, operationId, pid, topicId });
+
+      let stdout = '';
+      child.stdout.on('data', (chunk: Buffer) => {
+        stdout += chunk.toString();
+      });
+
+      child.on('close', (code, signal) => {
+        this.platformTasks.delete(taskId);
+
+        if (code !== 0 || signal !== null) {
+          const text = signal
+            ? `Task cancelled (signal: ${signal})`
+            : `Task failed (exit code: ${code})`;
+          void this.sendNotify({ agentId, content: text, role: 'assistant', topicId }).finally(() =>
+            this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId }),
+          );
+          return;
+        }
+
+        // Parse "session_id: <id>" from the first line, response from the rest.
+        const sessionIdMatch = stdout.match(/^session_id:\s*(\S+)/m);
+        const sessionId = sessionIdMatch?.[1];
+        const response = stdout.replace(/^session_id:[^\n]*\n?/, '').trim();
+
+        if (sessionId) this.hermesSessionMap.set(topicId, sessionId);
+
+        if (response) {
+          void this.sendNotify({ agentId, content: response, role: 'assistant', topicId }).finally(
+            () => this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId }),
+          );
+        } else {
+          void this.sendNotify({ agentId, content: '', done: true, role: 'assistant', topicId });
+        }
+      });
+
+      return JSON.stringify({ pid, taskId });
     }
 
     throw new Error(`Unsupported agentType: ${agentType}`);
@@ -480,28 +985,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       return JSON.stringify({ message: `No task found with taskId: ${taskId}`, success: false });
     }
 
-    if (entry.agentType === 'hermes') {
-      const port = this.getHermesPort();
-      try {
-        await fetch(`http://localhost:${port}/stop`, {
-          body: JSON.stringify({ operationId: entry.operationId }),
-          headers: { 'Content-Type': 'application/json' },
-          method: 'POST',
-        });
-      } catch {
-        // Hermes gateway may already have stopped; ignore
-      }
-      this.platformTasks.delete(taskId);
-      await this.sendNotify({
-        agentId: entry.agentId,
-        content: 'Task cancelled',
-        role: 'assistant',
-        topicId: entry.topicId,
-      });
-      return JSON.stringify({ taskId });
-    }
-
-    // openclaw: kill by PID; the close handler sends the done signal.
+    // Both openclaw and hermes: kill by PID; the close handler sends the done signal.
     try {
       process.kill(entry.pid, signal);
     } catch {
@@ -536,17 +1020,45 @@ export default class GatewayConnectionCtr extends ControllerModule {
       ]);
       if (!serverUrl || !token) return;
 
-      await fetch(`${serverUrl}/trpc/agentNotify.notify`, {
+      await fetch(`${serverUrl}/trpc/lambda/agentNotify.notify`, {
         body: JSON.stringify({ json: params }),
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
+          'Oidc-Auth': token,
         },
         method: 'POST',
       });
     } catch {
       // Fire-and-forget: openclaw's own `lh notify` calls are the primary channel.
     }
+  }
+
+  /**
+   * Persist this device to the server registry via `device.register`.
+   * Fire-and-forget from the connect path: a failure must not block the WS
+   * connection, the device just won't appear in the offline list until the
+   * next successful connect.
+   */
+  private async registerDevice(info: {
+    deviceId: string;
+    hostname: string;
+    identitySource: string;
+    platform: string;
+  }): Promise<void> {
+    const [serverUrl, token] = await Promise.all([
+      this.remoteServerConfigCtr.getRemoteServerUrl(),
+      this.remoteServerConfigCtr.getAccessToken(),
+    ]);
+    if (!serverUrl || !token) return;
+
+    await fetch(`${serverUrl}/trpc/lambda/device.register`, {
+      body: JSON.stringify({ json: info }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Oidc-Auth': token,
+      },
+      method: 'POST',
+    });
   }
 
   // ─── Platform Agent Helpers ───
@@ -557,38 +1069,5 @@ export default class GatewayConnectionCtr extends ControllerModule {
     } catch {
       return 'lh';
     }
-  }
-
-  private getHermesPort(): number {
-    const env = process.env['HERMES_GATEWAY_PORT'];
-    if (env) {
-      const parsed = Number.parseInt(env, 10);
-      if (!Number.isNaN(parsed)) return parsed;
-    }
-    return DEFAULT_HERMES_PORT;
-  }
-
-  private async isHermesRunning(port: number): Promise<boolean> {
-    try {
-      return (await fetch(`http://localhost:${port}/health`)).ok;
-    } catch {
-      return false;
-    }
-  }
-
-  private async startHermesGateway(port: number): Promise<void> {
-    const child = spawn('hermes', ['gateway', 'start'], {
-      detached: true,
-      env: { ...process.env },
-      stdio: 'ignore',
-    });
-    child.unref();
-
-    const deadline = Date.now() + 10_000;
-    while (Date.now() < deadline) {
-      await new Promise<void>((r) => setTimeout(r, 500));
-      if (await this.isHermesRunning(port)) return;
-    }
-    throw new Error(`Hermes gateway did not start within 10s on port ${port}`);
   }
 }

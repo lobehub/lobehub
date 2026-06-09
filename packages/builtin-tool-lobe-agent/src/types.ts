@@ -82,38 +82,30 @@ export interface CallSubAgentsParams {
   tasks: SubAgentTask[];
 }
 
+/** Execution stats reported back by a finished sub-agent run. */
+export interface SubAgentRunStats {
+  /** Model the sub-agent ran on */
+  model?: string;
+  /** Total tokens consumed by the sub-agent run */
+  totalTokens?: number;
+  /** Number of tool calls the sub-agent made */
+  totalToolCalls?: number;
+}
+
 /**
- * State returned after dispatching a server-side sub-agent.
+ * State persisted on the callSubAgent tool message.
  *
- * The `type` value is the wire-level discriminator the `agent-runtime`
- * layer (`GeneralChatAgent.tool_result`) inspects to emit the matching
- * `exec_sub_agent` / `exec_client_sub_agent` instruction.
+ * The sub-agent runs in an isolated Thread via the current runtime; the Render
+ * uses `threadId` to open that Thread in the portal, and the stats feed the
+ * Inspector row.
  */
-export interface CallSubAgentState {
-  parentMessageId: string;
-  task: SubAgentTask;
-  type: 'execSubAgent';
+export interface CallSubAgentState extends SubAgentRunStats {
+  threadId: string;
 }
 
-/** State returned after dispatching multiple server-side sub-agents. */
+/** State persisted on the callSubAgents tool message (one entry per sub-agent). */
 export interface CallSubAgentsState {
-  parentMessageId: string;
-  tasks: SubAgentTask[];
-  type: 'execSubAgents';
-}
-
-/** State returned after dispatching a desktop-only client-side sub-agent. */
-export interface CallClientSubAgentState {
-  parentMessageId: string;
-  task: SubAgentTask;
-  type: 'execClientSubAgent';
-}
-
-/** State returned after dispatching multiple desktop-only client-side sub-agents. */
-export interface CallClientSubAgentsState {
-  parentMessageId: string;
-  tasks: SubAgentTask[];
-  type: 'execClientSubAgents';
+  subAgents: ({ description: string; threadId: string } & SubAgentRunStats)[];
 }
 
 // ==================== Todo Item ====================

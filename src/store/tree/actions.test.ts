@@ -36,7 +36,7 @@ const createState = (): TreeState => ({
   loadChildren: vi.fn(),
   moveItem: vi.fn(),
   moveItems: vi.fn(),
-  navigateTo: vi.fn(),
+  expandAncestors: vi.fn(),
   reconcile: vi.fn(),
   removeItems: vi.fn(),
   renameItem: vi.fn(),

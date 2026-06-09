@@ -1,16 +1,15 @@
 'use client';
 
-import type { AgentEvalRunListItem } from '@lobechat/types';
 import { Button, Flexbox } from '@lobehub/ui';
-import { Select } from 'antd';
+import { Select } from '@lobehub/ui/base-ui';
 import { Plus } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { runSelectors, useEvalStore } from '@/store/eval';
 
-import RunCreateModal from '../RunCreateModal';
-import RunEditModal from '../RunEditModal';
+import { createRunCreateModal } from '../RunCreateModal';
+import { createRunEditModal } from '../RunEditModal';
 import EmptyState from './EmptyState';
 import RunCard from './RunCard';
 
@@ -20,8 +19,6 @@ interface RunsTabProps {
 
 const RunsTab = memo<RunsTabProps>(({ benchmarkId }) => {
   const { t } = useTranslation('eval');
-  const [createRunOpen, setCreateRunOpen] = useState(false);
-  const [editingRun, setEditingRun] = useState<AgentEvalRunListItem | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const useFetchRuns = useEvalStore((s) => s.useFetchRuns);
   const runList = useEvalStore(runSelectors.runList);
@@ -70,14 +67,19 @@ const RunsTab = memo<RunsTabProps>(({ benchmarkId }) => {
                 onChange={setStatusFilter}
               />
             </Flexbox>
-            <Button icon={Plus} size="small" type="primary" onClick={() => setCreateRunOpen(true)}>
+            <Button
+              icon={Plus}
+              size="small"
+              type="primary"
+              onClick={() => createRunCreateModal({ benchmarkId })}
+            >
               {t('run.actions.create')}
             </Button>
           </Flexbox>
         )}
 
         {sortedRuns.length === 0 ? (
-          <EmptyState onCreate={() => setCreateRunOpen(true)} />
+          <EmptyState onCreate={() => createRunCreateModal({ benchmarkId })} />
         ) : filteredRuns.length === 0 ? (
           <p style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 14, textAlign: 'center' }}>
             {t('run.filter.empty')}
@@ -89,23 +91,13 @@ const RunsTab = memo<RunsTabProps>(({ benchmarkId }) => {
                 benchmarkId={benchmarkId}
                 key={run.id}
                 run={run}
-                onEdit={setEditingRun}
+                onEdit={(editingRun) => createRunEditModal({ run: editingRun })}
                 onRefresh={refreshRuns}
               />
             ))}
           </Flexbox>
         )}
       </Flexbox>
-
-      <RunCreateModal
-        benchmarkId={benchmarkId}
-        open={createRunOpen}
-        onClose={() => setCreateRunOpen(false)}
-      />
-
-      {editingRun && (
-        <RunEditModal open={!!editingRun} run={editingRun} onClose={() => setEditingRun(null)} />
-      )}
     </>
   );
 });

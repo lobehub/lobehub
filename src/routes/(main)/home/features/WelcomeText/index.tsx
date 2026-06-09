@@ -57,13 +57,9 @@ interface AutoLinkPattern {
 }
 
 // Bare references the model might emit without the markdown link form.
-// Used as a fallback so e.g. plain "LOBE-8516" inside the welcome still
+// Used as a fallback so e.g. plain "" inside the welcome still
 // becomes clickable.
 const AUTO_LINK_PATTERNS: AutoLinkPattern[] = [
-  {
-    build: (match) => `https://linear.app/lobehub/issue/${match}`,
-    regex: /LOBE-\d+/g,
-  },
   {
     build: (match) => `https://github.com/lobehub/lobehub/issues/${match.slice(1)}`,
     regex: /#\d+/g,

@@ -66,6 +66,10 @@ export class MessageService {
     return lambdaClient.message.getHeatmaps.query();
   };
 
+  getTokenHeatmaps = async (): Promise<HeatmapsProps['data']> => {
+    return lambdaClient.message.getTokenHeatmaps.query();
+  };
+
   updateMessageError = async (id: string, value: ChatMessageError, ctx?: MessageQueryContext) => {
     const error = value.type
       ? value

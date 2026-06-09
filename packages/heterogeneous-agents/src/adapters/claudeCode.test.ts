@@ -96,6 +96,86 @@ describe('ClaudeCodeAdapter', () => {
       });
     });
 
+    it('classifies a 429 "not your usage limit" server throttle as overloaded, not rate_limit', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError =
+        'API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      // CC still emits a generic rate_limit_event (rejected, no resetsAt) for
+      // this transient throttle — it must NOT tip the classifier toward the
+      // user-facing usage-limit guide.
+      adapter.adapt({
+        rate_limit_info: { isUsingOverage: false, status: 'rejected' },
+        type: 'rate_limit_event',
+      });
+
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
+      expect(events[1].data).toMatchObject({
+        agentType: 'claude-code',
+        clearEchoedContent: true,
+        code: 'overloaded',
+        message: rawError,
+        stderr: rawError,
+      });
+    });
+
+    it('treats a 429 with no reset window in rate_limit_event as overloaded, not rate_limit', () => {
+      const adapter = new ClaudeCodeAdapter();
+      // Generic "Rate limited" wording + a rate_limit_event that carries no
+      // resetsAt / rateLimitType. The structured signal — not the 429 status
+      // or the "rate limit" substring — decides: no reset window → transient
+      // server throttle → overloaded.
+      const rawError = 'API Error: 429 · Rate limited';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        rate_limit_info: { status: 'rejected' },
+        type: 'rate_limit_event',
+      });
+
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
+      expect(events[1].data).toMatchObject({ code: 'overloaded', message: rawError });
+    });
+
+    it('classifies a user quota limit from rateLimitType alone (no resetsAt)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      const rawError = 'API Error: 429 · Rate limited';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      // rateLimitType is itself a user-quota signal even without resetsAt.
+      adapter.adapt({
+        rate_limit_info: { rateLimitType: 'seven_day', status: 'rejected' },
+        type: 'rate_limit_event',
+      });
+
+      const events = adapter.adapt({
+        api_error_status: 429,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events[1].data).toMatchObject({
+        code: 'rate_limit',
+        rateLimitInfo: { rateLimitType: 'seven_day' },
+      });
+    });
+
     it('classifies rate-limit failures from paired rate_limit_event + result events', () => {
       const adapter = new ClaudeCodeAdapter();
       const rawError = "You've hit your limit · resets 9am (Asia/Shanghai)";
@@ -337,7 +417,7 @@ describe('ClaudeCodeAdapter', () => {
     });
   });
 
-  describe('ToolSearch tool_reference content (LOBE-7369)', () => {
+  describe('ToolSearch tool_reference content ()', () => {
     // CC CLI serializes ToolSearch results as `tool_reference` blocks — no
     // `text` or `content` field — which the generic array mapper dropped to
     // empty content, leaving the tool message in DB with `content: ''` and
@@ -458,7 +538,7 @@ describe('ClaudeCodeAdapter', () => {
     });
   });
 
-  describe('Read tool image content (LOBE-7338)', () => {
+  describe('Read tool image content ()', () => {
     // CC's `Read` on images returns a `tool_result` whose `content` is an
     // `image` block (base64). The generic mapper had no branch for it so
     // resultContent collapsed to '' and the UI's StatusIndicator stuck on the
@@ -1211,14 +1291,20 @@ describe('ClaudeCodeAdapter', () => {
   });
 
   describe('usage and model extraction', () => {
-    // Under `--include-partial-messages`, CC emits a stale
+    // Under `--include-partial-messages` (partial mode), CC emits a stale
     // `message_start.usage` snapshot (e.g. `output_tokens: 8`) that it echoes
     // verbatim on every content-block `assistant` event. The authoritative
-    // per-turn total only arrives later as `message_delta`. So turn_metadata
-    // emission is wired to `message_delta`, not `assistant`.
-    it('does NOT emit turn_metadata on assistant events (usage there is stale)', () => {
+    // per-turn total only arrives later as `message_delta`. So in partial mode
+    // turn_metadata emission is wired to `message_delta`, not `assistant`.
+    // Seeing a `stream_event` is what tells the adapter it is in partial mode.
+    it('does NOT emit turn_metadata on assistant events in partial mode (usage there is stale)', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
+      // A stream_event marks partial mode — message_delta will own usage.
+      adapter.adapt({
+        event: { message: { id: 'msg_1', model: 'claude-sonnet-4-6' }, type: 'message_start' },
+        type: 'stream_event',
+      });
 
       const events = adapter.adapt({
         message: {
@@ -1233,6 +1319,42 @@ describe('ClaudeCodeAdapter', () => {
       expect(
         events.find((e) => e.type === 'step_complete' && e.data?.phase === 'turn_metadata'),
       ).toBeUndefined();
+    });
+
+    // BATCH mode (no `--include-partial-messages`, e.g. the `lh hetero exec`
+    // CLI used by device + sandbox runs): no `message_delta` arrives, and the
+    // `assistant` event's usage is authoritative — not a stale echo. The
+    // adapter must emit turn_metadata here so token counts land, carrying the
+    // clean `assistant` model id (NOT the `[1m]` beta-tagged `system init` one).
+    it('emits turn_metadata on assistant events in batch mode (no stream_event)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      // `system init` reports the beta-tagged id; the assistant event is clean.
+      adapter.adapt({ model: 'claude-opus-4-8[1m]', subtype: 'init', type: 'system' });
+
+      const events = adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ text: 'hello', type: 'text' }],
+          model: 'claude-opus-4-8',
+          usage: { input_tokens: 100, output_tokens: 50 },
+        },
+        type: 'assistant',
+      });
+
+      const meta = events.find(
+        (e) => e.type === 'step_complete' && e.data?.phase === 'turn_metadata',
+      );
+      expect(meta).toBeDefined();
+      expect(meta!.data.model).toBe('claude-opus-4-8');
+      expect(meta!.data.provider).toBe('claude-code');
+      expect(meta!.data.usage).toEqual({
+        inputCacheMissTokens: 100,
+        inputCachedTokens: undefined,
+        inputWriteCacheTokens: undefined,
+        totalInputTokens: 100,
+        totalOutputTokens: 50,
+        totalTokens: 150,
+      });
     });
 
     it('emits turn_metadata on message_delta with authoritative usage', () => {
@@ -1934,7 +2056,7 @@ describe('ClaudeCodeAdapter', () => {
       expect(starts.some((e) => e.data?.newStep)).toBe(false);
     });
 
-    it('does NOT emit turn_metadata step_complete for subagent events', () => {
+    it('emits subagent-tagged turn_metadata step_complete carrying message.usage', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt(init);
       adapter.adapt(
@@ -1952,6 +2074,41 @@ describe('ClaudeCodeAdapter', () => {
           id: 'msg_sub',
           model: 'claude-sonnet-4-6',
           usage: { input_tokens: 5, output_tokens: 10 },
+        },
+        parent_tool_use_id: 'toolu_parent',
+        type: 'assistant',
+      });
+
+      const meta = events.find(
+        (e) => e.type === 'step_complete' && e.data?.phase === 'turn_metadata',
+      );
+      expect(meta).toBeDefined();
+      // Subagent ctx tag is what stops the executor from writing this usage
+      // onto the main agent (which would double-count vs the result event).
+      expect(meta?.data?.subagent?.parentToolCallId).toBe('toolu_parent');
+      expect(meta?.data?.subagent?.subagentMessageId).toBe('msg_sub');
+      expect(meta?.data?.model).toBe('claude-sonnet-4-6');
+      expect(meta?.data?.usage?.totalInputTokens).toBe(5);
+      expect(meta?.data?.usage?.totalOutputTokens).toBe(10);
+    });
+
+    it('does NOT emit turn_metadata for subagent events without message.usage', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt(init);
+      adapter.adapt(
+        mainAssistant('msg_main', {
+          id: 'toolu_parent',
+          input: {},
+          name: 'Agent',
+          type: 'tool_use',
+        }),
+      );
+
+      const events = adapter.adapt({
+        message: {
+          content: [{ id: 'toolu_child', input: {}, name: 'Bash', type: 'tool_use' }],
+          id: 'msg_sub',
+          model: 'claude-sonnet-4-6',
         },
         parent_tool_use_id: 'toolu_parent',
         type: 'assistant',
@@ -2242,9 +2399,9 @@ describe('ClaudeCodeAdapter', () => {
   });
 
   // ────────────────────────────────────────────────────
-  // LOBE-8998: external signal detection (Monitor task callbacks)
+  // external signal detection (Monitor task callbacks)
   // ────────────────────────────────────────────────────
-  describe('external signal detection (LOBE-8998)', () => {
+  describe('external signal detection ()', () => {
     const init = (adapter: ClaudeCodeAdapter) => {
       adapter.adapt({
         model: 'claude-sonnet-4-6',

@@ -17,3 +17,16 @@ export interface DesktopHotkeyItem {
 }
 
 export type DesktopHotkeyConfig = Record<DesktopHotkeyId, string>;
+
+/**
+ * Mirror of `@lobechat/types`' `BuiltinServerRuntimeOutput`. Reached by
+ * `@lobechat/tool-runtime` (the runtime the gateway controller reuses) via
+ * `import type`, so only the shape is needed. Keep in sync with
+ * `packages/types/src/tool/builtin.ts`.
+ */
+export interface BuiltinServerRuntimeOutput {
+  content: string;
+  error?: unknown;
+  state?: unknown;
+  success: boolean;
+}

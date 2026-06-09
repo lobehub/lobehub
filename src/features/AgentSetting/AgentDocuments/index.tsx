@@ -1,7 +1,8 @@
 'use client';
 
+import { confirmModal, Select } from '@lobehub/ui/base-ui';
 import type { TableColumnsType } from 'antd';
-import { App, Button, Popconfirm, Select, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Popconfirm, Space, Table, Tag, Typography } from 'antd';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -28,7 +29,7 @@ const FILE_PREVIEW_LIMIT = 5;
 
 const AgentDocuments = memo(() => {
   const { t } = useTranslation(['setting', 'common']);
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const agentId = useAgentStore((s) => s.activeAgentId);
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE_ID);
   const [isInitializingTemplate, setIsInitializingTemplate] = useState(false);
@@ -160,7 +161,7 @@ const AgentDocuments = memo(() => {
     const previewFilenames = overwrittenFilenames.slice(0, FILE_PREVIEW_LIMIT);
     const remainingCount = overwrittenCount - previewFilenames.length;
 
-    modal.confirm({
+    confirmModal({
       content: (
         <Space direction={'vertical'} size={8}>
           <Typography.Text>

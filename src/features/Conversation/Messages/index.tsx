@@ -24,6 +24,7 @@ import TaskMessage from './Task';
 import TasksMessage from './Tasks';
 import ToolMessage from './Tool';
 import UserMessage from './User';
+import VerifyMessage from './Verify';
 
 const prefixCls = 'ant';
 
@@ -185,6 +186,10 @@ const MessageItem = memo<MessageItemProps>(
 
         case 'tool': {
           return <ToolMessage disableEditing={disableEditing} id={id} index={index} />;
+        }
+
+        case 'verify': {
+          return <VerifyMessage id={id} index={index} />;
         }
       }
 

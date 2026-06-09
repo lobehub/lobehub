@@ -27,10 +27,10 @@ export class MessageController extends BaseController {
       };
 
       const db = await this.getDatabase();
-      const messageService = new MessageService(db, userId);
+      const messageService = new MessageService(db, userId, this.getWorkspaceId(c));
       const result = await messageService.countMessages(processedQuery);
 
-      return this.success(c, result, '查询消息数量成功');
+      return this.success(c, result, 'Message count retrieved successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -47,10 +47,10 @@ export class MessageController extends BaseController {
       const request = this.getQuery<MessagesListQuery>(c);
 
       const db = await this.getDatabase();
-      const messageService = new MessageService(db, userId);
+      const messageService = new MessageService(db, userId, this.getWorkspaceId(c));
       const result = await messageService.getMessages(request);
 
-      return this.success(c, result, '获取消息列表成功');
+      return this.success(c, result, 'Message list retrieved successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -67,14 +67,14 @@ export class MessageController extends BaseController {
       const { id } = this.getParams<{ id: string }>(c);
 
       const db = await this.getDatabase();
-      const messageService = new MessageService(db, userId);
+      const messageService = new MessageService(db, userId, this.getWorkspaceId(c));
       const message = await messageService.getMessageById(id);
 
       if (!message) {
-        return this.error(c, '消息不存在或无权限访问', 404);
+        return this.error(c, 'Message not found or access denied', 404);
       }
 
-      return this.success(c, message, '获取消息详情成功');
+      return this.success(c, message, 'Message details retrieved successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -91,10 +91,10 @@ export class MessageController extends BaseController {
       const messageData = (await this.getBody<MessagesCreateRequest>(c))!;
 
       const db = await this.getDatabase();
-      const messageService = new MessageService(db, userId);
+      const messageService = new MessageService(db, userId, this.getWorkspaceId(c));
       const result = await messageService.createMessage(messageData);
 
-      return this.success(c, result, '创建消息成功');
+      return this.success(c, result, 'Message created successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -111,10 +111,10 @@ export class MessageController extends BaseController {
       const messageData = (await this.getBody<MessagesCreateRequest>(c))!;
 
       const db = await this.getDatabase();
-      const messageService = new MessageService(db, userId);
+      const messageService = new MessageService(db, userId, this.getWorkspaceId(c));
       const result = await messageService.createMessageWithAIReply(messageData);
 
-      return this.success(c, result, '创建消息并生成AI回复成功');
+      return this.success(c, result, 'Message created and AI reply generated successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -131,10 +131,10 @@ export class MessageController extends BaseController {
       const { id } = this.getParams<{ id: string }>(c);
 
       const db = await this.getDatabase();
-      const messageService = new MessageService(db, userId);
+      const messageService = new MessageService(db, userId, this.getWorkspaceId(c));
       await messageService.deleteMessage(id);
 
-      return this.success(c, null, '删除消息成功');
+      return this.success(c, null, 'Message deleted successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -151,10 +151,10 @@ export class MessageController extends BaseController {
       const { messageIds } = (await this.getBody<MessagesDeleteBatchRequest>(c))!;
 
       const db = await this.getDatabase();
-      const messageService = new MessageService(db, userId);
+      const messageService = new MessageService(db, userId, this.getWorkspaceId(c));
       const result = await messageService.deleteBatchMessages(messageIds);
 
-      return this.success(c, result, '批量删除消息成功');
+      return this.success(c, result, 'Messages deleted in batch successfully');
     } catch (error) {
       return this.handleError(c, error);
     }

@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
-import { agentDocumentService } from '@/services/agentDocument';
+import { resolveAgentDocumentsContext } from '@/services/agentDocument';
 import { type LobeAgentConfig } from '@/types/agent';
 import { withSWR } from '~test-utils';
 
@@ -14,9 +14,12 @@ vi.mock('zustand/traditional');
 
 // Mock agentService
 vi.mock('@/services/agent', () => ({
+  AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT: 12,
   agentService: {
+    createAgent: vi.fn(),
     getAgentConfigById: vi.fn(),
     getSessionConfig: vi.fn(),
+    queryAgents: vi.fn(),
     updateAgentConfig: vi.fn(),
     updateAgentMeta: vi.fn(),
   },
@@ -26,23 +29,7 @@ vi.mock('@/services/agentDocument', () => ({
   agentDocumentSWRKeys: {
     documents: (agentId: string) => ['agent-documents', agentId] as const,
   },
-  agentDocumentService: {
-    getDocuments: vi.fn(),
-  },
-}));
-
-vi.mock('@/utils/agentDocumentContextMapping', () => ({
-  toAgentContextDocuments: (documents: any[]) =>
-    documents.map((doc) => ({
-      content: doc.content,
-      filename: doc.filename,
-      id: doc.id,
-      loadPosition: undefined,
-      loadRules: doc.loadRules,
-      policyId: doc.templateId,
-      policyLoadFormat: undefined,
-      title: doc.title,
-    })),
+  resolveAgentDocumentsContext: vi.fn(),
 }));
 
 // Mock sessionStore
@@ -69,6 +56,7 @@ beforeEach(() => {
     activeAgentId: undefined,
     agentMap: {},
     builtinAgentIdMap: {},
+    availableAgents: undefined,
     updateAgentConfigSignal: undefined,
     agentDocumentsMap: {},
     updateAgentMetaSignal: undefined,
@@ -80,21 +68,46 @@ afterEach(() => {
 });
 
 describe('AgentSlice Actions', () => {
+  describe('createAgent', () => {
+    it('should invalidate cached available agents after creating an agent', async () => {
+      vi.mocked(agentService.createAgent).mockResolvedValue({ agentId: 'agent-2' });
+      const { result } = renderHook(() => useAgentStore());
+
+      act(() => {
+        useAgentStore.setState({
+          availableAgents: [
+            {
+              avatar: null,
+              backgroundColor: null,
+              description: 'stale',
+              id: 'agent-1',
+              title: 'Stale Agent',
+            },
+          ],
+        });
+      });
+
+      await act(async () => {
+        await result.current.createAgent({ config: { title: 'New Agent' } });
+      });
+
+      expect(result.current.availableAgents).toBeUndefined();
+    });
+  });
+
   describe('useFetchAgentDocuments', () => {
     it('should sync fetched agent documents into store cache', async () => {
-      vi.mocked(agentDocumentService.getDocuments).mockResolvedValue([
+      vi.mocked(resolveAgentDocumentsContext).mockResolvedValue([
         {
           content: 'setup steps',
           filename: 'setup.md',
           id: 'doc-1',
-          loadRules: [],
-          policy: null,
-          policyLoadFormat: null,
-          policyLoadPosition: null,
-          templateId: null,
+          loadRules: {},
+          policyId: null,
+          policyLoadFormat: undefined,
           title: 'Setup',
         },
-      ] as any);
+      ]);
 
       const { result } = renderHook(() => useAgentStore(), { wrapper: withSWR });
 
@@ -106,14 +119,71 @@ describe('AgentSlice Actions', () => {
             content: 'setup steps',
             filename: 'setup.md',
             id: 'doc-1',
-            loadPosition: undefined,
-            loadRules: [],
+            loadRules: {},
             policyId: null,
             policyLoadFormat: undefined,
             title: 'Setup',
           },
         ]);
       });
+      expect(resolveAgentDocumentsContext).toHaveBeenCalledWith({ agentId: 'agent-1' });
+    });
+  });
+
+  describe('useFetchAvailableAgents', () => {
+    it('should sync fetched available agents into store cache', async () => {
+      vi.mocked(agentService.queryAgents).mockResolvedValue([
+        {
+          avatar: null,
+          backgroundColor: null,
+          description: 'Helps with setup',
+          id: 'agent-1',
+          title: 'Setup',
+        },
+      ]);
+
+      const { result } = renderHook(() => useAgentStore(), { wrapper: withSWR });
+
+      renderHook(() => result.current.useFetchAvailableAgents(true), { wrapper: withSWR });
+
+      await waitFor(() => {
+        expect(result.current.availableAgents).toEqual([
+          {
+            avatar: null,
+            backgroundColor: null,
+            description: 'Helps with setup',
+            id: 'agent-1',
+            title: 'Setup',
+          },
+        ]);
+      });
+      expect(agentService.queryAgents).toHaveBeenCalledWith({ limit: 12 });
+    });
+  });
+
+  describe('invalidateAvailableAgents', () => {
+    it('should clear cached available agents', () => {
+      const { result } = renderHook(() => useAgentStore());
+
+      act(() => {
+        useAgentStore.setState({
+          availableAgents: [
+            {
+              avatar: null,
+              backgroundColor: null,
+              description: 'stale',
+              id: 'agent-1',
+              title: 'Stale Agent',
+            },
+          ],
+        });
+      });
+
+      act(() => {
+        result.current.invalidateAvailableAgents();
+      });
+
+      expect(result.current.availableAgents).toBeUndefined();
     });
   });
 
@@ -399,6 +469,15 @@ describe('AgentSlice Actions', () => {
         useAgentStore.setState({
           activeAgentId: 'agent-1',
           agentMap: { 'agent-1': { title: 'Old Title' } as any },
+          availableAgents: [
+            {
+              avatar: null,
+              backgroundColor: null,
+              description: 'Old Desc',
+              id: 'agent-1',
+              title: 'Old Title',
+            },
+          ],
         });
       });
 
@@ -410,6 +489,7 @@ describe('AgentSlice Actions', () => {
         description: 'New Desc',
         title: 'New Title',
       });
+      expect(result.current.availableAgents).toBeUndefined();
     });
 
     // Note: refreshSessions is no longer called after optimistic update

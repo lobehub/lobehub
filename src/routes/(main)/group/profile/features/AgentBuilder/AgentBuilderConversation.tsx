@@ -24,7 +24,7 @@ const AgentBuilderConversation = memo<AgentBuilderConversationProps>(({ agentId 
       <Flexbox flex={1} style={{ overflow: 'hidden' }}>
         <ChatList welcome={<AgentBuilderWelcome mode="group" />} />
       </Flexbox>
-      <ChatInput leftActions={actions} rightActions={rightActions} showRuntimeConfig={false} />
+      <ChatInput leftActions={actions} rightActions={rightActions} showControlBar={false} />
     </Flexbox>
   );
 });

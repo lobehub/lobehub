@@ -8,6 +8,7 @@ import type { Stream } from 'openai/streaming';
 import type { ChatStreamCallbacks } from '../../types';
 import { convertOpenAIUsage } from '../usageConverters';
 import type {
+  ChatPayloadForTransformStream,
   StreamContext,
   StreamProtocolChunk,
   StreamProtocolToolCallChunk,
@@ -24,13 +25,17 @@ import {
 export const transformQwenStream = (
   chunk: OpenAI.ChatCompletionChunk,
   streamContext?: StreamContext,
+  payload?: ChatPayloadForTransformStream,
 ): StreamProtocolChunk | StreamProtocolChunk[] => {
   if (Array.isArray(chunk.choices) && chunk.choices.length === 0 && chunk.usage) {
-    const usage = convertOpenAIUsage({
-      ...chunk.usage,
-      completion_tokens_details: chunk.usage.completion_tokens_details || {},
-      prompt_tokens_details: chunk.usage.prompt_tokens_details || {},
-    });
+    const usage = convertOpenAIUsage(
+      {
+        ...chunk.usage,
+        completion_tokens_details: chunk.usage.completion_tokens_details || {},
+        prompt_tokens_details: chunk.usage.prompt_tokens_details || {},
+      },
+      payload,
+    );
 
     if (streamContext) {
       streamContext.usage = usage;
@@ -149,17 +154,26 @@ export const QwenAIStream = (
 
   {
     callbacks,
+    payload,
     inputStartAt,
     enableStreaming = true,
-  }: { callbacks?: ChatStreamCallbacks; enableStreaming?: boolean; inputStartAt?: number } = {},
+  }: {
+    callbacks?: ChatStreamCallbacks;
+    enableStreaming?: boolean;
+    inputStartAt?: number;
+    payload?: ChatPayloadForTransformStream;
+  } = {},
 ) => {
   const streamContext: StreamContext = { id: '' };
   const readableStream =
     stream instanceof ReadableStream ? stream : convertIterableToStream(stream);
 
+  const transformWithPayload = (chunk: OpenAI.ChatCompletionChunk, streamContext: StreamContext) =>
+    transformQwenStream(chunk, streamContext, payload);
+
   return readableStream
     .pipeThrough(
-      createTokenSpeedCalculator(transformQwenStream, {
+      createTokenSpeedCalculator(transformWithPayload, {
         enableStreaming,
         inputStartAt,
         streamStack: streamContext,

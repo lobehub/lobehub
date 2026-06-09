@@ -1,6 +1,7 @@
 'use client';
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
 import { BookMinusIcon, FileBoxIcon, Trash2Icon } from 'lucide-react';
@@ -25,7 +26,7 @@ import SearchInput from './SearchInput';
  */
 const Header = memo(() => {
   const { t } = useTranslation(['components', 'common', 'file', 'knowledgeBase']);
-  const { modal, message } = App.useApp();
+  const { message } = App.useApp();
 
   // Get state and actions from store
   const [libraryId, category, onActionClick, selectAllState, selectFileIds] =
@@ -52,17 +53,20 @@ const Header = memo(() => {
           icon={BookMinusIcon}
           title={t('FileManager.actions.removeFromLibrary')}
           onClick={() => {
-            modal.confirm({
+            confirmModal({
+              cancelText: t('cancel', { ns: 'common' }),
+              content: t('FileManager.actions.confirmRemoveFromLibrary', {
+                count: selectCount,
+              }),
               okButtonProps: {
                 danger: true,
               },
+              okText: t('FileManager.actions.removeFromLibrary'),
               onOk: async () => {
                 await onActionClick('removeFromKnowledgeBase');
                 message.success(t('FileManager.actions.removeFromLibrarySuccess'));
               },
-              title: t('FileManager.actions.confirmRemoveFromLibrary', {
-                count: selectCount,
-              }),
+              title: t('FileManager.actions.removeFromLibrary'),
             });
           }}
         />
@@ -80,20 +84,23 @@ const Header = memo(() => {
         icon={Trash2Icon}
         title={t('delete', { ns: 'common' })}
         onClick={() => {
-          modal.confirm({
-            okButtonProps: {
-              danger: true,
-            },
-            onOk: async () => {
-              await onActionClick('delete');
-              message.success(t('FileManager.actions.deleteSuccess'));
-            },
-            title: t(
+          confirmModal({
+            cancelText: t('cancel', { ns: 'common' }),
+            content: t(
               selectAllState === 'all'
                 ? 'FileManager.actions.confirmDeleteAllFiles'
                 : 'FileManager.actions.confirmDeleteMultiFiles',
               { count: selectCount },
             ),
+            okButtonProps: {
+              danger: true,
+            },
+            okText: t('delete', { ns: 'common' }),
+            onOk: async () => {
+              await onActionClick('delete');
+              message.success(t('FileManager.actions.deleteSuccess'));
+            },
+            title: t('delete', { ns: 'common' }),
           });
         }}
       />

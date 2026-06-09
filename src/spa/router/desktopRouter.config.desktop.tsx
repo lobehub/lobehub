@@ -29,14 +29,11 @@ import TaskWorkspaceLayout from '@/routes/(main)/(task-workspace)/_layout';
 import AgentPage from '@/routes/(main)/agent';
 import DesktopChatLayout from '@/routes/(main)/agent/_layout';
 import DesktopAgentChatLayout from '@/routes/(main)/agent/(chat)/_layout';
-import AgentTopicNotebookRedirectPage from '@/routes/(main)/agent/[topicId]/page';
-import AgentTopicNotebookDocPage from '@/routes/(main)/agent/[topicId]/page/[docId]';
 import AgentChannelPage from '@/routes/(main)/agent/channel';
 import { agentRouteMeta } from '@/routes/(main)/agent/features/routeMeta';
-import { agentTopicPageRouteMeta } from '@/routes/(main)/agent/features/topicPageRouteMeta';
-import AgentPageRedirectPage from '@/routes/(main)/agent/page';
 import AgentProfilePage from '@/routes/(main)/agent/profile';
 import AgentTaskDetailRoute from '@/routes/(main)/agent/task/[taskId]';
+import AgentTopicsPage from '@/routes/(main)/agent/topics';
 import CommunityLayout from '@/routes/(main)/community/_layout';
 import CommunityDetailLayout from '@/routes/(main)/community/(detail)/_layout';
 import CommunityDetailAgentPage from '@/routes/(main)/community/(detail)/agent';
@@ -94,6 +91,7 @@ import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
 import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
 import AllTasksPage from '@/routes/(main)/tasks';
+import SharePagePage from '@/routes/share/page/[id]';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
 import { routeMeta } from '@/spa/router/routeMeta';
@@ -120,36 +118,12 @@ export const desktopRoutes: RouteObject[] = [
                     index: true,
                   },
                   {
-                    children: [
-                      {
-                        element: <AgentPage />,
-                        handle: { meta: agentRouteMeta },
-                        index: true,
-                      },
-                      {
-                        children: [
-                          {
-                            element: <AgentTopicNotebookRedirectPage />,
-                            handle: { meta: agentTopicPageRouteMeta },
-                            index: true,
-                          },
-                          {
-                            element: <AgentTopicNotebookDocPage />,
-                            handle: { meta: agentTopicPageRouteMeta },
-                            path: ':docId',
-                          },
-                        ],
-                        path: 'page',
-                      },
-                    ],
+                    element: <AgentPage />,
+                    handle: { meta: agentRouteMeta },
                     path: ':topicId',
                   },
                 ],
                 element: <DesktopAgentChatLayout />,
-              },
-              {
-                element: <AgentPageRedirectPage />,
-                path: 'page',
               },
               {
                 element: <AgentProfilePage />,
@@ -158,6 +132,10 @@ export const desktopRoutes: RouteObject[] = [
               {
                 element: <AgentChannelPage />,
                 path: 'channel',
+              },
+              {
+                element: <AgentTopicsPage />,
+                path: 'topics',
               },
               {
                 element: <AgentTaskDetailRoute />,
@@ -617,6 +595,17 @@ export const desktopRoutes: RouteObject[] = [
     ],
     element: <ShareTopicLayout />,
     path: '/share/t',
+  },
+
+  // Share page route (outside main layout)
+  {
+    children: [
+      {
+        element: <SharePagePage />,
+        path: ':id',
+      },
+    ],
+    path: '/share/page',
   },
 
   // Devtools route (outside main layout, dev-only)

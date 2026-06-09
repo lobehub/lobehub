@@ -15,11 +15,12 @@ const PagesPage = memo(() => {
   const params = useParams<{ id: string }>();
 
   const pageId = getIdFromIdentifier(params.id ?? '', 'docs');
-  storeUpdater('selectedPageId', pageId);
 
   useUnmount(() => {
     usePageStore.setState({ selectedPageId: undefined });
   });
+
+  storeUpdater('selectedPageId', pageId);
 
   return (
     <Suspense fallback={<Loading debugId="PagesPage" />}>

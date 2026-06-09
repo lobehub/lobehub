@@ -6,6 +6,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { useElectronStore } from '@/store/electron';
 
 import { useAgentId } from '../hooks/useAgentId';
 import {
@@ -30,8 +31,9 @@ export const useLocalFileMention = (): UseLocalFileMentionResult => {
   const isLocalSystemEnabled = useAgentStore(
     chatConfigByIdSelectors.isLocalSystemEnabledById(agentId),
   );
+  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const agentWorkingDirectory = useAgentStore((s) =>
-    agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(s),
+    agentByIdSelectors.getAgentWorkingDirectoryById(agentId, currentDeviceId)(s),
   );
   const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const workingDirectory = topicWorkingDirectory || agentWorkingDirectory;

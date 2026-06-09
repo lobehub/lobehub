@@ -3,15 +3,8 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { ChatList } from '@/features/Conversation';
-import MainChatInput from '@/routes/(main)/agent/features/Conversation/MainChatInput';
+import { ChatInput, ChatList } from '@/features/Conversation';
 
-/**
- * Inner body of FloatingChatPanel.
- *
- * Assumes it is rendered inside a ConversationProvider. Pure layout — does not
- * read the chat store directly.
- */
 const ChatBody = memo(() => {
   return (
     <Flexbox
@@ -33,7 +26,7 @@ const ChatBody = memo(() => {
       >
         <ChatList />
       </Flexbox>
-      <MainChatInput />
+      <ChatInput leftActions={['typo', 'stt']} rightActions={['contextWindow']} />
     </Flexbox>
   );
 });

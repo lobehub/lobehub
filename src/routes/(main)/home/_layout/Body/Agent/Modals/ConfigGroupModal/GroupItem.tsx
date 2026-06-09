@@ -1,4 +1,5 @@
 import { ActionIcon, EditableText, SortableList } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { PencilLine, Trash } from 'lucide-react';
@@ -23,8 +24,8 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const GroupItem = memo<SessionGroupItemBase>(({ id, name }) => {
-  const { t } = useTranslation('chat');
-  const { message, modal } = App.useApp();
+  const { t } = useTranslation(['chat', 'common']);
+  const { message } = App.useApp();
 
   const [editing, setEditing] = useState(false);
   const [updateGroupName, removeGroup] = useHomeStore((s) => [s.updateGroupName, s.removeGroup]);
@@ -40,16 +41,17 @@ const GroupItem = memo<SessionGroupItemBase>(({ id, name }) => {
             icon={Trash}
             size={'small'}
             onClick={() => {
-              modal.confirm({
-                centered: true,
+              confirmModal({
+                cancelText: t('cancel', { ns: 'common' }),
+                content: t('sessionGroup.confirmRemoveGroupAlert'),
                 okButtonProps: {
                   danger: true,
-                  type: 'primary',
                 },
+                okText: t('delete', { ns: 'common' }),
                 onOk: async () => {
                   await removeGroup(id);
                 },
-                title: t('sessionGroup.confirmRemoveGroupAlert'),
+                title: t('delete', { ns: 'common' }),
               });
             }}
           />

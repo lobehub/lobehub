@@ -1,7 +1,8 @@
 'use client';
 
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, Icon, Select, Skeleton } from '@lobehub/ui';
+import { Form, Icon, Skeleton } from '@lobehub/ui';
+import { Select } from '@lobehub/ui/base-ui';
 import { Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
@@ -26,7 +27,7 @@ const STT = memo(() => {
   const stt: FormGroupItemType = {
     children: [
       {
-        children: <Select options={sttOptions} />,
+        children: <Select options={sttOptions} style={{ width: 448 }} />,
         desc: t('settingTTS.sttService.desc'),
         label: t('settingTTS.sttService.title'),
         name: 'sttServer',
@@ -36,7 +37,6 @@ const STT = memo(() => {
         desc: t('settingTTS.sttAutoStop.desc'),
         label: t('settingTTS.sttAutoStop.title'),
         layout: 'horizontal',
-        minWidth: undefined,
         name: 'sttAutoStop',
         valuePropName: 'checked',
       },
@@ -61,6 +61,7 @@ const STT = memo(() => {
         setLoading(false);
       }}
       {...FORM_STYLE}
+      itemMinWidth={undefined}
     />
   );
 });

@@ -3,30 +3,35 @@ import { describe, expect, it } from 'vitest';
 import { formatCommandOutput } from './formatCommandOutput';
 
 describe('formatCommandOutput', () => {
-  it('should format successful output while running', () => {
+  it('should format successful output without exit code', () => {
     const result = formatCommandOutput({
-      running: true,
       success: true,
     });
-    expect(result).toMatchInlineSnapshot(`"Output retrieved. Running: true"`);
+    expect(result).toMatchInlineSnapshot(`"Output retrieved."`);
   });
 
-  it('should format successful output when not running', () => {
+  it('should include exit code when present', () => {
     const result = formatCommandOutput({
-      running: false,
+      exitCode: 0,
       success: true,
     });
-    expect(result).toMatchInlineSnapshot(`"Output retrieved. Running: false"`);
+    expect(result).toMatchInlineSnapshot(`
+      "Output retrieved.
+
+      Exit code: 0"
+    `);
   });
 
   it('should format successful output with content', () => {
     const result = formatCommandOutput({
+      exitCode: 17,
       output: 'Process output here',
-      running: true,
       success: true,
     });
     expect(result).toMatchInlineSnapshot(`
-      "Output retrieved. Running: true
+      "Output retrieved.
+
+      Exit code: 17
 
       Output:
       Process output here"
@@ -36,7 +41,6 @@ describe('formatCommandOutput', () => {
   it('should format failed output', () => {
     const result = formatCommandOutput({
       error: 'Process not found',
-      running: false,
       success: false,
     });
     expect(result).toMatchInlineSnapshot(`"Failed: Process not found"`);
@@ -45,12 +49,14 @@ describe('formatCommandOutput', () => {
   it('should format successful output with error info', () => {
     const result = formatCommandOutput({
       error: 'Warning message',
+      exitCode: 1,
       output: 'Some output',
-      running: false,
       success: true,
     });
     expect(result).toMatchInlineSnapshot(`
-      "Output retrieved. Running: false
+      "Output retrieved.
+
+      Exit code: 1
 
       Output:
       Some output

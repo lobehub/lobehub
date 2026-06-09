@@ -2,11 +2,11 @@
 
 import { Button, Icon, Text } from '@lobehub/ui';
 import { LinkIcon, ServerIcon, Trash2Icon, UserIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { buildDiscordOpenBotUrl } from '../constants';
-import LinkModal from '../LinkModal';
+import { createMessengerLinkModal } from '../LinkModal';
 import {
   ConnectionRow,
   DetailLayout,
@@ -32,7 +32,6 @@ interface DiscordDetailProps {
 // (`messenger.discord.connections.*`) makes that distinction explicit.
 const DiscordDetail = memo<DiscordDetailProps>(({ appId, botUsername, name, onBack }) => {
   const { t } = useTranslation('messenger');
-  const [linkOpen, setLinkOpen] = useState(false);
 
   const data = useMessengerData('discord');
   const { handleSetActive, handleUnlink } = useLinkActions({
@@ -61,90 +60,82 @@ const DiscordDetail = memo<DiscordDetailProps>(({ appId, botUsername, name, onBa
   const hasLinks = links.length > 0;
   const link = links[0];
 
+  const handleOpenLink = () =>
+    createMessengerLinkModal({ appId, botUsername, name, platform: 'discord' });
+
   const headerAction = (
     <Button
       icon={<Icon icon={LinkIcon} />}
       type={hasInstallations ? 'default' : 'primary'}
-      onClick={() => setLinkOpen(true)}
+      onClick={handleOpenLink}
     >
       {hasInstallations ? t('messenger.detail.addServer') : t('messenger.linkCta')}
     </Button>
   );
 
   return (
-    <>
-      <DetailLayout
-        hasConnections={hasInstallations || hasLinks}
-        headerAction={headerAction}
-        name={name}
-        platform="discord"
-        onBack={onBack}
-      >
-        {installations.map((install) => (
+    <DetailLayout
+      hasConnections={hasInstallations || hasLinks}
+      headerAction={headerAction}
+      name={name}
+      platform="discord"
+      onBack={onBack}
+    >
+      {installations.map((install) => (
+        <ConnectionRow
+          icon={<Icon icon={ServerIcon} size="small" />}
+          key={install.id}
+          label={t('messenger.detail.connections.serverLabel')}
+          name={install.tenantName || install.tenantId}
+          status="connected"
+          action={
+            <Button
+              danger
+              icon={<Icon icon={Trash2Icon} />}
+              size="small"
+              onClick={() => handleDisconnectInstallation(install.id)}
+            >
+              {t('messenger.detail.disconnect')}
+            </Button>
+          }
+        />
+      ))}
+      {link ? (
+        <UserAgentConnection
+          link={link}
+          onSetActive={(agentId) => handleSetActive('', agentId)}
+          onUnlink={() => handleUnlink('')}
+        />
+      ) : (
+        hasInstallations &&
+        appId && (
           <ConnectionRow
-            icon={<Icon icon={ServerIcon} size="small" />}
-            key={install.id}
-            label={t('messenger.detail.connections.serverLabel')}
-            name={install.tenantName || install.tenantId}
-            status="connected"
+            icon={<Icon icon={UserIcon} size="small" />}
+            label={t('messenger.detail.connections.userLabel')}
+            name={t('messenger.discord.userPending.name')}
+            status="pending"
             action={
               <Button
-                danger
-                icon={<Icon icon={Trash2Icon} />}
+                href={buildDiscordOpenBotUrl(appId)}
+                icon={<Icon icon={LinkIcon} />}
                 size="small"
-                onClick={() => handleDisconnectInstallation(install.id)}
+                target="_blank"
+                type="primary"
               >
-                {t('messenger.detail.disconnect')}
+                {t('messenger.discord.userPending.cta')}
               </Button>
             }
-          />
-        ))}
-        {link ? (
-          <UserAgentConnection
-            link={link}
-            onSetActive={(agentId) => handleSetActive('', agentId)}
-            onUnlink={() => handleUnlink('')}
-          />
-        ) : (
-          hasInstallations &&
-          appId && (
-            <ConnectionRow
-              icon={<Icon icon={UserIcon} size="small" />}
-              label={t('messenger.detail.connections.userLabel')}
-              name={t('messenger.discord.userPending.name')}
-              status="pending"
-              action={
-                <Button
-                  href={buildDiscordOpenBotUrl(appId)}
-                  icon={<Icon icon={LinkIcon} />}
-                  size="small"
-                  target="_blank"
-                  type="primary"
-                >
-                  {t('messenger.discord.userPending.cta')}
-                </Button>
-              }
-            >
-              <Text style={{ fontSize: 12 }} type="secondary">
-                {t('messenger.discord.userPending.hint')}
-              </Text>
-            </ConnectionRow>
-          )
-        )}
-        {!hasLinks && !hasInstallations && (
-          <div className={styles.emptyRow}>{t('messenger.detail.connections.empty')}</div>
-        )}
-      </DetailLayout>
-
-      <LinkModal
-        appId={appId}
-        botUsername={botUsername}
-        name={name}
-        open={linkOpen}
-        platform="discord"
-        onClose={() => setLinkOpen(false)}
-      />
-    </>
+          >
+            <Text style={{ fontSize: 12 }} type="secondary">
+              {t('messenger.discord.userPending.hint')}
+            </Text>
+          </ConnectionRow>
+        )
+      )}
+      {!hasLinks && !hasInstallations && (
+        <div className={styles.emptyRow}>{t('messenger.detail.connections.empty')}</div>
+      )}
+    </DetailLayout>
   );
 });
 

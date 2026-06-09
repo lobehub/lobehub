@@ -27,6 +27,7 @@ vi.mock('@lobehub/ui/icons', () => ({
 
 vi.mock('lucide-react', () => ({
   MessageSquarePlusIcon: () => null,
+  MessagesSquareIcon: () => null,
   RadioTowerIcon: () => null,
   SearchIcon: () => null,
 }));

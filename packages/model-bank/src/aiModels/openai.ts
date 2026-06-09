@@ -1177,54 +1177,6 @@ export const openaiChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      //search: true,
-    },
-    contextWindowTokens: 128_000,
-    description: 'GPT-4o Audio Preview model with audio input and output.',
-    displayName: 'GPT-4o Audio Preview',
-    id: 'gpt-4o-audio-preview',
-    maxOutput: 16_384,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-12-17',
-    /*
-    settings: {
-      searchImpl: 'params',
-    },
-    */
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      //search: true,
-    },
-    contextWindowTokens: 128_000,
-    description: 'GPT-4o mini Audio model with audio input and output.',
-    displayName: 'GPT-4o mini Audio',
-    id: 'gpt-4o-mini-audio-preview',
-    maxOutput: 16_384,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2024-12-17',
-    /*
-    settings: {
-      searchImpl: 'params',
-    },
-    */
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
       vision: true,
     },
     contextWindowTokens: 128_000,
@@ -1583,76 +1535,6 @@ export const openaiImageModels: AIImageModelCard[] = [
       ],
     },
     releasedAt: '2025-10-06',
-    type: 'image',
-  },
-  {
-    description:
-      'The latest DALL·E model, released in November 2023, supports more realistic, accurate image generation with stronger detail.',
-    displayName: 'DALL·E 3',
-    id: 'dall-e-3',
-    parameters: {
-      prompt: { default: '' },
-      quality: {
-        default: 'standard',
-        enum: ['standard', 'hd'],
-      },
-      size: {
-        default: '1024x1024',
-        enum: ['1024x1024', '1792x1024', '1024x1792'],
-      },
-    },
-    pricing: {
-      units: [
-        {
-          lookup: {
-            prices: {
-              hd_1024x1024: 0.08,
-              hd_1024x1792: 0.12,
-              hd_1792x1024: 0.12,
-              standard_1024x1024: 0.04,
-              standard_1024x1792: 0.08,
-              standard_1792x1024: 0.08,
-            },
-            pricingParams: ['quality', 'size'],
-          },
-          name: 'imageGeneration',
-          strategy: 'lookup',
-          unit: 'image',
-        },
-      ],
-    },
-    type: 'image',
-  },
-  {
-    description:
-      'Second-generation DALL·E model with more realistic, accurate image generation and 4× the resolution of the first generation.',
-    displayName: 'DALL·E 2',
-    id: 'dall-e-2',
-    parameters: {
-      imageUrl: { default: null },
-      prompt: { default: '' },
-      size: {
-        default: '1024x1024',
-        enum: ['256x256', '512x512', '1024x1024'],
-      },
-    },
-    pricing: {
-      units: [
-        {
-          lookup: {
-            prices: {
-              '1024x1024': 0.02,
-              '256x256': 0.016,
-              '512x512': 0.018,
-            },
-            pricingParams: ['size'],
-          },
-          name: 'imageGeneration',
-          strategy: 'lookup',
-          unit: 'image',
-        },
-      ],
-    },
     type: 'image',
   },
 ];

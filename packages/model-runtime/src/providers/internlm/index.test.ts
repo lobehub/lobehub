@@ -53,66 +53,6 @@ describe('LobeInternLMAI - custom features', () => {
     });
   });
 
-  describe('handlePayload', () => {
-    it('should disable streaming when tools are present', () => {
-      const payload = {
-        model: 'internlm2_5-7b-chat',
-        messages: [{ role: 'user' as const, content: 'Hello' }],
-        stream: true,
-        tools: [
-          {
-            type: 'function' as const,
-            function: {
-              name: 'test',
-              description: 'test function',
-            },
-          },
-        ],
-      };
-
-      const result = params.chatCompletion.handlePayload!(payload);
-      expect(result.stream).toBe(false);
-    });
-
-    it('should enable streaming when no tools are present', () => {
-      const payload = {
-        model: 'internlm2_5-7b-chat',
-        messages: [{ role: 'user' as const, content: 'Hello' }],
-        stream: true,
-      };
-
-      const result = params.chatCompletion.handlePayload!(payload);
-      expect(result.stream).toBe(true);
-    });
-
-    it('should keep streaming disabled when initially false and no tools', () => {
-      const payload = {
-        model: 'internlm2_5-7b-chat',
-        messages: [{ role: 'user' as const, content: 'Hello' }],
-        stream: false,
-      };
-
-      const result = params.chatCompletion.handlePayload!(payload);
-      expect(result.stream).toBe(true);
-    });
-
-    it('should preserve other payload properties', () => {
-      const payload = {
-        model: 'internlm2_5-7b-chat',
-        messages: [{ role: 'user' as const, content: 'Hello' }],
-        stream: true,
-        temperature: 0.7,
-        max_tokens: 100,
-      };
-
-      const result = params.chatCompletion.handlePayload!(payload);
-      expect(result.model).toBe('internlm2_5-7b-chat');
-      expect(result.messages).toEqual(payload.messages);
-      expect(result.temperature).toBe(0.7);
-      expect(result.max_tokens).toBe(100);
-    });
-  });
-
   describe('models', () => {
     it('should fetch and process models', async () => {
       const mockClient = {
@@ -229,7 +169,7 @@ describe('LobeInternLMAI - custom features', () => {
 
       expect(model.id).toBe('custom-model');
       expect(model.contextWindowTokens).toBeUndefined();
-      expect(model.displayName).toBeUndefined();
+      expect(model.displayName).toBe('custom-model');
       expect(model.enabled).toBe(false);
       expect(model.functionCall).toBe(false);
       expect(model.vision).toBe(false);

@@ -429,9 +429,9 @@ describe('ContextTreeBuilder', () => {
   });
 
   // ────────────────────────────────────────────────────
-  // LOBE-8998: AssistantGroupNode embeds SignalCallbacksNode children
+  // AssistantGroupNode embeds SignalCallbacksNode children
   // ────────────────────────────────────────────────────
-  describe('AssistantGroup with signal callbacks (LOBE-8998)', () => {
+  describe('AssistantGroup with signal callbacks ()', () => {
     it('appends SignalCallbacksNode at the end of AssistantGroup children', () => {
       const signalMeta = (sequence: number) => ({
         signal: {

@@ -183,13 +183,53 @@ const CLI_AUTH_REQUIRED_PATTERNS = [
   /\b401\b/,
 ] as const;
 
-const CLI_RATE_LIMIT_PATTERNS = [/you'?ve hit your limit/i, /rate limit/i] as const;
+/**
+ * Genuinely user-side limit wording. Used only as the text fallback for
+ * batch CLI / sandbox runs that don't emit a structured `rate_limit_event`
+ * (so {@link isUserQuotaRateLimit} can't fire). The ambiguous bare
+ * `rate limit` / `rate limited` substring is deliberately NOT here — it also
+ * appears in Anthropic's transient server throttle, so leaning on it would
+ * reintroduce the very misclassification this set exists to avoid.
+ */
+const CLI_USER_RATE_LIMIT_PATTERNS = [
+  /you'?ve hit your limit/i,
+  /usage limit reached/i,
+  /\blimit reached\b/i,
+] as const;
+
+/**
+ * Anthropic's server-side transient throttle. CC surfaces this as a 429 with
+ * a message that explicitly disclaims the user's plan limit ("not your usage
+ * limit") — e.g. `API Error: Server is temporarily limiting requests (not your
+ * usage limit) · Rate limited`. It clears on its own in moments, so it must be
+ * classified as `overloaded` (retry UX), NOT `rate_limit` (which renders a
+ * misleading "usage limit reached" reset-time guide).
+ */
+const CLI_SERVER_THROTTLE_PATTERNS = [
+  /not your usage limit/i,
+  /server is temporarily limiting requests/i,
+] as const;
 
 const CLI_OVERLOADED_PATTERNS = [
   /overloaded_error/i,
   /\boverloaded\b/i,
   /api error:\s*529\b/i,
+  ...CLI_SERVER_THROTTLE_PATTERNS,
 ] as const;
+
+/**
+ * The one reliable discriminator between a user-side plan/quota limit and a
+ * transient server throttle: only the genuine user limit carries a concrete
+ * reset window in the structured `rate_limit_event` — `resetsAt` (epoch
+ * seconds) and/or a named `rateLimitType` (e.g. `seven_day`). Anthropic's
+ * transient throttle emits a rate_limit_event too, but with just
+ * `status: 'rejected'` and no reset info. Status codes (429 / 529) alone are
+ * ambiguous, so this structured signal — not the HTTP status, not the message
+ * text — is what decides whether we show the "usage limit reached, resets at
+ * X" guide vs the "temporarily overloaded, retry" guide.
+ */
+const isUserQuotaRateLimit = (info?: HeterogeneousRateLimitInfo): boolean =>
+  !!info && (info.resetsAt != null || info.rateLimitType != null);
 
 const getCliResultMessage = (result: unknown): string | undefined => {
   if (typeof result === 'string') return result;
@@ -248,10 +288,18 @@ const toRateLimitInfo = (value: unknown): HeterogeneousRateLimitInfo | undefined
 const getOverloadedTerminalError = (
   result: unknown,
   apiErrorStatus?: unknown,
+  rateLimitInfo?: HeterogeneousRateLimitInfo,
 ): HeterogeneousTerminalErrorData | undefined => {
   const rawMessage = getCliResultMessage(result);
+  // A real user-quota limit is the rate-limit classifier's job — never steal
+  // it here, even if it happened to ride in on a 429/529.
+  if (isUserQuotaRateLimit(rateLimitInfo)) return;
+
   const looksOverloaded =
+    // Both 529 (upstream overloaded) and a 429 with no quota signal (transient
+    // server throttle) are momentary server-side conditions — same retry UX.
     apiErrorStatus === 529 ||
+    apiErrorStatus === 429 ||
     (!!rawMessage && CLI_OVERLOADED_PATTERNS.some((pattern) => pattern.test(rawMessage)));
 
   if (!looksOverloaded || !rawMessage) return;
@@ -269,15 +317,24 @@ const getOverloadedTerminalError = (
 const getRateLimitTerminalError = (
   result: unknown,
   rateLimitInfo?: HeterogeneousRateLimitInfo,
-  apiErrorStatus?: unknown,
 ): HeterogeneousTerminalErrorData | undefined => {
   const rawMessage = getCliResultMessage(result);
-  const looksLikeRateLimit =
-    apiErrorStatus === 429 ||
-    !!rateLimitInfo ||
-    (!!rawMessage && CLI_RATE_LIMIT_PATTERNS.some((pattern) => pattern.test(rawMessage)));
 
-  if (!looksLikeRateLimit || !rawMessage) return;
+  // Primary signal: the structured rate_limit_event carries a concrete reset
+  // window → this is the user's plan/quota limit. Fallback (batch runs with no
+  // rate_limit_event): clearly user-side wording that doesn't disclaim the
+  // limit. Everything else — bare 429, "rate limited", server throttle — is
+  // left to the overloaded classifier so it gets the retry UX, not a
+  // misleading "usage limit reached, resets at X" guide.
+  const looksLikeServerThrottle =
+    !!rawMessage && CLI_SERVER_THROTTLE_PATTERNS.some((pattern) => pattern.test(rawMessage));
+  const looksLikeUserLimit =
+    isUserQuotaRateLimit(rateLimitInfo) ||
+    (!!rawMessage &&
+      !looksLikeServerThrottle &&
+      CLI_USER_RATE_LIMIT_PATTERNS.some((pattern) => pattern.test(rawMessage)));
+
+  if (!looksLikeUserLimit || !rawMessage) return;
 
   return {
     agentType: 'claude-code',
@@ -398,6 +455,14 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   private pendingToolCalls = new Set<string>();
   private started = false;
   private stepIndex = 0;
+  /**
+   * True once any `stream_event` wrapper is seen — i.e. CC was spawned with
+   * `--include-partial-messages` (desktop driver). The `lh hetero exec` CLI
+   * used by device + sandbox runs spawns in BATCH mode (no partial flag), so
+   * this stays false and `handleAssistant` owns per-turn usage instead of
+   * `message_delta`.
+   */
+  private sawStreamEvent = false;
   /** Track current message.id to detect step boundaries */
   private currentMessageId: string | undefined;
   /** message.id of the stream_event delta flow currently in flight */
@@ -578,7 +643,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   // ─── Private handlers ───
 
   private handleSystem(raw: any): HeterogeneousAgentEvent[] {
-    // CC's long-running task lifecycle (Monitor, etc., LOBE-8998).
+    // CC's long-running task lifecycle (Monitor, etc., ).
     // `task_started` registers a task that may fire callback turns;
     // `task_notification` (terminal) drops it. While a task is alive,
     // any new turn without preceding user input is treated as a signal
@@ -741,11 +806,16 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       reasoningParts.join(''),
       this.streamedThinkingByMessageId,
     );
-    if (textCompletion) {
-      events.push(this.makeChunkEvent({ chunkType: 'text', content: textCompletion }));
-    }
+    // Emit reasoning before text so the gateway event handler starts the
+    // reasoning operation first — matching Claude's natural output order
+    // (thinking → response). Without this, batch-mode runs (CLI / sandbox
+    // without --include-partial-messages) emit text first, causing the
+    // brain icon to appear below the already-rendered text content.
     if (thinkingCompletion) {
       events.push(this.makeChunkEvent({ chunkType: 'reasoning', reasoning: thinkingCompletion }));
+    }
+    if (textCompletion) {
+      events.push(this.makeChunkEvent({ chunkType: 'text', content: textCompletion }));
     }
     if (messageId) {
       this.clearStreamedBuffers(messageId, {
@@ -754,6 +824,29 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       });
     }
     events.push(...this.emitToolChunk(newToolCalls, messageId));
+
+    // BATCH mode (no `--include-partial-messages`, e.g. the `lh hetero exec`
+    // CLI used by device + sandbox runs): there is no `message_delta` to carry
+    // per-turn usage, and the `assistant` event's usage is NOT a stale
+    // message_start echo — it's the real per-message total. Emit it as
+    // turn_metadata so usage (token counts) AND the canonical model id (the
+    // `assistant` event reports a clean `claude-opus-4-8`, unlike `system init`
+    // which appends a `[1m]` beta marker) land on the assistant message. In
+    // partial mode (`sawStreamEvent`) `message_delta` owns this — skip here to
+    // avoid double-counting the stale snapshot.
+    if (!this.sawStreamEvent) {
+      const usage = toUsageData(raw.message?.usage);
+      if (usage) {
+        events.push(
+          this.makeEvent('step_complete', {
+            model: raw.message?.model,
+            phase: 'turn_metadata',
+            provider: 'claude-code',
+            usage,
+          }),
+        );
+      }
+    }
 
     return events;
   }
@@ -767,13 +860,9 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * Handle a subagent assistant event (tagged with `parent_tool_use_id`).
    *
    * Subagent events are a side-channel of the main agent's stream and have
-   * two hard constraints:
-   *  - no main-agent step boundary (each subagent turn introduces a new
-   *    `message.id`; flushing that as a newStep would orphan main-agent
-   *    bubbles)
-   *  - no model / usage tracking on the main agent (CC's `result` event
-   *    carries the authoritative grand total; re-summing per-turn deltas
-   *    here would double-count against the main agent)
+   * one hard constraint: no main-agent step boundary (each subagent turn
+   * introduces a new `message.id`; flushing that as a newStep would orphan
+   * main-agent bubbles).
    *
    * Text / reasoning from subagent events ARE emitted — as `stream_chunk`
    * events tagged with the `subagent` peer field — so the executor can
@@ -781,6 +870,17 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
    * Thread view a readable subagent conversation (user → assistant text
    * → tools → assistant text → ...). Without this the thread only ever
    * shows tool calls with no closing reasoning / summary.
+   *
+   * Usage on `raw.message.usage` is also emitted, as a
+   * `step_complete{phase:turn_metadata, subagent}` event so the executor
+   * can route the per-turn delta onto the subagent's in-thread assistant
+   * (and bump the subagent run's running totalTokens for the inspector
+   * chip). Note this is the FULL message.usage (subagent assistant events
+   * are not partial-streamed, unlike main-agent assistant events which
+   * carry stale `message_start` snapshots), so no de-stale logic is
+   * needed here. The subagent ctx tag prevents the executor from writing
+   * the same usage to the main agent's assistant — CC's `result` event
+   * remains the grand total across main + subagents.
    *
    * Subagent lineage lives as event-level **peer fields** on each chunk
    * (`subagent.parentToolCallId` + `subagent.subagentMessageId`), not on
@@ -838,15 +938,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     // `messagesWithStreamedText` (unlike the main-agent path) because
     // subagent events don't arrive via `stream_event` partial-messages
     // deltas; the full block IS the only emission.
-    if (textParts.length > 0) {
-      events.push(
-        this.makeChunkEvent({
-          chunkType: 'text',
-          content: textParts.join(''),
-          subagent: subagentCtx,
-        }),
-      );
-    }
+    // Reasoning before text — same ordering fix as the main-agent batch path.
     if (reasoningParts.length > 0) {
       events.push(
         this.makeChunkEvent({
@@ -856,7 +948,30 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
         }),
       );
     }
+    if (textParts.length > 0) {
+      events.push(
+        this.makeChunkEvent({
+          chunkType: 'text',
+          content: textParts.join(''),
+          subagent: subagentCtx,
+        }),
+      );
+    }
     events.push(...this.emitToolChunk(newToolCalls, messageId, subagentCtx));
+
+    const usage = toUsageData(raw.message?.usage);
+    if (usage) {
+      events.push(
+        this.makeEvent('step_complete', {
+          model: raw.message?.model,
+          phase: 'turn_metadata',
+          provider: 'claude-code',
+          subagent: subagentCtx,
+          usage,
+        }),
+      );
+    }
+
     return events;
   }
 
@@ -976,11 +1091,11 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
                   // blocks — no `text` / `content` field. Without this branch the
                   // mapper returns '' for every reference, filter drops them all,
                   // and the tool message lands in DB with empty content — leaving
-                  // the UI's StatusIndicator stuck on the spinner (LOBE-7369).
+                  // the UI's StatusIndicator stuck on the spinner ().
                   if (c?.type === 'tool_reference' && c.tool_name) return c.tool_name;
                   // `Read` on images yields `{type: 'image', source: {...}}` blocks
                   // with no text. Drop a minimal placeholder so the tool message
-                  // has non-empty content (LOBE-7338); richer image echo is a
+                  // has non-empty content (); richer image echo is a
                   // follow-up that needs structured ToolResultData.
                   if (c?.type === 'image') {
                     const mediaType = c.source?.media_type || 'image';
@@ -1160,16 +1275,16 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
     }
 
     const resultMessage = getCliResultMessage(raw.result) || 'Agent execution failed';
-    const rateLimitError = getRateLimitTerminalError(
-      raw.result,
-      this.pendingRateLimitInfo,
-      raw.api_error_status,
-    );
+    const rateLimitError = getRateLimitTerminalError(raw.result, this.pendingRateLimitInfo);
     const finalEvent: HeterogeneousAgentEvent = raw.is_error
       ? this.makeEvent(
           'error',
           rateLimitError ||
-            getOverloadedTerminalError(raw.result, raw.api_error_status) ||
+            getOverloadedTerminalError(
+              raw.result,
+              raw.api_error_status,
+              this.pendingRateLimitInfo,
+            ) ||
             getAuthRequiredTerminalError(raw.result) || {
               error: resultMessage,
               message: resultMessage,
@@ -1201,6 +1316,12 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
   private handleStreamEvent(raw: any): HeterogeneousAgentEvent[] {
     const event = raw?.event;
     if (!event) return [];
+
+    // Seeing any stream_event proves CC is running with
+    // `--include-partial-messages` — `message_delta` owns authoritative usage,
+    // so `handleAssistant` must NOT also emit it (the assistant block echoes a
+    // stale message_start usage snapshot in this mode).
+    this.sawStreamEvent = true;
 
     switch (event.type) {
       case 'message_start': {
@@ -1290,7 +1411,7 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
 
     this.currentMessageId = messageId;
     this.stepIndex++;
-    // Signal-callback detection (LOBE-8998): if this turn opened
+    // Signal-callback detection (): if this turn opened
     // WITHOUT a preceding `user` event AND a long-running task is
     // still active, the LLM was re-invoked by the task pushing an
     // update — tag the resulting assistant turn accordingly. Otherwise

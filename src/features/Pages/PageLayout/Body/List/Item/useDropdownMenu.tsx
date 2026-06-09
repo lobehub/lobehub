@@ -1,5 +1,6 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { CopyPlus, PanelTop, Pencil, Trash2 } from 'lucide-react';
 import { useCallback } from 'react';
@@ -20,14 +21,14 @@ export const useDropdownMenu = ({
   toggleEditing,
 }: ActionProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['common', 'file']);
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   const navigate = useNavigate();
   const addTab = useElectronStore((s) => s.addTab);
   const removePage = usePageStore((s) => s.removePage);
   const duplicatePage = usePageStore((s) => s.duplicatePage);
 
   const handleDelete = () => {
-    modal.confirm({
+    confirmModal({
       cancelText: t('cancel'),
       content: t('pageEditor.deleteConfirm.content', { ns: 'file' }),
       okButtonProps: { danger: true },

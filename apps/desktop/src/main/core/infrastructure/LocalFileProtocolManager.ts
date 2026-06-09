@@ -7,7 +7,7 @@ import { app, protocol } from 'electron';
 import { LOCAL_FILE_PROTOCOL_HOST, LOCAL_FILE_PROTOCOL_SCHEME } from '@/const/protocol';
 import { createLogger } from '@/utils/logger';
 
-import { getExportMimeType } from '../../utils/mime';
+import { resolveLocalFileMimeType } from '../../utils/mime';
 
 const LOCAL_FILE_PROTOCOL_PRIVILEGES = {
   allowServiceWorkers: false,
@@ -21,20 +21,6 @@ const LOCAL_FILE_PROTOCOL_PRIVILEGES = {
 
 const logger = createLogger('core:LocalFileProtocolManager');
 const PREVIEW_TOKEN_TTL_MS = 5 * 60 * 1000;
-
-const EXTRA_MIME_TYPES: Record<string, string> = {
-  '.avif': 'image/avif',
-  '.bmp': 'image/bmp',
-  '.heic': 'image/heic',
-  '.heif': 'image/heif',
-  '.tif': 'image/tiff',
-  '.tiff': 'image/tiff',
-};
-
-const getMimeType = (filePath: string): string => {
-  const ext = path.extname(filePath).toLowerCase();
-  return getExportMimeType(filePath) ?? EXTRA_MIME_TYPES[ext] ?? 'application/octet-stream';
-};
 
 const normalizeAbsolutePath = (filePath: string): string | null => {
   const normalized = path.normalize(filePath);
@@ -130,7 +116,7 @@ export class LocalFileProtocolManager {
 
           const buffer = await readFile(realResolvedPath);
           const headers = new Headers();
-          headers.set('Content-Type', getMimeType(realResolvedPath));
+          headers.set('Content-Type', resolveLocalFileMimeType(realResolvedPath, buffer));
           headers.set('Content-Length', String(buffer.byteLength));
           // Local files are immutable from the renderer's perspective for a
           // single preview session; allow short-lived caching to avoid

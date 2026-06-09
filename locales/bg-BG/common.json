@@ -234,7 +234,7 @@
   "exportType.allAgentWithMessage": "Експортиране на всички агенти и съобщения",
   "exportType.globalSetting": "Експортиране на глобални настройки",
   "feedback": "Обратна връзка",
-  "feedback.emailContact": "Можете също да ни пишете на {{email}}",
+  "feedback.emailContact": "Можете също да ни пишете на <email>{{email}}</email>",
   "feedback.errors.fileTooLarge": "Файлът надвишава 5MB",
   "feedback.errors.submitFailed": "Изпращането не бе успешно. Опитайте отново.",
   "feedback.errors.teamNotFound": "Грешка в конфигурацията",
@@ -353,6 +353,7 @@
   "messengerBanner.title": "Говорете с Lobe AI в любимите си приложения за съобщения",
   "more": "Още",
   "navPanel.agent": "Агент",
+  "navPanel.bottomDivider": "Елементите по-долу се закрепват към дъното",
   "navPanel.customizeSidebar": "Персонализиране на страничната лента",
   "navPanel.displayItems": "Показвани елементи",
   "navPanel.hidden": "Скрито",
@@ -479,5 +480,6 @@
   "userPanel.setting": "Настройки",
   "userPanel.upgradePlan": "Надграждане на плана",
   "userPanel.usages": "Статистика на използване",
-  "version": "Версия"
+  "version": "Версия",
+  "zoom": "Увеличение"
 }

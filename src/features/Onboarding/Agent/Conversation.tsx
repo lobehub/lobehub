@@ -205,7 +205,7 @@ const AgentOnboardingConversation = memo<AgentOnboardingConversationProps>(
               isConfigLoading={!isInputReady}
               leftActions={chatInputLeftActions}
               rightActions={chatInputRightActions}
-              showRuntimeConfig={false}
+              showControlBar={false}
             />
           </Flexbox>
         )}

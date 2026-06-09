@@ -1,5 +1,6 @@
 import { type DropdownItem } from '@lobehub/ui';
 import { DropdownMenu, Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import {
   BookMinusIcon,
@@ -33,7 +34,7 @@ interface BatchActionsDropdownProps {
 
 const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onActionClick }) => {
   const { t } = useTranslation(['components', 'common', 'file', 'knowledgeBase']);
-  const { modal, message } = App.useApp();
+  const { message } = App.useApp();
 
   const libraryId = useResourceManagerStore((s) => s.libraryId);
   const [resolveSelectedResourceIds, selectAllState] = useResourceManagerStore((s) => [
@@ -54,14 +55,17 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
         key: 'deleteLibrary',
         label: t('header.actions.deleteLibrary', { ns: 'file' }),
         onClick: async () => {
-          modal.confirm({
+          confirmModal({
+            cancelText: t('cancel', { ns: 'common' }),
+            content: t('library.list.confirmRemoveLibrary', { ns: 'file' }),
             okButtonProps: {
               danger: true,
             },
+            okText: t('delete', { ns: 'common' }),
             onOk: async () => {
               await onActionClick('deleteLibrary');
             },
-            title: t('library.list.confirmRemoveLibrary', { ns: 'file' }),
+            title: t('header.actions.deleteLibrary', { ns: 'file' }),
           });
         },
       });
@@ -100,17 +104,20 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
         key: 'removeFromKnowledgeBase',
         label: t('FileManager.actions.removeFromLibrary'),
         onClick: () => {
-          modal.confirm({
+          confirmModal({
+            cancelText: t('cancel', { ns: 'common' }),
+            content: t('FileManager.actions.confirmRemoveFromLibrary', {
+              count: selectCount,
+            }),
             okButtonProps: {
               danger: true,
             },
+            okText: t('FileManager.actions.removeFromLibrary'),
             onOk: async () => {
               await onActionClick('removeFromKnowledgeBase');
               message.success(t('FileManager.actions.removeFromLibrarySuccess'));
             },
-            title: t('FileManager.actions.confirmRemoveFromLibrary', {
-              count: selectCount,
-            }),
+            title: t('FileManager.actions.removeFromLibrary'),
           });
         },
       });
@@ -154,15 +161,18 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
         key: 'delete',
         label: t('delete', { ns: 'common' }),
         onClick: async () => {
-          modal.confirm({
+          confirmModal({
+            cancelText: t('cancel', { ns: 'common' }),
+            content: t('FileManager.actions.confirmDeleteMultiFiles', { count: selectCount }),
             okButtonProps: {
               danger: true,
             },
+            okText: t('delete', { ns: 'common' }),
             onOk: async () => {
               await onActionClick('delete');
               message.success(t('FileManager.actions.deleteSuccess'));
             },
-            title: t('FileManager.actions.confirmDeleteMultiFiles', { count: selectCount }),
+            title: t('delete', { ns: 'common' }),
           });
         },
       },
@@ -177,7 +187,6 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
     addFilesToKnowledgeBase,
     resolveSelectedResourceIds,
     t,
-    modal,
     message,
     knowledgeBases,
   ]);

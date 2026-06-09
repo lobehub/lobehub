@@ -12,6 +12,7 @@ export interface FileSearchResult {
 
 export interface DocumentSearchResult {
   documentId: string;
+  fileId?: string;
   knowledgeBaseId: string;
   relevance: number;
   snippet: string;
@@ -42,12 +43,13 @@ ${chunks.join('\n')}
 };
 
 /**
- * Formats a single document search result (BM25 hit on custom/document) with XML tags.
+ * Formats a single document search result (BM25 hit on a KB document) with XML tags.
  * Documents return only a snippet — agent should call readKnowledge with the docs_* id
- * to fetch the full content.
+ * (or file_* id when present, for parsed-file documents) to fetch the full content.
  */
 const formatDocument = (doc: DocumentSearchResult): string => {
-  return `<document id="${doc.documentId}" title="${doc.title}" relevance="${doc.relevance}" knowledgeBaseId="${doc.knowledgeBaseId}">
+  const fileIdAttr = doc.fileId ? ` fileId="${doc.fileId}"` : '';
+  return `<document id="${doc.documentId}"${fileIdAttr} title="${doc.title}" relevance="${doc.relevance}" knowledgeBaseId="${doc.knowledgeBaseId}">
 <snippet>${doc.snippet}</snippet>
 </document>`;
 };

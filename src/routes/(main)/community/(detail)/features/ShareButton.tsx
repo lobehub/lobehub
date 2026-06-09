@@ -7,11 +7,11 @@ import {
   CopyButton,
   Flexbox,
   Input,
-  Modal,
   Skeleton,
   Tag,
   Text,
 } from '@lobehub/ui';
+import { Modal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { startCase } from 'es-toolkit/compat';
 import { LinkIcon, Share2Icon } from 'lucide-react';

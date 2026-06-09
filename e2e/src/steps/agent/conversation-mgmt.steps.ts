@@ -427,10 +427,10 @@ When('用户选择删除选项', async function (this: CustomWorld) {
 When('用户确认删除', async function (this: CustomWorld) {
   console.log('   📍 Step: 确认删除...');
 
-  // A confirmation modal should appear
-  const confirmButton = this.page.locator('.ant-modal-confirm-btns button.ant-btn-dangerous');
+  const confirmButton = this.page
+    .getByRole('dialog')
+    .getByRole('button', { name: /^(ok|delete|删除|确认|确定)$/i });
 
-  // Wait for modal to appear
   await expect(confirmButton).toBeVisible({ timeout: 5000 });
   await confirmButton.click();
 

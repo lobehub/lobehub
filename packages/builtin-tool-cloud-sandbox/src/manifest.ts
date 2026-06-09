@@ -184,6 +184,7 @@ export const CloudSandboxManifest: BuiltinToolManifest = {
       },
     },
     {
+      defaultTimeoutMs: 120_000,
       description:
         'Execute a shell command and return its output. Supports both synchronous and background execution with timeout control.',
       humanIntervention: 'required',

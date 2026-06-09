@@ -180,11 +180,16 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   performance: ModelPerformanceSchema.optional(),
   reactions: z.array(EmojiReactionSchema).optional(),
   scope: z.string().optional(),
-  // External-signal lineage for Monitor-style callback turns (LOBE-8998).
+  // External-signal lineage for Monitor-style callback turns ().
   signal: MessageSignalSchema.optional(),
   subAgentId: z.string().optional(),
   toolExecutionTimeMs: z.number().optional(),
   trigger: z.nativeEnum(RequestTrigger).optional(),
+  // role='verify' card: which Agent Run (agent_operations.id) it renders.
+  verifyOperationId: z.string().optional(),
+  verifyRound: z.number().optional(),
+  // @deprecated token usage moved to the top-level `usage` column. Still listed
+  // so zod doesn't strip `metadata.usage` from legacy writes during migration.
   usage: ModelUsageSchema.optional(),
 });
 
@@ -217,11 +222,12 @@ export interface ModelPerformance {
 export interface MessageMetadata {
   // ───────────────────────────────────────────────────────────────
   // Token usage + performance fields — DEPRECATED flat shape.
-  // New code must write to `metadata.usage` / `metadata.performance` (nested)
-  // instead. Kept here so legacy reads still type-check during migration;
-  // writers should stop populating them.
+  // Token usage now lives in the dedicated top-level `usage` column
+  // (`UIChatMessage.usage`); performance still lives in `metadata.performance`.
+  // These flat fields (and the nested `metadata.usage` below) are kept so legacy
+  // reads still type-check during migration; writers should stop populating them.
   // ───────────────────────────────────────────────────────────────
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   acceptedPredictionTokens?: number;
   activeBranchIndex?: number;
   activeColumn?: boolean;
@@ -231,36 +237,36 @@ export interface MessageMetadata {
    */
   collapsed?: boolean;
   compare?: boolean;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   cost?: number;
   /** @deprecated use `metadata.performance` instead */
   duration?: number;
   finishType?: string;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   inputAudioTokens?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   inputCachedAudioTokens?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   inputCachedImageTokens?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   inputCachedTextTokens?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   inputCachedTokens?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   inputCachedVideoTokens?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   inputCacheMissTokens?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   inputCitationTokens?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   inputImageTokens?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   inputTextTokens?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   inputToolTokens?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   inputVideoTokens?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   inputWriteCacheTokens?: number;
   /**
    * Tool inspect expanded state
@@ -277,7 +283,6 @@ export interface MessageMetadata {
    * Flag indicating if message content is multimodal (serialized MessageContentPart[])
    */
   isMultimodal?: boolean;
-
   /**
    * Flag indicating if message is from the Supervisor agent in group orchestration
    * Used by conversation-flow to transform role to 'supervisor' for UI rendering
@@ -285,17 +290,18 @@ export interface MessageMetadata {
   isSupervisor?: boolean;
   /** @deprecated use `metadata.performance` instead */
   latency?: number;
+
   /**
    * Local-system tool snapshots materialized when the user sent @file mentions.
    */
   localSystemToolSnapshots?: LocalSystemToolSnapshot[];
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   outputAudioTokens?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   outputImageTokens?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   outputReasoningTokens?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   outputTextTokens?: number;
   /**
    * Page selections attached to user message
@@ -311,7 +317,7 @@ export interface MessageMetadata {
    * Emoji reactions on this message
    */
   reactions?: EmojiReaction[];
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   rejectedPredictionTokens?: number;
   /**
    * Message scope - indicates the context in which this message was created
@@ -323,7 +329,7 @@ export interface MessageMetadata {
    * External-signal lineage for messages produced as reactive replies
    * to an out-of-band trigger (Monitor stdout push, webhook callback,
    * scheduled tick, …) rather than a fresh user turn. Phase-1 storage —
-   * Phase 2 (LOBE-8999) promotes this to a dedicated `messages.signal`
+   * Phase 2 () promotes this to a dedicated `messages.signal`
    * jsonb column.
    *
    * Conversation-flow groups signal-tagged TOOLLESS assistants into a
@@ -351,11 +357,11 @@ export interface MessageMetadata {
    * Tool execution time for tool messages (ms)
    */
   toolExecutionTimeMs?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   totalInputTokens?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   totalOutputTokens?: number;
-  /** @deprecated use `metadata.usage` instead */
+  /** @deprecated use the top-level message `usage` field instead */
   totalTokens?: number;
   /** @deprecated use `metadata.performance` instead */
   tps?: number;
@@ -365,14 +371,26 @@ export interface MessageMetadata {
   trigger?: RequestTrigger;
   /** @deprecated use `metadata.performance` instead */
   ttft?: number;
+  /**
+   * @deprecated Token usage has been promoted to the dedicated top-level `usage`
+   * column / `UIChatMessage.usage` field. Reads fall back here for legacy rows,
+   * but new writers should target the top-level `usage` instead.
+   */
   usage?: ModelUsage;
+  /**
+   * Agent Run operation id this verify card belongs to (for role='verify' messages).
+   * References `agent_operations.id`; the card reads the verify plan + results off it.
+   */
+  verifyOperationId?: string;
+  /** Display round number for the verify card (1-based; repair rounds are separate). */
+  verifyRound?: number;
 }
 
 /**
  * Persisted form of an external-signal trigger context — stamped on
  * messages produced as reactive replies to out-of-band events.
  *
- * Phase 1 lives under `MessageMetadata.signal`; Phase 2 (LOBE-8999)
+ * Phase 1 lives under `MessageMetadata.signal`; Phase 2 ()
  * promotes to a dedicated `messages.signal` column with the same
  * shape (plus `rootSourceId` / `scopeKey` for agent-signal alignment).
  */

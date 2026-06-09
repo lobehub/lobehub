@@ -2,11 +2,40 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { getUILocaleAndResources } from './getUILocaleAndResources';
 
+const translateFromUILocaleResources = (
+  resources: Record<string, Record<string, string>>,
+  key: string,
+) => Object.assign({}, ...Object.values(resources))[key];
+
 describe('getUILocaleAndResources', () => {
   it('should return zh-CN locale and zhCn resources for zh-CN', async () => {
     const result = await getUILocaleAndResources('zh-CN');
     expect(result.locale).toBe('zh-CN');
     expect(result.resources).toBeDefined();
+  });
+
+  it('should normalize business ui.json into a @lobehub/ui consumable resource map', async () => {
+    const result = await getUILocaleAndResources('zh-CN');
+
+    expect(translateFromUILocaleResources(result.resources, 'form.submit')).toBe('提交');
+  });
+
+  it('should merge built-in resources with partial business ui.json resources', async () => {
+    const result = await getUILocaleAndResources('zh-CN');
+
+    expect(translateFromUILocaleResources(result.resources, 'image.copy')).toBe('复制');
+    expect(translateFromUILocaleResources(result.resources, 'hotkey.clear')).toBe('清除绑定');
+    expect(translateFromUILocaleResources(result.resources, 'form.submit')).toBe('提交');
+  });
+
+  it('should merge en built-in fallback resources for non-en/zh partial business ui.json resources', async () => {
+    const result = await getUILocaleAndResources('de-DE');
+
+    expect(result.locale).toBe('de-DE');
+    expect(translateFromUILocaleResources(result.resources, 'image.copy')).toBe('Copy');
+    expect(translateFromUILocaleResources(result.resources, 'hotkey.clear')).toBe('Clear binding');
+    expect(translateFromUILocaleResources(result.resources, 'common.empty')).toBe('(empty)');
+    expect(translateFromUILocaleResources(result.resources, 'form.submit')).toBe('Absenden');
   });
 
   it('should return zh-CN locale and zhCn resources for zh-TW', async () => {
@@ -27,10 +56,18 @@ describe('getUILocaleAndResources', () => {
     expect(result.resources).toBeDefined();
   });
 
-  it('should return en-US locale and en resources for auto', async () => {
-    const result = await getUILocaleAndResources('auto');
-    expect(result.locale).toBe('en-US');
-    expect(result.resources).toBeDefined();
+  it('should resolve auto from the current document language', async () => {
+    const previousLang = document.documentElement.lang;
+    document.documentElement.lang = 'zh-CN';
+
+    try {
+      const result = await getUILocaleAndResources('auto');
+
+      expect(result.locale).toBe('zh-CN');
+      expect(translateFromUILocaleResources(result.resources, 'form.submit')).toBe('提交');
+    } finally {
+      document.documentElement.lang = previousLang;
+    }
   });
 
   it('should return ar locale and custom resources for ar', async () => {

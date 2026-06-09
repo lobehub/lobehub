@@ -1,15 +1,25 @@
 'use client';
 
+import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@lobechat/const';
 import { ActionIcon, Button, Flexbox, Text, TextArea } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
+import { debounce } from 'es-toolkit/compat';
 import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
 import type { ChangeEvent } from 'react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import CodeEditorPane from '@/components/CodeEditorPane';
+import FloatingChatPanel from '@/features/FloatingChatPanel';
+import { useClientDataSWR } from '@/libs/swr';
+import { documentService } from '@/services/document';
+import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useDocumentStore } from '@/store/document';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
+import { getDocumentRenderMode } from '@/utils/documentRenderMode';
 import {
   getSkillMarkdownMetadataError,
   parseSkillMarkdownFrontmatterFields,
@@ -190,8 +200,122 @@ const SkillFrontmatterBlock = memo<SkillFrontmatterBlockProps>(({ documentId, fr
   );
 });
 
+interface HighlightEditorProps {
+  content: string;
+  documentId: string;
+  language: string;
+  onSaved: (newContent: string) => void;
+}
+
+const HighlightEditor = memo<HighlightEditorProps>(({ content, documentId, language, onSaved }) => {
+  const [buffer, setBuffer] = useState<string | undefined>(undefined);
+  const editingValue = buffer ?? content;
+
+  const bufferRef = useRef(buffer);
+  const documentIdRef = useRef(documentId);
+  const onSavedRef = useRef(onSaved);
+  bufferRef.current = buffer;
+  documentIdRef.current = documentId;
+  onSavedRef.current = onSaved;
+
+  const writeBuffer = useCallback(async (source: 'manual' | 'autosave') => {
+    const toWrite = bufferRef.current;
+    if (toWrite === undefined) return;
+    try {
+      await documentService.updateDocument({
+        content: toWrite,
+        id: documentIdRef.current,
+        saveSource: source,
+      });
+      // Update SWR cache before clearing the buffer so the editor's value prop
+      // never falls back to stale content, which would otherwise reset the cursor.
+      onSavedRef.current(toWrite);
+      if (bufferRef.current === toWrite) setBuffer(undefined);
+    } catch (error) {
+      console.error('[HighlightEditor] save failed:', error);
+    }
+  }, []);
+
+  const debouncedAutoSave = useMemo(
+    () =>
+      debounce(() => writeBuffer('autosave'), EDITOR_DEBOUNCE_TIME, {
+        leading: false,
+        maxWait: EDITOR_MAX_WAIT,
+        trailing: true,
+      }),
+    [writeBuffer],
+  );
+
+  const handleChange = useCallback(
+    (next: string) => {
+      const isDirty = next !== content;
+      setBuffer(isDirty ? next : undefined);
+      if (isDirty) debouncedAutoSave();
+      else debouncedAutoSave.cancel();
+    },
+    [content, debouncedAutoSave],
+  );
+
+  const handleSave = useCallback(async () => {
+    debouncedAutoSave.cancel();
+    await writeBuffer('manual');
+  }, [debouncedAutoSave, writeBuffer]);
+
+  const isMountedRef = useRef(false);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      debouncedAutoSave.cancel();
+      const pendingContent = bufferRef.current;
+      if (pendingContent === undefined) return;
+      const pendingDocumentId = documentIdRef.current;
+      // Defer the fire-and-forget save to a microtask so that StrictMode's synchronous
+      // unmount/remount in development does not trigger a save. If the component is
+      // immediately remounted, isMountedRef flips back to true before this runs.
+      queueMicrotask(() => {
+        if (isMountedRef.current) return;
+        void documentService.updateDocument({
+          content: pendingContent,
+          id: pendingDocumentId,
+          saveSource: 'autosave',
+        });
+      });
+    };
+  }, [debouncedAutoSave]);
+
+  useEffect(() => {
+    const handler = (event: BeforeUnloadEvent) => {
+      if (bufferRef.current === undefined) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
+
+  return (
+    <CodeEditorPane
+      language={language}
+      style={{ minHeight: '100%' }}
+      value={editingValue}
+      onChange={handleChange}
+      onSave={handleSave}
+    />
+  );
+});
+
+HighlightEditor.displayName = 'HighlightEditor';
+
 const DocumentBody = memo(() => {
   const documentId = useChatStore(chatPortalSelectors.portalDocumentId);
+  const agentDocumentId = useChatStore(chatPortalSelectors.portalAgentDocumentId);
+  const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const enableFloatingChatPanel = useUserStore(
+    labPreferSelectors.enableAgentDocumentFloatingChatPanel,
+  );
   const [skillFrontmatter, contentFormat] = useDocumentStore((s) =>
     documentId
       ? [s.documents[documentId]?.skillFrontmatter ?? '', s.documents[documentId]?.contentFormat]
@@ -199,15 +323,51 @@ const DocumentBody = memo(() => {
   );
   const isSkillMarkdown = contentFormat === 'skillMarkdown';
 
+  const { data: documentMeta, mutate: mutateDocumentMeta } = useClientDataSWR(
+    documentId ? ['portal-document-header', documentId] : null,
+    () => documentService.getDocumentById(documentId!),
+  );
+  const renderMode = documentMeta
+    ? getDocumentRenderMode(documentMeta)
+    : { mode: 'editor' as const };
+
+  const handleHighlightSaved = useCallback(
+    (saved: string) => {
+      mutateDocumentMeta((prev) => (prev ? { ...prev, content: saved } : prev), {
+        revalidate: false,
+      });
+    },
+    [mutateDocumentMeta],
+  );
+
   return (
     <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
       <div className={styles.content}>
         {documentId && isSkillMarkdown && (
           <SkillFrontmatterBlock documentId={documentId} frontmatter={skillFrontmatter} />
         )}
-        <EditorCanvas />
+        {renderMode.mode === 'highlight' && documentId ? (
+          <HighlightEditor
+            content={documentMeta?.content ?? ''}
+            documentId={documentId}
+            key={documentId}
+            language={renderMode.language}
+            onSaved={handleHighlightSaved}
+          />
+        ) : (
+          <EditorCanvas />
+        )}
       </div>
       <TodoList />
+      {enableFloatingChatPanel && activeAgentId && (
+        <FloatingChatPanel
+          agentDocumentId={agentDocumentId}
+          agentId={activeAgentId}
+          documentId={documentId ?? undefined}
+          key={`${activeAgentId}:${activeTopicId ?? 'none'}:${documentId ?? 'none'}`}
+          topicId={activeTopicId ?? null}
+        />
+      )}
     </Flexbox>
   );
 });

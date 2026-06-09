@@ -378,6 +378,139 @@ describe('runAgent actions', () => {
           }),
         );
       });
+
+      it('replaces messages from server-pushed uiMessages snapshot (SoT)', async () => {
+        const replaceMessages = vi.fn();
+        act(() => {
+          useChatStore.setState({
+            replaceMessages,
+            operations: {
+              [TEST_IDS.OPERATION_ID]: {
+                abortController: new AbortController(),
+                context: { agentId: 'agent-1', topicId: 'topic-1' },
+                id: TEST_IDS.OPERATION_ID,
+                metadata: { lastEventId: '0', startTime: Date.now(), stepCount: 0 },
+                status: 'running',
+                type: 'groupAgentGenerate',
+              },
+            },
+          });
+        });
+        const { result } = renderHook(() => useChatStore());
+        const context = createStreamingContext({ assistantId: TEST_IDS.ASSISTANT_MESSAGE_ID });
+        const uiMessages = [{ id: 'msg_a', role: 'user' }] as any;
+
+        const event: StreamEvent = {
+          type: 'step_start',
+          timestamp: Date.now(),
+          operationId: TEST_IDS.OPERATION_ID,
+          data: { phase: 'tool_execution', uiMessages },
+        };
+
+        await act(async () => {
+          await result.current.internal_handleAgentStreamEvent(
+            TEST_IDS.OPERATION_ID,
+            event,
+            context,
+          );
+        });
+
+        expect(replaceMessages).toHaveBeenCalledWith(uiMessages, {
+          context: { agentId: 'agent-1', topicId: 'topic-1' },
+        });
+      });
+
+      it('does not call replaceMessages when uiMessages absent on step_start', async () => {
+        const replaceMessages = vi.fn();
+        act(() => {
+          useChatStore.setState({ replaceMessages });
+        });
+        const { result } = renderHook(() => useChatStore());
+        const context = createStreamingContext({ assistantId: TEST_IDS.ASSISTANT_MESSAGE_ID });
+        const event: StreamEvent = {
+          type: 'step_start',
+          timestamp: Date.now(),
+          operationId: TEST_IDS.OPERATION_ID,
+          data: { phase: 'tool_execution' }, // no uiMessages
+        };
+
+        await act(async () => {
+          await result.current.internal_handleAgentStreamEvent(
+            TEST_IDS.OPERATION_ID,
+            event,
+            context,
+          );
+        });
+
+        expect(replaceMessages).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('agent_runtime_end event', () => {
+      it('replaces messages from terminal uiMessages snapshot (final-step SoT)', async () => {
+        const replaceMessages = vi.fn();
+        act(() => {
+          useChatStore.setState({
+            replaceMessages,
+            operations: {
+              [TEST_IDS.OPERATION_ID]: {
+                abortController: new AbortController(),
+                context: { agentId: 'agent-1', topicId: 'topic-1' },
+                id: TEST_IDS.OPERATION_ID,
+                metadata: { lastEventId: '0', startTime: Date.now(), stepCount: 0 },
+                status: 'running',
+                type: 'groupAgentGenerate',
+              },
+            },
+          });
+        });
+        const { result } = renderHook(() => useChatStore());
+        const uiMessages = [{ id: 'msg_final', role: 'assistantGroup' }] as any;
+
+        const event: StreamEvent = {
+          type: 'agent_runtime_end',
+          timestamp: Date.now(),
+          operationId: TEST_IDS.OPERATION_ID,
+          data: { finalState: { status: 'done' }, reason: 'done', uiMessages },
+        };
+
+        await act(async () => {
+          await result.current.internal_handleAgentStreamEvent(
+            TEST_IDS.OPERATION_ID,
+            event,
+            createStreamingContext({ assistantId: TEST_IDS.ASSISTANT_MESSAGE_ID }),
+          );
+        });
+
+        expect(replaceMessages).toHaveBeenCalledWith(uiMessages, {
+          context: { agentId: 'agent-1', topicId: 'topic-1' },
+        });
+      });
+    });
+
+    describe('step_complete event', () => {
+      // The previous DB-refetch on tool_execution was the source of the
+      // assistantGroup-clobber regression — tool results are
+      // now reconciled via the next step_start's uiMessages snapshot.
+      it('does NOT refreshMessages on tool_execution phase', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const event: StreamEvent = {
+          type: 'step_complete',
+          timestamp: Date.now(),
+          operationId: TEST_IDS.OPERATION_ID,
+          data: { executionTime: 10, phase: 'tool_execution', result: { ok: true } },
+        };
+
+        await act(async () => {
+          await result.current.internal_handleAgentStreamEvent(
+            TEST_IDS.OPERATION_ID,
+            event,
+            createStreamingContext({ assistantId: TEST_IDS.ASSISTANT_MESSAGE_ID }),
+          );
+        });
+
+        expect(result.current.refreshMessages).not.toHaveBeenCalled();
+      });
     });
   });
 });

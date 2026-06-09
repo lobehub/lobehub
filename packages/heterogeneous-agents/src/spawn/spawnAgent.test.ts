@@ -179,7 +179,7 @@ describe('spawnAgent', () => {
     expect(args[resumeIdx + 1]).toBe('cc-prev-123');
   });
 
-  it('builds codex args with `exec` + json + skip-git-repo-check + full-auto', async () => {
+  it('builds codex args with `exec` + json + skip-git-repo-check + bypass approvals/sandbox', async () => {
     nextFakeProc = createFakeProc().proc;
     const { spawnAgent } = await import('./spawnAgent');
     await spawnAgent({ agentType: 'codex', operationId: 'op-1', prompt: 'hello' });
@@ -189,7 +189,23 @@ describe('spawnAgent', () => {
     expect(args[0]).toBe('exec');
     expect(args).toContain('--json');
     expect(args).toContain('--skip-git-repo-check');
+    expect(args).toContain('--dangerously-bypass-approvals-and-sandbox');
+    expect(args).not.toContain('--full-auto');
+  });
+
+  it('does not add the default codex execution mode when extraArgs already choose one', async () => {
+    nextFakeProc = createFakeProc().proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    await spawnAgent({
+      agentType: 'codex',
+      extraArgs: ['--full-auto'],
+      operationId: 'op-1',
+      prompt: 'hello',
+    });
+
+    const { args } = spawnCalls[0];
     expect(args).toContain('--full-auto');
+    expect(args).not.toContain('--dangerously-bypass-approvals-and-sandbox');
   });
 
   it('spawns the Windows executable resolved by the shared CLI spawn plan', async () => {

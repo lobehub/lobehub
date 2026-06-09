@@ -1,6 +1,6 @@
 ---
 name: agent-signal
-description: Build or extend LobeHub Agent Signal pipelines for background or quiet agent work driven by event sources, semantic signals, and action handlers. Use when adding a new Agent Signal source, signal or action type, policy, middleware handler, workflow handoff, dedupe or scope behavior, or observability around `src/server/services/agentSignal/**`, `packages/agent-signal`, or `packages/observability-otel/src/modules/agent-signal`.
+description: 'Build or extend LobeHub Agent Signal pipelines. Use for signal sources, signal/action types, policies, middleware, workflow handoff, dedupe, scope behavior, or observability.'
 ---
 
 # Agent Signal
@@ -26,9 +26,9 @@ Agent Signal has one consistent shape:
 
 Read:
 
-- `src/server/services/agentSignal/index.ts`
-- `src/server/workflows/agentSignal/index.ts`
-- `src/server/workflows/agentSignal/run.ts`
+- `apps/server/src/services/agentSignal/index.ts`
+- `apps/server/src/workflows/agentSignal/index.ts`
+- `apps/server/src/workflows/agentSignal/run.ts`
 
 ## Core Model
 
@@ -48,11 +48,11 @@ Keep the boundaries strict:
 ## Implementation Workflow
 
 1. Decide whether the use case is synchronous or quiet background work.
-2. Define or reuse a source type in `src/server/services/agentSignal/sourceTypes.ts`.
-3. Define or reuse signal and action types in `src/server/services/agentSignal/policies/types.ts`.
+2. Define or reuse a source type in `apps/server/src/services/agentSignal/sourceTypes.ts`.
+3. Define or reuse signal and action types in `apps/server/src/services/agentSignal/policies/types.ts`.
 4. Implement handlers with `defineSourceHandler`, `defineSignalHandler`, or `defineActionHandler`.
 5. Bundle handlers with `defineAgentSignalHandlers(...)`.
-6. Register the policy in `src/server/services/agentSignal/policies/index.ts` and pass it into the runtime factory if needed.
+6. Register the policy in `apps/server/src/services/agentSignal/policies/index.ts` and pass it into the runtime factory if needed.
 7. Add or update ingress code that emits or enqueues the source event.
 8. Add observability and tests before considering the flow complete.
 
@@ -63,19 +63,19 @@ Keep the boundaries strict:
   `packages/agent-signal/src/base/builders.ts`
   `packages/agent-signal/src/base/types.ts`
 - Server-owned runtime and middleware:
-  `src/server/services/agentSignal/runtime/AgentSignalRuntime.ts`
-  `src/server/services/agentSignal/runtime/AgentSignalScheduler.ts`
-  `src/server/services/agentSignal/runtime/middleware.ts`
-  `src/server/services/agentSignal/runtime/context.ts`
+  `apps/server/src/services/agentSignal/runtime/AgentSignalRuntime.ts`
+  `apps/server/src/services/agentSignal/runtime/AgentSignalScheduler.ts`
+  `apps/server/src/services/agentSignal/runtime/middleware.ts`
+  `apps/server/src/services/agentSignal/runtime/context.ts`
 - Existing policy example:
-  `src/server/services/agentSignal/policies/analyzeIntent/index.ts`
-  `src/server/services/agentSignal/policies/analyzeIntent/feedbackSatisfaction.ts`
-  `src/server/services/agentSignal/policies/analyzeIntent/feedbackDomain.ts`
-  `src/server/services/agentSignal/policies/analyzeIntent/feedbackAction.ts`
-  `src/server/services/agentSignal/policies/analyzeIntent/actions/userMemory.ts`
+  `apps/server/src/services/agentSignal/policies/analyzeIntent/index.ts`
+  `apps/server/src/services/agentSignal/policies/analyzeIntent/feedbackSatisfaction.ts`
+  `apps/server/src/services/agentSignal/policies/analyzeIntent/feedbackDomain.ts`
+  `apps/server/src/services/agentSignal/policies/analyzeIntent/feedbackAction.ts`
+  `apps/server/src/services/agentSignal/policies/analyzeIntent/actions/userMemory.ts`
 - Observability:
-  `src/server/services/agentSignal/observability/projector.ts`
-  `src/server/services/agentSignal/observability/traceEvents.ts`
+  `apps/server/src/services/agentSignal/observability/projector.ts`
+  `apps/server/src/services/agentSignal/observability/traceEvents.ts`
   `packages/observability-otel/src/modules/agent-signal/index.ts`
 
 ## Implementation Rules
@@ -86,7 +86,7 @@ Keep the boundaries strict:
 - Use stable ids and idempotency keys when the same source can arrive more than once.
 - Preserve scope discipline. The runtime uses `scopeKey` to serialize related background work.
 - Prefer the dedicated shared package types and builders from `@lobechat/agent-signal` for normalized nodes and result contracts.
-- Add focused tests near the touched runtime, policy, or store module. Existing tests under `src/server/services/agentSignal/**/__tests__` are the reference pattern.
+- Add focused tests near the touched runtime, policy, or store module. Existing tests under `apps/server/src/services/agentSignal/**/__tests__` are the reference pattern.
 
 ## References
 

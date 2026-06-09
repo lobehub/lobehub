@@ -234,7 +234,7 @@
   "exportType.allAgentWithMessage": "خروجی تمام نمایندگان و پیام‌ها",
   "exportType.globalSetting": "خروجی تنظیمات کلی",
   "feedback": "بازخورد",
-  "feedback.emailContact": "همچنین می‌توانید به ما ایمیل بزنید به {{email}}",
+  "feedback.emailContact": "همچنین می‌توانید به ما ایمیل بزنید به <email>{{email}}</email>",
   "feedback.errors.fileTooLarge": "فایل بیش از ۵ مگابایت است",
   "feedback.errors.submitFailed": "ارسال ناموفق بود. دوباره تلاش کنید.",
   "feedback.errors.teamNotFound": "خطای پیکربندی",
@@ -353,6 +353,7 @@
   "messengerBanner.title": "با Lobe AI در برنامه‌های پیام‌رسان محبوب خود صحبت کنید",
   "more": "بیشتر",
   "navPanel.agent": "نماینده",
+  "navPanel.bottomDivider": "موارد زیر به پایین متصل می‌شوند",
   "navPanel.customizeSidebar": "سفارشی‌سازی نوار کناری",
   "navPanel.displayItems": "موارد نمایشی",
   "navPanel.hidden": "پنهان",
@@ -479,5 +480,6 @@
   "userPanel.setting": "تنظیمات",
   "userPanel.upgradePlan": "ارتقاء طرح",
   "userPanel.usages": "آمار استفاده",
-  "version": "نسخه"
+  "version": "نسخه",
+  "zoom": "بزرگنمایی"
 }

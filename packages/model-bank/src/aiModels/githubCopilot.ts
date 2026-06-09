@@ -317,23 +317,6 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
 
-  // Grok Models
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      structuredOutput: true,
-    },
-    contextWindowTokens: 173_000,
-    description:
-      'We’re excited to launch grok-code-fast-1, a fast and cost-effective reasoning model that excels at agentic coding.',
-    displayName: 'Grok Code Fast 1',
-    enabled: true,
-    id: 'grok-code-fast-1',
-    releasedAt: '2025-08-27',
-    type: 'chat',
-  },
-
   // Raptor Models
   {
     abilities: {

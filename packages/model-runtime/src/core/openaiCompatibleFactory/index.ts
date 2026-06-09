@@ -9,6 +9,7 @@ import OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
 import { isGPT5ProResponsesModel, responsesAPIModels } from '../../const/models';
+import { ErrorClassifier } from '../../errors';
 import type {
   ChatCompletionErrorPayload,
   ChatCompletionTool,
@@ -39,10 +40,6 @@ import { desensitizeUrl } from '../../utils/desensitizeUrl';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { handleOpenAIError } from '../../utils/handleOpenAIError';
-import { isAccountDeactivatedError } from '../../utils/isAccountDeactivatedError';
-import { isExceededContextWindowError } from '../../utils/isExceededContextWindowError';
-import { isInsufficientQuotaError } from '../../utils/isInsufficientQuotaError';
-import { isQuotaLimitError } from '../../utils/isQuotaLimitError';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import {
   assertContextWithinWindow,
@@ -151,7 +148,7 @@ export interface OpenAICompatibleFactoryOptions<T extends Record<string, any> = 
      * provided model list before dispatching to upstream. If the estimated
      * prompt tokens strictly exceed the model's context window, the
      * request is aborted with a structured `ExceededContextWindow` error
-     * — see LOBE-8974.
+     * — see .
      *
      * This is for providers like NVIDIA / DeepSeek where the harness does
      * not cap `max_tokens` itself but we still want to fail fast on doomed
@@ -485,7 +482,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         // Pre-flight: abort doomed requests before invoking handlePayload so
         // providers don't waste a round-trip to upstream just to get a 400.
-        // See LOBE-8974.
+        // See .
         if (chatCompletion?.contextPreFlight) {
           const { models: preFlightModels, ...preFlightOptions } = chatCompletion.contextPreFlight;
           assertContextWithinWindow(processedPayload, preFlightModels, preFlightOptions);
@@ -578,21 +575,32 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           // Apply sampling sanitization to processedPayload for the custom client path.
           // We use processedPayload (ChatStreamPayload type) here because
           // createChatCompletionStream expects ChatStreamPayload, not the OpenAI SDK format.
+          // Strip LobeHub-internal fields that should never reach downstream APIs.
+          const {
+            apiMode: _apiMode,
+            preserveThinking: _preserveThinking,
+            ...cleanProcessedPayload
+          } = processedPayload as any;
           response = customClient.createChatCompletionStream(
             this.client,
             {
-              ...processedPayload,
-              ...resolveModelSamplingParameters(processedPayload.model, processedPayload, {
-                normalizeTemperature: false,
-                preferTemperature: true,
-              }),
+              ...cleanProcessedPayload,
+              ...resolveModelSamplingParameters(
+                cleanProcessedPayload.model,
+                cleanProcessedPayload,
+                {
+                  normalizeTemperature: false,
+                  preferTemperature: true,
+                },
+              ),
             },
             this,
           ) as any;
         } else {
-          // Remove internal apiMode parameter before sending to API
-
-          const { apiMode: _, ...cleanedPayload } = postPayload as any;
+          // Remove LobeHub-internal fields before sending to downstream API.
+          // `preserveThinking` is only consumed by Qwen/Zhipu handlePayload (which runs above)
+          // and must not leak to other providers' APIs as an unknown parameter.
+          const { apiMode: _, preserveThinking: _pt, ...cleanedPayload } = postPayload as any;
           const finalPayload = {
             ...cleanedPayload,
             messages,
@@ -1058,7 +1066,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
       // Pre-flight context-window failures get a structured payload so the
       // UI can offer fork / switch-model affordances instead of surfacing a
-      // raw provider 400. See LOBE-8974.
+      // raw provider 400. See .
       if (error instanceof ContextExceededPreFlightError) {
         log('pre-flight context exceeded: %s', error.message);
         return AgentRuntimeError.chat({
@@ -1145,7 +1153,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
       const errorMsg = errorResult.error?.message || errorResult.message;
 
-      if (isAccountDeactivatedError(errorMsg)) {
+      if (ErrorClassifier.isAccountDeactivated(errorMsg)) {
         log('account deactivated error detected from message');
         return AgentRuntimeError.chat({
           endpoint: desensitizedEndpoint,
@@ -1156,7 +1164,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         });
       }
 
-      if (isInsufficientQuotaError(errorMsg)) {
+      if (ErrorClassifier.isInsufficientQuota(errorMsg)) {
         log('insufficient quota error detected from message');
         return AgentRuntimeError.chat({
           endpoint: desensitizedEndpoint,
@@ -1167,7 +1175,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         });
       }
 
-      if (isExceededContextWindowError(errorMsg)) {
+      if (ErrorClassifier.isExceededContextWindow(errorMsg)) {
         log('context length exceeded detected from message');
         return AgentRuntimeError.chat({
           endpoint: desensitizedEndpoint,
@@ -1178,7 +1186,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         });
       }
 
-      if (isQuotaLimitError(errorMsg)) {
+      if (ErrorClassifier.isRateLimitExceeded(errorMsg)) {
         log('quota limit reached detected from message');
         return AgentRuntimeError.chat({
           endpoint: desensitizedEndpoint,
@@ -1217,6 +1225,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       delete res.apiMode;
       delete res.frequency_penalty;
       delete res.presence_penalty;
+      delete res.preserveThinking;
 
       const input = await convertOpenAIResponseInputs(messages as any, {
         forceImageBase64: chatCompletion?.forceImageBase64,

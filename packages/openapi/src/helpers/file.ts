@@ -46,7 +46,7 @@ export function addFilesUrlPrefix<T extends { path?: string; url?: string }>(fil
 export async function parseFormData(c: Context): Promise<FormData> {
   const contentType = c.req.header('content-type') || '';
   if (!/multipart\/form-data/i.test(contentType)) {
-    throw new Error('Content-Type 必须是 multipart/form-data');
+    throw new Error('Content-Type must be multipart/form-data');
   }
 
   // Prefer formidable (streaming, robust); fall back to native formData() on failure
@@ -54,14 +54,14 @@ export async function parseFormData(c: Context): Promise<FormData> {
     const webReq = c.req.raw as Request;
     const webBody = webReq.body;
     if (!webBody) {
-      throw new Error('解析失败：当前请求缺少可读的 body 流');
+      throw new Error('Parse failed: request body stream is not readable');
     }
 
     // Convert Web ReadableStream to Node Readable (Node 18+)
     const nodeReadable =
       typeof Readable?.fromWeb === 'function' ? Readable.fromWeb(webBody as any) : null;
     if (!nodeReadable) {
-      throw new Error('解析失败：运行时不支持 Readable.fromWeb，将不进行回退');
+      throw new Error('Parse failed: Readable.fromWeb is not supported in this runtime, no fallback applied');
     }
 
     // Construct a minimal Node-like IncomingMessage for formidable
@@ -125,6 +125,6 @@ export async function parseFormData(c: Context): Promise<FormData> {
     return fd;
   } catch (e) {
     // Re-throw the error to let the caller handle it via unified exception handling
-    throw e instanceof Error ? e : new Error('parseFormData 解析失败');
+    throw e instanceof Error ? e : new Error('parseFormData failed');
   }
 }

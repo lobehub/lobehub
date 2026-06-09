@@ -14,6 +14,7 @@ import {
 import { createdAt, timestamps } from './_helpers';
 import { documents, files } from './file';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 export const chunks = pgTable(
   'chunks',
@@ -27,12 +28,14 @@ export const chunks = pgTable(
 
     clientId: text('client_id'),
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     ...timestamps,
   },
   (t) => [
     uniqueIndex('chunks_client_id_user_id_unique').on(t.clientId, t.userId),
     index('chunks_user_id_idx').on(t.userId),
+    index('chunks_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -53,6 +56,7 @@ export const unstructuredChunks = pgTable(
     compositeId: uuid('composite_id').references(() => chunks.id, { onDelete: 'cascade' }),
     clientId: text('client_id'),
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     fileId: varchar('file_id').references(() => files.id, { onDelete: 'cascade' }),
   },
   (t) => ({
@@ -63,6 +67,7 @@ export const unstructuredChunks = pgTable(
     userIdIdx: index('unstructured_chunks_user_id_idx').on(t.userId),
     compositeIdIdx: index('unstructured_chunks_composite_id_idx').on(t.compositeId),
     fileIdIdx: index('unstructured_chunks_file_id_idx').on(t.fileId),
+    workspaceIdIdx: index('unstructured_chunks_workspace_id_idx').on(t.workspaceId),
   }),
 );
 
@@ -79,12 +84,14 @@ export const embeddings = pgTable(
     model: text('model'),
     clientId: text('client_id'),
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
   },
   (t) => [
     uniqueIndex('embeddings_client_id_user_id_unique').on(t.clientId, t.userId),
     // improve delete embeddings query
     index('embeddings_chunk_id_idx').on(t.chunkId),
     index('embeddings_user_id_idx').on(t.userId),
+    index('embeddings_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -111,6 +118,7 @@ export const documentChunks = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     createdAt: createdAt(),
   },
@@ -119,6 +127,7 @@ export const documentChunks = pgTable(
     index('document_chunks_document_id_idx').on(t.documentId),
     index('document_chunks_chunk_id_idx').on(t.chunkId),
     index('document_chunks_user_id_idx').on(t.userId),
+    index('document_chunks_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

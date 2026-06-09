@@ -79,6 +79,8 @@ export interface CreateKlavisServerParams {
  * Parameters for calling Klavis tool
  */
 export interface CallKlavisToolParams {
+  /** Klavis server identifier (e.g. 'gmail', 'google-calendar') — used for precise permission lookup */
+  identifier?: string;
   /** Strata Server URL */
   serverUrl: string;
   /** Tool arguments */

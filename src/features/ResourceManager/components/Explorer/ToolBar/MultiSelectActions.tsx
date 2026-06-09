@@ -1,4 +1,5 @@
 import { Button, Checkbox, Flexbox, Icon, Skeleton } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { BookMinusIcon, BookPlusIcon, FileBoxIcon, Trash2Icon } from 'lucide-react';
@@ -34,7 +35,7 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
     const { t } = useTranslation(['components', 'common']);
 
     const isSelectedFiles = selectCount > 0;
-    const { modal, message } = App.useApp();
+    const { message } = App.useApp();
 
     const libraryId = useResourceManagerStore((s) => s.libraryId);
 
@@ -83,17 +84,20 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
                   icon={BookMinusIcon}
                   size={'small'}
                   onClick={() => {
-                    modal.confirm({
+                    confirmModal({
+                      cancelText: t('cancel', { ns: 'common' }),
+                      content: t('FileManager.actions.confirmRemoveFromLibrary', {
+                        count: selectCount,
+                      }),
                       okButtonProps: {
                         danger: true,
                       },
+                      okText: t('FileManager.actions.removeFromLibrary'),
                       onOk: async () => {
                         await onActionClick('removeFromKnowledgeBase');
                         message.success(t('FileManager.actions.removeFromLibrarySuccess'));
                       },
-                      title: t('FileManager.actions.confirmRemoveFromLibrary', {
-                        count: selectCount,
-                      }),
+                      title: t('FileManager.actions.removeFromLibrary'),
                     });
                   }}
                 >
@@ -142,15 +146,18 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
               size={'small'}
               variant={'filled'}
               onClick={async () => {
-                modal.confirm({
+                confirmModal({
+                  cancelText: t('cancel', { ns: 'common' }),
+                  content: t('FileManager.actions.confirmDeleteMultiFiles', { count: selectCount }),
                   okButtonProps: {
                     danger: true,
                   },
+                  okText: t('delete', { ns: 'common' }),
                   onOk: async () => {
                     await onActionClick('delete');
                     message.success(t('FileManager.actions.deleteSuccess'));
                   },
-                  title: t('FileManager.actions.confirmDeleteMultiFiles', { count: selectCount }),
+                  title: t('delete', { ns: 'common' }),
                 });
               }}
             >

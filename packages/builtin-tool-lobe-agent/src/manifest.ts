@@ -168,7 +168,7 @@ export const LobeAgentManifest: BuiltinToolManifest = {
     {
       description: 'Clear todo items. Can clear only completed items or all items.',
       name: LobeAgentApiName.clearTodos,
-      humanIntervention: 'always',
+      humanIntervention: 'required',
       renderDisplayControl: 'expand',
       parameters: {
         properties: {

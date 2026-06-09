@@ -199,7 +199,9 @@ describe('LobeComfyUI Runtime', () => {
       });
 
       // Set APP_URL environment variable
+      const originalInternalAppUrl = process.env.INTERNAL_APP_URL;
       const originalAppUrl = process.env.APP_URL;
+      delete process.env.INTERNAL_APP_URL;
       process.env.APP_URL = 'http://localhost:3010';
 
       const result = await runtime.createImage(mockPayload);
@@ -231,6 +233,48 @@ describe('LobeComfyUI Runtime', () => {
       expect(result).toEqual(mockResponse);
 
       // Restore environment
+      if (originalInternalAppUrl === undefined) {
+        delete process.env.INTERNAL_APP_URL;
+      } else {
+        process.env.INTERNAL_APP_URL = originalInternalAppUrl;
+      }
+      if (originalAppUrl === undefined) {
+        delete process.env.APP_URL;
+      } else {
+        process.env.APP_URL = originalAppUrl;
+      }
+    });
+
+    it('should prefer INTERNAL_APP_URL over APP_URL for server-to-server calls', async () => {
+      const mockPayload: CreateImagePayload = {
+        model: 'flux1-dev.safetensors',
+        params: {
+          prompt: 'test prompt',
+        },
+      };
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ imageUrl: 'test.png' }),
+      });
+
+      const originalInternalAppUrl = process.env.INTERNAL_APP_URL;
+      const originalAppUrl = process.env.APP_URL;
+      process.env.INTERNAL_APP_URL = 'http://internal-service:3210';
+      process.env.APP_URL = 'https://public.example.com';
+
+      await runtime.createImage(mockPayload);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'http://internal-service:3210/webapi/create-image/comfyui',
+        expect.any(Object),
+      );
+
+      if (originalInternalAppUrl === undefined) {
+        delete process.env.INTERNAL_APP_URL;
+      } else {
+        process.env.INTERNAL_APP_URL = originalInternalAppUrl;
+      }
       if (originalAppUrl === undefined) {
         delete process.env.APP_URL;
       } else {
@@ -253,8 +297,10 @@ describe('LobeComfyUI Runtime', () => {
       });
 
       // Ensure APP_URL is not set
+      const originalInternalAppUrl = process.env.INTERNAL_APP_URL;
       const originalAppUrl = process.env.APP_URL;
       const originalPort = process.env.PORT;
+      delete process.env.INTERNAL_APP_URL;
       delete process.env.APP_URL;
       process.env.PORT = '3000';
 
@@ -267,6 +313,9 @@ describe('LobeComfyUI Runtime', () => {
       );
 
       // Restore environment
+      if (originalInternalAppUrl !== undefined) {
+        process.env.INTERNAL_APP_URL = originalInternalAppUrl;
+      }
       if (originalAppUrl !== undefined) {
         process.env.APP_URL = originalAppUrl;
       }
@@ -292,8 +341,10 @@ describe('LobeComfyUI Runtime', () => {
       });
 
       // Ensure both APP_URL and PORT are not set
+      const originalInternalAppUrl = process.env.INTERNAL_APP_URL;
       const originalAppUrl = process.env.APP_URL;
       const originalPort = process.env.PORT;
+      delete process.env.INTERNAL_APP_URL;
       delete process.env.APP_URL;
       delete process.env.PORT;
 
@@ -306,6 +357,9 @@ describe('LobeComfyUI Runtime', () => {
       );
 
       // Restore environment
+      if (originalInternalAppUrl !== undefined) {
+        process.env.INTERNAL_APP_URL = originalInternalAppUrl;
+      }
       if (originalAppUrl !== undefined) {
         process.env.APP_URL = originalAppUrl;
       }

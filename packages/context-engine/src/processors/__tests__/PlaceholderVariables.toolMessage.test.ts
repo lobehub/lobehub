@@ -4,7 +4,7 @@ import type { PipelineContext } from '../../types';
 import { PlaceholderVariablesProcessor } from '../PlaceholderVariables';
 
 /**
- * Regression for LOBE-6882 placeholder approach.
+ * Regression for placeholder approach.
  *
  * Confirms that PlaceholderVariablesProcessor does substitute `{{...}}` tokens
  * inside `role: 'tool'` messages. If this test ever fails, it means the
@@ -79,7 +79,7 @@ describe('PlaceholderVariablesProcessor — tool message substitution', () => {
     expect(result.messages[0].content).toBe('agent={{agent_id}}');
   });
 
-  // Regression for LOBE-9408: a tool error result (e.g. budget-exceeded) can
+  // Regression for a tool error result (e.g. budget-exceeded) can
   // arrive with `content: undefined`. The content-preview logging step used to
   // call `JSON.stringify(undefined).slice(...)` — which throws because
   // `JSON.stringify(undefined)` returns `undefined`, not a string — crashing

@@ -14,6 +14,7 @@ import {
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { sanitizeBm25Query } from '../../utils/bm25';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 
 export type SearchResultType =
   | 'page'
@@ -134,12 +135,17 @@ export interface KnowledgeBaseSearchResult extends BaseSearchResult {
 }
 
 /**
- * BM25 hit for KB-scoped documents (custom/document) used by chunkRouter.semanticSearchForChat.
- * Distinct from PageSearchResult — this carries snippet + KB id for agent tool consumption.
+ * BM25 hit for KB-scoped documents used by chunkRouter.semanticSearchForChat.
+ * Covers both inline `custom/document` pages and file-backed documents
+ * (e.g. parsed PDFs) joined through `knowledge_base_files`.
+ *
+ * `fileId` is present when the hit comes from a parsed-file document, letting
+ * the agent fetch the original via readKnowledge with either docs_* or file_*.
  * `relevance` is normalized to [1, 3] (lower = better, matches BaseSearchResult semantics).
  */
 export interface KnowledgeBaseDocumentHit {
   documentId: string;
+  fileId?: string;
   knowledgeBaseId: string;
   relevance: number;
   snippet: string;
@@ -194,10 +200,16 @@ const RECENCY_CANDIDATE_MULTIPLIER = 4;
 export class SearchRepo {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
+  }
+
+  private get scope() {
+    return { userId: this.userId, workspaceId: this.workspaceId };
   }
 
   /**
@@ -399,7 +411,7 @@ export class SearchRepo {
       .from(agents)
       .where(
         and(
-          eq(agents.userId, this.userId),
+          buildWorkspaceWhere(this.scope, agents),
           sql`(${agents.title} @@@ ${bm25Query} OR ${agents.description} @@@ ${bm25Query} OR ${agents.slug} @@@ ${bm25Query} OR ${agents.tags} @@@ ${bm25Query} OR ${agents.systemRole} @@@ ${bm25Query})`,
         ),
       )
@@ -453,10 +465,10 @@ export class SearchRepo {
         updatedAt: topics.updatedAt,
       })
       .from(topics)
-      .leftJoin(agents, and(eq(topics.agentId, agents.id), eq(agents.userId, this.userId)))
+      .leftJoin(agents, and(eq(topics.agentId, agents.id), buildWorkspaceWhere(this.scope, agents)))
       .where(
         and(
-          eq(topics.userId, this.userId),
+          buildWorkspaceWhere(this.scope, topics),
           agentId ? eq(topics.agentId, agentId) : undefined,
           sql`(${topics.title} @@@ ${bm25Query} OR ${topics.content} @@@ ${bm25Query} OR ${topics.description} @@@ ${bm25Query})`,
         ),
@@ -515,7 +527,7 @@ export class SearchRepo {
       .leftJoin(agents, eq(messages.agentId, agents.id))
       .where(
         and(
-          eq(messages.userId, this.userId),
+          buildWorkspaceWhere(this.scope, messages),
           ne(messages.role, 'tool'),
           agentId ? eq(messages.agentId, agentId) : undefined,
           sql`${messages.content} @@@ ${bm25Query}`,
@@ -569,7 +581,7 @@ export class SearchRepo {
       .leftJoin(knowledgeBaseFiles, eq(files.id, knowledgeBaseFiles.fileId))
       .where(
         and(
-          eq(files.userId, this.userId),
+          buildWorkspaceWhere(this.scope, files),
           ne(files.fileType, 'custom/document'),
           sql`${files.name} @@@ ${bm25Query}`,
         ),
@@ -614,7 +626,7 @@ export class SearchRepo {
       .from(documents)
       .where(
         and(
-          eq(documents.userId, this.userId),
+          buildWorkspaceWhere(this.scope, documents),
           eq(documents.fileType, DOCUMENT_FOLDER_TYPE),
           sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.description} @@@ ${bm25Query})`,
         ),
@@ -656,7 +668,7 @@ export class SearchRepo {
       .from(documents)
       .where(
         and(
-          eq(documents.userId, this.userId),
+          buildWorkspaceWhere(this.scope, documents),
           eq(documents.fileType, 'custom/document'),
           sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.content} @@@ ${bm25Query})`,
         ),
@@ -679,9 +691,19 @@ export class SearchRepo {
   }
 
   /**
-   * KB-scoped BM25 search over custom/document documents.
-   * Used by chunkRouter.semanticSearchForChat to surface inline documents
-   * to the KB agent tool's searchKnowledgeBase API.
+   * KB-scoped BM25 search over documents.
+   *
+   * Covers two routes to the KB scope, executed as two separate ParadeDB
+   * scoring queries that we merge in JS:
+   *   - inline pages: `documents.knowledge_base_id` directly references the KB
+   *   - file-backed docs (e.g. parsed PDFs): joined through `knowledge_base_files`
+   *     via `documents.file_id`
+   *
+   * Two queries instead of an `OR`-ed WHERE clause because `paradedb.score()`
+   * requires a tantivy index scan, and ParadeDB rejects disjunctive shapes
+   * spanning bm25 and non-bm25 predicates ("Unsupported query shape").
+   *
+   * Folder rows (DOCUMENT_FOLDER_TYPE) are excluded — they carry no content.
    */
   async searchKnowledgeBaseDocuments(
     query: string,
@@ -693,9 +715,14 @@ export class SearchRepo {
 
     const bm25Query = sanitizeBm25Query(query);
 
-    const rows = await this.db
+    const matchClause = sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.content} @@@ ${bm25Query})`;
+    const folderClause = ne(documents.fileType, DOCUMENT_FOLDER_TYPE);
+    const userClause = buildWorkspaceWhere(this.scope, documents);
+
+    const inlineRowsPromise = this.db
       .select({
         content: documents.content,
+        fileId: documents.fileId,
         filename: documents.filename,
         id: documents.id,
         knowledgeBaseId: documents.knowledgeBaseId,
@@ -706,17 +733,56 @@ export class SearchRepo {
       .from(documents)
       .where(
         and(
-          eq(documents.userId, this.userId),
-          eq(documents.fileType, 'custom/document'),
+          userClause,
+          folderClause,
           inArray(documents.knowledgeBaseId, knowledgeBaseIds),
-          sql`(${documents.title} @@@ ${bm25Query} OR ${documents.slug} @@@ ${bm25Query} OR ${documents.content} @@@ ${bm25Query})`,
+          matchClause,
         ),
       )
       .orderBy(sql`paradedb.score(${documents.id}) DESC`)
       .limit(limit);
 
-    return this.mapScoresToRelevance(rows).map((row) => ({
+    const fileBackedRowsPromise = this.db
+      .select({
+        content: documents.content,
+        fileId: documents.fileId,
+        filename: documents.filename,
+        id: documents.id,
+        knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId,
+        score: sql<number>`paradedb.score(${documents.id})`,
+        title: documents.title,
+        updatedAt: documents.updatedAt,
+      })
+      .from(documents)
+      .innerJoin(
+        knowledgeBaseFiles,
+        and(
+          eq(knowledgeBaseFiles.fileId, documents.fileId),
+          buildWorkspaceWhere(this.scope, knowledgeBaseFiles),
+          inArray(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseIds),
+        ),
+      )
+      .where(and(userClause, folderClause, matchClause))
+      .orderBy(sql`paradedb.score(${documents.id}) DESC`)
+      .limit(limit);
+
+    const [inlineRows, fileBackedRows] = await Promise.all([
+      inlineRowsPromise,
+      fileBackedRowsPromise,
+    ]);
+
+    const byId = new Map<string, (typeof inlineRows)[number]>();
+    for (const row of [...inlineRows, ...fileBackedRows]) {
+      const prev = byId.get(row.id);
+      if (!prev || row.score > prev.score) byId.set(row.id, row);
+    }
+    const merged = Array.from(byId.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+
+    return this.mapScoresToRelevance(merged).map((row) => ({
       documentId: row.id,
+      fileId: row.fileId ?? undefined,
       knowledgeBaseId: row.knowledgeBaseId ?? '',
       relevance: row.relevance,
       snippet: this.truncate(row.content, 300) ?? '',
@@ -783,7 +849,7 @@ export class SearchRepo {
       .from(chatGroups)
       .where(
         and(
-          eq(chatGroups.userId, this.userId),
+          buildWorkspaceWhere(this.scope, chatGroups),
           sql`(${chatGroups.title} @@@ ${bm25Query} OR ${chatGroups.description} @@@ ${bm25Query})`,
         ),
       )
@@ -825,7 +891,7 @@ export class SearchRepo {
       .from(knowledgeBases)
       .where(
         and(
-          eq(knowledgeBases.userId, this.userId),
+          buildWorkspaceWhere(this.scope, knowledgeBases),
           sql`(${knowledgeBases.name} @@@ ${bm25Query} OR ${knowledgeBases.description} @@@ ${bm25Query})`,
         ),
       )

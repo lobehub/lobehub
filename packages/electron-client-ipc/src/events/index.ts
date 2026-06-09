@@ -7,6 +7,7 @@ import type { ScreenCaptureBroadcastEvents } from './screenCapture';
 import type { SystemBroadcastEvents } from './system';
 import type { TopicPopupBroadcastEvents } from './topicPopup';
 import type { AutoUpdateBroadcastEvents } from './update';
+import type { ZoomBroadcastEvents } from './zoom';
 
 /**
  * main -> render broadcast events
@@ -22,6 +23,7 @@ export interface MainBroadcastEvents
     ScreenCaptureBroadcastEvents,
     SystemBroadcastEvents,
     TopicPopupBroadcastEvents,
+    ZoomBroadcastEvents,
     ProtocolBroadcastEvents {}
 
 export type MainBroadcastEventKey = keyof MainBroadcastEvents;

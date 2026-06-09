@@ -1,5 +1,6 @@
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { LucideCopy, Pen, PictureInPicture2Icon, Pin, PinOff, Trash } from 'lucide-react';
 import { useMemo } from 'react';
@@ -28,8 +29,8 @@ export const useGroupDropdownMenu = ({
   pinned,
   title,
 }: UseGroupDropdownMenuParams): (() => MenuProps['items']) => {
-  const { t } = useTranslation('chat');
-  const { modal, message } = App.useApp();
+  const { t } = useTranslation(['chat', 'common']);
+  const { message } = App.useApp();
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
   const [pinAgentGroup, duplicateAgentGroup, removeAgentGroup] = useHomeStore((s) => [
@@ -92,14 +93,16 @@ export const useGroupDropdownMenu = ({
           label: t('delete', { ns: 'common' }),
           onClick: ({ domEvent }: any) => {
             domEvent.stopPropagation();
-            modal.confirm({
-              centered: true,
+            confirmModal({
+              cancelText: t('cancel', { ns: 'common' }),
+              content: t('confirmRemoveChatGroupItemAlert'),
               okButtonProps: { danger: true },
+              okText: t('delete', { ns: 'common' }),
               onOk: async () => {
                 await removeAgentGroup(id);
                 message.success(t('confirmRemoveGroupSuccess'));
               },
-              title: t('confirmRemoveChatGroupItemAlert'),
+              title: t('delete', { ns: 'common' }),
             });
           },
         },
@@ -116,7 +119,6 @@ export const useGroupDropdownMenu = ({
       title,
       duplicateAgentGroup,
       openAgentInNewWindow,
-      modal,
       removeAgentGroup,
       message,
     ],

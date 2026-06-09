@@ -14,6 +14,12 @@ const installMarketplaceAgents = vi.fn().mockResolvedValue({
   skippedAgentIds: [],
   summaries: [],
 });
+const metrics = vi.hoisted(() => ({
+  trackOnboardingCompleted: vi.fn(),
+  trackOnboardingMarketplacePicked: vi.fn(),
+  trackOnboardingMarketplaceShown: vi.fn(),
+  trackOnboardingStepCompleted: vi.fn(),
+}));
 
 const templates: AgentTemplate[] = [
   {
@@ -66,8 +72,10 @@ vi.mock('@/services/installMarketplaceAgents', () => ({
 }));
 
 vi.mock('@/services/onboardingMetrics', () => ({
-  trackOnboardingMarketplacePicked: vi.fn(),
-  trackOnboardingMarketplaceShown: vi.fn(),
+  trackOnboardingCompleted: metrics.trackOnboardingCompleted,
+  trackOnboardingMarketplacePicked: metrics.trackOnboardingMarketplacePicked,
+  trackOnboardingMarketplaceShown: metrics.trackOnboardingMarketplaceShown,
+  trackOnboardingStepCompleted: metrics.trackOnboardingStepCompleted,
 }));
 
 const userState = { finishOnboarding, user: { interests: [] as string[] } };
@@ -82,6 +90,10 @@ beforeEach(() => {
   navigate.mockClear();
   finishOnboarding.mockClear();
   installMarketplaceAgents.mockClear();
+  metrics.trackOnboardingCompleted.mockClear();
+  metrics.trackOnboardingMarketplacePicked.mockClear();
+  metrics.trackOnboardingMarketplaceShown.mockClear();
+  metrics.trackOnboardingStepCompleted.mockClear();
   swrReturn = { data: templates, error: undefined, isLoading: false };
   searchParams = new URLSearchParams();
 });
@@ -107,6 +119,18 @@ describe('AgentPickerStep', () => {
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/'));
     expect(installMarketplaceAgents).toHaveBeenCalledWith(['t1']);
     expect(finishOnboarding).toHaveBeenCalledTimes(1);
+    expect(metrics.trackOnboardingStepCompleted).toHaveBeenCalledWith({
+      action: 'continue',
+      entry: 'classic',
+      flow: 'classic',
+      selectedCount: 1,
+      step: 'agentpicker',
+      stepIndex: 4,
+    });
+    expect(metrics.trackOnboardingCompleted).toHaveBeenCalledWith({
+      flow: 'classic',
+      targetUrl: '/',
+    });
   });
 
   it('finishes onboarding without installing on Skip', async () => {
@@ -117,6 +141,18 @@ describe('AgentPickerStep', () => {
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/'));
     expect(finishOnboarding).toHaveBeenCalledTimes(1);
     expect(installMarketplaceAgents).not.toHaveBeenCalled();
+    expect(metrics.trackOnboardingStepCompleted).toHaveBeenCalledWith({
+      action: 'skip',
+      entry: 'classic',
+      flow: 'classic',
+      selectedCount: 0,
+      step: 'agentpicker',
+      stepIndex: 4,
+    });
+    expect(metrics.trackOnboardingCompleted).toHaveBeenCalledWith({
+      flow: 'classic',
+      targetUrl: '/',
+    });
   });
 
   it('shows a Back button that calls onBack for a normal classic entry', () => {
@@ -132,5 +168,26 @@ describe('AgentPickerStep', () => {
     render(<AgentPickerStep onBack={vi.fn()} />);
 
     expect(screen.queryByRole('button', { name: 'back' })).not.toBeInTheDocument();
+  });
+
+  it('attributes entry=skip completion to the agent flow', async () => {
+    searchParams = new URLSearchParams('entry=skip');
+    render(<AgentPickerStep onBack={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'agentPicker.skip' }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/'));
+    expect(metrics.trackOnboardingStepCompleted).toHaveBeenCalledWith({
+      action: 'skip',
+      entry: 'agent_skip',
+      flow: 'agent',
+      selectedCount: 0,
+      step: 'agentpicker',
+      stepIndex: 4,
+    });
+    expect(metrics.trackOnboardingCompleted).toHaveBeenCalledWith({
+      flow: 'agent',
+      targetUrl: '/',
+    });
   });
 });

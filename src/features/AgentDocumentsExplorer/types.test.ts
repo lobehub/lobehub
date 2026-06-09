@@ -1,3 +1,8 @@
+import {
+  AGENT_DOCUMENT_CATEGORY,
+  AGENT_DOCUMENT_SKILL_CATEGORY,
+  CUSTOM_DOCUMENT_FILE_TYPE,
+} from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
 import type { AgentDocumentItem } from './types';
@@ -9,7 +14,7 @@ const createDocument = (overrides: Partial<AgentDocumentItem>): AgentDocumentIte
     accessSelf: 0,
     accessShared: 0,
     agentId: 'agent-1',
-    category: 'document',
+    category: AGENT_DOCUMENT_CATEGORY,
     content: '',
     createdAt: new Date('2026-05-09T00:00:00Z'),
     deletedAt: null,
@@ -20,7 +25,7 @@ const createDocument = (overrides: Partial<AgentDocumentItem>): AgentDocumentIte
     documentId: 'doc-1',
     editorData: null,
     filename: 'document.md',
-    fileType: 'custom/document',
+    fileType: CUSTOM_DOCUMENT_FILE_TYPE,
     id: 'agent-doc-1',
     isFolder: false,
     isSkillBundle: false,
@@ -43,7 +48,7 @@ const createDocument = (overrides: Partial<AgentDocumentItem>): AgentDocumentIte
   }) as AgentDocumentItem;
 
 const bundle = createDocument({
-  category: 'skill',
+  category: AGENT_DOCUMENT_SKILL_CATEGORY,
   documentId: 'bundle-doc',
   isFolder: true,
   isSkillBundle: true,
@@ -51,7 +56,7 @@ const bundle = createDocument({
 });
 
 const index = createDocument({
-  category: 'skill',
+  category: AGENT_DOCUMENT_SKILL_CATEGORY,
   documentId: 'index-doc',
   isSkillIndex: true,
   parentId: 'bundle-doc',

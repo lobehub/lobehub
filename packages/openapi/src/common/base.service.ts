@@ -1,4 +1,6 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '@lobechat/database';
+import { and, eq, inArray, type SQL } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import type { PERMISSION_ACTIONS } from '@/const/rbac';
 import { ALL_SCOPE } from '@/const/rbac';
@@ -31,13 +33,35 @@ const isNilOrEmptyObject = (value: unknown): boolean => {
  */
 export abstract class BaseService implements IBaseService {
   protected userId: string;
+  protected workspaceId?: string;
   public db: LobeChatDatabase;
   private rbacModel: RbacModel;
 
-  constructor(db: LobeChatDatabase, userId: string | null) {
+  constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
     this.db = db;
     this.userId = userId || '';
+    this.workspaceId = workspaceId;
     this.rbacModel = new RbacModel(db, this.userId);
+  }
+
+  protected buildWorkspaceWhere(cols: { userId: AnyPgColumn; workspaceId: AnyPgColumn }): SQL {
+    return buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, cols);
+  }
+
+  protected buildWorkspacePayload<T extends object>(
+    base: T,
+  ): T & { userId: string; workspaceId: string | null } {
+    return buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, base);
+  }
+
+  protected buildPermissionWhere(
+    cols: { userId: AnyPgColumn; workspaceId: AnyPgColumn },
+    condition?: { userId?: string },
+  ): SQL | undefined {
+    if (this.workspaceId)
+      return buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, cols);
+    if (condition?.userId) return buildWorkspaceWhere({ userId: condition.userId }, cols);
+    return;
   }
 
   /**
@@ -99,7 +123,7 @@ export abstract class BaseService implements IBaseService {
    * @param fallbackMessage Default error message
    */
   protected handleServiceError(error: unknown, operation: string): never {
-    this.log('error', `${operation}失败`, { error });
+    this.log('error', `${operation} failed`, { error });
 
     // If it is a known business error, throw it directly
     if (
@@ -115,7 +139,7 @@ export abstract class BaseService implements IBaseService {
       throw error;
     }
 
-    const errorMessage = `${operation}失败: ${error instanceof Error ? error.message : '未知错误'}`;
+    const errorMessage = `${operation} failed: ${error instanceof Error ? error.message : 'unknown error'}`;
 
     // Wrap all other errors as business errors
     throw this.createBusinessError(errorMessage);
@@ -158,10 +182,10 @@ export abstract class BaseService implements IBaseService {
   protected async hasGlobalPermission(
     permissionKey: keyof typeof PERMISSION_ACTIONS,
   ): Promise<boolean> {
-    return await this.rbacModel.hasAnyPermission(
-      getScopePermissions(permissionKey, ['ALL']),
-      this.userId,
-    );
+    return await this.rbacModel.hasAnyPermission(getScopePermissions(permissionKey, ['ALL']), {
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
   }
 
   /**
@@ -172,10 +196,10 @@ export abstract class BaseService implements IBaseService {
   protected async hasOwnerPermission(
     permissionKey: keyof typeof PERMISSION_ACTIONS,
   ): Promise<boolean> {
-    return await this.rbacModel.hasAnyPermission(
-      getScopePermissions(permissionKey, ['OWNER']),
-      this.userId,
-    );
+    return await this.rbacModel.hasAnyPermission(getScopePermissions(permissionKey, ['OWNER']), {
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
   }
 
   /**
@@ -293,7 +317,7 @@ export abstract class BaseService implements IBaseService {
         }
       }
     } catch (error) {
-      this.log('error', '获取目标用户ID失败', { error, target });
+      this.log('error', 'Failed to get target user ID', { error, target });
       return;
     }
   }
@@ -333,13 +357,17 @@ export abstract class BaseService implements IBaseService {
       userId: this.userId,
     };
 
-    this.log('info', '权限检查', logContext);
+    this.log('info', 'Permission check', logContext);
 
     /**
      * When the user has ALL permission, pass the check directly
      */
     if (hasGlobalAccess) {
-      this.log('info', `权限通过：当前user拥有 ${permissionKey} 的最高权限`, logContext);
+      this.log(
+        'info',
+        `Permission granted: current user has highest ${permissionKey} permission`,
+        logContext,
+      );
       return {
         condition: resourceBelongTo ? { userId: resourceBelongTo } : undefined,
         isPermitted: true,
@@ -352,7 +380,11 @@ export abstract class BaseService implements IBaseService {
      * 2. Querying a specific user's data, but the target resource does not belong to the current user
      */
     if (!resourceBelongTo || resourceBelongTo !== this.userId) {
-      this.log('warn', '权限拒绝：当前user没有ALL权限，或目标资源不属于当前用户', logContext);
+      this.log(
+        'warn',
+        'Permission denied: current user has no ALL permission, or target resource does not belong to current user',
+        logContext,
+      );
       return {
         isPermitted: false,
         message: `no permission,current user has no ALL permission,and resource not belong to current user`,
@@ -368,14 +400,18 @@ export abstract class BaseService implements IBaseService {
       const hasOwnerAccess = await this.hasOwnerPermission(permissionKey);
 
       if (hasOwnerAccess) {
-        this.log('info', '权限通过：当前user拥有owner权限', logContext);
+        this.log('info', 'Permission granted: current user has owner permission', logContext);
         return {
           condition: { userId: resourceBelongTo },
           isPermitted: true,
         };
       }
 
-      this.log('warn', '权限拒绝：目标资源属于当前用户，但用户没有对应操作的owner权限', logContext);
+      this.log(
+        'warn',
+        'Permission denied: target resource belongs to current user, but user has no owner permission for this operation',
+        logContext,
+      );
       return {
         isPermitted: false,
         message: `no permission,resource belong to current user,but current user has no any ${permissionKey} permission`,
@@ -383,7 +419,7 @@ export abstract class BaseService implements IBaseService {
     }
 
     // If we reach here, apply fallback logic
-    this.log('info', `兜底: no permission`, logContext);
+    this.log('info', `Fallback: no permission`, logContext);
     return {
       isPermitted: false,
       message: `permission validation error for: ${permissionKey}`,
@@ -414,7 +450,10 @@ export abstract class BaseService implements IBaseService {
 
     // If the user has global permission, allow the batch operation directly
     if (hasGlobalAccess) {
-      this.log('info', `权限通过：批量操作，当前user拥有 ${permissionKey} ALL权限`);
+      this.log(
+        'info',
+        `Permission granted: batch operation, current user has ${permissionKey} ALL permission`,
+      );
       return { isPermitted: true };
     }
 
@@ -497,25 +536,25 @@ export abstract class BaseService implements IBaseService {
         default: {
           return {
             isPermitted: false,
-            message: '未提供有效的资源 ID',
+            message: 'No valid resource ID provided',
           };
         }
       }
     } catch (error) {
-      this.log('error', '获取目标用户ID失败', { error, targetInfoIds });
+      this.log('error', 'Failed to get target user IDs', { error, targetInfoIds });
       return {
         isPermitted: false,
-        message: '获取资源信息失败',
+        message: 'Failed to get resource info',
       };
     }
 
     // If no resources are found
     if (userIds.length === 0) {
-      this.log('warn', '未找到任何目标资源', { permissionKey, targetInfoIds });
+      this.log('warn', 'No target resources found', { permissionKey, targetInfoIds });
       return {
         condition: { userIds },
         isPermitted: false,
-        message: '未找到任何目标资源',
+        message: 'No target resources found',
       };
     }
 
@@ -528,17 +567,21 @@ export abstract class BaseService implements IBaseService {
       if (hasOwnerAccess) {
         this.log(
           'info',
-          `权限通过：批量操作，所有资源属于当前用户，且拥有 ${permissionKey} owner 权限`,
+          `Permission granted: batch operation, all resources belong to current user and user has ${permissionKey} owner permission`,
         );
         return { condition: { userIds }, isPermitted: true };
       }
 
       // If all resources belong to the current user but the user has no owner permission, deny the operation
-      this.log('warn', '权限拒绝：批量操作需要 ${permissionKey} ALL/owner 权限', {
-        permissionKey,
-        targetInfoIds,
-        userIds,
-      });
+      this.log(
+        'warn',
+        'Permission denied: batch operation requires ${permissionKey} ALL/owner permission',
+        {
+          permissionKey,
+          targetInfoIds,
+          userIds,
+        },
+      );
       return {
         isPermitted: false,
         message: `no permission for batch operation, current user has no ${permissionKey} ALL/owner permission`,
@@ -546,11 +589,15 @@ export abstract class BaseService implements IBaseService {
     }
 
     // Some resources in the operation do not belong to the current user; deny directly
-    this.log('warn', `权限拒绝：批量操作需要 ${permissionKey} ALL/owner 权限`, {
-      permissionKey,
-      targetInfoIds,
-      userIds,
-    });
+    this.log(
+      'warn',
+      `Permission denied: batch operation requires ${permissionKey} ALL/owner permission`,
+      {
+        permissionKey,
+        targetInfoIds,
+        userIds,
+      },
+    );
 
     return {
       isPermitted: false,
@@ -607,7 +654,7 @@ export abstract class BaseService implements IBaseService {
 
     const isPermitted = missingPermissions.length === 0;
 
-    this.log('info', '聊天权限检查', {
+    this.log('info', 'Chat permission check', {
       isPermitted,
       missingPermissions,
       userId: this.userId,
@@ -616,7 +663,7 @@ export abstract class BaseService implements IBaseService {
     if (!isPermitted) {
       return {
         isPermitted: false,
-        message: `缺少必要权限：${missingPermissions.join(', ')}`,
+        message: `Missing required permissions: ${missingPermissions.join(', ')}`,
         missingPermissions,
       };
     }

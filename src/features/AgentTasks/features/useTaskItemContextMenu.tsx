@@ -7,6 +7,7 @@ import {
   Icon,
   type MenuInfo,
 } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
 import {
@@ -55,7 +56,7 @@ export interface TaskContextMenuActions {
 
 export const useTaskContextMenuActions = (): TaskContextMenuActions => {
   const { t } = useTranslation(['chat', 'common']);
-  const { modal, message } = App.useApp();
+  const { message } = App.useApp();
   const appOrigin = useAppOrigin();
 
   const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
@@ -72,8 +73,7 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
 
   return useMemo<TaskContextMenuActions>(() => {
     const triggerDelete = (identifier: string) => {
-      modal.confirm({
-        centered: true,
+      confirmModal({
         content: t('taskDetail.deleteConfirm.content'),
         okButtonProps: { danger: true },
         okText: t('taskDetail.deleteConfirm.ok'),
@@ -81,7 +81,6 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
           await deleteTask(identifier);
         },
         title: t('taskDetail.deleteConfirm.title'),
-        type: 'error',
       });
     };
 
@@ -277,7 +276,6 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
 
     return { buildItems, installKeyboardHandlers };
   }, [
-    modal,
     message,
     t,
     appOrigin,

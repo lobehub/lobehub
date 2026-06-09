@@ -239,7 +239,7 @@ const MarketToolAuthItem = memo<MarketToolAuthItemProps>(({ tool }) => {
 
   const handleSignIn = async () => {
     try {
-      await signIn();
+      await signIn('sandbox');
     } catch (error) {
       console.error('[ToolAuthAlert] Market sign in failed:', error);
     }
@@ -317,7 +317,7 @@ const ToolAuthAlert = memo(() => {
   return (
     <Alert
       showIcon={false}
-      style={{ width: '100%' }}
+      style={{ background: 'transparent', width: '100%' }}
       type="secondary"
       description={
         <>

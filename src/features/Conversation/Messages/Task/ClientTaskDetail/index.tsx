@@ -54,7 +54,7 @@ const ClientTaskDetail = memo<ClientTaskDetailProps>(
     );
 
     // Fetch thread messages (skip when executing - messages come from real-time updates)
-    useFetchMessages(threadContext, isExecuting);
+    useFetchMessages(threadContext, { skipFetch: isExecuting });
 
     // Get thread messages from store using selector
     const threadMessages = useChatStore((s) =>

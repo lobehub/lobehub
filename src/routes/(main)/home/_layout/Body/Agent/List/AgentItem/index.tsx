@@ -1,4 +1,3 @@
-import { SESSION_CHAT_URL } from '@lobechat/const';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import { type SidebarAgentItem } from '@lobechat/types';
 import { ActionIcon, Flexbox, Icon, Tag } from '@lobehub/ui';
@@ -18,6 +17,7 @@ import { useHomeStore } from '@/store/home';
 
 import { useAgentModal } from '../../ModalProvider';
 import Actions from '../Item/Actions';
+import { usePreservedAgentUrl } from '../usePreservedAgentUrl';
 import Avatar from './Avatar';
 import { useAgentDropdownMenu } from './useDropdownMenu';
 
@@ -115,8 +115,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) 
     displayTitle
   );
 
-  // Get URL for this agent
-  const agentUrl = SESSION_CHAT_URL(id, false);
+  const agentUrl = usePreservedAgentUrl(id);
 
   // Memoize event handlers
   const handleMouseEnter = useCallback(() => {

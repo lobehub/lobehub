@@ -9,7 +9,7 @@ import {
   Tag,
   Text,
 } from '@lobehub/ui';
-import { App } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { FileTextIcon, MoreHorizontal, Package, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -30,7 +30,6 @@ const flattenWorkspace = (nodes: TaskDetailWorkspaceNode[]): TaskDetailWorkspace
 
 const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
   const { t } = useTranslation('chat');
-  const { modal } = App.useApp();
   const openDocumentPreview = useDocumentStore((s) => s.openDocumentPreview);
   const unpinDocument = useTaskStore((s) => s.unpinDocument);
   const activeTaskId = useTaskStore(taskDetailSelectors.activeTaskId);
@@ -41,16 +40,14 @@ const ArtifactCard = memo<{ node: TaskDetailWorkspaceNode }>(({ node }) => {
   const handleDelete = useCallback(() => {
     const taskId = node.sourceTaskId ?? activeTaskId;
     if (!taskId) return;
-    modal.confirm({
-      centered: true,
+    confirmModal({
       content: t('taskDetail.artifactMenu.deleteConfirm.content'),
       okButtonProps: { danger: true },
       okText: t('taskDetail.artifactMenu.deleteConfirm.ok'),
       onOk: () => unpinDocument(taskId, node.documentId),
       title: t('taskDetail.artifactMenu.deleteConfirm.title'),
-      type: 'error',
     });
-  }, [activeTaskId, modal, node.documentId, node.sourceTaskId, t, unpinDocument]);
+  }, [activeTaskId, node.documentId, node.sourceTaskId, t, unpinDocument]);
 
   const menuItems = useMemo<DropdownItem[]>(
     () => [

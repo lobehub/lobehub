@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "تحميل مجلد",
   "home.uploadEntries.library.title": "إنشاء مكتبة جديدة",
   "home.uploadEntries.newPage.title": "صفحة جديدة",
+  "library.hierarchy.empty.desc": "أضف ملفات أو أنشئ مجلدًا للبدء",
+  "library.hierarchy.empty.title": "لا يوجد شيء هنا بعد",
   "library.list.confirmRemoveLibrary": "أنت على وشك حذف هذه المكتبة. لن يتم حذف الملفات الموجودة بداخلها، بل سيتم نقلها إلى جميع الملفات. لا يمكن التراجع عن هذا الإجراء، لذا يرجى المتابعة بحذر.",
   "library.list.empty": "انقر <1>+</1> لإنشاء مكتبة جديدة",
   "library.new": "مكتبة جديدة",

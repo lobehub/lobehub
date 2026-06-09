@@ -7,7 +7,12 @@ import type {
   ToolExecuteData,
   ToolStartData,
 } from '@lobechat/agent-gateway-client';
-import type { BuiltinToolResult, ChatMessageError, ConversationContext } from '@lobechat/types';
+import type {
+  BuiltinToolResult,
+  ChatMessageError,
+  ConversationContext,
+  UIChatMessage,
+} from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 
 import { messageService } from '@/services/message';
@@ -214,6 +219,15 @@ export const createGatewayEventHandler = (
   let accumulatedContent = '';
   let accumulatedReasoning = '';
 
+  // Tracks whether any server-confirmed state has actually arrived
+  // (server-assigned assistant id, streamed text/reasoning/tools, or a SoT
+  // uiMessages snapshot). Used by `agent_runtime_end` to decide between
+  // preserving in-memory streamed content (when interrupted MID-stream) vs.
+  // falling back to a DB refetch (when interrupted BEFORE any server state
+  // landed — otherwise the optimistic `tmp_*` placeholder messages stay in
+  // the store indefinitely).
+  let hasStreamedContent = false;
+
   // Active reasoning sub-op id. Mirrors the LLM `StreamingHandler` lifecycle so
   // `isMessageInReasoning(messageId)` (which drives the Thinking UI's
   // "thinking..." title + auto-expand) flips to `true` while thinking is
@@ -264,6 +278,9 @@ export const createGatewayEventHandler = (
             currentAssistantMessageId = newAssistantMessageId;
             // Associate the new message with the operation so UI shows generating state
             get().associateMessageWithOperation(currentAssistantMessageId, operationId);
+            // Server-confirmed assistant id is durable state — preserve it on
+            // interrupt instead of falling back to a placeholder-clobbering refetch.
+            hasStreamedContent = true;
           }
 
           // Close any reasoning op carried over from the previous step.
@@ -276,24 +293,35 @@ export const createGatewayEventHandler = (
           accumulatedContent = '';
           accumulatedReasoning = '';
 
-          // Heterogeneous CLI adapters emit `stream_start { newStep: true }`
-          // without a server-side assistant id. Pull the freshly created step
-          // assistant from DB so subsequent live chunks update the RIGHT row
-          // instead of appending onto the previous step's assistant.
-          const messages = await fetchAndReplaceMessages(get, context).catch((error) => {
-            console.error(error);
-            return undefined;
-          });
+          // Skip the DB read ONLY for native gateway streams — those carry
+          // `assistantMessage.id` directly on stream_start AND the preceding
+          // `step_start` already carried the SoT uiMessages snapshot, so
+          // chunks have a valid target in `dbMessagesMap` already. Removing
+          // the await here is what un-blocks the enqueue chain so live
+          // chunks can land mid-stream.
+          //
+          // Hetero CLI adapters (Claude Code / Codex) never set
+          // `assistantMessage.id` on stream_start, so the DB read stays
+          // mandatory for them — it (a) pulls the executor-created
+          // placeholder into `dbMessagesMap` so subsequent chunks can
+          // dispatch to it, and (b) resolves the next-step assistant id for
+          // the `newStep` fallback.
+          if (!newAssistantMessageId) {
+            const messages = await fetchAndReplaceMessages(get, context).catch((error) => {
+              console.error(error);
+              return undefined;
+            });
 
-          if (!newAssistantMessageId && data?.newStep) {
-            const resolvedAssistantMessageId = findNextAssistantMessageId(
-              messages as GatewayMessageLike[] | undefined,
-              currentAssistantMessageId,
-            );
+            if (data?.newStep) {
+              const resolvedAssistantMessageId = findNextAssistantMessageId(
+                messages as GatewayMessageLike[] | undefined,
+                currentAssistantMessageId,
+              );
 
-            if (resolvedAssistantMessageId) {
-              currentAssistantMessageId = resolvedAssistantMessageId;
-              get().associateMessageWithOperation(currentAssistantMessageId, operationId);
+              if (resolvedAssistantMessageId) {
+                currentAssistantMessageId = resolvedAssistantMessageId;
+                get().associateMessageWithOperation(currentAssistantMessageId, operationId);
+              }
             }
           }
 
@@ -327,6 +355,7 @@ export const createGatewayEventHandler = (
             // `StreamingHandler.handleText` for the same transition.
             endReasoningIfNeeded();
             accumulatedContent += data.content;
+            hasStreamedContent = true;
             get().internal_dispatchMessage(
               {
                 id: currentAssistantMessageId,
@@ -340,6 +369,7 @@ export const createGatewayEventHandler = (
           if (data.chunkType === 'reasoning' && data.reasoning) {
             startReasoningIfNeeded();
             accumulatedReasoning += data.reasoning;
+            hasStreamedContent = true;
             get().internal_dispatchMessage(
               {
                 id: currentAssistantMessageId,
@@ -352,6 +382,7 @@ export const createGatewayEventHandler = (
 
           if (data.chunkType === 'tools_calling' && data.toolsCalling) {
             endReasoningIfNeeded();
+            hasStreamedContent = true;
             get().internal_dispatchMessage(
               {
                 id: currentAssistantMessageId,
@@ -406,7 +437,17 @@ export const createGatewayEventHandler = (
           pendingToolsCalling?: unknown[];
           phase?: string;
           requiresApproval?: boolean;
+          uiMessages?: UIChatMessage[];
         };
+
+        // Server attaches the canonical UIChatMessage[] snapshot at every
+        // step boundary (agent-runtime #15152). Use it as Source of Truth
+        // instead of issuing a DB refetch — the refetch returns a stale
+        // assistant placeholder while DB fan-out is still in flight, which
+        // clobbers the in-memory streamed assistantGroup.
+        if (Array.isArray(data?.uiMessages)) {
+          get().replaceMessages(data.uiMessages, { action: 'gateway/step_start', context });
+        }
 
         if (data?.phase === 'human_approval' && data.requiresApproval && data.pendingToolsCalling) {
           void notifyDesktopHumanApprovalRequired(get, context);
@@ -475,6 +516,8 @@ export const createGatewayEventHandler = (
 
       case 'agent_runtime_end': {
         enqueue(async () => {
+          const data = event.data as { reason?: string; uiMessages?: UIChatMessage[] } | undefined;
+
           void emitClientAgentSignalSourceEvent({
             payload: {
               agentId: context.agentId,
@@ -499,7 +542,40 @@ export const createGatewayEventHandler = (
             get().markUnreadCompleted(completedOp.context.agentId, completedOp.context.topicId);
           }
 
-          await fetchAndReplaceMessages(get, context).catch(console.error);
+          // Terminal step has no later step_start to carry SoT — server
+          // pushes the canonical snapshot directly on this event. Fall back
+          // to a DB refetch only if the snapshot is absent (older server
+          // builds, or push-event delivery edge cases).
+          if (Array.isArray(data?.uiMessages)) {
+            get().replaceMessages(data.uiMessages, {
+              action: 'gateway/agent_runtime_end',
+              context,
+            });
+          } else if (
+            (data?.reason === 'interrupted' || data?.reason === 'waiting_for_async_tool') &&
+            hasStreamedContent
+          ) {
+            // MID-stream cancel, or a deferred-tool pause
+            // (`waiting_for_async_tool`). The server's
+            // `AgentRuntimeCoordinator.resolveUiMessages` omits uiMessages
+            // for both statuses precisely so we can preserve the
+            // in-memory streamed content here. The executor's partial-
+            // finalize catch writes the real content to DB asynchronously,
+            // but it may not be durable yet — refetching here would race
+            // against that update and clobber the streamed content with
+            // the LOADING_FLAT placeholder. Keep what we have; the next
+            // explicit refresh (route change, user-driven mutate) picks
+            // up the finalized partial content from DB.
+            //
+            // The `hasStreamedContent` guard limits this skip to the case
+            // where server state actually landed (server-assigned assistant
+            // id from stream_start OR any chunk dispatched). If cancel
+            // arrives BEFORE any stream activity, the optimistic `tmp_*`
+            // messages are the only in-memory state and they need the
+            // refetch to be reconciled with the server-side rows.
+          } else {
+            await fetchAndReplaceMessages(get, context).catch(console.error);
+          }
         });
         break;
       }

@@ -26,11 +26,8 @@ vi.mock('@/utils/logger', () => ({
 
 // Mock child_process for the shared package
 vi.mock('node:child_process', () => ({
+  execFile: vi.fn(),
   spawn: vi.fn(),
-}));
-
-vi.mock('node:crypto', () => ({
-  randomUUID: vi.fn(() => 'test-uuid-123'),
 }));
 
 vi.mock('../CliCtr', () => ({
@@ -59,7 +56,9 @@ describe('ShellCommandCtr (thin wrapper)', () => {
     mockChildProcess = {
       stdout: { on: vi.fn() },
       stderr: { on: vi.fn() },
+      off: vi.fn(),
       on: vi.fn(),
+      once: vi.fn(),
       kill: vi.fn(),
       exitCode: null,
     };
@@ -70,6 +69,10 @@ describe('ShellCommandCtr (thin wrapper)', () => {
 
   it('should delegate handleRunCommand to shared runCommand', async () => {
     mockChildProcess.on.mockImplementation((event: string, callback: any) => {
+      if (event === 'exit') setTimeout(() => callback(0), 10);
+      return mockChildProcess;
+    });
+    mockChildProcess.once.mockImplementation((event: string, callback: any) => {
       if (event === 'exit') setTimeout(() => callback(0), 10);
       return mockChildProcess;
     });
@@ -89,14 +92,21 @@ describe('ShellCommandCtr (thin wrapper)', () => {
   });
 
   it('should delegate handleGetCommandOutput to processManager', async () => {
-    mockChildProcess.on.mockImplementation(() => mockChildProcess);
+    mockChildProcess.on.mockImplementation((event: string, callback: any) => {
+      if (event === 'exit') setTimeout(() => callback(0), 10);
+      return mockChildProcess;
+    });
+    mockChildProcess.once.mockImplementation((event: string, callback: any) => {
+      if (event === 'exit') setTimeout(() => callback(0), 10);
+      return mockChildProcess;
+    });
     mockChildProcess.stdout.on.mockImplementation((event: string, callback: any) => {
       if (event === 'data') setTimeout(() => callback(Buffer.from('bg output\n')), 5);
       return mockChildProcess.stdout;
     });
     mockChildProcess.stderr.on.mockImplementation(() => mockChildProcess.stderr);
 
-    await ctr.handleRunCommand({
+    const runResult = await ctr.handleRunCommand({
       command: 'test',
       run_in_background: true,
     });
@@ -104,7 +114,7 @@ describe('ShellCommandCtr (thin wrapper)', () => {
     await new Promise((r) => setTimeout(r, 20));
 
     const result = await ctr.handleGetCommandOutput({
-      shell_id: 'test-uuid-123',
+      shell_id: runResult.shell_id!,
     });
 
     expect(result.success).toBe(true);
@@ -113,16 +123,17 @@ describe('ShellCommandCtr (thin wrapper)', () => {
 
   it('should delegate handleKillCommand to processManager', async () => {
     mockChildProcess.on.mockImplementation(() => mockChildProcess);
+    mockChildProcess.once.mockImplementation(() => mockChildProcess);
     mockChildProcess.stdout.on.mockImplementation(() => mockChildProcess.stdout);
     mockChildProcess.stderr.on.mockImplementation(() => mockChildProcess.stderr);
 
-    await ctr.handleRunCommand({
+    const runResult = await ctr.handleRunCommand({
       command: 'test',
       run_in_background: true,
     });
 
     const result = await ctr.handleKillCommand({
-      shell_id: 'test-uuid-123',
+      shell_id: runResult.shell_id!,
     });
 
     expect(result.success).toBe(true);

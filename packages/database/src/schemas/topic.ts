@@ -13,12 +13,13 @@ import {
 import { createInsertSchema } from 'drizzle-zod';
 
 import { createNanoId, idGenerator } from '../utils/idGenerator';
-import { createdAt, timestamps, timestamptz } from './_helpers';
+import { amountNumeric, createdAt, timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
 import { chatGroups } from './chatGroup';
 import { documents } from './file';
 import { sessions } from './session';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 export const topics = pgTable(
   'topics',
@@ -40,12 +41,36 @@ export const topics = pgTable(
     description: text('description'),
     historySummary: text('history_summary'),
     metadata: jsonb('metadata').$type<ChatTopicMetadata | undefined>(),
-    trigger: text('trigger'), // 'cron' | 'chat' | 'api' | 'eval' - topic creation trigger source
+    trigger: text('trigger'), // 'cron' | 'chat' | 'api' | 'eval' | 'share' - topic creation trigger source
     mode: text('mode'), // 'temp' | 'test' | 'default' - topic usage scenario
     status: text('status', {
       enum: ['active', 'running', 'paused', 'waitingForHuman', 'failed', 'completed', 'archived'],
     }),
     completedAt: timestamptz('completed_at'),
+
+    // ---- Usage & cost aggregates (denormalized roll-up of the topic's operations) ----
+    // Kept nullable: NULL means "not measured yet" so in-flight / legacy topics
+    // don't pollute SUM/AVG aggregates as if they were $0 / 0-token topics.
+    totalCost: amountNumeric('total_cost'),
+    totalInputTokens: integer('total_input_tokens'),
+    totalOutputTokens: integer('total_output_tokens'),
+    totalTokens: integer('total_tokens'),
+    // Full per-model cost / usage breakdowns for slice-and-dice analytics.
+    cost: jsonb('cost').$type<Record<string, unknown>>(),
+    usage: jsonb('usage').$type<Record<string, unknown>>(),
+    // Primary model / provider snapshot, promoted from metadata so it is indexable for GROUP BY.
+    model: text('model'),
+    provider: text('provider'),
+
+    /**
+     * Visitor identity for agent-share originated topics.
+     * Unauthenticated: browser-generated UUID stored in localStorage.
+     * After login: overwritten with the user's actual userId by the application layer.
+     * NULL for regular (non-share) conversations.
+     */
+    senderId: text('sender_id'),
+
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     ...timestamps,
   },
   (t) => [
@@ -57,7 +82,11 @@ export const topics = pgTable(
     index('topics_agent_id_idx').on(t.agentId),
     index('topics_trigger_idx').on(t.trigger),
     index('topics_status_idx').on(t.status),
+    index('topics_model_idx').on(t.model),
+    index('topics_provider_idx').on(t.provider),
     index('topics_user_id_completed_at_idx').on(t.userId, t.completedAt),
+    index('topics_sender_id_idx').on(t.senderId),
+    index('topics_workspace_id_idx').on(t.workspaceId),
     index('topics_extract_status_gin_idx').using(
       'gin',
       sql`(metadata->'userMemoryExtractStatus') jsonb_path_ops`,
@@ -110,6 +139,7 @@ export const threads = pgTable(
       .notNull(),
 
     lastActiveAt: timestamptz('last_active_at').defaultNow(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     ...timestamps,
   },
   (t) => [
@@ -120,6 +150,7 @@ export const threads = pgTable(
     index('threads_agent_id_idx').on(t.agentId),
     index('threads_group_id_idx').on(t.groupId),
     index('threads_parent_thread_id_idx').on(t.parentThreadId),
+    index('threads_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -144,6 +175,7 @@ export const topicDocuments = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     createdAt: createdAt(),
   },
@@ -152,6 +184,7 @@ export const topicDocuments = pgTable(
     index('topic_documents_user_id_idx').on(t.userId),
     index('topic_documents_topic_id_idx').on(t.topicId),
     index('topic_documents_document_id_idx').on(t.documentId),
+    index('topic_documents_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -175,6 +208,7 @@ export const topicShares = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     visibility: text('visibility').default('private').notNull(), // 'private' | 'link'
 
@@ -185,6 +219,7 @@ export const topicShares = pgTable(
   (t) => [
     uniqueIndex('topic_shares_topic_id_unique').on(t.topicId),
     index('topic_shares_user_id_idx').on(t.userId),
+    index('topic_shares_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

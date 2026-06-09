@@ -3,19 +3,20 @@
 import { validateVideoFileSize } from '@lobechat/utils/client';
 import type { IconProps } from '@lobehub/ui';
 import { Icon, Popover } from '@lobehub/ui';
-import { BrainOffIcon, GlobeOffIcon, SkillsIcon } from '@lobehub/ui/icons';
+import { GlobeOffIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { Upload } from 'antd';
 import { css, cssVar, cx } from 'antd-style';
 import {
   Brain,
   CheckIcon,
+  ChevronRight,
   CloudCog,
   FileUp,
   Globe,
   LibraryBig,
   PlusIcon,
   SearchCheck,
-  Store,
+  Settings2Icon,
   TypeIcon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -24,7 +25,6 @@ import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
-import { createSkillStoreModal } from '@/features/SkillStore';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
 import { useAgentStore } from '@/store/agent';
@@ -35,6 +35,8 @@ import {
 } from '@/store/agent/selectors';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useFileStore } from '@/store/file';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import { useAgentId } from '../../hooks/useAgentId';
@@ -57,7 +59,7 @@ const hotArea = css`
 
 const activeLabel = css`
   display: flex;
-  gap: 8px;
+  gap: 16px;
   align-items: center;
   justify-content: space-between;
 
@@ -232,7 +234,10 @@ const stripPopoverContent = (items?: ActionDropdownMenuItems): ActionDropdownMen
     delete nextItem.popoverContent;
 
     if ('children' in nextItem && nextItem.children) {
-      return { ...nextItem, children: stripPopoverContent(nextItem.children) };
+      return {
+        ...nextItem,
+        children: stripPopoverContent(nextItem.children),
+      } as ActionDropdownMenuItems[number];
     }
 
     if ('label' in nextItem) {
@@ -256,6 +261,14 @@ const PlusAction = memo(() => {
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
   const isAgentModeEnabled = useAgentStore(agentSelectors.isAgentModeEnabled);
+  const [showRightPanel, workingSidebarTab, setWorkingSidebarTab, toggleRightPanel] =
+    useGlobalStore((s) => [
+      systemStatusSelectors.showRightPanel(s),
+      s.status.workingSidebarTab,
+      s.setWorkingSidebarTab,
+      s.toggleRightPanel,
+    ]);
+  const isParamsPanelActive = Boolean(showRightPanel) && workingSidebarTab === 'params';
   const skillActivateMode = useAgentStore((s) =>
     chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
   );
@@ -266,6 +279,7 @@ const PlusAction = memo(() => {
 
   const isMemoryEnabled = useMemoryEnabled(agentId);
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
+  const editor = useChatInputStore((s) => s.editor);
   const { canUploadImage, canUploadVideo } = useVisualMediaUploadAbility(model, provider);
   const enableFC = useModelSupportToolUse(model, provider);
   const handleOpenKnowledge = useCallback(() => {
@@ -277,6 +291,7 @@ const PlusAction = memo(() => {
     footer: knowledgeFooter,
     items: knowledgeItems,
   } = useKnowledgeControls({ openAttachKnowledgeModal: handleOpenKnowledge });
+  const closeDropdown = useCallback(() => setDropdownOpen(false), []);
   const {
     autoCount: skillAutoCount,
     editPluginDrawer: skillEditPluginDrawer,
@@ -284,7 +299,7 @@ const PlusAction = memo(() => {
     marketHeader: skillMarketHeader,
     marketItems: skillItems,
     pinnedCount: skillPinnedCount,
-  } = useToolsControls();
+  } = useToolsControls({ closeDropdown });
 
   const isModelBuiltinSearchInternal = useAiInfraStore(
     aiModelSelectors.isModelBuiltinSearchInternal(model, provider),
@@ -302,9 +317,12 @@ const PlusAction = memo(() => {
   const activeSearchOption: 'off' | 'app' | 'provider' =
     searchMode === 'off' ? 'off' : useModelBuiltinSearch ? 'provider' : 'app';
 
-  const handleToggleMemory = useCallback(async () => {
-    await updateAgentChatConfig({ memory: { enabled: !isMemoryEnabled } });
-  }, [isMemoryEnabled, updateAgentChatConfig]);
+  const handleToggleMemory = useCallback(
+    async (enabled: boolean) => {
+      await updateAgentChatConfig({ memory: { enabled } });
+    },
+    [updateAgentChatConfig],
+  );
 
   const handleSelectSearch = useCallback(
     async (option: 'off' | 'app' | 'provider') => {
@@ -319,10 +337,15 @@ const PlusAction = memo(() => {
     [updateAgentChatConfig],
   );
 
-  const handleOpenTools = useCallback(() => {
+  const handleToggleParams = useCallback(() => {
     setDropdownOpen(false);
-    createSkillStoreModal();
-  }, []);
+    if (isParamsPanelActive) {
+      toggleRightPanel(false);
+      return;
+    }
+    setWorkingSidebarTab('params');
+    toggleRightPanel(true);
+  }, [isParamsPanelActive, setWorkingSidebarTab, toggleRightPanel]);
 
   const items: ActionDropdownMenuItems = useMemo(() => {
     const renderActive = (label: string, active: boolean) =>
@@ -376,7 +399,8 @@ const PlusAction = memo(() => {
     const uploadItems: ActionDropdownMenuItems = [
       {
         closeOnClick: false,
-        icon: FileUp,
+        // Match the 20px file/library icons below so the label lines up with those rows.
+        icon: <Icon icon={FileUp} size={20} />,
         key: 'upload-file-or-image',
         label: (
           <Upload
@@ -388,11 +412,15 @@ const PlusAction = memo(() => {
               const validation = validateVideoFileSize(file);
               if (!validation.isValid) {
                 message.error(
-                  t('upload.validation.videoSizeExceeded', { actualSize: validation.actualSize }),
+                  t('upload.validation.videoSizeExceeded', {
+                    actualSize: validation.actualSize,
+                    maxSize: validation.maxSize,
+                  }),
                 );
                 return false;
               }
               setDropdownOpen(false);
+              editor?.focus();
               await upload([file]);
               return false;
             }}
@@ -411,12 +439,14 @@ const PlusAction = memo(() => {
     const toolsItems: ActionDropdownMenuItems =
       isAgentModeEnabled && enableFC
         ? [
-            { type: 'divider' },
             {
               children: skillMenuItems,
+              // Trailing chevron (replaces base-ui's default triangle submenu arrow,
+              // which is hidden via the .lobe-submenu-chevron rule in ActionDropdown).
+              extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
               footer: skillMarketFooter,
               header: skillMarketHeader,
-              icon: activeIcon(SkillsIcon, activeSkillCount > 0),
+              icon: SkillsIcon,
               key: 'tools',
               label: renderLabelWithCount(
                 tSetting('tools.title'),
@@ -428,34 +458,19 @@ const PlusAction = memo(() => {
                 ),
               ),
             } as ActionDropdownMenuItems[number],
-            {
-              icon: Store,
-              key: 'add-skills',
-              label: t('plus.addSkills'),
-              onClick: handleOpenTools,
-            },
+            { type: 'divider' },
           ]
         : [];
 
     const capabilityItems: ActionDropdownMenuItems = [
-      { type: 'divider' },
-      // Rich text toolbar toggle
+      // Memory toggle — trailing switch; toggle by clicking the switch or the whole row
       {
-        icon: TypeIcon,
-        key: 'typo',
-        label: renderActive(
-          tEditor(showTypoBar ? 'actions.typobar.off' : 'actions.typobar.on'),
-          Boolean(showTypoBar),
-        ),
-        onClick: () => setShowTypoBar(!showTypoBar),
-      },
-      { type: 'divider' },
-      // Memory toggle
-      {
-        icon: activeIcon(isMemoryEnabled ? Brain : BrainOffIcon, Boolean(isMemoryEnabled)),
+        checked: Boolean(isMemoryEnabled),
+        icon: Brain,
         key: 'memory',
-        label: renderActive(t('memory.title'), Boolean(isMemoryEnabled)),
-        onClick: handleToggleMemory,
+        label: t('memory.title'),
+        onCheckedChange: handleToggleMemory,
+        type: 'switch',
       },
       // Web search: simple toggle when 2 options, submenu when 3
       ...(showProviderSearch
@@ -510,43 +525,73 @@ const PlusAction = memo(() => {
             } as ActionDropdownMenuItems[number],
           ]
         : [
+            // Web search toggle — trailing switch; toggle by clicking the switch or the whole row
             {
-              icon: activeIcon(
-                activeSearchOption === 'off' ? GlobeOffIcon : Globe,
-                activeSearchOption !== 'off',
-              ),
+              checked: activeSearchOption !== 'off',
+              icon: Globe,
               key: 'search-toggle',
-              label: renderActive(t('search.title'), activeSearchOption !== 'off'),
-              onClick: () => handleSelectSearch(activeSearchOption === 'off' ? 'app' : 'off'),
+              label: t('search.title'),
+              onCheckedChange: (checked: boolean) => handleSelectSearch(checked ? 'app' : 'off'),
+              type: 'switch',
             } as ActionDropdownMenuItems[number],
           ]),
+      { type: 'divider' },
+      // Skills (with "Add Skills..." merged in) sits directly under the Web Search divider.
       ...toolsItems,
+      // Formatting toolbar toggle — trailing switch; toggle by clicking the switch or the whole row
+      {
+        checked: Boolean(showTypoBar),
+        icon: TypeIcon,
+        key: 'typo',
+        label: tEditor('actions.typobar.title'),
+        onCheckedChange: (checked: boolean) => setShowTypoBar(checked),
+        type: 'switch',
+      },
+      // Advanced parameter settings — mirrors ParamsPanelToggle in the agent header.
+      {
+        icon: Settings2Icon,
+        key: 'params',
+        label: renderActive(tSetting('settingModel.params.title'), isParamsPanelActive),
+        onClick: handleToggleParams,
+      },
     ];
 
-    const knowledgeSectionItems: ActionDropdownMenuItems = enableKnowledgeBase
+    // "Add Attachments..." merges file upload with the knowledge base (libraries / files).
+    // When the knowledge base is disabled there is no submenu, so Upload stays a top-level entry.
+    const attachmentsItems: ActionDropdownMenuItems = enableKnowledgeBase
       ? [
           {
-            children: knowledgeItems,
+            children: [
+              ...uploadItems,
+              ...(knowledgeItems.length > 0
+                ? [{ type: 'divider' as const }, ...knowledgeItems]
+                : []),
+            ],
+            // Trailing chevron (replaces base-ui's default triangle submenu arrow,
+            // which is hidden via the .lobe-submenu-chevron rule in ActionDropdown).
+            extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
             footer: knowledgeFooter,
-            icon: activeIcon(LibraryBig, knowledgeEnabledCount > 0),
-            key: 'knowledge-base',
-            label: renderLabelWithCount(t('knowledgeBase.title'), knowledgeEnabledCount),
+            icon: LibraryBig,
+            key: 'attachments',
+            label: renderLabelWithCount(t('plus.addAttachments'), knowledgeEnabledCount),
           } as ActionDropdownMenuItems[number],
         ]
-      : [];
+      : uploadItems;
 
-    return [...uploadItems, ...knowledgeSectionItems, ...capabilityItems];
+    return [...attachmentsItems, ...capabilityItems];
   }, [
     activeSearchOption,
     canUploadImage,
     canUploadVideo,
+    editor,
     enableFC,
     enableKnowledgeBase,
-    handleOpenTools,
     handleSelectSearch,
     handleToggleMemory,
+    handleToggleParams,
     isAgentModeEnabled,
     isMemoryEnabled,
+    isParamsPanelActive,
     knowledgeEnabledCount,
     setShowTypoBar,
     showProviderSearch,

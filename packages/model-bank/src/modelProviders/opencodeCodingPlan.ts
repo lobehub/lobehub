@@ -8,7 +8,7 @@ const OpenCodeCodingPlan: ModelProviderCard = {
     'OpenCode Go is a $10/month subscription providing reliable access to curated open coding models: GLM, Kimi, MiMo, Qwen, MiniMax.',
   disableBrowserRequest: true,
   id: 'opencodecodingplan',
-  modelList: { showModelFetcher: false },
+  modelList: { showModelFetcher: true },
   modelsUrl: 'https://opencode.ai/go',
   name: 'OpenCode Go',
   settings: {
@@ -17,7 +17,7 @@ const OpenCodeCodingPlan: ModelProviderCard = {
       placeholder: 'https://opencode.ai/zen/go/v1',
     },
     sdkType: 'openai',
-    showModelFetcher: false,
+    showModelFetcher: true,
   },
   url: 'https://opencode.ai/go',
 };

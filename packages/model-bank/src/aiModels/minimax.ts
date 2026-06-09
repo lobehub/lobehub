@@ -9,12 +9,64 @@ const minimaxChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Frontier coding model with native multimodal input, 1M context, and strong agent capabilities.',
+    displayName: 'MiniMax M3',
+    enabled: true,
+    id: 'MiniMax-M3',
+    maxOutput: 524_288,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          name: 'textInput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 4.2, upTo: 512_000 },
+            { rate: 8.4, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textOutput',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 16.8, upTo: 512_000 },
+            { rate: 33.6, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        {
+          name: 'textInput_cacheRead',
+          strategy: 'tiered',
+          tiers: [
+            { rate: 0.84, upTo: 512_000 },
+            { rate: 1.68, upTo: 'infinity' },
+          ],
+          unit: 'millionTokens',
+        },
+        { name: 'textInput_cacheWrite', rate: 2.625, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-06-01',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
     },
     contextWindowTokens: 204_800,
     description:
       'First self-evolving model with top-tier coding and agentic performance (~60 tps).',
     displayName: 'MiniMax M2.7',
-    enabled: true,
     id: 'MiniMax-M2.7',
     maxOutput: 131_072,
     pricing: {
@@ -360,7 +412,6 @@ const minimaxVideoModels: AIVideoModelCard[] = [
     description:
       'The next-generation video generation model, MiniMax Hailuo 02, has been officially released, supporting 1080P resolution and 10-second video generation.',
     displayName: 'MiniMax Hailuo 02',
-    enabled: true,
     id: 'MiniMax-Hailuo-02',
     parameters: {
       duration: { default: 6, enum: [6, 10] },

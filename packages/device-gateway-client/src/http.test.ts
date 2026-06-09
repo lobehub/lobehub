@@ -137,7 +137,34 @@ describe('GatewayHttpClient', () => {
         { apiName: 'readFile', arguments: '{}', identifier: 'test' },
       );
 
-      expect(result).toEqual({ content: 'file contents', error: undefined, success: true });
+      expect(result).toEqual({
+        content: 'file contents',
+        error: undefined,
+        state: undefined,
+        success: true,
+      });
+    });
+
+    it('should preserve structured state alongside content', async () => {
+      // The wire envelope carries `state` separately from `content`. This is
+      // what makes `pluginState` work end-to-end for remote device tool calls.
+      mockFetch({
+        json: vi.fn().mockResolvedValue({
+          content: 'Renamed shell-1 → /tmp/foo',
+          state: { commandId: 'shell-1', exitCode: 0, stdout: 'ok' },
+          success: true,
+        }),
+        ok: true,
+      });
+
+      const result = await client.executeToolCall(
+        { userId: 'user-1' },
+        { apiName: 'runCommand', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(result.content).toBe('Renamed shell-1 → /tmp/foo');
+      expect(result.state).toEqual({ commandId: 'shell-1', exitCode: 0, stdout: 'ok' });
+      expect(result.success).toBe(true);
     });
 
     it('should handle non-string content', async () => {
@@ -154,9 +181,13 @@ describe('GatewayHttpClient', () => {
       expect(result.content).toBe(JSON.stringify({ key: 'value' }));
     });
 
-    it('should handle null/undefined content', async () => {
+    it('should return empty content when content and error are missing', async () => {
+      // Regression guard: previously the client JSON.stringify'd the entire
+      // response body when `content` was missing, leaking `success`/`state`
+      // into the LLM-facing content string. The fix returns empty content
+      // instead — the structured payload, if any, is read from `state`.
       mockFetch({
-        json: vi.fn().mockResolvedValue({ success: true }),
+        json: vi.fn().mockResolvedValue({ success: true, state: { foo: 'bar' } }),
         ok: true,
       });
 
@@ -165,8 +196,8 @@ describe('GatewayHttpClient', () => {
         { apiName: 'readFile', arguments: '{}', identifier: 'test' },
       );
 
-      // content is undefined, so JSON.stringify(undefined ?? data) -> JSON.stringify(data)
-      expect(result.content).toContain('success');
+      expect(result.content).toBe('');
+      expect(result.state).toEqual({ foo: 'bar' });
     });
 
     it('should handle missing success field', async () => {
@@ -221,14 +252,186 @@ describe('GatewayHttpClient', () => {
         json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
         ok: true,
       });
+      const signal = AbortSignal.abort();
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(signal);
 
       await client.executeToolCall(
         { deviceId: 'device-1', timeout: 5000, userId: 'user-1' },
         { apiName: 'readFile', arguments: '{}', identifier: 'test' },
       );
 
+      expect(timeoutSpy).toHaveBeenCalledWith(35_000);
       expect(fetch).toHaveBeenCalledWith(
         'https://gateway.test.com/api/device/tool-call',
+        expect.objectContaining({
+          body: expect.stringContaining('"deviceId":"device-1"'),
+          signal,
+        }),
+      );
+      // Builtin calls are tagged so the device routes on `type`, not payload shape.
+      const init = vi.mocked(fetch).mock.calls[0][1];
+      const body = JSON.parse((init as RequestInit).body as string);
+      expect(body.toolCall.type).toBe('tool');
+    });
+
+    it('should use default gateway timeout plus HTTP caller padding when timeout is absent', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
+        ok: true,
+      });
+      const signal = AbortSignal.abort();
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(signal);
+
+      await client.executeToolCall(
+        { userId: 'user-1' },
+        { apiName: 'readFile', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(timeoutSpy).toHaveBeenCalledWith(60_000);
+      expect(fetch).toHaveBeenCalledWith(
+        'https://gateway.test.com/api/device/tool-call',
+        expect.objectContaining({ signal }),
+      );
+    });
+  });
+
+  describe('executeMcpCall', () => {
+    it('should tunnel the call over the tool-call relay with stdio params', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({
+          content: 'stock data',
+          state: { rows: 3 },
+          success: true,
+        }),
+        ok: true,
+      });
+
+      const result = await client.executeMcpCall({
+        apiName: 'getStock',
+        arguments: '{"symbol":"AAPL"}',
+        deviceId: 'device-1',
+        identifier: 'kimi-datasource',
+        params: {
+          args: ['stock-mcp'],
+          command: 'npx',
+          env: { TOKEN: 'secret' },
+          name: 'kimi-datasource',
+          type: 'stdio',
+        },
+        userId: 'user-1',
+      });
+
+      expect(result).toEqual({
+        content: 'stock data',
+        error: undefined,
+        state: { rows: 3 },
+        success: true,
+      });
+
+      // Rides the same endpoint as executeToolCall; the device routes on the
+      // explicit `toolCall.type` discriminator, not on the shape of the payload.
+      const [url, init] = vi.mocked(fetch).mock.calls[0];
+      expect(url).toBe('https://gateway.test.com/api/device/tool-call');
+      const body = JSON.parse((init as RequestInit).body as string);
+      expect(body.toolCall.type).toBe('mcp');
+      expect(body.toolCall.identifier).toBe('kimi-datasource');
+      expect(body.toolCall.params.command).toBe('npx');
+      expect(body.toolCall.params.env).toEqual({ TOKEN: 'secret' });
+      // Routing fields are lifted out of the call descriptor, not tunneled.
+      expect(body.toolCall.deviceId).toBeUndefined();
+      expect(body.deviceId).toBe('device-1');
+    });
+
+    it('should surface non-ok responses as a failed result', async () => {
+      mockFetch({
+        ok: false,
+        status: 503,
+        text: vi.fn().mockResolvedValue('DEVICE_OFFLINE'),
+      });
+
+      const result = await client.executeMcpCall({
+        apiName: 'getStock',
+        arguments: '{}',
+        identifier: 'kimi-datasource',
+        params: { args: [], command: 'npx', name: 'kimi-datasource', type: 'stdio' },
+        userId: 'user-1',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('DEVICE_OFFLINE');
+    });
+  });
+
+  describe('executeMessageApi', () => {
+    it('should return message API result on success', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ content: '{"guid":"sent-1"}', success: true }),
+        ok: true,
+      });
+
+      const result = await client.executeMessageApi(
+        { userId: 'user-1' },
+        { apiName: 'sendText', payload: { chatGuid: 'chat-1' }, platform: 'imessage' },
+      );
+
+      expect(result).toEqual({ content: '{"guid":"sent-1"}', error: undefined, success: true });
+      expect(fetch).toHaveBeenCalledWith(
+        'https://gateway.test.com/api/device/message-api',
+        expect.objectContaining({
+          body: JSON.stringify({
+            api: { apiName: 'sendText', payload: { chatGuid: 'chat-1' }, platform: 'imessage' },
+            userId: 'user-1',
+          }),
+        }),
+      );
+    });
+
+    it('should handle non-string content', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ content: { ok: true }, success: true }),
+        ok: true,
+      });
+
+      const result = await client.executeMessageApi(
+        { userId: 'user-1' },
+        { apiName: 'ping', payload: {}, platform: 'imessage' },
+      );
+
+      expect(result.content).toBe(JSON.stringify({ ok: true }));
+    });
+
+    it('should handle non-ok response', async () => {
+      mockFetch({
+        ok: false,
+        status: 503,
+        text: vi.fn().mockResolvedValue('Desktop offline'),
+      });
+
+      const result = await client.executeMessageApi(
+        { userId: 'user-1' },
+        { apiName: 'ping', payload: {}, platform: 'imessage' },
+      );
+
+      expect(result).toEqual({
+        content: 'Device message API call failed (HTTP 503)',
+        error: 'Desktop offline',
+        success: false,
+      });
+    });
+
+    it('should pass optional deviceId and timeout', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
+        ok: true,
+      });
+
+      await client.executeMessageApi(
+        { deviceId: 'device-1', timeout: 5000, userId: 'user-1' },
+        { apiName: 'ping', payload: {}, platform: 'imessage' },
+      );
+
+      expect(fetch).toHaveBeenCalledWith(
+        'https://gateway.test.com/api/device/message-api',
         expect.objectContaining({
           body: expect.stringContaining('"deviceId":"device-1"'),
         }),
@@ -275,6 +478,53 @@ describe('GatewayHttpClient', () => {
       });
 
       const result = await client.getDeviceSystemInfo('user-1', 'device-1');
+
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('invokeRpc', () => {
+    it('forwards method + params and returns data on success', async () => {
+      const data = { instructions: [], skills: [] };
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ data, success: true }),
+        ok: true,
+      });
+
+      const result = await client.invokeRpc(
+        { deviceId: 'device-1', userId: 'user-1' },
+        { method: 'initWorkspace', params: { scope: '/proj' } },
+      );
+
+      expect(result).toEqual({ data, error: undefined, success: true });
+      const [url, init] = vi.mocked(fetch).mock.calls[0];
+      expect(url).toBe('https://gateway.test.com/api/device/rpc');
+      expect(JSON.parse((init as any).body)).toEqual({
+        deviceId: 'device-1',
+        method: 'initWorkspace',
+        params: { scope: '/proj' },
+        userId: 'user-1',
+      });
+    });
+
+    it('returns failure on non-ok response', async () => {
+      mockFetch({ ok: false, status: 503, text: vi.fn().mockResolvedValue('offline') });
+
+      const result = await client.invokeRpc(
+        { deviceId: 'device-1', userId: 'user-1' },
+        { method: 'initWorkspace' },
+      );
+
+      expect(result).toEqual({ error: 'offline', success: false });
+    });
+
+    it('defaults success to false when the field is missing', async () => {
+      mockFetch({ json: vi.fn().mockResolvedValue({ data: {} }), ok: true });
+
+      const result = await client.invokeRpc(
+        { deviceId: 'device-1', userId: 'user-1' },
+        { method: 'initWorkspace' },
+      );
 
       expect(result.success).toBe(false);
     });

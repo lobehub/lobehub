@@ -5,8 +5,9 @@ import {
   type RemoteHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import { Button, Flexbox, Icon } from '@lobehub/ui';
-import { Alert, Input, Modal, Select, Steps, Tag, Typography } from 'antd';
-import { createStyles } from 'antd-style';
+import { Select } from '@lobehub/ui/base-ui';
+import { Alert, Input, Modal, Steps, Tag, Typography } from 'antd';
+import { createStaticStyles, cssVar } from 'antd-style';
 import {
   BotIcon,
   CheckCircle2,
@@ -19,11 +20,12 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
-import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
+import { lambdaQuery } from '@/libs/trpc/client';
+import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css }) => ({
   avatarPreview: css`
     display: flex;
     align-items: center;
@@ -31,12 +33,12 @@ const useStyles = createStyles(({ css, token }) => ({
 
     width: 48px;
     height: 48px;
-    border-radius: ${token.borderRadiusLG}px;
+    border-radius: ${cssVar.borderRadiusLG};
 
     font-size: 28px;
     line-height: 1;
 
-    background: ${token.colorFillSecondary};
+    background: ${cssVar.colorFillSecondary};
   `,
   deviceItem: css`
     display: flex;
@@ -53,20 +55,20 @@ const useStyles = createStyles(({ css, token }) => ({
 
     padding-block: 12px;
     padding-inline: 16px;
-    border: 1.5px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1.5px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
 
     transition: border-color 0.2s;
 
     &:hover {
-      border-color: ${token.colorPrimary};
+      border-color: ${cssVar.colorPrimary};
     }
 
     &[data-selected='true'] {
-      border-color: ${token.colorPrimary};
-      background: ${token.colorPrimaryBg};
+      border-color: ${cssVar.colorPrimary};
+      background: ${cssVar.colorPrimaryBg};
     }
 
     &[data-disabled='true'] {
@@ -74,18 +76,18 @@ const useStyles = createStyles(({ css, token }) => ({
       opacity: 0.5;
 
       &:hover {
-        border-color: ${token.colorBorderSecondary};
+        border-color: ${cssVar.colorBorderSecondary};
       }
     }
   `,
   platformDesc: css`
     font-size: 13px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   platformName: css`
     font-size: 15px;
     font-weight: 500;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
 }));
 
@@ -104,7 +106,6 @@ interface CreatePlatformAgentModalProps {
 const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
   ({ open, onClose, groupId }) => {
     const { t } = useTranslation('chat');
-    const { styles } = useStyles();
     const navigate = useNavigate();
     const storeCreateAgent = useAgentStore((s) => s.createAgent);
     const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
@@ -124,7 +125,7 @@ const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
 
     // Platforms that are not yet ready for production use.
     // Remove a type from this set when the platform is fully supported.
-    const COMING_SOON_PLATFORMS = new Set<RemoteHeterogeneousAgentType>(['hermes']);
+    const COMING_SOON_PLATFORMS = new Set<RemoteHeterogeneousAgentType>(['amp', 'opencode']);
 
     // Derive platform display list from the registry — adding a new platform to
     // REMOTE_HETEROGENEOUS_AGENT_CONFIGS automatically includes it here.
@@ -187,7 +188,7 @@ const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
         setCheckingCapability(true);
         setCapabilityResult(undefined);
         try {
-          const result = await lambdaClient.device.checkCapability.query({
+          const result = await deviceService.checkCapability({
             deviceId: dId,
             platform,
           });
@@ -206,7 +207,7 @@ const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
         setFetchingProfile(true);
         setAgentProfile(null);
         try {
-          const profile = await lambdaClient.device.getAgentProfile.query({
+          const profile = await deviceService.getAgentProfile({
             deviceId: dId,
             platform,
           });
@@ -283,9 +284,17 @@ const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
       if (!capabilityResult) return null;
       if (capabilityResult.available) {
         return (
-          <Flexbox horizontal align="center" gap={4}>
-            <Icon color="var(--ant-color-success)" icon={CheckCircle2} size={14} />
-            <Tag color="success" style={{ marginInlineEnd: 0 }}>
+          <Flexbox horizontal align="flex-start" gap={4} style={{ flexWrap: 'wrap' }}>
+            <Icon
+              color="var(--ant-color-success)"
+              icon={CheckCircle2}
+              size={14}
+              style={{ marginTop: 2, flexShrink: 0 }}
+            />
+            <Tag
+              color="success"
+              style={{ marginInlineEnd: 0, whiteSpace: 'normal', wordBreak: 'break-word' }}
+            >
               {capabilityResult.version ?? t('platformAgent.create.available')}
             </Tag>
           </Flexbox>

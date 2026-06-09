@@ -26,7 +26,7 @@ export class RoleController extends BaseController {
       const request = this.getQuery<RolesListQuery>(c);
 
       const db = await this.getDatabase();
-      const roleService = new RoleService(db, this.getUserId(c));
+      const roleService = new RoleService(db, this.getUserId(c), this.getWorkspaceId(c));
       const roles = await roleService.getRoles(request);
 
       return this.success(c, roles, 'Get roles list successfully');
@@ -43,14 +43,14 @@ export class RoleController extends BaseController {
       const body = await this.getBody<CreateRoleRequest>(c);
 
       if (!body) {
-        return this.error(c, '请求体不能为空', 400);
+        return this.error(c, 'Request body cannot be empty', 400);
       }
 
       const db = await this.getDatabase();
-      const roleService = new RoleService(db, this.getUserId(c));
+      const roleService = new RoleService(db, this.getUserId(c), this.getWorkspaceId(c));
       const createdRole = await roleService.createRole(body);
 
-      return this.success(c, createdRole, '角色创建成功');
+      return this.success(c, createdRole, 'Role created successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -66,7 +66,7 @@ export class RoleController extends BaseController {
       const { id } = this.getParams<{ id: string }>(c);
       const roleId = id;
       const db = await this.getDatabase();
-      const roleService = new RoleService(db, this.getUserId(c));
+      const roleService = new RoleService(db, this.getUserId(c), this.getWorkspaceId(c));
       const role = await roleService.getRoleById(roleId);
 
       if (!role) {
@@ -90,7 +90,7 @@ export class RoleController extends BaseController {
       const request = this.getQuery<RolePermissionsListQuery>(c);
 
       const db = await this.getDatabase();
-      const roleService = new RoleService(db, this.getUserId(c));
+      const roleService = new RoleService(db, this.getUserId(c), this.getWorkspaceId(c));
 
       const permissions = await roleService.getRolePermissions({ roleId: id, ...request });
 
@@ -109,14 +109,14 @@ export class RoleController extends BaseController {
       const body = await this.getBody<UpdateRolePermissionsRequest>(c);
 
       if (!body) {
-        return this.error(c, '请求体不能为空', 400);
+        return this.error(c, 'Request body cannot be empty', 400);
       }
 
       const db = await this.getDatabase();
-      const roleService = new RoleService(db, this.getUserId(c));
+      const roleService = new RoleService(db, this.getUserId(c), this.getWorkspaceId(c));
       const result = await roleService.updateRolePermissions(id, body);
 
-      return this.success(c, result, '角色权限更新成功');
+      return this.success(c, result, 'Role permissions updated successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -131,10 +131,10 @@ export class RoleController extends BaseController {
       const { id } = this.getParams<{ id: string }>(c);
       const roleId = id;
       const db = await this.getDatabase();
-      const roleService = new RoleService(db, this.getUserId(c));
+      const roleService = new RoleService(db, this.getUserId(c), this.getWorkspaceId(c));
       const result = await roleService.clearRolePermissions(roleId);
 
-      return this.success(c, result, '角色权限已清空');
+      return this.success(c, result, 'Role permissions cleared');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -152,14 +152,14 @@ export class RoleController extends BaseController {
       const body = await this.getBody<UpdateRoleRequest>(c);
 
       if (!body) {
-        return this.error(c, '请求体不能为空', 400);
+        return this.error(c, 'Request body cannot be empty', 400);
       }
 
       const db = await this.getDatabase();
-      const roleService = new RoleService(db, this.getUserId(c));
+      const roleService = new RoleService(db, this.getUserId(c), this.getWorkspaceId(c));
       const updatedRole = await roleService.updateRole(id, body);
 
-      return this.success(c, updatedRole, '角色更新成功');
+      return this.success(c, updatedRole, 'Role updated successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -172,10 +172,10 @@ export class RoleController extends BaseController {
     try {
       const { id } = this.getParams<{ id: string }>(c);
       const db = await this.getDatabase();
-      const roleService = new RoleService(db, this.getUserId(c));
+      const roleService = new RoleService(db, this.getUserId(c), this.getWorkspaceId(c));
       const result = await roleService.deleteRole(id);
 
-      return this.success(c, result, '角色删除成功');
+      return this.success(c, result, 'Role deleted successfully');
     } catch (error) {
       return this.handleError(c, error);
     }

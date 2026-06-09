@@ -35,14 +35,23 @@ const Page = memo(() => {
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [loading, setLoading] = useState(false);
 
-  const [isPreferenceInit, enableInputMarkdown, enableGatewayMode, enablePlatformAgent, updateLab] =
-    useUserStore((s) => [
-      preferenceSelectors.isPreferenceInit(s),
-      labPreferSelectors.enableInputMarkdown(s),
-      labPreferSelectors.enableGatewayMode(s),
-      labPreferSelectors.enablePlatformAgent(s),
-      s.updateLab,
-    ]);
+  const [
+    isPreferenceInit,
+    enableAgentDocumentFloatingChatPanel,
+    enableInputMarkdown,
+    enableGatewayMode,
+    enablePlatformAgent,
+    enableImessage,
+    updateLab,
+  ] = useUserStore((s) => [
+    preferenceSelectors.isPreferenceInit(s),
+    labPreferSelectors.enableAgentDocumentFloatingChatPanel(s),
+    labPreferSelectors.enableInputMarkdown(s),
+    labPreferSelectors.enableGatewayMode(s),
+    labPreferSelectors.enablePlatformAgent(s),
+    labPreferSelectors.enableImessage(s),
+    s.updateLab,
+  ]);
 
   const hasGatewayUrl = useServerConfigStore((s) => !!s.serverConfig.agentGatewayUrl);
 
@@ -75,7 +84,7 @@ const Page = memo(() => {
       },
     ],
     extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
-    title: t('tab.advanced'),
+    title: t('tab.advanced.toolsAndDiagnostics.title'),
   };
 
   const channelOptions = [
@@ -93,10 +102,23 @@ const Page = memo(() => {
         label: t('tab.advanced.updateChannel.title'),
       },
     ],
-    title: t('tab.advanced.updateChannel.title'),
+    title: t('tab.advanced.appUpdates.title'),
   };
 
   const labItems: FormItemProps[] = [
+    {
+      children: (
+        <Switch
+          checked={enableAgentDocumentFloatingChatPanel}
+          loading={!isPreferenceInit}
+          onChange={(checked) => updateLab({ enableAgentDocumentFloatingChatPanel: checked })}
+        />
+      ),
+      className: styles.labItem,
+      desc: tLabs('features.agentDocumentFloatingChatPanel.desc'),
+      label: tLabs('features.agentDocumentFloatingChatPanel.title'),
+      minWidth: undefined,
+    },
     {
       children: (
         <Switch
@@ -110,6 +132,23 @@ const Page = memo(() => {
       label: tLabs('features.inputMarkdown.title'),
       minWidth: undefined,
     },
+    ...(isDesktop
+      ? [
+          {
+            children: (
+              <Switch
+                checked={enableImessage}
+                loading={!isPreferenceInit}
+                onChange={(checked: boolean) => updateLab({ enableImessage: checked })}
+              />
+            ),
+            className: styles.labItem,
+            desc: tLabs('features.imessage.desc'),
+            label: tLabs('features.imessage.title'),
+            minWidth: undefined,
+          } satisfies FormItemProps,
+        ]
+      : []),
     ...(hasGatewayUrl
       ? [
           {

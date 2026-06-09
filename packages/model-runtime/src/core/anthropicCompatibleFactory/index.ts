@@ -6,6 +6,7 @@ import debug from 'debug';
 import type { Pricing } from 'model-bank';
 
 import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../const/models';
+import { ErrorClassifier } from '../../errors';
 import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,
@@ -20,9 +21,6 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
 import { getModelPricing } from '../../utils/getModelPricing';
-import { isAccountDeactivatedError } from '../../utils/isAccountDeactivatedError';
-import { isExceededContextWindowError } from '../../utils/isExceededContextWindowError';
-import { isQuotaLimitError } from '../../utils/isQuotaLimitError';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { StreamingResponse } from '../../utils/response';
 import type { LobeRuntimeAI } from '../BaseAI';
@@ -323,7 +321,7 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
 
   const errorMsg = errorResult.message || errorResult.error?.message;
 
-  if (isAccountDeactivatedError(errorMsg)) {
+  if (ErrorClassifier.isAccountDeactivated(errorMsg)) {
     return {
       endpoint: desensitizedEndpoint,
       error: errorResult,
@@ -332,7 +330,7 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
     };
   }
 
-  if (isExceededContextWindowError(errorMsg)) {
+  if (ErrorClassifier.isExceededContextWindow(errorMsg)) {
     return {
       endpoint: desensitizedEndpoint,
       error: errorResult,
@@ -341,7 +339,7 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
     };
   }
 
-  if (isQuotaLimitError(errorMsg)) {
+  if (ErrorClassifier.isRateLimitExceeded(errorMsg)) {
     return {
       endpoint: desensitizedEndpoint,
       error: errorResult,
@@ -726,7 +724,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
 
       const errorMsg = errorResult.message || errorResult.error?.message;
 
-      if (isAccountDeactivatedError(errorMsg)) {
+      if (ErrorClassifier.isAccountDeactivated(errorMsg)) {
         return AgentRuntimeError.chat({
           endpoint: desensitizedEndpoint,
           error: errorResult,
@@ -736,7 +734,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         });
       }
 
-      if (isExceededContextWindowError(errorMsg)) {
+      if (ErrorClassifier.isExceededContextWindow(errorMsg)) {
         return AgentRuntimeError.chat({
           endpoint: desensitizedEndpoint,
           error: errorResult,
@@ -746,7 +744,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         });
       }
 
-      if (isQuotaLimitError(errorMsg)) {
+      if (ErrorClassifier.isRateLimitExceeded(errorMsg)) {
         return AgentRuntimeError.chat({
           endpoint: desensitizedEndpoint,
           error: errorResult,

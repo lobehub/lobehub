@@ -8,9 +8,18 @@ import { registerHeteroCommand } from './hetero';
 const { mockSpawnAgent } = vi.hoisted(() => ({
   mockSpawnAgent: vi.fn(),
 }));
+const { mockGetTrpcClient, mockHeteroFinishMutate, mockHeteroIngestMutate } = vi.hoisted(() => ({
+  mockGetTrpcClient: vi.fn(),
+  mockHeteroFinishMutate: vi.fn(),
+  mockHeteroIngestMutate: vi.fn(),
+}));
 
 vi.mock('@lobechat/heterogeneous-agents/spawn', () => ({
   spawnAgent: mockSpawnAgent,
+}));
+
+vi.mock('../api/client', () => ({
+  getTrpcClient: mockGetTrpcClient,
 }));
 
 vi.mock('../utils/logger', () => ({
@@ -77,6 +86,17 @@ describe('hetero exec command', () => {
     }) as any);
     stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     mockSpawnAgent.mockReset();
+    mockHeteroIngestMutate.mockReset();
+    mockHeteroFinishMutate.mockReset();
+    mockGetTrpcClient.mockReset();
+    mockHeteroIngestMutate.mockResolvedValue({ ack: true });
+    mockHeteroFinishMutate.mockResolvedValue({ ack: true });
+    mockGetTrpcClient.mockResolvedValue({
+      aiAgent: {
+        heteroFinish: { mutate: mockHeteroFinishMutate },
+        heteroIngest: { mutate: mockHeteroIngestMutate },
+      },
+    });
   });
 
   afterEach(() => {
@@ -535,5 +555,165 @@ describe('hetero exec command', () => {
       });
       expect(errorLine).toBeDefined();
     });
+  });
+
+  it('sends full text snapshots before tools and waits for finish until all server ingests ack', async () => {
+    const callOrder: string[] = [];
+    mockHeteroIngestMutate.mockImplementation(async ({ events }: any) => {
+      const first = events[0];
+      callOrder.push(`ingest:${first.type}:${first.data?.chunkType ?? 'terminal'}`);
+      return { ack: true };
+    });
+    mockHeteroFinishMutate.mockImplementation(async () => {
+      callOrder.push('finish');
+      return { ack: true };
+    });
+
+    mockSpawnAgent.mockReturnValue(
+      createFakeHandle({
+        events: [
+          {
+            data: { chunkType: 'text', content: 'hello ' },
+            operationId: 'op-server',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'stream_chunk',
+          },
+          {
+            data: { chunkType: 'text', content: 'world' },
+            operationId: 'op-server',
+            stepIndex: 0,
+            timestamp: 2,
+            type: 'stream_chunk',
+          },
+          {
+            data: {
+              chunkType: 'tools_calling',
+              toolsCalling: [
+                {
+                  apiName: 'Bash',
+                  arguments: '{"cmd":"ls"}',
+                  id: 'tc-1',
+                  identifier: 'bash',
+                  type: 'default',
+                },
+              ],
+            },
+            operationId: 'op-server',
+            stepIndex: 1,
+            timestamp: 3,
+            type: 'stream_chunk',
+          },
+          {
+            data: { reason: 'success' },
+            operationId: 'op-server',
+            stepIndex: 1,
+            timestamp: 4,
+            type: 'agent_runtime_end',
+          },
+        ],
+        exitCode: 0,
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-server',
+      '--render',
+      'none',
+    ]);
+
+    expect(mockHeteroIngestMutate).toHaveBeenCalledTimes(3);
+    expect(mockHeteroIngestMutate.mock.calls[0][0].events[0].data).toMatchObject({
+      chunkType: 'text',
+      content: 'hello world',
+      snapshotMode: 'replace',
+      snapshotSeq: 1,
+    });
+    expect(callOrder).toEqual([
+      'ingest:stream_chunk:text',
+      'ingest:stream_chunk:tools_calling',
+      'ingest:agent_runtime_end:terminal',
+      'finish',
+    ]);
+  });
+
+  it('resets the per-message text accumulator at message boundaries (no cross-message duplication)', async () => {
+    // LOBE-10157 Bug 3: the `replace` snapshot accumulator must not span
+    // message boundaries. Two assistant messages separated by a
+    // stream_end/stream_start boundary must each snapshot only their OWN
+    // text — otherwise the second message re-emits the first's text verbatim.
+    const textSnapshots: string[] = [];
+    mockHeteroIngestMutate.mockImplementation(async ({ events }: any) => {
+      for (const e of events) {
+        if (e.type === 'stream_chunk' && e.data?.chunkType === 'text') {
+          textSnapshots.push(e.data.content);
+        }
+      }
+      return { ack: true };
+    });
+
+    mockSpawnAgent.mockReturnValue(
+      createFakeHandle({
+        events: [
+          {
+            data: { chunkType: 'text', content: 'first message' },
+            operationId: 'op-server',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'stream_chunk',
+          },
+          { data: {}, operationId: 'op-server', stepIndex: 0, timestamp: 2, type: 'stream_end' },
+          {
+            data: { newStep: true, provider: 'claude-code' },
+            operationId: 'op-server',
+            stepIndex: 1,
+            timestamp: 3,
+            type: 'stream_start',
+          },
+          {
+            data: { chunkType: 'text', content: 'second message' },
+            operationId: 'op-server',
+            stepIndex: 1,
+            timestamp: 4,
+            type: 'stream_chunk',
+          },
+          {
+            data: { reason: 'success' },
+            operationId: 'op-server',
+            stepIndex: 1,
+            timestamp: 5,
+            type: 'agent_runtime_end',
+          },
+        ],
+        exitCode: 0,
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-server',
+      '--render',
+      'none',
+    ]);
+
+    // Second snapshot carries ONLY the second message — not "first messagesecond message".
+    expect(textSnapshots).toEqual(['first message', 'second message']);
   });
 });

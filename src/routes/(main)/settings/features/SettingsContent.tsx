@@ -67,10 +67,10 @@ const SettingsContent = ({ mobile, activeTab }: SettingsContentProps) => {
   return (
     <>
       {Object.keys(componentMap).map((tabKey) => {
-        const isProvider = tabKey === SettingsTabs.Provider;
+        const isFullWidth = tabKey === SettingsTabs.Provider || tabKey === SettingsTabs.Skill;
         if (activeTab !== tabKey) return null;
         const content = renderComponent(tabKey);
-        if (isProvider) return <Fragment key={tabKey}>{content}</Fragment>;
+        if (isFullWidth) return <Fragment key={tabKey}>{content}</Fragment>;
         return (
           <Fragment key={tabKey}>
             <NavHeader />

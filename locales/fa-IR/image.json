@@ -20,6 +20,7 @@
   "config.resolution.options.1K": "۱K",
   "config.resolution.options.2K": "۲K",
   "config.resolution.options.4K": "۴K",
+  "config.resolution.options.512": "۵۱۲پیکسل",
   "config.seed.label": "بذر (Seed)",
   "config.seed.random": "بذر تصادفی",
   "config.size.label": "اندازه",

@@ -22,10 +22,14 @@ export class AgentGroupController extends BaseController {
   async getAgentGroups(c: Context): Promise<Response> {
     try {
       const db = await this.getDatabase();
-      const agentGroupService = new AgentGroupService(db, this.getUserId(c));
+      const agentGroupService = new AgentGroupService(
+        db,
+        this.getUserId(c),
+        this.getWorkspaceId(c),
+      );
       const agentGroups = await agentGroupService.getAgentGroups();
 
-      return this.success(c, agentGroups, '获取助理分类列表成功');
+      return this.success(c, agentGroups, 'Agent category list retrieved successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -42,18 +46,22 @@ export class AgentGroupController extends BaseController {
       const { id: groupId } = this.getParams<{ id: string }>(c);
 
       if (!groupId) {
-        return this.error(c, '助理分类 ID 是必需的', 400);
+        return this.error(c, 'Agent category ID is required', 400);
       }
 
       const db = await this.getDatabase();
-      const agentGroupService = new AgentGroupService(db, this.getUserId(c));
+      const agentGroupService = new AgentGroupService(
+        db,
+        this.getUserId(c),
+        this.getWorkspaceId(c),
+      );
       const agentGroup = await agentGroupService.getAgentGroupById(groupId);
 
       if (!agentGroup) {
-        return this.error(c, '助理分类不存在', 404);
+        return this.error(c, 'Agent category not found', 404);
       }
 
-      return this.success(c, agentGroup, '获取助理分类详情成功');
+      return this.success(c, agentGroup, 'Agent category details retrieved successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -70,13 +78,17 @@ export class AgentGroupController extends BaseController {
       const body = await this.getBody<CreateAgentGroupRequest>(c);
 
       const db = await this.getDatabase();
-      const agentGroupService = new AgentGroupService(db, this.getUserId(c));
+      const agentGroupService = new AgentGroupService(
+        db,
+        this.getUserId(c),
+        this.getWorkspaceId(c),
+      );
       const groupId = await agentGroupService.createAgentGroup(body);
 
       return c.json(
         {
           data: { id: groupId },
-          message: '助理分类创建成功',
+          message: 'Agent category created successfully',
           success: true,
           timestamp: new Date().toISOString(),
         },
@@ -99,7 +111,7 @@ export class AgentGroupController extends BaseController {
       const body = await this.getBody<Omit<UpdateAgentGroupRequest, 'id'>>(c);
 
       if (!groupId) {
-        return this.error(c, '助理分类 ID 是必需的', 400);
+        return this.error(c, 'Agent category ID is required', 400);
       }
 
       const request: UpdateAgentGroupRequest = {
@@ -108,10 +120,14 @@ export class AgentGroupController extends BaseController {
       };
 
       const db = await this.getDatabase();
-      const agentGroupService = new AgentGroupService(db, this.getUserId(c));
+      const agentGroupService = new AgentGroupService(
+        db,
+        this.getUserId(c),
+        this.getWorkspaceId(c),
+      );
       await agentGroupService.updateAgentGroup(request);
 
-      return this.success(c, null, '助理分类更新成功');
+      return this.success(c, null, 'Agent category updated successfully');
     } catch (error) {
       return this.handleError(c, error);
     }
@@ -128,7 +144,7 @@ export class AgentGroupController extends BaseController {
       const { id: groupId } = this.getParams<{ id: string }>(c);
 
       if (!groupId) {
-        return this.error(c, '助理分类 ID 是必需的', 400);
+        return this.error(c, 'Agent category ID is required', 400);
       }
 
       const request: DeleteAgentGroupRequest = {
@@ -136,10 +152,14 @@ export class AgentGroupController extends BaseController {
       };
 
       const db = await this.getDatabase();
-      const agentGroupService = new AgentGroupService(db, this.getUserId(c));
+      const agentGroupService = new AgentGroupService(
+        db,
+        this.getUserId(c),
+        this.getWorkspaceId(c),
+      );
       await agentGroupService.deleteAgentGroup(request);
 
-      return this.success(c, null, '助理分类删除成功');
+      return this.success(c, null, 'Agent category deleted successfully');
     } catch (error) {
       return this.handleError(c, error);
     }

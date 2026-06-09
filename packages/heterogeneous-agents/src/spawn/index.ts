@@ -2,7 +2,7 @@
  * Producer-side helpers for converting external agent CLI output into the
  * unified `AgentStreamEvent` wire shape. Imported by:
  *   - Electron main (`HeterogeneousAgentCtr`) — desktop CC / Codex flow
- *   - The future `lh hetero exec` CLI — sandbox + terminal flow (LOBE-8516)
+ *   - The future `lh hetero exec` CLI — sandbox + terminal flow ()
  *
  * Consumers (renderer executor, server `heteroIngest` handler) never need to
  * touch adapters — every event reaching them is already an `AgentStreamEvent`.
@@ -32,6 +32,10 @@ export {
 export { JsonlStreamProcessor } from './jsonlProcessor';
 export {
   CLAUDE_CODE_BASE_ARGS,
+  CODEX_BYPASS_APPROVALS_AND_SANDBOX_ARG,
+  CODEX_DEFAULT_EXECUTION_ARGS,
+  CODEX_EXECUTION_MODE_FLAGS,
+  CODEX_REQUIRED_ARGS,
   spawnAgent,
   type SpawnAgentHandle,
   type SpawnAgentOptions,

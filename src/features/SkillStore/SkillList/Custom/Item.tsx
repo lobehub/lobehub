@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon, Block, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { App } from 'antd';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { MoreVerticalIcon, PackageSearch, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -45,7 +45,6 @@ interface ItemProps {
 
 const Item = memo<ItemProps>(({ identifier, title, description, avatar }) => {
   const { t } = useTranslation('plugin');
-  const { modal } = App.useApp();
   const [configOpen, setConfigOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
 
@@ -62,8 +61,7 @@ const Item = memo<ItemProps>(({ identifier, title, description, avatar }) => {
   ]);
 
   const handleDelete = () => {
-    modal.confirm({
-      centered: true,
+    confirmModal({
       okButtonProps: { danger: true },
       onOk: async () => {
         if (isPluginEnabledInAgent) {
@@ -72,7 +70,6 @@ const Item = memo<ItemProps>(({ identifier, title, description, avatar }) => {
         await uninstallPlugin(identifier);
       },
       title: t('store.actions.confirmUninstall'),
-      type: 'error',
     });
   };
 

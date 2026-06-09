@@ -9,7 +9,7 @@ import type { MarketAuthTokens } from './market';
 import type { UserMemorySettings } from './memory';
 import type { UserModelProviderConfig } from './modelProvider';
 import type { NotificationSettings } from './notification';
-import type { UserSystemAgentConfig } from './systemAgent';
+import type { UserServiceModelConfig } from './systemAgent';
 import type { UserToolConfig } from './tool';
 import type { UserTTSConfig } from './tts';
 
@@ -42,7 +42,7 @@ export interface UserSettings {
   market?: MarketAuthTokens;
   memory?: UserMemorySettings;
   notification?: NotificationSettings;
-  systemAgent: UserSystemAgentConfig;
+  systemAgent: UserServiceModelConfig;
   tool: UserToolConfig;
   tts: UserTTSConfig;
 }

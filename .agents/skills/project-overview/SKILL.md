@@ -1,6 +1,6 @@
 ---
 name: project-overview
-description: Complete project architecture and structure guide. Use when exploring the codebase, understanding project organization, finding files, or needing comprehensive architectural context. Triggers on architecture questions, directory navigation, or project overview needs.
+description: 'LobeHub open-source monorepo architecture map. Use when locating code layers, understanding apps/packages/src layout, business stubs, project structure, or onboarding to the repository.'
 user-invocable: false
 ---
 
@@ -13,11 +13,12 @@ user-invocable: false
 ## Project Description
 
 Open-source, modern-design AI Agent Workspace: **LobeHub** (previously LobeChat).
+This repo is the **open-source root** (`github.com/lobehub/lobehub`, package `@lobehub/lobehub`).
 
 **Supported platforms:**
 
 - Web desktop/mobile
-- Desktop (Electron)
+- Desktop (Electron) — `apps/desktop`
 - Mobile app (React Native) — **separate repo, already launched** (not in this monorepo)
 
 **Logo emoji:** 🤯
@@ -47,30 +48,29 @@ Open-source, modern-design AI Agent Workspace: **LobeHub** (previously LobeChat)
 
 ## Monorepo Layout
 
-This is a monorepo extending the open-source `lobehub` submodule. Two repos:
-
-- **cloud repo root** — `src/` and `packages/business/` (`config`, `const`, `model-runtime`) hold cloud-only SaaS code that overrides/extends the submodule. See `AGENTS.md` for the override mechanism.
-- **`lobehub/` submodule** — the open-source product core.
-
-### `lobehub/` submodule — key directories
+Flat layout — `apps/`, `packages/`, and `src/` all sit at the repo root. No
+git submodules.
 
 ```
-lobehub/
+(repo root)
 ├── apps/
-│   ├── cli/                 # LobeHub CLI
-│   ├── desktop/             # Electron desktop app
-│   └── device-gateway/      # Device gateway service
-├── docs/                    # changelog, development, self-hosting, usage
-├── locales/                 # en-US, zh-CN, ...
-├── packages/                # ~80 @lobechat/* workspace packages — `ls` for the full set. Key ones:
-│   ├── agent-runtime/        # Agent runtime
+│   ├── cli/                  # LobeHub CLI
+│   ├── desktop/              # Electron desktop app
+│   ├── device-gateway/       # Device gateway service
+│   └── server/               # Next.js-backed server: featureFlags, globalConfig, modules, routers, services, utils, workflows (`@/server/*` alias)
+├── docs/                     # changelog, development, self-hosting, usage
+├── locales/                  # en-US, zh-CN, ...
+├── packages/                 # ~80 @lobechat/* workspace packages — `ls` for the full set. Key ones:
+│   ├── agent-runtime/        # Agent runtime core
 │   ├── agent-signal/         # Agent Signal pipeline
-│   ├── builtin-tool-*/       # Builtin tool packages
-│   ├── builtin-tools/        # Builtin tool registries
+│   ├── agent-tracing/        # Tracing / snapshots
+│   ├── builtin-tool-*/       # Per-tool packages (calculator, web-browsing, claude-code, ...)
+│   ├── builtin-tools/        # Central registries that compose builtin-tool-*
 │   ├── context-engine/
 │   ├── database/             # src/{models,schemas,repositories}
 │   ├── model-bank/           # Model definitions & provider cards
 │   ├── model-runtime/        # src/{core,providers}
+│   ├── business/             # Open-source stubs (config, const, model-bank, model-runtime) — overridden by cloud
 │   ├── types/
 │   └── utils/
 └── src/
@@ -83,55 +83,54 @@ lobehub/
     ├── spa/                  # SPA entries + router config
     │   ├── entry.{web,mobile,desktop,popup}.tsx
     │   └── router/
-    ├── business/             # Open-source stubs (~50) overridden by cloud src/business/
+    ├── business/             # Open-source stubs (client/server) — cloud repo provides real impls
     ├── features/             # Domain business components
-    ├── store/                # ~28 zustand stores — `ls` for the full set
-    ├── server/               # featureFlags, globalConfig, modules, routers, services
+    ├── store/                # ~30 zustand stores — `ls` for the full set
+    ├── server/               # standalone-Hono server pieces only: agent-hono, workflows-hono (main backend lives in `apps/server`)
     └── ...                   # components, hooks, layout, libs, locales, services, types, utils
 ```
 
-### cloud repo — key directories
-
-```
-(cloud root)
-├── packages/business/        # Cloud overrides: config, const, model-runtime
-├── src/
-│   ├── business/             # Cloud impls of submodule stubs (client/server/locales)
-│   ├── routes/               # Cloud-only route groups: (cloud)/, embed/
-│   ├── store/                # Cloud-only stores (e.g. subscription/)
-│   ├── server/               # Cloud routers & services (billing, budget, risk control...)
-│   └── app/(backend)/cron/   # Vercel cron routes (schedules declared in root vercel.ts)
-└── vercel.ts                 # Cron schedule declarations
-```
-
-> File search rule: a path like `@/store/x` resolves cloud `src/store/x` first, then
-> `lobehub/packages/store/src/x`, then `lobehub/src/store/x`. Cloud override wins.
-
 ## Architecture Map
 
-| Layer            | Location                                             |
-| ---------------- | ---------------------------------------------------- |
-| UI Components    | `src/components`, `src/features`                     |
-| SPA Pages        | `src/routes/`                                        |
-| React Router     | `src/spa/router/`                                    |
-| Global Providers | `src/layout`                                         |
-| Zustand Stores   | `src/store`                                          |
-| Client Services  | `src/services/`                                      |
-| REST API         | `src/app/(backend)/webapi`                           |
-| tRPC Routers     | `src/server/routers/{async\|lambda\|mobile\|tools}`  |
-| Server Services  | `src/server/services` (can access DB)                |
-| Server Modules   | `src/server/modules` (no DB access)                  |
-| Feature Flags    | `src/server/featureFlags`                            |
-| Global Config    | `src/server/globalConfig`                            |
-| DB Schema        | `packages/database/src/schemas`                      |
-| DB Model         | `packages/database/src/models`                       |
-| DB Repository    | `packages/database/src/repositories`                 |
-| Third-party      | `src/libs` (analytics, oidc, etc.)                   |
-| Builtin Tools    | `src/tools`, `packages/builtin-tool-*`               |
-| Cloud-only       | `src/business/*`, `packages/business/*` (cloud repo) |
+| Layer            | Location                                                 |
+| ---------------- | -------------------------------------------------------- |
+| UI Components    | `src/components`, `src/features`                         |
+| SPA Pages        | `src/routes/`                                            |
+| React Router     | `src/spa/router/`                                        |
+| Global Providers | `src/layout`                                             |
+| Zustand Stores   | `src/store`                                              |
+| Client Services  | `src/services/`                                          |
+| REST API         | `src/app/(backend)/webapi`                               |
+| tRPC Routers     | `apps/server/src/routers/{async\|lambda\|mobile\|tools}` |
+| Server Services  | `apps/server/src/services` (can access DB)               |
+| Server Modules   | `apps/server/src/modules` (no DB access)                 |
+| Feature Flags    | `apps/server/src/featureFlags`                           |
+| Global Config    | `apps/server/src/globalConfig`                           |
+| DB Schema        | `packages/database/src/schemas`                          |
+| DB Model         | `packages/database/src/models`                           |
+| DB Repository    | `packages/database/src/repositories`                     |
+| Third-party      | `src/libs` (analytics, oidc, etc.)                       |
+| Builtin Tools    | `packages/builtin-tool-*`, `packages/builtin-tools`      |
+| Open-source stub | `src/business/*`, `packages/business/*` (this repo)      |
 
 ## Data Flow
 
 ```
 React UI → Store Actions → Client Service → TRPC Lambda → Server Services → DB Model → PostgreSQL
 ```
+
+## Note: Relationship to the Cloud Repo
+
+This open-source repo is consumed by a **separate, private cloud (SaaS) repo**
+as a git submodule mounted at `lobehub/`. The cloud repo provides:
+
+- **`src/business/{client,server}`** and **`packages/business/*`** implementations
+  that override the stubs shipped here.
+- Cloud-only routes (e.g. `(cloud)/`, `embed/`), cloud-only stores (e.g.
+  `subscription/`), cloud-only TRPC routers (billing, budget, risk control, …),
+  and Vercel cron routes under `src/app/(backend)/cron/`.
+- File-resolution order in cloud: `@/store/x` → cloud `src/store/x` first, then
+  `lobehub/packages/store/src/x`, then `lobehub/src/store/x`. **Cloud override wins.**
+
+When working in this repo alone, ignore the cloud layer — the stubs in
+`src/business/` and `packages/business/` are the source of truth here.

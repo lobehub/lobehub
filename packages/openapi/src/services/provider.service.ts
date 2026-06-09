@@ -1,3 +1,4 @@
+import { isOfficialProvider, OFFICIAL_PROVIDER_DISABLE_ERROR } from '@lobechat/business-const';
 import { and, asc, count, desc, eq, ilike, or } from 'drizzle-orm';
 
 import type { AiProviderSelectItem } from '@/database/schemas';
@@ -25,8 +26,8 @@ import type {
 export class ProviderService extends BaseService {
   private gateKeeperPromise: Promise<KeyVaultsGateKeeper> | null = null;
 
-  constructor(db: LobeChatDatabase, userId: string | null) {
-    super(db, userId);
+  constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
+    super(db, userId, workspaceId);
   }
 
   private async getGateKeeper(): Promise<KeyVaultsGateKeeper> {
@@ -98,9 +99,8 @@ export class ProviderService extends BaseService {
 
       const conditions = [] as any[];
 
-      if (permissionResult.condition?.userId) {
-        conditions.push(eq(aiProviders.userId, permissionResult.condition.userId));
-      }
+      const permissionWhere = this.buildPermissionWhere(aiProviders, permissionResult.condition);
+      if (permissionWhere) conditions.push(permissionWhere);
 
       if (request.keyword) {
         conditions.push(
@@ -163,9 +163,8 @@ export class ProviderService extends BaseService {
 
       const whereConditions = [eq(aiProviders.id, request.id)];
 
-      if (permissionResult.condition?.userId) {
-        whereConditions.push(eq(aiProviders.userId, permissionResult.condition.userId));
-      }
+      const permissionWhere = this.buildPermissionWhere(aiProviders, permissionResult.condition);
+      if (permissionWhere) whereConditions.push(permissionWhere);
 
       const whereCondition =
         whereConditions.length > 1 ? and(...whereConditions) : whereConditions[0];
@@ -191,6 +190,10 @@ export class ProviderService extends BaseService {
     });
 
     try {
+      if (isOfficialProvider(request.id) && request.enabled === false) {
+        throw this.createBusinessError(OFFICIAL_PROVIDER_DISABLE_ERROR);
+      }
+
       const permissionResult = await this.resolveOperationPermission('AI_PROVIDER_CREATE');
 
       if (!permissionResult.isPermitted) {
@@ -200,7 +203,7 @@ export class ProviderService extends BaseService {
       const ownerId = permissionResult.condition?.userId ?? this.userId;
 
       const existed = await this.db.query.aiProviders.findFirst({
-        where: and(eq(aiProviders.id, request.id), eq(aiProviders.userId, ownerId)),
+        where: and(eq(aiProviders.id, request.id), this.buildWorkspaceWhere(aiProviders)),
       });
 
       if (existed) {
@@ -227,7 +230,7 @@ export class ProviderService extends BaseService {
           sort: request.sort ?? null,
           source: request.source,
           updatedAt: now,
-          userId: ownerId,
+          ...this.buildWorkspacePayload({}),
         })
         .returning();
 
@@ -244,6 +247,10 @@ export class ProviderService extends BaseService {
     });
 
     try {
+      if (isOfficialProvider(request.id) && request.enabled === false) {
+        throw this.createBusinessError(OFFICIAL_PROVIDER_DISABLE_ERROR);
+      }
+
       const permissionResult = await this.resolveOperationPermission('AI_PROVIDER_UPDATE', {
         targetProviderId: request.id,
       });
@@ -254,9 +261,8 @@ export class ProviderService extends BaseService {
 
       const whereConditions = [eq(aiProviders.id, request.id)];
 
-      if (permissionResult.condition?.userId) {
-        whereConditions.push(eq(aiProviders.userId, permissionResult.condition.userId));
-      }
+      const permissionWhere = this.buildPermissionWhere(aiProviders, permissionResult.condition);
+      if (permissionWhere) whereConditions.push(permissionWhere);
 
       const whereCondition =
         whereConditions.length > 1 ? and(...whereConditions) : whereConditions[0];
@@ -321,9 +327,8 @@ export class ProviderService extends BaseService {
 
       const whereConditions = [eq(aiProviders.id, request.id)];
 
-      if (permissionResult.condition?.userId) {
-        whereConditions.push(eq(aiProviders.userId, permissionResult.condition.userId));
-      }
+      const permissionWhere = this.buildPermissionWhere(aiProviders, permissionResult.condition);
+      if (permissionWhere) whereConditions.push(permissionWhere);
 
       const providerWhere =
         whereConditions.length > 1 ? and(...whereConditions) : whereConditions[0]!;
@@ -339,9 +344,11 @@ export class ProviderService extends BaseService {
       await this.db.transaction(async (tx) => {
         const modelConditions = [eq(aiModels.providerId, request.id)];
 
-        if (permissionResult.condition?.userId) {
-          modelConditions.push(eq(aiModels.userId, permissionResult.condition.userId));
-        }
+        const modelPermissionWhere = this.buildPermissionWhere(
+          aiModels,
+          permissionResult.condition,
+        );
+        if (modelPermissionWhere) modelConditions.push(modelPermissionWhere);
 
         const modelWhere =
           modelConditions.length > 1 ? and(...modelConditions) : modelConditions[0]!;

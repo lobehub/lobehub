@@ -1,15 +1,17 @@
 import { ActionIcon, Button, DropdownMenu, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App, Space } from 'antd';
 import { cssVar } from 'antd-style';
 import { CircleX, EllipsisVertical, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
-import { memo, useEffect, useState } from 'react';
+import { memo, use, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
 
-import CreateNewModelModal from '../CreateNewModelModal';
+import { createCreateNewModelModal } from '../CreateNewModelModal';
+import { ProviderSettingsContext } from '../ProviderSettingsContext';
 import Search from './Search';
 
 interface ModelFetcherProps {
@@ -21,7 +23,7 @@ interface ModelFetcherProps {
 const ModelTitle = memo<ModelFetcherProps>(
   ({ provider, showAddNewModel = true, showModelFetcher = true }) => {
     const { t } = useTranslation('modelProvider');
-    const { modal, message } = App.useApp();
+    const { message } = App.useApp();
     const [
       searchKeyword,
       totalModels,
@@ -46,7 +48,7 @@ const ModelTitle = memo<ModelFetcherProps>(
 
     const [fetchRemoteModelsLoading, setFetchRemoteModelsLoading] = useState(false);
     const [clearRemoteModelsLoading, setClearRemoteModelsLoading] = useState(false);
-    const [showModal, setShowModal] = useState(false);
+    const { showDeployName } = use(ProviderSettingsContext);
 
     const mobile = useIsMobile();
 
@@ -130,16 +132,13 @@ const ModelTitle = memo<ModelFetcherProps>(
                   </Button>
                 )}
                 {showAddNewModel && (
-                  <>
-                    <Button
-                      icon={PlusIcon}
-                      size={'small'}
-                      onClick={() => {
-                        setShowModal(true);
-                      }}
-                    />
-                    <CreateNewModelModal open={showModal} setOpen={setShowModal} />
-                  </>
+                  <Button
+                    icon={PlusIcon}
+                    size={'small'}
+                    onClick={() => {
+                      createCreateNewModelModal({ showDeployName });
+                    }}
+                  />
                 )}
                 <DropdownMenu
                   items={[
@@ -147,7 +146,7 @@ const ModelTitle = memo<ModelFetcherProps>(
                       key: 'reset',
                       label: t('providerModels.list.resetAll.title'),
                       onClick: async () => {
-                        modal.confirm({
+                        confirmModal({
                           content: t('providerModels.list.resetAll.conform'),
                           onOk: async () => {
                             await clearModelsByProvider(provider);

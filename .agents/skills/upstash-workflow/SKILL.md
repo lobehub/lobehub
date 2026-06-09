@@ -1,6 +1,6 @@
 ---
 name: upstash-workflow
-description: 'Upstash Workflow implementation guide. Use when creating async workflows with QStash, implementing fan-out patterns, or building 3-layer workflow architecture (process → paginate → execute).'
+description: 'LobeHub Upstash Workflow and QStash guide. Use for async workflows, process/paginate/execute fan-out, serve handlers, context.run/call/sleep, or workflow triggers.'
 user-invocable: false
 ---
 
@@ -186,4 +186,4 @@ QSTASH_URL=https://custom-qstash.com
 - [Upstash Workflow Documentation](https://upstash.com/docs/workflow)
 - [QStash Documentation](https://upstash.com/docs/qstash)
 - [Example Workflows in Codebase](<../../src/app/(backend)/api/workflows/>)
-- [Workflow Classes](../../src/server/workflows/)
+- [Workflow Classes](../../apps/server/src/workflows/)

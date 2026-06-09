@@ -13,7 +13,7 @@ interface CurrentUserResponse {
 export async function getUserIdFromApiKey(apiKey: string, serverUrl?: string): Promise<string> {
   const normalizedServerUrl = normalizeUrl(serverUrl) || resolveServerUrl();
 
-  const response = await fetch(`${normalizedServerUrl}/api/v1/users/me`, {
+  const response = await fetch(`${normalizedServerUrl}/api/v1/users/me?includeCount=0`, {
     headers: {
       Authorization: `Bearer ${apiKey}`,
     },
@@ -23,7 +23,9 @@ export async function getUserIdFromApiKey(apiKey: string, serverUrl?: string): P
   try {
     body = (await response.json()) as CurrentUserResponse;
   } catch {
-    throw new Error(`Failed to parse response from ${normalizedServerUrl}/api/v1/users/me.`);
+    throw new Error(
+      `Failed to parse response from ${normalizedServerUrl}/api/v1/users/me?includeCount=0.`,
+    );
   }
 
   if (!response.ok || body?.success === false) {

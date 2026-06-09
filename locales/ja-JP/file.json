@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "フォルダをアップロード",
   "home.uploadEntries.library.title": "新しいライブラリを作成",
   "home.uploadEntries.newPage.title": "新規文書の作成",
+  "library.hierarchy.empty.desc": "ファイルを追加するか、フォルダーを作成して始めましょう",
+  "library.hierarchy.empty.title": "まだ何もありません",
   "library.list.confirmRemoveLibrary": "このライブラリを削除しようとしています。中のファイルは削除されず、「すべてのファイル」に移動されます。ライブラリは削除後に復元できませんので、ご注意ください。",
   "library.list.empty": "<1>+</1> をクリックしてライブラリを作成",
   "library.new": "新しいライブラリを作成",

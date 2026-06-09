@@ -8,15 +8,38 @@ import {
   type NewAgentEvalBenchmark,
 } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 
 export class AgentEvalBenchmarkModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
+
+  /**
+   * Ownership predicate: rows the current actor can see/edit. Includes
+   * workspace-scoped or personal rows AND system rows (`userId IS NULL`).
+   */
+  private ownership = () =>
+    or(
+      buildWorkspaceWhere(
+        { userId: this.userId, workspaceId: this.workspaceId },
+        agentEvalBenchmarks,
+      ),
+      isNull(agentEvalBenchmarks.userId),
+    );
+
+  /** Mutate-only predicate excluding system rows. */
+  private mutableOwnership = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      agentEvalBenchmarks,
+    );
 
   /**
    * Create a new benchmark
@@ -24,7 +47,7 @@ export class AgentEvalBenchmarkModel {
   create = async (params: NewAgentEvalBenchmark) => {
     const [result] = await this.db
       .insert(agentEvalBenchmarks)
-      .values({ ...params, userId: this.userId })
+      .values({ ...params, userId: this.userId, workspaceId: this.workspaceId ?? null })
       .returning();
     return result;
   };
@@ -39,23 +62,20 @@ export class AgentEvalBenchmarkModel {
         and(
           eq(agentEvalBenchmarks.id, id),
           eq(agentEvalBenchmarks.isSystem, false),
-          eq(agentEvalBenchmarks.userId, this.userId),
+          this.mutableOwnership(),
         ),
       );
   };
 
   /**
-   * Query benchmarks (system + user-created)
+   * Query benchmarks (system + user/workspace-created)
    * @param includeSystem - Whether to include system benchmarks (default: true)
    */
   query = async (includeSystem = true) => {
-    const userCondition = or(
-      eq(agentEvalBenchmarks.userId, this.userId),
-      isNull(agentEvalBenchmarks.userId),
-    );
+    const userCondition = this.ownership();
     const conditions = includeSystem
       ? userCondition
-      : and(eq(agentEvalBenchmarks.isSystem, false), userCondition);
+      : and(eq(agentEvalBenchmarks.isSystem, false), this.ownership());
 
     const datasetCountSq = this.db
       .select({
@@ -63,6 +83,12 @@ export class AgentEvalBenchmarkModel {
         count: count().as('dataset_count'),
       })
       .from(agentEvalDatasets)
+      .where(
+        buildWorkspaceWhere(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          agentEvalDatasets,
+        ),
+      )
       .groupBy(agentEvalDatasets.benchmarkId)
       .as('dc');
 
@@ -73,6 +99,12 @@ export class AgentEvalBenchmarkModel {
       })
       .from(agentEvalTestCases)
       .innerJoin(agentEvalDatasets, eq(agentEvalTestCases.datasetId, agentEvalDatasets.id))
+      .where(
+        buildWorkspaceWhere(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          agentEvalDatasets,
+        ),
+      )
       .groupBy(agentEvalDatasets.benchmarkId)
       .as('tc');
 
@@ -83,7 +115,9 @@ export class AgentEvalBenchmarkModel {
       })
       .from(agentEvalRuns)
       .innerJoin(agentEvalDatasets, eq(agentEvalRuns.datasetId, agentEvalDatasets.id))
-      .where(eq(agentEvalRuns.userId, this.userId))
+      .where(
+        buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentEvalRuns),
+      )
       .groupBy(agentEvalDatasets.benchmarkId)
       .as('rc');
 
@@ -109,7 +143,13 @@ export class AgentEvalBenchmarkModel {
           .from(agentEvalRuns)
           .innerJoin(agentEvalDatasets, eq(agentEvalRuns.datasetId, agentEvalDatasets.id))
           .where(
-            and(eq(agentEvalDatasets.benchmarkId, row.id), eq(agentEvalRuns.userId, this.userId)),
+            and(
+              eq(agentEvalDatasets.benchmarkId, row.id),
+              buildWorkspaceWhere(
+                { userId: this.userId, workspaceId: this.workspaceId },
+                agentEvalRuns,
+              ),
+            ),
           )
           .orderBy(desc(agentEvalRuns.createdAt))
           .limit(5);
@@ -144,12 +184,7 @@ export class AgentEvalBenchmarkModel {
     const [result] = await this.db
       .select()
       .from(agentEvalBenchmarks)
-      .where(
-        and(
-          eq(agentEvalBenchmarks.id, id),
-          or(eq(agentEvalBenchmarks.userId, this.userId), isNull(agentEvalBenchmarks.userId)),
-        ),
-      )
+      .where(and(eq(agentEvalBenchmarks.id, id), this.ownership()))
       .limit(1);
     return result;
   };
@@ -161,12 +196,7 @@ export class AgentEvalBenchmarkModel {
     const [result] = await this.db
       .select()
       .from(agentEvalBenchmarks)
-      .where(
-        and(
-          eq(agentEvalBenchmarks.identifier, identifier),
-          or(eq(agentEvalBenchmarks.userId, this.userId), isNull(agentEvalBenchmarks.userId)),
-        ),
-      )
+      .where(and(eq(agentEvalBenchmarks.identifier, identifier), this.ownership()))
       .limit(1);
     return result;
   };
@@ -182,7 +212,7 @@ export class AgentEvalBenchmarkModel {
         and(
           eq(agentEvalBenchmarks.id, id),
           eq(agentEvalBenchmarks.isSystem, false),
-          eq(agentEvalBenchmarks.userId, this.userId),
+          this.mutableOwnership(),
         ),
       )
       .returning();

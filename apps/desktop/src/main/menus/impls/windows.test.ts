@@ -85,6 +85,10 @@ const createMockApp = () => {
       getUpdaterState: vi.fn(() => ({ stage: 'idle' })),
       installNow: vi.fn(),
     },
+    storeManager: {
+      get: vi.fn(),
+      set: vi.fn(),
+    },
   } as unknown as App;
 };
 
@@ -421,13 +425,20 @@ describe('WindowsMenu', () => {
       const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
       const viewMenu = template.find((item: any) => item.label === 'View');
 
-      const resetZoomItem = viewMenu.submenu.find((item: any) => item.role === 'resetZoom');
-      const zoomInItem = viewMenu.submenu.find((item: any) => item.role === 'zoomIn');
-      const zoomOutItem = viewMenu.submenu.find((item: any) => item.role === 'zoomOut');
+      const resetZoomItem = viewMenu.submenu.find((item: any) => item.label === 'Reset Zoom');
+      const zoomInItems = viewMenu.submenu.filter((item: any) => item.label === 'Zoom In');
+      const zoomInItem = zoomInItems.find((item: any) => item.visible !== false);
+      const alternateZoomInItem = zoomInItems.find((item: any) => item.visible === false);
+      const zoomOutItem = viewMenu.submenu.find((item: any) => item.label === 'Zoom Out');
 
-      expect(resetZoomItem).toBeDefined();
-      expect(zoomInItem).toBeDefined();
-      expect(zoomOutItem).toBeDefined();
+      expect(resetZoomItem.accelerator).toBe('CmdOrCtrl+0');
+      expect(typeof resetZoomItem.click).toBe('function');
+      expect(zoomInItem.accelerator).toBe('CmdOrCtrl+=');
+      expect(typeof zoomInItem.click).toBe('function');
+      expect(alternateZoomInItem.accelerator).toBe('CmdOrCtrl+Plus');
+      expect(typeof alternateZoomInItem.click).toBe('function');
+      expect(zoomOutItem.accelerator).toBe('CmdOrCtrl+-');
+      expect(typeof zoomOutItem.click).toBe('function');
     });
   });
 

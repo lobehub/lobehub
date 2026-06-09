@@ -1,3 +1,4 @@
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { type TFunction } from 'i18next';
 import { type ChangeEvent } from 'react';
 import { useCallback } from 'react';
@@ -55,16 +56,13 @@ const useUploadFolder = ({
           const gitignoreContent = await readGitignoreContent(gitignoreFile);
           const gitignoreOriginalCount = files.length;
 
-          const { Modal } = await import('antd');
-
-          Modal.confirm({
+          confirmModal({
             cancelText: t('header.actions.gitignore.cancel'),
             content: t('header.actions.gitignore.content', {
               count: gitignoreOriginalCount,
             }),
             okText: t('header.actions.gitignore.apply'),
             onCancel: () => {
-              // Upload without awaiting - let it run in background
               upload(files);
             },
             onOk: async () => {

@@ -1,4 +1,5 @@
 import { Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { type ItemType } from 'antd/es/menu/interface';
 import { createStaticStyles } from 'antd-style';
@@ -24,8 +25,8 @@ const styles = createStaticStyles(({ css }) => ({
  * Used in List/Group/Actions.tsx
  */
 export const useSessionGroupMenuItems = () => {
-  const { t } = useTranslation('chat');
-  const { modal, message } = App.useApp();
+  const { t } = useTranslation(['chat', 'common']);
+  const { message } = App.useApp();
   const groupTemplates = useGroupTemplates();
 
   const [storeCreateAgent] = useAgentStore((s) => [s.createAgent]);
@@ -88,21 +89,20 @@ export const useSessionGroupMenuItems = () => {
         label: t('delete', { ns: 'common' }),
         onClick: (info: any) => {
           info.domEvent?.stopPropagation();
-          modal.confirm({
-            centered: true,
-            classNames: {
-              root: styles.modalRoot,
-            },
+          confirmModal({
+            cancelText: t('cancel', { ns: 'common' }),
+            content: t('sessionGroup.confirmRemoveGroupAlert'),
             okButtonProps: { danger: true },
+            okText: t('delete', { ns: 'common' }),
             onOk: async () => {
               await removeGroup(groupId);
             },
-            title: t('sessionGroup.confirmRemoveGroupAlert'),
+            title: t('delete', { ns: 'common' }),
           });
         },
       };
     },
-    [t, modal, removeGroup, styles.modalRoot],
+    [t, removeGroup],
   );
 
   /**

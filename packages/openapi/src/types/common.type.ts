@@ -23,7 +23,7 @@ export const PaginationQuerySchema = z.object({
       if (!val) return ''; // Allow empty value, convert to empty string
       return val.trim();
     })
-    .refine((val) => val.length <= 100, '搜索关键词长度不能超过100个字符'),
+    .refine((val) => val.length <= 100, 'Search keyword cannot exceed 100 characters'),
   page: z
     .string()
     .transform((val) => parseInt(val, 10))

@@ -34,6 +34,7 @@ interface PreparedMessage {
   traceId?: string | null;
   updatedAt: Date;
   userId: string;
+  workspaceId: string | null;
 }
 
 interface PreparedMessagePlugin {
@@ -46,15 +47,18 @@ interface PreparedMessagePlugin {
   toolCallId?: string | null;
   type?: string | null;
   userId: string;
+  workspaceId: string | null;
 }
 
 export class TopicImporterRepo {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
 
   /**
@@ -94,6 +98,7 @@ export class TopicImporterRepo {
         id: topicId,
         title: title || 'Imported Topic',
         userId: this.userId,
+        workspaceId: this.workspaceId ?? null,
       });
 
       // Batch insert messages
@@ -204,6 +209,7 @@ export class TopicImporterRepo {
         traceId: msg.traceId || null,
         updatedAt: new Date(msg.updatedTimestamp),
         userId: this.userId,
+        workspaceId: this.workspaceId ?? null,
       });
 
       // If message has plugin data (tool messages), prepare plugin record
@@ -219,6 +225,7 @@ export class TopicImporterRepo {
           toolCallId: msg.tool_call_id || null,
           type: plugin?.type || null,
           userId: this.userId,
+          workspaceId: this.workspaceId ?? null,
         });
       }
     }

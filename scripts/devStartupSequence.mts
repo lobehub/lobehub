@@ -4,6 +4,7 @@ import dotenvExpand from 'dotenv-expand';
 import net from 'node:net';
 
 const env = process.env.NODE_ENV || 'development';
+const isWindows = process.platform === 'win32';
 
 const shellEnv = Object.entries(process.env).reduce<Record<string, string>>(
   (acc, [key, value]) => {
@@ -47,8 +48,9 @@ const NEXT_PORT = resolveNextPort();
 const NEXT_ROOT_URL = `http://${NEXT_HOST}:${NEXT_PORT}/`;
 const NEXT_READY_TIMEOUT_MS = 180_000;
 const NEXT_READY_RETRY_MS = 400;
+const FORCE_KILL_TIMEOUT_MS = 5_000;
 
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const npmCommand = isWindows ? 'npm.cmd' : 'npm';
 
 let nextProcess: ChildProcess | undefined;
 let viteProcess: ChildProcess | undefined;
@@ -56,9 +58,10 @@ let shuttingDown = false;
 
 const runNpmScript = (scriptName: string) =>
   spawn(npmCommand, ['run', scriptName], {
+    detached: !isWindows,
     env: process.env,
     stdio: 'inherit',
-    shell: process.platform === 'win32',
+    shell: isWindows,
   });
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -112,9 +115,34 @@ const runNextBackgroundTasks = () => {
   })();
 };
 
+const isChildAlive = (child: ChildProcess) =>
+  !child.killed && child.exitCode === null && child.signalCode === null;
+
+const sendKillSignal = (child: ChildProcess, signal: NodeJS.Signals) => {
+  if (!isChildAlive(child) || !child.pid) return;
+  try {
+    if (!isWindows) {
+      try {
+        process.kill(-child.pid, signal);
+        return;
+      } catch {
+        // process group kill failed; fall through to direct kill
+      }
+    }
+    child.kill(signal);
+  } catch {
+    // child already gone
+  }
+};
+
 const terminateChild = (child?: ChildProcess) => {
-  if (!child || child.killed) return;
-  child.kill('SIGTERM');
+  if (!child) return;
+  sendKillSignal(child, 'SIGTERM');
+};
+
+const forceKillChild = (child?: ChildProcess) => {
+  if (!child) return;
+  sendKillSignal(child, 'SIGKILL');
 };
 
 const shutdownAll = (signal: NodeJS.Signals) => {
@@ -125,6 +153,12 @@ const shutdownAll = (signal: NodeJS.Signals) => {
   terminateChild(nextProcess);
 
   process.exitCode = signal === 'SIGINT' ? 130 : 143;
+
+  const forceKillTimer = setTimeout(() => {
+    forceKillChild(viteProcess);
+    forceKillChild(nextProcess);
+  }, FORCE_KILL_TIMEOUT_MS);
+  forceKillTimer.unref();
 };
 
 const watchChildExit = (child: ChildProcess, name: 'next' | 'vite') => {
@@ -139,13 +173,31 @@ const watchChildExit = (child: ChildProcess, name: 'next' | 'vite') => {
 };
 
 const main = async () => {
-  process.once('SIGINT', () => shutdownAll('SIGINT'));
-  process.once('SIGTERM', () => shutdownAll('SIGTERM'));
+  const forwardedSignals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+  for (const sig of forwardedSignals) {
+    process.once(sig, () => shutdownAll(sig));
+  }
+
+  process.on('uncaughtException', (error) => {
+    console.error('❌ uncaught exception in dev startup:', error);
+    shutdownAll('SIGTERM');
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    console.error('❌ unhandled rejection in dev startup:', reason);
+    shutdownAll('SIGTERM');
+  });
+
+  process.on('exit', () => {
+    forceKillChild(viteProcess);
+    forceKillChild(nextProcess);
+  });
 
   nextProcess = spawn('npx', ['next', 'dev', '-p', String(NEXT_PORT)], {
+    detached: !isWindows,
     env: process.env,
     stdio: 'inherit',
-    shell: process.platform === 'win32',
+    shell: isWindows,
   });
   watchChildExit(nextProcess, 'next');
 

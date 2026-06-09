@@ -4,7 +4,7 @@ import { type HeterogeneousProviderConfig, type UserCredSummary } from '@lobecha
 import { Github } from '@lobehub/icons';
 import { Flexbox } from '@lobehub/ui';
 import { Avatar, Button, Input, Select, Spin, Tag, Typography } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckCircle2, KeyRound, X } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,14 +15,14 @@ import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
 // Fixed cred key for Claude Code OAuth token — never changes
 const CLAUDE_TOKEN_CRED_KEY = 'CLAUDE_CODE_OAUTH_TOKEN';
 
-const useStyles = createStyles(({ css, token, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   card: css`
     padding-block: 16px 12px;
     padding-inline: 16px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   credOption: css`
     display: flex;
@@ -48,12 +48,12 @@ const useStyles = createStyles(({ css, token, cssVar }) => ({
     min-height: 36px;
     padding-block: 6px;
     padding-inline: 8px;
-    border-radius: ${token.borderRadiusSM}px;
+    border-radius: ${cssVar.borderRadiusSM};
 
     transition: background 0.15s;
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${cssVar.colorFillTertiary};
 
       .repo-delete-btn {
         opacity: 1;
@@ -61,7 +61,7 @@ const useStyles = createStyles(({ css, token, cssVar }) => ({
     }
   `,
   repoItemActive: css`
-    background: ${token.colorFillSecondary};
+    background: ${cssVar.colorFillSecondary};
   `,
   repoDeleteBtn: css`
     cursor: pointer;
@@ -73,7 +73,7 @@ const useStyles = createStyles(({ css, token, cssVar }) => ({
     border: none;
     border-radius: 4px;
 
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
 
     opacity: 0;
     background: transparent;
@@ -83,7 +83,7 @@ const useStyles = createStyles(({ css, token, cssVar }) => ({
       color 0.15s;
 
     &:hover {
-      color: ${token.colorError};
+      color: ${cssVar.colorError};
     }
   `,
   repoList: css`
@@ -93,15 +93,15 @@ const useStyles = createStyles(({ css, token, cssVar }) => ({
   `,
   sectionDesc: css`
     font-size: 12px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   sectionDivider: css`
     margin-block: 12px;
-    border-block-start: 1px solid ${token.colorBorderSecondary};
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   sectionLabel: css`
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
     text-transform: uppercase;
     letter-spacing: 0.04em;
   `,
@@ -121,7 +121,6 @@ interface TokenSectionProps {
 
 const TokenSection = memo<TokenSectionProps>(({ existingCred, onSaved, onEnvChange }) => {
   const { t } = useTranslation('setting');
-  const { styles } = useStyles();
   const [editing, setEditing] = useState(!existingCred);
   const [tokenInput, setTokenInput] = useState('');
   const [saving, setSaving] = useState(false);
@@ -211,7 +210,6 @@ interface RepoListSectionProps {
 
 const RepoListSection = memo<RepoListSectionProps>(({ repos, onReposChange }) => {
   const { t } = useTranslation('setting');
-  const { styles } = useStyles();
   const [input, setInput] = useState('');
 
   const addRepo = () => {
@@ -269,7 +267,6 @@ const RepoListSection = memo<RepoListSectionProps>(({ repos, onReposChange }) =>
 const CloudHeterogeneousConfig = memo<CloudHeterogeneousConfigProps>(
   ({ provider, onEnvChange }) => {
     const { t } = useTranslation('setting');
-    const { styles } = useStyles();
     const navigate = useNavigate();
 
     const currentEnv = provider.env ?? {};

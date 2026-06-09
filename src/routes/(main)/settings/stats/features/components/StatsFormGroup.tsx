@@ -6,6 +6,7 @@ import { type ReactNode } from 'react';
 import { memo } from 'react';
 
 interface StatsFormGroupProps extends Omit<BlockProps, 'title'> {
+  afterTitle?: ReactNode;
   children: ReactNode;
   extra?: ReactNode;
   fontSize?: number;
@@ -13,13 +14,16 @@ interface StatsFormGroupProps extends Omit<BlockProps, 'title'> {
 }
 
 const StatsFormGroup = memo<StatsFormGroupProps>(
-  ({ fontSize = 18, children, extra, title, ...rest }) => {
+  ({ fontSize = 18, afterTitle, children, extra, title, ...rest }) => {
     return (
       <Block gap={16} variant={'borderless'} {...rest}>
         <Flexbox horizontal align={'center'} justify={'space-between'}>
-          <Text fontSize={fontSize} weight={500}>
-            {title}
-          </Text>
+          <Flexbox horizontal align={'center'} gap={8}>
+            <Text fontSize={fontSize} weight={500}>
+              {title}
+            </Text>
+            {afterTitle}
+          </Flexbox>
           <Flexbox horizontal align={'center'} gap={8}>
             {extra}
           </Flexbox>

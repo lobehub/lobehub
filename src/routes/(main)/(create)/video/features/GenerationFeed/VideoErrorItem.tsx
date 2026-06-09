@@ -1,6 +1,5 @@
 'use client';
 
-import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { Block, Center, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { VideoOffIcon } from 'lucide-react';
@@ -11,6 +10,7 @@ import { ActionButtons } from '@/routes/(main)/(create)/image/features/Generatio
 import { styles } from '@/routes/(main)/(create)/image/features/GenerationFeed/GenerationItem/styles';
 import { AsyncTaskErrorType } from '@/types/asyncTask';
 import type { Generation } from '@/types/generation';
+import { getRuntimeErrorMessage } from '@/utils/locale/runtimeErrorMessage';
 
 interface VideoErrorItemProps {
   aspectRatio?: string;
@@ -22,7 +22,7 @@ interface VideoErrorItemProps {
 const VideoErrorItem = memo<VideoErrorItemProps>(
   ({ generation, aspectRatio, onDelete, onCopyError }) => {
     const { t } = useTranslation('video');
-    const { t: tError } = useTranslation('error');
+    const { t: tError } = useTranslation(['error', 'modelRuntime']);
 
     const errorMessage = useMemo(() => {
       if (!generation.task.error) return '';
@@ -31,28 +31,18 @@ const VideoErrorItem = memo<VideoErrorItemProps>(
       const errorBody = typeof error.body === 'string' ? error.body : error.body?.detail;
 
       if (errorBody) {
-        const knownErrorTypes = Object.values(AgentRuntimeErrorType);
+        const translated = getRuntimeErrorMessage(tError, errorBody);
         if (
-          knownErrorTypes.includes(
-            errorBody as (typeof AgentRuntimeErrorType)[keyof typeof AgentRuntimeErrorType],
-          )
+          translated &&
+          translated !== `modelRuntime:${errorBody}` &&
+          translated !== `response.${errorBody}`
         ) {
-          const translationKey = `response.${errorBody}`;
-          const translated = tError(translationKey as any);
-
-          if (translated === translationKey || (translated as string).startsWith('response.')) {
-            const directTranslated = tError(errorBody as any);
-            if (directTranslated !== errorBody) {
-              return directTranslated as string;
-            }
-            return errorBody;
-          }
-
-          return translated as string;
+          return translated;
         }
+        return errorBody;
       }
 
-      return errorBody || error.name || 'Unknown error';
+      return error.name || 'Unknown error';
     }, [generation.task.error, tError]);
 
     const isProviderContentModerationError =

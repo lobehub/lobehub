@@ -162,7 +162,7 @@ const findBlockById = (
     }
     // Post-task summary blocks live in a separate field on virtual
     // assistantGroup messages so they render AFTER `<SignalCallbacks>`
-    // (LOBE-8998). Same lookup contract as `children` — the renderer
+    // (). Same lookup contract as `children` — the renderer
     // identifies blocks by id regardless of which slot they came from.
     if ((message as { taskCompletions?: AssistantContentBlock[] }).taskCompletions) {
       const block = (
@@ -208,9 +208,22 @@ const getBlockHasTools =
     return !!tools && tools.length > 0;
   };
 
+/** 1-based position of a verify message among all verify messages in the thread. */
+const getVerifyOrdinal = (id: string) => (s: State) => {
+  let ordinal = 0;
+  for (const message of s.displayMessages) {
+    if (message.role === 'verify') {
+      ordinal += 1;
+      if (message.id === id) return ordinal;
+    }
+  }
+  return ordinal || 1;
+};
+
 export const dataSelectors = {
   currentTopicSummary,
   dbMessages,
+  getVerifyOrdinal,
   displayMessageIds,
   displayMessages,
   findLastMessageId,

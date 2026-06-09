@@ -73,7 +73,6 @@ describe('AgentSignalReceiptList', () => {
     expect(screen.getByText('GitHub PR review workflow')).toBeInTheDocument();
     expect(screen.getByText('Memory saved')).toBeInTheDocument();
     expect(screen.getByText('Skill updated')).toBeInTheDocument();
-    expect(screen.getAllByTitle('Agent Signal')).toHaveLength(2);
   });
 
   it('renders receipt cards without the recent activity label', () => {
@@ -135,7 +134,7 @@ describe('AgentSignalReceiptList', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /GitHub PR review workflow/ }));
 
-    expect(mocks.openDocument).toHaveBeenCalledWith('document-1');
+    expect(mocks.openDocument).toHaveBeenCalledWith('document-1', undefined);
   });
 
   it('renders receipts without openable targets as non-clickable status cards', () => {
@@ -198,7 +197,7 @@ describe('AgentSignalReceiptList', () => {
 
     fireEvent.click(screen.getByText('GitHub PR review workflow'));
 
-    expect(mocks.openDocument).toHaveBeenCalledWith('document-1');
+    expect(mocks.openDocument).toHaveBeenCalledWith('document-1', undefined);
   });
 
   it('opens skill receipt document refs while keeping the bundle target id for display metadata', () => {
@@ -231,7 +230,7 @@ describe('AgentSignalReceiptList', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /GitHub PR review workflow/ }));
 
-    expect(mocks.openDocument).toHaveBeenCalledWith('index-document-1');
+    expect(mocks.openDocument).toHaveBeenCalledWith('index-document-1', 'index-agent-document-1');
   });
 
   it('navigates memory receipts to the memory surface', () => {

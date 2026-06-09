@@ -24,13 +24,13 @@ export const ChatServiceParamsSchema = z.object({
   messages: z
     .array(
       z.object({
-        content: z.string().min(1, '消息内容不能为空'),
+        content: z.string().min(1, 'Message content cannot be empty'),
         role: z.enum(['user', 'assistant', 'system'], {
-          required_error: '角色必须为user、assistant或system',
+          required_error: 'Role must be user, assistant, or system',
         }),
       }),
     )
-    .min(1, '消息列表不能为空'),
+    .min(1, 'Message list cannot be empty'),
   model: z.string().nullish(),
   provider: z.string().nullish(),
   stream: z.boolean().nullish(),
@@ -66,11 +66,11 @@ export interface TranslateServiceParams {
 }
 
 export const TranslateServiceParamsSchema = z.object({
-  from: z.string().min(1, '源语言不能为空').optional(),
+  from: z.string().min(1, 'Source language cannot be empty').optional(),
   model: z.string().nullish(),
   provider: z.string().nullish(),
-  text: z.string().min(1, '待翻译文本不能为空'),
-  to: z.string().min(1, '目标语言不能为空'),
+  text: z.string().min(1, 'Text to translate cannot be empty'),
+  to: z.string().min(1, 'Target language cannot be empty'),
 });
 
 // ==================== Message Generation Types ====================
@@ -113,7 +113,7 @@ export const MessageGenerationParamsSchema = z.object({
     .nullish(),
   conversationHistory: z.array(
     z.object({
-      content: z.string().min(1, '消息内容不能为空'),
+      content: z.string().min(1, 'Message content cannot be empty'),
       role: z.enum(['user', 'assistant', 'system']),
     }),
   ),

@@ -54,6 +54,32 @@ describe('AgentOperationModel', () => {
       expect(row?.completedAt).toBeNull();
     });
 
+    it('persists the agent-signal marker into metadata so server tools can read it back', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-start-marker';
+      // Server-side self-iteration tools resolve the review window / source id from
+      // metadata.agentSignal (the trimmed appContext intentionally drops it). If
+      // the marker is not persisted here, tools fall back to a 1970 window +
+      // operationId source.
+      const agentSignal = {
+        agentId: 'agent_reviewed',
+        kind: 'nightly-review',
+        localDate: '2026-05-30',
+        reviewWindowEnd: '2026-05-30T00:00:00.000Z',
+        reviewWindowStart: '2026-05-29T00:00:00.000Z',
+        sourceId: 'nightly-review:user:agent_reviewed:2026-05-30',
+      };
+
+      await model.recordStart({
+        appContext: { scope: 'chat' },
+        metadata: { agentSignal },
+        operationId,
+      });
+
+      const row = await model.findById(operationId);
+      expect(row?.metadata).toEqual({ agentSignal });
+    });
+
     it('is idempotent on the primary key', async () => {
       const model = new AgentOperationModel(serverDB, userId);
       const operationId = 'op-start-2';
@@ -181,6 +207,65 @@ describe('AgentOperationModel', () => {
       expect(row?.error).toBeNull();
       // The attacker cannot read the row either.
       expect(await attackerModel.findById(operationId)).toBeNull();
+    });
+  });
+
+  describe('getMaxDurationSeconds', () => {
+    it('returns the longest wall-clock duration, ignoring in-flight and other users', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+
+      await serverDB.insert(agentOperations).values([
+        // 5 minutes
+        {
+          completedAt: new Date('2026-05-13T10:05:00.000Z'),
+          id: 'op-dur-1',
+          startedAt: new Date('2026-05-13T10:00:00.000Z'),
+          status: 'done',
+          userId,
+        },
+        // 1 hour — the longest
+        {
+          completedAt: new Date('2026-05-13T12:00:00.000Z'),
+          id: 'op-dur-2',
+          startedAt: new Date('2026-05-13T11:00:00.000Z'),
+          status: 'done',
+          userId,
+        },
+        // in-flight: no completedAt -> excluded
+        {
+          completedAt: null,
+          id: 'op-dur-running',
+          startedAt: new Date('2026-05-13T09:00:00.000Z'),
+          status: 'running',
+          userId,
+        },
+        // another user's much longer op -> excluded
+        {
+          completedAt: new Date('2026-05-13T20:00:00.000Z'),
+          id: 'op-dur-other',
+          startedAt: new Date('2026-05-13T10:00:00.000Z'),
+          status: 'done',
+          userId: otherUserId,
+        },
+      ]);
+
+      const result = await model.getMaxDurationSeconds();
+      expect(result).toBe(3600);
+    });
+
+    it('returns 0 when there are no completed operations', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+
+      await serverDB.insert(agentOperations).values({
+        completedAt: null,
+        id: 'op-dur-none',
+        startedAt: new Date('2026-05-13T09:00:00.000Z'),
+        status: 'running',
+        userId,
+      });
+
+      const result = await model.getMaxDurationSeconds();
+      expect(result).toBe(0);
     });
   });
 });

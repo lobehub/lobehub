@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, Icon } from '@lobehub/ui';
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { Brain, ChartBar, MessageSquare, Play } from 'lucide-react';
@@ -105,12 +106,12 @@ interface IdleStateProps {
 
 const IdleState = memo<IdleStateProps>(({ run }) => {
   const { t } = useTranslation('eval');
-  const { modal, message } = App.useApp();
+  const { message } = App.useApp();
   const startRun = useEvalStore((s) => s.startRun);
   const [starting, setStarting] = useState(false);
 
   const handleStart = () => {
-    modal.confirm({
+    confirmModal({
       content: t('run.actions.start.confirm'),
       okText: t('run.actions.start'),
       onOk: async () => {

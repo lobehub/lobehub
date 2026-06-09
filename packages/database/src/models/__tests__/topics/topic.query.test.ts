@@ -9,6 +9,7 @@ import {
   sessions,
   topics,
   users,
+  workspaces,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { TopicModel } from '../../topic';
@@ -51,6 +52,132 @@ describe('TopicModel - Query', () => {
       expect(result.items[0].id).toBe('5');
       expect(result.items[1].id).toBe('2');
       expect(result.items[2].id).toBe('4');
+    });
+
+    it('should isolate personal and workspace topics for the same user', async () => {
+      await serverDB.insert(workspaces).values({
+        id: 'topic-workspace',
+        name: 'Workspace',
+        primaryOwnerId: userId,
+        slug: 'topic-workspace',
+      });
+      await serverDB.insert(sessions).values({
+        id: 'topic-workspace-session',
+        userId,
+        workspaceId: 'topic-workspace',
+      });
+      await serverDB.insert(topics).values([
+        {
+          id: 'personal-topic',
+          sessionId,
+          updatedAt: new Date('2023-01-01'),
+          userId,
+          workspaceId: null,
+        },
+        {
+          id: 'workspace-topic',
+          sessionId: 'topic-workspace-session',
+          updatedAt: new Date('2023-02-01'),
+          userId,
+          workspaceId: 'topic-workspace',
+        },
+      ]);
+
+      await expect(topicModel.query({ containerId: sessionId })).resolves.toMatchObject({
+        items: [expect.objectContaining({ id: 'personal-topic' })],
+        total: 1,
+      });
+      await expect(
+        new TopicModel(serverDB, userId, 'topic-workspace').query({
+          containerId: 'topic-workspace-session',
+        }),
+      ).resolves.toMatchObject({
+        items: [expect.objectContaining({ id: 'workspace-topic' })],
+        total: 1,
+      });
+    });
+
+    it('should order by status priority when sortBy is "status"', async () => {
+      await serverDB.insert(topics).values([
+        // favorite floats to the top regardless of its (lower-priority) status
+        {
+          favorite: true,
+          id: 'fav',
+          sessionId,
+          status: 'completed',
+          updatedAt: new Date('2023-01-01'),
+          userId,
+        },
+        // null status is treated as `active` (rank 3)
+        { id: 'active', sessionId, updatedAt: new Date('2023-09-01'), userId },
+        {
+          id: 'running-old',
+          sessionId,
+          status: 'running',
+          updatedAt: new Date('2023-02-01'),
+          userId,
+        },
+        {
+          id: 'running-new',
+          sessionId,
+          status: 'running',
+          updatedAt: new Date('2023-08-01'),
+          userId,
+        },
+        {
+          id: 'waiting',
+          sessionId,
+          status: 'waitingForHuman',
+          updatedAt: new Date('2023-03-01'),
+          userId,
+        },
+        // failed shares the top "pending" bucket with waitingForHuman, so it
+        // ranks just below it and above running/active
+        {
+          id: 'failed',
+          sessionId,
+          status: 'failed',
+          updatedAt: new Date('2023-04-01'),
+          userId,
+        },
+        {
+          id: 'completed',
+          sessionId,
+          status: 'completed',
+          updatedAt: new Date('2023-07-01'),
+          userId,
+        },
+      ]);
+
+      const result = await topicModel.query({ containerId: sessionId, sortBy: 'status' });
+
+      expect(result.items.map((t) => t.id)).toEqual([
+        'fav', // favorite, rank-independent
+        'waiting', // waitingForHuman = 0
+        'failed', // failed = 1
+        'running-new', // running = 2, newer first within the bucket
+        'running-old',
+        'active', // null status → active = 3
+        'completed', // completed = 5
+      ]);
+    });
+
+    it('should keep updatedAt ordering by default (no sortBy)', async () => {
+      await serverDB.insert(topics).values([
+        {
+          id: 'waiting',
+          sessionId,
+          status: 'waitingForHuman',
+          updatedAt: new Date('2023-01-01'),
+          userId,
+        },
+        { id: 'active', sessionId, updatedAt: new Date('2023-05-01'), userId },
+      ]);
+
+      const result = await topicModel.query({ containerId: sessionId });
+
+      // Without status sort, most-recently-updated wins even if lower priority
+      expect(result.items.map((t) => t.id)).toEqual(['active', 'waiting']);
     });
 
     it('should query topics with pagination', async () => {
@@ -370,12 +497,9 @@ describe('TopicModel - Query', () => {
   });
 
   describe('query with agentId filter', () => {
-    it('should filter legacy topics by agentId through agentsToSessions lookup', async () => {
+    it('should not match legacy session-only topics by agentId', async () => {
       await serverDB.transaction(async (trx) => {
-        await trx.insert(sessions).values([
-          { id: 'session-for-agent', userId },
-          { id: 'session-other', userId },
-        ]);
+        await trx.insert(sessions).values([{ id: 'session-for-agent', userId }]);
         await trx.insert(agents).values([{ id: 'agent1', userId, title: 'Agent 1' }]);
         await trx
           .insert(agentsToSessions)
@@ -388,20 +512,14 @@ describe('TopicModel - Query', () => {
             agentId: null,
             updatedAt: new Date('2023-01-01'),
           },
-          {
-            id: 'topic-other-session',
-            userId,
-            sessionId: 'session-other',
-            agentId: null,
-            updatedAt: new Date('2023-01-02'),
-          },
         ]);
       });
 
+      // Topics carrying only a legacy sessionId are no longer adopted by the
+      // agent query; only `topics.agentId` matches.
       const result = await topicModel.query({ agentId: 'agent1' });
 
-      expect(result.items).toHaveLength(1);
-      expect(result.items[0].id).toBe('topic-agent-session');
+      expect(result.items).toHaveLength(0);
     });
 
     it('should filter new topics by agentId directly', async () => {
@@ -434,7 +552,7 @@ describe('TopicModel - Query', () => {
       expect(result.items[0].id).toBe('new-topic-1');
     });
 
-    it('should return both legacy and new topics when querying by agentId', async () => {
+    it('should only return topics carrying the agentId, ignoring session-only ones', async () => {
       await serverDB.transaction(async (trx) => {
         await trx.insert(sessions).values([{ id: 'mixed-session', userId }]);
         await trx.insert(agents).values([{ id: 'mixed-agent', userId, title: 'Mixed Agent' }]);
@@ -468,12 +586,9 @@ describe('TopicModel - Query', () => {
 
       const result = await topicModel.query({ agentId: 'mixed-agent' });
 
-      expect(result.items).toHaveLength(3);
-      expect(result.items.map((t) => t.id).sort()).toEqual([
-        'both-topic',
-        'legacy-topic',
-        'new-topic',
-      ]);
+      // `legacy-topic` (sessionId only, no agentId) is excluded.
+      expect(result.items).toHaveLength(2);
+      expect(result.items.map((t) => t.id).sort()).toEqual(['both-topic', 'new-topic']);
     });
 
     it('should not return duplicate topics when both agentId and sessionId match', async () => {
@@ -683,21 +798,15 @@ describe('TopicModel - Query', () => {
 
     it('should ignore containerId when agentId is provided', async () => {
       await serverDB.transaction(async (trx) => {
-        await trx.insert(sessions).values([
-          { id: 'agent-only-session', userId },
-          { id: 'container-only-session', userId },
-        ]);
+        await trx.insert(sessions).values([{ id: 'container-only-session', userId }]);
         await trx
           .insert(agents)
           .values([{ id: 'priority-agent', userId, title: 'Priority Agent' }]);
-        await trx
-          .insert(agentsToSessions)
-          .values([{ agentId: 'priority-agent', sessionId: 'agent-only-session', userId }]);
         await trx.insert(topics).values([
           {
             id: 'agent-topic',
             userId,
-            sessionId: 'agent-only-session',
+            agentId: 'priority-agent',
             updatedAt: new Date('2023-01-01'),
           },
           {
@@ -750,6 +859,281 @@ describe('TopicModel - Query', () => {
 
       expect(result.items).toHaveLength(1);
       expect(result.items[0].id).toBe('group-topic');
+    });
+  });
+
+  describe('query with withDetails option', () => {
+    const seedTopicWithMessages = async (
+      topicId: string,
+      userMessage: string,
+      messageCount: number,
+      description?: string,
+      trigger?: string,
+    ) => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(agents).values({ id: `agt-${topicId}`, userId, title: `Agent ${topicId}` });
+        await tx.insert(topics).values({
+          id: topicId,
+          userId,
+          agentId: `agt-${topicId}`,
+          description: description ?? null,
+          trigger: trigger ?? null,
+          updatedAt: new Date('2024-01-01'),
+        });
+
+        const rows = [
+          { id: `${topicId}-m0`, role: 'user', content: userMessage },
+          ...Array.from({ length: messageCount - 1 }, (_, i) => ({
+            id: `${topicId}-m${i + 1}`,
+            role: i % 2 === 0 ? 'assistant' : 'user',
+            content: `reply ${i + 1}`,
+          })),
+        ].map((m, idx) => ({
+          ...m,
+          topicId,
+          userId,
+          createdAt: new Date(`2024-01-01T00:00:0${idx}Z`),
+        }));
+        if (rows.length > 0) await tx.insert(messages).values(rows);
+      });
+    };
+
+    it('omits detail columns by default (withDetails not set)', async () => {
+      await seedTopicWithMessages('plain-topic', 'first user msg', 3, 'desc-text', 'chat');
+
+      const result = await topicModel.query({ agentId: 'agt-plain-topic' });
+
+      expect(result.items).toHaveLength(1);
+      const item = result.items[0] as Record<string, unknown>;
+      expect(item.id).toBe('plain-topic');
+      // Sidebar-shape: detail columns must not exist on the payload
+      expect(item).not.toHaveProperty('firstUserMessage');
+      expect(item).not.toHaveProperty('messageCount');
+      expect(item).not.toHaveProperty('description');
+      expect(item).not.toHaveProperty('trigger');
+      expect(item).not.toHaveProperty('cost');
+      expect(item).not.toHaveProperty('tokenUsage');
+    });
+
+    it('returns detail columns when withDetails is true', async () => {
+      await seedTopicWithMessages(
+        'detailed-topic',
+        'hello first user message',
+        4,
+        'a short description',
+        'cron',
+      );
+
+      const result = await topicModel.query({
+        agentId: 'agt-detailed-topic',
+        withDetails: true,
+      });
+
+      expect(result.items).toHaveLength(1);
+      const item = result.items[0] as Record<string, unknown>;
+      expect(item.id).toBe('detailed-topic');
+      expect(item.firstUserMessage).toBe('hello first user message');
+      expect(item.messageCount).toBe(4);
+      expect(item.description).toBe('a short description');
+      expect(item.trigger).toBe('cron');
+      // cost / tokenUsage are not yet returned — waiting on a schema
+      // migration to add real columns before they come back.
+      expect(item).not.toHaveProperty('cost');
+      expect(item).not.toHaveProperty('tokenUsage');
+    });
+
+    it('returns null firstUserMessage when no user message exists', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(agents).values({ id: 'agt-no-user-msg', userId, title: 'No User Msg' });
+        await tx.insert(topics).values({
+          id: 'no-user-msg-topic',
+          userId,
+          agentId: 'agt-no-user-msg',
+          updatedAt: new Date('2024-01-01'),
+        });
+        // Only an assistant message — the `WHERE role = 'user'` subquery should
+        // skip it and return null.
+        await tx.insert(messages).values({
+          id: 'no-user-msg-topic-m0',
+          role: 'assistant',
+          content: 'assistant only reply',
+          topicId: 'no-user-msg-topic',
+          userId,
+        });
+      });
+
+      const result = await topicModel.query({
+        agentId: 'agt-no-user-msg',
+        withDetails: true,
+      });
+
+      expect(result.items).toHaveLength(1);
+      const item = result.items[0] as Record<string, unknown>;
+      expect(item.firstUserMessage).toBeNull();
+      expect(item.messageCount).toBe(1);
+    });
+
+    it('picks the earliest user message by createdAt for firstUserMessage', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(agents).values({ id: 'agt-order', userId, title: 'Order' });
+        await tx.insert(topics).values({
+          id: 'order-topic',
+          userId,
+          agentId: 'agt-order',
+          updatedAt: new Date('2024-01-01'),
+        });
+        // Insert in non-chronological order so we exercise the ORDER BY in
+        // the subquery rather than insertion order.
+        await tx.insert(messages).values([
+          {
+            id: 'order-topic-m2',
+            role: 'user',
+            content: 'second user message',
+            topicId: 'order-topic',
+            userId,
+            createdAt: new Date('2024-01-01T00:00:02Z'),
+          },
+          {
+            id: 'order-topic-m0',
+            role: 'user',
+            content: 'first user message',
+            topicId: 'order-topic',
+            userId,
+            createdAt: new Date('2024-01-01T00:00:00Z'),
+          },
+          {
+            id: 'order-topic-m1',
+            role: 'assistant',
+            content: 'an assistant reply in between',
+            topicId: 'order-topic',
+            userId,
+            createdAt: new Date('2024-01-01T00:00:01Z'),
+          },
+        ]);
+      });
+
+      const result = await topicModel.query({
+        agentId: 'agt-order',
+        withDetails: true,
+      });
+
+      const item = result.items[0] as Record<string, unknown>;
+      expect(item.firstUserMessage).toBe('first user message');
+      expect(item.messageCount).toBe(3);
+    });
+
+    it('also returns detail columns when querying via groupId', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(chatGroups).values({ id: 'detail-group', title: 'Detail Group', userId });
+        await tx.insert(topics).values({
+          id: 'detail-group-topic',
+          userId,
+          groupId: 'detail-group',
+          description: 'group topic desc',
+          trigger: 'chat',
+          updatedAt: new Date('2024-01-01'),
+        });
+        await tx.insert(messages).values({
+          id: 'detail-group-topic-m0',
+          role: 'user',
+          content: 'group user message',
+          topicId: 'detail-group-topic',
+          userId,
+        });
+      });
+
+      const result = await topicModel.query({
+        groupId: 'detail-group',
+        withDetails: true,
+      });
+
+      const item = result.items[0] as Record<string, unknown>;
+      expect(item.firstUserMessage).toBe('group user message');
+      expect(item.messageCount).toBe(1);
+      expect(item.description).toBe('group topic desc');
+      expect(item.trigger).toBe('chat');
+    });
+
+    it('measures payload size delta between basic and withDetails queries', async () => {
+      // Realistic-ish seed: 20 topics, each with ~5 messages — a first user
+      // message big enough to dominate the row (~600 chars), a long-ish
+      // description (~200 chars), plus a handful of assistant replies that
+      // don't show up in either payload but affect the messageCount subquery.
+      const TOPIC_COUNT = 20;
+      const MESSAGES_PER_TOPIC = 5;
+      const firstUserText = 'u'.repeat(600);
+      const descriptionText = 'd'.repeat(200);
+
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(agents).values({ id: 'agt-size-bench', userId, title: 'Size Bench' });
+        await tx.insert(topics).values(
+          Array.from({ length: TOPIC_COUNT }, (_, i) => ({
+            id: `size-topic-${i}`,
+            userId,
+            agentId: 'agt-size-bench',
+            description: descriptionText,
+            trigger: i % 2 === 0 ? 'chat' : 'cron',
+            updatedAt: new Date(`2024-01-${String(i + 1).padStart(2, '0')}`),
+          })),
+        );
+
+        const messageRows = [] as {
+          id: string;
+          role: string;
+          content: string;
+          topicId: string;
+          userId: string;
+        }[];
+        for (let i = 0; i < TOPIC_COUNT; i++) {
+          messageRows.push({
+            id: `size-topic-${i}-m0`,
+            role: 'user',
+            content: firstUserText,
+            topicId: `size-topic-${i}`,
+            userId,
+          });
+          for (let j = 1; j < MESSAGES_PER_TOPIC; j++) {
+            messageRows.push({
+              id: `size-topic-${i}-m${j}`,
+              role: j % 2 === 1 ? 'assistant' : 'user',
+              content: 'short reply',
+              topicId: `size-topic-${i}`,
+              userId,
+            });
+          }
+        }
+        await tx.insert(messages).values(messageRows);
+      });
+
+      const basic = await topicModel.query({
+        agentId: 'agt-size-bench',
+        pageSize: TOPIC_COUNT,
+      });
+      const detailed = await topicModel.query({
+        agentId: 'agt-size-bench',
+        pageSize: TOPIC_COUNT,
+        withDetails: true,
+      });
+
+      const basicBytes = Buffer.byteLength(JSON.stringify(basic.items), 'utf8');
+      const detailedBytes = Buffer.byteLength(JSON.stringify(detailed.items), 'utf8');
+      const ratio = detailedBytes / basicBytes;
+
+      // Print so the developer running the test gets a real-world number to
+      // reason about — the actual size depends on text length seeded above.
+
+      console.log(
+        `[topic.query withDetails size] basic=${basicBytes}B  detailed=${detailedBytes}B  ` +
+          `ratio=${ratio.toFixed(2)}x  perRowDelta=${Math.round(
+            (detailedBytes - basicBytes) / TOPIC_COUNT,
+          )}B`,
+      );
+
+      // Detailed payload must be strictly larger and roughly proportional to
+      // the seeded user-message + description text — guard against the detail
+      // columns silently disappearing from the SELECT shape.
+      expect(detailedBytes).toBeGreaterThan(basicBytes);
+      expect(ratio).toBeGreaterThan(1.5);
     });
   });
 
@@ -855,9 +1239,7 @@ describe('TopicModel - Query', () => {
       expect(result.items[0].id).toBe('true-legacy-inbox');
     });
 
-    it('should include topics with associated sessionId via agentsToSessions when isInbox is true', async () => {
-      // This tests the scenario where old users have inbox topics with sessionId
-      // but no agentId, linked via agentsToSessions relation
+    it('should adopt only agentId and fully-orphan topics, not session-linked ones, when isInbox is true', async () => {
       await serverDB.transaction(async (trx) => {
         // Create inbox session and agent with relation
         await trx.insert(sessions).values([{ id: 'inbox-session', slug: 'inbox', userId }]);
@@ -899,10 +1281,10 @@ describe('TopicModel - Query', () => {
 
       const result = await topicModel.query({ agentId: 'inbox-agent-linked', isInbox: true });
 
-      // Should include all three: legacy with sessionId, new with agentId, orphan legacy
-      expect(result.items).toHaveLength(3);
+      // `legacy-session-topic` is no longer adopted via the agentsToSessions
+      // lookup; only the agentId match and the fully-orphan fallback remain.
+      expect(result.items).toHaveLength(2);
       expect(result.items.map((t) => t.id).sort()).toEqual([
-        'legacy-session-topic',
         'new-agentid-topic',
         'orphan-legacy-topic',
       ]);
@@ -1140,7 +1522,7 @@ describe('TopicModel - Query', () => {
   });
 
   describe('queryRecent', () => {
-    it('should return recent topics with agentId and sessionId', async () => {
+    it('should return recent topics with agentId', async () => {
       await serverDB.transaction(async (tx) => {
         await tx.insert(agents).values([
           {

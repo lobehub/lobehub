@@ -1,0 +1,375 @@
+import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
+import { RequestTrigger } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
+import { chunk } from 'es-toolkit/compat';
+import pMap from 'p-map';
+import { z } from 'zod';
+
+import { checkEmbeddingUsage } from '@/business/server/trpc-middlewares/async';
+import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from '@/const/settings/knowledge';
+import { AsyncTaskModel } from '@/database/models/asyncTask';
+import { ChunkModel } from '@/database/models/chunk';
+import { EmbeddingModel } from '@/database/models/embedding';
+import { FileModel } from '@/database/models/file';
+import { type NewChunkItem, type NewEmbeddingsItem } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
+import { fileEnv } from '@/envs/file';
+import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
+import { getServerDefaultFilesConfig } from '@/server/globalConfig';
+import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { ChunkService } from '@/server/services/chunk';
+import { DocumentService } from '@/server/services/document';
+import { FileService } from '@/server/services/file';
+import { type IAsyncTaskError } from '@/types/asyncTask';
+import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
+import { safeParseJSON } from '@/utils/safeParseJSON';
+import { sanitizeUTF8 } from '@/utils/sanitizeUTF8';
+
+const fileProcedure = asyncAuthedProcedure.use(async (opts) => {
+  const { ctx } = opts;
+
+  return opts.next({
+    ctx: {
+      asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
+      chunkModel: new ChunkModel(ctx.serverDB, ctx.userId),
+      chunkService: new ChunkService(ctx.serverDB, ctx.userId),
+      documentService: new DocumentService(ctx.serverDB, ctx.userId),
+      embeddingModel: new EmbeddingModel(ctx.serverDB, ctx.userId),
+      fileModel: new FileModel(ctx.serverDB, ctx.userId),
+      fileService: new FileService(ctx.serverDB, ctx.userId),
+    },
+  });
+});
+
+const resolveWorkspaceIdFromFile = async (
+  serverDB: LobeChatDatabase,
+  userId: string,
+  fileId: string,
+  workspaceId?: string,
+) => {
+  if (workspaceId) return workspaceId;
+
+  if (typeof FileModel.getFileById !== 'function') return undefined;
+
+  const file = await FileModel.getFileById(serverDB, fileId);
+  if (!file || file.userId !== userId) return undefined;
+
+  return file.workspaceId ?? undefined;
+};
+
+export const fileRouter = router({
+  embeddingChunks: fileProcedure
+    .use(checkEmbeddingUsage)
+    .input(
+      z.object({
+        fileId: z.string(),
+        taskId: z.string(),
+        workspaceId: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const workspaceId = await resolveWorkspaceIdFromFile(
+        ctx.serverDB,
+        ctx.userId,
+        input.fileId,
+        input.workspaceId,
+      );
+      const asyncTaskModel = new AsyncTaskModel(ctx.serverDB, ctx.userId, workspaceId);
+      const chunkModel = new ChunkModel(ctx.serverDB, ctx.userId, workspaceId);
+      const embeddingModel = new EmbeddingModel(ctx.serverDB, ctx.userId, workspaceId);
+      const fileModel = new FileModel(ctx.serverDB, ctx.userId, workspaceId);
+      const file = await fileModel.findById(input.fileId);
+
+      if (!file) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' });
+      }
+
+      const asyncTask = await asyncTaskModel.findById(input.taskId);
+
+      const { model, provider } =
+        getServerDefaultFilesConfig().embeddingModel || DEFAULT_FILE_EMBEDDING_MODEL_ITEM;
+
+      if (!asyncTask) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Async Task not found' });
+
+      try {
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(
+              new AsyncTaskError(
+                AsyncTaskErrorType.Timeout,
+                'embedding task is timeout, please try again',
+              ),
+            );
+          }, ASYNC_TASK_TIMEOUT);
+        });
+
+        const embeddingPromise = async () => {
+          // update the task status to success
+          await asyncTaskModel.update(input.taskId, {
+            status: AsyncTaskStatus.Processing,
+          });
+
+          const startAt = Date.now();
+
+          const CHUNK_SIZE = fileEnv.EMBEDDING_BATCH_SIZE;
+          const CONCURRENCY = fileEnv.EMBEDDING_CONCURRENCY;
+
+          const chunks = await chunkModel.getChunksTextByFileId(input.fileId);
+          const requestArray = chunk(chunks, CHUNK_SIZE);
+          try {
+            await pMap(
+              requestArray,
+              async (chunks) => {
+                // Read user's provider config from database
+                const modelRuntime = await initModelRuntimeFromDB(
+                  ctx.serverDB,
+                  ctx.userId,
+                  provider,
+                  workspaceId,
+                );
+
+                const embeddings = await modelRuntime.embeddings(
+                  {
+                    dimensions: 1024,
+                    input: chunks.map((c) => c.text),
+                    model,
+                  },
+                  { metadata: { trigger: RequestTrigger.FileEmbedding }, user: ctx.userId },
+                );
+
+                const items: NewEmbeddingsItem[] =
+                  embeddings?.map((e, idx) => ({
+                    chunkId: chunks[idx].id,
+                    embeddings: e,
+                    fileId: input.fileId,
+                    model,
+                  })) || [];
+
+                await embeddingModel.bulkCreate(items);
+              },
+              { concurrency: CONCURRENCY },
+            );
+          } catch (e: any) {
+            throw {
+              message: e.errorType ?? e.message ?? JSON.stringify(e),
+              name: AsyncTaskErrorType.EmbeddingError,
+            };
+          }
+
+          const duration = Date.now() - startAt;
+          // update the task status to success
+          await asyncTaskModel.update(input.taskId, {
+            duration,
+            status: AsyncTaskStatus.Success,
+          });
+
+          return { success: true };
+        };
+
+        // Race between the chunking process and the timeout
+        return await Promise.race([embeddingPromise(), timeoutPromise]);
+      } catch (e) {
+        console.error('embeddingChunks error', e);
+
+        await asyncTaskModel.update(input.taskId, {
+          error: new AsyncTaskError((e as Error).name, (e as Error).message),
+          status: AsyncTaskStatus.Error,
+        });
+
+        return {
+          message: `File ${file.name}(${input.taskId}) failed to embedding: ${(e as Error).message}`,
+          success: false,
+        };
+      }
+    }),
+
+  parseFileToChunks: fileProcedure
+    .input(
+      z.object({
+        fileId: z.string(),
+        taskId: z.string(),
+        workspaceId: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const workspaceId = await resolveWorkspaceIdFromFile(
+        ctx.serverDB,
+        ctx.userId,
+        input.fileId,
+        input.workspaceId,
+      );
+      const asyncTaskModel = new AsyncTaskModel(ctx.serverDB, ctx.userId, workspaceId);
+      const chunkModel = new ChunkModel(ctx.serverDB, ctx.userId, workspaceId);
+      const chunkService = new ChunkService(ctx.serverDB, ctx.userId, workspaceId);
+      const documentService = new DocumentService(ctx.serverDB, ctx.userId, workspaceId);
+      const fileModel = new FileModel(ctx.serverDB, ctx.userId, workspaceId);
+      const fileService = new FileService(ctx.serverDB, ctx.userId, workspaceId);
+      const file = await fileModel.findById(input.fileId);
+      if (!file) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'File not found' });
+      }
+
+      // Inline documents (custom/document) keep a mirror file row whose url is the
+      // `internal://document/placeholder` marker. Their content lives on documents.content
+      // and is intentionally not chunked — searching is handled by BM25 instead.
+      if (file.url.startsWith('internal://')) {
+        await asyncTaskModel.update(input.taskId, {
+          error: new AsyncTaskError(
+            AsyncTaskErrorType.TaskTriggerError,
+            'Inline documents (custom/document) do not require chunking; content is searched via BM25.',
+          ),
+          status: AsyncTaskStatus.Error,
+        });
+        return {
+          message: `File ${file.name}(${input.taskId}) is an inline document and was skipped`,
+          success: false,
+        };
+      }
+
+      let content: Uint8Array | undefined;
+      try {
+        content = await fileService.getFileByteArray(file.url);
+      } catch (e) {
+        console.error(e);
+        const errorCode = (e as any).Code;
+        // Storage returned NoSuchKey. Do NOT delete the file row — transient S3
+        // outages, IAM misconfig, or already-orphaned DB rows must not cascade
+        // into destroying chunks/embeddings/documents. Mark the task as Error
+        // so users see a clear message and can re-upload or retry.
+        if (errorCode === 'NoSuchKey') {
+          await asyncTaskModel.update(input.taskId, {
+            error: new AsyncTaskError(
+              AsyncTaskErrorType.TaskTriggerError,
+              'File content unavailable in storage. Verify storage access or re-upload.',
+            ),
+            status: AsyncTaskStatus.Error,
+          });
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'File content unavailable in storage.',
+          });
+        }
+        // Other fetch errors (network, IAM, etc.) — mark the task as Error so
+        // the user surface stays consistent, then propagate.
+        await asyncTaskModel.update(input.taskId, {
+          error: new AsyncTaskError(
+            AsyncTaskErrorType.TaskTriggerError,
+            `Failed to fetch file content: ${(e as Error)?.message ?? errorCode ?? 'unknown error'}`,
+          ),
+          status: AsyncTaskStatus.Error,
+        });
+        throw e;
+      }
+
+      if (!content) return;
+
+      const asyncTask = await asyncTaskModel.findById(input.taskId);
+
+      if (!asyncTask) throw new TRPCError({ code: 'BAD_REQUEST', message: 'Async Task not found' });
+
+      try {
+        const startAt = Date.now();
+
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(
+              new AsyncTaskError(
+                AsyncTaskErrorType.Timeout,
+                'chunking task is timeout, please try again',
+              ),
+            );
+          }, ASYNC_TASK_TIMEOUT);
+        });
+
+        const chunkingPromise = async () => {
+          // update the task status to processing
+          await asyncTaskModel.update(input.taskId, { status: AsyncTaskStatus.Processing });
+
+          // parse file to document record first (for detailed content viewing)
+          try {
+            await documentService.parseFile(input.fileId);
+          } catch (e) {
+            // document parsing failure should not block chunking
+            console.warn(
+              '[parseFileToChunks] document parsing failed, continuing with chunking:',
+              e,
+            );
+          }
+
+          // partition file to chunks
+          const chunkResult = await chunkService.chunkContent({
+            content,
+            fileType: file.fileType,
+            filename: file.name,
+          });
+
+          // after finish partition, we need to filter out some elements
+          const chunks = chunkResult.chunks.map(
+            ({ text, ...item }): NewChunkItem => ({
+              ...item,
+              text: text ? sanitizeUTF8(text) : '',
+              userId: ctx.userId,
+              workspaceId,
+            }),
+          );
+
+          const duration = Date.now() - startAt;
+
+          // if no chunk found, throw error
+          if (chunks.length === 0) {
+            throw {
+              message:
+                'No chunk found in this file. it may due to current chunking method can not parse file accurately',
+              name: AsyncTaskErrorType.NoChunkError,
+            };
+          }
+
+          await chunkModel.bulkCreate(chunks, input.fileId);
+
+          if (chunkResult.unstructuredChunks) {
+            const unstructuredChunks = chunkResult.unstructuredChunks.map(
+              (item): NewChunkItem => ({
+                ...item,
+                fileId: input.fileId,
+                userId: ctx.userId,
+                workspaceId,
+              }),
+            );
+            await chunkModel.bulkCreateUnstructuredChunks(unstructuredChunks);
+          }
+
+          // update the task status to success
+          await asyncTaskModel.update(input.taskId, {
+            duration,
+            status: AsyncTaskStatus.Success,
+          });
+
+          // if enable auto embedding, trigger the embedding task
+          if (fileEnv.CHUNKS_AUTO_EMBEDDING) {
+            await chunkService.asyncEmbeddingFileChunks(input.fileId);
+          }
+
+          return { success: true };
+        };
+        // Race between the chunking process and the timeout
+        return await Promise.race([chunkingPromise(), timeoutPromise]);
+      } catch (e) {
+        const error = e as any;
+
+        const asyncTaskError = error.body
+          ? ({ body: safeParseJSON(error.body) ?? error.body, name: error.name } as IAsyncTaskError)
+          : new AsyncTaskError((error as Error).name, error.message);
+
+        console.error('[Chunking Error]', asyncTaskError);
+        await asyncTaskModel.update(input.taskId, {
+          error: asyncTaskError,
+          status: AsyncTaskStatus.Error,
+        });
+
+        return {
+          message: `File ${file.name}(${input.taskId}) failed to chunking: ${(e as Error).message}`,
+          success: false,
+        };
+      }
+    }),
+});

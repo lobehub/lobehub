@@ -1,3 +1,9 @@
+import {
+  AGENT_DOCUMENT_CATEGORY,
+  AGENT_DOCUMENT_FILE_TYPE,
+  AGENT_DOCUMENT_SKILL_CATEGORY,
+  AGENT_SIGNAL_SOURCE_TYPE,
+} from '@lobechat/const';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,8 +15,10 @@ const modalConfirm = vi.hoisted(() => vi.fn());
 const messageError = vi.hoisted(() => vi.fn());
 const messageSuccess = vi.hoisted(() => vi.fn());
 const removeDocumentMock = vi.hoisted(() => vi.fn());
-const useMatchMock = vi.hoisted(() => vi.fn());
-const useNavigateMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@lobehub/ui/base-ui', () => ({
+  confirmModal: modalConfirm,
+}));
 
 vi.mock('@lobehub/ui', () => ({
   Accordion: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
@@ -47,7 +55,6 @@ vi.mock('antd', () => ({
   App: {
     useApp: () => ({
       message: { error: messageError, success: messageSuccess },
-      modal: { confirm: modalConfirm },
     }),
   },
 }));
@@ -78,11 +85,6 @@ vi.mock('react-i18next', () => ({
         }) as Record<string, string>
       )[key] || key,
   }),
-}));
-
-vi.mock('react-router-dom', () => ({
-  useMatch: () => useMatchMock(),
-  useNavigate: () => useNavigateMock,
 }));
 
 vi.mock('@/features/AgentDocumentsExplorer', () => ({
@@ -196,7 +198,7 @@ vi.mock('@/store/chat/selectors', () => ({
 }));
 
 const skillBundleRow = {
-  category: 'skill',
+  category: AGENT_DOCUMENT_SKILL_CATEGORY,
   createdAt: new Date('2026-05-09T00:00:00Z'),
   description: 'Use for YouTube comments',
   documentId: 'skill-bundle-doc',
@@ -207,14 +209,14 @@ const skillBundleRow = {
   isSkillBundle: true,
   isSkillIndex: false,
   parentId: null,
-  sourceType: 'agent-signal',
+  sourceType: AGENT_SIGNAL_SOURCE_TYPE,
   templateId: 'agent-skill',
   title: 'YouTube Comment Retrieval Workflow',
   updatedAt: new Date(),
 };
 
 const skillIndexRow = {
-  category: 'skill',
+  category: AGENT_DOCUMENT_SKILL_CATEGORY,
   createdAt: new Date('2026-05-09T00:00:00Z'),
   description: 'Use for YouTube comments',
   documentId: 'skill-index-doc',
@@ -225,18 +227,18 @@ const skillIndexRow = {
   isSkillBundle: false,
   isSkillIndex: true,
   parentId: 'skill-bundle-doc',
-  sourceType: 'agent-signal',
+  sourceType: AGENT_SIGNAL_SOURCE_TYPE,
   templateId: 'agent-skill',
   title: 'SKILL.md',
   updatedAt: new Date(),
 };
 
 const fileDocRow = {
-  category: 'document',
+  category: AGENT_DOCUMENT_CATEGORY,
   createdAt: new Date('2026-04-16T00:00:00Z'),
   description: 'A short brief',
   documentId: 'doc-content-1',
-  fileType: 'agent/document',
+  fileType: AGENT_DOCUMENT_FILE_TYPE,
   filename: 'brief.md',
   id: 'doc-1',
   isFolder: false,
@@ -276,9 +278,6 @@ describe('AgentDocumentsGroup', () => {
     messageSuccess.mockReset();
     openDocument.mockReset();
     removeDocumentMock.mockReset();
-    useMatchMock.mockReset();
-    useNavigateMock.mockReset();
-    useMatchMock.mockReturnValue(null);
     removeDocumentMock.mockResolvedValue({ deleted: true, id: 'doc-1' });
   });
 
@@ -313,7 +312,7 @@ describe('AgentDocumentsGroup', () => {
     render(<AgentDocumentsGroup />);
 
     fireEvent.click(screen.getByText('YouTube Comment Retrieval Workflow'));
-    expect(openDocument).toHaveBeenCalledWith('skill-index-doc');
+    expect(openDocument).toHaveBeenCalledWith('skill-index-doc', 'skill-index-row');
   });
 
   it('falls back to the bundle id when opening an orphan skill bundle', () => {
@@ -327,7 +326,7 @@ describe('AgentDocumentsGroup', () => {
     render(<AgentDocumentsGroup />);
 
     fireEvent.click(screen.getByText('YouTube Comment Retrieval Workflow'));
-    expect(openDocument).toHaveBeenCalledWith('skill-bundle-doc');
+    expect(openDocument).toHaveBeenCalledWith('skill-bundle-doc', 'skill-bundle-row');
   });
 
   it('opens a child file by relative path through onOpenFile', () => {
@@ -341,7 +340,7 @@ describe('AgentDocumentsGroup', () => {
     render(<AgentDocumentsGroup />);
 
     fireEvent.click(screen.getByTestId('skill-skill-bundle-doc-open-skill-md'));
-    expect(openDocument).toHaveBeenCalledWith('skill-index-doc');
+    expect(openDocument).toHaveBeenCalledWith('skill-index-doc', 'skill-index-row');
   });
 
   it('renders the document tree when switching to the Documents tab', () => {
@@ -379,7 +378,7 @@ describe('AgentDocumentsGroup', () => {
     expect(screen.queryByText('Brief')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Example'));
-    expect(openDocument).toHaveBeenCalledWith('doc-content-2');
+    expect(openDocument).toHaveBeenCalledWith('doc-content-2', 'doc-2');
 
     fireEvent.click(screen.getByLabelText('delete'));
     const [firstConfirmCall] = modalConfirm.mock.calls;
@@ -390,27 +389,9 @@ describe('AgentDocumentsGroup', () => {
       agentId: 'agent-1',
       documentId: 'doc-content-2',
       id: 'doc-2',
-      topicId: undefined,
     });
     expect(mutate).toHaveBeenCalled();
     expect(messageSuccess).toHaveBeenCalledWith('workingPanel.resources.deleteSuccess');
-  });
-
-  it('navigates to the page route when opening a web card from a topic page', () => {
-    useMatchMock.mockReturnValue({ params: { aid: 'agent-1', topicId: 'topic-1' } });
-    useClientDataSWR.mockReturnValue({
-      data: [webDocRow],
-      error: undefined,
-      isLoading: false,
-      mutate: vi.fn(),
-    });
-
-    render(<AgentDocumentsGroup />);
-    fireEvent.click(screen.getByText('Web'));
-    fireEvent.click(screen.getByText('Example'));
-
-    expect(useNavigateMock).toHaveBeenCalledWith('/agent/agent-1/topic-1/page/doc-content-2');
-    expect(openDocument).not.toHaveBeenCalled();
   });
 
   it('falls back to a single empty placeholder when every skill source is empty', () => {

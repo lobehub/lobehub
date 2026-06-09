@@ -77,6 +77,75 @@ describe('selectRuntimeType', () => {
     });
   });
 
+  describe('executionTarget routing for local CLI hetero', () => {
+    it('routes to gateway when executionTarget = device on desktop', () => {
+      expect(
+        selectRuntimeType(
+          {
+            executionTarget: 'device',
+            heterogeneousProvider: heteroProvider,
+            isGatewayMode: false,
+          },
+          { isDesktop: true },
+        ),
+      ).toBe('gateway');
+    });
+
+    it('routes to gateway when executionTarget = sandbox on desktop', () => {
+      expect(
+        selectRuntimeType(
+          {
+            executionTarget: 'sandbox',
+            heterogeneousProvider: heteroProvider,
+            isGatewayMode: false,
+          },
+          { isDesktop: true },
+        ),
+      ).toBe('gateway');
+    });
+
+    it('keeps hetero when executionTarget = local on desktop', () => {
+      expect(
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: heteroProvider,
+            isGatewayMode: false,
+          },
+          { isDesktop: true },
+        ),
+      ).toBe('hetero');
+    });
+
+    it('falls back to gateway when executionTarget = local on web (no local path)', () => {
+      expect(
+        selectRuntimeType(
+          {
+            executionTarget: 'local',
+            heterogeneousProvider: heteroProvider,
+            isGatewayMode: false,
+          },
+          { isDesktop: false },
+        ),
+      ).toBe('gateway');
+    });
+
+    it('preserves legacy default when executionTarget is unset (desktop → hetero, web → gateway)', () => {
+      expect(
+        selectRuntimeType(
+          { heterogeneousProvider: heteroProvider, isGatewayMode: false },
+          { isDesktop: true },
+        ),
+      ).toBe('hetero');
+      expect(
+        selectRuntimeType(
+          { heterogeneousProvider: heteroProvider, isGatewayMode: false },
+          { isDesktop: false },
+        ),
+      ).toBe('gateway');
+    });
+  });
+
   describe('parentRuntime override', () => {
     it('parentRuntime wins over every other signal', () => {
       expect(

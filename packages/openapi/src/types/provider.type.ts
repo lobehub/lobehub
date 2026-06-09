@@ -60,14 +60,14 @@ const ProviderPayloadBaseSchema = z.object({
   fetchOnClient: z.boolean().nullable().optional(),
   keyVaults: z.record(z.string()).optional(),
   logo: z.string().nullable().optional(),
-  name: z.string().min(1, 'Provider 名称不能为空').nullable().optional(),
+  name: z.string().min(1, 'Provider name cannot be empty').nullable().optional(),
   settings: z.record(z.unknown()).optional(),
   sort: z.number().int().nullable().optional(),
   source: z.enum(['builtin', 'custom']).optional(),
 });
 
 export const CreateProviderRequestSchema = ProviderPayloadBaseSchema.extend({
-  id: z.string().min(1, 'Provider ID 不能为空'),
+  id: z.string().min(1, 'Provider ID cannot be empty'),
 });
 
 export const UpdateProviderRequestSchema = ProviderPayloadBaseSchema.extend({
@@ -105,7 +105,7 @@ export type UpdateProviderResponse = ProviderDetailResponse;
 // ==================== Provider Param Schemas ====================
 
 export const ProviderIdParamSchema = z.object({
-  id: z.string().min(1, 'Provider ID 不能为空').max(64, 'Provider ID 不能超过 64 个字符'),
+  id: z.string().min(1, 'Provider ID cannot be empty').max(64, 'Provider ID cannot exceed 64 characters'),
 });
 
 export type ProviderIdParam = z.infer<typeof ProviderIdParamSchema>;
