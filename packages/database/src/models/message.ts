@@ -2708,7 +2708,10 @@ export class MessageModel {
 
   // **************** Helper *************** //
 
-  private genId = () => idGenerator('messages', 14);
+  // 18-char hash (was 14): widen the message id space — the coordinator-driven
+  // hetero subagent flow allocates many ids per run, and a few extra chars keep
+  // collision odds negligible at that volume.
+  private genId = () => idGenerator('messages', 18);
 
   private matchSession = (sessionId?: string | null) => {
     if (sessionId === INBOX_SESSION_ID) return isNull(messages.sessionId);

@@ -2551,12 +2551,12 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
       // At least the retry must have landed after the original failure.
       expect(streamedWrites.length).toBeGreaterThanOrEqual(2);
-      // Every attempt — including the retry — must target the streaming
-      // turn's assistant, so the terminal row's content never gets
-      // clobbered by the leftover buffer.
-      for (const [id] of streamedWrites) {
-        expect(id).toBe('thread-ast-1');
-      }
+      // Every attempt — including the retry — must target the SAME streaming
+      // turn's assistant (the coordinator-pre-allocated in-thread assistant id),
+      // so the terminal row's content never gets clobbered by the leftover
+      // buffer. (Ids are now caller-pre-allocated, not the mock's return.)
+      const streamedTargetIds = new Set(streamedWrites.map(([id]: any) => id));
+      expect(streamedTargetIds.size).toBe(1);
 
       // Terminal assistant carrying the authoritative `resultContent`
       // was still created as a fresh row (not overwritten by the retry).

@@ -51,12 +51,14 @@ export interface CreateNewMessageParams {
   content: string;
   // ========== Error handling ==========
   error?: ChatMessageError | null;
-
   fileChunks?: MessageSemanticSearchChunk[];
+
   // ========== Content ==========
   files?: string[];
-
   groupId?: string;
+
+  /** Caller-pre-allocated message id. Omitted → the DB generates one. */
+  id?: string;
   // ========== Model info ==========
   model?: string;
 
@@ -186,6 +188,10 @@ export const CreateNewMessageParamsSchema = z
     // Required fields
     role: UIMessageRoleTypeSchema,
     content: z.string(),
+    // Caller-pre-allocated id (e.g. the subagent run coordinator assigns ids up
+    // front so parentId chains resolve without a create→backfill round-trip).
+    // Omitted → the DB generates one.
+    id: z.string().optional(),
     // agentId is required, but can be resolved from sessionId in the router
     agentId: z.string().optional(),
     /**

@@ -133,8 +133,11 @@ export class MessageService {
    * reducing the need for separate refresh calls and improving performance.
    */
   async createMessage(params: CreateMessageParams): Promise<CreateMessageResult> {
-    // 1. Create the message (using agentId)
-    const item = await this.messageModel.create(params);
+    // 1. Create the message (using agentId). Honor a caller-pre-allocated id
+    //    when present (passing `undefined` falls back to the model's genId
+    //    default), so flows that chain parentId across not-yet-created messages
+    //    (e.g. the subagent run coordinator) can assign ids up front.
+    const item = await this.messageModel.create(params, params.id);
 
     // 2. Query all messages for this agent/topic
     // Use agentId field for query

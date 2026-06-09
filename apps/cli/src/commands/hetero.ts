@@ -224,10 +224,25 @@ class SerialServerIngester {
   push(event: AgentStreamEvent): void {
     if (this.fatalError) return;
 
+    // Text-snapshot coalescing is a MAIN-AGENT-ONLY transport optimization:
+    // it debounces the main agent's token-level text *deltas* into one
+    // `replace` snapshot to cut ingest calls. Subagent text is explicitly
+    // excluded (`!event.data?.subagent`) for two reasons:
+    //   1. Subagent text is emitted as ONE full block per turn (see
+    //      claudeCode adapter `handleSubagentAssistant` — "the full block IS
+    //      the only emission"), so there is nothing to coalesce.
+    //   2. `accumulatedText` is a single shared accumulator with no subagent
+    //      scope. Folding subagent blocks in would (a) splice main-agent text
+    //      into the subagent message via the shared buffer, and (b) emit a
+    //      `replace` snapshot that the server's subagent path *appends*
+    //      (`persistSubagentText` has no snapshot semantics) → duplicated /
+    //      cross-scope content. Forwarding the raw block straight through lets
+    //      the server append it exactly once, correctly.
     if (
       event.type === 'stream_chunk' &&
       event.data?.chunkType === 'text' &&
-      typeof event.data?.content === 'string'
+      typeof event.data?.content === 'string' &&
+      !event.data?.subagent
     ) {
       this.accumulatedText += event.data.content;
       this.pendingTextEvent = event;
