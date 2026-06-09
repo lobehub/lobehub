@@ -81,6 +81,36 @@ describe('serverMessagesEngine', () => {
       expect(result).toEqual([{ content: getCurrentDateContent(), role: 'system' }]);
     });
 
+    it('should include file URLs in server-side file context', async () => {
+      const result = await serverMessagesEngine({
+        messages: [
+          {
+            content: 'Read this',
+            createdAt: Date.now(),
+            fileList: [
+              {
+                fileType: 'text/plain',
+                id: 'file1',
+                name: 'test.txt',
+                size: 100,
+                url: 'https://app.example.com/f/file1',
+              },
+            ],
+            id: 'msg-1',
+            role: 'user',
+            updatedAt: Date.now(),
+          } as UIChatMessage,
+        ],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const userMessage = result.find((message) => message.role === 'user');
+      const content = userMessage?.content as any[];
+
+      expect(content[0].text).toContain('url="https://app.example.com/f/file1"');
+    });
+
     it('should pass active topic document initial context into MessagesEngine', async () => {
       const result = await serverMessagesEngine({
         initialContext: {

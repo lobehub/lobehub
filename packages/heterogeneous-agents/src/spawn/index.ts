@@ -32,6 +32,10 @@ export {
 export { JsonlStreamProcessor } from './jsonlProcessor';
 export {
   CLAUDE_CODE_BASE_ARGS,
+  CODEX_BYPASS_APPROVALS_AND_SANDBOX_ARG,
+  CODEX_DEFAULT_EXECUTION_ARGS,
+  CODEX_EXECUTION_MODE_FLAGS,
+  CODEX_REQUIRED_ARGS,
   spawnAgent,
   type SpawnAgentHandle,
   type SpawnAgentOptions,

@@ -95,6 +95,7 @@ export const composioRouter = router({
       });
 
       return {
+        authConfigId,
         connectedAccountId: connReq.id,
         identifier,
         redirectUrl: connReq.redirectUrl,

@@ -53,15 +53,15 @@ const toSkillMetaWithAvailability = (s: BuiltinSkill): LobeToolMetaWithAvailabil
 });
 
 const getKlavisMetas = (s: ToolStoreState): LobeToolMeta[] =>
-  (s.servers || [])
+  (s.composioServers || [])
     .filter((server) => server.status === ComposioServerStatus.ACTIVE && server.tools?.length)
     .map((server) => ({
-      author: 'Klavis',
+      author: 'Composio',
       // Use identifier as storage identifier (e.g., 'google-calendar')
       identifier: server.identifier,
       meta: {
         avatar: '☁️',
-        description: `LobeHub Mcp Server: ${server.serverName}`,
+        description: `LobeHub Mcp Server: ${server.label}`,
         tags: ['composio', 'mcp'],
         // title still uses serverName to display friendly name
         title: server.serverName,

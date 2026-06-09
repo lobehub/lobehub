@@ -1,7 +1,7 @@
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { useCallback, useEffect, useState } from 'react';
 
-import { lambdaClient } from '@/libs/trpc/client';
+import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
 
 export type RemoteAgentDeviceStatus =
@@ -48,7 +48,7 @@ export const useRemoteAgentDeviceGuard = ({
     setStatus('checking');
 
     try {
-      const devices = await lambdaClient.device.listDevices.query();
+      const devices = await deviceService.listDevices();
       const device = devices.find((d) => d.deviceId === boundDeviceId);
 
       if (!device || !device.online) {
@@ -57,7 +57,7 @@ export const useRemoteAgentDeviceGuard = ({
       }
 
       if (providerType && isRemoteHeterogeneousType(providerType)) {
-        const capability = await lambdaClient.device.checkCapability.query({
+        const capability = await deviceService.checkCapability({
           deviceId: boundDeviceId,
           platform: providerType,
         });

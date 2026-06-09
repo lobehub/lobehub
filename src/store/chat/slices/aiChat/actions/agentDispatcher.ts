@@ -1,6 +1,6 @@
 import { isDesktop as defaultIsDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
-import { type HeteroExecutionTarget, type HeterogeneousProviderConfig } from '@lobechat/types';
+import { type DeviceExecutionTarget, type HeterogeneousProviderConfig } from '@lobechat/types';
 
 /**
  * Which agent runtime should handle an operation.
@@ -56,7 +56,7 @@ export interface RuntimeSelectionContext {
    *   - `'local'` / `undefined`  → keep today's default (desktop → `hetero`
    *     in-process spawn, web → `gateway` sandbox).
    */
-  executionTarget?: HeteroExecutionTarget;
+  executionTarget?: DeviceExecutionTarget;
   /** Per-agent heterogeneous provider config (desktop only — takes priority over gateway). */
   heterogeneousProvider?: HeterogeneousProviderConfig;
   /** Result of `chatStore.isGatewayModeEnabled()`. */

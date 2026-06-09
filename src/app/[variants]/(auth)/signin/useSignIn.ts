@@ -140,9 +140,12 @@ export const useSignIn = () => {
           return;
         }
         const callbackUrl = searchParams.get('callbackUrl') || '/';
-        router.push(
-          `/signup?email=${encodeURIComponent(targetEmail)}&callbackUrl=${encodeURIComponent(callbackUrl)}`,
-        );
+        const signupParams = new URLSearchParams();
+        signupParams.set('email', targetEmail);
+        signupParams.set('callbackUrl', callbackUrl);
+        const utmSource = searchParams.get('utm_source');
+        if (utmSource) signupParams.set('utm_source', utmSource);
+        router.push(`/signup?${signupParams.toString()}`);
         return;
       }
 
@@ -257,6 +260,8 @@ export const useSignIn = () => {
     const params = new URLSearchParams();
     if (currentEmail) params.set('email', currentEmail);
     params.set('callbackUrl', callbackUrl);
+    const utmSource = searchParams.get('utm_source');
+    if (utmSource) params.set('utm_source', utmSource);
     void trackLoginOrSignupClicked({ spm: 'signin.go_to_signup.click' }).finally(() => {
       router.push(`/signup?${params.toString()}`);
     });

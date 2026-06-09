@@ -8,6 +8,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { inspectorTextStyles, shinyTextStyles } from '../../styles';
+import { getRunCommandDisplayCommand } from '../../utils/runCommand';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   chip: css`
@@ -64,7 +65,8 @@ export const RunCommandInspector = memo<RunCommandInspectorProps>(
   ({ args, partialArgs, isArgumentsStreaming, pluginState, isLoading, translationKey }) => {
     const { t } = useTranslation('plugin');
 
-    const description = args?.description || partialArgs?.description || args?.command || '';
+    const command = getRunCommandDisplayCommand(args?.command || partialArgs?.command);
+    const description = args?.description || partialArgs?.description || command;
 
     if (isArgumentsStreaming) {
       if (!description)

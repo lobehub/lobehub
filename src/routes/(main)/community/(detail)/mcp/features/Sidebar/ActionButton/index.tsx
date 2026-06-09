@@ -42,7 +42,7 @@ const ActionButton = memo(() => {
     // If this is a cloud MCP and user is not authenticated, request authorization first
     if (isCloudMcp && !isAuthenticated) {
       try {
-        await signIn();
+        await signIn('mcp');
       } catch {
         return; // Don't proceed with installation if auth fails
       }

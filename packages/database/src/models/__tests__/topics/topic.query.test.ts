@@ -64,7 +64,7 @@ describe('TopicModel - Query', () => {
           updatedAt: new Date('2023-01-01'),
           userId,
         },
-        // null status is treated as `active` (rank 2)
+        // null status is treated as `active` (rank 3)
         { id: 'active', sessionId, updatedAt: new Date('2023-09-01'), userId },
         {
           id: 'running-old',
@@ -87,6 +87,15 @@ describe('TopicModel - Query', () => {
           updatedAt: new Date('2023-03-01'),
           userId,
         },
+        // failed shares the top "pending" bucket with waitingForHuman, so it
+        // ranks just below it and above running/active
+        {
+          id: 'failed',
+          sessionId,
+          status: 'failed',
+          updatedAt: new Date('2023-04-01'),
+          userId,
+        },
         {
           id: 'completed',
           sessionId,
@@ -101,9 +110,10 @@ describe('TopicModel - Query', () => {
       expect(result.items.map((t) => t.id)).toEqual([
         'fav', // favorite, rank-independent
         'waiting', // waitingForHuman = 0
-        'running-new', // running = 1, newer first within the bucket
+        'failed', // failed = 1
+        'running-new', // running = 2, newer first within the bucket
         'running-old',
-        'active', // null status → active = 2
+        'active', // null status → active = 3
         'completed', // completed = 5
       ]);
     });

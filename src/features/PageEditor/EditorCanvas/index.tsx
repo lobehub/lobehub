@@ -1,6 +1,8 @@
 'use client';
 
-import { type CSSProperties } from 'react';
+import { ReactBlockPlugin } from '@lobehub/editor';
+import { Editor } from '@lobehub/editor/react';
+import { type CSSProperties, useMemo } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,10 +26,16 @@ const EditorCanvas = memo<EditorCanvasProps>(({ placeholder, style }) => {
   const slashItems = useSlashItems();
   const askCopilotItem = useAskCopilotItem(editor);
 
+  const extraPlugins = useMemo(
+    () => [Editor.withProps(ReactBlockPlugin, { anchorPadding: 0 })],
+    [],
+  );
+
   return (
     <SharedEditorCanvas
       documentId={documentId}
       editor={editor}
+      extraPlugins={extraPlugins}
       placeholder={placeholder || t('pageEditor.editorPlaceholder')}
       slashItems={slashItems}
       style={style}

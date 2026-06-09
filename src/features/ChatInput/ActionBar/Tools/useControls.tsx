@@ -26,7 +26,7 @@ import {
   Zap,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -46,6 +46,7 @@ import {
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
 import { useAgentId } from '../../hooks/useAgentId';
@@ -289,17 +290,6 @@ const styles = createStaticStyles(({ css }) => ({
     flex: 1;
     text-align: start;
   `,
-  searchBox: css`
-    display: flex;
-    align-items: center;
-
-    height: 36px;
-    margin-inline: -8px;
-    padding-inline: 4px;
-    border-radius: 10px;
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
   toolLabel: css`
     display: flex;
     flex: 1;
@@ -327,6 +317,12 @@ const styles = createStaticStyles(({ css }) => ({
     width: 100%;
     min-width: 0;
   `,
+  toolTrailing: css`
+    display: inline-flex;
+    flex: none;
+    gap: 8px;
+    align-items: center;
+  `,
   typeTag: css`
     display: inline-flex;
     flex: none;
@@ -341,50 +337,44 @@ const styles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorFillQuaternary};
   `,
-  statsFooter: css`
-    display: flex;
-    gap: 14px;
-    align-items: center;
-
-    margin-block-end: -4px;
-    margin-inline: -8px;
-    padding-inline: 8px;
-  `,
-  statsSettingsButton: css`
+  addSkillRow: css`
     cursor: pointer;
 
-    display: inline-flex;
-    flex: none;
+    display: flex;
+    gap: 8px;
     align-items: center;
-    justify-content: center;
 
-    width: 24px;
-    height: 24px;
-    padding: 0;
+    /* width: 320px + margin-inline: -12px anchors the submenu to 320px so it
+       matches the attachment submenu, and lets the row break out of the footer's
+       12px inline padding to span full width; padding-inline: 12px then re-aligns
+       the icon/text to the same column as the menu rows above. */
+    width: 320px;
+    min-height: 32px;
+    margin-inline: -12px;
+    padding-inline: 12px;
     border: 0;
     border-radius: 6px;
 
-    color: ${cssVar.colorTextTertiary};
+    font-size: 14px;
+    color: ${cssVar.colorText};
 
     background: transparent;
 
-    transition:
-      color 0.2s,
-      background 0.2s;
+    transition: background 150ms ${cssVar.motionEaseOut};
 
     &:hover {
-      color: ${cssVar.colorTextSecondary};
       background: ${cssVar.colorFillTertiary};
     }
-  `,
-  statsItem: css`
-    display: inline-flex;
-    gap: 5px;
-    align-items: center;
 
-    font-size: 12px;
-    line-height: 18px;
-    color: ${cssVar.colorTextTertiary};
+    /* The footer adds 8px block padding; cancel it on the last action row so the
+       bottom row sits flush against the popup edge instead of leaving a gap. */
+    &:last-child {
+      margin-block-end: -8px;
+    }
+  `,
+  addSkillLabel: css`
+    flex: 1;
+    text-align: start;
   `,
 }));
 
@@ -630,9 +620,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           {icon}
           <span className={cx(styles.toolLabelText)}>{label}</span>
           {extraTag}
-          {badge && <span className={cx(styles.typeTag)}>{badge}</span>}
         </span>
-        {action}
+        <span className={cx(styles.toolTrailing)}>
+          {badge && <span className={cx(styles.typeTag)}>{badge}</span>}
+          {action}
+        </span>
       </span>
     ),
     [openSkillPolicyMenu],
@@ -689,6 +681,14 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const installedBuiltinSkills = useToolStore(builtinToolSelectors.installedBuiltinSkills, isEqual);
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
+
+  // Custom connectors (user-added OAuth MCP servers) from the connector store
+  const customConnectors = useToolStore(connectorSelectors.customConnectors, isEqual);
+  const isConnectorsInit = useToolStore((s) => s.isConnectorsInit);
+  const fetchConnectors = useToolStore((s) => s.fetchConnectors);
+  useEffect(() => {
+    if (!isConnectorsInit) fetchConnectors();
+  }, [isConnectorsInit, fetchConnectors]);
 
   const [
     useFetchUserComposioConnections,
@@ -1008,15 +1008,17 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
                 {icon}
                 <span className={cx(styles.toolLabelText)}>{title}</span>
                 {officialTag}
+              </span>
+              <span className={cx(styles.toolTrailing)}>
                 <span className={cx(styles.typeTag)}>
                   <Icon icon={Wrench} size={12} />
                 </span>
+                <Tooltip placement={'top'} title={t('tools.activation.fixed.hint')}>
+                  <span className={cx(styles.fixedIndicator)}>
+                    <Icon icon={Pin} size={15} />
+                  </span>
+                </Tooltip>
               </span>
-              <Tooltip placement={'top'} title={t('tools.activation.fixed.hint')}>
-                <span className={cx(styles.fixedIndicator)}>
-                  <Icon icon={Pin} size={15} />
-                </span>
-              </Tooltip>
             </span>
           ),
           popoverContent,
@@ -1137,6 +1139,36 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [userAgentSkills, t, createManagedSkillItem, deleteAgentSkill],
   );
 
+  // Custom connector list items (user-added OAuth MCP servers).
+  // Toggling adds the connector identifier to agents.plugins[] — the same field
+  // the runtime resolves connectors from, so they become callable immediately.
+  const customConnectorItems = useMemo(
+    () =>
+      customConnectors.map((connector) => {
+        const title = connector.name || connector.identifier;
+        const icon = <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />;
+        const popoverContent = (
+          <ToolItemDetailPopover
+            description={connector.mcpServerUrl ?? ''}
+            icon={<Icon icon={McpIcon} size={36} />}
+            identifier={connector.identifier}
+            sourceLabel={t('skillStore.tabs.custom')}
+            title={title}
+          />
+        );
+
+        return createManagedSkillItem({
+          badge: <Icon icon={McpIcon} size={12} />,
+          icon,
+          id: connector.identifier,
+          popoverContent,
+          searchText: `${title} ${connector.identifier}`,
+          title,
+        });
+      }),
+    [customConnectors, t, createManagedSkillItem],
+  );
+
   // Skills list items (including LobeHub Skill and Klavis)
   // Connected items listed first, deduplicated by key (LobeHub takes priority)
   const skillItems = useMemo(() => {
@@ -1247,10 +1279,11 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     ...communityPlugins.map(mapPluginToItem),
   ];
 
-  // Build Custom group children (User Agent Skills + custom plugins)
+  // Build Custom group children (User Agent Skills + custom plugins + custom connectors)
   const customGroupChildren: ItemType[] = [
     ...userAgentSkillItems,
     ...customPlugins.map(mapPluginToItem),
+    ...customConnectorItems,
   ];
 
   const normalizedSearchKeyword = searchKeyword.trim().toLowerCase();
@@ -1279,12 +1312,14 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
   const renderActivationGroupLabel = ({
     autoSwitch,
+    count,
     icon,
     open,
     title,
     onToggle,
   }: {
     autoSwitch?: boolean;
+    count?: number;
     icon: ReactNode;
     open: boolean;
     title: string;
@@ -1303,6 +1338,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       <div className={cx(styles.activationGroupTitleBlock)}>
         {icon}
         <span className={cx(styles.activationGroupTitleText)}>{title}</span>
+        {typeof count === 'number' && <span className={cx(styles.count)}>{count}</span>}
       </div>
       <div className={cx(styles.activationGroupActions)}>
         {autoSwitch && (
@@ -1339,69 +1375,50 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   );
 
   const marketHeader = (
-    <div className={cx(styles.searchBox)} onClick={stopPropagation} onKeyDown={stopPropagation}>
-      <SearchBar
-        allowClear
-        placeholder={t('tools.search')}
-        size="small"
-        style={{ flex: 1 }}
-        value={searchKeyword}
-        variant="borderless"
-        onChange={(event) => setSearchKeyword(event.target.value)}
-        onKeyDown={stopPropagation}
-      />
-    </div>
+    <SearchBar
+      allowClear
+      className="lobe-skill-submenu-search"
+      placeholder={t('tools.search')}
+      size="small"
+      style={{ width: '100%' }}
+      value={searchKeyword}
+      variant="borderless"
+      onChange={(event) => setSearchKeyword(event.target.value)}
+      onClick={stopPropagation}
+      onKeyDown={stopPropagation}
+    />
   );
 
   const marketFooter =
     allSkillItems.length > 0 || fixedItems.length > 0 ? (
-      <div className={cx(styles.statsFooter)}>
-        <span className={cx(styles.statsItem)}>
-          <Icon icon={Pin} size={12} />
-          {allPinnedItems.length + fixedItems.length}
-        </span>
-        <span className={cx(styles.statsItem)}>
-          <Icon icon={Zap} size={12} />
-          {allAutoItems.length}
-        </span>
-        <span
-          style={{
-            alignItems: 'center',
-            display: 'inline-flex',
-            gap: 2,
-            marginInlineStart: 'auto',
+      <>
+        <button
+          aria-label={t('plus.addSkills', { ns: 'chat' })}
+          className={cx(styles.addSkillRow)}
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            closeDropdown?.();
+            createSkillStoreModal();
           }}
         >
-          <Tooltip placement="top" title={t('plus.addSkills', { ns: 'chat' })}>
-            <button
-              aria-label={t('plus.addSkills', { ns: 'chat' })}
-              className={cx(styles.statsSettingsButton)}
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                closeDropdown?.();
-                createSkillStoreModal();
-              }}
-            >
-              <Icon icon={Store} size={14} />
-            </button>
-          </Tooltip>
-          <Tooltip placement="top" title={t('tools.plugins.management')}>
-            <button
-              aria-label={t('tools.plugins.management')}
-              className={cx(styles.statsSettingsButton)}
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                closeDropdown?.();
-                navigate('/settings/skill');
-              }}
-            >
-              <Icon icon={Settings} size={14} />
-            </button>
-          </Tooltip>
-        </span>
-      </div>
+          <Icon icon={Store} size={SKILL_ICON_SIZE} />
+          <span className={cx(styles.addSkillLabel)}>{t('plus.addSkills', { ns: 'chat' })}</span>
+        </button>
+        <button
+          aria-label={t('tools.plugins.management')}
+          className={cx(styles.addSkillRow)}
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            closeDropdown?.();
+            navigate('/settings/skill');
+          }}
+        >
+          <Icon icon={Settings} size={SKILL_ICON_SIZE} />
+          <span className={cx(styles.addSkillLabel)}>{t('tools.plugins.management')}</span>
+        </button>
+      </>
     ) : undefined;
 
   const marketItems: ItemType[] = [
@@ -1411,6 +1428,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             children: pinnedOpen ? pinnedItems : [],
             key: 'pinned',
             label: renderActivationGroupLabel({
+              count: allPinnedItems.length,
               icon: <Icon icon={Pin} size={14} />,
               open: pinnedOpen,
               title: t('tools.activation.pinned'),
@@ -1435,6 +1453,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             key: 'auto',
             label: renderActivationGroupLabel({
               autoSwitch: true,
+              count: allAutoItems.length,
               icon: <Icon icon={Zap} size={14} />,
               open: autoOpen,
               title: t('tools.activation.auto'),

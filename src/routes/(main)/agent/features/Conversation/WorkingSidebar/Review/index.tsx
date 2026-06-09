@@ -22,8 +22,8 @@ import { Fragment, memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import { useGitInfo } from '@/features/ChatInput/RuntimeConfig/useGitInfo';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
+import { useFetchGitInfo } from '@/store/device';
 
 import FileRow from './FileRow';
 import GroupHeader from './GroupHeader';
@@ -45,6 +45,11 @@ const REVIEW_MODE_STORAGE_KEY = 'lobechat-review-mode';
 const BASE_REF_OVERRIDES_STORAGE_KEY = 'lobechat-review-base-overrides';
 
 interface ReviewProps {
+  /**
+   * Target device the working directory lives on. Undefined for local desktop;
+   * set for a remote / web-bound device so git ops route through the device RPCs.
+   */
+  deviceId?: string;
   workingDirectory: string;
 }
 
@@ -193,7 +198,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const Review = memo<ReviewProps>(({ workingDirectory }) => {
+const Review = memo<ReviewProps>(({ deviceId, workingDirectory }) => {
   const { t } = useTranslation('chat');
   const [mode, setMode] = useLocalStorageState<ReviewMode>(REVIEW_MODE_STORAGE_KEY, 'unstaged');
   // Per-repo base-ref override — when set, the branch diff compares against
@@ -217,12 +222,14 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
     workingDirectory,
     mode,
     baseOverride,
+    deviceId,
   );
   // Lazy: only fetch remote branches list once the user opens the picker.
   const [basePickerOpen, setBasePickerOpen] = useState(false);
   const { data: remoteBranches } = useGitRemoteBranches(
     workingDirectory,
     mode === 'branch' && basePickerOpen,
+    deviceId,
   );
   // Memo-stabilise the fallback so downstream useMemo deps don't flap on
   // every render while the SWR result is undefined.
@@ -232,8 +239,10 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
   const headRef = data?.mode === 'branch' ? data.headRef : undefined;
   // Parent branch — only needed for the group header label, so we only fetch
   // it when there's at least one submodule group to render alongside it.
-  // SWR-deduped under the hood by `useGitInfo`'s own cache key.
-  const { data: parentGitInfo } = useGitInfo(
+  // SWR-deduped under the hood by `useFetchGitInfo`'s own cache key. Routes
+  // through the target device so remote repos resolve the same way.
+  const { data: parentGitInfo } = useFetchGitInfo(
+    deviceId,
     submoduleGroups.length > 0 ? workingDirectory : undefined,
   );
   const [viewMode, setViewMode] = useLocalStorageState<'unified' | 'split'>(
@@ -572,6 +581,7 @@ const Review = memo<ReviewProps>(({ workingDirectory }) => {
                     const expanded = activeKeys.includes(key);
                     return (
                       <FileRow
+                        deviceId={deviceId}
                         entry={entry}
                         expanded={expanded}
                         key={key}

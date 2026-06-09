@@ -16,6 +16,7 @@ import type {
   InitWorkspaceParams,
   KillCommandParams,
   ListLocalFileParams,
+  ListProjectSkillsParams,
   LocalReadFileParams,
   LocalReadFilesParams,
   LocalSearchFilesParams,
@@ -29,6 +30,7 @@ import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
 
+import GitCtr from './GitCtr';
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, IpcMethod } from './index';
 import LocalFileCtr from './LocalFileCtr';
@@ -166,6 +168,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   private get workspaceCtr() {
     return this.app.getController(WorkspaceCtr);
+  }
+
+  private get gitCtr() {
+    return this.app.getController(GitCtr);
   }
 
   private get shellCommandCtr() {
@@ -354,6 +360,72 @@ export default class GatewayConnectionCtr extends ControllerModule {
     switch (method) {
       case 'initWorkspace': {
         return this.workspaceCtr.initWorkspace(params as InitWorkspaceParams);
+      }
+
+      case 'getGitBranch': {
+        return this.gitCtr.getGitBranch((params as { path: string }).path);
+      }
+
+      case 'getLinkedPullRequest': {
+        return this.gitCtr.getLinkedPullRequest(params as { branch: string; path: string });
+      }
+
+      case 'getGitWorkingTreeStatus': {
+        return this.gitCtr.getGitWorkingTreeStatus((params as { path: string }).path);
+      }
+
+      case 'getGitAheadBehind': {
+        return this.gitCtr.getGitAheadBehind((params as { path: string }).path);
+      }
+
+      case 'listGitBranches': {
+        return this.gitCtr.listGitBranches((params as { path: string }).path);
+      }
+
+      case 'checkoutGitBranch': {
+        return this.gitCtr.checkoutGitBranch(
+          params as { branch: string; create?: boolean; path: string },
+        );
+      }
+
+      case 'pullGitBranch': {
+        return this.gitCtr.pullGitBranch(params as { path: string });
+      }
+
+      case 'pushGitBranch': {
+        return this.gitCtr.pushGitBranch(params as { path: string });
+      }
+
+      case 'getGitWorkingTreePatches': {
+        return this.gitCtr.getGitWorkingTreePatches((params as { path: string }).path);
+      }
+
+      case 'getGitWorkingTreeFiles': {
+        return this.gitCtr.getGitWorkingTreeFiles((params as { path: string }).path);
+      }
+
+      case 'getProjectFileIndex': {
+        return this.localFileCtr.getProjectFileIndex(params as { scope?: string });
+      }
+
+      case 'listProjectSkills': {
+        return this.workspaceCtr.listProjectSkills(params as ListProjectSkillsParams);
+      }
+
+      case 'getGitBranchDiff': {
+        return this.gitCtr.getGitBranchDiff(params as { baseRef?: string; path: string });
+      }
+
+      case 'listGitRemoteBranches': {
+        return this.gitCtr.listGitRemoteBranches((params as { path: string }).path);
+      }
+
+      case 'revertGitFile': {
+        return this.gitCtr.revertGitFile(params as { filePath: string; path: string });
+      }
+
+      case 'statPath': {
+        return this.workspaceCtr.statPath(params as { path: string });
       }
 
       default: {

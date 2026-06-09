@@ -12,10 +12,26 @@ import {
   embeddings,
   fileChunks,
   files,
+  filesToSessions,
   globalFiles,
   knowledgeBaseFiles,
+  messages,
+  messagesFiles,
+  topics,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
+
+/**
+ * Minimal file descriptor used to bootstrap user-uploaded files into a sandbox.
+ */
+export interface SandboxInitFileItem {
+  fileType: string;
+  id: string;
+  name: string;
+  size: number;
+  /** S3 key / storage url, needs to be turned into a download url before use */
+  url: string;
+}
 
 export class FileModel {
   private readonly userId: string;
@@ -358,6 +374,44 @@ export class FileModel {
     return database.query.files.findFirst({
       where: and(eq(files.id, id), eq(files.userId, this.userId)),
     });
+  };
+
+  /**
+   * Collect the user-uploaded files that should be pre-loaded into a sandbox for
+   * the given topic. Combines two associations and de-duplicates by file id:
+   * - files attached to messages inside the topic (`messages_files`)
+   * - files attached to the session that owns the topic (`files_to_sessions`)
+   */
+  findFilesToInitInSandbox = async (topicId: string): Promise<SandboxInitFileItem[]> => {
+    const columns = {
+      fileType: files.fileType,
+      id: files.id,
+      name: files.name,
+      size: files.size,
+      url: files.url,
+    };
+
+    const [messageFiles, sessionFiles] = await Promise.all([
+      this.db
+        .select(columns)
+        .from(messagesFiles)
+        .innerJoin(messages, eq(messagesFiles.messageId, messages.id))
+        .innerJoin(files, eq(messagesFiles.fileId, files.id))
+        .where(and(eq(messages.topicId, topicId), eq(messagesFiles.userId, this.userId))),
+      this.db
+        .select(columns)
+        .from(filesToSessions)
+        .innerJoin(topics, eq(topics.sessionId, filesToSessions.sessionId))
+        .innerJoin(files, eq(filesToSessions.fileId, files.id))
+        .where(and(eq(topics.id, topicId), eq(filesToSessions.userId, this.userId))),
+    ]);
+
+    const deduped = new Map<string, SandboxInitFileItem>();
+    for (const file of [...messageFiles, ...sessionFiles]) {
+      if (!deduped.has(file.id)) deduped.set(file.id, file);
+    }
+
+    return [...deduped.values()];
   };
 
   countFilesByHash = async (hash: string) => {

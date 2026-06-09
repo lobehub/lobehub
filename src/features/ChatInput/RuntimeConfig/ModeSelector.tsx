@@ -45,6 +45,7 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     display: flex;
+    flex: none;
     gap: 6px;
     align-items: center;
 
@@ -54,6 +55,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
+    white-space: nowrap;
 
     transition: all 0.2s;
 

@@ -5,6 +5,7 @@ import {
 } from '@lobechat/const';
 import { type LobeAgentChatConfig, type RuntimeEnvMode } from '@lobechat/types';
 
+import { resolveRuntimeMode } from '@/helpers/executionTarget';
 import { type AgentStoreState } from '@/store/agent/initialState';
 
 import { agentSelectors } from './selectors';
@@ -59,16 +60,22 @@ const isLocalSystemEnabledById = (agentId: string) => (s: AgentStoreState) =>
   getRuntimeModeById(agentId)(s) === 'local';
 
 /**
- * Get runtime environment mode by agent ID.
- * Reads from `runtimeMode[platform]`, defaults to 'local' on desktop, 'none' on web.
+ * Get the agent's runtime mode, derived from the unified
+ * `agencyConfig.executionTarget` (sandbox → cloud, local → local, device →
+ * none), falling back to the legacy per-platform `runtimeMode` for agents that
+ * predate `executionTarget`.
  */
 const getRuntimeModeById =
   (agentId: string) =>
   (s: AgentStoreState): RuntimeEnvMode => {
-    const runtimeEnv = getChatConfigById(agentId)(s).runtimeEnv;
+    const config = agentSelectors.getAgentConfigById(agentId)(s);
     const platform = isDesktop ? 'desktop' : 'web';
 
-    return runtimeEnv?.runtimeMode?.[platform] ?? (isDesktop ? 'local' : 'none');
+    return resolveRuntimeMode(
+      config?.agencyConfig,
+      config?.chatConfig?.runtimeEnv?.runtimeMode?.[platform],
+      isDesktop,
+    );
   };
 
 const getSkillActivateModeById =

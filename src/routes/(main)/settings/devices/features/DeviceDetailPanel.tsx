@@ -1,6 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
+import type { DeviceListItem } from '@lobechat/types';
 import { ActionIcon, Button, Flexbox, Icon, Input, SortableList, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
@@ -8,12 +9,11 @@ import { FolderOpenIcon, FolderPlusIcon, XIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { nextWorkingDirs } from '@/features/ChatInput/RuntimeConfig/deviceCwd';
-import { renderDirIcon } from '@/features/ChatInput/RuntimeConfig/dirIcon';
+import DirIcon from '@/features/ChatInput/RuntimeConfig/DirIcon';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { electronSystemService } from '@/services/electron/system';
+import { nextWorkingDirs } from '@/store/device';
 
-import type { DeviceListItem } from './DeviceItem';
 import { getDeviceIcon } from './getDeviceIcon';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -231,7 +231,7 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
             renderItem={(item: { id: string; repoType?: 'git' | 'github' }) => (
               <SortableList.Item className={styles.recentItem} id={item.id} variant={'filled'}>
                 <SortableList.DragHandle />
-                {renderDirIcon(item.repoType)}
+                <DirIcon repoType={item.repoType} />
                 <Text className={styles.path} title={item.id}>
                   {item.id}
                 </Text>

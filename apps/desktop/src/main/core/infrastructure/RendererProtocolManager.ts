@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import { app, net, protocol } from 'electron';
+import { app, protocol } from 'electron';
 import { pathExistsSync } from 'fs-extra';
 
 import { createLogger } from '@/utils/logger';
@@ -286,19 +286,34 @@ export class StaticRendererFallback implements RendererFallbackStrategy {
   }
 }
 
-/**
- * Development fallback: forward the request to the electron-vite dev server.
- * Non-backend `app://renderer/<path>` requests get round-tripped through the
- * Vite middleware (HTML rewrites, module transforms, optimized deps) and
- * returned to the renderer as if served from `app://` directly.
- *
- * The HMR WebSocket bypasses this — the renderer opens
- * `ws://localhost:<port>` straight against the dev server (see
- * `electron.vite.config.ts` `server.hmr.clientPort`).
- */
+class Semaphore {
+  private active = 0;
+  private readonly waiters: Array<() => void> = [];
+
+  constructor(private readonly max: number) {}
+
+  async acquire(): Promise<() => void> {
+    if (this.active >= this.max) {
+      await new Promise<void>((resolve) => this.waiters.push(resolve));
+    }
+    this.active += 1;
+
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.active -= 1;
+      this.waiters.shift()?.();
+    };
+  }
+}
+
+const VITE_FETCH_CONCURRENCY = 64;
+
 export class ViteRendererFallback implements RendererFallbackStrategy {
   private readonly viteOrigin: string;
   private readonly logger = createLogger('core:ViteRendererFallback');
+  private readonly gate = new Semaphore(VITE_FETCH_CONCURRENCY);
 
   constructor(viteOrigin: string) {
     this.viteOrigin = viteOrigin.replace(/\/+$/, '');
@@ -307,7 +322,7 @@ export class ViteRendererFallback implements RendererFallbackStrategy {
   async handle(request: Request, url: URL): Promise<Response> {
     const target = `${this.viteOrigin}${url.pathname}${url.search}`;
 
-    // Strip Host so net.fetch derives it from the target URL (otherwise Vite
+    // Strip Host so fetch derives it from the target URL (otherwise Vite
     // sees `Host: renderer` and middleware that keys off Host can misbehave).
     const headers = new Headers(request.headers);
     headers.delete('host');
@@ -322,11 +337,30 @@ export class ViteRendererFallback implements RendererFallbackStrategy {
       init.duplex = 'half';
     }
 
+    const release = await this.gate.acquire();
     try {
-      return await net.fetch(target, init);
+      const response = await fetch(target, init);
+      return this.releaseOnBodyDone(response, release);
     } catch (error) {
+      release();
       this.logger.error(`Vite dev server fetch failed: ${target}`, error);
       return new Response('Vite Dev Server Unavailable', { status: 502 });
     }
+  }
+
+  private releaseOnBodyDone(response: Response, release: () => void): Response {
+    if (!response.body) {
+      release();
+      return response;
+    }
+
+    const passthrough = new TransformStream();
+    void response.body.pipeTo(passthrough.writable).then(release, release);
+
+    return new Response(passthrough.readable, {
+      headers: response.headers,
+      status: response.status,
+      statusText: response.statusText,
+    });
   }
 }

@@ -2,6 +2,7 @@ import type {
   ISandboxService,
   SandboxExportFileResult,
 } from '@lobechat/builtin-tool-cloud-sandbox';
+import type { LobeChatDatabase } from '@lobechat/database';
 
 import type { FileService } from '@/server/services/file';
 import type { MarketService } from '@/server/services/market';
@@ -16,6 +17,8 @@ export interface SandboxSessionContext {
 export interface SandboxServiceOptions extends SandboxSessionContext {
   fileService?: FileService;
   marketService: MarketService;
+  /** Used to look up topic/session files when bootstrapping the sandbox. */
+  serverDB?: LobeChatDatabase;
 }
 
 export interface SandboxProviderCapabilities {

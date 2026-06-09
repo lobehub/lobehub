@@ -3,18 +3,20 @@
 import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
 import { isDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
-import type { HeteroExecutionTarget, RuntimeEnvMode } from '@lobechat/types';
+import type { DeviceExecutionTarget } from '@lobechat/types';
 import { Microsoft } from '@lobehub/icons';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
+  BoxIcon,
   CheckIcon,
   ChevronDownIcon,
-  CloudIcon,
   ExternalLinkIcon,
   InfoIcon,
   LaptopIcon,
+  MonitorDownIcon,
   MonitorIcon,
+  MonitorOffIcon,
 } from 'lucide-react';
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,12 +24,14 @@ import { useTranslation } from 'react-i18next';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useElectronStore } from '@/store/electron';
 
 const styles = createStaticStyles(({ css }) => ({
   button: css`
     cursor: pointer;
 
     display: flex;
+    flex: none;
     gap: 6px;
     align-items: center;
 
@@ -37,6 +41,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
+    white-space: nowrap;
 
     transition: all 0.2s;
 
@@ -44,6 +49,12 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillSecondary};
     }
+  `,
+  buttonLabel: css`
+    overflow: hidden;
+    max-width: 120px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   check: css`
     flex: none;
@@ -81,6 +92,30 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 8px;
     padding-inline: 8px;
     font-size: 12px;
+    color: ${cssVar.colorTextQuaternary};
+  `,
+  downloadCard: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 10px;
+    align-items: center;
+
+    padding-block: 8px;
+    padding-inline: 8px;
+    border-radius: ${cssVar.borderRadius};
+
+    text-decoration: none;
+
+    transition: background-color 0.2s;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  downloadCardArrow: css`
+    flex: none;
+    margin-inline-start: auto;
     color: ${cssVar.colorTextQuaternary};
   `,
   option: css`
@@ -143,6 +178,19 @@ const styles = createStaticStyles(({ css }) => ({
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
+  tag: css`
+    flex: none;
+
+    padding-block: 0;
+    padding-inline: 5px;
+    border-radius: 4px;
+
+    font-size: 10px;
+    line-height: 16px;
+    color: ${cssVar.colorTextSecondary};
+
+    background: ${cssVar.colorFillSecondary};
+  `,
   header: css`
     display: flex;
     gap: 6px;
@@ -190,9 +238,10 @@ interface OptionRowProps {
   icon: ReactNode;
   label: string;
   onClick: () => void;
+  tag?: ReactNode;
 }
 
-const OptionRow = memo<OptionRowProps>(({ active, desc, disabled, icon, label, onClick }) => {
+const OptionRow = memo<OptionRowProps>(({ active, desc, disabled, icon, label, onClick, tag }) => {
   return (
     <div
       className={cx(
@@ -206,7 +255,10 @@ const OptionRow = memo<OptionRowProps>(({ active, desc, disabled, icon, label, o
     >
       <div className={styles.optionIcon}>{icon}</div>
       <div className={styles.optionMeta}>
-        <div className={styles.optionTitle}>{label}</div>
+        <Flexbox horizontal align={'center'} gap={6}>
+          <span className={styles.optionTitle}>{label}</span>
+          {tag ? <span className={styles.tag}>{tag}</span> : null}
+        </Flexbox>
         {desc ? <div className={styles.desc}>{desc}</div> : null}
       </div>
       {active ? <Icon className={styles.check} icon={CheckIcon} size={14} /> : null}
@@ -248,32 +300,44 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const storedTarget = agencyConfig?.executionTarget;
   const boundDeviceId = agencyConfig?.boundDeviceId;
 
-  // Effective target: falls back to local on desktop, sandbox on web
-  const executionTarget: HeteroExecutionTarget = storedTarget ?? (isDesktop ? 'local' : 'sandbox');
+  // Heterogeneous agents (Claude Code / Codex — remote types already early-return
+  // below) bring their own toolchain and must execute somewhere, so `'none'`
+  // (plain chat, no execution environment) isn't a valid target for them: hide
+  // the option and never fall back to / honour a stale stored `'none'`.
+  const isHetero = !!heteroType;
 
   const { data: devices, isLoading } = lambdaQuery.device.listDevices.useQuery(undefined, {
     staleTime: 30_000,
   });
 
+  // The current machine's own gateway deviceId (desktop only), used only to
+  // badge the matching device row. The dedicated local "This device" option
+  // remains visible in desktop mode.
+  useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
+  const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
+  const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
+
+  // Effective target: falls back to local on desktop, sandbox for heterogeneous
+  // agents on web (they must execute somewhere), otherwise no device on web. A
+  // hetero agent never resolves to `'none'`, even if one was previously stored.
+  const fallbackTarget: DeviceExecutionTarget = isDesktop ? 'local' : isHetero ? 'sandbox' : 'none';
+  const storedOrFallback = storedTarget ?? fallbackTarget;
+  const executionTarget: DeviceExecutionTarget =
+    isHetero && storedOrFallback === 'none' ? fallbackTarget : storedOrFallback;
+
   const handleSelect = useCallback(
-    async (target: HeteroExecutionTarget, deviceId?: string) => {
+    async (target: DeviceExecutionTarget, deviceId?: string) => {
       setOpen(false);
 
-      // Keep runtimeMode in sync so the server-side tool gate (runtimeMode === 'cloud'
-      // enables CloudSandbox) reflects the user's chosen execution target.
-      // Use a single updateAgentConfigById to persist both fields atomically — parallel
-      // calls share the same abort signal name and the second would cancel the first.
-      const platform = isDesktop ? 'desktop' : 'web';
-      const runtimeMode: RuntimeEnvMode =
-        target === 'sandbox' ? 'cloud' : target === 'local' ? 'local' : 'none';
-
+      // `executionTarget` is the single source of truth now — the server tool
+      // gate + client `getRuntimeModeById` derive `runtimeMode` from it, so we no
+      // longer write the legacy per-platform `runtimeMode` record.
       await updateAgentConfigById(agentId, {
         agencyConfig: {
           ...agencyConfig,
           executionTarget: target,
           ...(target === 'device' && deviceId ? { boundDeviceId: deviceId } : {}),
         },
-        chatConfig: { runtimeEnv: { runtimeMode: { [platform]: runtimeMode } } },
       });
     },
     [agentId, agencyConfig, updateAgentConfigById],
@@ -285,11 +349,17 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const boundDevice =
     executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
   const hasNoDevices = !devices || devices.length === 0;
+  // On web with no device, the prominent download card below replaces the small
+  // header link — avoid showing the same CTA twice.
+  const showWebDownloadCard = !isDesktop && hasNoDevices && !isLoading;
 
   // Compute chip
-  let chipIcon: ReactNode = <Icon icon={CloudIcon} size={14} />;
+  let chipIcon: ReactNode = <Icon icon={BoxIcon} size={14} />;
   let chipLabel = t('heteroAgent.executionTarget.sandbox');
-  if (executionTarget === 'local') {
+  if (executionTarget === 'none') {
+    chipIcon = <Icon icon={MonitorOffIcon} size={14} />;
+    chipLabel = t('heteroAgent.executionTarget.none');
+  } else if (executionTarget === 'local') {
     chipIcon = <Icon icon={LaptopIcon} size={14} />;
     chipLabel = t('heteroAgent.executionTarget.local');
   } else if (executionTarget === 'device') {
@@ -300,16 +370,45 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       t('heteroAgent.executionTarget.unknownDevice');
   }
 
-  const isActive = (target: HeteroExecutionTarget, deviceId?: string) => {
+  const isActive = (target: DeviceExecutionTarget, deviceId?: string) => {
     if (target === 'device') return executionTarget === 'device' && boundDeviceId === deviceId;
     return executionTarget === target;
   };
 
+  const renderDeviceRow = (d: NonNullable<typeof devices>[number]) => (
+    <OptionRow
+      active={isActive('device', d.deviceId)}
+      disabled={!d.online}
+      icon={getDeviceIcon(d.platform)}
+      key={d.deviceId}
+      label={d.friendlyName || d.hostname || d.deviceId}
+      tag={d.deviceId === currentDeviceId ? t('heteroAgent.executionTarget.local') : undefined}
+      desc={
+        <>
+          <span className={d.online ? styles.dotOnline : styles.dotOffline} />
+          <span>
+            {d.online
+              ? t('heteroAgent.executionTarget.online')
+              : t('heteroAgent.executionTarget.offline')}
+          </span>
+        </>
+      }
+      onClick={() => void handleSelect('device', d.deviceId)}
+    />
+  );
+
   const content = (
-    <Flexbox gap={2} style={{ maxWidth: 320, minWidth: 280 }}>
+    <Flexbox gap={6} style={{ maxWidth: 320, minWidth: 280 }}>
       <div className={styles.header}>
-        <span className={styles.headerTitle}>{t('heteroAgent.executionTarget.title')}</span>
-        <Flexbox horizontal align={'center'} gap={6}>
+        <Flexbox horizontal align={'center'} gap={4}>
+          <span className={styles.headerTitle}>{t('heteroAgent.executionTarget.title')}</span>
+          <Tooltip title={t('heteroAgent.executionTarget.infoTooltip')}>
+            <span className={styles.headerInfo}>
+              <Icon icon={InfoIcon} size={12} />
+            </span>
+          </Tooltip>
+        </Flexbox>
+        {isDesktop || showWebDownloadCard ? null : (
           <a
             className={styles.headerLink}
             href="https://lobehub.com/downloads"
@@ -319,13 +418,17 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
             <Icon icon={ExternalLinkIcon} size={11} />
             <span>{t('heteroAgent.executionTarget.downloadDesktop')}</span>
           </a>
-          <Tooltip title={t('heteroAgent.executionTarget.infoTooltip')}>
-            <span className={styles.headerInfo}>
-              <Icon icon={InfoIcon} size={12} />
-            </span>
-          </Tooltip>
-        </Flexbox>
+        )}
       </div>
+      {isHetero ? null : (
+        <OptionRow
+          active={isActive('none')}
+          desc={t('heteroAgent.executionTarget.noneDesc')}
+          icon={<Icon icon={MonitorOffIcon} size={14} />}
+          label={t('heteroAgent.executionTarget.none')}
+          onClick={() => void handleSelect('none')}
+        />
+      )}
       {isDesktop ? (
         <OptionRow
           active={isActive('local')}
@@ -338,34 +441,38 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       <OptionRow
         active={isActive('sandbox')}
         desc={t('heteroAgent.executionTarget.sandboxDesc')}
-        icon={<Icon icon={CloudIcon} size={14} />}
+        icon={<Icon icon={BoxIcon} size={14} />}
         label={t('heteroAgent.executionTarget.sandbox')}
         onClick={() => void handleSelect('sandbox')}
       />
-      {(devices ?? []).map((d) => (
-        <OptionRow
-          active={isActive('device', d.deviceId)}
-          disabled={!d.online}
-          icon={getDeviceIcon(d.platform)}
-          key={d.deviceId}
-          label={d.friendlyName || d.hostname || d.deviceId}
-          desc={
-            <>
-              <span className={d.online ? styles.dotOnline : styles.dotOffline} />
-              <span>
-                {d.online
-                  ? t('heteroAgent.executionTarget.online')
-                  : t('heteroAgent.executionTarget.offline')}
-              </span>
-            </>
-          }
-          onClick={() => void handleSelect('device', d.deviceId)}
-        />
-      ))}
+      {(devices ?? []).map((d) => renderDeviceRow(d))}
       {hasNoDevices && isLoading ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.loading')}</div>
       ) : null}
-      {hasNoDevices && !isLoading ? (
+      {/* On web with no remote device, guide the user to the desktop app (which
+          unlocks local execution + `lh connect`) rather than a muted dead-end. */}
+      {showWebDownloadCard ? (
+        <a
+          className={styles.downloadCard}
+          href="https://lobehub.com/downloads"
+          rel="noreferrer"
+          target="_blank"
+        >
+          <div className={styles.optionIcon}>
+            <Icon icon={MonitorDownIcon} size={14} />
+          </div>
+          <div className={styles.optionMeta}>
+            <div className={styles.optionTitle}>
+              {t('heteroAgent.executionTarget.downloadDesktopTitle')}
+            </div>
+            <div className={styles.desc}>
+              {t('heteroAgent.executionTarget.downloadDesktopDesc')}
+            </div>
+          </div>
+          <Icon className={styles.downloadCardArrow} icon={ExternalLinkIcon} size={13} />
+        </a>
+      ) : null}
+      {hasNoDevices && !isLoading && isDesktop ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.noDevices')}</div>
       ) : null}
     </Flexbox>
@@ -382,7 +489,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     >
       <div className={styles.button}>
         {chipIcon}
-        <span>{chipLabel}</span>
+        <span className={styles.buttonLabel}>{chipLabel}</span>
         <Icon icon={ChevronDownIcon} size={12} />
       </div>
     </Popover>

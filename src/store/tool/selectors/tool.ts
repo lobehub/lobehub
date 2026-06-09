@@ -125,7 +125,7 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
   // Build exclusion sets for deduplication
   const builtinSkillIds = new Set((s.builtinSkills || []).map((skill) => skill.identifier));
   const agentSkillIds = new Set((s.agentSkills || []).map((skill) => skill.identifier));
-  const klavisIds = new Set((s.servers || []).map((server) => server.identifier));
+  const klavisIds = new Set((s.composioServers || []).map((server) => server.identifier));
   const lobehubSkillIds = new Set((s.lobehubSkillServers || []).map((server) => server.identifier));
 
   // 1. Builtin tools — directly from s.builtinTools
@@ -157,14 +157,14 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
     });
 
   // 3. Klavis MCP servers (connected only)
-  const klavisItems = (s.servers || [])
+  const klavisItems = (s.composioServers || [])
     .filter((server) => server.status === ComposioServerStatus.ACTIVE && server.tools?.length)
     .map((server) => {
       const config = getComposioAppByIdentifier(server.identifier);
       return {
         description: config?.description || '',
         identifier: server.identifier,
-        name: config?.label || server.serverName,
+        name: config?.label || server.label,
       };
     });
 

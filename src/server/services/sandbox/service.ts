@@ -1,10 +1,18 @@
-import type {
-  SandboxCallToolResult,
-  SandboxExportFileResult,
+import {
+  type SandboxCallToolResult,
+  type SandboxExportFileResult,
+  selectSandboxInitFiles,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import debug from 'debug';
 import { sha256 } from 'js-sha256';
 
+import { FileModel } from '@/database/models/file';
+
+import {
+  buildSandboxFilesInitCommand,
+  SANDBOX_INIT_TIMEOUT_MS,
+  type SandboxInitDownload,
+} from './bootstrap';
 import type {
   SandboxCommandResult,
   SandboxProvider,
@@ -20,6 +28,8 @@ export class SandboxMiddlewareService implements SandboxService {
   readonly capabilities: SandboxProviderCapabilities;
   readonly kind: SandboxProviderKind;
 
+  private filesInitialized = false;
+
   constructor(
     private readonly provider: SandboxProvider,
     private readonly options: SandboxServiceOptions,
@@ -28,8 +38,68 @@ export class SandboxMiddlewareService implements SandboxService {
     this.kind = provider.kind;
   }
 
-  callTool(toolName: string, params: Record<string, unknown>): Promise<SandboxCallToolResult> {
+  async callTool(
+    toolName: string,
+    params: Record<string, unknown>,
+  ): Promise<SandboxCallToolResult> {
+    await this.ensureFilesInitialized();
     return this.provider.callTool(toolName, params);
+  }
+
+  /**
+   * Sync the files the user uploaded in this topic/session into the sandbox the
+   * first time this service instance is used. Best-effort: any failure is
+   * swallowed so it never blocks the actual tool call.
+   *
+   * The downloaded command is guarded by an in-sandbox marker file, which is the
+   * single source of truth for idempotency: it is a cheap no-op once synced, and
+   * if the sandbox session is recycled the marker disappears so the next call
+   * re-syncs automatically. We intentionally do NOT cache the "done" state out of
+   * band (e.g. in Redis), because that could skip the re-sync after a recycle and
+   * leave the agent believing files exist when /mnt/data is empty.
+   */
+  private async ensureFilesInitialized(): Promise<void> {
+    if (this.filesInitialized) return;
+    this.filesInitialized = true;
+
+    const { fileService, serverDB, topicId, userId } = this.options;
+    if (!serverDB || !fileService || !topicId || !userId) return;
+    if (!this.provider.capabilities.shell) return;
+
+    try {
+      const fileModel = new FileModel(serverDB, userId);
+      const files = selectSandboxInitFiles(await fileModel.findFilesToInitInSandbox(topicId));
+
+      if (files.length === 0) return;
+
+      const downloads = (
+        await Promise.all(
+          files.map(async (file): Promise<SandboxInitDownload | null> => {
+            const url = await fileService
+              .createCachedPreSignedUrlForPreview(file.url)
+              .catch(() => '');
+            return url ? { name: file.name, url } : null;
+          }),
+        )
+      ).filter((item): item is SandboxInitDownload => item !== null);
+
+      if (downloads.length === 0) return;
+
+      const command = buildSandboxFilesInitCommand(downloads);
+      const result = await this.provider.callTool('runCommand', {
+        command,
+        timeout: SANDBOX_INIT_TIMEOUT_MS,
+      });
+
+      log(
+        'Sandbox file init for topic %s: %d files, success=%s',
+        topicId,
+        downloads.length,
+        result.success,
+      );
+    } catch (error) {
+      log('Sandbox file init failed for topic %s: %O', topicId, error);
+    }
   }
 
   async exportAndUploadFile(path: string, filename: string): Promise<SandboxExportFileResult> {

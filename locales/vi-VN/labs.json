@@ -5,8 +5,6 @@
   "features.agentSelfIteration.title": "Tự lặp của tác nhân",
   "features.assistantMessageGroup.desc": "Nhóm các tin nhắn của tác nhân và kết quả gọi công cụ lại với nhau để hiển thị",
   "features.assistantMessageGroup.title": "Nhóm Tin Nhắn Tác Nhân",
-  "features.executionDeviceSwitcher.desc": "Hiển thị công cụ chuyển đổi thiết bị thực thi trong thanh công cụ đại lý không đồng nhất để bạn có thể định tuyến các lần chạy đến thiết bị này, một sandbox đám mây hoặc một thiết bị từ xa được liên kết.",
-  "features.executionDeviceSwitcher.title": "Công Cụ Chuyển Đổi Thiết Bị Thực Thi",
   "features.gatewayMode.desc": "Thực thi các tác vụ của tác nhân trên máy chủ thông qua Gateway WebSocket thay vì chạy cục bộ. Giúp tăng tốc độ xử lý và giảm mức sử dụng tài nguyên trên thiết bị của người dùng.",
   "features.gatewayMode.title": "Thực thi tác nhân phía máy chủ (Gateway)",
   "features.groupChat.desc": "Kích hoạt phối hợp trò chuyện nhóm với nhiều tác nhân.",

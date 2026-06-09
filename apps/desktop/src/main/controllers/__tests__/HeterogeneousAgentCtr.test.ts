@@ -440,8 +440,14 @@ describe('HeterogeneousAgentCtr', () => {
       expect(command).toBe('codex');
       expect(cliArgs).not.toContain(prompt);
       expect(cliArgs).toEqual(
-        expect.arrayContaining(['exec', '--json', '--skip-git-repo-check', '--full-auto']),
+        expect.arrayContaining([
+          'exec',
+          '--json',
+          '--skip-git-repo-check',
+          '--dangerously-bypass-approvals-and-sandbox',
+        ]),
       );
+      expect(cliArgs).not.toContain('--full-auto');
       expect(cliArgs).not.toContain('-');
       expect(writes).toEqual([prompt]);
     });

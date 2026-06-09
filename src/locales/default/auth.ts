@@ -127,6 +127,7 @@ export default {
   'betterAuth.signup.submit': 'Sign Up',
   'betterAuth.signup.subtitle': 'Start your Agents collaboration space',
   'betterAuth.signup.success': 'Sign up successful! Please check your email for verification',
+  'betterAuth.signup.cardTitle': 'Create a {{appName}} Account',
   'betterAuth.signup.title': 'Create Account',
   'betterAuth.signup.usernamePlaceholder': 'Enter your username',
   'betterAuth.verifyEmail.backToSignIn': 'Back to Sign In',

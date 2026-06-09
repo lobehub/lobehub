@@ -109,7 +109,7 @@ export class ComposioStoreActionImpl {
 
       const server: ComposioServer = {
         appSlug,
-        authConfigId,
+        authConfigId: response.authConfigId,
         connectedAccountId: response.connectedAccountId,
         createdAt: 0,
         identifier: response.identifier,

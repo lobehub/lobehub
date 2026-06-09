@@ -30,6 +30,15 @@ export interface OIDCConfig {
    */
   clientId?: string;
 
+  /**
+   * Client secret for confidential clients.
+   * - pre_registration: filled in by the user
+   * - dcr: written back after dynamic registration succeeds
+   * Stored in plaintext (non-token credential); access/refresh tokens live
+   * encrypted in `credentials` instead.
+   */
+  clientSecret?: string;
+
   /** OIDC discovery issuer URL — preferred over manual endpoint overrides */
   issuer?: string;
   redirectUri?: string;

@@ -23,7 +23,10 @@ const logBetterAuth = debug('middleware:better-auth');
 const dangerousLocalDevProxyRoute = '/_dangerous_local_dev_proxy';
 
 export function defineConfig() {
-  const backendApiEndpoints = ['/api', '/trpc', '/webapi', '/oidc'];
+  // `/oauth/connector` is a backend route handler (custom connector OAuth callback);
+  // the rest of `/oauth/*` (e.g. /oauth/callback/success) are SPA pages, so scope
+  // the passthrough to the connector subtree only.
+  const backendApiEndpoints = ['/api', '/trpc', '/webapi', '/oidc', '/oauth/connector'];
 
   const defaultMiddleware = (request: NextRequest) => {
     const url = new URL(request.url);
@@ -188,6 +191,9 @@ export function defineConfig() {
     // oauth
     // Make only the consent view public (GET page), not other oauth paths
     '/oauth/consent/(.*)',
+    // Custom connector OAuth callback — hit via a cross-site redirect from the
+    // provider, carries its own code+state, so it must not be session-gated.
+    '/oauth/connector/callback',
     '/oidc/handoff',
     '/oidc/device/auth',
     '/oidc/token',
@@ -238,6 +244,13 @@ export function defineConfig() {
         if (hl) {
           signInUrl.searchParams.set('hl', hl);
           logBetterAuth('Preserving locale to sign-in: hl=%s', hl);
+        }
+        // Preserve marketing attribution (e.g. sign-ups originating from Market)
+        // so it survives the auth detour and reaches the sign-up page.
+        const utmSource = req.nextUrl.searchParams.get('utm_source');
+        if (utmSource) {
+          signInUrl.searchParams.set('utm_source', utmSource);
+          logBetterAuth('Preserving utm_source to sign-in: %s', utmSource);
         }
         return Response.redirect(signInUrl);
       }

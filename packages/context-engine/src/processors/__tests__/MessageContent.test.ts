@@ -357,11 +357,49 @@ describe('MessageContentProcessor', () => {
       expect(content[0].type).toBe('text');
       expect(content[0].text).toContain('SYSTEM CONTEXT');
       expect(content[0].text).toContain('Hello');
-      expect(content[0].text).toContain('<image ref="msg_1cs5ql.image_1" name="test.png"></image>');
+      expect(content[0].text).toContain(
+        '<image ref="msg_1cs5ql.image_1" name="test.png" url="http://example.com/image.jpg"></image>',
+      );
+      expect(content[0].text).toContain(
+        '<file id="file1" name="test.txt" type="text/plain" size="100" url="http://example.com/test.txt"></file>',
+      );
+    });
+
+    it('should omit file URLs when includeFileUrl is disabled', async () => {
+      mockIsCanUseVision.mockReturnValue(false);
+
+      const processor = new MessageContentProcessor({
+        fileContext: { enabled: true, includeFileUrl: false },
+        isCanUseVision: mockIsCanUseVision,
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          content: 'Hello',
+          createdAt: Date.now(),
+          fileList: [
+            {
+              fileType: 'text/plain',
+              id: 'file1',
+              name: 'test.txt',
+              size: 100,
+              url: 'http://example.com/test.txt',
+            },
+          ],
+          id: 'test',
+          role: 'user',
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      const content = result.messages[0].content as any[];
       expect(content[0].text).toContain(
         '<file id="file1" name="test.txt" type="text/plain" size="100"></file>',
       );
-      expect(content[0].text).not.toContain('http://example.com/image.jpg');
       expect(content[0].text).not.toContain('http://example.com/test.txt');
     });
 

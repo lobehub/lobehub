@@ -68,9 +68,16 @@
         if (resolvedTheme === 'dark' || resolvedTheme === 'light') {
           document.documentElement.setAttribute('data-theme', resolvedTheme);
         }
-        // Check URL query parameter for locale (set by Electron main process from stored settings)
+        // Renderer-side reloads (Cmd+R / webContents.reload) don't go through
+        // the main process's `?lng=` injection, so prefer the i18next cache —
+        // the actual user setting persisted by the language switcher — before
+        // falling back to the URL param or navigator detection.
         var urlParams = new URLSearchParams(window.location.search);
-        var locale = urlParams.get('lng') || navigator.language || 'en-US';
+        var locale;
+        try {
+          locale = localStorage.getItem('i18nextLng');
+        } catch (_) {}
+        if (!locale) locale = urlParams.get('lng') || navigator.language || 'en-US';
         document.documentElement.lang = locale;
         var rtl = ['ar', 'arc', 'dv', 'fa', 'ha', 'he', 'khw', 'ks', 'ku', 'ps', 'ur', 'yi'];
         document.documentElement.dir =
