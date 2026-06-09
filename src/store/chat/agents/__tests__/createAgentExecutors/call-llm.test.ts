@@ -195,6 +195,9 @@ describe('call_llm executor', () => {
 
       expect(mockStore.optimisticCreateMessage).toHaveBeenCalledTimes(2);
       const firstMessage = await vi.mocked(mockStore.optimisticCreateMessage).mock.results[0].value;
+      const planUpgradeMessage = vi
+        .mocked(mockStore.optimisticCreateMessage)
+        .mock.calls.at(-1)?.[0];
       expect(mockStore.optimisticCreateMessage).toHaveBeenLastCalledWith(
         expect.objectContaining({
           content: '',
@@ -219,6 +222,7 @@ describe('call_llm executor', () => {
           operationId: expect.any(String),
         }),
       );
+      expect(planUpgradeMessage?.error).not.toHaveProperty('message');
     });
 
     it('should forward request metadata to chatService', async () => {

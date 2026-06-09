@@ -566,7 +566,6 @@ export const createAgentExecutors = (context: {
                       scenario: 'chat',
                     },
                   },
-                  message: 'Upgrade to continue using this model.',
                   type: ChatErrorType.FreePlanLimit,
                 },
                 groupId,
