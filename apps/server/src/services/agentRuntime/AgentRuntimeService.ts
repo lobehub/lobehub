@@ -1598,10 +1598,13 @@ export class AgentRuntimeService {
    *
    * `options.scheduleVerifyOnHold` arms a one-shot delayed re-check
    * (`verifyAsyncToolBarrier`) when the parent is found not yet resumable.
-   * Sub-agent completion bridges set it to cover two races: the child
-   * finishing before the parent's parked state is persisted, and two sibling
-   * completions barrier-checking concurrently before each other's backfill
-   * commits. The re-check itself never re-arms, so retries stay bounded.
+   * Sub-agent completions set it to cover the child finishing before the
+   * parent's parked state is persisted, and transient failures around the
+   * last completion (a sibling dying between backfill and resume, a DB
+   * hiccup during the barrier read). Pure concurrency needs no cover: each
+   * completion checks the barrier only after committing its own backfill, so
+   * the last committer always sees every earlier one. The re-check itself
+   * never re-arms, so retries stay bounded.
    */
   async tryResumeParentFromAsyncTool(
     params: { parentOperationId: string },
