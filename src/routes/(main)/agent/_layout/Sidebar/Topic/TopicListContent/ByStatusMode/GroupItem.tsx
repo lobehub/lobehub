@@ -3,13 +3,12 @@ import { cssVar } from 'antd-style';
 import {
   Archive,
   CheckCircle2,
+  CircleAlert,
   CircleDot,
-  Hand,
   Loader,
   type LucideIcon,
   PauseCircle,
   Star,
-  XCircle,
 } from 'lucide-react';
 import { memo } from 'react';
 
@@ -17,17 +16,17 @@ import TopicItem from '../../List/Item';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
 
 // Map each status-group id to its icon + color, mirroring the per-topic status
-// glyphs in `List/Item`. `favorite` is the synthetic group split out by
-// `buildGroupedTopics`, so it gets a star.
+// glyphs in `List/Item`. `pending` collapses the attention-needing states
+// (awaiting input / failed / unread completion) into one group; `favorite` is
+// the synthetic group split out by `buildGroupedTopics`, so it gets a star.
 const STATUS_ICON: Record<string, { color: string; icon: LucideIcon }> = {
   active: { color: cssVar.colorTextTertiary, icon: CircleDot },
   archived: { color: cssVar.colorTextDescription, icon: Archive },
   completed: { color: cssVar.colorTextDescription, icon: CheckCircle2 },
-  failed: { color: cssVar.colorError, icon: XCircle },
   favorite: { color: cssVar.colorWarning, icon: Star },
   paused: { color: cssVar.colorTextDescription, icon: PauseCircle },
+  pending: { color: cssVar.colorWarning, icon: CircleAlert },
   running: { color: cssVar.colorWarning, icon: Loader },
-  waitingForHuman: { color: cssVar.colorInfo, icon: Hand },
 };
 
 const GroupItem = memo<GroupItemComponentProps>(({ group, activeTopicId, activeThreadId }) => {

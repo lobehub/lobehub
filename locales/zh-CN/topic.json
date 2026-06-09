@@ -44,6 +44,7 @@
   "groupTitle.byStatus.completed": "已完成",
   "groupTitle.byStatus.failed": "已失败",
   "groupTitle.byStatus.paused": "已暂停",
+  "groupTitle.byStatus.pending": "待处理",
   "groupTitle.byStatus.running": "进行中",
   "groupTitle.byStatus.waitingForHuman": "等待处理",
   "groupTitle.byTime.month": "本月",

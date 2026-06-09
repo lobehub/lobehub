@@ -45,6 +45,7 @@ export default {
   'groupTitle.byStatus.completed': 'Completed',
   'groupTitle.byStatus.failed': 'Failed',
   'groupTitle.byStatus.paused': 'Paused',
+  'groupTitle.byStatus.pending': 'Needs attention',
   'groupTitle.byStatus.running': 'Running',
   'groupTitle.byStatus.waitingForHuman': 'Awaiting input',
   'groupTitle.byTime.month': 'This Month',

@@ -122,6 +122,7 @@ const getGroupFn = (
   groupMode: TopicGroupMode,
   sortBy: TopicSortBy,
   loadingTopicIds?: ReadonlySet<string>,
+  unreadTopicIds?: ReadonlySet<string>,
 ) => {
   const field: 'createdAt' | 'updatedAt' = sortBy === 'createdAt' ? 'createdAt' : 'updatedAt';
   if (groupMode === 'byProject') {
@@ -134,7 +135,7 @@ const getGroupFn = (
   }
   if (groupMode === 'byStatus') {
     return (topics: ChatTopic[]) =>
-      groupTopicsByStatus(topics, field, loadingTopicIds).map((group) => ({
+      groupTopicsByStatus(topics, field, loadingTopicIds, unreadTopicIds).map((group) => ({
         ...group,
         title: t(`groupTitle.byStatus.${group.id}` as any, { ns: 'topic' }),
       }));
@@ -177,10 +178,19 @@ const groupedTopicsForSidebar =
   (s: ChatStoreState): GroupedTopic[] => {
     const limitedTopics = displayTopicsForSidebar(pageSize, sortBy)(s);
     if (!limitedTopics) return [];
-    // Topics actively streaming on this client surface under "running" even
-    // though their persisted status is still active — see resolveStatusBucket.
+    // Topics actively streaming on this client surface under "running", and
+    // topics with an unread completion surface under "pending", even though
+    // their persisted status says otherwise — see resolveStatusBucket. Both are
+    // client-only states the server can't see.
     const loadingTopicIds = groupMode === 'byStatus' ? new Set(s.topicLoadingIds) : undefined;
-    return buildGroupedTopics(limitedTopics, getGroupFn(groupMode, sortBy, loadingTopicIds));
+    const unreadTopicIds =
+      groupMode === 'byStatus'
+        ? new Set(Object.values(s.unreadCompletedTopicsByAgent).flatMap((set) => [...set]))
+        : undefined;
+    return buildGroupedTopics(
+      limitedTopics,
+      getGroupFn(groupMode, sortBy, loadingTopicIds, unreadTopicIds),
+    );
   };
 
 const hasMoreTopics = (s: ChatStoreState): boolean => {
