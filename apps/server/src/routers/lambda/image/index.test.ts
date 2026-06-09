@@ -74,8 +74,13 @@ vi.mock('@lobechat/business-model-runtime', async (importOriginal) => ({
 }));
 
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
-  isLobeHubModelAvailable: (...args: [string, string, { userEmail?: string | null }?]) =>
-    mockIsLobeHubModelAvailable(...args),
+  isLobeHubModelAvailable: (
+    ...args: [
+      string,
+      string,
+      { getUserEmail?: () => Promise<string | null | undefined>; userEmail?: string | null }?,
+    ]
+  ) => mockIsLobeHubModelAvailable(...args),
 }));
 
 // Mock async caller
@@ -228,8 +233,12 @@ describe('imageRouter', () => {
       expect(result.success).toBe(true);
       expect(mockResolveBusinessModelMapping).toHaveBeenCalledWith('lobehub', 'onboarding-image');
       expect(mockIsLobeHubModelAvailable).toHaveBeenCalledWith('gpt-image-1', 'image', {
-        userEmail: 'user@example.com',
+        getUserEmail: expect.any(Function),
       });
+      const availabilityOptions = mockIsLobeHubModelAvailable.mock.calls.at(-1)?.[2];
+      expect(mockFindUserById).not.toHaveBeenCalled();
+      await expect(availabilityOptions!.getUserEmail!()).resolves.toBe('user@example.com');
+      expect(mockFindUserById).toHaveBeenCalledWith(mockServerDB, mockUserId);
       expect(mockCreateAsyncCaller).toHaveBeenCalledWith({ userId: mockUserId });
     });
 

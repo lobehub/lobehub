@@ -67,8 +67,13 @@ vi.mock('@lobechat/business-model-runtime', async (importOriginal) => ({
     mockResolveBusinessModelMapping(...args),
 }));
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
-  isLobeHubModelAvailable: (...args: [string, string, { userEmail?: string | null }?]) =>
-    mockIsLobeHubModelAvailable(...args),
+  isLobeHubModelAvailable: (
+    ...args: [
+      string,
+      string,
+      { getUserEmail?: () => Promise<string | null | undefined>; userEmail?: string | null }?,
+    ]
+  ) => mockIsLobeHubModelAvailable(...args),
 }));
 vi.mock('@/business/server/video-generation/getVideoFreeQuota', () => ({
   getVideoFreeQuota: vi.fn().mockResolvedValue({ remaining: 10 }),
@@ -196,8 +201,12 @@ describe('videoRouter', () => {
       expect(mockIsLobeHubModelAvailable).toHaveBeenCalledWith(
         'dreamina-seedance-2-0-260128',
         'video',
-        { userEmail: 'user@example.com' },
+        { getUserEmail: expect.any(Function) },
       );
+      const availabilityOptions = mockIsLobeHubModelAvailable.mock.calls.at(-1)?.[2];
+      expect(mockFindUserById).not.toHaveBeenCalled();
+      await expect(availabilityOptions!.getUserEmail!()).resolves.toBe('user@example.com');
+      expect(mockFindUserById).toHaveBeenCalledWith(mockServerDB, mockCtx.userId);
       expect(mockCreateVideo).toHaveBeenCalledWith(
         expect.objectContaining({ model: 'dreamina-seedance-2-0-260128' }),
         expect.any(Object),

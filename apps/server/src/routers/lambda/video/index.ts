@@ -91,7 +91,7 @@ export const videoRouter = router({
       if (
         provider === BRANDING_PROVIDER &&
         !(await isLobeHubModelAvailable(resolvedModelId, 'video', {
-          userEmail: (await UserModel.findById(serverDB, userId))?.email,
+          getUserEmail: async () => (await UserModel.findById(serverDB, userId))?.email,
         }))
       ) {
         throw new TRPCError({

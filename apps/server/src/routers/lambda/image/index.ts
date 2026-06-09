@@ -81,7 +81,7 @@ export const imageRouter = router({
       if (
         provider === BRANDING_PROVIDER &&
         !(await isLobeHubModelAvailable(resolvedModelId, 'image', {
-          userEmail: (await UserModel.findById(serverDB, userId))?.email,
+          getUserEmail: async () => (await UserModel.findById(serverDB, userId))?.email,
         }))
       ) {
         throw new TRPCError({

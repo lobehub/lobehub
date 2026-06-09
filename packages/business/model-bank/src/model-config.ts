@@ -33,5 +33,8 @@ export const loadLobeHubPlanCardModels = async (): Promise<string[]> =>
 export const isLobeHubModelAvailable = async (
   _id: string,
   _expectedType: AiModelType,
-  _options?: { userEmail?: string | null },
+  _options?: {
+    getUserEmail?: () => Promise<string | null | undefined>;
+    userEmail?: string | null;
+  },
 ): Promise<boolean> => false;
