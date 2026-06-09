@@ -5,11 +5,13 @@ import { subAgentCallback } from '../subAgentCallback';
 
 const mockCompleteSubAgentBridge = vi.fn();
 const mockGetOperationMetadata = vi.fn();
+const mockAiAgentService = vi.fn();
 
-vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
-    completeSubAgentBridge: mockCompleteSubAgentBridge,
-  })),
+vi.mock('@/server/services/aiAgent', () => ({
+  AiAgentService: vi.fn().mockImplementation((...args: any[]) => {
+    mockAiAgentService(...args);
+    return { completeSubAgentBridge: mockCompleteSubAgentBridge };
+  }),
 }));
 
 vi.mock('@/server/modules/AgentRuntime', () => ({
@@ -52,7 +54,8 @@ describe('subAgentCallback handler', () => {
   beforeEach(() => {
     mockCompleteSubAgentBridge.mockReset();
     mockGetOperationMetadata.mockReset();
-    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1' });
+    mockAiAgentService.mockReset();
+    mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1', workspaceId: 'ws-1' });
   });
 
   afterEach(() => {
@@ -107,6 +110,11 @@ describe('subAgentCallback handler', () => {
       reason: 'done',
       threadId: 'thread-1',
       toolMessageId: 'msg-tool-1',
+    });
+    // Workspace-scoped like the /run step worker — a personal-scoped runtime
+    // would miss workspace rows in the backfill / barrier queries.
+    expect(mockAiAgentService).toHaveBeenCalledWith(expect.anything(), 'user-1', {
+      workspaceId: 'ws-1',
     });
   });
 

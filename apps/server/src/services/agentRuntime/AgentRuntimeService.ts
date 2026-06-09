@@ -67,6 +67,7 @@ import {
   type StartExecutionParams,
   type StartExecutionResult,
   type StepCompletionReason,
+  type SubAgentBridgeParams,
 } from './types';
 
 if (process.env.VERCEL) {
@@ -1725,17 +1726,7 @@ export class AgentRuntimeService {
    *
    * Returns true when this call won the resume CAS.
    */
-  async completeSubAgentBridge(params: {
-    /** Child op's final state — passed in local mode; loaded from the coordinator otherwise. */
-    finalState?: AgentState;
-    /** Child (sub-agent) operation ID. */
-    operationId: string;
-    parentOperationId: string;
-    reason: string;
-    threadId: string;
-    /** The parent's placeholder `role: 'tool'` message to backfill. */
-    toolMessageId: string;
-  }): Promise<boolean> {
+  async completeSubAgentBridge(params: SubAgentBridgeParams): Promise<boolean> {
     const { operationId, parentOperationId, reason, threadId, toolMessageId } = params;
     const failed = reason === 'error' || reason === 'interrupted';
 

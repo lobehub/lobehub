@@ -75,6 +75,7 @@ import type {
   AgentExecutionParams,
   AgentExecutionResult,
   AgentRuntimeServiceOptions,
+  SubAgentBridgeParams,
 } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { getAbortError, isAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
@@ -412,6 +413,19 @@ export class AiAgentService {
    */
   executeStep(params: AgentExecutionParams): Promise<AgentExecutionResult> {
     return this.agentRuntimeService.executeStep(params);
+  }
+
+  /**
+   * Run the sub-agent completion bridge against this service's runtime.
+   *
+   * Same rationale as `executeStep`: the QStash `subagent-callback` webhook
+   * drives the bridge through here so the runtime's models stay
+   * workspace-scoped — a bare AgentRuntimeService would be personal-scoped
+   * and the tool-message backfill / resume barrier could miss
+   * workspace-scoped rows.
+   */
+  completeSubAgentBridge(params: SubAgentBridgeParams): Promise<boolean> {
+    return this.agentRuntimeService.completeSubAgentBridge(params);
   }
 
   /**

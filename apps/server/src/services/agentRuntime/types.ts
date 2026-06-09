@@ -163,6 +163,22 @@ export interface AgentExecutionResult {
   success: boolean;
 }
 
+/**
+ * Params for the sub-agent completion bridge — see
+ * `AgentRuntimeService.completeSubAgentBridge`.
+ */
+export interface SubAgentBridgeParams {
+  /** Child op's final state — passed in local mode; loaded from the coordinator otherwise. */
+  finalState?: AgentState;
+  /** Child (sub-agent) operation ID. */
+  operationId: string;
+  parentOperationId: string;
+  reason: string;
+  threadId: string;
+  /** The parent's placeholder `role: 'tool'` message to backfill. */
+  toolMessageId: string;
+}
+
 export interface OperationCreationParams {
   activeDeviceId?: string;
   agentConfig?: any;

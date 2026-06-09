@@ -3,6 +3,7 @@
  */
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import type * as ModelBankModule from 'model-bank';
+import type { MockInstance } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -1706,7 +1707,7 @@ describe('AgentRuntimeService', () => {
     };
 
     let updateToolMessage: ReturnType<typeof vi.fn>;
-    let resumeSpy: ReturnType<typeof vi.spyOn>;
+    let resumeSpy: MockInstance<AgentRuntimeService['tryResumeParentFromAsyncTool']>;
 
     beforeEach(() => {
       updateToolMessage = vi.fn().mockResolvedValue(undefined);

@@ -3,7 +3,7 @@ import type { Context } from 'hono';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime';
-import { AgentRuntimeService } from '@/server/services/agentRuntime';
+import { AiAgentService } from '@/server/services/aiAgent';
 
 const log = debug('lobe-server:agent:subagent-callback');
 
@@ -14,7 +14,7 @@ const log = debug('lobe-server:agent:subagent-callback');
  * reaches a terminal state, its `onComplete` hook is delivered here via QStash
  * (in-memory handler hooks don't survive queue mode's cross-process steps).
  * Backfills the parent's placeholder tool message and barrier-resumes the
- * parked parent op via `AgentRuntimeService.completeSubAgentBridge`.
+ * parked parent op via `completeSubAgentBridge`.
  *
  * Body: `{ operationId, reason, parentOperationId, threadId, toolMessageId }`
  * — event fields from the hook dispatch plus the bridge params from
@@ -59,9 +59,15 @@ export async function subAgentCallback(c: Context): Promise<Response> {
     }
 
     const serverDB = await getServerDB();
-    const agentRuntimeService = new AgentRuntimeService(serverDB, metadata.userId);
+    // Bridge through AiAgentService (like the /run step worker) so the
+    // runtime's models stay workspace-scoped — a bare AgentRuntimeService
+    // would be personal-scoped and the tool-message backfill / resume
+    // barrier could miss workspace-scoped rows.
+    const aiAgentService = new AiAgentService(serverDB, metadata.userId, {
+      workspaceId: metadata.workspaceId,
+    });
 
-    const resumed = await agentRuntimeService.completeSubAgentBridge({
+    const resumed = await aiAgentService.completeSubAgentBridge({
       operationId,
       parentOperationId,
       reason: reason ?? 'done',
