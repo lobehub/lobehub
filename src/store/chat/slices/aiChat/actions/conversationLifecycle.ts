@@ -326,6 +326,13 @@ export class ConversationLifecycleActionImpl {
     // (and downstream server-side PageAgent tool calls, which only receive that
     // context) is scoped to the open document. Without this the server runtime
     // throws "received a tool call without documentId in context".
+    //
+    // This fallback is only authoritative when the active page's editor is
+    // mounted (StoreUpdater has called setCurrentDocId for it). Callers that
+    // create a document and send before that editor mounts (e.g. sendAsWrite)
+    // MUST pass the new documentId in context explicitly — the `!context.documentId`
+    // guard preserves it, so the singleton (still bound to the previous page) is
+    // not consulted and a stale id is never injected.
     const activePageDocumentId =
       context.scope === 'page' && !context.documentId
         ? pageAgentRuntime.getCurrentDocId()

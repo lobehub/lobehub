@@ -245,7 +245,11 @@ export class HomeInputActionImpl {
 
         const { sendMessage } = useChatStore.getState();
         await sendMessage({
-          context: { agentId: pageAgentId, scope: 'page' },
+          // Pass the freshly created document id explicitly. The new PageEditor
+          // has not mounted yet, so the page editor runtime singleton may still
+          // be bound to the previously open document — relying on its fallback
+          // here would scope server-side PageAgent tools to the wrong document.
+          context: { agentId: pageAgentId, documentId: newDoc.id, scope: 'page' },
           editorData,
           message,
         });
