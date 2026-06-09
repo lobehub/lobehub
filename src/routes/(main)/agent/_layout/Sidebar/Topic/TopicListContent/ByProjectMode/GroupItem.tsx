@@ -5,6 +5,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
+import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 
@@ -22,14 +23,17 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, activeTopicId, activeT
     [id],
   );
 
+  const agentId = useAgentStore((s) => s.activeAgentId);
+  const { commitAgentDefault } = useCommitWorkingDirectory(agentId ?? '');
+
   const handleAddTopic = useCallback(async () => {
-    if (!workingDirectory) return;
-    const agentId = useAgentStore.getState().activeAgentId;
-    if (agentId) {
-      await useAgentStore.getState().updateAgentRuntimeEnvConfigById(agentId, { workingDirectory });
-    }
+    if (!workingDirectory || !agentId) return;
+    // Write the agent's per-device default so the new topic inherits this
+    // directory at creation time — the same high-precedence slot the picker
+    // uses, not the legacy per-agent fallback that gets shadowed by it.
+    await commitAgentDefault(workingDirectory);
     useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
-  }, [workingDirectory]);
+  }, [workingDirectory, agentId, commitAgentDefault]);
 
   const canAddTopic = isDesktop && !!workingDirectory;
 
