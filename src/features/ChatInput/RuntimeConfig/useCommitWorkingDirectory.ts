@@ -27,6 +27,10 @@ export const useCommitWorkingDirectory = (agentId: string) => {
 
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
+  const updateAgentRuntimeEnvConfigById = useAgentStore((s) => s.updateAgentRuntimeEnvConfigById);
+  const legacyAgentWorkingDirectory = useAgentStore(
+    (s) => s.localAgentWorkingDirectoryMap[agentId],
+  );
 
   const activeTopicId = useChatStore((s) => s.activeTopicId);
   const activeTopic = useChatStore((s) =>
@@ -44,14 +48,23 @@ export const useCommitWorkingDirectory = (agentId: string) => {
       // agent's per-device choice so a new topic inherits it.
       if (activeTopicId) {
         await updateTopicMetadata(activeTopicId, { workingDirectory: newPath });
-      } else if (targetDeviceId) {
-        const prev = agencyConfig?.workingDirByDevice ?? {};
-        const nextMap = { ...prev };
-        if (newPath) nextMap[targetDeviceId] = newPath;
-        else delete nextMap[targetDeviceId];
-        await updateAgentConfigById(agentId, {
-          agencyConfig: { ...agencyConfig, workingDirByDevice: nextMap },
-        });
+      } else {
+        if (targetDeviceId) {
+          const prev = agencyConfig?.workingDirByDevice ?? {};
+          const nextMap = { ...prev };
+          if (newPath) nextMap[targetDeviceId] = newPath;
+          else delete nextMap[targetDeviceId];
+          await updateAgentConfigById(agentId, {
+            agencyConfig: { ...agencyConfig, workingDirByDevice: nextMap },
+          });
+        }
+        // Clearing the agent default must also drop the legacy per-agent value —
+        // otherwise it keeps re-supplying a stale cwd from a lower precedence
+        // level and Clear looks dead. (Only clears the localStorage map; no
+        // network round-trip since `workingDirectory` is stripped before send.)
+        if (!newPath && legacyAgentWorkingDirectory) {
+          await updateAgentRuntimeEnvConfigById(agentId, { workingDirectory: undefined });
+        }
       }
       // Record on the target device's recent list (not the device-wide default —
       // a per-agent pick shouldn't repoint other agents on the same device).
@@ -64,7 +77,9 @@ export const useCommitWorkingDirectory = (agentId: string) => {
       agencyConfig,
       activeTopicId,
       targetDeviceId,
+      legacyAgentWorkingDirectory,
       updateAgentConfigById,
+      updateAgentRuntimeEnvConfigById,
       updateTopicMetadata,
       updateDeviceCwd,
     ],

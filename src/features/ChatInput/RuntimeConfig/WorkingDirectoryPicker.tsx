@@ -266,6 +266,18 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
     topicWorkingDirectory,
   });
 
+  // Clear only makes sense when an agent-level override exists. The device-wide
+  // `deviceDefaultCwd` isn't clearable from here (it's a device setting), so
+  // gating on it would render a dead button when the cwd comes from the default.
+  const agentChoice = targetDeviceId
+    ? agencyConfig?.workingDirByDevice?.[targetDeviceId]
+    : undefined;
+  const hasClearableSelection = !!(
+    topicWorkingDirectory ||
+    agentChoice ||
+    legacyAgentWorkingDirectory
+  );
+
   const { clear, commit } = useCommitWorkingDirectory(agentId);
   const removeDeviceWorkingDir = useDeviceStore((s) => s.removeDeviceWorkingDir);
 
@@ -283,7 +295,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
     <Flexbox gap={4} style={{ minWidth: 280 }}>
       <Flexbox horizontal align={'center'} distribution={'space-between'}>
         <div className={styles.sectionTitle}>{t('workingDirectory.recent')}</div>
-        {selectedDir && (
+        {hasClearableSelection && (
           <div className={styles.clearText} onClick={() => void clear().then(() => setOpen(false))}>
             {t('workingDirectory.clear')}
           </div>
