@@ -93,7 +93,7 @@ export class FileUploadActionImpl {
       const res = await fileService.createFile({
         fileType,
         hash,
-        metadata,
+        metadata: { ...metadata, ...dimensions },
         name: metadata.filename,
         size,
         url: metadata.path,
@@ -184,7 +184,7 @@ export class FileUploadActionImpl {
         {
           fileType,
           hash,
-          metadata,
+          metadata: { ...metadata, ...dimensions },
           name: normalizedFile.name,
           parentId,
           size: normalizedFile.size,

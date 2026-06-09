@@ -57,7 +57,16 @@ export const FileMetadataSchema = z.object({
   date: z.string(),
   dirname: z.string(),
   filename: z.string(),
+  /**
+   * intrinsic image height in pixels, recorded for images so consumers can
+   * reserve layout space (avoid CLS) without loading the file first
+   */
+  height: z.number().optional(),
   path: z.string(),
+  /**
+   * intrinsic image width in pixels, recorded for images
+   */
+  width: z.number().optional(),
 });
 
 export type FileMetadata = z.infer<typeof FileMetadataSchema>;
