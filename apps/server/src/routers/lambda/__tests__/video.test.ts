@@ -9,7 +9,8 @@ import { AsyncTaskStatus } from '@/types/asyncTask';
 const {
   mockAfter,
   mockCreateVideo,
-  mockLoadModels,
+  mockFindUserById,
+  mockIsLobeHubModelAvailable,
   mockProcessBackgroundVideoPolling,
   mockResolveBusinessModelMapping,
   mockServerDB,
@@ -19,13 +20,15 @@ const {
   const mockServerDB = { transaction: mockTransaction };
   const mockCreateVideo = vi.fn();
   const mockAfter = vi.fn((cb: () => void) => cb());
-  const mockLoadModels = vi.fn();
+  const mockFindUserById = vi.fn();
+  const mockIsLobeHubModelAvailable = vi.fn();
   const mockProcessBackgroundVideoPolling = vi.fn().mockResolvedValue(undefined);
   const mockResolveBusinessModelMapping = vi.fn();
   return {
     mockAfter,
     mockCreateVideo,
-    mockLoadModels,
+    mockFindUserById,
+    mockIsLobeHubModelAvailable,
     mockProcessBackgroundVideoPolling,
     mockResolveBusinessModelMapping,
     mockServerDB,
@@ -37,6 +40,11 @@ const {
 
 vi.mock('@/database/models/asyncTask');
 vi.mock('@/server/services/file');
+vi.mock('@/database/models/user', () => ({
+  UserModel: {
+    findById: mockFindUserById,
+  },
+}));
 
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn().mockResolvedValue(mockServerDB),
@@ -59,7 +67,8 @@ vi.mock('@lobechat/business-model-runtime', async (importOriginal) => ({
     mockResolveBusinessModelMapping(...args),
 }));
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
-  loadModels: mockLoadModels,
+  isLobeHubModelAvailable: (...args: [string, string, { userEmail?: string | null }?]) =>
+    mockIsLobeHubModelAvailable(...args),
 }));
 vi.mock('@/business/server/video-generation/getVideoFreeQuota', () => ({
   getVideoFreeQuota: vi.fn().mockResolvedValue({ remaining: 10 }),
@@ -146,15 +155,8 @@ describe('videoRouter', () => {
         resolvedModelId: model,
       }),
     );
-    mockLoadModels.mockResolvedValue([
-      {
-        abilities: {},
-        enabled: true,
-        id: 'dreamina-seedance-2-0-260128',
-        providerId: 'lobehub',
-        type: 'video',
-      },
-    ]);
+    mockFindUserById.mockResolvedValue({ email: 'user@example.com' });
+    mockIsLobeHubModelAvailable.mockResolvedValue(true);
   });
 
   describe('createVideo - async strategy routing', () => {
@@ -191,10 +193,36 @@ describe('videoRouter', () => {
 
       expect(result.success).toBe(true);
       expect(mockResolveBusinessModelMapping).toHaveBeenCalledWith('lobehub', 'onboarding-video');
+      expect(mockIsLobeHubModelAvailable).toHaveBeenCalledWith(
+        'dreamina-seedance-2-0-260128',
+        'video',
+        { userEmail: 'user@example.com' },
+      );
       expect(mockCreateVideo).toHaveBeenCalledWith(
         expect.objectContaining({ model: 'dreamina-seedance-2-0-260128' }),
         expect.any(Object),
       );
+    });
+
+    it('should reject unavailable lobehub video models before creating async tasks', async () => {
+      setupMocks();
+      mockIsLobeHubModelAvailable.mockResolvedValue(false);
+
+      const caller = videoRouter.createCaller(mockCtx);
+
+      await expect(
+        caller.createVideo({
+          ...defaultInput,
+          model: 'restricted-video-model',
+          provider: 'lobehub',
+        }),
+      ).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: 'LobeHubModelDeprecated',
+      });
+
+      expect(mockTransaction).not.toHaveBeenCalled();
+      expect(mockCreateVideo).not.toHaveBeenCalled();
     });
 
     it('should use polling path when response contains only inferenceId', async () => {

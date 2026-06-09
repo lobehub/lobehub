@@ -1,4 +1,4 @@
-import type { AiFullModelCard } from 'model-bank';
+import type { AiFullModelCard, AiModelType } from 'model-bank';
 import { loadModels as loadModelBankModels, ModelProvider } from 'model-bank';
 
 interface LobeHubModelConfig {
@@ -29,3 +29,9 @@ const loadLobeHubModels = async (): Promise<AiFullModelCard[]> =>
 
 export const loadLobeHubPlanCardModels = async (): Promise<string[]> =>
   (await loadLobeHubModelConfig()).planCardModels;
+
+export const isLobeHubModelAvailable = async (
+  _id: string,
+  _expectedType: AiModelType,
+  _options?: { userEmail?: string | null },
+): Promise<boolean> => false;
