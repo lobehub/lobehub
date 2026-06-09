@@ -59,9 +59,9 @@ const antgroupChatModels: AIChatModelCard[] = [
     contextWindowTokens: 262_144, // Model can support 1M context window but API only release 256K
     description:
       'The latest flagship large language model, featuring support for a 1M-token context window and enabling an end-to-end workflow from logical reasoning to task execution.',
-    displayName: 'Ling-2.6',
+    displayName: 'Ling-2.6-1T',
     enabled: true,
-    id: 'Ling-2.6',
+    id: 'Ling-2.6-1T',
     pricing: {
       currency: 'CNY',
       units: [
