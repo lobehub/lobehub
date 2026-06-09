@@ -1675,7 +1675,6 @@ export class AiAgentService {
         agentConfig.chatConfig?.runtimeEnv?.runtimeMode?.[gatewayConfigured ? 'desktop' : 'web'],
         gatewayConfigured,
       );
-<<<<<<< HEAD
       // When sandbox is not the active runtime, remove lobe-cloud-sandbox from the
       // manifest map. The initial seed via getEnabledPluginManifests (which includes
       // defaultToolIds) may have already placed it there, and the allowedBuiltinTools
@@ -1684,8 +1683,6 @@ export class AiAgentService {
       if (agentRuntimeMode !== 'cloud') {
         delete toolManifestMap[CloudSandboxManifest.identifier];
       }
-=======
->>>>>>> ea125d3bdd (🐛 fix: activator tool discovery for cloud-sandbox and local-system)
       for (const tool of allowedBuiltinTools) {
         // lobe-cloud-sandbox is only activator-discoverable when runtimeMode resolves
         // to 'cloud'. Handles both executionTarget='sandbox' (new) and the legacy
@@ -1699,23 +1696,14 @@ export class AiAgentService {
 
       // lobe-local-system has `discoverable: isDesktop` in builtinTools, which
       // evaluates to false on the Node.js server side, so it never enters the
-<<<<<<< HEAD
       // loop above. Explicitly inject it only when the device gateway is
       // configured AND the runtime mode is 'local' — skip for sandbox/none
       // targets to avoid leaking local-system into non-local sessions.
-=======
-      // loop above. Explicitly inject it when a device gateway is configured:
-      // in that scenario the agent IS reachable via the gateway and the
-      // activator must be able to find its manifest.
->>>>>>> ea125d3bdd (🐛 fix: activator tool discovery for cloud-sandbox and local-system)
       if (
         canUseDevice &&
         !disableLocalSystem &&
         gatewayConfigured &&
-<<<<<<< HEAD
         agentRuntimeMode === 'local' &&
-=======
->>>>>>> ea125d3bdd (🐛 fix: activator tool discovery for cloud-sandbox and local-system)
         !toolManifestMap[LocalSystemManifest.identifier]
       ) {
         toolManifestMap[LocalSystemManifest.identifier] = LocalSystemManifest as LobeToolManifest;
