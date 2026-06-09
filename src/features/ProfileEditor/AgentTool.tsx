@@ -44,8 +44,6 @@ import PopoverContent from './PopoverContent';
 
 const WEB_BROWSING_IDENTIFIER = 'lobe-web-browsing';
 
-type TabType = 'all' | 'installed';
-
 export interface AgentToolProps {
   /**
    * Optional agent ID to use instead of currentAgentConfig
@@ -115,10 +113,6 @@ const AgentTool = memo<AgentToolProps>(
 
     const [updating, setUpdating] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
-
-    // Tab state for dual-column layout
-    const [activeTab, setActiveTab] = useState<TabType | null>(null);
-    const isInitializedRef = useRef(false);
 
     // Fetch plugins
     const [
@@ -198,15 +192,6 @@ const AgentTool = memo<AgentToolProps>(
       },
       [canEdit, toggleWebBrowsing, togglePlugin, showWebBrowsing],
     );
-
-    // Set default tab based on installed plugins (only on first load)
-    // Only show 'installed' tab by default if more than 5 plugins are enabled
-    useEffect(() => {
-      if (!isInitializedRef.current && plugins.length >= 0) {
-        isInitializedRef.current = true;
-        setActiveTab(plugins.length > 5 ? 'installed' : 'all');
-      }
-    }, [plugins.length]);
 
     // Get connected server by identifier
     const getServerByName = (identifier: string) => {
@@ -643,324 +628,6 @@ const AgentTool = memo<AgentToolProps>(
       [builtinItems, communityGroupChildren, customGroupChildren, t],
     );
 
-    // Installed tab items - only show enabled items
-    const installedTabItems: ItemType[] = useMemo(() => {
-      const items: ItemType[] = [];
-
-      // Enabled builtin tools
-      const enabledBuiltinItems = filteredBuiltinList
-        .filter((item) => isToolEnabled(item.identifier))
-        .map((item) => ({
-          icon: (
-            <Avatar
-              avatar={item.meta.avatar}
-              size={SKILL_ICON_SIZE}
-              style={{ marginInlineEnd: 0 }}
-            />
-          ),
-          key: item.identifier,
-          label: (
-            <ToolItem
-              checked={true}
-              id={item.identifier}
-              label={item.meta?.title}
-              onUpdate={async () => {
-                setUpdating(true);
-                await handleToggleTool(item.identifier);
-                setUpdating(false);
-              }}
-            />
-          ),
-          popoverContent: (
-            <ToolItemDetailPopover
-              identifier={item.identifier}
-              sourceLabel={t('skillStore.tabs.lobehub')}
-              description={t(`tools.builtins.${item.identifier}.description` as any, {
-                defaultValue: item.meta?.description || '',
-              })}
-              icon={
-                <Avatar
-                  avatar={item.meta.avatar}
-                  size={36}
-                  style={{ flex: 'none', marginInlineEnd: 0 }}
-                />
-              }
-              title={t(`tools.builtins.${item.identifier}.title` as any, {
-                defaultValue: item.meta?.title || item.identifier,
-              })}
-            />
-          ),
-        }));
-
-      // Connected and enabled Klavis servers
-      const connectedKlavisItems = klavisServerItems.filter((item) =>
-        plugins.includes(item.key as string),
-      );
-
-      // Connected LobeHub Skill Providers
-      const connectedLobehubSkillItems = lobehubSkillItems.filter((item) =>
-        plugins.includes(item.key as string),
-      );
-
-      // Enabled Builtin Agent Skills
-      const enabledBuiltinAgentSkillItems = installedBuiltinSkills
-        .filter((skill) => isToolEnabled(skill.identifier))
-        .map((skill) => ({
-          icon: skill.avatar ? (
-            <Avatar avatar={skill.avatar} size={SKILL_ICON_SIZE} style={{ marginInlineEnd: 0 }} />
-          ) : (
-            <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />
-          ),
-          key: skill.identifier,
-          label: (
-            <ToolItem
-              checked={true}
-              id={skill.identifier}
-              label={skill.name}
-              onUpdate={async () => {
-                setUpdating(true);
-                await handleToggleTool(skill.identifier);
-                setUpdating(false);
-              }}
-            />
-          ),
-          popoverContent: (
-            <ToolItemDetailPopover
-              description={skill.description}
-              identifier={skill.identifier}
-              sourceLabel={t('skillStore.tabs.lobehub')}
-              title={skill.name}
-              icon={
-                skill.avatar ? (
-                  <Avatar
-                    avatar={skill.avatar}
-                    size={36}
-                    style={{ flex: 'none', marginInlineEnd: 0 }}
-                  />
-                ) : (
-                  <Icon icon={SkillsIcon} size={36} />
-                )
-              }
-            />
-          ),
-        }));
-
-      // LobeHub group (Builtin Agent Skills + builtin + LobeHub Skill + Klavis)
-      const lobehubGroupItems = [
-        ...enabledBuiltinAgentSkillItems,
-        ...enabledBuiltinItems,
-        ...connectedLobehubSkillItems,
-        ...connectedKlavisItems,
-      ];
-
-      if (lobehubGroupItems.length > 0) {
-        items.push({
-          children: lobehubGroupItems,
-          key: 'installed-lobehub',
-          label: t('skillStore.tabs.lobehub'),
-          type: 'group',
-        });
-      }
-
-      // Enabled community plugins
-      const enabledCommunityPlugins = communityPlugins
-        .filter((item) => plugins.includes(item.identifier))
-        .map((item) => {
-          const isMcp = item?.avatar === 'MCP_AVATAR' || !item?.avatar;
-          return {
-            icon: isMcp ? (
-              <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
-            ) : (
-              <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
-            ),
-            key: item.identifier,
-            label: (
-              <ToolItem
-                checked={true}
-                id={item.identifier}
-                label={item.title}
-                onUpdate={async () => {
-                  setUpdating(true);
-                  await togglePlugin(item.identifier);
-                  setUpdating(false);
-                }}
-              />
-            ),
-            popoverContent: (
-              <ToolItemDetailPopover
-                description={item.description}
-                identifier={item.identifier}
-                sourceLabel={t('skillStore.tabs.community')}
-                title={item.title}
-                icon={
-                  isMcp ? (
-                    <Icon icon={McpIcon} size={36} />
-                  ) : (
-                    <Avatar
-                      avatar={item.avatar}
-                      shape={'square'}
-                      size={36}
-                      style={{ flex: 'none', marginInlineEnd: 0 }}
-                    />
-                  )
-                }
-              />
-            ),
-          };
-        });
-
-      // Enabled Market Agent Skills
-      const enabledMarketAgentSkillItems = marketAgentSkills
-        .filter((skill) => isToolEnabled(skill.identifier))
-        .map((skill) => ({
-          icon: (
-            <MarketSkillIcon
-              identifier={skill.identifier}
-              name={skill.name}
-              size={SKILL_ICON_SIZE}
-            />
-          ),
-          key: skill.identifier,
-          label: (
-            <ToolItem
-              checked={true}
-              id={skill.identifier}
-              label={skill.name}
-              onUpdate={async () => {
-                setUpdating(true);
-                await handleToggleTool(skill.identifier);
-                setUpdating(false);
-              }}
-            />
-          ),
-          popoverContent: (
-            <MarketAgentSkillPopoverContent
-              description={skill.description}
-              identifier={skill.identifier}
-              name={skill.name}
-              sourceLabel={t('skillStore.tabs.community')}
-            />
-          ),
-        }));
-
-      // Community group (Market Agent Skills + community plugins)
-      const allCommunityItems = [...enabledMarketAgentSkillItems, ...enabledCommunityPlugins];
-      if (allCommunityItems.length > 0) {
-        items.push({
-          children: allCommunityItems,
-          key: 'installed-community',
-          label: t('skillStore.tabs.community'),
-          type: 'group',
-        });
-      }
-
-      // Enabled custom plugins
-      const enabledCustomPlugins = customPlugins
-        .filter((item) => plugins.includes(item.identifier))
-        .map((item) => {
-          const isMcp = item?.avatar === 'MCP_AVATAR' || !item?.avatar;
-          return {
-            icon: isMcp ? (
-              <Icon icon={McpIcon} size={SKILL_ICON_SIZE} />
-            ) : (
-              <Avatar avatar={item.avatar} shape={'square'} size={SKILL_ICON_SIZE} />
-            ),
-            key: item.identifier,
-            label: (
-              <ToolItem
-                checked={true}
-                id={item.identifier}
-                label={item.title}
-                onUpdate={async () => {
-                  setUpdating(true);
-                  await togglePlugin(item.identifier);
-                  setUpdating(false);
-                }}
-              />
-            ),
-            popoverContent: (
-              <ToolItemDetailPopover
-                description={item.description}
-                identifier={item.identifier}
-                sourceLabel={t('skillStore.tabs.custom')}
-                title={item.title}
-                icon={
-                  isMcp ? (
-                    <Icon icon={McpIcon} size={36} />
-                  ) : (
-                    <Avatar
-                      avatar={item.avatar}
-                      shape={'square'}
-                      size={36}
-                      style={{ flex: 'none', marginInlineEnd: 0 }}
-                    />
-                  )
-                }
-              />
-            ),
-          };
-        });
-
-      // Enabled User Agent Skills
-      const enabledUserAgentSkillItems = userAgentSkills
-        .filter((skill) => isToolEnabled(skill.identifier))
-        .map((skill) => ({
-          icon: <Icon icon={SkillsIcon} size={SKILL_ICON_SIZE} />,
-          key: skill.identifier,
-          label: (
-            <ToolItem
-              checked={true}
-              id={skill.identifier}
-              label={skill.name}
-              onUpdate={async () => {
-                setUpdating(true);
-                await handleToggleTool(skill.identifier);
-                setUpdating(false);
-              }}
-            />
-          ),
-          popoverContent: (
-            <ToolItemDetailPopover
-              description={skill.description}
-              icon={<Icon icon={SkillsIcon} size={36} />}
-              identifier={skill.identifier}
-              sourceLabel={t('skillStore.tabs.custom')}
-              title={skill.name}
-            />
-          ),
-        }));
-
-      // Custom group (User Agent Skills + custom plugins)
-      const allCustomItems = [...enabledUserAgentSkillItems, ...enabledCustomPlugins];
-      if (allCustomItems.length > 0) {
-        items.push({
-          children: allCustomItems,
-          key: 'installed-custom',
-          label: t('skillStore.tabs.custom'),
-          type: 'group',
-        });
-      }
-
-      return items;
-    }, [
-      filteredBuiltinList,
-      installedBuiltinSkills,
-      marketAgentSkills,
-      userAgentSkills,
-      klavisServerItems,
-      lobehubSkillItems,
-      communityPlugins,
-      customPlugins,
-      plugins,
-      isToolEnabled,
-      handleToggleTool,
-      togglePlugin,
-      t,
-    ]);
-
-    // Use effective tab for display (default to all while initializing)
-    const effectiveTab = activeTab ?? 'all';
-
     const button = (
       <Button
         disabled={!canEdit}
@@ -973,6 +640,75 @@ const AgentTool = memo<AgentToolProps>(
         {t('tools.add', { defaultValue: 'Add' })}
       </Button>
     );
+
+    // ──────────────────────────────────────────────
+    // Auto-cleanup stale plugins that no longer exist
+    // ──────────────────────────────────────────────
+    // Build the set of all valid identifiers known to the system
+    const validIdentifiers = useMemo(() => {
+      const all = new Set<string>();
+
+      // 1. Builtin tools (includes Klavis metas)
+      for (const tool of builtinList) all.add(tool.identifier);
+
+      // 2. Installed plugins
+      for (const plugin of installedPluginList) all.add(plugin.identifier);
+
+      // 3. Klavis server types (if enabled)
+      if (isKlavisEnabledInEnv) {
+        for (const type of KLAVIS_SERVER_TYPES) all.add(type.identifier);
+      }
+
+      // 4. LobeHub Skill providers (if enabled)
+      if (isLobehubSkillEnabled) {
+        for (const provider of LOBEHUB_SKILL_PROVIDERS) all.add(provider.id);
+      }
+
+      // 5. Builtin skills
+      for (const skill of installedBuiltinSkills) all.add(skill.identifier);
+
+      // 6. Market agent skills
+      for (const skill of marketAgentSkills) all.add(skill.identifier);
+
+      // 7. User agent skills
+      for (const skill of userAgentSkills) all.add(skill.identifier);
+
+      return all;
+    }, [
+      builtinList,
+      installedPluginList,
+      isKlavisEnabledInEnv,
+      isLobehubSkillEnabled,
+      installedBuiltinSkills,
+      marketAgentSkills,
+      userAgentSkills,
+    ]);
+
+    // Track whether initial cleanup has been performed
+    const cleanupDoneRef = useRef(false);
+
+    // Auto-remove stale plugin IDs from the agent config
+    // Uses a short debounce to allow async data (SWR) to complete loading
+    useEffect(() => {
+      if (cleanupDoneRef.current) return;
+      if (validIdentifiers.size === 0) return;
+      if (plugins.length === 0) return;
+
+      // Defer cleanup to avoid race with async data loading (SWR, Klavis, etc.)
+      const timer = setTimeout(() => {
+        const stalePlugins = plugins.filter((id) => !validIdentifiers.has(id));
+
+        if (stalePlugins.length > 0 && effectiveAgentId) {
+          const cleanedPlugins = plugins.filter((id) => validIdentifiers.has(id));
+          updateAgentConfigById(effectiveAgentId, { plugins: cleanedPlugins });
+        }
+
+        cleanupDoneRef.current = true;
+      }, 500);
+
+      return () => clearTimeout(timer);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [validIdentifiers]);
 
     // Combine plugins and web browsing for display
     const allEnabledTools = useMemo(() => {
@@ -1011,11 +747,8 @@ const AgentTool = memo<AgentToolProps>(
               }}
               popupRender={() => (
                 <PopoverContent
-                  activeTab={effectiveTab}
-                  allTabItems={allTabItems}
-                  installedTabItems={installedTabItems}
+                  items={allTabItems}
                   onClose={() => setDropdownOpen(false)}
-                  onTabChange={setActiveTab}
                   onOpenStore={() => {
                     setDropdownOpen(false);
                     createSkillStoreModal();
