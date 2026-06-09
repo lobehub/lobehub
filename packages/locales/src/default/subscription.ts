@@ -54,6 +54,7 @@ export default {
   'currentPlan.seeAllFeaturesAndComparePlans': 'See all features and compare plans',
   'currentPlan.title': 'Current Plan',
   'discount.add': 'Add',
+  'discount.limitedTime': 'Limited-time',
   'discount.maxOff': 'Up to {{percent}}% off',
   'discount.off': '{{percent}}% off',
   'discount.save': 'Save',
@@ -385,6 +386,7 @@ export default {
   'plans.workspace.solo': 'Solo (1 member)',
   'plans.target': 'Target Plan',
   'plans.unlimited': 'Unlimited',
+  'promoBanner.fableYearly': 'Annual subscribers get {{percent}}% usage off for a limited time',
   'qa.desc':
     'If your question is not answered, check <1>Product Documentation</1> for more FAQs, or contact us.',
   'qa.detail': 'View Details',
