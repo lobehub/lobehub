@@ -49,7 +49,12 @@ import { createTraceHeader } from '@/utils/trace';
 
 import { createHeaderWithAuth } from '../_auth';
 import { API_ENDPOINTS } from '../_url';
-import { findDeploymentName, isEnableFetchOnClient, resolveRuntimeProvider } from './helper';
+import {
+  findDeploymentName,
+  isEnableFetchOnClient,
+  resolveRuntimeProvider,
+  shouldUseServerSideVisionBase64,
+} from './helper';
 import { type ResolvedAgentConfig } from './mecha';
 import {
   contextEngineering,
@@ -59,7 +64,6 @@ import {
 } from './mecha';
 import { type FetchOptions } from './types';
 
-const defaultProvider = ModelProvider.OpenAI;
 const providersWithDeploymentName = new Set<string>([
   ModelProvider.Azure,
   ModelProvider.AzureAI,
@@ -418,7 +422,8 @@ class ChatService {
     /**
      * Use browser agent runtime
      */
-    const enableFetchOnClient = isEnableFetchOnClient(provider);
+    const enableFetchOnClient =
+      isEnableFetchOnClient(provider) && !shouldUseServerSideVisionBase64(payload);
 
     let fetcher: typeof fetch | undefined = undefined;
 

@@ -2,6 +2,12 @@ import { ModelProvider } from 'model-bank';
 
 import { getAiInfraStoreState } from '@/store/aiInfra';
 import { aiProviderSelectors } from '@/store/aiInfra/selectors';
+import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
+import type {
+  ChatStreamPayload,
+  OpenAIChatMessage,
+  UserMessageContentPart,
+} from '@/types/openai/chat';
 
 const getModelAbilities = (model: string, provider: string) => {
   const state = getAiInfraStoreState();
@@ -42,6 +48,50 @@ export const findDeploymentName = (model: string, provider: string) => {
 
 export const isEnableFetchOnClient = (provider: string) => {
   return aiProviderSelectors.isProviderFetchOnClient(provider)(getAiInfraStoreState());
+};
+
+const getImageUrl = (part: UserMessageContentPart) => {
+  if (part.type !== 'image_url') return undefined;
+
+  return part.image_url.url;
+};
+
+const getVideoUrl = (part: UserMessageContentPart) => {
+  if (part.type !== 'video_url') return undefined;
+
+  return part.video_url?.url;
+};
+
+const isRemoteUrl = (url: string | undefined) => !!url && !url.startsWith('data:');
+
+const hasRemoteVisionMedia = (
+  messages: OpenAIChatMessage[] | undefined,
+  options: { image?: boolean; video?: boolean },
+) =>
+  messages?.some((message) => {
+    if (!Array.isArray(message.content)) return false;
+
+    return message.content.some((part) => {
+      if (options.image && isRemoteUrl(getImageUrl(part))) return true;
+      if (options.video && isRemoteUrl(getVideoUrl(part))) return true;
+
+      return false;
+    });
+  }) || false;
+
+export const shouldUseServerSideVisionBase64 = (payload: Partial<ChatStreamPayload>) => {
+  const serverConfig = getServerConfigStoreState();
+  if (!serverConfig) return false;
+
+  const useImageBase64 = serverConfigSelectors.useVisionImageBase64(serverConfig);
+  const useVideoBase64 = serverConfigSelectors.useVisionVideoBase64(serverConfig);
+
+  if (!useImageBase64 && !useVideoBase64) return false;
+
+  return hasRemoteVisionMedia(payload.messages, {
+    image: useImageBase64,
+    video: useVideoBase64,
+  });
 };
 
 export const resolveRuntimeProvider = (provider: string) => {

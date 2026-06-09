@@ -137,6 +137,8 @@ export const getServerGlobalConfig = async () => {
     telemetry: {
       langfuse: langfuseEnv.ENABLE_LANGFUSE,
     },
+    useVisionImageBase64: process.env.LLM_VISION_IMAGE_USE_BASE64 === '1',
+    useVisionVideoBase64: process.env.LLM_VISION_VIDEO_USE_BASE64 === '1',
   };
 
   return config;

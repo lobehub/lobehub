@@ -15,6 +15,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
+import { createServerConfigStore } from '@/store/serverConfig/store';
 import { useToolStore } from '@/store/tool';
 import { settingsSelectors } from '@/store/user/selectors';
 
@@ -148,6 +149,14 @@ beforeEach(async () => {
   useAgentStore.setState({ activeAgentId: undefined, agentDocumentsMap: {} } as any);
   useAiInfraStore.setState({ enabledAiModels: [] });
   useChatStore.setState({ activeAgentId: undefined } as any);
+  createServerConfigStore().setState({
+    serverConfig: {
+      aiProvider: {},
+      telemetry: {},
+      useVisionImageBase64: false,
+      useVisionVideoBase64: false,
+    },
+  });
 });
 
 // mock auth
@@ -1783,6 +1792,55 @@ describe('ChatService', () => {
           deploymentName: 'prod-gpt-54',
           messages: [],
           model: 'gpt-5.4',
+        }),
+      );
+    });
+
+    it('should force server request when vision base64 is enabled for remote image URLs', async () => {
+      useAiInfraStore.setState({
+        aiProviderRuntimeConfig: {
+          openai: {
+            fetchOnClient: true,
+            keyVaults: {
+              apiKey: 'sk-test',
+              baseURL: 'https://api.example.com/v1',
+            },
+            settings: {},
+          },
+        },
+      } as any);
+      createServerConfigStore().setState({
+        serverConfig: {
+          aiProvider: {},
+          telemetry: {},
+          useVisionImageBase64: true,
+        },
+      });
+
+      await chatService.getChatCompletion({
+        messages: [
+          {
+            content: [
+              { text: 'describe this image', type: 'text' },
+              {
+                image_url: { url: 'https://s3.example.com/files/image.png' },
+                type: 'image_url',
+              },
+            ],
+            role: 'user',
+          },
+        ],
+        model: 'gpt-4o',
+        provider: 'openai',
+      });
+
+      expect(mockFetchSSE).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          fetcher: undefined,
+          requestContext: expect.objectContaining({
+            fetchOnClient: false,
+          }),
         }),
       );
     });

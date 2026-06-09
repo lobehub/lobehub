@@ -80,6 +80,8 @@ export interface GlobalServerConfig {
   telemetry: {
     langfuse?: boolean;
   };
+  useVisionImageBase64?: boolean;
+  useVisionVideoBase64?: boolean;
   visualUnderstanding?: VisualUnderstandingConfig;
 }
 
