@@ -292,6 +292,12 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const storedTarget = agencyConfig?.executionTarget;
   const boundDeviceId = agencyConfig?.boundDeviceId;
 
+  // Heterogeneous agents (Claude Code / Codex — remote types already early-return
+  // below) bring their own toolchain and must execute somewhere, so `'none'`
+  // (plain chat, no execution environment) isn't a valid target for them: hide
+  // the option and never fall back to / honour a stale stored `'none'`.
+  const isHetero = !!heteroType;
+
   const { data: devices, isLoading } = lambdaQuery.device.listDevices.useQuery(undefined, {
     staleTime: 30_000,
   });
@@ -303,8 +309,13 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
 
-  // Effective target: falls back to local on desktop, no device on web.
-  const executionTarget: DeviceExecutionTarget = storedTarget ?? (isDesktop ? 'local' : 'none');
+  // Effective target: falls back to local on desktop, sandbox for heterogeneous
+  // agents on web (they must execute somewhere), otherwise no device on web. A
+  // hetero agent never resolves to `'none'`, even if one was previously stored.
+  const fallbackTarget: DeviceExecutionTarget = isDesktop ? 'local' : isHetero ? 'sandbox' : 'none';
+  const storedOrFallback = storedTarget ?? fallbackTarget;
+  const executionTarget: DeviceExecutionTarget =
+    isHetero && storedOrFallback === 'none' ? fallbackTarget : storedOrFallback;
 
   const handleSelect = useCallback(
     async (target: DeviceExecutionTarget, deviceId?: string) => {
@@ -401,13 +412,15 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           </a>
         )}
       </div>
-      <OptionRow
-        active={isActive('none')}
-        desc={t('heteroAgent.executionTarget.noneDesc')}
-        icon={<Icon icon={MonitorOffIcon} size={14} />}
-        label={t('heteroAgent.executionTarget.none')}
-        onClick={() => void handleSelect('none')}
-      />
+      {isHetero ? null : (
+        <OptionRow
+          active={isActive('none')}
+          desc={t('heteroAgent.executionTarget.noneDesc')}
+          icon={<Icon icon={MonitorOffIcon} size={14} />}
+          label={t('heteroAgent.executionTarget.none')}
+          onClick={() => void handleSelect('none')}
+        />
+      )}
       {isDesktop ? (
         <OptionRow
           active={isActive('local')}
