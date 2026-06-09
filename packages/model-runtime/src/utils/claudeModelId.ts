@@ -137,6 +137,7 @@ export const hasTemperatureTopPConflict = (model: string): boolean => {
 export const shouldOmitSamplingParams = (model: string): boolean => {
   const parsed = parseClaudeModelId(model);
   if (!parsed) return false;
+  if (parsed.majorVersion >= 5) return true;
   if (parsed.family !== 'opus' || parsed.majorVersion !== 4) return false;
   if (parsed.minorVersion !== 7 && parsed.minorVersion !== 8) return false;
 

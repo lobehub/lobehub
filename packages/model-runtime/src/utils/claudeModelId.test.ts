@@ -220,11 +220,11 @@ describe('shouldOmitSamplingParams', () => {
     expect(shouldOmitSamplingParams('gemini-2.5-pro')).toBe(false);
   });
 
-  it('should not omit sampling params for Claude 5 ids until verified', () => {
-    expect(shouldOmitSamplingParams('claude-fable-5')).toBe(false);
-    expect(shouldOmitSamplingParams('claude-mythos-5-preview')).toBe(false);
-    expect(shouldOmitSamplingParams('anthropic/claude-5-mythos')).toBe(false);
-    expect(shouldOmitSamplingParams('us.anthropic.claude-mythos-5-v1:0')).toBe(false);
+  it('should return true for Claude 5 ids', () => {
+    expect(shouldOmitSamplingParams('claude-fable-5')).toBe(true);
+    expect(shouldOmitSamplingParams('claude-mythos-5-preview')).toBe(true);
+    expect(shouldOmitSamplingParams('anthropic/claude-5-mythos')).toBe(true);
+    expect(shouldOmitSamplingParams('us.anthropic.claude-mythos-5-v1:0')).toBe(true);
   });
 });
 
