@@ -1,7 +1,7 @@
 import type { ChatTopicMetadata, ChatTopicStatus } from '@lobechat/types';
-import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
+import { Flexbox, Icon, Skeleton, Tag, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
-import { CheckCircle2, Hand, HashIcon, MessageSquareDashed } from 'lucide-react';
+import { CheckCircle2, Hand, HashIcon, MessageSquareDashed, TriangleAlert } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -175,6 +175,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
   });
 
   const isCompleted = status === 'completed';
+  const isFailed = status === 'failed';
   const isRunning = status === 'running';
   const isWaitingForHuman = status === 'waitingForHuman';
 
@@ -241,6 +242,13 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, meta
                 size={14}
                 style={{ color: cssVar.colorWarning }}
               />
+            );
+          }
+          if (isFailed) {
+            return (
+              <Tooltip title={t('failedStatusTip')}>
+                <Icon icon={TriangleAlert} size={'small'} style={{ color: cssVar.colorError }} />
+              </Tooltip>
             );
           }
           if (isCompleted) {

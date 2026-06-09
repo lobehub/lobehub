@@ -27,6 +27,7 @@ export default {
   'displayItems': 'Display Items',
   'duplicateLoading': 'Copying Topic...',
   'duplicateSuccess': 'Topic Copied Successfully',
+  'failedStatusTip': 'This run hit an error — open it to take a look.',
   'favorite': 'Favorite',
   'filter.filter': 'Filter',
   'filter.groupMode.byProject': 'By project',
