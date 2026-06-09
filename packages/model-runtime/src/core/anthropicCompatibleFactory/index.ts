@@ -5,7 +5,6 @@ import type { ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
 import type { Pricing } from 'model-bank';
 
-import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../const/models';
 import { ErrorClassifier } from '../../errors';
 import type {
   ChatCompletionErrorPayload,
@@ -17,6 +16,7 @@ import type {
 } from '../../types';
 import type { ILobeAgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeErrorType } from '../../types/error';
+import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../utils/claudeModelId';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
@@ -343,7 +343,7 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
     return {
       endpoint: desensitizedEndpoint,
       error: errorResult,
-      errorType: AgentRuntimeErrorType.QuotaLimitReached,
+      errorType: AgentRuntimeErrorType.RateLimitExceeded,
       message,
     };
   }
@@ -748,7 +748,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         return AgentRuntimeError.chat({
           endpoint: desensitizedEndpoint,
           error: errorResult,
-          errorType: AgentRuntimeErrorType.QuotaLimitReached,
+          errorType: AgentRuntimeErrorType.RateLimitExceeded,
           message,
           provider: this.id,
         });
