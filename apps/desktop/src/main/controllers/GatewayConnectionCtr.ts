@@ -16,6 +16,7 @@ import type {
   InitWorkspaceParams,
   KillCommandParams,
   ListLocalFileParams,
+  ListProjectSkillsParams,
   LocalReadFileParams,
   LocalReadFilesParams,
   LocalSearchFilesParams,
@@ -405,6 +406,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
       case 'getProjectFileIndex': {
         return this.localFileCtr.getProjectFileIndex(params as { scope?: string });
+      }
+
+      case 'listProjectSkills': {
+        return this.workspaceCtr.listProjectSkills(params as ListProjectSkillsParams);
       }
 
       case 'getGitBranchDiff': {

@@ -271,6 +271,22 @@ export const deviceRouter = router({
     }),
 
   /**
+   * Project skills (`.agents/skills` / `.claude/skills`) for a directory on a
+   * remote device, via the device's `listProjectSkills` RPC. Powers the
+   * Resources tab's skills group in device mode. Returns `null` when offline.
+   */
+  listProjectSkills: deviceProcedure
+    .input(z.object({ deviceId: z.string(), scope: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.listProjectSkills({
+        deviceId: input.deviceId,
+        scope: input.scope,
+        userId: ctx.userId,
+      });
+      return result ?? null;
+    }),
+
+  /**
    * Revert a single file in a directory on a remote device, via the device's
    * `revertGitFile` RPC.
    */

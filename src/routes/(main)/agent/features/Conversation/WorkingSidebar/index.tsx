@@ -200,7 +200,7 @@ const AgentWorkingSidebar = memo(() => {
             width={'100%'}
           >
             <ProgressSection />
-            <ResourcesSection />
+            <ResourcesSection deviceId={remoteDeviceId} />
           </Flexbox>
         </Flexbox>
       </Flexbox>

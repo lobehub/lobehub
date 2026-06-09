@@ -303,3 +303,31 @@ export interface DeviceProjectFileIndexResult {
   source: 'git' | 'glob';
   totalCount: number;
 }
+
+/**
+ * A single project skill (`.agents/skills` / `.claude/skills`) discovered on a
+ * remote device, returned by the `listProjectSkills` device RPC. Mirrors the
+ * desktop `ProjectSkillItem` (`@lobechat/electron-client-ipc`).
+ */
+export interface DeviceProjectSkillItem {
+  description?: string;
+  fileCount: number;
+  files: string[];
+  name: string;
+  /** Absolute path to the SKILL.md file on the device. */
+  path: string;
+  /** Directory containing the SKILL.md. */
+  skillDir: string;
+  source: '.agents/skills' | '.claude/skills';
+}
+
+/**
+ * Project skills listing for a directory on a remote device, returned by the
+ * `listProjectSkills` device RPC. Powers the Resources tab's skills group in
+ * device mode. Mirrors the desktop `ListProjectSkillsResult`.
+ */
+export interface DeviceListProjectSkillsResult {
+  root: string;
+  skills: DeviceProjectSkillItem[];
+  source: DeviceProjectSkillItem['source'] | null;
+}

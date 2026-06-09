@@ -21,6 +21,7 @@ import type {
   DeviceGitWorkingTreeFiles,
   DeviceGitWorkingTreePatches,
   DeviceGitWorkingTreeStatus,
+  DeviceListProjectSkillsResult,
   DeviceProjectFileIndexResult,
   ProjectSkillMeta,
   WorkspaceInitResult,
@@ -461,6 +462,41 @@ export class DeviceGateway {
       return result.data;
     } catch (error) {
       log('getProjectFileIndex: error for deviceId=%s — %O', deviceId, error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Project skills (`.agents/skills` / `.claude/skills`) for a directory on a
+   * remote device via the `listProjectSkills` device RPC — the Resources tab's
+   * skills group in device mode. Mirrors `getProjectFileIndex`; returns
+   * `undefined` when the gateway is unconfigured, the device is offline, or the
+   * call fails so the UI degrades to "no skills".
+   */
+  async listProjectSkills(params: {
+    deviceId: string;
+    scope: string;
+    timeout?: number;
+    userId: string;
+  }): Promise<DeviceListProjectSkillsResult | undefined> {
+    const { userId, deviceId, scope, timeout = 30_000 } = params;
+    const client = this.getClient();
+    if (!client) return undefined;
+
+    try {
+      const result = await client.invokeRpc<DeviceListProjectSkillsResult>(
+        { deviceId, timeout, userId },
+        { method: 'listProjectSkills', params: { scope } },
+      );
+
+      if (!result.success || !result.data) {
+        log('listProjectSkills: failed for deviceId=%s — %s', deviceId, result.error);
+        return undefined;
+      }
+
+      return result.data;
+    } catch (error) {
+      log('listProjectSkills: error for deviceId=%s — %O', deviceId, error);
       return undefined;
     }
   }

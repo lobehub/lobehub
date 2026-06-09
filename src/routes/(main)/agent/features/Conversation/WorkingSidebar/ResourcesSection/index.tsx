@@ -9,7 +9,12 @@ import { topicSelectors } from '@/store/chat/selectors';
 import AgentDocumentsGroup from './AgentDocumentsGroup';
 import SkillsGroup from './SkillsGroup';
 
-const ResourcesSection = memo(() => {
+interface ResourcesSectionProps {
+  /** Bound remote device id (device mode); skills are then scanned over RPC. */
+  deviceId?: string;
+}
+
+const ResourcesSection = memo<ResourcesSectionProps>(({ deviceId }) => {
   const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const agentWorkingDirectory = useAgentStore((s) =>
@@ -27,7 +32,9 @@ const ResourcesSection = memo(() => {
       paddingInline={'8px 12px'}
       style={{ minHeight: 0 }}
     >
-      {isHetero && workingDirectory && <SkillsGroup workingDirectory={workingDirectory} />}
+      {isHetero && workingDirectory && (
+        <SkillsGroup deviceId={deviceId} workingDirectory={workingDirectory} />
+      )}
       {!isHetero && (
         <AgentDocumentsGroup
           style={{ flex: 1, minHeight: 0 }}
