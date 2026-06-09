@@ -2845,7 +2845,7 @@ export class AiAgentService {
     // Use headless mode to skip human approval in async task execution
     const result = await this.execAgent({
       agentId,
-      appContext: { groupId, isSubAgent: true, threadId: thread.id, topicId },
+      appContext: { groupId, threadId: thread.id, topicId },
       autoStart: true,
       hooks,
       parentOperationId,
