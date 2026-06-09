@@ -66,6 +66,14 @@ export const resolveClientSkills = async (pluginIds?: string[]): Promise<Operati
       // query (SkillListItem) does not carry content, so fetch it on demand.
       if (!pinnedIds.has(s.identifier)) return meta;
 
+      // Skills bundled as a ZIP (scripts/resources) must be activated via the
+      // activateSkill tool so the server mounts their bundle for execScript /
+      // readReference — that runtime mount is keyed off stepContext.activatedSkills,
+      // which operation-level pinning does not populate. Pre-injecting their
+      // content would instruct the model to run scripts from an unmounted bundle,
+      // so leave bundled skills in <available_skills> and let the model activate them.
+      if (s.zipFileHash) return meta;
+
       try {
         const detail =
           toolState.agentSkillDetailMap?.[s.id] ?? (await agentSkillService.getById(s.id));

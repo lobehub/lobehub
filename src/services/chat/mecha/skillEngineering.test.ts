@@ -127,6 +127,29 @@ describe('resolveClientSkills', () => {
     expect(skill?.activated).toBeFalsy();
   });
 
+  it('does NOT pre-activate a pinned DB skill bundled as a ZIP', async () => {
+    // Bundled skills must go through activateSkill so the server mounts the bundle;
+    // pre-injecting content here would reference scripts/resources that are not mounted.
+    setToolState({
+      agentSkills: [
+        {
+          description: 'bundled',
+          id: 'db-1',
+          identifier: 'zip-skill',
+          name: 'Zip Skill',
+          zipFileHash: 'hash-abc',
+        },
+      ],
+    });
+
+    const result = await resolveClientSkills(['zip-skill']);
+
+    expect(mockedGetById).not.toHaveBeenCalled();
+    const skill = findSkill(result.skills, 'zip-skill');
+    expect(skill?.content).toBeUndefined();
+    expect(skill?.activated).toBeFalsy();
+  });
+
   it('prefers the cached skill detail over a network fetch', async () => {
     setToolState({
       agentSkillDetailMap: {
