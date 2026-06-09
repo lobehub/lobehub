@@ -89,6 +89,32 @@ const toAgentSignalSnapshotEvents = (
   });
 };
 
+/**
+ * Operations the runtime delegates UP to its owning layer (AiAgentService).
+ *
+ * The dependency arrow is one-way: AiAgentService → AgentRuntimeService. The
+ * runtime is the low-level step executor — it cannot resolve agent configs,
+ * build tool engines, manage threads, or run the full `execAgent` pipeline;
+ * those live in the layer above it. Yet some tools (e.g. `lobe-agent.callSubAgent`)
+ * need exactly such a high-level action *mid-step*. Rather than import
+ * AiAgentService (which would be a circular dependency), the runtime delegates
+ * these operations back to its owner through callbacks injected here.
+ *
+ * Convention: every future "the runtime, mid-execution, must trigger a
+ * higher-layer pipeline" capability belongs on this delegate — not as a loose
+ * top-level option. One named home for the whole upward-call surface.
+ */
+export interface AgentRuntimeDelegate {
+  /**
+   * Fork a sub-agent through the full high-level pipeline
+   * (AiAgentService.execSubAgent → execAgent: agent-config resolution, tool
+   * engine, context engineering, createOperation). Returns a deferred result;
+   * the parent op parks (`waiting_for_async_tool`) until the completion bridge
+   * backfills the placeholder and resumes it.
+   */
+  execSubAgent?: (params: ExecSubAgentParams) => Promise<unknown>;
+}
+
 export interface AgentRuntimeServiceOptions {
   /**
    * Custom agent factory. When provided, this function is called instead of
@@ -103,11 +129,12 @@ export interface AgentRuntimeServiceOptions {
    */
   coordinatorOptions?: AgentRuntimeCoordinatorOptions;
   /**
-   * Callback to spawn a sub-agent task from within a running server-side agent.
-   * Injected by AiAgentService to wire up the exec_task / exec_tasks executors
-   * without creating a circular import between RuntimeExecutors and AiAgentService.
+   * Operations the runtime delegates up to its owning layer. See
+   * {@link AgentRuntimeDelegate}. Injected by AiAgentService so the runtime can
+   * trigger high-level pipelines (e.g. sub-agent forking) mid-step without a
+   * circular import.
    */
-  execSubAgent?: (params: ExecSubAgentParams) => Promise<unknown>;
+  delegate?: AgentRuntimeDelegate;
   /**
    * Custom QueueService
    * Set to null to disable queue scheduling (for synchronous execution tests)
@@ -152,7 +179,7 @@ export class AgentRuntimeService {
   private agentFactory?: (config: GeneralAgentConfig) => Agent;
   private completionLifecycle: CompletionLifecycle;
   private coordinator: AgentRuntimeCoordinator;
-  private execSubAgentCallback?: (params: ExecSubAgentParams) => Promise<unknown>;
+  private delegate: AgentRuntimeDelegate;
   private humanIntervention: HumanInterventionHandler;
   private streamManager: IStreamEventManager;
   private queueService: QueueService | null;
@@ -203,7 +230,7 @@ export class AgentRuntimeService {
       options?.snapshotStore ?? this.createDefaultSnapshotStore(),
     );
     this.agentFactory = options?.agentFactory;
-    this.execSubAgentCallback = options?.execSubAgent;
+    this.delegate = options?.delegate ?? {};
     this.serverDB = db;
     this.userId = userId;
     this.workspaceId = options?.workspaceId;
@@ -1657,7 +1684,7 @@ export class AgentRuntimeService {
       discordContext: metadata?.discordContext,
       userTimezone: metadata?.userTimezone,
       evalContext: metadata?.evalContext,
-      execSubAgent: this.execSubAgentCallback,
+      execSubAgent: this.delegate.execSubAgent,
       hookDispatcher,
       loadAgentState: this.coordinator.loadAgentState.bind(this.coordinator),
       messageModel: this.messageModel,

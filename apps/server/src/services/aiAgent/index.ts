@@ -302,9 +302,17 @@ export class AiAgentService {
     this.topicModel = new TopicModel(db, userId, wsId);
     this.agentRuntimeService = new AgentRuntimeService(db, userId, {
       ...options?.runtimeOptions,
-      // `execSubAgent` is an auto-bound arrow field, so it can be passed as a
-      // callback without `.bind(this)`.
-      execSubAgent: this.execSubAgent,
+      // ── Runtime delegate ─────────────────────────────────────────────────
+      // Operations the runtime delegates back UP to this layer. The dependency
+      // arrow is one-way (AiAgentService → AgentRuntimeService), so the runtime
+      // can't import us; instead we hand it the callbacks it needs to trigger
+      // high-level pipelines mid-step. See AgentRuntimeDelegate. New high-level
+      // capabilities the runtime calls into go in this `delegate` object.
+      //
+      // `execSubAgent` is an auto-bound arrow field, so no `.bind(this)`.
+      delegate: {
+        execSubAgent: this.execSubAgent,
+      },
       workspaceId: wsId,
     });
     this.marketService = new MarketService({ userInfo: { userId } });
