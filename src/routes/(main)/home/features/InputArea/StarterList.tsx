@@ -5,7 +5,10 @@ import { createStaticStyles, cx } from 'antd-style';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useBusinessModelModeConfig } from '@/business/client/hooks/useBusinessAgentMode';
+import {
+  type BusinessModelModeConfig,
+  useBusinessModelModeConfig,
+} from '@/business/client/hooks/useBusinessAgentMode';
 import type { HomeNewModelItem } from '@/business/client/hooks/useHomeNewModels';
 import { useHomeNewModels } from '@/business/client/hooks/useHomeNewModels';
 import { useStableNavigate } from '@/hooks/useStableNavigate';
@@ -82,7 +85,7 @@ const StarterList = memo(() => {
           const currentModel = agentByIdSelectors.getAgentModelById(activeAgentId)(agentState);
           const currentProvider =
             agentByIdSelectors.getAgentModelProviderById(activeAgentId)(agentState);
-          const nextConfig = applyBusinessModelModeConfig({
+          const nextConfig: BusinessModelModeConfig = applyBusinessModelModeConfig({
             model: item.model,
             provider,
           });
