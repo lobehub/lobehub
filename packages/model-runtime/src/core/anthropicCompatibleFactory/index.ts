@@ -343,7 +343,7 @@ export const handleDefaultAnthropicError = <T extends Record<string, any> = any>
     return {
       endpoint: desensitizedEndpoint,
       error: errorResult,
-      errorType: AgentRuntimeErrorType.RateLimitExceeded,
+      errorType: AgentRuntimeErrorType.QuotaLimitReached,
       message,
     };
   }
@@ -748,7 +748,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         return AgentRuntimeError.chat({
           endpoint: desensitizedEndpoint,
           error: errorResult,
-          errorType: AgentRuntimeErrorType.RateLimitExceeded,
+          errorType: AgentRuntimeErrorType.QuotaLimitReached,
           message,
           provider: this.id,
         });
