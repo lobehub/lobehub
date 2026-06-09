@@ -14,7 +14,7 @@ export interface SandboxCallToolResult {
  * Result of exporting and uploading a file from sandbox
  */
 export interface SandboxExportFileResult {
-  error?: { message: string };
+  error?: { message: string; name?: string };
   fileId?: string;
   filename: string;
   mimeType?: string;
@@ -29,7 +29,7 @@ export interface SandboxExportFileResult {
  * Context (topicId, userId) is bound at service creation time, not passed per-call.
  * This allows CloudSandboxExecutionRuntime to work on both client and server:
  * - Client: Implemented via tRPC client (codeInterpreterService)
- * - Server: Implemented via MarketSDK directly (ServerSandboxService)
+ * - Server: Implemented via the configured sandbox provider
  */
 export interface ISandboxService {
   /**

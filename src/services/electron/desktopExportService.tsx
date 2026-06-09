@@ -5,7 +5,9 @@ import { localFileService } from './localFileService';
 
 export interface DesktopExportOptions {
   content: string;
+  dialogTitle?: string;
   fileName: string;
+  successTitle?: string;
 }
 
 export interface DesktopExportResult {
@@ -15,12 +17,12 @@ export interface DesktopExportResult {
 
 class DesktopExportService {
   async exportMarkdown(options: DesktopExportOptions): Promise<DesktopExportResult> {
-    const { content, fileName } = options;
+    const { content, dialogTitle, fileName, successTitle } = options;
 
     const result = await localFileService.showSaveDialog({
       defaultPath: fileName,
       filters: [{ extensions: ['md'], name: 'Markdown' }],
-      title: i18next.t('pageEditor.exportDialogTitle', { ns: 'file' }),
+      title: dialogTitle || i18next.t('pageEditor.exportDialogTitle', { ns: 'file' }),
     });
 
     if (result.canceled || !result.filePath) {
@@ -32,12 +34,12 @@ class DesktopExportService {
       path: result.filePath,
     });
 
-    this.showExportSuccessToast(result.filePath);
+    this.showExportSuccessToast(result.filePath, successTitle);
 
     return { canceled: false, filePath: result.filePath };
   }
 
-  private showExportSuccessToast(filePath: string) {
+  private showExportSuccessToast(filePath: string, successTitle?: string) {
     const t = i18next.t.bind(i18next);
 
     toast.success({
@@ -53,7 +55,7 @@ class DesktopExportService {
           variant: 'primary',
         },
       ],
-      title: t('pageEditor.exportSuccess', { ns: 'file' }),
+      title: successTitle || t('pageEditor.exportSuccess', { ns: 'file' }),
     });
   }
 }

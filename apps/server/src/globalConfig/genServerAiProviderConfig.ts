@@ -1,0 +1,84 @@
+import { type ProviderConfig } from '@lobechat/types';
+import { type AiFullModelCard, type LobeDefaultAiModelListItem, ModelProvider } from 'model-bank';
+import * as AiModels from 'model-bank';
+
+import { loadModels } from '@/business/client/model-bank/loadModels';
+import { getLLMConfig } from '@/envs/llm';
+import { extractEnabledModels, transformToAiModelList } from '@/utils/server/parseModels';
+
+export interface ProviderSpecificConfig {
+  enabled?: boolean;
+  enabledKey?: string;
+  fetchOnClient?: boolean;
+  modelListKey?: string;
+  withDeploymentName?: boolean;
+}
+
+const groupModelsByProvider = (models: LobeDefaultAiModelListItem[]) =>
+  models.reduce<Record<string, AiFullModelCard[]>>((map, model) => {
+    const providerModels = map[model.providerId] ?? [];
+    providerModels.push(model);
+    map[model.providerId] = providerModels;
+    return map;
+  }, {});
+
+export const genServerAiProvidersConfig = async (
+  specificConfig: Record<any, ProviderSpecificConfig>,
+) => {
+  const llmConfig = getLLMConfig() as Record<string, any>;
+  const builtinModels = groupModelsByProvider(await loadModels());
+  const staticModels = AiModels as unknown as Record<string, AiFullModelCard[] | undefined>;
+
+  // Process all providers concurrently
+  const providerConfigs = await Promise.all(
+    Object.values(ModelProvider).map(async (provider) => {
+      const providerUpperCase = provider.toUpperCase();
+      const hasStaticModels = Object.hasOwn(staticModels, provider);
+      const staticProviderModels = hasStaticModels ? staticModels[provider] : undefined;
+      const aiModels = builtinModels[provider] ?? staticProviderModels ?? [];
+
+      if (provider !== ModelProvider.LobeHub && !hasStaticModels)
+        throw new Error(
+          `Provider [${provider}] not found in aiModels, please make sure you have exported the provider in the \`aiModels/index.ts\``,
+        );
+
+      const providerConfig = specificConfig[provider as keyof typeof specificConfig] || {};
+      const modelString =
+        process.env[providerConfig.modelListKey ?? `${providerUpperCase}_MODEL_LIST`];
+
+      // Process extractEnabledModels and transformToAiModelList concurrently
+      const [enabledModels, serverModelLists] = await Promise.all([
+        extractEnabledModels(provider, modelString, providerConfig.withDeploymentName || false),
+        transformToAiModelList({
+          defaultModels: aiModels || [],
+          modelString,
+          providerId: provider,
+          withDeploymentName: providerConfig.withDeploymentName || false,
+        }),
+      ]);
+
+      return {
+        config: {
+          enabled:
+            typeof providerConfig.enabled !== 'undefined'
+              ? providerConfig.enabled
+              : llmConfig[providerConfig.enabledKey || `ENABLED_${providerUpperCase}`],
+          enabledModels,
+          serverModelLists,
+          ...(providerConfig.fetchOnClient !== undefined && {
+            fetchOnClient: providerConfig.fetchOnClient,
+          }),
+        },
+        provider,
+      };
+    }),
+  );
+
+  // Convert the results to an object
+  const config = {} as Record<string, ProviderConfig>;
+  for (const { provider, config: providerConfig } of providerConfigs) {
+    config[provider] = providerConfig;
+  }
+
+  return config;
+};

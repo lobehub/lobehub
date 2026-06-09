@@ -32,9 +32,9 @@ source node
 
 Read:
 
-- `src/server/services/agentSignal/index.ts`
-- `src/server/services/agentSignal/sources/index.ts`
-- `src/server/services/agentSignal/runtime/AgentSignalScheduler.ts`
+- `apps/server/src/services/agentSignal/index.ts`
+- `apps/server/src/services/agentSignal/sources/index.ts`
+- `apps/server/src/services/agentSignal/runtime/AgentSignalScheduler.ts`
 
 ## Package Boundaries
 
@@ -56,7 +56,7 @@ Read:
 - `packages/agent-signal/src/types/events.ts`
 - `packages/agent-signal/src/types/builtin.ts`
 
-### `src/server/services/agentSignal`
+### `apps/server/src/services/agentSignal`
 
 Treat this as the server-owned implementation layer.
 
@@ -89,11 +89,11 @@ Examples:
 
 Define source payloads in:
 
-- `src/server/services/agentSignal/sourceTypes.ts`
+- `apps/server/src/services/agentSignal/sourceTypes.ts`
 
 Build normalized sources in:
 
-- `src/server/services/agentSignal/sources/buildSource.ts`
+- `apps/server/src/services/agentSignal/sources/buildSource.ts`
 - `packages/agent-signal/src/base/builders.ts`
 
 ### Signal
@@ -109,7 +109,7 @@ Examples from `analyzeIntent`:
 
 Define server-owned signal types in:
 
-- `src/server/services/agentSignal/policies/types.ts`
+- `apps/server/src/services/agentSignal/policies/types.ts`
 
 ### Action
 
@@ -157,9 +157,9 @@ When a user asks for "the procedure", document the flow above and point to the e
 
 Read:
 
-- `src/server/services/agentSignal/sources/index.ts`
-- `src/server/services/agentSignal/runtime/context.ts`
-- `src/server/services/agentSignal/constants.ts`
+- `apps/server/src/services/agentSignal/sources/index.ts`
+- `apps/server/src/services/agentSignal/runtime/context.ts`
+- `apps/server/src/services/agentSignal/constants.ts`
 
 Use `enqueueAgentSignalSourceEvent(...)` when the work should stay quiet and out-of-band. That path:
 
@@ -172,8 +172,8 @@ This is the preferred path when the UI request should finish immediately and the
 
 Read:
 
-- `src/server/workflows/agentSignal/index.ts`
-- `src/server/workflows/agentSignal/run.ts`
+- `apps/server/src/workflows/agentSignal/index.ts`
+- `apps/server/src/workflows/agentSignal/run.ts`
 
 ## Existing Example: `analyzeIntent`
 
@@ -192,8 +192,8 @@ agent.user.message
 
 Read:
 
-- `src/server/services/agentSignal/policies/analyzeIntent/index.ts`
-- `src/server/services/agentSignal/policies/analyzeIntent/feedbackSatisfaction.ts`
-- `src/server/services/agentSignal/policies/analyzeIntent/feedbackDomain.ts`
-- `src/server/services/agentSignal/policies/analyzeIntent/feedbackAction.ts`
-- `src/server/services/agentSignal/policies/analyzeIntent/actions/userMemory.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/index.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/feedbackSatisfaction.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/feedbackDomain.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/feedbackAction.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/actions/userMemory.ts`

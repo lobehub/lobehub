@@ -76,6 +76,14 @@ export default defineFixtures({
       name: 'ToolSearch',
     },
     {
+      description: 'Fetch a URL and answer a prompt about it.',
+      name: 'WebFetch',
+    },
+    {
+      description: 'Search the web.',
+      name: 'WebSearch',
+    },
+    {
       description: 'Write a new file.',
       name: 'Write',
     },
@@ -365,6 +373,22 @@ export default defineFixtures({
     ToolSearch: single({
       args: { max_results: 5, query: 'select:Read,Edit,Grep' },
       content: 'Loaded 3 deferred tool schemas: Read, Edit, Grep.',
+    }),
+    WebFetch: single({
+      args: {
+        prompt: 'Summarize the key changes in the latest release.',
+        url: 'https://github.com/lobehub/lobe-chat/releases/latest',
+      },
+      content:
+        '## LobeChat v1.0\n\n- New agent runtime with tool streaming\n- Faster cold start\n- Fixed a memory leak in the chat store',
+    }),
+    WebSearch: single({
+      args: {
+        allowed_domains: ['developer.mozilla.org'],
+        query: 'CSS container queries browser support',
+      },
+      content:
+        '1. Container queries — MDN — developer.mozilla.org/en-US/docs/Web/CSS/CSS_containment\n2. Can I use: CSS Container Queries — caniuse.com/css-container-queries',
     }),
     Write: single({
       args: {

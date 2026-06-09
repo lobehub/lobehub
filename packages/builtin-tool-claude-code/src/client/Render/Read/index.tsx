@@ -10,9 +10,9 @@ import { memo, useMemo } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   path: css`
+    min-width: 0;
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
-    word-break: break-all;
   `,
 }));
 
@@ -39,6 +39,7 @@ const stripLineNumbers = (text: string): string => {
 const Read = memo<BuiltinRenderProps<ReadArgs>>(({ args, content }) => {
   const filePath = args?.file_path || '';
   const fileName = filePath ? path.basename(filePath) : '';
+  const dir = filePath ? path.dirname(filePath) : '';
   const ext = filePath ? path.extname(filePath).slice(1).toLowerCase() : '';
 
   const source = useMemo(() => stripLineNumbers(content || ''), [content]);
@@ -49,9 +50,9 @@ const Read = memo<BuiltinRenderProps<ReadArgs>>(({ args, content }) => {
       header={
         <>
           <Text strong>{fileName || 'Read'}</Text>
-          {filePath && filePath !== fileName && (
+          {dir && dir !== '.' && (
             <Text ellipsis className={styles.path}>
-              {filePath}
+              {dir}
             </Text>
           )}
         </>

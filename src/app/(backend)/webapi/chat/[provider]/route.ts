@@ -8,6 +8,8 @@ import { type ChatStreamPayload } from '@/types/openai/chat';
 import { createErrorResponse } from '@/utils/errorResponse';
 import { getTracePayload } from '@/utils/trace';
 
+import { resolveValidWorkspaceIdFromRequest } from '../../_utils/workspace';
+
 // If user don't use fluid compute, will build  failed
 // this enforce user to enable fluid compute
 export const maxDuration = 300;
@@ -16,8 +18,10 @@ export const POST = checkAuth(async (req: Request, { params, userId, serverDB })
   const provider = (await params)!.provider!;
 
   try {
+    const workspaceId = await resolveValidWorkspaceIdFromRequest({ req, serverDB, userId });
+
     // ============  1. init chat model   ============ //
-    const modelRuntime = await initModelRuntimeFromDB(serverDB, userId, provider);
+    const modelRuntime = await initModelRuntimeFromDB(serverDB, userId, provider, workspaceId);
 
     // ============  2. create chat completion   ============ //
 

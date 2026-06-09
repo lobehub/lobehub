@@ -1,7 +1,7 @@
 'use client';
 
 import { ContextMenuTrigger, type GenericItemType, Icon } from '@lobehub/ui';
-import { ScrollArea } from '@lobehub/ui/base-ui';
+import { confirmModal, ScrollArea } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
 import { FileIcon, XIcon } from 'lucide-react';
@@ -38,9 +38,41 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     opacity: 0.6;
     background: transparent;
 
+    .cm-tab-close-x {
+      display: inline-flex;
+    }
+
+    .cm-tab-close-dot {
+      display: none;
+
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+
+      background: ${cssVar.colorPrimary};
+    }
+
+    &[data-dirty='true'] {
+      .cm-tab-close-x {
+        display: none;
+      }
+
+      .cm-tab-close-dot {
+        display: inline-block;
+      }
+    }
+
     &:hover {
       opacity: 1;
       background: ${cssVar.colorFillSecondary};
+
+      .cm-tab-close-x {
+        display: inline-flex;
+      }
+
+      .cm-tab-close-dot {
+        display: none;
+      }
     }
   `,
   tabItem: css`
@@ -108,11 +140,38 @@ const TabStrip = memo(() => {
   const { t } = useTranslation('chat');
   const openLocalFiles = useChatStore(chatPortalSelectors.openLocalFiles);
   const activeLocalFilePath = useChatStore(chatPortalSelectors.activeLocalFilePath);
+  const dirtyContents = useChatStore(chatPortalSelectors.dirtyLocalFileContents);
   const setActiveLocalFile = useChatStore((s) => s.setActiveLocalFile);
   const closeLocalFileTab = useChatStore((s) => s.closeLocalFileTab);
   const closeLeftLocalFileTabs = useChatStore((s) => s.closeLeftLocalFileTabs);
   const closeOtherLocalFileTabs = useChatStore((s) => s.closeOtherLocalFileTabs);
   const closeRightLocalFileTabs = useChatStore((s) => s.closeRightLocalFileTabs);
+
+  const confirmClose = useCallback(
+    (filePath: string, perform: () => void) => {
+      if (!(filePath in dirtyContents)) {
+        perform();
+        return;
+      }
+      const filename = filePath.split('/').at(-1) ?? filePath;
+      confirmModal({
+        cancelText: t('cancel', { defaultValue: 'Cancel' }),
+        content: t('workingPanel.localFile.closeDirty.content', {
+          defaultValue: `${filename} has unsaved changes. Close without saving?`,
+          filename,
+        }),
+        okButtonProps: { danger: true },
+        okText: t('workingPanel.localFile.closeDirty.confirm', {
+          defaultValue: 'Close without saving',
+        }),
+        onOk: perform,
+        title: t('workingPanel.localFile.closeDirty.title', {
+          defaultValue: 'Unsaved changes',
+        }),
+      });
+    },
+    [dirtyContents, t],
+  );
 
   const getContextMenuItems = useCallback(
     (filePath: string, index: number): GenericItemType[] => [
@@ -138,7 +197,7 @@ const TabStrip = memo(() => {
       {
         key: 'close',
         label: t('workingPanel.localFile.close'),
-        onClick: () => closeLocalFileTab(filePath),
+        onClick: () => confirmClose(filePath, () => closeLocalFileTab(filePath)),
       },
     ],
     [
@@ -146,6 +205,7 @@ const TabStrip = memo(() => {
       closeLocalFileTab,
       closeOtherLocalFileTabs,
       closeRightLocalFileTabs,
+      confirmClose,
       openLocalFiles.length,
       t,
     ],
@@ -187,13 +247,17 @@ const TabStrip = memo(() => {
               <button
                 aria-label={`Close ${filename}`}
                 className={styles.tabClose}
+                data-dirty={filePath in dirtyContents ? 'true' : 'false'}
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  closeLocalFileTab(filePath);
+                  confirmClose(filePath, () => closeLocalFileTab(filePath));
                 }}
               >
-                <XIcon size={12} />
+                <span className={'cm-tab-close-x'}>
+                  <XIcon size={12} />
+                </span>
+                <span className={'cm-tab-close-dot'} />
               </button>
             </div>
           </ContextMenuTrigger>

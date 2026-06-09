@@ -48,13 +48,10 @@
   "starter.createAgent": "ایجاد عامل",
   "starter.createGroup": "ایجاد گروه",
   "starter.deepResearch": "تحقیق عمیق",
-  "starter.deepseekV4Pro": "DeepSeek V4 Pro",
-  "starter.deepseekV4ProAlready": "از قبل در حال استفاده از DeepSeek V4 Pro هستید",
-  "starter.deepseekV4ProSwitched": "به DeepSeek V4 Pro تغییر یافت",
   "starter.developing": "به‌زودی",
   "starter.image": "تصویر",
-  "starter.imageGeneration": "تولید تصویر",
+  "starter.modelInUse": "در حال حاضر از {{name}} استفاده می‌کنید",
+  "starter.modelSwitched": "به {{name}} تغییر داده شد",
   "starter.newLabel": "جدید",
-  "starter.videoGeneration": "سیدنس ۲.۰",
   "starter.write": "نوشتن"
 }

@@ -4,6 +4,7 @@ import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 
 import { LOADING_FLAT } from '@/const/message';
+import ContentLoading from '@/features/Conversation/Messages/components/ContentLoading';
 import { type AssistantContentBlock } from '@/types/index';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
@@ -436,6 +437,20 @@ const Group = memo<GroupChildrenProps>(
 
     const workflowChromeComplete = !isGenerating || postToolTailPromoted;
 
+    // When the turn ends on an inline single-tool segment whose tool already
+    // settled but the run is still generating (waiting on the next step), the
+    // inline path renders no working chrome — unlike WorkflowCollapse, which has
+    // its own streaming header. Without this the user sees a blank gap below the
+    // finished tool. Render the same "running" indicator used at turn start to
+    // fill it. Multi-tool segments keep their own chrome; a tool still executing
+    // is covered by its own loading placeholder (areWorkflowToolsComplete=false).
+    const lastSegment = segments.at(-1);
+    const showTailRunningIndicator =
+      isGenerating &&
+      lastSegment?.kind === 'workflow' &&
+      shouldInlineWorkflowSegment(lastSegment.blocks) &&
+      areWorkflowToolsComplete(lastSegment.blocks.flatMap((block) => block.tools ?? []));
+
     if (isCollapsed) {
       return (
         content && (
@@ -499,6 +514,7 @@ const Group = memo<GroupChildrenProps>(
               />
             );
           })}
+          {showTailRunningIndicator && <ContentLoading id={id} />}
         </Flexbox>
       </MessageAggregationContext>
     );

@@ -6,14 +6,19 @@ import { startSkillDrag } from '@/features/ChatInput/InputEditor/ActionTag/skill
 import { SkillSection, SkillsList, useProjectSkills } from '@/features/SkillsList';
 
 interface SkillsGroupProps {
+  /** Bound remote device id; when set, skills are scanned over RPC. */
+  deviceId?: string;
   workingDirectory: string;
 }
 
-const SkillsGroup = memo<SkillsGroupProps>(({ workingDirectory }) => {
+const SkillsGroup = memo<SkillsGroupProps>(({ deviceId, workingDirectory }) => {
   const { t } = useTranslation('chat');
-  const enabled = isDesktop && !!workingDirectory;
+  // Local desktop reads over IPC; a bound device reads over RPC. Either path
+  // makes the skills list reachable even when this client isn't the desktop.
+  const enabled = (isDesktop || !!deviceId) && !!workingDirectory;
   const { isLoading, items, onOpenFile, onOpenSkill } = useProjectSkills(
     enabled ? workingDirectory : undefined,
+    deviceId,
   );
 
   if (!enabled) return null;

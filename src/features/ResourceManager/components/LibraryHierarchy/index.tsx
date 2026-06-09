@@ -9,6 +9,7 @@ import { VList } from 'virtua';
 
 import { useFolderPath } from '@/routes/(main)/resource/features/hooks/useFolderPath';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
+import { useFileStore } from '@/store/file';
 import type { TreeItem } from '@/store/tree';
 import { useTreeStore } from '@/store/tree';
 
@@ -36,8 +37,13 @@ const LibraryHierarchy = memo(() => {
   const expanded = useTreeStore((s) => s.expanded);
   const status = useTreeStore((s) => s.status);
   const init = useTreeStore((s) => s.init);
-  const navigateTo = useTreeStore((s) => s.navigateTo);
+  const expandAncestors = useTreeStore((s) => s.expandAncestors);
   const toggle = useTreeStore((s) => s.toggle);
+
+  // Reuse Explorer Breadcrumb's SWR cache so the sidebar doesn't double-fetch
+  // document.getFolderBreadcrumb when navigating into a folder.
+  const useFetchFolderBreadcrumb = useFileStore((s) => s.useFetchFolderBreadcrumb);
+  const { data: folderChain } = useFetchFolderBreadcrumb(currentFolderSlug);
 
   // Effect 1: Library switch → reset + load root
   useEffect(() => {
@@ -45,11 +51,11 @@ const LibraryHierarchy = memo(() => {
     init(libraryId);
   }, [libraryId, init]);
 
-  // Effect 2: Folder navigation → expand ancestors
+  // Effect 2: Folder navigation → expand ancestors once breadcrumb resolves
   useEffect(() => {
-    if (!currentFolderSlug) return;
-    void navigateTo(currentFolderSlug);
-  }, [currentFolderSlug, navigateTo]);
+    if (!folderChain?.length) return;
+    void expandAncestors(folderChain.map((c) => c.id));
+  }, [folderChain, expandAncestors]);
 
   const isLoading = status[''] === 'loading';
 

@@ -21,12 +21,20 @@ import {
 } from '@lobechat/builtin-tool-knowledge-base/client';
 import { LobeAgentManifest, LobeAgentRenders } from '@lobechat/builtin-tool-lobe-agent/client';
 import {
+  LobeDeliveryCheckerManifest,
+  LobeDeliveryCheckerRenders,
+} from '@lobechat/builtin-tool-lobe-delivery-checker/client';
+import {
   LocalSystemManifest,
   LocalSystemRenders,
 } from '@lobechat/builtin-tool-local-system/client';
 import { MemoryManifest, MemoryRenders } from '@lobechat/builtin-tool-memory/client';
 import { MessageManifest, MessageRenders } from '@lobechat/builtin-tool-message/client';
 import { PageAgentManifest, PageAgentRenders } from '@lobechat/builtin-tool-page-agent/client';
+import {
+  RemoteDeviceManifest,
+  RemoteDeviceRenders,
+} from '@lobechat/builtin-tool-remote-device/client';
 import { SkillStoreManifest, SkillStoreRenders } from '@lobechat/builtin-tool-skill-store/client';
 import { SkillsManifest, SkillsRenders } from '@lobechat/builtin-tool-skills/client';
 import { TaskManifest, TaskRenders } from '@lobechat/builtin-tool-task/client';
@@ -65,11 +73,16 @@ const BuiltinToolsRenders: Record<string, Record<string, BuiltinRender>> = {
   [GroupManagementManifest.identifier]: GroupManagementRenders as Record<string, BuiltinRender>,
   [KnowledgeBaseManifest.identifier]: KnowledgeBaseRenders as Record<string, BuiltinRender>,
   [LobeAgentManifest.identifier]: LobeAgentRenders as Record<string, BuiltinRender>,
+  [LobeDeliveryCheckerManifest.identifier]: LobeDeliveryCheckerRenders as Record<
+    string,
+    BuiltinRender
+  >,
   [LocalSystemManifest.identifier]: LocalSystemRenders as Record<string, BuiltinRender>,
   [MemoryManifest.identifier]: MemoryRenders as Record<string, BuiltinRender>,
   [MessageManifest.identifier]: MessageRenders as Record<string, BuiltinRender>,
   [NotebookIdentifier]: NotebookRenders,
   [PageAgentManifest.identifier]: PageAgentRenders as Record<string, BuiltinRender>,
+  [RemoteDeviceManifest.identifier]: RemoteDeviceRenders as Record<string, BuiltinRender>,
   [SkillStoreManifest.identifier]: SkillStoreRenders as Record<string, BuiltinRender>,
   [SkillsManifest.identifier]: SkillsRenders as Record<string, BuiltinRender>,
   [TaskManifest.identifier]: TaskRenders as Record<string, BuiltinRender>,

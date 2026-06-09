@@ -18,6 +18,7 @@ import {
   KeyRound,
   Map,
   MessageCircleIcon,
+  MonitorSmartphoneIcon,
   PaletteIcon,
   Sparkles,
   TerminalSquare,
@@ -96,6 +97,11 @@ export const useCategory = () => {
         icon: PaletteIcon,
         key: SettingsTabs.Appearance,
         label: t('tab.appearance'),
+      },
+      {
+        icon: MonitorSmartphoneIcon,
+        key: SettingsTabs.Devices,
+        label: t('tab.devices'),
       },
       !mobile && {
         icon: KeyboardIcon,

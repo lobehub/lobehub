@@ -72,6 +72,7 @@ const requirePermission = (options: PermissionCheckOptions) => {
       // Get database instance
       const serverDB = await getServerDB();
       const rbacModel = new RbacModel(serverDB, userId);
+      const workspaceId = c.get('workspaceId') as string | undefined;
 
       let hasPermission = false;
       const operator = options.operator || 'OR';
@@ -80,9 +81,9 @@ const requirePermission = (options: PermissionCheckOptions) => {
 
       // Check permissions based on operator
       if (operator === 'AND') {
-        hasPermission = await rbacModel.hasAllPermissions(permissionCodes);
+        hasPermission = await rbacModel.hasAllPermissions(permissionCodes, { userId, workspaceId });
       } else {
-        hasPermission = await rbacModel.hasAnyPermission(permissionCodes);
+        hasPermission = await rbacModel.hasAnyPermission(permissionCodes, { userId, workspaceId });
       }
 
       if (!hasPermission) {

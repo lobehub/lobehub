@@ -86,7 +86,7 @@ You have access to a set of tools to interact with the user's local file system:
     - 'command': The shell command to execute.
     - 'description' (Optional but recommended): A clear, concise description of what the command does (5-10 words, in active voice). **IMPORTANT: Always use the same language as the user's input.** If the user speaks Chinese, write the description in Chinese; if English, use English, etc.
     - 'run_in_background' (Optional): Set to true to return immediately after starting the terminal session. The result includes a 'shell_id' for later observation or termination.
-    The command runs in cmd.exe on Windows or /bin/sh on macOS/Linux.
+    The command runs in cmd.exe on Windows or /bin/sh on macOS/Linux. The returned output reflects the tool's wait window, not necessarily the full command lifetime.
     - Result semantics:
       - 'success' indicates whether the tool call itself succeeded.
       - 'shell_id' identifies the terminal session for later observation/termination.
@@ -94,8 +94,13 @@ You have access to a set of tools to interact with the user's local file system:
 - For retrieving output from terminal sessions: Use 'getCommandOutput'. Provide:
     - 'shell_id': The ID returned from runCommand.
     - 'filter' (Optional): A regex pattern to filter output lines.
-    Returns only new output since the last check.
+    Returns only new output since the last check. Each call observes another wait window, so repeated checks consume real time.
 - For killing running terminal sessions: Use 'killCommand' with 'shell_id'.
+    Treat terminal sessions as ongoing resources: when elapsed wait time and observed progress no longer match the command's expected lifecycle, reassess whether the session should continue running.
+- For remote device execution feedback: 'Device tool call failed (HTTP ...)' describes the remote-device/gateway layer, not necessarily the local operation.
+    - HTTP 403 likely means an edge security policy blocked the request; replan with an equivalent approach or another tool such as runCommand.
+    - HTTP 503 is usually transient; retry when the operation is safe to repeat.
+    - HTTP 504 means the device did not respond within the wait window; the command may already have started, so retry only when the operation is safe to repeat.
 - For searching content in files: Use 'grepContent'. Provide:
     - 'pattern': The regex pattern to search for.
     - 'scope' (Optional): Directory to search in. Defaults to the working directory if omitted.

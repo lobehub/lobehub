@@ -10,6 +10,7 @@ import { type StoreSetter } from '@/store/types';
 
 import { type MessageMapKeyInput } from '../../../utils/messageMapKey';
 import { messageMapKey } from '../../../utils/messageMapKey';
+import { reconcileAssistantToolLinks } from '../utils/reconcileTools';
 
 const SWR_USE_FETCH_MESSAGES = 'SWR_USE_FETCH_MESSAGES';
 
@@ -84,13 +85,20 @@ export class MessageQueryActionImpl {
 
     const messagesKey = messageMapKey(ctx);
 
+    // Re-link any tool row whose parent assistant lost its tools[] entry before
+    // it lands in the raw bucket — a stale / out-of-order snapshot can drop the
+    // link while the tool row survives, which would orphan the tool bubble (see
+    // reconcileAssistantToolLinks). Keeps dbMessagesMap (SoT) consistent for
+    // optimistic updates, not just the parsed display.
+    const reconciled = reconcileAssistantToolLinks(messages);
+
     // Get raw messages from dbMessagesMap and apply reducer
-    const nextDbMap = { ...this.#get().dbMessagesMap, [messagesKey]: messages };
+    const nextDbMap = { ...this.#get().dbMessagesMap, [messagesKey]: reconciled };
 
     if (isEqual(nextDbMap, this.#get().dbMessagesMap)) return;
 
     // Parse messages using conversation-flow
-    const { flatList } = parse(messages);
+    const { flatList } = parse(reconciled);
 
     this.#set(
       {

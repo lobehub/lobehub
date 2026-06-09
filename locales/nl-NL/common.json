@@ -234,7 +234,7 @@
   "exportType.allAgentWithMessage": "Alle agents en berichten exporteren",
   "exportType.globalSetting": "Globale instellingen exporteren",
   "feedback": "Feedback",
-  "feedback.emailContact": "Je kunt ons ook e-mailen op {{email}}",
+  "feedback.emailContact": "Je kunt ons ook e-mailen op <email>{{email}}</email>",
   "feedback.errors.fileTooLarge": "Bestand is groter dan 5MB",
   "feedback.errors.submitFailed": "Verzenden mislukt. Probeer het opnieuw.",
   "feedback.errors.teamNotFound": "Configuratiefout",
@@ -353,6 +353,7 @@
   "messengerBanner.title": "Praat met Lobe AI via je favoriete berichtenapps",
   "more": "Meer",
   "navPanel.agent": "Agent",
+  "navPanel.bottomDivider": "Items hieronder verankeren aan de onderkant",
   "navPanel.customizeSidebar": "Zijbalk aanpassen",
   "navPanel.displayItems": "Weergegeven items",
   "navPanel.hidden": "Verborgen",
@@ -479,5 +480,6 @@
   "userPanel.setting": "Instellingen",
   "userPanel.upgradePlan": "Abonnement upgraden",
   "userPanel.usages": "Gebruiksstatistieken",
-  "version": "Versie"
+  "version": "Versie",
+  "zoom": "Zoom"
 }

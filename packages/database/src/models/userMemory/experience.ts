@@ -16,6 +16,10 @@ export class UserMemoryExperienceModel {
     this.db = db;
   }
 
+  private memoryWhere(table: { userId: any }) {
+    return eq(table.userId, this.userId);
+  }
+
   create = async (params: Omit<NewUserMemoryExperience, 'userId'>) => {
     const [result] = await this.db
       .insert(userMemoriesExperiences)
@@ -28,10 +32,7 @@ export class UserMemoryExperienceModel {
   delete = async (id: string) => {
     return this.db.transaction(async (tx) => {
       const experience = await tx.query.userMemoriesExperiences.findFirst({
-        where: and(
-          eq(userMemoriesExperiences.id, id),
-          eq(userMemoriesExperiences.userId, this.userId),
-        ),
+        where: and(eq(userMemoriesExperiences.id, id), this.memoryWhere(userMemoriesExperiences)),
       });
 
       if (!experience || !experience.userMemoryId) {
@@ -41,25 +42,21 @@ export class UserMemoryExperienceModel {
       // Delete the base user memory (cascade will handle the experience)
       await tx
         .delete(userMemories)
-        .where(
-          and(eq(userMemories.id, experience.userMemoryId), eq(userMemories.userId, this.userId)),
-        );
+        .where(and(eq(userMemories.id, experience.userMemoryId), this.memoryWhere(userMemories)));
 
       return { success: true };
     });
   };
 
   deleteAll = async () => {
-    return this.db
-      .delete(userMemoriesExperiences)
-      .where(eq(userMemoriesExperiences.userId, this.userId));
+    return this.db.delete(userMemoriesExperiences).where(this.memoryWhere(userMemoriesExperiences));
   };
 
   query = async (limit = 50) => {
     return this.db.query.userMemoriesExperiences.findMany({
       limit,
       orderBy: [desc(userMemoriesExperiences.createdAt)],
-      where: eq(userMemoriesExperiences.userId, this.userId),
+      where: this.memoryWhere(userMemoriesExperiences),
     });
   };
 
@@ -80,7 +77,7 @@ export class UserMemoryExperienceModel {
 
     // Build WHERE conditions
     const conditions: Array<SQL | undefined> = [
-      eq(userMemoriesExperiences.userId, this.userId),
+      this.memoryWhere(userMemoriesExperiences),
       // Full-text search across title, situation, keyLearning, action
       normalizedQuery
         ? sql`(${userMemories.id} @@@ paradedb.boolean(should => ARRAY[paradedb.match('title', ${bm25MatchQuery}, conjunction_mode => true)]) OR ${userMemoriesExperiences.id} @@@ paradedb.boolean(should => ARRAY[paradedb.match('situation', ${bm25MatchQuery}, conjunction_mode => true), paradedb.match('key_learning', ${bm25MatchQuery}, conjunction_mode => true), paradedb.match('action', ${bm25MatchQuery}, conjunction_mode => true)]))`
@@ -110,7 +107,7 @@ export class UserMemoryExperienceModel {
     // JOIN condition
     const joinCondition = and(
       eq(userMemories.id, userMemoriesExperiences.userMemoryId),
-      eq(userMemories.userId, this.userId),
+      this.memoryWhere(userMemories),
     );
 
     // Execute queries in parallel
@@ -152,10 +149,7 @@ export class UserMemoryExperienceModel {
 
   findById = async (id: string) => {
     return this.db.query.userMemoriesExperiences.findFirst({
-      where: and(
-        eq(userMemoriesExperiences.id, id),
-        eq(userMemoriesExperiences.userId, this.userId),
-      ),
+      where: and(eq(userMemoriesExperiences.id, id), this.memoryWhere(userMemoriesExperiences)),
     });
   };
 
@@ -163,8 +157,6 @@ export class UserMemoryExperienceModel {
     return this.db
       .update(userMemoriesExperiences)
       .set({ ...value, updatedAt: new Date() })
-      .where(
-        and(eq(userMemoriesExperiences.id, id), eq(userMemoriesExperiences.userId, this.userId)),
-      );
+      .where(and(eq(userMemoriesExperiences.id, id), this.memoryWhere(userMemoriesExperiences)));
   };
 }

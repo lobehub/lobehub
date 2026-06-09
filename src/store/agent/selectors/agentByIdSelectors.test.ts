@@ -1,10 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { type AgentStoreState } from '@/store/agent/initialState';
 import { initialAgentSliceState } from '@/store/agent/slices/agent/initialState';
 import { initialBuiltinAgentSliceState } from '@/store/agent/slices/builtin/initialState';
 
 import { agentByIdSelectors } from './agentByIdSelectors';
+
+// getAgentWorkingDirectoryById is desktop-only; force the desktop branch on.
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal()),
+  isDesktop: true,
+}));
 
 const createState = (overrides: Partial<AgentStoreState> = {}): AgentStoreState => ({
   ...initialAgentSliceState,
@@ -54,6 +61,66 @@ describe('agentByIdSelectors', () => {
         provider: undefined,
         systemRole: undefined,
       });
+    });
+  });
+
+  describe('getAgentWorkingDirectoryById', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    const stateWith = (config: Record<string, any>, localMap: Record<string, string> = {}) =>
+      createState({
+        agentMap: { 'agent-1': config },
+        localAgentWorkingDirectoryMap: localMap,
+      });
+
+    it('reads the per-device choice for the current (local) device', () => {
+      vi.spyOn(globalAgentContextManager, 'getContext').mockReturnValue({ homePath: '/home/me' });
+      const state = stateWith({
+        agencyConfig: { workingDirByDevice: { 'device-A': '/repos/agent-gateway' } },
+      });
+
+      expect(agentByIdSelectors.getAgentWorkingDirectoryById('agent-1', 'device-A')(state)).toBe(
+        '/repos/agent-gateway',
+      );
+    });
+
+    it('reads the bound device choice when the agent targets a device', () => {
+      vi.spyOn(globalAgentContextManager, 'getContext').mockReturnValue({ homePath: '/home/me' });
+      const state = stateWith({
+        agencyConfig: {
+          boundDeviceId: 'device-B',
+          executionTarget: 'device',
+          workingDirByDevice: { 'device-A': '/repos/local', 'device-B': '/repos/remote' },
+        },
+      });
+
+      // currentDeviceId is the local machine, but executionTarget=device → device-B wins
+      expect(agentByIdSelectors.getAgentWorkingDirectoryById('agent-1', 'device-A')(state)).toBe(
+        '/repos/remote',
+      );
+    });
+
+    it('falls back to the legacy per-agent value when no device choice exists', () => {
+      vi.spyOn(globalAgentContextManager, 'getContext').mockReturnValue({ homePath: '/home/me' });
+      const state = stateWith({ agencyConfig: {} }, { 'agent-1': '/repos/legacy' });
+
+      expect(agentByIdSelectors.getAgentWorkingDirectoryById('agent-1', 'device-A')(state)).toBe(
+        '/repos/legacy',
+      );
+    });
+
+    it('falls back to desktop/home path when nothing is set', () => {
+      vi.spyOn(globalAgentContextManager, 'getContext').mockReturnValue({
+        desktopPath: '/home/me/Desktop',
+        homePath: '/home/me',
+      });
+      const state = stateWith({ agencyConfig: {} });
+
+      expect(agentByIdSelectors.getAgentWorkingDirectoryById('agent-1', 'device-A')(state)).toBe(
+        '/home/me/Desktop',
+      );
     });
   });
 });

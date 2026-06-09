@@ -35,6 +35,21 @@ describe('createSecurityBlacklistAudit', () => {
       ).resolves.toBe(false);
     });
 
+    it('should respect rule policy when using metadata blacklist', async () => {
+      const audit = createSecurityBlacklistAudit('required');
+      const customBlacklist = [
+        {
+          description: 'Block custom command',
+          match: { command: { pattern: 'custom-danger.*', type: 'regex' as const } },
+          policy: 'required' as const,
+        },
+      ];
+
+      await expect(
+        audit({ command: 'custom-danger --force' }, { securityBlacklist: customBlacklist }),
+      ).resolves.toBe(true);
+    });
+
     it('should fall back to DEFAULT_SECURITY_BLACKLIST when metadata has no blacklist', async () => {
       const audit = createSecurityBlacklistAudit();
       await expect(audit({ command: 'rm -rf /' }, {})).resolves.toBe(true);
@@ -51,8 +66,8 @@ describe('createSecurityBlacklistAudit', () => {
       await expect(audit({})).resolves.toBe(false);
     });
 
-    it('should detect sensitive file paths via default blacklist', async () => {
-      const audit = createSecurityBlacklistAudit();
+    it('should detect sensitive file paths via required blacklist rules', async () => {
+      const audit = createSecurityBlacklistAudit('required');
       await expect(audit({ path: '/home/user/.env' })).resolves.toBe(true);
       await expect(audit({ path: '/home/user/.ssh/id_rsa' })).resolves.toBe(true);
     });
@@ -76,7 +91,26 @@ describe('createSecurityBlacklistAudit', () => {
       const config = createSecurityBlacklistGlobalAudit();
 
       await expect(config.resolver({ command: 'rm -rf /' })).resolves.toBe(true);
+      await expect(config.resolver({ command: 'cat .env' })).resolves.toBe(false);
       await expect(config.resolver({ command: 'ls -la' })).resolves.toBe(false);
+    });
+  });
+
+  describe('createSecurityBlacklistGlobalAudit(required)', () => {
+    it('should return a required GlobalInterventionAuditConfig', () => {
+      const config = createSecurityBlacklistGlobalAudit('required');
+
+      expect(config.type).toBe(SECURITY_BLACKLIST_AUDIT_TYPE);
+      expect(config.policy).toBe('required');
+      expect(typeof config.resolver).toBe('function');
+    });
+
+    it('should block overridable sensitive commands only', async () => {
+      const config = createSecurityBlacklistGlobalAudit('required');
+
+      await expect(config.resolver({ command: 'cat .env' })).resolves.toBe(true);
+      await expect(config.resolver({ command: 'cat /etc/ssh/sshd_config' })).resolves.toBe(true);
+      await expect(config.resolver({ command: 'rm -rf /' })).resolves.toBe(false);
     });
   });
 

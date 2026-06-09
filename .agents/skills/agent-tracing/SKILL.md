@@ -1,6 +1,6 @@
 ---
 name: agent-tracing
-description: "Agent tracing CLI for inspecting agent execution snapshots. Use when user mentions 'agent-tracing', 'trace', 'snapshot', wants to debug agent execution, inspect LLM calls, view context engine data, or analyze agent steps. Triggers on agent debugging, trace inspection, or execution analysis tasks."
+description: 'Agent tracing CLI for execution snapshots. Use for agent-tracing, traces, snapshots, LLM call inspection, context engine data, agent step analysis, or execution debugging.'
 user-invocable: false
 ---
 
@@ -216,6 +216,6 @@ When using `--messages`, the output shows three sections (if context engine data
 
 ## Integration Points
 
-- **Recording**: `src/server/services/agentRuntime/AgentRuntimeService.ts` — in the `executeStep()` method, after building `stepPresentationData`, writes partial snapshot in dev mode
-- **Context engine capture**: `src/server/modules/AgentRuntime/RuntimeExecutors.ts` — in `call_llm` executor, after `serverMessagesEngine()` returns, calls `ctx.tracingContextEngine(input, output)`. `AgentRuntimeService.executeStep` buffers it per step and passes it to `traceRecorder.appendStep` as the typed `contextEngine` field (kept off the `events` array to stay out of Redis state).
+- **Recording**: `apps/server/src/services/agentRuntime/AgentRuntimeService.ts` — in the `executeStep()` method, after building `stepPresentationData`, writes partial snapshot in dev mode
+- **Context engine capture**: `apps/server/src/modules/AgentRuntime/RuntimeExecutors.ts` — in `call_llm` executor, after `serverMessagesEngine()` returns, calls `ctx.tracingContextEngine(input, output)`. `AgentRuntimeService.executeStep` buffers it per step and passes it to `traceRecorder.appendStep` as the typed `contextEngine` field (kept off the `events` array to stay out of Redis state).
 - **Store**: `FileSnapshotStore` reads/writes to `.agent-tracing/` relative to `process.cwd()`

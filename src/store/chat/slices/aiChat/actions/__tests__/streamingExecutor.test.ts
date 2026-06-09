@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as toolEngineering from '@/helpers/toolEngineering';
 import { chatService } from '@/services/chat';
 import * as agentConfigResolver from '@/services/chat/mecha/agentConfigResolver';
+import { useAgentStore } from '@/store/agent';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 
@@ -120,6 +121,7 @@ beforeEach(() => {
   serverConfigMock.enableVisualUnderstanding = false;
 
   act(() => {
+    useAgentStore.setState({ availableAgents: [] });
     useChatStore.setState({
       refreshMessages: vi.fn(),
       executeClientAgent: vi.fn(),

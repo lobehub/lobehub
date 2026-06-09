@@ -61,7 +61,7 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
   const handleInstall = async () => {
     if (isCloudMcp && !isAuthenticated) {
       try {
-        await signIn();
+        await signIn('mcp');
       } catch {
         return;
       }

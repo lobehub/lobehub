@@ -12,6 +12,8 @@ import type {
   GatewayClientEvents,
   MessageApiRequestMessage,
   MessageApiResponseMessage,
+  RpcRequestMessage,
+  RpcResponseMessage,
   ServerMessage,
   SystemInfoRequestMessage,
   SystemInfoResponseMessage,
@@ -46,6 +48,20 @@ const noopLogger: GatewayClientLogger = {
 export interface GatewayClientOptions {
   /** Auto-reconnect on disconnection (default: true) */
   autoReconnect?: boolean;
+  /**
+   * Freeform routing label for this connection, e.g. `desktop` / `desktop-dev`
+   * / `cli` / `cli-dev`. Used by the gateway for dispatch priority + UI; it does
+   * NOT participate in stale-connection dedupe (that's `connectionId`).
+   */
+  channel?: string;
+  /**
+   * Stable per-install random UUID identifying this connection. The gateway uses
+   * it as the stale-connection dedupe key, so multiple channels on the same
+   * physical device (same `deviceId`) coexist. Defaults to a fresh UUID, which
+   * means a fresh dedupe identity per process — callers that want a reconnect to
+   * replace its own previous socket should pass a persisted value.
+   */
+  connectionId?: string;
   deviceId?: string;
   gatewayUrl?: string;
   logger?: GatewayClientLogger;
@@ -64,6 +80,8 @@ export class GatewayClient extends EventEmitter {
   private status: ConnectionStatus = 'disconnected';
   private intentionalDisconnect = false;
   private deviceId: string;
+  private connectionId: string;
+  private channel?: string;
   private gatewayUrl: string;
   private token: string;
   private tokenType?: 'apiKey' | 'jwt' | 'serviceToken';
@@ -78,6 +96,8 @@ export class GatewayClient extends EventEmitter {
     this.tokenType = options.tokenType;
     this.gatewayUrl = options.gatewayUrl || DEFAULT_GATEWAY_URL;
     this.deviceId = options.deviceId || randomUUID();
+    this.connectionId = options.connectionId || randomUUID();
+    this.channel = options.channel;
     this.serverUrl = options.serverUrl;
     this.userId = options.userId;
     this.logger = options.logger || noopLogger;
@@ -92,6 +112,10 @@ export class GatewayClient extends EventEmitter {
 
   get currentDeviceId(): string {
     return this.deviceId;
+  }
+
+  get currentConnectionId(): string {
+    return this.connectionId;
   }
 
   override on<K extends keyof GatewayClientEvents>(
@@ -162,6 +186,13 @@ export class GatewayClient extends EventEmitter {
     });
   }
 
+  sendRpcResponse(response: Omit<RpcResponseMessage, 'type'>): void {
+    this.sendMessage({
+      ...response,
+      type: 'rpc_response',
+    });
+  }
+
   sendAgentRunAck(response: Omit<AgentRunAckMessage, 'type'>): void {
     this.sendMessage({
       ...response,
@@ -204,10 +235,15 @@ export class GatewayClient extends EventEmitter {
     const wsProtocol = this.gatewayUrl.startsWith('https') ? 'wss' : 'ws';
     const host = this.gatewayUrl.replace(/^https?:\/\//, '');
     const params = new URLSearchParams({
+      connectionId: this.connectionId,
       deviceId: this.deviceId,
       hostname: os.hostname(),
       platform: process.platform,
     });
+
+    if (this.channel) {
+      params.set('channel', this.channel);
+    }
 
     // Service token mode: pass userId in query
     if (this.userId) {
@@ -272,6 +308,11 @@ export class GatewayClient extends EventEmitter {
 
         case 'system_info_request': {
           this.emit('system_info_request', message as SystemInfoRequestMessage);
+          break;
+        }
+
+        case 'rpc_request': {
+          this.emit('rpc_request', message as RpcRequestMessage);
           break;
         }
 

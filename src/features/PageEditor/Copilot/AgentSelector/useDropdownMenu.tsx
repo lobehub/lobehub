@@ -25,13 +25,14 @@ export const useDropdownMenu = ({
   const handleDelete = () => {
     confirmModal({
       cancelText: t('cancel'),
+      content: t('confirmRemoveSessionItemAlert', { ns: 'chat' }),
       okButtonProps: { danger: true },
       okText: t('delete'),
       onOk: async () => {
         await removeAgent(agentId);
         onClose();
       },
-      title: t('confirmRemoveSessionItemAlert', { ns: 'chat' }),
+      title: t('delete'),
     });
   };
 

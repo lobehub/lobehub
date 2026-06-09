@@ -1,5 +1,5 @@
 import type { GroundingSearch } from '../../search';
-import type { MessageMetadata, ModelReasoning, ToolIntervention } from '../common';
+import type { MessageMetadata, ModelReasoning, ModelUsage, ToolIntervention } from '../common';
 
 export interface DBMessageItem {
   agentId: string | null;
@@ -30,7 +30,13 @@ export interface DBMessageItem {
 
   traceId: string | null;
   updatedAt: Date;
+  /**
+   * Token usage + cost, promoted out of `metadata.usage` into a dedicated
+   * column. Reads prefer this, falling back to `metadata.usage` for legacy rows.
+   */
+  usage?: ModelUsage | null;
   userId: string;
+  workspaceId: string | null;
 }
 
 export interface MessagePluginItem {

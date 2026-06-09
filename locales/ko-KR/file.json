@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "폴더 업로드",
   "home.uploadEntries.library.title": "새 라이브러리 만들기",
   "home.uploadEntries.newPage.title": "새 문서 만들기",
+  "library.hierarchy.empty.desc": "파일을 추가하거나 폴더를 만들어 시작하세요",
+  "library.hierarchy.empty.title": "아직 아무것도 없습니다",
   "library.list.confirmRemoveLibrary": "이 라이브러리를 삭제하려고 합니다. 라이브러리 내 파일은 삭제되지 않으며 전체 파일로 이동됩니다. 삭제된 라이브러리는 복구할 수 없으니 신중히 진행하세요.",
   "library.list.empty": "<1>+</1>을 클릭하여 라이브러리를 생성하세요",
   "library.new": "새 리소스 라이브러리 만들기",

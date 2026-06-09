@@ -273,6 +273,16 @@ export interface AgentInstructionResolveAbortedTools extends AgentInstructionBas
   type: 'resolve_aborted_tools';
 }
 
+export interface AgentInstructionResolveBlockedTools extends AgentInstructionBase {
+  payload: {
+    /** Parent message ID (assistant message) */
+    parentMessageId: string;
+    /** Tool calls that were blocked and need tool results */
+    toolsCalling: ChatToolPayload[];
+  };
+  type: 'resolve_blocked_tools';
+}
+
 // ─ Sub-Agent ─────────────────────────────────────────────
 
 export interface AgentInstructionExecSubAgent extends AgentInstructionBase {
@@ -373,6 +383,7 @@ export type AgentInstruction =
   | AgentInstructionCallTool
   | AgentInstructionCallToolsBatch
   | AgentInstructionResolveAbortedTools
+  | AgentInstructionResolveBlockedTools
   // Sub-Agent
   | AgentInstructionExecSubAgent
   | AgentInstructionExecSubAgents

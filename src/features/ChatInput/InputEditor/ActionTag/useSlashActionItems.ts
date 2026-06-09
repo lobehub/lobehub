@@ -9,12 +9,10 @@ import { ArchiveIcon, MessageSquarePlusIcon } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useClientDataSWR } from '@/libs/swr';
 import { localFileService } from '@/services/electron/localFileService';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
 import { useToolStore } from '@/store/tool';
 import { agentDocumentSkillsSelectors } from '@/store/tool/selectors';
 import type { AgentDocumentSkillItem } from '@/store/tool/slices/agentDocumentSkills/initialState';
@@ -50,11 +48,10 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   // cwd. Both homogeneous and heterogeneous runtimes accept project skills now
   // (see commit dd4a4e7595), so we no longer gate on the hetero provider.
   const agentId = useAgentId();
-  const agentWorkingDirectory = useAgentStore((s) =>
-    agentId ? agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(s) : undefined,
-  );
-  const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
-  const workingDirectory = topicWorkingDirectory || agentWorkingDirectory;
+  // Unified cwd: topic > agent's per-device choice > device default > home.
+  // This is what makes project skills load even when only a device default is
+  // set (and for local-device runs), not just an explicit agent/topic pick.
+  const workingDirectory = useEffectiveWorkingDirectory(agentId);
 
   const projectSkillsEnabled = isDesktop && !!workingDirectory;
   const { data: projectSkillsData } = useClientDataSWR<ListProjectSkillsResult>(

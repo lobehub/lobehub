@@ -1,3 +1,4 @@
+export * from './agentDocument';
 export * from './bot';
 export * from './currency';
 export * from './desktop';
@@ -27,3 +28,4 @@ export * from './url';
 export * from './user';
 export * from './userMemory';
 export * from './version';
+export * from './workspace';

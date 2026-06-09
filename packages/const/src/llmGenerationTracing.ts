@@ -23,6 +23,8 @@ export const TRACING_SCENARIOS = {
   TaskHandoff: 'task_handoff',
   TopicTitle: 'topic_title',
   Unknown: 'unknown',
+  VerifyJudge: 'verify_judge',
+  VerifyPlanGen: 'verify_plan_gen',
 } as const;
 
 export type TracingScenario = (typeof TRACING_SCENARIOS)[keyof typeof TRACING_SCENARIOS];

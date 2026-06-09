@@ -78,6 +78,70 @@ const doubaoChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      search: true,
+    },
+    config: {
+      deploymentName: 'deepseek-v4-pro-260425',
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'DeepSeek-V4-Pro is DeepSeek’s flagship MoE model on Volcano Ark, supporting both non-thinking and thinking modes for advanced reasoning, code generation, and complex agent workflows.',
+    displayName: 'DeepSeek V4 Pro',
+    enabled: true,
+    id: 'deepseek-v4-pro',
+    maxOutput: 393_216,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 24, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 0.017, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-24',
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    config: {
+      deploymentName: 'deepseek-v4-flash-260425',
+    },
+    contextWindowTokens: 1_048_576,
+    description:
+      'DeepSeek-V4-Flash is DeepSeek’s efficient 1M-context model on Volcano Ark, balancing speed and cost while keeping strong reasoning and agent capabilities.',
+    displayName: 'DeepSeek V4 Flash',
+    enabled: true,
+    id: 'deepseek-v4-flash',
+    maxOutput: 393_216,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput_cacheWrite', rate: 0.017, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-04-24',
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
       video: true,
       vision: true,
       search: true,
@@ -566,33 +630,6 @@ const doubaoChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-    },
-    config: {
-      deploymentName: 'deepseek-v3-1-terminus',
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'DeepSeek-V3.1 is a new hybrid reasoning model from DeepSeek, supporting both thinking and non-thinking modes and offering higher thinking efficiency than DeepSeek-R1-0528. Post-training optimizations greatly improve agent tool use and agent-task performance. It supports a 128k context window and up to 64k output tokens.',
-    displayName: 'DeepSeek V3.1',
-    id: 'deepseek-v3.1',
-    maxOutput: 32_768,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['enableReasoning'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
       video: true,
       vision: true,
       search: true,
@@ -709,62 +746,6 @@ const doubaoChatModels: AIChatModelCard[] = [
       search: true,
     },
     config: {
-      deploymentName: 'doubao-seed-1-6-lite-251015',
-    },
-    contextWindowTokens: 256_000,
-    description:
-      'Doubao-Seed-1.6-lite is a new multimodal deep-reasoning model with adjustable reasoning effort (Minimal, Low, Medium, High), delivering better value and a strong choice for common tasks, with a context window up to 256k.',
-    displayName: 'Doubao Seed 1.6 Lite',
-    id: 'doubao-seed-1.6-lite',
-    maxOutput: 32_000,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 0.3,
-              '[0.032, 0.128]': 0.6,
-              '[0.128, 0.256]': 1.2,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]_[0, 0.0002]': 0.6,
-              '[0, 0.032]_[0.0002, infinity]': 2.4,
-              '[0.032, 0.128]_[0, infinity]': 4,
-              '[0.128, 0.256]_[0, infinity]': 12,
-            },
-            pricingParams: ['textInputRange', 'textOutputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        { name: 'textInput_cacheRead', rate: 0.06, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['gpt5ReasoningEffort'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      video: true,
-      vision: true,
-      search: true,
-    },
-    config: {
       deploymentName: 'doubao-seed-1-6-flash-250828',
     },
     contextWindowTokens: 256_000,
@@ -808,51 +789,6 @@ const doubaoChatModels: AIChatModelCard[] = [
     settings: {
       extendParams: ['enableReasoning'],
       searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    config: {
-      deploymentName: 'deepseek-r1-250528',
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'The latest 0528 release of DeepSeek-R1 applies large-scale reinforcement learning in post-training, greatly boosting reasoning with very little labeled data. It matches the OpenAI o1 production model on math, code, and natural language reasoning tasks.',
-    displayName: 'DeepSeek R1',
-    id: 'deepseek-r1',
-    maxOutput: 16_384,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    config: {
-      deploymentName: 'deepseek-v3-250324',
-    },
-    contextWindowTokens: 128_000,
-    description:
-      'DeepSeek-V3 is a MoE model developed by DeepSeek. It surpasses other open models like Qwen2.5-72B and Llama-3.1-405B on many benchmarks, and is competitive with leading closed models such as GPT-4o and Claude 3.5 Sonnet.',
-    displayName: 'DeepSeek V3',
-    id: 'deepseek-v3',
-    maxOutput: 16_384,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
     },
     type: 'chat',
   },
@@ -1055,28 +991,6 @@ const volcengineImageModels: AIImageModelCard[] = [
     releasedAt: '2025-09-09',
     type: 'image',
   },
-  {
-    description:
-      'Seedream 3.0 is an image generation model from ByteDance Seed, supporting text and image inputs with highly controllable, high-quality image generation. It generates images from text prompts.',
-    displayName: 'Seedream 3.0 Text-to-Image',
-    id: 'doubao-seedream-3-0-t2i-250415',
-    parameters: {
-      cfg: { default: 2.5, max: 10, min: 1, step: 0.1 },
-      height: { default: 1024, max: 3549, min: 296, step: 1 },
-      prompt: {
-        default: '',
-      },
-      seed: { default: null },
-      watermark: { default: false },
-      width: { default: 1024, max: 3549, min: 296, step: 1 },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.259, strategy: 'fixed', unit: 'image' }],
-    },
-    releasedAt: '2025-04-15',
-    type: 'image',
-  },
 ];
 
 const volcengineVideoModels: AIVideoModelCard[] = [
@@ -1222,78 +1136,6 @@ const volcengineVideoModels: AIVideoModelCard[] = [
       units: [{ name: 'videoGeneration', rate: 15, strategy: 'fixed', unit: 'millionTokens' }],
     },
     releasedAt: '2025-05-28',
-    type: 'video',
-  },
-  {
-    description:
-      'Stable generation quality with high cost-effectiveness, capable of generating videos from a first frame, first-and-last frames, or reference images.',
-    displayName: 'Seedance 1.0 Lite I2V',
-    id: 'doubao-seedance-1-0-lite-i2v-250428',
-    organization: 'ByteDance',
-    parameters: {
-      aspectRatio: {
-        default: '16:9',
-        enum: ['21:9', '16:9', '4:3', '1.1', '3:4', '9:16'],
-      },
-      cameraFixed: { default: false },
-      endImageUrl: {
-        aspectRatio: { max: 2.5, min: 0.4 },
-        default: null,
-        height: { max: 6000, min: 300 },
-        maxFileSize: 30 * 1024 * 1024,
-        requiresImageUrl: true,
-        width: { max: 6000, min: 300 },
-      },
-      imageUrls: {
-        aspectRatio: { max: 2.5, min: 0.4 },
-        default: [],
-        height: { max: 6000, min: 300 },
-        maxFileSize: 30 * 1024 * 1024,
-        maxCount: 4,
-        width: { max: 6000, min: 300 },
-      },
-      duration: { default: 5, max: 12, min: 2 },
-      prompt: { default: '' },
-      resolution: {
-        default: '720p',
-        enum: ['480p', '720p', '1080p'],
-      },
-      seed: { default: null },
-      watermark: { default: false },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 10, strategy: 'fixed', unit: 'millionTokens' }],
-    },
-    releasedAt: '2025-04-28',
-    type: 'video',
-  },
-  {
-    description:
-      'Stable generation quality with high cost-effectiveness, capable of generating videos based on text instructions.',
-    displayName: 'Seedance 1.0 Lite T2V',
-    id: 'doubao-seedance-1-0-lite-t2v-250428',
-    organization: 'ByteDance',
-    parameters: {
-      aspectRatio: {
-        default: '16:9',
-        enum: ['21:9', '16:9', '4:3', '1.1', '3:4', '9:16'],
-      },
-      cameraFixed: { default: false },
-      duration: { default: 5, max: 12, min: 2 },
-      prompt: { default: '' },
-      resolution: {
-        default: '720p',
-        enum: ['480p', '720p', '1080p'],
-      },
-      seed: { default: null },
-      watermark: { default: false },
-    },
-    pricing: {
-      currency: 'CNY',
-      units: [{ name: 'videoGeneration', rate: 10, strategy: 'fixed', unit: 'millionTokens' }],
-    },
-    releasedAt: '2025-04-28',
     type: 'video',
   },
 ];

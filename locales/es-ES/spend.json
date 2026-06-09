@@ -26,6 +26,7 @@
   "table.columns.trigger.enums.onboarding": "Incorporación",
   "table.columns.trigger.enums.openapi": "OpenAPI",
   "table.columns.trigger.enums.semantic_search": "Búsqueda de Conocimiento",
+  "table.columns.trigger.enums.signup_email_llm_review": "Revisión de Correo Electrónico de Registro",
   "table.columns.trigger.enums.topic": "Resumen de Tema",
   "table.columns.trigger.enums.video": "Generación de vídeo",
   "table.columns.trigger.enums.visual_analysis": "Análisis visual",

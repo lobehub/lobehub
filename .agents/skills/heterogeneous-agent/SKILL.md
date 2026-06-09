@@ -1,6 +1,6 @@
 ---
 name: heterogeneous-agent
-description: Guide for implementing and debugging LobeHub heterogeneous agent integrations such as Claude Code, Codex, and future external CLI agents. Use when working on adapter event mapping, Electron IPC transport, renderer persistence, tool-call chaining, subagent threads, resume/session handling, or regressions like mixed multi-tool messages, broken step boundaries, stuck tool loading, and orphan tool messages. Triggers on 'heterogeneous agent', 'hetero agent', '异构 agent', 'claude code adapter', 'codex adapter', 'external agent CLI', '孤立 tool 消息', 'raw Codex trace', or adapter/executor bugs.
+description: 'Implement or debug LobeHub heterogeneous agents. Use for Claude Code/Codex adapters, external CLI agents, event mapping, IPC, persistence, tool-call chains, sessions, traces, or adapter bugs.'
 ---
 
 # Heterogeneous Agent Development

@@ -42,7 +42,7 @@ export class KlavisStoreActionImpl {
   }
 
   callKlavisTool = async (params: CallKlavisToolParams): Promise<CallKlavisToolResult> => {
-    const { serverUrl, toolName, toolArgs } = params;
+    const { serverUrl, toolName, toolArgs, identifier } = params;
 
     const toolId = `${serverUrl}:${toolName}`;
 
@@ -57,6 +57,7 @@ export class KlavisStoreActionImpl {
     try {
       // Call tRPC server interface to execute tool (use toolsClient for longer timeout)
       const response = await toolsClient.klavis.callTool.mutate({
+        identifier,
         serverUrl,
         toolArgs,
         toolName,

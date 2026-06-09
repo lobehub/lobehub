@@ -12,6 +12,7 @@ import type {
   IThreadType,
   MessagePluginItem,
   ModelRankItem,
+  ModelUsage,
   NewMessageQueryParams,
   QueryMessageParams,
   TaskDetail,
@@ -73,6 +74,8 @@ import type { LobeChatDatabase, Transaction } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { recomputeTopicUsage } from './topicUsage';
 
 /**
  * Options for querying messages with relations
@@ -89,7 +92,10 @@ export interface QueryMessagesOptions {
   /**
    * Post-process function for file URLs
    */
-  postProcessUrl?: (path: string | null, file: { fileType: string }) => Promise<string>;
+  postProcessUrl?: (
+    path: string | null,
+    file: { fileType: string; id?: string | null },
+  ) => Promise<string>;
   timing?: ModelTimingContext;
   /**
    * Topic ID for MessageGroup aggregation queries
@@ -190,11 +196,28 @@ interface SplitCreateMessageParams {
 export class MessageModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
+
+  private pluginsOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messagePlugins);
+
+  private translatesOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messageTranslates);
+
+  private ttsOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messageTTS);
+
+  private agentsToSessionsOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentsToSessions);
 
   /**
    * Touch topics' updatedAt timestamp within a transaction
@@ -204,7 +227,12 @@ export class MessageModel {
     await trx
       .update(topics)
       .set({ updatedAt: new Date() })
-      .where(and(inArray(topics.id, topicIds), eq(topics.userId, this.userId)));
+      .where(
+        and(
+          inArray(topics.id, topicIds),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+        ),
+      );
   }
 
   // **************** Query *************** //
@@ -226,7 +254,10 @@ export class MessageModel {
       threadId,
     }: QueryMessageParams = {},
     options: {
-      postProcessUrl?: (path: string | null, file: { fileType: string }) => Promise<string>;
+      postProcessUrl?: (
+        path: string | null,
+        file: { fileType: string; id?: string | null },
+      ) => Promise<string>;
       timing?: ModelTimingContext;
     } = {},
   ) => {
@@ -360,6 +391,7 @@ export class MessageModel {
             reasoning: messages.reasoning,
             search: messages.search,
             metadata: messages.metadata,
+            usage: messages.usage,
             error: messages.error,
 
             model: messages.model,
@@ -405,7 +437,7 @@ export class MessageModel {
           .from(messages)
           .where(
             and(
-              eq(messages.userId, this.userId),
+              this.ownership(),
               // Filter out messages that belong to MessageGroups
               isNull(messages.messageGroupId),
               where,
@@ -523,6 +555,9 @@ export class MessageModel {
               ragRawQuery: messageQuery?.userQuery,
               // Add taskDetail for task messages
               taskDetail: item.role === 'task' ? threadMap.get(item.id as string) : undefined,
+              // Prefer the dedicated `usage` column, falling back to legacy
+              // `metadata.usage` for rows written before the migration.
+              usage: item.usage ?? (item.metadata as { usage?: ModelUsage } | null)?.usage,
               videoList: videoList
                 .filter((relation) => relation.messageId === item.id)
 
@@ -564,7 +599,10 @@ export class MessageModel {
     topicId,
   }: {
     current: number;
-    postProcessUrl?: (path: string | null, file: { fileType: string }) => Promise<string>;
+    postProcessUrl?: (
+      path: string | null,
+      file: { fileType: string; id?: string | null },
+    ) => Promise<string>;
     result: { createdAt: Date }[];
     timing?: ModelTimingContext;
     topicId?: string;
@@ -648,7 +686,10 @@ export class MessageModel {
           rawRelatedFileList.map(async (file) => ({
             ...file,
             url: postProcessUrl
-              ? await postProcessUrl(file.url, file as unknown as { fileType: string })
+              ? await postProcessUrl(
+                  file.url,
+                  file as unknown as { fileType: string; id?: string | null },
+                )
               : (file.url as string),
           })),
         ),
@@ -767,7 +808,10 @@ export class MessageModel {
           })
           .from(threads)
           .where(
-            and(eq(threads.userId, this.userId), inArray(threads.sourceMessageId, taskMessageIds)),
+            and(
+              buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, threads),
+              inArray(threads.sourceMessageId, taskMessageIds),
+            ),
           ),
       { taskMessageCount: taskMessageIds.length },
     );
@@ -807,7 +851,10 @@ export class MessageModel {
   queryByIds = async (
     messageIds: string[],
     options: {
-      postProcessUrl?: (path: string | null, file: { fileType: string }) => Promise<string>;
+      postProcessUrl?: (
+        path: string | null,
+        file: { fileType: string; id?: string | null },
+      ) => Promise<string>;
     } = {},
   ): Promise<UIChatMessage[]> => {
     if (messageIds.length === 0) return [];
@@ -824,6 +871,7 @@ export class MessageModel {
         reasoning: messages.reasoning,
         search: messages.search,
         metadata: messages.metadata,
+        usage: messages.usage,
         error: messages.error,
 
         model: messages.model,
@@ -867,7 +915,7 @@ export class MessageModel {
         ttsVoice: messageTTS.voice,
       })
       .from(messages)
-      .where(and(eq(messages.userId, this.userId), inArray(messages.id, messageIds)))
+      .where(and(this.ownership(), inArray(messages.id, messageIds)))
       .leftJoin(messagePlugins, eq(messagePlugins.id, messages.id))
       .leftJoin(messageTranslates, eq(messageTranslates.id, messages.id))
       .leftJoin(messageTTS, eq(messageTTS.id, messages.id))
@@ -935,7 +983,10 @@ export class MessageModel {
             .from(threads)
             .where(
               and(
-                eq(threads.userId, this.userId),
+                buildWorkspaceWhere(
+                  { userId: this.userId, workspaceId: this.workspaceId },
+                  threads,
+                ),
                 inArray(threads.sourceMessageId, taskMessageIds),
               ),
             )
@@ -946,7 +997,12 @@ export class MessageModel {
     const relatedFileList = await Promise.all(
       rawRelatedFileList.map(async (file) => ({
         ...file,
-        url: postProcessUrl ? await postProcessUrl(file.url, file as any) : (file.url as string),
+        url: postProcessUrl
+          ? await postProcessUrl(
+              file.url,
+              file as unknown as { fileType: string; id?: string | null },
+            )
+          : (file.url as string),
       })),
     );
 
@@ -1047,6 +1103,9 @@ export class MessageModel {
           ragRawQuery: messageQuery?.userQuery,
           // Add taskDetail for task messages
           taskDetail: item.role === 'task' ? threadMap.get(item.id as string) : undefined,
+          // Prefer the dedicated `usage` column, falling back to legacy
+          // `metadata.usage` for rows written before the migration.
+          usage: item.usage ?? (item.metadata as { usage?: ModelUsage } | null)?.usage,
           videoList: videoList
             .filter((relation) => relation.messageId === item.id)
             .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
@@ -1066,12 +1125,15 @@ export class MessageModel {
   private queryMessageGroupNodes = async (
     topicId: string,
     timeRange?: { endTime: Date; startTime: Date },
-    postProcessUrl?: (path: string | null, file: { fileType: string }) => Promise<string>,
+    postProcessUrl?: (
+      path: string | null,
+      file: { fileType: string; id?: string | null },
+    ) => Promise<string>,
     timing?: ModelTimingContext,
   ): Promise<UIChatMessage[]> => {
     // 1. Query MessageGroups for this topic, optionally filtered by time range
     const whereConditions = [
-      eq(messageGroups.userId, this.userId),
+      buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messageGroups),
       eq(messageGroups.topicId, topicId),
     ];
 
@@ -1112,7 +1174,7 @@ export class MessageModel {
             messageGroupId: messages.messageGroupId,
           })
           .from(messages)
-          .where(and(eq(messages.userId, this.userId), inArray(messages.messageGroupId, groupIds)))
+          .where(and(this.ownership(), inArray(messages.messageGroupId, groupIds)))
           .orderBy(asc(messages.createdAt)),
       { groupCount: groupIds.length },
     );
@@ -1214,7 +1276,10 @@ export class MessageModel {
   private buildThreadQueryCondition = async (threadId: string): Promise<SQL | undefined> => {
     // Fetch the thread info to get sourceMessageId and type
     const thread = await this.db.query.threads.findFirst({
-      where: and(eq(threads.id, threadId), eq(threads.userId, this.userId)),
+      where: and(
+        eq(threads.id, threadId),
+        buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, threads),
+      ),
     });
 
     if (!thread?.sourceMessageId || !thread?.topicId) {
@@ -1247,7 +1312,7 @@ export class MessageModel {
     const agentSession = await this.db
       .select({ sessionId: agentsToSessions.sessionId })
       .from(agentsToSessions)
-      .where(and(eq(agentsToSessions.agentId, agentId), eq(agentsToSessions.userId, this.userId)))
+      .where(and(eq(agentsToSessions.agentId, agentId), this.agentsToSessionsOwnership()))
       .limit(1);
 
     const associatedSessionId = agentSession[0]?.sessionId;
@@ -1260,7 +1325,23 @@ export class MessageModel {
 
   findById = async (id: string) => {
     return this.db.query.messages.findFirst({
-      where: and(eq(messages.id, id), eq(messages.userId, this.userId)),
+      where: and(eq(messages.id, id), this.ownership()),
+    });
+  };
+
+  /**
+   * Resolve the `role='verify'` delivery-checker card for an Agent Run (created
+   * with `metadata.verifyOperationId = operationId`). Used by auto-repair to
+   * persist the failure feedback onto the card it belongs to.
+   */
+  findVerifyMessageByOperationId = async (operationId: string) => {
+    return this.db.query.messages.findFirst({
+      where: and(
+        eq(messages.userId, this.userId),
+        eq(messages.role, 'verify'),
+        sql`${messages.metadata}->>'verifyOperationId' = ${operationId}`,
+      ),
+      orderBy: [desc(messages.createdAt)],
     });
   };
 
@@ -1291,7 +1372,7 @@ export class MessageModel {
     // For Standalone type, only return the source message
     if (threadType === ThreadType.Standalone) {
       const sourceMessage = await this.db.query.messages.findFirst({
-        where: and(eq(messages.id, sourceMessageId), eq(messages.userId, this.userId)),
+        where: and(eq(messages.id, sourceMessageId), this.ownership()),
       });
 
       return sourceMessage ? [sourceMessage as DBMessageItem] : [];
@@ -1299,7 +1380,7 @@ export class MessageModel {
 
     // For Continuation type, get the source message first to know its createdAt
     const sourceMessage = await this.db.query.messages.findFirst({
-      where: and(eq(messages.id, sourceMessageId), eq(messages.userId, this.userId)),
+      where: and(eq(messages.id, sourceMessageId), this.ownership()),
     });
 
     if (!sourceMessage) return [];
@@ -1312,7 +1393,7 @@ export class MessageModel {
       .from(messages)
       .where(
         and(
-          eq(messages.userId, this.userId),
+          this.ownership(),
           eq(messages.topicId, topicId),
           isNull(messages.threadId), // Only main conversation messages (not in any thread)
           or(
@@ -1351,7 +1432,7 @@ export class MessageModel {
     const result = await this.db
       .select()
       .from(messages)
-      .where(eq(messages.userId, this.userId))
+      .where(and(this.ownership()))
       .orderBy(desc(messages.createdAt))
       .limit(pageSize)
       .offset(offset);
@@ -1362,7 +1443,7 @@ export class MessageModel {
   queryBySessionId = async (sessionId?: string | null) => {
     const result = await this.db.query.messages.findMany({
       orderBy: [asc(messages.createdAt)],
-      where: and(eq(messages.userId, this.userId), this.matchSession(sessionId)),
+      where: and(this.ownership(), this.matchSession(sessionId)),
     });
 
     return result as DBMessageItem[];
@@ -1375,7 +1456,7 @@ export class MessageModel {
     const result = await this.db
       .select()
       .from(messages)
-      .where(and(eq(messages.userId, this.userId), sql`${messages.content} @@@ ${bm25Query}`))
+      .where(and(this.ownership(), sql`${messages.content} @@@ ${bm25Query}`))
       .orderBy(desc(messages.createdAt));
 
     return result as DBMessageItem[];
@@ -1393,7 +1474,7 @@ export class MessageModel {
       .from(messages)
       .where(
         genWhere([
-          eq(messages.userId, this.userId),
+          this.ownership(),
           params?.range
             ? genRangeWhere(params.range, messages.createdAt, (date) => date.toDate())
             : undefined,
@@ -1413,7 +1494,7 @@ export class MessageModel {
     const rows = await this.db
       .select({ id: messages.id })
       .from(messages)
-      .where(and(eq(messages.userId, this.userId), eq(messages.topicId, topicId)))
+      .where(and(eq(messages.topicId, topicId), this.ownership()))
       .limit(1);
 
     return rows.length > 0;
@@ -1423,13 +1504,7 @@ export class MessageModel {
     const rows = (await this.db
       .select()
       .from(messages)
-      .where(
-        and(
-          eq(messages.userId, this.userId),
-          eq(messages.topicId, topicId),
-          eq(messages.role, 'assistant'),
-        ),
-      )
+      .where(and(eq(messages.topicId, topicId), eq(messages.role, 'assistant'), this.ownership()))
       .orderBy(asc(messages.createdAt))
       .limit(1)) as DBMessageItem[];
 
@@ -1448,7 +1523,7 @@ export class MessageModel {
       .from(messages)
       .where(
         genWhere([
-          eq(messages.userId, this.userId),
+          this.ownership(),
           params?.range
             ? genRangeWhere(params.range, messages.createdAt, (date) => date.toDate())
             : undefined,
@@ -1471,7 +1546,7 @@ export class MessageModel {
         id: messages.model,
       })
       .from(messages)
-      .where(and(eq(messages.userId, this.userId), isNotNull(messages.model)))
+      .where(and(this.ownership(), isNotNull(messages.model)))
       .having(({ count }) => gt(count, 0))
       .groupBy(messages.model)
       .orderBy(desc(sql`count`), asc(messages.model))
@@ -1490,7 +1565,7 @@ export class MessageModel {
       .from(messages)
       .where(
         genWhere([
-          eq(messages.userId, this.userId),
+          this.ownership(),
           genRangeWhere(
             [startDate.format('YYYY-MM-DD'), endDate.add(1, 'day').format('YYYY-MM-DD')],
             messages.createdAt,
@@ -1531,11 +1606,85 @@ export class MessageModel {
     return heatmapData;
   };
 
+  /**
+   * Daily token-usage heatmap for the last year.
+   *
+   * Sums `usage.totalTokens` of assistant messages bucketed by the day each
+   * message was created — so tokens land on the day they were actually consumed
+   * (a long-running topic spreads across days instead of piling onto its
+   * creation date). Reads prefer the dedicated `usage` column and fall back to
+   * legacy `metadata.usage`, aggregating directly in SQL rather than pulling
+   * rows into JS. `level` is scaled relative to the busiest day so the heatmap
+   * stays readable regardless of absolute token volume.
+   */
+  getTokenHeatmaps = async (): Promise<HeatmapsProps['data']> => {
+    const startDate = today().subtract(1, 'year').startOf('day');
+    const endDate = today().endOf('day');
+
+    const result = await this.db
+      .select({
+        date: sql`DATE(${messages.createdAt})`.as('heatmaps_date'),
+        tokens:
+          sql<number>`COALESCE(SUM((COALESCE(${messages.usage}, ${messages.metadata}->'usage')->>'totalTokens')::numeric), 0)`.mapWith(
+            Number,
+          ),
+      })
+      .from(messages)
+      .where(
+        genWhere([
+          this.ownership(),
+          eq(messages.role, 'assistant'),
+          genRangeWhere(
+            [startDate.format('YYYY-MM-DD'), endDate.add(1, 'day').format('YYYY-MM-DD')],
+            messages.createdAt,
+            (date) => date.toDate(),
+          ),
+        ]),
+      )
+      .groupBy(sql`heatmaps_date`)
+      .orderBy(desc(sql`heatmaps_date`));
+
+    const dateTokenMap = new Map<string, number>();
+    let maxTokens = 0;
+    for (const item of result) {
+      if (item?.date) {
+        const dateStr = dayjs(item.date as string).format('YYYY-MM-DD');
+        const tokens = item.tokens || 0;
+        dateTokenMap.set(dateStr, tokens);
+        if (tokens > maxTokens) maxTokens = tokens;
+      }
+    }
+
+    const heatmapData: HeatmapsProps['data'] = [];
+    let currentDate = startDate.clone();
+
+    while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
+      const formattedDate = currentDate.format('YYYY-MM-DD');
+      const tokens = dateTokenMap.get(formattedDate) || 0;
+
+      // Scale to 1-4 relative to the busiest day; 0 tokens stays at level 0.
+      const level =
+        tokens > 0 && maxTokens > 0
+          ? Math.min(4, Math.max(1, Math.ceil((tokens / maxTokens) * 4)))
+          : 0;
+
+      heatmapData.push({
+        count: tokens,
+        date: formattedDate,
+        level,
+      });
+
+      currentDate = currentDate.add(1, 'day');
+    }
+
+    return heatmapData;
+  };
+
   hasMoreThanN = async (n: number): Promise<boolean> => {
     const result = await this.db
       .select({ id: messages.id })
       .from(messages)
-      .where(eq(messages.userId, this.userId))
+      .where(and(this.ownership()))
       .limit(n + 1);
 
     return result.length > n;
@@ -1548,7 +1697,7 @@ export class MessageModel {
     const result = await this.db
       .select({ id: messages.id })
       .from(messages)
-      .where(eq(messages.userId, this.userId))
+      .where(and(this.ownership()))
       .limit(n);
 
     return result.length;
@@ -1593,18 +1742,25 @@ export class MessageModel {
     // Ensure group message does not populate sessionId
     const normalizedMessage = message.groupId ? { ...message, sessionId: null } : message;
 
-    return {
-      ...normalizedMessage,
-      // Sanitize content to strip null bytes that PostgreSQL rejects
-      content: sanitizeNullBytes(normalizedMessage.content),
-      // TODO: remove this when the client is updated
-      createdAt: createdAt ? new Date(createdAt) : undefined,
-      id,
-      model: fromModel,
-      provider: fromProvider,
-      updatedAt: updatedAt ? new Date(updatedAt) : undefined,
-      userId: this.userId,
-    };
+    return buildWorkspacePayload(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      {
+        ...normalizedMessage,
+        // Sanitize content to strip null bytes that PostgreSQL rejects
+        content: sanitizeNullBytes(normalizedMessage.content),
+        // TODO: remove this when the client is updated
+        createdAt: createdAt ? new Date(createdAt) : undefined,
+        id,
+        model: fromModel,
+        provider: fromProvider,
+        updatedAt: updatedAt ? new Date(updatedAt) : undefined,
+        // Promote token usage into the dedicated `usage` column, preferring a
+        // top-level `usage` over the legacy `metadata.usage`.
+        usage:
+          normalizedMessage.usage ??
+          (normalizedMessage.metadata as { usage?: ModelUsage } | undefined)?.usage,
+      },
+    );
   };
 
   private insertMessageRelationsInTransaction = async (
@@ -1635,6 +1791,7 @@ export class MessageModel {
           toolCallId: message.tool_call_id,
           type: plugin?.type,
           userId: this.userId,
+          workspaceId: this.workspaceId ?? null,
         }),
       );
     }
@@ -1644,9 +1801,14 @@ export class MessageModel {
         timing,
         `${timingPrefix}.files.insert`,
         () =>
-          trx
-            .insert(messagesFiles)
-            .values(files.map((file) => ({ fileId: file, messageId: id, userId: this.userId }))),
+          trx.insert(messagesFiles).values(
+            files.map((file) => ({
+              fileId: file,
+              messageId: id,
+              userId: this.userId,
+              workspaceId: this.workspaceId ?? null,
+            })),
+          ),
         { fileCount: files.length },
       );
     }
@@ -1663,6 +1825,7 @@ export class MessageModel {
               queryId: ragQueryId,
               similarity: chunk.similarity?.toString(),
               userId: this.userId,
+              workspaceId: this.workspaceId ?? null,
             })),
           ),
         { chunkCount: fileChunks.length },
@@ -1828,10 +1991,13 @@ export class MessageModel {
   };
 
   batchCreate = async (newMessages: DBMessageItem[]) => {
-    const messagesToInsert = newMessages.map((m) => {
-      // TODO: need a better way to handle this
-      return { ...m, role: m.role as any, userId: this.userId };
-    });
+    const messagesToInsert = newMessages.map((m) =>
+      buildWorkspacePayload(
+        { userId: this.userId, workspaceId: this.workspaceId },
+        // TODO: need a better way to handle this
+        { ...m, role: m.role as any },
+      ),
+    );
 
     const topicIds = [...new Set(newMessages.map((m) => m.topicId).filter(Boolean))] as string[];
 
@@ -1847,7 +2013,7 @@ export class MessageModel {
   createMessageQuery = async (params: NewMessageQueryParams) => {
     const result = await this.db
       .insert(messageQueries)
-      .values({ ...params, userId: this.userId })
+      .values({ ...params, userId: this.userId, workspaceId: this.workspaceId ?? null })
       .returning();
 
     return result[0];
@@ -1856,9 +2022,22 @@ export class MessageModel {
 
   update = async (
     id: string,
-    { imageList, metadata, ...message }: Partial<UpdateMessageParams>,
+    { imageList, metadata, usage, ...message }: Partial<UpdateMessageParams>,
     timing?: ModelTimingContext,
   ): Promise<{ success: boolean }> => {
+    // Promote token usage into the dedicated `usage` column. Prefer a top-level
+    // `usage` payload, falling back to `metadata.usage` so existing writers
+    // (Gateway / hetero-agent executors) keep populating the column without
+    // changes. `metadata.usage` is still written for backward-compatible reads.
+    const usageToWrite = usage ?? (metadata as { usage?: ModelUsage } | undefined)?.usage;
+    // Keep `metadata.usage` dual-written even when usage arrives as a top-level
+    // param (with no metadata payload) — legacy readers / rollback paths still
+    // consume it during the transition. Folding the resolved usage into the
+    // patch also keeps it consistent with the column when both are sent.
+    const metadataPatch =
+      metadata || usageToWrite
+        ? { ...metadata, ...(usageToWrite && { usage: usageToWrite }) }
+        : undefined;
     try {
       await runTimedStage(
         timing,
@@ -1876,15 +2055,17 @@ export class MessageModel {
                       fileId: file.id,
                       messageId: id,
                       userId: this.userId,
+                      workspaceId: this.workspaceId ?? null,
                     })),
                   ),
                 { imageCount: imageList.length },
               );
             }
 
-            // 2. Handle metadata merge if provided
+            // 2. Handle metadata merge if there's a metadata payload or a
+            // top-level usage to fold back into `metadata.usage`.
             let mergedMetadata: Record<string, any> | undefined;
-            if (metadata) {
+            if (metadataPatch) {
               const [existingMessage] = await runTimedStage(
                 timing,
                 'db.message.update.metadata.select',
@@ -1892,9 +2073,9 @@ export class MessageModel {
                   trx
                     .select({ metadata: messages.metadata })
                     .from(messages)
-                    .where(and(eq(messages.id, id), eq(messages.userId, this.userId))),
+                    .where(and(eq(messages.id, id), this.ownership())),
               );
-              mergedMetadata = merge(existingMessage?.metadata || {}, metadata);
+              mergedMetadata = merge(existingMessage?.metadata || {}, metadataPatch);
             }
 
             const [updated] = await runTimedStage(
@@ -1903,10 +2084,14 @@ export class MessageModel {
               () =>
                 trx
                   .update(messages)
-                  .set({ ...message, ...(mergedMetadata && { metadata: mergedMetadata }) })
-                  .where(and(eq(messages.id, id), eq(messages.userId, this.userId)))
+                  .set({
+                    ...message,
+                    ...(mergedMetadata && { metadata: mergedMetadata }),
+                    ...(usageToWrite && { usage: usageToWrite }),
+                  })
+                  .where(and(eq(messages.id, id), this.ownership()))
                   .returning({ topicId: messages.topicId }),
-              { hasMetadata: !!metadata, valueKeys: Object.keys(message) },
+              { hasMetadata: !!metadataPatch, valueKeys: Object.keys(message) },
             );
 
             // Touch topic's updatedAt when updating a message
@@ -1917,11 +2102,24 @@ export class MessageModel {
                 () => this.touchTopicUpdatedAt(trx, [updated.topicId!]),
                 { topicCount: 1 },
               );
+
+              // When this write carries token usage (assistant finalize / hetero
+              // step), recompute the topic's denormalized usage rollup from its
+              // messages. Gated on the *incoming* payload so streaming
+              // content-only updates don't trigger needless recomputes.
+              if (usageToWrite) {
+                await runTimedStage(
+                  timing,
+                  'db.message.update.topic.recomputeUsage',
+                  () => recomputeTopicUsage(trx, this.userId, updated.topicId!, this.workspaceId),
+                  { topicCount: 1 },
+                );
+              }
             }
           }),
         {
           hasImageList: !!imageList?.length,
-          hasMetadata: !!metadata,
+          hasMetadata: !!metadataPatch,
           valueKeys: Object.keys(message),
         },
       );
@@ -1935,36 +2133,44 @@ export class MessageModel {
 
   updateMetadata = async (id: string, metadata: Record<string, any>) => {
     const item = await this.db.query.messages.findFirst({
-      where: and(eq(messages.id, id), eq(messages.userId, this.userId)),
+      where: and(eq(messages.id, id), this.ownership()),
     });
 
     if (!item) return;
 
+    const mergedMetadata = merge(item.metadata || {}, metadata);
+    // Keep the dedicated `usage` column in sync when the merged metadata carries
+    // token usage, preferring it over the existing column value.
+    const usageToWrite = (metadata as { usage?: ModelUsage } | undefined)?.usage;
+
     return this.db
       .update(messages)
-      .set({ metadata: merge(item.metadata || {}, metadata) })
-      .where(and(eq(messages.userId, this.userId), eq(messages.id, id)));
+      .set({ metadata: mergedMetadata, ...(usageToWrite && { usage: usageToWrite }) })
+      .where(and(eq(messages.id, id), this.ownership()));
   };
 
   updatePluginState = async (id: string, state: Record<string, any>): Promise<void> => {
     const item = await this.db.query.messagePlugins.findFirst({
-      where: eq(messagePlugins.id, id),
+      where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
     });
     if (!item) throw new Error('Plugin not found');
 
     await this.db
       .update(messagePlugins)
       .set({ state: merge(item.state || {}, state) })
-      .where(eq(messagePlugins.id, id));
+      .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()));
   };
 
   updateMessagePlugin = async (id: string, value: Partial<MessagePluginItem>) => {
     const item = await this.db.query.messagePlugins.findFirst({
-      where: eq(messagePlugins.id, id),
+      where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
     });
     if (!item) throw new Error('Plugin not found');
 
-    return this.db.update(messagePlugins).set(value).where(eq(messagePlugins.id, id));
+    return this.db
+      .update(messagePlugins)
+      .set(value)
+      .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()));
   };
 
   /**
@@ -1980,7 +2186,7 @@ export class MessageModel {
    */
   findMessagePlugin = async (messageId: string): Promise<MessagePluginItem | undefined> => {
     const row = await this.db.query.messagePlugins.findFirst({
-      where: eq(messagePlugins.id, messageId),
+      where: and(eq(messagePlugins.id, messageId), this.pluginsOwnership()),
     });
     if (!row) return undefined;
     return {
@@ -2021,7 +2227,7 @@ export class MessageModel {
       })
       .from(messagePlugins)
       .innerJoin(messages, eq(messagePlugins.id, messages.id))
-      .where(and(eq(messages.topicId, topicId), eq(messages.userId, this.userId)))
+      .where(and(eq(messages.topicId, topicId), this.ownership(), this.pluginsOwnership()))
       .orderBy(asc(messages.createdAt), asc(messages.id));
 
     return rows.map((row) => ({
@@ -2067,7 +2273,7 @@ export class MessageModel {
           if (metadata !== undefined) {
             // Need to merge with existing metadata
             const existingMessage = await trx.query.messages.findFirst({
-              where: and(eq(messages.id, id), eq(messages.userId, this.userId)),
+              where: and(eq(messages.id, id), this.ownership()),
             });
             messageUpdateData.metadata = merge(existingMessage?.metadata || {}, metadata);
           }
@@ -2076,14 +2282,14 @@ export class MessageModel {
             await trx
               .update(messages)
               .set(messageUpdateData)
-              .where(and(eq(messages.id, id), eq(messages.userId, this.userId)));
+              .where(and(eq(messages.id, id), this.ownership()));
           }
         }
 
         // Update messagePlugins table (pluginState, pluginError)
         if (pluginState !== undefined || pluginError !== undefined) {
           const pluginItem = await trx.query.messagePlugins.findFirst({
-            where: eq(messagePlugins.id, id),
+            where: and(eq(messagePlugins.id, id), this.pluginsOwnership()),
           });
 
           if (pluginItem) {
@@ -2101,7 +2307,7 @@ export class MessageModel {
               await trx
                 .update(messagePlugins)
                 .set(pluginUpdateData)
-                .where(eq(messagePlugins.id, id));
+                .where(and(eq(messagePlugins.id, id), this.pluginsOwnership()));
             }
           }
         }
@@ -2136,7 +2342,7 @@ export class MessageModel {
           })
           .from(messagePlugins)
           .innerJoin(messages, eq(messages.id, messagePlugins.id))
-          .where(and(eq(messagePlugins.toolCallId, toolCallId), eq(messages.userId, this.userId)))
+          .where(and(eq(messagePlugins.toolCallId, toolCallId), this.ownership()))
           .limit(1);
 
         if (!toolResult?.parentId) {
@@ -2147,7 +2353,7 @@ export class MessageModel {
         const [parentMessage] = await trx
           .select({ id: messages.id, tools: messages.tools })
           .from(messages)
-          .where(eq(messages.id, toolResult.parentId))
+          .where(and(eq(messages.id, toolResult.parentId), this.ownership()))
           .limit(1);
 
         if (!parentMessage?.tools) {
@@ -2170,12 +2376,12 @@ export class MessageModel {
           trx
             .update(messagePlugins)
             .set({ arguments: args })
-            .where(eq(messagePlugins.id, toolResult.toolPluginId)),
+            .where(and(eq(messagePlugins.id, toolResult.toolPluginId), this.pluginsOwnership())),
           // Update parent assistant message's tools
           trx
             .update(messages)
             .set({ tools: updatedTools })
-            .where(eq(messages.id, parentMessage.id)),
+            .where(and(eq(messages.id, parentMessage.id), this.ownership())),
         ]);
       });
 
@@ -2188,21 +2394,29 @@ export class MessageModel {
 
   updateTranslate = async (id: string, translate: Partial<ChatTranslate>) => {
     const result = await this.db.query.messageTranslates.findFirst({
-      where: and(eq(messageTranslates.id, id)),
+      where: and(eq(messageTranslates.id, id), this.translatesOwnership()),
     });
 
     // If the message does not exist in the translate table, insert it
     if (!result) {
-      return this.db.insert(messageTranslates).values({ ...translate, id, userId: this.userId });
+      return this.db.insert(messageTranslates).values({
+        ...translate,
+        id,
+        userId: this.userId,
+        workspaceId: this.workspaceId ?? null,
+      });
     }
 
     // or just update the existing one
-    return this.db.update(messageTranslates).set(translate).where(eq(messageTranslates.id, id));
+    return this.db
+      .update(messageTranslates)
+      .set(translate)
+      .where(and(eq(messageTranslates.id, id), this.translatesOwnership()));
   };
 
   updateTTS = async (id: string, tts: Partial<ChatTTS>) => {
     const result = await this.db.query.messageTTS.findFirst({
-      where: and(eq(messageTTS.id, id)),
+      where: and(eq(messageTTS.id, id), this.ttsOwnership()),
     });
 
     // If the message does not exist in the translate table, insert it
@@ -2213,6 +2427,7 @@ export class MessageModel {
         id,
         userId: this.userId,
         voice: tts.voice,
+        workspaceId: this.workspaceId ?? null,
       });
     }
 
@@ -2220,7 +2435,7 @@ export class MessageModel {
     return this.db
       .update(messageTTS)
       .set({ contentMd5: tts.contentMd5, fileId: tts.file, voice: tts.voice })
-      .where(eq(messageTTS.id, id));
+      .where(and(eq(messageTTS.id, id), this.ttsOwnership()));
   };
 
   async updateMessageRAG(id: string, { ragQueryId, fileChunks }: UpdateMessageRAGParams) {
@@ -2231,6 +2446,7 @@ export class MessageModel {
         queryId: ragQueryId,
         similarity: chunk.similarity?.toString(),
         userId: this.userId,
+        workspaceId: this.workspaceId ?? null,
       })),
     );
   }
@@ -2243,7 +2459,7 @@ export class MessageModel {
       const message = await tx
         .select()
         .from(messages)
-        .where(and(eq(messages.id, id), eq(messages.userId, this.userId)))
+        .where(and(eq(messages.id, id), this.ownership()))
         .limit(1);
 
       // If the message to be deleted is not found, return directly
@@ -2254,7 +2470,7 @@ export class MessageModel {
       await tx
         .update(messages)
         .set({ parentId: message[0].parentId })
-        .where(and(eq(messages.parentId, id), eq(messages.userId, this.userId)));
+        .where(and(eq(messages.parentId, id), this.ownership()));
 
       // 3. Check if the message contains tools
       const toolCallIds = (message[0].tools as ChatToolPayload[])
@@ -2279,7 +2495,13 @@ export class MessageModel {
       // 6. Delete all related messages
       await tx
         .delete(messages)
-        .where(and(eq(messages.userId, this.userId), inArray(messages.id, messageIdsToDelete)));
+        .where(and(this.ownership(), inArray(messages.id, messageIdsToDelete)));
+
+      // 7. Keep the topic's usage rollup in sync (pure derived — a removed
+      // assistant message must drop out of the topic totals).
+      if (message[0].topicId) {
+        await recomputeTopicUsage(tx, this.userId, message[0].topicId, this.workspaceId);
+      }
     });
   };
 
@@ -2289,9 +2511,9 @@ export class MessageModel {
     return this.db.transaction(async (tx) => {
       // 1. Query all messages to be deleted with their parentId
       const toDelete = await tx
-        .select({ id: messages.id, parentId: messages.parentId })
+        .select({ id: messages.id, parentId: messages.parentId, topicId: messages.topicId })
         .from(messages)
-        .where(and(eq(messages.userId, this.userId), inArray(messages.id, ids)));
+        .where(and(this.ownership(), inArray(messages.id, ids)));
 
       if (toDelete.length === 0) return;
 
@@ -2336,23 +2558,28 @@ export class MessageModel {
         .select({ id: messages.id, parentId: messages.parentId })
         .from(messages)
         .where(
-          and(
-            eq(messages.userId, this.userId),
-            inArray(messages.parentId, ids),
-            not(inArray(messages.id, ids)),
-          ),
+          and(this.ownership(), inArray(messages.parentId, ids), not(inArray(messages.id, ids))),
         );
 
       // 5. Update each child's parentId to the final ancestor
       for (const child of children) {
         const newParentId = finalAncestorMap.get(child.parentId!) ?? null;
-        await tx.update(messages).set({ parentId: newParentId }).where(eq(messages.id, child.id));
+        await tx
+          .update(messages)
+          .set({ parentId: newParentId })
+          .where(and(eq(messages.id, child.id), this.ownership()));
       }
 
       // 6. Delete the messages
-      await tx
-        .delete(messages)
-        .where(and(eq(messages.userId, this.userId), inArray(messages.id, ids)));
+      await tx.delete(messages).where(and(this.ownership(), inArray(messages.id, ids)));
+
+      // 7. Recompute the usage rollup for every affected topic (pure derived).
+      const affectedTopicIds = [
+        ...new Set(toDelete.map((m) => m.topicId).filter(Boolean) as string[]),
+      ];
+      for (const topicId of affectedTopicIds) {
+        await recomputeTopicUsage(tx, this.userId, topicId, this.workspaceId);
+      }
     });
   };
 
@@ -2369,6 +2596,7 @@ export class MessageModel {
           fileId,
           messageId,
           userId: this.userId,
+          workspaceId: this.workspaceId ?? null,
         })),
       );
       return { success: true };
@@ -2381,17 +2609,23 @@ export class MessageModel {
   deleteMessageTranslate = async (id: string) =>
     this.db
       .delete(messageTranslates)
-      .where(and(eq(messageTranslates.id, id), eq(messageTranslates.userId, this.userId)));
+      .where(and(eq(messageTranslates.id, id), this.translatesOwnership()));
 
   deleteMessageTTS = async (id: string) =>
-    this.db
-      .delete(messageTTS)
-      .where(and(eq(messageTTS.id, id), eq(messageTTS.userId, this.userId)));
+    this.db.delete(messageTTS).where(and(eq(messageTTS.id, id), this.ttsOwnership()));
 
   deleteMessageQuery = async (id: string) =>
     this.db
       .delete(messageQueries)
-      .where(and(eq(messageQueries.id, id), eq(messageQueries.userId, this.userId)));
+      .where(
+        and(
+          eq(messageQueries.id, id),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            messageQueries,
+          ),
+        ),
+      );
 
   deleteMessagesBySession = async (
     sessionId?: string | null,
@@ -2402,7 +2636,7 @@ export class MessageModel {
       .delete(messages)
       .where(
         and(
-          eq(messages.userId, this.userId),
+          this.ownership(),
           this.matchSession(sessionId),
           this.matchTopic(topicId),
           this.matchGroup(groupId),
@@ -2410,7 +2644,7 @@ export class MessageModel {
       );
 
   deleteAllMessages = async () => {
-    return this.db.delete(messages).where(eq(messages.userId, this.userId));
+    return this.db.delete(messages).where(and(this.ownership()));
   };
 
   /**
@@ -2424,7 +2658,7 @@ export class MessageModel {
     const agentSession = await this.db
       .select({ sessionId: agentsToSessions.sessionId })
       .from(agentsToSessions)
-      .where(and(eq(agentsToSessions.agentId, agentId), eq(agentsToSessions.userId, this.userId)))
+      .where(and(eq(agentsToSessions.agentId, agentId), this.agentsToSessionsOwnership()))
       .limit(1);
 
     const associatedSessionId = agentSession[0]?.sessionId;
@@ -2434,7 +2668,7 @@ export class MessageModel {
       ? or(eq(messages.agentId, agentId), eq(messages.sessionId, associatedSessionId))
       : eq(messages.agentId, agentId);
 
-    return this.db.delete(messages).where(and(eq(messages.userId, this.userId), agentCondition));
+    return this.db.delete(messages).where(and(this.ownership(), agentCondition));
   };
 
   // **************** Helper *************** //

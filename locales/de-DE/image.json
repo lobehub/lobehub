@@ -20,6 +20,7 @@
   "config.resolution.options.1K": "1K",
   "config.resolution.options.2K": "2K",
   "config.resolution.options.4K": "4K",
+  "config.resolution.options.512": "512px",
   "config.seed.label": "Seed",
   "config.seed.random": "Zufälliger Seed",
   "config.size.label": "Größe",

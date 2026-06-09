@@ -1,5 +1,7 @@
 import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
+import { useAgentTopicGroupMode } from '@/routes/(main)/agent/_layout/Sidebar/Topic/hooks/useAgentTopicGroupMode';
+import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
@@ -18,9 +20,19 @@ const EXCLUDE_STATUSES_COMPLETED = ['completed'];
  */
 export const useFetchChatTopics = () => {
   const includeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
+  const activeGroupId = useChatStore((s) => s.activeGroupId);
+  const { topicGroupMode } = useAgentTopicGroupMode();
+
+  // "Group by status" ordering is resolved server-side so the highest-priority
+  // topics (awaiting human → running → active) stay on the first page even when
+  // the list is paginated — client-side grouping over a partial page is exactly
+  // what made the previous approach flaky. Only the agent sidebar supports it;
+  // group sessions keep the default updatedAt ordering.
+  const sortBy = !activeGroupId && topicGroupMode === 'byStatus' ? 'status' : undefined;
 
   return useFetchTopics({
     excludeStatuses: includeCompleted ? undefined : EXCLUDE_STATUSES_COMPLETED,
     excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
+    sortBy,
   });
 };

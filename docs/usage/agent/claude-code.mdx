@@ -1,0 +1,123 @@
+---
+title: Claude Code
+description: >-
+  Delegate Anthropic's Claude Code inside LobeHub — chat with the Claude Code
+  CLI from your desktop app, watch tasks, todos, skills, and tool calls stream
+  in real time, and resume sessions across turns.
+tags:
+  - LobeHub
+  - Claude Code
+  - Coding Agent
+  - Desktop
+  - CLI
+  - Anthropic
+---
+
+# Claude Code
+
+Claude Code is Anthropic's coding agent that reads, writes, and runs code from your terminal. In LobeHub, you can delegate Claude Code from the desktop app — keep the chat UX you already use, while Claude Code does the work locally with full access to your project.
+
+Send a prompt and Claude Code reads files, makes edits, runs commands, and reports back. Tasks, todos, skills, and tool calls stream into the chat as the agent moves; sessions resume across turns so a long task can span many messages.
+
+## What Is Claude Code in LobeHub?
+
+A bridge between LobeHub's chat UI and the Claude Code CLI running on your machine. LobeHub spawns the `claude` command as a local subprocess, streams its events into a chat conversation, and renders Claude Code's output — partial messages, tasks, todos, skills, sub-agent threads — as first-class chat blocks. You drive the agent in natural language; Claude Code executes locally with your environment, credentials, and project context.
+
+## Requirements
+
+- **LobeHub desktop app** — Claude Code agents only work in the desktop build. The web app cannot spawn local processes.
+- **Claude Code CLI installed** — the `claude` command must be available on your `PATH`.
+- **Signed in** — you must run `claude` once in a terminal to authenticate before LobeHub can drive it. Requires an Anthropic account.
+
+## Install the Claude Code CLI
+
+Pick one of the install paths:
+
+**Recommended (install script)**
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+**Homebrew (macOS)**
+
+```bash
+brew install --cask claude-code
+```
+
+After installing, run `claude` once in a terminal to sign in. See the [Claude Code setup guide](https://docs.anthropic.com/en/docs/claude-code/setup) for details.
+
+If LobeHub can't find the CLI, it shows an **Install Claude Code CLI** prompt with the same commands and an **Open System Tools** button — click it after installing to re-detect the CLI.
+
+## Add Claude Code in LobeHub
+
+When LobeHub detects the Claude Code CLI on your machine, an **Add Claude Code** recommendation card appears on the home page tagged "Coding Agent". Click it to create a Claude Code agent in one step.
+
+You can also create one manually from the **Create Agent** menu and pick **Claude Code** as the type.
+
+Each agent is independent, so you can keep multiple Claude Code agents pinned to different projects or workflows.
+
+## Working Directory
+
+Every Claude Code session is pinned to a working directory — the folder Claude Code sees as the project root. Set it from the chat input bar before sending your first message. Switching mid-conversation triggers a **Switch working directory?** confirmation: chat messages stay, but the previous session context cannot be resumed and a new session starts for this topic.
+
+If you change folders and the saved Claude Code session can't be resumed, LobeHub shows: *"Working directory changed. Previous Claude Code session can only be resumed from its original directory, so a new conversation has started."*
+
+Inside the working directory, Claude Code runs with **Full access** — read and write to anything in the folder. Switching permission modes from inside LobeHub is not yet supported.
+
+## What Gets Rendered in Chat
+
+LobeHub renders Claude Code's tool calls and structured output with purpose-built blocks instead of raw JSON:
+
+**Tasks** — When Claude Code uses its task manager, tasks render as a live progress card. Watch items move through pending → in-progress → completed as Claude Code works.
+
+**Todos** — `TodoWrite` plans render as a progress card with completion counts and check states. Useful for tracking multi-step work.
+
+**Skills** — When Claude Code invokes a built-in or user-installed skill, the call appears in a Skill block showing inputs, outputs, and any artifacts.
+
+**Tool calls** — Reads, edits, shell runs, web fetches, and other tool uses get their own block in the conversation. Streamed partial output appears as Claude Code generates it.
+
+**Sub-agents** — Claude Code can spawn sub-agents to handle parallel or scoped work. Their threads render in isolation inside the conversation without leaking into the main bubble.
+
+**Interventions** — When Claude Code needs to ask you something mid-run, it shows a prompt inline so you can answer without leaving the chat.
+
+## Sessions and Resume
+
+Claude Code sessions persist across messages in the same topic. LobeHub captures the underlying session ID and reuses it on every follow-up, so you can pick up a long-running task at any point.
+
+A session can't be resumed if:
+
+- The working directory changed since the session was created
+- The Claude Code CLI returns a resume error (session no longer exists, credentials expired, etc.)
+
+In either case, LobeHub starts a fresh conversation automatically.
+
+## Where It Can Run
+
+The **Execution Device** selector lets you pick where the Claude Code agent runs:
+
+- **This device** — runs Claude Code as a local process inside the desktop app. Default.
+- **Cloud sandbox** — runs Claude Code in an ephemeral cloud sandbox. Useful when you don't want the agent touching your local filesystem.
+- **Remote device** — drives a remote machine you've connected with `lh connect`. Useful when the project lives on a different machine.
+
+## Limitations
+
+- **Desktop only** — the Claude Code agent runs in the LobeHub desktop app. The web app cannot spawn the CLI.
+- **One sign-in per machine** — Claude Code shares its authentication with the global CLI. If `claude` works in your terminal, it works in LobeHub.
+- **Working-directory-bound** — sessions don't follow you across folders or machines.
+- **Full access only** — switching permission modes from inside LobeHub is not yet supported.
+
+## Tips
+
+- **Run `claude` once in a terminal first** — sign-in happens at the CLI level, not in LobeHub.
+- **Pick the working directory before your first message** — switching it later starts a new session.
+- **Use one Claude Code agent per project** — pinning each agent to a specific repo keeps sessions tidy and resumable.
+- **Watch the task card** — when Claude Code uses its task manager, the card is the fastest read on what's done, what's running, and what's queued.
+
+<Cards>
+  <Card href={'/docs/usage/agent/codex'} title={'Codex'} />
+
+  <Card href={'/docs/usage/agent/agent-team'} title={'Agent Groups'} />
+
+  <Card href={'/docs/usage/agent/sandbox'} title={'Cloud Sandbox'} />
+</Cards>

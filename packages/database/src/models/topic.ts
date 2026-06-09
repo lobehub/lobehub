@@ -2,6 +2,7 @@ import type {
   ChatTopicMetadata,
   ChatTopicStatus,
   DBMessageItem,
+  TopicQuerySortBy,
   TopicRankItem,
 } from '@lobechat/types';
 import type { TimingSink } from '@lobechat/utils';
@@ -29,11 +30,13 @@ import {
 } from 'drizzle-orm';
 
 import type { TopicItem } from '../schemas';
-import { agents, agentsToSessions, messagePlugins, messages, topics } from '../schemas';
+import { agents, messagePlugins, messages, topics } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+import { recomputeTopicUsage } from './topicUsage';
 
 type OnboardingSessionMetadataPatch = Partial<NonNullable<ChatTopicMetadata['onboardingSession']>>;
 type TopicMetadataPatch = Omit<Partial<ChatTopicMetadata>, 'onboardingSession'> & {
@@ -83,6 +86,12 @@ interface QueryTopicParams {
    */
   isInbox?: boolean;
   pageSize?: number;
+  /**
+   * Server-side ordering. Defaults to `updatedAt`. `status` orders by status
+   * priority (see `STATUS_SORT_RANK`) so the sidebar "group by status" mode
+   * keeps high-priority topics on the first page.
+   */
+  sortBy?: TopicQuerySortBy;
   timing?: ModelTimingContext;
   /**
    * Include only topics matching the given trigger types (positive filter)
@@ -106,14 +115,45 @@ export interface ListTopicsForMemoryExtractorCursor {
   id: string;
 }
 
+// Status priority for the sidebar "group by status" ordering. Lower rank =
+// higher in the list. A NULL / unknown status falls through to `active` (3),
+// matching the client which treats a missing status as active. Keep this in
+// sync with `STATUS_GROUP_ORDER` / `resolveStatusBucket` in `@lobechat/utils`
+// (client-side bucketing): `waitingForHuman` and `failed` both collapse into the
+// top `pending` bucket, so they must float to the top here too — otherwise a
+// failed topic could fall off the first page and vanish from the pending group.
+const STATUS_SORT_RANK = sql`CASE ${topics.status}
+  WHEN 'waitingForHuman' THEN 0
+  WHEN 'failed' THEN 1
+  WHEN 'running' THEN 2
+  WHEN 'active' THEN 3
+  WHEN 'paused' THEN 4
+  WHEN 'completed' THEN 5
+  WHEN 'archived' THEN 6
+  ELSE 3 END`;
+
+// Favorites always float to the top; the rest are ordered by the requested
+// strategy. `status` adds the priority bucket before the recency tiebreaker.
+const buildTopicOrderBy = (sortBy?: TopicQuerySortBy): SQL[] =>
+  sortBy === 'status'
+    ? [desc(topics.favorite), asc(STATUS_SORT_RANK), desc(topics.updatedAt)]
+    : [desc(topics.favorite), desc(topics.updatedAt)];
+
 export class TopicModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics);
+  private messageOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, messages);
   // **************** Query *************** //
 
   query = async ({
@@ -126,10 +166,12 @@ export class TopicModel {
     pageSize = 9999,
     groupId,
     isInbox,
+    sortBy,
     timing,
     triggers,
     withDetails = false,
   }: QueryTopicParams = {}) => {
+    const orderBy = buildTopicOrderBy(sortBy);
     const queryStartedAt = Date.now();
     logTiming(timing, 'db.topic.query:start', {
       current,
@@ -200,7 +242,7 @@ export class TopicModel {
     // If groupId is provided, query topics by groupId directly
     if (groupId) {
       const whereCondition = and(
-        eq(topics.userId, this.userId),
+        this.ownership(),
         eq(topics.groupId, groupId),
         includeTriggerCondition,
         excludeTriggerCondition,
@@ -232,7 +274,7 @@ export class TopicModel {
               } as any)
               .from(topics)
               .where(whereCondition)
-              .orderBy(desc(topics.favorite), desc(topics.updatedAt))
+              .orderBy(...orderBy)
               .limit(pageSize)
               .offset(offset),
           { current, pageSize },
@@ -253,54 +295,19 @@ export class TopicModel {
       return { items, total: totalResult[0].count };
     }
 
-    // If agentId is provided, query topics that match either:
-    // 1. topics.agentId = agentId (new data with agentId stored directly)
-    // 2. topics.sessionId = associated sessionId (legacy data via agentsToSessions lookup)
-    // 3. For inbox: sessionId IS NULL AND groupId IS NULL AND agentId IS NULL (legacy inbox data)
+    // If agentId is provided, match topics by `topics.agentId` directly. The
+    // inbox agent additionally adopts very old orphan rows where every owner
+    // column (session / group / agent) is null.
     if (agentId) {
-      // Get the associated sessionId for backward compatibility with legacy data
-      const agentSession = await runTimedStage(
-        timing,
-        'db.topic.query.agentSession.select',
-        () =>
-          this.db
-            .select({ sessionId: agentsToSessions.sessionId })
-            .from(agentsToSessions)
-            .where(
-              and(eq(agentsToSessions.agentId, agentId), eq(agentsToSessions.userId, this.userId)),
-            )
-            .limit(1),
-        { hasAgentId: true },
-      );
+      const agentCondition = isInbox
+        ? or(
+            eq(topics.agentId, agentId),
+            and(isNull(topics.sessionId), isNull(topics.groupId), isNull(topics.agentId)),
+          )
+        : eq(topics.agentId, agentId);
 
-      const associatedSessionId = agentSession[0]?.sessionId;
-
-      // Build condition to match both new (agentId) and legacy (sessionId) data
-      let agentCondition;
-      if (isInbox) {
-        // For inbox agent: query topics that match:
-        // 1. topics.agentId = agentId (new data)
-        // 2. topics.sessionId = associatedSessionId (legacy data with session relation)
-        // 3. sessionId IS NULL AND groupId IS NULL AND agentId IS NULL (very old legacy inbox data)
-        const conditions = [
-          eq(topics.agentId, agentId),
-          and(isNull(topics.sessionId), isNull(topics.groupId), isNull(topics.agentId)),
-        ];
-        // Also include topics linked via legacy session relation
-        if (associatedSessionId) {
-          conditions.push(eq(topics.sessionId, associatedSessionId));
-        }
-        agentCondition = or(...conditions);
-      } else if (associatedSessionId) {
-        agentCondition = or(eq(topics.agentId, agentId), eq(topics.sessionId, associatedSessionId));
-      } else {
-        agentCondition = eq(topics.agentId, agentId);
-      }
-
-      // Fetch items and total count in parallel
-      // Include sessionId and agentId for migration detection
       const agentWhere = and(
-        eq(topics.userId, this.userId),
+        this.ownership(),
         agentCondition,
         includeTriggerCondition,
         excludeTriggerCondition,
@@ -329,10 +336,10 @@ export class TopicModel {
               } as any)
               .from(topics)
               .where(agentWhere)
-              .orderBy(desc(topics.favorite), desc(topics.updatedAt))
+              .orderBy(...orderBy)
               .limit(pageSize)
               .offset(offset),
-          { current, hasAssociatedSessionId: !!associatedSessionId, isInbox: !!isInbox, pageSize },
+          { current, isInbox: !!isInbox, pageSize },
         ),
         runTimedStage(
           timing,
@@ -342,7 +349,7 @@ export class TopicModel {
               .select({ count: count(topics.id) })
               .from(topics)
               .where(agentWhere),
-          { hasAssociatedSessionId: !!associatedSessionId, isInbox: !!isInbox },
+          { isInbox: !!isInbox },
         ),
       ]);
 
@@ -356,7 +363,7 @@ export class TopicModel {
 
     // Fallback to containerId-based query (backward compatibility)
     const whereCondition = and(
-      eq(topics.userId, this.userId),
+      this.ownership(),
       this.matchContainer(containerId),
       includeTriggerCondition,
       excludeTriggerCondition,
@@ -387,9 +394,7 @@ export class TopicModel {
             } as any)
             .from(topics)
             .where(whereCondition)
-            // In boolean sorting, false is considered "smaller" than true.
-            // So here we use desc to ensure that topics with favorite as true are in front.
-            .orderBy(desc(topics.favorite), desc(topics.updatedAt))
+            .orderBy(...orderBy)
             .limit(pageSize)
             .offset(offset),
         { current, pageSize },
@@ -417,16 +422,12 @@ export class TopicModel {
 
   findById = async (id: string) => {
     return this.db.query.topics.findFirst({
-      where: and(eq(topics.id, id), eq(topics.userId, this.userId)),
+      where: and(eq(topics.id, id), this.ownership()),
     });
   };
 
   queryAll = async (): Promise<TopicItem[]> => {
-    return this.db
-      .select()
-      .from(topics)
-      .orderBy(topics.updatedAt)
-      .where(eq(topics.userId, this.userId));
+    return this.db.select().from(topics).orderBy(topics.updatedAt).where(and(this.ownership()));
   };
 
   queryByKeyword = async (keyword: string, containerId?: string | null): Promise<TopicItem[]> => {
@@ -442,7 +443,7 @@ export class TopicModel {
         .from(topics)
         .where(
           and(
-            eq(topics.userId, this.userId),
+            this.ownership(),
             this.matchContainer(containerId),
             sql`${topics.title} @@@ ${bm25Query}`,
           ),
@@ -455,9 +456,9 @@ export class TopicModel {
         .innerJoin(topics, eq(messages.topicId, topics.id))
         .where(
           and(
-            eq(messages.userId, this.userId),
+            this.messageOwnership(),
             sql`${messages.content} @@@ ${bm25Query}`,
-            eq(topics.userId, this.userId),
+            this.ownership(),
             this.matchContainer(containerId),
           ),
         )
@@ -475,7 +476,7 @@ export class TopicModel {
 
     const topicsByMessages = await this.db.query.topics.findMany({
       orderBy: [desc(topics.updatedAt)],
-      where: and(eq(topics.userId, this.userId), inArray(topics.id, topicIds)),
+      where: and(this.ownership(), inArray(topics.id, topicIds)),
     });
 
     // Merge results and deduplicate
@@ -501,27 +502,9 @@ export class TopicModel {
     startDate?: string;
   }): Promise<number> => {
     // Build agent-specific condition if agentId is provided
-    let agentCondition: SQL | undefined;
-    if (params?.agentId) {
-      // Get the associated sessionId for backward compatibility with legacy data
-      const agentSession = await this.db
-        .select({ sessionId: agentsToSessions.sessionId })
-        .from(agentsToSessions)
-        .where(
-          and(
-            eq(agentsToSessions.agentId, params.agentId),
-            eq(agentsToSessions.userId, this.userId),
-          ),
-        )
-        .limit(1);
-
-      const associatedSessionId = agentSession[0]?.sessionId;
-
-      // Build condition to match both new (agentId) and legacy (sessionId) data
-      agentCondition = associatedSessionId
-        ? or(eq(topics.agentId, params.agentId), eq(topics.sessionId, associatedSessionId))
-        : eq(topics.agentId, params.agentId);
-    }
+    const agentCondition: SQL | undefined = params?.agentId
+      ? eq(topics.agentId, params.agentId)
+      : undefined;
 
     const result = await this.db
       .select({
@@ -530,7 +513,7 @@ export class TopicModel {
       .from(topics)
       .where(
         genWhere([
-          eq(topics.userId, this.userId),
+          this.ownership(),
           agentCondition,
           params?.containerId ? this.matchContainer(params.containerId) : undefined,
           params?.range
@@ -551,13 +534,13 @@ export class TopicModel {
   rank = async (limit: number = 10): Promise<TopicRankItem[]> => {
     return this.db
       .select({
+        agentId: topics.agentId,
         count: count(messages.id).as('count'),
         id: topics.id,
-        sessionId: topics.sessionId,
         title: topics.title,
       })
       .from(topics)
-      .where(and(eq(topics.userId, this.userId)))
+      .where(and(this.ownership()))
       .leftJoin(messages, eq(topics.id, messages.topicId))
       .groupBy(topics.id)
       .orderBy(desc(sql`count`))
@@ -586,7 +569,7 @@ export class TopicModel {
       .leftJoin(agents, eq(topics.agentId, agents.id))
       .where(
         and(
-          eq(topics.userId, this.userId),
+          this.ownership(),
           or(
             // Group topics: has groupId
             not(isNull(topics.groupId)),
@@ -613,14 +596,16 @@ export class TopicModel {
     id: string = this.genId(),
     timing?: ModelTimingContext,
   ): Promise<TopicItem> => {
-    const insertData = {
-      ...params,
-      agentId: params.agentId || null,
-      groupId: params.groupId || null,
-      id,
-      sessionId: params.sessionId || null,
-      userId: this.userId,
-    };
+    const insertData = buildWorkspacePayload(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      {
+        ...params,
+        agentId: params.agentId || null,
+        groupId: params.groupId || null,
+        id,
+        sessionId: params.sessionId || null,
+      },
+    );
     const insertMeta = {
       hasAgentId: !!params.agentId,
       hasGroupId: !!params.groupId,
@@ -659,7 +644,7 @@ export class TopicModel {
               tx
                 .update(messages)
                 .set({ topicId: topic.id })
-                .where(and(eq(messages.userId, this.userId), inArray(messages.id, messageIds))),
+                .where(and(this.messageOwnership(), inArray(messages.id, messageIds))),
             { messageCount: messageIds.length },
           );
 
@@ -681,16 +666,20 @@ export class TopicModel {
       const createdTopics = await tx
         .insert(topics)
         .values(
-          topicParams.map((params) => ({
-            agentId: params.agentId || null,
-            favorite: params.favorite,
-            groupId: params.sessionId ? null : params.groupId,
-            id: params.id || this.genId(),
-            sessionId: params.groupId ? null : params.sessionId,
-            title: params.title,
-            trigger: params.trigger,
-            userId: this.userId,
-          })),
+          topicParams.map((params) =>
+            buildWorkspacePayload(
+              { userId: this.userId, workspaceId: this.workspaceId },
+              {
+                agentId: params.agentId || null,
+                favorite: params.favorite,
+                groupId: params.sessionId ? null : params.groupId,
+                id: params.id || this.genId(),
+                sessionId: params.groupId ? null : params.sessionId,
+                title: params.title,
+                trigger: params.trigger,
+              },
+            ),
+          ),
         )
         .returning();
 
@@ -702,7 +691,7 @@ export class TopicModel {
             await tx
               .update(messages)
               .set({ topicId: topic.id })
-              .where(and(eq(messages.userId, this.userId), inArray(messages.id, messageIds)));
+              .where(and(this.messageOwnership(), inArray(messages.id, messageIds)));
           }
         }),
       );
@@ -715,7 +704,7 @@ export class TopicModel {
     return this.db.transaction(async (tx) => {
       // find original topic
       const originalTopic = await tx.query.topics.findFirst({
-        where: and(eq(topics.id, topicId), eq(topics.userId, this.userId)),
+        where: and(eq(topics.id, topicId), this.ownership()),
       });
 
       if (!originalTopic) {
@@ -725,19 +714,24 @@ export class TopicModel {
       // copy topic
       const [duplicatedTopic] = await tx
         .insert(topics)
-        .values({
-          ...originalTopic,
-          clientId: null,
-          id: this.genId(),
-          title: newTitle || originalTopic?.title,
-        })
+        .values(
+          buildWorkspacePayload(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            {
+              ...originalTopic,
+              clientId: null,
+              id: this.genId(),
+              title: newTitle || originalTopic?.title,
+            },
+          ),
+        )
         .returning();
 
       // Find messages associated with the original topic, ordered by createdAt
       const originalMessages = await tx
         .select()
         .from(messages)
-        .where(and(eq(messages.topicId, topicId), eq(messages.userId, this.userId)))
+        .where(and(eq(messages.topicId, topicId), this.messageOwnership()))
         .orderBy(messages.createdAt);
 
       // Find all messagePlugins for this topic
@@ -821,62 +815,39 @@ export class TopicModel {
    * Delete a session, also delete all messages and topics associated with it.
    */
   delete = async (id: string) => {
-    return this.db.delete(topics).where(and(eq(topics.id, id), eq(topics.userId, this.userId)));
+    return this.db.delete(topics).where(and(eq(topics.id, id), this.ownership()));
   };
 
   /**
    * Deletes multiple topics based on the sessionId.
    */
   batchDeleteBySessionId = async (sessionId?: string | null) => {
-    return this.db
-      .delete(topics)
-      .where(and(this.matchSession(sessionId), eq(topics.userId, this.userId)));
+    return this.db.delete(topics).where(and(this.matchSession(sessionId), this.ownership()));
   };
 
   /**
    * Deletes multiple topics based on the groupId.
    */
   batchDeleteByGroupId = async (groupId?: string | null) => {
-    return this.db
-      .delete(topics)
-      .where(and(this.matchGroup(groupId), eq(topics.userId, this.userId)));
+    return this.db.delete(topics).where(and(this.matchGroup(groupId), this.ownership()));
   };
 
   /**
-   * Deletes multiple topics based on the agentId.
-   * This will delete topics that have either:
-   * 1. Direct agentId match (new data)
-   * 2. SessionId match via agentsToSessions lookup (legacy data)
+   * Deletes all topics matching the given agentId (`topics.agentId`).
    */
   batchDeleteByAgentId = async (agentId: string) => {
-    // Get the associated sessionId for backward compatibility with legacy data
-    const agentSession = await this.db
-      .select({ sessionId: agentsToSessions.sessionId })
-      .from(agentsToSessions)
-      .where(and(eq(agentsToSessions.agentId, agentId), eq(agentsToSessions.userId, this.userId)))
-      .limit(1);
-
-    const associatedSessionId = agentSession[0]?.sessionId;
-
-    // Build condition to match both new (agentId) and legacy (sessionId) data
-    const agentCondition = associatedSessionId
-      ? or(eq(topics.agentId, agentId), eq(topics.sessionId, associatedSessionId))
-      : eq(topics.agentId, agentId);
-
-    return this.db.delete(topics).where(and(eq(topics.userId, this.userId), agentCondition));
+    return this.db.delete(topics).where(and(this.ownership(), eq(topics.agentId, agentId)));
   };
 
   /**
    * Deletes multiple topics and all messages associated with them in a transaction.
    */
   batchDelete = async (ids: string[]) => {
-    return this.db
-      .delete(topics)
-      .where(and(inArray(topics.id, ids), eq(topics.userId, this.userId)));
+    return this.db.delete(topics).where(and(inArray(topics.id, ids), this.ownership()));
   };
 
   deleteAll = async () => {
-    return this.db.delete(topics).where(eq(topics.userId, this.userId));
+    return this.db.delete(topics).where(and(this.ownership()));
   };
 
   // **************** Update *************** //
@@ -885,9 +856,18 @@ export class TopicModel {
     return this.db
       .update(topics)
       .set({ ...data, updatedAt: new Date() })
-      .where(and(eq(topics.id, id), eq(topics.userId, this.userId)))
+      .where(and(eq(topics.id, id), this.ownership()))
       .returning();
   };
+
+  /**
+   * Recompute this topic's denormalized usage/cost rollup from its assistant
+   * messages. The canonical aggregation lives in `recomputeTopicUsage`; the
+   * live path (MessageModel) calls it inline within its own transaction, while
+   * external callers use this wrapper. Runs in a transaction for consistency.
+   */
+  recomputeUsage = async (id: string) =>
+    this.db.transaction((trx) => recomputeTopicUsage(trx, this.userId, id, this.workspaceId));
 
   /**
    * Update topic metadata with merge logic
@@ -897,7 +877,7 @@ export class TopicModel {
     // Get existing topic to merge metadata
     const existing = await this.db.query.topics.findFirst({
       columns: { metadata: true },
-      where: and(eq(topics.id, id), eq(topics.userId, this.userId)),
+      where: and(eq(topics.id, id), this.ownership()),
     });
 
     const mergedOnboardingSession =
@@ -917,7 +897,7 @@ export class TopicModel {
     return this.db
       .update(topics)
       .set({ metadata: mergedMetadata })
-      .where(and(eq(topics.id, id), eq(topics.userId, this.userId)))
+      .where(and(eq(topics.id, id), this.ownership()))
       .returning();
   };
 
@@ -929,7 +909,7 @@ export class TopicModel {
       .from(topics)
       .where(
         and(
-          eq(topics.userId, this.userId),
+          this.ownership(),
           eq(topics.agentId, agentId),
           eq(topics.trigger, 'cron'),
           sql`(${topics.metadata}->>'cronJobId') IS NOT NULL`,
@@ -997,7 +977,7 @@ export class TopicModel {
       limit: options.limit,
       orderBy: (fields, { asc }) => [asc(fields.createdAt), asc(fields.id)],
       where: and(
-        eq(topics.userId, this.userId),
+        this.ownership(),
         options.startDate ? gte(topics.createdAt, options.startDate) : undefined,
         options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
         options.ignoreExtracted
@@ -1023,7 +1003,7 @@ export class TopicModel {
       .from(topics)
       .where(
         and(
-          eq(topics.userId, this.userId),
+          this.ownership(),
           options.startDate ? gte(topics.createdAt, options.startDate) : undefined,
           options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
           options.ignoreExtracted

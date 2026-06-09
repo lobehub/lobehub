@@ -36,7 +36,7 @@ vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
     currentAgentModel: () => 'gpt-4',
     currentAgentModelProvider: () => 'openai',
-    currentAgentWorkingDirectory: () => undefined,
+    currentAgentWorkingDirectory: () => () => undefined,
   },
 }));
 

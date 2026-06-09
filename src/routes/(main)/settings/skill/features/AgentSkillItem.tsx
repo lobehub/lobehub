@@ -1,16 +1,7 @@
 'use client';
 
 import { type BuiltinSkill, type SkillListItem } from '@lobechat/types';
-import {
-  Avatar,
-  Button,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Modal,
-  stopPropagation,
-  Tag,
-} from '@lobehub/ui';
+import { Avatar, Button, DropdownMenu, Flexbox, Icon, Modal, stopPropagation } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { Space } from 'antd';
@@ -18,7 +9,6 @@ import { DownloadIcon, MoreHorizontalIcon, Plus, Trash2 } from 'lucide-react';
 import { lazy, memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SkillSourceTag from '@/components/SkillSourceTag';
 import { createBuiltinAgentSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
@@ -34,10 +24,12 @@ const isBuiltinSkill = (skill: BuiltinSkill | SkillListItem): skill is BuiltinSk
   !('id' in skill);
 
 interface AgentSkillItemProps {
+  isSelected?: boolean;
+  onSelect?: () => void;
   skill: BuiltinSkill | SkillListItem;
 }
 
-const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
+const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect }) => {
   const { t } = useTranslation('setting');
   const { t: tc } = useTranslation('common');
   const { t: tp } = useTranslation('plugin');
@@ -207,38 +199,37 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
         className={styles.container}
         gap={16}
         justify="space-between"
+        style={{
+          ...(isSelected ? { background: 'var(--ant-color-primary-bg)', borderRadius: 6 } : {}),
+          ...(onSelect ? { cursor: 'pointer' } : {}),
+        }}
+        onClick={onSelect}
       >
-        <Flexbox horizontal align="center" gap={16} style={{ flex: 1, overflow: 'hidden' }}>
+        <Flexbox horizontal align="center" gap={8} style={{ flex: 1, overflow: 'hidden' }}>
           <Flexbox
             horizontal
             align="center"
-            gap={16}
-            style={{ cursor: 'pointer' }}
-            onClick={handleOpenDetail}
+            gap={8}
+            style={{ cursor: onSelect ? undefined : 'pointer' }}
+            onClick={onSelect ? undefined : handleOpenDetail}
           >
             <div className={`${styles.icon} ${showDisconnected ? styles.disconnectedIcon : ''}`}>
-              {avatar ? <Avatar avatar={avatar} size={32} /> : <Icon icon={SkillsIcon} size={28} />}
+              {avatar ? <Avatar avatar={avatar} size={16} /> : <Icon icon={SkillsIcon} size={16} />}
             </div>
-            <Flexbox gap={4} style={{ overflow: 'hidden' }}>
-              <Flexbox horizontal align="center" gap={8}>
-                <span
-                  className={`${styles.title} ${showDisconnected ? styles.disconnectedTitle : ''}`}
-                >
-                  {title}
-                </span>
-                {!isBuiltin && <Tag icon={<Icon icon={SkillsIcon} />} size={'small'} />}
-                <SkillSourceTag source={skill.source} />
-              </Flexbox>
-              {showDisconnected && renderStatus()}
-            </Flexbox>
+            <span className={`${styles.title} ${showDisconnected ? styles.disconnectedTitle : ''}`}>
+              {title}
+            </span>
           </Flexbox>
+          {showDisconnected && renderStatus()}
         </Flexbox>
-        <Flexbox horizontal align="center" gap={12} onClick={stopPropagation}>
-          {isBuiltin && isBuiltinInstalled && renderStatus()}
-          {renderActions()}
-        </Flexbox>
+        {!onSelect && (
+          <Flexbox horizontal align="center" gap={8} onClick={stopPropagation}>
+            {isBuiltin && isBuiltinInstalled && renderStatus()}
+            {renderActions()}
+          </Flexbox>
+        )}
       </Flexbox>
-      {renderDetailModal()}
+      {!onSelect && renderDetailModal()}
     </>
   );
 });

@@ -76,8 +76,12 @@ async function processConnectQueue(remainingMs: number): Promise<number> {
         continue;
       }
 
-      const model = new AgentBotProviderModel(serverDB, item.userId, gateKeeper);
-      const provider = await model.findEnabledByApplicationId(item.platform, item.applicationId);
+      const provider = await AgentBotProviderModel.findEnabledByPlatformAndAppId(
+        serverDB,
+        item.platform,
+        item.applicationId,
+        gateKeeper,
+      );
 
       if (!provider) {
         log('No enabled provider found for queued %s appId=%s', item.platform, item.applicationId);

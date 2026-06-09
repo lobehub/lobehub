@@ -3,7 +3,8 @@ import { inferImageMimeTypeFromBytes } from '@lobechat/utils';
 import { t } from 'i18next';
 import { sha256 } from 'js-sha256';
 
-import { message, notification } from '@/components/AntdStaticMethods';
+import { handleFileUploadError } from '@/business/client/handleFileUploadError';
+import { message } from '@/components/AntdStaticMethods';
 import { fileService } from '@/services/file';
 import { uploadService } from '@/services/upload';
 import { type StoreSetter } from '@/store/types';
@@ -69,6 +70,7 @@ const normalizeUploadedImageFileType = async (
 };
 
 type Setter = StoreSetter<FileStore>;
+
 export const createFileUploadSlice = (set: Setter, get: () => FileStore, _api?: unknown) =>
   new FileUploadActionImpl(set, get, _api);
 
@@ -82,20 +84,26 @@ export class FileUploadActionImpl {
   uploadBase64FileWithProgress = async (
     base64: string,
   ): Promise<UploadWithProgressResult | undefined> => {
-    // Extract image dimensions from base64 data
-    const dimensions = await getImageDimensions(base64);
+    try {
+      // Extract image dimensions from base64 data
+      const dimensions = await getImageDimensions(base64);
 
-    const { metadata, fileType, size, hash } = await uploadService.uploadBase64ToS3(base64);
+      const { metadata, fileType, size, hash } = await uploadService.uploadBase64ToS3(base64);
 
-    const res = await fileService.createFile({
-      fileType,
-      hash,
-      metadata,
-      name: metadata.filename,
-      size,
-      url: metadata.path,
-    });
-    return { ...res, dimensions, filename: metadata.filename };
+      const res = await fileService.createFile({
+        fileType,
+        hash,
+        metadata,
+        name: metadata.filename,
+        size,
+        url: metadata.path,
+      });
+      return { ...res, dimensions, filename: metadata.filename };
+    } catch (error) {
+      if (handleFileUploadError(error)) return;
+
+      throw error;
+    }
   };
 
   uploadWithProgress = async ({
@@ -199,15 +207,14 @@ export class FileUploadActionImpl {
 
       return { ...data, dimensions, filename: normalizedFile.name };
     } catch (error) {
-      // Handle file storage plan limit error
-      if ((error as any)?.message?.includes('beyond the plan limit')) {
-        onStatusUpdate?.({ id: statusId, type: 'removeFile' });
-        notification.error({
-          description: t('upload.storageLimitExceeded', { ns: 'error' }),
-          message: t('upload.uploadFailed', { ns: 'error' }),
-        });
+      if (
+        handleFileUploadError(error, {
+          onUploadBlocked: () => onStatusUpdate?.({ id: statusId, type: 'removeFile' }),
+        })
+      ) {
         return;
       }
+
       throw error;
     }
   };

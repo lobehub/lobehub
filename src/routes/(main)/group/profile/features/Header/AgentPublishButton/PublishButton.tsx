@@ -56,7 +56,7 @@ const PublishButton = memo<MarketPublishButtonProps>(
             content: t('messages.loading', { ns: 'marketAuth' }),
             key: 'market-auth',
           });
-          const accountId = await signIn();
+          const accountId = await signIn('publish');
           message.success({ content: buttonConfig.authSuccessMessage, key: 'market-auth' });
 
           // Check ownership after authentication if marketIdentifier exists

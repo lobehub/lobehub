@@ -108,6 +108,10 @@ const createMockApp = () => {
     updaterManager: {
       checkForUpdates: vi.fn(),
     },
+    storeManager: {
+      get: vi.fn(),
+      set: vi.fn(),
+    },
   } as unknown as App;
 };
 

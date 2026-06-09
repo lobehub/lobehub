@@ -234,7 +234,7 @@
   "exportType.allAgentWithMessage": "Tüm Temsilcileri ve Mesajları Dışa Aktar",
   "exportType.globalSetting": "Genel Ayarları Dışa Aktar",
   "feedback": "Geri Bildirim",
-  "feedback.emailContact": "Bize ayrıca {{email}} adresinden e-posta gönderebilirsiniz",
+  "feedback.emailContact": "Bize ayrıca <email>{{email}}</email> adresinden e-posta gönderebilirsiniz",
   "feedback.errors.fileTooLarge": "Dosya boyutu 5MB'ı aşıyor",
   "feedback.errors.submitFailed": "Gönderim başarısız oldu. Lütfen tekrar deneyin.",
   "feedback.errors.teamNotFound": "Yapılandırma hatası",
@@ -353,6 +353,7 @@
   "messengerBanner.title": "Lobe AI ile favori mesajlaşma uygulamalarınızda konuşun",
   "more": "Daha Fazla",
   "navPanel.agent": "Temsilci",
+  "navPanel.bottomDivider": "Aşağıdaki öğeler alta sabitlenir",
   "navPanel.customizeSidebar": "Kenar çubuğunu özelleştir",
   "navPanel.displayItems": "Görüntülenen Öğeler",
   "navPanel.hidden": "Gizli",
@@ -479,5 +480,6 @@
   "userPanel.setting": "Ayarlar",
   "userPanel.upgradePlan": "Planı Yükselt",
   "userPanel.usages": "Kullanım İstatistikleri",
-  "version": "Sürüm"
+  "version": "Sürüm",
+  "zoom": "Yakınlaştır"
 }

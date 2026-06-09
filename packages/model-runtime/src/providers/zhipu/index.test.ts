@@ -407,6 +407,96 @@ describe('LobeZhipuAI - custom features', () => {
       });
     });
 
+    describe('preserve thinking mapping', () => {
+      it('should map preserveThinking=true to clear_thinking=false and convert reasoning content', () => {
+        const payload = {
+          messages: [
+            { content: 'hello', role: 'user' },
+            {
+              content: 'answer',
+              reasoning: { content: 'reasoning content' },
+              role: 'assistant',
+            },
+          ],
+          model: 'glm-5',
+          preserveThinking: true,
+          thinking: { budget_tokens: 1024, type: 'enabled' },
+        } as any;
+
+        const result = params.chatCompletion.handlePayload(payload);
+
+        expect(result.thinking).toEqual({ clear_thinking: false, type: 'enabled' });
+        expect(result.messages).toEqual([
+          { content: 'hello', role: 'user' },
+          {
+            content: 'answer',
+            reasoning_content: 'reasoning content',
+            role: 'assistant',
+          },
+        ]);
+      });
+
+      it('should still convert reasoning to reasoning_content when preserveThinking is absent', () => {
+        const payload = {
+          messages: [
+            {
+              content: 'answer',
+              reasoning: { content: 'reasoning content' },
+              role: 'assistant',
+            },
+          ],
+          model: 'glm-5',
+        } as any;
+
+        const result = params.chatCompletion.handlePayload(payload);
+
+        expect(result.thinking).toBeUndefined();
+        expect(result.messages).toEqual([
+          {
+            content: 'answer',
+            reasoning_content: 'reasoning content',
+            role: 'assistant',
+          },
+        ]);
+      });
+
+      it('should map preserveThinking=false to clear_thinking=true', () => {
+        const payload = {
+          messages: [{ content: 'hello', role: 'user' }],
+          model: 'glm-4.7',
+          preserveThinking: false,
+        } as any;
+
+        const result = params.chatCompletion.handlePayload(payload);
+
+        expect(result.thinking).toEqual({ clear_thinking: true });
+      });
+
+      it('should keep caller-provided reasoning_content', () => {
+        const payload = {
+          messages: [
+            {
+              content: 'answer',
+              reasoning_content: 'existing reasoning content',
+              role: 'assistant',
+            },
+          ],
+          model: 'glm-5',
+          preserveThinking: true,
+        } as any;
+
+        const result = params.chatCompletion.handlePayload(payload);
+
+        expect(result.messages).toEqual([
+          {
+            content: 'answer',
+            reasoning_content: 'existing reasoning content',
+            role: 'assistant',
+          },
+        ]);
+      });
+    });
+
     describe('Preserve other payload properties', () => {
       it('should preserve all other properties', async () => {
         await instance.chat({

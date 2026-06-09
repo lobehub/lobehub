@@ -74,6 +74,68 @@ const zhipuChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       search: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
+      'GLM-5V-Turbo is Zhipu’s multimodal Coding foundation model for visual programming tasks. It natively handles images, video, text, and files, and is optimized for long-horizon planning, complex coding, and agent execution in multimodal workflows.',
+    displayName: 'GLM-5V-Turbo',
+    enabled: true,
+    id: 'glm-5v-turbo',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 1.2,
+              '[0.032, infinity]': 1.8,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 5,
+              '[0.032, infinity]': 7,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textInput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 22,
+              '[0.032, infinity]': 26,
+            },
+            pricingParams: ['textInput'],
+          },
+          name: 'textOutput',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
     },
     contextWindowTokens: 200_000,
     description:
@@ -185,7 +247,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-02-12',
     settings: {
-      extendParams: ['enableReasoning'],
+      extendParams: ['enableReasoning', 'preserveThinking'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -248,7 +310,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-12-22',
     settings: {
-      extendParams: ['enableReasoning'],
+      extendParams: ['enableReasoning', 'preserveThinking'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -302,69 +364,6 @@ const zhipuChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-01-19',
-    settings: {
-      extendParams: ['enableReasoning'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      video: true,
-      vision: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'GLM-5V-Turbo is Zhipu’s first multimodal coding foundation model, designed for visual programming tasks. It can natively process multimodal inputs such as images, videos, and text, while excelling in long-horizon planning, complex programming, and action execution. Deeply integrated with agent workflows, it can collaborate seamlessly with agents like Claude Code and OpenClaw to complete a full closed loop of “understanding the environment → planning actions → executing tasks.”',
-    displayName: 'GLM-5V-Turbo',
-    enabled: true,
-    id: 'glm-5v-turbo',
-    maxOutput: 131_072,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 1.2,
-              '[0.032, infinity]': 1.8,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 5,
-              '[0.032, infinity]': 7,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 22,
-              '[0.032, infinity]': 26,
-            },
-            pricingParams: ['textInput'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2026-04-02',
     settings: {
       extendParams: ['enableReasoning'],
       searchImpl: 'params',

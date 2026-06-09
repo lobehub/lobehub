@@ -1,3 +1,9 @@
+import {
+  AGENT_DOCUMENT_CATEGORY,
+  AGENT_DOCUMENT_SKILL_CATEGORY,
+  CUSTOM_DOCUMENT_FILE_TYPE,
+  CUSTOM_FOLDER_FILE_TYPE,
+} from '@lobechat/const';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -136,7 +142,7 @@ const createDocument = (overrides: Partial<AgentDocumentItem>): AgentDocumentIte
     accessSelf: 0,
     accessShared: 0,
     agentId: 'agent-1',
-    category: 'document',
+    category: AGENT_DOCUMENT_CATEGORY,
     content: '',
     createdAt: new Date('2026-05-09T00:00:00Z'),
     deletedAt: null,
@@ -147,7 +153,7 @@ const createDocument = (overrides: Partial<AgentDocumentItem>): AgentDocumentIte
     documentId: 'doc-1',
     editorData: null,
     filename: 'document.md',
-    fileType: 'custom/document',
+    fileType: CUSTOM_DOCUMENT_FILE_TYPE,
     id: 'agent-doc-1',
     isFolder: false,
     isSkillBundle: false,
@@ -183,7 +189,7 @@ describe('DocumentExplorerTree', () => {
   it('renders managed skill bundle as a folder with SKILL.md underneath', () => {
     const data = [
       createDocument({
-        category: 'skill',
+        category: AGENT_DOCUMENT_SKILL_CATEGORY,
         documentId: 'skill-bundle-doc',
         fileType: 'skills/bundle',
         filename: 'youtube-comment-retrieval-workflow',
@@ -194,7 +200,7 @@ describe('DocumentExplorerTree', () => {
         title: 'YouTube Comment Retrieval Workflow',
       }),
       createDocument({
-        category: 'skill',
+        category: AGENT_DOCUMENT_SKILL_CATEGORY,
         documentId: 'skill-index-doc',
         fileType: 'skills/index',
         filename: 'SKILL.md',
@@ -206,7 +212,7 @@ describe('DocumentExplorerTree', () => {
       }),
       createDocument({
         documentId: 'folder-doc',
-        fileType: 'custom/folder',
+        fileType: CUSTOM_FOLDER_FILE_TYPE,
         filename: 'Notes',
         id: 'folder-row',
         isFolder: true,
@@ -231,7 +237,7 @@ describe('DocumentExplorerTree', () => {
   it('opens SKILL.md but does not open the empty skill bundle', () => {
     const data = [
       createDocument({
-        category: 'skill',
+        category: AGENT_DOCUMENT_SKILL_CATEGORY,
         documentId: 'skill-bundle-doc',
         fileType: 'skills/bundle',
         filename: 'youtube-comment-retrieval-workflow',
@@ -242,7 +248,7 @@ describe('DocumentExplorerTree', () => {
         title: 'YouTube Comment Retrieval Workflow',
       }),
       createDocument({
-        category: 'skill',
+        category: AGENT_DOCUMENT_SKILL_CATEGORY,
         documentId: 'skill-index-doc',
         fileType: 'skills/index',
         filename: 'SKILL.md',
@@ -267,7 +273,7 @@ describe('DocumentExplorerTree', () => {
     const mutate = vi.fn().mockResolvedValue(undefined);
     const data = [
       createDocument({
-        category: 'skill',
+        category: AGENT_DOCUMENT_SKILL_CATEGORY,
         documentId: 'skill-bundle-doc',
         fileType: 'skills/bundle',
         filename: 'youtube-comment-retrieval-workflow',

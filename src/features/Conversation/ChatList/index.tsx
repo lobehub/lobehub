@@ -109,7 +109,7 @@ const ChatList = memo<ChatListProps>(
       topicId: canShowAgentSignalReceipts ? context.topicId : undefined,
     });
 
-    // Fetch notebook documents when topic is selected (skip for share pages)
+    // Fetch conversation context data when a conversation is visible (skip for share pages)
     useFetchAgentDocuments(isSharePage ? undefined : activeAgentId);
     useFetchNotebookDocuments(isSharePage ? undefined : context.topicId!);
     useFetchTopicMemories(enableUserMemories && !isSharePage ? context.topicId : undefined);

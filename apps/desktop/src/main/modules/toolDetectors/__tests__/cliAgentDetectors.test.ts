@@ -181,5 +181,46 @@ describe('cliAgentDetectors', () => {
       expect(execMock).not.toHaveBeenCalled();
       expect(execFileMock).toHaveBeenCalledTimes(2);
     });
+
+    it('falls back to the login shell PATH for tools installed by shell setup', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      process.env.SHELL = '/bin/zsh';
+
+      try {
+        callExecFileError(new Error('not found'));
+        callExecFile('/opt/homebrew/bin:/Users/Hanam/.local/share/mise/shims:/usr/bin:/bin');
+        callExecFile('/Users/Hanam/.local/share/mise/shims/gemini\n');
+        callExecFile('gemini 0.2.0');
+
+        const { geminiCliDetector } = await import('../cliAgentDetectors');
+        const status = await geminiCliDetector.detect();
+
+        expect(status.available).toBe(true);
+        expect(status.path).toBe('/Users/Hanam/.local/share/mise/shims/gemini');
+        expect(status.version).toBe('gemini 0.2.0');
+
+        expect(execFileMock).toHaveBeenCalledTimes(4);
+        expect(execFileMock.mock.calls[0]![0]).toBe('which');
+        expect(execFileMock.mock.calls[1]![0]).toBe('/bin/zsh');
+        expect(execFileMock.mock.calls[1]![1]).toEqual(['-ilc', 'printf "%s" "$PATH"']);
+        expect(execFileMock.mock.calls[2]![0]).toBe('which');
+        expect(execFileMock.mock.calls[2]![2]).toMatchObject({
+          env: {
+            PATH: '/opt/homebrew/bin:/Users/Hanam/.local/share/mise/shims:/usr/bin:/bin',
+          },
+        });
+        expect(execFileMock.mock.calls[3]![0]).toBe('/Users/Hanam/.local/share/mise/shims/gemini');
+        expect(execFileMock.mock.calls[3]![2]).toMatchObject({
+          env: {
+            PATH: '/opt/homebrew/bin:/Users/Hanam/.local/share/mise/shims:/usr/bin:/bin',
+          },
+        });
+      } finally {
+        process.env.PATH = originalPath;
+        process.env.SHELL = originalShell;
+      }
+    });
   });
 });

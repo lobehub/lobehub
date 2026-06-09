@@ -10,7 +10,7 @@ import { useParams } from 'react-router-dom';
 
 import { runSelectors, useEvalStore } from '@/store/eval';
 
-import { BatchResumeModal } from './features/BatchResumeModal';
+import { createBatchResumeModal } from './features/BatchResumeModal';
 import CaseResultsTable from './features/CaseResultsTable';
 import BenchmarkCharts from './features/Charts/BenchmarkCharts';
 import IdleState from './features/IdleState';
@@ -35,7 +35,6 @@ const RunDetail = memo(() => {
   const runResults = useEvalStore(runSelectors.getRunResultsById(runId!));
   const isActive = useEvalStore(runSelectors.isRunActive(runId!));
   const [retrying, setRetrying] = useState(false);
-  const [batchResumeOpen, setBatchResumeOpen] = useState(false);
 
   const pollingConfig = { refreshInterval: isActive ? POLLING_INTERVAL : 0 };
 
@@ -154,7 +153,12 @@ const RunDetail = memo(() => {
                   <Button
                     icon={<Play size={14} />}
                     size="small"
-                    onClick={() => setBatchResumeOpen(true)}
+                    onClick={() =>
+                      createBatchResumeModal({
+                        onConfirm: (targets) => batchResumeRunCases(runId!, targets),
+                        runId: runId!,
+                      })
+                    }
                   >
                     {t('run.actions.batchResume')}
                   </Button>
@@ -202,13 +206,6 @@ const RunDetail = memo(() => {
           />
         </Card>
       )}
-
-      <BatchResumeModal
-        open={batchResumeOpen}
-        runId={runId!}
-        onClose={() => setBatchResumeOpen(false)}
-        onConfirm={(targets) => batchResumeRunCases(runId!, targets)}
-      />
     </Flexbox>
   );
 });

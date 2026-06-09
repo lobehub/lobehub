@@ -8,6 +8,7 @@ import { safeParseJSON } from '@/utils/safeParseJSON';
 
 const ToolRender = memo(() => {
   const messageId = useChatStore(chatPortalSelectors.toolMessageId);
+  const params = useChatStore(chatPortalSelectors.toolUIParams, isEqual);
   const message = useChatStore(dbMessageSelectors.getDbMessageById(messageId || ''), isEqual);
 
   // make sure the message and id is valid
@@ -32,6 +33,7 @@ const ToolRender = memo(() => {
       arguments={args}
       identifier={plugin.identifier}
       messageId={messageId}
+      params={params}
       state={pluginState}
     />
   );

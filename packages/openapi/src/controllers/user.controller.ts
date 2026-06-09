@@ -21,10 +21,13 @@ export class UserController extends BaseController {
    */
   async getCurrentUser(c: Context): Promise<Response> {
     try {
+      const includeCountQuery = c.req.query('includeCount');
+      const includeCount = includeCountQuery !== '0' && includeCountQuery !== 'false';
+
       // Get database connection and create service instance
       const db = await this.getDatabase();
-      const userService = new UserService(db, this.getUserId(c));
-      const userInfo = await userService.getCurrentUser();
+      const userService = new UserService(db, this.getUserId(c), this.getWorkspaceId(c));
+      const userInfo = await userService.getCurrentUser(includeCount);
 
       return this.success(c, userInfo, 'User info retrieved successfully');
     } catch (error) {
@@ -43,7 +46,7 @@ export class UserController extends BaseController {
 
       // Get database connection and create service instance
       const db = await this.getDatabase();
-      const userService = new UserService(db, this.getUserId(c));
+      const userService = new UserService(db, this.getUserId(c), this.getWorkspaceId(c));
 
       const userList = await userService.queryUsers(request);
 
@@ -64,7 +67,7 @@ export class UserController extends BaseController {
 
       // Get database connection and create service instance
       const db = await this.getDatabase();
-      const userService = new UserService(db, this.getUserId(c));
+      const userService = new UserService(db, this.getUserId(c), this.getWorkspaceId(c));
       const newUser = await userService.createUser(userData);
 
       return this.success(c, newUser, 'User created successfully');
@@ -84,7 +87,7 @@ export class UserController extends BaseController {
 
       // Get database connection and create service instance
       const db = await this.getDatabase();
-      const userService = new UserService(db, this.getUserId(c));
+      const userService = new UserService(db, this.getUserId(c), this.getWorkspaceId(c));
       const user = await userService.getUserById(id);
 
       return this.success(c, user, 'User info retrieved successfully');
@@ -105,7 +108,7 @@ export class UserController extends BaseController {
 
       // Get database connection and create service instance
       const db = await this.getDatabase();
-      const userService = new UserService(db, this.getUserId(c));
+      const userService = new UserService(db, this.getUserId(c), this.getWorkspaceId(c));
       const updatedUser = await userService.updateUser(id, userData);
 
       return this.success(c, updatedUser, 'User info updated successfully');
@@ -125,7 +128,7 @@ export class UserController extends BaseController {
 
       // Get database connection and create service instance
       const db = await this.getDatabase();
-      const userService = new UserService(db, this.getUserId(c));
+      const userService = new UserService(db, this.getUserId(c), this.getWorkspaceId(c));
       const result = await userService.deleteUser(id);
 
       return this.success(c, result, 'User deleted successfully');
@@ -151,7 +154,7 @@ export class UserController extends BaseController {
 
       // Get database connection and create service instance
       const db = await this.getDatabase();
-      const userService = new UserService(db, this.getUserId(c));
+      const userService = new UserService(db, this.getUserId(c), this.getWorkspaceId(c));
       const result = await userService.updateUserRoles(id, body);
 
       return this.success(c, result, 'User roles updated successfully');
@@ -169,7 +172,7 @@ export class UserController extends BaseController {
       const { id } = this.getParams<{ id: string }>(c);
 
       const db = await this.getDatabase();
-      const userService = new UserService(db, this.getUserId(c));
+      const userService = new UserService(db, this.getUserId(c), this.getWorkspaceId(c));
       const result = await userService.clearUserRoles(id);
 
       return this.success(c, result, 'User roles cleared');
@@ -190,7 +193,7 @@ export class UserController extends BaseController {
 
       // Get database connection and create service instance
       const db = await this.getDatabase();
-      const userService = new UserService(db, this.getUserId(c));
+      const userService = new UserService(db, this.getUserId(c), this.getWorkspaceId(c));
       const userRoles = await userService.getUserRoles(id);
 
       return this.success(c, userRoles, 'User roles retrieved successfully');

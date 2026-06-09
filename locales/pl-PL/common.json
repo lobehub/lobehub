@@ -234,7 +234,7 @@
   "exportType.allAgentWithMessage": "Eksportuj wszystkich agentów i wiadomości",
   "exportType.globalSetting": "Eksportuj ustawienia globalne",
   "feedback": "Opinie",
-  "feedback.emailContact": "Możesz również wysłać do nas e-mail na adres {{email}}",
+  "feedback.emailContact": "Możesz również wysłać do nas e-mail na adres <email>{{email}}</email>",
   "feedback.errors.fileTooLarge": "Plik przekracza 5 MB",
   "feedback.errors.submitFailed": "Nie udało się wysłać. Spróbuj ponownie.",
   "feedback.errors.teamNotFound": "Błąd konfiguracji",
@@ -353,6 +353,7 @@
   "messengerBanner.title": "Porozmawiaj z Lobe AI na swoich ulubionych aplikacjach do przesyłania wiadomości",
   "more": "Więcej",
   "navPanel.agent": "Agent",
+  "navPanel.bottomDivider": "Elementy poniżej zakotwiczają się na dole",
   "navPanel.customizeSidebar": "Dostosuj pasek boczny",
   "navPanel.displayItems": "Wyświetlane elementy",
   "navPanel.hidden": "Ukryte",
@@ -479,5 +480,6 @@
   "userPanel.setting": "Ustawienia",
   "userPanel.upgradePlan": "Ulepsz plan",
   "userPanel.usages": "Statystyki użycia",
-  "version": "Wersja"
+  "version": "Wersja",
+  "zoom": "Powiększenie"
 }

@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "Prześlij folder",
   "home.uploadEntries.library.title": "Utwórz nową bibliotekę",
   "home.uploadEntries.newPage.title": "Nowa strona",
+  "library.hierarchy.empty.desc": "Dodaj pliki lub utwórz folder, aby rozpocząć",
+  "library.hierarchy.empty.title": "Jeszcze nic tutaj nie ma",
   "library.list.confirmRemoveLibrary": "Zamierzasz usunąć tę bibliotekę. Pliki w niej zawarte nie zostaną usunięte, lecz przeniesione do Wszystkich plików. Tej operacji nie można cofnąć, więc prosimy o ostrożność.",
   "library.list.empty": "Kliknij <1>+</1>, aby utworzyć nową bibliotekę",
   "library.new": "Nowa biblioteka",

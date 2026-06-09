@@ -18,6 +18,7 @@ export enum PortalViewType {
   Notebook = 'notebook',
   Thread = 'thread',
   ToolUI = 'toolUI',
+  VerifyResult = 'verifyResult',
 }
 
 export interface PortalFile {
@@ -34,15 +35,24 @@ export type PortalViewData =
   | { file: PortalFile; type: PortalViewType.FilePreview }
   | { type: PortalViewType.LocalFile }
   | { messageId: string; type: PortalViewType.MessageDetail }
-  | { identifier: string; messageId: string; type: PortalViewType.ToolUI }
+  | {
+      identifier: string;
+      messageId: string;
+      params?: Record<string, any>;
+      type: PortalViewType.ToolUI;
+    }
   | { startMessageId?: string; threadId?: string; type: PortalViewType.Thread }
-  | { agentId: string; type: PortalViewType.GroupThread };
+  | { agentId: string; type: PortalViewType.GroupThread }
+  | { checkItemId: string; operationId: string; type: PortalViewType.VerifyResult };
 
 // ============== Portal State ==============
 
 export interface ChatPortalState {
   /** Path of the currently active tab; undefined when no tabs open. */
   activeLocalFilePath?: string;
+
+  /** Unsaved edit buffers keyed by file path. Presence implies the file is dirty. */
+  dirtyLocalFileContents: Record<string, string>;
 
   // Legacy fields (kept for backward compatibility during migration)
   // TODO: Remove after Phase 3 migration complete
@@ -69,6 +79,7 @@ export interface ChatPortalState {
 }
 
 export const initialChatPortalState: ChatPortalState = {
+  dirtyLocalFileContents: {},
   openLocalFiles: [],
   portalArtifactDisplayMode: ArtifactDisplayMode.Preview,
   portalStack: [],

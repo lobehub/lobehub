@@ -1,3 +1,4 @@
+import type { WorkingDirEntry } from '@lobechat/types';
 import { and, desc, eq } from 'drizzle-orm';
 
 import type { DeviceItem } from '../schemas';
@@ -15,9 +16,20 @@ export interface RegisterDeviceParams {
 export interface UpdateDeviceParams {
   defaultCwd?: string | null;
   friendlyName?: string | null;
-  recentCwds?: string[];
+  workingDirs?: WorkingDirEntry[];
 }
 
+/**
+ * Devices are intentionally USER-LEVEL, not workspace-scoped.
+ *
+ * Even though the `devices` table carries a nullable `workspace_id` column, a
+ * physical machine belongs to the user across every workspace they're in (the
+ * unique key is `(userId, deviceId)`). This model therefore scopes all reads
+ * and writes by `userId` only and deliberately does NOT take a `workspaceId`
+ * argument or use `buildWorkspaceWhere` / `buildWorkspacePayload`. Switching it
+ * to workspace-scoped lookups would hide a user's own device inside their
+ * workspaces. See the matching note on `devices.workspaceId` in the schema.
+ */
 export class DeviceModel {
   private userId: string;
   private db: LobeChatDatabase;
@@ -30,7 +42,7 @@ export class DeviceModel {
   /**
    * Auto-register from desktop/CLI. Upserts on the (userId, deviceId) unique
    * index. On conflict only the machine-reported fields + lastSeenAt are
-   * refreshed — friendlyName / defaultCwd / recentCwds are user-owned and
+   * refreshed — friendlyName / defaultCwd / workingDirs are user-owned and
    * must survive re-registration.
    */
   register = async (params: RegisterDeviceParams) => {

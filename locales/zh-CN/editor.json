@@ -13,6 +13,7 @@
   "actions.expand.on": "展开",
   "actions.typobar.off": "隐藏格式工具栏",
   "actions.typobar.on": "显示格式工具栏",
+  "actions.typobar.title": "格式工具",
   "autoSave.latest": "已加载最新版本",
   "autoSave.saved": "已保存",
   "autoSave.saving": "自动保存中…",

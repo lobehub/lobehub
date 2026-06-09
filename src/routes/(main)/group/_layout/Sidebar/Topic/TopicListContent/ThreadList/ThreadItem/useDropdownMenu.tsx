@@ -40,11 +40,14 @@ export const useThreadItemDropdownMenu = ({
         label: t('delete', { ns: 'common' }),
         onClick: () => {
           confirmModal({
+            cancelText: t('cancel', { ns: 'common' }),
+            content: t('actions.confirmRemoveThread'),
             okButtonProps: { danger: true },
+            okText: t('delete', { ns: 'common' }),
             onOk: async () => {
               await removeThread(id);
             },
-            title: t('actions.confirmRemoveThread'),
+            title: t('delete', { ns: 'common' }),
           });
         },
       },

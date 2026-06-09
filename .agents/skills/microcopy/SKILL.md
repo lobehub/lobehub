@@ -1,6 +1,6 @@
 ---
 name: microcopy
-description: UI copy and microcopy guidelines. Use when writing UI text, buttons, error messages, empty states, onboarding, or any user-facing copy. Triggers on i18n translation, UI text writing, or copy improvement tasks. Supports both Chinese and English.
+description: 'UI copy and microcopy guidelines. Use for user-facing copy, buttons, errors, empty states, onboarding, i18n wording, translation, or copy improvements in Chinese or English.'
 user-invocable: false
 ---
 

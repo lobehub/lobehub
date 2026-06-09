@@ -40,11 +40,14 @@ export const useProjectItemDropdownMenu = ({
         onClick: () => {
           if (!id) return;
           confirmModal({
+            cancelText: t('cancel', { ns: 'common' }),
+            content: t('project.deleteConfirm'),
             okButtonProps: { danger: true },
+            okText: t('delete', { ns: 'common' }),
             onOk: async () => {
               await removeKnowledgeBase(id);
             },
-            title: t('project.deleteConfirm'),
+            title: t('delete', { ns: 'common' }),
           });
         },
       },

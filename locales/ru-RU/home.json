@@ -48,13 +48,10 @@
   "starter.createAgent": "Создать агента",
   "starter.createGroup": "Создать группу",
   "starter.deepResearch": "Глубокое исследование",
-  "starter.deepseekV4Pro": "DeepSeek V4 Pro",
-  "starter.deepseekV4ProAlready": "Уже используется DeepSeek V4 Pro",
-  "starter.deepseekV4ProSwitched": "Переключено на DeepSeek V4 Pro",
   "starter.developing": "Скоро появится",
   "starter.image": "Изображение",
-  "starter.imageGeneration": "Генерация изображений",
+  "starter.modelInUse": "Уже используется {{name}}",
+  "starter.modelSwitched": "Переключено на {{name}}",
   "starter.newLabel": "Новое",
-  "starter.videoGeneration": "Seedance 2.0",
   "starter.write": "Написать"
 }

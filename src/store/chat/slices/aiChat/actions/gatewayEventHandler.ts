@@ -551,10 +551,14 @@ export const createGatewayEventHandler = (
               action: 'gateway/agent_runtime_end',
               context,
             });
-          } else if (data?.reason === 'interrupted' && hasStreamedContent) {
-            // MID-stream cancel. The server's
+          } else if (
+            (data?.reason === 'interrupted' || data?.reason === 'waiting_for_async_tool') &&
+            hasStreamedContent
+          ) {
+            // MID-stream cancel, or a deferred-tool pause
+            // (`waiting_for_async_tool`). The server's
             // `AgentRuntimeCoordinator.resolveUiMessages` omits uiMessages
-            // for status='interrupted' precisely so we can preserve the
+            // for both statuses precisely so we can preserve the
             // in-memory streamed content here. The executor's partial-
             // finalize catch writes the real content to DB asynchronously,
             // but it may not be durable yet — refetching here would race

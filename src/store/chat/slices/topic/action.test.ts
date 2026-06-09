@@ -8,6 +8,7 @@ import { mutate } from '@/libs/swr';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
+import { useAgentStore } from '@/store/agent';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
@@ -80,6 +81,7 @@ beforeEach(() => {
     },
     false,
   );
+  useAgentStore.setState({ agentDocumentsMap: {} });
   useSessionStore.setState(
     {
       activeId: 'inbox',

@@ -28,6 +28,7 @@ import {
 } from '@lobechat/heterogeneous-agents/spawn';
 import { app as electronApp, BrowserWindow } from 'electron';
 
+import { HETERO_AGENT_FILES_DIR, HETERO_AGENT_TRACING_DIR } from '@/const/heteroAgent';
 import { getHeterogeneousAgentDriver } from '@/modules/heterogeneousAgent';
 import type {
   HeterogeneousAgentBuildPlan,
@@ -40,6 +41,33 @@ import { createLogger } from '@/utils/logger';
 import { ControllerModule, IpcMethod } from './index';
 
 const logger = createLogger('controllers:HeterogeneousAgentCtr');
+
+// Anthropic auth env vars that must NOT be inherited from the desktop process
+// when spawning a local CLI agent. A developer with `ANTHROPIC_API_KEY` (or an
+// auth token / base url) exported in their shell would otherwise have it
+// forwarded to `claude`, which then switches from its own subscription login to
+// that key — an expired / wrong key surfaces as a baffling "Invalid API key"
+// and the run exits non-zero. Agents that genuinely want an API key still set
+// it through `session.env`, which is spread AFTER the inherited env below and
+// therefore wins.
+const STRIPPED_INHERITED_ENV_KEYS = [
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_BASE_URL',
+] as const;
+
+/**
+ * Inherited `process.env` with the Anthropic auth vars removed. Keep this pure
+ * and exported so the "never leak host Anthropic creds into the CLI" invariant
+ * can be unit-tested directly.
+ */
+export const buildInheritedSpawnEnv = (
+  sourceEnv: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv => {
+  const env = { ...sourceEnv };
+  for (const key of STRIPPED_INHERITED_ENV_KEYS) delete env[key];
+  return env;
+};
 const CODEX_RESUME_THREAD_NOT_FOUND_PATTERNS = [
   /no conversation found/i,
   /thread .*not found/i,
@@ -62,7 +90,7 @@ const CODEX_RESUME_CWD_MISMATCH_PATTERNS = [
 ] as const;
 
 /** Directory under appStoragePath for caching downloaded files */
-const FILE_CACHE_DIR = 'heteroAgent/files';
+const FILE_CACHE_DIR = HETERO_AGENT_FILES_DIR;
 const CLI_TRACE_DIR = '.heerogeneous-tracing';
 const CODEX_STDERR_STATUS_LINE = 'Reading prompt from stdin...';
 const CODEX_WARN_LOG_PATTERN = /^\d{4}-\d{2}-\d{2}T\S+\s+WARN\s+/;
@@ -434,7 +462,32 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   }
 
   private get shouldTraceCliOutput(): boolean {
-    return process.env.NODE_ENV !== 'test' && !electronApp.isPackaged;
+    if (process.env.NODE_ENV === 'test') return false;
+    // Dev builds always trace. Packaged builds trace only when the user has
+    // flipped the Help-menu developer toggle — so production issues can be
+    // captured on demand without polluting normal runs.
+    if (!electronApp.isPackaged) return true;
+    return this.app.storeManager.get('heteroTracingEnabled', false);
+  }
+
+  /**
+   * Root directory for CLI trace sessions.
+   *
+   * When the user has explicitly opted in via the `heteroTracingEnabled`
+   * Help-menu toggle, centralize traces under the app storage dir
+   * (`<appStoragePath>/heteroAgent/tracing`) — this is the only path packaged
+   * builds ever trace through, and it keeps traces out of the user's real
+   * project directory while staying reachable from one stable Help-menu entry.
+   *
+   * Otherwise (a plain dev run with the toggle off) keep writing into the
+   * working directory (`cwd/.heerogeneous-tracing`) — devs expect traces to
+   * show up alongside the repo they're running in.
+   */
+  private resolveTraceRootDir(cwd: string): string {
+    if (this.app.storeManager.get('heteroTracingEnabled', false)) {
+      return path.join(this.app.appStoragePath, HETERO_AGENT_TRACING_DIR);
+    }
+    return path.join(cwd, CLI_TRACE_DIR);
   }
 
   private formatTraceTimestamp(date: Date): string {
@@ -501,7 +554,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     }
 
     const createdAt = new Date();
-    const rootDir = path.join(cwd, CLI_TRACE_DIR);
+    const rootDir = this.resolveTraceRootDir(cwd);
     const agentDir = path.join(rootDir, this.sanitizeTracePathSegment(session.agentType));
     const traceId = `${this.formatTraceTimestamp(createdAt)}-${this.sanitizeTracePathSegment(
       session.sessionId,
@@ -894,7 +947,10 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const spawnOptions = {
       cwd,
       detached: process.platform !== 'win32',
-      env: { ...process.env, ...proxyEnv, ...session.env },
+      // Strip host Anthropic creds from the inherited env so a developer's
+      // shell `ANTHROPIC_API_KEY` can't hijack the CLI's own auth. `session.env`
+      // is spread last, so an agent that explicitly configures a key still wins.
+      env: { ...buildInheritedSpawnEnv(), ...proxyEnv, ...session.env },
       stdio: [useStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'] as ['pipe' | 'ignore', 'pipe', 'pipe'],
     };
 
@@ -1266,10 +1322,20 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     prompt: string;
     resumeSessionId?: string;
     serverUrl: string;
+    systemContext?: string;
     topicId: string;
   }): void {
-    const { agentType, cwd, jwt, operationId, prompt, resumeSessionId, serverUrl, topicId } =
-      params;
+    const {
+      agentType,
+      cwd,
+      jwt,
+      operationId,
+      prompt,
+      resumeSessionId,
+      serverUrl,
+      systemContext,
+      topicId,
+    } = params;
     const workDir = cwd ?? process.cwd();
 
     const args = [
@@ -1305,7 +1371,17 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       stdio: ['pipe', 'inherit', 'inherit'],
     });
 
-    child.stdin.write(JSON.stringify(prompt));
+    // When systemContext is provided, send a content-block array so CC sees the
+    // context block first, then the user's actual message — mirrors
+    // spawnHeteroSandbox. lh handles JSON arrays via coerceJsonPrompt, so no lh
+    // changes are required.
+    const stdinPayload = systemContext
+      ? JSON.stringify([
+          { text: systemContext, type: 'text' },
+          { text: prompt, type: 'text' },
+        ])
+      : JSON.stringify(prompt);
+    child.stdin.write(stdinPayload);
     child.stdin.end();
 
     child.on('error', (err) => {

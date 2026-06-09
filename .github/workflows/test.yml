@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Test Packages
     env:
-      PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/python-interpreter @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/builtin-tool-lobe-agent model-bank'
+      PACKAGES: '@lobechat/file-loaders @lobechat/prompts @lobechat/model-runtime @lobechat/web-crawler @lobechat/electron-server-ipc @lobechat/utils @lobechat/python-interpreter @lobechat/context-engine @lobechat/agent-runtime @lobechat/conversation-flow @lobechat/ssrf-safe-fetch @lobechat/memory-user-memory @lobechat/types @lobechat/trpc @lobechat/app-config @lobechat/locales @lobechat/env @lobechat/builtin-tool-lobe-agent model-bank @lobechat/agent-gateway-client @lobechat/agent-manager-runtime @lobechat/device-gateway-client @lobechat/device-identity @lobechat/eval-dataset-parser @lobechat/eval-rubric @lobechat/fetch-sse @lobechat/heterogeneous-agents'
 
     steps:
       - name: Checkout

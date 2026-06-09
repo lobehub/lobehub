@@ -26,6 +26,11 @@ export async function runStep(c: Context): Promise<Response> {
   const externalRetryCount = Number(c.req.header('upstash-retried') ?? 0) || 0;
 
   try {
+    // QStash nests resume/intervention fields under `body.payload` (see
+    // QStashQueueServiceImpl.scheduleMessage), while `operationId`/`stepIndex`/
+    // `context` stay at the top level. Merge so both shapes work — without this
+    // the QStash path reads `resumeAsyncTool`/`approvedToolCall`/… as undefined
+    // and never resumes a parked op. (The local queue spreads payload itself.)
     const {
       operationId,
       stepIndex = 0,
@@ -34,8 +39,9 @@ export async function runStep(c: Context): Promise<Response> {
       approvedToolCall,
       rejectionReason,
       rejectAndContinue,
+      resumeAsyncTool,
       toolMessageId,
-    } = body;
+    } = { ...body, ...body.payload };
 
     if (!operationId) {
       return c.json({ error: 'operationId is required' }, 400);
@@ -53,7 +59,12 @@ export async function runStep(c: Context): Promise<Response> {
     }
 
     const serverDB = await getServerDB();
-    const agentRuntimeService = new AgentRuntimeService(serverDB, metadata.userId);
+    // Thread the operation's workspace through so the runtime's models stay
+    // workspace-scoped. Without it the worker is personal-scoped and the
+    // parent-message lookup misses workspace-scoped rows → ConversationParentMissing.
+    const agentRuntimeService = new AgentRuntimeService(serverDB, metadata.userId, {
+      workspaceId: metadata.workspaceId,
+    });
 
     const result = await agentRuntimeService.executeStep({
       approvedToolCall,
@@ -63,6 +74,7 @@ export async function runStep(c: Context): Promise<Response> {
       operationId,
       rejectAndContinue,
       rejectionReason,
+      resumeAsyncTool,
       stepIndex,
       toolMessageId,
     });

@@ -8,11 +8,11 @@ import type { ConversationContext, ExecAgentResult, MessageMetadata } from '@lob
 
 import { isDesktop } from '@/const/version';
 import { aiAgentService, type ResumeApprovalParam } from '@/services/aiAgent';
-import { localFileService } from '@/services/electron/localFileService';
+import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
@@ -22,32 +22,34 @@ import { useUserStore } from '@/store/user';
 import { createGatewayEventHandler } from './gatewayEventHandler';
 
 /**
- * Scan the active working directory for project-level skills
- * (`.agents/skills` / `.claude/skills`) so the server can surface them in
- * `<available_skills>`. Desktop-only and best-effort: a failed scan must not
- * block the send.
+ * When the agent runs against the local machine ("本机"), resolve this desktop's
+ * own gateway deviceId so it can be passed as the run's `deviceId`. The server
+ * then presets `activeDeviceId` and injects `lobe-local-system` into the very
+ * first LLM payload — skipping the extra `activateDevice` round-trip the model
+ * is otherwise forced to make whenever more than one device is online (with a
+ * single device the server's heuristic already covered it).
+ *
+ * Gated on the effective runtime mode (`isLocalSystemEnabledById`), NOT on
+ * `agencyConfig.executionTarget`: the latter is only written by the newer
+ * HeteroDeviceSwitcher, whereas the legacy ModeSelector writes just
+ * `runtimeMode`. Resolving a device whenever the target is unset would override
+ * an explicit `cloud` / `none` choice and wrongly route a cloud run to the
+ * local machine. `runtimeMode` is the single source of truth both selectors
+ * agree on (and what the server gates CloudSandbox on).
+ *
+ * Desktop-only and best-effort: any failure falls back to the server-side
+ * device-resolution heuristics. We don't pre-check online status here — an
+ * offline id simply fails the server's `onlineDevices` guard and stays unrouted.
  */
-const resolveProjectSkills = async (
-  get: () => ChatStore,
-): Promise<{ description?: string; name: string; path: string }[] | undefined> => {
-  if (!isDesktop) return undefined;
+const resolveLocalDeviceId = async (agentId?: string): Promise<string | undefined> => {
+  if (!isDesktop || !agentId) return undefined;
 
-  const topicWorkingDirectory = topicSelectors.currentTopicWorkingDirectory(get());
-  const agentWorkingDirectory = agentSelectors.currentAgentWorkingDirectory(getAgentStoreState());
-  const workingDirectory = topicWorkingDirectory ?? agentWorkingDirectory;
-  if (!workingDirectory) return undefined;
+  const isLocal = chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(getAgentStoreState());
+  if (!isLocal) return undefined;
 
   try {
-    const { skills } = await localFileService.listProjectSkills({ scope: workingDirectory });
-    if (skills.length === 0) return undefined;
-    // The directory tree is enumerated lazily at activation time by the Skills
-    // runtime (via the local-system `listFiles` tool), so we drop `files` here
-    // — keeps the op-param payload small.
-    return skills.map((skill) => ({
-      description: skill.description,
-      name: skill.name,
-      path: skill.path,
-    }));
+    const info = await gatewayConnectionService.getDeviceInfo();
+    return info?.deviceId;
   } catch {
     return undefined;
   }
@@ -313,6 +315,13 @@ export class GatewayActionImpl {
      * a fresh user prompt.
      */
     resumeApproval?: ResumeApprovalParam;
+    /**
+     * Temporary message IDs created during the initial sendMessage phase.
+     * These are associated with the new gateway operation so the UI doesn't
+     * show a blank loading state while waiting for the first `step_start`
+     * event to call `replaceMessages` with the server's real message IDs.
+     */
+    tempMessageIds?: string[];
   }): Promise<ExecAgentResult> => {
     const {
       context,
@@ -323,6 +332,7 @@ export class GatewayActionImpl {
       parentMessageId,
       parentOperationId,
       resumeApproval,
+      tempMessageIds,
     } = params;
 
     const agentGatewayUrl =
@@ -353,7 +363,7 @@ export class GatewayActionImpl {
       ? this.#get().getOperationAbortSignal(parentOperationId)
       : undefined;
 
-    const projectSkills = await resolveProjectSkills(this.#get);
+    const localDeviceId = await resolveLocalDeviceId(context.agentId);
 
     const result = await aiAgentService.execAgentTask(
       {
@@ -369,9 +379,9 @@ export class GatewayActionImpl {
           threadId: context.threadId,
           topicId: context.topicId,
         },
+        deviceId: localDeviceId,
         fileIds,
         parentMessageId,
-        projectSkills,
         prompt: message,
         resumeApproval,
         trigger: metadata?.trigger,
@@ -448,9 +458,43 @@ export class GatewayActionImpl {
     // Associate the server-created assistant message with the gateway operation
     this.#get().associateMessageWithOperation(result.assistantMessageId, gatewayOpId);
 
+    // Also associate temp message IDs so the UI doesn't show a blank loading
+    // state while waiting for the first `step_start` event to call
+    // `replaceMessages` with the server's real message IDs.
+    if (tempMessageIds?.length) {
+      for (const tempId of tempMessageIds) {
+        this.#get().associateMessageWithOperation(tempId, gatewayOpId);
+      }
+    }
+
     // Phase-1 init done: child op is running. Hand off loading state from
     // the caller's op (e.g. `sendMessage`) to the child without a gap.
     if (parentOperationId) this.#get().completeOperation(parentOperationId);
+
+    // Optimistically update the local store's runningOperation for this topic so
+    // useGatewayReconnect doesn't fire for a stale previous operation while the new
+    // gateway connection is being established. Also disconnect any live reconnect
+    // connection that was already established for the old operation.
+    if (result.topicId) {
+      const existingTopic = topicSelectors.getTopicById(result.topicId)(this.#get());
+      const staleOpId = existingTopic?.metadata?.runningOperation?.operationId;
+      if (staleOpId && staleOpId !== result.operationId) {
+        this.#get().internal_dispatchTopic({
+          id: result.topicId,
+          type: 'updateTopic',
+          value: {
+            metadata: {
+              ...existingTopic?.metadata,
+              runningOperation: {
+                assistantMessageId: result.assistantMessageId,
+                operationId: result.operationId,
+              },
+            },
+          },
+        });
+        this.disconnectFromGateway(staleOpId);
+      }
+    }
 
     // When the local operation is cancelled (e.g. user clicks stop), forward
     // the interrupt directly to the server via the existing tRPC endpoint.
@@ -530,8 +574,23 @@ export class GatewayActionImpl {
     const existingStatus = this.#get().gatewayConnections[operationId]?.status;
     if (existingStatus && existingStatus !== 'disconnected') return;
 
+    // Skip reconnect if the topic already has a newer running operation. This
+    // happens when executeGatewayAgent was called (creating a new op) while this
+    // stale reconnect was still queued — connecting to the old op would produce
+    // duplicate streaming events alongside the new connection.
+    const topicCurrentOpId = topicSelectors.getTopicById(topicId)(this.#get())?.metadata
+      ?.runningOperation?.operationId;
+    if (topicCurrentOpId && topicCurrentOpId !== operationId) return;
+
     // Get a fresh JWT token (original expired after 5 min)
     const { token } = await aiAgentService.refreshGatewayToken(topicId);
+
+    // Re-check after the async token refresh: a newer executeGatewayAgent call may have
+    // taken over for this topic while we were waiting. If so, bail to avoid a duplicate stream.
+    // (disconnectFromGateway on the stale op is a no-op here because we haven't connected yet.)
+    const topicOpIdAfterRefresh = topicSelectors.getTopicById(topicId)(this.#get())?.metadata
+      ?.runningOperation?.operationId;
+    if (topicOpIdAfterRefresh && topicOpIdAfterRefresh !== operationId) return;
 
     const agentId = this.#get().activeAgentId;
     const context = {

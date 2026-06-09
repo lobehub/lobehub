@@ -142,7 +142,7 @@ describe('anthropicHelpers', () => {
       vi.mocked(parseDataUri).mockReturnValueOnce({
         mimeType: null,
         base64: null,
-        // @ts-ignore
+        // @ts-expect-error test invalid parser branch
         type: 'invalid',
       });
 
@@ -191,6 +191,89 @@ describe('anthropicHelpers', () => {
       const result = await buildAnthropicBlock(content);
       expect(imageUrlToBase64).toHaveBeenCalledWith(content.image_url.url);
       expect(result).toBeUndefined();
+    });
+
+    it('should transform a video data URL into an Anthropic-compatible video block', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        mimeType: 'video/mp4',
+        base64: 'videoBase64String',
+        type: 'base64',
+      });
+
+      const content = {
+        type: 'video_url',
+        video_url: { url: 'data:video/mp4;base64,videoBase64String' },
+      } as const;
+
+      const result = await buildAnthropicBlock(content);
+
+      expect(parseDataUri).toHaveBeenCalledWith(content.video_url.url);
+      expect(result).toEqual({
+        source: {
+          data: 'videoBase64String',
+          media_type: 'video/mp4',
+          type: 'base64',
+        },
+        type: 'video',
+      });
+    });
+
+    it('should transform a video URL into an Anthropic-compatible URL source block', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        mimeType: null,
+        base64: null,
+        type: 'url',
+      });
+
+      const content = {
+        type: 'video_url',
+        video_url: { url: 'https://example.com/video.mp4' },
+      } as const;
+
+      const result = await buildAnthropicBlock(content);
+
+      expect(result).toEqual({
+        source: {
+          type: 'url',
+          url: 'https://example.com/video.mp4',
+        },
+        type: 'video',
+      });
+    });
+
+    it('should pass MiniMax file references as Anthropic-compatible video URL sources', async () => {
+      const content = {
+        type: 'video_url',
+        video_url: { url: 'mm_file://file_123' },
+      } as const;
+
+      const result = await buildAnthropicBlock(content);
+
+      expect(parseDataUri).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        source: {
+          type: 'url',
+          url: 'mm_file://file_123',
+        },
+        type: 'video',
+      });
+    });
+
+    it('should throw an error for invalid video URLs', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        mimeType: null,
+        base64: null,
+        type: null,
+      });
+
+      const content = {
+        type: 'video_url',
+        video_url: { url: 'invalid-video-url' },
+      } as const;
+
+      await expect(buildAnthropicBlock(content)).rejects.toThrow(
+        'Invalid video URL: invalid-video-url',
+      );
     });
   });
 

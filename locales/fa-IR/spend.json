@@ -26,6 +26,7 @@
   "table.columns.trigger.enums.onboarding": "آموزش اولیه",
   "table.columns.trigger.enums.openapi": "OpenAPI",
   "table.columns.trigger.enums.semantic_search": "جستجوی دانش",
+  "table.columns.trigger.enums.signup_email_llm_review": "بررسی ایمیل ثبت‌نام",
   "table.columns.trigger.enums.topic": "خلاصه موضوع",
   "table.columns.trigger.enums.video": "تولید ویدئو",
   "table.columns.trigger.enums.visual_analysis": "تحلیل بصری",

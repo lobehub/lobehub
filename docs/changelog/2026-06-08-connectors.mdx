@@ -1,0 +1,43 @@
+---
+title: Connectors & Connect Agents
+description: >-
+  Govern every tool with the new Connectors system, run Connect Agents on your own device, and track spending right in the activity heatmap.
+
+tags:
+  - Connectors
+  - Connect Agent
+  - Insights
+  - Models
+---
+
+# Connectors & Connect Agents
+
+## Connectors: one place to govern every tool
+
+Connectors bring all of an agent's tools — MCP servers, Skill Market skills, built-in tools, and third-party integrations — under a single permission layer. For each tool you decide whether it runs freely, pauses for your approval, or stays off, and read-only actions (like fetching or listing) are detected automatically so they aren't blocked by mistake. It's the clearest way yet to see what your agents can reach, and to keep write actions on a short leash.
+
+## Connect Agents, running on your own machine
+
+What you used to create as a "Platform Agent" is now a **Connect Agent** — a name that better reflects what it is: a third-party agent running on your own device, not on LobeHub. The execution-device switcher now appears for every agent, so you can point any conversation at a specific machine. Agents can call stdio MCP tools directly through your device and their results render inline in chat, and server-run agents now scan the project folder you bind them to — automatically picking up `.agents/skills`, `.claude/skills`, and your `AGENTS.md` / `CLAUDE.md`.
+
+## See where your tokens go
+
+The activity heatmap added a token-usage mode, so you can switch from "how often did I chat" to "how much did each day cost" without leaving the page. The topic sidebar can now group conversations by status, and one click collapses or expands every group at once.
+
+## New model and chat-input polish
+
+- **New model**: MiniMax M3, including its video runtime
+- **Configurable model routing and starters**, for finer control over which model handles what
+- The chat input's **`+` menu** was reworked with toggle switches and grouped submenus, and app-fixed tools now live in a dedicated **Pinned** section
+- Command output now **renders ANSI colors**, so `RunCommand` logs read just like your terminal
+- Inside a task, the comment box is now a full chat input that **kicks off a new run**
+
+## Improvements and fixes
+
+- Page-agent edits now run server-side, so they no longer break when you switch tabs, navigate away, or hit a network blip.
+- Cleaner auto-generated topic titles, with better results on DeepSeek, and stray Markdown tokens stripped from fallback titles.
+- The agent document editor renders system docs, defaults new files to `.md`, and preserves IME composition for CJK input.
+- Delete confirmations were restructured for clearer titles and wording across the app.
+- Desktop: macOS auto-update signing works again, the updater can quit cleanly, CLI tools resolve from your shell `PATH`, and a startup renderer crash is fixed.
+- Streaming no longer duplicates after a stale reconnect, and home-screen starters load more reliably.
+- The GitHub bot renders its `runCommand` result card, and agent documents load with noticeably less latency.

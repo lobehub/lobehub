@@ -662,11 +662,9 @@ class TaskExecutor extends BaseExecutor<typeof TaskApiName> {
   ): Promise<BuiltinToolResult> => {
     try {
       log('[TaskExecutor] updateTaskComment - commentId:', params.commentId);
-      await getTaskStoreState().updateComment(
-        params.commentId,
-        params.content,
-        ctx?.taskId ?? undefined,
-      );
+      await getTaskStoreState().updateComment(params.commentId, params.content, {
+        taskId: ctx?.taskId ?? undefined,
+      });
 
       return {
         content: `Comment ${params.commentId} updated.`,

@@ -115,6 +115,17 @@ export const AgentRuntimeErrorType = {
   InvalidVertexCredentials: 'InvalidVertexCredentials',
   StreamChunkError: 'StreamChunkError',
   /**
+   * The model returned an empty completion — no text content, no tool calls,
+   * and ~0 output tokens — typically after a stalled tool loop where it
+   * effectively gives up. Retryable: re-issuing the same request usually
+   * yields a real response. Without this code the harness silently finalized
+   * to `done` and persisted a blank assistant message (empty bubble). See
+   * This addresses the "empty completion" failure mode: after a stalled
+   * tool loop the model may give up and emit a blank turn with ~0 output
+   * tokens, no text, and no tool calls.
+   */
+  ModelEmptyCompletion: 'ModelEmptyCompletion',
+  /**
    * A persistence-layer query / transaction failed (Drizzle "Failed query:
    * …"). Harness-side: the DB write/read or txn could not complete and
    * surfaced as an unhandled error instead of being retried / degraded.

@@ -53,6 +53,8 @@
   "home.uploadEntries.folder.title": "上傳資料夾",
   "home.uploadEntries.library.title": "新增資源庫",
   "home.uploadEntries.newPage.title": "新增文稿",
+  "library.hierarchy.empty.desc": "新增檔案或建立資料夾以開始使用",
+  "library.hierarchy.empty.title": "這裡還沒有任何內容",
   "library.list.confirmRemoveLibrary": "即將刪除該資源庫，當中的檔案不會被刪除，將移至全部檔案中。資源庫刪除後將無法恢復，請謹慎操作。",
   "library.list.empty": "點擊 <1>+</1> 開始建立資源庫",
   "library.new": "新增資源庫",

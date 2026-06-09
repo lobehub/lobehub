@@ -66,8 +66,12 @@ export interface AvailablePluginInfo {
   identifier: string;
   /** Plugin display name */
   name: string;
-  /** Plugin type: 'builtin' for built-in tools, 'klavis' for Klavis servers, 'lobehub-skill' for LobehubSkill providers */
-  type: 'builtin' | 'klavis' | 'lobehub-skill';
+  /**
+   * Plugin source: 'builtin' for built-in tools, 'klavis' for Klavis servers,
+   * 'lobehub-skill' for LobehubSkill providers, 'custom' for user-added custom
+   * MCP connectors (aligns with ConnectorSourceType.custom).
+   */
+  type: 'builtin' | 'klavis' | 'lobehub-skill' | 'custom';
 }
 
 /**
@@ -165,6 +169,7 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
     const builtinPlugins = context.availablePlugins.filter((p) => p.type === 'builtin');
     const klavisPlugins = context.availablePlugins.filter((p) => p.type === 'klavis');
     const lobehubSkillPlugins = context.availablePlugins.filter((p) => p.type === 'lobehub-skill');
+    const customPlugins = context.availablePlugins.filter((p) => p.type === 'custom');
 
     const pluginsSections: string[] = [];
 
@@ -198,6 +203,16 @@ const defaultFormatContext = (context: AgentManagementContext): string => {
       pluginsSections.push(
         `  <lobehub_skill_plugins>\n${lobehubSkillItems}\n  </lobehub_skill_plugins>`,
       );
+    }
+
+    if (customPlugins.length > 0) {
+      const customItems = customPlugins
+        .map((p) => {
+          const desc = p.description ? ` - ${escapeXml(p.description)}` : '';
+          return `    <plugin id="${p.identifier}">${escapeXml(p.name)}${desc}</plugin>`;
+        })
+        .join('\n');
+      pluginsSections.push(`  <custom_plugins>\n${customItems}\n  </custom_plugins>`);
     }
 
     if (pluginsSections.length > 0) {

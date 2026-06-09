@@ -22,8 +22,8 @@ import type {
  * Agent service implementation class
  */
 export class AgentService extends BaseService {
-  constructor(db: LobeChatDatabase, userId: string | null) {
-    super(db, userId);
+  constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
+    super(db, userId, workspaceId);
   }
 
   /**
@@ -40,7 +40,7 @@ export class AgentService extends BaseService {
     try {
       // Base filter: current user + exclude virtual agents (inbox, supervisor, etc.)
       const baseConditions = and(
-        eq(agents.userId, this.userId),
+        this.buildWorkspaceWhere(agents),
         or(eq(agents.virtual, false), isNull(agents.virtual)),
       );
 
@@ -94,7 +94,7 @@ export class AgentService extends BaseService {
           systemRole: request.systemRole || null,
           title: request.title,
           updatedAt: new Date(),
-          userId: this.userId,
+          ...this.buildWorkspacePayload({}),
         };
 
         // Insert into database
@@ -129,9 +129,8 @@ export class AgentService extends BaseService {
       return await this.db.transaction(async (tx) => {
         // Build query conditions
         const whereConditions = [eq(agents.id, request.id)];
-        if (permissionResult.condition?.userId) {
-          whereConditions.push(eq(agents.userId, permissionResult.condition.userId));
-        }
+        const permissionWhere = this.buildPermissionWhere(agents, permissionResult.condition);
+        if (permissionWhere) whereConditions.push(permissionWhere);
 
         // Check if the Agent exists
         const existingAgent = await tx.query.agents.findFirst({
@@ -207,7 +206,7 @@ export class AgentService extends BaseService {
 
       // Check if the Agent to be deleted exists
       const targetAgent = await this.db.query.agents.findFirst({
-        where: eq(agents.id, request.agentId),
+        where: and(eq(agents.id, request.agentId), this.buildWorkspaceWhere(agents)),
       });
 
       if (!targetAgent) {
@@ -217,7 +216,7 @@ export class AgentService extends BaseService {
       if (request.migrateSessionTo) {
         // Validate that the migration target Agent exists and belongs to the current user
         const migrateTarget = await this.db.query.agents.findFirst({
-          where: and(eq(agents.id, request.migrateSessionTo), eq(agents.userId, this.userId)),
+          where: and(eq(agents.id, request.migrateSessionTo), this.buildWorkspaceWhere(agents)),
         });
 
         if (!migrateTarget) {
@@ -235,10 +234,10 @@ export class AgentService extends BaseService {
         // After migration, delete the agent itself directly; sessions have been transferred so cascade delete is not needed
         await this.db
           .delete(agents)
-          .where(and(eq(agents.id, request.agentId), eq(agents.userId, this.userId)));
+          .where(and(eq(agents.id, request.agentId), this.buildWorkspaceWhere(agents)));
       } else {
         // No migration: reuse AgentModel.delete, which cascades deletion of associated sessions, messages, topics, etc.
-        const agentModel = new AgentModel(this.db, this.userId);
+        const agentModel = new AgentModel(this.db, this.userId, this.workspaceId);
         await agentModel.delete(request.agentId);
       }
 
@@ -271,7 +270,7 @@ export class AgentService extends BaseService {
       }
 
       // Reuse AgentModel methods to get the full Agent configuration
-      const agentModel = new AgentModel(this.db, this.userId);
+      const agentModel = new AgentModel(this.db, this.userId, this.workspaceId);
       const agent = await agentModel.getAgentConfigById(agentId);
 
       if (!agent || !agent.id) {
@@ -303,7 +302,7 @@ export class AgentService extends BaseService {
           .where(
             and(
               eq(agentsToSessions.agentId, fromAgentId),
-              eq(agentsToSessions.userId, this.userId),
+              this.buildWorkspaceWhere(agentsToSessions),
             ),
           );
 
@@ -318,7 +317,7 @@ export class AgentService extends BaseService {
           .where(
             and(
               eq(agentsToSessions.agentId, fromAgentId),
-              eq(agentsToSessions.userId, this.userId),
+              this.buildWorkspaceWhere(agentsToSessions),
             ),
           );
 
@@ -341,7 +340,7 @@ export class AgentService extends BaseService {
             newSessionIds.map((sessionId) => ({
               agentId: toAgentId,
               sessionId,
-              userId: this.userId,
+              ...this.buildWorkspacePayload({}),
             })),
           );
         }

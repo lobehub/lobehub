@@ -1,7 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { message } from '@/components/AntdStaticMethods';
+import { handleFileUploadError } from '@/business/client/handleFileUploadError';
+import { message, notification } from '@/components/AntdStaticMethods';
 import { fileService } from '@/services/file';
 import { uploadService } from '@/services/upload';
 import { getImageDimensions } from '@/utils/client/imageDimensions';
@@ -15,6 +16,13 @@ vi.mock('@/components/AntdStaticMethods', () => ({
   message: {
     info: vi.fn(),
   },
+  notification: {
+    error: vi.fn(),
+  },
+}));
+
+vi.mock('@/business/client/handleFileUploadError', () => ({
+  handleFileUploadError: vi.fn(),
 }));
 
 vi.mock('@/utils/client/imageDimensions', () => ({
@@ -44,6 +52,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(handleFileUploadError).mockReturnValue(false);
 });
 
 afterEach(() => {
@@ -151,6 +160,37 @@ describe('FileUploadAction', () => {
           await result.current.uploadBase64FileWithProgress(base64Data);
         }),
       ).rejects.toThrow('Upload failed');
+    });
+
+    it('should delegate handled base64 upload errors to the business upload error handler', async () => {
+      const { result } = renderHook(() => useStore());
+
+      const base64Data = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA';
+      const mockMetadata = {
+        date: '12345',
+        dirname: '/test',
+        filename: 'test.png',
+        path: '/test/test.png',
+      };
+
+      vi.mocked(getImageDimensions).mockResolvedValue(undefined);
+      vi.spyOn(uploadService, 'uploadBase64ToS3').mockResolvedValue({
+        fileType: 'image/png',
+        hash: 'mock-hash',
+        metadata: mockMetadata,
+        size: 1024,
+      });
+      const uploadError = new Error('business upload blocked');
+      vi.spyOn(fileService, 'createFile').mockRejectedValue(uploadError);
+      vi.mocked(handleFileUploadError).mockReturnValue(true);
+
+      const uploadResult = await act(async () => {
+        return await result.current.uploadBase64FileWithProgress(base64Data);
+      });
+
+      expect(uploadResult).toBeUndefined();
+      expect(handleFileUploadError).toHaveBeenCalledWith(uploadError);
+      expect(notification.error).not.toHaveBeenCalled();
     });
   });
 
@@ -692,6 +732,41 @@ describe('FileUploadAction', () => {
     });
 
     describe('error handling', () => {
+      it('should delegate handled upload errors to the business upload error handler', async () => {
+        const { uploadWithProgress } = useStore.getState();
+
+        const mockFile = new File(['test content'], 'blocked.png', { type: 'image/png' });
+        const mockCheckResult = { isExist: false };
+        const onStatusUpdate = vi.fn();
+        const uploadError = new Error('business upload blocked');
+
+        vi.mocked(getImageDimensions).mockResolvedValue(undefined);
+        vi.spyOn(fileService, 'checkFileHash').mockResolvedValue(mockCheckResult);
+        vi.spyOn(uploadService, 'uploadFileToS3').mockRejectedValue(uploadError);
+        vi.mocked(handleFileUploadError).mockImplementation((_error, options) => {
+          options?.onUploadBlocked?.();
+          return true;
+        });
+
+        const result = await act(async () => {
+          return await uploadWithProgress({
+            file: mockFile,
+            onStatusUpdate,
+          });
+        });
+
+        expect(result).toBeUndefined();
+        expect(onStatusUpdate).toHaveBeenCalledWith({
+          id: mockFile.name,
+          type: 'removeFile',
+        });
+        expect(handleFileUploadError).toHaveBeenCalledWith(
+          uploadError,
+          expect.objectContaining({ onUploadBlocked: expect.any(Function) }),
+        );
+        expect(notification.error).not.toHaveBeenCalled();
+      });
+
       it('should handle checkFileHash errors', async () => {
         const { uploadWithProgress } = useStore.getState();
 

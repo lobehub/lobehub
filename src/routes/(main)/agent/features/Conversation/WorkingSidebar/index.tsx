@@ -5,16 +5,17 @@ import { lazy, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
-import { useRepoType } from '@/features/ChatInput/RuntimeConfig/useRepoType';
+import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
 import RightPanel from '@/features/RightPanel';
+import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
+import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
 import {
   agentByIdSelectors,
   agentSelectors,
   chatConfigByIdSelectors,
 } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
+import { useElectronStore } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 
 import Files from './Files';
@@ -80,20 +81,37 @@ const AgentWorkingSidebar = memo(() => {
   const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
   const setWorkingSidebarTab = useGlobalStore((s) => s.setWorkingSidebarTab);
   const storedTab = useGlobalStore((s) => s.status.workingSidebarTab);
-  const topicWorkingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const agentWorkingDirectory = useAgentStore((s) =>
-    activeAgentId ? agentByIdSelectors.getAgentWorkingDirectoryById(activeAgentId)(s) : undefined,
-  );
   const isLocalSystemEnabled = useAgentStore((s) =>
     activeAgentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(activeAgentId)(s) : false,
   );
   const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
-  const workingDirectory = topicWorkingDirectory || agentWorkingDirectory;
-  const repoType = useRepoType(workingDirectory);
+  // Unified precedence (topic > per-device choice > legacy > device default), so
+  // the sidebar resolves the same directory the runtime bar / git status do.
+  // The old `topicCwd || legacy agentCwd` pattern missed `workingDirByDevice`,
+  // landing on the home fallback for device-bound agents and hiding Review.
+  const workingDirectory = useEffectiveWorkingDirectory(activeAgentId);
+  // Effective target device for git ops — bound device for remote agents, this
+  // machine otherwise. Resolved the same way WorkingDirectoryPicker / GitStatus do.
+  const agencyConfig = useAgentStore((s) =>
+    activeAgentId ? agentByIdSelectors.getAgencyConfigById(activeAgentId)(s) : undefined,
+  );
+  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
+  const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
+  const repoType = useRepoType(workingDirectory, targetDeviceId);
 
-  const filesAvailable = isLocalSystemEnabled && !!workingDirectory;
-  const reviewAvailable = isLocalSystemEnabled && !!workingDirectory && !!repoType;
+  // Running against a bound device (remote, or this machine as a device): file
+  // tree + git reads go over RPC, so both Review and Files are reachable even
+  // when runtimeMode isn't `local`.
+  const isDeviceMode = agencyConfig?.executionTarget === 'device' && !!agencyConfig?.boundDeviceId;
+  // `targetDeviceId` also identifies the local desktop for per-device working
+  // directory state. Files/Review only need a deviceId when routing through a
+  // remote device RPC; local "This device" must keep Electron IPC + file-open
+  // actions enabled.
+  const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;
+  const filesAvailable = (isLocalSystemEnabled || isDeviceMode) && !!workingDirectory;
+  const reviewAvailable =
+    (isLocalSystemEnabled || isDeviceMode) && !!workingDirectory && !!repoType;
   const paramsAvailable = !isHetero;
   const resolveActiveTab = (): Tab => {
     if (storedTab === 'params' && paramsAvailable) return 'params';
@@ -168,12 +186,12 @@ const AgentWorkingSidebar = memo(() => {
           )}
           {reviewAvailable && (
             <Flexbox className={activeTab === 'review' ? styles.pane : styles.paneHidden}>
-              <Review workingDirectory={workingDirectory} />
+              <Review deviceId={remoteDeviceId} workingDirectory={workingDirectory} />
             </Flexbox>
           )}
           {filesAvailable && (
             <Flexbox className={activeTab === 'files' ? styles.pane : styles.paneHidden}>
-              <Files workingDirectory={workingDirectory} />
+              <Files deviceId={remoteDeviceId} workingDirectory={workingDirectory} />
             </Flexbox>
           )}
           <Flexbox
@@ -182,7 +200,7 @@ const AgentWorkingSidebar = memo(() => {
             width={'100%'}
           >
             <ProgressSection />
-            <ResourcesSection />
+            <ResourcesSection deviceId={remoteDeviceId} />
           </Flexbox>
         </Flexbox>
       </Flexbox>

@@ -1,6 +1,11 @@
 'use client';
 
 import { FILE_URL } from '@lobechat/business-const';
+import {
+  CUSTOM_DOCUMENT_FILE_TYPE,
+  CUSTOM_FOLDER_FILE_TYPE,
+  DERIVED_DOCUMENT_SOURCE_TYPE,
+} from '@lobechat/const';
 import { Notion } from '@lobehub/icons';
 import { type MenuProps } from '@lobehub/ui';
 import { Button, DropdownMenu, Icon } from '@lobehub/ui';
@@ -73,10 +78,10 @@ const AddButton = () => {
     const untitledTitle = t('pageList.untitled');
     const realId = await createResourceAndSync({
       content: '',
-      fileType: 'custom/document',
+      fileType: CUSTOM_DOCUMENT_FILE_TYPE,
       knowledgeBaseId: libraryId,
       parentId: currentFolderId ?? undefined,
-      sourceType: 'document',
+      sourceType: DERIVED_DOCUMENT_SOURCE_TYPE,
       title: untitledTitle,
     });
 
@@ -108,7 +113,7 @@ const AddButton = () => {
       // Filter for folders at the same level
       const foldersAtSameLevel = resourceList.filter(
         (item) =>
-          item.fileType === 'custom/folder' &&
+          item.fileType === CUSTOM_FOLDER_FILE_TYPE &&
           (item.parentId ?? null) === (currentFolderId ?? null),
       );
 
@@ -127,10 +132,10 @@ const AddButton = () => {
       // Wait for sync to complete to get the real ID
       const realId = await createResourceAndSync({
         content: '',
-        fileType: 'custom/folder',
+        fileType: CUSTOM_FOLDER_FILE_TYPE,
         knowledgeBaseId: libraryId,
         parentId: currentFolderId ?? undefined,
-        sourceType: 'document',
+        sourceType: DERIVED_DOCUMENT_SOURCE_TYPE,
         title: uniqueName,
       });
 

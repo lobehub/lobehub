@@ -8,5 +8,8 @@ const DAYJS_LOCALE_ALIASES: Record<string, string> = {
 
 export const normalizeDayjsLocale = (lang: string): string => {
   const lower = lang.toLowerCase();
+  if (lower.startsWith('zh-hans')) return 'zh-cn';
+  if (lower.startsWith('zh-hant')) return 'zh-tw';
+
   return DAYJS_LOCALE_ALIASES[lower] ?? lower;
 };

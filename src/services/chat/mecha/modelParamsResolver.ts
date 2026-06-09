@@ -21,6 +21,7 @@ export interface ModelExtendParams {
   enabledContextCaching?: boolean;
   imageAspectRatio?: string;
   imageResolution?: string;
+  preserveThinking?: boolean;
   reasoning_effort?: string;
   thinking?: {
     budget_tokens?: number;
@@ -188,6 +189,14 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.enabledContextCaching = false;
   }
 
+  // Preserve historical thinking content (provider support required)
+  if (
+    modelExtendParams.includes('preserveThinking') &&
+    typeof chatConfig.preserveThinking === 'boolean'
+  ) {
+    extendParams.preserveThinking = chatConfig.preserveThinking;
+  }
+
   // Reasoning effort variants
   if (modelExtendParams.includes('reasoningEffort') && chatConfig.reasoningEffort) {
     extendParams.reasoning_effort = chatConfig.reasoningEffort;
@@ -253,6 +262,10 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
 
   if (modelExtendParams.includes('opus47Effort') && chatConfig.opus47Effort) {
     extendParams.effort = chatConfig.opus47Effort;
+  }
+
+  if (modelExtendParams.includes('step3_5ReasoningEffort') && chatConfig.step3_5ReasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.step3_5ReasoningEffort;
   }
 
   // Text verbosity

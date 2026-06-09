@@ -271,6 +271,7 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
           reasoning,
           max_tokens,
           verbosity,
+          preserveThinking: _pt,
           ...responseRest
         } = rest as any;
 
@@ -350,7 +351,7 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
         );
       }
 
-      const { apiMode: _, ...cleanedRest } = rest as any;
+      const { apiMode: _, preserveThinking: _pt, ...cleanedRest } = rest as any;
       const messages = await convertOpenAIMessages(cleanedRest.messages as any, {
         forceImageBase64: true,
       });

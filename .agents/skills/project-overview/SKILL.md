@@ -1,6 +1,6 @@
 ---
 name: project-overview
-description: "LobeHub open-source monorepo architecture map — flat `apps/` + `packages/@lobechat/*` + `src/` layout, per-layer location table, and `src/business/` stubs that the cloud repo overrides. Use when exploring an unfamiliar part of the codebase, locating where a layer lives (store / service / router / schema / etc.), or onboarding to the monorepo. Triggers on 'where does X live', 'project structure', 'monorepo layout', `src/business/` stub, 'architecture overview', '项目结构', '架构总览'."
+description: 'LobeHub open-source monorepo architecture map. Use when locating code layers, understanding apps/packages/src layout, business stubs, project structure, or onboarding to the repository.'
 user-invocable: false
 ---
 
@@ -56,7 +56,8 @@ git submodules.
 ├── apps/
 │   ├── cli/                  # LobeHub CLI
 │   ├── desktop/              # Electron desktop app
-│   └── device-gateway/       # Device gateway service
+│   ├── device-gateway/       # Device gateway service
+│   └── server/               # Next.js-backed server: featureFlags, globalConfig, modules, routers, services, utils, workflows (`@/server/*` alias)
 ├── docs/                     # changelog, development, self-hosting, usage
 ├── locales/                  # en-US, zh-CN, ...
 ├── packages/                 # ~80 @lobechat/* workspace packages — `ls` for the full set. Key ones:
@@ -85,32 +86,32 @@ git submodules.
     ├── business/             # Open-source stubs (client/server) — cloud repo provides real impls
     ├── features/             # Domain business components
     ├── store/                # ~30 zustand stores — `ls` for the full set
-    ├── server/               # featureFlags, globalConfig, modules, routers, services, workflows, agent-hono
+    ├── server/               # standalone-Hono server pieces only: agent-hono, workflows-hono (main backend lives in `apps/server`)
     └── ...                   # components, hooks, layout, libs, locales, services, types, utils
 ```
 
 ## Architecture Map
 
-| Layer            | Location                                            |
-| ---------------- | --------------------------------------------------- |
-| UI Components    | `src/components`, `src/features`                    |
-| SPA Pages        | `src/routes/`                                       |
-| React Router     | `src/spa/router/`                                   |
-| Global Providers | `src/layout`                                        |
-| Zustand Stores   | `src/store`                                         |
-| Client Services  | `src/services/`                                     |
-| REST API         | `src/app/(backend)/webapi`                          |
-| tRPC Routers     | `src/server/routers/{async\|lambda\|mobile\|tools}` |
-| Server Services  | `src/server/services` (can access DB)               |
-| Server Modules   | `src/server/modules` (no DB access)                 |
-| Feature Flags    | `src/server/featureFlags`                           |
-| Global Config    | `src/server/globalConfig`                           |
-| DB Schema        | `packages/database/src/schemas`                     |
-| DB Model         | `packages/database/src/models`                      |
-| DB Repository    | `packages/database/src/repositories`                |
-| Third-party      | `src/libs` (analytics, oidc, etc.)                  |
-| Builtin Tools    | `packages/builtin-tool-*`, `packages/builtin-tools` |
-| Open-source stub | `src/business/*`, `packages/business/*` (this repo) |
+| Layer            | Location                                                 |
+| ---------------- | -------------------------------------------------------- |
+| UI Components    | `src/components`, `src/features`                         |
+| SPA Pages        | `src/routes/`                                            |
+| React Router     | `src/spa/router/`                                        |
+| Global Providers | `src/layout`                                             |
+| Zustand Stores   | `src/store`                                              |
+| Client Services  | `src/services/`                                          |
+| REST API         | `src/app/(backend)/webapi`                               |
+| tRPC Routers     | `apps/server/src/routers/{async\|lambda\|mobile\|tools}` |
+| Server Services  | `apps/server/src/services` (can access DB)               |
+| Server Modules   | `apps/server/src/modules` (no DB access)                 |
+| Feature Flags    | `apps/server/src/featureFlags`                           |
+| Global Config    | `apps/server/src/globalConfig`                           |
+| DB Schema        | `packages/database/src/schemas`                          |
+| DB Model         | `packages/database/src/models`                           |
+| DB Repository    | `packages/database/src/repositories`                     |
+| Third-party      | `src/libs` (analytics, oidc, etc.)                       |
+| Builtin Tools    | `packages/builtin-tool-*`, `packages/builtin-tools`      |
+| Open-source stub | `src/business/*`, `packages/business/*` (this repo)      |
 
 ## Data Flow
 

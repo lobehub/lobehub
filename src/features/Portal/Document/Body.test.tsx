@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { type ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import DocumentBody from './Body';
 
@@ -26,11 +26,32 @@ vi.mock('@lobehub/ui', () => ({
   ActionIcon: () => null,
   Button: ({ children }: { children: ReactNode }) => <button>{children}</button>,
   Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Highlighter: ({ children }: { children: ReactNode }) => (
-    <pre data-testid="highlighter">{children}</pre>
-  ),
   Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
   TextArea: () => <textarea />,
+}));
+
+vi.mock('@/components/CodeEditorPane', () => ({
+  default: ({
+    onChange,
+    onSave,
+    value,
+  }: {
+    onChange?: (next: string) => void;
+    onSave?: () => void;
+    value: string;
+  }) => (
+    <textarea
+      data-testid="highlight-editor"
+      value={value}
+      onChange={(event) => onChange?.(event.target.value)}
+      onKeyDown={(event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key === 's') {
+          event.preventDefault();
+          onSave?.();
+        }
+      }}
+    />
+  ),
 }));
 
 const mockDocumentMeta = vi.hoisted(() => ({
@@ -46,8 +67,13 @@ vi.mock('@/libs/swr', () => ({
   useClientDataSWR: () => ({ data: mockDocumentMeta.current }),
 }));
 
+const mockUpdateDocument = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+
 vi.mock('@/services/document', () => ({
-  documentService: { getDocumentById: vi.fn() },
+  documentService: {
+    getDocumentById: vi.fn(),
+    updateDocument: mockUpdateDocument,
+  },
 }));
 
 vi.mock('./EditorCanvas', () => ({
@@ -122,6 +148,12 @@ describe('DocumentBody', () => {
     mockAgentState.current.activeAgentId = 'agent-1';
     mockUserState.current.preference.lab.enableAgentDocumentFloatingChatPanel = false;
     mockDocumentMeta.current = { content: '', filename: 'doc.md' };
+    mockUpdateDocument.mockClear();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('does not render FloatingChatPanel when the lab feature is disabled', () => {
@@ -138,12 +170,12 @@ describe('DocumentBody', () => {
     expect(screen.getByTestId('floating-chat-panel')).toBeDefined();
   });
 
-  it('renders Highlighter for non-markdown files', () => {
+  it('renders highlight editor for non-markdown files', () => {
     mockDocumentMeta.current = { content: 'raw log content', filename: 'topic_call.txt' };
 
     render(<DocumentBody />);
 
-    expect(screen.getByTestId('highlighter')).toBeDefined();
+    expect(screen.getByTestId('highlight-editor')).toHaveValue('raw log content');
     expect(screen.queryByTestId('editor-canvas')).toBeNull();
   });
 
@@ -153,7 +185,7 @@ describe('DocumentBody', () => {
     render(<DocumentBody />);
 
     expect(screen.getByTestId('editor-canvas')).toBeDefined();
-    expect(screen.queryByTestId('highlighter')).toBeNull();
+    expect(screen.queryByTestId('highlight-editor')).toBeNull();
   });
 
   it('renders EditorCanvas for notebook documents that have no filename', () => {
@@ -167,6 +199,56 @@ describe('DocumentBody', () => {
     render(<DocumentBody />);
 
     expect(screen.getByTestId('editor-canvas')).toBeDefined();
-    expect(screen.queryByTestId('highlighter')).toBeNull();
+    expect(screen.queryByTestId('highlight-editor')).toBeNull();
+  });
+
+  it('autosaves highlight editor edits after the debounce window', () => {
+    mockDocumentMeta.current = { content: 'before', filename: 'config.json' };
+
+    render(<DocumentBody />);
+    const editor = screen.getByTestId('highlight-editor');
+
+    fireEvent.change(editor, { target: { value: 'after' } });
+    expect(mockUpdateDocument).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(mockUpdateDocument).toHaveBeenCalledWith({
+      content: 'after',
+      id: 'document-1',
+      saveSource: 'autosave',
+    });
+  });
+
+  it('flushes pending highlight edits when the editor unmounts', async () => {
+    mockDocumentMeta.current = { content: 'before', filename: 'config.json' };
+
+    const { unmount } = render(<DocumentBody />);
+    const editor = screen.getByTestId('highlight-editor');
+
+    fireEvent.change(editor, { target: { value: 'after' } });
+    expect(mockUpdateDocument).not.toHaveBeenCalled();
+
+    unmount();
+    await Promise.resolve();
+
+    expect(mockUpdateDocument).toHaveBeenCalledWith({
+      content: 'after',
+      id: 'document-1',
+      saveSource: 'autosave',
+    });
+  });
+
+  it('does not save on unmount when the highlight buffer is clean', async () => {
+    mockDocumentMeta.current = { content: 'before', filename: 'config.json' };
+
+    const { unmount } = render(<DocumentBody />);
+
+    unmount();
+    await Promise.resolve();
+
+    expect(mockUpdateDocument).not.toHaveBeenCalled();
   });
 });

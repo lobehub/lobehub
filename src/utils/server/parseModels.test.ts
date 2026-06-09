@@ -571,41 +571,6 @@ describe('transformToChatModelCards', () => {
     expect(result).toMatchSnapshot();
   });
 
-  it('should use default deploymentName from known model when not specified in string (VolcEngine case)', async () => {
-    const knownModel = LOBE_DEFAULT_MODEL_LIST.find(
-      (m) => m.id === 'deepseek-r1' && m.providerId === 'volcengine',
-    );
-    const defaultChatModels: AiFullModelCard[] = [];
-    const result = await transformToAiModelList({
-      modelString: '+deepseek-r1',
-      defaultModels: defaultChatModels,
-      providerId: 'volcengine',
-      withDeploymentName: true,
-    });
-    expect(result).toContainEqual({
-      ...knownModel,
-      enabled: true,
-    });
-  });
-
-  it('should use deploymentName from modelString when specified (VolcEngine case)', async () => {
-    const defaultChatModels: AiFullModelCard[] = [];
-    const knownModel = LOBE_DEFAULT_MODEL_LIST.find(
-      (m) => m.id === 'deepseek-r1' && m.providerId === 'volcengine',
-    );
-    const result = await transformToAiModelList({
-      modelString: `+deepseek-r1->my-custom-deploy`,
-      defaultModels: defaultChatModels,
-      providerId: 'volcengine',
-      withDeploymentName: true,
-    });
-    expect(result).toContainEqual({
-      ...knownModel,
-      enabled: true,
-      config: { deploymentName: 'my-custom-deploy' },
-    });
-  });
-
   it('should set both id and deploymentName to the full string when no -> is used and withDeploymentName is true', async () => {
     const defaultChatModels: AiFullModelCard[] = [];
     const result = await transformToAiModelList({

@@ -22,6 +22,7 @@ interface ApiKeyCacheEntry {
   expiresAt: Date | null;
   timestamp: number;
   userId: string;
+  workspaceId?: string | null;
 }
 
 // In-memory cache for API Key validation results
@@ -67,6 +68,7 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
   let userId: string | null = null;
   let authType: string | null = null;
   let authData: any = null;
+  let workspaceId: string | null | undefined;
 
   // Try Bearer token authentication - check format first to determine type
   if (bearerToken) {
@@ -92,6 +94,7 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
           userId = cachedEntry.userId;
           authType = 'apikey';
           authData = { apiKeyId: cachedEntry.apiKeyId, apiKeyName: cachedEntry.apiKeyName };
+          workspaceId = cachedEntry.workspaceId;
 
           log(
             'API Key authentication successful (from cache), userId: %s, apiKeyId: %d',
@@ -134,6 +137,7 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
                 userId = apiKeyRecord.userId;
                 authType = 'apikey';
                 authData = { apiKeyId: apiKeyRecord.id, apiKeyName: apiKeyRecord.name };
+                workspaceId = apiKeyRecord.workspaceId;
 
                 // Cache the validated API Key
                 apiKeyCache.set(bearerToken, {
@@ -142,6 +146,7 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
                   expiresAt: apiKeyRecord.expiresAt,
                   timestamp: now,
                   userId: apiKeyRecord.userId,
+                  workspaceId: apiKeyRecord.workspaceId,
                 });
 
                 log(
@@ -151,7 +156,11 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
                 );
 
                 // Update last used timestamp (fire and forget)
-                const userApiKeyModel = new ApiKeyModel(db, apiKeyRecord.userId);
+                const userApiKeyModel = new ApiKeyModel(
+                  db,
+                  apiKeyRecord.userId,
+                  apiKeyRecord.workspaceId ?? undefined,
+                );
                 userApiKeyModel.updateLastUsed(apiKeyRecord.id).catch((err) => {
                   log('Failed to update API Key last used timestamp: %O', err);
                 });
@@ -197,6 +206,7 @@ export const userAuthMiddleware = async (c: Context, next: Next) => {
     c.set('authType', authType);
     c.set('authData', authData);
     c.set('authorizationHeader', authorizationHeader);
+    c.set('workspaceId', workspaceId ?? undefined);
 
     log('Authentication successful - userId: %s, authType: %s', userId, authType);
   } else {

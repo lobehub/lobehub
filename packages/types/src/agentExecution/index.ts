@@ -1,6 +1,47 @@
 import type { TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
 
+export type AgentSignalOperationKind =
+  | 'memory'
+  | 'nightly-review'
+  | 'self-feedback-intent'
+  | 'self-reflection'
+  | 'skill';
+
+/**
+ * Run-scoped Agent Signal marker stamped onto a background agent operation at
+ * dispatch. It travels on `appContext.agentSignal`, lands in
+ * `state.metadata.agentSignal`, and is read back on the completion path to
+ * project receipts / briefs (the `agent.execution.completed` payload itself only
+ * carries `agentId/operationId/topicId`). Runtime parsing/validation helpers live
+ * server-side in `operationMarker.ts`.
+ */
+export interface AgentSignalOperationMarker {
+  /**
+   * The reviewed user agent a resulting receipt should be attributed to. Needed
+   * when the run executes under a builtin self-iteration slug (whose resolved
+   * operation agentId is the builtin agent, not the user's agent); the
+   * completion projector prefers this over the run's agentId.
+   */
+  agentId?: string;
+  /** Assistant message a resulting receipt should anchor to. */
+  anchorMessageId?: string;
+  /** Discriminator the completion handler dispatches on. */
+  kind: AgentSignalOperationKind;
+  /** Local review date (YYYY-MM-DD) for nightly review brief/receipt writes. */
+  localDate?: string;
+  /** Review window end (ISO) — lets tools re-derive the evidence digest. */
+  reviewWindowEnd?: string;
+  /** Review window start (ISO). */
+  reviewWindowStart?: string;
+  /** Stable producer source id of the originating signal. */
+  sourceId?: string;
+  /** Topic the run is scoped to. */
+  topicId?: string;
+  /** User message that initiated the originating feedback. */
+  triggerMessageId?: string;
+}
+
 /**
  * Application context for message storage
  */
@@ -13,6 +54,11 @@ export interface ExecAgentAppContext {
    * for downstream tool calls.
    */
   agentDocumentId?: string | null;
+  /**
+   * Run-scoped Agent Signal marker for background self-iteration / memory runs.
+   * Forwarded into the operation so the completion path can project receipts.
+   */
+  agentSignal?: AgentSignalOperationMarker;
   /** Optional default assignee candidate for task manager prompts */
   defaultTaskAssigneeAgentId?: string;
   /** Current document ID for page-scoped conversations */
@@ -48,22 +94,6 @@ export interface ExecAgentAppContext {
 }
 
 /**
- * A project-level skill discovered on the device filesystem
- * (`.agents/skills` / `.claude/skills`) by the client at request time.
- * Only frontmatter + the absolute SKILL.md path are carried; the SKILL.md
- * body and directory tree are loaded on demand at activation time via the
- * readFile / listFiles tools.
- */
-export interface ProjectSkillMeta {
-  /** Skill description from SKILL.md frontmatter. */
-  description?: string;
-  /** Skill name from frontmatter (falls back to the directory name). */
-  name: string;
-  /** Absolute path to the skill's SKILL.md on the device filesystem. */
-  path: string;
-}
-
-/**
  * Parameters for execAgent - execute a single Agent
  * Either agentId or slug must be provided
  */
@@ -96,13 +126,6 @@ export interface ExecAgentParams {
    * sub-tree back to its root.
    */
   parentOperationId?: string;
-  /**
-   * Project-level skills discovered on the device filesystem
-   * (`.agents/skills` / `.claude/skills`) at request time. Surfaced in the
-   * `<available_skills>` list and loaded on demand via the readFile tool.
-   * Only applied when a device is active for this run.
-   */
-  projectSkills?: ProjectSkillMeta[];
   /** The user input/prompt */
   prompt: string;
   /** Override the agent's default provider */
@@ -242,6 +265,14 @@ export interface ExecSubAgentTaskParams {
   parentMessageId: string;
   /** Parent operation ID for dispatching callAgent hooks */
   parentOperationId?: string;
+  /**
+   * When true, register the completion bridge that backfills the parent's
+   * placeholder tool message with this sub-agent's result and resumes the
+   * parked parent op (`waiting_for_async_tool` → running). Used by the server
+   * `callSubAgent` deferred-tool path; left false for the legacy fire-and-forget
+   * task dispatch.
+   */
+  resumeParentOnComplete?: boolean;
   /** Timeout in milliseconds (optional) */
   timeout?: number;
   /** Task title (shown in UI, used as thread title) */
