@@ -1019,6 +1019,7 @@
   "tools.activation.pinned": "固定启用",
   "tools.activation.pinned.desc": "始终注入",
   "tools.add": "集成技能",
+  "tools.addSkillOrConnector": "添加技能 / 连接器",
   "tools.builtins.configure": "配置",
   "tools.builtins.find-skills.description": "当用户询问“我该如何做 X”、“帮我找一个能做 X 的技能”或希望扩展能力时，帮助用户发现并安装助手技能",
   "tools.builtins.find-skills.title": "查找技能",

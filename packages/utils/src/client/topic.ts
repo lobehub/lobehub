@@ -151,54 +151,71 @@ export const groupTopicsByProject = (
   });
 };
 
-// Status-based grouping. Fixed priority order: topics awaiting a human come
-// first, then running, then active; the remaining states fall below. Topics
-// without a status are treated as `active`. The group `id` is the raw status
-// value so the sidebar can resolve its title via `groupTitle.byStatus.<id>`.
+// The display buckets for status grouping. These are NOT raw `ChatTopicStatus`
+// values: the three states that need the user's attention — awaiting a human,
+// failed, and an unread completion — collapse into a single `pending` bucket so
+// the sidebar surfaces "needs attention" in one place. The remaining buckets map
+// 1:1 to a status. The group `id` resolves its title via `groupTitle.byStatus.<id>`.
+export type TopicStatusBucket =
+  | 'pending'
+  | 'running'
+  | 'active'
+  | 'paused'
+  | 'completed'
+  | 'archived';
+
+// Fixed priority order: `pending` (needs attention) comes first, then running,
+// then active; the remaining states fall below. Topics without a status are
+// treated as `active`.
 //
-// The server orders the query by the same priority (see `STATUS_SORT_RANK` in
-// `@lobechat/database` topic model) so the right page is fetched; this only
-// re-buckets that already-ordered page for display. Keep the two in sync. The
-// one client-only nuance is `loadingTopicIds` (a topic streaming right now),
-// which the server can't know about — see `resolveStatusBucket`.
-export const STATUS_GROUP_ORDER: ChatTopicStatus[] = [
-  'waitingForHuman',
+// The server orders the query by the underlying status priority (see
+// `STATUS_SORT_RANK` in `@lobechat/database` topic model) so the right page is
+// fetched; this only re-buckets that already-ordered page for display. The
+// client-only nuances are `loadingTopicIds` (a topic streaming right now) and
+// `unreadTopicIds` (a completion not yet read), which the server can't know
+// about — see `resolveStatusBucket`.
+export const STATUS_GROUP_ORDER: TopicStatusBucket[] = [
+  'pending',
   'running',
   'active',
   'paused',
-  'failed',
   'completed',
   'archived',
 ];
 
 /**
  * Resolve the bucket a topic belongs to. Mirrors the icon precedence in the
- * sidebar `TopicItem`: `waitingForHuman` wins, then a topic that is actively
- * streaming on this client (`loadingTopicIds`, a transient client-only state
- * the server can't see) or persisted as `running` lands in `running`, then the
- * persisted status, defaulting to `active`.
+ * sidebar `TopicItem`: anything needing attention (`waitingForHuman`, `failed`,
+ * or an unread completion in `unreadTopicIds`) lands in `pending`; then a topic
+ * actively streaming on this client (`loadingTopicIds`, a transient client-only
+ * state the server can't see) or persisted as `running` lands in `running`; then
+ * the persisted status, defaulting to `active`.
  */
 const resolveStatusBucket = (
   topic: ChatTopic,
   loadingTopicIds?: ReadonlySet<string>,
-): ChatTopicStatus => {
-  if (topic.status === 'waitingForHuman') return 'waitingForHuman';
+  unreadTopicIds?: ReadonlySet<string>,
+): TopicStatusBucket => {
+  if (topic.status === 'waitingForHuman' || topic.status === 'failed') return 'pending';
+  if (unreadTopicIds?.has(topic.id)) return 'pending';
   if (loadingTopicIds?.has(topic.id) || topic.status === 'running') return 'running';
-  const status = topic.status ?? 'active';
-  return STATUS_GROUP_ORDER.includes(status) ? status : 'active';
+  const status: ChatTopicStatus = topic.status ?? 'active';
+  if (status === 'paused' || status === 'completed' || status === 'archived') return status;
+  return 'active';
 };
 
 export const groupTopicsByStatus = (
   topics: ChatTopic[],
   field: 'createdAt' | 'updatedAt',
   loadingTopicIds?: ReadonlySet<string>,
+  unreadTopicIds?: ReadonlySet<string>,
 ): GroupedTopic[] => {
   if (!topics.length) return [];
 
-  const groupsMap = new Map<ChatTopicStatus, ChatTopic[]>();
+  const groupsMap = new Map<TopicStatusBucket, ChatTopic[]>();
 
   for (const topic of topics) {
-    const id = resolveStatusBucket(topic, loadingTopicIds);
+    const id = resolveStatusBucket(topic, loadingTopicIds, unreadTopicIds);
     const existing = groupsMap.get(id);
     if (existing) {
       existing.push(topic);

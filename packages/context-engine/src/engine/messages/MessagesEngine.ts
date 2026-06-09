@@ -452,7 +452,7 @@ export class MessagesEngine {
       new ReactionFeedbackProcessor({ enabled: true }),
       // Message content processing (image encoding, multimodal)
       new MessageContentProcessor({
-        fileContext: fileContext || { enabled: true, includeFileUrl: false },
+        fileContext: fileContext || { enabled: true, includeFileUrl: true },
         isCanUseVideo: capabilities?.isCanUseVideo || (() => false),
         isCanUseVision: capabilities?.isCanUseVision || (() => true),
         model,

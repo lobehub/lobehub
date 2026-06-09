@@ -43,14 +43,21 @@ const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
                 if (isMarketApi) {
                   // Market API 401: emit event for MarketAuthProvider to handle
                   // Don't trigger LobeChat logout for market auth issues
+                  const { getUserStoreState } = await import('@/store/user/store');
+                  // Without a LobeChat session a market.* 401 is not a Market auth
+                  // issue — let it bubble instead of triggering the auth modal
+                  if (!getUserStoreState().isSignedIn) break;
                   const now = Date.now();
                   if (now - lastMarket401Time > MIN_401_INTERVAL) {
                     lastMarket401Time = now;
                     // Dynamically import to avoid circular dependencies
                     const { marketAuthEvents } =
                       await import('@/layout/AuthProvider/MarketAuth/events');
+                    const { pathToMarketAuthScene } =
+                      await import('@/layout/AuthProvider/MarketAuth/scenes');
                     marketAuthEvents.emit('market-unauthorized', {
                       path: op.path,
+                      scene: pathToMarketAuthScene(op.path),
                       timestamp: now,
                     });
                   }

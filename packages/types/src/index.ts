@@ -11,6 +11,7 @@ export * from './chunk';
 export * from './clientDB';
 export * from './conversation';
 export * from './creds';
+export * from './device';
 export * from './discover';
 export * from './document';
 export * from './eval';

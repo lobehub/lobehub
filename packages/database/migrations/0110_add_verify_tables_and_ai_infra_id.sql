@@ -167,9 +167,11 @@ CREATE INDEX IF NOT EXISTS "verify_rubrics_user_id_idx" ON "verify_rubrics" USIN
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "verify_rubrics_workspace_id_idx" ON "verify_rubrics" USING btree ("workspace_id");
 --> statement-breakpoint
--- LOBE-10072: nullable surrogate `_id` for the online workspace-scoped rebuild
--- (LOBE-10056). Two-step (ADD nullable, then SET DEFAULT) so it stays catalog-only
--- — a combined volatile-DEFAULT ADD COLUMN would rewrite the whole table under lock.
+-- Phase 5 ai_infra workspace-scoped migration: add nullable surrogate `_id` columns
+-- for ai_providers and ai_models. Two-step approach (ADD nullable first, then SET DEFAULT)
+-- keeps the operation catalog-only. A combined ADD COLUMN ... DEFAULT gen_random_uuid()
+-- NOT NULL would trigger a full table rewrite under ACCESS EXCLUSIVE lock (ai_models has
+-- ~4M rows), which would block all chat reads that depend on model resolution.
 ALTER TABLE "ai_providers" ADD COLUMN IF NOT EXISTS "_id" uuid;
 --> statement-breakpoint
 ALTER TABLE "ai_providers" ALTER COLUMN "_id" SET DEFAULT gen_random_uuid();

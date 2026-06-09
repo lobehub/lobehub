@@ -231,9 +231,12 @@ export default defineConfig({
     server: {
       hmr: {
         clientPort: 5173,
-        host: 'localhost',
+        host: '127.0.0.1',
         protocol: 'ws',
       },
+      // Force IPv4 so main-process `fetch` skips happy-eyeballs dual-stack
+      // attempts that surface as ETIMEDOUT under cold-start request bursts.
+      host: '127.0.0.1',
       port: 5173,
       strictPort: true,
     },

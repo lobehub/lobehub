@@ -24,14 +24,25 @@ export class ConnectorActionImpl {
 
   createConnector = async (
     params: Parameters<typeof lambdaClient.connector.create.mutate>[0],
-  ): Promise<void> => {
+  ): Promise<string> => {
     this.#set({ connectorCreating: true }, false, 'createConnector/start');
     try {
-      await lambdaClient.connector.create.mutate(params);
+      const created = await lambdaClient.connector.create.mutate(params);
       await this.fetchConnectors();
+      return created.id;
     } finally {
       this.#set({ connectorCreating: false }, false, 'createConnector/end');
     }
+  };
+
+  /**
+   * Begin the OAuth authorization-code flow for a custom connector and return
+   * the authorize URL for the caller to open in a popup. Resolves the client
+   * via pre-registration or DCR on the server.
+   */
+  startConnectorOAuth = async (id: string): Promise<string> => {
+    const { authorizationUrl } = await lambdaClient.connector.startOAuth.mutate({ id });
+    return authorizationUrl;
   };
 
   deleteConnector = async (id: string): Promise<void> => {

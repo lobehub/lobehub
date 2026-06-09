@@ -1,22 +1,8 @@
-import type { WorkspaceInitResult } from '@lobechat/types';
+import type { WorkingDirEntry } from '@lobechat/types';
 
 /** Max number of working directories persisted per device. Matches the
  * `workingDirs` cap enforced by the `device.updateDevice` tRPC input. */
 export const WORKING_DIRS_MAX = 20;
-
-/**
- * A working directory recorded on a device. Structured so metadata such as the
- * detected repo type survives across machines — a remote client viewing this
- * device can't re-probe its filesystem. Mirrors the DB `WorkingDirEntry`.
- */
-export interface WorkingDirEntry {
-  path: string;
-  repoType?: 'git' | 'github';
-  /** Cached "workspace init" scan (AGENTS.md + project skills). See DB `WorkingDirEntry`. */
-  workspace?: WorkspaceInitResult;
-  /** Epoch ms of the last `workspace` scan (top-level for cheap freshness checks). */
-  workspaceScannedAt?: number;
-}
 
 /**
  * Compute the next `workingDirs` list after the user picks `entry`: move it to
@@ -35,3 +21,10 @@ export const nextWorkingDirs = (
   if (!path) return [...current];
   return [{ ...entry, path }, ...current.filter((d) => d.path !== path)].slice(0, max);
 };
+
+/** Drop a path from a device's `workingDirs` recent list (used by the picker's
+ * remove-recent affordance). */
+export const removeWorkingDir = (
+  path: string,
+  current: readonly WorkingDirEntry[] = [],
+): WorkingDirEntry[] => current.filter((d) => d.path !== path);

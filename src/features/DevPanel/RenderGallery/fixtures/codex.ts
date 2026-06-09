@@ -24,7 +24,7 @@ export default defineFixtures({
   ],
   fixtures: {
     command_execution: single({
-      args: { command: 'bun run type-check' },
+      args: { command: "/bin/zsh -lc 'bun run type-check'" },
       content: 'Checked 1247 files in 2.3s\nNo type errors found.',
       pluginState: {
         exitCode: 0,

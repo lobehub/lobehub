@@ -6,15 +6,17 @@ import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
 import RingLoadingIcon from '@/components/RingLoading';
-import { electronGitService } from '@/services/electron/git';
 import { electronSystemService } from '@/services/electron/system';
+import { gitService } from '@/services/git';
+import {
+  useFetchGitAheadBehind,
+  useFetchGitInfo,
+  useFetchGitWorkingTreeStatus,
+} from '@/store/device';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 import BranchSwitcher from './BranchSwitcher';
-import { useGitAheadBehind } from './useGitAheadBehind';
-import { useGitInfo } from './useGitInfo';
-import { useWorkingTreeStatus } from './useWorkingTreeStatus';
 
 const styles = createStaticStyles(({ css }) => {
   return {
@@ -61,6 +63,7 @@ const styles = createStaticStyles(({ css }) => {
       cursor: pointer;
 
       display: flex;
+      flex: none;
       gap: 4px;
       align-items: center;
 
@@ -70,6 +73,7 @@ const styles = createStaticStyles(({ css }) => {
 
       font-size: 12px;
       color: ${cssVar.colorTextSecondary};
+      white-space: nowrap;
 
       transition: background 0.2s;
 
@@ -79,6 +83,7 @@ const styles = createStaticStyles(({ css }) => {
       }
     `,
     separator: css`
+      flex: none;
       width: 1px;
       height: 10px;
       background: ${cssVar.colorSplit};
@@ -87,6 +92,7 @@ const styles = createStaticStyles(({ css }) => {
       cursor: pointer;
 
       display: inline-flex;
+      flex: none;
       gap: 2px;
       align-items: center;
 
@@ -116,6 +122,7 @@ const styles = createStaticStyles(({ css }) => {
       cursor: pointer;
 
       display: flex;
+      flex: none;
       gap: 4px;
       align-items: center;
 
@@ -125,6 +132,7 @@ const styles = createStaticStyles(({ css }) => {
 
       font-size: 12px;
       color: ${cssVar.colorTextSecondary};
+      white-space: nowrap;
 
       transition: background 0.2s;
 
@@ -136,15 +144,24 @@ const styles = createStaticStyles(({ css }) => {
 });
 
 interface GitStatusProps {
+  /** When set, git status / branch switch / pull / push all run against this
+   * remote device via RPC. Omit for the local machine (talks over IPC). */
+  deviceId?: string;
   isGithub: boolean;
   path: string;
 }
 
-const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
-  const { t } = useTranslation('plugin');
-  const { data, mutate } = useGitInfo(path, isGithub);
-  const { data: workingStatus, mutate: mutateWorkingStatus } = useWorkingTreeStatus(path);
-  const { data: aheadBehind, mutate: mutateAheadBehind } = useGitAheadBehind(path);
+const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
+  const { t } = useTranslation('device');
+  const local = !deviceId;
+  // Transport (Electron IPC vs device RPC) is decided inside the service; the
+  // component just reads, identically for local and remote.
+  const { data, mutate } = useFetchGitInfo(deviceId, path, isGithub);
+  const { data: workingStatus, mutate: mutateWorkingStatus } = useFetchGitWorkingTreeStatus(
+    deviceId,
+    path,
+  );
+  const { data: aheadBehind, mutate: mutateAheadBehind } = useFetchGitAheadBehind(deviceId, path);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [pulling, setPulling] = useState(false);
   const [pushing, setPushing] = useState(false);
@@ -172,69 +189,89 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
     await Promise.all([mutate(), mutateWorkingStatus(), mutateAheadBehind()]);
   }, [mutate, mutateWorkingStatus, mutateAheadBehind]);
 
+  // Flip the displayed branch instantly on checkout; clear the old branch's PR
+  // (the new branch's is unknown until revalidate). No revalidate here — the
+  // switcher's onAfterCheckout reconciles once the checkout lands.
+  const handleOptimisticCheckout = useCallback(
+    (branch: string) => {
+      void mutate(
+        (prev) => ({
+          ...prev,
+          branch,
+          detached: false,
+          extraCount: undefined,
+          ghMissing: undefined,
+          pullRequest: null,
+        }),
+        { revalidate: false },
+      );
+    },
+    [mutate],
+  );
+
   const syncBusy = pulling || pushing;
 
   const handlePull = useCallback(async () => {
     if (pulling || pushing) return;
     setPulling(true);
     try {
-      const result = await electronGitService.pullGitBranch({ path });
+      const result = await gitService.pullGitBranch({ deviceId, path });
       if (result.success) {
         if (result.noop) {
-          message.info(t('localSystem.workingDirectory.pullNoop'));
+          message.info(t('workingDirectory.pullNoop'));
         } else {
-          message.success(t('localSystem.workingDirectory.pullSuccess'));
+          message.success(t('workingDirectory.pullSuccess'));
         }
         await refreshAfterSync();
       } else {
-        message.error(result.error || t('localSystem.workingDirectory.pullFailed'));
+        message.error(result.error || t('workingDirectory.pullFailed'));
       }
     } finally {
       setPulling(false);
     }
-  }, [path, pulling, pushing, refreshAfterSync, t]);
+  }, [deviceId, path, pulling, pushing, refreshAfterSync, t]);
 
   const handlePush = useCallback(async () => {
     if (pulling || pushing) return;
     setPushing(true);
     try {
-      const result = await electronGitService.pushGitBranch({ path });
+      const result = await gitService.pushGitBranch({ deviceId, path });
       if (result.success) {
         if (result.noop) {
-          message.info(t('localSystem.workingDirectory.pushNoop'));
+          message.info(t('workingDirectory.pushNoop'));
         } else {
-          message.success(t('localSystem.workingDirectory.pushSuccess'));
+          message.success(t('workingDirectory.pushSuccess'));
         }
         await refreshAfterSync();
       } else {
-        message.error(result.error || t('localSystem.workingDirectory.pushFailed'));
+        message.error(result.error || t('workingDirectory.pushFailed'));
       }
     } finally {
       setPushing(false);
     }
-  }, [path, pulling, pushing, refreshAfterSync, t]);
+  }, [deviceId, path, pulling, pushing, refreshAfterSync, t]);
 
   if (!data?.branch) return null;
 
   const branchTooltip = data.detached
-    ? t('localSystem.workingDirectory.detachedHead', { sha: data.branch })
+    ? t('workingDirectory.detachedHead', { sha: data.branch })
     : data.branch;
 
   const prTooltip = data.pullRequest
     ? data.extraCount
-      ? t('localSystem.workingDirectory.prTooltipWithExtra', {
+      ? t('workingDirectory.prTooltipWithExtra', {
           count: data.extraCount,
           title: data.pullRequest.title,
         })
       : data.pullRequest.title
     : data.ghMissing
-      ? t('localSystem.workingDirectory.ghMissing')
+      ? t('workingDirectory.ghMissing')
       : undefined;
 
   const hasChanges = !!workingStatus && !workingStatus.clean;
 
   const diffStatTooltip = hasChanges
-    ? t('localSystem.workingDirectory.diffStatTooltip', {
+    ? t('workingDirectory.diffStatTooltip', {
         added: workingStatus!.added,
         deleted: workingStatus!.deleted,
         modified: workingStatus!.modified,
@@ -255,14 +292,18 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
   );
 
   const branchNode = data.detached ? (
+    // Detached HEAD → plain branch label (nothing to switch to).
     <Tooltip title={branchTooltip}>{branchTrigger}</Tooltip>
   ) : (
+    // Local switches over IPC; a remote device switches over RPC (deviceId set).
     <BranchSwitcher
       currentBranch={data.branch}
+      deviceId={deviceId}
       open={switcherOpen}
       path={path}
       onExternalRefresh={refreshAfterSync}
       onOpenChange={setSwitcherOpen}
+      onOptimisticCheckout={handleOptimisticCheckout}
       onAfterCheckout={() => {
         void mutate();
         void mutateWorkingStatus();
@@ -274,23 +315,18 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
   );
 
   const pullTooltip = pulling
-    ? t('localSystem.workingDirectory.pullInProgress')
-    : t('localSystem.workingDirectory.pullAction', {
+    ? t('workingDirectory.pullInProgress')
+    : t('workingDirectory.pullAction', {
         count: aheadBehind?.behind ?? 0,
         upstream: upstreamName,
       });
 
   const pushTooltip = pushing
-    ? t('localSystem.workingDirectory.pushInProgress')
-    : t(
-        pushTargetExists
-          ? 'localSystem.workingDirectory.pushAction'
-          : 'localSystem.workingDirectory.pushActionNew',
-        {
-          count: aheadBehind?.ahead ?? 0,
-          target: pushTargetName || upstreamName,
-        },
-      );
+    ? t('workingDirectory.pushInProgress')
+    : t(pushTargetExists ? 'workingDirectory.pushAction' : 'workingDirectory.pushActionNew', {
+        count: aheadBehind?.ahead ?? 0,
+        target: pushTargetName || upstreamName,
+      });
 
   const pullNode = showBehind && (
     <Tooltip title={pullTooltip}>
@@ -329,7 +365,11 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub }) => {
   const diffNode = (() => {
     if (!hasChanges || !workingStatus) return null;
     const diffButton = (
-      <div className={styles.trigger} role="button" onClick={handleToggleReview}>
+      <div
+        className={styles.trigger}
+        role={local ? 'button' : undefined}
+        onClick={local ? handleToggleReview : undefined}
+      >
         <span className={styles.diffStat}>
           {workingStatus.added > 0 && (
             <span className={styles.diffStatAdded}>+{workingStatus.added}</span>

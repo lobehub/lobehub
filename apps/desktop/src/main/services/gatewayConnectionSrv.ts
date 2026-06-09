@@ -17,6 +17,7 @@ import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
 import { app, powerSaveBlocker } from 'electron';
 
 import { isDev } from '@/const/env';
+import { getDesktopEnv } from '@/env';
 import { createLogger } from '@/utils/logger';
 
 import { ServiceModule } from './index';
@@ -628,7 +629,13 @@ export default class GatewayConnectionService extends ServiceModule {
   // ─── Gateway URL ───
 
   private getGatewayUrl(): string {
-    return this.app.storeManager.get('gatewayUrl') || DEFAULT_GATEWAY_URL;
+    // Env override wins (dev: point at a local `wrangler dev` gateway), then the
+    // user-configured store value, then the production default.
+    return (
+      getDesktopEnv().DEVICE_GATEWAY_URL ||
+      this.app.storeManager.get('gatewayUrl') ||
+      DEFAULT_GATEWAY_URL
+    );
   }
 
   // ─── Token Helpers ───

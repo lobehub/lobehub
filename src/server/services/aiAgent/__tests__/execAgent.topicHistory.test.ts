@@ -110,7 +110,7 @@ vi.mock('@/server/services/file', () => ({
   })),
 }));
 
-vi.mock('@/server/services/toolExecution/deviceGateway', () => ({
+vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     isConfigured: false,
     queryDeviceList: vi.fn().mockResolvedValue([]),

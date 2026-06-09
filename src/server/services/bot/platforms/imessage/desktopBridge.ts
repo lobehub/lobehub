@@ -7,7 +7,7 @@ import type {
   BlueBubblesSendOptions,
 } from '@lobechat/chat-adapter-imessage';
 
-import { deviceGateway } from '@/server/services/toolExecution/deviceGateway';
+import { deviceGateway } from '@/server/services/deviceGateway';
 
 const IMESSAGE_MESSAGE_API_TIMEOUT_MS = 60_000;
 

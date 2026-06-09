@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
-import { app, net, protocol } from 'electron';
+import { app, protocol } from 'electron';
 import { pathExistsSync } from 'fs-extra';
 
 import { createLogger } from '@/utils/logger';
@@ -286,11 +286,6 @@ export class StaticRendererFallback implements RendererFallbackStrategy {
   }
 }
 
-/**
- * Minimal FIFO semaphore: bounds the number of concurrently-held slots and hands
- * waiters their turn in arrival order. `acquire()` resolves with an idempotent
- * release function.
- */
 class Semaphore {
   private active = 0;
   private readonly waiters: Array<() => void> = [];
@@ -313,26 +308,8 @@ class Semaphore {
   }
 }
 
-/**
- * Cap on concurrent dev-server fetches. Since #15304 unified dev under `app://`,
- * every renderer asset round-trips through the main process `net` stack instead
- * of being fetched straight from Vite by the renderer. A cold start (thousands of
- * module requests) or a non-default UI language (every i18n namespace fetched
- * over HTTP, ~50 at once) can otherwise exhaust the net request pool and surface
- * as `ERR_INSUFFICIENT_RESOURCES`. Bound the in-flight burst instead.
- */
 const VITE_FETCH_CONCURRENCY = 64;
 
-/**
- * Development fallback: forward the request to the electron-vite dev server.
- * Non-backend `app://renderer/<path>` requests get round-tripped through the
- * Vite middleware (HTML rewrites, module transforms, optimized deps) and
- * returned to the renderer as if served from `app://` directly.
- *
- * The HMR WebSocket bypasses this — the renderer opens
- * `ws://localhost:<port>` straight against the dev server (see
- * `electron.vite.config.ts` `server.hmr.clientPort`).
- */
 export class ViteRendererFallback implements RendererFallbackStrategy {
   private readonly viteOrigin: string;
   private readonly logger = createLogger('core:ViteRendererFallback');
@@ -345,7 +322,7 @@ export class ViteRendererFallback implements RendererFallbackStrategy {
   async handle(request: Request, url: URL): Promise<Response> {
     const target = `${this.viteOrigin}${url.pathname}${url.search}`;
 
-    // Strip Host so net.fetch derives it from the target URL (otherwise Vite
+    // Strip Host so fetch derives it from the target URL (otherwise Vite
     // sees `Host: renderer` and middleware that keys off Host can misbehave).
     const headers = new Headers(request.headers);
     headers.delete('host');
@@ -362,10 +339,7 @@ export class ViteRendererFallback implements RendererFallbackStrategy {
 
     const release = await this.gate.acquire();
     try {
-      const response = await net.fetch(target, init);
-      // Hold the slot until the body is fully drained (or cancelled) so streaming
-      // responses count against the limit for their whole lifetime, not just until
-      // headers arrive. Bodyless responses release immediately.
+      const response = await fetch(target, init);
       return this.releaseOnBodyDone(response, release);
     } catch (error) {
       release();
@@ -374,12 +348,6 @@ export class ViteRendererFallback implements RendererFallbackStrategy {
     }
   }
 
-  /**
-   * Wrap the response body in a passthrough that invokes `release` once the stream
-   * closes, errors, or is cancelled downstream — keeping the semaphore slot held
-   * for the request's true lifetime without buffering (so media Range/streaming is
-   * preserved). Returns a new Response carrying the wrapped body.
-   */
   private releaseOnBodyDone(response: Response, release: () => void): Response {
     if (!response.body) {
       release();
