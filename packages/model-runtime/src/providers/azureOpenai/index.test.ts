@@ -180,41 +180,6 @@ describe('LobeAzureOpenAI', () => {
         );
       });
 
-      it('should use deploymentName for future GPT-5 minor Responses API requests', async () => {
-        const mockProdStream = new ReadableStream() as any;
-        const mockDebugStream = new ReadableStream() as any;
-        const mockPricing = { units: [] };
-
-        instance = new LobeAzureOpenAI({
-          apiKey: 'test_key',
-          baseURL: 'https://test.openai.azure.com/',
-          id: 'lobehub',
-        });
-
-        vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(
-          new ReadableStream() as any,
-        );
-        vi.spyOn(instance['client'].responses, 'create').mockResolvedValue({
-          tee: () => [mockProdStream, mockDebugStream],
-        } as any);
-        vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(mockPricing as any);
-        vi.spyOn(streamsModule, 'OpenAIResponsesStream').mockReturnValue(new ReadableStream());
-
-        await instance.chat({
-          deploymentName: 'prod-gpt-56',
-          messages: [{ role: 'user', content: 'Hello' }],
-          model: 'gpt-5.6',
-          stream: true,
-        } as any);
-
-        expect(instance['client'].chat.completions.create).not.toHaveBeenCalled();
-
-        const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
-
-        expect(createCall.model).toBe('prod-gpt-56');
-        expect(createCall.reasoning).toEqual({ summary: 'auto' });
-      });
-
       it('should strip unsupported params for Azure reasoning models and include usage in stream options', async () => {
         const mockProdStream = new ReadableStream() as any;
         const mockDebugStream = new ReadableStream() as any;

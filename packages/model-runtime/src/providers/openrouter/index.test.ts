@@ -482,16 +482,6 @@ describe('LobeOpenRouterAI - custom features', () => {
           architecture: { input_modalities: ['text'] },
           created: 1_700_000_000,
           description: 'Test model',
-          id: 'openai/gpt-5.6',
-          name: 'openai/gpt-5.6',
-          pricing: { completion: '0.00001', prompt: '0.00001' },
-          supported_parameters: ['reasoning'],
-          top_provider: { context_length: 8192, max_completion_tokens: 1024 },
-        },
-        {
-          architecture: { input_modalities: ['text'] },
-          created: 1_700_000_000,
-          description: 'Test model',
           id: 'openai/gpt-5.5',
           name: 'openai/gpt-5.5',
           pricing: { completion: '0.00001', prompt: '0.00001' },
@@ -529,14 +519,10 @@ describe('LobeOpenRouterAI - custom features', () => {
       );
 
       const models = await params.models();
-      const gpt56 = models.find((m) => m.id === 'openai/gpt-5.6');
       const gpt55 = models.find((m) => m.id === 'openai/gpt-5.5');
       const gpt52 = models.find((m) => m.id === 'openai/gpt-5.2-mini');
       const gpt51 = models.find((m) => m.id === 'openai/gpt-5.1-mini');
 
-      expect(gpt56?.settings?.extendParams).toEqual(
-        expect.arrayContaining(['gpt5_2ReasoningEffort', 'textVerbosity']),
-      );
       expect(gpt55?.settings?.extendParams).toEqual(
         expect.arrayContaining(['gpt5_2ReasoningEffort', 'textVerbosity']),
       );

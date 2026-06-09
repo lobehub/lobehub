@@ -3,6 +3,7 @@ import { type ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 
+import { responsesAPIModels } from '../../const/models';
 import { buildDefaultAnthropicPayload } from '../../core/anthropicCompatibleFactory';
 import { type LobeRuntimeAI } from '../../core/BaseAI';
 import {
@@ -17,7 +18,6 @@ import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugResponse, debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
-import { isResponsesAPIModel } from '../../utils/gptModelId';
 import { StreamingResponse } from '../../utils/response';
 import { assertToolLimits } from '../../utils/validateToolLimits';
 
@@ -260,7 +260,7 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
       });
 
       if (
-        isResponsesAPIModel(model) ||
+        responsesAPIModels.has(model) ||
         model.toLowerCase().includes('oswe') ||
         (payload as any).apiMode === 'responses'
       ) {
@@ -526,7 +526,7 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
         return AgentRuntimeError.chat({
           endpoint: this.baseURL,
           error,
-          errorType: AgentRuntimeErrorType.RateLimitExceeded,
+          errorType: AgentRuntimeErrorType.QuotaLimitReached,
           provider: ModelProvider.GithubCopilot,
         });
       }

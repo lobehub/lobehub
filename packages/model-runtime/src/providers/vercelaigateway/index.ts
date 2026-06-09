@@ -2,7 +2,6 @@ import { ModelProvider } from 'model-bank';
 
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
-import { resolveGPT5ReasoningExtendParam } from '../../utils/gptModelId';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 
 export interface VercelAIGatewayModelCard {
@@ -124,9 +123,17 @@ export const params = {
         // Merge all applicable extendParams for settings
         ...(() => {
           const extendParams: string[] = [];
-          const gpt5ReasoningExtendParam = resolveGPT5ReasoningExtendParam(m.id);
-          if (tags.includes('reasoning') && gpt5ReasoningExtendParam) {
-            extendParams.push(gpt5ReasoningExtendParam, 'textVerbosity');
+          if (tags.includes('reasoning') && m.id.includes('gpt-5') && !m.id.includes('gpt-5.')) {
+            extendParams.push('gpt5ReasoningEffort', 'textVerbosity');
+          }
+          if (tags.includes('reasoning') && m.id.includes('gpt-5.1') && !m.id.includes('gpt-5.2')) {
+            extendParams.push('gpt5_1ReasoningEffort', 'textVerbosity');
+          }
+          if (
+            tags.includes('reasoning') &&
+            (m.id.includes('gpt-5.2') || m.id.includes('gpt-5.4') || m.id.includes('gpt-5.5'))
+          ) {
+            extendParams.push('gpt5_2ReasoningEffort', 'textVerbosity');
           }
           if (tags.includes('reasoning') && m.id.includes('openai') && !m.id.includes('gpt-5')) {
             extendParams.push('reasoningEffort', 'textVerbosity');

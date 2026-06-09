@@ -249,13 +249,6 @@ describe('LobeVercelAIGatewayAI - custom features', () => {
     it('should map extendParams for gpt-5.x reasoning models', async () => {
       const mockModelData: VercelAIGatewayModelCard[] = [
         {
-          id: 'openai/gpt-5.6',
-          name: 'GPT-5.6',
-          pricing: { input: 0.000_005, output: 0.000_03 },
-          tags: ['reasoning'],
-          type: 'chat',
-        },
-        {
           id: 'openai/gpt-5.5',
           name: 'GPT-5.5',
           pricing: { input: 0.000_005, output: 0.000_03 },
@@ -292,15 +285,11 @@ describe('LobeVercelAIGatewayAI - custom features', () => {
       };
 
       const models = await params.models({ client: mockClient as any });
-      const gpt56 = models.find((m) => m.id === 'openai/gpt-5.6');
       const gpt55 = models.find((m) => m.id === 'openai/gpt-5.5');
       const gpt52 = models.find((m) => m.id === 'openai/gpt-5.2-mini');
       const gpt51 = models.find((m) => m.id === 'openai/gpt-5.1-mini');
       const gpt5 = models.find((m) => m.id === 'openai/gpt-5-mini');
 
-      expect(gpt56?.settings?.extendParams).toEqual(
-        expect.arrayContaining(['gpt5_2ReasoningEffort', 'textVerbosity']),
-      );
       expect(gpt55?.settings?.extendParams).toEqual(
         expect.arrayContaining(['gpt5_2ReasoningEffort', 'textVerbosity']),
       );

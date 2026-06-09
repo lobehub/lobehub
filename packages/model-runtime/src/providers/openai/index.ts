@@ -1,10 +1,10 @@
 import { ModelProvider } from 'model-bank';
 
+import { isGPT5ProResponsesModel, responsesAPIModels } from '../../const/models';
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import type { ChatStreamPayload } from '../../types';
-import { isGPT5ProResponsesModel, isResponsesAPIModel } from '../../utils/gptModelId';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 
 export interface OpenAIModelCard {
@@ -30,7 +30,7 @@ export const params = {
     handlePayload: (payload) => {
       const { enabledSearch, model, ...rest } = payload;
 
-      if (isResponsesAPIModel(model) || enabledSearch) {
+      if (responsesAPIModels.has(model) || enabledSearch) {
         return { ...rest, apiMode: 'responses', enabledSearch, model } as ChatStreamPayload;
       }
 
