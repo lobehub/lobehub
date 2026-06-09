@@ -1652,13 +1652,14 @@ export class AiAgentService {
 
       // lobe-local-system has `discoverable: isDesktop` in builtinTools, which
       // evaluates to false on the Node.js server side, so it never enters the
-      // loop above. Explicitly inject it when a device gateway is configured:
-      // in that scenario the agent IS reachable via the gateway and the
-      // activator must be able to find its manifest.
+      // loop above. Explicitly inject it only when the device gateway is
+      // configured AND the runtime mode is 'local' — skip for sandbox/none
+      // targets to avoid leaking local-system into non-local sessions.
       if (
         canUseDevice &&
         !disableLocalSystem &&
         gatewayConfigured &&
+        agentRuntimeMode === 'local' &&
         !toolManifestMap[LocalSystemManifest.identifier]
       ) {
         toolManifestMap[LocalSystemManifest.identifier] = LocalSystemManifest as LobeToolManifest;
