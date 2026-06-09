@@ -994,7 +994,6 @@ export default {
   'workflow.toolDisplayName.calculate': 'Calculated',
   'workflow.toolDisplayName.callAgent': 'Called an agent',
   'workflow.toolDisplayName.callSubAgent': 'Call SubAgent',
-  'workflow.toolDisplayName.callSubAgents': 'Call SubAgents',
   'workflow.toolDisplayName.clearTodos': 'Cleared todos',
   'workflow.toolDisplayName.copyDocument': 'Copied a document',
   'workflow.toolDisplayName.crawlMultiPages': 'Crawled pages',

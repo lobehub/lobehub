@@ -8,7 +8,6 @@ import { LobeAgentManifest } from '../../manifest';
 import type {
   AnalyzeVisualMediaParams,
   CallSubAgentParams,
-  CallSubAgentsParams,
   ClearTodosParams,
   CreatePlanParams,
   CreateTodosParams,
@@ -394,52 +393,6 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
     return {
       content: result,
       state: { model, threadId, totalToolCalls, totalTokens },
-      success: true,
-    };
-  };
-
-  callSubAgents = async (
-    params: CallSubAgentsParams,
-    ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    const { tasks } = params;
-
-    if (!tasks || tasks.length === 0) {
-      return { content: 'No sub-agents provided to dispatch.', success: false };
-    }
-
-    if (!ctx.subAgent) {
-      return { content: 'Sub-agent execution is not available in this runtime.', success: false };
-    }
-
-    const subAgent = ctx.subAgent;
-    const results = await Promise.all(
-      tasks.map((task) =>
-        subAgent.run({
-          description: task.description,
-          inheritMessages: task.inheritMessages,
-          instruction: task.instruction,
-          timeout: task.timeout,
-          toolMessageId: ctx.messageId,
-        }),
-      ),
-    );
-
-    const content = results
-      .map((r, i) => `${i + 1}. ${tasks[i].description}\n${r.success ? r.result : `❌ ${r.error}`}`)
-      .join('\n\n');
-
-    return {
-      content,
-      state: {
-        subAgents: results.map((r, i) => ({
-          description: tasks[i].description,
-          model: r.model,
-          threadId: r.threadId,
-          totalToolCalls: r.totalToolCalls,
-          totalTokens: r.totalTokens,
-        })),
-      },
       success: true,
     };
   };

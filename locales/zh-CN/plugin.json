@@ -73,8 +73,6 @@
   "builtins.lobe-agent.apiName.analyzeVisualMedia.mediaCount": "{{count}} 个媒体",
   "builtins.lobe-agent.apiName.analyzeVisualMedia.result": "分析视觉媒体：<question>{{question}}</question>",
   "builtins.lobe-agent.apiName.callSubAgent": "Call SubAgent",
-  "builtins.lobe-agent.apiName.callSubAgents": "Call SubAgents",
-  "builtins.lobe-agent.apiName.callSubAgents.more": "等 {{count}} 个",
   "builtins.lobe-agent.apiName.clearTodos": "清除待办",
   "builtins.lobe-agent.apiName.clearTodos.modeAll": "全部",
   "builtins.lobe-agent.apiName.clearTodos.modeCompleted": "已完成",

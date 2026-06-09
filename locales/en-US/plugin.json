@@ -73,8 +73,6 @@
   "builtins.lobe-agent.apiName.analyzeVisualMedia.mediaCount": "{{count}} media",
   "builtins.lobe-agent.apiName.analyzeVisualMedia.result": "Analyze visual media: <question>{{question}}</question>",
   "builtins.lobe-agent.apiName.callSubAgent": "Call SubAgent",
-  "builtins.lobe-agent.apiName.callSubAgents": "Call SubAgents",
-  "builtins.lobe-agent.apiName.callSubAgents.more": "{{count}} in total",
   "builtins.lobe-agent.apiName.clearTodos": "Clear todos",
   "builtins.lobe-agent.apiName.clearTodos.modeAll": "all",
   "builtins.lobe-agent.apiName.clearTodos.modeCompleted": "completed",

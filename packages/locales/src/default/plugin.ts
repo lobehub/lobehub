@@ -56,8 +56,6 @@ export default {
   'builtins.lobe-agent.apiName.analyzeVisualMedia.result':
     'Analyze visual media: <question>{{question}}</question>',
   'builtins.lobe-agent.apiName.callSubAgent': 'Call SubAgent',
-  'builtins.lobe-agent.apiName.callSubAgents': 'Call SubAgents',
-  'builtins.lobe-agent.apiName.callSubAgents.more': '{{count}} in total',
   'builtins.lobe-agent.subAgent.stats.tokens': '{{count}} tokens',
   'builtins.lobe-agent.subAgent.stats.tools': '{{count}} tools',
   'builtins.lobe-agent.title': 'Lobe Agent',
