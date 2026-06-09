@@ -50,14 +50,14 @@ execAgent({ hooks })
 
 ## Key Files
 
-| File                                                       | Role                                                   |
-| ---------------------------------------------------------- | ------------------------------------------------------ |
-| `packages/agent-runtime/src/types/hooks.ts`                | Type definitions (AgentHookType, all event interfaces) |
-| `src/server/services/agentRuntime/hooks/types.ts`          | Server-side types (AgentHook, re-exports)              |
-| `src/server/services/agentRuntime/hooks/HookDispatcher.ts` | Registration, dispatch, dispatchBeforeToolCall         |
-| `src/server/modules/AgentRuntime/RuntimeExecutors.ts`      | Tool/Compact/HumanIntervention hook dispatch           |
-| `src/server/services/agentRuntime/AgentRuntimeService.ts`  | Step hooks + HumanIntervention resume/reject           |
-| `src/server/services/aiAgent/index.ts`                     | CallAgent hook dispatch                                |
+| File                                                            | Role                                                   |
+| --------------------------------------------------------------- | ------------------------------------------------------ |
+| `packages/agent-runtime/src/types/hooks.ts`                     | Type definitions (AgentHookType, all event interfaces) |
+| `apps/server/src/services/agentRuntime/hooks/types.ts`          | Server-side types (AgentHook, re-exports)              |
+| `apps/server/src/services/agentRuntime/hooks/HookDispatcher.ts` | Registration, dispatch, dispatchBeforeToolCall         |
+| `apps/server/src/modules/AgentRuntime/RuntimeExecutors.ts`      | Tool/Compact/HumanIntervention hook dispatch           |
+| `apps/server/src/services/agentRuntime/AgentRuntimeService.ts`  | Step hooks + HumanIntervention resume/reject           |
+| `apps/server/src/services/aiAgent/index.ts`                     | CallAgent hook dispatch                                |
 
 ## Registration Flow
 
