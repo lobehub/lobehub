@@ -1,6 +1,6 @@
-import type { ImportPgDataStructure } from '@lobechat/types';
+import type { ImporterEntryData, ImportErrorResult, ImportPgDataStructure } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import * as Schema from '../../../schemas';
@@ -423,6 +423,232 @@ describe('DataImporter', () => {
         sessions: { added: 1, errors: 0, skips: 0, updated: 0 },
         topics: { added: 1, errors: 0, skips: 0, updated: 0 },
       });
+    });
+  });
+
+  describe('importData (deprecated entry wrapper)', () => {
+    it('should delegate to the deprecated importer and wrap the result', async () => {
+      const data: ImporterEntryData = {
+        version: 7,
+        sessionGroups: [],
+        sessions: [],
+        topics: [],
+        messages: [],
+      } as unknown as ImporterEntryData;
+
+      const result = await importer.importData(data);
+
+      expect(result.success).toBe(true);
+      expect(result.results).toBeDefined();
+    });
+  });
+
+  describe('importPgData error handling (outer catch)', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('should return success=false with parsed unique-constraint error details', async () => {
+      const uniqueError: any = new Error('duplicate key value violates unique constraint');
+      uniqueError.code = '23505';
+      uniqueError.detail = 'Key (slug)=(my-agent) already exists.';
+
+      vi.spyOn(clientDB, 'transaction').mockRejectedValueOnce(uniqueError);
+
+      const result = await importer.importPgData(agentsData as ImportPgDataStructure);
+
+      expect(result.success).toBe(false);
+      expect((result as ImportErrorResult).error).toMatchObject({
+        message: 'duplicate key value violates unique constraint',
+        details: {
+          constraintType: 'unique',
+          field: 'slug',
+          value: 'my-agent',
+        },
+      });
+    });
+
+    it('should fall back to raw detail when error is not a 23505 unique violation', async () => {
+      const genericError: any = new Error('some db failure');
+      genericError.detail = 'raw detail message';
+
+      vi.spyOn(clientDB, 'transaction').mockRejectedValueOnce(genericError);
+
+      const result = await importer.importPgData(agentsData as ImportPgDataStructure);
+
+      expect(result.success).toBe(false);
+      expect((result as ImportErrorResult).error).toMatchObject({
+        message: 'some db failure',
+        details: 'raw detail message',
+      });
+    });
+
+    it('should fall back to "Unknown error details" when 23505 detail is unparseable', async () => {
+      const weirdUniqueError: any = new Error('weird unique violation');
+      weirdUniqueError.code = '23505';
+      weirdUniqueError.detail = 'no parseable key here';
+
+      vi.spyOn(clientDB, 'transaction').mockRejectedValueOnce(weirdUniqueError);
+
+      const result = await importer.importPgData(agentsData as ImportPgDataStructure);
+
+      expect(result.success).toBe(false);
+      expect((result as ImportErrorResult).error?.details).toBe('no parseable key here');
+    });
+  });
+
+  describe('batch insert error handling (in-batch duplicate)', () => {
+    it('should record errors when two composite-key rows collide on the same primary key', async () => {
+      // userInstalledPlugins uses composite PK [userId, identifier]; two rows with the
+      // same identifier are both "new" (not yet in DB), pass the conflict pre-check,
+      // and then violate the PK during the batch insert -> batch catch path.
+      const data: ImportPgDataStructure = {
+        data: {
+          userInstalledPlugins: [
+            {
+              identifier: 'dup-plugin',
+              type: 'plugin',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+            {
+              identifier: 'dup-plugin',
+              type: 'plugin',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+        },
+        mode: 'pglite',
+        schemaHash: 'test',
+      } as any;
+
+      const result = await importer.importPgData(data);
+
+      // The transaction itself still succeeds; the batch error is swallowed and counted.
+      expect(result.success).toBe(true);
+      expect(result.results.userInstalledPlugins?.errors).toBe(2);
+    });
+  });
+
+  describe('userInstalledPlugins (composite key + merge strategy)', () => {
+    it('should insert then merge on identifier conflict and bump updated count', async () => {
+      const firstData: ImportPgDataStructure = {
+        data: {
+          userInstalledPlugins: [
+            {
+              identifier: 'merge-plugin',
+              type: 'plugin',
+              source: 'first',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+        },
+        mode: 'pglite',
+        schemaHash: 'test',
+      } as any;
+
+      const firstResult = await importer.importPgData(firstData);
+      expect(firstResult.success).toBe(true);
+      expect(firstResult.results.userInstalledPlugins).toMatchObject({ added: 1, errors: 0 });
+
+      // Re-import the same identifier (twice in one payload) with a fresh importer.
+      // First row triggers merge (exists), establishing the conflict; the second row in
+      // the same call also hits merge after the first update committed -> updated++ branch.
+      const importer2 = new DataImporterRepos(clientDB, userId);
+      const secondData: ImportPgDataStructure = {
+        data: {
+          userInstalledPlugins: [
+            {
+              identifier: 'merge-plugin',
+              type: 'plugin',
+              source: 'second',
+              createdAt: '2025-02-01T00:00:00Z',
+              updatedAt: '2025-02-01T00:00:00Z',
+            },
+            {
+              identifier: 'merge-plugin',
+              type: 'plugin',
+              source: 'third',
+              createdAt: '2025-03-01T00:00:00Z',
+              updatedAt: '2025-03-01T00:00:00Z',
+            },
+          ],
+        },
+        mode: 'pglite',
+        schemaHash: 'test',
+      } as any;
+
+      const secondResult = await importer2.importPgData(secondData);
+      expect(secondResult.success).toBe(true);
+      expect(secondResult.results.userInstalledPlugins?.updated).toBe(2);
+      expect(secondResult.results.userInstalledPlugins?.added).toBe(0);
+
+      // Only one row should exist (merged), with the latest merged source value.
+      const rows = await clientDB.query.userInstalledPlugins.findMany({
+        where: eq(Schema.userInstalledPlugins.userId, userId),
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].source).toBe('third');
+    });
+  });
+
+  describe('aiModels (non-composite skip strategy on unique constraint)', () => {
+    it('should skip a new model whose providerId already exists and map its id', async () => {
+      // aiModels config: conflictStrategy 'skip', uniqueConstraints ['id','providerId'].
+      // Import a first model with providerId 'prov-x'.
+      const firstData: ImportPgDataStructure = {
+        data: {
+          aiModels: [
+            {
+              id: 'model-a',
+              providerId: 'prov-x',
+              type: 'chat',
+              createdAt: '2025-01-01T00:00:00Z',
+              updatedAt: '2025-01-01T00:00:00Z',
+            },
+          ],
+        },
+        mode: 'pglite',
+        schemaHash: 'test',
+      } as any;
+
+      const firstResult = await importer.importPgData(firstData);
+      expect(firstResult.success).toBe(true);
+      expect(firstResult.results.aiModels).toMatchObject({ added: 1, errors: 0 });
+
+      // A second, different model (new id) but same providerId -> providerId unique
+      // constraint conflict -> skip branch (no providers imported here so providerId is
+      // not remapped and keeps colliding).
+      const importer2 = new DataImporterRepos(clientDB, userId);
+      const secondData: ImportPgDataStructure = {
+        data: {
+          aiModels: [
+            {
+              id: 'model-b',
+              providerId: 'prov-x',
+              type: 'chat',
+              createdAt: '2025-02-01T00:00:00Z',
+              updatedAt: '2025-02-01T00:00:00Z',
+            },
+          ],
+        },
+        mode: 'pglite',
+        schemaHash: 'test',
+      } as any;
+
+      const secondResult = await importer2.importPgData(secondData);
+      expect(secondResult.success).toBe(true);
+      expect(secondResult.results.aiModels?.added).toBe(0);
+      expect(secondResult.results.aiModels?.skips).toBeGreaterThanOrEqual(1);
+
+      const models = await clientDB.query.aiModels.findMany({
+        where: eq(Schema.aiModels.userId, userId),
+      });
+      // model-b was skipped, only model-a persisted.
+      expect(models).toHaveLength(1);
+      expect(models[0].id).toBe('model-a');
     });
   });
 });

@@ -6,6 +6,14 @@ user-invocable: false
 
 # Drizzle ORM Schema Style Guide
 
+> **Adding a Model or Repository?** Ship a sibling test in the same PR — every new
+> file under `packages/database/src/models/**` or `src/repositories/**` needs a
+> matching `__tests__/<name>.test.ts`. See the **testing** skill
+> (`.agents/skills/testing/references/db-model-test.md`) for the `getTestDB()`
+> integration pattern, user-isolation tests, the BM25 `describe.skipIf(!isServerDB)`
+> guard, and schema gotchas. CI's coverage patch gate won't reliably catch a brand-new
+> untested file, so this is on you.
+
 ## Configuration
 
 - Config: `drizzle.config.ts`
