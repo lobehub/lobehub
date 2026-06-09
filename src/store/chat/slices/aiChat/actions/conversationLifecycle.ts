@@ -54,6 +54,7 @@ import {
   getCompressionCandidateMessageIds,
   hasRunningCompressionOperation,
 } from '@/store/chat/utils/compression';
+import { getElectronStoreState } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { type StoreSetter } from '@/store/types';
@@ -524,8 +525,11 @@ export class ConversationLifecycleActionImpl {
       const existingTopic = operationContext.topicId
         ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
         : undefined;
-      const agentWorkingDirectory =
-        agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(getAgentStoreState());
+      const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+      const agentWorkingDirectory = agentByIdSelectors.getAgentWorkingDirectoryById(
+        agentId,
+        currentDeviceId,
+      )(getAgentStoreState());
       const workingDirectory = existingTopic?.metadata?.workingDirectory || agentWorkingDirectory;
 
       // Persist messages to DB first (same as client mode)

@@ -20,6 +20,7 @@ import { KnowledgeType } from '@lobechat/types';
 import { VoiceList } from '@lobehub/tts';
 
 import { DEFAULT_OPENING_QUESTIONS } from '@/features/AgentSetting/store/selectors';
+import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { filterToolIds } from '@/helpers/toolFilters';
 
@@ -260,20 +261,34 @@ const currentAgentRuntimeEnvConfig = (s: AgentStoreState): RuntimeEnvConfig | un
   currentAgentConfig(s)?.chatConfig?.runtimeEnv;
 
 /**
- * Get current agent's working directory
+ * Get the active agent's agent-level working directory.
+ *
+ * Precedence mirrors `getAgentWorkingDirectoryById` (the agent-owned slice only;
+ * topic overrides are layered on by callers):
+ *
+ *   agent's per-device choice (`agencyConfig.workingDirByDevice[targetDeviceId]`)
+ *     > legacy per-agent localStorage value > home path
+ *
+ * `currentDeviceId` is passed in (not read cross-store) so the target device is
+ * resolved correctly for device-bound agents and hook callers stay reactive.
  */
-const currentAgentWorkingDirectory = (s: AgentStoreState): string | undefined =>
-  (() => {
+const currentAgentWorkingDirectory =
+  (currentDeviceId?: string) =>
+  (s: AgentStoreState): string | undefined => {
     if (!isDesktop) return;
 
+    const homePath = globalAgentContextManager.getContext().homePath;
     const activeAgentId = s.activeAgentId;
-    if (!activeAgentId) return globalAgentContextManager.getContext().homePath;
+    if (!activeAgentId) return homePath;
 
-    return (
-      s.localAgentWorkingDirectoryMap[activeAgentId] ??
-      globalAgentContextManager.getContext().homePath
-    );
-  })();
+    const agencyConfig = currentAgentConfig(s)?.agencyConfig;
+    const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
+    const agentChoice = targetDeviceId
+      ? agencyConfig?.workingDirByDevice?.[targetDeviceId]
+      : undefined;
+
+    return agentChoice ?? s.localAgentWorkingDirectoryMap[activeAgentId] ?? homePath;
+  };
 
 const isCurrentAgentExternal = (s: AgentStoreState): boolean => !currentAgentData(s)?.virtual;
 

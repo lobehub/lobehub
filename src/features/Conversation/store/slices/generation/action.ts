@@ -24,6 +24,7 @@ import {
   mergeAgentRuntimeInitialContexts,
   resolveActiveTopicDocumentInitialContext,
 } from '@/store/chat/utils/activeTopicDocumentContext';
+import { getElectronStoreState } from '@/store/electron';
 
 import { type Store as ConversationStore } from '../../action';
 
@@ -85,8 +86,11 @@ const runHeterogeneousFromExistingMessage = async (
   const topic = context.topicId
     ? topicSelectors.getTopicById(context.topicId)(chatStore)
     : undefined;
-  const agentWorkingDirectory =
-    agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(getAgentStoreState());
+  const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+  const agentWorkingDirectory = agentByIdSelectors.getAgentWorkingDirectoryById(
+    agentId,
+    currentDeviceId,
+  )(getAgentStoreState());
   const workingDirectory = topic?.metadata?.workingDirectory || agentWorkingDirectory;
 
   // Drops the saved sessionId when its bound cwd disagrees with the current
