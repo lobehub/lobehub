@@ -14,6 +14,7 @@ import { agentByIdSelectors } from '@/store/agent/selectors';
 
 const styles = createStaticStyles(({ css }) => ({
   bar: css`
+    container: runtimebar / inline-size;
     padding-block: 0;
     padding-inline: 4px;
   `,
@@ -21,6 +22,7 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: default;
 
     display: flex;
+    flex: none;
     gap: 6px;
     align-items: center;
 
@@ -30,6 +32,27 @@ const styles = createStaticStyles(({ css }) => ({
 
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
+    white-space: nowrap;
+  `,
+  // On a narrow bar the "full access" badge collapses to just its icon — the
+  // hover tooltip still spells it out. Saves a chunk of horizontal space that
+  // the truncating workspace cluster can use instead.
+  fullAccessLabel: css`
+    @container runtimebar (width < 600px) {
+      display: none;
+    }
+  `,
+  // Mirror RuntimeConfig: the workspace cluster shrinks then scrolls horizontally
+  // (hidden scrollbar) instead of wrapping each chip's text on narrow screens.
+  leftGroup: css`
+    scrollbar-width: none;
+    overflow: auto hidden;
+    flex: 1;
+    min-width: 0;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
   `,
 }));
 
@@ -46,7 +69,7 @@ const WorkingDirectoryBar = memo(() => {
     if (!agentId) return null;
     return (
       <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
-        <Flexbox horizontal align={'center'} gap={4}>
+        <Flexbox horizontal align={'center'} className={styles.leftGroup} gap={4}>
           <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
         </Flexbox>
       </Flexbox>
@@ -65,13 +88,13 @@ const WorkingDirectoryBar = memo(() => {
   const fullAccessBadge = (
     <div className={styles.fullAccess}>
       <Icon icon={CircleAlertIcon} size={14} />
-      <span>{tChat('heteroAgent.fullAccess.label')}</span>
+      <span className={styles.fullAccessLabel}>{tChat('heteroAgent.fullAccess.label')}</span>
     </div>
   );
 
   return (
     <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
-      <Flexbox horizontal align={'center'} gap={4}>
+      <Flexbox horizontal align={'center'} className={styles.leftGroup} gap={4}>
         <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
       </Flexbox>
       <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>

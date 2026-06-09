@@ -63,6 +63,7 @@ const styles = createStaticStyles(({ css }) => {
       cursor: pointer;
 
       display: flex;
+      flex: none;
       gap: 4px;
       align-items: center;
 
@@ -72,6 +73,7 @@ const styles = createStaticStyles(({ css }) => {
 
       font-size: 12px;
       color: ${cssVar.colorTextSecondary};
+      white-space: nowrap;
 
       transition: background 0.2s;
 
@@ -81,6 +83,7 @@ const styles = createStaticStyles(({ css }) => {
       }
     `,
     separator: css`
+      flex: none;
       width: 1px;
       height: 10px;
       background: ${cssVar.colorSplit};
@@ -89,6 +92,7 @@ const styles = createStaticStyles(({ css }) => {
       cursor: pointer;
 
       display: inline-flex;
+      flex: none;
       gap: 2px;
       align-items: center;
 
@@ -118,6 +122,7 @@ const styles = createStaticStyles(({ css }) => {
       cursor: pointer;
 
       display: flex;
+      flex: none;
       gap: 4px;
       align-items: center;
 
@@ -127,6 +132,7 @@ const styles = createStaticStyles(({ css }) => {
 
       font-size: 12px;
       color: ${cssVar.colorTextSecondary};
+      white-space: nowrap;
 
       transition: background 0.2s;
 

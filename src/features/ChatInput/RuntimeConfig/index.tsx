@@ -17,6 +17,26 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 0;
     padding-inline: 4px;
   `,
+  // Left cluster (mode + device + working directory + git) is the variable-width
+  // part. It shrinks first and, once its long labels have truncated as far as
+  // they can, scrolls horizontally instead of wrapping each chip's text. The
+  // scrollbar is hidden — trackpad / wheel still works.
+  leftGroup: css`
+    scrollbar-width: none;
+
+    overflow: auto hidden;
+    flex: 1;
+
+    min-width: 0;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  `,
+  // Right cluster (approval mode + context window) stays pinned and intact.
+  rightGroup: css`
+    flex: none;
+  `,
 }));
 
 const RuntimeConfig = memo(() => {
@@ -43,12 +63,12 @@ const RuntimeConfig = memo(() => {
   return (
     <Flexbox horizontal align={'center'} className={styles.bar} justify={'space-between'}>
       {/* Left: chat-mode switcher + (agent-only) execution device + working directory */}
-      <Flexbox horizontal align={'center'} gap={4}>
+      <Flexbox horizontal align={'center'} className={styles.leftGroup} gap={4}>
         <ModeSelector />
         {enableAgentMode && <WorkspaceControls agentId={agentId} />}
       </Flexbox>
 
-      <Flexbox horizontal align={'center'} gap={4}>
+      <Flexbox horizontal align={'center'} className={styles.rightGroup} gap={4}>
         {enableAgentMode && <ApprovalMode />}
         {showContextWindow && <ContextWindow />}
       </Flexbox>

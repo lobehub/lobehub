@@ -31,6 +31,7 @@ const styles = createStaticStyles(({ css }) => ({
     cursor: pointer;
 
     display: flex;
+    flex: none;
     gap: 6px;
     align-items: center;
 
@@ -40,6 +41,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
+    white-space: nowrap;
 
     transition: all 0.2s;
 
@@ -47,6 +49,12 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillSecondary};
     }
+  `,
+  buttonLabel: css`
+    overflow: hidden;
+    max-width: 120px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   check: css`
     flex: none;
@@ -481,7 +489,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     >
       <div className={styles.button}>
         {chipIcon}
-        <span>{chipLabel}</span>
+        <span className={styles.buttonLabel}>{chipLabel}</span>
         <Icon icon={ChevronDownIcon} size={12} />
       </div>
     </Popover>
