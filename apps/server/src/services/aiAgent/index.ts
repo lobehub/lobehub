@@ -2,7 +2,7 @@ import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
 import { BUILTIN_AGENT_SLUGS, getAgentRuntimeConfig } from '@lobechat/builtin-agents';
 import { builtinSkills } from '@lobechat/builtin-skills';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
-import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
+import { LobeAgentIdentifier, LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { MessageToolIdentifier } from '@lobechat/builtin-tool-message';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
@@ -627,6 +627,10 @@ export class AiAgentService {
         ? agentConfig.plugins
         : [TaskIdentifier, ...(agentConfig.plugins ?? [])];
       log('execAgent: injected task-agent runtime for task scope');
+    }
+
+    if (appContext?.isSubAgent) {
+      agentConfig.plugins = agentConfig.plugins?.filter((id) => id !== LobeAgentIdentifier);
     }
 
     await throwIfExecutionAborted('agent configuration');
@@ -2545,6 +2549,7 @@ export class AiAgentService {
           defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
           documentId: appContext?.documentId,
           groupId: appContext?.groupId,
+          isSubAgent: appContext?.isSubAgent,
           scope: appContext?.scope,
           sourceMessageId: userMessageRecord?.id ?? parentMessageId ?? undefined,
           taskId: operationTaskId,
@@ -2840,7 +2845,7 @@ export class AiAgentService {
     // Use headless mode to skip human approval in async task execution
     const result = await this.execAgent({
       agentId,
-      appContext: { groupId, threadId: thread.id, topicId },
+      appContext: { groupId, isSubAgent: true, threadId: thread.id, topicId },
       autoStart: true,
       hooks,
       parentOperationId,

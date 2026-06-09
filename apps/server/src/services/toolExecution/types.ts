@@ -70,6 +70,8 @@ export interface ToolExecutionContext {
   executionTimeoutMs?: number;
   /** Current group ID for group chat context */
   groupId?: string | null;
+  /** Whether this tool call is executing inside an isolated sub-agent run. */
+  isSubAgent?: boolean;
   /**
    * Optional server-owned embedding runtime for memory search.
    *

@@ -73,6 +73,11 @@ export interface ExecAgentAppContext {
     repos?: string[];
     workingDirectory?: string;
   };
+  /**
+   * Whether this operation is an isolated sub-agent execution. Used to disable
+   * recursive sub-agent dispatch.
+   */
+  isSubAgent?: boolean;
   /** Scope identifier */
   scope?: string | null;
   /** Session ID */

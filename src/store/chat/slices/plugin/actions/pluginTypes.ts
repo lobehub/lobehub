@@ -113,6 +113,8 @@ export class PluginTypesActionImpl {
       const viewedTask = operation?.context?.viewedTask ?? rootRuntimeOperationContext?.viewedTask;
       const taskId = viewedTask?.type === 'detail' ? viewedTask.taskId : undefined;
       const topicId = operation?.context?.topicId ?? rootRuntimeOperationContext?.topicId;
+      const isSubAgent =
+        operation?.context?.isSubAgent ?? rootRuntimeOperationContext?.isSubAgent ?? false;
 
       // For agent-builder tools, inject activeAgentId from store if not in context
       // This is needed because AgentBuilderProvider uses a separate scope for messages
@@ -186,6 +188,7 @@ export class PluginTypesActionImpl {
         messageId: id,
         operationId,
         rootRuntimeOperationId,
+        isSubAgent,
         scope,
         taskId,
         topicId,
@@ -198,6 +201,7 @@ export class PluginTypesActionImpl {
           documentId,
           groupId,
           groupOrchestration,
+          isSubAgent,
           messageId: id,
           operationId,
           registerAfterCompletion,

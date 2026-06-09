@@ -168,6 +168,7 @@ export interface OperationCreationParams {
     defaultTaskAssigneeAgentId?: string;
     documentId?: string | null;
     groupId?: string | null;
+    isSubAgent?: boolean;
     scope?: string | null;
     /** Source user message ID used for same-turn Agent Signal procedure suppression. */
     sourceMessageId?: string;

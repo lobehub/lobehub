@@ -4769,6 +4769,46 @@ describe('RuntimeExecutors', () => {
       expect(result.nextContext?.phase).toBe('sub_agent_result');
     });
 
+    it('exec_sub_agent blocks nested dispatch when current state is already a sub-agent', async () => {
+      const mockExecSubAgentTask = vi.fn();
+      const ctxWithCallback = {
+        ...ctx,
+        execSubAgentTask: mockExecSubAgentTask,
+        topicId: 'topic-123',
+      };
+
+      const executors = createRuntimeExecutors(ctxWithCallback);
+      const state = createMockState({
+        metadata: {
+          agentId: 'parent-agent-id',
+          isSubAgent: true,
+          topicId: 'topic-123',
+        },
+      });
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'tool-msg-id',
+          task: {
+            description: 'Nested call',
+            instruction: 'Do nested work',
+            targetAgentId: 'target-agent-id',
+          },
+        },
+        type: 'exec_sub_agent' as const,
+      };
+
+      const result = await executors.exec_sub_agent!(instruction as any, state);
+
+      expect(result.nextContext?.phase).toBe('sub_agent_result');
+      expect((result.nextContext?.payload as any).result).toMatchObject({
+        error: 'Sub-agent calls cannot be triggered from within another sub-agent.',
+        success: false,
+      });
+      expect(mockMessageModel.create).not.toHaveBeenCalled();
+      expect(mockExecSubAgentTask).not.toHaveBeenCalled();
+    });
+
     it('exec_sub_agent gracefully skips dispatch when execSubAgent not injected', async () => {
       // No callback injected (e.g. in tests that don't set it up)
       const executors = createRuntimeExecutors(ctx);
