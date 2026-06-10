@@ -52,13 +52,29 @@ const getTRPCErrorCodeFromStatus = (status: number): TRPCErrorCode => {
 const createRuntimeTRPCError = (error: unknown): TRPCError | undefined => {
   const errorType = getRuntimeErrorType(error);
   const spec = getErrorCodeSpec(errorType);
-  if (!errorType || !spec) return;
+  if (errorType && spec) {
+    return new TRPCError({
+      cause: error,
+      code: getTRPCErrorCodeFromStatus(spec.httpStatus),
+      message: errorType,
+    });
+  }
 
-  return new TRPCError({
-    cause: error,
-    code: getTRPCErrorCodeFromStatus(spec.httpStatus),
-    message: errorType,
-  });
+  // Raw provider SDK errors (OpenAI/Anthropic APIError) carry an HTTP status
+  // but no errorType — the generateObject path rethrows upstream errors
+  // verbatim. Without this mapping, tRPC classifies them as
+  // INTERNAL_SERVER_ERROR, so a user-channel 4xx (e.g. a BYOK provider
+  // rejecting the request) pollutes server 500 monitoring.
+  const status = (error as { status?: unknown } | undefined)?.status;
+  if (typeof status === 'number' && status >= 400 && status < 500) {
+    return new TRPCError({
+      cause: error,
+      code: getTRPCErrorCodeFromStatus(status),
+      message: error instanceof Error ? error.message : `Provider error (${status})`,
+    });
+  }
+
+  return undefined;
 };
 
 const aiChatProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
