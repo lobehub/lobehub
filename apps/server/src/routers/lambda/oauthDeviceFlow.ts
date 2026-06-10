@@ -20,7 +20,7 @@ const oauthProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
 
   return opts.next({
     ctx: {
-      aiProviderModel: new AiProviderModel(ctx.serverDB, ctx.userId),
+      aiProviderModel: new AiProviderModel(ctx.serverDB, ctx.userId, wsId),
       gateKeeper,
     },
   });

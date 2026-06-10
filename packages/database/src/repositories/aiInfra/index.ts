@@ -124,6 +124,7 @@ const injectSearchSettings = (providerId: string, item: any) => {
 export class AiInfraRepos {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
   aiProviderModel: AiProviderModel;
   private readonly providerConfigs: Record<string, ProviderConfig>;
   aiModelModel: AiModelModel;
@@ -133,11 +134,13 @@ export class AiInfraRepos {
     db: LobeChatDatabase,
     userId: string,
     providerConfigs: Record<string, ProviderConfig>,
+    workspaceId?: string,
   ) {
     this.userId = userId;
     this.db = db;
-    this.aiProviderModel = new AiProviderModel(db, userId);
-    this.aiModelModel = new AiModelModel(db, userId);
+    this.workspaceId = workspaceId;
+    this.aiProviderModel = new AiProviderModel(db, userId, workspaceId);
+    this.aiModelModel = new AiModelModel(db, userId, workspaceId);
     this.providerConfigs = providerConfigs;
   }
 

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type {
   AiModelSortMap,
   AiProviderModelListItem,
@@ -10,15 +10,48 @@ import { AiModelSourceEnum } from 'model-bank';
 import type { AiModelSelectItem, NewAiModelItem } from '../schemas';
 import { aiModels } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspaceWhere } from '../utils/workspace';
 
 export class AiModelModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, aiModels);
+
+  private modelConflictTarget = () =>
+    this.workspaceId
+      ? {
+          // Workspace rows are shared across all members (buildWorkspaceWhere reads
+          // by workspace_id only; user_id just records the creator), so the upsert
+          // must conflict on (id, provider_id, workspace_id) — not the creator —
+          // otherwise two members editing the same model insert duplicate rows.
+          target: [aiModels.id, aiModels.providerId, aiModels.workspaceId],
+          targetWhere: isNotNull(aiModels.workspaceId),
+        }
+      : {
+          target: [aiModels.id, aiModels.providerId, aiModels.userId],
+          targetWhere: isNull(aiModels.workspaceId),
+        };
+
+  private modelConflictDoNothingTarget = () =>
+    this.workspaceId
+      ? {
+          // Shared workspace rows conflict on (id, provider_id, workspace_id), not creator.
+          target: [aiModels.id, aiModels.providerId, aiModels.workspaceId],
+          where: isNotNull(aiModels.workspaceId),
+        }
+      : {
+          target: [aiModels.id, aiModels.providerId, aiModels.userId],
+          where: isNull(aiModels.workspaceId),
+        };
 
   /**
    * Helper method to validate if array is empty and return early if needed
@@ -37,6 +70,7 @@ export class AiModelModel {
         enabled: params.enabled ?? true, // enabled by default, but respect explicit value
         source: AiModelSourceEnum.Custom,
         userId: this.userId,
+        workspaceId: this.workspaceId,
       })
       .returning();
 
@@ -46,23 +80,17 @@ export class AiModelModel {
   delete = async (id: string, providerId: string) => {
     return this.db
       .delete(aiModels)
-      .where(
-        and(
-          eq(aiModels.id, id),
-          eq(aiModels.providerId, providerId),
-          eq(aiModels.userId, this.userId),
-        ),
-      );
+      .where(and(eq(aiModels.id, id), eq(aiModels.providerId, providerId), this.ownership()));
   };
 
   deleteAll = async () => {
-    return this.db.delete(aiModels).where(eq(aiModels.userId, this.userId));
+    return this.db.delete(aiModels).where(this.ownership());
   };
 
   query = async () => {
     return this.db.query.aiModels.findMany({
       orderBy: [desc(aiModels.updatedAt)],
-      where: eq(aiModels.userId, this.userId),
+      where: this.ownership(),
     });
   };
 
@@ -84,7 +112,7 @@ export class AiModelModel {
         type: aiModels.type,
       })
       .from(aiModels)
-      .where(and(eq(aiModels.providerId, providerId), eq(aiModels.userId, this.userId)))
+      .where(and(eq(aiModels.providerId, providerId), this.ownership()))
       .orderBy(
         asc(aiModels.sort),
         desc(aiModels.enabled),
@@ -113,25 +141,31 @@ export class AiModelModel {
         type: aiModels.type,
       })
       .from(aiModels)
-      .where(and(eq(aiModels.userId, this.userId)));
+      .where(this.ownership());
 
     return data as EnabledAiModel[];
   };
 
   findById = async (id: string) => {
     return this.db.query.aiModels.findFirst({
-      where: and(eq(aiModels.id, id), eq(aiModels.userId, this.userId)),
+      where: and(eq(aiModels.id, id), this.ownership()),
     });
   };
 
   update = async (id: string, providerId: string, value: Partial<AiModelSelectItem>) => {
     return this.db
       .insert(aiModels)
-      .values({ ...value, id, providerId, updatedAt: new Date(), userId: this.userId })
+      .values({
+        ...value,
+        id,
+        providerId,
+        updatedAt: new Date(),
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      })
       .onConflictDoUpdate({
         set: value,
-        target: [aiModels.id, aiModels.providerId, aiModels.userId],
-        targetWhere: isNull(aiModels.workspaceId),
+        ...this.modelConflictTarget(),
       });
   };
 
@@ -141,6 +175,7 @@ export class AiModelModel {
       ...value,
       updatedAt: now,
       userId: this.userId,
+      workspaceId: this.workspaceId,
     } as typeof aiModels.$inferInsert;
 
     if (value.type) insertValues.type = value.type;
@@ -157,8 +192,7 @@ export class AiModelModel {
       .values(insertValues)
       .onConflictDoUpdate({
         set: updateValues,
-        target: [aiModels.id, aiModels.providerId, aiModels.userId],
-        targetWhere: isNull(aiModels.workspaceId),
+        ...this.modelConflictTarget(),
       });
   };
 
@@ -174,14 +208,14 @@ export class AiModelModel {
       providerId,
       updatedAt: new Date(),
       userId: this.userId,
+      workspaceId: this.workspaceId,
     }));
 
     return this.db
       .insert(aiModels)
       .values(records)
       .onConflictDoNothing({
-        target: [aiModels.id, aiModels.userId, aiModels.providerId],
-        where: isNull(aiModels.workspaceId),
+        ...this.modelConflictDoNothingTarget(),
       })
       .returning();
   };
@@ -210,6 +244,7 @@ export class AiModelModel {
         source: AiModelSourceEnum.Builtin,
         updatedAt: new Date(),
         userId: this.userId,
+        workspaceId: this.workspaceId,
       };
 
       // Preserve type if available from default model list
@@ -229,8 +264,7 @@ export class AiModelModel {
           enabled: sql`excluded.enabled`,
           updatedAt: sql`excluded.updated_at`,
         },
-        target: [aiModels.id, aiModels.userId, aiModels.providerId],
-        targetWhere: isNull(aiModels.workspaceId),
+        ...this.modelConflictTarget(),
       });
   };
 
@@ -241,7 +275,7 @@ export class AiModelModel {
         and(
           eq(aiModels.providerId, providerId),
           eq(aiModels.source, AiModelSourceEnum.Remote),
-          eq(aiModels.userId, this.userId),
+          this.ownership(),
         ),
       );
   }
@@ -249,7 +283,7 @@ export class AiModelModel {
   clearModelsByProvider(providerId: string) {
     return this.db
       .delete(aiModels)
-      .where(and(eq(aiModels.providerId, providerId), eq(aiModels.userId, this.userId)));
+      .where(and(eq(aiModels.providerId, providerId), this.ownership()));
   }
 
   updateModelsOrder = async (providerId: string, sortMap: AiModelSortMap[]) => {
@@ -269,6 +303,7 @@ export class AiModelModel {
           // source: isBuiltin ? 'builtin' : 'custom',
           updatedAt: now,
           userId: this.userId,
+          workspaceId: this.workspaceId,
         };
 
         if (type) insertValues.type = type;
@@ -285,8 +320,7 @@ export class AiModelModel {
           .values(insertValues)
           .onConflictDoUpdate({
             set: updateValues,
-            target: [aiModels.id, aiModels.userId, aiModels.providerId],
-            targetWhere: isNull(aiModels.workspaceId),
+            ...this.modelConflictTarget(),
           });
       });
 

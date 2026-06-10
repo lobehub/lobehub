@@ -5,7 +5,7 @@ import type {
   CreateAiProviderParams,
   UpdateAiProviderConfigParams,
 } from '@lobechat/types';
-import { and, asc, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { isEmpty } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
@@ -15,6 +15,7 @@ import { merge } from '@/utils/merge';
 import type { AiProviderSelectItem } from '../schemas';
 import { aiModels, aiProviders } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspaceWhere } from '../utils/workspace';
 
 type DecryptUserKeyVaults = (encryptKeyVaultsStr: string | null) => Promise<any>;
 
@@ -23,11 +24,34 @@ type EncryptUserKeyVaults = (keyVaults: string) => Promise<string>;
 export class AiProviderModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, aiProviders);
+
+  private aiModelsOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, aiModels);
+
+  private providerConflictTarget = () =>
+    this.workspaceId
+      ? {
+          // Workspace rows are shared across all members (buildWorkspaceWhere reads
+          // by workspace_id only; user_id just records the creator), so the upsert
+          // must conflict on (id, workspace_id) — not the creator — otherwise two
+          // members editing the same provider insert duplicate workspace rows.
+          target: [aiProviders.id, aiProviders.workspaceId],
+          targetWhere: isNotNull(aiProviders.workspaceId),
+        }
+      : {
+          target: [aiProviders.id, aiProviders.userId],
+          targetWhere: isNull(aiProviders.workspaceId),
+        };
 
   create = async (
     { keyVaults: userKey, ...params }: CreateAiProviderParams,
@@ -45,6 +69,7 @@ export class AiProviderModel {
         enabled: true,
         keyVaults,
         userId: this.userId,
+        workspaceId: this.workspaceId,
       })
       .returning();
 
@@ -54,25 +79,21 @@ export class AiProviderModel {
   delete = async (id: string) => {
     return this.db.transaction(async (trx) => {
       // 1. delete all models of the provider
-      await trx
-        .delete(aiModels)
-        .where(and(eq(aiModels.providerId, id), eq(aiModels.userId, this.userId)));
+      await trx.delete(aiModels).where(and(eq(aiModels.providerId, id), this.aiModelsOwnership()));
 
       // 2. delete the provider
-      await trx
-        .delete(aiProviders)
-        .where(and(eq(aiProviders.id, id), eq(aiProviders.userId, this.userId)));
+      await trx.delete(aiProviders).where(and(eq(aiProviders.id, id), this.ownership()));
     });
   };
 
   deleteAll = async () => {
-    return this.db.delete(aiProviders).where(eq(aiProviders.userId, this.userId));
+    return this.db.delete(aiProviders).where(this.ownership());
   };
 
   query = async () => {
     return this.db.query.aiProviders.findMany({
       orderBy: [desc(aiProviders.updatedAt)],
-      where: eq(aiProviders.userId, this.userId),
+      where: this.ownership(),
     });
   };
 
@@ -88,7 +109,7 @@ export class AiProviderModel {
         source: aiProviders.source,
       })
       .from(aiProviders)
-      .where(eq(aiProviders.userId, this.userId))
+      .where(this.ownership())
       .orderBy(asc(aiProviders.sort), desc(aiProviders.updatedAt));
 
     return result as AiProviderListItem[];
@@ -96,7 +117,7 @@ export class AiProviderModel {
 
   findById = async (id: string) => {
     return this.db.query.aiProviders.findFirst({
-      where: and(eq(aiProviders.id, id), eq(aiProviders.userId, this.userId)),
+      where: and(eq(aiProviders.id, id), this.ownership()),
     });
   };
 
@@ -104,7 +125,7 @@ export class AiProviderModel {
     return this.db
       .update(aiProviders)
       .set({ ...value, updatedAt: new Date() })
-      .where(and(eq(aiProviders.id, id), eq(aiProviders.userId, this.userId)));
+      .where(and(eq(aiProviders.id, id), this.ownership()));
   };
 
   updateConfig = async (
@@ -148,11 +169,11 @@ export class AiProviderModel {
         id,
         source: this.getProviderSource(id),
         userId: this.userId,
+        workspaceId: this.workspaceId,
       })
       .onConflictDoUpdate({
         set: commonFields,
-        target: [aiProviders.id, aiProviders.userId],
-        targetWhere: isNull(aiProviders.workspaceId),
+        ...this.providerConflictTarget(),
       });
   };
 
@@ -165,11 +186,11 @@ export class AiProviderModel {
         source: this.getProviderSource(id),
         updatedAt: new Date(),
         userId: this.userId,
+        workspaceId: this.workspaceId,
       })
       .onConflictDoUpdate({
         set: { enabled },
-        target: [aiProviders.id, aiProviders.userId],
-        targetWhere: isNull(aiProviders.workspaceId),
+        ...this.providerConflictTarget(),
       });
   };
 
@@ -185,11 +206,11 @@ export class AiProviderModel {
             source: this.getProviderSource(id),
             updatedAt: new Date(),
             userId: this.userId,
+            workspaceId: this.workspaceId,
           })
           .onConflictDoUpdate({
             set: { sort, updatedAt: new Date() },
-            target: [aiProviders.id, aiProviders.userId],
-            targetWhere: isNull(aiProviders.workspaceId),
+            ...this.providerConflictTarget(),
           });
       });
 
@@ -216,7 +237,7 @@ export class AiProviderModel {
         source: aiProviders.source,
       })
       .from(aiProviders)
-      .where(and(eq(aiProviders.id, id), eq(aiProviders.userId, this.userId)))
+      .where(and(eq(aiProviders.id, id), this.ownership()))
       .limit(1);
 
     const [result] = await query;
@@ -226,7 +247,7 @@ export class AiProviderModel {
       if (this.isBuiltInProvider(id)) {
         await this.db
           .insert(aiProviders)
-          .values({ id, source: 'builtin', userId: this.userId })
+          .values({ id, source: 'builtin', userId: this.userId, workspaceId: this.workspaceId })
           .onConflictDoNothing();
 
         const resultAgain = await query;
@@ -267,7 +288,7 @@ export class AiProviderModel {
         settings: aiProviders.settings,
       })
       .from(aiProviders)
-      .where(and(eq(aiProviders.userId, this.userId)));
+      .where(this.ownership());
 
     const decrypt = decryptor ?? JSON.parse;
     const runtimeConfig: Record<string, AiProviderRuntimeConfig> = {};

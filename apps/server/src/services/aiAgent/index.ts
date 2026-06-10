@@ -1911,7 +1911,7 @@ export class AiAgentService {
 
     if (isAgentManagementEnabled) {
       // Query user's enabled models from database
-      const aiModelModel = new AiModelModel(this.db, this.userId);
+      const aiModelModel = new AiModelModel(this.db, this.userId, this.workspaceId);
       const allUserModels = await aiModelModel.getAllModels();
 
       // Filter only enabled chat models and group by provider
