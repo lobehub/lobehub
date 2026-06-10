@@ -3,6 +3,7 @@ import { type ComponentType, type FC } from 'react';
 import { useState } from 'react';
 import { Rnd } from 'react-rnd';
 
+import { useBusinessModelPricingPrefetch } from '@/business/client/hooks/useBusinessModelPricing';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors/general';
@@ -40,6 +41,8 @@ export const PanelContent: FC<PanelContentProps> = ({
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const { groupMode, handleGroupModeChange } = usePanelState();
   const { panelHeight, panelWidth, handlePanelWidthChange } = usePanelSize(enabledList.length);
+
+  useBusinessModelPricingPrefetch();
 
   const content = (
     <>

@@ -8,14 +8,15 @@ import { imageUrlToBase64, resolveImageMimeTypeFromBase64 } from '@lobechat/util
 
 import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { safeParseJSON } from '../../utils/safeParseJSON';
-import { parseDataUri } from '../../utils/uriParser';
+import { isPublicExternalUrl, parseDataUri, validateExternalUrl } from '../../utils/uriParser';
 
 const GOOGLE_SUPPORTED_IMAGE_TYPES = new Set([
-  'image/jpeg',
-  'image/jpg',
   'image/png',
-  'image/gif',
+  'image/jpeg',
+  'image/jpg', // non-standard but widely used alias for image/jpeg
   'image/webp',
+  'image/heic',
+  'image/heif',
 ]);
 
 const isImageTypeSupported = (mimeType: string | null | undefined): mimeType is string =>
@@ -30,11 +31,66 @@ const isImageTypeSupported = (mimeType: string | null | undefined): mimeType is 
  */
 export const GEMINI_MAGIC_THOUGHT_SIGNATURE = 'skip_thought_signature_validator';
 
+const getGeminiMajorVersion = (model?: string) => {
+  if (!model) return null;
+
+  // Examples:
+  // - gemini-3-flash-preview
+  // - gemini-2.5-flash
+  const match = model.match(/gemini-(\d+)(?:\.(\d+))?/i);
+  if (!match?.[1]) return null;
+
+  const major = Number.parseInt(match[1], 10);
+  return Number.isFinite(major) ? major : null;
+};
+
+/**
+ * External HTTP / Signed URLs support varies by model generation.
+ * In practice, Gemini 3+ supports `fileData.fileUri` for external URLs reliably,
+ * while earlier models often require `inlineData`.
+ * Returns false for unversioned model IDs (e.g. gemini-pro) to avoid request failures.
+ */
+const supportsExternalUrlFileData = (model?: string) => {
+  const major = getGeminiMajorVersion(model);
+  if (major === null) return false;
+  return major >= 3;
+};
+
+const buildExternalUrlFileDataPart = async (
+  url: string,
+  options?: { model?: string },
+): Promise<Part | undefined> => {
+  if (!supportsExternalUrlFileData(options?.model) || !isPublicExternalUrl(url)) return undefined;
+
+  const validation = await validateExternalUrl(url);
+  if (validation.isValid) {
+    return {
+      fileData: {
+        fileUri: url,
+        mimeType: validation.contentType,
+      },
+      thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+    };
+  }
+
+  if (validation.isTooLarge) {
+    throw new RangeError(validation.reason || 'External URL file too large');
+  }
+
+  return undefined;
+};
+
 /**
  * Convert OpenAI content part to Google Part format
+ *
+ * TODO: urlContext tool only supports files up to 34MB. In the future, we should
+ * detect file URLs in the conversation and use External URL feature (fileData.fileUri)
+ * for files larger than 34MB to avoid urlContext limitations.
+ * @see https://ai.google.dev/gemini-api/docs/file-input-methods
  */
 export const buildGooglePart = async (
   content: UserMessageContentPart,
+  options?: { model?: string },
 ): Promise<Part | undefined> => {
   switch (content.type) {
     default: {
@@ -67,12 +123,19 @@ export const buildGooglePart = async (
       }
 
       if (type === 'url') {
-        const { base64, mimeType } = await imageUrlToBase64(content.image_url.url);
+        const url = content.image_url.url;
 
-        if (!isImageTypeSupported(mimeType)) return undefined;
+        const externalUrlPart = await buildExternalUrlFileDataPart(url, options);
+        if (externalUrlPart) return externalUrlPart;
+
+        // Fallback: convert URL to base64 (for private/local URLs or failed validation)
+        const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(url);
+        const resolvedMimeType = urlMimeType || mimeType;
+
+        if (!isImageTypeSupported(resolvedMimeType)) return undefined;
 
         return {
-          inlineData: { data: base64, mimeType },
+          inlineData: { data: urlBase64, mimeType: resolvedMimeType || 'image/png' },
           thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
         };
       }
@@ -95,12 +158,18 @@ export const buildGooglePart = async (
       }
 
       if (type === 'url') {
+        const url = content.video_url.url;
+
+        const externalUrlPart = await buildExternalUrlFileDataPart(url, options);
+        if (externalUrlPart) return externalUrlPart;
+
+        // Fallback: convert URL to base64
         // Use imageUrlToBase64 for SSRF protection (works for any binary data including videos)
         // Note: This might need size/duration limits for practical use
-        const { base64, mimeType } = await imageUrlToBase64(content.video_url.url);
+        const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(url);
 
         return {
-          inlineData: { data: base64, mimeType },
+          inlineData: { data: urlBase64, mimeType: urlMimeType },
           thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
         };
       }
@@ -116,6 +185,7 @@ export const buildGooglePart = async (
 export const buildGoogleMessage = async (
   message: OpenAIChatMessage,
   toolCallNameMap?: Map<string, string>,
+  options?: { model?: string },
 ): Promise<Content> => {
   const content = message.content as string | UserMessageContentPart[];
 
@@ -191,7 +261,7 @@ export const buildGoogleMessage = async (
     if (typeof content === 'string')
       return [{ text: content, thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }];
 
-    const parts = await Promise.all(content.map(async (c) => await buildGooglePart(c)));
+    const parts = await Promise.all(content.map(async (c) => await buildGooglePart(c, options)));
     return parts.filter(Boolean) as Part[];
   };
 
@@ -204,7 +274,10 @@ export const buildGoogleMessage = async (
 /**
  * Convert messages from the OpenAI format to Google GenAI SDK format
  */
-export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promise<Content[]> => {
+export const buildGoogleMessages = async (
+  messages: OpenAIChatMessage[],
+  options?: { model?: string },
+): Promise<Content[]> => {
   const toolCallNameMap = new Map<string, string>();
 
   // Build tool call id to name mapping
@@ -220,7 +293,7 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
 
   const pools = messages
     .filter((message) => message.role !== 'function')
-    .map(async (msg) => await buildGoogleMessage(msg, toolCallNameMap));
+    .map(async (msg) => await buildGoogleMessage(msg, toolCallNameMap, options));
 
   const contents = await Promise.all(pools);
 

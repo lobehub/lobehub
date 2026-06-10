@@ -172,7 +172,6 @@ export const TOOL_API_DISPLAY_NAMES: Record<string, string> = {
 
   // Lobe Agent — Sub-Agents
   callSubAgent: 'workflow.toolDisplayName.callSubAgent',
-  callSubAgents: 'workflow.toolDisplayName.callSubAgents',
 
   // Memory
   addActivityMemory: 'workflow.toolDisplayName.addActivityMemory',

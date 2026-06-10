@@ -59,7 +59,7 @@ vi.mock('@/services/electron/gatewayConnection', () => ({
 vi.mock('@/store/agent', () => ({ getAgentStoreState: () => ({}) }));
 
 vi.mock('@/store/agent/selectors', () => ({
-  agentSelectors: { currentAgentWorkingDirectory: () => undefined },
+  agentSelectors: { currentAgentWorkingDirectory: () => () => undefined },
   chatConfigByIdSelectors: { isLocalSystemEnabledById: () => () => mockRuntime.isLocal },
 }));
 

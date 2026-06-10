@@ -8,25 +8,33 @@ import { merge } from '@/utils/merge';
 
 import type { AgentItem } from '../schemas';
 import {
+  agentBotProviders,
+  agentCronJobs,
   agents,
   agentsFiles,
   agentsKnowledgeBases,
   agentsToSessions,
+  chatGroupsAgents,
   documents,
   files,
   knowledgeBases,
+  messages,
   sessions,
+  threads,
   topics,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export class AgentModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
 
   /**
@@ -45,21 +53,44 @@ export class AgentModel {
       })
       .from(agents)
       .leftJoin(topics, eq(topics.agentId, agents.id))
-      .where(
-        and(
-          eq(agents.userId, this.userId),
-          or(eq(agents.slug, INBOX_SESSION_ID), ne(agents.virtual, true)),
-        ),
-      )
+      .where(and(this.ownership(), or(eq(agents.slug, INBOX_SESSION_ID), ne(agents.virtual, true))))
       .groupBy(agents.id)
       .having(({ count }) => gt(count, 0))
       .orderBy(desc(sql`count`))
       .limit(limit);
   };
 
+  /**
+   * Compat-mode ownership predicate for the `agents` table.
+   * - team mode (workspaceId set): `workspace_id = ?` (every member sees the same agents)
+   * - personal mode: `user_id = ? AND workspace_id IS NULL`
+   */
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agents);
+
+  /** Same predicate but for the `sessions` table (used in delete cascade). */
+  private sessionsOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, sessions);
+
+  /** Ownership predicates for the agent join/related tables. */
+  private documentsOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents);
+
+  private agentsFilesOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentsFiles);
+
+  private agentsKnowledgeBasesOwnership = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      agentsKnowledgeBases,
+    );
+
+  private agentsToSessionsOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentsToSessions);
+
   getAgentConfigById = async (id: string) => {
     const agent = await this.db.query.agents.findFirst({
-      where: and(eq(agents.id, id), eq(agents.userId, this.userId)),
+      where: and(eq(agents.id, id), this.ownership()),
     });
 
     if (!agent) return null;
@@ -71,7 +102,7 @@ export class AgentModel {
     const rows = await this.db
       .select({ id: agents.id })
       .from(agents)
-      .where(and(eq(agents.id, id), eq(agents.userId, this.userId)))
+      .where(and(eq(agents.id, id), this.ownership()))
       .limit(1);
 
     return rows.length > 0;
@@ -90,9 +121,7 @@ export class AgentModel {
     const rows = await this.db
       .select({ model: agents.model, provider: agents.provider })
       .from(agents)
-      .where(
-        and(eq(agents.userId, this.userId), or(eq(agents.id, idOrSlug), eq(agents.slug, idOrSlug))),
-      )
+      .where(and(this.ownership(), or(eq(agents.id, idOrSlug), eq(agents.slug, idOrSlug))))
       .limit(1);
 
     const row = rows[0];
@@ -107,7 +136,7 @@ export class AgentModel {
   private buildQueryAgentsWhere = (keyword?: string) => {
     // Include agents where virtual is false OR null (legacy data without virtual field)
     const baseConditions = and(
-      eq(agents.userId, this.userId),
+      this.ownership(),
       or(eq(agents.virtual, false), isNull(agents.virtual)),
     );
 
@@ -173,7 +202,7 @@ export class AgentModel {
         title: agents.title,
       })
       .from(agents)
-      .where(and(eq(agents.userId, this.userId), inArray(agents.id, ids)));
+      .where(and(this.ownership(), inArray(agents.id, ids)));
 
     return rows.map(({ slug, ...row }) => ({
       ...row,
@@ -186,12 +215,15 @@ export class AgentModel {
    * Get agent config by ID or slug (single query with OR condition)
    */
   getAgentConfig = async (idOrSlug: string) => {
-    const agent = await this.db.query.agents.findFirst({
-      where: and(
-        eq(agents.userId, this.userId),
-        or(eq(agents.id, idOrSlug), eq(agents.slug, idOrSlug)),
-      ),
-    });
+    // Prefer an exact ID match over a slug match. The combined `or(id, slug)`
+    // query has no inherent ordering, so resolve ID first for determinism.
+    const agent =
+      (await this.db.query.agents.findFirst({
+        where: and(this.ownership(), eq(agents.id, idOrSlug)),
+      })) ??
+      (await this.db.query.agents.findFirst({
+        where: and(this.ownership(), eq(agents.slug, idOrSlug)),
+      }));
 
     if (!agent) return null;
 
@@ -214,7 +246,7 @@ export class AgentModel {
 
     if (enabledFileIds.length > 0) {
       const documentsData = await this.db.query.documents.findMany({
-        where: and(eq(documents.userId, this.userId), inArray(documents.fileId, enabledFileIds)),
+        where: and(this.documentsOwnership(), inArray(documents.fileId, enabledFileIds)),
       });
 
       const documentMap = new Map(documentsData.map((doc) => [doc.fileId, doc.content]));
@@ -234,15 +266,13 @@ export class AgentModel {
       this.db
         .select({ enabled: agentsKnowledgeBases.enabled, knowledgeBases })
         .from(agentsKnowledgeBases)
-        .where(
-          and(eq(agentsKnowledgeBases.agentId, id), eq(agentsKnowledgeBases.userId, this.userId)),
-        )
+        .where(and(eq(agentsKnowledgeBases.agentId, id), this.agentsKnowledgeBasesOwnership()))
         .orderBy(desc(agentsKnowledgeBases.createdAt))
         .leftJoin(knowledgeBases, eq(knowledgeBases.id, agentsKnowledgeBases.knowledgeBaseId)),
       this.db
         .select({ enabled: agentsFiles.enabled, files })
         .from(agentsFiles)
-        .where(and(eq(agentsFiles.agentId, id), eq(agentsFiles.userId, this.userId)))
+        .where(and(eq(agentsFiles.agentId, id), this.agentsFilesOwnership()))
         .orderBy(desc(agentsFiles.createdAt))
         .leftJoin(files, eq(files.id, agentsFiles.fileId)),
     ]);
@@ -264,10 +294,7 @@ export class AgentModel {
    */
   findBySessionId = async (sessionId: string) => {
     const item = await this.db.query.agentsToSessions.findFirst({
-      where: and(
-        eq(agentsToSessions.sessionId, sessionId),
-        eq(agentsToSessions.userId, this.userId),
-      ),
+      where: and(eq(agentsToSessions.sessionId, sessionId), this.agentsToSessionsOwnership()),
     });
 
     if (!item) return;
@@ -282,12 +309,14 @@ export class AgentModel {
     knowledgeBaseId: string,
     enabled: boolean = true,
   ) => {
-    return this.db.insert(agentsKnowledgeBases).values({
-      agentId,
-      enabled,
-      knowledgeBaseId,
-      userId: this.userId,
-    });
+    return this.db
+      .insert(agentsKnowledgeBases)
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { agentId, enabled, knowledgeBaseId },
+        ),
+      );
   };
 
   deleteAgentKnowledgeBase = async (agentId: string, knowledgeBaseId: string) => {
@@ -297,7 +326,7 @@ export class AgentModel {
         and(
           eq(agentsKnowledgeBases.agentId, agentId),
           eq(agentsKnowledgeBases.knowledgeBaseId, knowledgeBaseId),
-          eq(agentsKnowledgeBases.userId, this.userId),
+          this.agentsKnowledgeBasesOwnership(),
         ),
       );
   };
@@ -310,7 +339,7 @@ export class AgentModel {
         and(
           eq(agentsKnowledgeBases.agentId, agentId),
           eq(agentsKnowledgeBases.knowledgeBaseId, knowledgeBaseId),
-          eq(agentsKnowledgeBases.userId, this.userId),
+          this.agentsKnowledgeBasesOwnership(),
         ),
       );
   };
@@ -323,7 +352,7 @@ export class AgentModel {
       .where(
         and(
           eq(agentsFiles.agentId, agentId),
-          eq(agentsFiles.userId, this.userId),
+          this.agentsFilesOwnership(),
           inArray(agentsFiles.fileId, fileIds),
         ),
       );
@@ -337,7 +366,12 @@ export class AgentModel {
     return this.db
       .insert(agentsFiles)
       .values(
-        needToInsertFileIds.map((fileId) => ({ agentId, enabled, fileId, userId: this.userId })),
+        needToInsertFileIds.map((fileId) =>
+          buildWorkspacePayload(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            { agentId, enabled, fileId },
+          ),
+        ),
       );
   };
 
@@ -348,7 +382,7 @@ export class AgentModel {
         and(
           eq(agentsFiles.agentId, agentId),
           eq(agentsFiles.fileId, fileId),
-          eq(agentsFiles.userId, this.userId),
+          this.agentsFilesOwnership(),
         ),
       );
   };
@@ -363,28 +397,24 @@ export class AgentModel {
       const links = await trx
         .select({ sessionId: agentsToSessions.sessionId })
         .from(agentsToSessions)
-        .where(
-          and(eq(agentsToSessions.agentId, agentId), eq(agentsToSessions.userId, this.userId)),
-        );
+        .where(and(eq(agentsToSessions.agentId, agentId), this.agentsToSessionsOwnership()));
 
       const sessionIds = links.map((link) => link.sessionId);
 
       // 2. Delete links in agentsToSessions
       await trx
         .delete(agentsToSessions)
-        .where(
-          and(eq(agentsToSessions.agentId, agentId), eq(agentsToSessions.userId, this.userId)),
-        );
+        .where(and(eq(agentsToSessions.agentId, agentId), this.agentsToSessionsOwnership()));
 
       // 3. Delete associated sessions (this will cascade delete messages, topics, etc.)
       if (sessionIds.length > 0) {
         await trx
           .delete(sessions)
-          .where(and(inArray(sessions.id, sessionIds), eq(sessions.userId, this.userId)));
+          .where(and(inArray(sessions.id, sessionIds), this.sessionsOwnership()));
       }
 
       // 4. Delete the agent itself
-      return trx.delete(agents).where(and(eq(agents.id, agentId), eq(agents.userId, this.userId)));
+      return trx.delete(agents).where(and(eq(agents.id, agentId), this.ownership()));
     });
   };
 
@@ -396,9 +426,7 @@ export class AgentModel {
   batchDelete = async (agentIds: string[]) => {
     if (agentIds.length === 0) return;
 
-    return this.db
-      .delete(agents)
-      .where(and(eq(agents.userId, this.userId), inArray(agents.id, agentIds)));
+    return this.db.delete(agents).where(and(this.ownership(), inArray(agents.id, agentIds)));
   };
 
   toggleFile = async (agentId: string, fileId: string, enabled?: boolean) => {
@@ -409,7 +437,7 @@ export class AgentModel {
         and(
           eq(agentsFiles.agentId, agentId),
           eq(agentsFiles.fileId, fileId),
-          eq(agentsFiles.userId, this.userId),
+          this.agentsFilesOwnership(),
         ),
       );
   };
@@ -422,11 +450,13 @@ export class AgentModel {
     const [result] = await this.db
       .insert(agents)
       .values([
-        {
-          ...config,
-          model: typeof config.model === 'string' ? config.model : null,
-          userId: this.userId,
-        },
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          {
+            ...config,
+            model: typeof config.model === 'string' ? config.model : null,
+          },
+        ),
       ])
       .returning();
 
@@ -443,11 +473,15 @@ export class AgentModel {
     return this.db
       .insert(agents)
       .values(
-        configs.map((config) => ({
-          ...config,
-          model: typeof config.model === 'string' ? config.model : null,
-          userId: this.userId,
-        })),
+        configs.map((config) =>
+          buildWorkspacePayload(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            {
+              ...config,
+              model: typeof config.model === 'string' ? config.model : null,
+            },
+          ),
+        ),
       )
       .returning();
   };
@@ -456,7 +490,7 @@ export class AgentModel {
     return this.db
       .update(agents)
       .set({ ...data, updatedAt: new Date() })
-      .where(and(eq(agents.id, agentId), eq(agents.userId, this.userId)));
+      .where(and(eq(agents.id, agentId), this.ownership()));
   };
 
   touchUpdatedAt = async (agentId: string) => {
@@ -469,7 +503,7 @@ export class AgentModel {
    */
   checkByMarketIdentifier = async (marketIdentifier: string): Promise<boolean> => {
     const result = await this.db.query.agents.findFirst({
-      where: and(eq(agents.marketIdentifier, marketIdentifier), eq(agents.userId, this.userId)),
+      where: and(eq(agents.marketIdentifier, marketIdentifier), this.ownership()),
     });
     return !!result;
   };
@@ -483,7 +517,7 @@ export class AgentModel {
     const result = await this.db.query.agents.findFirst({
       columns: { id: true },
       orderBy: (agents, { desc }) => [desc(agents.updatedAt)],
-      where: and(eq(agents.marketIdentifier, marketIdentifier), eq(agents.userId, this.userId)),
+      where: and(eq(agents.marketIdentifier, marketIdentifier), this.ownership()),
     });
     return result?.id ?? null;
   };
@@ -498,7 +532,7 @@ export class AgentModel {
       columns: { id: true },
       orderBy: (agents, { desc }) => [desc(agents.updatedAt)],
       where: and(
-        eq(agents.userId, this.userId),
+        this.ownership(),
         sql`${agents.params}->>'forkedFromIdentifier' = ${forkedFromIdentifier}`,
       ),
     });
@@ -509,7 +543,7 @@ export class AgentModel {
     if (!data || Object.keys(data).length === 0) return;
 
     const agent = await this.db.query.agents.findFirst({
-      where: and(eq(agents.id, agentId), eq(agents.userId, this.userId)),
+      where: and(eq(agents.id, agentId), this.ownership()),
     });
 
     if (!agent) return;
@@ -562,7 +596,7 @@ export class AgentModel {
     return this.db
       .update(agents)
       .set(updateData)
-      .where(and(eq(agents.id, agentId), eq(agents.userId, this.userId)));
+      .where(and(eq(agents.id, agentId), this.ownership()));
   };
 
   /**
@@ -572,7 +606,7 @@ export class AgentModel {
     const result = await this.db
       .update(agents)
       .set({ sessionGroupId, updatedAt: new Date() })
-      .where(and(eq(agents.id, agentId), eq(agents.userId, this.userId)))
+      .where(and(eq(agents.id, agentId), this.ownership()))
       .returning();
 
     return result[0];
@@ -585,7 +619,7 @@ export class AgentModel {
   duplicate = async (agentId: string, newTitle?: string): Promise<{ agentId: string } | null> => {
     // Get the source agent
     const sourceAgent = await this.db.query.agents.findFirst({
-      where: and(eq(agents.id, agentId), eq(agents.userId, this.userId)),
+      where: and(eq(agents.id, agentId), this.ownership()),
     });
 
     if (!sourceAgent) return null;
@@ -593,32 +627,35 @@ export class AgentModel {
     // Create new agent with explicit include fields
     const [newAgent] = await this.db
       .insert(agents)
-      .values({
-        avatar: sourceAgent.avatar,
-        backgroundColor: sourceAgent.backgroundColor,
-        chatConfig: sourceAgent.chatConfig,
-        description: sourceAgent.description,
-        fewShots: sourceAgent.fewShots,
-        model: sourceAgent.model,
-        openingMessage: sourceAgent.openingMessage,
-        openingQuestions: sourceAgent.openingQuestions,
-        params: sourceAgent.params,
-        pinned: sourceAgent.pinned,
-        // Config
-        plugins: sourceAgent.plugins,
-        provider: sourceAgent.provider,
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          {
+            avatar: sourceAgent.avatar,
+            backgroundColor: sourceAgent.backgroundColor,
+            chatConfig: sourceAgent.chatConfig,
+            description: sourceAgent.description,
+            fewShots: sourceAgent.fewShots,
+            model: sourceAgent.model,
+            openingMessage: sourceAgent.openingMessage,
+            openingQuestions: sourceAgent.openingQuestions,
+            params: sourceAgent.params,
+            pinned: sourceAgent.pinned,
+            // Config
+            plugins: sourceAgent.plugins,
+            provider: sourceAgent.provider,
 
-        // Session group
-        sessionGroupId: sourceAgent.sessionGroupId,
-        systemRole: sourceAgent.systemRole,
+            // Session group
+            sessionGroupId: sourceAgent.sessionGroupId,
+            systemRole: sourceAgent.systemRole,
 
-        tags: sourceAgent.tags,
-        // Metadata
-        title: newTitle || (sourceAgent.title ? `${sourceAgent.title} (Copy)` : 'Copy'),
-        tts: sourceAgent.tts,
-        // User
-        userId: this.userId,
-      })
+            tags: sourceAgent.tags,
+            // Metadata
+            title: newTitle || (sourceAgent.title ? `${sourceAgent.title} (Copy)` : 'Copy'),
+            tts: sourceAgent.tts,
+          },
+        ),
+      )
       .returning();
 
     return { agentId: newAgent.id };
@@ -632,7 +669,7 @@ export class AgentModel {
   getBuiltinAgent = async (slug: string): Promise<AgentItem | null> => {
     // 1. First try to find existing agent by slug
     const existing = await this.db.query.agents.findFirst({
-      where: and(eq(agents.slug, slug), eq(agents.userId, this.userId)),
+      where: and(eq(agents.slug, slug), this.ownership()),
     });
 
     if (existing) return existing;
@@ -647,7 +684,7 @@ export class AgentModel {
         .from(sessions)
         .innerJoin(agentsToSessions, eq(sessions.id, agentsToSessions.sessionId))
         .innerJoin(agents, eq(agentsToSessions.agentId, agents.id))
-        .where(and(eq(sessions.slug, INBOX_SESSION_ID), eq(sessions.userId, this.userId)))
+        .where(and(eq(sessions.slug, INBOX_SESSION_ID), this.sessionsOwnership()))
         .limit(1);
 
       if (result.length > 0 && result[0].agent) {
@@ -673,30 +710,156 @@ export class AgentModel {
     // `onConflictDoNothing`, the loser hits the `agents_slug_user_id_unique`
     // constraint; with it, the loser's `.returning()` is empty and we re-read
     // the row that won.
-    // `agents_slug_user_id_unique` is a partial index (WHERE workspace_id IS
-    // NULL) since migration 0109, so the conflict arbiter must carry the same
-    // predicate; builtin agents are always workspace-less (workspace_id NULL).
+    // Bare `onConflictDoNothing()` (no target) does NOT pin an arbiter index,
+    // so it works whether `agents_slug_user_id_unique` is the legacy full
+    // unique or the migration-0109 partial (WHERE workspace_id IS NULL) — this
+    // is the transition-safe form while 0109 rolls out. Tighten back to a
+    // partitioned { target, where } once 0109 has flipped the index in every
+    // environment. Payload still carries workspaceId so workspace-scoped
+    // builtin agents land in the right workspace.
     const result = await this.db
       .insert(agents)
-      .values({
-        model: persistConfig.model,
-        provider: persistConfig.provider,
-        slug: persistConfig.slug,
-        userId: this.userId,
-        virtual: true,
-      })
-      .onConflictDoNothing({
-        target: [agents.slug, agents.userId],
-        where: isNull(agents.workspaceId),
-      })
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          {
+            model: persistConfig.model,
+            provider: persistConfig.provider,
+            slug: persistConfig.slug,
+            virtual: true,
+          },
+        ),
+      )
+      .onConflictDoNothing()
       .returning();
 
     if (result[0]) return result[0];
 
     return (
       (await this.db.query.agents.findFirst({
-        where: and(eq(agents.slug, slug), eq(agents.userId, this.userId)),
+        where: and(eq(agents.slug, slug), this.ownership()),
       })) ?? null
     );
+  };
+
+  /**
+   * Transfer an agent and all its associated data to a different workspace or personal account.
+   * Runs in a single transaction to ensure atomicity.
+   */
+  transferAgent = async (
+    agentId: string,
+    targetWorkspaceId: string | null,
+    targetUserId: string,
+  ): Promise<{ agentId: string; slug: string | null }> => {
+    return this.db.transaction(async (trx) => {
+      // 1. Verify agent exists and belongs to current scope
+      const agent = await trx.query.agents.findFirst({
+        where: and(eq(agents.id, agentId), this.ownership()),
+      });
+      if (!agent) throw new Error('Agent not found');
+
+      // 2. Handle slug conflict in target scope
+      let slug = agent.slug;
+      if (slug) {
+        const buildConflictCheck = (candidate: string) =>
+          targetWorkspaceId
+            ? and(eq(agents.slug, candidate), eq(agents.workspaceId, targetWorkspaceId))
+            : and(
+                eq(agents.slug, candidate),
+                eq(agents.userId, targetUserId),
+                isNull(agents.workspaceId),
+              );
+
+        const existing = await trx.query.agents.findFirst({
+          where: buildConflictCheck(slug),
+        });
+        if (existing) {
+          let suffix = 1;
+          while (suffix < 100) {
+            const candidate = `${slug}-${suffix}`;
+            const conflict = await trx.query.agents.findFirst({
+              where: buildConflictCheck(candidate),
+            });
+            if (!conflict) {
+              slug = candidate;
+              break;
+            }
+            suffix++;
+          }
+        }
+      }
+
+      // 3. Build ownership update payload
+      const ownershipUpdate = {
+        userId: targetUserId,
+        workspaceId: targetWorkspaceId,
+      };
+
+      // 4. Update the agent record
+      await trx
+        .update(agents)
+        .set({ ...ownershipUpdate, slug, updatedAt: new Date() })
+        .where(eq(agents.id, agentId));
+
+      // 5. Update sessions linked via agentsToSessions
+      const links = await trx
+        .select({ sessionId: agentsToSessions.sessionId })
+        .from(agentsToSessions)
+        .where(eq(agentsToSessions.agentId, agentId));
+
+      const sessionIds = links.map((l) => l.sessionId);
+
+      if (sessionIds.length > 0) {
+        await trx.update(sessions).set(ownershipUpdate).where(inArray(sessions.id, sessionIds));
+      }
+
+      await trx
+        .update(agentsToSessions)
+        .set(ownershipUpdate)
+        .where(eq(agentsToSessions.agentId, agentId));
+
+      // 6. Update topics (linked via sessionId or agentId)
+      const topicCondition =
+        sessionIds.length > 0
+          ? or(inArray(topics.sessionId, sessionIds), eq(topics.agentId, agentId))
+          : eq(topics.agentId, agentId);
+      await trx.update(topics).set(ownershipUpdate).where(topicCondition!);
+
+      // 7. Update messages (linked via sessionId or agentId)
+      const messageCondition =
+        sessionIds.length > 0
+          ? or(inArray(messages.sessionId, sessionIds), eq(messages.agentId, agentId))
+          : eq(messages.agentId, agentId);
+      await trx.update(messages).set(ownershipUpdate).where(messageCondition!);
+
+      // 8. Update threads (linked via agentId)
+      await trx.update(threads).set(ownershipUpdate).where(eq(threads.agentId, agentId));
+
+      // 9. Update agent files associations
+      await trx.update(agentsFiles).set(ownershipUpdate).where(eq(agentsFiles.agentId, agentId));
+
+      // 10. Update agent knowledge base associations
+      await trx
+        .update(agentsKnowledgeBases)
+        .set(ownershipUpdate)
+        .where(eq(agentsKnowledgeBases.agentId, agentId));
+
+      // 11. Update agent cron jobs
+      await trx
+        .update(agentCronJobs)
+        .set(ownershipUpdate)
+        .where(eq(agentCronJobs.agentId, agentId));
+
+      // 12. Update agent bot providers (transfer, not delete)
+      await trx
+        .update(agentBotProviders)
+        .set(ownershipUpdate)
+        .where(eq(agentBotProviders.agentId, agentId));
+
+      // 13. Remove chat group associations (groups belong to source workspace context)
+      await trx.delete(chatGroupsAgents).where(eq(chatGroupsAgents.agentId, agentId));
+
+      return { agentId, slug };
+    });
   };
 }

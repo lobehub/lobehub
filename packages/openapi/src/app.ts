@@ -5,6 +5,7 @@ import { prettyJSON } from 'hono/pretty-json';
 
 // Import user authentication middleware (supports both OIDC and API Key authentication)
 import { userAuthMiddleware } from './middleware/auth';
+import { workspaceAuthMiddleware } from './middleware/workspace';
 // Import routes
 import routes from './routes';
 
@@ -16,6 +17,7 @@ app.use('*', cors());
 app.use('*', logger());
 app.use('*', prettyJSON());
 app.use('*', userAuthMiddleware); // User authentication middleware
+app.use('*', workspaceAuthMiddleware);
 
 // Error handling middleware
 app.onError((error: Error, c) => {

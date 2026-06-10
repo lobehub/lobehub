@@ -177,7 +177,7 @@ This allows cloud to override specific modules while using lobehub defaults.
 Place workflow class in cloud:
 
 ```text
-lobehub-cloud/src/server/workflows/featureName/index.ts
+lobehub-cloud/apps/server/src/workflows/featureName/index.ts
 ```
 
 ### Shared Workflows
@@ -185,7 +185,7 @@ lobehub-cloud/src/server/workflows/featureName/index.ts
 Place workflow class in lobehub, re-export in cloud if needed:
 
 ```text
-lobehub/src/server/workflows/featureName/index.ts
+lobehub/apps/server/src/workflows/featureName/index.ts
 ```
 
 ---
@@ -294,8 +294,8 @@ export { POST } from 'lobehub/src/app/(backend)/api/workflows/feature/*/route';
 **Step 4**: Move workflow class to lobehub
 
 ```bash
-mv lobehub-cloud/src/server/workflows/feature \
-  lobehub/src/server/workflows/
+mv lobehub-cloud/apps/server/src/workflows/feature \
+  lobehub/apps/server/src/workflows/
 ```
 
 **Step 5**: Update cloud imports
@@ -305,7 +305,7 @@ mv lobehub-cloud/src/server/workflows/feature \
 import { Workflow } from '@/server/workflows/feature';
 
 // To
-import { Workflow } from 'lobehub/src/server/workflows/feature';
+import { Workflow } from 'lobehub/apps/server/src/workflows/feature';
 ```
 
 ---
@@ -326,7 +326,7 @@ lobehub-cloud/
 │   ├── process-users/route.ts
 │   ├── paginate-users/route.ts
 │   └── generate-user/route.ts
-└── src/server/workflows/welcomePlaceholder/
+└── apps/server/src/workflows/welcomePlaceholder/
     └── index.ts
 ```
 

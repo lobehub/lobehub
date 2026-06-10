@@ -5,6 +5,7 @@ import { AgentEvalRunModel } from '@/database/models/agentEval';
 import { getServerDB } from '@/database/server';
 import { qstashClient } from '@/libs/qstash';
 import { AgentEvalRunWorkflow, type ExecuteTestCasePayload } from '@/server/workflows/agentEvalRun';
+import { resolveAgentEvalRunWorkspace } from '@/server/workflows/agentEvalRun/utils';
 
 const log = debug('lobe-server:workflows:execute-test-case');
 
@@ -25,10 +26,11 @@ export const { POST } = serve<ExecuteTestCasePayload>(
     }
 
     const db = await getServerDB();
+    const wsId = await resolveAgentEvalRunWorkspace(db, runId);
 
     // Get run to get K value from config
     const run = await context.run('agent-eval-run:get-run', async () => {
-      const runModel = new AgentEvalRunModel(db, userId);
+      const runModel = new AgentEvalRunModel(db, userId, wsId);
       return runModel.findById(runId);
     });
 

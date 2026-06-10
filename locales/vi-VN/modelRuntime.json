@@ -22,6 +22,7 @@
   "InvalidRequestFormat": "Rất tiếc, nhà cung cấp đã từ chối yêu cầu vì định dạng không hợp lệ. Vui lòng kiểm tra đầu vào hoặc thử một mô hình khác.",
   "InvalidVertexCredentials": "Xác thực Vertex thất bại. Vui lòng kiểm tra thông tin xác thực của bạn và thử lại.",
   "LocationNotSupportError": "Rất tiếc, vị trí hiện tại của bạn không hỗ trợ dịch vụ mô hình này. Điều này có thể do hạn chế khu vực hoặc dịch vụ không khả dụng. Vui lòng xác nhận xem vị trí hiện tại có hỗ trợ sử dụng dịch vụ này hay không, hoặc thử sử dụng một vị trí khác.",
+  "ModelEmptyCompletion": "Mô hình đã trả về một phản hồi trống. Thông thường, vấn đề này sẽ được khắc phục khi thử lại; nếu vẫn tiếp diễn, hãy thử đơn giản hóa yêu cầu hoặc chuyển sang mô hình khác.",
   "ModelNotFound": "Rất tiếc, không thể tìm thấy mô hình được yêu cầu. Có thể mô hình không tồn tại hoặc bạn không có quyền truy cập cần thiết. Vui lòng thử lại sau khi thay đổi khóa API hoặc điều chỉnh quyền truy cập của bạn.",
   "NoAvailableChannel": "Rất tiếc, proxy hoặc bộ định tuyến không có kênh khả dụng cho mô hình được yêu cầu. Vui lòng chuyển đổi cấu hình kênh/khóa hoặc thử lại sau.",
   "OllamaBizError": "Lỗi khi yêu cầu dịch vụ Ollama, vui lòng khắc phục sự cố hoặc thử lại dựa trên thông tin sau.",

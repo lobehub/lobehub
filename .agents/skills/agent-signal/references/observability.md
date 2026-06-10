@@ -24,9 +24,9 @@ After runtime execution, the service projects one compact observability model fr
 
 Read:
 
-- `src/server/services/agentSignal/observability/projector.ts`
-- `src/server/services/agentSignal/observability/traceEvents.ts`
-- `src/server/services/agentSignal/observability/store.ts`
+- `apps/server/src/services/agentSignal/observability/projector.ts`
+- `apps/server/src/services/agentSignal/observability/traceEvents.ts`
+- `apps/server/src/services/agentSignal/observability/store.ts`
 
 Projection outputs:
 
@@ -58,7 +58,7 @@ Workflow-triggered runs do not naturally pass through the normal foreground runt
 
 Read:
 
-- `src/server/workflows/agentSignal/run.ts`
+- `apps/server/src/workflows/agentSignal/run.ts`
 
 Use that path when:
 
@@ -77,8 +77,8 @@ Check:
 
 Read:
 
-- `src/server/services/agentSignal/index.ts`
-- `src/server/services/agentSignal/sources/index.ts`
+- `apps/server/src/services/agentSignal/index.ts`
+- `apps/server/src/services/agentSignal/sources/index.ts`
 
 ### The signal exists but no action runs
 
@@ -98,8 +98,8 @@ Check:
 
 Reference:
 
-- `src/server/services/agentSignal/policies/actionIdempotency.ts`
-- `src/server/services/agentSignal/policies/analyzeIntent/actions/userMemory.ts`
+- `apps/server/src/services/agentSignal/policies/actionIdempotency.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/actions/userMemory.ts`
 
 ### Background runs are hard to discover
 

@@ -1,0 +1,1242 @@
+import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
+import { LOADING_FLAT } from '@lobechat/const';
+import type {
+  SubagentIntent,
+  SubagentReduceCtx,
+  SubagentRunsState,
+} from '@lobechat/heterogeneous-agents';
+import { createSubagentRunsState, reduceSubagentRuns } from '@lobechat/heterogeneous-agents';
+import {
+  AgentRuntimeErrorType,
+  type ChatMessageError,
+  type ChatToolPayload,
+  ThreadStatus,
+  ThreadType,
+} from '@lobechat/types';
+import { createNanoId } from '@lobechat/utils';
+import debug from 'debug';
+
+import type { MessageModel } from '@/database/models/message';
+import type { ThreadModel } from '@/database/models/thread';
+import type { TopicModel } from '@/database/models/topic';
+
+const log = debug('lobe-server:hetero-agent:persistence');
+
+const generateThreadId = () => `thd_${createNanoId(16)()}`;
+
+/**
+ * Stable 32-bit FNV-1a hash of a string. Cheap to compute, collision odds are
+ * negligible at this scope (a few thousand events per operation), and the
+ * output is short enough to keep the per-operation `processedKeys` set small.
+ */
+const fnv1a = (input: string): string => {
+  let hash = 0x81_1c_9d_c5;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    // FNV prime 0x01000193, applied via bit shifts to stay in 32-bit math.
+    hash = (hash + ((hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24))) >>> 0;
+  }
+  return hash.toString(36);
+};
+
+/**
+ * Per-event idempotency key. CLI BatchIngester retries the SAME event objects
+ * on transient failures, so the same `(stepIndex, type, data)` triple is
+ * stable across retries — and distinct between back-to-back events even when
+ * they share a millisecond timestamp.
+ *
+ * Why not just `(stepIndex, type, timestamp)`: producers stamp events with
+ * `Date.now()` (see `claudeCode.ts` / `codex.ts` adapters), and CC bursts
+ * multiple `stream_chunk` events through the same step within a single
+ * millisecond. Without a content fingerprint, later chunks would collide with
+ * earlier ones, get treated as duplicates, and be dropped — silently
+ * truncating assistant output.
+ *
+ * Why not hash full `data`: tools_calling payloads can carry large argument
+ * strings; a stable JSON.stringify on every event is cheap enough but the
+ * resulting key would balloon the `processedKeys` set. Hashing keeps the key
+ * bounded.
+ */
+const eventKey = (event: AgentStreamEvent): string => {
+  // Fingerprint the data via stable JSON. Order is irrelevant — adapters
+  // produce events with consistent key order, and even if they didn't, the
+  // important property is "same event input → same output", which holds.
+  const dataJson = (() => {
+    try {
+      return JSON.stringify(event.data ?? null);
+    } catch {
+      // Cyclic / unstringifiable payload: fall back to a coarse fingerprint.
+      // Real wire data is always JSON-serializable, so this branch only fires
+      // on bad test inputs.
+      return String(typeof event.data);
+    }
+  })();
+  return `${event.stepIndex}:${event.type}:${event.timestamp}:${fnv1a(dataJson)}`;
+};
+
+const normalizeErrorText = (value?: string) => value?.replaceAll(/\s+/g, ' ').trim();
+
+/**
+ * CC sometimes streams the error string into `content` BEFORE emitting the
+ * structured error event (e.g. AuthRequired echoes the stderr line). Mirrors
+ * the renderer's `shouldSuppressTerminalErrorEcho` (lines 113–130 of
+ * heterogeneousAgentExecutor.ts): only suppress when the body is explicitly
+ * marked or matches the AuthRequired code, AND the trimmed strings are
+ * equal. Anything else stays — accidental partial overlaps are not echo.
+ */
+const shouldSuppressTerminalErrorEcho = (
+  content: string,
+  error: ChatMessageError | undefined,
+): boolean => {
+  if (!error) return false;
+  const errorBody = error.body as
+    | {
+        clearEchoedContent?: boolean;
+        code?: string;
+        message?: string;
+        stderr?: string;
+      }
+    | undefined;
+  // The renderer guards on either an explicit flag or AuthRequired (the most
+  // common echo source). Other error codes might echo too, but we err on the
+  // side of preserving content unless the producer asks for the cleanup.
+  const ECHO_TRIGGER_CODES = new Set(['AuthRequired']);
+  if (
+    !errorBody?.clearEchoedContent &&
+    (!errorBody?.code || !ECHO_TRIGGER_CODES.has(errorBody.code))
+  ) {
+    return false;
+  }
+  const normalizedContent = normalizeErrorText(content);
+  const normalizedError = normalizeErrorText(
+    errorBody?.stderr || errorBody?.message || error.message,
+  );
+  return !!normalizedContent && !!normalizedError && normalizedContent === normalizedError;
+};
+
+interface ToolCallPayload extends ChatToolPayload {}
+
+/** Per-assistant-message tool persistence state (main or sub-agent scope). */
+interface ToolPersistenceState {
+  payloads: ChatToolPayload[];
+  persistedIds: Set<string>;
+}
+
+/**
+ * Per-operation in-memory state. Lifetime spans the whole CLI run from first
+ * `heteroIngest` batch through `heteroFinish`. Multi-replica caveat: state is
+ * per-Node-process; cloud sandbox routing must be sticky to a single replica
+ * for one operationId, otherwise turn boundaries on the second replica will
+ * lose the chain-parent and pre-existing tool map. (Phase 3 sandbox owns the
+ * endpoint per-instance, so this is not a problem in practice.)
+ */
+interface OperationState {
+  accumulatedContent: string;
+  accumulatedReasoning: string;
+  agentId: string | null;
+  currentAssistantMessageId: string;
+  lastModel: string | undefined;
+  lastProvider: string | undefined;
+  lastStepIndex: number;
+  lastTextSnapshotSeq: number;
+  messageMetadata: Record<string, any>;
+  operationId: string;
+  processedKeys: Set<string>;
+  /** Shared subagent run coordinator state (see `@lobechat/heterogeneous-agents`). */
+  subagentState: SubagentRunsState;
+  toolMsgIdByCallId: Map<string, string>;
+  toolState: ToolPersistenceState;
+  topicId: string;
+}
+
+/**
+ * Module-level singleton: `Map<operationId, OperationState>`. Service
+ * instances are constructed per-request via the tRPC procedure middleware,
+ * so per-instance state would not survive across requests. Keying off the
+ * shared map lets two ingest batches for the same operationId share their
+ * tool map / accumulated content / subagent runs.
+ */
+const operationStates = new Map<string, OperationState>();
+
+/** Test-only reset hook to clear the singleton between specs. */
+export const __resetOperationStatesForTesting = () => operationStates.clear();
+
+export class StaleHeteroOperationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StaleHeteroOperationError';
+  }
+}
+
+export interface HeterogeneousPersistenceHandlerDeps {
+  messageModel: MessageModel;
+  threadModel: ThreadModel;
+  topicModel: TopicModel;
+}
+
+/**
+ * Server-side persistence for `lh hetero exec` event streams. Mirrors the
+ * desktop renderer's `executeHeterogeneousAgent` (1.8k lines) for the DB
+ * concerns only — IPC, store dispatch, notifications, refresh hooks all
+ * live host-side and are intentionally absent here.
+ *
+ * Phase 2b scope:
+ *
+ *   1. 3-phase tool persist (assistant.tools[] pre-register → tool message
+ *      create → backfill `result_msg_id`)
+ *   2. Subagent thread + per-turn assistant chaining + finalize on parent
+ *      tool_result
+ *   3. Step boundary handling (new assistant per `stream_start { newStep }`)
+ *   4. Per-turn metadata persistence (`step_complete` w/ `phase=turn_metadata`)
+ *   5. Final content / reasoning flush on `agent_runtime_end` / `error`
+ *
+ * Failure semantics (differs from the renderer's optimistic UI posture):
+ *
+ *   - DB writes propagate exceptions instead of swallowing them. A throw
+ *     bubbles to `ingest`, leaving the offending event un-marked in
+ *     `processedKeys` so the BatchIngester's outer retry replays it.
+ *     Idempotent state updates (per-tool `persistedIds`, payload de-dup,
+ *     `ThreadModel.onConflictDoNothing`) make replays safe.
+ *   - Renderer-only "log + continue" no longer applies — the server is
+ *     authoritative for cloud runs, so silent partial writes would diverge
+ *     DB from what the WS subscribers see.
+ *
+ * Multi-replica caveat: state is per-Node-process. Cloud sandbox routing
+ * must be sticky to a single replica per operationId, otherwise turn
+ * boundaries on the second replica would lose the chain-parent and
+ * pre-existing tool map. (Phase 3 sandbox owns the endpoint per-instance,
+ * so this is not a problem in practice.)
+ */
+export class HeterogeneousPersistenceHandler {
+  private readonly deps: HeterogeneousPersistenceHandlerDeps;
+
+  constructor(deps: HeterogeneousPersistenceHandlerDeps) {
+    this.deps = deps;
+  }
+
+  /**
+   * Process a batch of events for an operation. Sequential within the batch.
+   *
+   * Idempotency contract: an event is marked `processed` ONLY after its
+   * handler resolves cleanly. If a handler throws, the event stays unmarked
+   * so a follow-up retry processes it again, and the throw bubbles to
+   * `heteroIngest` → tRPC → BatchIngester so the producer re-sends. Events
+   * that already succeeded earlier in the batch are skipped on retry via
+   * the dedupe map, so the retry only re-runs the failed event onward.
+   */
+  async ingest(params: {
+    assistantMessageId?: string;
+    events: AgentStreamEvent[];
+    operationId: string;
+    topicId: string;
+  }): Promise<void> {
+    const state = await this.loadOrCreateState(
+      params.operationId,
+      params.topicId,
+      params.assistantMessageId,
+    );
+    const batchMaxStepIndex = Math.max(...params.events.map((event) => event.stepIndex));
+
+    // A different Lambda may have already processed `stream_start { newStep }`
+    // and persisted `heteroCurrentMsgId` for this operation. Warm instances keep
+    // their operation state in memory, so without an explicit resync they would
+    // keep appending later-step chunks to the PREVIOUS assistant row. Only resync
+    // when the incoming batch advances beyond the step this instance has seen.
+    if (batchMaxStepIndex > state.lastStepIndex) {
+      await this.syncAssistantPointerForAdvancedStep(state);
+    }
+
+    // Refresh content/reasoning baseline from DB before processing this batch.
+    //
+    // Root cause of truncation: Vercel serverless routes consecutive batches to
+    // different Lambda instances. A warm replica's in-memory `accumulatedContent`
+    // reflects only the batches IT processed — it has no visibility into batches
+    // handled by other replicas. When that warm replica later processes a
+    // tools_calling event, `persistMainToolBatch` writes the stale short content
+    // alongside the new tools, overwriting the correct (longer) DB value.
+    //
+    // Fix: re-read the current assistant message from DB at the start of every
+    // ingest call. Since `flushBatchContent` always writes at the end of each
+    // batch, DB is authoritative. Reading here gives us the freshest flushed
+    // content as the new baseline, so any text accumulated in this batch extends
+    // the correct full string rather than a stale partial.
+    //
+    // Cost: one extra `findById` round-trip per warm ingest call (cold calls
+    // already read the message in `loadOrCreateState` — the second read is
+    // redundant but harmless and keeps the logic uniform).
+    const refreshed = await this.deps.messageModel.findById(state.currentAssistantMessageId);
+    const rawDbContent = (refreshed?.content ?? '') as string;
+    const dbContent = rawDbContent === LOADING_FLAT ? '' : rawDbContent;
+    const dbReasoning = (refreshed?.reasoning as { content?: string } | null)?.content ?? '';
+    const dbMetadata = ((refreshed?.metadata as Record<string, any> | null) ?? {}) as Record<
+      string,
+      any
+    >;
+    const dbTextSnapshotSeq = Number(dbMetadata.heteroTextSnapshotSeq ?? 0);
+
+    // Adopt DB value only when it is LONGER than what this instance holds in memory.
+    // This correctly handles two competing cases without introducing a dirty flag:
+    //
+    //   1. Multi-replica stale (the problem this refresh was added to fix):
+    //      Another replica flushed more content to DB than this warm instance
+    //      has in memory → dbContent is longer → adopt it so new text in this
+    //      batch extends the correct full string rather than a stale partial.
+    //
+    //   2. flushBatchContent retry on the same warm instance (P1 concern):
+    //      Events were already processed and marked in processedKeys, but the
+    //      end-of-batch flush threw a transient DB error. DB still holds the
+    //      shorter pre-batch value; in-memory already has the correct result.
+    //      Unconditionally overwriting with the DB value would wipe those
+    //      chunks permanently (processedKeys prevents replay). Taking the
+    //      longer in-memory value keeps them safe.
+    if (dbContent.length > state.accumulatedContent.length) {
+      state.accumulatedContent = dbContent;
+    }
+    if (dbReasoning.length > state.accumulatedReasoning.length) {
+      state.accumulatedReasoning = dbReasoning;
+    }
+    if (Number.isFinite(dbTextSnapshotSeq) && dbTextSnapshotSeq > state.lastTextSnapshotSeq) {
+      state.lastTextSnapshotSeq = dbTextSnapshotSeq;
+      state.messageMetadata = dbMetadata;
+    } else if (
+      Object.keys(state.messageMetadata).length === 0 &&
+      Object.keys(dbMetadata).length > 0
+    ) {
+      state.messageMetadata = dbMetadata;
+    }
+
+    // Same multi-replica concern for `tools[]` and `lastModel`/`lastProvider`.
+    //
+    // Why this is necessary: `handleStepStart` computes the new assistant's
+    // parentId from `state.toolState.payloads` and copies model/provider from
+    // `state.lastModel` / `state.lastProvider`. Those are populated by
+    // `persistMainToolBatch` and `handleTurnMetadata` respectively — both
+    // run on whichever replica drains the relevant event. When the replica
+    // driving the next step boundary is NOT the one that drained the prior
+    // step's tools_calling / step_complete, the in-memory state is empty:
+    //   - parentId falls back to `state.currentAssistantMessageId`, so the
+    //     new turn chains off the previous assistant instead of the tool
+    //     message (observed in prod: 4/11 step boundaries in one topic).
+    //   - model/provider are written as null on the new assistant.
+    //
+    // Adopt the DB view as authoritative whenever it carries more resolved
+    // state than memory. `tools[]` is rewritten end-to-end on every Phase-3
+    // backfill, so it's safe to replace wholesale rather than merge by id —
+    // the same-batch transient where mem has a tool DB hasn't seen yet does
+    // not happen at refresh time (refresh runs before the event loop).
+    const dbTools = (refreshed?.tools ?? []) as ChatToolPayload[];
+    const dbResolvedToolCount = dbTools.filter((t) => !!t.result_msg_id).length;
+    const memResolvedToolCount = state.toolState.payloads.filter((t) => !!t.result_msg_id).length;
+    if (
+      dbTools.length > state.toolState.payloads.length ||
+      dbResolvedToolCount > memResolvedToolCount
+    ) {
+      state.toolState = {
+        payloads: [...dbTools],
+        // Only treat tool ids whose `result_msg_id` is already filled in as
+        // persisted. Phase 1 of `persistToolBatch` writes `tools[]` before
+        // creating the `role:'tool'` row (Phase 2), so a refresh that lands
+        // between the two would see an unresolved id. Marking that id as
+        // persisted would cause a subsequent retry of the same tools_calling
+        // event to skip the create (Phase 2) entirely — leaving the tool
+        // permanently without a tool message / result_msg_id.
+        persistedIds: new Set(dbTools.filter((t) => !!t.result_msg_id).map((t) => t.id)),
+      };
+    }
+    if (!state.lastModel && refreshed?.model) state.lastModel = refreshed.model;
+    if (!state.lastProvider && refreshed?.provider) state.lastProvider = refreshed.provider;
+
+    for (const event of params.events) {
+      const key = eventKey(event);
+      if (state.processedKeys.has(key)) {
+        log('skip duplicate event %s op=%s', key, state.operationId);
+        continue;
+      }
+
+      // NOTE: do NOT mark `processed` before the handler runs. Marking up
+      // front would silently swallow event-level failures — the BatchIngester
+      // would ack OK while DB state diverges from the renderer's view. Mark
+      // only on success so a retry can complete the lost write.
+      await this.handleEvent(state, event);
+      state.processedKeys.add(key);
+      state.lastStepIndex = Math.max(state.lastStepIndex, event.stepIndex);
+    }
+
+    // Flush accumulated content after every batch so a subsequent replica
+    // picking up this operation always sees the latest content in the DB,
+    // even if it never processes a step boundary or terminal event.
+    await this.flushBatchContent(state);
+  }
+
+  /**
+   * Flush trailing accumulators, persist the CLI's native session id (when
+   * present) for next-turn resume, and drop the per-operation state.
+   *
+   * Resume id source: CC's `--resume <sessionId>` token comes from the
+   * adapter's cached `system:init.session_id`. The CLI surfaces it here as a
+   * `heteroFinish` argument; we write it to `topic.metadata.heteroSessionId`
+   * (the same field the desktop renderer uses), so the next CLI spawn for
+   * this topic can include `--resume <id>`.
+   */
+  async finish(params: {
+    error?: { message: string; type: string };
+    operationId: string;
+    result: 'success' | 'error' | 'cancelled';
+    sessionId?: string;
+  }): Promise<void> {
+    const state = operationStates.get(params.operationId);
+    if (!state) return;
+
+    try {
+      await this.flushFinalState(state, params.error, params.result);
+      if (params.sessionId) {
+        await this.persistSessionId(state.topicId, params.sessionId);
+      } else if (params.result === 'error') {
+        // No new session id was produced and the run failed. The most common
+        // cause in cloud sandboxes is `--resume <staleId>` failing because the
+        // container was recycled and session files are gone. Clear any persisted
+        // `heteroSessionId` so the next turn starts a fresh CC session instead
+        // of looping on the same stale id.
+        //
+        // When CC ran (system.init was emitted) but produced an error result,
+        // `params.sessionId` is set — so this branch is NOT reached and the
+        // valid session id is kept for resume on the next turn.
+        await this.clearSessionId(state.topicId);
+      }
+    } finally {
+      operationStates.delete(params.operationId);
+    }
+  }
+
+  /**
+   * Persist the CLI's native session id onto `topic.metadata.heteroSessionId`.
+   * `TopicModel.updateMetadata` merges into existing JSONB so this does NOT
+   * clobber `runningOperation` / `workingDirectory` / other peer fields.
+   */
+  private async persistSessionId(topicId: string, sessionId: string): Promise<void> {
+    try {
+      await this.deps.topicModel.updateMetadata(topicId, { heteroSessionId: sessionId });
+      log('persisted sessionId topic=%s sessionId=%s', topicId, sessionId);
+    } catch (err) {
+      log('persistSessionId failed topic=%s err=%O', topicId, err);
+    }
+  }
+
+  /**
+   * Remove a stale `heteroSessionId` from topic metadata. Called when a run
+   * fails without producing a new session id (e.g. `--resume` rejected because
+   * the sandbox was recycled). Prevents the next turn from inheriting a session
+   * id that will never succeed.
+   */
+  private async clearSessionId(topicId: string): Promise<void> {
+    try {
+      await this.deps.topicModel.updateMetadata(topicId, { heteroSessionId: undefined });
+      log('cleared stale sessionId topic=%s', topicId);
+    } catch (err) {
+      log('clearSessionId failed topic=%s err=%O', topicId, err);
+    }
+  }
+
+  // ─── State management ────────────────────────────────────────────────────
+
+  private async loadOrCreateState(
+    operationId: string,
+    topicId: string,
+    seedAssistantMessageId?: string,
+  ): Promise<OperationState> {
+    let state = operationStates.get(operationId);
+    if (state) {
+      // Defensive: caller mismatch on topicId would corrupt persistence —
+      // assert and throw rather than silently writing to the wrong topic.
+      if (state.topicId !== topicId) {
+        throw new Error(
+          `Operation ${operationId} is already bound to topic ${state.topicId}, not ${topicId}`,
+        );
+      }
+      return state;
+    }
+
+    const topic = await this.deps.topicModel.findById(topicId);
+    const running = topic?.metadata?.runningOperation;
+
+    if (!running) {
+      throw new StaleHeteroOperationError(
+        `Stale hetero operation ${operationId} on topic ${topicId}; no active runningOperation`,
+      );
+    }
+
+    if (running.operationId !== operationId) {
+      throw new StaleHeteroOperationError(
+        `Stale hetero operation ${operationId} on topic ${topicId}; current operation is ${running.operationId}`,
+      );
+    }
+
+    // Prefer the assistantMessageId forwarded in the ingest payload (sandbox path).
+    // The orchestrator already has it in-memory and passes it through env → CLI → tRPC,
+    // so this path avoids depending on `runningOperation.assistantMessageId`
+    // itself being readable on this replica. We still require the topic's
+    // runningOperation binding to match `operationId`, otherwise late/retried
+    // batches after finish could keep mutating a completed turn.
+    // Fall back to topic.metadata for desktop / old-CLI callers that lack the field.
+    const baseAssistantMessageId = seedAssistantMessageId ?? running.assistantMessageId;
+
+    if (!baseAssistantMessageId) {
+      throw new Error(`runningOperation on topic ${topicId} is missing assistantMessageId`);
+    }
+
+    if (seedAssistantMessageId) {
+      const seededMsg = await this.deps.messageModel.findById(seedAssistantMessageId);
+      if (!seededMsg) {
+        throw new Error(
+          `Seeded assistantMessageId ${seedAssistantMessageId} was not found for topic ${topicId}`,
+        );
+      }
+      if (seededMsg.topicId !== topicId) {
+        throw new Error(
+          `Seeded assistantMessageId ${seedAssistantMessageId} does not belong to topic ${topicId}`,
+        );
+      }
+    }
+
+    // Prefer the latest step's assistant message id (written by handleStepStart)
+    // over the initial placeholder — so a new replica after a step boundary uses
+    // the correct message rather than the stale initial one.
+    // Guard: only use heteroCurrentMsgId when it belongs to THIS operation.
+    // A stale value from a previous run must not override the new operation's
+    // seeded assistantMessageId (P1 fix).
+    const stored = topic?.metadata?.heteroCurrentMsgId;
+    const currentAssistantMessageId =
+      stored?.operationId === operationId
+        ? (stored.msgId ?? baseAssistantMessageId)
+        : baseAssistantMessageId;
+
+    // Restore toolMsgIdByCallId from the DB so tool_results that arrive on a
+    // different replica than their tool_use can still be matched and persisted.
+    const toolPlugins = await this.deps.messageModel.listMessagePluginsByTopic(topicId);
+    const toolMsgIdByCallId = new Map<string, string>();
+    for (const plugin of toolPlugins) {
+      if (plugin.toolCallId) toolMsgIdByCallId.set(plugin.toolCallId, plugin.id);
+    }
+
+    // Restore in-progress accumulators and tool state from the current assistant
+    // message so a cold replica (Vercel serverless — each request is a new process)
+    // continues from where the previous request left off rather than overwriting
+    // with an empty/shorter value. Without this, every ingest call would reset
+    // accumulatedContent to '' and toolState.payloads to [], causing:
+    //   - content truncation: warm instance writes "hello world", cold instance
+    //     accumulates only " more text" and overwrites with that shorter string.
+    //   - tool duplication: cold instance sees persistedIds={}, re-creates already-
+    //     persisted tool messages, and overwrites assistant.tools[] with only the
+    //     current batch's tools (losing all previous ones).
+    const currentMsg = await this.deps.messageModel.findById(currentAssistantMessageId);
+    // Skip LOADING_FLAT placeholder — it is the initial DB value before any
+    // content arrives and must not be treated as real accumulated text.
+    const rawContent = (currentMsg?.content ?? '') as string;
+    const restoredContent = rawContent === LOADING_FLAT ? '' : rawContent;
+    const restoredReasoning = (currentMsg?.reasoning as { content?: string } | null)?.content ?? '';
+    const restoredMetadata = ((currentMsg?.metadata as Record<string, any> | null) ?? {}) as Record<
+      string,
+      any
+    >;
+    const restoredTools = (currentMsg?.tools ?? []) as ChatToolPayload[];
+    const restoredTextSnapshotSeq = Number(restoredMetadata.heteroTextSnapshotSeq ?? 0);
+    // Phase 1 of `persistToolBatch` writes `tools[]` BEFORE the tool message
+    // row is created (Phase 2 sets `result_msg_id`). Only ids that already
+    // carry a `result_msg_id` are truly persisted — restoring an unresolved
+    // id into `persistedIds` would make a retry of the same tools_calling
+    // event skip the Phase 2 create, orphaning the tool forever.
+    const restoredPersistedIds = new Set(
+      restoredTools.filter((t) => !!t.result_msg_id).map((t) => t.id),
+    );
+
+    state = {
+      accumulatedContent: restoredContent,
+      accumulatedReasoning: restoredReasoning,
+      agentId: topic?.agentId ?? null,
+      currentAssistantMessageId,
+      lastModel: undefined,
+      lastProvider: undefined,
+      lastStepIndex: 0,
+      lastTextSnapshotSeq: Number.isFinite(restoredTextSnapshotSeq) ? restoredTextSnapshotSeq : 0,
+      messageMetadata: restoredMetadata,
+      operationId,
+      processedKeys: new Set(),
+      subagentState: createSubagentRunsState(),
+      toolMsgIdByCallId,
+      toolState: { payloads: restoredTools, persistedIds: restoredPersistedIds },
+      topicId,
+    };
+    operationStates.set(operationId, state);
+    log(
+      'created state for operation %s on topic %s msgId=%s tools=%d restored(content=%d tools=%d)',
+      operationId,
+      topicId,
+      currentAssistantMessageId,
+      toolMsgIdByCallId.size,
+      restoredContent.length,
+      restoredTools.length,
+    );
+    return state;
+  }
+
+  private async syncAssistantPointerForAdvancedStep(state: OperationState): Promise<void> {
+    const topic = await this.deps.topicModel.findById(state.topicId);
+    const running = topic?.metadata?.runningOperation;
+
+    if (running && running.operationId !== state.operationId) {
+      throw new StaleHeteroOperationError(
+        `Stale hetero operation ${state.operationId} on topic ${state.topicId}; current operation is ${running.operationId}`,
+      );
+    }
+
+    const stored = topic?.metadata?.heteroCurrentMsgId;
+    const authoritativeAssistantMessageId =
+      stored?.operationId === state.operationId
+        ? (stored.msgId ?? running?.assistantMessageId)
+        : running?.assistantMessageId;
+
+    if (
+      !authoritativeAssistantMessageId ||
+      authoritativeAssistantMessageId === state.currentAssistantMessageId
+    ) {
+      return;
+    }
+
+    const currentMsg = await this.deps.messageModel.findById(authoritativeAssistantMessageId);
+    const restoredContent = (currentMsg?.content ?? '') as string;
+    const restoredReasoning = (currentMsg?.reasoning as { content?: string } | null)?.content ?? '';
+    const restoredMetadata = ((currentMsg?.metadata as Record<string, any> | null) ?? {}) as Record<
+      string,
+      any
+    >;
+    const restoredTools = (currentMsg?.tools ?? []) as ChatToolPayload[];
+    const restoredTextSnapshotSeq = Number(restoredMetadata.heteroTextSnapshotSeq ?? 0);
+
+    state.currentAssistantMessageId = authoritativeAssistantMessageId;
+    state.accumulatedContent = restoredContent;
+    state.accumulatedReasoning = restoredReasoning;
+    state.lastTextSnapshotSeq = Number.isFinite(restoredTextSnapshotSeq)
+      ? restoredTextSnapshotSeq
+      : 0;
+    state.messageMetadata = restoredMetadata;
+    state.toolState = {
+      payloads: restoredTools,
+      // Same `persistedIds` invariant as `loadOrCreateState`: only ids with a
+      // backfilled `result_msg_id` count as persisted. An unresolved id (Phase
+      // 1 written, Phase 2 not yet) must remain re-createable so a retry on
+      // this replica can complete the tool message.
+      persistedIds: new Set(
+        restoredTools.filter((tool) => !!tool.result_msg_id).map((tool) => tool.id),
+      ),
+    };
+
+    log(
+      'synced warm state op=%s to assistant=%s after step advance',
+      state.operationId,
+      authoritativeAssistantMessageId,
+    );
+  }
+
+  // ─── Event dispatch ──────────────────────────────────────────────────────
+
+  private async handleEvent(state: OperationState, event: AgentStreamEvent): Promise<void> {
+    switch (event.type) {
+      case 'tool_result': {
+        await this.handleToolResult(state, event);
+        return;
+      }
+
+      case 'step_complete': {
+        if (event.data?.phase === 'turn_metadata') {
+          await this.handleTurnMetadata(state, event);
+        }
+        return;
+      }
+
+      case 'stream_start': {
+        if (event.data?.newStep) {
+          await this.handleStepStart(state);
+        } else {
+          await this.handleStreamInit(state, event);
+        }
+        return;
+      }
+
+      case 'stream_chunk': {
+        await this.handleStreamChunk(state, event);
+        return;
+      }
+
+      case 'agent_runtime_end':
+      case 'error': {
+        await this.handleTerminal(state, event);
+        return;
+      }
+
+      // tool_start / tool_end / step_start / stream_end / agent_runtime_init /
+      // tool_execute / stream_retry: no-op — server only persists the
+      // adapter-level events, lifecycle markers are renderer-side concerns.
+      default: {
+        return;
+      }
+    }
+  }
+
+  // ─── Per-event handlers ──────────────────────────────────────────────────
+
+  /**
+   * The adapter's FIRST `stream_start` (CC's system/init, `newStep` unset)
+   * carries the CLI's authoritative model/provider (e.g. claude-sonnet-x /
+   * 'claude-code'). Capture it into step state and backfill the placeholder
+   * assistant so the model tag shows the real CLI model from the very first
+   * turn — even before (or entirely without) any usage-bearing `turn_metadata`.
+   *
+   * The placeholder is created with only `provider: heteroType` and no model
+   * (see `aiAgent.execAgent`), so without this the first turn would render an
+   * empty model until `turn_metadata` lands, and a usage-less run would never
+   * resolve a real model at all.
+   */
+  private async handleStreamInit(state: OperationState, event: AgentStreamEvent) {
+    const { model, provider } = event.data ?? {};
+    const update: Record<string, any> = {};
+    if (model) {
+      state.lastModel = model;
+      update.model = model;
+    }
+    if (provider) {
+      state.lastProvider = provider;
+      update.provider = provider;
+    }
+    if (Object.keys(update).length === 0) return;
+    await this.deps.messageModel.update(state.currentAssistantMessageId, update);
+  }
+
+  private async handleTurnMetadata(state: OperationState, event: AgentStreamEvent) {
+    const { model, provider, usage } = event.data ?? {};
+
+    // Subagent-tagged usage routes through the coordinator (RecordUsage intent →
+    // written onto the subagent's in-thread assistant). It must NOT touch
+    // `state.lastModel` / `state.lastProvider`, which carry main-agent step
+    // boundary state and would contaminate the next main-agent assistant.
+    if ((event.data as any)?.subagent) {
+      await this.reduceAndApply(state, event);
+      return;
+    }
+
+    if (model) state.lastModel = model;
+    if (provider) state.lastProvider = provider;
+
+    // Persist model/provider/usage to DB so a replica that didn't drain this
+    // event can still recover lastModel/lastProvider via the ingest-refresh
+    // path. Previously only `metadata.usage` was written, which left
+    // model/provider in-memory only — and the next step boundary on a
+    // different replica created assistants with model=null/provider=null.
+    const update: Record<string, any> = {};
+    if (usage) {
+      state.messageMetadata = { ...state.messageMetadata, usage };
+      update.metadata = state.messageMetadata;
+    }
+    if (model) update.model = model;
+    if (provider) update.provider = provider;
+    if (Object.keys(update).length === 0) return;
+
+    await this.deps.messageModel.update(state.currentAssistantMessageId, update);
+  }
+
+  /**
+   * `stream_start { newStep: true }` opens a new assistant turn within the
+   * same operation. Mirrors renderer logic:
+   *
+   *   1. Flush prior assistant's accumulated content / reasoning / model
+   *   2. Create the new assistant — chained off the last main-agent tool
+   *      message (so the wire becomes `asst → tool → asst → tool → ...`),
+   *      falling back to the prev assistant when the prior step had no tools
+   *   3. Reset main-agent tool state (NOT the global `toolMsgIdByCallId` —
+   *      late subagent tool_results from prior steps still resolve via it)
+   */
+  private async handleStepStart(state: OperationState) {
+    const prevUpdate: Record<string, any> = {};
+    if (state.accumulatedContent) prevUpdate.content = state.accumulatedContent;
+    if (state.accumulatedReasoning) prevUpdate.reasoning = { content: state.accumulatedReasoning };
+    if (state.lastModel) prevUpdate.model = state.lastModel;
+    if (state.lastProvider) prevUpdate.provider = state.lastProvider;
+
+    if (Object.keys(prevUpdate).length > 0) {
+      await this.deps.messageModel.update(state.currentAssistantMessageId, prevUpdate);
+    }
+
+    let lastToolMsgId = [...state.toolState.payloads]
+      .reverse()
+      .find((p) => !!p.result_msg_id)?.result_msg_id;
+
+    // In-memory tool state can be empty or unresolved here: a different
+    // replica drained this step's `tools_calling`, or the batch-start refresh
+    // read the assistant's `tools[]` JSONB before its Phase-3 `result_msg_id`
+    // backfill was visible. Chaining off `currentAssistantMessageId` in that
+    // case forks the wire (`asst1 → asst2` with the tools as a dead branch),
+    // which renders as two disconnected bubbles. Fall back to the
+    // authoritative source — the `role:'tool'` rows themselves (Phase 2),
+    // which are committed earlier and independently of the JSONB mirror.
+    if (!lastToolMsgId) {
+      lastToolMsgId = await this.deps.messageModel.getLastChildToolMessageId(
+        state.currentAssistantMessageId,
+      );
+    }
+
+    const stepParentId = lastToolMsgId || state.currentAssistantMessageId;
+
+    const newMsg = await this.deps.messageModel.create({
+      agentId: state.agentId ?? undefined,
+      content: '',
+      model: state.lastModel,
+      parentId: stepParentId,
+      provider: state.lastProvider,
+      role: 'assistant',
+      topicId: state.topicId,
+    });
+
+    // Persist BEFORE advancing in-memory state (P2 fix). If this write fails
+    // transiently and the event is retried, state is still at the previous step
+    // so handleStepStart re-creates the new message with the correct parent
+    // rather than chaining off the partially-created one. The first attempt's
+    // empty message becomes an orphan but does not corrupt the turn chain.
+    await this.deps.topicModel.updateMetadata(state.topicId, {
+      heteroCurrentMsgId: { msgId: newMsg.id, operationId: state.operationId },
+    });
+
+    // Advance state only after the DB write lands.
+    state.currentAssistantMessageId = newMsg.id;
+    state.accumulatedContent = '';
+    state.accumulatedReasoning = '';
+    state.lastTextSnapshotSeq = 0;
+    state.messageMetadata = {};
+    state.toolState = { payloads: [], persistedIds: new Set() };
+  }
+
+  private async handleStreamChunk(state: OperationState, event: AgentStreamEvent) {
+    const chunk = event.data ?? {};
+
+    // Subagent-scoped chunks (text / reasoning / tools_calling) are routed
+    // through the shared run coordinator — it owns thread create, turn
+    // boundaries, tool persistence, and finalize.
+    if (chunk.subagent) {
+      await this.reduceAndApply(state, event);
+      return;
+    }
+
+    if (chunk.chunkType === 'text' && typeof chunk.content === 'string') {
+      const snapshotMode = chunk.snapshotMode;
+      const snapshotSeq =
+        typeof chunk.snapshotSeq === 'number' ? Number(chunk.snapshotSeq) : undefined;
+
+      if (snapshotMode === 'replace' && snapshotSeq !== undefined) {
+        if (snapshotSeq <= state.lastTextSnapshotSeq) {
+          log(
+            'skip stale text snapshot op=%s seq=%d current=%d',
+            state.operationId,
+            snapshotSeq,
+            state.lastTextSnapshotSeq,
+          );
+          return;
+        }
+        state.lastTextSnapshotSeq = snapshotSeq;
+        state.messageMetadata = {
+          ...state.messageMetadata,
+          heteroTextSnapshotSeq: snapshotSeq,
+        };
+        state.accumulatedContent = chunk.content;
+      } else {
+        state.accumulatedContent += chunk.content;
+      }
+      return;
+    }
+
+    if (chunk.chunkType === 'reasoning' && typeof chunk.reasoning === 'string') {
+      state.accumulatedReasoning += chunk.reasoning;
+      return;
+    }
+
+    if (chunk.chunkType === 'tools_calling') {
+      const tools = chunk.toolsCalling as ToolCallPayload[] | undefined;
+      if (!tools?.length) return;
+      await this.persistMainToolBatch(state, tools);
+    }
+  }
+
+  private async handleToolResult(state: OperationState, event: AgentStreamEvent) {
+    const data = event.data ?? {};
+    const toolCallId: string | undefined = data.toolCallId;
+    if (!toolCallId) return;
+
+    const content: string = data.content ?? '';
+    const isError: boolean = !!data.isError;
+    const pluginState: Record<string, any> | undefined = data.pluginState;
+
+    const toolMsgId = state.toolMsgIdByCallId.get(toolCallId);
+    if (toolMsgId) {
+      await this.deps.messageModel.updateToolMessage(toolMsgId, {
+        content,
+        pluginError: isError ? { message: content } : undefined,
+        pluginState,
+      });
+    } else {
+      // Late-arriving result for a call we never saw the tool_use for is
+      // recoverable on a follow-up batch (out-of-order delivery); log and
+      // move on so the rest of the batch lands.
+      log('tool_result for unknown toolCallId=%s op=%s', toolCallId, state.operationId);
+    }
+
+    // Route through the coordinator. For a parent-spawn tool_result it
+    // finalizes the run (terminal assistant + thread Active); for a subagent
+    // inner tool_result the coordinator emits ResolveToolResult, which the
+    // server interpreter no-ops because the generic `toolMsgIdByCallId` update
+    // above already wrote the DB content. Main-agent tool_results yield no
+    // intents.
+    await this.reduceAndApply(state, event);
+  }
+
+  private async handleTerminal(state: OperationState, event: AgentStreamEvent) {
+    const isError = event.type === 'error';
+    const messageError = isError ? this.toChatMessageError(event.data) : undefined;
+    const suppressEcho =
+      !!messageError && shouldSuppressTerminalErrorEcho(state.accumulatedContent, messageError);
+
+    const updateValue: Record<string, any> = {};
+    if (suppressEcho) {
+      // CC sometimes streams the error string into `content` BEFORE emitting
+      // the structured error event. When the two payloads echo each other,
+      // surface only the structured error and clear the duplicate text.
+      updateValue.content = '';
+    } else if (state.accumulatedContent) {
+      updateValue.content = state.accumulatedContent;
+    }
+    if (state.accumulatedReasoning) updateValue.reasoning = { content: state.accumulatedReasoning };
+    if (state.lastModel) updateValue.model = state.lastModel;
+    if (state.lastProvider) updateValue.provider = state.lastProvider;
+    if (messageError) updateValue.error = messageError;
+
+    if (Object.keys(updateValue).length > 0) {
+      await this.deps.messageModel.update(state.currentAssistantMessageId, updateValue);
+    }
+
+    // Drain any subagent runs that never saw their parent tool_result (CLI
+    // crashed mid-spawn, or main never closed the spawn). The coordinator
+    // flushes each run's trailing content and marks the thread Active — no
+    // terminal assistant, since there's no authoritative resultContent.
+    await this.reduceAndApply(state, event);
+
+    // Reset accumulators so a `finish()` flush after a terminal event in the
+    // stream is a no-op (idempotent finalize).
+    state.accumulatedContent = '';
+    state.accumulatedReasoning = '';
+  }
+
+  /** Final safety flush triggered by `heteroFinish`. */
+  private async flushFinalState(
+    state: OperationState,
+    error: { message: string; type: string } | undefined,
+    result: 'success' | 'error' | 'cancelled',
+  ) {
+    if (!state.accumulatedContent && !state.accumulatedReasoning && !error && result !== 'error') {
+      // Nothing pending — terminal event already flushed in-stream.
+      return;
+    }
+
+    const updateValue: Record<string, any> = {};
+    if (state.accumulatedContent) updateValue.content = state.accumulatedContent;
+    if (state.accumulatedReasoning) updateValue.reasoning = { content: state.accumulatedReasoning };
+    if (error) {
+      // `error.type` is a free-form string from the CLI; coerce to the
+      // shared union via `as` since the runtime contract accepts arbitrary
+      // values (renderer-side error classifier already does the same).
+      const errType = (error.type ||
+        AgentRuntimeErrorType.AgentRuntimeError) as ChatMessageError['type'];
+      updateValue.error = {
+        body: { message: error.message },
+        message: error.message,
+        type: errType,
+      } satisfies ChatMessageError;
+    }
+
+    if (Object.keys(updateValue).length > 0) {
+      await this.deps.messageModel.update(state.currentAssistantMessageId, updateValue);
+    }
+  }
+
+  /**
+   * Write accumulated content/reasoning to DB after every ingest batch.
+   * This ensures a subsequent replica always finds the latest text in the DB
+   * even if the current replica never processes a step-boundary or terminal
+   * event (which are the normal flush triggers).
+   */
+  private async flushBatchContent(state: OperationState): Promise<void> {
+    if (!state.accumulatedContent && !state.accumulatedReasoning) return;
+    const update: Record<string, any> = {};
+    if (state.accumulatedContent) update.content = state.accumulatedContent;
+    if (state.accumulatedReasoning) update.reasoning = { content: state.accumulatedReasoning };
+    if (Object.keys(state.messageMetadata).length > 0) update.metadata = state.messageMetadata;
+    await this.deps.messageModel.update(state.currentAssistantMessageId, update);
+  }
+
+  private toChatMessageError(data: unknown): ChatMessageError {
+    if (typeof data === 'object' && data && 'message' in data) {
+      const message =
+        typeof (data as any).message === 'string' ? (data as any).message : 'Agent runtime error';
+      return {
+        body: data as Record<string, unknown>,
+        message,
+        type: AgentRuntimeErrorType.AgentRuntimeError,
+      };
+    }
+    const message = typeof data === 'string' ? data : 'Agent runtime error';
+    return {
+      body: { message },
+      message,
+      type: AgentRuntimeErrorType.AgentRuntimeError,
+    };
+  }
+
+  // ─── 3-phase tool persist (main agent) ───────────────────────────────────
+
+  /**
+   * Same shape as renderer's `persistToolBatch` (lines 319–411 in
+   * `heterogeneousAgentExecutor.ts`):
+   *
+   *   1. Append fresh tools to `state.payloads`, write them on the assistant
+   *      together with the latest streamed content / reasoning so DB stays
+   *      in sync (no orphan-tool window once the parser sees them).
+   *   2. Create a `role:'tool'` message per fresh tool_use, capture its DB
+   *      id into the global `toolMsgIdByCallId` lookup, and write
+   *      `result_msg_id` onto the matching `state.payloads` entry.
+   *   3. Re-write `state.payloads` so phase 2's backfilled `result_msg_id`
+   *      lands on the assistant row.
+   *
+   * Idempotent on retry: tool_use ids already in `state.persistedIds` are
+   * skipped up front.
+   */
+  private async persistToolBatch(
+    incoming: ToolCallPayload[],
+    persistState: ToolPersistenceState,
+    assistantMessageId: string,
+    state: OperationState,
+    snapshot: { content: string; reasoning: string },
+    threadId?: string,
+  ): Promise<{ newToolMsgIds: string[] }> {
+    // Merge incoming tools into the payloads array, de-duped by id. On a
+    // retry of the same event, payloads already has these entries — skip the
+    // re-push to keep phase 1/3 writes idempotent.
+    for (const tool of incoming) {
+      if (!persistState.payloads.some((p) => p.id === tool.id)) {
+        persistState.payloads.push({ ...tool });
+      }
+    }
+
+    const buildUpdate = (): Record<string, any> => {
+      const update: Record<string, any> = { tools: persistState.payloads };
+      if (snapshot.content) update.content = snapshot.content;
+      if (snapshot.reasoning) update.reasoning = { content: snapshot.reasoning };
+      return update;
+    };
+
+    // ─── Phase 1: pre-register tools[] on the assistant ───
+    // Idempotent re-write of the tools[] JSONB column. Throws propagate so
+    // the outer ingest loop leaves the event un-marked → retry replays.
+    await this.deps.messageModel.update(assistantMessageId, buildUpdate());
+
+    // ─── Phase 2: create tool messages, capture ids ───
+    // Only create rows for tools that haven't been persisted yet. On retry
+    // after a phase 2 mid-batch failure, this skips the ones that already
+    // landed (their ids are in `persistedIds`) and re-tries the rest.
+    const newToolMsgIds: string[] = [];
+    const freshForCreate = incoming.filter((t) => !persistState.persistedIds.has(t.id));
+    for (const tool of freshForCreate) {
+      const result = await this.deps.messageModel.create({
+        agentId: state.agentId ?? undefined,
+        content: '',
+        parentId: assistantMessageId,
+        plugin: {
+          apiName: tool.apiName,
+          arguments: tool.arguments,
+          identifier: tool.identifier,
+          type: tool.type,
+        },
+        role: 'tool',
+        threadId: threadId ?? null,
+        tool_call_id: tool.id,
+        topicId: state.topicId,
+      });
+      // Mark persisted ONLY after the create resolves cleanly — a thrown
+      // create leaves the id absent so retries re-attempt this tool.
+      state.toolMsgIdByCallId.set(tool.id, result.id);
+      persistState.persistedIds.add(tool.id);
+      newToolMsgIds.push(result.id);
+      const entry = persistState.payloads.find((p) => p.id === tool.id);
+      if (entry) entry.result_msg_id = result.id;
+    }
+
+    // ─── Phase 3: backfill result_msg_id on assistant.tools[] ───
+    // Always runs: even if every tool was already persisted in a prior call,
+    // a phase 3 retry after a partial-failure replay needs to land the
+    // up-to-date payloads. The write is idempotent (same JSONB).
+    await this.deps.messageModel.update(assistantMessageId, buildUpdate());
+
+    return { newToolMsgIds };
+  }
+
+  private async persistMainToolBatch(state: OperationState, tools: ToolCallPayload[]) {
+    await this.persistToolBatch(tools, state.toolState, state.currentAssistantMessageId, state, {
+      content: state.accumulatedContent,
+      reasoning: state.accumulatedReasoning,
+    });
+  }
+
+  // ─── Subagent thread + turn tracking ─────────────────────────────────────
+
+  // ─── Subagent run coordinator (shared reducer) interpreter ───────────────
+
+  private subagentReduceCtx(state: OperationState): SubagentReduceCtx {
+    return {
+      agentId: state.agentId,
+      mainAssistantId: state.currentAssistantMessageId,
+      // Pre-allocate DB-compatible ids so the reducer can chain parentId
+      // without a create→read round-trip. `thd_…` matches `generateThreadId`.
+      newId: (kind) => (kind === 'thread' ? generateThreadId() : `msg_${createNanoId(18)()}`),
+      topicId: state.topicId,
+    };
+  }
+
+  /**
+   * Reduce one event through the shared subagent coordinator and apply the
+   * resulting intents. Commit-on-success: `state.subagentState` is only
+   * advanced after every intent lands, so a throwing intent leaves the event
+   * unmarked in `processedKeys` and the CLI BatchIngester replays it against
+   * the unchanged state (same resilience the per-event idempotency loop relies
+   * on elsewhere).
+   */
+  private async reduceAndApply(state: OperationState, event: AgentStreamEvent) {
+    const { state: next, intents } = reduceSubagentRuns(
+      state.subagentState,
+      event,
+      this.subagentReduceCtx(state),
+    );
+    for (const intent of intents) await this.applySubagentIntent(state, intent);
+    state.subagentState = next;
+  }
+
+  private async applySubagentIntent(state: OperationState, intent: SubagentIntent) {
+    switch (intent.kind) {
+      case 'createThread': {
+        await this.deps.threadModel.create({
+          id: intent.threadId,
+          metadata: {
+            sourceToolCallId: intent.sourceToolCallId,
+            startedAt: new Date().toISOString(),
+            subagentType: intent.subagentType,
+          },
+          sourceMessageId: intent.sourceMessageId,
+          status: ThreadStatus.Processing,
+          title: intent.title,
+          topicId: intent.topicId ?? state.topicId,
+          type: ThreadType.Isolation,
+        } as any);
+        return;
+      }
+
+      case 'createMessage': {
+        await this.deps.messageModel.create(
+          {
+            agentId: intent.agentId ?? undefined,
+            content: intent.content,
+            parentId: intent.parentId,
+            role: intent.role,
+            threadId: intent.threadId,
+            topicId: intent.topicId ?? state.topicId,
+          },
+          intent.messageId,
+        );
+        return;
+      }
+
+      // Live in-memory UI updates have no server surface; durable writes land
+      // via persistContent / persistToolBatch.
+      case 'streamContent': {
+        return;
+      }
+
+      // Inner subagent tool_result DB content is already written by the generic
+      // `toolMsgIdByCallId` update in handleToolResult; nothing extra server-side.
+      case 'resolveToolResult': {
+        return;
+      }
+
+      case 'persistContent': {
+        const update: Record<string, any> = {};
+        if (intent.content) update.content = intent.content;
+        if (intent.reasoning) update.reasoning = { content: intent.reasoning };
+        if (Object.keys(update).length > 0) {
+          await this.deps.messageModel.update(intent.messageId, update);
+        }
+        return;
+      }
+
+      case 'persistToolBatch': {
+        const buildUpdate = (withResult: boolean): Record<string, any> => {
+          const update: Record<string, any> = {
+            tools: intent.tools.map((t) =>
+              withResult ? { ...t.payload, result_msg_id: t.toolMessageId } : { ...t.payload },
+            ),
+          };
+          if (intent.content) update.content = intent.content;
+          if (intent.reasoning) update.reasoning = { content: intent.reasoning };
+          return update;
+        };
+
+        // Phase 1: pre-register assistant.tools[] (no result_msg_id yet).
+        await this.deps.messageModel.update(intent.assistantMessageId, buildUpdate(false));
+
+        // Phase 2: create rows for new tools with their pre-allocated ids and
+        // register them in the global tool-message map for tool_result lookup.
+        for (const t of intent.tools) {
+          if (!t.isNew) continue;
+          await this.deps.messageModel.create(
+            {
+              agentId: state.agentId ?? undefined,
+              content: '',
+              parentId: intent.assistantMessageId,
+              plugin: {
+                apiName: t.payload.apiName,
+                arguments: t.payload.arguments,
+                identifier: t.payload.identifier,
+                type: t.payload.type,
+              },
+              role: 'tool',
+              threadId: intent.threadId,
+              tool_call_id: t.payload.id,
+              topicId: state.topicId,
+            } as any,
+            t.toolMessageId,
+          );
+          state.toolMsgIdByCallId.set(t.payload.id, t.toolMessageId);
+        }
+
+        // Phase 3: backfill result_msg_id on assistant.tools[].
+        await this.deps.messageModel.update(intent.assistantMessageId, buildUpdate(true));
+        return;
+      }
+
+      case 'recordUsage': {
+        await this.deps.messageModel.update(intent.messageId, {
+          metadata: { usage: intent.usage as any },
+          ...(intent.model && { model: intent.model }),
+          ...(intent.provider && { provider: intent.provider }),
+        });
+        return;
+      }
+
+      case 'finalizeThread': {
+        await this.deps.threadModel.update(intent.threadId, { status: ThreadStatus.Active });
+        return;
+      }
+    }
+  }
+}

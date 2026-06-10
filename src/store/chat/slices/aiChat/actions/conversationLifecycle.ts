@@ -54,8 +54,10 @@ import {
   getCompressionCandidateMessageIds,
   hasRunningCompressionOperation,
 } from '@/store/chat/utils/compression';
+import { getElectronStoreState } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { type StoreSetter } from '@/store/types';
 import { useUserMemoryStore } from '@/store/userMemory';
 import { markdownToTxt } from '@/utils/markdownToTxt';
@@ -319,12 +321,30 @@ export class ConversationLifecycleActionImpl {
     const hasMentionedAgents =
       !context.groupId && !directMentionRoute && mentionedAgents.length > 0;
 
+    // Page-scoped conversations: the page editor runtime tracks the currently
+    // open document. Inject its id at send time so the agent-runtime context
+    // (and downstream server-side PageAgent tool calls, which only receive that
+    // context) is scoped to the open document. Without this the server runtime
+    // throws "received a tool call without documentId in context".
+    //
+    // This fallback is only authoritative when the active page's editor is
+    // mounted (StoreUpdater has called setCurrentDocId for it). Callers that
+    // create a document and send before that editor mounts (e.g. sendAsWrite)
+    // MUST pass the new documentId in context explicitly — the `!context.documentId`
+    // guard preserves it, so the singleton (still bound to the previous page) is
+    // not consulted and a stale id is never injected.
+    const activePageDocumentId =
+      context.scope === 'page' && !context.documentId
+        ? pageAgentRuntime.getCurrentDocId()
+        : undefined;
+
     const operationContext = {
       ...context,
       ...(isCreatingNewThread && { threadId: undefined }),
       // Only set isSupervisor for actual group supervisors — NOT for @agent mentions.
       // isSupervisor triggers group-specific UI rendering (SupervisorMessage with group avatars).
       ...(isGroupSupervisor && { isSupervisor: true }),
+      ...(activePageDocumentId ? { documentId: activePageDocumentId } : {}),
     };
 
     const fileIdList = files?.map((f) => f.id);
@@ -524,8 +544,11 @@ export class ConversationLifecycleActionImpl {
       const existingTopic = operationContext.topicId
         ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
         : undefined;
-      const agentWorkingDirectory =
-        agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(getAgentStoreState());
+      const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+      const agentWorkingDirectory = agentByIdSelectors.getAgentWorkingDirectoryById(
+        agentId,
+        currentDeviceId,
+      )(getAgentStoreState());
       const workingDirectory = existingTopic?.metadata?.workingDirectory || agentWorkingDirectory;
 
       // Persist messages to DB first (same as client mode)

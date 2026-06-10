@@ -1559,7 +1559,7 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.2, upTo: 0.256 },
+            { rate: 1.2, upTo: 256_000 },
             { rate: 4.8, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1568,7 +1568,7 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 7.2, upTo: 0.256 },
+            { rate: 7.2, upTo: 256_000 },
             { rate: 28.8, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1577,7 +1577,7 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.2 * 0.2, upTo: 0.256 },
+            { rate: 1.2 * 0.2, upTo: 256_000 },
             { rate: 4.8 * 0.2, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1616,8 +1616,8 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.2, upTo: 0.128 },
-            { rate: 0.8, upTo: 0.256 },
+            { rate: 0.2, upTo: 128_000 },
+            { rate: 0.8, upTo: 256_000 },
             { rate: 1.2, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1626,8 +1626,8 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 2, upTo: 0.128 },
-            { rate: 8, upTo: 0.256 },
+            { rate: 2, upTo: 128_000 },
+            { rate: 8, upTo: 256_000 },
             { rate: 12, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1636,8 +1636,8 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.2 * 0.2, upTo: 0.128 },
-            { rate: 0.8 * 0.2, upTo: 0.256 },
+            { rate: 0.2 * 0.2, upTo: 128_000 },
+            { rate: 0.8 * 0.2, upTo: 256_000 },
             { rate: 1.2 * 0.2, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1673,8 +1673,8 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.15, upTo: 0.128 },
-            { rate: 0.6, upTo: 0.256 },
+            { rate: 0.15, upTo: 128_000 },
+            { rate: 0.6, upTo: 256_000 },
             { rate: 1.2, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1683,8 +1683,8 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.5, upTo: 0.128 },
-            { rate: 6, upTo: 0.256 },
+            { rate: 1.5, upTo: 128_000 },
+            { rate: 6, upTo: 256_000 },
             { rate: 12, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1693,8 +1693,8 @@ const qwenChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.15 * 0.2, upTo: 0.128 },
-            { rate: 0.6 * 0.2, upTo: 0.256 },
+            { rate: 0.15 * 0.2, upTo: 128_000 },
+            { rate: 0.6 * 0.2, upTo: 256_000 },
             { rate: 1.2 * 0.2, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -1748,13 +1748,46 @@ const qwenChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
+      deploymentName: 'qwen3.7-plus', // Supports context caching
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Qwen3.7 Plus is a multimodal interactive hybrid agent model, building upon the Qwen3.7 series text capabilities to unify vision and language. It excels at GUI operation, visual coding, and complex agentic workflows.',
+    displayName: 'Qwen3.7 Plus',
+    enabled: true,
+    id: 'qwen3.7-plus',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 2 * 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-06-01',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken', 'preserveThinking'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      video: true,
+      vision: true,
+    },
+    config: {
       deploymentName: 'qwen3.6-plus', // Supports context caching
     },
     contextWindowTokens: 1_000_000,
     description:
-      'Qwen 3.6-Plus introduces major upgrades in coding capabilities, with a focus on Agentic Coding and front-end development, significantly enhancing the Vibe Coding experience. Its reasoning ability across general scenarios has been further improved. In terms of multimodality, capabilities such as universal recognition, OCR, and object localization have been substantially enhanced. It also fixes known issues from the Qwen 3.5-Plus release. Usage remains the same as Qwen 3.5-Plus.',
+      'Qwen3.6 Plus supports text, image, and video input. It delivers a balanced performance across quality, speed, and cost. Its multimodal capabilities are significantly improved compared to the Qwen3 VL series.',
     displayName: 'Qwen3.6 Plus',
-    enabled: true,
     id: 'qwen3.6-plus',
     maxOutput: 65_536,
     organization: 'Qwen',
@@ -1764,32 +1797,8 @@ const qwenChatModels: AIChatModelCard[] = [
         {
           lookup: {
             prices: {
-              '[0, 0.256]': 2 * 0.1,
-              '[0.256, infinity]': 8 * 0.1,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.256]': 2 * 1.25,
-              '[0.256, infinity]': 8 * 1.25,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
               '[0, 0.256]': 2,
-              '[0.256, infinity]': 8,
+              '[0.256, 1]': 8,
             },
             pricingParams: ['textInputRange'],
           },
@@ -1801,7 +1810,7 @@ const qwenChatModels: AIChatModelCard[] = [
           lookup: {
             prices: {
               '[0, 0.256]': 12,
-              '[0.256, infinity]': 48,
+              '[0.256, 1]': 48,
             },
             pricingParams: ['textInputRange'],
           },
@@ -1809,11 +1818,23 @@ const qwenChatModels: AIChatModelCard[] = [
           strategy: 'lookup',
           unit: 'millionTokens',
         },
+        {
+          lookup: {
+            prices: {
+              '[0, 0.256]': 2 * 0.2,
+              '[0.256, 1]': 8 * 0.2,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
       ],
     },
     releasedAt: '2026-04-02',
     settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      extendParams: ['enableReasoning', 'reasoningBudgetToken', 'preserveThinking'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -2058,13 +2079,44 @@ const qwenChatModels: AIChatModelCard[] = [
       search: true,
     },
     config: {
-      deploymentName: 'qwen3.6-max-preview', // Supports context caching
+      deploymentName: 'qwen3.7-max', // Supports context caching
+    },
+    contextWindowTokens: 1_000_000,
+    description:
+      'Qwen3.7 Max is the flagship omnipotent model of the AI agent era, offering comprehensive capabilities across text, image, and video understanding. It provides superior reasoning, function calling, and agent task execution performance.',
+    displayName: 'Qwen3.7 Max',
+    enabled: true,
+    id: 'qwen3.7-max',
+    maxOutput: 65_536,
+    organization: 'Qwen',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 12 * 0.2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 36, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-05-20',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken', 'preserveThinking'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    config: {
+      deploymentName: 'qwen3.6-max-preview',
     },
     contextWindowTokens: 262_144,
     description:
       'The largest closed-source model in the Qwen3.6 series. It delivers stronger world knowledge, instruction following, and agentic coding performance for complex tasks. It is text-only, supports thinking mode by default, explicit caching, and function calling.',
     displayName: 'Qwen3.6 Max Preview',
-    enabled: true,
     id: 'qwen3.6-max-preview',
     maxOutput: 65_536,
     organization: 'Qwen',
@@ -2111,7 +2163,7 @@ const qwenChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-18',
     settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+      extendParams: ['enableReasoning', 'reasoningBudgetToken', 'preserveThinking'],
       searchImpl: 'params',
     },
     type: 'chat',

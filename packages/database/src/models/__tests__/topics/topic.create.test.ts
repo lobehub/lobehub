@@ -2,7 +2,15 @@ import { asc, eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, messagePlugins, messages, sessions, topics, users } from '../../../schemas';
+import {
+  agents,
+  messagePlugins,
+  messages,
+  sessions,
+  topics,
+  users,
+  workspaces,
+} from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import type { CreateTopicParams } from '../../topic';
 import { TopicModel } from '../../topic';
@@ -93,6 +101,50 @@ describe('TopicModel - Create', () => {
         .from(messages)
         .where(eq(messages.id, 'message3'));
       expect(unassociatedMessage[0].topicId).toBeNull();
+    });
+
+    it('should associate workspace messages created by another member', async () => {
+      const workspaceId = 'topic-create-workspace';
+      const workspaceSessionId = 'topic-create-workspace-session';
+      const workspaceTopicModel = new TopicModel(serverDB, userId, workspaceId);
+
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(workspaces).values({
+          id: workspaceId,
+          name: 'Topic Create Workspace',
+          primaryOwnerId: userId,
+          slug: workspaceId,
+        });
+        await tx.insert(sessions).values({
+          id: workspaceSessionId,
+          userId,
+          workspaceId,
+        });
+        await tx.insert(messages).values({
+          id: 'workspace-message-other-member',
+          role: 'user',
+          sessionId: workspaceSessionId,
+          userId: userId2,
+          workspaceId,
+        });
+      });
+
+      const createdTopic = await workspaceTopicModel.create(
+        {
+          messages: ['workspace-message-other-member'],
+          sessionId: workspaceSessionId,
+          title: 'Workspace Topic',
+        },
+        'workspace-topic-created',
+      );
+
+      const [updatedMessage] = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, 'workspace-message-other-member'));
+
+      expect(createdTopic.workspaceId).toBe(workspaceId);
+      expect(updatedMessage.topicId).toBe(createdTopic.id);
     });
 
     it('should create a new topic without associating messages', async () => {
@@ -230,6 +282,62 @@ describe('TopicModel - Create', () => {
       expect(updatedMessages[2].topicId).toBe(createdTopics[1].id);
     });
 
+    it('should batch associate workspace messages created by other members', async () => {
+      const workspaceId = 'topic-batch-workspace';
+      const workspaceSessionId = 'topic-batch-workspace-session';
+      const workspaceTopicModel = new TopicModel(serverDB, userId, workspaceId);
+
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(workspaces).values({
+          id: workspaceId,
+          name: 'Topic Batch Workspace',
+          primaryOwnerId: userId,
+          slug: workspaceId,
+        });
+        await tx.insert(sessions).values({
+          id: workspaceSessionId,
+          userId,
+          workspaceId,
+        });
+        await tx.insert(messages).values([
+          {
+            id: 'workspace-batch-message-1',
+            role: 'user',
+            sessionId: workspaceSessionId,
+            userId: userId2,
+            workspaceId,
+          },
+          {
+            id: 'workspace-batch-message-2',
+            role: 'assistant',
+            sessionId: workspaceSessionId,
+            userId,
+            workspaceId,
+          },
+        ]);
+      });
+
+      const createdTopics = await workspaceTopicModel.batchCreate([
+        {
+          messages: ['workspace-batch-message-1', 'workspace-batch-message-2'],
+          sessionId: workspaceSessionId,
+          title: 'Workspace Batch Topic',
+        },
+      ]);
+
+      const updatedMessages = await serverDB
+        .select()
+        .from(messages)
+        .where(inArray(messages.id, ['workspace-batch-message-1', 'workspace-batch-message-2']))
+        .orderBy(asc(messages.id));
+
+      expect(createdTopics[0].workspaceId).toBe(workspaceId);
+      expect(updatedMessages.map((message) => message.topicId)).toEqual([
+        createdTopics[0].id,
+        createdTopics[0].id,
+      ]);
+    });
+
     it('should generate topic IDs if not provided', async () => {
       const topicParams = [
         { title: 'Topic 1', favorite: true, sessionId },
@@ -307,6 +415,56 @@ describe('TopicModel - Create', () => {
       expect(duplicatedMessages[1].id).not.toBe('message2');
       expect(duplicatedMessages[1].topicId).toBe(duplicatedTopic.id);
       expect(duplicatedMessages[1].content).toBe('Assistant message');
+    });
+
+    it('should duplicate workspace messages created by other members', async () => {
+      const workspaceId = 'topic-duplicate-workspace';
+      const topicId = 'workspace-topic-duplicate';
+      const workspaceTopicModel = new TopicModel(serverDB, userId, workspaceId);
+
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(workspaces).values({
+          id: workspaceId,
+          name: 'Topic Duplicate Workspace',
+          primaryOwnerId: userId,
+          slug: workspaceId,
+        });
+        await tx.insert(topics).values({
+          id: topicId,
+          title: 'Workspace Original Topic',
+          userId: userId2,
+          workspaceId,
+        });
+        await tx.insert(messages).values([
+          {
+            content: 'Other member user message',
+            id: 'workspace-duplicate-message-1',
+            role: 'user',
+            topicId,
+            userId: userId2,
+            workspaceId,
+          },
+          {
+            content: 'Current member assistant message',
+            id: 'workspace-duplicate-message-2',
+            role: 'assistant',
+            topicId,
+            userId,
+            workspaceId,
+          },
+        ]);
+      });
+
+      const { topic: duplicatedTopic, messages: duplicatedMessages } =
+        await workspaceTopicModel.duplicate(topicId, 'Workspace Duplicated Topic');
+
+      expect(duplicatedTopic.workspaceId).toBe(workspaceId);
+      expect(duplicatedMessages).toHaveLength(2);
+      expect(duplicatedMessages.map((message) => message.content).sort()).toEqual([
+        'Current member assistant message',
+        'Other member user message',
+      ]);
+      expect(duplicatedMessages.every((message) => message.workspaceId === workspaceId)).toBe(true);
     });
 
     it('should correctly map parentId references when duplicating messages', async () => {

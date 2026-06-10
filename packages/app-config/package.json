@@ -1,0 +1,23 @@
+{
+  "name": "@lobechat/app-config",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'"
+  },
+  "dependencies": {
+    "@lobechat/database": "workspace:*",
+    "@lobechat/utils": "workspace:*",
+    "@t3-oss/env-nextjs": "^0.13.10",
+    "debug": "^4.4.3",
+    "lucide-react": "*",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "vite-tsconfig-paths": "^6.1.1"
+  }
+}

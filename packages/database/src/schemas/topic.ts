@@ -86,11 +86,11 @@ export const topics = pgTable(
     index('topics_provider_idx').on(t.provider),
     index('topics_user_id_completed_at_idx').on(t.userId, t.completedAt),
     index('topics_sender_id_idx').on(t.senderId),
+    index('topics_workspace_id_idx').on(t.workspaceId),
     index('topics_extract_status_gin_idx').using(
       'gin',
       sql`(metadata->'userMemoryExtractStatus') jsonb_path_ops`,
     ),
-    index('topics_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

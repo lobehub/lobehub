@@ -4,15 +4,24 @@ import { and, desc, eq } from 'drizzle-orm';
 import type { InstalledPluginItem, NewInstalledPlugin } from '../schemas';
 import { userInstalledPlugins } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspaceWhere } from '../utils/workspace';
 
 export class PluginModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      userInstalledPlugins,
+    );
 
   create = async (
     params: Pick<
@@ -22,7 +31,7 @@ export class PluginModel {
   ) => {
     const [result] = await this.db
       .insert(userInstalledPlugins)
-      .values({ ...params, userId: this.userId })
+      .values({ ...params, userId: this.userId, workspaceId: this.workspaceId ?? null })
       .onConflictDoUpdate({
         set: { ...params, updatedAt: new Date() },
         target: [userInstalledPlugins.identifier, userInstalledPlugins.userId],
@@ -35,13 +44,11 @@ export class PluginModel {
   delete = async (id: string) => {
     return this.db
       .delete(userInstalledPlugins)
-      .where(
-        and(eq(userInstalledPlugins.identifier, id), eq(userInstalledPlugins.userId, this.userId)),
-      );
+      .where(and(eq(userInstalledPlugins.identifier, id), this.ownership()));
   };
 
   deleteAll = async () => {
-    return this.db.delete(userInstalledPlugins).where(eq(userInstalledPlugins.userId, this.userId));
+    return this.db.delete(userInstalledPlugins).where(this.ownership());
   };
 
   query = async () => {
@@ -57,7 +64,7 @@ export class PluginModel {
         updatedAt: userInstalledPlugins.updatedAt,
       })
       .from(userInstalledPlugins)
-      .where(eq(userInstalledPlugins.userId, this.userId))
+      .where(this.ownership())
       .orderBy(desc(userInstalledPlugins.createdAt));
 
     return data.map<LobeTool>((item) => ({
@@ -68,10 +75,7 @@ export class PluginModel {
 
   findById = async (id: string) => {
     return this.db.query.userInstalledPlugins.findFirst({
-      where: and(
-        eq(userInstalledPlugins.identifier, id),
-        eq(userInstalledPlugins.userId, this.userId),
-      ),
+      where: and(eq(userInstalledPlugins.identifier, id), this.ownership()),
     });
   };
 
@@ -79,8 +83,6 @@ export class PluginModel {
     return this.db
       .update(userInstalledPlugins)
       .set({ ...value, updatedAt: new Date() })
-      .where(
-        and(eq(userInstalledPlugins.identifier, id), eq(userInstalledPlugins.userId, this.userId)),
-      );
+      .where(and(eq(userInstalledPlugins.identifier, id), this.ownership()));
   };
 }

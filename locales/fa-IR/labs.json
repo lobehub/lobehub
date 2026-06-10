@@ -13,5 +13,7 @@
   "features.imessage.title": "کانال iMessage",
   "features.inputMarkdown.desc": "نمایش زنده Markdown در ناحیه ورودی (متن پررنگ، بلوک‌های کد، جدول‌ها و غیره).",
   "features.inputMarkdown.title": "نمایش Markdown در ورودی",
+  "features.platformAgent.desc": "نمایش گزینه \"اتصال عامل\" در منوی ایجاد. عوامل متصل (مانند OpenClaw، Hermes) بر روی دستگاه‌های شما اجرا می‌شوند و از طریق lh connect ارتباط برقرار می‌کنند.",
+  "features.platformAgent.title": "اتصال عامل",
   "title": "آزمایشگاه‌ها"
 }

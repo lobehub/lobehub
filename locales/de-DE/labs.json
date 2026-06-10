@@ -13,5 +13,7 @@
   "features.imessage.title": "iMessage-Kanal",
   "features.inputMarkdown.desc": "Markdown in Echtzeit im Eingabebereich rendern (fetter Text, Codeblöcke, Tabellen usw.).",
   "features.inputMarkdown.title": "Markdown-Darstellung im Eingabefeld",
+  "features.platformAgent.desc": "Zeigt den Eintrag \"Agent verbinden\" im Erstellungsmenü an. Verbundene Agenten (z. B. OpenClaw, Hermes) laufen auf Ihren eigenen Geräten und kommunizieren über LH Connect zurück.",
+  "features.platformAgent.title": "Agent verbinden",
   "title": "Labs"
 }

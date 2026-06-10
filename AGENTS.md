@@ -19,7 +19,7 @@ lobehub/
 ├── apps/
 │   ├── desktop/            # Electron desktop app
 │   ├── cli/                # LobeHub CLI
-│   └── device-gateway/     # Device gateway service
+│   └── server/             # Server service
 ├── packages/               # Shared packages (@lobechat/*)
 │   ├── database/           # Database schemas, models, repositories
 │   ├── agent-runtime/      # Agent runtime

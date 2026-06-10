@@ -13,6 +13,7 @@ import {
   generations,
   generationTopics,
   users,
+  workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { GenerationModel } from '../generation';
@@ -37,6 +38,7 @@ vi.mock('../file', () => ({
 
 const userId = 'generation-test-user-id';
 const otherUserId = 'other-user-id';
+const workspaceId = 'generation-workspace';
 const generationModel = new GenerationModel(serverDB, userId);
 
 // Test data
@@ -101,6 +103,12 @@ beforeEach(async () => {
   // Clear database and create test users
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
+  await serverDB.insert(workspaces).values({
+    id: workspaceId,
+    name: 'Generation Workspace',
+    primaryOwnerId: userId,
+    slug: workspaceId,
+  });
 
   // Create test topic
   await serverDB.insert(generationTopics).values(testTopic);
@@ -955,6 +963,37 @@ describe('GenerationModel', () => {
         '00000000-0000-0000-0000-000000000000',
       );
       expect(result).toBeUndefined();
+    });
+
+    it('should not return workspace generation from personal scope', async () => {
+      const workspaceAsyncTaskId = '550e8400-e29b-41d4-a716-446655440111';
+      await serverDB.insert(generationTopics).values({
+        ...testTopic,
+        id: 'workspace-topic-id',
+        workspaceId,
+      });
+      await serverDB.insert(generationBatches).values({
+        ...testBatch,
+        id: 'workspace-batch-id',
+        generationTopicId: 'workspace-topic-id',
+        workspaceId,
+      });
+      await serverDB.insert(asyncTasks).values({
+        ...testAsyncTask,
+        id: workspaceAsyncTaskId,
+        workspaceId,
+      });
+      await serverDB.insert(generations).values({
+        ...testGeneration,
+        asyncTaskId: workspaceAsyncTaskId,
+        generationBatchId: 'workspace-batch-id',
+        userId,
+        workspaceId,
+      });
+
+      await expect(
+        generationModel.findByAsyncTaskId(workspaceAsyncTaskId),
+      ).resolves.toBeUndefined();
     });
   });
 });

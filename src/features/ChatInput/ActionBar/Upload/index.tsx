@@ -125,6 +125,7 @@ const FileUpload = memo(() => {
               message.error(
                 t('upload.validation.videoSizeExceeded', {
                   actualSize: validation.actualSize,
+                  maxSize: validation.maxSize,
                 }),
               );
               return false;
@@ -163,6 +164,7 @@ const FileUpload = memo(() => {
               message.error(
                 t('upload.validation.videoSizeExceeded', {
                   actualSize: validation.actualSize,
+                  maxSize: validation.maxSize,
                 }),
               );
               return false;

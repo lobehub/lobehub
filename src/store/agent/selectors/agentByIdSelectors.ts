@@ -8,6 +8,7 @@ import {
   type RuntimeEnvConfig,
 } from '@lobechat/types';
 
+import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 
 import { type AgentStoreState } from '../initialState';
@@ -60,7 +61,8 @@ const isAgentConfigLoadingById = (agentId: string) => (s: AgentStoreState) =>
 const getAgentModeById =
   (agentId: string) =>
   (s: AgentStoreState): AgentMode | undefined => {
-    const chatConfig = agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig;
+    const config = agentSelectors.getAgentConfigById(agentId)(s);
+    const chatConfig = config?.chatConfig;
     return chatConfig?.enableAgentMode === false ? undefined : 'auto';
   };
 
@@ -71,7 +73,8 @@ const getAgentModeById =
 const getAgentEnableModeById =
   (agentId: string) =>
   (s: AgentStoreState): boolean => {
-    const chatConfig = agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig;
+    const config = agentSelectors.getAgentConfigById(agentId)(s);
+    const chatConfig = config?.chatConfig;
     return chatConfig?.enableAgentMode !== false;
   };
 
@@ -85,15 +88,35 @@ const getAgentRuntimeEnvConfigById =
     agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig?.runtimeEnv;
 
 /**
- * Get working directory by agentId
+ * Get the agent-level working directory by agentId.
+ *
+ * Precedence (the agent-owned slice only — topic overrides and device defaults
+ * are layered on by callers):
+ *
+ *   agent's per-device choice (`agencyConfig.workingDirByDevice[targetDeviceId]`)
+ *     > legacy per-agent localStorage value (pre-migration fallback)
+ *     > desktop path > home path
+ *
+ * `currentDeviceId` is passed in (not read cross-store) so hook callers stay
+ * reactive to device changes. The target device is resolved from it via
+ * `resolveTargetDeviceId`, so a device-bound agent reads its bound device's
+ * choice rather than the local machine's.
  */
 const getAgentWorkingDirectoryById =
-  (agentId: string) =>
+  (agentId: string, currentDeviceId?: string) =>
   (s: AgentStoreState): string | undefined => {
     if (!isDesktop) return;
 
     const ctx = globalAgentContextManager.getContext();
-    return s.localAgentWorkingDirectoryMap[agentId] ?? ctx.desktopPath ?? ctx.homePath;
+    const agencyConfig = agentSelectors.getAgentConfigById(agentId)(s)?.agencyConfig;
+    const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
+    const agentChoice = targetDeviceId
+      ? agencyConfig?.workingDirByDevice?.[targetDeviceId]
+      : undefined;
+
+    return (
+      agentChoice ?? s.localAgentWorkingDirectoryMap[agentId] ?? ctx.desktopPath ?? ctx.homePath
+    );
   };
 
 /**

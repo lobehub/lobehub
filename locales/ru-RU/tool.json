@@ -40,6 +40,7 @@
   "agentMarketplace.render.alreadyInLibraryTag": "Уже в библиотеке",
   "agentMarketplace.render.alreadyInLibrary_one": "{{count}} уже в библиотеке",
   "agentMarketplace.render.alreadyInLibrary_other": "{{count}} уже в библиотеке",
+  "claudeCode.askUserQuestion.customOption.placeholder": "Или напишите свой вариант…",
   "claudeCode.askUserQuestion.escape.back": "Вернуться к вариантам",
   "claudeCode.askUserQuestion.escape.enter": "Или введите напрямую",
   "claudeCode.askUserQuestion.escape.placeholder": "Введите ваш ответ здесь…",

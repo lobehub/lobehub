@@ -158,8 +158,8 @@ describe('MessageModel Statistics Tests', () => {
       // @ts-ignore - accessing private method for testing
       const id2 = model.genId();
 
-      expect(id1).toHaveLength(18);
-      expect(id2).toHaveLength(18);
+      expect(id1).toHaveLength(22);
+      expect(id2).toHaveLength(22);
       expect(id1).not.toBe(id2);
       expect(id1).toMatch(/^msg_/);
       expect(id2).toMatch(/^msg_/);

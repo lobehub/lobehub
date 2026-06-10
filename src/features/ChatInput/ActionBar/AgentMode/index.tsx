@@ -12,6 +12,7 @@ import {
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useBusinessAgentModeSync } from '@/business/client/hooks/useBusinessAgentMode';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useToggleAgentMode } from '@/features/ChatInput/hooks/useToggleAgentMode';
 import { useAgentStore } from '@/store/agent';
@@ -108,6 +109,7 @@ const AgentMode = memo(() => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const toggleAgentMode = useToggleAgentMode();
+  useBusinessAgentModeSync(agentId);
   const [open, setOpen] = useState(false);
 
   const enableAgentMode = useAgentStore(agentByIdSelectors.getAgentEnableModeById(agentId));

@@ -13,6 +13,7 @@
   "actions.expand.on": "Uitvouwen",
   "actions.typobar.off": "Opmaakwerkbalk verbergen",
   "actions.typobar.on": "Opmaakwerkbalk tonen",
+  "actions.typobar.title": "Opmaaktool",
   "autoSave.latest": "Laatste versie geladen",
   "autoSave.saved": "Opgeslagen",
   "autoSave.saving": "Automatisch opslaan...",

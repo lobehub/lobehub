@@ -20,7 +20,6 @@ import type React from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AddSkillButton from '@/features/SkillStore/SkillList/AddSkillButton';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
@@ -333,7 +332,6 @@ const SkillList = memo<SkillListProps>(
       return (
         <Center className={styles.container} paddingBlock={48}>
           <Empty description={t('tab.skillDesc')} icon={SkillsIcon} title={t('tab.skillEmpty')} />
-          <AddSkillButton />
         </Center>
       );
     }
@@ -561,9 +559,6 @@ const SkillList = memo<SkillListProps>(
             renderUserAgentSkills(),
           )}
 
-        <div style={{ marginTop: 8 }}>
-          <AddSkillButton />
-        </div>
       </div>
     );
   },

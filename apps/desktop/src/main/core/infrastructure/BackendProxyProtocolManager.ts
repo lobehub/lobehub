@@ -32,22 +32,30 @@ export class BackendProxyProtocolManager {
   private readonly logger = createLogger('core:BackendProxyProtocolManager');
 
   private authRequiredDebounceTimer: NodeJS.Timeout | null = null;
+  private pendingAuthRequiredReason: string | null = null;
   private static readonly AUTH_REQUIRED_DEBOUNCE_MS = 1000;
 
-  private notifyAuthorizationRequired() {
+  private notifyAuthorizationRequired(reason: string) {
     // Trailing-edge debounce: coalesce rapid 401 bursts and fire AFTER the burst settles.
     // This ensures the IPC event is sent after the renderer has had time to mount listeners.
+    // The most recent reason wins — within a burst they almost always describe the same cause.
+    this.pendingAuthRequiredReason = reason;
+
     if (this.authRequiredDebounceTimer) {
       clearTimeout(this.authRequiredDebounceTimer);
     }
 
     this.authRequiredDebounceTimer = setTimeout(() => {
       this.authRequiredDebounceTimer = null;
+      const finalReason = this.pendingAuthRequiredReason ?? reason;
+      this.pendingAuthRequiredReason = null;
+
+      this.logger.info(`Broadcasting authorizationRequired (reason=${finalReason})`);
 
       const allWindows = BrowserWindow.getAllWindows();
       for (const win of allWindows) {
         if (!win.isDestroyed()) {
-          win.webContents.send('authorizationRequired');
+          win.webContents.send('authorizationRequired', { reason: finalReason });
         }
       }
     }, BackendProxyProtocolManager.AUTH_REQUIRED_DEBOUNCE_MS);
@@ -196,7 +204,32 @@ export class BackendProxyProtocolManager {
     // Other failures keep 401 without this header (e.g., invalid API keys) and must not notify here.
     const authRequired = upstreamResponse.headers.get(AUTH_REQUIRED_HEADER) === 'true';
     if (authRequired) {
-      this.notifyAuthorizationRequired();
+      const pathTag = (() => {
+        try {
+          return new URL(rewrittenUrl).pathname;
+        } catch {
+          return rewrittenUrl;
+        }
+      })();
+      const sourceTag = context.source ? `${context.source}:` : '';
+      const wwwAuth = upstreamResponse.headers.get('www-authenticate') ?? '';
+      // Clone before forwarding the body downstream — the original stream stays
+      // intact for the renderer. Body snippet is truncated to keep logs small
+      // and to avoid leaking large payloads if the server ever returns one.
+      let bodySnippet: string;
+      try {
+        bodySnippet = (await upstreamResponse.clone().text()).slice(0, 300).replaceAll(/\s+/g, ' ');
+      } catch (error) {
+        bodySnippet = `<body-read-failed:${error instanceof Error ? error.message : 'unknown'}>`;
+      }
+      const parts = [
+        `proxy:${sourceTag}status=${upstreamResponse.status}`,
+        `${request.method} ${pathTag}`,
+        `hadToken=${Boolean(token)}`,
+      ];
+      if (wwwAuth) parts.push(`wwwAuth=${wwwAuth}`);
+      if (bodySnippet) parts.push(`body=${bodySnippet}`);
+      this.notifyAuthorizationRequired(parts.join(' '));
     }
 
     return new Response(upstreamResponse.body, {

@@ -73,6 +73,11 @@ export interface ExecAgentAppContext {
     repos?: string[];
     workingDirectory?: string;
   };
+  /**
+   * Whether this operation is an isolated sub-agent execution. Used to disable
+   * recursive sub-agent dispatch.
+   */
+  isSubAgent?: boolean;
   /** Scope identifier */
   scope?: string | null;
   /** Session ID */
@@ -248,13 +253,13 @@ export interface ExecGroupAgentResponse {
 // ============ SubAgent Task Execution Types ============
 
 /**
- * Parameters for execSubAgentTask - execute SubAgent task
+ * Parameters for execSubAgent - execute SubAgent task
  * Supports both Group mode and Single Agent mode
  *
  * - Group mode: pass groupId, Thread will be associated with the Group
  * - Single Agent mode: omit groupId, Thread will only be associated with the Agent
  */
-export interface ExecSubAgentTaskParams {
+export interface ExecSubAgentParams {
   /** The SubAgent ID to execute the task */
   agentId: string;
   /** The Group ID (optional, only for Group mode) */
@@ -282,9 +287,9 @@ export interface ExecSubAgentTaskParams {
 }
 
 /**
- * Result from execSubAgentTask
+ * Result from execSubAgent
  */
-export interface ExecSubAgentTaskResult {
+export interface ExecSubAgentResult {
   /** The assistant message ID created for this task */
   assistantMessageId: string;
   /** Error message if task failed to start */
@@ -298,14 +303,14 @@ export interface ExecSubAgentTaskResult {
 }
 
 /**
- * @deprecated Use ExecSubAgentTaskParams instead
+ * @deprecated Use ExecSubAgentParams instead
  */
-export type ExecGroupSubAgentTaskParams = ExecSubAgentTaskParams;
+export type ExecGroupSubAgentTaskParams = ExecSubAgentParams;
 
 /**
- * @deprecated Use ExecSubAgentTaskResult instead
+ * @deprecated Use ExecSubAgentResult instead
  */
-export type ExecGroupSubAgentTaskResult = ExecSubAgentTaskResult;
+export type ExecGroupSubAgentTaskResult = ExecSubAgentResult;
 
 /**
  * Current activity for real-time progress display

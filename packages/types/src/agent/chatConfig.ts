@@ -113,6 +113,12 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * Effort level for Claude Opus 4.7 and later (adds xhigh tier between high and max)
    */
   opus47Effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+  /**
+   * Whether to preserve and pass historical thinking content to the model
+   * (provider support required, e.g. Qwen preserve_thinking)
+   */
+  preserveThinking?: boolean;
   reasoningBudgetToken?: number;
   /**
    * Reasoning budget token for models with 32k max (GLM-5/GLM-4.7)
@@ -238,6 +244,7 @@ export const AgentChatConfigSchema = z
     imageResolution2: z.enum(['512', '1K', '2K', '4K']).optional(),
     opus47Effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
     runtimeEnv: RuntimeEnvConfigSchema.optional(),
+    preserveThinking: z.boolean().optional(),
     reasoningBudgetToken: z.number().optional(),
     reasoningBudgetToken32k: z.number().optional(),
     reasoningBudgetToken80k: z.number().optional(),

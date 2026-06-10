@@ -2,7 +2,7 @@
 
 ## Fluent Registration API
 
-Use the middleware helpers in `src/server/services/agentSignal/runtime/middleware.ts`.
+Use the middleware helpers in `apps/server/src/services/agentSignal/runtime/middleware.ts`.
 
 They provide:
 
@@ -32,7 +32,7 @@ The context gives you:
 
 Read:
 
-- `src/server/services/agentSignal/runtime/context.ts`
+- `apps/server/src/services/agentSignal/runtime/context.ts`
 
 ## Return Contracts
 
@@ -48,7 +48,7 @@ Return one of these shapes:
 Read:
 
 - `packages/agent-signal/src/base/types.ts`
-- `src/server/services/agentSignal/runtime/AgentSignalScheduler.ts`
+- `apps/server/src/services/agentSignal/runtime/AgentSignalScheduler.ts`
 
 ## Policy Composition Pattern
 
@@ -72,8 +72,8 @@ That bundle is later passed into the runtime via:
 
 Read:
 
-- `src/server/services/agentSignal/policies/index.ts`
-- `src/server/services/agentSignal/policies/analyzeIntent/index.ts`
+- `apps/server/src/services/agentSignal/policies/index.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/index.ts`
 
 ## Source Handler Pattern
 
@@ -81,7 +81,7 @@ Use a source handler when you are interpreting a producer event into semantic si
 
 Reference:
 
-- `src/server/services/agentSignal/policies/analyzeIntent/feedbackSatisfaction.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/feedbackSatisfaction.ts`
 
 Pattern:
 
@@ -114,8 +114,8 @@ Use a signal handler when one semantic state should branch into more semantic st
 
 References:
 
-- `src/server/services/agentSignal/policies/analyzeIntent/feedbackDomain.ts`
-- `src/server/services/agentSignal/policies/analyzeIntent/feedbackAction.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/feedbackDomain.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/feedbackAction.ts`
 
 Pattern:
 
@@ -148,7 +148,7 @@ Use an action handler when the runtime should do actual work.
 
 Reference:
 
-- `src/server/services/agentSignal/policies/analyzeIntent/actions/userMemory.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/actions/userMemory.ts`
 
 Pattern:
 
@@ -186,9 +186,9 @@ Keep these rules:
 Use this split:
 
 - external event payloads:
-  `src/server/services/agentSignal/sourceTypes.ts`
+  `apps/server/src/services/agentSignal/sourceTypes.ts`
 - policy-owned signal and action payloads:
-  `src/server/services/agentSignal/policies/types.ts`
+  `apps/server/src/services/agentSignal/policies/types.ts`
 - normalized shared node contracts:
   `packages/agent-signal/src/base/types.ts`
 
@@ -216,10 +216,10 @@ Prefer focused tests near the touched code.
 
 Useful references:
 
-- `src/server/services/agentSignal/runtime/__tests__/AgentSignalRuntime.test.ts`
-- `src/server/services/agentSignal/__tests__/index.integration.test.ts`
-- `src/server/services/agentSignal/policies/analyzeIntent/__tests__/*`
-- `src/server/services/agentSignal/policies/analyzeIntent/actions/__tests__/*`
+- `apps/server/src/services/agentSignal/runtime/__tests__/AgentSignalRuntime.test.ts`
+- `apps/server/src/services/agentSignal/__tests__/index.integration.test.ts`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/__tests__/*`
+- `apps/server/src/services/agentSignal/policies/analyzeIntent/actions/__tests__/*`
 
 Test at the smallest level that proves the behavior:
 

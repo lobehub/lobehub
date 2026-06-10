@@ -107,6 +107,8 @@ export const createAuthI18n = (lang?: string) => {
         interpolation: { escapeValue: false },
         keySeparator: false,
         lng: lang,
+        // Silence the Locize promotional console.info printed on init (i18next >= 25)
+        showSupportNotice: false,
       });
     },
     instance,

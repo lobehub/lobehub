@@ -66,9 +66,11 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
             `memory:user-memory:extract:users:${userId}:topics:${topicId}:cancel-check:before`,
             () =>
               getServerDB().then((db) =>
-                new AsyncTaskModel(db, userId).isUserMemoryExtractionCancellationRequested(
-                  payload.asyncTaskId!,
-                ),
+                new AsyncTaskModel(
+                  db,
+                  userId,
+                  payload.workspaceId,
+                ).isUserMemoryExtractionCancellationRequested(payload.asyncTaskId!),
               ),
           );
           if (cancelled) {
@@ -98,6 +100,7 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
                 topicId,
                 userId,
                 userInitiated: payload.userInitiated,
+                workspaceId: payload.workspaceId,
               }),
           );
         }
@@ -109,9 +112,11 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
               `memory:user-memory:extract:users:${userId}:topics:${topicId}:cancel-check:identity`,
               () =>
                 getServerDB().then((db) =>
-                  new AsyncTaskModel(db, userId).isUserMemoryExtractionCancellationRequested(
-                    payload.asyncTaskId!,
-                  ),
+                  new AsyncTaskModel(
+                    db,
+                    userId,
+                    payload.workspaceId,
+                  ).isUserMemoryExtractionCancellationRequested(payload.asyncTaskId!),
                 ),
             );
             if (cancelled) {
@@ -142,6 +147,7 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
                 topicId,
                 userId,
                 userInitiated: payload.userInitiated,
+                workspaceId: payload.workspaceId,
               }),
           );
         }
@@ -151,9 +157,11 @@ const processTopicRoute = async (context: WorkflowContext<MemoryExtractionPayloa
             `memory:user-memory:extract:users:${userId}:topics:${topicId}:progress`,
             () =>
               getServerDB().then((db) =>
-                new AsyncTaskModel(db, userId).incrementUserMemoryExtractionProgress(
-                  payload.asyncTaskId!,
-                ),
+                new AsyncTaskModel(
+                  db,
+                  userId,
+                  payload.workspaceId,
+                ).incrementUserMemoryExtractionProgress(payload.asyncTaskId!),
               ),
           );
         }
@@ -199,7 +207,7 @@ export const processTopicWorkflow = createWorkflow<MemoryExtractionPayloadInput,
         }
 
         const db = await getServerDB();
-        const asyncTaskModel = new AsyncTaskModel(db, userId);
+        const asyncTaskModel = new AsyncTaskModel(db, userId, payload.workspaceId);
 
         // NOTICE: Progress here means "topic processed", not "topic succeeded".
         // The async task model now guards against flipping errored tasks back to success,

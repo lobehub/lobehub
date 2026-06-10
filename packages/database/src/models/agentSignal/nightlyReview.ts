@@ -192,16 +192,27 @@ export class AgentSignalNightlyReviewModel {
         topicCount: countDistinct(messages.topicId),
       })
       .from(messages)
-      .leftJoin(topics, and(eq(topics.id, messages.topicId), eq(topics.userId, userId)))
-      .innerJoin(agents, and(eq(agents.id, effectiveAgentId), eq(agents.userId, userId)))
+      .leftJoin(
+        topics,
+        and(eq(topics.id, messages.topicId), eq(topics.userId, userId), isNull(topics.workspaceId)),
+      )
+      .innerJoin(
+        agents,
+        and(eq(agents.id, effectiveAgentId), eq(agents.userId, userId), isNull(agents.workspaceId)),
+      )
       .leftJoin(userSettings, eq(userSettings.id, userId))
       .leftJoin(
         messagePlugins,
-        and(eq(messagePlugins.id, messages.id), eq(messagePlugins.userId, userId)),
+        and(
+          eq(messagePlugins.id, messages.id),
+          eq(messagePlugins.userId, userId),
+          isNull(messagePlugins.workspaceId),
+        ),
       )
       .where(
         and(
           eq(messages.userId, userId),
+          isNull(messages.workspaceId),
           agentFilter,
           gte(messages.createdAt, options.windowStart),
           lte(messages.createdAt, options.windowEnd),

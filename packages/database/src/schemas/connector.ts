@@ -292,6 +292,8 @@ export const userConnectorTools = pgTable(
 export type NewUserConnectorTool = typeof userConnectorTools.$inferInsert;
 export type UserConnectorToolItem = typeof userConnectorTools.$inferSelect;
 
+// Deprecated legacy plugin install table. Keep workspaceId only for old rows;
+// workspace audits should ignore this table instead of expanding constraints.
 export const userInstalledPlugins = pgTable(
   'user_installed_plugins',
   {

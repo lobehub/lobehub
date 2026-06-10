@@ -9,7 +9,7 @@ import DotsLoading from '@/components/DotsLoading';
 import RingLoadingIcon from '@/components/RingLoading';
 import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { isDesktop } from '@/const/version';
-import DirIcon from '@/features/ChatInput/RuntimeConfig/DirIcon';
+import DirIcon from '@/features/ChatInput/ControlBar/DirIcon';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { useAgentStore } from '@/store/agent';

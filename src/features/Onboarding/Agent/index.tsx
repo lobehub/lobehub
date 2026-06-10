@@ -34,6 +34,7 @@ import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useUserStore } from '@/store/user';
 import { isDev } from '@/utils/env';
+import { peekOnboardingCallbackUrl } from '@/utils/onboardingRedirect';
 
 import AnalyticsBridge from './AnalyticsBridge';
 import { resolveAgentOnboardingContext } from './context';
@@ -261,7 +262,9 @@ const AgentOnboardingPage = memo(() => {
         flow: 'agent',
         hasTopic: !!topicId,
         targetUrl:
-          inboxAgentId && topicId ? SESSION_CHAT_TOPIC_URL(inboxAgentId, topicId) : undefined,
+          // A threaded signup target (if any) wins over the onboarding topic on finish
+          peekOnboardingCallbackUrl() ??
+          (inboxAgentId && topicId ? SESSION_CHAT_TOPIC_URL(inboxAgentId, topicId) : undefined),
       });
     },
     [inboxAgentId],

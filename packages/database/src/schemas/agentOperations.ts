@@ -161,6 +161,7 @@ export const agentOperations = pgTable(
   },
   (t) => [
     index('agent_operations_user_id_idx').on(t.userId),
+    index('agent_operations_workspace_id_idx').on(t.workspaceId),
     index('agent_operations_agent_id_idx').on(t.agentId),
     index('agent_operations_topic_id_idx').on(t.topicId),
     index('agent_operations_thread_id_idx').on(t.threadId),
@@ -170,7 +171,6 @@ export const agentOperations = pgTable(
     index('agent_operations_status_idx').on(t.status),
     index('agent_operations_user_id_created_at_idx').on(t.userId, t.createdAt),
     index('agent_operations_metadata_idx').using('gin', t.metadata),
-    index('agent_operations_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

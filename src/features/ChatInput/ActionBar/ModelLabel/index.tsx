@@ -3,6 +3,7 @@ import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 
+import { useBusinessModelModeConfig } from '@/business/client/hooks/useBusinessAgentMode';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -44,15 +45,16 @@ const ModelLabel = memo(() => {
     agentByIdSelectors.getAgentModelProviderById(agentId)(s),
     s.updateAgentConfigById,
   ]);
+  const applyBusinessModelModeConfig = useBusinessModelModeConfig();
 
   const enabledModel = useAiInfraStore(aiModelSelectors.getEnabledModelById(model, provider));
   const displayName = enabledModel?.displayName || model;
 
   const handleModelChange = useCallback(
     async (params: { model: string; provider: string }) => {
-      await updateAgentConfigById(agentId, params);
+      await updateAgentConfigById(agentId, applyBusinessModelModeConfig(params));
     },
-    [agentId, updateAgentConfigById],
+    [agentId, applyBusinessModelModeConfig, updateAgentConfigById],
   );
 
   return (

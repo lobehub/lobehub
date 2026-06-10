@@ -53,6 +53,11 @@ export interface ChatInputProps {
    */
   children?: ReactNode;
   /**
+   * Custom node to render in place of the default ControlBar
+   * (Local/Cloud/Approval). When provided, replaces the default bar.
+   */
+  controlBarSlot?: ReactNode;
+  /**
    * Suppress the followUp placeholder variant (e.g. onboarding has no
    * follow-up design). When true, placeholder stays in default variant.
    */
@@ -97,11 +102,6 @@ export interface ChatInputProps {
    */
   rightActions?: ActionKeys[];
   /**
-   * Custom node to render in place of the default RuntimeConfig bar
-   * (Local/Cloud/Approval). When provided, replaces the default bar.
-   */
-  runtimeConfigSlot?: ReactNode;
-  /**
    * Custom content to render before the SendArea (right side of action bar)
    */
   sendAreaPrefix?: ReactNode;
@@ -114,9 +114,9 @@ export interface ChatInputProps {
    */
   sendMenu?: MenuProps;
   /**
-   * Whether to show the runtime config bar (Local/Cloud/Auto Approve)
+   * Whether to show the control bar (Local/Cloud/Auto Approve)
    */
-  showRuntimeConfig?: boolean;
+  showControlBar?: boolean;
   /**
    * Remove a small margin when placed adjacent to the ChatList
    */
@@ -143,11 +143,11 @@ const ChatInput = memo<ChatInputProps>(
     extraActionItems,
     isConfigLoading = false,
     mentionItems,
-    runtimeConfigSlot,
+    controlBarSlot,
     sendMenu,
     sendAreaPrefix,
     sendButtonProps: customSendButtonProps,
-    showRuntimeConfig = true,
+    showControlBar = true,
     onEditorReady,
     skipScrollMarginWithList,
   }) => {
@@ -321,14 +321,14 @@ const ChatInput = memo<ChatInputProps>(
           <DesktopChatInput
             actionBarStyle={actionBarStyle}
             borderRadius={12}
+            controlBarSlot={controlBarSlot}
             extraActionItems={extraActionItems}
             hidden={hasPendingInterventions}
             isConfigLoading={isConfigLoading}
             leftContent={leftContent}
             placeholderVariant={placeholderVariant}
-            runtimeConfigSlot={runtimeConfigSlot}
             sendAreaPrefix={businessSendAreaPrefix}
-            showRuntimeConfig={showRuntimeConfig}
+            showControlBar={showControlBar}
           />
         </div>
       </WideScreenContainer>

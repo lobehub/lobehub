@@ -40,6 +40,7 @@
   "agentMarketplace.render.alreadyInLibraryTag": "Al in bibliotheek",
   "agentMarketplace.render.alreadyInLibrary_one": "{{count}} al in bibliotheek",
   "agentMarketplace.render.alreadyInLibrary_other": "{{count}} al in bibliotheek",
+  "claudeCode.askUserQuestion.customOption.placeholder": "Of schrijf je eigen…",
   "claudeCode.askUserQuestion.escape.back": "Terug naar opties",
   "claudeCode.askUserQuestion.escape.enter": "Of typ direct",
   "claudeCode.askUserQuestion.escape.placeholder": "Typ hier uw antwoord…",

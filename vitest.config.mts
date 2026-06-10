@@ -36,6 +36,10 @@ const alias = {
   '@/utils/electron': resolve(__dirname, './src/utils/electron'),
   '@/utils/markdownToTxt': resolve(__dirname, './src/utils/markdownToTxt'),
   '@/utils/sanitizeFileName': resolve(__dirname, './src/utils/sanitizeFileName'),
+  // Workspace store lives in the cloud repo; submodule-only tests get a stub
+  // that reports no active workspace so workspace-aware nav helpers behave
+  // like plain react-router.
+  '@/store/workspace': resolve(__dirname, './tests/mocks/storeWorkspace.ts'),
   '~test-utils': resolve(__dirname, './tests/utils.tsx'),
   'lru_map': resolve(__dirname, './tests/mocks/lru_map'),
 };

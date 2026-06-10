@@ -17,6 +17,7 @@ import type {
 } from '../schemas/generation';
 import { generationBatches } from '../schemas/generation';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 import { GenerationModel } from './generation';
 
 const log = debug('lobe-image:generation-batch-model');
@@ -24,15 +25,20 @@ const log = debug('lobe-image:generation-batch-model');
 export class GenerationBatchModel {
   private db: LobeChatDatabase;
   private userId: string;
+  private workspaceId?: string;
   private fileService: FileService;
   private generationModel: GenerationModel;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
     this.fileService = new FileService(db, userId);
-    this.generationModel = new GenerationModel(db, userId);
+    this.generationModel = new GenerationModel(db, userId, workspaceId);
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, generationBatches);
 
   async create(value: NewGenerationBatch): Promise<GenerationBatchItem> {
     log('Creating generation batch: %O', {
@@ -42,7 +48,9 @@ export class GenerationBatchModel {
 
     const [result] = await this.db
       .insert(generationBatches)
-      .values({ ...value, userId: this.userId })
+      .values(
+        buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, { ...value }),
+      )
       .returning();
 
     log('Generation batch created successfully: %s', result.id);
@@ -53,7 +61,7 @@ export class GenerationBatchModel {
     log('Finding generation batch by ID: %s for user: %s', id, this.userId);
 
     const result = await this.db.query.generationBatches.findFirst({
-      where: and(eq(generationBatches.id, id), eq(generationBatches.userId, this.userId)),
+      where: and(eq(generationBatches.id, id), this.ownership()),
     });
 
     log('Generation batch %s: %s', id, result ? 'found' : 'not found');
@@ -65,10 +73,7 @@ export class GenerationBatchModel {
 
     const results = await this.db.query.generationBatches.findMany({
       orderBy: (table, { desc }) => [desc(table.createdAt)],
-      where: and(
-        eq(generationBatches.generationTopicId, topicId),
-        eq(generationBatches.userId, this.userId),
-      ),
+      where: and(eq(generationBatches.generationTopicId, topicId), this.ownership()),
     });
 
     log('Found %d generation batches for topic %s', results.length, topicId);
@@ -87,10 +92,7 @@ export class GenerationBatchModel {
 
     const results = await this.db.query.generationBatches.findMany({
       orderBy: (table, { asc }) => [asc(table.createdAt)],
-      where: and(
-        eq(generationBatches.generationTopicId, topicId),
-        eq(generationBatches.userId, this.userId),
-      ),
+      where: and(eq(generationBatches.generationTopicId, topicId), this.ownership()),
       with: {
         generations: {
           orderBy: (table, { asc }) => [asc(table.createdAt), asc(table.id)],
@@ -184,7 +186,7 @@ export class GenerationBatchModel {
 
     // 1. First, get generations with their assets to collect file URLs for cleanup
     const batchWithGenerations = await this.db.query.generationBatches.findFirst({
-      where: and(eq(generationBatches.id, id), eq(generationBatches.userId, this.userId)),
+      where: and(eq(generationBatches.id, id), this.ownership()),
       with: {
         generations: {
           columns: {
@@ -215,7 +217,7 @@ export class GenerationBatchModel {
     // 3. Delete the batch record (this will cascade delete all associated generations)
     const [deletedBatch] = await this.db
       .delete(generationBatches)
-      .where(and(eq(generationBatches.id, id), eq(generationBatches.userId, this.userId)))
+      .where(and(eq(generationBatches.id, id), this.ownership()))
       .returning();
 
     log(

@@ -4,6 +4,7 @@ import { unionAll } from 'drizzle-orm/pg-core';
 
 import { agents, DOCUMENT_FOLDER_TYPE, documents, tasks, topics } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspaceWhere } from '../utils/workspace';
 
 export interface RecentDbItem {
   id: string;
@@ -30,14 +31,24 @@ const TASK_FINAL_STATUSES = ['completed', 'canceled'];
 
 export class RecentModel {
   private userId: string;
+  private workspaceId?: string;
   private db: LobeChatDatabase;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
 
   queryRecent = async (limit: number = 10): Promise<RecentDbItem[]> => {
+    const scope = { userId: this.userId, workspaceId: this.workspaceId };
+
+    // `tasks` uses `createdByUserId` instead of `userId`, so apply the
+    // workspace-aware predicate inline.
+    const taskScopeWhere = this.workspaceId
+      ? eq(tasks.workspaceId, this.workspaceId)
+      : and(eq(tasks.createdByUserId, this.userId), isNull(tasks.workspaceId));
+
     const topicArm = this.db
       .select({
         id: topics.id,
@@ -53,7 +64,7 @@ export class RecentModel {
       .leftJoin(agents, eq(topics.agentId, agents.id))
       .where(
         and(
-          eq(topics.userId, this.userId),
+          buildWorkspaceWhere(scope, topics),
           or(
             isNotNull(topics.groupId),
             eq(agents.slug, 'inbox'),
@@ -80,7 +91,7 @@ export class RecentModel {
       .from(documents)
       .where(
         and(
-          eq(documents.userId, this.userId),
+          buildWorkspaceWhere(scope, documents),
           not(inArray(documents.sourceType, TOOL_DOCUMENT_SOURCE_TYPES)),
           isNull(documents.knowledgeBaseId),
           ne(documents.fileType, DOCUMENT_FOLDER_TYPE),
@@ -101,12 +112,7 @@ export class RecentModel {
         updatedAt: tasks.updatedAt,
       })
       .from(tasks)
-      .where(
-        and(
-          eq(tasks.createdByUserId, this.userId),
-          not(inArray(tasks.status, TASK_FINAL_STATUSES)),
-        ),
-      );
+      .where(and(taskScopeWhere, not(inArray(tasks.status, TASK_FINAL_STATUSES))));
 
     const rows = await unionAll(topicArm, documentArm, taskArm)
       .orderBy(desc(sql`updated_at`))

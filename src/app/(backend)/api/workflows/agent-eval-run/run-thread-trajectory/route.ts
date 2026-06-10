@@ -8,6 +8,7 @@ import {
   AgentEvalRunWorkflow,
   type RunThreadTrajectoryPayload,
 } from '@/server/workflows/agentEvalRun';
+import { resolveAgentEvalRunWorkspace } from '@/server/workflows/agentEvalRun/utils';
 
 const log = debug('lobe-server:workflows:run-thread-trajectory');
 
@@ -26,7 +27,8 @@ export const { POST } = serve<RunThreadTrajectoryPayload>(
     }
 
     const db = await getServerDB();
-    const service = new AgentEvalRunService(db, userId);
+    const wsId = await resolveAgentEvalRunWorkspace(db, runId);
+    const service = new AgentEvalRunService(db, userId, wsId);
 
     // Step 1: Load run + testCase data
     const data = await context.run('thread-trajectory:load-data', () =>
