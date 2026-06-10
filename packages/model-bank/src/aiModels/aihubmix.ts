@@ -15,6 +15,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     displayName: 'GPT-5.5',
     enabled: true,
     id: 'gpt-5.5',
+    knowledgeCutoff: '2025-12',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -138,6 +139,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     displayName: 'GPT-5.4 mini',
     enabled: true,
     id: 'gpt-5.4-mini',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -166,6 +168,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'GPT-5.4 nano is our lowest-cost GPT-5.4-class model for high-throughput tasks where speed and cost matter most.',
     displayName: 'GPT-5.4 nano',
     id: 'gpt-5.4-nano',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -193,6 +196,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'GPT-5.4 Pro uses more compute to think harder and provide consistently better answers, available in the Responses API only.',
     displayName: 'GPT-5.4 Pro',
     id: 'gpt-5.4-pro',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -598,6 +602,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'o4-mini is our latest small o-series model, optimized for fast, efficient reasoning with strong coding and vision performance.',
     displayName: 'o4-mini',
     id: 'o4-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -625,6 +630,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'o4-mini-deep-research is a faster, more affordable deep-research model for complex multi-step research. It can search and synthesize web information and access your own data via MCP connectors.',
     displayName: 'o4-mini Deep Research',
     id: 'o4-mini-deep-research',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -652,6 +658,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'o3-pro uses more compute to think deeper and consistently deliver better answers, available only via the Responses API.',
     displayName: 'o3-pro',
     id: 'o3-pro',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -678,6 +685,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'o3 is a powerful general-purpose model that excels across domains. It sets a new bar for math, science, coding, and vision reasoning, and is strong at technical writing and instruction following. Use it to analyze text, code, and images and solve complex multi-step problems.',
     displayName: 'o3',
     id: 'o3',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -705,6 +713,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'o3-deep-research is our most advanced deep-research model for complex multi-step research. It can search and synthesize web information and access your own data via MCP connectors.',
     displayName: 'o3 Deep Research',
     id: 'o3-deep-research',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -942,6 +951,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     displayName: 'Claude Opus 4.7',
     enabled: true,
     id: 'claude-opus-4-7',
+    knowledgeCutoff: '2026-01',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -971,6 +981,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'Claude Opus 4.6 is Anthropic’s most intelligent model for building agents and coding.',
     displayName: 'Claude Opus 4.6',
     id: 'claude-opus-4-6',
+    knowledgeCutoff: '2025-05',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -1005,6 +1016,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'Claude Opus 4.5 is Anthropic’s flagship model, combining top-tier intelligence with scalable performance for complex, high-quality reasoning tasks.',
     displayName: 'Claude Opus 4.5',
     id: 'claude-opus-4-5-20251101',
+    knowledgeCutoff: '2025-05',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -1039,6 +1051,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'Claude Opus 4.1 is Anthropic’s newest and most powerful model for highly complex tasks, excelling in performance, intelligence, fluency, and comprehension.',
     displayName: 'Claude Opus 4.1',
     id: 'claude-opus-4-1-20250805',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_000,
     pricing: {
       units: [
@@ -1073,6 +1086,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'Claude Opus 4 is Anthropic’s most powerful model for highly complex tasks, excelling in performance, intelligence, fluency, and comprehension.',
     displayName: 'Claude Opus 4',
     id: 'claude-opus-4-20250514',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_000,
     pricing: {
       units: [
@@ -1107,6 +1121,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     displayName: 'Claude Sonnet 4.6',
     enabled: true,
     id: 'claude-sonnet-4-6',
+    knowledgeCutoff: '2025-08',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -1147,6 +1162,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'Sonnet 4.5 is the world’s best model for agents, coding, and computer use. It is also our most accurate and detailed model on long-running tasks, with enhanced knowledge in coding, finance, and cybersecurity.',
     displayName: 'Claude Sonnet 4.5',
     id: 'claude-sonnet-4-5-20250929',
+    knowledgeCutoff: '2025-01',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -1180,6 +1196,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'Claude Sonnet 4 can produce near-instant responses or extended step-by-step reasoning that users can see. API users can finely control how long the model thinks.',
     displayName: 'Claude Sonnet 4',
     id: 'claude-sonnet-4-20250514',
+    knowledgeCutoff: '2025-01',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -1213,6 +1230,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'Claude 3.7 Sonnet is Anthropic’s most intelligent model and the first hybrid reasoning model on the market. It can produce near-instant responses or extended step-by-step reasoning that users can see. Sonnet is especially strong at coding, data science, vision, and agent tasks.',
     displayName: 'Claude 3.7 Sonnet',
     id: 'claude-3-7-sonnet-20250219',
+    knowledgeCutoff: '2024-10',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -1248,6 +1266,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     displayName: 'Claude Haiku 4.5',
     enabled: true,
     id: 'claude-haiku-4-5-20251001',
+    knowledgeCutoff: '2025-02',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -1279,6 +1298,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
       'Claude 3.5 Haiku is Anthropic’s fastest next-gen model. Compared to Claude 3 Haiku, it improves across skills and surpasses the previous largest model Claude 3 Opus on many intelligence benchmarks.',
     displayName: 'Claude 3.5 Haiku',
     id: 'claude-3-5-haiku-20241022',
+    knowledgeCutoff: '2024-07',
     maxOutput: 8192,
     pricing: {
       units: [

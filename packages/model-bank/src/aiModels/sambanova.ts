@@ -11,6 +11,7 @@ const sambanovaChatModels: AIChatModelCard[] = [
     displayName: 'Meta Llama 3.3 70B Instruct',
     enabled: true,
     id: 'Meta-Llama-3.3-70B-Instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
@@ -25,6 +26,7 @@ const sambanovaChatModels: AIChatModelCard[] = [
       'Cutting-edge small language model with strong language understanding, excellent reasoning, and text generation.',
     displayName: 'Meta Llama 3.2 1B Instruct',
     id: 'Meta-Llama-3.2-1B-Instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.04, strategy: 'fixed', unit: 'millionTokens' },
@@ -39,6 +41,7 @@ const sambanovaChatModels: AIChatModelCard[] = [
       'Cutting-edge small language model with strong language understanding, excellent reasoning, and text generation.',
     displayName: 'Meta Llama 3.2 3B Instruct',
     id: 'Meta-Llama-3.2-3B-Instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.08, strategy: 'fixed', unit: 'millionTokens' },
@@ -57,6 +60,7 @@ const sambanovaChatModels: AIChatModelCard[] = [
     displayName: 'Meta Llama 3.2 11B Vision Instruct',
     enabled: true,
     id: 'Llama-3.2-11B-Vision-Instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
@@ -74,6 +78,7 @@ const sambanovaChatModels: AIChatModelCard[] = [
     displayName: 'Meta Llama 3.2 90B Vision Instruct',
     enabled: true,
     id: 'Llama-3.2-90B-Vision-Instruct	',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
@@ -91,6 +96,7 @@ const sambanovaChatModels: AIChatModelCard[] = [
       'Llama 3.1 instruction-tuned text model optimized for multilingual chat, performing strongly on common industry benchmarks among open and closed chat models.',
     displayName: 'Meta Llama 3.1 8B Instruct',
     id: 'Meta-Llama-3.1-8B-Instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
@@ -108,6 +114,7 @@ const sambanovaChatModels: AIChatModelCard[] = [
       'Llama 3.1 instruction-tuned text model optimized for multilingual chat, performing strongly on common industry benchmarks among open and closed chat models.',
     displayName: 'Meta Llama 3.1 70B Instruct',
     id: 'Meta-Llama-3.1-70B-Instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
@@ -125,6 +132,7 @@ const sambanovaChatModels: AIChatModelCard[] = [
       'Llama 3.1 instruction-tuned text model optimized for multilingual chat, performing strongly on common industry benchmarks among open and closed chat models.',
     displayName: 'Meta Llama 3.1 405B Instruct',
     id: 'Meta-Llama-3.1-405B-Instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },

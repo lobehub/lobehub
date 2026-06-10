@@ -23,6 +23,7 @@ const ollamaChatModels: AIChatModelCard[] = [
       'GPT-OSS 20B is OpenAI’s open-source LLM with MXFP4 quantization, suitable for high-end consumer GPUs or Apple Silicon Macs. It excels at chat generation, coding, and reasoning, with function calling and tool use.',
     displayName: 'GPT-OSS 20B',
     id: 'gpt-oss:20b',
+    knowledgeCutoff: '2024-06',
     releasedAt: '2025-08-05',
     type: 'chat',
   },
@@ -36,6 +37,7 @@ const ollamaChatModels: AIChatModelCard[] = [
       'GPT-OSS 120B is OpenAI’s flagship open-source model with MXFP4 quantization. It requires multi-GPU or high-end workstations and excels at complex reasoning, code generation, and multilingual processing, with advanced function calling and tool integration.',
     displayName: 'GPT-OSS 120B',
     id: 'gpt-oss:120b',
+    knowledgeCutoff: '2024-06',
     releasedAt: '2025-08-05',
     type: 'chat',
   },
@@ -77,6 +79,7 @@ const ollamaChatModels: AIChatModelCard[] = [
       'Llama 3.1 is Meta’s leading model, scaling up to 405B parameters for complex dialogue, multilingual translation, and data analysis.',
     displayName: 'Llama 3.1 8B',
     id: 'llama3.1',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -85,6 +88,7 @@ const ollamaChatModels: AIChatModelCard[] = [
       'Llama 3.1 is Meta’s leading model, scaling up to 405B parameters for complex dialogue, multilingual translation, and data analysis.',
     displayName: 'Llama 3.1 70B',
     id: 'llama3.1:70b',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -93,6 +97,7 @@ const ollamaChatModels: AIChatModelCard[] = [
       'Llama 3.1 is Meta’s leading model, scaling up to 405B parameters for complex dialogue, multilingual translation, and data analysis.',
     displayName: 'Llama 3.1 405B',
     id: 'llama3.1:405b',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -288,6 +293,7 @@ const ollamaChatModels: AIChatModelCard[] = [
       'Phi-3 is Microsoft’s lightweight open model for efficient integration and large-scale reasoning.',
     displayName: 'Phi-3 3.8B',
     id: 'phi3',
+    knowledgeCutoff: '2023-10',
     type: 'chat',
   },
   {
@@ -296,6 +302,7 @@ const ollamaChatModels: AIChatModelCard[] = [
       'Phi-3 is Microsoft’s lightweight open model for efficient integration and large-scale reasoning.',
     displayName: 'Phi-3 14B',
     id: 'phi3:14b',
+    knowledgeCutoff: '2023-10',
     type: 'chat',
   },
   {

@@ -7,6 +7,7 @@ const zerooneChatModels: AIChatModelCard[] = [
     displayName: 'Yi Lightning',
     enabled: true,
     id: 'yi-lightning',
+    knowledgeCutoff: '2024',
     pricing: {
       currency: 'CNY',
       units: [

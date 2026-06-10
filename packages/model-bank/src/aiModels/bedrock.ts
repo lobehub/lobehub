@@ -406,6 +406,7 @@ const bedrockChatModels: AIChatModelCard[] = [
       'An updated Meta Llama 3.1 8B Instruct with a 128K context window, multilingual support, and improved reasoning. The Llama 3.1 family includes 8B, 70B, and 405B instruction-tuned text models optimized for multilingual chat and strong benchmark performance. It is designed for commercial and research use across languages; instruction-tuned models suit assistant-style chat, while pretrained models fit broader generation tasks. Llama 3.1 outputs can also be used to improve other models (e.g., synthetic data and refinement). It is an autoregressive Transformer model, with SFT and RLHF to align for helpfulness and safety.',
     displayName: 'Llama 3.1 8B Instruct',
     id: 'meta.llama3-1-8b-instruct-v1:0',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.22, strategy: 'fixed', unit: 'millionTokens' },
@@ -423,6 +424,7 @@ const bedrockChatModels: AIChatModelCard[] = [
       'An updated Meta Llama 3.1 70B Instruct with an extended 128K context window, multilingual support, and improved reasoning. The Llama 3.1 multilingual LLMs are a set of pre-trained and instruction-tuned generation models in 8B, 70B, and 405B sizes (text in/text out). The instruction-tuned text models are optimized for multilingual dialogue and outperform many available open chat models on common industry benchmarks. Llama 3.1 is designed for commercial and research use across languages. Instruction-tuned models are suited for assistant-style chat, while pretrained models fit broader natural language generation tasks. Llama 3.1 outputs can also be used to improve other models, including synthetic data generation and refinement. Llama 3.1 is an autoregressive Transformer model with an optimized architecture. The tuned versions use supervised fine-tuning (SFT) and reinforcement learning from human feedback (RLHF) to align with human preferences for helpfulness and safety.',
     displayName: 'Llama 3.1 70B Instruct',
     id: 'meta.llama3-1-70b-instruct-v1:0',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.99, strategy: 'fixed', unit: 'millionTokens' },
@@ -440,6 +442,7 @@ const bedrockChatModels: AIChatModelCard[] = [
       'Meta Llama 3.1 405B Instruct is the largest and most powerful Llama 3.1 Instruct model, a highly advanced model for dialogue reasoning and synthetic data generation, and a strong base for domain-specific continued pretraining or fine-tuning. The Llama 3.1 multilingual LLMs are a set of pre-trained and instruction-tuned generation models in 8B, 70B, and 405B sizes (text in/text out). The instruction-tuned text models are optimized for multilingual dialogue and outperform many available open chat models on common industry benchmarks. Llama 3.1 is designed for commercial and research use across languages. Instruction-tuned models are suited for assistant-style chat, while pretrained models fit broader natural language generation tasks. Llama 3.1 outputs can also be used to improve other models, including synthetic data generation and refinement. Llama 3.1 is an autoregressive Transformer model with an optimized architecture. The tuned versions use supervised fine-tuning (SFT) and reinforcement learning from human feedback (RLHF) to align with human preferences for helpfulness and safety.',
     displayName: 'Llama 3.1 405B Instruct',
     id: 'meta.llama3-1-405b-instruct-v1:0',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 5.32, strategy: 'fixed', unit: 'millionTokens' },
@@ -454,6 +457,7 @@ const bedrockChatModels: AIChatModelCard[] = [
       'Meta Llama 3 is an open LLM for developers, researchers, and enterprises, designed to help them build, experiment, and responsibly scale generative AI ideas. As part of the foundation for global community innovation, it is well suited to limited compute and resources, edge devices, and faster training times.',
     displayName: 'Llama 3 8B Instruct',
     id: 'meta.llama3-8b-instruct-v1:0',
+    knowledgeCutoff: '2023-03',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
@@ -468,6 +472,7 @@ const bedrockChatModels: AIChatModelCard[] = [
       'Meta Llama 3 is an open LLM for developers, researchers, and enterprises, designed to help them build, experiment, and responsibly scale generative AI ideas. As part of the foundation for global community innovation, it is well suited for content creation, conversational AI, language understanding, R&D, and enterprise applications.',
     displayName: 'Llama 3 70B Instruct',
     id: 'meta.llama3-70b-instruct-v1:0',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 2.65, strategy: 'fixed', unit: 'millionTokens' },

@@ -266,6 +266,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       'o3 is a powerful general-purpose model that excels across domains. It sets a new bar for math, science, coding, and vision reasoning, and is strong at technical writing and instruction following. Use it to analyze text, code, and images and solve complex multi-step problems.',
     displayName: 'o3',
     id: 'openai/o3',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -288,6 +289,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       'o4-mini high reasoning tier, optimized for fast, efficient reasoning with strong coding and vision performance.',
     displayName: 'o4-mini (high)',
     id: 'openai/o4-mini-high',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -310,6 +312,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       'o4-mini is optimized for fast, effective reasoning with strong efficiency and performance in coding and vision tasks.',
     displayName: 'o4-mini',
     id: 'openai/o4-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -392,6 +395,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       'o3-mini (high reasoning) delivers higher intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini (high)',
     id: 'openai/o3-mini-high',
+    knowledgeCutoff: '2023-10',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -413,6 +417,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       'o3-mini delivers higher intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini',
     id: 'openai/o3-mini',
+    knowledgeCutoff: '2023-10',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -525,6 +530,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       'Claude Opus 4.5 is Anthropic’s flagship model, combining top-tier intelligence with scalable performance for complex, high-quality reasoning tasks.',
     displayName: 'Claude Opus 4.5',
     id: 'anthropic/claude-opus-4.5',
+    knowledgeCutoff: '2025-05',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -552,6 +558,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     description: 'Claude Sonnet 4.5 is Anthropic’s most intelligent model to date.',
     displayName: 'Claude Sonnet 4.5',
     id: 'anthropic/claude-sonnet-4.5',
+    knowledgeCutoff: '2025-01',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -578,6 +585,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       'Claude 3 Haiku is Anthropic’s fastest and most compact model, designed for near-instant responses with fast, accurate performance.',
     displayName: 'Claude 3 Haiku',
     id: 'anthropic/claude-3-haiku',
+    knowledgeCutoff: '2023-08',
     maxOutput: 4096,
     pricing: {
       units: [
@@ -604,6 +612,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       'Claude 3.5 Haiku is Anthropic’s fastest next-gen model. Compared to Claude 3 Haiku, it improves across skills and surpasses the previous largest model Claude 3 Opus on many intelligence benchmarks.',
     displayName: 'Claude 3.5 Haiku',
     id: 'anthropic/claude-3.5-haiku',
+    knowledgeCutoff: '2024-07',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -632,6 +641,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       'Claude 3.7 Sonnet is Anthropic’s most intelligent model and the first hybrid reasoning model on the market. It can produce near-instant responses or extended step-by-step reasoning that users can see. Sonnet is especially strong at coding, data science, vision, and agent tasks.',
     displayName: 'Claude 3.7 Sonnet',
     id: 'anthropic/claude-3.7-sonnet',
+    knowledgeCutoff: '2024-10',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -663,6 +673,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       'Claude Sonnet 4 can produce near-instant responses or extended step-by-step reasoning that users can see. API users can finely control how long the model thinks.',
     displayName: 'Claude Sonnet 4',
     id: 'anthropic/claude-sonnet-4',
+    knowledgeCutoff: '2025-01',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -687,6 +698,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       'Claude Opus 4 is Anthropic’s most powerful model for highly complex tasks, excelling in performance, intelligence, fluency, and comprehension.',
     displayName: 'Claude Opus 4',
     id: 'anthropic/claude-opus-4',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_000,
     pricing: {
       units: [
@@ -730,6 +742,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       'LLaMA 3.2 is designed for tasks combining vision and text. It excels at image captioning and visual QA, bridging language generation and visual reasoning.',
     displayName: 'Llama 3.2 11B Vision',
     id: 'meta-llama/llama-3.2-11b-vision-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.162, strategy: 'fixed', unit: 'millionTokens' },
@@ -747,6 +760,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       'Llama 3.3 is the most advanced multilingual open-source Llama model, delivering near-405B performance at very low cost. It is Transformer-based and improved with SFT and RLHF for usefulness and safety. The instruction-tuned version is optimized for multilingual chat and beats many open and closed chat models on industry benchmarks. Knowledge cutoff: Dec 2023.',
     displayName: 'Llama 3.3 70B Instruct',
     id: 'meta-llama/llama-3.3-70b-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.12, strategy: 'fixed', unit: 'millionTokens' },
@@ -764,6 +778,7 @@ const openrouterChatModels: AIChatModelCard[] = [
       'Llama 3.3 is the most advanced multilingual open-source Llama model, delivering near-405B performance at very low cost. It is Transformer-based and improved with SFT and RLHF for usefulness and safety. The instruction-tuned version is optimized for multilingual chat and beats many open and closed chat models on industry benchmarks. Knowledge cutoff: Dec 2023.',
     displayName: 'Llama 3.3 70B Instruct (Free)',
     id: 'meta-llama/llama-3.3-70b-instruct:free',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
 ];

@@ -33,6 +33,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'Claude Opus 4.1 is a drop-in replacement for Opus 4, delivering excellent performance and precision for real-world coding and agent tasks. It reaches 74.5% on SWE-bench Verified and handles complex multi-step problems with greater rigor and attention to detail.',
     displayName: 'Claude Opus 4.1',
     id: 'anthropic/claude-opus-4.1',
+    knowledgeCutoff: '2025-01',
     pricing: {
       units: [
         { name: 'textInput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
@@ -54,6 +55,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'Claude Opus 4 is Anthropic’s most powerful model and a top coding model, leading on SWE-bench (72.5%) and Terminal-bench (43.2%). It sustains performance on long tasks with thousands of steps and can work for hours, significantly extending agent capabilities.',
     displayName: 'Claude Opus 4',
     id: 'anthropic/claude-opus-4',
+    knowledgeCutoff: '2025-01',
     pricing: {
       units: [
         { name: 'textInput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
@@ -74,6 +76,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'Claude Sonnet 4 significantly improves on Sonnet 3.7, excelling at coding with a 72.7% SWE-bench score. It balances performance and efficiency for internal and external use cases, with enhanced controllability.',
     displayName: 'Claude Sonnet 4',
     id: 'anthropic/claude-sonnet-4',
+    knowledgeCutoff: '2025-01',
     pricing: {
       units: [
         { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
@@ -118,6 +121,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'OpenAI o3 is the most powerful reasoning model, setting new SOTA in coding, math, science, and visual perception. It excels at complex, multi-faceted queries and is particularly strong at analyzing images, charts, and diagrams.',
     displayName: 'o3',
     id: 'openai/o3',
+    knowledgeCutoff: '2024-06',
     pricing: {
       units: [
         { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
@@ -141,6 +145,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'OpenAI o1 is a flagship reasoning model built for complex problems that require deep thinking, delivering strong reasoning and higher accuracy on multi-step tasks.',
     displayName: 'o1',
     id: 'openai/o1',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
@@ -164,6 +169,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'Claude 3.7 Sonnet is the first hybrid reasoning model and Anthropic’s most intelligent to date, delivering SOTA performance in coding, content creation, data analysis, and planning on top of Claude 3.5 Sonnet.',
     displayName: 'Claude 3.7 Sonnet',
     id: 'anthropic/claude-3.7-sonnet',
+    knowledgeCutoff: '2024-10',
     pricing: {
       units: [
         { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
@@ -185,6 +191,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'Claude 3.5 Sonnet strikes an ideal balance between intelligence and speed, especially for enterprise workloads, offering strong performance at lower cost and durability for large-scale AI deployments.',
     displayName: 'Claude 3.5 Sonnet',
     id: 'anthropic/claude-3.5-sonnet',
+    knowledgeCutoff: '2024-04',
     pricing: {
       units: [
         { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
@@ -206,6 +213,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'Claude 3 Opus is Anthropic’s most intelligent model with market-leading performance on highly complex tasks, handling open-ended prompts and novel scenarios with exceptional fluency and human-like understanding.',
     displayName: 'Claude 3 Opus',
     id: 'anthropic/claude-3-opus',
+    knowledgeCutoff: '2023-08',
     pricing: {
       units: [
         { name: 'textInput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
@@ -289,6 +297,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     description: 'A highly capable general-purpose LLM with strong, controllable reasoning.',
     displayName: 'gpt-oss-120b',
     id: 'openai/gpt-oss-120b',
+    knowledgeCutoff: '2024-06',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
@@ -309,6 +318,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'A compact, open-weights language model optimized for low latency and resource-constrained environments, including local and edge deployments.',
     displayName: 'gpt-oss-20b',
     id: 'openai/gpt-oss-20b',
+    knowledgeCutoff: '2024-06',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.07, strategy: 'fixed', unit: 'millionTokens' },
@@ -330,6 +340,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'o3-mini is OpenAI’s latest small reasoning model, delivering higher intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini',
     id: 'openai/o3-mini',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput', rate: 1.1, strategy: 'fixed', unit: 'millionTokens' },
@@ -352,6 +363,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'OpenAI o4-mini delivers fast, cost-effective reasoning with outstanding performance for its size, especially in math (best on AIME), coding, and vision tasks.',
     displayName: 'o4-mini',
     id: 'openai/o4-mini',
+    knowledgeCutoff: '2024-06',
     pricing: {
       units: [
         { name: 'textInput', rate: 1.1, strategy: 'fixed', unit: 'millionTokens' },
@@ -808,6 +820,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'An updated Meta Llama 3 70B Instruct with 128K context, multilingual support, and improved reasoning.',
     displayName: 'Llama 3.1 70B Instruct',
     id: 'meta/llama-3.1-70b',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.72, strategy: 'fixed', unit: 'millionTokens' },
@@ -825,6 +838,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'Llama 3.1 8B supports a 128K context window, ideal for real-time chat and data analysis, and offers significant cost savings versus larger models. Served by Groq on LPU hardware for fast, efficient inference.',
     displayName: 'Llama 3.1 8B Instruct',
     id: 'meta/llama-3.1-8b',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
@@ -843,6 +857,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'An instruction-tuned image reasoning model (text+image input, text output) optimized for visual recognition, image reasoning, captioning, and general image QA.',
     displayName: 'Llama 3.2 11B Vision Instruct',
     id: 'meta/llama-3.2-11b',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.16, strategy: 'fixed', unit: 'millionTokens' },
@@ -860,6 +875,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'Text-only model for on-device use cases like multilingual local retrieval, summarization, and rewriting.',
     displayName: 'Llama 3.2 1B Instruct',
     id: 'meta/llama-3.2-1b',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
@@ -877,6 +893,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'Text-only model fine-tuned for on-device use cases like multilingual local retrieval, summarization, and rewriting.',
     displayName: 'Llama 3.2 3B Instruct',
     id: 'meta/llama-3.2-3b',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
@@ -895,6 +912,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'An instruction-tuned image reasoning model (text+image input, text output) optimized for visual recognition, image reasoning, captioning, and general image QA.',
     displayName: 'Llama 3.2 90B Vision Instruct',
     id: 'meta/llama-3.2-90b',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.72, strategy: 'fixed', unit: 'millionTokens' },
@@ -912,6 +930,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'A perfect balance of performance and efficiency. Built for high-performance conversational AI in content creation, enterprise apps, and research, with strong language understanding for summarization, classification, sentiment, and code generation.',
     displayName: 'Llama 3.3 70B Instruct',
     id: 'meta/llama-3.3-70b',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.72, strategy: 'fixed', unit: 'millionTokens' },
@@ -930,6 +949,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'The Llama 4 family is a native multimodal AI model set supporting text and multimodal experiences, using MoE for leading text and image understanding. Llama 4 Maverick is a 17B model with 128 experts, served by DeepInfra.',
     displayName: 'Llama 4 Maverick 17B 128E Instruct',
     id: 'meta/llama-4-maverick',
+    knowledgeCutoff: '2024-08',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
@@ -948,6 +968,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'The Llama 4 family is a native multimodal AI model set supporting text and multimodal experiences, using MoE for leading text and image understanding. Llama 4 Scout is a 17B model with 16 experts, served by DeepInfra.',
     displayName: 'Llama 4 Scout 17B 16E Instruct',
     id: 'meta/llama-4-scout',
+    knowledgeCutoff: '2024-08',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
@@ -1448,6 +1469,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'Claude 3.5 Haiku is the next generation of our fastest model. It matches Claude 3 Haiku’s speed while improving across skills and surpassing the previous flagship Claude 3 Opus on many benchmarks.',
     displayName: 'Claude 3.5 Haiku',
     id: 'anthropic/claude-3.5-haiku',
+    knowledgeCutoff: '2024-07',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
@@ -1468,6 +1490,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
       'Claude 3 Haiku is Anthropic’s fastest model, designed for enterprise workloads with longer prompts. It can quickly analyze large documents like quarterly reports, contracts, or legal cases at half the cost of peers.',
     displayName: 'Claude 3 Haiku',
     id: 'anthropic/claude-3-haiku',
+    knowledgeCutoff: '2023-08',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },

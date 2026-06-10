@@ -42,6 +42,7 @@ const azureChatModels: AIChatModelCard[] = [
       'o3 is a versatile, powerful model that excels across domains, setting a new bar for math, science, coding, and visual reasoning. It is also strong in technical writing and instruction following, and can analyze text, code, and images to solve multi-step problems.',
     displayName: 'o3',
     id: 'o3',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -64,6 +65,7 @@ const azureChatModels: AIChatModelCard[] = [
       'o4-mini is our latest small o-series model, optimized for fast, efficient reasoning with strong coding and vision performance.',
     displayName: 'o4-mini',
     id: 'o4-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -168,6 +170,7 @@ const azureChatModels: AIChatModelCard[] = [
       'o3-mini is our latest small reasoning model, delivering high intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini',
     id: 'o3-mini',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput_cacheRead', rate: 0.55, strategy: 'fixed', unit: 'millionTokens' },
@@ -187,6 +190,7 @@ const azureChatModels: AIChatModelCard[] = [
       'o1-mini is a fast, cost-effective reasoning model designed for programming, math, and science use cases. It has a 128K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1-mini',
     id: 'o1-mini',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput_cacheRead', rate: 0.55, strategy: 'fixed', unit: 'millionTokens' },
@@ -206,6 +210,7 @@ const azureChatModels: AIChatModelCard[] = [
       'o1 is OpenAI’s new reasoning model that supports text and image input and outputs text, suitable for complex tasks requiring broad general knowledge. It has a 200K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1',
     id: 'o1',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput_cacheRead', rate: 7.5, strategy: 'fixed', unit: 'millionTokens' },

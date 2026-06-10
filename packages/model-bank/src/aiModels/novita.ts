@@ -174,6 +174,7 @@ const novitaChatModels: AIChatModelCard[] = [
     contextWindowTokens: 131_072,
     displayName: 'OpenAI GPT OSS 120B',
     id: 'openai/gpt-oss-120b',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -190,6 +191,7 @@ const novitaChatModels: AIChatModelCard[] = [
     contextWindowTokens: 131_072,
     displayName: 'OpenAI: GPT OSS 20B',
     id: 'openai/gpt-oss-20b',
+    knowledgeCutoff: '2024-06',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.04, strategy: 'fixed', unit: 'millionTokens' },
@@ -476,6 +478,7 @@ const novitaChatModels: AIChatModelCard[] = [
     contextWindowTokens: 131_072,
     displayName: 'Llama 3.3 70B Instruct',
     id: 'meta-llama/llama-3.3-70b-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.13, strategy: 'fixed', unit: 'millionTokens' },
@@ -504,6 +507,7 @@ const novitaChatModels: AIChatModelCard[] = [
     contextWindowTokens: 131_072,
     displayName: 'Llama 4 Scout 17B Instruct',
     id: 'meta-llama/llama-4-scout-17b-16e-instruct',
+    knowledgeCutoff: '2024-08',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
@@ -520,6 +524,7 @@ const novitaChatModels: AIChatModelCard[] = [
     contextWindowTokens: 1_048_576,
     displayName: 'Llama 4 Maverick 17B Instruct',
     id: 'meta-llama/llama-4-maverick-17b-128e-instruct-fp8',
+    knowledgeCutoff: '2024-08',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -535,6 +540,7 @@ const novitaChatModels: AIChatModelCard[] = [
       'Llama 3.1 8B Instruct is optimized for high-quality dialogue, outperforming many leading closed models.',
     displayName: 'Llama 3.1 8B Instruct',
     id: 'meta-llama/llama-3.1-8b-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
@@ -549,6 +555,7 @@ const novitaChatModels: AIChatModelCard[] = [
       'Llama 3 8B Instruct is optimized for high-quality dialogue, outperforming many closed models.',
     displayName: 'Llama 3 8B Instruct',
     id: 'meta-llama/llama-3-8b-instruct',
+    knowledgeCutoff: '2023-03',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.04, strategy: 'fixed', unit: 'millionTokens' },
@@ -563,6 +570,7 @@ const novitaChatModels: AIChatModelCard[] = [
       'Llama 3 70B Instruct is optimized for high-quality dialogue and performs strongly in human evaluations.',
     displayName: 'Llama 3 70B Instruct',
     id: 'meta-llama/llama-3-70b-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.51, strategy: 'fixed', unit: 'millionTokens' },
@@ -881,6 +889,7 @@ const novitaChatModels: AIChatModelCard[] = [
     contextWindowTokens: 32_768,
     displayName: 'Llama 3.2 3B Instruct',
     id: 'meta-llama/llama-3.2-3b-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.03, strategy: 'fixed', unit: 'millionTokens' },
@@ -893,6 +902,7 @@ const novitaChatModels: AIChatModelCard[] = [
     contextWindowTokens: 8192,
     displayName: 'Llama 3.1 8B Instruct BF16',
     id: 'meta-llama/llama-3.1-8b-instruct-bf16',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.06, strategy: 'fixed', unit: 'millionTokens' },

@@ -13,6 +13,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     displayName: 'Claude Haiku 3.5',
     enabled: false,
     id: 'claude-3-5-haiku',
+    knowledgeCutoff: '2024-07',
     maxOutput: 8192,
     organization: 'Anthropic',
     pricing: {
@@ -35,6 +36,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     displayName: 'Claude Haiku 4.5',
     enabled: false,
     id: 'claude-haiku-4-5',
+    knowledgeCutoff: '2025-02',
     maxOutput: 32_000,
     organization: 'Anthropic',
     pricing: {
@@ -57,6 +59,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     displayName: 'Claude Opus 4.1',
     enabled: false,
     id: 'claude-opus-4-1',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_000,
     organization: 'Anthropic',
     pricing: {
@@ -79,6 +82,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     displayName: 'Claude Opus 4.5',
     enabled: false,
     id: 'claude-opus-4-5',
+    knowledgeCutoff: '2025-05',
     maxOutput: 32_000,
     organization: 'Anthropic',
     pricing: {
@@ -101,6 +105,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     displayName: 'Claude Opus 4.6',
     enabled: false,
     id: 'claude-opus-4-6',
+    knowledgeCutoff: '2025-05',
     maxOutput: 32_000,
     organization: 'Anthropic',
     pricing: {
@@ -123,6 +128,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     displayName: 'Claude Opus 4.7',
     enabled: true,
     id: 'claude-opus-4-7',
+    knowledgeCutoff: '2026-01',
     maxOutput: 32_000,
     organization: 'Anthropic',
     pricing: {
@@ -145,6 +151,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     displayName: 'Claude Sonnet 4',
     enabled: false,
     id: 'claude-sonnet-4',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_000,
     organization: 'Anthropic',
     pricing: {
@@ -167,6 +174,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     displayName: 'Claude Sonnet 4.5',
     enabled: false,
     id: 'claude-sonnet-4-5',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_000,
     organization: 'Anthropic',
     pricing: {
@@ -189,6 +197,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     displayName: 'Claude Sonnet 4.6',
     enabled: false,
     id: 'claude-sonnet-4-6',
+    knowledgeCutoff: '2025-08',
     maxOutput: 32_000,
     organization: 'Anthropic',
     pricing: {
@@ -537,6 +546,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     displayName: 'GPT-5.4 Mini',
     enabled: false,
     id: 'gpt-5.4-mini',
+    knowledgeCutoff: '2025-08',
     maxOutput: 32_000,
     organization: 'OpenAI',
     pricing: {
@@ -557,6 +567,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     displayName: 'GPT-5.4 Nano',
     enabled: false,
     id: 'gpt-5.4-nano',
+    knowledgeCutoff: '2025-08',
     maxOutput: 32_000,
     organization: 'OpenAI',
     pricing: {
@@ -577,6 +588,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     displayName: 'GPT-5.4 Pro',
     enabled: false,
     id: 'gpt-5.4-pro',
+    knowledgeCutoff: '2025-08',
     maxOutput: 32_000,
     organization: 'OpenAI',
     pricing: {

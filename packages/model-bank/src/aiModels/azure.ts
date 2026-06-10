@@ -72,6 +72,7 @@ const azureChatModels: AIChatModelCard[] = [
       'GPT-5.4 Pro uses more compute to think harder and provide consistently better answers, available in the Responses API only.',
     displayName: 'GPT-5.4 Pro',
     id: 'gpt-5.4-pro',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -119,6 +120,7 @@ const azureChatModels: AIChatModelCard[] = [
     displayName: 'GPT-5.4 mini',
     enabled: true,
     id: 'gpt-5.4-mini',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -151,6 +153,7 @@ const azureChatModels: AIChatModelCard[] = [
     displayName: 'GPT-5.4 nano',
     enabled: true,
     id: 'gpt-5.4-nano',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -397,6 +400,7 @@ const azureChatModels: AIChatModelCard[] = [
     displayName: 'o3',
     enabled: true,
     id: 'o3',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -423,6 +427,7 @@ const azureChatModels: AIChatModelCard[] = [
     displayName: 'o4-mini',
     enabled: true,
     id: 'o4-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -522,6 +527,7 @@ const azureChatModels: AIChatModelCard[] = [
       'o3-mini is our latest small reasoning model, delivering high intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini',
     id: 'o3-mini',
+    knowledgeCutoff: '2023-10',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -545,6 +551,7 @@ const azureChatModels: AIChatModelCard[] = [
       'o1-mini is a fast, cost-effective reasoning model designed for programming, math, and science use cases. It has a 128K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1-mini',
     id: 'o1-mini',
+    knowledgeCutoff: '2023-10',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -568,6 +575,7 @@ const azureChatModels: AIChatModelCard[] = [
       'o1 is OpenAI’s new reasoning model that supports text and image input and outputs text, suitable for complex tasks requiring broad general knowledge. It has a 200K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1',
     id: 'o1',
+    knowledgeCutoff: '2023-10',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -591,6 +599,7 @@ const azureChatModels: AIChatModelCard[] = [
       'o1 is OpenAI’s new reasoning model for complex tasks requiring broad general knowledge. It has a 128K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1-preview',
     id: 'o1-preview',
+    knowledgeCutoff: '2023-10',
     maxOutput: 32_768,
     pricing: {
       units: [

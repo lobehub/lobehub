@@ -10,6 +10,7 @@ const cerebrasModels: AIChatModelCard[] = [
     displayName: 'GPT OSS 120B',
     enabled: true,
     id: 'gpt-oss-120b',
+    knowledgeCutoff: '2024-06',
     maxOutput: 40_960,
     pricing: {
       units: [

@@ -34,6 +34,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     displayName: 'GPT-5.4 mini',
     enabled: true,
     id: 'gpt-5.4-mini',
+    knowledgeCutoff: '2025-08',
     releasedAt: '2026-03-18',
     settings: {
       extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
@@ -157,6 +158,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     displayName: 'Claude Opus 4.6',
     enabled: true,
     id: 'claude-opus-4.6',
+    knowledgeCutoff: '2025-05',
     releasedAt: '2026-02-05',
     settings: {
       extendParams: ['enableAdaptiveThinking', 'effort'],
@@ -175,6 +177,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
       'Claude Opus 4.6 is Anthropic’s most intelligent model for building agents and coding.',
     displayName: 'Claude Opus 4.6 (Fast Mode)',
     id: 'claude-opus-4.6-fast',
+    knowledgeCutoff: '2025-05',
     releasedAt: '2026-02-05',
     settings: {
       extendParams: ['enableAdaptiveThinking', 'effort'],
@@ -193,6 +196,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     displayName: 'Claude Sonnet 4.6',
     enabled: true,
     id: 'claude-sonnet-4.6',
+    knowledgeCutoff: '2025-08',
     releasedAt: '2026-02-17',
     settings: {
       extendParams: ['enableAdaptiveThinking', 'enableReasoning', 'reasoningBudgetToken', 'effort'],
@@ -211,6 +215,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
       'Claude Opus 4.5 is Anthropic’s flagship model, combining top-tier intelligence with scalable performance for complex, high-quality reasoning tasks.',
     displayName: 'Claude Opus 4.5',
     id: 'claude-opus-4.5',
+    knowledgeCutoff: '2025-05',
     releasedAt: '2025-11-24',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
@@ -228,6 +233,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     description: 'Claude Sonnet 4.5 is Anthropic’s most intelligent model to date.',
     displayName: 'Claude Sonnet 4.5',
     id: 'claude-sonnet-4.5',
+    knowledgeCutoff: '2025-01',
     releasedAt: '2025-09-29',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
@@ -247,6 +253,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     displayName: 'Claude Haiku 4.5',
     enabled: true,
     id: 'claude-haiku-4.5',
+    knowledgeCutoff: '2025-02',
     releasedAt: '2025-10-16',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
@@ -264,6 +271,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
       'Claude Sonnet 4 can produce near-instant responses or extended step-by-step reasoning that users can see. API users can finely control how long the model thinks.',
     displayName: 'Claude Sonnet 4',
     id: 'claude-sonnet-4',
+    knowledgeCutoff: '2025-01',
     releasedAt: '2025-05-23',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],

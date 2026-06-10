@@ -135,6 +135,7 @@ const xinferenceChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.3 Instruct',
     enabled: true,
     id: 'llama-3.3-instruct',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -147,6 +148,7 @@ const xinferenceChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.2 Vision Instruct',
     enabled: true,
     id: 'llama-3.2-vision-instruct',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -159,6 +161,7 @@ const xinferenceChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.1 Instruct',
     enabled: true,
     id: 'llama-3.1-instruct',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
 ];

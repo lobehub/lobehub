@@ -11,6 +11,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.3 70B Instruct Turbo',
     enabled: true,
     id: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -20,6 +21,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.2 3B Instruct Turbo',
     enabled: true,
     id: 'meta-llama/Llama-3.2-3B-Instruct-Turbo',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -32,6 +34,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.2 11B Vision Instruct Turbo (Free)',
     enabled: true,
     id: 'meta-llama/Llama-Vision-Free',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -43,6 +46,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
       'LLaMA 3.2 is designed for tasks combining vision and text. It excels at image captioning and visual QA, bridging language generation and visual reasoning.',
     displayName: 'Llama 3.2 11B Vision Instruct Turbo',
     id: 'meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -55,6 +59,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.2 90B Vision Instruct Turbo',
     enabled: true,
     id: 'meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -67,6 +72,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.1 8B Instruct Turbo',
     enabled: true,
     id: 'meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -79,6 +85,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.1 70B Instruct Turbo',
     enabled: true,
     id: 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -91,6 +98,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.1 405B Instruct Turbo',
     enabled: true,
     id: 'meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -108,6 +116,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
       'Llama 3 8B Instruct Turbo is a high-performance LLM for a wide range of use cases.',
     displayName: 'Llama 3 8B Instruct Turbo',
     id: 'meta-llama/Meta-Llama-3-8B-Instruct-Turbo',
+    knowledgeCutoff: '2023-03',
     type: 'chat',
   },
   {
@@ -116,6 +125,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
       'Llama 3 70B Instruct Turbo delivers strong understanding and generation for the most demanding workloads.',
     displayName: 'Llama 3 70B Instruct Turbo',
     id: 'meta-llama/Meta-Llama-3-70B-Instruct-Turbo',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -124,6 +134,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
       'Llama 3 8B Instruct Lite balances performance for resource-constrained environments.',
     displayName: 'Llama 3 8B Instruct Lite',
     id: 'meta-llama/Meta-Llama-3-8B-Instruct-Lite',
+    knowledgeCutoff: '2023-03',
     type: 'chat',
   },
   {
@@ -131,6 +142,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     description: 'Llama 3 70B Instruct Lite is built for high performance with lower latency.',
     displayName: 'Llama 3 70B Instruct Lite',
     id: 'meta-llama/Meta-Llama-3-70B-Instruct-Lite',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -139,6 +151,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
       'Llama 3 8B Instruct Reference offers multilingual support and broad domain knowledge.',
     displayName: 'Llama 3 8B Instruct Reference',
     id: 'meta-llama/Llama-3-8b-chat-hf',
+    knowledgeCutoff: '2023-03',
     type: 'chat',
   },
   {
@@ -146,6 +159,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     description: 'Llama 3 70B Instruct Reference is a powerful chat model for complex dialogues.',
     displayName: 'Llama 3 70B Instruct Reference',
     id: 'meta-llama/Llama-3-70b-chat-hf',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -154,6 +168,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
       'LLaMA-2 Chat (13B) provides strong language handling and a solid chat experience.',
     displayName: 'LLaMA-2 Chat (13B)',
     id: 'meta-llama/Llama-2-13b-chat-hf',
+    knowledgeCutoff: '2022-09',
     type: 'chat',
   },
   {
@@ -161,6 +176,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     description: 'LLaMA-2 provides strong language handling and a solid interaction experience.',
     displayName: 'LLaMA-2 (70B)',
     id: 'meta-llama/Llama-2-70b-hf',
+    knowledgeCutoff: '2022-09',
     type: 'chat',
   },
   {

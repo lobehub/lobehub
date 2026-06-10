@@ -43,6 +43,7 @@ const huggingfaceChatModels: AIChatModelCard[] = [
     contextWindowTokens: 32_768,
     displayName: 'Phi 3.5 mini instruct',
     id: 'microsoft/Phi-3.5-mini-instruct',
+    knowledgeCutoff: '2023-10',
     type: 'chat',
   },
   {

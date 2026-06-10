@@ -189,6 +189,7 @@ const giteeaiChatModels: AIChatModelCard[] = [
     displayName: 'Yi 34B Chat',
     enabled: true,
     id: 'Yi-34B-Chat',
+    knowledgeCutoff: '2023-06',
     type: 'chat',
   },
   /*

@@ -9,6 +9,7 @@ const lmStudioChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.1 8B',
     enabled: true,
     id: 'llama3.1',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {

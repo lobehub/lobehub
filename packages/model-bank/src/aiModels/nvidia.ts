@@ -20,6 +20,7 @@ const nvidiaChatModels: AIChatModelCard[] = [
     description: 'An advanced LLM strong at reasoning, math, common sense, and function calling.',
     displayName: 'Llama 3.3 70B Instruct',
     id: 'meta/llama-3.3-70b-instruct',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -31,6 +32,7 @@ const nvidiaChatModels: AIChatModelCard[] = [
       'A frontier vision-language model that excels at high-quality reasoning from images.',
     displayName: 'Llama 3.2 11B Vision Instruct',
     id: 'meta/llama-3.2-11b-vision-instruct',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -42,6 +44,7 @@ const nvidiaChatModels: AIChatModelCard[] = [
       'A frontier vision-language model that excels at high-quality reasoning from images.',
     displayName: 'Llama 3.2 90B Vision Instruct',
     id: 'meta/llama-3.2-90b-vision-instruct',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -53,6 +56,7 @@ const nvidiaChatModels: AIChatModelCard[] = [
       'A cutting-edge model with strong language understanding, reasoning, and text generation.',
     displayName: 'Llama 3.1 8B Instruct',
     id: 'meta/llama-3.1-8b-instruct',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -64,6 +68,7 @@ const nvidiaChatModels: AIChatModelCard[] = [
       'Built for complex dialogue with excellent context understanding, reasoning, and text generation.',
     displayName: 'Llama 3.1 70B Instruct',
     id: 'meta/llama-3.1-70b-instruct',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -71,6 +76,7 @@ const nvidiaChatModels: AIChatModelCard[] = [
     description: 'A distinctive language model delivering exceptional accuracy and efficiency.',
     displayName: 'Llama 3.1 Nemotron 51B Instruct',
     id: 'nvidia/llama-3.1-nemotron-51b-instruct',
+    knowledgeCutoff: '2023',
     type: 'chat',
   },
   {

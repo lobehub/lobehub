@@ -27,6 +27,7 @@ const akashChatModels: AIChatModelCard[] = [
     displayName: 'GPT-OSS-120B',
     enabled: true,
     id: 'gpt-oss-120b',
+    knowledgeCutoff: '2024-06',
     settings: {
       extendParams: ['reasoningEffort'],
     },
@@ -58,6 +59,7 @@ const akashChatModels: AIChatModelCard[] = [
       'Llama 4 Maverick is a large MoE model with efficient expert activation for strong reasoning performance.',
     displayName: 'Llama 4 Maverick (17Bx128E)',
     id: 'Meta-Llama-4-Maverick-17B-128E-Instruct-FP8',
+    knowledgeCutoff: '2024-08',
     type: 'chat',
   },
   {
@@ -68,6 +70,7 @@ const akashChatModels: AIChatModelCard[] = [
     description: 'Llama 3.3 70B is a versatile Transformer model for chat and generation tasks.',
     displayName: 'Llama 3.3 70B',
     id: 'Meta-Llama-3-3-70B-Instruct',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -77,6 +80,7 @@ const akashChatModels: AIChatModelCard[] = [
     contextWindowTokens: 131_072,
     displayName: 'Llama 3.1 8B',
     id: 'Meta-Llama-3-1-8B-Instruct-FP8',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
 ];

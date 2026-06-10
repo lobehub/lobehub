@@ -11,6 +11,7 @@ const vllmChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.1 70B',
     enabled: true,
     id: 'meta-llama/Meta-Llama-3.1-70B',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -22,6 +23,7 @@ const vllmChatModels: AIChatModelCard[] = [
       'Llama 3.1 is Meta’s leading model family, scaling up to 405B parameters for complex dialogue, multilingual translation, and data analysis.',
     displayName: 'Llama 3.1 405B Instruct',
     id: 'meta-llama/Meta-Llama-3.1-405B-Instruct',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {

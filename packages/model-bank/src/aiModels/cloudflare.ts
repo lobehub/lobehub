@@ -40,6 +40,7 @@ const cloudflareChatModels: AIChatModelCard[] = [
     contextWindowTokens: 24_000,
     displayName: 'llama 3.3 70b',
     id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -49,6 +50,7 @@ const cloudflareChatModels: AIChatModelCard[] = [
     contextWindowTokens: 131_000,
     displayName: 'llama 4 17b',
     id: '@cf/meta/llama-4-scout-17b-16e-instruct',
+    knowledgeCutoff: '2024-08',
     type: 'chat',
   },
   {
@@ -77,6 +79,7 @@ const cloudflareChatModels: AIChatModelCard[] = [
     contextWindowTokens: 128_000,
     displayName: 'llama 3.1 8b',
     id: '@cf/meta/llama-3.1-8b-instruct-fast',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
 ];

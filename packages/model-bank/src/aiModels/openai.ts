@@ -48,6 +48,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     displayName: 'GPT-5.5',
     enabled: true,
     id: 'gpt-5.5',
+    knowledgeCutoff: '2025-12',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -109,6 +110,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       'GPT-5.5 pro uses more compute to think harder and provide consistently better answers.',
     displayName: 'GPT-5.5 Pro',
     id: 'gpt-5.5-pro',
+    knowledgeCutoff: '2025-12',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -207,6 +209,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       'GPT-5.4 Pro uses more compute to think harder and provide consistently better answers, available in the Responses API only.',
     displayName: 'GPT-5.4 Pro',
     id: 'gpt-5.4-pro',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -257,6 +260,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     displayName: 'GPT-5.4 mini',
     enabled: true,
     id: 'gpt-5.4-mini',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -285,6 +289,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       "GPT-5.4 nano is OpenAI's cheapest GPT-5.4-class model for simple high-volume tasks.",
     displayName: 'GPT-5.4 nano',
     id: 'gpt-5.4-nano',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -747,6 +752,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       'o4-mini is the latest small o-series model, optimized for fast, effective reasoning with high efficiency in coding and vision tasks.',
     displayName: 'o4-mini',
     id: 'o4-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -774,6 +780,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       'o4-mini-deep-research is a faster, more affordable deep research model for complex multi-step research. It can search the web and also access your data via MCP connectors.',
     displayName: 'o4-mini Deep Research',
     id: 'o4-mini-deep-research',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -801,6 +808,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       'o3-pro uses more compute to think deeper and consistently deliver better answers; available only via the Responses API.',
     displayName: 'o3-pro',
     id: 'o3-pro',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -827,6 +835,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       'o3 is a powerful all-round model that sets a new bar for math, science, programming, and visual reasoning. It excels at technical writing and instruction following and can analyze text, code, and images for multi-step problems.',
     displayName: 'o3',
     id: 'o3',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -854,6 +863,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       'o3-deep-research is our most advanced deep research model for complex multi-step tasks. It can search the web and access your data via MCP connectors.',
     displayName: 'o3 Deep Research',
     id: 'o3-deep-research',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -879,6 +889,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       'o3-mini is our latest small reasoning model, delivering higher intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini',
     id: 'o3-mini',
+    knowledgeCutoff: '2023-10',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -904,6 +915,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       'The o1 series is trained with reinforcement learning to think before answering and handle complex reasoning. o1-pro uses more compute for deeper thinking and consistently higher-quality answers.',
     displayName: 'o1-pro',
     id: 'o1-pro',
+    knowledgeCutoff: '2023-10',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -928,6 +940,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       'o1 is OpenAI’s new reasoning model with text+image input and text output, suited for complex tasks requiring broad knowledge. It has a 200K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1',
     id: 'o1',
+    knowledgeCutoff: '2023-10',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -1161,6 +1174,7 @@ export const openaiChatModels: AIChatModelCard[] = [
       'GPT Audio is a general chat model for audio input/output, supported in the Chat Completions API.',
     displayName: 'GPT Audio',
     id: 'gpt-audio',
+    knowledgeCutoff: '2023-10',
     maxOutput: 16_384,
     pricing: {
       units: [

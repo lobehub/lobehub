@@ -20,6 +20,7 @@ const ai302ChatModels: AIChatModelCard[] = [
     displayName: 'llama3.3-70b',
     enabled: true,
     id: 'llama3.3-70b',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {
@@ -41,6 +42,7 @@ const ai302ChatModels: AIChatModelCard[] = [
     displayName: 'claude-3-7-sonnet-20250219',
     enabled: true,
     id: 'claude-3-7-sonnet-20250219',
+    knowledgeCutoff: '2024-10',
     type: 'chat',
   },
   {
@@ -48,6 +50,7 @@ const ai302ChatModels: AIChatModelCard[] = [
     displayName: 'claude-3-7-sonnet-latest',
     enabled: true,
     id: 'claude-3-7-sonnet-latest',
+    knowledgeCutoff: '2024-10',
     type: 'chat',
   },
   {
@@ -76,6 +79,7 @@ const ai302ChatModels: AIChatModelCard[] = [
     displayName: 'o3',
     enabled: true,
     id: 'o3',
+    knowledgeCutoff: '2024-06',
     type: 'chat',
   },
   {
@@ -83,6 +87,7 @@ const ai302ChatModels: AIChatModelCard[] = [
     displayName: 'o4-mini',
     enabled: true,
     id: 'o4-mini',
+    knowledgeCutoff: '2024-06',
     type: 'chat',
   },
   {
@@ -111,6 +116,7 @@ const ai302ChatModels: AIChatModelCard[] = [
     displayName: 'llama-4-maverick',
     enabled: true,
     id: 'llama-4-maverick',
+    knowledgeCutoff: '2024-08',
     type: 'chat',
   },
   {
@@ -125,6 +131,7 @@ const ai302ChatModels: AIChatModelCard[] = [
     displayName: 'claude-sonnet-4-20250514',
     enabled: true,
     id: 'claude-sonnet-4-20250514',
+    knowledgeCutoff: '2025-01',
     type: 'chat',
   },
   {
@@ -132,6 +139,7 @@ const ai302ChatModels: AIChatModelCard[] = [
     displayName: 'claude-opus-4-20250514',
     enabled: true,
     id: 'claude-opus-4-20250514',
+    knowledgeCutoff: '2025-01',
     type: 'chat',
   },
   {

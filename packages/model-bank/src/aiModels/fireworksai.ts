@@ -8,6 +8,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.3 70B Instruct',
     enabled: true,
     id: 'accounts/fireworks/models/llama-v3p3-70b-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.9, strategy: 'fixed', unit: 'millionTokens' },
@@ -23,6 +24,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.2 3B Instruct',
     enabled: true,
     id: 'accounts/fireworks/models/llama-v3p2-3b-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
@@ -41,6 +43,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.2 11B Vision Instruct',
     enabled: true,
     id: 'accounts/fireworks/models/llama-v3p2-11b-vision-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
@@ -59,6 +62,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.2 90B Vision Instruct',
     enabled: true,
     id: 'accounts/fireworks/models/llama-v3p2-90b-vision-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.9, strategy: 'fixed', unit: 'millionTokens' },
@@ -73,6 +77,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
       'Meta Llama 3.1 is a multilingual LLM family with pre-trained and instruction-tuned generation models at 8B, 70B, and 405B sizes. The instruction-tuned text models are optimized for multilingual dialogue and outperform many existing open and closed chat models on common industry benchmarks.',
     displayName: 'Llama 3.1 8B Instruct',
     id: 'accounts/fireworks/models/llama-v3p1-8b-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
@@ -90,6 +95,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
       'Meta Llama 3.1 is a multilingual LLM family with pre-trained and instruction-tuned generation models at 8B, 70B, and 405B sizes. The instruction-tuned text models are optimized for multilingual dialogue and outperform many existing open and closed chat models on common industry benchmarks.',
     displayName: 'Llama 3.1 70B Instruct',
     id: 'accounts/fireworks/models/llama-v3p1-70b-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.9, strategy: 'fixed', unit: 'millionTokens' },
@@ -107,6 +113,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
       'Meta Llama 3.1 is a multilingual LLM family with pre-trained and instruction-tuned generation models at 8B, 70B, and 405B sizes. The instruction-tuned text models are optimized for multilingual dialogue and outperform many existing open and closed chat models on common industry benchmarks. 405B is the most capable model in the Llama 3.1 family, using FP8 inference that closely matches the reference implementation.',
     displayName: 'Llama 3.1 405B Instruct',
     id: 'accounts/fireworks/models/llama-v3p1-405b-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
@@ -121,6 +128,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
       'Meta developed and released the Meta Llama 3 LLM series, a collection of pre-trained and instruction-tuned text generation models at 8B and 70B. The Llama 3 instruction-tuned models are optimized for conversational use and outperform many existing open chat models on common industry benchmarks.',
     displayName: 'Llama 3 8B Instruct',
     id: 'accounts/fireworks/models/llama-v3-8b-instruct',
+    knowledgeCutoff: '2023-03',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
@@ -135,6 +143,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
       'Meta developed and released the Meta Llama 3 LLM series, which includes pre-trained and instruction-tuned text generation models at 8B and 70B. The Llama 3 instruction-tuned models are optimized for conversational use and outperform many existing open chat models on common industry benchmarks.',
     displayName: 'Llama 3 70B Instruct',
     id: 'accounts/fireworks/models/llama-v3-70b-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.9, strategy: 'fixed', unit: 'millionTokens' },
@@ -149,6 +158,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
       'The Meta Llama 3 instruction-tuned models are optimized for conversational use and outperform many existing open chat models on common industry benchmarks. Llama 3 8B Instruct (HF version) is the original FP16 version of Llama 3 8B Instruct, with results expected to match the official Hugging Face implementation.',
     displayName: 'Llama 3 8B Instruct (HF version)',
     id: 'accounts/fireworks/models/llama-v3-8b-instruct-hf',
+    knowledgeCutoff: '2023-03',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
@@ -213,6 +223,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
     displayName: 'Phi 3.5 Vision Instruct',
     enabled: true,
     id: 'accounts/fireworks/models/phi-3-vision-128k-instruct',
+    knowledgeCutoff: '2024-03',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },

@@ -32,6 +32,7 @@ const groqChatModels: AIChatModelCard[] = [
       'OpenAI GPT-OSS 120B is a top-tier language model with 120B parameters, featuring built-in browser search and code execution, plus reasoning capabilities.',
     displayName: 'GPT OSS 120B',
     id: 'openai/gpt-oss-120b',
+    knowledgeCutoff: '2024-06',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -52,6 +53,7 @@ const groqChatModels: AIChatModelCard[] = [
       'OpenAI GPT-OSS 20B is a top-tier language model with 20B parameters, featuring built-in browser search and code execution, plus reasoning capabilities.',
     displayName: 'GPT OSS 20B',
     id: 'openai/gpt-oss-20b',
+    knowledgeCutoff: '2024-06',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -67,6 +69,7 @@ const groqChatModels: AIChatModelCard[] = [
     displayName: 'Llama 4 Scout (17Bx16E)',
     enabled: true,
     id: 'meta-llama/llama-4-scout-17b-16e-instruct',
+    knowledgeCutoff: '2024-08',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -101,6 +104,7 @@ const groqChatModels: AIChatModelCard[] = [
       'Llama 3.1 8B is a high-efficiency model with fast text generation, ideal for large-scale, cost-efficient use cases.',
     displayName: 'Llama 3.1 8B Instant',
     id: 'llama-3.1-8b-instant',
+    knowledgeCutoff: '2023-12',
     maxOutput: 131_072,
     pricing: {
       units: [
@@ -119,6 +123,7 @@ const groqChatModels: AIChatModelCard[] = [
       'Meta Llama 3.3 is a multilingual LLM with 70B parameters (text in/text out), offering pre-trained and instruction-tuned variants. The instruction-tuned text-only model is optimized for multilingual dialogue use cases and outperforms many available open and closed chat models on common industry benchmarks.',
     displayName: 'Llama 3.3 70B Versatile',
     id: 'llama-3.3-70b-versatile',
+    knowledgeCutoff: '2023-12',
     maxOutput: 32_768,
     pricing: {
       units: [

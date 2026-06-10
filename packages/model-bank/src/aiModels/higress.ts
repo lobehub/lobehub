@@ -462,6 +462,7 @@ const higressChatModels: AIChatModelCard[] = [
     displayName: 'Yi Lightning',
     enabled: true,
     id: 'yi-lightning',
+    knowledgeCutoff: '2024',
     pricing: {
       currency: 'CNY',
       units: [
@@ -1504,6 +1505,7 @@ const higressChatModels: AIChatModelCard[] = [
     displayName: 'OpenAI o1-mini',
     enabled: true,
     id: 'o1-mini',
+    knowledgeCutoff: '2023-10',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -1521,6 +1523,7 @@ const higressChatModels: AIChatModelCard[] = [
     displayName: 'OpenAI o1-preview',
     enabled: true,
     id: 'o1-preview',
+    knowledgeCutoff: '2023-10',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -1954,6 +1957,7 @@ const higressChatModels: AIChatModelCard[] = [
       'Strong image reasoning on high-resolution images, suited for visual understanding apps.',
     displayName: 'Llama 3.2 11B Vision',
     id: 'llama-3.2-11b-vision-instruct',
+    knowledgeCutoff: '2023-12',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -1965,6 +1969,7 @@ const higressChatModels: AIChatModelCard[] = [
     description: 'Advanced image reasoning for visual-understanding agent applications.',
     displayName: 'Llama 3.2 90B Vision',
     id: 'llama-3.2-90b-vision-instruct',
+    knowledgeCutoff: '2023-12',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -1974,6 +1979,7 @@ const higressChatModels: AIChatModelCard[] = [
       'Llama 3.1 instruction-tuned text model optimized for multilingual chat, performing strongly on common industry benchmarks among open and closed chat models.',
     displayName: 'Meta Llama 3.1 8B',
     id: 'meta-llama-3.1-8b-instruct',
+    knowledgeCutoff: '2023-12',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -1983,6 +1989,7 @@ const higressChatModels: AIChatModelCard[] = [
       'Llama 3.1 instruction-tuned text model optimized for multilingual chat, performing strongly on common industry benchmarks among open and closed chat models.',
     displayName: 'Meta Llama 3.1 70B',
     id: 'meta-llama-3.1-70b-instruct',
+    knowledgeCutoff: '2023-12',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -1992,6 +1999,7 @@ const higressChatModels: AIChatModelCard[] = [
       'Llama 3.1 instruction-tuned text model optimized for multilingual chat, performing strongly on common industry benchmarks among open and closed chat models.',
     displayName: 'Meta Llama 3.1 405B',
     id: 'meta-llama-3.1-405b-instruct',
+    knowledgeCutoff: '2023-12',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -2000,6 +2008,7 @@ const higressChatModels: AIChatModelCard[] = [
     description: 'A versatile 8B-parameter model optimized for chat and text generation.',
     displayName: 'Meta Llama 3 8B',
     id: 'meta-llama-3-8b-instruct',
+    knowledgeCutoff: '2023-03',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -2009,6 +2018,7 @@ const higressChatModels: AIChatModelCard[] = [
       'A powerful 70B-parameter model that excels at reasoning, coding, and broad language tasks.',
     displayName: 'Meta Llama 3 70B',
     id: 'meta-llama-3-70b-instruct',
+    knowledgeCutoff: '2023-12',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -2017,6 +2027,7 @@ const higressChatModels: AIChatModelCard[] = [
     description: 'An updated version of the Phi-3-mini model.',
     displayName: 'Phi-3.5-mini 128K',
     id: 'Phi-3.5-mini-instruct',
+    knowledgeCutoff: '2023-10',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -2028,6 +2039,7 @@ const higressChatModels: AIChatModelCard[] = [
     description: 'An updated version of the Phi-3-vision model.',
     displayName: 'Phi-3.5-vision 128K',
     id: 'Phi-3.5-vision-instrust',
+    knowledgeCutoff: '2024-03',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -2036,6 +2048,7 @@ const higressChatModels: AIChatModelCard[] = [
     description: 'The smallest Phi-3 family member, optimized for quality and low latency.',
     displayName: 'Phi-3-mini 4K',
     id: 'Phi-3-mini-4k-instruct',
+    knowledgeCutoff: '2023-10',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -2045,6 +2058,7 @@ const higressChatModels: AIChatModelCard[] = [
       'The same Phi-3-mini model with a larger context window for RAG or few-shot prompts.',
     displayName: 'Phi-3-mini 128K',
     id: 'Phi-3-mini-128k-instruct',
+    knowledgeCutoff: '2023-10',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -2054,6 +2068,7 @@ const higressChatModels: AIChatModelCard[] = [
       'A 7B-parameter model with higher quality than Phi-3-mini, focused on high-quality, reasoning-intensive data.',
     displayName: 'Phi-3-small 8K',
     id: 'Phi-3-small-8k-instruct',
+    knowledgeCutoff: '2023-10',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -2063,6 +2078,7 @@ const higressChatModels: AIChatModelCard[] = [
       'The same Phi-3-small model with a larger context window for RAG or few-shot prompts.',
     displayName: 'Phi-3-small 128K',
     id: 'Phi-3-small-128k-instruct',
+    knowledgeCutoff: '2023-10',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -2072,6 +2088,7 @@ const higressChatModels: AIChatModelCard[] = [
       'A 14B-parameter model with higher quality than Phi-3-mini, focused on high-quality, reasoning-intensive data.',
     displayName: 'Phi-3-medium 4K',
     id: 'Phi-3-medium-4k-instruct',
+    knowledgeCutoff: '2023-10',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -2081,6 +2098,7 @@ const higressChatModels: AIChatModelCard[] = [
       'The same Phi-3-medium model with a larger context window for RAG or few-shot prompts.',
     displayName: 'Phi-3-medium 128K',
     id: 'Phi-3-medium-128k-instruct',
+    knowledgeCutoff: '2023-10',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -2094,6 +2112,7 @@ const higressChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.2 11B Vision (Preview)',
     enabled: true,
     id: 'llama-3.2-11b-vision-preview',
+    knowledgeCutoff: '2023-12',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -2113,6 +2132,7 @@ const higressChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.2 90B Vision (Preview)',
     enabled: true,
     id: 'llama-3.2-90b-vision-preview',
+    knowledgeCutoff: '2023-12',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -2132,6 +2152,7 @@ const higressChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.1 8B',
     enabled: true,
     id: 'llama-3.1-8b-instant',
+    knowledgeCutoff: '2023-12',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -2151,6 +2172,7 @@ const higressChatModels: AIChatModelCard[] = [
     displayName: 'Llama 3.1 70B',
     enabled: true,
     id: 'llama-3.1-70b-versatile',
+    knowledgeCutoff: '2023-12',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -2202,6 +2224,7 @@ const higressChatModels: AIChatModelCard[] = [
     description: 'Meta Llama 3 8B delivers strong reasoning performance for diverse scenarios.',
     displayName: 'Meta Llama 3 8B',
     id: 'llama3-8b-8192',
+    knowledgeCutoff: '2023-03',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
@@ -2218,6 +2241,7 @@ const higressChatModels: AIChatModelCard[] = [
     description: 'Meta Llama 3 70B offers exceptional complexity handling for demanding projects.',
     displayName: 'Meta Llama 3 70B',
     id: 'llama3-70b-8192',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.59, strategy: 'fixed', unit: 'millionTokens' },
@@ -2316,6 +2340,7 @@ const higressChatModels: AIChatModelCard[] = [
     displayName: 'Claude 3.5 Haiku',
     enabled: true,
     id: 'claude-3-5-haiku-20241022',
+    knowledgeCutoff: '2024-07',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -2343,6 +2368,7 @@ const higressChatModels: AIChatModelCard[] = [
       'Claude 3 Haiku is Anthropic’s fastest and most compact model, designed for near-instant responses with fast, accurate performance.',
     displayName: 'Claude 3 Haiku',
     id: 'claude-3-haiku-20240307',
+    knowledgeCutoff: '2023-08',
     maxOutput: 4096,
     pricing: {
       units: [
@@ -2363,6 +2389,7 @@ const higressChatModels: AIChatModelCard[] = [
       'Claude 3 Sonnet balances intelligence and speed for enterprise workloads, delivering high utility at lower cost and reliable large-scale deployment.',
     displayName: 'Claude 3 Sonnet',
     id: 'claude-3-sonnet-20240229',
+    knowledgeCutoff: '2023-08',
     maxOutput: 4096,
     pricing: {
       units: [
@@ -2384,6 +2411,7 @@ const higressChatModels: AIChatModelCard[] = [
     displayName: 'Claude 3 Opus',
     enabled: true,
     id: 'claude-3-opus-20240229',
+    knowledgeCutoff: '2023-08',
     maxOutput: 4096,
     pricing: {
       units: [
@@ -2416,6 +2444,7 @@ const higressChatModels: AIChatModelCard[] = [
       'Claude 2 delivers key enterprise improvements, including a leading 200K-token context, reduced hallucinations, system prompts, and a new test feature: tool calling.',
     displayName: 'Claude 2.0',
     id: 'claude-2.0',
+    knowledgeCutoff: '2023',
     maxOutput: 4096,
     pricing: {
       units: [

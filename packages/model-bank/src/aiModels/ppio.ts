@@ -188,6 +188,7 @@ const ppioChatModels: AIChatModelCard[] = [
     displayName: 'meta-llama/llama-3.2-3b-instruct',
     enabled: true,
     id: 'meta-llama/llama-3.2-3b-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       currency: 'CNY',
       units: [
@@ -236,6 +237,7 @@ const ppioChatModels: AIChatModelCard[] = [
     displayName: 'meta-llama/llama-3.1-70b-instruct',
     enabled: true,
     id: 'meta-llama/llama-3.1-70b-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       currency: 'CNY',
       units: [
@@ -252,6 +254,7 @@ const ppioChatModels: AIChatModelCard[] = [
     displayName: 'meta-llama/llama-3.1-8b-instruct',
     enabled: true,
     id: 'meta-llama/llama-3.1-8b-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       currency: 'CNY',
       units: [

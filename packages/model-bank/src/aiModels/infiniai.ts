@@ -816,6 +816,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
       'Access requires an application. GPT-OSS-120B is an open-source large language model from OpenAI with strong text generation capability.',
     displayName: 'GPT-OSS-120B',
     id: 'gpt-oss-120b',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       currency: 'CNY',
@@ -832,6 +833,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
       'Access requires an application. GPT-OSS-20B is an open-source mid-size language model from OpenAI with efficient text generation.',
     displayName: 'GPT-OSS-20B',
     id: 'gpt-oss-20b',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       currency: 'CNY',

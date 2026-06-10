@@ -11,6 +11,7 @@ const nebiusChatModels: AIChatModelCard[] = [
     contextWindowTokens: 131_072,
     displayName: 'gpt-oss-120b',
     id: 'openai/gpt-oss-120b',
+    knowledgeCutoff: '2024-06',
     organization: 'openai',
     pricing: {
       units: [

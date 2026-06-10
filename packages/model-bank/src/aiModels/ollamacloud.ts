@@ -37,6 +37,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
     contextWindowTokens: 262_144,
     displayName: 'Gemma 4 31B',
     id: 'gemma4:31b',
+    knowledgeCutoff: '2025-01',
     type: 'chat',
   },
   {
@@ -230,6 +231,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
       'GPT-OSS 20B is an open-source LLM from OpenAI using MXFP4 quantization, suitable for high-end consumer GPUs or Apple Silicon Macs. It performs well in dialogue generation, coding, and reasoning tasks, supporting function calling and tool use.',
     displayName: 'GPT-OSS 20B',
     id: 'gpt-oss:20b',
+    knowledgeCutoff: '2024-06',
     releasedAt: '2025-08-05',
     type: 'chat',
   },
@@ -243,6 +245,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
       'GPT-OSS 120B is OpenAI’s large open-source LLM using MXFP4 quantization and positioned as a flagship model. It requires multi-GPU or high-end workstation environments and delivers excellent performance in complex reasoning, code generation, and multilingual processing, with advanced function calling and tool integration.',
     displayName: 'GPT-OSS 120B',
     id: 'gpt-oss:120b',
+    knowledgeCutoff: '2024-06',
     releasedAt: '2025-08-05',
     type: 'chat',
   },
