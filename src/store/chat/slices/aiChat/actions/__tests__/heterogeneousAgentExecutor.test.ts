@@ -338,6 +338,11 @@ const codexThreadStarted = (threadId = 'codex-thread-1') => ({
   type: 'thread.started',
 });
 
+const codexSessionConfigured = (model = 'gpt-5.5') => ({
+  model,
+  type: 'session_configured',
+});
+
 const codexTurnStarted = () => ({
   type: 'turn.started',
 });
@@ -1279,6 +1284,44 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   });
 
   describe('Codex multi-turn persistence', () => {
+    it('should persist Codex host model metadata onto the current assistant message', async () => {
+      await runWithEvents(
+        [
+          codexSessionConfigured('gpt-5.5'),
+          codexThreadStarted(),
+          codexTurnStarted(),
+          codexAgentMessage('item_0', 'Done.'),
+          codexTurnCompleted({ cached_input_tokens: 4, input_tokens: 6, output_tokens: 3 }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+          },
+        },
+      );
+
+      const modelWrites = mockUpdateMessage.mock.calls.filter(
+        ([id, value]: any) =>
+          id === 'ast-initial' && value.model === 'gpt-5.5' && value.provider === 'codex',
+      );
+      expect(modelWrites.length).toBeGreaterThan(0);
+
+      const usageWrite = modelWrites.find(([, value]: any) => value.metadata?.usage);
+      expect(usageWrite?.[1]).toMatchObject({
+        metadata: {
+          usage: {
+            inputCachedTokens: 4,
+            inputCacheMissTokens: 6,
+            totalInputTokens: 10,
+            totalOutputTokens: 3,
+            totalTokens: 13,
+          },
+        },
+        model: 'gpt-5.5',
+        provider: 'codex',
+      });
+    });
+
     it('should switch to a new assistant before persisting the next turn tool', async () => {
       const idCounter = { assistant: 0, tool: 0 };
       mockCreateMessage.mockImplementation(async (params: any) => {

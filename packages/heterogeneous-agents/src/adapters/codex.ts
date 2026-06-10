@@ -3,6 +3,7 @@ import type {
   HeterogeneousAgentEvent,
   HeterogeneousTerminalErrorData,
   StepCompleteData,
+  StreamStartData,
   ToolCallPayload,
   ToolResultData,
   UsageData,
@@ -37,6 +38,7 @@ interface CodexTodoListItem extends CodexBaseItem {
 }
 
 interface CodexFileChangeEntry {
+  diffText?: string;
   kind?: string;
   linesAdded?: number;
   linesDeleted?: number;
@@ -45,6 +47,7 @@ interface CodexFileChangeEntry {
 
 interface CodexFileChangeItem extends CodexBaseItem {
   changes?: CodexFileChangeEntry[];
+  diffText?: string;
   linesAdded?: number;
   linesDeleted?: number;
 }
@@ -158,6 +161,7 @@ const synthesizeTodoListPluginState = (item: CodexTodoListItem) => {
 
 const synthesizeFileChangePluginState = (item: CodexFileChangeItem) => {
   const changes = (item.changes || []).map((change) => ({
+    ...(change.diffText ? { diffText: change.diffText } : {}),
     kind: change.kind,
     linesAdded: change.linesAdded ?? 0,
     linesDeleted: change.linesDeleted ?? 0,
@@ -170,6 +174,7 @@ const synthesizeFileChangePluginState = (item: CodexFileChangeItem) => {
 
   return {
     changes,
+    ...(item.diffText ? { diffText: item.diffText } : {}),
     linesAdded: item.linesAdded ?? 0,
     linesDeleted: item.linesDeleted ?? 0,
   };
@@ -619,9 +624,16 @@ export class CodexAdapter implements AgentEventAdapter {
 
   private handleSessionConfigured(raw: any): HeterogeneousAgentEvent[] {
     const model = getEventModel(raw);
-    if (model) this.currentModel = model;
+    if (!model || model === this.currentModel) return [];
 
-    return [];
+    this.currentModel = model;
+    return [
+      this.makeEvent('step_complete', {
+        model,
+        phase: 'turn_metadata',
+        provider: CODEX_IDENTIFIER,
+      } satisfies StepCompleteData),
+    ];
   }
 
   private handleTurnStarted(): HeterogeneousAgentEvent[] {
@@ -632,13 +644,13 @@ export class CodexAdapter implements AgentEventAdapter {
 
     if (!this.started) {
       this.started = true;
-      return [this.makeEvent('stream_start', { provider: CODEX_IDENTIFIER })];
+      return [this.makeEvent('stream_start', this.getStreamStartData())];
     }
 
     this.stepIndex += 1;
     return [
       this.makeEvent('stream_end', {}),
-      this.makeEvent('stream_start', { newStep: true, provider: CODEX_IDENTIFIER }),
+      this.makeEvent('stream_start', this.getStreamStartData({ newStep: true })),
     ];
   }
 
@@ -671,7 +683,7 @@ export class CodexAdapter implements AgentEventAdapter {
         this.resetStepToolCalls();
         this.hasTextInCurrentStep = false;
         events.push(this.makeEvent('stream_end', {}));
-        events.push(this.makeEvent('stream_start', { newStep: true, provider: CODEX_IDENTIFIER }));
+        events.push(this.makeEvent('stream_start', this.getStreamStartData({ newStep: true })));
       }
 
       const content =
@@ -752,6 +764,14 @@ export class CodexAdapter implements AgentEventAdapter {
   private resetStepToolCalls(): void {
     this.stepToolCalls = [];
     this.stepToolCallIds.clear();
+  }
+
+  private getStreamStartData(extra: Record<string, unknown> = {}): StreamStartData {
+    return {
+      ...(this.currentModel ? { model: this.currentModel } : {}),
+      provider: CODEX_IDENTIFIER,
+      ...extra,
+    };
   }
 
   private makeEvent(type: HeterogeneousAgentEvent['type'], data: any): HeterogeneousAgentEvent {

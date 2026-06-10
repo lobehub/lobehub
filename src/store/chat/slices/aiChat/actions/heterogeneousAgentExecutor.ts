@@ -1229,14 +1229,18 @@ export const executeHeterogeneousAgent = async (
 
         if (event.data.model) lastModel = event.data.model;
         if (event.data.provider) lastProvider = event.data.provider;
-        if (turnUsage) {
+        const updateValue: Record<string, any> = {};
+        if (turnUsage) updateValue.metadata = { usage: turnUsage };
+        if (event.data.model) updateValue.model = event.data.model;
+        if (event.data.provider) updateValue.provider = event.data.provider;
+
+        if (Object.keys(updateValue).length > 0) {
           persistQueue = persistQueue.then(async () => {
             await messageService
-              .updateMessage(
-                currentAssistantMessageId,
-                { metadata: { usage: turnUsage } },
-                { agentId: context.agentId, topicId: context.topicId },
-              )
+              .updateMessage(currentAssistantMessageId, updateValue, {
+                agentId: context.agentId,
+                topicId: context.topicId,
+              })
               .catch(console.error);
           });
         }
