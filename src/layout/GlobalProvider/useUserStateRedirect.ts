@@ -5,10 +5,12 @@ import { useCallback } from 'react';
 import { isDesktop } from '@/const/version';
 import { onboardingSelectors } from '@/store/user/selectors';
 import { type UserInitializationState } from '@/types/user';
+import { buildOnboardingRedirectUrl } from '@/utils/onboardingRedirect';
 
-const redirectIfNotOn = (currentPath: string, path: string) => {
-  if (!currentPath.startsWith(path)) {
-    window.location.href = path;
+const redirectToOnboarding = (currentPath: string, search: string) => {
+  if (!currentPath.startsWith('/onboarding')) {
+    // Thread the page the user was on so onboarding finish points return there
+    window.location.href = buildOnboardingRedirectUrl(currentPath + search);
   }
 };
 
@@ -30,7 +32,7 @@ export const useWebUserStateRedirect = () =>
     // fires, so matching only /agent/inbox would miss the resolved-slug case.
     if (pathname.startsWith('/agent/') && new URLSearchParams(search).has('message')) return;
 
-    redirectIfNotOn(pathname, '/onboarding');
+    redirectToOnboarding(pathname, search);
   }, []);
 
 export const useUserStateRedirect = () => {
