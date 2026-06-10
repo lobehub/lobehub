@@ -217,6 +217,17 @@ export interface AIBaseModelCard {
    */
   displayName?: string;
   enabled?: boolean;
+  /**
+   * model lineage, finer than `organization` (e.g. 'claude', 'gpt', 'o-series',
+   * 'qwen', 'deepseek'). Lets the UI group models and match the same model
+   * across aggregator providers.
+   */
+  family?: string;
+  /**
+   * model generation within the family (e.g. 'claude-4.6', 'gpt-5.2', 'qwen3.5').
+   * Only set when confidently derivable from the model line's naming.
+   */
+  generation?: string;
   id: string;
   /**
    * knowledge cutoff date (YYYY-MM). When the provider distinguishes a "reliable
@@ -469,6 +480,8 @@ export interface AiProviderModelListItem {
   contextWindowTokens?: number;
   displayName?: string;
   enabled: boolean;
+  family?: string;
+  generation?: string;
   id: string;
   knowledgeCutoff?: string;
   parameters?: ModelParamsSchema;
@@ -525,6 +538,8 @@ export interface AiModelForSelect {
   contextWindowTokens?: number;
   description?: string;
   displayName?: string;
+  family?: string;
+  generation?: string;
   id: string;
   knowledgeCutoff?: string;
   parameters?: ModelParamsSchema;
@@ -546,6 +561,8 @@ export interface EnabledAiModel {
   contextWindowTokens?: number;
   displayName?: string;
   enabled?: boolean;
+  family?: string;
+  generation?: string;
   id: string;
   knowledgeCutoff?: string;
   parameters?: ModelParamsSchema;
