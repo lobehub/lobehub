@@ -1,9 +1,7 @@
-import {
-  type BuiltinInspector,
-  type BuiltinRender,
-  type RenderDisplayControl,
-} from '@lobechat/types';
+import { type BuiltinInspector, type BuiltinRender } from '@lobechat/types';
 
+import CommandExecutionInspector from './CommandExecutionInspector';
+import { CodexRenderDisplayControls } from './displayControls';
 import FileChangeInspector from './FileChangeInspector';
 import FileChangeRender from './FileChangeRender';
 import McpToolInspector from './McpToolInspector';
@@ -14,6 +12,7 @@ import WebSearchInspector from './WebSearchInspector';
 import WebSearchRender from './WebSearchRender';
 
 export const CodexInspectors: Record<string, BuiltinInspector> = {
+  command_execution: CommandExecutionInspector as BuiltinInspector,
   file_change: FileChangeInspector as BuiltinInspector,
   mcp_tool_call: McpToolInspector as BuiltinInspector,
   todo_list: TodoListInspector as BuiltinInspector,
@@ -27,9 +26,4 @@ export const CodexRenders: Record<string, BuiltinRender> = {
   web_search: WebSearchRender as BuiltinRender,
 };
 
-export const CodexRenderDisplayControls: Record<string, RenderDisplayControl> = {
-  file_change: 'expand',
-  mcp_tool_call: 'expand',
-  todo_list: 'expand',
-  web_search: 'expand',
-};
+export { CodexRenderDisplayControls };

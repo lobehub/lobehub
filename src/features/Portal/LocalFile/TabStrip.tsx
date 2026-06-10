@@ -4,10 +4,11 @@ import { ContextMenuTrigger, type GenericItemType, Icon } from '@lobehub/ui';
 import { confirmModal, ScrollArea } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles } from 'antd-style';
-import { FileIcon, XIcon } from 'lucide-react';
+import { XIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import FileIcon from '@/components/FileIcon';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
@@ -19,6 +20,15 @@ const resolveSkillName = (filePath: string): string | null => {
 };
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  tabIcon: css`
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+
+    width: 14px;
+    height: 14px;
+  `,
   tabClose: css`
     cursor: pointer;
 
@@ -242,7 +252,13 @@ const TabStrip = memo(() => {
                 }
               }}
             >
-              <Icon icon={skillName ? SkillsIcon : FileIcon} size={12} />
+              {skillName ? (
+                <Icon className={styles.tabIcon} icon={SkillsIcon} size={12} />
+              ) : (
+                <span className={styles.tabIcon}>
+                  <FileIcon fileName={filename} size={14} variant={'raw'} />
+                </span>
+              )}
               <span className={styles.tabLabel}>{label}</span>
               <button
                 aria-label={`Close ${filename}`}
