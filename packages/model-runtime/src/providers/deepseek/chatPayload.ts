@@ -7,7 +7,7 @@ import type { ChatStreamPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { sanitizeDeepSeekJsonPayload } from './sanitizePayload';
 
-const isDeepSeekV4Model = (model: string) => model.startsWith('deepseek-v4');
+export const isDeepSeekV4Model = (model: string) => model.startsWith('deepseek-v4');
 const isEmptyContent = (content: unknown) =>
   content === '' || content === null || content === undefined;
 const hasReasoningContent = (reasoning: any) => typeof reasoning?.content === 'string';
