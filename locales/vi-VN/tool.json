@@ -40,6 +40,7 @@
   "agentMarketplace.render.alreadyInLibraryTag": "Đã có trong thư viện",
   "agentMarketplace.render.alreadyInLibrary_one": "{{count}} đã có trong thư viện",
   "agentMarketplace.render.alreadyInLibrary_other": "{{count}} đã có trong thư viện",
+  "claudeCode.askUserQuestion.customOption.placeholder": "Hoặc tự viết của bạn…",
   "claudeCode.askUserQuestion.escape.back": "Quay lại các tùy chọn",
   "claudeCode.askUserQuestion.escape.enter": "Hoặc nhập trực tiếp",
   "claudeCode.askUserQuestion.escape.placeholder": "Nhập câu trả lời của bạn tại đây…",

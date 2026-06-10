@@ -6,6 +6,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
+import { useElectronStore } from '@/store/electron';
 
 import { isPathWithinScope } from '../../utils/path';
 
@@ -23,7 +24,10 @@ const OutOfScopeWarning = memo<OutOfScopeWarningProps>(({ paths }) => {
   const { t } = useTranslation('tool');
 
   const topicWorkingDir = useChatStore(topicSelectors.currentTopicWorkingDirectory);
-  const agentWorkingDir = useAgentStore(agentSelectors.currentAgentWorkingDirectory);
+  const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
+  const agentWorkingDir = useAgentStore(
+    agentSelectors.currentAgentWorkingDirectory(currentDeviceId),
+  );
   const workingDirectory = topicWorkingDir || agentWorkingDir;
 
   // Find paths that are outside the working directory

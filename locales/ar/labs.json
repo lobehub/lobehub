@@ -5,8 +5,6 @@
   "features.agentSelfIteration.title": "التكرار الذاتي للوكيل",
   "features.assistantMessageGroup.desc": "تجميع رسائل الوكيل ونتائج استدعاء الأدوات معًا للعرض",
   "features.assistantMessageGroup.title": "تجميع رسائل الوكيل",
-  "features.executionDeviceSwitcher.desc": "إظهار مفتاح تبديل جهاز التنفيذ في شريط أدوات الوكيل المتنوع بحيث يمكنك توجيه العمليات إلى هذا الجهاز أو إلى سحابة تجريبية أو إلى جهاز بعيد مرتبط.",
-  "features.executionDeviceSwitcher.title": "مفتاح تبديل جهاز التنفيذ",
   "features.gatewayMode.desc": "تنفيذ مهام الوكيل على الخادم عبر بوابة WebSocket بدلًا من التشغيل محليًا، مما يتيح تنفيذًا أسرع ويقلل من استهلاك موارد العميل.",
   "features.gatewayMode.title": "تنفيذ الوكيل من جانب الخادم (البوابة)",
   "features.groupChat.desc": "تمكين تنسيق الدردشة الجماعية متعددة الوكلاء.",
@@ -15,7 +13,7 @@
   "features.imessage.title": "قناة iMessage",
   "features.inputMarkdown.desc": "عرض Markdown في منطقة الإدخال في الوقت الفعلي (نص عريض، كتل الشيفرة، جداول، إلخ).",
   "features.inputMarkdown.title": "عرض Markdown في الإدخال",
-  "features.platformAgent.desc": "عرض خيار \"إضافة وكيل منصة\" في قائمة الإنشاء. يعمل وكلاء المنصة (مثل OpenClaw، Hermes) على جهاز متصل ويتواصلون عبر lh connect.",
-  "features.platformAgent.title": "إنشاء وكيل منصة",
+  "features.platformAgent.desc": "عرض خيار \"اتصال الوكيل\" في قائمة الإنشاء. الوكلاء المتصلون (مثل OpenClaw، Hermes) يعملون على أجهزتك الخاصة ويتواصلون عبر lh connect.",
+  "features.platformAgent.title": "اتصال الوكيل",
   "title": "المختبرات"
 }

@@ -251,5 +251,21 @@
   "channel.wechatScanToConnect": "Scan QR Code to Connect",
   "channel.wechatTips": "Please update WeChat to the latest version and restart it. The ClawBot plugin is in gradual rollout, so check Settings > Plugins to confirm access.",
   "channel.wechatUserId": "WeChat User ID",
-  "channel.wechatUserIdHint": "WeChat account identifier returned by the authorization flow."
+  "channel.wechatUserIdHint": "WeChat account identifier returned by the authorization flow.",
+  "transfer.button": "Transfer",
+  "transfer.confirm.botChannels": "Bot channel connections may need to be refreshed after transfer",
+  "transfer.confirm.chatGroups": "Multi-agent group associations will be removed",
+  "transfer.confirm.desc": "This will move the agent and all associated data (topics, messages, files, etc.) to the target workspace.",
+  "transfer.confirm.plugins": "Custom plugins may not be available in the target workspace",
+  "transfer.confirm.title": "Transfer Agent",
+  "transfer.confirm.warning": "Some features don't transfer:",
+  "transfer.copyTo": "Copy To",
+  "transfer.desc": "Transfer this agent to another workspace or your personal account.",
+  "transfer.error": "Failed to transfer agent",
+  "transfer.personalAccount": "Personal Account",
+  "transfer.searchWorkspace": "Search workspaces...",
+  "transfer.selectTarget": "Transfer Agent To",
+  "transfer.success": "Agent transferred successfully",
+  "transfer.title": "Transfer",
+  "transfer.transferTo": "Transfer To"
 }

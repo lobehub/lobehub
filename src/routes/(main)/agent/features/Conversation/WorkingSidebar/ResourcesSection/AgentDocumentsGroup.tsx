@@ -252,214 +252,234 @@ const buildSkillBundleViews = (data: AgentDocumentListItem[]): SkillBundleView[]
 };
 
 interface AgentDocumentsGroupProps {
+  /** Bound remote device id (device mode); skills are then scanned over RPC. */
+  deviceId?: string;
   style?: CSSProperties;
   workingDirectory?: string;
 }
 
-const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(({ style, workingDirectory }) => {
-  const { t } = useTranslation('chat');
-  const agentId = useAgentStore((s) => s.activeAgentId);
-  const isLocalEnabled = useAgentStore((s) =>
-    agentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(s) : false,
-  );
-  const openDocument = useChatStore((s) => s.openDocument);
-  const [filter, setFilter] = useState<ResourceFilter>('skills');
-
-  const showProjectSkills = isLocalEnabled && !!workingDirectory;
-
-  // Mirror what each child component reads so the parent can decide the
-  // section layout (flat when a single source has items, sectioned otherwise).
-  // Both hooks are SWR-deduped against their respective child fetches.
-  const userSkillItems = useUserSkills();
-  const { items: projectSkillItems } = useProjectSkills(
-    showProjectSkills ? workingDirectory : undefined,
-  );
-
-  const {
-    data = [],
-    error,
-    isLoading,
-    mutate,
-  } = useClientDataSWR(agentId ? agentDocumentSWRKeys.documentsList(agentId) : null, () =>
-    agentDocumentService.getDocuments({ agentId: agentId! }),
-  );
-
-  const webData = useMemo(
-    () => data.filter((doc) => doc.category === AGENT_DOCUMENT_WEB_CATEGORY),
-    [data],
-  );
-
-  const documentsData = useMemo(
-    () => data.filter((doc) => doc.category === AGENT_DOCUMENT_CATEGORY),
-    [data],
-  );
-
-  const skillBundleViews = useMemo(() => buildSkillBundleViews(data), [data]);
-
-  const skillItems = useMemo<SkillListItem[]>(
-    () =>
-      skillBundleViews.map(({ bundle, files }) => ({
-        description: bundle.description ?? undefined,
-        fileCount: files.length,
-        files,
-        id: bundle.documentId,
-        name: bundle.title || bundle.filename || '',
-      })),
-    [skillBundleViews],
-  );
-
-  if (!agentId) return null;
-
-  if (isLoading) {
-    return (
-      <Center flex={1} paddingBlock={24}>
-        <NeuralNetworkLoading size={32} />
-      </Center>
+const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
+  ({ deviceId, style, workingDirectory }) => {
+    const { t } = useTranslation('chat');
+    const agentId = useAgentStore((s) => s.activeAgentId);
+    const isLocalEnabled = useAgentStore((s) =>
+      agentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(s) : false,
     );
-  }
+    const openDocument = useChatStore((s) => s.openDocument);
+    const [filter, setFilter] = useState<ResourceFilter>('skills');
 
-  if (error) {
-    return (
-      <Center flex={1} paddingBlock={24}>
-        <Text type={'danger'}>{t('workingPanel.resources.error')}</Text>
-      </Center>
+    // Local desktop reads skills over IPC; a bound device reads over RPC.
+    const showProjectSkills = (isLocalEnabled || !!deviceId) && !!workingDirectory;
+
+    // Mirror what each child component reads so the parent can decide the
+    // section layout (flat when a single source has items, sectioned otherwise).
+    // Both hooks are SWR-deduped against their respective child fetches.
+    const userSkillItems = useUserSkills();
+    const { items: projectSkillItems, isLoading: isProjectSkillsLoading } = useProjectSkills(
+      showProjectSkills ? workingDirectory : undefined,
+      deviceId,
     );
-  }
 
-  const renderAgentSkillsList = () => (
-    <SkillsList
-      items={skillItems}
-      onOpenFile={(item, relativePath) => {
-        const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
-        const docId = view?.pathToDocumentId.get(relativePath);
-        if (!docId) return;
-        const row = data.find((d) => d.documentId === docId);
-        openDocument(docId, row?.id);
-      }}
-      onOpenSkill={(item) => {
-        // Open the SKILL.md (skills/index child) when present; fall back to
-        // the bundle itself (orphan bundles surface for recovery).
-        const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
-        const indexChild = data.find((doc) => doc.parentId === item.id && doc.isSkillIndex);
-        const targetDocId = indexChild?.documentId ?? view?.bundle.documentId ?? item.id;
-        const targetRow = data.find((d) => d.documentId === targetDocId);
-        openDocument(targetDocId, targetRow?.id);
-      }}
-      onSkillDragStart={(item, event) => {
-        // The runtime resolves these via the `agent-skills:<filename>`
-        // identifier (built from the shared const helper so the prefix stays
-        // in lockstep with the server-side resolver). Display label keeps
-        // the human-readable title.
-        const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
-        const filename = view?.bundle.filename;
-        if (!filename) return;
-        startSkillDrag(event, {
-          category: 'agentSkill',
-          label: item.name,
-          type: buildAgentSkillIdentifier(filename),
-        });
-      }}
-    />
-  );
+    const {
+      data = [],
+      error,
+      isLoading,
+      mutate,
+    } = useClientDataSWR(agentId ? agentDocumentSWRKeys.documentsList(agentId) : null, () =>
+      agentDocumentService.getDocuments({ agentId: agentId! }),
+    );
 
-  const renderSkills = () => {
-    // Sections render in fixed order — agent → project → user — and each one
-    // hides itself when it has nothing to show. When exactly one source has
-    // items we drop the group header and render the list flat (no redundant
-    // "User skills 1" label above a single row). When everything is empty we
-    // fall back to a single placeholder.
-    const hasAgent = skillItems.length > 0;
-    const hasProject = showProjectSkills && projectSkillItems.length > 0;
-    const hasUser = userSkillItems.length > 0;
-    const activeCount = (hasAgent ? 1 : 0) + (hasProject ? 1 : 0) + (hasUser ? 1 : 0);
+    const webData = useMemo(
+      () => data.filter((doc) => doc.category === AGENT_DOCUMENT_WEB_CATEGORY),
+      [data],
+    );
 
-    if (activeCount === 0) {
+    const documentsData = useMemo(
+      () => data.filter((doc) => doc.category === AGENT_DOCUMENT_CATEGORY),
+      [data],
+    );
+
+    const skillBundleViews = useMemo(() => buildSkillBundleViews(data), [data]);
+
+    const skillItems = useMemo<SkillListItem[]>(
+      () =>
+        skillBundleViews.map(({ bundle, files }) => ({
+          description: bundle.description ?? undefined,
+          fileCount: files.length,
+          files,
+          id: bundle.documentId,
+          name: bundle.title || bundle.filename || '',
+        })),
+      [skillBundleViews],
+    );
+
+    if (!agentId) return null;
+
+    if (isLoading) {
       return (
-        <Center flex={1} gap={8} paddingBlock={24}>
-          <Empty description={t('workingPanel.skills.empty')} icon={SkillsIcon} />
+        <Center flex={1} paddingBlock={24}>
+          <NeuralNetworkLoading size={32} />
         </Center>
       );
     }
 
-    const flat = activeCount === 1;
+    if (error) {
+      return (
+        <Center flex={1} paddingBlock={24}>
+          <Text type={'danger'}>{t('workingPanel.resources.error')}</Text>
+        </Center>
+      );
+    }
 
-    return (
-      <Flexbox gap={16} style={{ paddingBottom: 16 }}>
-        {hasAgent &&
-          (flat ? (
-            renderAgentSkillsList()
-          ) : (
-            <SkillSection
-              sectionHeader={{
-                count: skillItems.length,
-                title: t('workingPanel.skills.section.agent'),
-              }}
-            >
-              {renderAgentSkillsList()}
-            </SkillSection>
-          ))}
-        {hasProject && (
-          <ProjectLevelSkills hideHeader={flat} workingDirectory={workingDirectory!} />
-        )}
-        {hasUser && <UserLevelSkills hideHeader={flat} />}
-      </Flexbox>
-    );
-  };
-
-  const renderDocuments = () => (
-    // Always render the tree for the Documents tab even when empty, so the
-    // toolbar (new folder / new doc) stays reachable.
-    <Flexbox flex={1} style={{ minHeight: 0 }}>
-      <DocumentExplorerTree
-        agentId={agentId}
-        data={documentsData}
-        mutate={mutate}
-        style={{ height: '100%' }}
+    const renderAgentSkillsList = () => (
+      <SkillsList
+        items={skillItems}
+        onOpenFile={(item, relativePath) => {
+          const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
+          const docId = view?.pathToDocumentId.get(relativePath);
+          if (!docId) return;
+          const row = data.find((d) => d.documentId === docId);
+          openDocument(docId, row?.id);
+        }}
+        onOpenSkill={(item) => {
+          // Open the SKILL.md (skills/index child) when present; fall back to
+          // the bundle itself (orphan bundles surface for recovery).
+          const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
+          const indexChild = data.find((doc) => doc.parentId === item.id && doc.isSkillIndex);
+          const targetDocId = indexChild?.documentId ?? view?.bundle.documentId ?? item.id;
+          const targetRow = data.find((d) => d.documentId === targetDocId);
+          openDocument(targetDocId, targetRow?.id);
+        }}
+        onSkillDragStart={(item, event) => {
+          // The runtime resolves these via the `agent-skills:<filename>`
+          // identifier (built from the shared const helper so the prefix stays
+          // in lockstep with the server-side resolver). Display label keeps
+          // the human-readable title.
+          const view = skillBundleViews.find((v) => v.bundle.documentId === item.id);
+          const filename = view?.bundle.filename;
+          if (!filename) return;
+          startSkillDrag(event, {
+            category: 'agentSkill',
+            label: item.name,
+            type: buildAgentSkillIdentifier(filename),
+          });
+        }}
       />
-    </Flexbox>
-  );
+    );
 
-  const renderWeb = () => {
-    if (webData.length === 0) {
+    const renderSkills = () => {
+      // Sections render in fixed order — agent → project → user — and each one
+      // hides itself when it has nothing to show. When exactly one source has
+      // items we drop the group header and render the list flat (no redundant
+      // "User skills 1" label above a single row). When everything is empty we
+      // fall back to a single placeholder.
+      const hasAgent = skillItems.length > 0;
+      const hasProject = showProjectSkills && projectSkillItems.length > 0;
+      const hasUser = userSkillItems.length > 0;
+      const activeCount = (hasAgent ? 1 : 0) + (hasProject ? 1 : 0) + (hasUser ? 1 : 0);
+
+      if (activeCount === 0) {
+        // Project skills refetch on a working-directory switch (new SWR key →
+        // empty items while in flight). Show the loader instead of flashing the
+        // empty placeholder when there's nothing else to render yet.
+        if (showProjectSkills && isProjectSkillsLoading) {
+          return (
+            <Center flex={1} paddingBlock={24}>
+              <NeuralNetworkLoading size={32} />
+            </Center>
+          );
+        }
+        return (
+          <Center flex={1} gap={8} paddingBlock={24}>
+            <Empty description={t('workingPanel.skills.empty')} icon={SkillsIcon} />
+          </Center>
+        );
+      }
+
+      const flat = activeCount === 1;
+
       return (
-        <Center flex={1} gap={8} paddingBlock={24}>
-          <Empty description={t('workingPanel.resources.empty')} icon={GlobeIcon} />
-        </Center>
+        <Flexbox gap={16} style={{ paddingBottom: 16 }}>
+          {hasAgent &&
+            (flat ? (
+              renderAgentSkillsList()
+            ) : (
+              <SkillSection
+                sectionHeader={{
+                  count: skillItems.length,
+                  title: t('workingPanel.skills.section.agent'),
+                }}
+              >
+                {renderAgentSkillsList()}
+              </SkillSection>
+            ))}
+          {hasProject && (
+            <ProjectLevelSkills
+              deviceId={deviceId}
+              hideHeader={flat}
+              workingDirectory={workingDirectory!}
+            />
+          )}
+          {hasUser && <UserLevelSkills hideHeader={flat} />}
+        </Flexbox>
       );
-    }
-    return (
-      <Flexbox gap={8}>
-        {webData.map((doc) => (
-          <DocumentItem agentId={agentId} document={doc} key={doc.id} mutate={mutate} />
-        ))}
+    };
+
+    const renderDocuments = () => (
+      // Always render the tree for the Documents tab even when empty, so the
+      // toolbar (new folder / new doc) stays reachable.
+      <Flexbox flex={1} style={{ minHeight: 0 }}>
+        <DocumentExplorerTree
+          agentId={agentId}
+          data={documentsData}
+          mutate={mutate}
+          style={{ height: '100%' }}
+        />
       </Flexbox>
     );
-  };
 
-  return (
-    <Flexbox gap={12} style={style}>
-      <Flexbox horizontal gap={4} role={'tablist'}>
-        {FILTER_OPTIONS.map((option) => {
-          const active = filter === option.value;
-          return (
-            <div
-              aria-selected={active}
-              className={cx(styles.pillTab, active && styles.pillActive)}
-              key={option.value}
-              role={'tab'}
-              onClick={() => setFilter(option.value)}
-            >
-              {t(option.labelKey)}
-            </div>
-          );
-        })}
+    const renderWeb = () => {
+      if (webData.length === 0) {
+        return (
+          <Center flex={1} gap={8} paddingBlock={24}>
+            <Empty description={t('workingPanel.resources.empty')} icon={GlobeIcon} />
+          </Center>
+        );
+      }
+      return (
+        <Flexbox gap={8}>
+          {webData.map((doc) => (
+            <DocumentItem agentId={agentId} document={doc} key={doc.id} mutate={mutate} />
+          ))}
+        </Flexbox>
+      );
+    };
+
+    return (
+      <Flexbox gap={12} style={style}>
+        <Flexbox horizontal gap={4} role={'tablist'}>
+          {FILTER_OPTIONS.map((option) => {
+            const active = filter === option.value;
+            return (
+              <div
+                aria-selected={active}
+                className={cx(styles.pillTab, active && styles.pillActive)}
+                key={option.value}
+                role={'tab'}
+                onClick={() => setFilter(option.value)}
+              >
+                {t(option.labelKey)}
+              </div>
+            );
+          })}
+        </Flexbox>
+        {filter === 'skills' && renderSkills()}
+        {filter === 'documents' && renderDocuments()}
+        {filter === 'web' && renderWeb()}
       </Flexbox>
-      {filter === 'skills' && renderSkills()}
-      {filter === 'documents' && renderDocuments()}
-      {filter === 'web' && renderWeb()}
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 
 AgentDocumentsGroup.displayName = 'AgentDocumentsGroup';
 

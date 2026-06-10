@@ -685,14 +685,14 @@ describe('UsageCounter', () => {
 
       const result1 = UsageCounter.accumulateLLM({
         cost: state.cost,
-        model: 'gpt-4o-audio-preview',
+        model: 'gpt-audio',
         modelUsage: usage1,
         provider: 'openai',
         usage: state.usage,
       });
       const result2 = UsageCounter.accumulateLLM({
         cost: result1.cost,
-        model: 'gpt-4o-audio-preview',
+        model: 'gpt-audio',
         modelUsage: usage2,
         provider: 'openai',
         usage: result1.usage,

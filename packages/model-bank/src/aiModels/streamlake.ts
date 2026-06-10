@@ -345,7 +345,7 @@ const streamlakeModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 7, upTo: 0.256 },
+            { rate: 7, upTo: 256_000 },
             { rate: 14, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -354,7 +354,7 @@ const streamlakeModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 21, upTo: 0.256 },
+            { rate: 21, upTo: 256_000 },
             { rate: 42, upTo: 'infinity' },
           ],
           unit: 'millionTokens',

@@ -4,11 +4,18 @@ import { Avatar, Button, Skeleton } from '@lobehub/ui';
 import { UserCircleIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useCommunityWorkspaceProfile } from '@/business/client/hooks/useCommunityWorkspaceProfile';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useMarketAuth, useMarketUserProfile } from '@/layout/AuthProvider/MarketAuth';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
+
+import { resolveCommunityUserAvatarTarget } from './navigation';
+
+interface UserAvatarProps {
+  avatarOverride?: string | null;
+}
 
 /**
  * Check whether the user needs to complete their profile
@@ -34,10 +41,15 @@ const checkNeedsProfileSetup = (
   return !hasAvatarUrl;
 };
 
-const UserAvatar = memo(() => {
+const UserAvatar = memo<UserAvatarProps>(({ avatarOverride }) => {
   const { t } = useTranslation('discover');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const [loading, setLoading] = useState(false);
+  const {
+    avatarUrl: workspaceAvatarUrl,
+    isWorkspaceScope,
+    username: workspaceUsername,
+  } = useCommunityWorkspaceProfile();
   const { isAuthenticated, isLoading, getCurrentUserInfo, signIn } = useMarketAuth();
 
   const enableMarketTrustedClient = useServerConfigStore(
@@ -68,10 +80,15 @@ const UserAvatar = memo(() => {
 
   const handleAvatarClick = useCallback(() => {
     const profileUserName = userProfile?.userName || userProfile?.namespace;
-    if (profileUserName) {
-      navigate(`/community/user/${profileUserName}`);
+    const target = resolveCommunityUserAvatarTarget({
+      isWorkspaceScope,
+      profileUsername: profileUserName,
+    });
+
+    if (target) {
+      navigate(target);
     }
-  }, [navigate, userProfile?.userName, userProfile?.namespace]);
+  }, [isWorkspaceScope, navigate, userProfile?.userName, userProfile?.namespace]);
 
   if (isLoading) {
     return <Skeleton.Avatar active shape={'square'} size={28} style={{ borderRadius: 6 }} />;
@@ -96,16 +113,13 @@ const UserAvatar = memo(() => {
   }
 
   // Get avatar from user profile (fetched via SWR with caching)
-  const avatarUrl = userProfile?.avatarUrl;
+  const avatarUrl =
+    avatarOverride ||
+    (isWorkspaceScope
+      ? workspaceAvatarUrl || workspaceUsername
+      : userProfile?.avatarUrl || userProfile?.userName || username);
 
-  return (
-    <Avatar
-      avatar={avatarUrl || userProfile?.userName || username}
-      shape={'square'}
-      size={28}
-      onClick={handleAvatarClick}
-    />
-  );
+  return <Avatar avatar={avatarUrl} shape={'square'} size={28} onClick={handleAvatarClick} />;
 });
 
 export default UserAvatar;

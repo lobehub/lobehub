@@ -65,7 +65,7 @@ describe('FileUploadAction', () => {
       const { result } = renderHook(() => useStore());
 
       const base64Data = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA';
-      const mockDimensions = { height: 100, width: 200 };
+      const mockDimensions = { height: 100, ratio: 2, width: 200 };
       const mockMetadata = {
         date: '12345',
         dirname: '/test',
@@ -97,7 +97,7 @@ describe('FileUploadAction', () => {
       expect(fileService.createFile).toHaveBeenCalledWith({
         fileType: mockUploadResult.fileType,
         hash: mockUploadResult.hash,
-        metadata: mockUploadResult.metadata,
+        metadata: { ...mockUploadResult.metadata, ...mockDimensions },
         name: mockMetadata.filename,
         size: mockUploadResult.size,
         url: mockMetadata.path,
@@ -200,7 +200,7 @@ describe('FileUploadAction', () => {
         const { result } = renderHook(() => useStore());
 
         const mockFile = new File(['test content'], 'test.png', { type: 'image/png' });
-        const mockDimensions = { height: 100, width: 200 };
+        const mockDimensions = { height: 100, ratio: 2, width: 200 };
         const mockExistingMetadata = {
           date: '12345',
           dirname: '/test',
@@ -241,7 +241,7 @@ describe('FileUploadAction', () => {
           {
             fileType: mockFile.type,
             hash: 'mock-hash-value',
-            metadata: mockExistingMetadata,
+            metadata: { ...mockExistingMetadata, ...mockDimensions },
             name: mockFile.name,
             size: mockFile.size,
             url: mockExistingMetadata.path, // Uses metadata.path when available
@@ -261,7 +261,7 @@ describe('FileUploadAction', () => {
         const { result } = renderHook(() => useStore());
 
         const mockFile = new File(['test content'], 'newfile.jpg', { type: 'image/jpeg' });
-        const mockDimensions = { height: 150, width: 250 };
+        const mockDimensions = { height: 150, ratio: 1.6667, width: 250 };
         const mockMetadata = {
           date: '12345',
           dirname: '/uploads',
@@ -303,7 +303,7 @@ describe('FileUploadAction', () => {
           {
             fileType: mockFile.type,
             hash: 'mock-hash-value',
-            metadata: mockMetadata,
+            metadata: { ...mockMetadata, ...mockDimensions },
             name: mockFile.name,
             size: mockFile.size,
             url: mockMetadata.path,
@@ -676,7 +676,7 @@ describe('FileUploadAction', () => {
         const { result } = renderHook(() => useStore());
 
         const mockFile = new File(['image data'], 'image.jpg', { type: 'image/jpeg' });
-        const mockDimensions = { height: 300, width: 400 };
+        const mockDimensions = { height: 300, ratio: 1.3333, width: 400 };
         const mockMetadata = {
           date: '12345',
           dirname: '/images',

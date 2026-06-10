@@ -88,6 +88,8 @@ export interface LobeDocument {
    * File last modified timestamp
    */
   updatedAt: Date;
+
+  userId?: string;
 }
 
 /**

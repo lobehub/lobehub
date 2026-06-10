@@ -1,9 +1,9 @@
 // @vitest-environment node
 import * as imageToBase64Module from '@lobechat/utils';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
-import { parseDataUri } from '../../utils/uriParser';
+import { isPublicExternalUrl, parseDataUri, validateExternalUrl } from '../../utils/uriParser';
 import {
   buildGoogleMessage,
   buildGoogleMessages,
@@ -15,7 +15,9 @@ import {
 
 // Mock the utils
 vi.mock('../../utils/uriParser', () => ({
+  isPublicExternalUrl: vi.fn().mockReturnValue(false),
   parseDataUri: vi.fn(),
+  validateExternalUrl: vi.fn().mockResolvedValue({ isValid: false, reason: 'mocked' }),
 }));
 
 vi.mock('../../utils/imageToBase64', () => ({
@@ -34,6 +36,10 @@ describe('google contextBuilders', () => {
   });
 
   describe('buildGooglePart', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
     it('should handle text type messages', async () => {
       const content: UserMessageContentPart = {
         text: 'Hello',
@@ -140,6 +146,161 @@ describe('google contextBuilders', () => {
       expect(imageToBase64Module.imageUrlToBase64).toHaveBeenCalledWith(imageUrl);
     });
 
+    it('should use fileData for external URL images on gemini-3+', async () => {
+      const imageUrl = 'https://example.com/image.png';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
+      vi.mocked(validateExternalUrl).mockResolvedValueOnce({
+        contentLength: 1024,
+        contentType: 'image/png',
+        isValid: true,
+      });
+
+      const imageToBase64Spy = vi
+        .spyOn(imageToBase64Module, 'imageUrlToBase64')
+        .mockResolvedValueOnce({
+          base64: 'mockBase64Data',
+          mimeType: 'image/png',
+        });
+
+      const content: UserMessageContentPart = {
+        image_url: { url: imageUrl },
+        type: 'image_url',
+      };
+
+      const result = await buildGooglePart(content, { model: 'gemini-3-flash-preview' });
+
+      expect(result).toEqual({
+        fileData: {
+          fileUri: imageUrl,
+          mimeType: 'image/png',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+
+      expect(imageToBase64Spy).not.toHaveBeenCalled();
+    });
+
+    it('should fallback to inlineData when external URL validation fails for HEIC', async () => {
+      const imageUrl = 'https://example.com/image.heic';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
+      vi.mocked(validateExternalUrl).mockResolvedValueOnce({
+        contentLength: 1024,
+        contentType: 'image/heic',
+        isValid: false,
+        reason: 'Unsupported content type: image/heic',
+      });
+
+      const imageToBase64Spy = vi
+        .spyOn(imageToBase64Module, 'imageUrlToBase64')
+        .mockResolvedValueOnce({
+          base64: 'mockBase64Data',
+          mimeType: 'image/heic',
+        });
+
+      const content: UserMessageContentPart = {
+        image_url: { url: imageUrl },
+        type: 'image_url',
+      };
+
+      const result = await buildGooglePart(content, { model: 'gemini-3-flash-preview' });
+
+      expect(result).toEqual({
+        inlineData: {
+          data: 'mockBase64Data',
+          mimeType: 'image/heic',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+
+      expect(imageToBase64Spy).toHaveBeenCalledWith(imageUrl);
+    });
+
+    it('should force inlineData for external URL images on gemini-2.5 and earlier', async () => {
+      const imageUrl = 'https://example.com/image.png';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+
+      const imageToBase64Spy = vi
+        .spyOn(imageToBase64Module, 'imageUrlToBase64')
+        .mockResolvedValueOnce({
+          base64: 'mockBase64Data',
+          mimeType: 'image/png',
+        });
+
+      const content: UserMessageContentPart = {
+        image_url: { url: imageUrl },
+        type: 'image_url',
+      };
+
+      const result = await buildGooglePart(content, { model: 'gemini-2.5-flash' });
+
+      expect(result).toEqual({
+        inlineData: {
+          data: 'mockBase64Data',
+          mimeType: 'image/png',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+
+      expect(imageToBase64Spy).toHaveBeenCalledWith(imageUrl);
+      expect(isPublicExternalUrl).not.toHaveBeenCalled();
+      expect(validateExternalUrl).not.toHaveBeenCalled();
+    });
+
+    it('should throw when external URL exceeds size limit', async () => {
+      const imageUrl = 'https://example.com/large-image.png';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: 'image/png',
+        type: 'url',
+      });
+
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
+      vi.mocked(validateExternalUrl).mockResolvedValueOnce({
+        contentLength: 120 * 1024 * 1024,
+        contentType: 'image/png',
+        isTooLarge: true,
+        isValid: false,
+        reason: 'File too large: 120MB',
+      });
+
+      const imageToBase64Spy = vi
+        .spyOn(imageToBase64Module, 'imageUrlToBase64')
+        .mockResolvedValueOnce({
+          base64: 'mockBase64Data',
+          mimeType: 'image/png',
+        });
+
+      const content: UserMessageContentPart = {
+        image_url: { url: imageUrl },
+        type: 'image_url',
+      };
+
+      await expect(buildGooglePart(content, { model: 'gemini-3-flash' })).rejects.toThrow(
+        RangeError,
+      );
+      expect(imageToBase64Spy).not.toHaveBeenCalled();
+    });
+
     it('should throw TypeError for unsupported image URL types', async () => {
       const unsupportedImageUrl = 'unsupported://example.com/image.png';
 
@@ -180,6 +341,46 @@ describe('google contextBuilders', () => {
         },
         thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
       });
+    });
+
+    it('should use fileData for external URL videos on gemini-3+', async () => {
+      const videoUrl = 'https://example.com/video.mp4';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
+      vi.mocked(validateExternalUrl).mockResolvedValueOnce({
+        contentLength: 1024,
+        contentType: 'video/mp4',
+        isValid: true,
+      });
+
+      const imageToBase64Spy = vi
+        .spyOn(imageToBase64Module, 'imageUrlToBase64')
+        .mockResolvedValueOnce({
+          base64: 'mockVideoBase64Data',
+          mimeType: 'video/mp4',
+        });
+
+      const content: UserMessageContentPart = {
+        type: 'video_url',
+        video_url: { url: videoUrl },
+      };
+
+      const result = await buildGooglePart(content, { model: 'gemini-3-flash-preview' });
+
+      expect(result).toEqual({
+        fileData: {
+          fileUri: videoUrl,
+          mimeType: 'video/mp4',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+      expect(imageToBase64Spy).not.toHaveBeenCalled();
     });
 
     it('should return undefined for unsupported SVG image (base64)', async () => {

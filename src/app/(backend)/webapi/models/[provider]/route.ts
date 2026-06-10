@@ -6,12 +6,16 @@ import { checkAuth } from '@/app/(backend)/middleware/auth';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { createErrorResponse } from '@/utils/errorResponse';
 
+import { resolveValidWorkspaceIdFromRequest } from '../../_utils/workspace';
+
 export const GET = checkAuth(async (req, { params, userId, serverDB }) => {
   const provider = (await params)!.provider!;
 
   try {
+    const workspaceId = await resolveValidWorkspaceIdFromRequest({ req, serverDB, userId });
+
     // Read user's provider config from database
-    const agentRuntime = await initModelRuntimeFromDB(serverDB, userId, provider);
+    const agentRuntime = await initModelRuntimeFromDB(serverDB, userId, provider, workspaceId);
 
     const list = await agentRuntime.models();
 

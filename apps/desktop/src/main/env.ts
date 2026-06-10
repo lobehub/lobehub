@@ -70,6 +70,11 @@ export const getDesktopEnv = memoize(() =>
       // escape hatch: allow testing static renderer in dev via env
       DESKTOP_RENDERER_STATIC: envBoolean(false),
 
+      // device gateway url override (dev: point at a local `wrangler dev` instance,
+      // e.g. http://localhost:8787). Falls back to the stored value, then the
+      // production gateway.
+      DEVICE_GATEWAY_URL: z.string().url().optional(),
+
       // Force use dev-app-update.yml even in packaged app (for testing updates)
       FORCE_DEV_UPDATE_CONFIG: envBoolean(false),
 

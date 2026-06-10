@@ -3,7 +3,7 @@ import type { GitWorkingTreeFiles } from '@lobechat/electron-client-ipc';
 import type { GitStatusEntry } from '@pierre/trees';
 
 import { useClientDataSWR } from '@/libs/swr';
-import { electronGitService } from '@/services/electron/git';
+import { gitService } from '@/services/git';
 
 export const buildGitStatusEntries = (files: GitWorkingTreeFiles | undefined): GitStatusEntry[] => {
   if (!files) return [];
@@ -15,12 +15,22 @@ export const buildGitStatusEntries = (files: GitWorkingTreeFiles | undefined): G
   ];
 };
 
-export const useGitWorkingTreeFiles = (dirPath: string | undefined, enabled: boolean) => {
-  const key = isDesktop && dirPath && enabled ? ['git-working-tree-files', dirPath] : null;
+/**
+ * Dirty working-tree files for the git-status overlay. Transport-agnostic via
+ * `gitService` (Electron IPC local / `device.*` RPC remote). Disabled until a
+ * `dirPath` + `enabled`, and on web until a `deviceId` is present too.
+ */
+export const useGitWorkingTreeFiles = (
+  deviceId: string | undefined,
+  dirPath: string | undefined,
+  enabled: boolean,
+) => {
+  const active = (!!deviceId || isDesktop) && !!dirPath && enabled;
+  const key = active ? ['git-working-tree-files', deviceId ?? 'local', dirPath] : null;
 
-  return useClientDataSWR<GitWorkingTreeFiles>(
+  return useClientDataSWR<GitWorkingTreeFiles | undefined>(
     key,
-    () => electronGitService.getGitWorkingTreeFiles(dirPath!),
+    () => gitService.getGitWorkingTreeFiles({ deviceId, path: dirPath! }),
     {
       focusThrottleInterval: 5 * 1000,
       revalidateOnFocus: true,

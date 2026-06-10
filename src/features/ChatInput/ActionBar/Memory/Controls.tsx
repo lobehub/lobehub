@@ -9,6 +9,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import LevelSlider from '@/features/ModelSwitchPanel/components/ControlsForm/LevelSlider';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 
@@ -63,6 +64,7 @@ const ToggleItem = memo<ToggleOption>(({ value, description, icon, label }) => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const isEnabled = useMemoryEnabled(agentId);
+  const { allowed: canCreate } = usePermission('create_content');
 
   const isActive = value === 'on' ? isEnabled : !isEnabled;
 
@@ -72,7 +74,12 @@ const ToggleItem = memo<ToggleOption>(({ value, description, icon, label }) => {
       align={'flex-start'}
       className={cx(styles.option, isActive && styles.active)}
       gap={12}
+      style={{
+        cursor: canCreate ? undefined : 'not-allowed',
+        opacity: canCreate ? undefined : 0.5,
+      }}
       onClick={async () => {
+        if (!canCreate) return;
         await updateAgentChatConfig({ memory: { enabled: value === 'on' } });
       }}
     >
@@ -92,6 +99,7 @@ const Controls = memo(() => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const isEnabled = useMemoryEnabled(agentId);
+  const { allowed: canCreate } = usePermission('create_content');
   const effort = useAgentStore((s) => chatConfigByIdSelectors.getMemoryToolEffortById(agentId)(s));
 
   const toggleOptions: ToggleOption[] = [
@@ -122,7 +130,13 @@ const Controls = memo(() => {
               <div className={styles.title}>{t('memory.effort.title')}</div>
               <div className={styles.description}>{t('memory.effort.desc')}</div>
             </Flexbox>
-            <Flexbox flex={1}>
+            <Flexbox
+              flex={1}
+              style={{
+                opacity: canCreate ? undefined : 0.5,
+                pointerEvents: canCreate ? undefined : 'none',
+              }}
+            >
               <LevelSlider<UserMemoryEffort>
                 defaultValue="medium"
                 levels={MEMORY_EFFORT_LEVELS}
@@ -133,6 +147,7 @@ const Controls = memo(() => {
                   2: t('memory.effort.high.title'),
                 }}
                 onChange={async (value) => {
+                  if (!canCreate) return;
                   await updateAgentChatConfig({ memory: { effort: value, enabled: true } });
                 }}
               />

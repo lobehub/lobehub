@@ -4,13 +4,13 @@ import { type FormInstance, type InputRef } from 'antd';
 import { Badge, Divider, Form } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRight, Mail } from 'lucide-react';
-import { useEffect, useRef } from 'react';
-import { Trans, useTranslation } from 'react-i18next';
+import { type CSSProperties, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import AuthIcons from '@/components/AuthIcons';
-import { PRIVACY_URL, TERMS_URL } from '@/const/url';
 
 import AuthCard from '../../../../features/AuthCard';
+import AuthAgreement from '../_layout/AuthAgreement';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   setPasswordLink: css`
@@ -22,6 +22,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 export const EMAIL_REGEX = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/;
 export const USERNAME_REGEX = /^\w+$/;
+
+// Pin both the provider logo and the loading spinner to the same spot so the
+// spinner doesn't jump when a social button enters its loading state.
+const PROVIDER_ICON_STYLE: CSSProperties = { left: 12, position: 'absolute', top: 13 };
+
+// Turn a provider id into a display name, e.g. "google" -> "Google".
+const getProviderName = (provider: string) =>
+  provider.toLowerCase().replaceAll(/(^|[_-])([a-z])/g, (_, __, c) => c.toUpperCase());
 
 export interface SignInEmailStepProps {
   disableEmailPassword?: boolean;
@@ -66,47 +74,14 @@ export const SignInEmailStep = ({
   );
 
   const getProviderLabel = (provider: string) => {
-    const normalized = provider
-      .toLowerCase()
-      .replaceAll(/(^|[_-])([a-z])/g, (_, __, c) => c.toUpperCase());
+    const normalized = getProviderName(provider);
     const normalizedKey = normalized.replaceAll(/[^\da-z]/gi, '');
     const key = `betterAuth.signin.continueWith${normalizedKey}`;
     return t(key, { defaultValue: `Continue with ${normalized}` });
   };
 
-  const footer = (
-    <Text fontSize={13} type={'secondary'}>
-      <Trans
-        i18nKey={'footer.agreement'}
-        ns={'auth'}
-        components={{
-          privacy: (
-            <a
-              href={PRIVACY_URL}
-              style={{ color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
-            >
-              {t('footer.terms')}
-            </a>
-          ),
-          terms: (
-            <a
-              href={TERMS_URL}
-              style={{ color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
-            >
-              {t('footer.privacy')}
-            </a>
-          ),
-        }}
-      />
-    </Text>
-  );
-
   return (
-    <AuthCard
-      footer={footer}
-      subtitle={t('signin.subtitle', { appName: BRANDING_NAME })}
-      title={'Agent teammates that grow with you'}
-    >
+    <AuthCard title={t('signin.subtitle', { appName: BRANDING_NAME })}>
       {!serverConfigInit && (
         <Flexbox gap={12}>
           <Skeleton.Button active block size="large" />
@@ -120,19 +95,11 @@ export const SignInEmailStep = ({
             const button = (
               <Button
                 block
+                icon={<Icon icon={AuthIcons(provider, 18)} style={PROVIDER_ICON_STYLE} />}
+                iconProps={{ size: 18, style: PROVIDER_ICON_STYLE }}
                 key={provider}
                 loading={socialLoading === provider}
                 size="large"
-                icon={
-                  <Icon
-                    icon={AuthIcons(provider, 18)}
-                    style={{
-                      left: 12,
-                      position: 'absolute',
-                      top: 13,
-                    }}
-                  />
-                }
                 onClick={() => onSocialSignIn(provider)}
               >
                 {getProviderLabel(provider)}
@@ -143,14 +110,14 @@ export const SignInEmailStep = ({
               (oAuthSSOProviders.length > 1 ||
                 (oAuthSSOProviders.length === 1 && !disableEmailPassword));
             return showLastUsed ? (
-              <Badge.Ribbon
-                color="var(--ant-color-info-fill-tertiary)"
+              <Badge
+                color="var(--ant-color-info)"
+                count={t('betterAuth.signin.lastUsed')}
                 key={provider}
-                styles={{ content: { color: 'var(--ant-color-info)' } }}
-                text={t('betterAuth.signin.lastUsed')}
+                styles={{ root: { display: 'block', width: '100%' } }}
               >
                 {button}
-              </Badge.Ribbon>
+              </Badge>
             ) : (
               button
             );
@@ -227,6 +194,7 @@ export const SignInEmailStep = ({
           }
         />
       )}
+      <AuthAgreement />
     </AuthCard>
   );
 };

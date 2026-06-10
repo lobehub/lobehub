@@ -7,6 +7,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plugins';
+import { usePermission } from '@/hooks/usePermission';
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -18,6 +19,7 @@ import { useSlashItems } from './useSlashItems';
 
 const EditorCanvas = memo(() => {
   const { t } = useTranslation('setting');
+  const { allowed: canEdit } = usePermission('edit_own_content');
   const [editorInit, setEditorInit] = useState(false);
   const [contentInit, setContentInit] = useState(false);
   const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
@@ -40,10 +42,11 @@ const EditorCanvas = memo(() => {
 
   // Wrap handleContentChange with updateConfig
   const handleChange = useCallback(() => {
+    if (!canEdit) return;
     // Don't trigger save during streaming
     if (streamingInProgress) return;
     handleContentChange(updateConfig);
-  }, [handleContentChange, updateConfig, streamingInProgress]);
+  }, [canEdit, handleContentChange, updateConfig, streamingInProgress]);
 
   // Handle streaming updates - update editor with streaming content
   useEffect(() => {
@@ -67,6 +70,8 @@ const EditorCanvas = memo(() => {
   // Trigger save when streaming ends
   useEffect(() => {
     if (wasStreamingRef.current && !streamingInProgress && editor && editorInit) {
+      if (!canEdit) return;
+
       // Streaming just ended, wait for editor to update its internal state then save
       // This ensures editorData (json) is properly updated from the markdown content
       const timer = setTimeout(() => {
@@ -75,7 +80,7 @@ const EditorCanvas = memo(() => {
       return () => clearTimeout(timer);
     }
     wasStreamingRef.current = !!streamingInProgress;
-  }, [streamingInProgress, editor, editorInit, handleContentChange, updateConfig]);
+  }, [canEdit, streamingInProgress, editor, editorInit, handleContentChange, updateConfig]);
 
   useEffect(() => {
     if (!editorInit || !editor || contentInit) return;
@@ -96,12 +101,14 @@ const EditorCanvas = memo(() => {
 
   return (
     <div
+      style={canEdit ? undefined : { cursor: 'not-allowed', opacity: 0.65, pointerEvents: 'none' }}
       onClick={(e) => {
         e.stopPropagation();
       }}
     >
       <Editor
         content={initialLoad}
+        editable={canEdit}
         editor={editor!}
         lineEmptyPlaceholder={t('settingAgent.prompt.placeholder')}
         mentionOption={mentionOptions}

@@ -84,6 +84,7 @@ const TaskTemplateDetailContent = memo<TaskTemplateDetailContentProps>(
           <Flexbox gap={6}>
             {visibleAuthSpecs.map((spec) => (
               <SkillAuthRow
+                disabled={disabled}
                 key={`${spec.source}:${spec.provider}`}
                 spec={spec}
                 onError={handleConnectError}

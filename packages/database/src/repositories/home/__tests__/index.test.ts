@@ -621,4 +621,230 @@ describe('HomeRepository', () => {
       });
     });
   });
+
+  describe('getSidebarAgentList - heterogeneous type', () => {
+    it('should expose heterogeneousType from agencyConfig.heterogeneousProvider.type', async () => {
+      await clientDB.insert(Schema.agents).values({
+        id: 'hetero-agent',
+        userId,
+        title: 'Hetero Agent',
+        pinned: false,
+        virtual: false,
+        agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.ungrouped).toHaveLength(1);
+      expect(result.ungrouped[0].id).toBe('hetero-agent');
+      expect(result.ungrouped[0].heterogeneousType).toBe('claude-code');
+    });
+
+    it('should leave heterogeneousType unset when agencyConfig has no heterogeneousProvider', async () => {
+      await clientDB.insert(Schema.agents).values({
+        id: 'no-hetero-agent',
+        userId,
+        title: 'No Hetero Agent',
+        pinned: false,
+        virtual: false,
+        agencyConfig: { executionTarget: 'none' },
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.ungrouped).toHaveLength(1);
+      // heterogeneousType resolves to null and is stripped by cleanObject
+      expect(result.ungrouped[0].heterogeneousType).toBeUndefined();
+    });
+  });
+
+  describe('getSidebarAgentList - session group resolution', () => {
+    it('should use agents.sessionGroupId to place agent into a folder', async () => {
+      // Folder + agent that references the folder directly via agents.sessionGroupId
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.sessionGroups).values({
+          id: 'folder-direct',
+          name: 'Direct Folder',
+          sort: 0,
+          userId,
+        });
+        await tx.insert(Schema.agents).values({
+          id: 'agent-direct-group',
+          userId,
+          title: 'Direct Group Agent',
+          pinned: false,
+          virtual: false,
+          sessionGroupId: 'folder-direct',
+        });
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.groups).toHaveLength(1);
+      expect(result.groups[0].id).toBe('folder-direct');
+      expect(result.groups[0].items).toHaveLength(1);
+      expect(result.groups[0].items[0].id).toBe('agent-direct-group');
+      expect(result.ungrouped).toHaveLength(0);
+    });
+
+    it('should prioritize agents.sessionGroupId over sessions.groupId', async () => {
+      // agents.sessionGroupId points to folder A; sessions.groupId points to folder B.
+      // The agent must land in folder A.
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.sessionGroups).values([
+          { id: 'folder-a', name: 'Folder A', sort: 0, userId },
+          { id: 'folder-b', name: 'Folder B', sort: 1, userId },
+        ]);
+        await tx.insert(Schema.agents).values({
+          id: 'agent-priority-group',
+          userId,
+          title: 'Priority Group Agent',
+          pinned: false,
+          virtual: false,
+          sessionGroupId: 'folder-a',
+        });
+        await tx.insert(Schema.sessions).values({
+          id: 'session-priority-group',
+          slug: 'session-priority-group',
+          userId,
+          groupId: 'folder-b',
+        });
+        await tx.insert(Schema.agentsToSessions).values({
+          agentId: 'agent-priority-group',
+          sessionId: 'session-priority-group',
+          userId,
+        });
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      const folderA = result.groups.find((g) => g.id === 'folder-a');
+      const folderB = result.groups.find((g) => g.id === 'folder-b');
+      expect(folderA?.items.map((i) => i.id)).toContain('agent-priority-group');
+      expect(folderB?.items).toHaveLength(0);
+    });
+
+    it('should fall back to sessions.groupId when agents.sessionGroupId is null', async () => {
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.sessionGroups).values({
+          id: 'folder-fallback',
+          name: 'Fallback Folder',
+          sort: 0,
+          userId,
+        });
+        await tx.insert(Schema.agents).values({
+          id: 'agent-fallback-group',
+          userId,
+          title: 'Fallback Group Agent',
+          pinned: false,
+          virtual: false,
+          // sessionGroupId intentionally not set
+        });
+        await tx.insert(Schema.sessions).values({
+          id: 'session-fallback-group',
+          slug: 'session-fallback-group',
+          userId,
+          groupId: 'folder-fallback',
+        });
+        await tx.insert(Schema.agentsToSessions).values({
+          agentId: 'agent-fallback-group',
+          sessionId: 'session-fallback-group',
+          userId,
+        });
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      expect(result.groups).toHaveLength(1);
+      expect(result.groups[0].id).toBe('folder-fallback');
+      expect(result.groups[0].items.map((i) => i.id)).toContain('agent-fallback-group');
+    });
+  });
+
+  describe('getSidebarAgentList - chat group member avatars', () => {
+    it('should fall back to member avatars when chat group has no custom avatar', async () => {
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.chatGroups).values({
+          id: 'cg-members',
+          userId,
+          title: 'Members Group',
+          pinned: false,
+        });
+        await tx.insert(Schema.agents).values([
+          {
+            id: 'cg-member-1',
+            userId,
+            title: 'Member One',
+            avatar: '🤖',
+            backgroundColor: '#101010',
+            virtual: true,
+          },
+          {
+            id: 'cg-member-2',
+            userId,
+            title: 'Member Two',
+            avatar: '👤',
+            // no backgroundColor -> exercises `?? undefined` branch
+            virtual: true,
+          },
+        ]);
+        await tx.insert(Schema.chatGroupsAgents).values([
+          { agentId: 'cg-member-1', chatGroupId: 'cg-members', order: 0, userId },
+          { agentId: 'cg-member-2', chatGroupId: 'cg-members', order: 1, userId },
+        ]);
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      const group = result.ungrouped.find((i) => i.id === 'cg-members');
+      expect(group).toBeDefined();
+      expect(group!.type).toBe('group');
+      expect(Array.isArray(group!.avatar)).toBe(true);
+      const avatars = group!.avatar as Array<{ avatar: string; background?: string }>;
+      expect(avatars).toHaveLength(2);
+      expect(avatars[0]).toEqual({ avatar: '🤖', background: '#101010' });
+      // member without a backgroundColor should omit `background`
+      expect(avatars[1]).toEqual({ avatar: '👤', background: undefined });
+    });
+
+    it('should skip members without an avatar when building member avatar list', async () => {
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.chatGroups).values({
+          id: 'cg-noavatar',
+          userId,
+          title: 'No Avatar Members Group',
+          pinned: false,
+        });
+        await tx.insert(Schema.agents).values([
+          {
+            id: 'cg-has-avatar',
+            userId,
+            title: 'Has Avatar',
+            avatar: '🎉',
+            virtual: true,
+          },
+          {
+            id: 'cg-null-avatar',
+            userId,
+            title: 'No Avatar',
+            // avatar omitted -> should be skipped
+            virtual: true,
+          },
+        ]);
+        await tx.insert(Schema.chatGroupsAgents).values([
+          { agentId: 'cg-has-avatar', chatGroupId: 'cg-noavatar', order: 0, userId },
+          { agentId: 'cg-null-avatar', chatGroupId: 'cg-noavatar', order: 1, userId },
+        ]);
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      const group = result.ungrouped.find((i) => i.id === 'cg-noavatar');
+      expect(group).toBeDefined();
+      const avatars = group!.avatar as Array<{ avatar: string; background?: string }>;
+      // only the member with an avatar is included
+      expect(avatars).toHaveLength(1);
+      expect(avatars[0].avatar).toBe('🎉');
+    });
+  });
 });

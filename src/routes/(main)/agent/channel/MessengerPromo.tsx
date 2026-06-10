@@ -6,8 +6,8 @@ import { createStaticStyles } from 'antd-style';
 import { X } from 'lucide-react';
 import React, { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
@@ -66,7 +66,7 @@ const ICON_SIZE = 16;
 
 const MessengerPromo = memo(() => {
   const { t } = useTranslation('agent');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   const isDismissed = useGlobalStore(systemStatusSelectors.isBannerDismissed(MESSENGER_PROMO_ID));
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);

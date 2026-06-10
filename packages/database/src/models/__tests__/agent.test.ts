@@ -17,6 +17,7 @@ import {
   sessions,
   topics,
   users,
+  workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
@@ -1307,6 +1308,52 @@ describe('AgentModel', () => {
         expect(result).toBeDefined();
         expect(result?.slug).toBe('task-agent');
         expect(result?.virtual).toBe(true);
+      });
+    });
+
+    describe('workspace mode', () => {
+      it('should create workspace-scoped inbox agent', async () => {
+        const [workspace] = await serverDB
+          .insert(workspaces)
+          .values({ name: 'ws', primaryOwnerId: userId, slug: 'ws-slug' })
+          .returning();
+
+        const wsAgentModel = new AgentModel(serverDB, userId, workspace.id);
+        const result = await wsAgentModel.getBuiltinAgent(INBOX_SESSION_ID);
+
+        expect(result).toBeDefined();
+        expect(result?.slug).toBe(INBOX_SESSION_ID);
+        expect(result?.workspaceId).toBe(workspace.id);
+        expect(result?.userId).toBe(userId);
+      });
+
+      it('should allow workspace inbox to coexist with personal inbox for the same user', async () => {
+        const personal = await agentModel.getBuiltinAgent(INBOX_SESSION_ID);
+        expect(personal?.workspaceId).toBeNull();
+
+        const [workspace] = await serverDB
+          .insert(workspaces)
+          .values({ name: 'ws2', primaryOwnerId: userId, slug: 'ws2-slug' })
+          .returning();
+
+        const wsAgentModel = new AgentModel(serverDB, userId, workspace.id);
+        const ws = await wsAgentModel.getBuiltinAgent(INBOX_SESSION_ID);
+
+        expect(ws?.id).not.toBe(personal?.id);
+        expect(ws?.workspaceId).toBe(workspace.id);
+      });
+
+      it('should be idempotent in workspace mode', async () => {
+        const [workspace] = await serverDB
+          .insert(workspaces)
+          .values({ name: 'ws3', primaryOwnerId: userId, slug: 'ws3-slug' })
+          .returning();
+
+        const wsAgentModel = new AgentModel(serverDB, userId, workspace.id);
+        const first = await wsAgentModel.getBuiltinAgent(INBOX_SESSION_ID);
+        const second = await wsAgentModel.getBuiltinAgent(INBOX_SESSION_ID);
+
+        expect(first?.id).toBe(second?.id);
       });
     });
   });

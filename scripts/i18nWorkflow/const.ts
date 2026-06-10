@@ -8,7 +8,7 @@ export const localesDir = resolve(root, i18nConfig.output);
 export const localeDir = (locale: string) => resolve(localesDir, locale);
 export const localeDirJsonList = (locale: string) =>
   readdirSync(localeDir(locale)).filter((name) => name.includes('.json'));
-export const srcLocalesDir = resolve(root, './src/locales');
+export const srcLocalesDir = resolve(root, './packages/locales/src');
 export const entryLocaleJsonFilepath = (file: string) =>
   resolve(localesDir, i18nConfig.entryLocale, file);
 export const outputLocaleJsonFilepath = (locale: string, file: string) =>

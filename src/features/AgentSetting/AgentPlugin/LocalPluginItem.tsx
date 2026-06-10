@@ -5,14 +5,21 @@ import { memo } from 'react';
 import { useStore } from '../store';
 
 const MarketList = memo<{ id: string }>(({ id }) => {
-  const [toggleAgentPlugin, hasPlugin] = useStore((s) => [s.toggleAgentPlugin, !!s.config.plugins]);
+  const [toggleAgentPlugin, hasPlugin, disabled] = useStore((s) => [
+    s.toggleAgentPlugin,
+    !!s.config.plugins,
+    s.disabled,
+  ]);
   const plugins = useStore((s) => s.config.plugins || []);
 
   return (
     <Flexbox horizontal align={'center'} gap={8}>
       <Switch
         checked={!hasPlugin ? false : plugins.includes(id)}
+        disabled={disabled}
         onChange={() => {
+          if (disabled) return;
+
           toggleAgentPlugin(id);
         }}
       />

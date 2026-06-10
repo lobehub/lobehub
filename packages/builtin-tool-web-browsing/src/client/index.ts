@@ -9,6 +9,7 @@ export { WebBrowsingPlaceholders } from './Placeholder';
 
 // Portal component (detailed view in portal)
 export { default as WebBrowsingPortal } from './Portal';
+export { default as WebBrowsingPortalTitle } from './Portal/Title';
 
 // Reusable components
 export { CategoryAvatar, EngineAvatar, EngineAvatarGroup, SearchBar } from './components';

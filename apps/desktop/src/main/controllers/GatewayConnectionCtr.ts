@@ -13,8 +13,10 @@ import type {
   GetCommandOutputParams,
   GlobFilesParams,
   GrepContentParams,
+  InitWorkspaceParams,
   KillCommandParams,
   ListLocalFileParams,
+  ListProjectSkillsParams,
   LocalReadFileParams,
   LocalReadFilesParams,
   LocalSearchFilesParams,
@@ -28,12 +30,14 @@ import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
 
+import GitCtr from './GitCtr';
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, IpcMethod } from './index';
 import LocalFileCtr from './LocalFileCtr';
 import McpCtr from './McpCtr';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 import ShellCommandCtr from './ShellCommandCtr';
+import WorkspaceCtr from './WorkspaceCtr';
 
 /**
  * Inject the lh-notify protocol into the first turn of a new hetero-agent session.
@@ -162,6 +166,14 @@ export default class GatewayConnectionCtr extends ControllerModule {
     return this.app.getController(LocalFileCtr);
   }
 
+  private get workspaceCtr() {
+    return this.app.getController(WorkspaceCtr);
+  }
+
+  private get gitCtr() {
+    return this.app.getController(GitCtr);
+  }
+
   private get shellCommandCtr() {
     return this.app.getController(ShellCommandCtr);
   }
@@ -202,6 +214,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
     // Wire up agent run handler
     srv.setAgentRunHandler((request) => this.executeAgentRun(request));
+
+    // Wire up generic device RPC handler (server-internal method forwarding,
+    // e.g. workspace-init scans — never surfaced to the agent)
+    srv.setRpcHandler((method, params) => this.executeDeviceRpc(method, params));
 
     // Wire up device registrar (persists this device to the server registry)
     srv.setDeviceRegistrar((info) => this.registerDevice(info));
@@ -308,7 +324,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
    * renderer uses, so remote tool calls produce identical
    * `{ content, state, success }` envelopes — `content` is the LLM-facing
    * prompt text, `state` is the structured payload, both flow downstream
-   * intact (the gateway / DeviceProxy / RuntimeExecutors paths preserve them
+   * intact (the gateway / DeviceGateway / RuntimeExecutors paths preserve them
    * and write `state` to the tool message's `pluginState`).
    */
   private getLocalSystemRuntime(): LocalSystemExecutionRuntime {
@@ -333,6 +349,89 @@ export default class GatewayConnectionCtr extends ControllerModule {
       this.localSystemRuntime = new LocalSystemExecutionRuntime(service);
     }
     return this.localSystemRuntime;
+  }
+
+  /**
+   * Dispatch a generic server-internal device RPC (not an agent tool call) by
+   * method name. Currently only `initWorkspace` (scan the bound project root for
+   * skills + AGENTS.md); add new server-only device methods here.
+   */
+  private async executeDeviceRpc(method: string, params: unknown): Promise<unknown> {
+    switch (method) {
+      case 'initWorkspace': {
+        return this.workspaceCtr.initWorkspace(params as InitWorkspaceParams);
+      }
+
+      case 'getGitBranch': {
+        return this.gitCtr.getGitBranch((params as { path: string }).path);
+      }
+
+      case 'getLinkedPullRequest': {
+        return this.gitCtr.getLinkedPullRequest(params as { branch: string; path: string });
+      }
+
+      case 'getGitWorkingTreeStatus': {
+        return this.gitCtr.getGitWorkingTreeStatus((params as { path: string }).path);
+      }
+
+      case 'getGitAheadBehind': {
+        return this.gitCtr.getGitAheadBehind((params as { path: string }).path);
+      }
+
+      case 'listGitBranches': {
+        return this.gitCtr.listGitBranches((params as { path: string }).path);
+      }
+
+      case 'checkoutGitBranch': {
+        return this.gitCtr.checkoutGitBranch(
+          params as { branch: string; create?: boolean; path: string },
+        );
+      }
+
+      case 'pullGitBranch': {
+        return this.gitCtr.pullGitBranch(params as { path: string });
+      }
+
+      case 'pushGitBranch': {
+        return this.gitCtr.pushGitBranch(params as { path: string });
+      }
+
+      case 'getGitWorkingTreePatches': {
+        return this.gitCtr.getGitWorkingTreePatches((params as { path: string }).path);
+      }
+
+      case 'getGitWorkingTreeFiles': {
+        return this.gitCtr.getGitWorkingTreeFiles((params as { path: string }).path);
+      }
+
+      case 'getProjectFileIndex': {
+        return this.localFileCtr.getProjectFileIndex(params as { scope?: string });
+      }
+
+      case 'listProjectSkills': {
+        return this.workspaceCtr.listProjectSkills(params as ListProjectSkillsParams);
+      }
+
+      case 'getGitBranchDiff': {
+        return this.gitCtr.getGitBranchDiff(params as { baseRef?: string; path: string });
+      }
+
+      case 'listGitRemoteBranches': {
+        return this.gitCtr.listGitRemoteBranches((params as { path: string }).path);
+      }
+
+      case 'revertGitFile': {
+        return this.gitCtr.revertGitFile(params as { filePath: string; path: string });
+      }
+
+      case 'statPath': {
+        return this.workspaceCtr.statPath(params as { path: string });
+      }
+
+      default: {
+        throw new Error(`Unknown device RPC method: ${method}`);
+      }
+    }
   }
 
   private async executeToolCall(

@@ -1,7 +1,14 @@
 import type { ChatTopicStatus } from '@lobechat/types';
-import { Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
+import { Flexbox, Icon, Skeleton, Tag, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { CheckCircle2, Hand, HashIcon, Loader2Icon, MessageSquareDashed } from 'lucide-react';
+import {
+  CheckCircle2,
+  Hand,
+  HashIcon,
+  Loader2Icon,
+  MessageSquareDashed,
+  TriangleAlert,
+} from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -148,6 +155,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
   });
 
   const isCompleted = status === 'completed';
+  const isFailed = status === 'failed';
   const isRunning = status === 'running';
   const isWaitingForHuman = status === 'waitingForHuman';
 
@@ -198,6 +206,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
     return (
       <NavItem
         active={active}
+        titleColor={cssVar.colorText}
         icon={
           isLoading ? (
             <Icon spin color={cssVar.colorWarning} icon={Loader2Icon} size={'small'} />
@@ -233,6 +242,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
         disabled={editing}
         href={!editing ? href : undefined}
         title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
+        titleColor={cssVar.colorText}
         icon={(() => {
           if (isWaitingForHuman) {
             return <Icon icon={Hand} size={'small'} style={{ color: cssVar.colorInfo }} />;
@@ -240,6 +250,13 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId, stat
           if (isLoading || isRunning) {
             return (
               <Icon spin icon={Loader2Icon} size={'small'} style={{ color: cssVar.colorWarning }} />
+            );
+          }
+          if (isFailed) {
+            return (
+              <Tooltip title={t('failedStatusTip')}>
+                <Icon icon={TriangleAlert} size={'small'} style={{ color: cssVar.colorError }} />
+              </Tooltip>
             );
           }
           if (isCompleted) {

@@ -1,8 +1,9 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { useMount, usePrevious, useUnmount } from 'ahooks';
 import { useEffect, useMemo, useRef } from 'react';
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -17,7 +18,7 @@ const AgentIdSync = () => {
   const [searchParams] = useSearchParams();
   const searchParamsRef = useRef(searchParams);
   searchParamsRef.current = searchParams;
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const location = useLocation();
 
   // Resolve builtin agent slug to real agent ID

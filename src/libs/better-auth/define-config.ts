@@ -9,10 +9,8 @@ import { type BetterAuthOptions } from 'better-auth/minimal';
 import { betterAuth } from 'better-auth/minimal';
 import { admin, emailOTP, genericOAuth, magicLink } from 'better-auth/plugins';
 import { type BetterAuthPlugin } from 'better-auth/types';
-import { emailHarmony } from 'better-auth-harmony';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 
-import { businessEmailHarmonyOptions } from '@/business/server/better-auth';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import {
@@ -258,7 +256,6 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
       ...customOptions.plugins,
       emailWhitelist(),
       expo(),
-      emailHarmony(businessEmailHarmonyOptions),
       admin(),
       // Email OTP plugin for mobile verification
       emailOTP({

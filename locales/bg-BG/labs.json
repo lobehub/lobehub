@@ -5,8 +5,6 @@
   "features.agentSelfIteration.title": "Само-итерация на агента",
   "features.assistantMessageGroup.desc": "Групиране на съобщенията от агента и резултатите от извикванията на инструменти заедно за показване",
   "features.assistantMessageGroup.title": "Групиране на съобщения от агент",
-  "features.executionDeviceSwitcher.desc": "Показване на превключвателя за изпълнителни устройства в хетерогенната лента с инструменти на агента, за да можете да насочвате изпълненията към това устройство, облачен пясъчник или свързано отдалечено устройство.",
-  "features.executionDeviceSwitcher.title": "Превключвател за изпълнителни устройства",
   "features.gatewayMode.desc": "Изпълнявайте задачите на агента на сървъра чрез Gateway WebSocket вместо локално. Осигурява по-бързо изпълнение и намалява използването на ресурси от клиента.",
   "features.gatewayMode.title": "Изпълнение на агента от страна на сървъра (Gateway)",
   "features.groupChat.desc": "Активиране на координация в групов чат с множество агенти.",
@@ -15,7 +13,7 @@
   "features.imessage.title": "Канал iMessage",
   "features.inputMarkdown.desc": "Реално време визуализация на Markdown в полето за въвеждане (удебелен текст, кодови блокове, таблици и др.).",
   "features.inputMarkdown.title": "Визуализация на Markdown при въвеждане",
-  "features.platformAgent.desc": "Показване на записа \"Добавяне на платформен агент\" в менюто за създаване. Платформените агенти (например OpenClaw, Hermes) работят на свързано устройство и комуникират обратно чрез lh connect.",
-  "features.platformAgent.title": "Създаване на платформен агент",
+  "features.platformAgent.desc": "Показване на записа \"Свържи агент\" в менюто за създаване. Свързаните агенти (напр. OpenClaw, Hermes) работят на вашите устройства и комуникират обратно чрез lh connect.",
+  "features.platformAgent.title": "Свържи агент",
   "title": "Лаборатория"
 }

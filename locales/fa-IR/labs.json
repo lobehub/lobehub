@@ -5,8 +5,6 @@
   "features.agentSelfIteration.title": "خود‌تکراری عامل",
   "features.assistantMessageGroup.desc": "نمایش گروهی پیام‌های عامل و نتایج ابزارهای فراخوانی‌شده به‌صورت یکجا",
   "features.assistantMessageGroup.title": "گروه‌بندی پیام‌های عامل",
-  "features.executionDeviceSwitcher.desc": "نمایش تغییر‌دهنده دستگاه اجرا در نوار ابزار نماینده ناهمگن تا بتوانید اجراها را به این دستگاه، یک محیط ابری یا یک دستگاه راه دور متصل هدایت کنید.",
-  "features.executionDeviceSwitcher.title": "تغییر‌دهنده دستگاه اجرا",
   "features.gatewayMode.desc": "اجرای وظایف ایجنت روی سرور از طریق وب‌سوکت Gateway به‌جای اجرای محلی. این کار سرعت اجرا را افزایش داده و مصرف منابع در دستگاه کاربر را کاهش می‌دهد.",
   "features.gatewayMode.title": "اجرای ایجنت در سمت سرور (Gateway)",
   "features.groupChat.desc": "فعال‌سازی هماهنگی گفت‌وگوی گروهی چندعاملی.",
@@ -15,7 +13,7 @@
   "features.imessage.title": "کانال iMessage",
   "features.inputMarkdown.desc": "نمایش زنده Markdown در ناحیه ورودی (متن پررنگ، بلوک‌های کد، جدول‌ها و غیره).",
   "features.inputMarkdown.title": "نمایش Markdown در ورودی",
-  "features.platformAgent.desc": "نمایش گزینه \"افزودن نماینده پلتفرم\" در منوی ایجاد. نمایندگان پلتفرم (مانند OpenClaw، Hermes) روی یک دستگاه متصل اجرا می‌شوند و از طریق lh connect ارتباط برقرار می‌کنند.",
-  "features.platformAgent.title": "ایجاد نماینده پلتفرم",
+  "features.platformAgent.desc": "نمایش گزینه \"اتصال عامل\" در منوی ایجاد. عوامل متصل (مانند OpenClaw، Hermes) بر روی دستگاه‌های شما اجرا می‌شوند و از طریق lh connect ارتباط برقرار می‌کنند.",
+  "features.platformAgent.title": "اتصال عامل",
   "title": "آزمایشگاه‌ها"
 }

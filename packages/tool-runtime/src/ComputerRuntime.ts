@@ -307,6 +307,7 @@ export abstract class ComputerRuntime {
       }
 
       const r = result.result || {};
+      const commandSuccess = typeof r.success === 'boolean' ? r.success : result.success;
 
       const state: RunCommandState = {
         commandId: r.commandId || r.shell_id,
@@ -316,7 +317,7 @@ export abstract class ComputerRuntime {
         output: r.output,
         stderr: r.stderr,
         stdout: r.stdout,
-        success: result.success,
+        success: commandSuccess,
       };
 
       const content = formatCommandResult({
@@ -325,7 +326,7 @@ export abstract class ComputerRuntime {
         shellId: r.commandId || r.shell_id,
         stderr: r.stderr,
         stdout: r.stdout || r.output,
-        success: result.success,
+        success: commandSuccess,
       });
 
       return { content, state, success: true };
@@ -346,19 +347,21 @@ export abstract class ComputerRuntime {
       }
 
       const r = result.result || {};
+      const outputSuccess = typeof r.success === 'boolean' ? r.success : result.success;
 
       const state: GetCommandOutputState = {
         error: r.error,
         exitCode: r.exitCode ?? r.exit_code,
         newOutput: r.newOutput || r.output,
-        success: result.success,
+        running: r.running ?? false,
+        success: outputSuccess,
       };
 
       const content = formatCommandOutput({
         error: r.error,
         exitCode: r.exitCode ?? r.exit_code,
         output: r.newOutput || r.output,
-        success: result.success,
+        success: outputSuccess,
       });
 
       return { content, state, success: true };
@@ -379,16 +382,19 @@ export abstract class ComputerRuntime {
         });
       }
 
+      const killSuccess =
+        typeof result.result?.success === 'boolean' ? result.result.success : result.success;
+
       const state: KillCommandState = {
         commandId: args.commandId,
         error: result.result?.error,
-        success: result.success,
+        success: killSuccess,
       };
 
       const content = formatKillResult({
         error: result.result?.error,
         shellId: args.commandId,
-        success: result.success,
+        success: killSuccess,
       });
 
       return { content, state, success: true };

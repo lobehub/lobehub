@@ -57,7 +57,7 @@ lsof -ti:3011 | xargs kill
 pnpm run dev:next
 ```
 
-**Important:** Server-side code changes in the submodule (`lobehub/src/server/`, `lobehub/packages/`) require a server restart. Next.js hot-reload may not pick up changes in submodule packages.
+**Important:** Server-side code changes in the submodule (`lobehub/apps/server/src/`, `lobehub/src/server/`, `lobehub/packages/`) require a server restart. Next.js hot-reload may not pick up changes in submodule packages.
 
 ### Step 2: Check CLI Authentication
 
@@ -150,14 +150,15 @@ $CLI provider test <provider-id>
 
 ### When Server Restart is Needed
 
-| Change Location                           | Restart? |
-| ----------------------------------------- | -------- |
-| `lobehub/src/server/` (routers, services) | Yes      |
-| `lobehub/packages/database/` (models)     | Yes      |
-| `lobehub/packages/types/`                 | Yes      |
-| `lobehub/packages/prompts/`               | Yes      |
-| `lobehub/apps/cli/` (CLI code)            | No       |
-| `src/` (cloud overrides)                  | Yes      |
+| Change Location                                         | Restart? |
+| ------------------------------------------------------- | -------- |
+| `lobehub/apps/server/src/` (routers, services, modules) | Yes      |
+| `lobehub/src/server/` (agent-hono, workflows-hono)      | Yes      |
+| `lobehub/packages/database/` (models)                   | Yes      |
+| `lobehub/packages/types/`                               | Yes      |
+| `lobehub/packages/prompts/`                             | Yes      |
+| `lobehub/apps/cli/` (CLI code)                          | No       |
+| `src/` (cloud overrides)                                | Yes      |
 
 ## Troubleshooting
 

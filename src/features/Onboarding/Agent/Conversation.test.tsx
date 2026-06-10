@@ -170,7 +170,7 @@ describe('AgentOnboardingConversation', () => {
         allowExpand: false,
         leftActions: [],
         rightActions: [],
-        showRuntimeConfig: false,
+        showControlBar: false,
       }),
     );
   });

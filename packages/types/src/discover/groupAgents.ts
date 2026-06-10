@@ -98,6 +98,10 @@ export interface DiscoverGroupAgentItem extends MetaData {
    */
   memberCount: number;
   /**
+   * Owner account type, used to resolve the author profile link
+   */
+  ownerType?: 'user' | 'organization';
+  /**
    * Number of plugins across all member agents
    */
   pluginCount?: number;

@@ -26,8 +26,8 @@ import {
   Zap,
 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useEvalStore } from '@/store/eval';
 
 const SYSTEM_ICONS = [
@@ -56,7 +56,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const BenchmarkHead = memo<{ id: string }>(({ id }) => {
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const useFetchBenchmarks = useEvalStore((s) => s.useFetchBenchmarks);
   useFetchBenchmarks();
   const benchmark = useEvalStore((s) => s.benchmarkDetailMap[id]);

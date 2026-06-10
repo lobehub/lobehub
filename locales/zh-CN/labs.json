@@ -5,8 +5,6 @@
   "features.agentSelfIteration.title": "Agent 自我迭代",
   "features.assistantMessageGroup.desc": "将代理消息及其工具调用结果组合在一起显示",
   "features.assistantMessageGroup.title": "代理消息分组",
-  "features.executionDeviceSwitcher.desc": "在异构 Agent 工具栏中展示「执行设备」切换器，可将运行任务路由到本机、云端沙箱或已绑定的远程设备。",
-  "features.executionDeviceSwitcher.title": "执行设备切换器",
   "features.gatewayMode.desc": "通过 Gateway 在服务端执行 Agent 任务。可实现关闭浏览器后仍然执行 agent。",
   "features.gatewayMode.title": "服务端代理执行（Gateway）",
   "features.groupChat.desc": "启用多代理协同群聊功能。",
@@ -15,7 +13,7 @@
   "features.imessage.title": "iMessage 渠道",
   "features.inputMarkdown.desc": "在输入区域实时渲染 Markdown（粗体、代码块、表格等）",
   "features.inputMarkdown.title": "输入框 Markdown 渲染",
-  "features.platformAgent.desc": "在创建菜单中显示「添加平台 Agent」入口。平台 Agent（如 OpenClaw、Hermes）运行在已连接的设备上，通过 lh connect 与 LobeHub 通信。",
-  "features.platformAgent.title": "平台 Agent 创建",
+  "features.platformAgent.desc": "在创建菜单中显示「接入助理」入口。接入的助理（如 OpenClaw、Hermes）运行在你自己的设备上，通过 lh connect 与 LobeHub 通信。",
+  "features.platformAgent.title": "接入助理",
   "title": "实验室"
 }

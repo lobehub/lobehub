@@ -1,3 +1,6 @@
+import { mkdtemp, readdir, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
 import { Command } from 'commander';
@@ -644,5 +647,225 @@ describe('hetero exec command', () => {
       'ingest:agent_runtime_end:terminal',
       'finish',
     ]);
+  });
+
+  it('resets the per-message text accumulator at message boundaries (no cross-message duplication)', async () => {
+    // LOBE-10157 Bug 3: the `replace` snapshot accumulator must not span
+    // message boundaries. Two assistant messages separated by a
+    // stream_end/stream_start boundary must each snapshot only their OWN
+    // text — otherwise the second message re-emits the first's text verbatim.
+    const textSnapshots: string[] = [];
+    mockHeteroIngestMutate.mockImplementation(async ({ events }: any) => {
+      for (const e of events) {
+        if (e.type === 'stream_chunk' && e.data?.chunkType === 'text') {
+          textSnapshots.push(e.data.content);
+        }
+      }
+      return { ack: true };
+    });
+
+    mockSpawnAgent.mockReturnValue(
+      createFakeHandle({
+        events: [
+          {
+            data: { chunkType: 'text', content: 'first message' },
+            operationId: 'op-server',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'stream_chunk',
+          },
+          { data: {}, operationId: 'op-server', stepIndex: 0, timestamp: 2, type: 'stream_end' },
+          {
+            data: { newStep: true, provider: 'claude-code' },
+            operationId: 'op-server',
+            stepIndex: 1,
+            timestamp: 3,
+            type: 'stream_start',
+          },
+          {
+            data: { chunkType: 'text', content: 'second message' },
+            operationId: 'op-server',
+            stepIndex: 1,
+            timestamp: 4,
+            type: 'stream_chunk',
+          },
+          {
+            data: { reason: 'success' },
+            operationId: 'op-server',
+            stepIndex: 1,
+            timestamp: 5,
+            type: 'agent_runtime_end',
+          },
+        ],
+        exitCode: 0,
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-server',
+      '--render',
+      'none',
+    ]);
+
+    // Second snapshot carries ONLY the second message — not "first messagesecond message".
+    expect(textSnapshots).toEqual(['first message', 'second message']);
+  });
+
+  it('forwards subagent text raw (no snapshot coalescing, no cross-scope pollution of main text)', async () => {
+    // Subagent text is emitted as ONE full block per turn and the server's
+    // subagent path *appends* it (no snapshot semantics). It must therefore
+    // bypass the main-agent `replace`-snapshot coalescing: folding it into the
+    // shared accumulator would (a) splice main text into the subagent message
+    // and (b) make the server append a replace-snapshot → duplicated content.
+    const ingested: any[] = [];
+    mockHeteroIngestMutate.mockImplementation(async ({ events }: any) => {
+      for (const e of events) ingested.push(e);
+      return { ack: true };
+    });
+
+    const subagent = { parentToolCallId: 'task-1', subagentMessageId: 'msg-sub-1' };
+
+    mockSpawnAgent.mockReturnValue(
+      createFakeHandle({
+        events: [
+          // Main-agent streamed text delta (coalesced).
+          {
+            data: { chunkType: 'text', content: 'hello ' },
+            operationId: 'op-server',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'stream_chunk',
+          },
+          // Subagent full-block text — must pass through untouched.
+          {
+            data: { chunkType: 'text', content: 'I checked the files.', subagent },
+            operationId: 'op-server',
+            stepIndex: 0,
+            timestamp: 2,
+            type: 'stream_chunk',
+          },
+          {
+            data: {
+              chunkType: 'tools_calling',
+              toolsCalling: [
+                {
+                  apiName: 'Bash',
+                  arguments: '{"cmd":"ls"}',
+                  id: 'tc-1',
+                  identifier: 'bash',
+                  type: 'default',
+                },
+              ],
+            },
+            operationId: 'op-server',
+            stepIndex: 1,
+            timestamp: 3,
+            type: 'stream_chunk',
+          },
+          {
+            data: { reason: 'success' },
+            operationId: 'op-server',
+            stepIndex: 1,
+            timestamp: 4,
+            type: 'agent_runtime_end',
+          },
+        ],
+        exitCode: 0,
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-server',
+      '--render',
+      'none',
+    ]);
+
+    const textEvents = ingested.filter(
+      (e) => e.type === 'stream_chunk' && e.data?.chunkType === 'text',
+    );
+
+    // Subagent text forwarded verbatim: keeps its subagent tag, original
+    // content, and is NOT converted into a replace snapshot.
+    const subagentText = textEvents.find((e) => e.data?.subagent);
+    expect(subagentText).toBeDefined();
+    expect(subagentText.data.content).toBe('I checked the files.');
+    expect(subagentText.data.snapshotMode).toBeUndefined();
+
+    // Main snapshot is untainted by the subagent block.
+    const mainText = textEvents.find((e) => !e.data?.subagent);
+    expect(mainText).toBeDefined();
+    expect(mainText.data.content).toBe('hello ');
+    expect(mainText.data.snapshotMode).toBe('replace');
+    expect(mainText.data.content).not.toContain('I checked');
+  });
+
+  it('--raw-dump writes a session folder with meta.json, wires onRawStdout, and tees stderr', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'hetero-rawdump-'));
+
+    mockSpawnAgent.mockReturnValue(
+      createFakeHandle({
+        events: [
+          {
+            data: { chunkType: 'text', content: 'hi' },
+            operationId: 'op-raw',
+            stepIndex: 0,
+            timestamp: 1,
+            type: 'stream_chunk',
+          },
+        ],
+        exitCode: 0,
+        stderrChunks: ['warning: something happened\n'],
+      }),
+    );
+
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'claude-code',
+      '--prompt',
+      'hi',
+      '--operation-id',
+      'op-raw',
+      '--render',
+      'none',
+      '--raw-dump',
+      root,
+    ]);
+
+    // The raw stdout tee is handed to spawnAgent (the package captures the
+    // pre-adapter bytes — exercised in spawnAgent.test.ts).
+    expect(typeof mockSpawnAgent.mock.calls[0][0].onRawStdout).toBe('function');
+
+    // One session folder per exec, keyed by the operation id.
+    const sessions = await readdir(root);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toContain('op-raw');
+    const sessionDir = path.join(root, sessions[0]!);
+
+    const meta = JSON.parse(await readFile(path.join(sessionDir, 'meta.json'), 'utf8'));
+    expect(meta).toMatchObject({ agentType: 'claude-code', operationId: 'op-raw' });
+
+    // stderr is teed to the attempt's log file.
+    const stderrDump = await readFile(path.join(sessionDir, 'attempt-1.stderr.log'), 'utf8');
+    expect(stderrDump).toContain('warning: something happened');
   });
 });

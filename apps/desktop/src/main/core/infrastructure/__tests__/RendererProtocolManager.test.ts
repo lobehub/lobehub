@@ -1,27 +1,41 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { RendererProtocolManager } from '../RendererProtocolManager';
+import {
+  RendererProtocolManager,
+  StaticRendererFallback,
+  ViteRendererFallback,
+} from '../RendererProtocolManager';
 
-const { mockApp, mockPathExistsSync, mockProtocol, mockReadFile, mockStat, protocolHandlerRef } =
-  vi.hoisted(() => {
-    const protocolHandlerRef = { current: null as any };
+const {
+  mockApp,
+  mockFetch,
+  mockPathExistsSync,
+  mockProtocol,
+  mockReadFile,
+  mockStat,
+  protocolHandlerRef,
+} = vi.hoisted(() => {
+  const protocolHandlerRef = { current: null as any };
 
-    return {
-      mockApp: {
-        isReady: vi.fn().mockReturnValue(true),
-        whenReady: vi.fn().mockResolvedValue(undefined),
-      },
-      mockPathExistsSync: vi.fn().mockReturnValue(true),
-      mockProtocol: {
-        handle: vi.fn((_scheme: string, handler: any) => {
-          protocolHandlerRef.current = handler;
-        }),
-      },
-      mockReadFile: vi.fn(),
-      mockStat: vi.fn(),
-      protocolHandlerRef,
-    };
-  });
+  return {
+    mockApp: {
+      isReady: vi.fn().mockReturnValue(true),
+      whenReady: vi.fn().mockResolvedValue(undefined),
+    },
+    mockFetch: vi.fn(),
+    mockPathExistsSync: vi.fn().mockReturnValue(true),
+    mockProtocol: {
+      handle: vi.fn((_scheme: string, handler: any) => {
+        protocolHandlerRef.current = handler;
+      }),
+    },
+    mockReadFile: vi.fn(),
+    mockStat: vi.fn(),
+    protocolHandlerRef,
+  };
+});
+
+vi.stubGlobal('fetch', mockFetch);
 
 vi.mock('electron', () => ({
   app: mockApp,
@@ -46,7 +60,7 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
-describe('RendererProtocolManager', () => {
+describe('RendererProtocolManager + StaticRendererFallback', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     protocolHandlerRef.current = null;
@@ -59,7 +73,14 @@ describe('RendererProtocolManager', () => {
     protocolHandlerRef.current = null;
   });
 
-  it('should fall back to entry HTML when resolve returns 404.html for non-asset routes', async () => {
+  const buildStaticManager = (resolve: (url: URL) => Promise<string | null>) => {
+    const fallback = new StaticRendererFallback('/export', resolve);
+    const manager = new RendererProtocolManager({ fallback });
+    manager.registerHandler();
+    return manager;
+  };
+
+  it('falls back to entry HTML when resolve returns 404.html for non-asset routes', async () => {
     const resolveRendererFilePath = vi.fn(async (url: URL) => {
       if (url.pathname === '/missing') return '/export/404.html';
       if (url.pathname === '/') return '/export/index.html';
@@ -67,12 +88,7 @@ describe('RendererProtocolManager', () => {
     });
     mockReadFile.mockImplementation(async (path: string) => Buffer.from(`content:${path}`));
 
-    const manager = new RendererProtocolManager({
-      rendererDir: '/export',
-      resolveRendererFilePath,
-    });
-
-    manager.registerHandler();
+    buildStaticManager(resolveRendererFilePath);
     expect(mockProtocol.handle).toHaveBeenCalled();
     const handler = protocolHandlerRef.current;
 
@@ -92,7 +108,7 @@ describe('RendererProtocolManager', () => {
     expect(response.status).toBe(200);
   });
 
-  it('should serve 404.html when explicitly requested', async () => {
+  it('serves 404.html when explicitly requested', async () => {
     const resolveRendererFilePath = vi.fn(async (url: URL) => {
       if (url.pathname === '/404.html') return '/export/404.html';
       if (url.pathname === '/') return '/export/index.html';
@@ -100,12 +116,7 @@ describe('RendererProtocolManager', () => {
     });
     mockReadFile.mockImplementation(async (path: string) => Buffer.from(`content:${path}`));
 
-    const manager = new RendererProtocolManager({
-      rendererDir: '/export',
-      resolveRendererFilePath,
-    });
-
-    manager.registerHandler();
+    buildStaticManager(resolveRendererFilePath);
     const handler = protocolHandlerRef.current;
 
     const response = await handler({
@@ -119,36 +130,30 @@ describe('RendererProtocolManager', () => {
     expect(response.status).toBe(200);
   });
 
-  it('should return 404 for missing asset requests without fallback', async () => {
+  it('returns 404 for missing asset requests without fallback', async () => {
     const resolveRendererFilePath = vi.fn(async (_url: URL) => null);
 
-    const manager = new RendererProtocolManager({
-      rendererDir: '/export',
-      resolveRendererFilePath,
-    });
-
-    manager.registerHandler();
+    buildStaticManager(resolveRendererFilePath);
     const handler = protocolHandlerRef.current;
 
-    const response = await handler({ url: 'app://renderer/logo.png' } as any);
+    const response = await handler({
+      headers: new Headers(),
+      method: 'GET',
+      url: 'app://renderer/logo.png',
+    } as any);
 
     expect(resolveRendererFilePath).toHaveBeenCalledTimes(1);
     expect(response.status).toBe(404);
   });
 
-  it('should support Range requests for media assets', async () => {
+  it('supports Range requests for media assets', async () => {
     const resolveRendererFilePath = vi.fn(async (_url: URL) => '/export/intro-video.mp4');
     const payload = Buffer.from('0123456789');
 
     mockStat.mockImplementation(async () => ({ size: payload.length }));
     mockReadFile.mockImplementation(async () => payload);
 
-    const manager = new RendererProtocolManager({
-      rendererDir: '/export',
-      resolveRendererFilePath,
-    });
-
-    manager.registerHandler();
+    buildStaticManager(resolveRendererFilePath);
     const handler = protocolHandlerRef.current;
 
     const response = await handler({
@@ -165,5 +170,127 @@ describe('RendererProtocolManager', () => {
 
     const buf = Buffer.from(await response.arrayBuffer());
     expect(buf.toString()).toBe('01');
+  });
+
+  it('runs interceptors before the fallback and short-circuits on first non-null Response', async () => {
+    const resolveRendererFilePath = vi.fn(async () => '/export/index.html');
+    mockReadFile.mockImplementation(async () => Buffer.from('static'));
+
+    const fallback = new StaticRendererFallback('/export', resolveRendererFilePath);
+    const manager = new RendererProtocolManager({ fallback });
+
+    manager.addRequestInterceptor(async () => null);
+    manager.addRequestInterceptor(async (request) =>
+      new URL(request.url).pathname === '/trpc/hello'
+        ? new Response('intercepted', { status: 200 })
+        : null,
+    );
+
+    manager.registerHandler();
+    const handler = protocolHandlerRef.current;
+
+    const intercepted = await handler({
+      headers: new Headers(),
+      method: 'GET',
+      url: 'app://renderer/trpc/hello',
+    } as any);
+    expect(intercepted.status).toBe(200);
+    expect(await intercepted.text()).toBe('intercepted');
+    expect(resolveRendererFilePath).not.toHaveBeenCalled();
+
+    const fallthrough = await handler({
+      headers: new Headers(),
+      method: 'GET',
+      url: 'app://renderer/anything',
+    } as any);
+    expect(fallthrough.status).toBe(200);
+    expect(await fallthrough.text()).toBe('static');
+  });
+
+  it('returns 404 for cross-host requests', async () => {
+    const resolveRendererFilePath = vi.fn(async () => '/export/index.html');
+    buildStaticManager(resolveRendererFilePath);
+    const handler = protocolHandlerRef.current;
+
+    const response = await handler({
+      headers: new Headers(),
+      method: 'GET',
+      url: 'app://elsewhere/index.html',
+    } as any);
+
+    expect(response.status).toBe(404);
+    expect(resolveRendererFilePath).not.toHaveBeenCalled();
+  });
+});
+
+describe('ViteRendererFallback', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    protocolHandlerRef.current = null;
+    mockApp.isReady.mockReturnValue(true);
+  });
+
+  it('forwards GET requests to the Vite origin preserving pathname + search', async () => {
+    mockFetch.mockResolvedValue(new Response('vite-served', { status: 200 }));
+
+    const fallback = new ViteRendererFallback('http://localhost:5173');
+    const manager = new RendererProtocolManager({ fallback });
+    manager.registerHandler();
+    const handler = protocolHandlerRef.current;
+
+    const response = await handler({
+      headers: new Headers({ Accept: 'text/html' }),
+      method: 'GET',
+      url: 'app://renderer/src/main.tsx?t=12345',
+    } as any);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [target, init] = mockFetch.mock.calls[0]!;
+    expect(target).toBe('http://localhost:5173/src/main.tsx?t=12345');
+    expect((init as RequestInit).method).toBe('GET');
+    const headers = (init as RequestInit).headers as Headers;
+    expect(headers.get('Accept')).toBe('text/html');
+    expect(headers.get('Host')).toBeNull();
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('vite-served');
+  });
+
+  it('forwards body and sets duplex for non-GET requests', async () => {
+    mockFetch.mockResolvedValue(new Response('ok', { status: 200 }));
+
+    const fallback = new ViteRendererFallback('http://localhost:5173/');
+    const manager = new RendererProtocolManager({ fallback });
+    manager.registerHandler();
+    const handler = protocolHandlerRef.current;
+
+    await handler({
+      headers: new Headers(),
+      method: 'POST',
+      body: 'payload' as any,
+      url: 'app://renderer/__hmr',
+    } as any);
+
+    const [target, init] = mockFetch.mock.calls[0]!;
+    expect(target).toBe('http://localhost:5173/__hmr');
+    expect((init as RequestInit & { duplex?: string }).duplex).toBe('half');
+    expect((init as any).body).toBe('payload');
+  });
+
+  it('returns 502 when fetch throws', async () => {
+    mockFetch.mockRejectedValue(new Error('ECONNREFUSED'));
+
+    const fallback = new ViteRendererFallback('http://localhost:5173');
+    const manager = new RendererProtocolManager({ fallback });
+    manager.registerHandler();
+    const handler = protocolHandlerRef.current;
+
+    const response = await handler({
+      headers: new Headers(),
+      method: 'GET',
+      url: 'app://renderer/@vite/client',
+    } as any);
+
+    expect(response.status).toBe(502);
   });
 });

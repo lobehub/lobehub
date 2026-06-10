@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import type {
   AiModelSortMap,
   AiProviderModelListItem,
@@ -131,6 +131,7 @@ export class AiModelModel {
       .onConflictDoUpdate({
         set: value,
         target: [aiModels.id, aiModels.providerId, aiModels.userId],
+        targetWhere: isNull(aiModels.workspaceId),
       });
   };
 
@@ -157,6 +158,7 @@ export class AiModelModel {
       .onConflictDoUpdate({
         set: updateValues,
         target: [aiModels.id, aiModels.providerId, aiModels.userId],
+        targetWhere: isNull(aiModels.workspaceId),
       });
   };
 
@@ -179,6 +181,7 @@ export class AiModelModel {
       .values(records)
       .onConflictDoNothing({
         target: [aiModels.id, aiModels.userId, aiModels.providerId],
+        where: isNull(aiModels.workspaceId),
       })
       .returning();
   };
@@ -227,6 +230,7 @@ export class AiModelModel {
           updatedAt: sql`excluded.updated_at`,
         },
         target: [aiModels.id, aiModels.userId, aiModels.providerId],
+        targetWhere: isNull(aiModels.workspaceId),
       });
   };
 
@@ -282,6 +286,7 @@ export class AiModelModel {
           .onConflictDoUpdate({
             set: updateValues,
             target: [aiModels.id, aiModels.userId, aiModels.providerId],
+            targetWhere: isNull(aiModels.workspaceId),
           });
       });
 

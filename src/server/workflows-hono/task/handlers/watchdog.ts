@@ -23,13 +23,14 @@ export async function watchdog(c: Context) {
     const failed: string[] = [];
 
     for (const task of stuckTasks) {
-      const taskModel = new TaskModel(db, task.createdByUserId);
+      const wsId = task.workspaceId ?? undefined;
+      const taskModel = new TaskModel(db, task.createdByUserId, wsId);
       await taskModel.updateStatus(task.id, 'failed', {
         completedAt: new Date(),
         error: 'Heartbeat timeout',
       });
 
-      const briefModel = new BriefModel(db, task.createdByUserId);
+      const briefModel = new BriefModel(db, task.createdByUserId, wsId);
       await briefModel.create({
         agentId: task.assigneeAgentId || undefined,
         priority: 'urgent',

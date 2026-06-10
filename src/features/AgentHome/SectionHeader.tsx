@@ -4,7 +4,8 @@ import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { type LucideIcon } from 'lucide-react';
 import { memo } from 'react';
-import { Link } from 'react-router-dom';
+
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 interface SectionHeaderProps {
   actionLabel?: string;
@@ -21,11 +22,11 @@ const SectionHeader = memo<SectionHeaderProps>(({ icon, title, actionLabel, acti
         <Text color={cssVar.colorTextSecondary}>{title}</Text>
       </Flexbox>
       {actionLabel && actionUrl && (
-        <Link to={actionUrl} style={{ color: 'inherit', textDecoration: 'none' }}>
+        <WorkspaceLink style={{ color: 'inherit', textDecoration: 'none' }} to={actionUrl}>
           <Text fontSize={12} type={'secondary'}>
             {actionLabel}
           </Text>
-        </Link>
+        </WorkspaceLink>
       )}
     </Flexbox>
   );

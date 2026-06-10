@@ -43,6 +43,7 @@ import ThinkingLevelSlider from './ThinkingLevelSlider';
 import ThinkingSlider from './ThinkingSlider';
 
 interface ControlsFormProps {
+  disabled?: boolean;
   model?: string;
   onUpdatingChange?: (updating: boolean) => void;
   provider?: string;
@@ -63,7 +64,7 @@ const resolveEnableReasoningInitialValue = (config: LobeAgentChatConfig) => {
 };
 
 const ControlsForm = memo<ControlsFormProps>(
-  ({ model: modelProp, onUpdatingChange, provider: providerProp }) => {
+  ({ disabled, model: modelProp, onUpdatingChange, provider: providerProp }) => {
     const { t } = useTranslation('chat');
     const agentId = useAgentId();
     const { updateAgentChatConfig } = useUpdateAgentConfig();
@@ -111,7 +112,7 @@ const ControlsForm = memo<ControlsFormProps>(
 
     const items = [
       {
-        children: <ContextCachingSwitch />,
+        children: <ContextCachingSwitch disabled={disabled} />,
         desc: (
           <span style={isNarrow ? descNarrow : descWide}>
             <Trans i18nKey={'extendParams.disableContextCaching.desc'} ns={'chat'}>
@@ -133,7 +134,7 @@ const ControlsForm = memo<ControlsFormProps>(
         name: 'disableContextCaching',
       },
       {
-        children: <Switch size={'small'} />,
+        children: <Switch disabled={disabled} size={'small'} />,
         desc: (
           <span style={isNarrow ? descNarrow : descWide}>
             <Trans i18nKey={'extendParams.enableReasoning.desc'} ns={'chat'}>
@@ -145,6 +146,18 @@ const ControlsForm = memo<ControlsFormProps>(
         layout: isNarrow ? 'vertical' : 'horizontal',
         minWidth: undefined,
         name: 'enableReasoning',
+      },
+      {
+        children: <Switch disabled={disabled} size={'small'} />,
+        desc: isNarrow ? (
+          <span style={descNarrow}>{t('extendParams.preserveThinking.desc')}</span>
+        ) : (
+          t('extendParams.preserveThinking.desc')
+        ),
+        label: t('extendParams.preserveThinking.title'),
+        layout: isNarrow ? 'vertical' : 'horizontal',
+        minWidth: undefined,
+        name: 'preserveThinking',
       },
       {
         children: <Switch size={'small'} />,
@@ -361,7 +374,7 @@ const ControlsForm = memo<ControlsFormProps>(
         tag: 'thinkingBudget',
       },
       {
-        children: <Switch size={'small'} />,
+        children: <Switch disabled={disabled} size={'small'} />,
         desc: isNarrow ? (
           <span style={descNarrow}>{t('extendParams.urlContext.desc')}</span>
         ) : (
@@ -475,27 +488,35 @@ const ControlsForm = memo<ControlsFormProps>(
     ].filter(Boolean) as FormItemProps[];
 
     return (
-      <Form
-        form={form}
-        initialValues={initialValues}
-        itemsType={'flat'}
-        size={'small'}
-        style={{ fontSize: 12 }}
-        variant={'borderless'}
-        items={
-          (modelExtendParams || [])
-            .map((item: any) => items.find((i) => i.name === item))
-            .filter(Boolean) as FormItemProps[]
-        }
-        onValuesChange={async (values) => {
-          onUpdatingChange?.(true);
-          try {
-            await updateAgentChatConfig(values);
-          } finally {
-            onUpdatingChange?.(false);
-          }
+      <div
+        style={{
+          opacity: disabled ? 0.5 : undefined,
+          pointerEvents: disabled ? 'none' : undefined,
         }}
-      />
+      >
+        <Form
+          form={form}
+          initialValues={initialValues}
+          itemsType={'flat'}
+          size={'small'}
+          style={{ fontSize: 12 }}
+          variant={'borderless'}
+          items={
+            (modelExtendParams || [])
+              .map((item: any) => items.find((i) => i.name === item))
+              .filter(Boolean) as FormItemProps[]
+          }
+          onValuesChange={async (values) => {
+            if (disabled) return;
+            onUpdatingChange?.(true);
+            try {
+              await updateAgentChatConfig(values);
+            } finally {
+              onUpdatingChange?.(false);
+            }
+          }}
+        />
+      </div>
     );
   },
 );

@@ -16,6 +16,7 @@ interface BodyProps {
   randomId: string;
   signInUrl: string;
   tokenData?: PeekedToken | null;
+  userAvatar?: string | null;
 }
 
 const Body = memo<BodyProps>(({ platform, ...rest }) => {

@@ -5,8 +5,6 @@
   "features.agentSelfIteration.title": "Auto-iterazione dell'agente",
   "features.assistantMessageGroup.desc": "Raggruppa i messaggi dell'agente e i risultati delle chiamate agli strumenti per una visualizzazione unificata",
   "features.assistantMessageGroup.title": "Raggruppamento Messaggi Agente",
-  "features.executionDeviceSwitcher.desc": "Visualizza il selettore del dispositivo di esecuzione nella barra degli strumenti eterogenea dell'agente, così puoi instradare le esecuzioni su questo dispositivo, un sandbox cloud o un dispositivo remoto associato.",
-  "features.executionDeviceSwitcher.title": "Selettore del Dispositivo di Esecuzione",
   "features.gatewayMode.desc": "Esegui le attività dell’agente sul server tramite Gateway WebSocket invece di eseguirle in locale. Consente un’esecuzione più rapida e riduce l’utilizzo delle risorse del client.",
   "features.gatewayMode.title": "Esecuzione dell’Agente Lato Server (Gateway)",
   "features.groupChat.desc": "Abilita il coordinamento della chat di gruppo con più agenti.",
@@ -15,7 +13,7 @@
   "features.imessage.title": "Canale iMessage",
   "features.inputMarkdown.desc": "Visualizza in tempo reale il Markdown nell'area di input (testo in grassetto, blocchi di codice, tabelle, ecc.).",
   "features.inputMarkdown.title": "Rendering Markdown in Input",
-  "features.platformAgent.desc": "Mostra la voce \"Aggiungi Agente Piattaforma\" nel menu di creazione. Gli agenti di piattaforma (ad esempio OpenClaw, Hermes) funzionano su un dispositivo connesso e comunicano tramite lh connect.",
-  "features.platformAgent.title": "Creazione Agente Piattaforma",
+  "features.platformAgent.desc": "Mostra la voce \"Connetti Agente\" nel menu di creazione. Gli agenti connessi (ad esempio OpenClaw, Hermes) funzionano sui tuoi dispositivi e comunicano tramite lh connect.",
+  "features.platformAgent.title": "Connetti Agente",
   "title": "Laboratori"
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import type { FormGroupItemType, FormItemProps } from '@lobehub/ui';
-import { Flexbox, Form, Icon, InputNumber, Skeleton } from '@lobehub/ui';
+import { Flexbox, Form, Icon, InputNumber, Skeleton, Tooltip } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
 import { ConfigProvider } from 'antd';
 import isEqual from 'fast-deep-equal';
@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
 import ModelSelect from '@/features/ModelSelect';
+import { usePermission } from '@/hooks/usePermission';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import type { SystemAgentItem, UserServiceModelConfigKey } from '@/types/user/settings';
@@ -44,6 +45,7 @@ const MEMORY_MODEL_ITEMS: SystemAgentModelItem[] = [
 
 const ModelAssignmentsForm = memo(() => {
   const { t } = useTranslation('setting');
+  const { allowed: canManageServiceModel, reason } = usePermission('manage_settings');
   const [defaultAgent, systemAgentSettings] = useUserStore(
     (s) => [settingsSelectors.defaultAgent(s), settingsSelectors.currentSystemAgent(s)],
     isEqual,
@@ -68,6 +70,8 @@ const ModelAssignmentsForm = memo(() => {
     model: string;
     provider: string;
   }) => {
+    if (!canManageServiceModel) return;
+
     setLoadingKey('defaultAgent');
     try {
       await updateDefaultAgent({ config: { model, provider } });
@@ -80,6 +84,8 @@ const ModelAssignmentsForm = memo(() => {
     key: UserServiceModelConfigKey,
     value: Partial<SystemAgentItem>,
   ) => {
+    if (!canManageServiceModel) return;
+
     setLoadingKey(key);
     try {
       await updateSystemAgent(key, value);
@@ -90,14 +96,22 @@ const ModelAssignmentsForm = memo(() => {
 
   const defaultAgentItem: FormItemProps = {
     children: (
-      <Flexbox align="center" direction="horizontal" gap={12} style={{ width: 448 }}>
-        <ModelSelect
-          showAbility={false}
-          style={{ minWidth: 0, width: '100%' }}
-          value={defaultAgent.config}
-          onChange={updateDefaultAgentModel}
-        />
-      </Flexbox>
+      <Tooltip title={reason}>
+        <Flexbox
+          align="center"
+          direction="horizontal"
+          gap={12}
+          style={{ width: 'min(100%, 448px)' }}
+        >
+          <ModelSelect
+            disabled={!canManageServiceModel}
+            showAbility={false}
+            style={{ minWidth: 0, width: '100%' }}
+            value={defaultAgent.config}
+            onChange={updateDefaultAgentModel}
+          />
+        </Flexbox>
+      </Tooltip>
     ),
     desc: t('defaultAgent.model.desc'),
     label: t('defaultAgent.title'),
@@ -108,14 +122,22 @@ const ModelAssignmentsForm = memo(() => {
 
     return {
       children: (
-        <Flexbox align="center" direction="horizontal" gap={12} style={{ width: 448 }}>
-          <ModelSelect
-            showAbility={false}
-            style={{ minWidth: 0, width: '100%' }}
-            value={value}
-            onChange={(props) => updateSystemAgentModel(key, props)}
-          />
-        </Flexbox>
+        <Tooltip title={reason}>
+          <Flexbox
+            align="center"
+            direction="horizontal"
+            gap={12}
+            style={{ width: 'min(100%, 448px)' }}
+          >
+            <ModelSelect
+              disabled={!canManageServiceModel}
+              showAbility={false}
+              style={{ minWidth: 0, width: '100%' }}
+              value={value}
+              onChange={(props) => updateSystemAgentModel(key, props)}
+            />
+          </Flexbox>
+        </Tooltip>
       ),
       desc: t(`systemAgent.${key}.modelDesc`),
       label: t(`systemAgent.${key}.title`),
@@ -158,31 +180,41 @@ const ModelAssignmentsForm = memo(() => {
 
   const optionalFeatureItems: FormItemProps[] = OPTIONAL_FEATURE_ITEMS.map(({ key }) => {
     const value = systemAgentSettings[key];
-    const disabled = value.enabled === false;
+    const featureDisabled = value.enabled === false;
 
     return {
       children: (
-        <Flexbox direction="vertical" gap={8} style={{ width: 448 }}>
-          <Switch
-            checked={value.enabled}
-            loading={loadingKey === key}
-            style={{ alignSelf: 'flex-end' }}
-            title={t(`systemAgent.${key}.title`)}
-            onChange={(enabled) => updateSystemAgentModel(key, { enabled })}
-          />
-          <ModelSelect
-            showAbility={false}
-            style={{ minWidth: 0, width: '100%' }}
-            value={value}
-            onChange={(props) => updateSystemAgentModel(key, props)}
-          />
-        </Flexbox>
+        <Tooltip title={reason}>
+          <Flexbox
+            align="center"
+            direction="horizontal"
+            gap={12}
+            style={{ width: 'min(100%, 448px)' }}
+          >
+            <ModelSelect
+              disabled={!canManageServiceModel}
+              showAbility={false}
+              style={{ minWidth: 0, width: '100%' }}
+              value={value}
+              onChange={(props) => updateSystemAgentModel(key, props)}
+            />
+            <Flexbox align="center" direction="horizontal" gap={8}>
+              <Switch
+                aria-label={t(`systemAgent.${key}.title`)}
+                checked={value.enabled}
+                disabled={!canManageServiceModel}
+                loading={loadingKey === key}
+                onChange={(enabled) => updateSystemAgentModel(key, { enabled })}
+              />
+            </Flexbox>
+          </Flexbox>
+        </Tooltip>
       ),
       desc: t(`systemAgent.${key}.modelDesc`),
       label: (
         <span
           style={{
-            opacity: disabled ? 0.45 : 1,
+            opacity: featureDisabled || !canManageServiceModel ? 0.45 : 1,
           }}
         >
           {t(`systemAgent.${key}.title`)}

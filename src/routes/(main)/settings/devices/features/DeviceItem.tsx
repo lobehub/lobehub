@@ -1,5 +1,6 @@
 'use client';
 
+import type { DeviceListItem } from '@lobechat/types';
 import { ActionIcon, DropdownMenu, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -8,31 +9,9 @@ import { FolderIcon, MoreVerticalIcon, Trash2Icon, TriangleAlertIcon } from 'luc
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { WorkingDirEntry } from '@/features/ChatInput/RuntimeConfig/deviceCwd';
 import { lambdaQuery } from '@/libs/trpc/client';
 
 import { getDeviceIcon } from './getDeviceIcon';
-
-export interface DeviceChannel {
-  channel: string | null;
-  connectedAt: string;
-  hostname: string | null;
-  platform: string | null;
-}
-
-export interface DeviceListItem {
-  channels?: DeviceChannel[];
-  defaultCwd: string | null;
-  deviceId: string;
-  friendlyName: string | null;
-  hostname: string | null;
-  identitySource: string | null;
-  lastSeen: string;
-  online: boolean;
-  platform: string | null;
-  registered: boolean;
-  workingDirs: WorkingDirEntry[];
-}
 
 const styles = createStaticStyles(({ css }) => ({
   cwd: css`

@@ -1,7 +1,9 @@
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { agents, agentsToSessions, messages, sessions, topics } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 
 type MigrateBySessionParams = { agentId: string; sessionId: string };
 type MigrateInboxParams = { agentId: string; isInbox: true; sessionId?: string | null };
@@ -16,11 +18,16 @@ type MigrateAgentIdParams = MigrateBySessionParams | MigrateInboxParams;
 export class AgentMigrationRepo {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
+
+  private ws = (cols: { userId: AnyPgColumn; workspaceId: AnyPgColumn }) =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, cols);
 
   /**
    * Runtime migration: backfill agentId for all legacy topics and messages
@@ -57,7 +64,7 @@ export class AgentMigrationRepo {
       .from(topics)
       .where(
         and(
-          eq(topics.userId, this.userId),
+          this.ws(topics),
           isNull(topics.sessionId),
           isNull(topics.groupId),
           isNull(topics.agentId),
@@ -74,7 +81,7 @@ export class AgentMigrationRepo {
       .set({ agentId, updatedAt: topics.updatedAt })
       .where(
         and(
-          eq(topics.userId, this.userId),
+          this.ws(topics),
           isNull(topics.sessionId),
           isNull(topics.groupId),
           isNull(topics.agentId),
@@ -85,13 +92,7 @@ export class AgentMigrationRepo {
     await tx
       .update(messages)
       .set({ agentId, updatedAt: messages.updatedAt })
-      .where(
-        and(
-          eq(messages.userId, this.userId),
-          inArray(messages.topicId, topicIds),
-          isNull(messages.agentId),
-        ),
-      );
+      .where(and(this.ws(messages), inArray(messages.topicId, topicIds), isNull(messages.agentId)));
 
     // 4. Also update messages without topicId but in inbox (sessionId IS NULL) - preserve original updatedAt
     await tx
@@ -99,7 +100,7 @@ export class AgentMigrationRepo {
       .set({ agentId, updatedAt: messages.updatedAt })
       .where(
         and(
-          eq(messages.userId, this.userId),
+          this.ws(messages),
           isNull(messages.sessionId),
           isNull(messages.topicId),
           isNull(messages.agentId),
@@ -118,13 +119,7 @@ export class AgentMigrationRepo {
     const legacyTopics = await tx
       .select({ id: topics.id })
       .from(topics)
-      .where(
-        and(
-          eq(topics.userId, this.userId),
-          eq(topics.sessionId, sessionId),
-          isNull(topics.agentId),
-        ),
-      );
+      .where(and(this.ws(topics), eq(topics.sessionId, sessionId), isNull(topics.agentId)));
 
     const topicIds = legacyTopics.map((t) => t.id);
 
@@ -132,13 +127,7 @@ export class AgentMigrationRepo {
     await tx
       .update(topics)
       .set({ agentId, updatedAt: topics.updatedAt })
-      .where(
-        and(
-          eq(topics.userId, this.userId),
-          eq(topics.sessionId, sessionId),
-          isNull(topics.agentId),
-        ),
-      );
+      .where(and(this.ws(topics), eq(topics.sessionId, sessionId), isNull(topics.agentId)));
 
     // 3. Update associated messages within these topics
     if (topicIds.length > 0) {
@@ -146,11 +135,7 @@ export class AgentMigrationRepo {
         .update(messages)
         .set({ agentId, updatedAt: messages.updatedAt })
         .where(
-          and(
-            eq(messages.userId, this.userId),
-            inArray(messages.topicId, topicIds),
-            isNull(messages.agentId),
-          ),
+          and(this.ws(messages), inArray(messages.topicId, topicIds), isNull(messages.agentId)),
         );
     }
 
@@ -160,7 +145,7 @@ export class AgentMigrationRepo {
       .set({ agentId, updatedAt: messages.updatedAt })
       .where(
         and(
-          eq(messages.userId, this.userId),
+          this.ws(messages),
           eq(messages.sessionId, sessionId),
           isNull(messages.topicId),
           isNull(messages.agentId),
@@ -175,7 +160,7 @@ export class AgentMigrationRepo {
     const result = await this.db
       .select({ sessionId: agentsToSessions.sessionId })
       .from(agentsToSessions)
-      .where(and(eq(agentsToSessions.agentId, agentId), eq(agentsToSessions.userId, this.userId)))
+      .where(and(eq(agentsToSessions.agentId, agentId), this.ws(agentsToSessions)))
       .limit(1);
 
     return result[0]?.sessionId ?? null;
@@ -202,13 +187,7 @@ export class AgentMigrationRepo {
       .from(agents)
       .innerJoin(agentsToSessions, eq(agents.id, agentsToSessions.agentId))
       .innerJoin(sessions, eq(agentsToSessions.sessionId, sessions.id))
-      .where(
-        and(
-          eq(agents.userId, this.userId),
-          isNull(agents.sessionGroupId),
-          isNotNull(sessions.groupId),
-        ),
-      );
+      .where(and(this.ws(agents), isNull(agents.sessionGroupId), isNotNull(sessions.groupId)));
 
     if (agentsToMigrate.length === 0) return;
 
@@ -220,7 +199,7 @@ export class AgentMigrationRepo {
       await this.db
         .update(agents)
         .set({ sessionGroupId: item.sessionGroupId, updatedAt: agents.updatedAt })
-        .where(and(eq(agents.id, item.agentId), eq(agents.userId, this.userId)));
+        .where(and(eq(agents.id, item.agentId), this.ws(agents)));
     }
   };
 }

@@ -5,6 +5,7 @@ import {
 } from '@lobechat/const';
 import { type LobeAgentChatConfig, type RuntimeEnvMode } from '@lobechat/types';
 
+import { resolveRuntimeMode } from '@/helpers/executionTarget';
 import { type AgentStoreState } from '@/store/agent/initialState';
 
 import { agentSelectors } from './selectors';
@@ -14,14 +15,18 @@ import { agentSelectors } from './selectors';
  * Used in ChatInput components where agentId is passed as prop.
  */
 
-const getChatConfigById =
+const getStoredChatConfigById =
   (agentId: string) =>
   (s: AgentStoreState): LobeAgentChatConfig =>
     agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig || {};
 
-// Return raw chatConfig value without business logic overrides
+const getChatConfigById =
+  (agentId: string) =>
+  (s: AgentStoreState): LobeAgentChatConfig =>
+    getStoredChatConfigById(agentId)(s);
+
 const getEnableHistoryCountById = (agentId: string) => (s: AgentStoreState) =>
-  getChatConfigById(agentId)(s).enableHistoryCount;
+  getStoredChatConfigById(agentId)(s).enableHistoryCount;
 
 const getHistoryCountById =
   (agentId: string) =>
@@ -59,16 +64,22 @@ const isLocalSystemEnabledById = (agentId: string) => (s: AgentStoreState) =>
   getRuntimeModeById(agentId)(s) === 'local';
 
 /**
- * Get runtime environment mode by agent ID.
- * Reads from `runtimeMode[platform]`, defaults to 'local' on desktop, 'none' on web.
+ * Get the agent's runtime mode, derived from the unified
+ * `agencyConfig.executionTarget` (sandbox → cloud, local → local, device →
+ * none), falling back to the legacy per-platform `runtimeMode` for agents that
+ * predate `executionTarget`.
  */
 const getRuntimeModeById =
   (agentId: string) =>
   (s: AgentStoreState): RuntimeEnvMode => {
-    const runtimeEnv = getChatConfigById(agentId)(s).runtimeEnv;
+    const config = agentSelectors.getAgentConfigById(agentId)(s);
     const platform = isDesktop ? 'desktop' : 'web';
 
-    return runtimeEnv?.runtimeMode?.[platform] ?? (isDesktop ? 'local' : 'none');
+    return resolveRuntimeMode(
+      config?.agencyConfig,
+      config?.chatConfig?.runtimeEnv?.runtimeMode?.[platform],
+      isDesktop,
+    );
   };
 
 const getSkillActivateModeById =

@@ -15,7 +15,7 @@ export async function register() {
     !process.env.VERCEL_ENV &&
     (!isDev || process.env.ENABLE_BOT_IN_DEV === '1')
   ) {
-    const { GatewayService } = await import('./server/services/gateway');
+    const { GatewayService } = await import('@/server/services/gateway');
     const service = new GatewayService();
     service.ensureRunning().catch((err) => {
       console.error('[Instrumentation] Failed to auto-start GatewayManager:', err);

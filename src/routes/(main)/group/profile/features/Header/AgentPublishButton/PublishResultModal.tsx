@@ -4,7 +4,8 @@ import { FluentEmoji, Modal, Text } from '@lobehub/ui';
 import { Result } from 'antd';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 interface PublishResultModalProps {
   identifier?: string;
@@ -13,7 +14,7 @@ interface PublishResultModalProps {
 }
 
 const PublishResultModal = memo<PublishResultModalProps>(({ identifier, onCancel, open }) => {
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('setting');
   const { t: tCommon } = useTranslation('common');
 

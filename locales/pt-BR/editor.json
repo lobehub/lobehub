@@ -13,6 +13,7 @@
   "actions.expand.on": "Expandir",
   "actions.typobar.off": "Ocultar barra de formatação",
   "actions.typobar.on": "Mostrar barra de formatação",
+  "actions.typobar.title": "Ferramenta de Formatação",
   "autoSave.latest": "Última versão carregada",
   "autoSave.saved": "Salvo",
   "autoSave.saving": "Salvando automaticamente...",

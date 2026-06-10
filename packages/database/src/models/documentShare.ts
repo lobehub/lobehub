@@ -4,6 +4,7 @@ import { and, eq, sql } from 'drizzle-orm';
 
 import { documents, documentShares, users } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export interface DocumentShareAccessResult {
   document: typeof documents.$inferSelect;
@@ -17,10 +18,12 @@ export interface DocumentShareAccessResult {
 
 export class DocumentShareModel {
   private userId: string;
+  private workspaceId?: string;
   private db: LobeChatDatabase;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
+    this.workspaceId = workspaceId;
     this.db = db;
   }
 
@@ -34,7 +37,12 @@ export class DocumentShareModel {
     const [doc] = await this.db
       .select({ id: documents.id })
       .from(documents)
-      .where(and(eq(documents.id, documentId), eq(documents.userId, this.userId)))
+      .where(
+        and(
+          eq(documents.id, documentId),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
+        ),
+      )
       .limit(1);
 
     if (!doc) {
@@ -43,12 +51,16 @@ export class DocumentShareModel {
 
     const [result] = await this.db
       .insert(documentShares)
-      .values({
-        documentId,
-        permission: params.permission ?? 'read',
-        userId: this.userId,
-        visibility: params.visibility ?? 'private',
-      })
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          {
+            documentId,
+            permission: params.permission ?? 'read',
+            visibility: params.visibility ?? 'private',
+          },
+        ),
+      )
       .onConflictDoNothing({ target: documentShares.documentId })
       .returning();
 
@@ -63,7 +75,15 @@ export class DocumentShareModel {
     const [result] = await this.db
       .update(documentShares)
       .set({ updatedAt: new Date(), visibility })
-      .where(and(eq(documentShares.documentId, documentId), eq(documentShares.userId, this.userId)))
+      .where(
+        and(
+          eq(documentShares.documentId, documentId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            documentShares,
+          ),
+        ),
+      )
       .returning();
 
     return result || null;
@@ -73,7 +93,15 @@ export class DocumentShareModel {
     const [result] = await this.db
       .update(documentShares)
       .set({ permission, updatedAt: new Date() })
-      .where(and(eq(documentShares.documentId, documentId), eq(documentShares.userId, this.userId)))
+      .where(
+        and(
+          eq(documentShares.documentId, documentId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            documentShares,
+          ),
+        ),
+      )
       .returning();
 
     return result || null;
@@ -83,7 +111,13 @@ export class DocumentShareModel {
     return this.db
       .delete(documentShares)
       .where(
-        and(eq(documentShares.documentId, documentId), eq(documentShares.userId, this.userId)),
+        and(
+          eq(documentShares.documentId, documentId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            documentShares,
+          ),
+        ),
       );
   };
 
@@ -98,7 +132,15 @@ export class DocumentShareModel {
         visibility: documentShares.visibility,
       })
       .from(documentShares)
-      .where(and(eq(documentShares.documentId, documentId), eq(documentShares.userId, this.userId)))
+      .where(
+        and(
+          eq(documentShares.documentId, documentId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            documentShares,
+          ),
+        ),
+      )
       .limit(1);
 
     return result[0] || null;

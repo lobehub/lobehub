@@ -1,10 +1,13 @@
 'use client';
 
-import { type CSSProperties } from 'react';
+import { ReactBlockPlugin } from '@lobehub/editor';
+import { Editor } from '@lobehub/editor/react';
+import { type CSSProperties, useMemo } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { EditorCanvas as SharedEditorCanvas } from '@/features/EditorCanvas';
+import { usePermission } from '@/hooks/usePermission';
 
 import { usePageEditorStore } from '../store';
 import { useAskCopilotItem } from './useAskCopilotItem';
@@ -17,6 +20,7 @@ interface EditorCanvasProps {
 
 const EditorCanvas = memo<EditorCanvasProps>(({ placeholder, style }) => {
   const { t } = useTranslation(['file', 'ui']);
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const editor = usePageEditorStore((s) => s.editor);
   const documentId = usePageEditorStore((s) => s.documentId);
@@ -24,10 +28,17 @@ const EditorCanvas = memo<EditorCanvasProps>(({ placeholder, style }) => {
   const slashItems = useSlashItems();
   const askCopilotItem = useAskCopilotItem(editor);
 
+  const extraPlugins = useMemo(
+    () => [Editor.withProps(ReactBlockPlugin, { anchorPadding: 0 })],
+    [],
+  );
+
   return (
     <SharedEditorCanvas
+      disabled={!canEdit}
       documentId={documentId}
       editor={editor}
+      extraPlugins={extraPlugins}
       placeholder={placeholder || t('pageEditor.editorPlaceholder')}
       slashItems={slashItems}
       style={style}

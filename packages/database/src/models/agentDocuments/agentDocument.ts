@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, like, or, sql } from 'd
 import type { DocumentItem, NewAgentDocument, NewDocument } from '../../schemas';
 import { AGENT_SKILL_TEMPLATE_ID, agentDocuments, documents } from '../../schemas';
 import type { LobeChatDatabase, Transaction } from '../../type';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 import { deriveAgentDocumentFields } from './deriveFields';
 import { buildDocumentFilename } from './filename';
 import {
@@ -71,11 +72,29 @@ interface ConvertAgentDocumentToSkillIndexParams {
 
 export class AgentDocumentModel {
   private userId: string;
+  private workspaceId?: string;
   private db: LobeChatDatabase;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
+    this.workspaceId = workspaceId;
     this.db = db;
+  }
+
+  /**
+   * Workspace-aware ownership predicate for the `agent_documents` binding table.
+   * Personal mode → `user_id = ? AND workspace_id IS NULL`; workspace mode → `workspace_id = ?`.
+   */
+  private agentDocOwnership() {
+    return buildWorkspaceWhere(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      agentDocuments,
+    );
+  }
+
+  /** Workspace-aware ownership predicate for the backing `documents` rows. */
+  private documentOwnership() {
+    return buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents);
   }
 
   private getDocumentStats(content: string) {
@@ -175,7 +194,7 @@ export class AgentDocumentModel {
       .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
       .where(
         and(
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           eq(agentDocuments.agentId, agentId),
           inArray(documents.parentId, parentIds),
           ...this.buildDeletedAtFilters(options),
@@ -212,7 +231,7 @@ export class AgentDocumentModel {
       const [doc] = await trx
         .select()
         .from(documents)
-        .where(and(eq(documents.id, documentId), eq(documents.userId, this.userId)))
+        .where(and(eq(documents.id, documentId), this.documentOwnership()))
         .limit(1);
 
       if (!doc) return { id: '' };
@@ -235,6 +254,7 @@ export class AgentDocumentModel {
           policyLoadPosition: DocumentLoadPosition.BEFORE_FIRST_USER,
           policyLoadRule: DocumentLoadRule.ALWAYS,
           userId: this.userId,
+          workspaceId: this.workspaceId ?? null,
         })
         .onConflictDoNothing()
         .returning({ id: agentDocuments.id });
@@ -332,6 +352,7 @@ export class AgentDocumentModel {
       totalLineCount: stats.totalLineCount,
       updatedAt: updatedAt ?? createdAt,
       userId: this.userId,
+      workspaceId: this.workspaceId ?? null,
     };
 
     const [insertedDocument] = await trx.insert(documents).values(documentPayload).returning();
@@ -361,6 +382,7 @@ export class AgentDocumentModel {
       templateId,
       updatedAt: updatedAt ?? createdAt,
       userId: this.userId,
+      workspaceId: this.workspaceId ?? null,
     };
 
     const [settings] = await trx.insert(agentDocuments).values(newDoc).returning();
@@ -414,7 +436,7 @@ export class AgentDocumentModel {
       .where(
         and(
           eq(agentDocuments.id, params.agentDocumentId),
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           isNull(agentDocuments.deletedAt),
         ),
       )
@@ -445,7 +467,7 @@ export class AgentDocumentModel {
         totalLineCount: stats.totalLineCount,
         updatedAt,
       })
-      .where(and(eq(documents.id, existing.documentId), eq(documents.userId, this.userId)));
+      .where(and(eq(documents.id, existing.documentId), this.documentOwnership()));
 
     await trx
       .update(agentDocuments)
@@ -457,7 +479,7 @@ export class AgentDocumentModel {
       .where(
         and(
           eq(agentDocuments.id, params.agentDocumentId),
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           isNull(agentDocuments.deletedAt),
         ),
       );
@@ -469,7 +491,7 @@ export class AgentDocumentModel {
       .where(
         and(
           eq(agentDocuments.id, params.agentDocumentId),
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           isNull(agentDocuments.deletedAt),
         ),
       )
@@ -559,13 +581,13 @@ export class AgentDocumentModel {
         await trx
           .update(documents)
           .set(documentUpdate)
-          .where(and(eq(documents.id, existing.documentId), eq(documents.userId, this.userId)));
+          .where(and(eq(documents.id, existing.documentId), this.documentOwnership()));
       }
 
       await trx
         .update(agentDocuments)
         .set(settingsUpdate)
-        .where(and(eq(agentDocuments.id, documentId), eq(agentDocuments.userId, this.userId)));
+        .where(and(eq(agentDocuments.id, documentId), this.agentDocOwnership()));
     });
   }
 
@@ -616,7 +638,7 @@ export class AgentDocumentModel {
         ...(params.parentId !== undefined && { parentId: params.parentId }),
         ...(params.title !== undefined && { title: params.title }),
       })
-      .where(and(eq(documents.id, existing.documentId), eq(documents.userId, this.userId)));
+      .where(and(eq(documents.id, existing.documentId), this.documentOwnership()));
 
     return this.findById(agentDocumentId);
   }
@@ -658,7 +680,7 @@ export class AgentDocumentModel {
           source,
           title,
         })
-        .where(and(eq(documents.id, existing.documentId), eq(documents.userId, this.userId)));
+        .where(and(eq(documents.id, existing.documentId), this.documentOwnership()));
     });
 
     return this.findById(documentId);
@@ -701,7 +723,7 @@ export class AgentDocumentModel {
           source,
           title: filename,
         })
-        .where(and(eq(documents.id, existing.documentId), eq(documents.userId, this.userId)));
+        .where(and(eq(documents.id, existing.documentId), this.documentOwnership()));
     });
 
     return this.findById(documentId);
@@ -749,7 +771,7 @@ export class AgentDocumentModel {
       .where(
         and(
           eq(agentDocuments.id, documentId),
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           isNull(agentDocuments.deletedAt),
         ),
       );
@@ -775,7 +797,7 @@ export class AgentDocumentModel {
       .where(
         and(
           eq(agentDocuments.id, documentId),
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           ...this.buildDeletedAtFilters(options),
         ),
       )
@@ -871,7 +893,7 @@ export class AgentDocumentModel {
       .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
       .where(
         and(
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           eq(agentDocuments.agentId, agentId),
           isNull(agentDocuments.deletedAt),
         ),
@@ -895,7 +917,7 @@ export class AgentDocumentModel {
       .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
       .where(
         and(
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           eq(agentDocuments.agentId, agentId),
           isNull(agentDocuments.deletedAt),
           or(
@@ -958,7 +980,7 @@ export class AgentDocumentModel {
       .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
       .where(
         and(
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           eq(agentDocuments.agentId, agentId),
           isNull(agentDocuments.deletedAt),
         ),
@@ -1013,7 +1035,7 @@ export class AgentDocumentModel {
       .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
       .where(
         and(
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           eq(agentDocuments.agentId, agentId),
           inArray(agentDocuments.documentId, documentIds),
           isNull(agentDocuments.deletedAt),
@@ -1037,7 +1059,7 @@ export class AgentDocumentModel {
       .from(agentDocuments)
       .where(
         and(
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           eq(agentDocuments.agentId, agentId),
           isNull(agentDocuments.deletedAt),
         ),
@@ -1054,7 +1076,7 @@ export class AgentDocumentModel {
       .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
       .where(
         and(
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           eq(agentDocuments.agentId, agentId),
           eq(agentDocuments.templateId, templateId),
           isNull(agentDocuments.deletedAt),
@@ -1083,7 +1105,7 @@ export class AgentDocumentModel {
       .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
       .where(
         and(
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           eq(agentDocuments.agentId, agentId),
           eq(documents.filename, filename),
           ...this.buildDeletedAtFilters(options),
@@ -1109,7 +1131,7 @@ export class AgentDocumentModel {
       .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
       .where(
         and(
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           eq(agentDocuments.agentId, agentId),
           eq(documents.filename, filename),
           parentId ? eq(documents.parentId, parentId) : isNull(documents.parentId),
@@ -1149,7 +1171,7 @@ export class AgentDocumentModel {
       .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
       .where(
         and(
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           eq(agentDocuments.agentId, agentId),
           eq(documents.filename, filename),
           parentId ? eq(documents.parentId, parentId) : isNull(documents.parentId),
@@ -1174,7 +1196,7 @@ export class AgentDocumentModel {
       .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
       .where(
         and(
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           eq(agentDocuments.agentId, agentId),
           eq(agentDocuments.documentId, documentId),
           ...this.buildDeletedAtFilters(options),
@@ -1199,7 +1221,7 @@ export class AgentDocumentModel {
       .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
       .where(
         and(
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           eq(agentDocuments.agentId, agentId),
           parentId ? eq(documents.parentId, parentId) : isNull(documents.parentId),
           ...this.buildDeletedAtFilters(options),
@@ -1219,9 +1241,9 @@ export class AgentDocumentModel {
       .innerJoin(documents, eq(agentDocuments.documentId, documents.id))
       .where(
         and(
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           eq(agentDocuments.agentId, agentId),
-          eq(documents.userId, this.userId),
+          this.documentOwnership(),
           isNotNull(agentDocuments.deletedAt),
         ),
       )
@@ -1270,7 +1292,7 @@ export class AgentDocumentModel {
       .where(
         and(
           eq(agentDocuments.id, documentId),
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           isNull(agentDocuments.deletedAt),
         ),
       );
@@ -1296,7 +1318,7 @@ export class AgentDocumentModel {
       })
       .where(
         and(
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           inArray(
             agentDocuments.id,
             subtree.map((item) => item.id),
@@ -1336,7 +1358,7 @@ export class AgentDocumentModel {
           deletedByUserId: null,
           policyLoad: PolicyLoad.PROGRESSIVE,
         })
-        .where(and(eq(agentDocuments.id, documentId), eq(agentDocuments.userId, this.userId)));
+        .where(and(eq(agentDocuments.id, documentId), this.agentDocOwnership()));
     });
   }
 
@@ -1358,7 +1380,7 @@ export class AgentDocumentModel {
       })
       .where(
         and(
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           inArray(
             agentDocuments.id,
             subtree.map((item) => item.id),
@@ -1375,11 +1397,11 @@ export class AgentDocumentModel {
     await this.db.transaction(async (trx) => {
       await trx
         .delete(agentDocuments)
-        .where(and(eq(agentDocuments.id, documentId), eq(agentDocuments.userId, this.userId)));
+        .where(and(eq(agentDocuments.id, documentId), this.agentDocOwnership()));
 
       await trx
         .delete(documents)
-        .where(and(eq(documents.id, existing.documentId), eq(documents.userId, this.userId)));
+        .where(and(eq(documents.id, existing.documentId), this.documentOwnership()));
     });
   }
 
@@ -1399,13 +1421,11 @@ export class AgentDocumentModel {
     await this.db.transaction(async (trx) => {
       await trx
         .delete(agentDocuments)
-        .where(
-          and(eq(agentDocuments.userId, this.userId), inArray(agentDocuments.id, agentDocumentIds)),
-        );
+        .where(and(this.agentDocOwnership(), inArray(agentDocuments.id, agentDocumentIds)));
 
       await trx
         .delete(documents)
-        .where(and(eq(documents.userId, this.userId), inArray(documents.id, documentIds)));
+        .where(and(this.documentOwnership(), inArray(documents.id, documentIds)));
     });
   }
 
@@ -1423,7 +1443,7 @@ export class AgentDocumentModel {
       .where(
         and(
           eq(agentDocuments.agentId, agentId),
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           isNull(agentDocuments.deletedAt),
         ),
       );
@@ -1447,7 +1467,7 @@ export class AgentDocumentModel {
         and(
           eq(agentDocuments.agentId, agentId),
           eq(agentDocuments.templateId, templateId),
-          eq(agentDocuments.userId, this.userId),
+          this.agentDocOwnership(),
           isNull(agentDocuments.deletedAt),
         ),
       );

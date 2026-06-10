@@ -575,21 +575,32 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           // Apply sampling sanitization to processedPayload for the custom client path.
           // We use processedPayload (ChatStreamPayload type) here because
           // createChatCompletionStream expects ChatStreamPayload, not the OpenAI SDK format.
+          // Strip LobeHub-internal fields that should never reach downstream APIs.
+          const {
+            apiMode: _apiMode,
+            preserveThinking: _preserveThinking,
+            ...cleanProcessedPayload
+          } = processedPayload as any;
           response = customClient.createChatCompletionStream(
             this.client,
             {
-              ...processedPayload,
-              ...resolveModelSamplingParameters(processedPayload.model, processedPayload, {
-                normalizeTemperature: false,
-                preferTemperature: true,
-              }),
+              ...cleanProcessedPayload,
+              ...resolveModelSamplingParameters(
+                cleanProcessedPayload.model,
+                cleanProcessedPayload,
+                {
+                  normalizeTemperature: false,
+                  preferTemperature: true,
+                },
+              ),
             },
             this,
           ) as any;
         } else {
-          // Remove internal apiMode parameter before sending to API
-
-          const { apiMode: _, ...cleanedPayload } = postPayload as any;
+          // Remove LobeHub-internal fields before sending to downstream API.
+          // `preserveThinking` is only consumed by Qwen/Zhipu handlePayload (which runs above)
+          // and must not leak to other providers' APIs as an unknown parameter.
+          const { apiMode: _, preserveThinking: _pt, ...cleanedPayload } = postPayload as any;
           const finalPayload = {
             ...cleanedPayload,
             messages,
@@ -1214,6 +1225,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       delete res.apiMode;
       delete res.frequency_penalty;
       delete res.presence_penalty;
+      delete res.preserveThinking;
 
       const input = await convertOpenAIResponseInputs(messages as any, {
         forceImageBase64: chatCompletion?.forceImageBase64,

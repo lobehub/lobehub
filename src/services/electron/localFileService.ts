@@ -65,7 +65,10 @@ class LocalFileService {
   }
 
   async listProjectSkills(params: ListProjectSkillsParams): Promise<ListProjectSkillsResult> {
-    return ensureElectronIpc().localSystem.listProjectSkills(params);
+    // Project-skill scanning lives in the main-process WorkspaceCtr ('workspace'
+    // group), split out of LocalFileCtr — hence the namespace differs from the
+    // other local-file ops here.
+    return ensureElectronIpc().workspace.listProjectSkills(params);
   }
 
   async openLocalFile(params: OpenLocalFileParams) {

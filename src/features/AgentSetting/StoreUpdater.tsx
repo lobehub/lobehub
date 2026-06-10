@@ -10,13 +10,13 @@ import { type State } from './store';
 import { useStoreApi } from './store';
 
 export interface StoreUpdaterProps extends Partial<
-  Pick<State, 'onMetaChange' | 'onConfigChange' | 'meta' | 'config' | 'id' | 'loading'>
+  Pick<State, 'onMetaChange' | 'onConfigChange' | 'meta' | 'config' | 'disabled' | 'id' | 'loading'>
 > {
   instanceRef?: ForwardedRef<AgentSettingsInstance> | null;
 }
 
 const StoreUpdater = memo<StoreUpdaterProps>(
-  ({ onConfigChange, instanceRef, id, onMetaChange, meta, config, loading }) => {
+  ({ onConfigChange, instanceRef, id, onMetaChange, meta, config, disabled, loading }) => {
     const storeApi = useStoreApi();
     const useStoreUpdater = createStoreUpdater(storeApi);
 
@@ -24,6 +24,7 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useStoreUpdater('config', config!);
     useStoreUpdater('onConfigChange', onConfigChange);
     useStoreUpdater('onMetaChange', onMetaChange);
+    useStoreUpdater('disabled', disabled);
     useStoreUpdater('loading', loading);
     useStoreUpdater('id', id);
 

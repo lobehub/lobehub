@@ -7,6 +7,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { openEditingPopover } from '@/features/EditingPopover/store';
+import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 
@@ -31,6 +32,7 @@ export const useGroupDropdownMenu = ({
 }: UseGroupDropdownMenuParams): (() => MenuProps['items']) => {
   const { t } = useTranslation(['chat', 'common']);
   const { message } = App.useApp();
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
   const [pinAgentGroup, duplicateAgentGroup, removeAgentGroup] = useHomeStore((s) => [
@@ -43,17 +45,25 @@ export const useGroupDropdownMenu = ({
     () => () =>
       [
         {
+          disabled: !canEdit,
           icon: <Icon icon={pinned ? PinOff : Pin} />,
           key: 'pin',
           label: t(pinned ? 'pinOff' : 'pin'),
-          onClick: () => pinAgentGroup(id, !pinned),
+          onClick: () => {
+            if (!canEdit) return;
+
+            pinAgentGroup(id, !pinned);
+          },
         },
         {
+          disabled: !canEdit,
           icon: <Icon icon={Pen} />,
           key: 'rename',
           label: t('rename', { ns: 'common' }),
           onClick: (info: any) => {
             info.domEvent?.stopPropagation();
+            if (!canEdit) return;
+
             if (anchor) {
               openEditingPopover({
                 anchor,
@@ -68,11 +78,14 @@ export const useGroupDropdownMenu = ({
           },
         },
         {
+          disabled: !canEdit,
           icon: <Icon icon={LucideCopy} />,
           key: 'duplicate',
           label: t('duplicate', { ns: 'common' }),
           onClick: ({ domEvent }: any) => {
             domEvent.stopPropagation();
+            if (!canEdit) return;
+
             duplicateAgentGroup(id);
           },
         },
@@ -88,11 +101,14 @@ export const useGroupDropdownMenu = ({
         { type: 'divider' },
         {
           danger: true,
+          disabled: !canEdit,
           icon: <Icon icon={Trash} />,
           key: 'delete',
           label: t('delete', { ns: 'common' }),
           onClick: ({ domEvent }: any) => {
             domEvent.stopPropagation();
+            if (!canEdit) return;
+
             confirmModal({
               cancelText: t('cancel', { ns: 'common' }),
               content: t('confirmRemoveChatGroupItemAlert'),
@@ -111,6 +127,7 @@ export const useGroupDropdownMenu = ({
       anchor,
       avatar,
       backgroundColor,
+      canEdit,
       memberAvatars,
       t,
       pinned,

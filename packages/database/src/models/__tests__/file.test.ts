@@ -11,10 +11,16 @@ import {
   embeddings,
   fileChunks,
   files,
+  filesToSessions,
   globalFiles,
   knowledgeBaseFiles,
   knowledgeBases,
+  messages,
+  messagesFiles,
+  sessions,
+  topics,
   users,
+  workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { FileModel } from '../file';
@@ -1600,6 +1606,293 @@ describe('FileModel', () => {
 
       const result = await fileModel.findByIds(['other-file-id']);
       expect(result).toHaveLength(0);
+    });
+  });
+
+  describe('findFilesToInitInSandbox', () => {
+    const sessionId = 'sandbox-session-1';
+    const topicId = 'sandbox-topic-1';
+
+    beforeEach(async () => {
+      await serverDB.insert(sessions).values({ id: sessionId, userId });
+      await serverDB.insert(topics).values([
+        { id: topicId, sessionId, userId },
+        { id: 'sandbox-topic-2', sessionId, userId },
+      ]);
+      await serverDB.insert(messages).values([
+        { id: 'sandbox-msg-1', role: 'user', topicId, userId },
+        { id: 'sandbox-msg-2', role: 'user', topicId: 'sandbox-topic-2', userId },
+      ]);
+      await serverDB.insert(files).values([
+        { fileType: 'text/csv', id: 'sf-msg', name: 'msg.csv', size: 1, url: 'k-msg', userId },
+        {
+          fileType: 'application/pdf',
+          id: 'sf-sess',
+          name: 's.pdf',
+          size: 2,
+          url: 'k-sess',
+          userId,
+        },
+        { fileType: 'text/plain', id: 'sf-both', name: 'both.txt', size: 3, url: 'k-both', userId },
+        { fileType: 'text/plain', id: 'sf-other', name: 'o.txt', size: 4, url: 'k-other', userId },
+      ]);
+    });
+
+    it('merges topic message files and session files, de-duped by id', async () => {
+      await serverDB.insert(messagesFiles).values([
+        { fileId: 'sf-msg', messageId: 'sandbox-msg-1', userId },
+        { fileId: 'sf-both', messageId: 'sandbox-msg-1', userId },
+        // attached to a different topic → must be excluded
+        { fileId: 'sf-other', messageId: 'sandbox-msg-2', userId },
+      ]);
+      await serverDB.insert(filesToSessions).values([
+        { fileId: 'sf-sess', sessionId, userId },
+        // also referenced via message → must be de-duped
+        { fileId: 'sf-both', sessionId, userId },
+      ]);
+
+      const result = await fileModel.findFilesToInitInSandbox(topicId);
+
+      expect(result.map((file) => file.id).sort()).toEqual(['sf-both', 'sf-msg', 'sf-sess']);
+      expect(result.find((file) => file.id === 'sf-both')).toEqual({
+        fileType: 'text/plain',
+        id: 'sf-both',
+        name: 'both.txt',
+        size: 3,
+        url: 'k-both',
+      });
+    });
+
+    it('returns an empty array when the topic has no associated files', async () => {
+      const result = await fileModel.findFilesToInitInSandbox(topicId);
+      expect(result).toEqual([]);
+    });
+
+    it('does not return files belonging to another user', async () => {
+      await serverDB.insert(messages).values({
+        id: 'sandbox-msg-other',
+        role: 'user',
+        topicId,
+        userId: 'user2',
+      });
+      await serverDB.insert(files).values({
+        fileType: 'text/plain',
+        id: 'sf-user2',
+        name: 'u2.txt',
+        size: 5,
+        url: 'k-u2',
+        userId: 'user2',
+      });
+      await serverDB
+        .insert(messagesFiles)
+        .values({ fileId: 'sf-user2', messageId: 'sandbox-msg-other', userId: 'user2' });
+
+      const result = await fileModel.findFilesToInitInSandbox(topicId);
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('updateGlobalFile', () => {
+    it('should update url and metadata of a global file by hashId', async () => {
+      await fileModel.createGlobalFile({
+        hashId: 'update-hash',
+        fileType: 'text/plain',
+        size: 100,
+        url: 'https://example.com/old.txt',
+        metadata: { version: 1 },
+        creator: userId,
+      });
+
+      await fileModel.updateGlobalFile('update-hash', {
+        url: 'https://example.com/new.txt',
+        metadata: { version: 2 },
+      });
+
+      const updated = await serverDB.query.globalFiles.findFirst({
+        where: eq(globalFiles.hashId, 'update-hash'),
+      });
+
+      expect(updated?.url).toBe('https://example.com/new.txt');
+      expect(updated?.metadata).toEqual({ version: 2 });
+    });
+
+    it('should support running inside a provided transaction', async () => {
+      await fileModel.createGlobalFile({
+        hashId: 'trx-update-hash',
+        fileType: 'text/plain',
+        size: 100,
+        url: 'https://example.com/old.txt',
+        metadata: { version: 1 },
+        creator: userId,
+      });
+
+      await serverDB.transaction(async (trx) => {
+        await fileModel.updateGlobalFile(
+          'trx-update-hash',
+          { url: 'https://example.com/trx.txt' },
+          trx,
+        );
+      });
+
+      const updated = await serverDB.query.globalFiles.findFirst({
+        where: eq(globalFiles.hashId, 'trx-update-hash'),
+      });
+
+      expect(updated?.url).toBe('https://example.com/trx.txt');
+    });
+  });
+
+  describe('transferTo', () => {
+    const targetWorkspaceId = 'transfer-target-ws';
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: targetWorkspaceId,
+        name: 'Target WS',
+        slug: 'transfer-target-ws',
+        primaryOwnerId: userId,
+      });
+    });
+
+    it('should transfer ownership of a file and re-point knowledge base links', async () => {
+      await serverDB.insert(files).values({
+        id: 'transfer-file-1',
+        name: 'transfer.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-transfer',
+        userId,
+      });
+      await serverDB.insert(knowledgeBaseFiles).values({
+        fileId: 'transfer-file-1',
+        knowledgeBaseId: knowledgeBase.id,
+        userId,
+      });
+
+      const result = await fileModel.transferTo('transfer-file-1', targetWorkspaceId, 'user2');
+
+      expect(result).toEqual({ fileId: 'transfer-file-1' });
+
+      const file = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'transfer-file-1'),
+      });
+      expect(file?.userId).toBe('user2');
+      expect(file?.workspaceId).toBe(targetWorkspaceId);
+
+      const kbLink = await serverDB.query.knowledgeBaseFiles.findFirst({
+        where: eq(knowledgeBaseFiles.fileId, 'transfer-file-1'),
+      });
+      expect(kbLink?.userId).toBe('user2');
+    });
+
+    it('should support transferring to a null (personal) workspace', async () => {
+      await serverDB.insert(files).values({
+        id: 'transfer-file-2',
+        name: 'transfer2.txt',
+        fileType: 'text/plain',
+        size: 10,
+        url: 'k-transfer2',
+        userId,
+      });
+
+      await fileModel.transferTo('transfer-file-2', null, 'user2');
+
+      const file = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'transfer-file-2'),
+      });
+      expect(file?.userId).toBe('user2');
+      expect(file?.workspaceId).toBeNull();
+    });
+
+    it('should throw when the file does not exist or is not owned', async () => {
+      await expect(
+        fileModel.transferTo('non-existent-file', targetWorkspaceId, 'user2'),
+      ).rejects.toThrow('File not found');
+    });
+  });
+
+  describe('copyToWorkspace', () => {
+    const targetWorkspaceId = 'copy-target-ws';
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: targetWorkspaceId,
+        name: 'Copy Target WS',
+        slug: 'copy-target-ws',
+        primaryOwnerId: userId,
+      });
+    });
+
+    it('should clone a file row into the target scope and reset index task ids', async () => {
+      await fileModel.createGlobalFile({
+        hashId: 'copy-hash',
+        fileType: 'text/plain',
+        size: 42,
+        url: 'k-copy',
+        creator: userId,
+      });
+      await serverDB.insert(files).values({
+        id: 'copy-file-1',
+        name: 'copy.txt',
+        fileType: 'text/plain',
+        fileHash: 'copy-hash',
+        size: 42,
+        url: 'k-copy',
+        metadata: { original: true },
+        chunkTaskId: null,
+        embeddingTaskId: null,
+        userId,
+      });
+
+      const result = await fileModel.copyToWorkspace('copy-file-1', targetWorkspaceId, 'user2');
+
+      expect(result.fileId).toBeDefined();
+      expect(result.fileId).not.toBe('copy-file-1');
+
+      const copied = await serverDB.query.files.findFirst({
+        where: eq(files.id, result.fileId),
+      });
+      expect(copied?.userId).toBe('user2');
+      expect(copied?.workspaceId).toBe(targetWorkspaceId);
+      expect(copied?.fileHash).toBe('copy-hash');
+      expect(copied?.name).toBe('copy.txt');
+      expect(copied?.size).toBe(42);
+      expect(copied?.chunkTaskId).toBeNull();
+      expect(copied?.embeddingTaskId).toBeNull();
+      expect(copied?.parentId).toBeNull();
+      expect((copied?.metadata as Record<string, unknown>).duplicatedFrom).toBe('copy-file-1');
+      expect((copied?.metadata as Record<string, unknown>).original).toBe(true);
+
+      // Original file remains untouched
+      const original = await serverDB.query.files.findFirst({
+        where: eq(files.id, 'copy-file-1'),
+      });
+      expect(original?.userId).toBe(userId);
+    });
+
+    it('should support copying to a null (personal) workspace', async () => {
+      await serverDB.insert(files).values({
+        id: 'copy-file-2',
+        name: 'copy2.txt',
+        fileType: 'text/plain',
+        size: 1,
+        url: 'k-copy2',
+        userId,
+      });
+
+      const result = await fileModel.copyToWorkspace('copy-file-2', null, 'user2');
+
+      const copied = await serverDB.query.files.findFirst({
+        where: eq(files.id, result.fileId),
+      });
+      expect(copied?.workspaceId).toBeNull();
+      expect(copied?.userId).toBe('user2');
+    });
+
+    it('should throw when the source file does not exist or is not owned', async () => {
+      await expect(
+        fileModel.copyToWorkspace('non-existent-file', targetWorkspaceId, 'user2'),
+      ).rejects.toThrow('File not found');
     });
   });
 });

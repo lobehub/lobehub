@@ -5,6 +5,7 @@ import type {
   AgentRunRequestMessage,
   GatewayMcpStdioParams,
   MessageApiRequestMessage,
+  RpcRequestMessage,
   SystemInfoRequestMessage,
   ToolCallRequestMessage,
   ToolCallResponseMessage,
@@ -16,6 +17,7 @@ import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
 import { app, powerSaveBlocker } from 'electron';
 
 import { isDev } from '@/const/env';
+import { getDesktopEnv } from '@/env';
 import { createLogger } from '@/utils/logger';
 
 import { ServiceModule } from './index';
@@ -83,6 +85,15 @@ interface AgentRunHandler {
   (request: AgentRunRequestMessage): Promise<{ reason?: string; status: 'accepted' | 'rejected' }>;
 }
 
+/**
+ * Handler for generic server-internal device RPCs (e.g. workspace-init scans).
+ * Dispatches by `method` name and returns the JSON-serializable result. Distinct
+ * from {@link ToolCallHandler} — RPCs are never exposed to the agent.
+ */
+interface RpcHandler {
+  (method: string, params: unknown): Promise<unknown>;
+}
+
 interface DeviceRegistrar {
   (info: {
     deviceId: string;
@@ -112,6 +123,7 @@ export default class GatewayConnectionService extends ServiceModule {
   private mcpCallHandler: McpCallHandler | null = null;
   private messageApiHandler: MessageApiHandler | null = null;
   private agentRunHandler: AgentRunHandler | null = null;
+  private rpcHandler: RpcHandler | null = null;
   private deviceRegistrar: DeviceRegistrar | null = null;
 
   // ─── Configuration ───
@@ -147,6 +159,15 @@ export default class GatewayConnectionService extends ServiceModule {
 
   setMessageApiHandler(handler: MessageApiHandler) {
     this.messageApiHandler = handler;
+  }
+
+  /**
+   * Set the generic device-RPC handler (routes server-internal method calls such
+   * as workspace-init to the relevant controller). Distinct from the tool-call
+   * handler — these are never surfaced to the agent.
+   */
+  setRpcHandler(handler: RpcHandler) {
+    this.rpcHandler = handler;
   }
 
   setAgentRunHandler(handler: AgentRunHandler) {
@@ -337,6 +358,10 @@ export default class GatewayConnectionService extends ServiceModule {
       this.handleSystemInfoRequest(client, request);
     });
 
+    client.on('rpc_request', (request) => {
+      this.handleRpcRequest(client, request);
+    });
+
     client.on('agent_run_request', (request) => {
       this.handleAgentRunRequest(client, request);
     });
@@ -402,6 +427,32 @@ export default class GatewayConnectionService extends ServiceModule {
     });
   }
 
+  // ─── Generic Device RPC ───
+
+  private async handleRpcRequest(client: GatewayClient, request: RpcRequestMessage) {
+    const { method, params, requestId } = request;
+    logger.info(`Received rpc_request: method=${method}, requestId=${requestId}`);
+
+    if (!this.rpcHandler) {
+      client.sendRpcResponse({
+        requestId,
+        result: { error: 'No RPC handler registered', success: false },
+      });
+      return;
+    }
+
+    try {
+      const data = await this.rpcHandler(method, params);
+      client.sendRpcResponse({ requestId, result: { data, success: true } });
+    } catch (error) {
+      logger.error(`rpc_request method=${method} failed:`, serializeWireError(error));
+      client.sendRpcResponse({
+        requestId,
+        result: { error: serializeWireError(error), success: false },
+      });
+    }
+  }
+
   // ─── Agent Run ───
 
   private handleAgentRunRequest = async (
@@ -465,7 +516,7 @@ export default class GatewayConnectionService extends ServiceModule {
       // Forward the typed envelope unchanged. Critically, do NOT stringify the
       // whole result into `content` — that would bury the structured payload
       // inside a JSON blob and lose `state`. The wire protocol carries each
-      // field separately so downstream (`DeviceProxy` → `RuntimeExecutors`)
+      // field separately so downstream (`DeviceGateway` → `RuntimeExecutors`)
       // can persist `state` to `pluginState`. Optional fields are only set
       // when present so payloads stay minimal.
       const wireResult: ToolCallResponseMessage['result'] = {
@@ -578,7 +629,13 @@ export default class GatewayConnectionService extends ServiceModule {
   // ─── Gateway URL ───
 
   private getGatewayUrl(): string {
-    return this.app.storeManager.get('gatewayUrl') || DEFAULT_GATEWAY_URL;
+    // Env override wins (dev: point at a local `wrangler dev` gateway), then the
+    // user-configured store value, then the production default.
+    return (
+      getDesktopEnv().DEVICE_GATEWAY_URL ||
+      this.app.storeManager.get('gatewayUrl') ||
+      DEFAULT_GATEWAY_URL
+    );
   }
 
   // ─── Token Helpers ───

@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { sessions, threads, topics, users } from '../../schemas';
+import { messages, sessions, threads, topics, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ThreadModel } from '../thread';
 
@@ -181,6 +181,68 @@ describe('ThreadModel', () => {
       const result = await threadModel.queryByTopicId('non-existent-topic');
 
       expect(result).toHaveLength(0);
+    });
+
+    it('derives subagent metrics (SUM tokens, COUNT tools, model) from child messages', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(threads).values({
+          id: 'sub-thread',
+          metadata: { sourceToolCallId: 'tc-1' },
+          status: ThreadStatus.Active,
+          topicId,
+          type: ThreadType.Standalone,
+          userId,
+        });
+        await tx.insert(messages).values([
+          // two assistant turns → tokens SUM to 1000 + 1800 = 2800
+          {
+            id: 'm-a1',
+            model: 'claude-opus-4-8',
+            role: 'assistant',
+            threadId: 'sub-thread',
+            topicId,
+            usage: { totalTokens: 1000 },
+            userId,
+          },
+          { id: 'm-t1', role: 'tool', threadId: 'sub-thread', topicId, userId },
+          // legacy row: usage only under metadata.usage (no promoted column)
+          {
+            id: 'm-a2',
+            metadata: { usage: { totalTokens: 1800 } },
+            role: 'assistant',
+            threadId: 'sub-thread',
+            topicId,
+            userId,
+          },
+          { id: 'm-t2', role: 'tool', threadId: 'sub-thread', topicId, userId },
+        ]);
+      });
+
+      const [thread] = await threadModel.queryByTopicId(topicId);
+
+      expect(thread.id).toBe('sub-thread');
+      expect(thread.metadata?.totalTokens).toBe(2800);
+      expect(thread.metadata?.totalToolCalls).toBe(2);
+      expect(thread.metadata?.model).toBe('claude-opus-4-8');
+      // create-time metadata preserved
+      expect(thread.metadata?.sourceToolCallId).toBe('tc-1');
+    });
+
+    it('omits derived metrics for a thread with no child messages', async () => {
+      await serverDB.insert(threads).values({
+        id: 'empty-thread',
+        status: ThreadStatus.Active,
+        topicId,
+        type: ThreadType.Standalone,
+        userId,
+      });
+
+      const [thread] = await threadModel.queryByTopicId(topicId);
+
+      expect(thread.id).toBe('empty-thread');
+      expect(thread.metadata?.totalTokens).toBeUndefined();
+      expect(thread.metadata?.totalToolCalls).toBeUndefined();
+      expect(thread.metadata?.model).toBeUndefined();
     });
   });
 

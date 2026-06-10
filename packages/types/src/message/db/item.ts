@@ -36,6 +36,7 @@ export interface DBMessageItem {
    */
   usage?: ModelUsage | null;
   userId: string;
+  workspaceId: string | null;
 }
 
 export interface MessagePluginItem {

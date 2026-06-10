@@ -42,7 +42,7 @@ const taskKanbanHiddenColumns = (s: GlobalState): string[] =>
 const taskKanbanHiddenPanelCollapsed = (s: GlobalState): boolean =>
   s.status.taskKanbanHiddenPanelCollapsed ?? false;
 
-export const DEFAULT_HIDDEN_SECTIONS: string[] = ['memory'];
+export const DEFAULT_HIDDEN_SECTIONS: string[] = [];
 
 const hiddenSidebarSections = (s: GlobalState): string[] =>
   s.status.hiddenSidebarSections ?? DEFAULT_HIDDEN_SECTIONS;

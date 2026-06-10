@@ -47,8 +47,9 @@ export const klavisExecutor: RemoteToolExecutor = async (p, _context) => {
   // Parse arguments
   const args = safeParseJSON(p.arguments) || {};
 
-  // Call Klavis tool via store action
+  // Call Klavis tool via store action — pass identifier for precise permission gate lookup
   const result = await useToolStore.getState().callKlavisTool({
+    identifier,
     serverUrl: server.serverUrl,
     toolArgs: args,
     toolName: p.apiName,

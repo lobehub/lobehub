@@ -73,6 +73,11 @@ export interface ExecAgentAppContext {
     repos?: string[];
     workingDirectory?: string;
   };
+  /**
+   * Whether this operation is an isolated sub-agent execution. Used to disable
+   * recursive sub-agent dispatch.
+   */
+  isSubAgent?: boolean;
   /** Scope identifier */
   scope?: string | null;
   /** Session ID */
@@ -91,22 +96,6 @@ export interface ExecAgentAppContext {
   threadId?: string | null;
   /** Topic ID */
   topicId?: string | null;
-}
-
-/**
- * A project-level skill discovered on the device filesystem
- * (`.agents/skills` / `.claude/skills`) by the client at request time.
- * Only frontmatter + the absolute SKILL.md path are carried; the SKILL.md
- * body and directory tree are loaded on demand at activation time via the
- * readFile / listFiles tools.
- */
-export interface ProjectSkillMeta {
-  /** Skill description from SKILL.md frontmatter. */
-  description?: string;
-  /** Skill name from frontmatter (falls back to the directory name). */
-  name: string;
-  /** Absolute path to the skill's SKILL.md on the device filesystem. */
-  path: string;
 }
 
 /**
@@ -142,13 +131,6 @@ export interface ExecAgentParams {
    * sub-tree back to its root.
    */
   parentOperationId?: string;
-  /**
-   * Project-level skills discovered on the device filesystem
-   * (`.agents/skills` / `.claude/skills`) at request time. Surfaced in the
-   * `<available_skills>` list and loaded on demand via the readFile tool.
-   * Only applied when a device is active for this run.
-   */
-  projectSkills?: ProjectSkillMeta[];
   /** The user input/prompt */
   prompt: string;
   /** Override the agent's default provider */
@@ -271,13 +253,13 @@ export interface ExecGroupAgentResponse {
 // ============ SubAgent Task Execution Types ============
 
 /**
- * Parameters for execSubAgentTask - execute SubAgent task
+ * Parameters for execSubAgent - execute SubAgent task
  * Supports both Group mode and Single Agent mode
  *
  * - Group mode: pass groupId, Thread will be associated with the Group
  * - Single Agent mode: omit groupId, Thread will only be associated with the Agent
  */
-export interface ExecSubAgentTaskParams {
+export interface ExecSubAgentParams {
   /** The SubAgent ID to execute the task */
   agentId: string;
   /** The Group ID (optional, only for Group mode) */
@@ -288,6 +270,14 @@ export interface ExecSubAgentTaskParams {
   parentMessageId: string;
   /** Parent operation ID for dispatching callAgent hooks */
   parentOperationId?: string;
+  /**
+   * When true, register the completion bridge that backfills the parent's
+   * placeholder tool message with this sub-agent's result and resumes the
+   * parked parent op (`waiting_for_async_tool` → running). Used by the server
+   * `callSubAgent` deferred-tool path; left false for the legacy fire-and-forget
+   * task dispatch.
+   */
+  resumeParentOnComplete?: boolean;
   /** Timeout in milliseconds (optional) */
   timeout?: number;
   /** Task title (shown in UI, used as thread title) */
@@ -297,9 +287,9 @@ export interface ExecSubAgentTaskParams {
 }
 
 /**
- * Result from execSubAgentTask
+ * Result from execSubAgent
  */
-export interface ExecSubAgentTaskResult {
+export interface ExecSubAgentResult {
   /** The assistant message ID created for this task */
   assistantMessageId: string;
   /** Error message if task failed to start */
@@ -313,14 +303,14 @@ export interface ExecSubAgentTaskResult {
 }
 
 /**
- * @deprecated Use ExecSubAgentTaskParams instead
+ * @deprecated Use ExecSubAgentParams instead
  */
-export type ExecGroupSubAgentTaskParams = ExecSubAgentTaskParams;
+export type ExecGroupSubAgentTaskParams = ExecSubAgentParams;
 
 /**
- * @deprecated Use ExecSubAgentTaskResult instead
+ * @deprecated Use ExecSubAgentResult instead
  */
-export type ExecGroupSubAgentTaskResult = ExecSubAgentTaskResult;
+export type ExecGroupSubAgentTaskResult = ExecSubAgentResult;
 
 /**
  * Current activity for real-time progress display

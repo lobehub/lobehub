@@ -13,6 +13,7 @@ import {
 } from './slices/agentDocumentSkills';
 import { type AgentSkillsAction, createAgentSkillsSlice } from './slices/agentSkills';
 import { type BuiltinToolAction, createBuiltinToolSlice } from './slices/builtin';
+import { type ConnectorAction, createConnectorSlice } from './slices/connector';
 import { createCustomPluginSlice, type CustomPluginAction } from './slices/customPlugin';
 import { createKlavisStoreSlice, type KlavisStoreAction } from './slices/klavisStore';
 import {
@@ -25,6 +26,7 @@ import { createPluginSlice, type PluginAction } from './slices/plugin';
 //  ===============  Aggregate createStoreFn ============ //
 
 export type ToolStore = ToolStoreState &
+  ConnectorAction &
   CustomPluginAction &
   PluginAction &
   BuiltinToolAction &
@@ -35,7 +37,8 @@ export type ToolStore = ToolStoreState &
   AgentDocumentSkillsAction &
   ResetableStore;
 
-type ToolStoreAction = CustomPluginAction &
+type ToolStoreAction = ConnectorAction &
+  CustomPluginAction &
   PluginAction &
   BuiltinToolAction &
   PluginMCPStoreAction &
@@ -54,6 +57,7 @@ const createStore: StateCreator<ToolStore, [['zustand/devtools', never]]> = (
 ) => ({
   ...initialState,
   ...flattenActions<ToolStoreAction>([
+    createConnectorSlice(...parameters),
     createPluginSlice(...parameters),
     createCustomPluginSlice(...parameters),
     createBuiltinToolSlice(...parameters),

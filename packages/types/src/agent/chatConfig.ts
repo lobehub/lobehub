@@ -113,6 +113,12 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * Effort level for Claude Opus 4.7 and later (adds xhigh tier between high and max)
    */
   opus47Effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+  /**
+   * Whether to preserve and pass historical thinking content to the model
+   * (provider support required, e.g. Qwen preserve_thinking)
+   */
+  preserveThinking?: boolean;
   reasoningBudgetToken?: number;
   /**
    * Reasoning budget token for models with 32k max (GLM-5/GLM-4.7)
@@ -127,10 +133,9 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * Runtime environment configuration (desktop only)
    */
   runtimeEnv?: RuntimeEnvConfig;
-
   searchFCModel?: WorkingModel;
-  searchMode?: SearchMode;
 
+  searchMode?: SearchMode;
   /**
    * Skill activate mode:
    * - 'auto': Default tools (LobeTools, Skills, SkillStore, etc.) are always active,
@@ -147,11 +152,20 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
   textVerbosity?: 'low' | 'medium' | 'high';
 
   thinking?: 'disabled' | 'auto' | 'enabled';
+
   thinkingBudget?: number;
   thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
   thinkingLevel2?: 'low' | 'high';
   thinkingLevel3?: 'low' | 'medium' | 'high';
   thinkingLevel4?: 'minimal' | 'high';
+  /**
+   * Tool-resolution mode. When set it overrides the `enableAgentMode` derivation:
+   * - `agent`  full default toolset + plugins + always-on tools
+   * - `chat`   strict runtime-managed allow-list (KB / memory / web-browsing)
+   * - `custom` the toolset is EXACTLY the agent's declared plugins — nothing
+   *            auto-injected. For focused builtin sub-agents (e.g. the verifier).
+   */
+  toolMode?: 'agent' | 'chat' | 'custom';
   /**
    * Maximum length for tool execution result content (in characters)
    * This prevents context overflow when sending tool results back to LLM
@@ -206,6 +220,7 @@ export const AgentChatConfigSchema = z
     effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
     enableAdaptiveThinking: z.boolean().optional(),
     enableAgentMode: z.boolean().optional(),
+    toolMode: z.enum(['agent', 'chat', 'custom']).optional(),
     enableAutoScrollOnStreaming: z.boolean().optional(),
     enableCompressHistory: z.boolean().optional(),
     enableContextCompression: z.boolean().optional(),
@@ -229,6 +244,7 @@ export const AgentChatConfigSchema = z
     imageResolution2: z.enum(['512', '1K', '2K', '4K']).optional(),
     opus47Effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
     runtimeEnv: RuntimeEnvConfigSchema.optional(),
+    preserveThinking: z.boolean().optional(),
     reasoningBudgetToken: z.number().optional(),
     reasoningBudgetToken32k: z.number().optional(),
     reasoningBudgetToken80k: z.number().optional(),

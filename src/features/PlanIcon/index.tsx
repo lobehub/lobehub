@@ -1,5 +1,5 @@
 import { Plans } from '@lobechat/types';
-import { Center, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { Center, Flexbox, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Atom, Box, CircleSlash, Sparkle, Zap } from 'lucide-react';
 import { type CSSProperties, type MouseEvent } from 'react';
@@ -47,10 +47,14 @@ export const themes = {
 const styles = createStaticStyles(({ css }) => ({
   icon: css`
     flex: none;
-    border-radius: ${cssVar.borderRadiusLG};
     box-shadow: 0 0 0 1px ${cssVar.colorFillSecondary};
   `,
 }));
+
+const getPlanIconMetrics = (size: number) => ({
+  glyphSize: Math.max(12, Math.round(size / 2)),
+  radius: Math.max(8, Math.round(size / 3)),
+});
 
 interface PlanIconProps {
   className?: string;
@@ -64,11 +68,12 @@ interface PlanIconProps {
 
 const PlanIcon = memo<PlanIconProps>(
   ({ type = 'icon', plan, size = 36, mono, style, className, onClick }) => {
-    const { icon, theme } = themes[plan];
+    const { icon: IconComponent, theme } = themes[plan];
     const { t } = useTranslation('subscription');
     const isTag = type === 'tag';
     const isCombine = type === 'combine';
     const isFree = plan === Plans.Free;
+    const { glyphSize, radius } = getPlanIconMetrics(size);
 
     if (isTag) {
       return (
@@ -91,19 +96,30 @@ const PlanIcon = memo<PlanIconProps>(
       );
     }
 
+    const iconStyle = {
+      ...(mono
+        ? null
+        : {
+            ...theme,
+            border: isFree ? undefined : `2px solid ${theme.color}`,
+          }),
+      alignItems: 'center',
+      borderRadius: radius,
+      display: 'flex',
+      justifyContent: 'center',
+      lineHeight: 0,
+      ...style,
+    } satisfies CSSProperties;
+
     const iconContent = (
       <Center
         className={styles.icon}
         height={size}
+        style={iconStyle}
         width={size}
-        style={
-          mono
-            ? style
-            : { ...theme, border: isFree ? undefined : `2px solid ${theme.color}`, ...style }
-        }
         onClick={onClick}
       >
-        <Icon color={mono ? undefined : theme.color} icon={icon} size={size / 2} />
+        <IconComponent color={mono ? undefined : theme.color} size={glyphSize} />
       </Center>
     );
 

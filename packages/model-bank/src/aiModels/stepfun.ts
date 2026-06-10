@@ -41,7 +41,6 @@ const stepfunChatModels: AIChatModelCard[] = [
     description:
       'Built on Step 3.5 Flash and optimized for high-frequency agent scenarios, it further improves token efficiency and inference speed while retaining flagship-level reasoning and tool-calling capabilities. It also supports switching to a low-reasoning mode to reduce resource consumption. Additionally, targeted optimizations have been made to enhance compatibility with coding tasks and agent frameworks.',
     displayName: 'Step 3.5 Flash 2603',
-    enabled: true,
     id: 'step-3.5-flash-2603',
     pricing: {
       currency: 'CNY',
@@ -95,7 +94,7 @@ const stepfunChatModels: AIChatModelCard[] = [
           name: 'textInput_cacheRead',
           strategy: 'tiered',
           tiers: [
-            { rate: 0.3, upTo: 0.004 },
+            { rate: 0.3, upTo: 4_000 },
             { rate: 0.8, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -104,7 +103,7 @@ const stepfunChatModels: AIChatModelCard[] = [
           name: 'textInput',
           strategy: 'tiered',
           tiers: [
-            { rate: 1.5, upTo: 0.004 },
+            { rate: 1.5, upTo: 4_000 },
             { rate: 4, upTo: 'infinity' },
           ],
           unit: 'millionTokens',
@@ -113,7 +112,7 @@ const stepfunChatModels: AIChatModelCard[] = [
           name: 'textOutput',
           strategy: 'tiered',
           tiers: [
-            { rate: 4, upTo: 0.004 },
+            { rate: 4, upTo: 4_000 },
             { rate: 8, upTo: 'infinity' }, // Still differs from documentation
           ],
           unit: 'millionTokens',

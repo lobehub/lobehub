@@ -113,7 +113,14 @@ export interface AgentState {
    */
   securityBlacklist?: SecurityBlacklistConfig;
   // --- State Machine ---
-  status: 'idle' | 'running' | 'waiting_for_human' | 'done' | 'error' | 'interrupted';
+  status:
+    | 'idle'
+    | 'running'
+    | 'waiting_for_human'
+    | 'waiting_for_async_tool'
+    | 'done'
+    | 'error'
+    | 'interrupted';
 
   // --- Execution Tracking ---
   /**

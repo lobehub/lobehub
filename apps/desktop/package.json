@@ -78,7 +78,7 @@
     "cross-env": "^10.1.0",
     "diff": "^8.0.4",
     "electron": "41.3.0",
-    "electron-builder": "^26.8.1",
+    "electron-builder": "26.14.0",
     "electron-devtools-installer": "4.0.0",
     "electron-is": "^3.0.0",
     "electron-store": "^8.2.0",
@@ -125,6 +125,7 @@
       "node-mac-permissions"
     ],
     "overrides": {
+      "node-gyp": "^12.4.0",
       "react": "19.2.4",
       "react-dom": "19.2.4",
       "vitest": "3.2.4"

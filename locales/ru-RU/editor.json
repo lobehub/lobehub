@@ -13,6 +13,7 @@
   "actions.expand.on": "Развернуть",
   "actions.typobar.off": "Скрыть панель форматирования",
   "actions.typobar.on": "Показать панель форматирования",
+  "actions.typobar.title": "Инструмент форматирования",
   "autoSave.latest": "Загружена последняя версия",
   "autoSave.saved": "Сохранено",
   "autoSave.saving": "Автосохранение...",

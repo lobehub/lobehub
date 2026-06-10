@@ -1,6 +1,6 @@
+import { stableWorkspaceAwareNavigate } from '@/features/Workspace/stableWorkspaceAwareNavigate';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
-import { getStableNavigate } from '@/utils/stableNavigate';
 
 type Setter = StoreSetter<HomeStore>;
 export const createGroupSlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>
@@ -14,7 +14,7 @@ export class GroupActionImpl {
   }
 
   switchToGroup = (groupId: string): void => {
-    getStableNavigate()?.(`/group/${groupId}`);
+    stableWorkspaceAwareNavigate(`/group/${groupId}`);
   };
 }
 

@@ -2,6 +2,7 @@ import { and, eq, sql } from 'drizzle-orm';
 
 import { topics } from '../schemas';
 import type { Transaction } from '../type';
+import { buildWorkspaceWhere } from '../utils/workspace';
 
 /**
  * ModelUsage numeric fields summed per (provider, model) to build the
@@ -60,12 +61,20 @@ export const recomputeTopicUsage = async (
   trx: Transaction,
   userId: string,
   topicId: string,
+  workspaceId?: string,
 ): Promise<void> => {
   // Reads prefer the dedicated `usage` column, falling back to legacy
   // `metadata->'usage'` for rows written before the migration.
   const fieldSelects = USAGE_FIELDS.map(
     (f) => `sum((COALESCE(usage, metadata->'usage')->>'${f}')::numeric) AS "${f}"`,
   ).join(',\n      ');
+
+  // Workspace-aware ownership predicate for the raw messages aggregate: in team
+  // mode rows are scoped by workspace_id (creator user_id is not part of the
+  // filter); in personal mode by user_id with workspace_id IS NULL.
+  const messageOwnership = workspaceId
+    ? sql`workspace_id = ${workspaceId}`
+    : sql`user_id = ${userId} AND workspace_id IS NULL`;
 
   const { rows } = await trx.execute(sql`
     SELECT
@@ -77,7 +86,7 @@ export const recomputeTopicUsage = async (
       ${sql.raw(fieldSelects)}
     FROM messages
     WHERE topic_id = ${topicId}
-      AND user_id = ${userId}
+      AND ${messageOwnership}
       AND role = 'assistant'
       AND (usage IS NOT NULL OR metadata ? 'usage')
     GROUP BY provider, model
@@ -99,7 +108,7 @@ export const recomputeTopicUsage = async (
         totalTokens: null,
         usage: null,
       })
-      .where(and(eq(topics.id, topicId), eq(topics.userId, userId)));
+      .where(and(eq(topics.id, topicId), buildWorkspaceWhere({ userId, workspaceId }, topics)));
     return;
   }
 
@@ -191,5 +200,5 @@ export const recomputeTopicUsage = async (
       totalTokens,
       usage,
     })
-    .where(and(eq(topics.id, topicId), eq(topics.userId, userId)));
+    .where(and(eq(topics.id, topicId), buildWorkspaceWhere({ userId, workspaceId }, topics)));
 };

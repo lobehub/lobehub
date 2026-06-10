@@ -182,56 +182,6 @@ const qiniuChatModels: AIChatModelCard[] = [
     },
     type: 'chat',
   },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 2_000_000,
-    description:
-      'We’re excited to release Grok 4 Fast, our latest progress in cost-effective reasoning models.',
-    displayName: 'Grok 4 Fast',
-    enabled: true,
-    id: 'x-ai/grok-4-fast',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 7.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 12.6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-09',
-    settings: {
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 256_000,
-    description:
-      'We’re excited to launch grok-code-fast-1, a fast and cost-effective reasoning model that excels at agentic coding.',
-    displayName: 'Grok Code Fast 1',
-    id: 'x-ai/grok-code-fast-1',
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.02, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-08-27',
-    // settings: {
-    // reasoning_effort is not supported by grok-code. Specifying reasoning_effort parameter will get an error response.
-    // extendParams: ['reasoningEffort'],
-    // },
-    type: 'chat',
-  },
 ];
 
 export const allModels = [...qiniuChatModels];

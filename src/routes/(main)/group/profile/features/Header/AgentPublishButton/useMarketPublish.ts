@@ -2,9 +2,11 @@ import isEqual from 'fast-deep-equal';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { message } from '@/components/AntdStaticMethods';
 import { useTokenCount } from '@/hooks/useTokenCount';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { lambdaClient } from '@/libs/trpc/client';
 import { marketApiService } from '@/services/marketApi';
 import { useAgentStore } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
@@ -37,6 +39,7 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
   const model = useAgentStore(agentSelectors.currentAgentModel);
   const provider = useAgentStore(agentSelectors.currentAgentModelProvider);
   const tokenUsage = useTokenCount(systemRole);
+  const hasActiveWorkspace = useHasActiveWorkspace();
 
   const isSubmit = action === 'submit';
 
@@ -57,6 +60,9 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
       setIsPublishing(true);
       message.loading({ content: loadingMessage, key: messageKey });
       marketApiService.setAccessToken(session.accessToken);
+      const actAs = hasActiveWorkspace
+        ? (await lambdaClient.workspace.ensureMarketOrganization.mutate()).marketAccountId
+        : undefined;
 
       if (isSubmit) {
         identifier = generateMarketIdentifier();
@@ -65,6 +71,7 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
           await marketApiService.getAgentDetail(identifier);
         } catch {
           const createPayload: Record<string, unknown> = {
+            actAs,
             identifier,
             name: meta?.title || '',
           };
@@ -79,6 +86,7 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
       }
 
       const versionPayload = {
+        actAs,
         avatar: meta?.avatar,
         changelog,
         config: {
@@ -162,6 +170,7 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
     chatConfig?.historyCount,
     chatConfig?.searchMode,
     editorData,
+    hasActiveWorkspace,
     isAuthenticated,
     isSubmit,
     language,

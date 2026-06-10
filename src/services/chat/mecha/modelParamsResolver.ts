@@ -21,6 +21,7 @@ export interface ModelExtendParams {
   enabledContextCaching?: boolean;
   imageAspectRatio?: string;
   imageResolution?: string;
+  preserveThinking?: boolean;
   reasoning_effort?: string;
   thinking?: {
     budget_tokens?: number;
@@ -186,6 +187,14 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
   // Context caching
   if (modelExtendParams.includes('disableContextCaching') && chatConfig.disableContextCaching) {
     extendParams.enabledContextCaching = false;
+  }
+
+  // Preserve historical thinking content (provider support required)
+  if (
+    modelExtendParams.includes('preserveThinking') &&
+    typeof chatConfig.preserveThinking === 'boolean'
+  ) {
+    extendParams.preserveThinking = chatConfig.preserveThinking;
   }
 
   // Reasoning effort variants

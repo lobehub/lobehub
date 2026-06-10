@@ -52,6 +52,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'enableAdaptiveThinking',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.preserveThinking.hint',
+    key: 'preserveThinking',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint',
     key: 'reasoningBudgetToken',
   },
@@ -178,6 +182,7 @@ const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
   grok4_3ReasoningEffort: 'reasoningEffort',
   hy3ReasoningEffort: 'reasoningEffort',
   imageAspectRatio2: 'imageAspectRatio',
+  imageResolution2: 'imageResolution',
   opus47Effort: 'effort',
   reasoningBudgetToken32k: 'reasoningBudgetToken',
   reasoningBudgetToken80k: 'reasoningBudgetToken',
@@ -241,6 +246,11 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   imageResolution: { labelSuffix: '', previewWidth: 250, tag: 'resolution' },
   imageResolution2: { labelSuffix: ' (512px+)', previewWidth: 280, tag: 'resolution' },
   opus47Effort: { labelSuffix: ' (Opus 4.7+)', previewWidth: 280, tag: 'output_config.effort' },
+  preserveThinking: {
+    labelSuffix: ' (Qwen3.6+ / GLM-4.7+)',
+    previewWidth: 460,
+    tag: 'preserve_thinking',
+  },
   reasoningBudgetToken: { previewWidth: 350, tag: 'thinking.budget_tokens' },
   reasoningBudgetToken32k: {
     labelSuffix: ' (32k)',
@@ -383,6 +393,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       effort: <EffortSlider value="high" />,
       enableAdaptiveThinking: <Switch checked disabled />,
       enableReasoning: <Switch checked disabled />,
+      preserveThinking: <Switch checked disabled />,
       gpt5ReasoningEffort: <GPT5ReasoningEffortSlider value="medium" />,
       gpt5_1ReasoningEffort: <GPT51ReasoningEffortSlider value="none" />,
       gpt5_2ProReasoningEffort: <GPT52ProReasoningEffortSlider value="medium" />,

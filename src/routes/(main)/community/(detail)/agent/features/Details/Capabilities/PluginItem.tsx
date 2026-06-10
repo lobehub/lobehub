@@ -10,9 +10,9 @@ import { Avatar, Block, Flexbox, Icon, Image, Skeleton, Tag, Text } from '@lobeh
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import urlJoin from 'url-join';
 
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useDiscoverStore } from '@/store/discover';
 
 /**
@@ -270,7 +270,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
 
   // For internal links (market plugins), use Link component
   if (sourceConfig.href) {
-    return <Link to={sourceConfig.href}>{content}</Link>;
+    return <WorkspaceLink to={sourceConfig.href}>{content}</WorkspaceLink>;
   }
 
   return content;
