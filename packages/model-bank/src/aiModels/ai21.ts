@@ -10,6 +10,7 @@ const ai21ChatModels: AIChatModelCard[] = [
       'The most efficient model in its class, balancing speed and quality with a smaller footprint.',
     displayName: 'Jamba Mini',
     enabled: true,
+    family: 'jamba',
     id: 'jamba-mini',
     pricing: {
       units: [
@@ -29,6 +30,7 @@ const ai21ChatModels: AIChatModelCard[] = [
       'Our most powerful, advanced model, designed for complex enterprise tasks with outstanding performance.',
     displayName: 'Jamba Large',
     enabled: true,
+    family: 'jamba',
     id: 'jamba-large',
     pricing: {
       units: [

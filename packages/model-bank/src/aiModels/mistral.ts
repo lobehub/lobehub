@@ -15,6 +15,7 @@ const mistralChatModels: AIChatModelCard[] = [
       'Mistral Medium 3.5 is a frontier-class multimodal model optimized for agentic and coding use cases, released as open weights under a Modified MIT license.',
     displayName: 'Mistral Medium 3.5',
     enabled: true,
+    family: 'mistral',
     id: 'mistral-medium-3.5',
     pricing: {
       units: [
@@ -37,6 +38,7 @@ const mistralChatModels: AIChatModelCard[] = [
       'Devstral 2 is an enterprise-level text model that excels at using tools to explore codebases, edit multiple files, and power software engineering agents.',
     displayName: 'Devstral 2',
     enabled: true,
+    family: 'devstral',
     id: 'devstral-2512',
     pricing: {
       units: [
@@ -55,6 +57,7 @@ const mistralChatModels: AIChatModelCard[] = [
     description:
       'Devstral Small 2 excels at using tools to explore code bases, edit multiple files, and power software engineering agents.',
     displayName: 'Devstral Small 2',
+    family: 'devstral',
     id: 'labs-devstral-small-2512',
     pricing: {
       units: [
@@ -73,6 +76,7 @@ const mistralChatModels: AIChatModelCard[] = [
     description:
       'Mistral Medium 3.1 delivers state-of-the-art performance at 8× lower cost and simplifies enterprise deployment.',
     displayName: 'Mistral Medium 3.1',
+    family: 'mistral',
     id: 'mistral-medium-2508',
     pricing: {
       units: [
@@ -91,6 +95,7 @@ const mistralChatModels: AIChatModelCard[] = [
     description:
       'Magistral Medium 1.2 is a frontier reasoning model from Mistral AI (Sep 2025) with vision support.',
     displayName: 'Magistral Medium 1.2',
+    family: 'magistral',
     id: 'magistral-medium-2509',
     pricing: {
       units: [
@@ -109,6 +114,7 @@ const mistralChatModels: AIChatModelCard[] = [
     description:
       'Magistral Small 1.2 is an open-source small reasoning model from Mistral AI (Sep 2025) with vision support.',
     displayName: 'Magistral Small 1.2',
+    family: 'magistral',
     id: 'magistral-small-2509',
     pricing: {
       units: [
@@ -127,6 +133,7 @@ const mistralChatModels: AIChatModelCard[] = [
     description:
       'Mistral Nemo is a 12B model co-developed with Nvidia, offering strong reasoning and coding performance with easy integration.',
     displayName: 'Mistral Nemo',
+    family: 'mistral',
     id: 'open-mistral-nemo',
     pricing: {
       units: [
@@ -146,6 +153,7 @@ const mistralChatModels: AIChatModelCard[] = [
     description:
       "Mistral's powerful hybrid model unifying instruct, reasoning, and coding capabilities in a single model. 119B parameters with 6.5B active.",
     displayName: 'Mistral Small 4',
+    family: 'mistral',
     id: 'mistral-small-2603',
     pricing: {
       units: [
@@ -167,6 +175,7 @@ const mistralChatModels: AIChatModelCard[] = [
     description:
       'Mistral Small is a cost-effective, fast, and reliable option for translation, summarization, and sentiment analysis.',
     displayName: 'Mistral Small 3.2',
+    family: 'mistral',
     id: 'mistral-small-2506',
     pricing: {
       units: [
@@ -186,6 +195,7 @@ const mistralChatModels: AIChatModelCard[] = [
       'Mistral Large 3, is a state-of-the-art, open-weight, general-purpose multimodal model with a granular Mixture-of-Experts architecture. It features 41B active parameters and 675B total parameters.',
     displayName: 'Mistral Large 3',
     enabled: true,
+    family: 'mistral',
     id: 'mistral-large-2512',
     pricing: {
       units: [
@@ -205,6 +215,7 @@ const mistralChatModels: AIChatModelCard[] = [
     description:
       'Mistral Large is the flagship model, strong in multilingual tasks, complex reasoning, and code generation—ideal for high-end applications.',
     displayName: 'Mistral Large 2.1',
+    family: 'mistral',
     id: 'mistral-large-2411',
     pricing: {
       units: [
@@ -222,6 +233,7 @@ const mistralChatModels: AIChatModelCard[] = [
     description:
       'Codestral is our most advanced coding model; v2 (Jan 2025) targets low-latency, high-frequency tasks like FIM, code correction, and test generation.',
     displayName: 'Codestral 2508',
+    family: 'codestral',
     id: 'codestral-latest',
     pricing: {
       units: [
@@ -241,6 +253,7 @@ const mistralChatModels: AIChatModelCard[] = [
     description:
       'Pixtral Large is a 124B-parameter open multimodal model built on Mistral Large 2, the second in our multimodal family with frontier-level image understanding.',
     displayName: 'Pixtral Large',
+    family: 'pixtral',
     id: 'pixtral-large-latest',
     pricing: {
       units: [
@@ -259,6 +272,7 @@ const mistralChatModels: AIChatModelCard[] = [
     description:
       'Pixtral is strong at chart/image understanding, document QA, multimodal reasoning, and instruction following. It ingests images at native resolution/aspect ratio and handles any number of images within a 128K context window.',
     displayName: 'Pixtral 12B',
+    family: 'pixtral',
     id: 'pixtral-12b-2409',
     pricing: {
       units: [
@@ -275,6 +289,7 @@ const mistralChatModels: AIChatModelCard[] = [
     contextWindowTokens: 131_072,
     description: 'Ministral 3B is Mistral’s top-tier edge model.',
     displayName: 'Ministral 3B',
+    family: 'ministral',
     id: 'ministral-3b-latest',
     pricing: {
       units: [
@@ -291,6 +306,7 @@ const mistralChatModels: AIChatModelCard[] = [
     contextWindowTokens: 131_072,
     description: 'Ministral 8B is a highly cost-effective edge model from Mistral.',
     displayName: 'Ministral 8B',
+    family: 'ministral',
     id: 'ministral-8b-latest',
     pricing: {
       units: [
@@ -305,6 +321,7 @@ const mistralChatModels: AIChatModelCard[] = [
     description:
       'Codestral Mamba is a Mamba 2 language model focused on code generation, supporting advanced coding and reasoning tasks.',
     displayName: 'Codestral Mamba',
+    family: 'codestral',
     id: 'open-codestral-mamba',
     pricing: {
       units: [
@@ -323,6 +340,7 @@ const mistralChatModels: AIChatModelCard[] = [
     description:
       "Mistral's first open-source code agent designed for Lean 4, built for formal proof engineering in realistic repositories. 119B parameters with 6.5B active.",
     displayName: 'Leanstral',
+    family: 'leanstral',
     id: 'labs-leanstral-2603',
     pricing: {
       units: [

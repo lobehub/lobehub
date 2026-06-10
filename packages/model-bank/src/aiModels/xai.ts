@@ -13,6 +13,8 @@ const xaiChatModels: AIChatModelCard[] = [
     description: 'The most truth-seeking large language model in the world',
     displayName: 'Grok 4.3',
     enabled: true,
+    family: 'grok',
+    generation: 'grok-4.3',
     id: 'grok-4.3',
     pricing: {
       units: [
@@ -63,6 +65,8 @@ const xaiChatModels: AIChatModelCard[] = [
     description: 'A non-reasoning variant for simple use cases',
     displayName: 'Grok 4.20 (Non-Reasoning)',
     enabled: true,
+    family: 'grok',
+    generation: 'grok-4.20',
     id: 'grok-4.20-0309-non-reasoning',
     pricing: {
       units: [
@@ -113,6 +117,8 @@ const xaiChatModels: AIChatModelCard[] = [
     description: 'Intelligent, blazing-fast model that reasons before responding',
     displayName: 'Grok 4.20',
     enabled: true,
+    family: 'grok',
+    generation: 'grok-4.20',
     id: 'grok-4.20-0309-reasoning',
     pricing: {
       units: [
@@ -163,6 +169,8 @@ const xaiChatModels: AIChatModelCard[] = [
       'A team of 4 or 16 agents, Excels at research use cases, Does not currently support client-side tools. Only supports xAI server side tools (eg X Search, Web Search tools) and remote MCP tools.',
     displayName: 'Grok 4.20 Multi-Agent',
     enabled: true,
+    family: 'grok',
+    generation: 'grok-4.20',
     id: 'grok-4.20-multi-agent-0309',
     pricing: {
       units: [

@@ -9,6 +9,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'Qwen3 VL 235B A22B Instruct',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen/qwen3-vl-235b-a22b-instruct',
     maxOutput: 32_768,
     pricing: {
@@ -26,6 +28,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'Qwen3 VL 235B A22B Thinking',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen/qwen3-vl-235b-a22b-thinking',
     maxOutput: 32_768,
     pricing: {
@@ -43,6 +47,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'Qwen3 Next 80B A3B Thinking',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen/qwen3-next-80b-a3b-thinking',
     maxOutput: 32_768,
     pricing: {
@@ -59,6 +65,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'Qwen3 Next 80B A3B Instruct',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen/qwen3-next-80b-a3b-instruct',
     maxOutput: 32_768,
     pricing: {
@@ -72,6 +80,7 @@ const novitaChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 4096,
     displayName: 'Qwen MT Plus',
+    family: 'qwen',
     id: 'qwen/qwen-mt-plus',
     maxOutput: 2048,
     pricing: {
@@ -90,6 +99,8 @@ const novitaChatModels: AIChatModelCard[] = [
     description:
       'kimi-k2-0905-preview offers a 256k context window, stronger agentic coding, better front-end code quality, and improved context understanding.',
     displayName: 'Kimi K2 0905',
+    family: 'kimi',
+    generation: 'kimi-k2',
     id: 'moonshotai/kimi-k2-0905',
     pricing: {
       units: [
@@ -108,6 +119,8 @@ const novitaChatModels: AIChatModelCard[] = [
     contextWindowTokens: 163_840,
     displayName: 'Deepseek V3.2 Exp',
     enabled: true,
+    family: 'deepseek',
+    generation: 'deepseek-v3.2',
     id: 'deepseek/deepseek-v3.2-exp',
     pricing: {
       units: [
@@ -124,6 +137,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'DeepSeek V3.1 Terminus',
+    family: 'deepseek',
+    generation: 'deepseek-v3.1',
     id: 'deepseek/deepseek-v3.1-terminus',
     maxOutput: 65_536,
     pricing: {
@@ -141,6 +156,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'DeepSeek V3.1',
+    family: 'deepseek',
+    generation: 'deepseek-v3.1',
     id: 'deepseek/deepseek-v3.1',
     maxOutput: 32_768,
     pricing: {
@@ -157,6 +174,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 65_536,
     displayName: 'Qwen3 Coder 480B A35B Instruct',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen/qwen3-coder-480b-a35b-instruct',
     pricing: {
       units: [
@@ -173,6 +192,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'OpenAI GPT OSS 120B',
+    family: 'gpt-oss',
+    generation: 'gpt-oss',
     id: 'openai/gpt-oss-120b',
     knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
@@ -190,6 +211,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'OpenAI: GPT OSS 20B',
+    family: 'gpt-oss',
+    generation: 'gpt-oss',
     id: 'openai/gpt-oss-20b',
     knowledgeCutoff: '2024-06',
     pricing: {
@@ -208,6 +231,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 65_536,
     displayName: 'GLM-4.5V',
+    family: 'glm',
+    generation: 'glm-4.5',
     id: 'zai-org/glm-4.5v',
     maxOutput: 16_384,
     pricing: {
@@ -225,6 +250,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'GLM-4.5',
+    family: 'glm',
+    generation: 'glm-4.5',
     id: 'zai-org/glm-4.5',
     maxOutput: 98_304,
     pricing: {
@@ -241,6 +268,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'Qwen3 235B A22B Instruct 2507',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen/qwen3-235b-a22b-instruct-2507',
     maxOutput: 16_384,
     pricing: {
@@ -258,6 +287,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'Qwen3 235B A22b Thinking 2507',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen/qwen3-235b-a22b-thinking-2507',
     maxOutput: 32_768,
     pricing: {
@@ -274,6 +305,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'BaiChuan M2 32B',
+    family: 'baichuan',
+    generation: 'baichuan-m2',
     id: 'baichuan/baichuan-m2-32b',
     pricing: {
       units: [
@@ -289,6 +322,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'Kimi K2 0711',
+    family: 'kimi',
+    generation: 'kimi-k2',
     id: 'moonshotai/kimi-k2-instruct',
     pricing: {
       units: [
@@ -305,6 +340,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 65_536,
     displayName: 'GLM 4.1V 9B Thinking',
+    family: 'glm',
+    generation: 'glm-4.1',
     id: 'thudm/glm-4.1v-9b-thinking',
     pricing: {
       units: [
@@ -320,6 +357,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 120_000,
     displayName: 'ERNIE 4.5 21B A3B',
+    family: 'ernie',
+    generation: 'ernie-4.5',
     id: 'baidu/ernie-4.5-21B-a3b',
     pricing: {
       units: [
@@ -336,6 +375,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'ERNIE 4.5 21B A3B Thinking',
+    family: 'ernie',
+    generation: 'ernie-4.5',
     id: 'baidu/ernie-4.5-21B-a3b-thingking',
     maxOutput: 65_536,
     pricing: {
@@ -352,6 +393,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 123_000,
     displayName: 'ERNIE 4.5 300B A47B Paddle',
+    family: 'ernie',
+    generation: 'ernie-4.5',
     id: 'baidu/ernie-4.5-300b-a47b-paddle',
     pricing: {
       units: [
@@ -369,6 +412,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 30_000,
     displayName: 'ERNIE 4.5 VL 28B A3B',
+    family: 'ernie',
+    generation: 'ernie-4.5',
     id: 'baidu/ernie-4.5-vl-28b-a3b',
     pricing: {
       units: [
@@ -386,6 +431,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 123_000,
     displayName: 'ERNIE 4.5 VL 424B A47B',
+    family: 'ernie',
+    generation: 'ernie-4.5',
     id: 'baidu/ernie-4.5-vl-424b-a47b',
     pricing: {
       units: [
@@ -402,6 +449,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_000_000,
     displayName: 'MiniMax M1 80K',
+    family: 'minimax',
+    generation: 'minimax-m1',
     id: 'minimaxai/minimax-m1-80k',
     pricing: {
       units: [
@@ -417,6 +466,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     displayName: 'Qwen3 4B FP8',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen/qwen3-4b-fp8',
     pricing: {
       units: [
@@ -432,6 +483,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 40_960,
     displayName: 'Qwen3 235B A22B FP8',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen/qwen3-235b-a22b-fp8',
     pricing: {
       units: [
@@ -447,6 +500,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     displayName: 'Qwen3 30B A3B FP8',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen/qwen3-30b-a3b-fp8',
     pricing: {
       units: [
@@ -462,6 +517,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 40_960,
     displayName: 'Qwen3 32B FP8',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen/qwen3-32b-fp8',
     pricing: {
       units: [
@@ -477,6 +534,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'Llama 3.3 70B Instruct',
+    family: 'llama',
+    generation: 'llama-3.3',
     id: 'meta-llama/llama-3.3-70b-instruct',
     knowledgeCutoff: '2023-12',
     pricing: {
@@ -490,6 +549,8 @@ const novitaChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 128_000,
     displayName: 'Qwen3 8B FP8',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen/qwen3-8b-fp8',
     pricing: {
       units: [
@@ -506,6 +567,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     displayName: 'Llama 4 Scout 17B Instruct',
+    family: 'llama',
+    generation: 'llama-4',
     id: 'meta-llama/llama-4-scout-17b-16e-instruct',
     knowledgeCutoff: '2024-08',
     pricing: {
@@ -523,6 +586,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     displayName: 'Llama 4 Maverick 17B Instruct',
+    family: 'llama',
+    generation: 'llama-4',
     id: 'meta-llama/llama-4-maverick-17b-128e-instruct-fp8',
     knowledgeCutoff: '2024-08',
     maxOutput: 8192,
@@ -539,6 +604,8 @@ const novitaChatModels: AIChatModelCard[] = [
     description:
       'Llama 3.1 8B Instruct is optimized for high-quality dialogue, outperforming many leading closed models.',
     displayName: 'Llama 3.1 8B Instruct',
+    family: 'llama',
+    generation: 'llama-3.1',
     id: 'meta-llama/llama-3.1-8b-instruct',
     knowledgeCutoff: '2023-12',
     pricing: {
@@ -554,6 +621,8 @@ const novitaChatModels: AIChatModelCard[] = [
     description:
       'Llama 3 8B Instruct is optimized for high-quality dialogue, outperforming many closed models.',
     displayName: 'Llama 3 8B Instruct',
+    family: 'llama',
+    generation: 'llama-3',
     id: 'meta-llama/llama-3-8b-instruct',
     knowledgeCutoff: '2023-03',
     pricing: {
@@ -569,6 +638,8 @@ const novitaChatModels: AIChatModelCard[] = [
     description:
       'Llama 3 70B Instruct is optimized for high-quality dialogue and performs strongly in human evaluations.',
     displayName: 'Llama 3 70B Instruct',
+    family: 'llama',
+    generation: 'llama-3',
     id: 'meta-llama/llama-3-70b-instruct',
     knowledgeCutoff: '2023-12',
     pricing: {
@@ -584,6 +655,8 @@ const novitaChatModels: AIChatModelCard[] = [
     description:
       'Gemma 3 27B is a Google open-source language model setting a new bar for efficiency and performance.',
     displayName: 'Gemma 3 27B',
+    family: 'gemma',
+    generation: 'gemma-3',
     id: 'google/gemma-3-27b-it',
     pricing: {
       units: [
@@ -598,6 +671,8 @@ const novitaChatModels: AIChatModelCard[] = [
     description:
       'Gemma 3 12B is a Google open-source language model setting a new bar for efficiency and performance.',
     displayName: 'Gemma 3 12B',
+    family: 'gemma',
+    generation: 'gemma-3',
     id: 'google/gemma-3-12b-it',
     maxOutput: 8192,
     pricing: {
@@ -613,6 +688,7 @@ const novitaChatModels: AIChatModelCard[] = [
     description:
       'Mistral Nemo is a 7.3B model with multilingual support and strong coding performance.',
     displayName: 'Mistral Nemo',
+    family: 'mistral',
     id: 'mistralai/mistral-nemo',
     pricing: {
       units: [
@@ -627,6 +703,7 @@ const novitaChatModels: AIChatModelCard[] = [
     description:
       'WizardLM-2 8x22B is Microsoft AI’s most advanced Wizard model with highly competitive performance.',
     displayName: 'WizardLM-2 8x22B',
+    family: 'wizardlm',
     id: 'microsoft/wizardlm-2-8x22b',
     pricing: {
       units: [
@@ -641,6 +718,7 @@ const novitaChatModels: AIChatModelCard[] = [
     description:
       'Hermes 2 Pro Llama 3 8B is an updated Nous Hermes 2 version with the latest internally developed datasets.',
     displayName: 'Hermes 2 Pro Llama 3 8B',
+    family: 'hermes',
     id: 'nousresearch/hermes-2-pro-llama-3-8b',
     pricing: {
       units: [
@@ -667,6 +745,7 @@ const novitaChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 160_000,
     displayName: 'Deepseek Prover V2 671B',
+    family: 'deepseek',
     id: 'deepseek/deepseek-prover-v2-671b',
     pricing: {
       units: [
@@ -682,6 +761,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 64_000,
     displayName: 'Deepseek V3 Turbo',
+    family: 'deepseek',
+    generation: 'deepseek-v3',
     id: 'deepseek/deepseek-v3-turbo',
     pricing: {
       units: [
@@ -697,6 +778,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 163_840,
     displayName: 'Deepseek V3 0324',
+    family: 'deepseek',
+    generation: 'deepseek-v3',
     id: 'deepseek/deepseek-v3-0324',
     pricing: {
       units: [
@@ -713,6 +796,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 163_840,
     displayName: 'Deepseek R1 0528',
+    family: 'deepseek',
+    generation: 'deepseek-r1',
     id: 'deepseek/deepseek-r1-0528',
     maxOutput: 32_768,
     pricing: {
@@ -729,6 +814,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     displayName: 'DeepSeek R1 0528 Qwen3 8B',
+    family: 'deepseek',
+    generation: 'deepseek-r1',
     id: 'deepseek/deepseek-r1-0528-qwen3-8b',
     pricing: {
       units: [
@@ -745,6 +832,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 64_000,
     displayName: 'Deepseek R1 Turbo',
+    family: 'deepseek',
+    generation: 'deepseek-r1',
     id: 'deepseek/deepseek-r1-turbo',
     pricing: {
       units: [
@@ -760,6 +849,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_000,
     displayName: 'Deepseek R1 Distill Llama 70B',
+    family: 'deepseek',
+    generation: 'deepseek-r1-distill',
     id: 'deepseek/deepseek-r1-distill-llama-70b',
     pricing: {
       units: [
@@ -775,6 +866,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     displayName: 'Deepseek R1 Distill Qwen 14B',
+    family: 'deepseek',
+    generation: 'deepseek-r1-distill',
     id: 'deepseek/deepseek-r1-distill-qwen-14b',
     maxOutput: 16_384,
     pricing: {
@@ -791,6 +884,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 64_000,
     displayName: 'Deepseek R1 Distill Qwen 32B',
+    family: 'deepseek',
+    generation: 'deepseek-r1-distill',
     id: 'deepseek/deepseek-r1-distill-qwen-32b',
     pricing: {
       units: [
@@ -803,6 +898,8 @@ const novitaChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     displayName: 'L3 8B Stheno v3.2',
+    family: 'llama',
+    generation: 'llama-3',
     id: 'Sao10K/L3-8B-Stheno-v3.2',
     pricing: {
       units: [
@@ -818,6 +915,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_000,
     displayName: 'Qwen2.5 72B Instruct',
+    family: 'qwen',
+    generation: 'qwen2.5',
     id: 'qwen/qwen-2.5-72b-instruct',
     maxOutput: 8192,
     pricing: {
@@ -834,6 +933,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8192,
     displayName: 'L3 70B Euryale v2.1',
+    family: 'llama',
+    generation: 'llama-3',
     id: 'sao10k/l3-70b-euryale-v2.1',
     pricing: {
       units: [
@@ -858,6 +959,8 @@ const novitaChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     displayName: 'L3 8B Lunaris',
+    family: 'llama',
+    generation: 'llama-3',
     id: 'sao10k/l3-8b-lunaris',
     pricing: {
       units: [
@@ -873,6 +976,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     displayName: 'Qwen2.5 VL 72B Instruct',
+    family: 'qwen',
+    generation: 'qwen2.5',
     id: 'qwen/qwen2.5-vl-72b-instruct',
     pricing: {
       units: [
@@ -888,6 +993,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_768,
     displayName: 'Llama 3.2 3B Instruct',
+    family: 'llama',
+    generation: 'llama-3.2',
     id: 'meta-llama/llama-3.2-3b-instruct',
     knowledgeCutoff: '2023-12',
     pricing: {
@@ -901,6 +1008,8 @@ const novitaChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 8192,
     displayName: 'Llama 3.1 8B Instruct BF16',
+    family: 'llama',
+    generation: 'llama-3.1',
     id: 'meta-llama/llama-3.1-8b-instruct-bf16',
     knowledgeCutoff: '2023-12',
     pricing: {
@@ -917,6 +1026,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 8192,
     displayName: 'L31 70B Euryale v2.2',
+    family: 'llama',
+    generation: 'llama-3.1',
     id: 'sao10k/l31-70b-euryale-v2.2',
     pricing: {
       units: [
@@ -932,6 +1043,8 @@ const novitaChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 32_000,
     displayName: 'Qwen2.5 7B Instruct',
+    family: 'qwen',
+    generation: 'qwen2.5',
     id: 'qwen/qwen2.5-7b-instruct',
     pricing: {
       units: [

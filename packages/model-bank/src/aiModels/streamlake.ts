@@ -11,6 +11,7 @@ const streamlakeModels: AIChatModelCard[] = [
       'The latest high-performance model from the Kuaishou Kwaipilot team, designed for complex enterprise projects and SaaS integration. It excels in code-related scenarios and is compatible with various types of agent frameworks (Claude Code, OpenCode, KiloCode), natively supports OpenClaw, and is optimized specifically for front-end page aesthetics.',
     displayName: 'KAT-Coder-Pro-V2',
     enabled: true,
+    family: 'kat-coder',
     id: 'KAT-Coder-Pro-V2',
     maxOutput: 81_920,
     pricing: {
@@ -32,6 +33,7 @@ const streamlakeModels: AIChatModelCard[] = [
     description:
       'Designed for Agentic Coding, it comprehensively covers programming tasks and scenarios, achieving intelligent behavior emergence through large-scale reinforcement learning, significantly outperforming similar models in code writing performance.',
     displayName: 'KAT-Coder-Pro-V1',
+    family: 'kat-coder',
     id: 'KAT-Coder-Pro-V1',
     maxOutput: 32_768,
     pricing: {
@@ -52,6 +54,7 @@ const streamlakeModels: AIChatModelCard[] = [
     description:
       'KAT-Coder-Exp-72B is the RL innovation experimental version in the KAT-Coder series, achieving a remarkable performance of 74.6% on the SWE-Bench verified benchmark, setting a new record for open-source models. It focuses on Agentic Coding and currently only supports the SWE-Agent scaffold, but can also be used for simple conversations.',
     displayName: 'KAT-Coder-Exp-72B-1010',
+    family: 'kat-coder',
     id: 'KAT-Coder-Exp-72B-1010',
     maxOutput: 32_768,
     pricing: {
@@ -74,6 +77,7 @@ const streamlakeModels: AIChatModelCard[] = [
       'A lightweight version within the KAT-Coder series. Specifically designed for Agentic Coding, it comprehensively covers programming tasks and scenarios. Leveraging large-scale agent-based reinforcement learning, it enables emergent intelligent behaviors and significantly outperforms comparable models in coding performance.',
     displayName: 'KAT-Coder-Air-V1',
     enabled: true,
+    family: 'kat-coder',
     id: 'KAT-Coder-Air-V1',
     maxOutput: 32_768,
     pricing: {
@@ -95,6 +99,8 @@ const streamlakeModels: AIChatModelCard[] = [
     description:
       'GLM-5-Turbo is a foundation model deeply optimized for agentic scenarios. It has been specifically optimized for core requirements of agent tasks from the training phase, enhancing key capabilities such as tool invocation, command following, and long-chain execution. It is ideal for building high-performance agent assistants.',
     displayName: 'GLM-5-Turbo',
+    family: 'glm',
+    generation: 'glm-5',
     id: 'GLM-5-Turbo',
     maxOutput: 131_072,
     pricing: {
@@ -153,6 +159,8 @@ const streamlakeModels: AIChatModelCard[] = [
     description:
       'GLM-5 is Zhipu’s next-generation flagship foundation model, purpose-built for Agentic Engineering. It delivers reliable productivity in complex systems engineering and long-horizon agentic tasks. In coding and agent capabilities, GLM-5 achieves state-of-the-art performance among open-source models. In real-world programming scenarios, its user experience approaches that of Claude Opus 4.5. It excels at complex systems engineering and long-horizon agent tasks, making it an ideal foundation model for general-purpose agent assistants.',
     displayName: 'GLM-5',
+    family: 'glm',
+    generation: 'glm-5',
     id: 'GLM-5',
     maxOutput: 131_072,
     pricing: {
@@ -211,6 +219,8 @@ const streamlakeModels: AIChatModelCard[] = [
     description:
       'First self-evolving model with top-tier coding and agentic performance (~60 tps).',
     displayName: 'MiniMax M2.7',
+    family: 'minimax',
+    generation: 'minimax-m2.7',
     id: 'MiniMax-M2.7',
     maxOutput: 131_072,
     pricing: {
@@ -234,6 +244,8 @@ const streamlakeModels: AIChatModelCard[] = [
     description:
       'Top-tier performance and ultimate cost-effectiveness, easily handling complex tasks (approx. 60 tps).',
     displayName: 'MiniMax M2.5',
+    family: 'minimax',
+    generation: 'minimax-m2.5',
     id: 'MiniMax-M2.5',
     maxOutput: 131_072,
     pricing: {
@@ -259,6 +271,8 @@ const streamlakeModels: AIChatModelCard[] = [
     description:
       'Kimi K2.5 is the most capable Kimi model, delivering open-source SOTA in agent tasks, coding, and vision understanding. It supports multimodal inputs and both thinking and non-thinking modes.',
     displayName: 'Kimi K2.5',
+    family: 'kimi',
+    generation: 'kimi-k2.5',
     id: 'Kimi-K2.5',
     maxOutput: 32_768,
     pricing: {
@@ -286,6 +300,8 @@ const streamlakeModels: AIChatModelCard[] = [
     description:
       'Qwen3.5 Plus supports text, image, and video input. Its performance on pure text tasks is comparable to Qwen3 Max, with better performance and lower cost. Its multimodal capabilities are significantly improved compared to the Qwen3 VL series.',
     displayName: 'Qwen3.5 Plus',
+    family: 'qwen',
+    generation: 'qwen3.5',
     id: 'Qwen3.5-Plus',
     maxOutput: 65_536,
     organization: 'Qwen',
@@ -336,6 +352,7 @@ const streamlakeModels: AIChatModelCard[] = [
     description:
       'MiMo-V2-Pro is specifically designed for high-intensity agent workflows in real-world scenarios. It features over 1 trillion total parameters (42B activated parameters), adopts an innovative hybrid attention architecture, and supports an ultra-long context length of up to 1 million tokens. Built on a powerful foundational model, we continuously scale computational resources across a broader range of agent scenarios, further expanding the action space of intelligence and achieving significant generalization—from coding to real-world task execution (“claw”).',
     displayName: 'MiMo-V2 Pro',
+    family: 'mimo',
     id: 'MiMo-V2-Pro',
     maxOutput: 131_072,
     pricing: {
@@ -376,6 +393,8 @@ const streamlakeModels: AIChatModelCard[] = [
     description:
       'deepseek-v3.2 introduces sparse attention mechanism, aiming to improve training and inference efficiency when processing long texts, priced lower than deepseek-v3.1.',
     displayName: 'DeepSeek V3.2',
+    family: 'deepseek',
+    generation: 'deepseek-v3.2',
     id: 'DeepSeek-V3.2',
     maxOutput: 65_536,
     pricing: {
@@ -400,6 +419,7 @@ const streamlakeModels: AIChatModelCard[] = [
     description:
       'DeepSeek-OCR is a vision-language model from DeepSeek AI focused on OCR and "context optical compression." It explores compressing context from images, efficiently processes documents, and converts them to structured text (e.g., Markdown). It accurately recognizes text in images, suited for document digitization, text extraction, and structured processing.',
     displayName: 'DeepSeek OCR',
+    family: 'deepseek',
     id: 'DeepSeek-OCR',
     pricing: {
       currency: 'CNY',

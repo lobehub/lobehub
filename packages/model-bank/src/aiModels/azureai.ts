@@ -7,6 +7,8 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     displayName: 'DeepSeek R1',
+    family: 'deepseek',
+    generation: 'deepseek-r1',
     id: 'DeepSeek-R1',
     pricing: {
       units: [
@@ -22,6 +24,8 @@ const azureChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     displayName: 'DeepSeek V3',
+    family: 'deepseek',
+    generation: 'deepseek-v3',
     id: 'DeepSeek-V3',
     pricing: {
       units: [
@@ -41,6 +45,8 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'o3 is a versatile, powerful model that excels across domains, setting a new bar for math, science, coding, and visual reasoning. It is also strong in technical writing and instruction following, and can analyze text, code, and images to solve multi-step problems.',
     displayName: 'o3',
+    family: 'o-series',
+    generation: 'o3',
     id: 'o3',
     knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
@@ -64,6 +70,8 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'o4-mini is our latest small o-series model, optimized for fast, efficient reasoning with strong coding and vision performance.',
     displayName: 'o4-mini',
+    family: 'o-series',
+    generation: 'o4',
     id: 'o4-mini',
     knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
@@ -87,6 +95,8 @@ const azureChatModels: AIChatModelCard[] = [
       'GPT-4.1 is our flagship model for complex tasks, ideal for cross-domain problem solving.',
     displayName: 'GPT-4.1',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-4.1',
     id: 'gpt-4.1',
     maxOutput: 32_768,
     pricing: {
@@ -108,6 +118,8 @@ const azureChatModels: AIChatModelCard[] = [
     description: 'GPT-4.1 mini balances intelligence, speed, and cost for many use cases.',
     displayName: 'GPT-4.1 mini',
     enabled: true,
+    family: 'gpt',
+    generation: 'gpt-4.1',
     id: 'gpt-4.1-mini',
     maxOutput: 32_768,
     pricing: {
@@ -129,6 +141,8 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'GPT-4.1 mini balances intelligence, speed, and cost, making it an attractive model for many use cases.',
     displayName: 'GPT-4.1 nano',
+    family: 'gpt',
+    generation: 'gpt-4.1',
     id: 'gpt-4.1-nano',
     maxOutput: 32_768,
     pricing: {
@@ -149,6 +163,8 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'GPT-4.5-preview is the latest general-purpose model with deep world knowledge and better intent understanding, strong at creative tasks and agent planning. Its knowledge cutoff is October 2023.',
     displayName: 'GPT 4.5 Preview',
+    family: 'gpt',
+    generation: 'gpt-4.5',
     id: 'gpt-4.5-preview',
     pricing: {
       units: [
@@ -169,6 +185,8 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'o3-mini is our latest small reasoning model, delivering high intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini',
+    family: 'o-series',
+    generation: 'o3',
     id: 'o3-mini',
     knowledgeCutoff: '2023-10',
     pricing: {
@@ -189,6 +207,8 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'o1-mini is a fast, cost-effective reasoning model designed for programming, math, and science use cases. It has a 128K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1-mini',
+    family: 'o-series',
+    generation: 'o1',
     id: 'o1-mini',
     knowledgeCutoff: '2023-10',
     pricing: {
@@ -209,6 +229,8 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'o1 is OpenAI’s new reasoning model that supports text and image input and outputs text, suitable for complex tasks requiring broad general knowledge. It has a 200K context window and an October 2023 knowledge cutoff.',
     displayName: 'o1',
+    family: 'o-series',
+    generation: 'o1',
     id: 'o1',
     knowledgeCutoff: '2023-10',
     pricing: {
@@ -230,6 +252,8 @@ const azureChatModels: AIChatModelCard[] = [
     description:
       'ChatGPT-4o is a dynamic model that updates in real time to stay current. It combines strong language understanding and generation, suitable for large-scale applications such as customer support, education, and technical support.',
     displayName: 'GPT-4o',
+    family: 'gpt',
+    generation: 'gpt-4o',
     id: 'gpt-4o',
     maxOutput: 4096,
     pricing: {
@@ -250,6 +274,8 @@ const azureChatModels: AIChatModelCard[] = [
     contextWindowTokens: 128_000,
     description: 'GPT-4o Mini is a small, efficient model with performance similar to GPT-4o.',
     displayName: 'GPT 4o Mini',
+    family: 'gpt',
+    generation: 'gpt-4o',
     id: 'gpt-4o-mini',
     maxOutput: 16_384,
     pricing: {
