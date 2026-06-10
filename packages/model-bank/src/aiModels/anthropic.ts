@@ -14,8 +14,8 @@ const anthropicChatModels: AIChatModelCard[] = [
       "Claude Fable 5 is Anthropic's most capable model — a new tier above Opus for the most demanding reasoning and long-horizon agentic work.",
     displayName: 'Claude Fable 5',
     enabled: true,
-    family: 'claude',
-    generation: 'claude-5',
+    family: 'claude-mythos',
+    generation: 'mythos-5',
     id: 'claude-fable-5',
     maxOutput: 128_000,
     pricing: {

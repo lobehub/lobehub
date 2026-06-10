@@ -52,7 +52,7 @@ Rule-based, no research needed: `scripts/derive-family.ts` holds the per-family 
 - Size suffixes are not versions: `llama-3-8b` → `llama-3` (not `llama-3.8`); `gemma-7b-it` is **gemma-1** (not gemma-7).
 - Vendor spelling variants: `qwen2p5` = qwen2.5, `llama-v3p1` = llama-3.1, ollama `:NNb` tags, Bedrock `us.`/`global.`/`anthropic.` prefixes.
 - `claude-X.0` normalizes to `claude-X`.
-- Fable/Mythos-class ids (`claude-fable-5`) don't match the opus/sonnet/haiku regex — they are `family: 'claude'`, `generation: 'claude-5'` (set manually).
+- Fable/Mythos-class ids (`claude-fable-5`) don't match the opus/sonnet/haiku regex — they are the Mythos class — `family: 'claude-mythos'`, `generation: 'mythos-5'` (set manually; the launch page calls Fable 5 "the generally available Mythos-class model").
 
 ## Repo-wide sweep workflow
 
