@@ -262,8 +262,8 @@ describe('AiModelModel', () => {
   });
 
   describe('batchUpdateAiModels', () => {
-    it('should insert new models and update existing ones', async () => {
-      // Create an initial model
+    it('should insert new models and preserve existing user-editable fields on conflict', async () => {
+      // Create an initial model — displayName set by user
       await aiProviderModel.create({
         id: 'existing-model',
         providerId: 'openai',
@@ -273,10 +273,12 @@ describe('AiModelModel', () => {
       const models = [
         {
           id: 'existing-model',
+          // Provider sends a new displayName, but DB-first COALESCE keeps 'Old Name'
           displayName: 'Updated Name',
         },
         {
           id: 'new-model',
+          // No existing row — incoming value is used
           displayName: 'New Model',
         },
       ] as AiProviderModelListItem[];
@@ -285,8 +287,38 @@ describe('AiModelModel', () => {
 
       const allModels = await aiProviderModel.query();
       expect(allModels).toHaveLength(2);
-      expect(allModels.find((m) => m.id === 'existing-model')?.displayName).toBe('Updated Name');
+      // Existing non-null displayName is preserved (DB-first)
+      expect(allModels.find((m) => m.id === 'existing-model')?.displayName).toBe('Old Name');
+      // New model has no previous value → incoming value fills it
       expect(allModels.find((m) => m.id === 'new-model')?.displayName).toBe('New Model');
+    });
+
+    it('should fill NULL user-editable fields from incoming data', async () => {
+      // Create a model with no displayName, contextWindowTokens, abilities, parameters, or type override
+      await serverDB.insert(aiModels).values({
+        id: 'bare-model',
+        providerId: 'openai',
+        userId,
+        // displayName intentionally left NULL
+      });
+
+      const models = [
+        {
+          id: 'bare-model',
+          displayName: 'Filled Name',
+          contextWindowTokens: 8192,
+          type: 'chat',
+        },
+      ] as AiProviderModelListItem[];
+
+      await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      const allModels = await aiProviderModel.query();
+      const model = allModels.find((m) => m.id === 'bare-model');
+      // NULL slots are filled by the incoming provider data
+      expect(model?.displayName).toBe('Filled Name');
+      expect(model?.contextWindowTokens).toBe(8192);
+      expect(model?.type).toBe('chat');
     });
 
     it('should not overwrite existing description with null/undefined when updating', async () => {
@@ -310,7 +342,8 @@ describe('AiModelModel', () => {
 
       const allModels = await aiProviderModel.query();
       const model = allModels.find((m) => m.id === 'existing-model');
-      expect(model?.displayName).toBe('Updated Name');
+      // displayName is preserved (DB-first) because it was already set
+      expect(model?.displayName).toBe('Old Name');
       expect(model?.description).toBe('Existing Description');
     });
 

@@ -213,16 +213,20 @@ export class AiModelModel {
       .values(records)
       .onConflictDoUpdate({
         set: {
-          abilities: sql`COALESCE(excluded.abilities, ai_models.abilities)`,
-          contextWindowTokens: sql`COALESCE(excluded.context_window_tokens, ai_models.context_window_tokens)`,
+          // User-editable fields: keep existing DB value; only fill when NULL
+          abilities: sql`COALESCE(ai_models.abilities, excluded.abilities)`,
+          contextWindowTokens: sql`COALESCE(ai_models.context_window_tokens, excluded.context_window_tokens)`,
+          displayName: sql`COALESCE(ai_models.display_name, excluded.display_name)`,
+          parameters: sql`COALESCE(ai_models.parameters, excluded.parameters)`,
+          type: sql`COALESCE(ai_models.type, excluded.type)`,
+          // Provider-sourced fields: always prefer incoming value
           description: sql`COALESCE(excluded.description, ai_models.description)`,
-          displayName: sql`COALESCE(excluded.display_name, ai_models.display_name)`,
-          parameters: sql`COALESCE(excluded.parameters, ai_models.parameters)`,
           pricing: sql`COALESCE(excluded.pricing, ai_models.pricing)`,
           releasedAt: sql`COALESCE(excluded.released_at, ai_models.released_at)`,
-          source: sql`COALESCE(excluded.source, ai_models.source)`,
-          type: sql`COALESCE(excluded.type, ai_models.type)`,
+          // source marks model origin (remote/custom/builtin); once set, never overwrite
+          source: sql`COALESCE(ai_models.source, excluded.source)`,
           updatedAt: sql`excluded.updated_at`,
+          // Note: enabled is intentionally omitted to preserve user toggle state
         },
         target: [aiModels.id, aiModels.userId, aiModels.providerId],
         targetWhere: isNull(aiModels.workspaceId),
