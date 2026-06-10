@@ -34,8 +34,12 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
   },
 }));
 
+const mockSsrfSafeFetch = vi.fn();
+vi.mock('@lobechat/ssrf-safe-fetch', () => ({
+  ssrfSafeFetch: (...args: any[]) => mockSsrfSafeFetch(...args),
+}));
+
 let request: Request;
-const mockFetch = vi.fn();
 
 beforeEach(() => {
   request = new Request(new URL('https://test.com'), {
@@ -47,8 +51,6 @@ beforeEach(() => {
     session: {} as any,
     user: { id: 'test-user-id' } as any,
   });
-
-  global.fetch = mockFetch;
 });
 
 afterEach(() => {
@@ -94,7 +96,7 @@ describe('GET /webapi/models/newapi/pricing', () => {
       },
     } as any);
 
-    mockFetch.mockResolvedValue({
+    mockSsrfSafeFetch.mockResolvedValue({
       json: async () => ({ success: true, data: [{ model_name: 'test' }] }),
       ok: true,
     });
@@ -104,7 +106,7 @@ describe('GET /webapi/models/newapi/pricing', () => {
 
     expect(response.status).toBe(200);
     expect(responseBody).toEqual({ success: true, data: [{ model_name: 'test' }] });
-    expect(mockFetch).toHaveBeenCalledWith(
+    expect(mockSsrfSafeFetch).toHaveBeenCalledWith(
       'https://newapi.test.com/api/pricing',
       expect.any(Object),
     );
@@ -120,7 +122,7 @@ describe('GET /webapi/models/newapi/pricing', () => {
       },
     } as any);
 
-    mockFetch.mockRejectedValueOnce(new Error('Auth fetch failed')).mockResolvedValueOnce({
+    mockSsrfSafeFetch.mockRejectedValueOnce(new Error('Auth fetch failed')).mockResolvedValueOnce({
       json: async () => ({ success: true, data: [{ model_name: 'test' }] }),
       ok: true,
     });
@@ -130,7 +132,7 @@ describe('GET /webapi/models/newapi/pricing', () => {
 
     expect(response.status).toBe(200);
     expect(responseBody).toEqual({ success: true, data: [{ model_name: 'test' }] });
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockSsrfSafeFetch).toHaveBeenCalledTimes(2);
   });
 
   it('should return BadGateway if external api call fails', async () => {
@@ -143,7 +145,7 @@ describe('GET /webapi/models/newapi/pricing', () => {
       },
     } as any);
 
-    mockFetch.mockResolvedValue({
+    mockSsrfSafeFetch.mockResolvedValue({
       ok: false,
       statusText: 'Bad Gateway',
     });
@@ -153,5 +155,28 @@ describe('GET /webapi/models/newapi/pricing', () => {
 
     expect(response.status).toBe(502);
     expect(responseBody.errorType).toBe(ChatErrorType.BadGateway);
+  });
+
+  it('should return InternalServerError if SSRF protection blocks the request', async () => {
+    const mockParams = Promise.resolve({ provider: 'newapi' });
+    const mockModelInstance = new AiProviderModel({} as any, 'test-user-id');
+    vi.mocked(mockModelInstance.getAiProviderById).mockResolvedValue({
+      keyVaults: {
+        apiKey: 'test-key',
+        baseURL: 'http://192.168.1.1/v1',
+      },
+    } as any);
+
+    mockSsrfSafeFetch.mockRejectedValue(
+      new Error(
+        'SSRF blocked: http://192.168.1.1 is not allowed. See: https://lobehub.com/docs/self-hosting/environment-variables/basic#ssrf-allow-private-ip-address',
+      ),
+    );
+
+    const response = await GET(request, { params: mockParams });
+    const responseBody = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(responseBody.errorType).toBe(ChatErrorType.InternalServerError);
   });
 });

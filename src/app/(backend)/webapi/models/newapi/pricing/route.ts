@@ -1,3 +1,4 @@
+import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import { ChatErrorType } from '@lobechat/types';
 import debug from 'debug';
 import { NextResponse } from 'next/server';
@@ -49,7 +50,7 @@ export const GET = checkAuth(async (req, { userId, serverDB }) => {
       if (useAuth && apiKey) {
         currentHeaders.Authorization = `Bearer ${apiKey}`;
       }
-      return fetch(pricingUrl, { headers: currentHeaders });
+      return ssrfSafeFetch(pricingUrl, { headers: currentHeaders });
     };
 
     let res: Response;
