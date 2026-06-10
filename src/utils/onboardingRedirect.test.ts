@@ -23,6 +23,12 @@ describe('isSafeRedirectPath', () => {
     expect(isSafeRedirectPath('//evil.com')).toBe(false);
     expect(isSafeRedirectPath('javascript:alert(1)')).toBe(false);
   });
+
+  it('should reject backslash paths that browsers normalize to protocol-relative URLs', () => {
+    expect(isSafeRedirectPath('/\\evil.com')).toBe(false);
+    expect(isSafeRedirectPath('/\\/evil.com')).toBe(false);
+    expect(isSafeRedirectPath('/foo\\bar')).toBe(false);
+  });
 });
 
 describe('buildOnboardingRedirectUrl', () => {
@@ -46,6 +52,16 @@ describe('buildOnboardingRedirectUrl', () => {
   it('should drop unsafe external targets', () => {
     expect(buildOnboardingRedirectUrl('https://evil.com')).toBe('/onboarding');
     expect(buildOnboardingRedirectUrl('//evil.com')).toBe('/onboarding');
+    expect(buildOnboardingRedirectUrl('/\\evil.com')).toBe('/onboarding');
+  });
+
+  it('should normalize same-origin absolute URLs to relative paths', () => {
+    const origin = window.location.origin;
+    expect(buildOnboardingRedirectUrl(`${origin}/settings?tab=profile`)).toBe(
+      '/onboarding?callbackUrl=%2Fsettings%3Ftab%3Dprofile',
+    );
+    expect(buildOnboardingRedirectUrl(`${origin}/`)).toBe('/onboarding');
+    expect(buildOnboardingRedirectUrl(`${origin}/onboarding/agent`)).toBe('/onboarding/agent');
   });
 });
 

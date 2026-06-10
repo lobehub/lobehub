@@ -4,9 +4,28 @@ const CALLBACK_STORAGE_KEY = 'onboarding-callback-url';
 /**
  * Only same-site relative paths are allowed as post-onboarding redirect
  * targets, to prevent open redirects (e.g. `https://evil.com`, `//evil.com`).
+ * Backslashes are rejected because browsers normalize `\` to `/` in
+ * navigations, so `/\evil.com` would escape as a protocol-relative URL.
  */
 export const isSafeRedirectPath = (url: string): boolean =>
-  url.startsWith('/') && !url.startsWith('//');
+  url.startsWith('/') && !url.startsWith('//') && !url.includes('\\');
+
+/**
+ * Auth detours can produce same-origin absolute callback URLs (e.g. the
+ * protected-route proxy builds `APP_URL + pathname + search`) — normalize
+ * them to relative paths instead of dropping them as unsafe.
+ */
+const toRelativePath = (url: string): string => {
+  if (!/^https?:\/\//.test(url)) return url;
+  try {
+    const parsed = new URL(url);
+    if (typeof window !== 'undefined' && parsed.origin === window.location.origin)
+      return parsed.pathname + parsed.search + parsed.hash;
+  } catch {
+    // fall through — non-parsable URLs are rejected by isSafeRedirectPath
+  }
+  return url;
+};
 
 /**
  * Build the first-hop URL for a freshly signed-up user. New users always land
@@ -14,10 +33,10 @@ export const isSafeRedirectPath = (url: string): boolean =>
  * `callbackUrl` query param and restored when onboarding finishes.
  */
 export const buildOnboardingRedirectUrl = (callbackUrl?: string | null): string => {
-  if (!callbackUrl || callbackUrl === '/' || !isSafeRedirectPath(callbackUrl))
-    return ONBOARDING_PATH;
-  if (callbackUrl.startsWith(ONBOARDING_PATH)) return callbackUrl;
-  return `${ONBOARDING_PATH}?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+  const target = callbackUrl && toRelativePath(callbackUrl);
+  if (!target || target === '/' || !isSafeRedirectPath(target)) return ONBOARDING_PATH;
+  if (target.startsWith(ONBOARDING_PATH)) return target;
+  return `${ONBOARDING_PATH}?callbackUrl=${encodeURIComponent(target)}`;
 };
 
 /**
