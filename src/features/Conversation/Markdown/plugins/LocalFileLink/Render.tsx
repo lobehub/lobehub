@@ -1,15 +1,17 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { A } from '@lobehub/ui';
+import { A, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { memo, type MouseEvent, useCallback } from 'react';
+import type { MouseEvent } from 'react';
+import { memo, useCallback } from 'react';
 
 import FileIcon from '@/components/FileIcon';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
-import { type MarkdownElementProps } from '../type';
+import type { MarkdownElementProps } from '../type';
+import type { ParsedLocalFileHref } from './parse';
 import { parseLocalFileHref } from './parse';
 
 interface LocalFileLinkProperties {
@@ -17,21 +19,51 @@ interface LocalFileLinkProperties {
   linkLabel?: string;
 }
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   icon: css`
     display: inline-flex;
     flex-shrink: 0;
     align-items: center;
   `,
   link: css`
+    cursor: pointer;
+
     display: inline-flex;
     gap: 4px;
     align-items: center;
+
+    margin-inline: -2px;
+    padding-inline: 2px;
+    border-radius: ${cssVar.borderRadiusSM}px;
+
+    text-decoration: none;
     vertical-align: -0.16em;
+
+    transition:
+      color 0.2s ${cssVar.motionEaseOut},
+      background 0.2s ${cssVar.motionEaseOut};
+
+    &:hover {
+      color: ${cssVar.colorLinkHover};
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      background: ${cssVar.colorFillTertiary};
+    }
+
+    &:active {
+      color: ${cssVar.colorLinkActive};
+      background: ${cssVar.colorFillSecondary};
+    }
   `,
 }));
 
 const getFileName = (filePath: string) => filePath.split(/[\\/]/).at(-1) || filePath;
+
+const formatLocalFileTitle = ({ column, filePath, line }: ParsedLocalFileHref) => {
+  if (!line) return filePath;
+
+  return column ? `${filePath} (line ${line}, column ${column})` : `${filePath} (line ${line})`;
+};
 
 const Render = memo<MarkdownElementProps<LocalFileLinkProperties>>(({ node }) => {
   const { linkHref, linkLabel } = node?.properties || {};
@@ -40,6 +72,7 @@ const Render = memo<MarkdownElementProps<LocalFileLinkProperties>>(({ node }) =>
   const parsed = isDesktop ? parseLocalFileHref(linkHref, { workingDirectory }) : null;
   const label = linkLabel || parsed?.filePath || linkHref || '';
   const iconFileName = parsed ? getFileName(parsed.filePath) : label;
+  const title = parsed ? formatLocalFileTitle(parsed) : linkHref;
 
   const handleClick = useCallback(
     (event: MouseEvent<HTMLAnchorElement>) => {
@@ -58,12 +91,14 @@ const Render = memo<MarkdownElementProps<LocalFileLinkProperties>>(({ node }) =>
   );
 
   return (
-    <A className={styles.link} href={linkHref} onClick={handleClick}>
-      <span aria-hidden className={styles.icon}>
-        <FileIcon fileName={iconFileName} size={16} variant={'raw'} />
-      </span>
-      <span>{label}</span>
-    </A>
+    <Tooltip mouseEnterDelay={0.1} placement={'topLeft'} title={title}>
+      <A className={styles.link} href={linkHref} onClick={handleClick}>
+        <span aria-hidden className={styles.icon}>
+          <FileIcon fileName={iconFileName} size={16} variant={'raw'} />
+        </span>
+        <span>{label}</span>
+      </A>
+    </Tooltip>
   );
 });
 
