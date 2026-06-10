@@ -99,6 +99,9 @@ export class ComposioService {
       const result = await (composioClient.tools as any).execute(toolSlug, {
         arguments: args,
         connectedAccountId,
+        // Toolkit version resolves to "latest"; allow manual execution without a
+        // pinned version (Composio otherwise throws ComposioToolVersionRequiredError).
+        dangerouslySkipVersionCheck: true,
         userId: this.userId,
       });
 

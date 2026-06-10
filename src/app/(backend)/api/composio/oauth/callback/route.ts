@@ -12,15 +12,13 @@ const targetOrigin = (): string => {
 };
 
 /**
- * Serialize a value for safe embedding inside an inline `<script>`. Plain
- * JSON.stringify does NOT escape `</script>` or the U+2028/U+2029 line
- * separators, so an attacker-controlled OAuth error string could break out of
- * the script context. Escaping `<`, `>`, `&` and the JS line separators to
- * their `\uXXXX` form closes that hole.
+ * Serialize a value for safe embedding inside an inline `<script>`. Escaping
+ * `<`, `>` and `&` to their `\uXXXX` form prevents an attacker-controlled OAuth
+ * query param from breaking out of the script context (e.g. via `</script>`).
  */
 const jsonForScript = (value: unknown): string =>
   JSON.stringify(value).replaceAll(
-    /[<>&  ]/g,
+    /[&<>]/g,
     (c) => '\\u' + c.codePointAt(0)!.toString(16).padStart(4, '0'),
   );
 

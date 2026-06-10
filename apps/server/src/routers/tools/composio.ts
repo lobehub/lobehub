@@ -22,6 +22,9 @@ export const composioToolsRouter = router({
       const result = await (ctx.composioClient.tools as any).execute(input.toolSlug, {
         arguments: input.toolArgs || {},
         connectedAccountId: input.connectedAccountId,
+        // Toolkit version resolves to "latest"; allow manual execution without a
+        // pinned version (Composio otherwise throws ComposioToolVersionRequiredError).
+        dangerouslySkipVersionCheck: true,
         userId: ctx.userId,
       });
 
@@ -68,7 +71,11 @@ export const composioToolsRouter = router({
   listActions: composioProcedure
     .input(z.object({ appSlug: z.string() }))
     .query(async ({ ctx, input }) => {
-      const response = await (ctx.composioClient.tools as any).get(ctx.userId, {
+      // Use getRawComposioTools (raw tool defs with slug/inputParameters), NOT
+      // tools.get() — the latter returns provider-wrapped (OpenAI-format) tools
+      // whose name/params live under `.function`, so slug/name/inputSchema come
+      // back empty and every tool collapses to the same `${identifier}____` name.
+      const response = await (ctx.composioClient.tools as any).getRawComposioTools({
         toolkits: [input.appSlug],
       });
 
@@ -76,12 +83,12 @@ export const composioToolsRouter = router({
       const tools = Array.isArray(items)
         ? items.map((tool: any) => ({
             description: tool.description || '',
-            inputSchema: tool.parameters ||
+            inputSchema: tool.inputParameters ||
               tool.inputSchema || {
                 properties: {},
                 type: 'object',
               },
-            name: tool.name || tool.slug || '',
+            name: tool.slug || tool.name || '',
           }))
         : [];
 
