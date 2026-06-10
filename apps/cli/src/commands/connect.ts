@@ -289,15 +289,16 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   });
 
   // Handle gateway-dispatched agent runs (heterogeneous agents, e.g. Claude
-  // Code). Mirrors the desktop app: spawn `lh hetero exec` fire-and-forget and
-  // ack immediately so the gateway doesn't time out — the spawned process owns
-  // the full execution + server-ingest pipeline.
-  client.on('agent_run_request', (request: AgentRunRequestMessage) => {
+  // Code). Mirrors the desktop app: spawn `lh hetero exec`, which owns the full
+  // execution + server-ingest pipeline. Ack with the spawn outcome — `accepted`
+  // once the child starts, `rejected` if it fails to spawn (e.g. bad cwd) — so
+  // a failed dispatch surfaces as an error instead of a stuck assistant message.
+  client.on('agent_run_request', async (request: AgentRunRequestMessage) => {
     info(
       `Received agent_run_request: operationId=${request.operationId} type=${request.agentType}`,
     );
     try {
-      spawnHeteroAgentRun(
+      const ack = await spawnHeteroAgentRun(
         {
           agentType: request.agentType,
           cwd: request.cwd,
@@ -311,7 +312,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
         },
         { error, info },
       );
-      client.sendAgentRunAck({ operationId: request.operationId, status: 'accepted' });
+      client.sendAgentRunAck({ operationId: request.operationId, ...ack });
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       error(`agent_run_request failed: ${reason}`);

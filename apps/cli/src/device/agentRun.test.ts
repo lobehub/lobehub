@@ -16,22 +16,29 @@ const makeFakeChild = () => {
   return child;
 };
 
+const baseParams = {
+  agentType: 'claudeCode',
+  jwt: 'jwt',
+  operationId: 'op',
+  prompt: 'hi',
+  serverUrl: 'https://app.lobehub.com',
+  topicId: 'tpc',
+};
+
 describe('spawnHeteroAgentRun', () => {
   afterEach(() => {
     spawnMock.mockReset();
   });
 
-  it('spawns `lh hetero exec` in server-ingest mode via the current CLI entry', () => {
+  it('spawns `lh hetero exec` in server-ingest mode via the current CLI entry', async () => {
     const child = makeFakeChild();
     spawnMock.mockReturnValue(child);
 
-    spawnHeteroAgentRun({
-      agentType: 'claudeCode',
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
       cwd: '/work/dir',
       jwt: 'jwt-token',
       operationId: 'op-1',
-      prompt: 'hi',
-      serverUrl: 'https://app.lobehub.com',
       topicId: 'tpc-1',
     });
 
@@ -65,43 +72,48 @@ describe('spawnHeteroAgentRun', () => {
       }),
     });
 
-    // Plain prompt is sent to stdin as a JSON string.
+    // stdin is only written after the child actually spawns.
+    expect(child.stdin.write).not.toHaveBeenCalled();
+    child.emit('spawn');
+
+    await expect(ackPromise).resolves.toEqual({ status: 'accepted' });
     expect(child.stdin.write).toHaveBeenCalledWith(JSON.stringify('hi'));
     expect(child.stdin.end).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects (no stuck run) when the child errors before spawning, e.g. bad cwd', async () => {
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const ackPromise = spawnHeteroAgentRun({ ...baseParams, cwd: '/missing' });
+    child.emit('error', new Error('spawn ENOENT'));
+
+    await expect(ackPromise).resolves.toEqual({ reason: 'spawn ENOENT', status: 'rejected' });
+    expect(child.stdin.write).not.toHaveBeenCalled();
   });
 
   it('appends --resume when resuming a session', () => {
     const child = makeFakeChild();
     spawnMock.mockReturnValue(child);
 
-    spawnHeteroAgentRun({
-      agentType: 'claudeCode',
-      jwt: 'jwt',
-      operationId: 'op-2',
-      prompt: 'continue',
-      resumeSessionId: 'sess-9',
-      serverUrl: 'https://app.lobehub.com',
-      topicId: 'tpc-2',
-    });
+    void spawnHeteroAgentRun({ ...baseParams, resumeSessionId: 'sess-9' });
 
     const [, args] = spawnMock.mock.calls[0];
     expect(args).toContain('--resume');
     expect(args).toContain('sess-9');
   });
 
-  it('sends a content-block array to stdin when systemContext is provided', () => {
+  it('sends a content-block array to stdin when systemContext is provided', async () => {
     const child = makeFakeChild();
     spawnMock.mockReturnValue(child);
 
-    spawnHeteroAgentRun({
-      agentType: 'claudeCode',
-      jwt: 'jwt',
-      operationId: 'op-3',
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
       prompt: 'do it',
-      serverUrl: 'https://app.lobehub.com',
       systemContext: 'workspace rules',
-      topicId: 'tpc-3',
     });
+    child.emit('spawn');
+    await ackPromise;
 
     expect(child.stdin.write).toHaveBeenCalledWith(
       JSON.stringify([
