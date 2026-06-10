@@ -16,6 +16,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'google/gemini-2.5-pro',
+    knowledgeCutoff: '2025-01',
     pricing: {
       units: [
         { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
@@ -108,6 +109,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'openai/gpt-5',
+    knowledgeCutoff: '2024-09',
     pricing: {
       units: [
         { name: 'textInput', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
@@ -257,6 +259,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'openai/gpt-4o',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
@@ -278,6 +281,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'openai/gpt-5-mini',
+    knowledgeCutoff: '2024-05',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.25, strategy: 'fixed', unit: 'millionTokens' },
@@ -302,6 +306,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'openai/gpt-5-nano',
+    knowledgeCutoff: '2024-05',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.05, strategy: 'fixed', unit: 'millionTokens' },
@@ -423,6 +428,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'openai/gpt-4.1',
+    knowledgeCutoff: '2024-06',
     pricing: {
       units: [
         { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
@@ -682,6 +688,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.0',
     id: 'google/gemini-2.0-flash',
+    knowledgeCutoff: '2024-08',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
@@ -702,6 +709,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.0',
     id: 'google/gemini-2.0-flash-lite',
+    knowledgeCutoff: '2024-08',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.075, strategy: 'fixed', unit: 'millionTokens' },
@@ -723,6 +731,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'google/gemini-2.5-flash',
+    knowledgeCutoff: '2025-01',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
@@ -744,6 +753,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'google/gemini-2.5-flash-lite',
+    knowledgeCutoff: '2025-01',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
@@ -764,6 +774,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'grok',
     generation: 'grok-4',
     id: 'xai/grok-4',
+    knowledgeCutoff: '2024-11',
     pricing: {
       units: [
         { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
@@ -784,6 +795,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'grok',
     generation: 'grok-3',
     id: 'xai/grok-3-mini-fast',
+    knowledgeCutoff: '2024-11',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
@@ -804,6 +816,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'grok',
     generation: 'grok-3',
     id: 'xai/grok-3-mini',
+    knowledgeCutoff: '2024-11',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
@@ -824,6 +837,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'grok',
     generation: 'grok-3',
     id: 'xai/grok-3-fast',
+    knowledgeCutoff: '2024-11',
     pricing: {
       units: [
         { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
@@ -844,6 +858,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'grok',
     generation: 'grok-3',
     id: 'xai/grok-3',
+    knowledgeCutoff: '2024-11',
     pricing: {
       units: [
         { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
@@ -1194,6 +1209,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     displayName: 'Mistral Large',
     family: 'mistral',
     id: 'mistral/mistral-large',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
@@ -1338,6 +1354,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-3.5',
     id: 'openai/gpt-3.5-turbo',
+    knowledgeCutoff: '2021-09',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
@@ -1357,6 +1374,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-3.5',
     id: 'openai/gpt-3.5-turbo-instruct',
+    knowledgeCutoff: '2021-09',
     pricing: {
       units: [
         { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
@@ -1376,6 +1394,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4',
     id: 'openai/gpt-4-turbo',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
@@ -1396,6 +1415,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'openai/gpt-4.1-mini',
+    knowledgeCutoff: '2024-06',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
@@ -1416,6 +1436,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'openai/gpt-4.1-nano',
+    knowledgeCutoff: '2024-06',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
@@ -1437,6 +1458,7 @@ const vercelAIGatewayChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'openai/gpt-4o-mini',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },

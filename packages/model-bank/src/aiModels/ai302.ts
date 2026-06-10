@@ -16,6 +16,7 @@ const ai302ChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'chatgpt-4o-latest',
+    knowledgeCutoff: '2023-10',
     type: 'chat',
   },
   {
@@ -43,6 +44,7 @@ const ai302ChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.0',
     id: 'gemini-2.0-flash',
+    knowledgeCutoff: '2024-08',
     type: 'chat',
   },
   {
@@ -72,6 +74,7 @@ const ai302ChatModels: AIChatModelCard[] = [
     family: 'grok',
     generation: 'grok-3',
     id: 'grok-3-beta',
+    knowledgeCutoff: '2024-11',
     type: 'chat',
   },
   {
@@ -81,6 +84,7 @@ const ai302ChatModels: AIChatModelCard[] = [
     family: 'grok',
     generation: 'grok-3',
     id: 'grok-3-mini-beta',
+    knowledgeCutoff: '2024-11',
     type: 'chat',
   },
   {
@@ -90,6 +94,7 @@ const ai302ChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'gpt-4.1',
+    knowledgeCutoff: '2024-06',
     type: 'chat',
   },
   {
@@ -137,6 +142,7 @@ const ai302ChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'gemini-2.5-pro-preview-05-06',
+    knowledgeCutoff: '2025-01',
     type: 'chat',
   },
   {
@@ -156,6 +162,7 @@ const ai302ChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'gemini-2.5-flash',
+    knowledgeCutoff: '2025-01',
     type: 'chat',
   },
   {
@@ -185,6 +192,7 @@ const ai302ChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'gemini-2.5-pro',
+    knowledgeCutoff: '2025-01',
     type: 'chat',
   },
 ];

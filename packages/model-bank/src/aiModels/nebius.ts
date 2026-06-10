@@ -33,6 +33,7 @@ const nebiusChatModels: AIChatModelCard[] = [
     family: 'gemma',
     generation: 'gemma-3',
     id: 'google/gemma-3-27b-it',
+    knowledgeCutoff: '2024-08',
     organization: 'google',
     pricing: {
       units: [

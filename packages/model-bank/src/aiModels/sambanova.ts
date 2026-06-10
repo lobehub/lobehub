@@ -87,7 +87,7 @@ const sambanovaChatModels: AIChatModelCard[] = [
     enabled: true,
     family: 'llama',
     generation: 'llama-3.2',
-    id: 'Llama-3.2-90B-Vision-Instruct	',
+    id: 'Llama-3.2-90B-Vision-Instruct',
     knowledgeCutoff: '2023-12',
     pricing: {
       units: [

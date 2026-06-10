@@ -12,6 +12,7 @@ const ai21ChatModels: AIChatModelCard[] = [
     enabled: true,
     family: 'jamba',
     id: 'jamba-mini',
+    knowledgeCutoff: '2024-08',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
@@ -32,6 +33,7 @@ const ai21ChatModels: AIChatModelCard[] = [
     enabled: true,
     family: 'jamba',
     id: 'jamba-large',
+    knowledgeCutoff: '2024-08',
     pricing: {
       units: [
         { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },

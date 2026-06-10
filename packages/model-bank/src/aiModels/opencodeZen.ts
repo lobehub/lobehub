@@ -241,6 +241,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3',
     id: 'gemini-3-flash',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_000,
     organization: 'Google',
     pricing: {
@@ -263,6 +264,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.1',
     id: 'gemini-3.1-pro',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_000,
     organization: 'Google',
     pricing: {
@@ -334,6 +336,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5',
+    knowledgeCutoff: '2024-09',
     maxOutput: 32_000,
     organization: 'OpenAI',
     pricing: {
@@ -356,6 +359,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5-codex',
+    knowledgeCutoff: '2024-09',
     maxOutput: 32_000,
     organization: 'OpenAI',
     pricing: {
@@ -378,6 +382,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5-nano',
+    knowledgeCutoff: '2024-05',
     maxOutput: 32_000,
     organization: 'OpenAI',
     pricing: {
@@ -400,6 +405,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.1',
     id: 'gpt-5.1',
+    knowledgeCutoff: '2024-09',
     maxOutput: 32_000,
     organization: 'OpenAI',
     pricing: {
@@ -422,6 +428,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.1',
     id: 'gpt-5.1-codex',
+    knowledgeCutoff: '2024-09',
     maxOutput: 32_000,
     organization: 'OpenAI',
     pricing: {
@@ -444,6 +451,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.1',
     id: 'gpt-5.1-codex-max',
+    knowledgeCutoff: '2024-09',
     maxOutput: 32_000,
     organization: 'OpenAI',
     pricing: {
@@ -466,6 +474,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.1',
     id: 'gpt-5.1-codex-mini',
+    knowledgeCutoff: '2024-09',
     maxOutput: 32_000,
     organization: 'OpenAI',
     pricing: {
@@ -488,6 +497,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.2',
     id: 'gpt-5.2',
+    knowledgeCutoff: '2025-08',
     maxOutput: 32_000,
     organization: 'OpenAI',
     pricing: {
@@ -510,6 +520,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.2',
     id: 'gpt-5.2-codex',
+    knowledgeCutoff: '2025-08',
     maxOutput: 32_000,
     organization: 'OpenAI',
     pricing: {
@@ -532,6 +543,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.3',
     id: 'gpt-5.3-codex',
+    knowledgeCutoff: '2025-08',
     maxOutput: 32_000,
     organization: 'OpenAI',
     pricing: {
@@ -576,6 +588,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.4',
     id: 'gpt-5.4',
+    knowledgeCutoff: '2025-08',
     maxOutput: 32_000,
     organization: 'OpenAI',
     pricing: {
@@ -739,6 +752,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     displayName: 'Nemotron 3 Super Free',
     enabled: true,
     id: 'nemotron-3-super-free',
+    knowledgeCutoff: '2025-06',
     maxOutput: 32_000,
     organization: 'Nvidia',
     pricing: {

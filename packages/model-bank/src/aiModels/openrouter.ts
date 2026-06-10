@@ -45,6 +45,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.1',
     id: 'google/gemini-3.1-flash-image-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       approximatePricePerImage: 0.067,
@@ -73,6 +74,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3',
     id: 'google/gemini-3-pro-image-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_768,
     pricing: {
       approximatePricePerImage: 0.134,
@@ -100,6 +102,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'google/gemini-2.5-flash-image',
+    knowledgeCutoff: '2025-06',
     maxOutput: 8192,
     pricing: {
       approximatePricePerImage: 0.039,
@@ -226,6 +229,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'google/gemini-2.5-pro',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -248,6 +252,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'google/gemini-2.5-pro-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -270,6 +275,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'google/gemini-2.5-flash',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_535,
     pricing: {
       units: [
@@ -366,6 +372,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'openai/gpt-4.1',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -388,6 +395,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'openai/gpt-4.1-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -410,6 +418,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'openai/gpt-4.1-nano',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -481,6 +490,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'openai/gpt-4o-mini',
+    knowledgeCutoff: '2023-10',
     maxOutput: 16_385,
     pricing: {
       units: [
@@ -502,6 +512,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'openai/gpt-4o',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
@@ -788,6 +799,7 @@ const openrouterChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.0',
     id: 'google/gemini-2.0-flash-001',
+    knowledgeCutoff: '2024-08',
     maxOutput: 8192,
     pricing: {
       units: [

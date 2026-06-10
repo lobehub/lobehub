@@ -658,6 +658,7 @@ const novitaChatModels: AIChatModelCard[] = [
     family: 'gemma',
     generation: 'gemma-3',
     id: 'google/gemma-3-27b-it',
+    knowledgeCutoff: '2024-08',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.119, strategy: 'fixed', unit: 'millionTokens' },
@@ -674,6 +675,7 @@ const novitaChatModels: AIChatModelCard[] = [
     family: 'gemma',
     generation: 'gemma-3',
     id: 'google/gemma-3-12b-it',
+    knowledgeCutoff: '2024-08',
     maxOutput: 8192,
     pricing: {
       units: [

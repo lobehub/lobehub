@@ -464,6 +464,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
     displayName: 'DBRX Instruct',
     family: 'dbrx',
     id: 'databricks/dbrx-instruct',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
   {

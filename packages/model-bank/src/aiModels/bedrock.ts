@@ -16,6 +16,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4.7',
     id: 'global.anthropic.claude-opus-4-7',
+    knowledgeCutoff: '2026-01',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -46,6 +47,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4.6',
     id: 'global.anthropic.claude-opus-4-6-v1',
+    knowledgeCutoff: '2025-05',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -80,6 +82,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4.6',
     id: 'global.anthropic.claude-sonnet-4-6',
+    knowledgeCutoff: '2025-08',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -120,6 +123,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4.5',
     id: 'global.anthropic.claude-opus-4-5-20251101-v1:0',
+    knowledgeCutoff: '2025-05',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -147,6 +151,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4.5',
     id: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+    knowledgeCutoff: '2025-01',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -175,6 +180,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4.5',
     id: 'global.anthropic.claude-haiku-4-5-20251001-v1:0',
+    knowledgeCutoff: '2025-02',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -223,6 +229,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-3.7',
     id: 'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
+    knowledgeCutoff: '2024-10',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -248,6 +255,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-3.5',
     id: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
+    knowledgeCutoff: '2024-04',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -273,6 +281,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-3.5',
     id: 'us.anthropic.claude-3-5-sonnet-20241022-v2:0',
+    knowledgeCutoff: '2024-04',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -298,6 +307,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-3.5',
     id: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
+    knowledgeCutoff: '2024-04',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -323,6 +333,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-3',
     id: 'anthropic.claude-3-haiku-20240307-v1:0',
+    knowledgeCutoff: '2023-08',
     maxOutput: 4096,
     pricing: {
       units: [
@@ -348,6 +359,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-3',
     id: 'anthropic.claude-3-sonnet-20240229-v1:0',
+    knowledgeCutoff: '2023-08',
     pricing: {
       units: [
         { name: 'textInput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
@@ -367,6 +379,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-3',
     id: 'anthropic.claude-3-opus-20240229-v1:0',
+    knowledgeCutoff: '2023-08',
     maxOutput: 4096,
     pricing: {
       units: [
@@ -388,6 +401,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-2',
     id: 'anthropic.claude-v2:1',
+    knowledgeCutoff: '2023',
     pricing: {
       units: [
         { name: 'textInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
@@ -404,6 +418,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-2',
     id: 'anthropic.claude-v2',
+    knowledgeCutoff: '2023',
     pricing: {
       units: [
         { name: 'textInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
@@ -420,6 +435,7 @@ const bedrockChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-instant',
     id: 'anthropic.claude-instant-v1',
+    knowledgeCutoff: '2023',
     maxOutput: 4096,
     pricing: {
       units: [

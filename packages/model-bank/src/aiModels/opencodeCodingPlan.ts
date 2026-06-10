@@ -117,6 +117,7 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     enabled: false,
     family: 'mimo',
     id: 'mimo-v2.5',
+    knowledgeCutoff: '2024-12',
     maxOutput: 128_000,
     organization: 'Xiaomi',
     pricing: {
@@ -142,6 +143,7 @@ const opencodeCodingPlanChatModels: AIChatModelCard[] = [
     enabled: false,
     family: 'mimo',
     id: 'mimo-v2.5-pro',
+    knowledgeCutoff: '2024-12',
     maxOutput: 128_000,
     organization: 'Xiaomi',
     pricing: {

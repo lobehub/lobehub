@@ -21,6 +21,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.5',
     id: 'gemini-3.5-flash',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -61,6 +62,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.1',
     id: 'gemini-3.1-flash-image-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_768,
     pricing: {
       approximatePricePerImage: 0.067,
@@ -96,6 +98,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.1',
     id: 'gemini-3.1-pro-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -186,6 +189,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.1',
     id: 'gemini-3.1-flash-lite',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -223,6 +227,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.1',
     id: 'gemini-3.1-flash-lite-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -316,6 +321,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3',
     id: 'gemini-3-flash-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -355,6 +361,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3',
     id: 'gemini-3-pro-image-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_768,
     pricing: {
       approximatePricePerImage: 0.134,
@@ -387,6 +394,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'gemini-2.5-pro',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -419,6 +427,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'gemini-2.5-pro-preview-05-06',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -442,6 +451,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'gemini-2.5-pro-preview-03-25',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -465,6 +475,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'gemini-2.5-flash',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -496,6 +507,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'gemini-2.5-flash-preview-04-17',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -518,6 +530,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'gemini-2.5-flash-image',
+    knowledgeCutoff: '2025-06',
     maxOutput: 8192,
     pricing: {
       approximatePricePerImage: 0.039,
@@ -544,6 +557,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'gemini-2.5-flash-lite',
+    knowledgeCutoff: '2025-01',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -573,6 +587,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'gemini-2.5-flash-lite-preview-06-17',
+    knowledgeCutoff: '2025-01',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -600,6 +615,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.0',
     id: 'gemini-2.0-flash',
+    knowledgeCutoff: '2024-08',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -622,6 +638,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.0',
     id: 'gemini-2.0-flash-lite',
+    knowledgeCutoff: '2024-08',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -645,6 +662,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-1.5',
     id: 'gemini-1.5-flash-002',
+    knowledgeCutoff: '2024-05',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -667,6 +685,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-1.5',
     id: 'gemini-1.5-pro-002',
+    knowledgeCutoff: '2024-05',
     maxOutput: 8192,
     pricing: {
       units: [

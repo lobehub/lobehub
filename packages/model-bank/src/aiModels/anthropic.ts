@@ -14,6 +14,8 @@ const anthropicChatModels: AIChatModelCard[] = [
       "Claude Fable 5 is Anthropic's most capable model — a new tier above Opus for the most demanding reasoning and long-horizon agentic work.",
     displayName: 'Claude Fable 5',
     enabled: true,
+    family: 'claude',
+    generation: 'claude-5',
     id: 'claude-fable-5',
     maxOutput: 128_000,
     pricing: {
@@ -48,6 +50,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4.8',
     id: 'claude-opus-4-8',
+    knowledgeCutoff: '2026-01',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -81,6 +84,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4.7',
     id: 'claude-opus-4-7',
+    knowledgeCutoff: '2026-01',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -113,6 +117,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4.6',
     id: 'claude-opus-4-6',
+    knowledgeCutoff: '2025-05',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -149,6 +154,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4.6',
     id: 'claude-sonnet-4-6',
+    knowledgeCutoff: '2025-08',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -191,6 +197,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4.5',
     id: 'claude-opus-4-5-20251101',
+    knowledgeCutoff: '2025-05',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -226,6 +233,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4.5',
     id: 'claude-sonnet-4-5-20250929',
+    knowledgeCutoff: '2025-01',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -258,6 +266,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4.5',
     id: 'claude-haiku-4-5-20251001',
+    knowledgeCutoff: '2025-02',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -293,6 +302,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4.1',
     id: 'claude-opus-4-1-20250805',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_000,
     pricing: {
       units: [
@@ -328,6 +338,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4',
     id: 'claude-opus-4-20250514',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_000,
     pricing: {
       units: [
@@ -363,6 +374,7 @@ const anthropicChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4',
     id: 'claude-sonnet-4-20250514',
+    knowledgeCutoff: '2025-01',
     maxOutput: 64_000,
     pricing: {
       units: [

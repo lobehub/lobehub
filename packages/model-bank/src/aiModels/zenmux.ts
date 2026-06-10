@@ -24,6 +24,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.2',
     id: 'openai/gpt-5.2',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -53,6 +54,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.2',
     id: 'openai/gpt-5.2-pro',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -79,6 +81,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.2',
     id: 'openai/gpt-5.2-chat',
+    knowledgeCutoff: '2025-08',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -104,6 +107,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3',
     id: 'google/gemini-3-pro-image-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -128,6 +132,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3',
     id: 'google/gemini-3-pro-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_530,
     pricing: {
       units: [
@@ -156,6 +161,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.1',
     id: 'openai/gpt-5.1',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -181,6 +187,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.1',
     id: 'openai/gpt-5.1-chat',
+    knowledgeCutoff: '2024-09',
     maxOutput: 16_380,
     pricing: {
       units: [
@@ -203,6 +210,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.1',
     id: 'openai/gpt-5.1-codex',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -228,6 +236,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.1',
     id: 'openai/gpt-5.1-codex-mini',
+    knowledgeCutoff: '2024-09',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -641,6 +650,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'google/gemini-2.5-pro',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_530,
     pricing: {
       units: [
@@ -669,6 +679,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'google/gemini-2.5-flash',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_530,
     pricing: {
       units: [
@@ -696,6 +707,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'openai/gpt-5-pro',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -721,6 +733,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'openai/gpt-5',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -745,6 +758,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'openai/gpt-5-chat',
+    knowledgeCutoff: '2024-09',
     maxOutput: 16_380,
     pricing: {
       units: [
@@ -766,6 +780,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'openai/gpt-5-mini',
+    knowledgeCutoff: '2024-05',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -790,6 +805,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'openai/gpt-5-nano',
+    knowledgeCutoff: '2024-05',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -814,6 +830,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'openai/gpt-5-codex',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -838,6 +855,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'openai/gpt-4.1',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_770,
     pricing: {
       units: [
@@ -857,6 +875,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'openai/gpt-4.1-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_770,
     pricing: {
       units: [
@@ -877,6 +896,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'openai/gpt-4.1-nano',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_770,
     pricing: {
       units: [
@@ -1128,6 +1148,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'google/gemini-2.5-flash-image',
+    knowledgeCutoff: '2025-06',
     maxOutput: 8192,
     pricing: {
       approximatePricePerImage: 0.039,
@@ -1225,6 +1246,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'openai/gpt-4o',
+    knowledgeCutoff: '2023-10',
     maxOutput: 16_380,
     pricing: {
       units: [
@@ -1245,6 +1267,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'openai/gpt-4o-mini',
+    knowledgeCutoff: '2023-10',
     maxOutput: 16_380,
     pricing: {
       units: [
@@ -1395,6 +1418,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.0',
     id: 'google/gemini-2.0-flash',
+    knowledgeCutoff: '2024-08',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -1417,6 +1441,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.0',
     id: 'google/gemini-2.0-flash-lite-001',
+    knowledgeCutoff: '2024-08',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -1439,6 +1464,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'google/gemini-2.5-flash-lite',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_530,
     pricing: {
       units: [

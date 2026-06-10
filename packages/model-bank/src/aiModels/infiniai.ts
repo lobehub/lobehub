@@ -122,6 +122,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     displayName: 'MiMo-V2 Pro',
     family: 'mimo',
     id: 'mimo-v2-pro',
+    knowledgeCutoff: '2024-12',
     maxOutput: 262_144,
     pricing: {
       currency: 'CNY',

@@ -433,6 +433,7 @@ const ollamaChatModels: AIChatModelCard[] = [
     displayName: 'Mixtral Large 123B',
     family: 'mistral',
     id: 'mistral-large',
+    knowledgeCutoff: '2023-10',
     type: 'chat',
   },
   {

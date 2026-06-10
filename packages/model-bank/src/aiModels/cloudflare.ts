@@ -39,6 +39,7 @@ const cloudflareChatModels: AIChatModelCard[] = [
     family: 'gemma',
     generation: 'gemma-3',
     id: '@cf/google/gemma-3-12b-it',
+    knowledgeCutoff: '2024-08',
     type: 'chat',
   },
   {
@@ -73,6 +74,7 @@ const cloudflareChatModels: AIChatModelCard[] = [
     displayName: 'mistral small 3.1 24b',
     family: 'mistral',
     id: '@cf/mistralai/mistral-small-3.1-24b-instruct',
+    knowledgeCutoff: '2023-10',
     type: 'chat',
   },
   {

@@ -20,6 +20,7 @@ const azureChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.4',
     id: 'gpt-5.4',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -195,6 +196,7 @@ const azureChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.2',
     id: 'gpt-5.2',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -227,6 +229,7 @@ const azureChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.1',
     id: 'gpt-5.1',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -260,6 +263,7 @@ const azureChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5-pro',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -286,6 +290,7 @@ const azureChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5-codex',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -315,6 +320,7 @@ const azureChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -344,6 +350,7 @@ const azureChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5-mini',
+    knowledgeCutoff: '2024-05',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -373,6 +380,7 @@ const azureChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5-nano',
+    knowledgeCutoff: '2024-05',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -398,6 +406,7 @@ const azureChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5-chat',
+    knowledgeCutoff: '2024-09',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -484,6 +493,7 @@ const azureChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'gpt-4.1',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -511,6 +521,7 @@ const azureChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'gpt-4.1-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -537,6 +548,7 @@ const azureChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'gpt-4.1-nano',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -668,6 +680,7 @@ const azureChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'gpt-4o',
+    knowledgeCutoff: '2023-10',
     maxOutput: 4096,
     pricing: {
       units: [
@@ -694,6 +707,7 @@ const azureChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4',
     id: 'gpt-4',
+    knowledgeCutoff: '2021-09',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -711,6 +725,7 @@ const azureChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'gpt-4o-mini',
+    knowledgeCutoff: '2023-10',
     maxOutput: 4096,
     pricing: {
       units: [

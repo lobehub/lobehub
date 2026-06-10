@@ -354,6 +354,7 @@ const streamlakeModels: AIChatModelCard[] = [
     displayName: 'MiMo-V2 Pro',
     family: 'mimo',
     id: 'MiMo-V2-Pro',
+    knowledgeCutoff: '2024-12',
     maxOutput: 131_072,
     pricing: {
       currency: 'CNY',

@@ -16,6 +16,7 @@ const xaiChatModels: AIChatModelCard[] = [
     family: 'grok',
     generation: 'grok-4.3',
     id: 'grok-4.3',
+    knowledgeCutoff: '2025-12',
     pricing: {
       units: [
         {

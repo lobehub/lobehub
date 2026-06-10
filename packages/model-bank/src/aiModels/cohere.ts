@@ -51,6 +51,7 @@ const cohereChatModels: AIChatModelCard[] = [
     enabled: true,
     family: 'command',
     id: 'command-r-plus-08-2024',
+    knowledgeCutoff: '2023-02',
     maxOutput: 4000,
     pricing: {
       units: [
@@ -89,6 +90,7 @@ const cohereChatModels: AIChatModelCard[] = [
     enabled: true,
     family: 'command',
     id: 'command-r-08-2024',
+    knowledgeCutoff: '2023-02',
     maxOutput: 4000,
     pricing: {
       units: [

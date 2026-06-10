@@ -21,6 +21,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     description: 'Latest Instant model used in ChatGPT.',
     displayName: 'Chat Latest',
     id: 'chat-latest',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -155,6 +156,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.4',
     id: 'gpt-5.4',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -330,6 +332,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.3',
     id: 'gpt-5.3-chat-latest',
+    knowledgeCutoff: '2025-08',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -356,6 +359,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.3',
     id: 'gpt-5.3-codex',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -386,6 +390,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.2',
     id: 'gpt-5.2',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -416,6 +421,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.2',
     id: 'gpt-5.2-codex',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -445,6 +451,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.2',
     id: 'gpt-5.2-pro',
+    knowledgeCutoff: '2025-08',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -471,6 +478,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.2',
     id: 'gpt-5.2-chat-latest',
+    knowledgeCutoff: '2025-08',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -496,6 +504,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.1',
     id: 'gpt-5.1',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -522,6 +531,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.1',
     id: 'gpt-5.1-chat-latest',
+    knowledgeCutoff: '2024-09',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -547,6 +557,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.1',
     id: 'gpt-5.1-codex-max',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -576,6 +587,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.1',
     id: 'gpt-5.1-codex',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -605,6 +617,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.1',
     id: 'gpt-5.1-codex-mini',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -634,6 +647,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5-pro',
+    knowledgeCutoff: '2024-09',
     maxOutput: 272_000,
     pricing: {
       units: [
@@ -662,6 +676,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5-codex',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -692,6 +707,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -722,6 +738,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5-mini',
+    knowledgeCutoff: '2024-05',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -750,6 +767,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5-nano',
+    knowledgeCutoff: '2024-05',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -775,6 +793,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5-chat-latest',
+    knowledgeCutoff: '2024-09',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -1030,6 +1049,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'gpt-4.1',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -1057,6 +1077,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'gpt-4.1-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -1082,6 +1103,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'gpt-4.1-nano',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -1106,6 +1128,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'gpt-4o-mini',
+    knowledgeCutoff: '2023-10',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -1131,6 +1154,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'gpt-4o-mini-search-preview',
+    knowledgeCutoff: '2023-10',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -1157,6 +1181,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'gpt-4o',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput_cacheRead', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
@@ -1181,6 +1206,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'gpt-4o-search-preview',
+    knowledgeCutoff: '2023-10',
     maxOutput: 16_384,
     pricing: {
       units: [
@@ -1207,6 +1233,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'gpt-4o-2024-11-20',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput_cacheRead', rate: 1.25, strategy: 'fixed', unit: 'millionTokens' },
@@ -1233,6 +1260,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'gpt-4o-2024-05-13',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput', rate: 5, strategy: 'fixed', unit: 'millionTokens' },
@@ -1282,6 +1310,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4',
     id: 'gpt-4-turbo',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
@@ -1302,6 +1331,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4',
     id: 'gpt-4-turbo-2024-04-09',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
@@ -1322,6 +1352,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4',
     id: 'gpt-4',
+    knowledgeCutoff: '2021-09',
     pricing: {
       units: [
         { name: 'textInput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
@@ -1341,6 +1372,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4',
     id: 'gpt-4-0613',
+    knowledgeCutoff: '2021-09',
     pricing: {
       units: [
         { name: 'textInput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
@@ -1361,6 +1393,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-3.5',
     id: 'gpt-3.5-turbo',
+    knowledgeCutoff: '2021-09',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
@@ -1380,6 +1413,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-3.5',
     id: 'gpt-3.5-turbo-0125',
+    knowledgeCutoff: '2021-09',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
@@ -1400,6 +1434,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-3.5',
     id: 'gpt-3.5-turbo-1106',
+    knowledgeCutoff: '2021-09',
     pricing: {
       units: [
         { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
@@ -1417,6 +1452,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-3.5',
     id: 'gpt-3.5-turbo-instruct',
+    knowledgeCutoff: '2021-09',
     pricing: {
       units: [
         { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
@@ -1437,6 +1473,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     displayName: 'Computer Use Preview',
     family: 'gpt',
     id: 'computer-use-preview',
+    knowledgeCutoff: '2023-10',
     maxOutput: 1024,
     pricing: {
       units: [

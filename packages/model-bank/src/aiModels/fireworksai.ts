@@ -195,6 +195,7 @@ const fireworksaiChatModels: AIChatModelCard[] = [
     enabled: true,
     family: 'mistral',
     id: 'accounts/fireworks/models/mistral-small-24b-instruct-2501',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.9, strategy: 'fixed', unit: 'millionTokens' },

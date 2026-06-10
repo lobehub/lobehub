@@ -65,6 +65,7 @@ const githubChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'openai/gpt-4.1',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -89,6 +90,7 @@ const githubChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'openai/gpt-4.1-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -111,6 +113,7 @@ const githubChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'openai/gpt-4.1-nano',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -226,6 +229,7 @@ const githubChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'openai/gpt-4o-mini',
+    knowledgeCutoff: '2023-10',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -241,6 +245,7 @@ const githubChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4o',
     id: 'openai/gpt-4o',
+    knowledgeCutoff: '2023-10',
     maxOutput: 16_384,
     type: 'chat',
   },
@@ -253,6 +258,7 @@ const githubChatModels: AIChatModelCard[] = [
     family: 'grok',
     generation: 'grok-3',
     id: 'xai/grok-3',
+    knowledgeCutoff: '2024-11',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -266,6 +272,7 @@ const githubChatModels: AIChatModelCard[] = [
     family: 'grok',
     generation: 'grok-3',
     id: 'xai/grok-3-mini',
+    knowledgeCutoff: '2024-11',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -313,6 +320,7 @@ const githubChatModels: AIChatModelCard[] = [
     displayName: 'AI21 Jamba 1.5 Mini',
     family: 'jamba',
     id: 'ai21-labs/AI21-Jamba-1.5-Mini',
+    knowledgeCutoff: '2024-03',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -326,6 +334,7 @@ const githubChatModels: AIChatModelCard[] = [
     displayName: 'AI21 Jamba 1.5 Large',
     family: 'jamba',
     id: 'ai21-labs/AI21-Jamba-1.5-Large',
+    knowledgeCutoff: '2024-03',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -363,6 +372,7 @@ const githubChatModels: AIChatModelCard[] = [
     displayName: 'Mistral Small',
     family: 'mistral',
     id: 'mistral-ai/mistral-small-2503',
+    knowledgeCutoff: '2023-10',
     maxOutput: 4096,
     type: 'chat',
   },
@@ -373,6 +383,7 @@ const githubChatModels: AIChatModelCard[] = [
     displayName: 'Mistral Large',
     family: 'mistral',
     id: 'mistral-ai/Mistral-Large-2411',
+    knowledgeCutoff: '2023-10',
     maxOutput: 4096,
     type: 'chat',
   },

@@ -17,6 +17,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.4',
     id: 'gpt-5.4',
+    knowledgeCutoff: '2025-08',
     releasedAt: '2026-03-05',
     settings: {
       extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
@@ -59,6 +60,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.3',
     id: 'gpt-5.3-codex',
+    knowledgeCutoff: '2025-08',
     releasedAt: '2026-02-05',
     settings: {
       extendParams: ['codexMaxReasoningEffort'],
@@ -79,6 +81,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.2',
     id: 'gpt-5.2',
+    knowledgeCutoff: '2025-08',
     releasedAt: '2025-12-11',
     settings: {
       extendParams: ['gpt5_2ReasoningEffort', 'textVerbosity'],
@@ -99,6 +102,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.2',
     id: 'gpt-5.2-codex',
+    knowledgeCutoff: '2025-08',
     releasedAt: '2025-12-18',
     settings: {
       extendParams: ['codexMaxReasoningEffort'],
@@ -118,6 +122,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5.1',
     id: 'gpt-5.1',
+    knowledgeCutoff: '2024-09',
     releasedAt: '2025-11-13',
     settings: {
       extendParams: ['gpt5_1ReasoningEffort', 'textVerbosity'],
@@ -138,6 +143,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-5',
     id: 'gpt-5-mini',
+    knowledgeCutoff: '2024-05',
     releasedAt: '2025-08-07',
     settings: {
       extendParams: ['gpt5ReasoningEffort', 'textVerbosity'],
@@ -156,6 +162,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     family: 'gpt',
     generation: 'gpt-4.1',
     id: 'gpt-4.1',
+    knowledgeCutoff: '2024-06',
     releasedAt: '2025-04-14',
     type: 'chat',
   },
@@ -325,6 +332,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3.1',
     id: 'gemini-3.1-pro-preview',
+    knowledgeCutoff: '2025-01',
     releasedAt: '2026-02-19',
     type: 'chat',
   },
@@ -341,6 +349,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-3',
     id: 'gemini-3-flash-preview',
+    knowledgeCutoff: '2025-01',
     releasedAt: '2025-12-17',
     type: 'chat',
   },
@@ -357,6 +366,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     family: 'gemini',
     generation: 'gemini-2.5',
     id: 'gemini-2.5-pro',
+    knowledgeCutoff: '2025-01',
     releasedAt: '2025-06-17',
     type: 'chat',
   },

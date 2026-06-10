@@ -17,6 +17,7 @@ const mistralChatModels: AIChatModelCard[] = [
     enabled: true,
     family: 'mistral',
     id: 'mistral-medium-3.5',
+    knowledgeCutoff: '2024-11',
     pricing: {
       units: [
         { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
@@ -155,6 +156,7 @@ const mistralChatModels: AIChatModelCard[] = [
     displayName: 'Mistral Small 4',
     family: 'mistral',
     id: 'mistral-small-2603',
+    knowledgeCutoff: '2024-11',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
@@ -177,6 +179,7 @@ const mistralChatModels: AIChatModelCard[] = [
     displayName: 'Mistral Small 3.2',
     family: 'mistral',
     id: 'mistral-small-2506',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
@@ -197,6 +200,7 @@ const mistralChatModels: AIChatModelCard[] = [
     enabled: true,
     family: 'mistral',
     id: 'mistral-large-2512',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
@@ -217,6 +221,7 @@ const mistralChatModels: AIChatModelCard[] = [
     displayName: 'Mistral Large 2.1',
     family: 'mistral',
     id: 'mistral-large-2411',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
