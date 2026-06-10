@@ -551,6 +551,7 @@
   "sharePage.error.unauthorized.action": "登录",
   "sharePage.error.unauthorized.subtitle": "请登录后查看此分享话题。",
   "sharePage.error.unauthorized.title": "需要登录",
+  "sharePage.menu.copyLink": "复制链接",
   "sharePage.menu.goToLobeHub": "前往 LobeHub",
   "sharePage.menu.more": "更多",
   "sharePage.menu.report": "举报",

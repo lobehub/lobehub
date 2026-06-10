@@ -94,6 +94,7 @@ import AllTasksPage from '@/routes/(main)/tasks';
 import SharePagePage from '@/routes/share/page/[id]';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
+import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { ErrorBoundary, redirectElement } from '@/utils/router';
 
@@ -590,6 +591,7 @@ export const desktopRoutes: RouteObject[] = [
     children: [
       {
         element: <ShareTopicPage />,
+        handle: { meta: shareTopicRouteMeta },
         path: ':id',
       },
     ],

@@ -612,6 +612,7 @@ export default {
   'sharePage.error.unauthorized.action': 'Sign In',
   'sharePage.error.unauthorized.subtitle': 'Please sign in to view this shared topic.',
   'sharePage.error.unauthorized.title': 'Sign In Required',
+  'sharePage.menu.copyLink': 'Copy Link',
   'sharePage.menu.goToLobeHub': 'Go to LobeHub',
   'sharePage.menu.more': 'More',
   'sharePage.menu.report': 'Report',
