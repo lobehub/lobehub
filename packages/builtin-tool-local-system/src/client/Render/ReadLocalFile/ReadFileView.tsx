@@ -7,6 +7,7 @@ import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
+import { InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   actions: css`
@@ -100,6 +101,7 @@ const ReadFileView = memo<ReadFileState>(
     const { t } = useTranslation('tool');
     const { openFile, openFolder, displayRelativePath } = useToolRenderCapabilities();
     const filename = filenameProp || path.split('/').pop() || path;
+    const isHtml = isHtmlFile({ fileName: filename, fileType, path });
 
     const handleOpenFile = openFile
       ? (e: React.MouseEvent) => {
@@ -192,8 +194,13 @@ const ReadFileView = memo<ReadFileState>(
           </Text>
         </Flexbox>
 
-        <Flexbox className={styles.previewBox} style={{ maxHeight: 240 }}>
-          {fileType === 'md' ? (
+        <Flexbox
+          className={styles.previewBox}
+          style={{ height: isHtml ? 240 : undefined, maxHeight: 240 }}
+        >
+          {isHtml ? (
+            <InlineHtmlPreview content={content} />
+          ) : fileType === 'md' ? (
             <Markdown style={{ overflow: 'auto' }}>{content}</Markdown>
           ) : (
             <div className={styles.previewText} style={{ width: '100%' }}>

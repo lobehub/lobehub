@@ -1009,6 +1009,7 @@
   "workingPanel.localFile.error": "无法加载此文件",
   "workingPanel.localFile.preview.raw": "原文",
   "workingPanel.localFile.preview.render": "预览",
+  "workingPanel.localFile.preview.source": "源码",
   "workingPanel.localFile.truncated": "文件预览被截断至 {{limit}} 个字符",
   "workingPanel.progress": "进度",
   "workingPanel.progress.allCompleted": "所有任务已完成",

@@ -1111,6 +1111,7 @@ export default {
   'workingPanel.localFile.error': "Couldn't load this file",
   'workingPanel.localFile.preview.raw': 'Raw',
   'workingPanel.localFile.preview.render': 'Preview',
+  'workingPanel.localFile.preview.source': 'Source',
   'workingPanel.localFile.truncated': 'File preview truncated to {{limit}} characters',
   'workingPanel.skills.empty': 'No skills available',
   'workingPanel.skills.section.agent': 'Agent skills',
