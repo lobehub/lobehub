@@ -262,29 +262,13 @@ export class FlatListBuilder {
           processedIds.add(completion.id);
         }
 
-        // Continue after the assistant chain
-        // Priority 1: If last assistant has non-tool children, continue from it
-        // Priority 2: Otherwise continue from tools (for cases where user replies to tool)
-        const lastAssistant = assistantChain.at(-1);
-        const toolIds = new Set(allToolMessages.map((t) => t.id));
-
-        const lastAssistantNonToolChildren = lastAssistant
-          ? this.childrenMap.get(lastAssistant.id)?.filter((childId) => !toolIds.has(childId))
-          : undefined;
-
-        if (
-          lastAssistantNonToolChildren &&
-          lastAssistantNonToolChildren.length > 0 &&
-          lastAssistant
-        ) {
-          // Follow-up messages exist after the last assistant (not tools)
-          this.buildFlatListRecursive(lastAssistant.id, flatList, processedIds, allMessages);
-        } else {
-          // No non-tool children of last assistant, check tools for children
-          for (const toolMsg of allToolMessages) {
-            this.buildFlatListRecursive(toolMsg.id, flatList, processedIds, allMessages);
-          }
-        }
+        this.continueAfterAssistantGroup(
+          assistantChain,
+          allToolMessages,
+          flatList,
+          processedIds,
+          allMessages,
+        );
         continue;
       }
 
@@ -409,25 +393,13 @@ export class FlatListBuilder {
             assistantChain.forEach((m) => processedIds.add(m.id));
             allToolMessages.forEach((m) => processedIds.add(m.id));
 
-            // Continue after the assistant chain
-            const lastAssistant = assistantChain.at(-1);
-            const toolIds = new Set(allToolMessages.map((t) => t.id));
-
-            const lastAssistantNonToolChildren = lastAssistant
-              ? this.childrenMap.get(lastAssistant.id)?.filter((childId) => !toolIds.has(childId))
-              : undefined;
-
-            if (
-              lastAssistantNonToolChildren &&
-              lastAssistantNonToolChildren.length > 0 &&
-              lastAssistant
-            ) {
-              this.buildFlatListRecursive(lastAssistant.id, flatList, processedIds, allMessages);
-            } else {
-              for (const toolMsg of allToolMessages) {
-                this.buildFlatListRecursive(toolMsg.id, flatList, processedIds, allMessages);
-              }
-            }
+            this.continueAfterAssistantGroup(
+              assistantChain,
+              allToolMessages,
+              flatList,
+              processedIds,
+              allMessages,
+            );
           } else {
             // Regular assistant message (not assistantGroup) - add branch info
             const activeBranchWithBranches = this.createMessageWithBranches(
@@ -528,25 +500,94 @@ export class FlatListBuilder {
     assistantChain.forEach((m) => processedIds.add(m.id));
     allToolMessages.forEach((m) => processedIds.add(m.id));
 
-    // Continue after the assistant chain
-    // Priority 1: If last assistant has non-tool children, continue from it
-    // Priority 2: Otherwise continue from tools (for cases where user replies to tool)
+    this.continueAfterAssistantGroup(
+      assistantChain,
+      allToolMessages,
+      flatList,
+      processedIds,
+      allMessages,
+    );
+  }
+
+  private continueAfterAssistantGroup(
+    assistantChain: Message[],
+    allToolMessages: Message[],
+    flatList: Message[],
+    processedIds: Set<string>,
+    allMessages: Message[],
+  ): void {
     const lastAssistant = assistantChain.at(-1);
-    const toolIds = new Set(allToolMessages.map((t) => t.id));
+    const parentIds = [
+      ...(lastAssistant ? [lastAssistant.id] : []),
+      ...allToolMessages.map((toolMessage) => toolMessage.id),
+    ];
 
-    const lastAssistantNonToolChildren = lastAssistant
-      ? this.childrenMap.get(lastAssistant.id)?.filter((childId) => !toolIds.has(childId))
-      : undefined;
+    while (true) {
+      const nextContinuation = this.findNextUnprocessedChild(parentIds, processedIds);
+      if (!nextContinuation) return;
 
-    if (lastAssistantNonToolChildren && lastAssistantNonToolChildren.length > 0 && lastAssistant) {
-      // Follow-up messages exist after the last assistant (not tools)
-      this.buildFlatListRecursive(lastAssistant.id, flatList, processedIds, allMessages);
-    } else {
-      // No non-tool children of last assistant, check tools for children
-      for (const toolMsg of allToolMessages) {
-        this.buildFlatListRecursive(toolMsg.id, flatList, processedIds, allMessages);
+      if (this.shouldDrainParentContinuations(nextContinuation.parentId, processedIds)) {
+        this.buildFlatListRecursive(
+          nextContinuation.parentId,
+          flatList,
+          processedIds,
+          allMessages,
+        );
+        continue;
       }
+
+      this.buildFlatListRecursiveForChild(
+        nextContinuation.parentId,
+        nextContinuation.child.id,
+        flatList,
+        processedIds,
+        allMessages,
+      );
     }
+  }
+
+  private buildFlatListRecursiveForChild(
+    parentId: string,
+    childId: string,
+    flatList: Message[],
+    processedIds: Set<string>,
+    allMessages: Message[],
+  ): void {
+    const childIds = this.childrenMap.get(parentId) ?? [];
+    this.childrenMap.set(parentId, [childId]);
+
+    try {
+      this.buildFlatListRecursive(parentId, flatList, processedIds, allMessages);
+    } finally {
+      this.childrenMap.set(parentId, childIds);
+    }
+  }
+
+  private findNextUnprocessedChild(
+    parentIds: string[],
+    processedIds: Set<string>,
+  ): { child: Message; parentId: string } | undefined {
+    return parentIds
+      .flatMap((parentId) =>
+        (this.childrenMap.get(parentId) ?? [])
+          .map((childId) => this.messageMap.get(childId))
+          .filter((child): child is Message => !!child && !processedIds.has(child.id))
+          .map((child) => ({ child, parentId })),
+      )
+      .sort((a, b) => a.child.createdAt - b.child.createdAt)[0];
+  }
+
+  private shouldDrainParentContinuations(parentId: string, processedIds: Set<string>): boolean {
+    const parentMessage = this.messageMap.get(parentId);
+    const children = (this.childrenMap.get(parentId) ?? []).filter(
+      (childId) => !processedIds.has(childId),
+    );
+    if (!parentMessage || children.length <= 1) return false;
+
+    if (this.isAgentCouncilMode(parentMessage)) return true;
+
+    const taskChildren = children.filter((childId) => this.messageMap.get(childId)?.role === 'task');
+    return taskChildren.length > 1;
   }
 
   /**
