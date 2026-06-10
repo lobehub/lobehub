@@ -1,4 +1,5 @@
 import { ChatErrorType } from '@lobechat/types';
+import debug from 'debug';
 import { NextResponse } from 'next/server';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
@@ -6,14 +7,10 @@ import { AiProviderModel } from '@/database/models/aiProvider';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { createErrorResponse } from '@/utils/errorResponse';
 
-export const GET = checkAuth(async (req, { params, userId, serverDB }) => {
-  const provider = (await params)!.provider!;
+const log = debug('lobe-server:newapi:pricing');
 
-  if (provider !== 'newapi') {
-    return createErrorResponse(ChatErrorType.BadRequest, {
-      message: 'Only newapi provider supports pricing endpoint proxy.',
-    });
-  }
+export const GET = checkAuth(async (req, { userId, serverDB }) => {
+  const provider = 'newapi';
 
   try {
     // 1. Get user's provider configuration from database
@@ -77,7 +74,7 @@ export const GET = checkAuth(async (req, { params, userId, serverDB }) => {
     const body = await res.json();
     return NextResponse.json(body);
   } catch (e) {
-    console.error(`Route: [${provider}] pricing error:`, e);
+    log(`Route: [${provider}] pricing error: %O`, e);
     const error = e instanceof Error ? { message: e.message, name: e.name } : e;
     return createErrorResponse(ChatErrorType.InternalServerError, { error });
   }

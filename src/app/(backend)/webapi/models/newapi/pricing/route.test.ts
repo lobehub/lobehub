@@ -55,16 +55,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('GET /webapi/models/[provider]/pricing', () => {
-  it('should return BadRequest if provider is not newapi', async () => {
-    const mockParams = Promise.resolve({ provider: 'openai' });
-    const response = await GET(request, { params: mockParams });
-    const responseBody = await response.json();
-
-    expect(response.status).toBe(400);
-    expect(responseBody.errorType).toBe(ChatErrorType.BadRequest);
-  });
-
+describe('GET /webapi/models/newapi/pricing', () => {
   it('should return ContentNotFound if provider config is missing', async () => {
     const mockParams = Promise.resolve({ provider: 'newapi' });
     const mockModelInstance = new AiProviderModel({} as any, 'test-user-id');
