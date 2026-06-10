@@ -19,7 +19,7 @@ import {
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { onboardingSelectors } from '@/store/user/selectors';
-import { clearStaleOnboardingCallbackUrl } from '@/utils/onboardingRedirect';
+import { clearStaleOnboardingCallbackUrl, isSafeRedirectPath } from '@/utils/onboardingRedirect';
 
 /**
  * Remap a `currentStep` persisted under the old 5-step classic flow
@@ -42,6 +42,15 @@ const COMMON_STEP_TRACKING = {
   1: { flow: 'common', step: 'telemetry', stepIndex: 1 },
   2: { flow: 'common', step: 'response_language', stepIndex: 2 },
 } as const;
+
+const appendCallbackUrl = (path: string, searchParams: URLSearchParams): string => {
+  const callbackUrl = searchParams.get('callbackUrl');
+  if (!callbackUrl || !isSafeRedirectPath(callbackUrl)) return path;
+
+  const params = new URLSearchParams();
+  params.set('callbackUrl', callbackUrl);
+  return `${path}?${params.toString()}`;
+};
 
 const CommonOnboardingPage = memo(() => {
   const isUserStateInit = useUserStore((s) => s.isUserStateInit);
@@ -130,7 +139,7 @@ const CommonOnboardingPage = memo(() => {
       enableAgentOnboarding: !!enableAgentOnboarding,
       isDesktop,
     });
-    return <Navigate replace to={branchPath} />;
+    return <Navigate replace to={appendCallbackUrl(branchPath, searchParams)} />;
   }
 
   return (
