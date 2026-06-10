@@ -1003,6 +1003,7 @@ export default {
   'workflow.toolDisplayName.addPreferenceMemory': 'Saved memory',
   'workflow.toolDisplayName.calculate': 'Calculated',
   'workflow.toolDisplayName.callAgent': 'Called an agent',
+  'workflow.toolDisplayName.callMcpTool': 'Called MCP tool',
   'workflow.toolDisplayName.callSubAgent': 'Call SubAgent',
   'workflow.toolDisplayName.clearTodos': 'Cleared todos',
   'workflow.toolDisplayName.copyDocument': 'Copied a document',

@@ -455,6 +455,80 @@ describe('CodexAdapter', () => {
     });
   });
 
+  it('maps mcp_tool_call items into compact args and MCP result content', () => {
+    const adapter = new CodexAdapter();
+
+    const started = adapter.adapt({
+      item: {
+        arguments: { code: '1 + 1' },
+        id: 'item_5',
+        server: 'node_repl',
+        status: 'in_progress',
+        tool: 'js',
+        type: 'mcp_tool_call',
+      },
+      type: 'item.started',
+    });
+    const completed = adapter.adapt({
+      item: {
+        arguments: { code: '1 + 1' },
+        error: null,
+        id: 'item_5',
+        result: {
+          content: [{ text: '2', type: 'text' }],
+          isError: false,
+        },
+        server: 'node_repl',
+        status: 'completed',
+        tool: 'js',
+        type: 'mcp_tool_call',
+      },
+      type: 'item.completed',
+    });
+
+    expect(started[0]).toMatchObject({
+      data: {
+        chunkType: 'tools_calling',
+        toolsCalling: [
+          {
+            apiName: 'mcp_tool_call',
+            arguments: JSON.stringify({
+              arguments: { code: '1 + 1' },
+              server: 'node_repl',
+              tool: 'js',
+            }),
+            id: 'item_5',
+            identifier: 'codex',
+          },
+        ],
+      },
+      type: 'stream_chunk',
+    });
+    expect(completed[0]).toMatchObject({
+      data: {
+        content: '2',
+        isError: false,
+        pluginState: {
+          arguments: { code: '1 + 1' },
+          error: null,
+          result: {
+            content: [{ text: '2', type: 'text' }],
+            isError: false,
+          },
+          server: 'node_repl',
+          status: 'completed',
+          tool: 'js',
+        },
+        toolCallId: 'item_5',
+      },
+      type: 'tool_result',
+    });
+    expect(completed[1]).toMatchObject({
+      data: { isSuccess: true, toolCallId: 'item_5' },
+      type: 'tool_end',
+    });
+  });
+
   it('uses failure copy for unsuccessful non-command tool completions', () => {
     const adapter = new CodexAdapter();
 
