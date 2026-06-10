@@ -522,6 +522,76 @@ describe('AgentRuntimeService', () => {
       expect(mockQueueService.scheduleMessage).toHaveBeenCalled();
     });
 
+    it('should resume async tools with the last pending tool result as parentMessageId', async () => {
+      const pendingTools = [
+        {
+          apiName: 'callSubAgent',
+          arguments: '{}',
+          id: 'tool-call-1',
+          identifier: 'agent-management',
+          type: 'default',
+        },
+        {
+          apiName: 'callSubAgent',
+          arguments: '{}',
+          id: 'tool-call-2',
+          identifier: 'agent-management',
+          type: 'default',
+        },
+      ];
+      const parkedState = {
+        ...mockState,
+        interruption: {
+          canResume: true,
+          interruptedAt: new Date().toISOString(),
+          reason: 'async_tool',
+        },
+        pendingToolsCalling: pendingTools,
+        status: 'waiting_for_async_tool',
+      };
+      const refreshedMessages = [
+        { content: 'use tools', id: 'user-msg-1', role: 'user' },
+        {
+          children: [
+            {
+              id: 'assistant-msg-1',
+              role: 'assistant',
+              tools: [
+                { ...pendingTools[0], result_msg_id: 'tool-msg-1' },
+                { ...pendingTools[1], result_msg_id: 'tool-msg-2' },
+              ],
+            },
+          ],
+          id: 'assistant-group-1',
+          role: 'assistantGroup',
+        },
+      ];
+      const mockStepResult = {
+        events: [],
+        newState: { ...parkedState, pendingToolsCalling: [], status: 'done', stepCount: 2 },
+        nextContext: null,
+      };
+      const mockRuntime = { step: vi.fn().mockResolvedValue(mockStepResult) };
+
+      mockCoordinator.loadAgentState.mockResolvedValue(parkedState);
+      vi.spyOn(service as any, 'refreshMessagesFromDB').mockResolvedValue(refreshedMessages);
+      vi.spyOn(service as any, 'createAgentRuntime').mockReturnValue({ runtime: mockRuntime });
+
+      await service.executeStep({ ...mockParams, resumeAsyncTool: true });
+
+      expect(mockRuntime.step).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: refreshedMessages,
+          pendingToolsCalling: [],
+          status: 'running',
+        }),
+        expect.objectContaining({
+          payload: { parentMessageId: 'tool-msg-2' },
+          phase: 'user_input',
+        }),
+      );
+    });
+
     it('should handle missing agent state', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue(null);
 
