@@ -13,6 +13,7 @@
   "actions.expand.on": "展開する",
   "actions.typobar.off": "書式ツールバーを非表示",
   "actions.typobar.on": "書式ツールバーを表示",
+  "actions.typobar.title": "フォーマットツール",
   "autoSave.latest": "最新バージョンを読み込みました",
   "autoSave.saved": "保存済み",
   "autoSave.saving": "自動保存中...",

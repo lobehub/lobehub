@@ -22,6 +22,7 @@
   "InvalidRequestFormat": "Spiacenti, il provider a monte ha rifiutato la richiesta perché malformata. Controlla l'input o prova un modello diverso.",
   "InvalidVertexCredentials": "Autenticazione Vertex fallita. Controlla le tue credenziali e riprova.",
   "LocationNotSupportError": "Spiacenti, la tua posizione attuale non supporta questo servizio modello. Questo potrebbe essere dovuto a restrizioni regionali o al fatto che il servizio non è disponibile. Conferma se la posizione attuale supporta l'uso di questo servizio o prova a utilizzare una posizione diversa.",
+  "ModelEmptyCompletion": "Il modello ha restituito una risposta vuota. Di solito il problema si risolve riprovando; se persiste, prova a semplificare la richiesta o a cambiare modello.",
   "ModelNotFound": "Spiacenti, il modello richiesto non è stato trovato. Potrebbe non esistere o potresti non avere i permessi di accesso necessari. Riprova dopo aver modificato la chiave API o regolato i permessi di accesso.",
   "NoAvailableChannel": "Spiacenti, il proxy o il router non ha canali disponibili per il modello richiesto. Cambia la configurazione del canale/chiave o riprova più tardi.",
   "OllamaBizError": "Errore durante la richiesta al servizio Ollama, risolvi il problema o riprova basandoti sulle informazioni seguenti.",

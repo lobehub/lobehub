@@ -13,6 +13,7 @@
   "actions.expand.on": "Ausklappen",
   "actions.typobar.off": "Formatierungsleiste ausblenden",
   "actions.typobar.on": "Formatierungsleiste anzeigen",
+  "actions.typobar.title": "Formatierungswerkzeug",
   "autoSave.latest": "Neueste Version geladen",
   "autoSave.saved": "Gespeichert",
   "autoSave.saving": "Automatisches Speichern...",

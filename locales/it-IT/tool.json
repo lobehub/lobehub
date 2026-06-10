@@ -40,6 +40,7 @@
   "agentMarketplace.render.alreadyInLibraryTag": "Già nella libreria",
   "agentMarketplace.render.alreadyInLibrary_one": "{{count}} già nella libreria",
   "agentMarketplace.render.alreadyInLibrary_other": "{{count}} già nella libreria",
+  "claudeCode.askUserQuestion.customOption.placeholder": "Oppure scrivi il tuo…",
   "claudeCode.askUserQuestion.escape.back": "Torna alle opzioni",
   "claudeCode.askUserQuestion.escape.enter": "Oppure digita direttamente",
   "claudeCode.askUserQuestion.escape.placeholder": "Scrivi la tua risposta qui…",

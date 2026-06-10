@@ -13,5 +13,7 @@
   "features.imessage.title": "iMessageチャンネル",
   "features.inputMarkdown.desc": "入力エリアでMarkdown（太字、コードブロック、表など）をリアルタイムでレンダリングします。",
   "features.inputMarkdown.title": "入力欄のMarkdownレンダリング",
+  "features.platformAgent.desc": "作成メニューに「エージェントを接続」エントリを表示します。接続されたエージェント（例: OpenClaw、Hermes）は、ユーザー自身のデバイス上で動作し、lh connectを介して通信します。",
+  "features.platformAgent.title": "エージェントを接続",
   "title": "ラボ"
 }

@@ -13,5 +13,7 @@
   "features.imessage.title": "iMessage 通道",
   "features.inputMarkdown.desc": "在輸入區即時渲染 Markdown（粗體、程式碼區塊、表格等）。",
   "features.inputMarkdown.title": "輸入框 Markdown 渲染",
+  "features.platformAgent.desc": "在建立選單中顯示「連接代理」項目。已連接的代理（例如 OpenClaw、Hermes）運行於您的設備上，並通過 lh connect 進行通信。",
+  "features.platformAgent.title": "連接代理",
   "title": "實驗室"
 }
