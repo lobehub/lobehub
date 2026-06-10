@@ -22,6 +22,12 @@ import TabItem from './TabItem';
 const TAB_WIDTH = 180;
 const TAB_GAP = 0;
 
+// Fallback when the active route doesn't define createNewTab: open the home page,
+// so the "+" button stays available on every page.
+const DEFAULT_NEW_TAB_ACTION: NewTabAction = {
+  onCreate: async () => ({ url: '/' }),
+};
+
 const TabBar = () => {
   const styles = useStyles;
   const navigate = useNavigate();
@@ -117,13 +123,13 @@ const TabBar = () => {
     }
   }, [activeTabId, tabs]);
 
-  const newTabAction: NewTabAction | null = useMemo(() => {
-    if (!activeTabId) return null;
+  const newTabAction: NewTabAction = useMemo(() => {
+    if (!activeTabId) return DEFAULT_NEW_TAB_ACTION;
     const activeTab = tabs.find((tab) => tab.tab.id === activeTabId);
-    if (!activeTab) return null;
+    if (!activeTab) return DEFAULT_NEW_TAB_ACTION;
 
     const matched = matchRouteMeta(desktopRoutes, activeTab.tab.url);
-    return matched.meta?.createNewTab?.(matched.params) ?? null;
+    return matched.meta?.createNewTab?.(matched.params) ?? DEFAULT_NEW_TAB_ACTION;
   }, [activeTabId, tabs]);
 
   useWatchBroadcast('closeCurrentTabOrWindow', () => {
@@ -135,7 +141,6 @@ const TabBar = () => {
   });
 
   const handleNewTab = useCallback(async () => {
-    if (!newTabAction) return;
     let result;
     try {
       result = await newTabAction.onCreate();
@@ -177,15 +182,13 @@ const TabBar = () => {
           onCloseRight={handleCloseRight}
         />
       ))}
-      {newTabAction && (
-        <ActionIcon
-          className={cx(electronStylish.nodrag, styles.newTabButton)}
-          icon={Plus}
-          size="small"
-          title={t('tab.newTab')}
-          onClick={handleNewTab}
-        />
-      )}
+      <ActionIcon
+        className={cx(electronStylish.nodrag, styles.newTabButton)}
+        icon={Plus}
+        size="small"
+        title={t('tab.newTab')}
+        onClick={handleNewTab}
+      />
     </ScrollArea>
   );
 };
