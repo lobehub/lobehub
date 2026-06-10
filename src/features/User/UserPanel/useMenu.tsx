@@ -1,61 +1,106 @@
 import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
-import { isDesktop } from '@lobechat/const';
-import { Hotkey, Icon } from '@lobehub/ui';
+import { DOWNLOAD_URL, isDesktop } from '@lobechat/const';
+import { Flexbox, Hotkey, Icon, Tag } from '@lobehub/ui';
 import { type ItemType } from 'antd/es/menu/interface';
-import { BrainCircuit, Cloudy, HardDriveDownload, Settings2 } from 'lucide-react';
+import { BrainCircuit, Cloudy, Download, HardDriveDownload, LogOut, Settings2 } from 'lucide-react';
+import { type PropsWithChildren } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import useBusinessMenuItems from '@/business/client/features/User/useBusinessMenuItems';
-import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { type MenuProps } from '@/components/Menu';
 import { DEFAULT_DESKTOP_HOTKEY_CONFIG } from '@/const/desktop';
 import { OFFICIAL_URL } from '@/const/url';
 import DataImporter from '@/features/DataImporter';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useNavLayout } from '@/hooks/useNavLayout';
+import { usePlatform } from '@/hooks/usePlatform';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
+import { useNewVersion } from './useNewVersion';
+
+const NewVersionBadge = memo(
+  ({
+    children,
+    showBadge,
+    onClick,
+  }: PropsWithChildren & { onClick?: () => void; showBadge?: boolean }) => {
+    const { t } = useTranslation('common');
+    if (!showBadge)
+      return (
+        <Flexbox flex={1} onClick={onClick}>
+          {children}
+        </Flexbox>
+      );
+    return (
+      <Flexbox horizontal align={'center'} flex={1} gap={8} width={'100%'} onClick={onClick}>
+        {children}
+        <Tag color={'info'} size={'small'} style={{ borderRadius: 16, paddingInline: 8 }}>
+          {t('upgradeVersion.hasNew')}
+        </Tag>
+      </Flexbox>
+    );
+  },
+);
+
 export const useMenu = () => {
-  const { t } = useTranslation(['common', 'setting']);
+  const hasNewVersion = useNewVersion();
+  const { t } = useTranslation(['common', 'setting', 'auth']);
   const { showCloudPromotion, hideDocs } = useServerConfigStore(featureFlagsSelectors);
-  const isLogin = useUserStore(authSelectors.isLogin);
+  const [isLogin, isLoginWithAuth] = useUserStore((s) => [
+    authSelectors.isLogin(s),
+    authSelectors.isLoginWithAuth(s),
+  ]);
   const { userPanel } = useNavLayout();
   const businessMenuItems = useBusinessMenuItems(isLogin);
-  const activeWorkspaceSlug = useActiveWorkspaceSlug();
+  const { isIOS, isAndroid } = usePlatform();
 
-  // In workspace context, route Settings to the workspace's settings root —
-  // the route's index redirect (`/:slug/settings → /:slug/settings/general`)
-  // handles tab landing, keeping this hook URL-agnostic. Personal context
-  // falls back to user settings.
-  const settingsHref = activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings` : '/settings';
+  const downloadUrl = useMemo(() => {
+    if (isIOS) return DOWNLOAD_URL.ios;
+    if (isAndroid) return DOWNLOAD_URL.android;
+    return DOWNLOAD_URL.default;
+  }, [isIOS, isAndroid]);
 
-  const settings: MenuProps['items'] = isLogin
-    ? [
-        {
-          extra: isDesktop ? (
-            <div>
-              <Hotkey keys={DEFAULT_DESKTOP_HOTKEY_CONFIG.openSettings} />
-            </div>
-          ) : undefined,
-          icon: <Icon icon={Settings2} />,
-          key: 'setting',
-          label: <Link to={settingsHref}>{t('userPanel.setting')}</Link>,
-        },
-      ]
-    : [];
+  const settings: MenuProps['items'] = [
+    {
+      extra: isDesktop ? (
+        <div>
+          <Hotkey keys={DEFAULT_DESKTOP_HOTKEY_CONFIG.openSettings} />
+        </div>
+      ) : undefined,
+      icon: <Icon icon={Settings2} />,
+      key: 'setting',
+      label: (
+        <WorkspaceLink to="/settings">
+          <NewVersionBadge showBadge={hasNewVersion}>{t('userPanel.setting')}</NewVersionBadge>
+        </WorkspaceLink>
+      ),
+    },
+    ...(userPanel.showMemory
+      ? [
+          {
+            icon: <Icon icon={BrainCircuit} />,
+            key: 'memory',
+            label: <Link to="/memory">{t('tab.memory')}</Link>,
+          },
+        ]
+      : []),
+  ];
 
-  const memoryItems: MenuProps['items'] = userPanel.showMemory
-    ? [
-        {
-          icon: <Icon icon={BrainCircuit} />,
-          key: 'memory',
-          label: <WorkspaceLink to="/memory">{t('tab.memory')}</WorkspaceLink>,
-        },
-      ]
-    : [];
+  const getDesktopApp: MenuProps['items'] = [
+    {
+      icon: <Icon icon={Download} />,
+      key: 'get-desktop-app',
+      label: (
+        <a href={downloadUrl} rel="noopener noreferrer" target="_blank">
+          {t('getDesktopApp')}
+        </a>
+      ),
+    },
+  ];
 
   const helps: MenuProps['items'] = [
     showCloudPromotion && {
@@ -77,9 +122,10 @@ export const useMenu = () => {
     {
       type: 'divider',
     },
-    ...settings,
-    ...memoryItems,
+
+    ...(isLogin ? settings : []),
     ...businessMenuItems,
+    ...(!isDesktop ? [{ type: 'divider' as const }, ...getDesktopApp] : []),
     ...(userPanel.showDataImporter && isLogin
       ? [
           {
@@ -102,5 +148,18 @@ export const useMenu = () => {
       return !(isDivider(item) && isDivider(arr[index - 1]));
     }) as MenuProps['items'];
 
-  return { mainItems };
+  const logoutItems: MenuProps['items'] = isLoginWithAuth
+    ? [
+        {
+          icon: <Icon icon={LogOut} />,
+          key: 'logout',
+          label: <span>{t('signout', { ns: 'auth' })}</span>,
+        },
+        {
+          type: 'divider',
+        },
+      ]
+    : [];
+
+  return { logoutItems, mainItems };
 };
