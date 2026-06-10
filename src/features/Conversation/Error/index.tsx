@@ -76,6 +76,17 @@ const OllamaSetupGuide = dynamic(() => import('./OllamaSetupGuide'), {
   ssr: false,
 });
 
+const PlanLimitCard = dynamic(() => import('./PlanLimitCard'), { loading, ssr: false });
+
+const DeprecatedModelError = dynamic(() => import('./DeprecatedModelError'), {
+  loading,
+  ssr: false,
+});
+
+const QuotaLimitError = dynamic(() => import('./QuotaLimitError'), { loading, ssr: false });
+
+const TraceIdError = dynamic(() => import('./TraceIdError'), { loading, ssr: false });
+
 const HETEROGENEOUS_AGENT_STATUS_GUIDE_ERROR_CODES = new Set<string>([
   HeterogeneousAgentSessionErrorCode.AuthRequired,
   HeterogeneousAgentSessionErrorCode.CliNotFound,
@@ -213,6 +224,34 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data, onRe
   if (enableBusinessFeatures && businessChatErrorMessageExtra) return businessChatErrorMessageExtra;
 
   switch (error?.type) {
+    // Lightweight fallbacks for cloud billing errors, used in builds without a
+    // business override (e.g. desktop). The business hook above takes
+    // precedence when installed.
+    case ChatErrorType.FreePlanLimit:
+    case ChatErrorType.SubscriptionPlanLimit:
+    case ChatErrorType.InsufficientBudgetForModel: {
+      if (enableBusinessFeatures)
+        return (
+          <PlanLimitCard
+            errorBody={error?.body}
+            errorType={error?.type}
+            onRetry={handleRetryAgentMessage}
+          />
+        );
+      break;
+    }
+
+    case ChatErrorType.LobeHubModelDeprecated: {
+      if (enableBusinessFeatures)
+        return <DeprecatedModelError requestedModel={error?.body?.requestedModel} />;
+      break;
+    }
+
+    case AgentRuntimeErrorType.QuotaLimitReached: {
+      if (enableBusinessFeatures) return <QuotaLimitError id={data.id} />;
+      break;
+    }
+
     case AgentRuntimeErrorType.OllamaServiceUnavailable: {
       return <OllamaSetupGuide id={data.id} />;
     }
@@ -234,6 +273,11 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data, onRe
 
   if (error?.type?.toString().includes('Invalid')) {
     return <ChatInvalidAPIKey id={data.id} provider={data.error?.body?.provider} />;
+  }
+
+  // Show a report action for unknown traceable errors instead of the raw body
+  if (enableBusinessFeatures && typeof error?.body?.traceId === 'string') {
+    return <TraceIdError id={data.id} traceId={error.body.traceId} />;
   }
 
   return (
