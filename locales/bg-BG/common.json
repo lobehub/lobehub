@@ -480,6 +480,9 @@
   "userPanel.setting": "Настройки",
   "userPanel.upgradePlan": "Надграждане на плана",
   "userPanel.usages": "Статистика на използване",
+  "userPanel.workspaceCredits": "Кредити за работно пространство",
+  "userPanel.workspaceSetting": "Настройки на работното пространство",
+  "userPanel.workspaceUsages": "Използване на работното пространство",
   "version": "Версия",
   "zoom": "Увеличение"
 }

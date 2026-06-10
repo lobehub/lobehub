@@ -480,6 +480,9 @@
   "userPanel.setting": "Configurações",
   "userPanel.upgradePlan": "Atualizar Plano",
   "userPanel.usages": "Estatísticas de Uso",
+  "userPanel.workspaceCredits": "Créditos do Espaço de Trabalho",
+  "userPanel.workspaceSetting": "Configurações do Espaço de Trabalho",
+  "userPanel.workspaceUsages": "Uso do Espaço de Trabalho",
   "version": "Versão",
   "zoom": "Zoom"
 }

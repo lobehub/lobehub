@@ -309,6 +309,7 @@
   "claude-3-haiku-20240307.description": "Claude 3 Haiku là mô hình nhanh nhất và nhỏ gọn nhất của Anthropic, được thiết kế cho phản hồi gần như tức thì với hiệu suất nhanh và chính xác.",
   "claude-3-opus-20240229.description": "Claude 3 Opus là mô hình mạnh mẽ nhất của Anthropic cho các tác vụ phức tạp, xuất sắc về hiệu suất, trí tuệ, lưu loát và hiểu biết.",
   "claude-3-sonnet-20240229.description": "Claude 3 Sonnet cân bằng giữa trí tuệ và tốc độ cho khối lượng công việc doanh nghiệp, mang lại giá trị cao với chi phí thấp hơn và triển khai quy mô lớn đáng tin cậy.",
+  "claude-fable-5.description": "Claude Fable 5 là mô hình mạnh mẽ nhất của Anthropic — một cấp độ mới vượt trên Opus dành cho các công việc đòi hỏi lý luận phức tạp và tác vụ dài hạn.",
   "claude-haiku-4-5-20251001.description": "Claude Haiku 4.5 là mô hình Haiku nhanh nhất và thông minh nhất của Anthropic, với tốc độ cực nhanh và khả năng suy luận mở rộng.",
   "claude-haiku-4-5.description": "Claude Haiku 4.5 của Anthropic — Haiku thế hệ mới với khả năng lý luận và thị giác nâng cao.",
   "claude-haiku-4.5.description": "Claude Haiku 4.5 là mô hình Haiku nhanh nhất và thông minh nhất của Anthropic, với tốc độ vượt trội và khả năng suy luận mở rộng.",
