@@ -40,7 +40,7 @@
   "brief.viewRun": "Voir l'exécution",
   "freeCreditBadge.cta": "Commencer l'essai gratuit",
   "freeCreditBadge.dismiss": "Fermer",
-  "freeCreditBadge.label": "Crédits gratuits exclusifs de {{amount}} pour {{model}}",
+  "freeCreditBadge.label": "Crédits gratuits exclusifs pour {{model}}",
   "project.create": "Nouveau projet",
   "project.deleteConfirm": "Ce projet sera supprimé et ne pourra pas être récupéré. Confirmez pour continuer.",
   "recommendations.heteroAgent.cta": "Ajouter un agent",

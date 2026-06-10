@@ -40,7 +40,7 @@
   "brief.viewRun": "Просмотреть запуск",
   "freeCreditBadge.cta": "Начать бесплатную пробную версию",
   "freeCreditBadge.dismiss": "Закрыть",
-  "freeCreditBadge.label": "Эксклюзивные {{amount}} бесплатные кредиты для {{model}}",
+  "freeCreditBadge.label": "Эксклюзивные бесплатные кредиты для {{model}}",
   "project.create": "Новый проект",
   "project.deleteConfirm": "Этот проект будет удален и не может быть восстановлен. Подтвердите, чтобы продолжить.",
   "recommendations.heteroAgent.cta": "Добавить агента",

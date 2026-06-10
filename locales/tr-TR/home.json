@@ -40,7 +40,7 @@
   "brief.viewRun": "Çalışmayı görüntüle",
   "freeCreditBadge.cta": "Ücretsiz deneme başlat",
   "freeCreditBadge.dismiss": "Kapat",
-  "freeCreditBadge.label": "{{model}} için özel {{amount}} ücretsiz kredi",
+  "freeCreditBadge.label": "{{model}} için özel ücretsiz kredi",
   "project.create": "Yeni proje",
   "project.deleteConfirm": "Bu proje silinecek ve geri alınamaz. Devam etmek için onaylayın.",
   "recommendations.heteroAgent.cta": "Aracı Ekle",

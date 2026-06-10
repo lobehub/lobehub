@@ -40,7 +40,7 @@
   "brief.viewRun": "Преглед на изпълнението",
   "freeCreditBadge.cta": "Започнете безплатен пробен период",
   "freeCreditBadge.dismiss": "Отхвърли",
-  "freeCreditBadge.label": "Ексклузивни {{amount}} безплатни кредити за {{model}}",
+  "freeCreditBadge.label": "Ексклузивни безплатни кредити за {{model}}",
   "project.create": "Нов проект",
   "project.deleteConfirm": "Този проект ще бъде изтрит и не може да бъде възстановен. Потвърдете, за да продължите.",
   "recommendations.heteroAgent.cta": "Добавяне на агент",
