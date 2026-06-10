@@ -219,6 +219,11 @@ export interface AIBaseModelCard {
   enabled?: boolean;
   id: string;
   /**
+   * knowledge cutoff date (YYYY-MM). When the provider distinguishes a "reliable
+   * knowledge cutoff" from the broader training-data cutoff, use the reliable one.
+   */
+  knowledgeCutoff?: string;
+  /**
    * whether model is legacy (deprecated but not removed yet)
    */
   legacy?: boolean;
@@ -465,6 +470,7 @@ export interface AiProviderModelListItem {
   displayName?: string;
   enabled: boolean;
   id: string;
+  knowledgeCutoff?: string;
   parameters?: ModelParamsSchema;
   pricing?: Pricing;
   releasedAt?: string;
@@ -520,6 +526,7 @@ export interface AiModelForSelect {
   description?: string;
   displayName?: string;
   id: string;
+  knowledgeCutoff?: string;
   parameters?: ModelParamsSchema;
   /**
    * Exact per-image price (USD) calculated from pricing units
@@ -540,6 +547,7 @@ export interface EnabledAiModel {
   displayName?: string;
   enabled?: boolean;
   id: string;
+  knowledgeCutoff?: string;
   parameters?: ModelParamsSchema;
   providerId: string;
   releasedAt?: string;
