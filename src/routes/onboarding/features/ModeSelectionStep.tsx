@@ -11,6 +11,7 @@ import { useIsDark } from '@/hooks/useIsDark';
 import LobeMessage from '@/routes/onboarding/components/LobeMessage';
 import { useUserStore } from '@/store/user';
 import { isDev } from '@/utils/env';
+import { consumeOnboardingCallbackUrl } from '@/utils/onboardingRedirect';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   base: css`
@@ -99,7 +100,7 @@ const ModeSelectionStep = memo<ModeSelectionStepProps>(({ onBack, onNext }) => {
     finishOnboarding();
 
     if (!isDev) {
-      navigate('/');
+      navigate(consumeOnboardingCallbackUrl() || '/');
     }
   };
 

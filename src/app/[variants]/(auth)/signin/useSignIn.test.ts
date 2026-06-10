@@ -306,7 +306,7 @@ describe('useSignIn', () => {
       });
 
       expect(mockSignInSocial).toHaveBeenCalledWith(
-        expect.objectContaining({ provider: 'google' }),
+        expect.objectContaining({ newUserCallbackURL: '/onboarding', provider: 'google' }),
       );
       expect(mockMessageError).not.toHaveBeenCalled();
     });
@@ -321,7 +321,7 @@ describe('useSignIn', () => {
       });
 
       expect(mockSignInOauth2).toHaveBeenCalledWith(
-        expect.objectContaining({ providerId: 'custom-oidc' }),
+        expect.objectContaining({ newUserCallbackURL: '/onboarding', providerId: 'custom-oidc' }),
       );
     });
 

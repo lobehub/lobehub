@@ -6,7 +6,7 @@ import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
 import { Center, Flexbox, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cx, useTheme } from 'antd-style';
-import { type FC, type MouseEvent, type PropsWithChildren, useCallback } from 'react';
+import { type FC, type MouseEvent, type PropsWithChildren, useCallback, useEffect } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -17,6 +17,7 @@ import { useIsDark } from '@/hooks/useIsDark';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
+import { stashOnboardingCallbackUrl } from '@/utils/onboardingRedirect';
 
 import { styles } from './style';
 
@@ -25,8 +26,15 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
   const isMobile = useIsMobile();
   const theme = useTheme();
   const { t } = useTranslation('onboarding');
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const navigate = useNavigate();
+
+  // Signup flows land here with a threaded `callbackUrl`; stash it so finish
+  // points can restore the original target after onboarding completes.
+  useEffect(() => {
+    stashOnboardingCallbackUrl(search);
+  }, [search]);
+
   const setOnboardingStep = useUserStore((s) => s.setOnboardingStep);
   const enableAgentOnboarding = useServerConfigStore((s) => s.featureFlags.enableAgentOnboarding);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
