@@ -1467,17 +1467,17 @@ describe('ChatPluginAction', () => {
       });
     });
 
-    describe('invokeKlavisTypePlugin', () => {
+    describe('invokeComposioTypePlugin', () => {
       it('should use optimisticUpdateToolMessage for successful result', async () => {
         const mockResult = {
-          content: 'klavis result content',
+          content: 'composio result content',
           state: { data: 'test-data' },
           success: true,
         };
 
         // Mock useToolStore to return a server
         vi.spyOn(useToolStore, 'getState').mockReturnValue({
-          servers: [{ identifier: 'test-plugin', serverUrl: 'http://test.com' }],
+          composioServers: [{ identifier: 'test-plugin', serverUrl: 'http://test.com' }],
           callComposioTool: vi.fn().mockResolvedValue({
             success: true,
             data: mockResult,
@@ -1500,7 +1500,7 @@ describe('ChatPluginAction', () => {
         const { result } = renderHook(() => useChatStore());
 
         await act(async () => {
-          await result.current.invokeKlavisTypePlugin(messageId, payload);
+          await result.current.invokeComposioTypePlugin(messageId, payload);
         });
 
         expect(optimisticUpdateToolMessageMock).toHaveBeenCalledWith(
