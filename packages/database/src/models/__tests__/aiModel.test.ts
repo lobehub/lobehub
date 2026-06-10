@@ -347,6 +347,31 @@ describe('AiModelModel', () => {
       expect(model?.description).toBe('Existing Description');
     });
 
+    it('should not overwrite existing abilities/parameters with empty defaults when omitted in sparse update', async () => {
+      // Create an initial model with abilities and parameters
+      await aiProviderModel.create({
+        id: 'existing-model',
+        providerId: 'openai',
+        abilities: { functionCall: true },
+        parameters: { temperature: 0.5 },
+      });
+
+      const models = [
+        {
+          id: 'existing-model',
+          // abilities and parameters are omitted in the payload
+          displayName: 'Updated Name',
+        },
+      ] as AiProviderModelListItem[];
+
+      await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      const allModels = await aiProviderModel.query();
+      const model = allModels.find((m) => m.id === 'existing-model');
+      expect(model?.abilities).toEqual({ functionCall: true });
+      expect(model?.parameters).toEqual({ temperature: 0.5 });
+    });
+
     it('should return empty array when models array is empty', async () => {
       const result = await aiProviderModel.batchUpdateAiModels('openai', []);
       expect(result).toEqual([]);

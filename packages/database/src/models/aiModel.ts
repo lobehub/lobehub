@@ -206,6 +206,8 @@ export class AiModelModel {
       releasedAt: this.normalizeReleasedAt(model.releasedAt),
       updatedAt: new Date(),
       userId: this.userId,
+      abilities: model.abilities ?? null,
+      parameters: model.parameters ?? null,
     }));
 
     return this.db
