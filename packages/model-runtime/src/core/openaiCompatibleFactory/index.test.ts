@@ -3426,7 +3426,7 @@ describe('LobeOpenAICompatibleFactory', () => {
             "Claude 3.7 Sonnet is Anthropic's fastest next-gen model. Compared to Claude 3 Haiku, it improves across skills and surpasses the previous flagship Claude 3 Opus on many intelligence benchmarks.",
           displayName: 'Claude 3.7 Sonnet',
           enabled: false,
-          family: 'claude',
+          family: 'claude-sonnet',
           generation: 'claude-3.7',
           id: 'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
           knowledgeCutoff: '2024-10',

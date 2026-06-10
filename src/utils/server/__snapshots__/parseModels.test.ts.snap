@@ -113,7 +113,7 @@ exports[`transformToChatModelCards > should have file with builtin models like g
     "family": "gpt",
     "generation": "gpt-4",
     "id": "gpt-4-0125-preview",
-    "knowledgeCutoff": undefined,
+    "knowledgeCutoff": "2023-12",
     "pricing": {
       "units": [
         {

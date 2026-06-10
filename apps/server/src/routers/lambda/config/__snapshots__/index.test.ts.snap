@@ -34,7 +34,7 @@ exports[`configRouter > getGlobalConfig > Model Provider env > OPENAI_MODEL_LIST
       "family": "gpt",
       "generation": "gpt-4",
       "id": "gpt-4-0125-preview",
-      "knowledgeCutoff": undefined,
+      "knowledgeCutoff": "2023-12",
       "pricing": {
         "units": [
           {
@@ -72,7 +72,7 @@ exports[`configRouter > getGlobalConfig > Model Provider env > OPENAI_MODEL_LIST
     "family": "gpt",
     "generation": "gpt-3.5",
     "id": "gpt-3.5-turbo-1106",
-    "knowledgeCutoff": undefined,
+    "knowledgeCutoff": "2021-09",
     "pricing": {
       "units": [
         {
@@ -137,7 +137,7 @@ exports[`configRouter > getGlobalConfig > Model Provider env > OPENAI_MODEL_LIST
     "family": "gpt",
     "generation": "gpt-4",
     "id": "gpt-4",
-    "knowledgeCutoff": "2023-12",
+    "knowledgeCutoff": "2021-09",
     "pricing": {
       "units": [
         {
@@ -169,7 +169,7 @@ exports[`configRouter > getGlobalConfig > Model Provider env > OPENAI_MODEL_LIST
     "family": "gpt",
     "generation": "gpt-4",
     "id": "gpt-4-32k",
-    "knowledgeCutoff": undefined,
+    "knowledgeCutoff": "2021-09",
     "pricing": {
       "units": [
         {
@@ -201,7 +201,7 @@ exports[`configRouter > getGlobalConfig > Model Provider env > OPENAI_MODEL_LIST
     "family": "gpt",
     "generation": "gpt-4",
     "id": "gpt-4-1106-preview",
-    "knowledgeCutoff": undefined,
+    "knowledgeCutoff": "2023-04",
     "pricing": {
       "units": [
         {
@@ -244,7 +244,7 @@ exports[`configRouter > getGlobalConfig > Model Provider env > OPENAI_MODEL_LIST
   "family": "gpt",
   "generation": "gpt-4",
   "id": "gpt-4-1106-preview",
-  "knowledgeCutoff": undefined,
+  "knowledgeCutoff": "2023-04",
   "pricing": {
     "units": [
       {
