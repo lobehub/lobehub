@@ -122,6 +122,34 @@ export interface LocalFilePreviewUrlResult {
   url?: string;
 }
 
+export interface LocalFilePreviewText {
+  content: string;
+  contentType: string;
+  type: 'text';
+}
+
+export interface LocalFilePreviewImage {
+  base64: string;
+  contentType: string;
+  type: 'image';
+}
+
+export interface LocalFilePreviewUnsupported {
+  contentType: string;
+  type: 'binary' | 'pdf' | 'video';
+}
+
+export type LocalFilePreview =
+  | LocalFilePreviewImage
+  | LocalFilePreviewText
+  | LocalFilePreviewUnsupported;
+
+export interface LocalFilePreviewResult {
+  error?: string;
+  preview?: LocalFilePreview;
+  success: boolean;
+}
+
 export interface LocalReadFileResult {
   /**
    * Character count of the content within the specified `loc` range.

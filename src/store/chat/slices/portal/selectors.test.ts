@@ -226,6 +226,25 @@ describe('chatDockSelectors', () => {
       });
     });
 
+    it('should preserve device context on the active file entry', () => {
+      const state = createState({
+        activeLocalFilePath: '/path/to/file.ts',
+        openLocalFiles: [
+          {
+            deviceId: 'device-1',
+            filePath: '/path/to/file.ts',
+            workingDirectory: '/path/to',
+          },
+        ],
+      } as Partial<ChatStoreState>);
+
+      expect(chatPortalSelectors.currentLocalFile(state)).toEqual({
+        deviceId: 'device-1',
+        filePath: '/path/to/file.ts',
+        workingDirectory: '/path/to',
+      });
+    });
+
     it('should return undefined when activeLocalFilePath is not in openLocalFiles', () => {
       const state = createState({
         activeLocalFilePath: '/path/to/other.ts',

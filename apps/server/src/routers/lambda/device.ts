@@ -271,6 +271,21 @@ export const deviceRouter = router({
     }),
 
   /**
+   * Read-only local file preview for a file on a remote device. The web client
+   * receives render data, not a `localfile://` URL; saving remains unsupported.
+   */
+  getLocalFilePreview: deviceProcedure
+    .input(z.object({ deviceId: z.string(), path: z.string(), workingDirectory: z.string() }))
+    .query(async ({ ctx, input }) =>
+      deviceGateway.getLocalFilePreview({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        workingDirectory: input.workingDirectory,
+      }),
+    ),
+
+  /**
    * Project skills (`.agents/skills` / `.claude/skills`) for a directory on a
    * remote device, via the device's `listProjectSkills` RPC. Powers the
    * Resources tab's skills group in device mode. Returns `null` when offline.

@@ -27,6 +27,12 @@ export interface PortalFile {
   fileId: string;
 }
 
+export interface OpenLocalFileEntry {
+  deviceId?: string;
+  filePath: string;
+  workingDirectory: string;
+}
+
 export type PortalViewData =
   | { type: PortalViewType.Home }
   | { artifact: PortalArtifact; type: PortalViewType.Artifact }
@@ -57,7 +63,7 @@ export interface ChatPortalState {
   // Legacy fields (kept for backward compatibility during migration)
   // TODO: Remove after Phase 3 migration complete
   /** Open file tabs in the LocalFile portal. */
-  openLocalFiles: Array<{ filePath: string; workingDirectory: string }>;
+  openLocalFiles: OpenLocalFileEntry[];
   /** @deprecated Use portalStack instead */
   portalArtifact?: PortalArtifact;
   portalArtifactDisplayMode: ArtifactDisplayMode;

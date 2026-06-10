@@ -3,7 +3,7 @@ import { type ChatStore } from '@/store/chat/store';
 import { type StoreSetter } from '@/store/types';
 import { type PortalArtifact } from '@/types/artifact';
 
-import { type PortalFile, type PortalViewData } from './initialState';
+import { type OpenLocalFileEntry, type PortalFile, type PortalViewData } from './initialState';
 import { PortalViewType } from './initialState';
 
 // Helper to get current view type from stack
@@ -188,16 +188,15 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ file, type: PortalViewType.FilePreview });
   };
 
-  openLocalFile = ({
-    filePath,
-    workingDirectory,
-  }: {
-    filePath: string;
-    workingDirectory: string;
-  }): void => {
+  openLocalFile = ({ deviceId, filePath, workingDirectory }: OpenLocalFileEntry): void => {
     const { openLocalFiles } = this.#get();
     const exists = openLocalFiles.some((f) => f.filePath === filePath);
-    const nextFiles = exists ? openLocalFiles : [...openLocalFiles, { filePath, workingDirectory }];
+    const nextFile = deviceId
+      ? { deviceId, filePath, workingDirectory }
+      : { filePath, workingDirectory };
+    const nextFiles = exists
+      ? openLocalFiles.map((file) => (file.filePath === filePath ? nextFile : file))
+      : [...openLocalFiles, nextFile];
     this.#set({ activeLocalFilePath: filePath, openLocalFiles: nextFiles }, false, 'openLocalFile');
     this.#get().pushPortalView({ type: PortalViewType.LocalFile });
   };

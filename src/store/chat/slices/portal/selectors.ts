@@ -3,7 +3,7 @@ import { type ChatStoreState } from '@/store/chat';
 import { type PortalArtifact } from '@/types/artifact';
 
 import { dbMessageSelectors } from '../message/selectors';
-import { type PortalFile, type PortalViewData } from './initialState';
+import { type OpenLocalFileEntry, type PortalFile, type PortalViewData } from './initialState';
 import { PortalViewType } from './initialState';
 
 // ============== Core Stack Selectors ==============
@@ -134,12 +134,9 @@ const chunkText = (s: ChatStoreState) => currentFile(s)?.chunkText;
 // Local File selectors
 const activeLocalFilePath = (s: ChatStoreState): string | undefined => s.activeLocalFilePath;
 
-const openLocalFiles = (s: ChatStoreState): Array<{ filePath: string; workingDirectory: string }> =>
-  s.openLocalFiles;
+const openLocalFiles = (s: ChatStoreState): OpenLocalFileEntry[] => s.openLocalFiles;
 
-const currentLocalFile = (
-  s: ChatStoreState,
-): { filePath: string; workingDirectory: string } | undefined => {
+const currentLocalFile = (s: ChatStoreState): OpenLocalFileEntry | undefined => {
   const active = s.activeLocalFilePath;
   if (!active) return undefined;
   return s.openLocalFiles.find((f) => f.filePath === active);

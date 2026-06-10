@@ -358,6 +358,43 @@ describe('chatDockSlice', () => {
       expect(result.current.activeLocalFilePath).toBe('/path/a.ts');
     });
 
+    it('should keep device context when opening a remote file', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({
+          deviceId: 'device-1',
+          filePath: '/path/a.ts',
+          workingDirectory: '/path',
+        });
+      });
+
+      expect(result.current.openLocalFiles).toEqual([
+        { deviceId: 'device-1', filePath: '/path/a.ts', workingDirectory: '/path' },
+      ]);
+      expect(result.current.activeLocalFilePath).toBe('/path/a.ts');
+    });
+
+    it('should refresh device context when reopening the same file path', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({ filePath: '/path/a.ts', workingDirectory: '/path' });
+      });
+
+      act(() => {
+        result.current.openLocalFile({
+          deviceId: 'device-1',
+          filePath: '/path/a.ts',
+          workingDirectory: '/remote/path',
+        });
+      });
+
+      expect(result.current.openLocalFiles).toEqual([
+        { deviceId: 'device-1', filePath: '/path/a.ts', workingDirectory: '/remote/path' },
+      ]);
+    });
+
     it('should add multiple files as separate tabs and keep portal as single entry', () => {
       const { result } = renderHook(() => useChatStore());
 

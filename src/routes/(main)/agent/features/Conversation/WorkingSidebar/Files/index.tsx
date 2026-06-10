@@ -175,22 +175,23 @@ const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
     (node: ExplorerTreeNode<ProjectFileIndexEntry>) => {
       if (!node.data) return;
       if (node.isFolder) {
+        if (isRemote) return;
+
         void localFileService.openLocalFileOrFolder(node.data.path, true);
         return;
       }
-      openLocalFile({ filePath: node.data.path, workingDirectory: projectRoot });
+      openLocalFile({ deviceId, filePath: node.data.path, workingDirectory: projectRoot });
     },
-    [openLocalFile, projectRoot],
+    [deviceId, isRemote, openLocalFile, projectRoot],
   );
 
   const handleNodeClick = useCallback(
     (node: ExplorerTreeNode<ProjectFileIndexEntry>) => {
-      // Folders expand via the tree; files open the local viewer (local only —
-      // a remote device has no filesystem to open here).
-      if (node.isFolder || isRemote) return;
+      // Folders expand via the tree; files open in the preview panel.
+      if (node.isFolder) return;
       openNode(node);
     },
-    [isRemote, openNode],
+    [openNode],
   );
 
   const getContextMenuItems = useCallback(

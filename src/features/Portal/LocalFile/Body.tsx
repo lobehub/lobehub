@@ -1,4 +1,3 @@
-import { isDesktop, MARKDOWN_MIME_TYPES } from '@lobechat/const';
 import { Center, Empty, Flexbox, Icon, Markdown, Segmented, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CodeIcon, EyeIcon } from 'lucide-react';
@@ -9,7 +8,7 @@ import CodeEditorPane from '@/components/CodeEditorPane';
 import { InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
 import Loading from '@/components/Loading/CircleLoading';
 import { useClientDataSWR } from '@/libs/swr';
-import { localFileService } from '@/services/electron/localFileService';
+import { type LocalFilePreview, localFileService } from '@/services/electron/localFileService';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import {
@@ -20,62 +19,6 @@ import {
 } from '@/utils/skillMarkdown';
 
 import { extensionToLanguage, getFileExtension } from './Body.helpers';
-
-const TEXT_PREVIEW_MIME_TYPES = new Set([
-  'application/graphql',
-  'application/javascript',
-  'application/json',
-  'application/markdown',
-  'application/toml',
-  'application/xml',
-  'application/yaml',
-  ...MARKDOWN_MIME_TYPES,
-]);
-
-interface BinaryLocalFilePreview {
-  contentType: string;
-  type: 'binary';
-}
-
-interface ImageLocalFilePreview {
-  blob: Blob;
-  contentType: string;
-  type: 'image';
-}
-
-interface TextLocalFilePreview {
-  content: string;
-  contentType: string;
-  type: 'text';
-}
-
-type LocalFilePreview = BinaryLocalFilePreview | ImageLocalFilePreview | TextLocalFilePreview;
-
-const normalizeContentType = (contentType: string | null): string =>
-  contentType?.split(';')[0].trim().toLowerCase() ?? '';
-
-const isTextPreviewMimeType = (mimeType: string): boolean =>
-  mimeType.startsWith('text/') || TEXT_PREVIEW_MIME_TYPES.has(mimeType);
-
-const fetchLocalFilePreview = async (url: string): Promise<LocalFilePreview> => {
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error(`Failed to load local file: ${response.status}`);
-  }
-
-  const contentType = normalizeContentType(response.headers.get('content-type'));
-
-  if (contentType.startsWith('image/')) {
-    return { blob: await response.blob(), contentType, type: 'image' };
-  }
-
-  if (isTextPreviewMimeType(contentType)) {
-    return { content: await response.text(), contentType, type: 'text' };
-  }
-
-  return { contentType, type: 'binary' };
-};
 
 interface ImagePreviewProps {
   blob: Blob;
@@ -171,10 +114,11 @@ interface TextPreviewPaneProps {
   ext: string;
   filePath: string;
   onSaved?: (savedContent: string) => void;
+  readOnly?: boolean;
 }
 
 const TextPreviewPane = memo<TextPreviewPaneProps>(
-  ({ content, contentType, ext, filePath, onSaved }) => {
+  ({ content, contentType, ext, filePath, onSaved, readOnly = false }) => {
     const { t } = useTranslation('chat');
     const isMarkdown = useMemo(() => MARKDOWN_EXTS.has(ext.toLowerCase()), [ext]);
     const isHtml = useMemo(
@@ -186,20 +130,24 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
     const setLocalFileBuffer = useChatStore((s) => s.setLocalFileBuffer);
     const saveLocalFile = useChatStore((s) => s.saveLocalFile);
 
-    const editingValue = buffer ?? content;
+    const editingValue = readOnly ? content : (buffer ?? content);
 
     const handleCodeChange = useCallback(
       (next: string) => {
+        if (readOnly) return;
+
         if (next === content) {
           setLocalFileBuffer(filePath, undefined);
         } else {
           setLocalFileBuffer(filePath, next);
         }
       },
-      [content, filePath, setLocalFileBuffer],
+      [content, filePath, readOnly, setLocalFileBuffer],
     );
 
     const handleSave = useCallback(async () => {
+      if (readOnly) return;
+
       try {
         const saved = await saveLocalFile(filePath);
         if (saved === undefined) return;
@@ -211,7 +159,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
       } catch {
         /* swallow — surfacing handled elsewhere if needed */
       }
-    }, [filePath, onSaved, saveLocalFile, setLocalFileBuffer]);
+    }, [filePath, onSaved, readOnly, saveLocalFile, setLocalFileBuffer]);
 
     const { body, frontmatter } = useMemo(
       () => (isMarkdown ? parseSkillMarkdownFrontmatter(editingValue) : { body: editingValue }),
@@ -284,10 +232,11 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
           ) : (
             <CodeEditorPane
               language={extensionToLanguage(ext)}
+              readOnly={readOnly}
               style={{ fontSize: 12, minHeight: '100%' }}
               value={editingValue}
-              onChange={handleCodeChange}
-              onSave={handleSave}
+              onChange={readOnly ? undefined : handleCodeChange}
+              onSave={readOnly ? undefined : handleSave}
             />
           )}
         </div>
@@ -301,11 +250,12 @@ TextPreviewPane.displayName = 'TextPreviewPane';
 // ============== ActiveFileView ==============
 
 interface ActiveFileViewProps {
+  deviceId?: string;
   filePath: string;
   workingDirectory: string;
 }
 
-const ActiveFileView = memo<ActiveFileViewProps>(({ filePath, workingDirectory }) => {
+const ActiveFileView = memo<ActiveFileViewProps>(({ deviceId, filePath, workingDirectory }) => {
   const { t } = useTranslation('chat');
 
   const filename = filePath.split('/').at(-1) ?? '';
@@ -315,19 +265,15 @@ const ActiveFileView = memo<ActiveFileViewProps>(({ filePath, workingDirectory }
     isLoading,
     mutate,
   } = useClientDataSWR<LocalFilePreview>(
-    isDesktop && workingDirectory ? ['local-file-preview', filePath, workingDirectory] : null,
-    async () => {
-      const result = await localFileService.getLocalFilePreviewUrl({
+    workingDirectory
+      ? ['local-file-preview', deviceId ?? 'local', filePath, workingDirectory]
+      : null,
+    () =>
+      localFileService.getLocalFilePreview({
+        deviceId,
         path: filePath,
         workingDirectory,
-      });
-
-      if (!result.success || !result.url) {
-        throw new Error(result.error || 'Missing local file preview URL');
-      }
-
-      return fetchLocalFilePreview(result.url);
-    },
+      }),
     { revalidateOnFocus: false },
   );
 
@@ -340,16 +286,6 @@ const ActiveFileView = memo<ActiveFileViewProps>(({ filePath, workingDirectory }
     [mutate],
   );
 
-  // Chromium blocks `file://` from a non-file origin. The desktop main process
-  // mints short-lived `localfile://` preview URLs for approved workspace files.
-  if (!isDesktop) {
-    return (
-      <Center height={'100%'} width={'100%'}>
-        <Empty description={t('workingPanel.localFile.binary')} />
-      </Center>
-    );
-  }
-
   if (isLoading) return <Loading />;
 
   if (error || !preview) {
@@ -360,16 +296,16 @@ const ActiveFileView = memo<ActiveFileViewProps>(({ filePath, workingDirectory }
     );
   }
 
-  if (preview.type === 'binary') {
+  if (preview.type === 'image') {
+    return <ImagePreview blob={preview.blob} filename={filename} />;
+  }
+
+  if (preview.type !== 'text') {
     return (
       <Center height={'100%'} width={'100%'}>
         <Empty description={t('workingPanel.localFile.binary')} />
       </Center>
     );
-  }
-
-  if (preview.type === 'image') {
-    return <ImagePreview blob={preview.blob} filename={filename} />;
   }
 
   const ext = getFileExtension(filename);
@@ -380,6 +316,7 @@ const ActiveFileView = memo<ActiveFileViewProps>(({ filePath, workingDirectory }
       contentType={preview.contentType}
       ext={ext}
       filePath={filePath}
+      readOnly={!!deviceId}
       onSaved={handleSavedContent}
     />
   );
@@ -399,6 +336,7 @@ const Body = memo(() => {
   return (
     <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
       <ActiveFileView
+        deviceId={activeFile.deviceId}
         filePath={activeFile.filePath}
         workingDirectory={activeFile.workingDirectory}
       />
