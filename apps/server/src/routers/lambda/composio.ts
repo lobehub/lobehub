@@ -1,6 +1,7 @@
 import { type ToolManifest } from '@lobechat/types';
 import { z } from 'zod';
 
+import { getServerComposioAuthConfigId } from '@/config/composio';
 import { PluginModel } from '@/database/models/plugin';
 import { getComposioClient } from '@/libs/composio';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
@@ -30,16 +31,24 @@ export const composioRouter = router({
 
       const callbackUrl = `${process.env.APP_URL || process.env.NEXTAUTH_URL || ''}/api/composio/oauth/callback`;
 
-      // Auto-fetch or create auth config for this app (server-managed, not client-provided)
-      const authConfigs = await (ctx.composioClient.authConfigs as any).list();
-      let authConfig = authConfigs?.items?.find((c: any) => c.toolkit?.slug === appSlug);
-      if (!authConfig) {
-        authConfig = await (ctx.composioClient.authConfigs as any).create(appSlug, {
-          name: appSlug,
-          type: 'use_composio_managed_auth',
-        });
+      // Prefer a pre-configured auth config (e.g. a custom/white-label config
+      // created in the Composio dashboard), pinned per toolkit via env. Falls
+      // back to discovering an existing config for this toolkit, and finally to
+      // auto-creating a Composio-managed one.
+      let authConfigId = getServerComposioAuthConfigId(identifier);
+      if (!authConfigId) {
+        const authConfigs = await (ctx.composioClient.authConfigs as any).list();
+        let authConfig = authConfigs?.items?.find(
+          (c: any) => c.toolkit?.slug?.toLowerCase() === appSlug.toLowerCase(),
+        );
+        if (!authConfig) {
+          authConfig = await (ctx.composioClient.authConfigs as any).create(appSlug, {
+            name: appSlug,
+            type: 'use_composio_managed_auth',
+          });
+        }
+        authConfigId = authConfig.id;
       }
-      const authConfigId: string = authConfig.id;
 
       // Composio-managed OAuth auth configs no longer support `initiate`; use
       // `link` (POST /api/v3/connected_accounts/link) to get the redirect URL.
