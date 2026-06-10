@@ -10,24 +10,44 @@ const headers = {
   }),
 };
 
+function getToken(): string {
+  const token = process.env.QSTASH_TOKEN;
+  if (!token) {
+    throw new Error(
+      'QSTASH_TOKEN is required. Configure it in your environment variables.',
+    );
+  }
+  return token;
+}
+
 /**
  * QStash client with Vercel Deployment Protection bypass headers.
  * Use as `qstashClient` option in Upstash Workflow `serve()`.
  *
+ * Lazy-instantiated via Proxy so that missing QSTASH_TOKEN only throws
+ * when the client is actually used, not at module import time.
+ *
  * @see https://upstash.com/docs/workflow/troubleshooting/vercel
  */
-export const qstashClient = new Client({
-  headers,
-  token: process.env.QSTASH_TOKEN!,
+export const qstashClient: Client = new Proxy({} as Client, {
+  get(_target, prop) {
+    const client = new Client({ headers, token: getToken() });
+    return (client as any)[prop];
+  },
 });
 
 /**
  * Workflow client with Vercel Deployment Protection bypass headers.
  * Use for triggering workflows via `workflowClient.trigger()`.
+ *
+ * Lazy-instantiated via Proxy so that missing QSTASH_TOKEN only throws
+ * when the client is actually used, not at module import time.
  */
-export const workflowClient = new WorkflowClient({
-  headers,
-  token: process.env.QSTASH_TOKEN!,
+export const workflowClient: Client = new Proxy({} as Client, {
+  get(_target, prop) {
+    const client = new WorkflowClient({ headers, token: getToken() });
+    return (client as any)[prop];
+  },
 });
 
 /**

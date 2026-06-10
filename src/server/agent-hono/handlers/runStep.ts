@@ -16,7 +16,7 @@ const log = debug('lobe-server:agent:run-step');
 export async function runStep(c: Context): Promise<Response> {
   const startTime = Date.now();
 
-  let body: any;
+  let body: Record<string, unknown>;
   try {
     body = await c.req.json();
   } catch {
@@ -121,16 +121,16 @@ export async function runStep(c: Context): Promise<Response> {
     );
 
     return c.json(responseData);
-  } catch (error: any) {
+  } catch (error) {
     const executionTime = Date.now() - startTime;
     console.error('Error in execution: %O', error);
 
     return c.json(
       {
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
         executionTime,
-        operationId: body?.operationId,
-        stepIndex: body?.stepIndex || 0,
+        operationId: (body as Record<string, unknown>)?.operationId,
+        stepIndex: typeof (body as Record<string, unknown>)?.stepIndex === 'number' ? (body as Record<string, unknown>).stepIndex : 0,
       },
       500,
     );

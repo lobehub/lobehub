@@ -23,7 +23,7 @@ const log = debug('lobe-server:agent:subagent-callback');
  * Auth: `qstashAuth` on the route — QStash signature required.
  */
 export async function subAgentCallback(c: Context): Promise<Response> {
-  let body: any;
+  let body: Record<string, unknown>;
   try {
     body = await c.req.json();
   } catch {

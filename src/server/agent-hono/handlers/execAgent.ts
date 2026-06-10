@@ -1,5 +1,6 @@
 import debug from 'debug';
 import type { Context } from 'hono';
+import type { ExecAgentAppContext } from '@lobechat/types';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { AiAgentService } from '@/server/services/aiAgent';
@@ -46,7 +47,7 @@ export async function execAgent(c: Context): Promise<Response> {
 
     const result = await aiAgentService.execAgent({
       agentId: agentId as string | undefined,
-      appContext: appContext as any,
+      appContext: appContext as ExecAgentAppContext | undefined,
       autoStart,
       existingMessageIds: existingMessageIds as string[] | undefined,
       prompt: prompt as string,

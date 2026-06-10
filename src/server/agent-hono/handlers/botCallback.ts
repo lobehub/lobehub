@@ -14,7 +14,7 @@ const log = debug('lobe-server:agent:bot-callback');
  * middleware on the route) and delegates to BotCallbackService.
  */
 export async function botCallback(c: Context): Promise<Response> {
-  let body: any;
+  let body: Record<string, unknown>;
   try {
     body = await c.req.json();
   } catch {

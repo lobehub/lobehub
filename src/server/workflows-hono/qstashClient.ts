@@ -9,9 +9,13 @@ const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
 // a shared QStash client. See:
 // https://upstash.com/docs/workflow/troubleshooting/vercel#step-2-pass-header-when-triggering
 export const createWorkflowQstashClient = () =>
-  new Client({
-    headers: { ...upstashWorkflowExtraHeaders },
-    token: process.env.QSTASH_TOKEN!,
-  });
+  (() => {
+    const token = process.env.QSTASH_TOKEN;
+    if (!token) throw new Error('QSTASH_TOKEN is required to create a workflow QStash client');
+    return new Client({
+      headers: { ...upstashWorkflowExtraHeaders },
+      token,
+    });
+  })()
 
 export { upstashWorkflowExtraHeaders };
