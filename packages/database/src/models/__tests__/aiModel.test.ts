@@ -289,6 +289,31 @@ describe('AiModelModel', () => {
       expect(allModels.find((m) => m.id === 'new-model')?.displayName).toBe('New Model');
     });
 
+    it('should not overwrite existing description with null/undefined when updating', async () => {
+      // Create an initial model with description
+      await aiProviderModel.create({
+        id: 'existing-model',
+        providerId: 'openai',
+        displayName: 'Old Name',
+        description: 'Existing Description',
+      });
+
+      const models = [
+        {
+          id: 'existing-model',
+          displayName: 'Updated Name',
+          // description is missing/undefined
+        },
+      ] as AiProviderModelListItem[];
+
+      await aiProviderModel.batchUpdateAiModels('openai', models);
+
+      const allModels = await aiProviderModel.query();
+      const model = allModels.find((m) => m.id === 'existing-model');
+      expect(model?.displayName).toBe('Updated Name');
+      expect(model?.description).toBe('Existing Description');
+    });
+
     it('should return empty array when models array is empty', async () => {
       const result = await aiProviderModel.batchUpdateAiModels('openai', []);
       expect(result).toEqual([]);
