@@ -110,7 +110,10 @@ exports[`transformToChatModelCards > should have file with builtin models like g
     "description": "The latest GPT-4 Turbo model includes vision. Vision requests can use JSON mode and function calling. GPT-4 Turbo is an enhanced version that balances accuracy and efficiency for cost-effective multimodal tasks and real-time interactions.",
     "displayName": "ChatGPT-4",
     "enabled": true,
+    "family": "gpt",
+    "generation": "gpt-4",
     "id": "gpt-4-0125-preview",
+    "knowledgeCutoff": undefined,
     "pricing": {
       "units": [
         {
@@ -141,7 +144,10 @@ exports[`transformToChatModelCards > should have file with builtin models like g
     "description": "The latest GPT-4 Turbo adds vision. Visual requests support JSON mode and function calling. It is a cost-effective multimodal model that balances accuracy and efficiency for real-time applications.",
     "displayName": "ChatGPT-4 Vision",
     "enabled": true,
+    "family": "gpt",
+    "generation": "gpt-4",
     "id": "gpt-4-turbo-2024-04-09",
+    "knowledgeCutoff": "2023-12",
     "pricing": {
       "units": [
         {
