@@ -4,10 +4,10 @@ import { MaximizeIcon } from 'lucide-react';
 import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
 import { SESSION_CHAT_URL } from '@/const/url';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import Link from '@/libs/router/Link';
 import { useClientDataSWR } from '@/libs/swr';
 import { agentService } from '@/services/agent';
@@ -20,7 +20,7 @@ import StatsFormGroup from '../components/StatsFormGroup';
 export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
   const [open, setOpen] = useState(false);
   const { t } = useTranslation(['auth', 'chat']);
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const { data, isLoading } = useClientDataSWR('rank-agents', async () =>
     agentService.rankAgents(),

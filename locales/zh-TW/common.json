@@ -480,6 +480,9 @@
   "userPanel.setting": "應用設定",
   "userPanel.upgradePlan": "升級方案",
   "userPanel.usages": "用量統計",
+  "userPanel.workspaceCredits": "工作區點數",
+  "userPanel.workspaceSetting": "工作區設定",
+  "userPanel.workspaceUsages": "工作區使用情況",
   "version": "版本",
   "zoom": "縮放"
 }

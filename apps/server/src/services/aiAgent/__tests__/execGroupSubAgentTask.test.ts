@@ -92,7 +92,7 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn(),
 }));
 
-describe('AiAgentService.execSubAgentTask', () => {
+describe('AiAgentService.execSubAgent', () => {
   let service: AiAgentService;
   const mockDb = {} as any;
   const userId = 'test-user-id';
@@ -133,7 +133,7 @@ describe('AiAgentService.execSubAgentTask', () => {
         userMessageId: 'user-msg-1',
       });
 
-      await service.execSubAgentTask({
+      await service.execSubAgent({
         agentId: 'agent-1',
         groupId: 'group-1',
         instruction: 'Test instruction',
@@ -166,7 +166,7 @@ describe('AiAgentService.execSubAgentTask', () => {
         userMessageId: 'user-msg-1',
       });
 
-      await service.execSubAgentTask({
+      await service.execSubAgent({
         agentId: 'agent-1',
         groupId: 'group-1',
         instruction: 'Test instruction',
@@ -196,7 +196,7 @@ describe('AiAgentService.execSubAgentTask', () => {
         userMessageId: 'user-msg-1',
       });
 
-      await service.execSubAgentTask({
+      await service.execSubAgent({
         agentId: 'agent-1',
         groupId: 'group-1',
         instruction: 'Test instruction',
@@ -239,7 +239,7 @@ describe('AiAgentService.execSubAgentTask', () => {
         userMessageId: 'user-msg-1',
       });
 
-      await service.execSubAgentTask({
+      await service.execSubAgent({
         agentId: 'agent-1',
         groupId: 'group-1',
         instruction: 'Test instruction',
@@ -269,7 +269,7 @@ describe('AiAgentService.execSubAgentTask', () => {
         userMessageId: 'user-msg-1',
       });
 
-      const result = await service.execSubAgentTask({
+      const result = await service.execSubAgent({
         agentId: 'agent-1',
         groupId: 'group-1',
         instruction: 'Test instruction',
@@ -304,7 +304,7 @@ describe('AiAgentService.execSubAgentTask', () => {
         userMessageId: 'user-msg-1',
       });
 
-      await service.execSubAgentTask({
+      await service.execSubAgent({
         agentId: 'agent-1',
         groupId: 'group-1',
         instruction: 'Test instruction',
@@ -341,7 +341,7 @@ describe('AiAgentService.execSubAgentTask', () => {
         userMessageId: 'user-msg-1',
       });
 
-      await service.execSubAgentTask({
+      await service.execSubAgent({
         agentId: 'agent-1',
         groupId: 'group-1',
         instruction: 'Test instruction',
@@ -379,7 +379,7 @@ describe('AiAgentService.execSubAgentTask', () => {
         userMessageId: 'user-msg-1',
       });
 
-      const result = await service.execSubAgentTask({
+      const result = await service.execSubAgent({
         agentId: 'agent-1',
         groupId: 'group-1',
         instruction: 'Test instruction',
@@ -402,7 +402,7 @@ describe('AiAgentService.execSubAgentTask', () => {
       mockThreadModel.create.mockResolvedValue(null);
 
       await expect(
-        service.execSubAgentTask({
+        service.execSubAgent({
           agentId: 'agent-1',
           groupId: 'group-1',
           instruction: 'Test instruction',
@@ -416,7 +416,7 @@ describe('AiAgentService.execSubAgentTask', () => {
       mockThreadModel.create.mockRejectedValue(new Error('Database connection failed'));
 
       await expect(
-        service.execSubAgentTask({
+        service.execSubAgent({
           agentId: 'agent-1',
           groupId: 'group-1',
           instruction: 'Test instruction',
@@ -444,7 +444,7 @@ describe('AiAgentService.execSubAgentTask', () => {
         userMessageId: 'user-msg-1',
       });
 
-      await service.execSubAgentTask({
+      await service.execSubAgent({
         agentId: 'agent-1',
         groupId: 'group-1',
         instruction: 'Test instruction',

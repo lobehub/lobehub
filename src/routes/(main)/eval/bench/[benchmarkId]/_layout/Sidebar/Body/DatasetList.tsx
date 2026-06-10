@@ -4,10 +4,11 @@ import { AccordionItem, Flexbox, Text } from '@lobehub/ui';
 import { Database } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useEvalStore } from '@/store/eval';
 
 interface DatasetListProps {
@@ -18,7 +19,7 @@ interface DatasetListProps {
 
 const DatasetList = memo<DatasetListProps>(({ activeKey, benchmarkId, itemKey }) => {
   const { t } = useTranslation('eval');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const datasetList = useEvalStore((s) => s.datasetList);
   const isLoading = useEvalStore((s) => s.isLoadingDatasets);
 
@@ -45,7 +46,7 @@ const DatasetList = memo<DatasetListProps>(({ activeKey, benchmarkId, itemKey })
           <SkeletonList rows={3} />
         ) : datasetList.length > 0 ? (
           datasetList.map((ds: any) => (
-            <Link
+            <WorkspaceLink
               key={ds.id}
               to={`/eval/bench/${benchmarkId}/datasets/${ds.id}`}
               onClick={(e) => {
@@ -59,7 +60,7 @@ const DatasetList = memo<DatasetListProps>(({ activeKey, benchmarkId, itemKey })
                 iconSize={16}
                 title={ds.name}
               />
-            </Link>
+            </WorkspaceLink>
           ))
         ) : (
           <Text fontSize={12} style={{ padding: '8px 12px' }} type="secondary">

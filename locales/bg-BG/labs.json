@@ -13,5 +13,7 @@
   "features.imessage.title": "Канал iMessage",
   "features.inputMarkdown.desc": "Реално време визуализация на Markdown в полето за въвеждане (удебелен текст, кодови блокове, таблици и др.).",
   "features.inputMarkdown.title": "Визуализация на Markdown при въвеждане",
+  "features.platformAgent.desc": "Показване на записа \"Свържи агент\" в менюто за създаване. Свързаните агенти (напр. OpenClaw, Hermes) работят на вашите устройства и комуникират обратно чрез lh connect.",
+  "features.platformAgent.title": "Свържи агент",
   "title": "Лаборатория"
 }

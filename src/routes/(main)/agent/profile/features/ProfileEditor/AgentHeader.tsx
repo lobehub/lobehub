@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
 import BackgroundSwatches from '@/features/AgentSetting/AgentMeta/BackgroundSwatches';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useFileStore } from '@/store/file';
@@ -22,6 +23,7 @@ const MAX_AVATAR_SIZE = 1024 * 1024; // 1MB limit for server actions
 const AgentHeader = memo(() => {
   const { t } = useTranslation(['setting', 'common']);
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   // Get current meta from store
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
@@ -42,6 +44,8 @@ const AgentHeader = memo(() => {
   // Debounced save for title
   const { run: debouncedSaveTitle } = useDebounceFn(
     (value: string) => {
+      if (!canEdit) return;
+
       updateMeta({ title: value });
     },
     { wait: EDITOR_DEBOUNCE_TIME },
@@ -49,12 +53,16 @@ const AgentHeader = memo(() => {
 
   // Handle avatar change (immediate save)
   const handleAvatarChange = (emoji: string) => {
+    if (!canEdit) return;
+
     updateMeta({ avatar: emoji });
   };
 
   // Handle avatar upload
   const handleAvatarUpload = useCallback(
     async (file: File) => {
+      if (!canEdit) return;
+
       if (file.size > MAX_AVATAR_SIZE) {
         message.error(t('settingAgent.avatar.sizeExceeded', { ns: 'setting' }));
         return;
@@ -70,16 +78,20 @@ const AgentHeader = memo(() => {
         setUploading(false);
       }
     },
-    [uploadWithProgress, updateMeta, t],
+    [canEdit, uploadWithProgress, updateMeta, t],
   );
 
   // Handle avatar delete
   const handleAvatarDelete = useCallback(() => {
+    if (!canEdit) return;
+
     updateMeta({ avatar: null });
-  }, [updateMeta]);
+  }, [canEdit, updateMeta]);
 
   // Handle background color change (immediate save)
   const handleBackgroundColorChange = (color?: string) => {
+    if (!canEdit) return;
+
     if (color !== undefined) {
       updateMeta({ backgroundColor: color });
     }
@@ -100,10 +112,11 @@ const AgentHeader = memo(() => {
       {/* Avatar Section */}
       <EmojiPicker
         allowModelAvatar
-        allowUpload
-        allowDelete={!!meta.avatar}
+        allowDelete={canEdit && !!meta.avatar}
+        allowUpload={canEdit}
         loading={uploading}
         locale={locale}
+        open={canEdit ? undefined : false}
         shape={'square'}
         size={72}
         value={meta.avatar}
@@ -130,6 +143,7 @@ const AgentHeader = memo(() => {
                   }
                 >
                   <BackgroundSwatches
+                    disabled={!canEdit}
                     gap={8}
                     shape={'square'}
                     size={38}
@@ -152,6 +166,7 @@ const AgentHeader = memo(() => {
       {/* Title Section */}
       <Flexbox flex={1} style={{ minWidth: 0 }}>
         <Input
+          disabled={!canEdit}
           placeholder={t('settingAgent.name.placeholder', { ns: 'setting' })}
           value={localTitle}
           variant={'borderless'}
@@ -163,6 +178,8 @@ const AgentHeader = memo(() => {
           }}
           onChange={(e) => {
             setLocalTitle(e.target.value);
+            if (!canEdit) return;
+
             debouncedSaveTitle(e.target.value);
           }}
         />

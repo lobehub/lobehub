@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type {
+  AgentRunRequestMessage,
   DeviceSystemInfo,
   SystemInfoRequestMessage,
   ToolCallRequestMessage,
@@ -25,6 +26,7 @@ import {
   stopDaemon,
   writeStatus,
 } from '../daemon/manager';
+import { spawnHeteroAgentRun } from '../device/agentRun';
 import { registerDevice, resolveDeviceIdentity } from '../device/register';
 import { loadOrCreateConnectionId, loadSettings, normalizeUrl, saveSettings } from '../settings';
 import { executeToolCall } from '../tools';
@@ -284,6 +286,38 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
         success: result.success,
       },
     });
+  });
+
+  // Handle gateway-dispatched agent runs (heterogeneous agents, e.g. Claude
+  // Code). Mirrors the desktop app: spawn `lh hetero exec`, which owns the full
+  // execution + server-ingest pipeline. Ack with the spawn outcome — `accepted`
+  // once the child starts, `rejected` if it fails to spawn (e.g. bad cwd) — so
+  // a failed dispatch surfaces as an error instead of a stuck assistant message.
+  client.on('agent_run_request', async (request: AgentRunRequestMessage) => {
+    info(
+      `Received agent_run_request: operationId=${request.operationId} type=${request.agentType}`,
+    );
+    try {
+      const ack = await spawnHeteroAgentRun(
+        {
+          agentType: request.agentType,
+          cwd: request.cwd,
+          jwt: request.jwt,
+          operationId: request.operationId,
+          prompt: request.prompt,
+          resumeSessionId: request.resumeSessionId,
+          serverUrl: auth.serverUrl,
+          systemContext: request.systemContext,
+          topicId: request.topicId,
+        },
+        { error, info },
+      );
+      client.sendAgentRunAck({ operationId: request.operationId, ...ack });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      error(`agent_run_request failed: ${reason}`);
+      client.sendAgentRunAck({ operationId: request.operationId, reason, status: 'rejected' });
+    }
   });
 
   client.on('connected', () => {

@@ -156,6 +156,7 @@ const MessengerVerifyPage = memo(() => {
         platform),
   );
   const lobeAccount = session?.user?.email ?? session?.user?.name ?? '';
+  const userAvatar = session?.user?.image ?? undefined;
 
   return (
     <Body
@@ -166,6 +167,7 @@ const MessengerVerifyPage = memo(() => {
       randomId={randomId}
       signInUrl={signInUrl}
       tokenData={activeToken}
+      userAvatar={userAvatar}
     />
   );
 });

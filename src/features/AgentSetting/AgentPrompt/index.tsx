@@ -16,9 +16,13 @@ const AgentPrompt = memo(() => {
   const { t } = useTranslation('setting');
   const isMobile = useServerConfigStore((s) => s.isMobile);
   const [editing, setEditing] = useState(false);
-  const [systemRole, updateConfig] = useStore((s) => [s.config.systemRole, s.setAgentConfig]);
+  const [systemRole, disabled, updateConfig] = useStore((s) => [
+    s.config.systemRole,
+    s.disabled,
+    s.setAgentConfig,
+  ]);
 
-  const editButton = !editing && !!systemRole && (
+  const editButton = !editing && !!systemRole && !disabled && (
     <Button
       icon={PenLineIcon}
       iconPlacement={'end'}
@@ -45,10 +49,10 @@ const AgentPrompt = memo(() => {
           children: (
             <Flexbox paddingBlock={isMobile ? 16 : 0}>
               <EditableMessage
-                showEditWhenEmpty
                 editing={editing}
                 height={'auto'}
                 placeholder={t('settingAgent.prompt.placeholder')}
+                showEditWhenEmpty={!disabled}
                 value={systemRole}
                 variant={'borderless'}
                 markdownProps={{
@@ -58,9 +62,15 @@ const AgentPrompt = memo(() => {
                   cancel: t('cancel', { ns: 'common' }),
                   confirm: t('ok', { ns: 'common' }),
                 }}
-                onEditingChange={setEditing}
                 onChange={(e) => {
+                  if (disabled) return;
+
                   updateConfig({ systemRole: e });
+                }}
+                onEditingChange={(next) => {
+                  if (disabled) return;
+
+                  setEditing(next);
                 }}
               />
               {!editing && !!systemRole && <Tokens value={systemRole} />}

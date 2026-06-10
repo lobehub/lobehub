@@ -5,6 +5,7 @@ import { memo, useState } from 'react';
 
 export interface CheckboxItemProps {
   checked?: boolean;
+  disabled?: boolean;
   hasPadding?: boolean;
   id: string;
   label?: ReactNode;
@@ -13,11 +14,13 @@ export interface CheckboxItemProps {
 }
 
 const CheckboxItem = memo<CheckboxItemProps>(
-  ({ id, onUpdate, label, checked, hasPadding = true, labelMaxWidth }) => {
+  ({ id, onUpdate, label, checked, disabled, hasPadding = true, labelMaxWidth }) => {
     const [loading, setLoading] = useState(false);
     const labelContent = label || id;
 
     const updateState = async () => {
+      if (disabled) return;
+
       setLoading(true);
       await onUpdate(id, !checked);
       setLoading(false);
@@ -39,6 +42,8 @@ const CheckboxItem = memo<CheckboxItemProps>(
         }
         onClick={async (e) => {
           e.stopPropagation();
+          if (disabled) return;
+
           updateState();
         }}
       >
@@ -61,8 +66,11 @@ const CheckboxItem = memo<CheckboxItemProps>(
         ) : (
           <Checkbox
             checked={checked}
+            disabled={disabled}
             onClick={async (e) => {
               e.stopPropagation();
+              if (disabled) return;
+
               await updateState();
             }}
           />

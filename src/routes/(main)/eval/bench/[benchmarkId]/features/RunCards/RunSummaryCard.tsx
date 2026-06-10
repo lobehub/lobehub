@@ -4,8 +4,8 @@ import { Flexbox } from '@lobehub/ui';
 import { Card, Progress, Typography } from 'antd';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import StatusBadge from '@/routes/(main)/eval/features/StatusBadge';
 
 interface RunSummaryCardProps {
@@ -25,7 +25,7 @@ const RunSummaryCard = memo<RunSummaryCardProps>(({ id, name, status, metrics, b
   const isActive = status === 'running' || status === 'pending';
 
   return (
-    <Link
+    <WorkspaceLink
       style={{ color: 'inherit', textDecoration: 'none' }}
       to={`/eval/bench/${benchmarkId}/runs/${id}`}
     >
@@ -58,7 +58,7 @@ const RunSummaryCard = memo<RunSummaryCardProps>(({ id, name, status, metrics, b
           )}
         </Flexbox>
       </Card>
-    </Link>
+    </WorkspaceLink>
   );
 });
 

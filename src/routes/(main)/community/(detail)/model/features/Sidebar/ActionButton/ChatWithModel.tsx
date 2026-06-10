@@ -7,8 +7,10 @@ import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 import { useDetailContext } from '../../DetailProvider';
 
@@ -24,16 +26,16 @@ const ChatWithModel = memo(() => {
   const { t } = useTranslation('discover');
   const { providers = [] } = useDetailContext();
   const includeLobeHub = providers.some((item) => item.id === 'lobehub');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const list = providers.filter((provider) => provider.id !== 'lobehub');
 
   const items = list.map((item) => ({
     icon: <ProviderIcon provider={item.id} size={20} type={'avatar'} />,
     key: item.id,
     label: (
-      <Link to={urlJoin('/community/provider', item.id)}>
+      <WorkspaceLink to={urlJoin('/community/provider', item.id)}>
         {[item.name, t('models.guide')].join(' ')}
-      </Link>
+      </WorkspaceLink>
     ),
   }));
 
@@ -61,11 +63,11 @@ const ChatWithModel = memo(() => {
 
   if (items.length === 1)
     return (
-      <Link style={{ flex: 1 }} to={urlJoin('/community/provider', items[0].key)}>
+      <WorkspaceLink style={{ flex: 1 }} to={urlJoin('/community/provider', items[0].key)}>
         <Button block className={styles.button} size={'large'} type={'primary'}>
           {t('models.guide')}
         </Button>
-      </Link>
+      </WorkspaceLink>
     );
 
   return (

@@ -14,6 +14,7 @@ import ModelSwitchPanel from '@/features/ModelSwitchPanel';
 import PromptTransformAction from '@/features/PromptTransform/PromptTransformAction';
 import { useFetchAiVideoConfig } from '@/hooks/useFetchAiVideoConfig';
 import { useIsDark } from '@/hooks/useIsDark';
+import { usePermission } from '@/hooks/usePermission';
 import { useQueryState } from '@/hooks/useQueryParam';
 import {
   ConfigAction,
@@ -42,6 +43,7 @@ interface PromptInputProps {
 const isSupportedParamSelector = videoGenerationConfigSelectors.isSupportedParam;
 
 const AspectRatioItem = memo(() => {
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue, enumValues } = useVideoGenerationConfigParam('aspectRatio');
   const options = useMemo(
     () => (enumValues ?? []).map((v) => ({ label: v, value: v })),
@@ -50,10 +52,21 @@ const AspectRatioItem = memo(() => {
 
   if (options.length === 0) return null;
 
-  return <AspectRatioSelect options={options} value={value} onChange={(v) => setValue(v as any)} />;
+  return (
+    <AspectRatioSelect
+      options={options}
+      value={value}
+      onChange={(v) => {
+        if (!canCreate) return;
+
+        setValue(v as any);
+      }}
+    />
+  );
 });
 
 const SizeItem = memo(() => {
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue, enumValues } = useVideoGenerationConfigParam('size');
 
   const options = useMemo(
@@ -67,10 +80,21 @@ const SizeItem = memo(() => {
 
   if (options.length === 0) return null;
 
-  return <Select options={options} value={value} onChange={setValue} />;
+  return (
+    <Select
+      options={options}
+      value={value}
+      onChange={(next) => {
+        if (!canCreate) return;
+
+        setValue(next);
+      }}
+    />
+  );
 });
 
 const ResolutionItem = memo(() => {
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue, enumValues } = useVideoGenerationConfigParam('resolution');
   const options = useMemo(
     () => (enumValues ?? []).map((v) => ({ label: v, value: v })),
@@ -82,16 +106,22 @@ const ResolutionItem = memo(() => {
   return (
     <Segmented
       block
+      disabled={!canCreate}
       options={options}
       style={{ width: '100%' }}
       value={value}
       variant="filled"
-      onChange={(v) => setValue(String(v) as any)}
+      onChange={(v) => {
+        if (!canCreate) return;
+
+        setValue(String(v) as any);
+      }}
     />
   );
 });
 
 const DurationItem = memo(() => {
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue, min, max, step, enumValues } = useVideoGenerationConfigParam('duration');
 
   const options = useMemo(
@@ -109,45 +139,68 @@ const DurationItem = memo(() => {
     return (
       <Segmented
         block
+        disabled={!canCreate}
         options={options}
         style={{ width: '100%' }}
         value={value ?? min}
         variant="filled"
-        onChange={(v) => setValue(Number(v) as any)}
+        onChange={(v) => {
+          if (!canCreate) return;
+
+          setValue(Number(v) as any);
+        }}
       />
     );
   }
 
   return (
     <SliderWithInput
+      disabled={!canCreate}
       max={max}
       min={min}
       step={step ?? 1}
       value={value ?? min}
-      onChange={(v) => setValue(v as any)}
+      onChange={(v) => {
+        if (!canCreate) return;
+
+        setValue(v as any);
+      }}
     />
   );
 });
 
 const SeedItem = memo(() => {
   const { t } = useTranslation('video');
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue } = useVideoGenerationConfigParam('seed');
 
   const handleRandomize = useCallback(() => {
+    if (!canCreate) return;
+
     setValue(generateUniqueSeeds(1)[0] as any);
-  }, [setValue]);
+  }, [canCreate, setValue]);
 
   return (
     <Flexbox horizontal gap={4}>
       <InputNumber
+        disabled={!canCreate}
         min={0}
         placeholder={t('config.seed.random')}
         step={1}
         style={{ width: '100%' }}
         value={value}
-        onChange={(v) => setValue(v as any)}
+        onChange={(v) => {
+          if (!canCreate) return;
+
+          setValue(v as any);
+        }}
       />
-      <Action icon={Dices} title={t('config.seed.random')} onClick={handleRandomize} />
+      <Action
+        disabled={!canCreate}
+        icon={Dices}
+        title={t('config.seed.random')}
+        onClick={handleRandomize}
+      />
     </Flexbox>
   );
 });
@@ -158,18 +211,28 @@ interface SwitchItemProps {
 }
 
 const SwitchItem = memo<SwitchItemProps>(({ label, paramName }) => {
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue } = useVideoGenerationConfigParam(paramName);
 
   return (
     <Flexbox horizontal align="center" justify="space-between" padding={'0 2px'}>
       <Text weight={500}>{label}</Text>
-      <Switch checked={!!value} onChange={(checked) => setValue(checked as any)} />
+      <Switch
+        checked={!!value}
+        disabled={!canCreate}
+        onChange={(checked) => {
+          if (!canCreate) return;
+
+          setValue(checked as any);
+        }}
+      />
     </Flexbox>
   );
 });
 
 const PromptExtendItem = memo(() => {
   const { t } = useTranslation('video');
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue, enumValues } = useVideoGenerationConfigParam('promptExtend');
 
   const options = enumValues?.map((item) => ({ label: item, value: item })) ?? [];
@@ -180,11 +243,16 @@ const PromptExtendItem = memo(() => {
         <Text weight={500}>{t('config.promptExtend.label')}</Text>
         <Segmented
           block
+          disabled={!canCreate}
           options={options}
           style={{ width: '100%' }}
           value={value as string}
           variant="filled"
-          onChange={(next) => setValue(String(next) as any)}
+          onChange={(next) => {
+            if (!canCreate) return;
+
+            setValue(String(next) as any);
+          }}
         />
       </Flexbox>
     );
@@ -193,7 +261,15 @@ const PromptExtendItem = memo(() => {
   return (
     <Flexbox horizontal align="center" justify="space-between" padding={'0 2px'}>
       <Text weight={500}>{t('config.promptExtend.label')}</Text>
-      <Switch checked={!!value} onChange={(checked) => setValue(checked as any)} />
+      <Switch
+        checked={!!value}
+        disabled={!canCreate}
+        onChange={(checked) => {
+          if (!canCreate) return;
+
+          setValue(checked as any);
+        }}
+      />
     </Flexbox>
   );
 });
@@ -201,6 +277,7 @@ const PromptExtendItem = memo(() => {
 const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const isDarkMode = useIsDark();
   const { t } = useTranslation('video');
+  const { allowed: canCreate } = usePermission('create_content');
   const { value, setValue } = useVideoGenerationConfigParam('prompt');
   const { value: imageUrl, setValue: setImageUrl } = useVideoGenerationConfigParam('imageUrl');
   const {
@@ -243,6 +320,8 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
   const hasProcessedModel = useRef(false);
 
   const handleGenerate = async () => {
+    if (!canCreate) return;
+
     if (!isLogin) {
       loginRequired.redirect({ timeout: 2000 });
       return;
@@ -270,7 +349,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
   // Auto-fill and auto-send when prompt query parameter is present
   useEffect(() => {
-    if (promptParam && !hasProcessedPrompt.current && isLogin) {
+    if (promptParam && !hasProcessedPrompt.current && isLogin && canCreate) {
       const decodedPrompt = decodeURIComponent(promptParam);
 
       setValue(decodedPrompt);
@@ -287,7 +366,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
         window.clearTimeout(timeoutId);
       };
     }
-  }, [promptParam, isLogin, setValue, setPromptParam, createVideo]);
+  }, [promptParam, isLogin, canCreate, setValue, setPromptParam, createVideo]);
 
   const showInlineFrames = isSupportImageUrl || isSupportImageUrls || isSupportEndImageUrl;
   const framePreviewUrls = useMemo(
@@ -304,6 +383,8 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
 
   const handleAddImage = useCallback(
     (data: string | { dimensions?: { height: number; width: number }; url: string }) => {
+      if (!canCreate) return;
+
       const url = typeof data === 'string' ? data : data?.url;
       if (!url) return;
       if (framePreviewUrls.length >= maxCount) return;
@@ -325,22 +406,27 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
       setImageUrls,
       framePreviewUrls.length,
       maxCount,
+      canCreate,
     ],
   );
 
   const handleRemoveImage = useCallback(
     (url: string) => {
+      if (!canCreate) return;
+
       if (url === imageUrl) {
         setImageUrl(null);
       } else {
         setImageUrls((imageUrls ?? []).filter((item) => item !== url) as any);
       }
     },
-    [imageUrl, imageUrls, setImageUrl, setImageUrls],
+    [canCreate, imageUrl, imageUrls, setImageUrl, setImageUrls],
   );
 
   const handleEndImageChange = useCallback(
     (data: string | { dimensions?: { height: number; width: number }; url: string } | null) => {
+      if (!canCreate) return;
+
       if (data === null) {
         setEndImageUrl(null as any);
         return;
@@ -348,7 +434,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
       const url = typeof data === 'string' ? data : data?.url;
       setEndImageUrl((url ?? null) as any);
     },
-    [setEndImageUrl],
+    [canCreate, setEndImageUrl],
   );
 
   return (
@@ -357,6 +443,7 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
       <Flexbox gap={8}>
         <GenerationPromptInput
           disableGenerate={!isInit}
+          disabled={!canCreate}
           generateLabel={t('generation.actions.generate')}
           generatingLabel={t('generation.status.generating')}
           isCreating={isCreating}
@@ -385,7 +472,12 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
             ) : undefined
           }
           leftActions={
-            <Flexbox horizontal align={'center'} gap={4}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              gap={4}
+              style={canCreate ? undefined : { opacity: 0.5, pointerEvents: 'none' }}
+            >
               <GenerationMediaModeSegment mode={'video'} />
               <ModelSwitchPanel
                 ModelItemComponent={VideoModelItem}
@@ -396,6 +488,8 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
                 pricingMode="video"
                 provider={currentProvider ?? undefined}
                 onModelChange={async ({ model, provider }) => {
+                  if (!canCreate) return;
+
                   setModelAndProviderOnSelect(model, provider);
                 }}
               >
@@ -479,7 +573,15 @@ const PromptInput = ({ showTitle = false }: PromptInputProps) => {
             hasRefImages ? t('config.prompt.placeholderWithRef') : t('config.prompt.placeholder')
           }
           rightActions={
-            <PromptTransformAction mode={'video'} prompt={value} onPromptChange={setValue as any} />
+            <PromptTransformAction
+              mode={'video'}
+              prompt={value}
+              onPromptChange={(next) => {
+                if (!canCreate) return;
+
+                setValue(next as any);
+              }}
+            />
           }
           onGenerate={handleGenerate}
           onValueChange={setValue}

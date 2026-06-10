@@ -15,14 +15,18 @@ import { agentSelectors } from './selectors';
  * Used in ChatInput components where agentId is passed as prop.
  */
 
-const getChatConfigById =
+const getStoredChatConfigById =
   (agentId: string) =>
   (s: AgentStoreState): LobeAgentChatConfig =>
     agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig || {};
 
-// Return raw chatConfig value without business logic overrides
+const getChatConfigById =
+  (agentId: string) =>
+  (s: AgentStoreState): LobeAgentChatConfig =>
+    getStoredChatConfigById(agentId)(s);
+
 const getEnableHistoryCountById = (agentId: string) => (s: AgentStoreState) =>
-  getChatConfigById(agentId)(s).enableHistoryCount;
+  getStoredChatConfigById(agentId)(s).enableHistoryCount;
 
 const getHistoryCountById =
   (agentId: string) =>

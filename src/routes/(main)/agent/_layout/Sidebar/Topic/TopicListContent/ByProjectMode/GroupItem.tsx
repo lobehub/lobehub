@@ -5,7 +5,9 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
+import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import TopicItem from '../../List/Item';
@@ -22,16 +24,23 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, activeTopicId, activeT
     [id],
   );
 
-  const handleAddTopic = useCallback(async () => {
-    if (!workingDirectory) return;
-    const agentId = useAgentStore.getState().activeAgentId;
-    if (agentId) {
-      await useAgentStore.getState().updateAgentRuntimeEnvConfigById(agentId, { workingDirectory });
-    }
-    useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
-  }, [workingDirectory]);
+  const agentId = useAgentStore((s) => s.activeAgentId);
+  const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId ?? ''));
+  const { commitAgentDefault } = useCommitWorkingDirectory(agentId ?? '');
 
-  const canAddTopic = isDesktop && !!workingDirectory;
+  const handleAddTopic = useCallback(async () => {
+    if (!workingDirectory || !agentId) return;
+    // Write the agent's per-device default so the new topic inherits this
+    // directory at creation time — the same high-precedence slot the picker
+    // uses, not the legacy per-agent fallback that gets shadowed by it.
+    await commitAgentDefault(workingDirectory);
+    useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
+  }, [workingDirectory, agentId, commitAgentDefault]);
+
+  // Web can add a topic in a directory too when the agent targets a bound
+  // device — the write goes to `workingDirByDevice`, no Electron dependency.
+  const isDeviceMode = agencyConfig?.executionTarget === 'device' && !!agencyConfig?.boundDeviceId;
+  const canAddTopic = (isDesktop || isDeviceMode) && !!workingDirectory;
 
   return (
     <AccordionItem

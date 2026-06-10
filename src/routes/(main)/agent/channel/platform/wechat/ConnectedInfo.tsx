@@ -47,11 +47,12 @@ interface WechatConnectedInfoProps {
     applicationId: string;
     credentials: Record<string, string>;
   };
+  disabled?: boolean;
   onQrAuthenticated?: (credentials: { botId: string; botToken: string; userId: string }) => void;
 }
 
 const WechatConnectedInfo = memo<WechatConnectedInfoProps>(
-  ({ currentConfig, onQrAuthenticated }) => {
+  ({ currentConfig, disabled, onQrAuthenticated }) => {
     const { t: _t } = useTranslation('agent');
     const t = _t as (key: string) => string;
 
@@ -72,6 +73,7 @@ const WechatConnectedInfo = memo<WechatConnectedInfoProps>(
             <QrCodeAuth
               buttonLabel={t('channel.wechatRebind')}
               buttonType="default"
+              disabled={disabled}
               showTips={false}
               onAuthenticated={onQrAuthenticated}
             />

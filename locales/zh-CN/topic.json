@@ -60,6 +60,8 @@
   "inPopup.description": "此话题已在独立窗口中打开，请前往该窗口继续对话以保持消息一致。",
   "inPopup.focus": "聚焦独立窗口",
   "inPopup.title": "已在独立窗口中打开",
+  "info.title": "主题信息",
+  "info.updatedAt": "更新于 {{time}}",
   "loadMore": "更多",
   "management.actions.newChat": "新对话",
   "management.actions.select": "选择",

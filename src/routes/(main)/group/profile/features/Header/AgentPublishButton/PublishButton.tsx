@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { message } from '@/components/AntdStaticMethods';
 import { HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { checkOwnership } from '@/hooks/useAgentOwnershipCheck';
+import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { resolveMarketAuthError } from '@/layout/AuthProvider/MarketAuth/errors';
 import { useServerConfigStore } from '@/store/serverConfig';
@@ -22,6 +23,7 @@ interface MarketPublishButtonProps {
 const PublishButton = memo<MarketPublishButtonProps>(
   ({ action, marketIdentifier, onPublishSuccess }) => {
     const { t } = useTranslation(['setting', 'marketAuth']);
+    const { allowed: canEdit } = usePermission('edit_own_content');
 
     const mobile = useServerConfigStore((s) => s.isMobile);
 
@@ -129,11 +131,16 @@ const PublishButton = memo<MarketPublishButtonProps>(
 
     return (
       <ActionIcon
+        disabled={!canEdit}
         icon={ShapesUploadIcon}
         loading={loading}
         size={HEADER_ICON_SIZE(mobile)}
         title={buttonTitle}
-        onClick={handleButtonClick}
+        onClick={() => {
+          if (!canEdit) return;
+
+          handleButtonClick();
+        }}
       />
     );
   },

@@ -14,6 +14,9 @@ const switchTopicMock = vi.hoisted(() => vi.fn());
 const toggleCommandMenuMock = vi.hoisted(() => vi.fn());
 const useParamsMock = vi.hoisted(() => vi.fn());
 const usePathnameMock = vi.hoisted(() => vi.fn());
+const permissionMock = vi.hoisted(() => ({
+  create_content: true,
+}));
 
 vi.mock('@lobehub/ui', () => ({
   Flexbox: ({ children, ...props }: { children?: ReactNode; [key: string]: unknown }) => (
@@ -55,14 +58,16 @@ vi.mock('@/const/url', () => ({
 vi.mock('@/features/NavPanel/components/NavItem', () => ({
   default: ({
     active,
+    disabled,
     onClick,
     title,
   }: {
     active?: boolean;
+    disabled?: boolean;
     onClick?: () => void;
     title: ReactNode;
   }) => (
-    <button data-active={String(active)} type="button" onClick={onClick}>
+    <button data-active={String(active)} disabled={disabled} type="button" onClick={onClick}>
       {title}
     </button>
   ),
@@ -81,6 +86,13 @@ vi.mock('@/libs/router/navigation', () => ({
 vi.mock('@/libs/swr', () => ({
   useActionSWR: () => ({
     mutate: mutateMock,
+  }),
+}));
+
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: (action: 'create_content') => ({
+    allowed: permissionMock[action],
+    reason: permissionMock[action] ? '' : 'requires member',
   }),
 }));
 
@@ -129,6 +141,7 @@ describe('Agent sidebar header nav', () => {
     toggleCommandMenuMock.mockReset();
     useParamsMock.mockReset();
     usePathnameMock.mockReset();
+    permissionMock.create_content = true;
 
     useParamsMock.mockReturnValue({ aid: 'agt_eH4zL98zBx5u', topicId: 'tpc_2FCHvjS7d4CA' });
   });
@@ -155,5 +168,20 @@ describe('Agent sidebar header nav', () => {
 
     expect(pushMock).toHaveBeenCalledWith('/agent/agt_eH4zL98zBx5u');
     expect(mutateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables starting a new topic for workspace viewers', () => {
+    permissionMock.create_content = false;
+    usePathnameMock.mockReturnValue('/agent/agt_eH4zL98zBx5u/channel');
+
+    render(<Nav />);
+
+    const startButton = screen.getByRole('button', { name: 'actions.addNewTopic' });
+    expect(startButton).toBeDisabled();
+
+    fireEvent.click(startButton);
+
+    expect(pushMock).not.toHaveBeenCalled();
+    expect(mutateMock).not.toHaveBeenCalled();
   });
 });

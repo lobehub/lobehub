@@ -20,6 +20,7 @@ import { UsageCounter } from '@lobechat/agent-runtime';
 import { countContextTokens, type ToolsEngine } from '@lobechat/context-engine';
 import { chainCompressContext } from '@lobechat/prompts';
 import {
+  ChatErrorType,
   type ChatMessageError,
   type ChatToolPayload,
   type CreateMessageParams,
@@ -297,7 +298,7 @@ export const createAgentExecutors = (context: {
       if (!operation) {
         throw new Error(`Operation not found: ${context.operationId}`);
       }
-      const { subAgentId, groupId, topicId } = operation.context;
+      const { subAgentId, groupId, threadId, topicId } = operation.context;
       const abortController = operation.abortController;
 
       // In group orchestration, subAgentId is the actual responding agent
@@ -494,9 +495,21 @@ export const createAgentExecutors = (context: {
           });
         },
         onFinish: async (
-          content,
-          { traceId, observationId, toolCalls, reasoning, grounding, usage, speed, type },
+          _content,
+          {
+            traceId,
+            observationId,
+            planUpgradeAfterFinish,
+            toolCalls,
+            reasoning,
+            grounding,
+            usage,
+            speed,
+            type,
+          },
         ) => {
+          void _content;
+
           if (traceId) {
             messageService.updateMessage(
               assistantMessageId,
@@ -538,6 +551,34 @@ export const createAgentExecutors = (context: {
             },
             { operationId: context.operationId },
           );
+
+          if (planUpgradeAfterFinish && type !== 'abort' && type !== 'error') {
+            await context.get().optimisticCreateMessage(
+              {
+                agentId: agentId || undefined,
+                content: '',
+                error: {
+                  body: {
+                    budget: {
+                      modelId: llmPayload.model,
+                      pricingBasis: 'unknown',
+                      providerId: llmPayload.provider,
+                      scenario: 'chat',
+                    },
+                  },
+                  type: ChatErrorType.FreePlanLimit,
+                },
+                groupId,
+                model: llmPayload.model,
+                parentId: assistantMessageId,
+                provider: llmPayload.provider,
+                role: 'assistant',
+                threadId,
+                topicId: topicId ?? undefined,
+              },
+              { operationId: context.operationId },
+            );
+          }
         },
         onMessageHandle: async (chunk) => {
           handler.handleChunk(chunk as StreamChunk);

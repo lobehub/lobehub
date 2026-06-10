@@ -258,7 +258,63 @@ describe('BackendProxyProtocolManager', () => {
 
     expect(send).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1000);
-    expect(send).toHaveBeenCalledWith('authorizationRequired');
+    expect(send).toHaveBeenCalledWith(
+      'authorizationRequired',
+      expect.objectContaining({
+        reason: expect.stringContaining('status=207'),
+      }),
+    );
+  });
+
+  it('captures www-authenticate, body snippet and hadToken in reason on 401', async () => {
+    vi.useFakeTimers();
+    const send = vi.fn();
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([
+      { isDestroyed: () => false, webContents: { send } },
+    ] as any);
+
+    const manager = new BackendProxyProtocolManager();
+    const session = {} as any;
+
+    const upstreamBody = JSON.stringify({
+      error: { json: { data: { code: 'UNAUTHORIZED' }, message: 'token expired at 2026-06-09' } },
+    });
+    const headers = new Headers({
+      [AUTH_REQUIRED_HEADER]: 'true',
+      'Content-Type': 'application/json',
+      'www-authenticate': 'Bearer error="invalid_token", error_description="expired"',
+    });
+    const fetchMock = vi.fn<FetchMock>(
+      async () => new Response(upstreamBody, { headers, status: 401, statusText: 'Unauthorized' }),
+    );
+    vi.stubGlobal('fetch', fetchMock as any);
+
+    manager.registerWithRemoteBaseUrl(session, {
+      getAccessToken: async () => 'fake-token',
+      getRemoteBaseUrl: async () => 'https://remote.example.com',
+    });
+
+    const response = await manager.proxy(
+      {
+        headers: new Headers(),
+        method: 'POST',
+        url: 'app://renderer/trpc/lambda/me',
+      } as any,
+      session,
+    );
+
+    // Original body is still readable by the downstream caller — clone() must not consume it.
+    expect(await response!.text()).toBe(upstreamBody);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(send).toHaveBeenCalledTimes(1);
+    const [, payload] = send.mock.calls[0];
+    expect(payload.reason).toContain('status=401');
+    expect(payload.reason).toContain('POST /trpc/lambda/me');
+    expect(payload.reason).toContain('hadToken=true');
+    expect(payload.reason).toContain('wwwAuth=Bearer error="invalid_token"');
+    expect(payload.reason).toContain('UNAUTHORIZED');
+    expect(payload.reason).toContain('token expired');
   });
 
   describe('createAppRequestInterceptor', () => {

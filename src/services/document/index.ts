@@ -230,6 +230,17 @@ export class DocumentService {
       savedAt: result.savedAt instanceof Date ? result.savedAt.toISOString() : result.savedAt,
     };
   }
+
+  async transferDocument(documentId: string, targetWorkspaceId: string | null): Promise<void> {
+    await lambdaClient.document.transferDocument.mutate({ documentId, targetWorkspaceId });
+  }
+
+  async copyDocumentToWorkspace(
+    documentId: string,
+    targetWorkspaceId: string | null,
+  ): Promise<{ rootId: string }> {
+    return lambdaClient.document.copyDocumentToWorkspace.mutate({ documentId, targetWorkspaceId });
+  }
 }
 
 export const documentService = new DocumentService() as DocumentService &

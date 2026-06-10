@@ -570,9 +570,9 @@ export class GeneralChatAgent implements Agent {
         const { data, parentMessageId, stop } =
           context.payload as GeneralAgentCallToolResultPayload;
 
-        // Check if this is a sub-agent dispatch request (lobe-agent.callSubAgent /
-        // callSubAgents and similarly-shaped tools emit state.type=execSubAgent*
-        // with stop=true so the runtime forks a sub-agent here).
+        // Check if this is a sub-agent dispatch request (lobe-agent.callSubAgent
+        // and similarly-shaped tools emit state.type=execSubAgent* with stop=true
+        // so the runtime forks a sub-agent here).
         if (stop && data?.state) {
           const stateType = data.state.type;
 

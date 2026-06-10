@@ -5,10 +5,11 @@ import { cssVar } from 'antd-style';
 import { BotMessageSquareIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { topicService } from '@/services/topic';
 
 import SectionHeader from './SectionHeader';
@@ -35,7 +36,7 @@ const AgentRecentTopics = memo(() => {
       />
       <Flexbox horizontal gap={12} style={{ overflowX: 'auto', paddingBottom: 4 }}>
         {topics.map((topic) => (
-          <Link
+          <WorkspaceLink
             key={topic.id}
             style={{ color: 'inherit', flexShrink: 0, textDecoration: 'none' }}
             to={SESSION_CHAT_TOPIC_URL(aid!, topic.id)}
@@ -60,7 +61,7 @@ const AgentRecentTopics = memo(() => {
                 </Text>
               </Flexbox>
             </Block>
-          </Link>
+          </WorkspaceLink>
         ))}
       </Flexbox>
     </Flexbox>

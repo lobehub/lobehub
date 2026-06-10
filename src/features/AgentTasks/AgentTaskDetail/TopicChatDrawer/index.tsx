@@ -22,6 +22,7 @@ import { useShareModal } from '@/features/ShareModal';
 import { LazySharePopover as SharePopover } from '@/features/SharePopover/lazy';
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -114,6 +115,7 @@ const TopicChatDrawer = memo(() => {
   const closeTopicDrawer = useTaskStore((s) => s.closeTopicDrawer);
   const useFetchTaskDetail = useTaskStore((s) => s.useFetchTaskDetail);
   const enableTopicLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+  const { allowed: canShare, reason } = usePermission('edit_own_content');
 
   // Hydrate task detail when the drawer is opened outside of TaskDetailPage
   // (e.g. from a brief on home) so the header has agentId / status / seq.
@@ -175,15 +177,16 @@ const TopicChatDrawer = memo(() => {
 
   const shareIcon = (
     <ActionIcon
+      disabled={!canShare}
       icon={Share2}
       size={'small'}
-      title={t('share', { ns: 'common' })}
-      onClick={enableTopicLinkShare ? undefined : openShareModal}
+      title={canShare ? t('share', { ns: 'common' }) : reason}
+      onClick={enableTopicLinkShare || !canShare ? undefined : openShareModal}
     />
   );
 
   const extra = topicId ? (
-    enableTopicLinkShare ? (
+    enableTopicLinkShare && canShare ? (
       <SharePopover topicId={topicId} onOpenModal={openShareModal}>
         {shareIcon}
       </SharePopover>

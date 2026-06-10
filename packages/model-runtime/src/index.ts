@@ -73,6 +73,7 @@ export { LobeZeroOneAI } from './providers/zeroone';
 export { LobeZhipuAI } from './providers/zhipu';
 export * from './types';
 export * from './types/error';
+export * from './utils/claudeModelId';
 export { consumeStreamUntilDone } from './utils/consumeStream';
 export { AgentRuntimeError } from './utils/createError';
 export { getModelPropertyWithFallback } from './utils/getFallbackModelProperty';

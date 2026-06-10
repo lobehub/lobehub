@@ -37,11 +37,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface TelegramLinkBodyProps {
   botUsername?: string;
+  disabled?: boolean;
   /** Brand-name label (e.g. `"Telegram"`) sourced from the registry. */
   name: string;
 }
 
-const TelegramLinkBody = memo<TelegramLinkBodyProps>(({ botUsername, name }) => {
+const TelegramLinkBody = memo<TelegramLinkBodyProps>(({ botUsername, disabled, name }) => {
   const { t } = useTranslation('messenger');
 
   if (!botUsername) {
@@ -72,7 +73,14 @@ const TelegramLinkBody = memo<TelegramLinkBodyProps>(({ botUsername, name }) => 
           {t('messenger.linkModal.scanHint', { platform: name })}
         </Text>
       </Flexbox>
-      <Button block href={deepLink} size="large" target="_blank" type="primary">
+      <Button
+        block
+        disabled={disabled}
+        href={disabled ? undefined : deepLink}
+        size="large"
+        target="_blank"
+        type="primary"
+      >
         {t('messenger.linkModal.openCta', { platform: name })}
       </Button>
     </>

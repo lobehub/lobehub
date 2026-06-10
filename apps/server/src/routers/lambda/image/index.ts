@@ -1,17 +1,17 @@
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { loadModels } from '@lobechat/business-model-bank/model-config';
+import { isLobeHubModelAvailable } from '@lobechat/business-model-bank/model-config';
 import { resolveBusinessModelMapping } from '@lobechat/business-model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
-import { isProviderModelAvailable } from 'model-bank';
 import { z } from 'zod';
 
 import { chargeBeforeGenerate } from '@/business/server/image-generation/chargeBeforeGenerate';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
+import { UserModel } from '@/database/models/user';
 import { type NewGeneration, type NewGenerationBatch } from '@/database/schemas';
 import { asyncTasks, generationBatches, generations } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
@@ -80,7 +80,9 @@ export const imageRouter = router({
       // can't serve the requested id.
       if (
         provider === BRANDING_PROVIDER &&
-        !isProviderModelAvailable(await loadModels(), BRANDING_PROVIDER, resolvedModelId, 'image')
+        !(await isLobeHubModelAvailable(resolvedModelId, 'image', {
+          getUserEmail: async () => (await UserModel.findById(serverDB, userId))?.email,
+        }))
       ) {
         throw new TRPCError({
           cause: { data: { modelType: 'image', requestedModel: model } },

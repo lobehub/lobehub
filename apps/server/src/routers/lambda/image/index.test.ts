@@ -12,8 +12,9 @@ const {
   mockAsyncTaskModelUpdate,
   mockChargeBeforeGenerate,
   mockCreateAsyncCaller,
+  mockFindUserById,
   mockInsertValues,
-  mockLoadModels,
+  mockIsLobeHubModelAvailable,
   mockResolveBusinessModelMapping,
 } = vi.hoisted(() => ({
   mockServerDB: {
@@ -24,8 +25,9 @@ const {
   mockAsyncTaskModelUpdate: vi.fn(),
   mockChargeBeforeGenerate: vi.fn(),
   mockCreateAsyncCaller: vi.fn(),
+  mockFindUserById: vi.fn(),
   mockInsertValues: [] as unknown[],
-  mockLoadModels: vi.fn(),
+  mockIsLobeHubModelAvailable: vi.fn(),
   mockResolveBusinessModelMapping: vi.fn(),
 }));
 
@@ -54,6 +56,12 @@ vi.mock('@/database/models/asyncTask', () => ({
   })),
 }));
 
+vi.mock('@/database/models/user', () => ({
+  UserModel: {
+    findById: mockFindUserById,
+  },
+}));
+
 // Mock chargeBeforeGenerate
 vi.mock('@/business/server/image-generation/chargeBeforeGenerate', () => ({
   chargeBeforeGenerate: (params: any) => mockChargeBeforeGenerate(params),
@@ -66,7 +74,13 @@ vi.mock('@lobechat/business-model-runtime', async (importOriginal) => ({
 }));
 
 vi.mock('@lobechat/business-model-bank/model-config', () => ({
-  loadModels: mockLoadModels,
+  isLobeHubModelAvailable: (
+    ...args: [
+      string,
+      string,
+      { getUserEmail?: () => Promise<string | null | undefined>; userEmail?: string | null }?,
+    ]
+  ) => mockIsLobeHubModelAvailable(...args),
 }));
 
 // Mock async caller
@@ -127,15 +141,8 @@ describe('imageRouter', () => {
     mockChargeBeforeGenerate.mockResolvedValue(undefined);
     mockGetKeyFromFullUrl.mockResolvedValue(null);
     mockGetFullFileUrl.mockResolvedValue(null);
-    mockLoadModels.mockResolvedValue([
-      {
-        abilities: {},
-        enabled: true,
-        id: 'gpt-image-1',
-        providerId: 'lobehub',
-        type: 'image',
-      },
-    ]);
+    mockFindUserById.mockResolvedValue({ email: 'user@example.com' });
+    mockIsLobeHubModelAvailable.mockResolvedValue(true);
 
     // Setup default transaction mock
     const mockBatch = {
@@ -225,7 +232,34 @@ describe('imageRouter', () => {
 
       expect(result.success).toBe(true);
       expect(mockResolveBusinessModelMapping).toHaveBeenCalledWith('lobehub', 'onboarding-image');
+      expect(mockIsLobeHubModelAvailable).toHaveBeenCalledWith('gpt-image-1', 'image', {
+        getUserEmail: expect.any(Function),
+      });
+      const availabilityOptions = mockIsLobeHubModelAvailable.mock.calls.at(-1)?.[2];
+      expect(mockFindUserById).not.toHaveBeenCalled();
+      await expect(availabilityOptions!.getUserEmail!()).resolves.toBe('user@example.com');
+      expect(mockFindUserById).toHaveBeenCalledWith(mockServerDB, mockUserId);
       expect(mockCreateAsyncCaller).toHaveBeenCalledWith({ userId: mockUserId });
+    });
+
+    it('should reject unavailable lobehub image models before creating async tasks', async () => {
+      mockIsLobeHubModelAvailable.mockResolvedValue(false);
+
+      const ctx = createMockCtx();
+      const input = createDefaultInput({
+        model: 'restricted-image-model',
+        provider: 'lobehub',
+      });
+
+      const caller = imageRouter.createCaller(ctx);
+
+      await expect(caller.createImage(input)).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+        message: 'LobeHubModelDeprecated',
+      });
+
+      expect(mockServerDB.transaction).not.toHaveBeenCalled();
+      expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
     });
 
     it('should convert imageUrls to S3 keys for database storage', async () => {

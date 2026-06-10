@@ -10,6 +10,7 @@ export const useTabNavigation = () => {
   const location = useLocation();
 
   const activateTab = useElectronStore((s) => s.activateTab);
+  const addTab = useElectronStore((s) => s.addTab);
   const updateTab = useElectronStore((s) => s.updateTab);
   const updateTabCache = useElectronStore((s) => s.updateTabCache);
   const loadTabs = useElectronStore((s) => s.loadTabs);
@@ -41,8 +42,14 @@ export const useTabNavigation = () => {
       return;
     }
 
-    if (activeTabId) updateTab(activeTabId, currentUrl);
-  }, [location.pathname, location.search, activateTab, updateTab]);
+    if (activeTabId && tabs.some((t) => t.id === activeTabId)) {
+      updateTab(activeTabId, currentUrl);
+    } else {
+      // First launch (or stale activeTabId): make the current page visible as a tab,
+      // so the tab bar and its "+" entry are always discoverable.
+      addTab(currentUrl);
+    }
+  }, [location.pathname, location.search, activateTab, addTab, updateTab]);
 
   useEffect(() => {
     if (!currentRouteMeta || !currentRouteMetaUrl) return;

@@ -5,12 +5,13 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Undo2Icon } from 'lucide-react';
 import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useIsDark } from '@/hooks/useIsDark';
 import LobeMessage from '@/routes/onboarding/components/LobeMessage';
 import { useUserStore } from '@/store/user';
 import { isDev } from '@/utils/env';
+import { consumeOnboardingCallbackUrl } from '@/utils/onboardingRedirect';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   base: css`
@@ -77,7 +78,7 @@ interface ModeSelectionStepProps {
 
 const ModeSelectionStep = memo<ModeSelectionStepProps>(({ onBack, onNext }) => {
   const { t } = useTranslation('onboarding');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const isDarkMode = useIsDark();
 
   const imageStyles = useMemo<React.CSSProperties>(
@@ -99,7 +100,7 @@ const ModeSelectionStep = memo<ModeSelectionStepProps>(({ onBack, onNext }) => {
     finishOnboarding();
 
     if (!isDev) {
-      navigate('/');
+      navigate(consumeOnboardingCallbackUrl() || '/');
     }
   };
 

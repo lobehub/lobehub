@@ -6,7 +6,8 @@ import { createStaticStyles, cx } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   more: css`
@@ -59,18 +60,17 @@ const Title = memo<TitleProps>(
         );
       } else if (isCommunityRoute) {
         moreLinkElement = (
-          <RouterLink className={styles.more} to={moreLink}>
+          <WorkspaceLink className={styles.more} to={moreLink}>
             <span style={{ marginRight: 4 }}>{more}</span>
             <Icon icon={ChevronRight} />
-          </RouterLink>
+          </WorkspaceLink>
         );
       } else {
-        // For non-external, non-community routes (like auth pages), use RouterLink
         moreLinkElement = (
-          <RouterLink className={styles.more} to={moreLink}>
+          <WorkspaceLink className={styles.more} to={moreLink}>
             <span style={{ marginRight: 4 }}>{more}</span>
             <Icon icon={ChevronRight} />
-          </RouterLink>
+          </WorkspaceLink>
         );
       }
     }

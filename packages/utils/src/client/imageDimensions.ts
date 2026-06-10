@@ -1,11 +1,11 @@
 /**
  * Helper function to extract image dimensions from File objects or base64 data URIs
  * @param source The image source - either a File object or base64 data URI string
- * @returns Promise resolving to dimensions or undefined if not an image or error occurs
+ * @returns Promise resolving to dimensions (incl. aspect ratio) or undefined if not an image or error occurs
  */
 export const getImageDimensions = async (
   source: File | string,
-): Promise<{ height: number; width: number } | undefined> => {
+): Promise<{ height: number; ratio: number; width: number } | undefined> => {
   // Type guard and validation
   if (typeof source === 'string') {
     // Handle base64 data URI
@@ -20,9 +20,14 @@ export const getImageDimensions = async (
     let objectUrl: string | null = null;
 
     const handleLoad = () => {
+      const height = img.naturalHeight;
+      const width = img.naturalWidth;
       resolve({
-        height: img.naturalHeight,
-        width: img.naturalWidth,
+        height,
+        // intrinsic aspect ratio (width / height), rounded to avoid float noise;
+        // 0 when height is missing to avoid Infinity/NaN
+        ratio: height > 0 ? Math.round((width / height) * 10_000) / 10_000 : 0,
+        width,
       });
       // Clean up object URL if created
       if (objectUrl) {

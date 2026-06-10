@@ -56,7 +56,19 @@ const oidcConfigSchema = z.object({
   usePKCE: z.boolean().optional(),
 });
 
+/**
+ * Non-OAuth credentials the client may set directly when creating/updating a
+ * connector. OAuth2 tokens are intentionally excluded — those are written only
+ * by the OAuth callback after a successful authorization exchange.
+ */
+const connectorCredentialsInputSchema = z.discriminatedUnion('type', [
+  z.object({ token: z.string().min(1), type: z.literal('bearer') }),
+  z.object({ apiKey: z.string().min(1), type: z.literal('apikey') }),
+  z.object({ headers: z.record(z.string()), type: z.literal('header') }),
+]);
+
 const createConnectorSchema = z.object({
+  credentials: connectorCredentialsInputSchema.optional(),
   identifier: z.string().min(1).max(255),
   isEnabled: z.boolean().optional().default(true),
   mcpConnectionType: z
@@ -113,13 +125,36 @@ export const connectorRouter = router({
   // ── Mutations ─────────────────────────────────────────────────────────────
 
   create: connectorProcedure.input(createConnectorSchema).mutation(async ({ input, ctx }) => {
-    return ctx.connectorModel.create({
-      ...input,
+    const fields = {
+      // The model expects the decrypted JSON string and encrypts it at rest.
+      credentials: input.credentials ? JSON.stringify(input.credentials) : null,
       mcpConnectionType: input.mcpConnectionType ?? null,
       mcpServerUrl: input.mcpServerUrl ?? null,
       mcpStdioConfig: input.mcpStdioConfig ?? null,
       metadata: input.metadata ?? null,
+      name: input.name,
       oidcConfig: input.oidcConfig ?? null,
+    };
+
+    // Idempotent on (user_id, identifier): re-adding or re-authorizing the same
+    // connector updates the existing row instead of violating the unique index.
+    // Status resets to `disconnected` — the OAuth callback / tool sync promotes
+    // it back to `connected` on success.
+    const [existing] = await ctx.connectorModel.queryByIdentifiers([input.identifier]);
+    if (existing) {
+      await ctx.connectorModel.update(existing.id, {
+        ...fields,
+        isEnabled: input.isEnabled ?? true,
+        status: ConnectorStatus.disconnected,
+      });
+      return { id: existing.id };
+    }
+
+    return ctx.connectorModel.create({
+      ...fields,
+      identifier: input.identifier,
+      isEnabled: input.isEnabled ?? true,
+      sourceType: input.sourceType,
       status: ConnectorStatus.disconnected,
     });
   }),
@@ -221,11 +256,22 @@ export const connectorRouter = router({
     .input(
       z.object({
         id: z.string().uuid(),
-        patch: createConnectorSchema.partial().omit({ identifier: true, sourceType: true }),
+        patch: createConnectorSchema
+          .partial()
+          .omit({ identifier: true, sourceType: true })
+          // Allow `null` here so an edit can clear credentials (switch to no-auth).
+          .extend({ credentials: connectorCredentialsInputSchema.nullable().optional() }),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      await ctx.connectorModel.update(input.id, input.patch as any);
+      const { credentials, ...patch } = input.patch;
+      await ctx.connectorModel.update(input.id, {
+        ...patch,
+        // undefined → leave untouched; null → clear; object → encrypt the JSON string.
+        ...(credentials === undefined
+          ? {}
+          : { credentials: credentials ? JSON.stringify(credentials) : null }),
+      } as any);
     }),
 
   delete: connectorProcedure

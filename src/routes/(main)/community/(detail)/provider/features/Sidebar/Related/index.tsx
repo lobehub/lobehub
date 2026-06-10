@@ -1,8 +1,9 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import urlJoin from 'url-join';
+
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 import Title from '../../../../../features/Title';
 import { useDetailContext } from '../../DetailProvider';
@@ -21,9 +22,9 @@ const Related = memo(() => {
         {related?.map((item, index) => {
           const link = urlJoin('/community/provider', item.identifier);
           return (
-            <Link key={index} style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
+            <WorkspaceLink key={index} style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
               <Item {...item} />
-            </Link>
+            </WorkspaceLink>
           );
         })}
       </Flexbox>

@@ -8,8 +8,8 @@ import { createStaticStyles } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { agentService } from '@/services/agent';
 import { useEvalStore } from '@/store/eval';
 
@@ -72,7 +72,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
   const { t } = useTranslation('eval');
   const { t: tChat } = useTranslation('chat');
   const { close } = useModalContext();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const createRun = useEvalStore((s) => s.createRun);
   const startRun = useEvalStore((s) => s.startRun);
   const datasetList = useEvalStore((s) => s.datasetList);

@@ -6,7 +6,8 @@ import { ArrowLeft } from 'lucide-react';
 import { type CSSProperties } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {
@@ -24,12 +25,12 @@ const Back = memo<{ href: string; style?: CSSProperties }>(({ href, style }) => 
   const { t } = useTranslation('discover');
 
   return (
-    <Link className={styles.back} style={{ marginBottom: 8, ...style }} to={href}>
+    <WorkspaceLink className={styles.back} style={{ marginBottom: 8, ...style }} to={href}>
       <Flexbox horizontal align={'center'} gap={8}>
         <Icon icon={ArrowLeft} />
         {t(`back`)}
       </Flexbox>
-    </Link>
+    </WorkspaceLink>
   );
 });
 

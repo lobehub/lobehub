@@ -2,16 +2,16 @@ import { Avatar, Flexbox, Grid, Text } from '@lobehub/ui';
 import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { type DiscoverGroupAgentItem } from '@/types/discover';
 
 import Title from '../../../../../features/Title';
 import { useDetailContext } from '../../DetailProvider';
 
 const GroupAgentCard = memo<DiscoverGroupAgentItem>((item) => {
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   const handleClick = () => {
     if (!item.identifier) return;

@@ -5,11 +5,13 @@ import type * as lobechatTypesModule from '@lobechat/types';
 import type * as lobehubUiModule from '@lobehub/ui';
 import { render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ErrorMessageExtra from './index';
 
 const navigateMock = vi.fn();
+
+const serverConfigMock = vi.hoisted(() => ({ enableBusinessFeatures: false }));
 
 vi.mock('@lobechat/business-const', async (importOriginal) => {
   const actual = (await importOriginal()) as typeof businessConstModule;
@@ -105,7 +107,7 @@ vi.mock('@/libs/next/dynamic', () => ({
 
 vi.mock('@/store/serverConfig', () => ({
   serverConfigSelectors: {
-    enableBusinessFeatures: () => false,
+    enableBusinessFeatures: () => serverConfigMock.enableBusinessFeatures,
   },
   useServerConfigStore: (selector: (s: unknown) => unknown) => selector({}),
 }));
@@ -119,6 +121,50 @@ vi.mock('@/features/Conversation/store', () => ({
 }));
 
 describe('ErrorMessageExtra', () => {
+  beforeEach(() => {
+    serverConfigMock.enableBusinessFeatures = false;
+  });
+
+  it('keeps the localized message for known error types even when a traceId exists', () => {
+    serverConfigMock.enableBusinessFeatures = true;
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.LocationNotSupportError' }}
+        data={{
+          error: {
+            body: { traceId: 'trace-123' },
+            type: 'LocationNotSupportError',
+          } as any,
+          id: 'msg-known-trace',
+        }}
+      />,
+    );
+
+    // Not swallowed by the TraceIdError fallback (rendered via mocked dynamic)
+    expect(screen.queryByText('dynamic')).not.toBeInTheDocument();
+    expect(screen.getByText('response.LocationNotSupportError')).toBeInTheDocument();
+  });
+
+  it('shows the trace-id report UI for unknown traceable errors', () => {
+    serverConfigMock.enableBusinessFeatures = true;
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.SomeUnmappedError' }}
+        data={{
+          error: {
+            body: { traceId: 'trace-456' },
+            type: 'SomeUnmappedError',
+          } as any,
+          id: 'msg-unknown-trace',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('dynamic')).toBeInTheDocument();
+  });
+
   it('renders the auth guide when the refreshed error is missing type but still carries session code', () => {
     render(
       <ErrorMessageExtra

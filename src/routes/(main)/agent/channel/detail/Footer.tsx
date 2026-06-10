@@ -51,6 +51,7 @@ interface FooterProps {
   connecting: boolean;
   connectResult?: TestResult;
   currentConfig?: CurrentConfig;
+  disabled?: boolean;
   form: FormInstance<ChannelFormValues>;
   hasConfig: boolean;
   onCopied: () => void;
@@ -72,6 +73,7 @@ const Footer = memo<FooterProps>(
     hasConfig,
     connectResult,
     connecting,
+    disabled,
     saveResult,
     saving,
     testing,
@@ -127,7 +129,7 @@ const Footer = memo<FooterProps>(
           {hasConfig ? (
             <Button
               danger
-              disabled={saving || connecting}
+              disabled={disabled || saving || connecting}
               icon={<Trash2 size={16} />}
               type="primary"
               onClick={onDelete}
@@ -140,7 +142,7 @@ const Footer = memo<FooterProps>(
           <Flexbox horizontal gap={12}>
             {hasConfig && (
               <Button
-                disabled={saving || connecting}
+                disabled={disabled || saving || connecting}
                 icon={<RefreshCw size={16} />}
                 loading={testing}
                 onClick={onTestConnection}
@@ -149,6 +151,7 @@ const Footer = memo<FooterProps>(
               </Button>
             )}
             <Button
+              disabled={disabled}
               icon={<Save size={16} />}
               loading={saving || connecting}
               type="primary"

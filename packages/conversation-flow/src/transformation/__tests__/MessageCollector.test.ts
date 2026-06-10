@@ -97,6 +97,103 @@ describe('MessageCollector', () => {
       expect(result).toHaveLength(2);
       expect(result.map((m) => m.id)).toEqual(['msg-2', 'msg-3']);
     });
+
+    it('should prefer result_msg_id when tool call IDs repeat in the same topic', () => {
+      const messageMap = new Map<string, Message>();
+      const childrenMap = new Map<string | null, string[]>();
+      const collector = new MessageCollector(messageMap, childrenMap);
+
+      const assistant: Message = {
+        content: 'current turn',
+        createdAt: 0,
+        id: 'assistant-current',
+        role: 'assistant',
+        tools: [
+          {
+            apiName: 'command_execution',
+            arguments: '{}',
+            id: 'item_1',
+            identifier: 'codex',
+            result_msg_id: 'tool-current',
+            type: 'default',
+          },
+        ],
+        updatedAt: 0,
+      };
+
+      const messages: Message[] = [
+        {
+          content: 'older result with the same Codex item id',
+          createdAt: 0,
+          id: 'tool-old',
+          parentId: 'assistant-old',
+          role: 'tool',
+          tool_call_id: 'item_1',
+          updatedAt: 0,
+        },
+        {
+          content: 'current result',
+          createdAt: 0,
+          id: 'tool-current',
+          parentId: 'assistant-current',
+          role: 'tool',
+          tool_call_id: 'item_1',
+          updatedAt: 0,
+        },
+      ];
+
+      const result = collector.collectToolMessages(assistant, messages);
+
+      expect(result.map((m) => m.id)).toEqual(['tool-current']);
+    });
+
+    it('should fall back to parent-scoped tool_call_id matching for older tool payloads', () => {
+      const messageMap = new Map<string, Message>();
+      const childrenMap = new Map<string | null, string[]>();
+      const collector = new MessageCollector(messageMap, childrenMap);
+
+      const assistant: Message = {
+        content: 'current turn',
+        createdAt: 0,
+        id: 'assistant-current',
+        role: 'assistant',
+        tools: [
+          {
+            apiName: 'command_execution',
+            arguments: '{}',
+            id: 'item_1',
+            identifier: 'codex',
+            type: 'default',
+          },
+        ],
+        updatedAt: 0,
+      };
+
+      const messages: Message[] = [
+        {
+          content: 'older result with the same Codex item id',
+          createdAt: 0,
+          id: 'tool-old',
+          parentId: 'assistant-old',
+          role: 'tool',
+          tool_call_id: 'item_1',
+          updatedAt: 0,
+        },
+        {
+          content: 'current result',
+          createdAt: 0,
+          id: 'tool-current',
+          parentId: 'assistant-current',
+          role: 'tool',
+          tool_call_id: 'item_1',
+          updatedAt: 0,
+        },
+      ];
+
+      const result = collector.collectToolMessages(assistant, messages);
+
+      expect(result.map((m) => m.id)).toEqual(['tool-current']);
+    });
   });
 
   describe('findLastNodeInAssistantGroup', () => {

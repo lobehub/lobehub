@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
 import BackgroundSwatches from '@/features/AgentSetting/AgentMeta/BackgroundSwatches';
+import { usePermission } from '@/hooks/usePermission';
 import GroupAvatar from '@/routes/(main)/group/features/GroupAvatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
@@ -22,6 +23,7 @@ const MAX_AVATAR_SIZE = 1024 * 1024; // 1MB limit for server actions
 
 const GroupHeader = memo(() => {
   const { t } = useTranslation('agentGroup');
+  const { allowed: canEdit } = usePermission('edit_own_content');
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
   // Get group meta from agentGroup store
@@ -43,6 +45,8 @@ const GroupHeader = memo(() => {
   // Debounced save for title
   const { run: debouncedSaveTitle } = useDebounceFn(
     (value: string) => {
+      if (!canEdit) return;
+
       updateGroupMeta({ title: value });
     },
     { wait: EDITOR_DEBOUNCE_TIME },
@@ -50,12 +54,16 @@ const GroupHeader = memo(() => {
 
   // Handle avatar change (immediate save)
   const handleAvatarChange = (emoji: string) => {
+    if (!canEdit) return;
+
     updateGroupMeta({ avatar: emoji });
   };
 
   // Handle avatar upload
   const handleAvatarUpload = useCallback(
     async (file: File) => {
+      if (!canEdit) return;
+
       if (file.size > MAX_AVATAR_SIZE) {
         message.error(t('avatar.sizeExceeded'));
         return;
@@ -71,16 +79,20 @@ const GroupHeader = memo(() => {
         setUploading(false);
       }
     },
-    [uploadWithProgress, updateGroupMeta, t],
+    [canEdit, uploadWithProgress, updateGroupMeta, t],
   );
 
   // Handle avatar delete
   const handleAvatarDelete = useCallback(() => {
+    if (!canEdit) return;
+
     updateGroupMeta({ avatar: undefined });
-  }, [updateGroupMeta]);
+  }, [canEdit, updateGroupMeta]);
 
   // Handle background color change
   const handleBackgroundColorChange = (color?: string) => {
+    if (!canEdit) return;
+
     if (color !== undefined) {
       updateGroupMeta({ backgroundColor: color });
     }
@@ -100,10 +112,11 @@ const GroupHeader = memo(() => {
     >
       {/* Avatar Section */}
       <EmojiPicker
-        allowUpload
-        allowDelete={!!groupMeta.avatar}
+        allowDelete={canEdit && !!groupMeta.avatar}
+        allowUpload={canEdit}
         loading={uploading}
         locale={locale}
+        open={canEdit ? undefined : false}
         shape={'square'}
         size={72}
         value={groupMeta.avatar}
@@ -141,6 +154,7 @@ const GroupHeader = memo(() => {
                   }
                 >
                   <BackgroundSwatches
+                    disabled={!canEdit}
                     gap={8}
                     shape={'square'}
                     size={38}
@@ -163,6 +177,7 @@ const GroupHeader = memo(() => {
       {/* Title Section */}
       <Flexbox flex={1} style={{ minWidth: 0 }}>
         <Input
+          disabled={!canEdit}
           placeholder={t('name.placeholder')}
           value={localTitle}
           variant={'borderless'}
@@ -174,6 +189,8 @@ const GroupHeader = memo(() => {
           }}
           onChange={(e) => {
             setLocalTitle(e.target.value);
+            if (!canEdit) return;
+
             debouncedSaveTitle(e.target.value);
           }}
         />

@@ -8,8 +8,9 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useServerConfigStore } from '@/store/serverConfig';
 
 const COLLAPSED_STORAGE_KEY = 'LOBE_ONBOARDING_MODE_SWITCH_COLLAPSED';
@@ -66,7 +67,7 @@ interface ModeSwitchProps {
 const ModeSwitch = memo<ModeSwitchProps>(({ actions, className, showLabel = false, style }) => {
   const { t } = useTranslation('onboarding');
   const location = useLocation();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const enableAgentOnboarding = useServerConfigStore((s) => s.featureFlags.enableAgentOnboarding);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
 

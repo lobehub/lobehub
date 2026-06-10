@@ -32,20 +32,6 @@ export default defineFixtures({
         },
       },
     }),
-    callSubAgents: single({
-      pluginState: {
-        tasks: [
-          {
-            description: 'Audit builtin render coverage',
-            instruction: 'Find any registered render without a usable sample fixture.',
-          },
-          {
-            description: 'Check route gating',
-            instruction: 'Make sure production builds do not expose /devtools.',
-          },
-        ],
-      },
-    }),
     clearTodos: single({
       pluginState: {
         todos: {

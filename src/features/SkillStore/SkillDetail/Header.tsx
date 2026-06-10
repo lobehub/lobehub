@@ -1,6 +1,6 @@
 'use client';
 
-import { Avatar, Flexbox, Icon, Text, useModalContext } from '@lobehub/ui';
+import { Avatar, Flexbox, Icon, Text, Tooltip, useModalContext } from '@lobehub/ui';
 import { Button } from 'antd';
 import { cssVar } from 'antd-style';
 import { Loader2, Plus, SquareArrowOutUpRight } from 'lucide-react';
@@ -8,6 +8,7 @@ import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useSkillConnect } from '@/features/SkillStore/SkillList/LobeHub/useSkillConnect';
+import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { builtinToolSelectors } from '@/store/tool/selectors';
 
@@ -31,6 +32,8 @@ interface HeaderProps {
 const Header = memo<HeaderProps>(({ type }) => {
   const { t } = useTranslation(['setting']);
   const { close } = useModalContext();
+  const { allowed: canCreate, reason: createReason } = usePermission('create_content');
+  const { allowed: canEdit, reason: editReason } = usePermission('edit_own_content');
   const { identifier, serverName, icon, label, localizedDescription, isConnected } =
     useDetailContext();
 
@@ -53,6 +56,8 @@ const Header = memo<HeaderProps>(({ type }) => {
   ]);
 
   const handleBuiltinInstall = async () => {
+    if (!canCreate || !canEdit) return;
+
     await installBuiltinTool(identifier);
     close();
   };
@@ -66,6 +71,8 @@ const Header = memo<HeaderProps>(({ type }) => {
   }, [hookIsConnected, close, isBuiltin]);
 
   const handleConnectWithTracking = async () => {
+    if (!canCreate || !canEdit) return;
+
     hasTriggeredConnectRef.current = true;
     await handleConnect();
   };
@@ -93,9 +100,16 @@ const Header = memo<HeaderProps>(({ type }) => {
       if (isBuiltinInstalled) return null;
 
       return (
-        <Button icon={<Icon icon={Plus} />} type="primary" onClick={handleBuiltinInstall}>
-          {t('tools.builtins.install')}
-        </Button>
+        <Tooltip title={!canCreate ? createReason : editReason}>
+          <Button
+            disabled={!canCreate || !canEdit}
+            icon={<Icon icon={Plus} />}
+            type="primary"
+            onClick={handleBuiltinInstall}
+          >
+            {t('tools.builtins.install')}
+          </Button>
+        </Tooltip>
       );
     }
 
@@ -111,13 +125,16 @@ const Header = memo<HeaderProps>(({ type }) => {
     }
 
     return (
-      <Button
-        icon={<Icon icon={SquareArrowOutUpRight} />}
-        type="primary"
-        onClick={handleConnectWithTracking}
-      >
-        {t('tools.klavis.connect', { defaultValue: 'Connect' })}
-      </Button>
+      <Tooltip title={!canCreate ? createReason : editReason}>
+        <Button
+          disabled={!canCreate || !canEdit}
+          icon={<Icon icon={SquareArrowOutUpRight} />}
+          type="primary"
+          onClick={handleConnectWithTracking}
+        >
+          {t('tools.klavis.connect', { defaultValue: 'Connect' })}
+        </Button>
+      </Tooltip>
     );
   };
 

@@ -19,12 +19,15 @@ import { getMessageError } from './parseError';
 
 type SSEFinishType = 'done' | 'error' | 'abort' | string;
 
+const PLAN_UPGRADE_AFTER_FINISH_HEADER = 'x-lobe-plan-upgrade-after-finish';
+
 export type OnFinishHandler = (
   text: string,
   context: {
     grounding?: GroundingSearch;
     images?: ChatImageChunk[];
     observationId?: string | null;
+    planUpgradeAfterFinish?: boolean;
     reasoning?: ModelReasoning;
     speed?: ModelPerformance;
     toolCalls?: MessageToolCall[];
@@ -540,6 +543,7 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
 
       const traceId = response.headers.get(LOBE_CHAT_TRACE_ID);
       const observationId = response.headers.get(LOBE_CHAT_OBSERVATION_ID);
+      const planUpgradeAfterFinish = response.headers.get(PLAN_UPGRADE_AFTER_FINISH_HEADER) === '1';
 
       textController.flushQueue();
       thinkingController.flushQueue();
@@ -548,6 +552,7 @@ export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptio
         grounding,
         images: images.length > 0 ? images : undefined,
         observationId,
+        planUpgradeAfterFinish,
         reasoning: !!thinking ? { content: thinking, signature: thinkingSignature } : undefined,
         speed,
         toolCalls,

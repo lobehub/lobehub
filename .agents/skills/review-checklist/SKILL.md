@@ -22,6 +22,7 @@ user-invocable: false
 
 - Bug fixes must include tests covering the fixed scenario
 - New logic (services, store actions, utilities) should have test coverage
+- **New database Model/Repository** (`packages/database/src/models/**`, `src/repositories/**`) must ship a sibling `__tests__/<name>.test.ts` — incl. user-isolation tests; BM25 search guarded by `describe.skipIf(!isServerDB)` (see `/testing` → `db-model-test.md`)
 - Existing tests still cover the changed behavior?
 - Prefer `vi.spyOn` over `vi.mock` (see `/testing` skill)
 

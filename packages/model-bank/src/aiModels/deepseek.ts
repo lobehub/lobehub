@@ -13,6 +13,8 @@ const deepseekChatModels: AIChatModelCard[] = [
       'DeepSeek V4 Flash is DeepSeek’s fast 1M-context flagship model, supporting both non-thinking and thinking modes with strong agent capabilities.',
     displayName: 'DeepSeek V4 Flash',
     enabled: true,
+    family: 'deepseek',
+    generation: 'deepseek-v4',
     id: 'deepseek-v4-flash',
     maxOutput: 393_216,
     pricing: {
@@ -41,6 +43,8 @@ const deepseekChatModels: AIChatModelCard[] = [
       'DeepSeek V4 Pro is DeepSeek’s most capable 1M-context flagship model, supporting both non-thinking and thinking modes for advanced reasoning and tool use.',
     displayName: 'DeepSeek V4 Pro',
     enabled: true,
+    family: 'deepseek',
+    generation: 'deepseek-v4',
     id: 'deepseek-v4-pro',
     maxOutput: 393_216,
     pricing: {

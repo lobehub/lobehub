@@ -66,7 +66,13 @@ export const toolsClient = createTRPCClient<ToolsRouter>({
         // dynamic import to avoid circular dependency
         const { createHeaderWithAuth } = await import('@/services/_auth');
 
-        return createHeaderWithAuth();
+        const headers = await createHeaderWithAuth();
+
+        // Let business layer contribute extra headers (e.g. workspace context in Cloud).
+        const { getBusinessTrpcHeaders } = await import('@/business/client/trpc-headers');
+        Object.assign(headers as Record<string, string>, await getBusinessTrpcHeaders());
+
+        return headers;
       },
       maxURLLength: 2083,
       transformer: superjson,

@@ -4,6 +4,7 @@ import { ArrowDownUpIcon, ToggleLeft } from 'lucide-react';
 import { use, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
 
@@ -18,6 +19,7 @@ interface EnabledModelListProps {
 const EnabledModelList = ({ activeTab }: EnabledModelListProps) => {
   const { t } = useTranslation('modelProvider');
   const { modelEditable } = use(ProviderSettingsContext);
+  const { allowed: canManageProvider, reason } = usePermission('manage_provider_key');
 
   const enabledModels = useAiInfraStore(aiModelSelectors.enabledAiProviderModelList, isEqual);
   const batchToggleAiModels = useAiInfraStore((s) => s.batchToggleAiModels);
@@ -51,11 +53,15 @@ const EnabledModelList = ({ activeTab }: EnabledModelListProps) => {
             <Flexbox horizontal>
               {togglableModels.length > 0 && (
                 <ActionIcon
+                  disabled={!canManageProvider}
                   icon={ToggleLeft}
                   loading={batchLoading}
                   size={'small'}
-                  title={t('providerModels.list.enabledActions.disableAll')}
+                  title={
+                    canManageProvider ? t('providerModels.list.enabledActions.disableAll') : reason
+                  }
                   onClick={async () => {
+                    if (!canManageProvider) return;
                     setBatchLoading(true);
                     await batchToggleAiModels(
                       togglableModels.map((i) => i.id),
@@ -67,10 +73,12 @@ const EnabledModelList = ({ activeTab }: EnabledModelListProps) => {
               )}
 
               <ActionIcon
+                disabled={!canManageProvider}
                 icon={ArrowDownUpIcon}
                 size={'small'}
-                title={t('providerModels.list.enabledActions.sort')}
+                title={canManageProvider ? t('providerModels.list.enabledActions.sort') : reason}
                 onClick={() => {
+                  if (!canManageProvider) return;
                   setOpen(true);
                 }}
               />

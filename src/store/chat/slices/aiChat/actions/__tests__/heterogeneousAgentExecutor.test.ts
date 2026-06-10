@@ -2543,27 +2543,86 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ccResult(),
       ]);
 
-      // Streamed content landed on the FIRST in-thread assistant
-      // (`thread-ast-1`) across the failure+retry — NOT on the terminal
-      // assistant created by the resultContent branch.
+      // Ids are now caller-pre-allocated (the coordinator assigns them and the
+      // interpreter creates rows WITH that id), so we resolve the two relevant
+      // in-thread assistants by their create payloads rather than a literal id:
+      //   - the FIRST streaming-turn assistant (role assistant, empty content)
+      //   - the terminal assistant (role assistant, the resultContent)
+      const firstAssistantId = mockCreateMessage.mock.calls.find(
+        ([p]: any) =>
+          p.role === 'assistant' &&
+          p.content === '' &&
+          typeof p.threadId === 'string' &&
+          p.threadId.startsWith('thd_'),
+      )?.[0].id;
+      const terminalCreate = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'assistant' && p.content === 'terminal result',
+      );
+      expect(firstAssistantId).toBeDefined();
+      // Terminal assistant carrying the authoritative `resultContent` was still
+      // created as a fresh row (not overwritten by the retry), with its OWN id.
+      expect(terminalCreate).toBeDefined();
+      expect(terminalCreate![0].id).not.toBe(firstAssistantId);
+
       const streamedWrites = mockUpdateMessage.mock.calls.filter(
         ([, val]: any) => val.content === 'streamed text',
       );
       // At least the retry must have landed after the original failure.
       expect(streamedWrites.length).toBeGreaterThanOrEqual(2);
-      // Every attempt — including the retry — must target the streaming
-      // turn's assistant, so the terminal row's content never gets
-      // clobbered by the leftover buffer.
+      // Every attempt — including the retry — must target the FIRST streaming
+      // turn's assistant, NOT the terminal row, so the authoritative
+      // `resultContent` is never clobbered by the leftover streamed buffer.
       for (const [id] of streamedWrites) {
-        expect(id).toBe('thread-ast-1');
+        expect(id).toBe(firstAssistantId);
+      }
+    });
+
+    it('retries the lazy thread create on the next event when a create intent fails (commit-on-success)', async () => {
+      // A transient failure on createThread / createMessage must NOT advance
+      // the coordinator state: committing would make the run look alive while
+      // nothing landed, so later chunks could never recreate the thread and
+      // the streamed content would be orphaned. With commit-on-success the
+      // failed event is dropped and the NEXT subagent event re-runs the lazy
+      // create end-to-end with fresh ids.
+      mockCreateThread.mockRejectedValueOnce(new Error('transient IndexedDB failure'));
+
+      await runWithEvents([
+        ccInit(),
+        ccToolUse('msg_main', 'toolu_task', 'Task', {
+          description: 'x',
+          prompt: 'go',
+          subagent_type: 'Explore',
+        }),
+        // First subagent event: createThread throws → state must not commit.
+        ccSubagentText('msg_sub', 'toolu_task', 'lost '),
+        // Next subagent event retries the lazy create.
+        ccSubagentText('msg_sub', 'toolu_task', 'kept'),
+        ccSubagentSpawnResult('toolu_task', 'terminal result'),
+        ccResult(),
+      ]);
+
+      // Lazy create attempted twice — first failed, retry landed with a fresh id.
+      expect(mockCreateThread).toHaveBeenCalledTimes(2);
+      const retryThreadId = mockCreateThread.mock.calls[1][0].id;
+      expect(retryThreadId).not.toBe(mockCreateThread.mock.calls[0][0].id);
+
+      // Every in-thread row (seed user, turn assistant, terminal assistant)
+      // belongs to the retried thread — nothing was written against the
+      // thread whose create failed.
+      const threadCreates = mockCreateMessage.mock.calls.filter(
+        ([p]: any) => typeof p.threadId === 'string' && p.threadId.startsWith('thd_'),
+      );
+      expect(threadCreates.length).toBeGreaterThan(0);
+      for (const [p] of threadCreates) {
+        expect(p.threadId).toBe(retryThreadId);
       }
 
-      // Terminal assistant carrying the authoritative `resultContent`
-      // was still created as a fresh row (not overwritten by the retry).
-      const terminalCreate = mockCreateMessage.mock.calls.find(
+      // The run still finalized normally inside the retried thread.
+      const terminal = mockCreateMessage.mock.calls.find(
         ([p]: any) => p.role === 'assistant' && p.content === 'terminal result',
       );
-      expect(terminalCreate).toBeDefined();
+      expect(terminal).toBeDefined();
+      expect(terminal![0].threadId).toBe(retryThreadId);
     });
 
     it('creates a terminal in-thread assistant with the main tool_result content', async () => {

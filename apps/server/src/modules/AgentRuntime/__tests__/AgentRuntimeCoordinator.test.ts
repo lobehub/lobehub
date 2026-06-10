@@ -176,6 +176,19 @@ describe('AgentRuntimeCoordinator', () => {
       });
     });
 
+    it('should not publish end event when status changes to waiting_for_async_tool because the same stream will resume', async () => {
+      const operationId = 'test-operation-id';
+      const previousState = { status: 'running', stepCount: 3 };
+      const newState = { status: 'waiting_for_async_tool', stepCount: 4 };
+
+      mockStateManager.loadAgentState.mockResolvedValue(previousState);
+
+      await coordinator.saveAgentState(operationId, newState as any);
+
+      expect(mockStateManager.saveAgentState).toHaveBeenCalledWith(operationId, newState);
+      expect(mockStreamManager.publishAgentRuntimeEnd).not.toHaveBeenCalled();
+    });
+
     it('should not publish end event when status was already done', async () => {
       const operationId = 'test-operation-id';
       const previousState = { status: 'done', stepCount: 5 };
@@ -289,6 +302,22 @@ describe('AgentRuntimeCoordinator', () => {
         stepIndex: 4,
         uiMessages: undefined,
       });
+    });
+
+    it('should not publish end event when status becomes waiting_for_async_tool because deferred tools resume this operation', async () => {
+      const operationId = 'test-operation-id';
+      const stepResult = {
+        executionTime: 1000,
+        newState: { status: 'waiting_for_async_tool', stepCount: 4 },
+        stepIndex: 4,
+      };
+
+      mockStateManager.loadAgentState.mockResolvedValue({ status: 'running', stepCount: 3 });
+
+      await coordinator.saveStepResult(operationId, stepResult as any);
+
+      expect(mockStateManager.saveStepResult).toHaveBeenCalledWith(operationId, stepResult);
+      expect(mockStreamManager.publishAgentRuntimeEnd).not.toHaveBeenCalled();
     });
 
     it('should publish end event when status becomes interrupted', async () => {

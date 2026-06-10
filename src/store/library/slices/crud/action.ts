@@ -1,10 +1,11 @@
-import { type SWRResponse } from 'swr';
+import type { SWRResponse } from 'swr';
 
+import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { knowledgeBaseService } from '@/services/knowledgeBase';
-import { type KnowledgeBaseStore } from '@/store/library/store';
-import { type StoreSetter } from '@/store/types';
-import { type CreateKnowledgeBaseParams, type KnowledgeBaseItem } from '@/types/knowledgeBase';
+import type { KnowledgeBaseStore } from '@/store/library/store';
+import type { StoreSetter } from '@/store/types';
+import type { CreateKnowledgeBaseParams, KnowledgeBaseItem } from '@/types/knowledgeBase';
 
 const FETCH_KNOWLEDGE_BASE_LIST_KEY = 'FETCH_KNOWLEDGE_BASE';
 const FETCH_KNOWLEDGE_BASE_ITEM_KEY = 'FETCH_KNOWLEDGE_BASE_ITEM';
@@ -44,7 +45,10 @@ export class KnowledgeBaseCrudActionImpl {
   };
 
   refreshKnowledgeBaseList = async (): Promise<void> => {
-    await mutate(FETCH_KNOWLEDGE_BASE_LIST_KEY);
+    const workspaceId = getActiveWorkspaceId();
+    await mutate(
+      workspaceId ? [FETCH_KNOWLEDGE_BASE_LIST_KEY, workspaceId] : FETCH_KNOWLEDGE_BASE_LIST_KEY,
+    );
   };
 
   removeKnowledgeBase = async (id: string): Promise<void> => {
