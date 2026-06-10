@@ -296,7 +296,7 @@
     "@napi-rs/canvas": "^0.1.88",
     "@neondatabase/serverless": "^1.0.2",
     "@next/third-parties": "^16.1.5",
-    "@opentelemetry/auto-instrumentations-node": "^0.67.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.75.0",
     "@opentelemetry/exporter-jaeger": "^2.5.0",
     "@opentelemetry/resources": "^2.2.0",
     "@opentelemetry/sdk-metrics": "^2.2.0",
