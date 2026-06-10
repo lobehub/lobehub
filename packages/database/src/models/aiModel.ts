@@ -211,9 +211,21 @@ export class AiModelModel {
     return this.db
       .insert(aiModels)
       .values(records)
-      .onConflictDoNothing({
+      .onConflictDoUpdate({
+        set: {
+          abilities: sql`excluded.abilities`,
+          contextWindowTokens: sql`excluded.context_window_tokens`,
+          description: sql`excluded.description`,
+          displayName: sql`excluded.display_name`,
+          parameters: sql`excluded.parameters`,
+          pricing: sql`excluded.pricing`,
+          releasedAt: sql`excluded.released_at`,
+          source: sql`excluded.source`,
+          type: sql`excluded.type`,
+          updatedAt: sql`excluded.updated_at`,
+        },
         target: [aiModels.id, aiModels.userId, aiModels.providerId],
-        where: isNull(aiModels.workspaceId),
+        targetWhere: isNull(aiModels.workspaceId),
       })
       .returning();
   };

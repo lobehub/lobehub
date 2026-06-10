@@ -285,7 +285,7 @@ describe('AiModelModel', () => {
 
       const allModels = await aiProviderModel.query();
       expect(allModels).toHaveLength(2);
-      expect(allModels.find((m) => m.id === 'existing-model')?.displayName).toBe('Old Name');
+      expect(allModels.find((m) => m.id === 'existing-model')?.displayName).toBe('Updated Name');
       expect(allModels.find((m) => m.id === 'new-model')?.displayName).toBe('New Model');
     });
 
