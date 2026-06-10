@@ -26,7 +26,7 @@ export const MODEL_KNOWLEDGE_CUTOFFS: Record<string, string> = {
   'claude-opus-4-8': '2026-01',
   'claude-sonnet-4': '2025-01',
   'claude-sonnet-4-5': '2025-01',
-  'claude-sonnet-4-6': '2025-08',
+  'claude-sonnet-4-6': '2025-05',
 
   // ────────────── OpenAI — https://developers.openai.com/api/docs/models ──────────────
   'gpt-3.5-turbo': '2021-09',

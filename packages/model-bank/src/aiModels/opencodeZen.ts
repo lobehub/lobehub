@@ -215,7 +215,7 @@ const opencodeZenChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4.6',
     id: 'claude-sonnet-4-6',
-    knowledgeCutoff: '2025-08',
+    knowledgeCutoff: '2025-05',
     maxOutput: 32_000,
     organization: 'Anthropic',
     pricing: {

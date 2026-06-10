@@ -218,7 +218,7 @@ const githubCopilotChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4.6',
     id: 'claude-sonnet-4.6',
-    knowledgeCutoff: '2025-08',
+    knowledgeCutoff: '2025-05',
     releasedAt: '2026-02-17',
     settings: {
       extendParams: ['enableAdaptiveThinking', 'enableReasoning', 'reasoningBudgetToken', 'effort'],

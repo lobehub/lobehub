@@ -58,10 +58,10 @@ describe('normalizeModelIdForCutoff', () => {
 describe('getModelKnowledgeCutoff', () => {
   it('resolves cutoffs across provider-specific spellings of the same model', () => {
     // one model, four spellings, one answer
-    expect(getModelKnowledgeCutoff('claude-sonnet-4-6')).toBe('2025-08');
-    expect(getModelKnowledgeCutoff('claude-sonnet-4.6')).toBe('2025-08');
-    expect(getModelKnowledgeCutoff('global.anthropic.claude-sonnet-4-6')).toBe('2025-08');
-    expect(getModelKnowledgeCutoff('anthropic/claude-sonnet-4.6')).toBe('2025-08');
+    expect(getModelKnowledgeCutoff('claude-sonnet-4-6')).toBe('2025-05');
+    expect(getModelKnowledgeCutoff('claude-sonnet-4.6')).toBe('2025-05');
+    expect(getModelKnowledgeCutoff('global.anthropic.claude-sonnet-4-6')).toBe('2025-05');
+    expect(getModelKnowledgeCutoff('anthropic/claude-sonnet-4.6')).toBe('2025-05');
   });
 
   it('returns undefined for models without a documented cutoff', () => {

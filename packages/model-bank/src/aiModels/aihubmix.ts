@@ -1199,7 +1199,7 @@ const aihubmixChatModels: AIChatModelCard[] = [
     family: 'claude',
     generation: 'claude-4.6',
     id: 'claude-sonnet-4-6',
-    knowledgeCutoff: '2025-08',
+    knowledgeCutoff: '2025-05',
     maxOutput: 64_000,
     pricing: {
       units: [
