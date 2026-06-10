@@ -14,6 +14,7 @@ import WorkspaceControls from './WorkspaceControls';
 
 const styles = createStaticStyles(({ css }) => ({
   bar: css`
+    height: 28px;
     padding-block: 0;
     padding-inline: 4px;
   `,
