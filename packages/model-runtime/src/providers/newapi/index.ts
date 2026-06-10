@@ -158,8 +158,20 @@ export const params = {
 
     return processMultiProviderModelList([...enrichedModelList, ...additionalModels], 'newapi');
   },
-  routers: (options) => {
+  routers: (options, runtimeContext) => {
     const userBaseURL = options.baseURL?.replace(/\/v\d+[a-z]*\/?$/, '') || '';
+
+    // DeepSeek models need the deepseek runtime: it simulates structured output
+    // via tool calling, while the generic openai fallback sends response_format
+    // json_schema which DeepSeek upstreams reject. The requested model is also
+    // matched dynamically to cover gateway ids missing from the static list.
+    const deepseekModels = LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
+      (id) => detectModelProvider(id) === 'deepseek',
+    );
+    const requestedModel = runtimeContext?.model;
+    if (requestedModel && detectModelProvider(requestedModel) === 'deepseek') {
+      deepseekModels.push(requestedModel);
+    }
 
     return [
       {
@@ -190,6 +202,15 @@ export const params = {
         options: {
           ...options,
           baseURL: urlJoin(userBaseURL, '/v1'),
+        },
+      },
+      {
+        apiType: 'deepseek',
+        models: deepseekModels,
+        options: {
+          ...options,
+          baseURL: urlJoin(userBaseURL, '/v1'),
+          sdkType: 'openai',
         },
       },
       {

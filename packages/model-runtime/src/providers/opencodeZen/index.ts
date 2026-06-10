@@ -17,6 +17,20 @@ const gptModels = LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
   (id) => detectModelProvider(id) === 'openai',
 );
 
+// DeepSeek models need the deepseek runtime: it simulates structured output via
+// tool calling, while the generic openai fallback sends response_format
+// json_schema which DeepSeek upstreams reject. Gateways expose ids missing from
+// the static list (e.g. deepseek-v4-flash-free), so the requested model is also
+// matched dynamically in `routers`.
+const deepseekModels = LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
+  (id) => detectModelProvider(id) === 'deepseek',
+);
+
+const resolveDeepSeekRouteModels = (requestedModel?: string) =>
+  requestedModel && detectModelProvider(requestedModel) === 'deepseek'
+    ? [...deepseekModels, requestedModel]
+    : deepseekModels;
+
 // Anthropic SDK auto-appends /v1/messages to baseURL, so we need to strip trailing /v1
 const stripV1 = (url?: string) => url?.replace(/\/v1$/, '');
 
@@ -30,7 +44,7 @@ export const params = {
     const modelList = modelsPage.data || [];
     return processMultiProviderModelList(modelList, 'opencodezen');
   },
-  routers: (options) => {
+  routers: (options, runtimeContext) => {
     const baseURL = options.baseURL || ZEN_BASE_URL;
     return [
       // Anthropic router for Claude models
@@ -52,6 +66,16 @@ export const params = {
           chatCompletion: {
             useResponseModels: [...Array.from(responsesAPIModels), /gpt-\d(?!\d)/, /^o\d/],
           },
+        },
+      },
+      // DeepSeek models via the deepseek runtime (OpenAI-compatible endpoint)
+      {
+        apiType: 'deepseek',
+        models: resolveDeepSeekRouteModels(runtimeContext?.model),
+        options: {
+          ...options,
+          baseURL,
+          sdkType: 'openai',
         },
       },
       // OpenAI-compatible fallback for all other models (Gemini, GLM, Kimi, MiniMax, Qwen, etc.)

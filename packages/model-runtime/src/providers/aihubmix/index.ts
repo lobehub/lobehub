@@ -214,7 +214,13 @@ export const params: CreateRouterRuntimeOptions = {
     },
     {
       apiType: 'deepseek',
-      models: ['deepseek-chat', 'deepseek-reasoner'],
+      // Match the whole DeepSeek family (deepseek-v4*, deepseek-chat, ...), not
+      // just the two legacy ids — the deepseek runtime simulates structured
+      // output via tool calling, while the generic openai fallback sends
+      // response_format json_schema which DeepSeek upstreams reject.
+      models: LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
+        (id) => detectModelProvider(id) === 'deepseek',
+      ),
       options: { baseURL: urlJoin(baseURL, '/v1') },
     },
     {
