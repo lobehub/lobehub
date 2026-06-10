@@ -19,12 +19,6 @@ export const WEB_ONBOARDING: BuiltinAgentDefinition = {
       memory: {
         enabled: false,
       },
-      runtimeEnv: {
-        runtimeMode: {
-          desktop: 'none',
-          web: 'none',
-        },
-      },
       searchMode: 'off',
       skillActivateMode: 'manual',
     },

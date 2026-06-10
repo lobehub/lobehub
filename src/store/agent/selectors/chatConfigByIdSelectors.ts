@@ -66,20 +66,14 @@ const isLocalSystemEnabledById = (agentId: string) => (s: AgentStoreState) =>
 /**
  * Get the agent's runtime mode, derived from the unified
  * `agencyConfig.executionTarget` (sandbox → cloud, local → local, device →
- * none), falling back to the legacy per-platform `runtimeMode` for agents that
- * predate `executionTarget`.
+ * none).
  */
 const getRuntimeModeById =
   (agentId: string) =>
   (s: AgentStoreState): RuntimeEnvMode => {
     const config = agentSelectors.getAgentConfigById(agentId)(s);
-    const platform = isDesktop ? 'desktop' : 'web';
 
-    return resolveRuntimeMode(
-      config?.agencyConfig,
-      config?.chatConfig?.runtimeEnv?.runtimeMode?.[platform],
-      isDesktop,
-    );
+    return resolveRuntimeMode(config?.agencyConfig, isDesktop);
   };
 
 const getSkillActivateModeById =

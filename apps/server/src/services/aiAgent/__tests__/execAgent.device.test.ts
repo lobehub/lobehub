@@ -311,6 +311,63 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
     });
   });
 
+  describe('executionTarget gating (none / sandbox never route to a device)', () => {
+    const overrideAgencyConfig = async (agencyConfig: Record<string, unknown>) => {
+      const { AgentService } = await import('@/server/services/agent');
+      vi.mocked(AgentService).mockImplementation(
+        () =>
+          ({
+            getAgentConfig: vi.fn().mockResolvedValue({
+              agencyConfig,
+              chatConfig: {},
+              files: [],
+              id: 'agent-1',
+              knowledgeBases: [],
+              model: 'gpt-4',
+              plugins: [],
+              provider: 'openai',
+              systemRole: 'You are a helpful assistant',
+            }),
+          }) as any,
+      );
+      service = new AiAgentService(mockDb, userId);
+    };
+
+    it('should NOT auto-activate the single online device when executionTarget is none', async () => {
+      // regression: 无设备 used to be bypassed by single-device auto-activation
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+      await overrideAgencyConfig({ executionTarget: 'none' });
+
+      await service.execAgent({ agentId: 'agent-1', prompt: 'List my files' });
+
+      const createOpArgs = mockCreateOperation.mock.calls[0][0];
+      expect(createOpArgs.activeDeviceId).toBeUndefined();
+    });
+
+    it('should NOT activate a bound online device when executionTarget is none', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+      await overrideAgencyConfig({ boundDeviceId: 'device-001', executionTarget: 'none' });
+
+      await service.execAgent({ agentId: 'agent-1', prompt: 'List my files' });
+
+      const createOpArgs = mockCreateOperation.mock.calls[0][0];
+      expect(createOpArgs.activeDeviceId).toBeUndefined();
+    });
+
+    it('should NOT activate any device when executionTarget is sandbox', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+      await overrideAgencyConfig({ boundDeviceId: 'device-001', executionTarget: 'sandbox' });
+
+      await service.execAgent({ agentId: 'agent-1', prompt: 'List my files' });
+
+      const createOpArgs = mockCreateOperation.mock.calls[0][0];
+      expect(createOpArgs.activeDeviceId).toBeUndefined();
+    });
+  });
+
   describe('boundDeviceId scenario', () => {
     it('should use boundDeviceId when device is online', async () => {
       mockDeviceProxy.isConfigured = true;
