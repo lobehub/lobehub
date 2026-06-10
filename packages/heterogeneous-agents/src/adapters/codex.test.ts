@@ -654,6 +654,15 @@ describe('CodexAdapter', () => {
         }),
         expect.objectContaining({
           content: 'Wait completed: 2 + 2 = 4',
+          pluginState: expect.objectContaining({
+            agents_states: {
+              '019dba1f-171e-7ae0-8d0d-2c659c15a4f0': {
+                message: '2 + 2 = 4',
+                status: 'completed',
+              },
+            },
+            tool: 'wait',
+          }),
           toolCallId: 'item_4',
         }),
       ]),

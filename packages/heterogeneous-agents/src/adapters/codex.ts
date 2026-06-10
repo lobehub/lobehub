@@ -267,6 +267,15 @@ const synthesizeMcpToolPluginState = (item: CodexMcpToolCallItem) => ({
   tool: item.tool,
 });
 
+const synthesizeCollabToolPluginState = (item: CodexCollabToolCallItem) => ({
+  agents_states: item.agents_states,
+  prompt: item.prompt,
+  receiver_thread_ids: item.receiver_thread_ids,
+  sender_thread_id: item.sender_thread_id,
+  status: item.status,
+  tool: item.tool,
+});
+
 const pluralize = (count: number, singular: string, plural = `${singular}s`) =>
   count === 1 ? singular : plural;
 
@@ -433,7 +442,9 @@ const getToolResultData = (item: CodexToolItem): ToolResultData => {
         ? synthesizeFileChangePluginState(item)
         : isMcpToolCallItem(item)
           ? synthesizeMcpToolPluginState(item)
-          : undefined;
+          : isCollabToolCallItem(item)
+            ? synthesizeCollabToolPluginState(item)
+            : undefined;
 
   return {
     content: output,
