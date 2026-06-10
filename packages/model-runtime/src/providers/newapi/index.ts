@@ -27,17 +27,39 @@ export interface NewAPIPricing {
   supported_endpoint_types?: string[];
 }
 
+const isBrowser = () => typeof window !== 'undefined' && typeof document !== 'undefined';
+
 const fetchPricing = async (
   pricingUrl: string,
   apiKey: string,
 ): Promise<NewAPIPricing[] | null> => {
   try {
-    const res = await fetch(pricingUrl, {
-      headers: {
-        Accept: 'application/json; charset=utf-8',
-        Authorization: `Bearer ${apiKey}`,
-      },
-    });
+    let res: Response;
+    if (isBrowser()) {
+      res = await fetch('/webapi/models/newapi/pricing');
+    } else {
+      const fetchWithAuth = async (useAuth: boolean) => {
+        const headers: Record<string, string> = {
+          Accept: 'application/json; charset=utf-8',
+        };
+        if (useAuth && apiKey) {
+          headers.Authorization = `Bearer ${apiKey}`;
+        }
+        return fetch(pricingUrl, { headers });
+      };
+
+      let usedAuth = true;
+      try {
+        res = await fetchWithAuth(true);
+      } catch {
+        usedAuth = false;
+        res = await fetchWithAuth(false);
+      }
+
+      if (!res.ok && usedAuth) {
+        res = await fetchWithAuth(false);
+      }
+    }
 
     if (!res.ok) return null;
 
