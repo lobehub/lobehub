@@ -132,7 +132,7 @@ const AssistantItem = memo<DiscoverAssistantItem>(
               zIndex: 1,
             }}
           >
-            {t('groupAgents.tag', { defaultValue: '群组' })}
+            {t('groupAgents.tag', { defaultValue: 'Group' })}
           </Tag>
         )}
         <Flexbox

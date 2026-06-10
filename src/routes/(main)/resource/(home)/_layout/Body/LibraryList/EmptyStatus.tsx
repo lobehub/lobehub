@@ -50,7 +50,7 @@ const EmptyStatus = memo(() => {
       <LineIcon />
       <Flexbox horizontal align={'center'} className={styles.paragraph}>
         <Trans i18nKey={'library.list.empty'} ns={'file'}>
-          点击 <kbd>+</kbd> 开始创建资源库
+          Click <kbd>+</kbd> to create a new library
         </Trans>
       </Flexbox>
     </Flexbox>

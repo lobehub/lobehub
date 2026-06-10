@@ -76,7 +76,7 @@ const UserGroupList = memo<UserGroupListProps>(({ rows = 4, pageSize = 8 }) => {
       <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
         <Flexbox horizontal align={'center'} gap={8}>
           <Text fontSize={16} weight={500}>
-            {t('user.publishedGroups', { defaultValue: '创作的群组' })}
+            {t('user.publishedGroups', { defaultValue: 'Created Groups' })}
           </Text>
           {groupCount > 0 && <Tag>{filteredGroups.length}</Tag>}
         </Flexbox>

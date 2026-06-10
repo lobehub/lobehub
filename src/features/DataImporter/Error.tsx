@@ -40,7 +40,7 @@ const Error = memo<ErrorProps>(({ error, onClick }) => {
       subTitle={
         <Balancer>
           <Trans i18nKey="importModal.error.desc" ns={'common'}>
-            非常抱歉，数据库升级过程发生异常。请重试升级，或
+            Sorry, an error occurred during the data import process. Please try importing again, or
             <a
               aria-label={'issue'}
               href={GITHUB_ISSUES}
@@ -51,9 +51,9 @@ const Error = memo<ErrorProps>(({ error, onClick }) => {
                 githubService.submitImportError(error!);
               }}
             >
-              提交问题
+              submit a request
             </a>
-            我们将会第一时间帮你排查问题。
+            , and we will help you troubleshoot the issue as soon as possible.
           </Trans>
         </Balancer>
       }

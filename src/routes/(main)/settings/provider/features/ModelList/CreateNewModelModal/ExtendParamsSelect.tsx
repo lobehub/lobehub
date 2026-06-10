@@ -439,7 +439,8 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
         return (
           sanitized || (
             <Trans i18nKey={'extendParams.disableContextCaching.desc'} ns={'chat'}>
-              单条对话生成成本最高可降低 90%，响应速度提升 4 倍。开启后将自动禁用历史消息数限制
+              Reduce by up to 90% of the cost of generating a single conversation and bring a max
+              of 4x speed. Enabling this will automatically disable the message history limit.
             </Trans>
           )
         );
@@ -452,7 +453,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
         return (
           sanitized || (
             <Trans i18nKey={'extendParams.enableReasoning.desc'} ns={'chat'}>
-              开启后模型会先进行推理，适合复杂问题。
+              Let the model reason before answering. Use it for complex tasks.
             </Trans>
           )
         );

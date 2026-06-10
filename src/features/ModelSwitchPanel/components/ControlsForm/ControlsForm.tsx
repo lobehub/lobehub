@@ -115,15 +115,15 @@ const ControlsForm = memo<ControlsFormProps>(
         desc: (
           <span style={isNarrow ? descNarrow : descWide}>
             <Trans i18nKey={'extendParams.disableContextCaching.desc'} ns={'chat'}>
-              单条对话生成成本最高可降低 90%，响应速度提升 4 倍（
+              Reduce by up to 90% of the cost of generating a single conversation and bring a max
+              of 4x speed.{' '}
               <a
                 href={'https://www.anthropic.com/news/prompt-caching?utm_source=lobechat'}
                 rel="noreferrer nofollow"
                 target="_blank"
               >
-                了解更多
+                Learn more
               </a>
-              ）。开启后将自动禁用历史记录限制
             </Trans>
           </span>
         ),
@@ -137,7 +137,7 @@ const ControlsForm = memo<ControlsFormProps>(
         desc: (
           <span style={isNarrow ? descNarrow : descWide}>
             <Trans i18nKey={'extendParams.enableReasoning.desc'} ns={'chat'}>
-              开启后模型会先进行推理，适合复杂问题。
+              Let the model reason before answering. Use it for complex tasks.
             </Trans>
           </span>
         ),

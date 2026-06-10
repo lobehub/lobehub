@@ -139,7 +139,7 @@ const AgentPlugin = memo(() => {
         style={{ maxWidth: 400 }}
         description={
           <Trans i18nKey={'plugin.empty'} ns={'setting'}>
-            暂无安装插件，
+            No Skills installed yet. Explore the
             <Link
               to={'/community/mcp'}
               onClick={(e) => {
@@ -149,9 +149,9 @@ const AgentPlugin = memo(() => {
                 navigate('/community/mcp');
               }}
             >
-              前往插件市场
+              Skill Store
             </Link>
-            安装
+            to get started.
           </Trans>
         }
       />
