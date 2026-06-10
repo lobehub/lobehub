@@ -21,7 +21,7 @@ const SectionHeader = memo<SectionHeaderProps>(({ icon, title, actionLabel, acti
         <Text color={cssVar.colorTextSecondary}>{title}</Text>
       </Flexbox>
       {actionLabel && actionUrl && (
-        <Link to={actionUrl} style={{ color: 'inherit', textDecoration: 'none' }}>
+        <Link style={{ color: 'inherit', textDecoration: 'none' }} to={actionUrl}>
           <Text fontSize={12} type={'secondary'}>
             {actionLabel}
           </Text>

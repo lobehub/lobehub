@@ -17,9 +17,6 @@ const AuthRequiredState = ({
 
   return (
     <GuideShell
-      headerDescription={
-        <Text type="secondary">{t('cliAuthGuide.desc', { name: config.title })}</Text>
-      }
       icon={<config.icon size={24} />}
       title={t('cliAuthGuide.title', { name: config.title })}
       variant={variant}
@@ -31,6 +28,9 @@ const AuthRequiredState = ({
           openSystemToolsLabel={t('cliAuthGuide.actions.openSystemTools')}
           onOpenSystemTools={onOpenSystemTools}
         />
+      }
+      headerDescription={
+        <Text type="secondary">{t('cliAuthGuide.desc', { name: config.title })}</Text>
       }
     >
       <Flexbox gap={6}>

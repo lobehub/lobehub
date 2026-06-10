@@ -223,6 +223,7 @@ const DatasetsTab = memo<DatasetsTabProps>(
                     total={isExpanded ? total : 0}
                     onDeleteCase={handleDeleteCase}
                     onDiffFilterChange={handleDiffFilterChange}
+                    onEdit={(dataset) => createDatasetEditModal({ dataset, onSuccess: onRefresh })}
                     onExpand={() => handleExpand(ds.id)}
                     onImport={() => handleImportDataset(ds)}
                     onPageChange={(page, pageSize) => setPagination({ current: page, pageSize })}
@@ -235,7 +236,6 @@ const DatasetsTab = memo<DatasetsTabProps>(
                         onSuccess: handleRefreshTestCases,
                       })
                     }
-                    onEdit={(dataset) => createDatasetEditModal({ dataset, onSuccess: onRefresh })}
                   />
                 );
               })}
