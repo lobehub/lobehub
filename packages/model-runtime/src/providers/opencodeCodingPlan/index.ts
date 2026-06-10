@@ -437,7 +437,7 @@ export const params = {
       );
     }
   },
-  routers: async (options, runtimeContext) => {
+  routers: async (options, runtimeContext?: { model?: string }) => {
     const baseURL = options.baseURL || GO_BASE_URL;
 
     const anthropicModels = await getAnthropicModels();

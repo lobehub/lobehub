@@ -889,13 +889,15 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         await options?.onUsage?.(convertOpenAIUsage(res.usage, usagePayload));
       }
 
+      // Structural type keeps this compatible across openai SDK majors (v6
+      // widened tool_calls to a function/custom union).
       const toolCalls = res.choices[0].message.tool_calls as
-        | OpenAI.ChatCompletionMessageFunctionToolCall[]
+        | { function?: { arguments: string; name: string } }[]
         | undefined;
       const toolCall =
         toolCalls?.find((item) => item.function?.name === tool.function.name) ?? toolCalls?.[0];
 
-      if (!toolCall) {
+      if (!toolCall?.function) {
         log('no tool call found in structured output response');
         return undefined;
       }

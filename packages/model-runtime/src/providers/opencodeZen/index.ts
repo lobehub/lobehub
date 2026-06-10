@@ -44,7 +44,7 @@ export const params = {
     const modelList = modelsPage.data || [];
     return processMultiProviderModelList(modelList, 'opencodezen');
   },
-  routers: (options, runtimeContext) => {
+  routers: (options, runtimeContext?: { model?: string }) => {
     const baseURL = options.baseURL || ZEN_BASE_URL;
     return [
       // Anthropic router for Claude models
