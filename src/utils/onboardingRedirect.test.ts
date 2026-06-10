@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   buildOnboardingRedirectUrl,
+  clearStaleOnboardingCallbackUrl,
   consumeOnboardingCallbackUrl,
   isSafeRedirectPath,
   peekOnboardingCallbackUrl,
@@ -92,6 +93,46 @@ describe('stash/peek/consumeOnboardingCallbackUrl', () => {
   it('should not clobber an existing stash with internal navigations', () => {
     stashOnboardingCallbackUrl('?callbackUrl=%2Fdiscover');
     stashOnboardingCallbackUrl('?entry=skip');
+
+    expect(peekOnboardingCallbackUrl()).toBe('/discover');
+  });
+});
+
+describe('clearStaleOnboardingCallbackUrl', () => {
+  beforeEach(() => {
+    stashOnboardingCallbackUrl('?callbackUrl=%2Fdiscover');
+  });
+
+  it('should clear a stale stash on a fresh top-level entry without callbackUrl', () => {
+    clearStaleOnboardingCallbackUrl('/onboarding', '');
+
+    expect(peekOnboardingCallbackUrl()).toBeUndefined();
+  });
+
+  it('should clear when the supplied callbackUrl is unsafe', () => {
+    clearStaleOnboardingCallbackUrl(
+      '/onboarding',
+      `?callbackUrl=${encodeURIComponent('https://evil.com')}`,
+    );
+
+    expect(peekOnboardingCallbackUrl()).toBeUndefined();
+  });
+
+  it('should keep the stash when a valid callbackUrl is present', () => {
+    clearStaleOnboardingCallbackUrl('/onboarding', '?callbackUrl=%2Fsettings');
+
+    expect(peekOnboardingCallbackUrl()).toBe('/discover');
+  });
+
+  it('should keep the stash on shared-prefix re-entries carrying a step param', () => {
+    clearStaleOnboardingCallbackUrl('/onboarding', '?step=1');
+
+    expect(peekOnboardingCallbackUrl()).toBe('/discover');
+  });
+
+  it('should keep the stash on branch paths', () => {
+    clearStaleOnboardingCallbackUrl('/onboarding/agent', '');
+    clearStaleOnboardingCallbackUrl('/onboarding/classic', '?entry=skip');
 
     expect(peekOnboardingCallbackUrl()).toBe('/discover');
   });

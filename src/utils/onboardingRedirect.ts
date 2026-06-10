@@ -54,6 +54,26 @@ export const stashOnboardingCallbackUrl = (search: string): void => {
   }
 };
 
+/**
+ * Drop a stale stashed callback left by a previously abandoned onboarding
+ * attempt in this tab. Only a fresh top-level entry (`/onboarding` without a
+ * valid `callbackUrl`) may clear: internal navigations either stay on branch
+ * paths (`/onboarding/agent`, `/onboarding/classic`) or re-enter the shared
+ * prefix with an explicit `?step` param, and must keep the stash intact.
+ */
+export const clearStaleOnboardingCallbackUrl = (pathname: string, search: string): void => {
+  if (pathname !== ONBOARDING_PATH) return;
+  const params = new URLSearchParams(search);
+  if (params.has('step')) return;
+  const callbackUrl = params.get('callbackUrl');
+  if (callbackUrl && isSafeRedirectPath(callbackUrl)) return;
+  try {
+    sessionStorage.removeItem(CALLBACK_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+};
+
 export const peekOnboardingCallbackUrl = (): string | undefined => {
   try {
     const url = sessionStorage.getItem(CALLBACK_STORAGE_KEY);

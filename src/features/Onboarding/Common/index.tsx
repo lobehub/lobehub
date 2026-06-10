@@ -19,6 +19,7 @@ import {
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { onboardingSelectors } from '@/store/user/selectors';
+import { clearStaleOnboardingCallbackUrl } from '@/utils/onboardingRedirect';
 
 /**
  * Remap a `currentStep` persisted under the old 5-step classic flow
@@ -75,6 +76,15 @@ const CommonOnboardingPage = memo(() => {
     }
     remappedRef.current = true;
   }, [isUserStateInit]);
+
+  // This component only mounts on top-level entries to `/onboarding` (fresh
+  // signup landings and `?step` re-entries from the branch's back button), so
+  // mount is the one safe point to drop a stale callback stashed by a
+  // previously abandoned attempt — later search changes are internal step
+  // navigations that must keep the stash.
+  useEffect(() => {
+    clearStaleOnboardingCallbackUrl(window.location.pathname, window.location.search);
+  }, []);
 
   useEffect(() => {
     if (__TEST__) return;
