@@ -1710,7 +1710,7 @@ describe('AgentRuntimeService', () => {
     let resumeSpy: MockInstance<AgentRuntimeService['tryResumeParentFromAsyncTool']>;
 
     beforeEach(() => {
-      updateToolMessage = vi.fn().mockResolvedValue(undefined);
+      updateToolMessage = vi.fn().mockResolvedValue({ success: true });
       (service as any).messageModel.updateToolMessage = updateToolMessage;
       resumeSpy = vi.spyOn(service, 'tryResumeParentFromAsyncTool').mockResolvedValue(true);
     });
@@ -1768,16 +1768,25 @@ describe('AgentRuntimeService', () => {
       );
     });
 
-    it('still attempts the resume when the backfill fails', async () => {
+    it('throws when the backfill reports success: false so the webhook path redelivers', async () => {
+      // updateToolMessage swallows transaction errors into { success: false } —
+      // acking 200 here would strand the parent: the barrier stays unsatisfied
+      // and QStash never retries an acknowledged delivery.
+      updateToolMessage.mockResolvedValue({ success: false });
+
+      await expect(
+        service.completeSubAgentBridge({ ...bridgeParams, finalState: childState as any }),
+      ).rejects.toThrow(/failed to backfill/);
+      expect(resumeSpy).not.toHaveBeenCalled();
+    });
+
+    it('propagates backfill infrastructure errors for the same redelivery', async () => {
       updateToolMessage.mockRejectedValue(new Error('db down'));
 
-      const won = await service.completeSubAgentBridge({
-        ...bridgeParams,
-        finalState: childState as any,
-      });
-
-      expect(won).toBe(true);
-      expect(resumeSpy).toHaveBeenCalled();
+      await expect(
+        service.completeSubAgentBridge({ ...bridgeParams, finalState: childState as any }),
+      ).rejects.toThrow('db down');
+      expect(resumeSpy).not.toHaveBeenCalled();
     });
   });
 });

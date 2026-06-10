@@ -3226,6 +3226,10 @@ export class AiAgentService {
         // answer (`lastAssistantContent`) — and any tool-produced attachments
         // the shared lifecycle event extractor inlines — through QStash.
         eventFields: ['operationId', 'reason', 'status'],
+        // The endpoint sits behind QStash signature auth, so the unsigned
+        // fetch fallback could never authenticate — it would only mask a
+        // publish failure as a silently-dropped 401, stranding the parent.
+        fallback: 'none' as const,
         url: '/api/agent/webhooks/subagent-callback',
       },
     };

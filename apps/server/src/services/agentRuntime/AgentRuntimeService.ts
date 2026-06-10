@@ -1720,9 +1720,11 @@ export class AgentRuntimeService {
    *      `tryResumeParentFromAsyncTool`, arming the delayed verify when the
    *      parent isn't resumable yet.
    *
-   * The two halves are independently non-fatal: a backfill failure must not
-   * block the resume attempt (the barrier holds the parent until the message
-   * is fulfilled), and a resume failure must not lose the backfill.
+   * THROWS on infrastructure failure of either half (state load, backfill,
+   * resume) so the queue-mode callback returns non-2xx and QStash redelivers
+   * the whole bridge — the delayed verify alone cannot recover a failed
+   * backfill, it only re-reads the barrier. Redelivery is safe: the backfill
+   * rewrites the same content and the resume is CAS-guarded.
    *
    * Returns true when this call won the resume CAS.
    */
@@ -1730,18 +1732,9 @@ export class AgentRuntimeService {
     const { operationId, parentOperationId, reason, threadId, toolMessageId } = params;
     const failed = reason === 'error' || reason === 'interrupted';
 
-    let finalState = params.finalState;
-    if (!finalState) {
-      try {
-        finalState = (await this.coordinator.loadAgentState(operationId)) ?? undefined;
-      } catch (error) {
-        log(
-          '[%s] sub-agent bridge: failed to load child state (non-fatal): %O',
-          operationId,
-          error,
-        );
-      }
-    }
+    // Infra errors propagate; a null state (expired) degrades to a stub note.
+    const finalState =
+      params.finalState ?? (await this.coordinator.loadAgentState(operationId)) ?? undefined;
 
     log(
       '[%s] sub-agent bridge → parent %s (reason: %s, state: %s)',
@@ -1751,52 +1744,38 @@ export class AgentRuntimeService {
       finalState ? 'loaded' : 'missing',
     );
 
-    // 1. Backfill the placeholder tool message with the result
-    try {
-      const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
-      const lastAssistant = [...messages]
-        .reverse()
-        .find((m: { role?: string }) => m?.role === 'assistant');
-      const content = failed
-        ? `Sub-agent did not complete (${reason}).`
-        : (lastAssistant?.content as string | undefined) ||
-          'Sub-agent completed without a textual answer.';
+    // 1. Backfill the placeholder tool message with the result.
+    // `updateToolMessage` swallows transaction errors into `success: false`,
+    // so the flag must be checked — an unfulfilled message would hold the
+    // parent's barrier forever while the callback acked with 200.
+    const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
+    const lastAssistant = [...messages]
+      .reverse()
+      .find((m: { role?: string }) => m?.role === 'assistant');
+    const content = failed
+      ? `Sub-agent did not complete (${reason}).`
+      : (lastAssistant?.content as string | undefined) ||
+        'Sub-agent completed without a textual answer.';
 
-      await this.messageModel.updateToolMessage(toolMessageId, {
-        content,
-        pluginError: failed ? formatErrorForMetadata(finalState?.error) : undefined,
-        pluginState: {
-          model: finalState?.modelRuntimeConfig?.model,
-          status: failed ? 'error' : 'completed',
-          threadId,
-          totalToolCalls: finalState?.usage?.tools?.totalCalls,
-          totalTokens: finalState?.usage?.llm?.tokens?.total,
-        },
-      });
-    } catch (error) {
-      log(
-        '[%s] sub-agent bridge: failed to backfill tool message %s (non-fatal): %O',
-        operationId,
-        toolMessageId,
-        error,
+    const backfill = await this.messageModel.updateToolMessage(toolMessageId, {
+      content,
+      pluginError: failed ? formatErrorForMetadata(finalState?.error) : undefined,
+      pluginState: {
+        model: finalState?.modelRuntimeConfig?.model,
+        status: failed ? 'error' : 'completed',
+        threadId,
+        totalToolCalls: finalState?.usage?.tools?.totalCalls,
+        totalTokens: finalState?.usage?.llm?.tokens?.total,
+      },
+    });
+    if (!backfill.success) {
+      throw new Error(
+        `Sub-agent bridge: failed to backfill tool message ${toolMessageId} for parent ${parentOperationId}`,
       );
     }
 
-    // 2. Barrier + CAS + resume the parent op
-    try {
-      return await this.tryResumeParentFromAsyncTool(
-        { parentOperationId },
-        { scheduleVerifyOnHold: true },
-      );
-    } catch (error) {
-      log(
-        '[%s] sub-agent bridge: failed to resume parent %s (non-fatal): %O',
-        operationId,
-        parentOperationId,
-        error,
-      );
-      return false;
-    }
+    // 2. Barrier + CAS + resume the parent op (infra errors propagate too)
+    return this.tryResumeParentFromAsyncTool({ parentOperationId }, { scheduleVerifyOnHold: true });
   }
 
   /**
