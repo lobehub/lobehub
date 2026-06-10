@@ -1,7 +1,7 @@
 import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import { type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
-import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
+import { AgentRuntimeErrorType, getErrorCodeSpec } from '@lobechat/model-runtime';
 import { type ChatMessageError, type ErrorType, type IToolErrorType } from '@lobechat/types';
 import { ChatErrorType } from '@lobechat/types';
 import { type AlertProps } from '@lobehub/ui';
@@ -93,6 +93,28 @@ const HETEROGENEOUS_AGENT_STATUS_GUIDE_ERROR_CODES = new Set<string>([
   HeterogeneousAgentSessionErrorCode.Overloaded,
   HeterogeneousAgentSessionErrorCode.RateLimit,
 ]);
+
+// `UnknownChatFetchError` is excluded: its localized copy is a generic
+// "unknown error" message, so the trace-id report UI is strictly more useful.
+const LEGACY_LOCALIZED_ERROR_TYPES = new Set<string>(
+  Object.values(ChatErrorType)
+    .map(String)
+    .filter((type) => type !== ChatErrorType.UnknownChatFetchError),
+);
+
+/**
+ * Whether `getRuntimeErrorMessage` resolves a dedicated localized message for
+ * this error type — known runtime codes (spec table) plus legacy
+ * `error:response.<X>` entries (ChatErrorType members and HTTP status codes).
+ */
+const hasLocalizedErrorMessage = (
+  errorType?: IToolErrorType | ILobeAgentRuntimeErrorType | ErrorType,
+): boolean => {
+  if (errorType === undefined || errorType === null) return false;
+  if (typeof errorType === 'number') return true;
+  if (getErrorCodeSpec(String(errorType))) return true;
+  return LEGACY_LOCALIZED_ERROR_TYPES.has(String(errorType));
+};
 
 const isHeterogeneousAgentStatusGuideError = (
   value: unknown,
@@ -275,8 +297,13 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data, onRe
     return <ChatInvalidAPIKey id={data.id} provider={data.error?.body?.provider} />;
   }
 
-  // Show a report action for unknown traceable errors instead of the raw body
-  if (enableBusinessFeatures && typeof error?.body?.traceId === 'string') {
+  // Show a report action for unknown traceable errors instead of the raw body.
+  // Error types with a dedicated localized message keep the ErrorContent below.
+  if (
+    enableBusinessFeatures &&
+    !hasLocalizedErrorMessage(error?.type) &&
+    typeof error?.body?.traceId === 'string'
+  ) {
     return <TraceIdError id={data.id} traceId={error.body.traceId} />;
   }
 
