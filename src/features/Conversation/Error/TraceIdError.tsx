@@ -1,14 +1,15 @@
 import { SOCIAL_URL } from '@lobechat/business-const';
-import { Icon } from '@lobehub/ui';
+import { copyToClipboard, Icon } from '@lobehub/ui';
 import { DiscordIcon } from '@lobehub/ui/icons';
 import { Button, message } from 'antd';
 import { cssVar } from 'antd-style';
 import { AlertTriangle, Copy, RotateCw } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import BaseErrorForm from '@/features/Conversation/Error/BaseErrorForm';
-import { useConversationStore } from '@/features/Conversation/store';
+
+import { useRetryParentMessage } from './useRetryParentMessage';
 
 interface TraceIdErrorProps {
   id: string;
@@ -17,27 +18,11 @@ interface TraceIdErrorProps {
 
 const TraceIdError = memo<TraceIdErrorProps>(({ id, traceId }) => {
   const { t } = useTranslation('error');
-  const [loading, setLoading] = useState(false);
-
-  const regenerateUserMessage = useConversationStore((s) => s.regenerateUserMessage);
-  const parentId = useConversationStore(
-    (s) => s.displayMessages.find((m) => m.id === id)?.parentId,
-  );
-
-  const handleRetry = useCallback(async () => {
-    if (!parentId) return;
-
-    setLoading(true);
-    try {
-      await regenerateUserMessage(parentId);
-    } finally {
-      setLoading(false);
-    }
-  }, [parentId, regenerateUserMessage]);
+  const { disabled, loading, retryParentMessage } = useRetryParentMessage(id);
 
   const handleCopyTraceId = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(traceId);
+      await copyToClipboard(traceId);
       message.success(t('unknownError.copyTraceId'));
     } catch {
       /* noop */
@@ -50,11 +35,12 @@ const TraceIdError = memo<TraceIdErrorProps>(({ id, traceId }) => {
       title={t('unknownError.title')}
       action={
         <Button
+          disabled={disabled}
           icon={<Icon icon={RotateCw} />}
           loading={loading}
           size={'small'}
           type={'primary'}
-          onClick={handleRetry}
+          onClick={() => retryParentMessage()}
         >
           {t('unknownError.retry')}
         </Button>
@@ -77,9 +63,10 @@ const TraceIdError = memo<TraceIdErrorProps>(({ id, traceId }) => {
             <Icon icon={DiscordIcon} size={14} />
             Discord
           </a>
-          {' · Trace ID: '}
+          {' · '}
+          {t('unknownError.traceIdLabel')}{' '}
           <code
-            title="Click to copy"
+            title={t('unknownError.copyTraceIdTooltip')}
             style={{
               cursor: 'pointer',
               opacity: 0.65,

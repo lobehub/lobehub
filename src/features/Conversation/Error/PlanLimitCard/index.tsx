@@ -1,5 +1,5 @@
 import { BRANDING_URL } from '@lobechat/business-const';
-import { ChatErrorType } from '@lobechat/types';
+import { ChatErrorType, Plans } from '@lobechat/types';
 import { Button, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
@@ -12,6 +12,7 @@ import {
   getBudgetContextFromErrorBody,
   getNextUpgradePlan,
   isFableCampaignLimitContext,
+  isKnownPlan,
   type PlanLimitPricingBasis,
 } from './budget';
 
@@ -20,17 +21,12 @@ const CREDIT_UNIT = 1_000_000;
 
 /** Plans with a `plans.plan.<id>.title` locale key */
 const PLAN_TITLE_KEYS = {
-  free: 'plans.plan.free.title',
-  hobby: 'plans.plan.hobby.title',
-  premium: 'plans.plan.premium.title',
-  starter: 'plans.plan.starter.title',
-  ultimate: 'plans.plan.ultimate.title',
-} as const;
-
-type KnownPlan = keyof typeof PLAN_TITLE_KEYS;
-
-const isKnownPlan = (plan?: string): plan is KnownPlan =>
-  !!plan && Object.hasOwn(PLAN_TITLE_KEYS, plan);
+  [Plans.Free]: 'plans.plan.free.title',
+  [Plans.Hobby]: 'plans.plan.hobby.title',
+  [Plans.Premium]: 'plans.plan.premium.title',
+  [Plans.Starter]: 'plans.plan.starter.title',
+  [Plans.Ultimate]: 'plans.plan.ultimate.title',
+} as const satisfies Record<Plans, string>;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   budgetFact: css`
@@ -101,9 +97,9 @@ const PlanLimitCard = memo<PlanLimitCardProps>(({ errorBody, errorType, onRetry 
   const isFableCampaign = isFableCampaignLimitContext(context);
   const isInsufficientBudget = errorType === ChatErrorType.InsufficientBudgetForModel;
 
-  const planAtError: KnownPlan = isKnownPlan(context?.planAtError) ? context.planAtError : 'free';
+  const planAtError = isKnownPlan(context?.planAtError) ? context.planAtError : Plans.Free;
 
-  const getPlanTitle = (plan: KnownPlan) => t(PLAN_TITLE_KEYS[plan]);
+  const getPlanTitle = (plan: Plans) => t(PLAN_TITLE_KEYS[plan]);
 
   let title: string;
   let description: string;
@@ -111,7 +107,7 @@ const PlanLimitCard = memo<PlanLimitCardProps>(({ errorBody, errorType, onRetry 
 
   if (isFableCampaign) {
     // Hobby has no credit allowance to restore, so skip the plan recommendation
-    const targetPlan = context?.planAtError === 'hobby' ? undefined : 'starter';
+    const targetPlan = context?.planAtError === Plans.Hobby ? undefined : Plans.Starter;
 
     title = t('limitation.fableCampaign.title');
     description = t('limitation.fableCampaign.desc');

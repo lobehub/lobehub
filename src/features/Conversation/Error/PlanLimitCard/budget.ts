@@ -1,3 +1,4 @@
+import { Plans } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils';
 
 export type PlanLimitPricingBasis = 'approximate' | 'estimated' | 'exact' | 'unknown';
@@ -29,15 +30,15 @@ export const getBudgetContextFromErrorBody = (
 export const isFableCampaignLimitContext = (context?: PlanLimitBudgetContext): boolean =>
   context?.modelId === 'claude-fable-5' && context.providerId === 'lobehub';
 
-const PLAN_UPGRADE_PATH = {
-  free: 'starter',
-  premium: 'ultimate',
-  starter: 'premium',
-} as const;
+const PLAN_VALUES = new Set<string>(Object.values(Plans));
 
-export const getNextUpgradePlan = (
-  plan?: string,
-): (typeof PLAN_UPGRADE_PATH)[keyof typeof PLAN_UPGRADE_PATH] | undefined =>
-  plan && Object.hasOwn(PLAN_UPGRADE_PATH, plan)
-    ? PLAN_UPGRADE_PATH[plan as keyof typeof PLAN_UPGRADE_PATH]
-    : undefined;
+export const isKnownPlan = (plan?: string): plan is Plans => !!plan && PLAN_VALUES.has(plan);
+
+const PLAN_UPGRADE_PATH: Partial<Record<Plans, Plans>> = {
+  [Plans.Free]: Plans.Starter,
+  [Plans.Premium]: Plans.Ultimate,
+  [Plans.Starter]: Plans.Premium,
+};
+
+export const getNextUpgradePlan = (plan?: Plans): Plans | undefined =>
+  plan ? PLAN_UPGRADE_PATH[plan] : undefined;
