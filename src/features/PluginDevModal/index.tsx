@@ -68,20 +68,22 @@ const DevModal = memo<DevModalProps>(
       }
     };
 
-    const handlePrimaryClick = async () => {
-      // OAuth needs window.open within the user-gesture tick (browsers block it
-      // after an async boundary). Open a blank popup synchronously here, validate,
-      // then hand it to onSave which navigates it to the authorize URL.
-      if (enableOAuth && authType === 'oauth2') {
-        const popup = window.open('about:blank', 'lobe-connector-oauth', 'width=600,height=720');
-        try {
-          const values = (await form.validateFields()) as LobeToolCustomPlugin;
-          await doSave(values, { oauthPopup: popup });
-        } catch {
-          popup?.close();
-        }
-        return;
+    // OAuth needs window.open within the user-gesture tick (browsers block it
+    // after an async boundary). Open a blank popup synchronously here, validate,
+    // then hand it to onSave which navigates it to the authorize URL. Shared by
+    // the footer save button and the in-form "Authorize" button.
+    const runOAuthFlow = async () => {
+      const popup = window.open('about:blank', 'lobe-connector-oauth', 'width=600,height=720');
+      try {
+        const values = (await form.validateFields()) as LobeToolCustomPlugin;
+        await doSave(values, { oauthPopup: popup });
+      } catch {
+        popup?.close();
       }
+    };
+
+    const handlePrimaryClick = () => {
+      if (enableOAuth && authType === 'oauth2') return runOAuthFlow();
       form.submit();
     };
 
@@ -178,7 +180,12 @@ const DevModal = memo<DevModalProps>(
             }}
           >
             <Flexbox flex={3} gap={16} padding={24} style={{ overflowY: 'auto' }}>
-              <MCPManifestForm enableOAuth={enableOAuth} form={form} isEditMode={isEditMode} />
+              <MCPManifestForm
+                enableOAuth={enableOAuth}
+                form={form}
+                isEditMode={isEditMode}
+                onAuthorizeOAuth={runOAuthFlow}
+              />
             </Flexbox>
             <PluginPreview form={form} />
           </Flexbox>

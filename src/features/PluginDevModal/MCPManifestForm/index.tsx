@@ -27,6 +27,12 @@ interface MCPManifestFormProps {
   enableOAuth?: boolean;
   form: FormInstance;
   isEditMode?: boolean;
+  /**
+   * Run the connector OAuth authorize flow. Called instead of the token-less
+   * manifest test when the OAuth auth type is selected (testing an OAuth server
+   * without authorizing first only ever 401s).
+   */
+  onAuthorizeOAuth?: () => void;
 }
 
 const HTTP_URL_KEY = ['customParams', 'mcp', 'url'];
@@ -43,10 +49,18 @@ const AUTH_CLIENT_SECRET = ['customParams', 'mcp', 'auth', 'clientSecret'];
 // Headers-related constants
 const HEADERS = ['customParams', 'mcp', 'headers'];
 
-const MCPManifestForm = ({ form, isEditMode, enableOAuth }: MCPManifestFormProps) => {
+const MCPManifestForm = ({
+  form,
+  isEditMode,
+  enableOAuth,
+  onAuthorizeOAuth,
+}: MCPManifestFormProps) => {
   const { t } = useTranslation('plugin');
   const mcpType = Form.useWatch(MCP_TYPE, form);
   const authType = Form.useWatch(AUTH_TYPE, form);
+  // For OAuth servers there is no token to test with — "testing" the connection
+  // means running the authorize flow instead.
+  const isOAuth = enableOAuth && mcpType === 'http' && authType === 'oauth2';
 
   // The redirect URI the server will use at authorize time (APP_URL-based), shown
   // so the user registers a matching URI on their OAuth app. Fetched lazily once
@@ -348,9 +362,9 @@ const MCPManifestForm = ({ form, isEditMode, enableOAuth }: MCPManifestFormProps
               <Button
                 loading={isTesting}
                 type={!!mcpType ? 'primary' : undefined}
-                onClick={handleTestConnection}
+                onClick={isOAuth ? onAuthorizeOAuth : handleTestConnection}
               >
-                {t('dev.mcp.testConnection')}
+                {isOAuth ? t('dev.mcp.auth.oauth.authorize') : t('dev.mcp.testConnection')}
               </Button>
             </Flexbox>
           </FormItem>

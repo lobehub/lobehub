@@ -461,6 +461,7 @@ export default {
   'dev.mcp.auth.label': 'Auth type',
   'dev.mcp.auth.none': 'No auth',
   'dev.mcp.auth.oauth': 'OAuth',
+  'dev.mcp.auth.oauth.authorize': 'Authorize & Connect',
   'dev.mcp.auth.oauth.clientId.desc':
     'Leave empty to register a client automatically (dynamic client registration)',
   'dev.mcp.auth.oauth.clientId.label': 'OAuth Client ID',
