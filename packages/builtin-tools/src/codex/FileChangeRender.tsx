@@ -41,11 +41,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorWarning};
   `,
   lineAdded: css`
-    font-weight: 600;
     color: ${cssVar.colorSuccess};
   `,
   lineDeleted: css`
-    font-weight: 600;
     color: ${cssVar.colorError};
   `,
   lineStats: css`

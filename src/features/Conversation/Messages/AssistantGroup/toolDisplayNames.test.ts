@@ -20,7 +20,9 @@ describe('tool display names', () => {
   it('uses friendly labels for Codex tool api names', () => {
     expect(getToolDisplayName('command_execution')).toBe('Ran a command');
     expect(getToolDisplayName('file_change')).toBe('Edited a file');
+    expect(getToolDisplayName('mcp_tool_call')).toBe('Called MCP tool');
     expect(getToolDisplayName('todo_list')).toBe('Updated todos');
+    expect(getToolDisplayName('web_search')).toBe('Searched the web');
   });
 
   it('uses friendly Codex labels in workflow summaries', () => {
@@ -31,14 +33,20 @@ describe('tool display names', () => {
           { apiName: 'command_execution', id: 'tool-1', result: { content: 'ok' } } as any,
           { apiName: 'command_execution', id: 'tool-2', result: { content: 'ok' } } as any,
           { apiName: 'file_change', id: 'tool-3', result: { content: 'ok' } } as any,
+          { apiName: 'mcp_tool_call', id: 'tool-4', result: { content: 'ok' } } as any,
+          { apiName: 'web_search', id: 'tool-5', result: { content: 'ok' } } as any,
         ],
       }),
     ]);
 
     expect(summary).toContain('Ran a command (2)');
     expect(summary).toContain('Edited a file');
+    expect(summary).toContain('Called MCP tool');
+    expect(summary).toContain('Searched the web');
     expect(summary).not.toContain('Command_execution');
     expect(summary).not.toContain('File_change');
+    expect(summary).not.toContain('Mcp_tool_call');
+    expect(summary).not.toContain('Web_search');
   });
 });
 

@@ -10,20 +10,6 @@ import { useTranslation } from 'react-i18next';
 import { type CodexFileChangeArgs, type CodexFileChangeState, getFileChangeStats } from './utils';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  chip: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex-shrink: 1;
-    align-items: center;
-
-    min-width: 0;
-    margin-inline-start: 6px;
-    padding-block: 2px;
-    padding-inline: 10px;
-    border-radius: 999px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
   count: css`
     margin-inline-start: 4px;
     font-size: 12px;
@@ -32,14 +18,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   lineAdded: css`
     margin-inline-start: 6px;
     font-size: 12px;
-    font-weight: 600;
     color: ${cssVar.colorSuccess};
   `,
   lineDeleted: css`
     margin-inline-start: 4px;
     font-size: 12px;
-    font-weight: 600;
     color: ${cssVar.colorError};
+  `,
+  summary: css`
+    margin-inline-end: 6px;
   `,
 }));
 
@@ -71,11 +58,13 @@ const FileChangeInspector = memo<BuiltinInspectorProps<CodexFileChangeArgs, Code
           (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
         )}
       >
-        <span>{summary}</span>
-        {stats.firstPath && (
-          <span className={styles.chip}>
+        {stats.firstPath ? (
+          <>
+            <span className={styles.summary}>{summary}:</span>
             <FilePathDisplay filePath={stats.firstPath} />
-          </span>
+          </>
+        ) : (
+          <span>{summary}</span>
         )}
         {stats.total > 1 && <span className={styles.count}>+{stats.total - 1}</span>}
         {hasLineStats && (
