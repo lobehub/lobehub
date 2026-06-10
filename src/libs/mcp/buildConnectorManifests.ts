@@ -85,8 +85,6 @@ export function buildConnectorManifests(
 }
 
 function buildMcpParams(connector: DecryptedConnector) {
-  const auth = buildAuthFromCredentials(connector);
-
   if (connector.mcpConnectionType === 'stdio') {
     return {
       args: connector.mcpStdioConfig?.args ?? [],
@@ -97,27 +95,40 @@ function buildMcpParams(connector: DecryptedConnector) {
     };
   }
 
+  const { auth, headers } = buildHttpAuthFromCredentials(connector.credentials);
+
   return {
     auth,
+    headers,
     name: connector.identifier,
     type: 'http' as const,
     url: connector.mcpServerUrl ?? '',
   };
 }
 
-function buildAuthFromCredentials(connector: DecryptedConnector) {
-  const creds = connector.credentials;
-  if (!creds) return undefined;
+/**
+ * Map stored credentials into the HTTP MCP client's auth + custom headers.
+ * bearer/apikey become bearer auth (Authorization: Bearer …); header is passed
+ * through verbatim. OAuth2 only needs the access token at request time.
+ */
+function buildHttpAuthFromCredentials(creds: DecryptedConnector['credentials']) {
+  if (!creds) return {};
 
   switch (creds.type) {
     case 'oauth2': {
-      return { accessToken: creds.accessToken, type: 'oauth2' as const };
+      return { auth: { accessToken: creds.accessToken, type: 'oauth2' as const } };
     }
     case 'bearer': {
-      return { token: creds.token, type: 'bearer' as const };
+      return { auth: { token: creds.token, type: 'bearer' as const } };
+    }
+    case 'apikey': {
+      return { auth: { token: creds.apiKey, type: 'bearer' as const } };
+    }
+    case 'header': {
+      return { headers: creds.headers };
     }
     default: {
-      return undefined;
+      return {};
     }
   }
 }
