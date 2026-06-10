@@ -34,25 +34,33 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     margin-inline: -2px;
     padding-inline: 2px;
-    border-radius: ${cssVar.borderRadiusSM}px;
+    border-radius: ${cssVar.borderRadiusSM};
 
     text-decoration: none;
     vertical-align: -0.16em;
 
     transition:
       color 0.2s ${cssVar.motionEaseOut},
-      background 0.2s ${cssVar.motionEaseOut};
+      background 0.2s ${cssVar.motionEaseOut},
+      box-shadow 0.2s ${cssVar.motionEaseOut};
 
     &:hover {
       color: ${cssVar.colorLinkHover};
       text-decoration: underline;
       text-underline-offset: 2px;
-      background: ${cssVar.colorFillTertiary};
+
+      background: ${cssVar.colorFillSecondary};
+      box-shadow: inset 0 0 0 1px ${cssVar.colorPrimaryBorder};
     }
 
     &:active {
       color: ${cssVar.colorLinkActive};
-      background: ${cssVar.colorFillSecondary};
+      background: ${cssVar.colorFill};
+    }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: 2px;
     }
   `,
 }));
