@@ -9,6 +9,7 @@ import { useBusinessSignup } from '@/business/client/hooks/useBusinessSignup';
 import { message } from '@/components/AntdStaticMethods';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { signUp } from '@/libs/better-auth/auth-client';
+import { buildOnboardingRedirectUrl } from '@/utils/onboardingRedirect';
 
 import { useAuthServerConfigStore } from '../../_layout/AuthServerConfigProvider';
 import type { AuthFetchOptions } from '../../utils/authFetchOptions';
@@ -49,12 +50,15 @@ export const useSignUp = () => {
       }
 
       const callbackUrl = searchParams.get('callbackUrl') || '/';
+      // New users always go through onboarding first; the original target is
+      // threaded via the `callbackUrl` query param and restored on finish.
+      const redirectUrl = buildOnboardingRedirectUrl(callbackUrl);
       const username = values.email.split('@')[0];
       const fetchOptions = await getFetchOptions();
 
       const submit = async (nextFetchOptions?: AuthFetchOptions) =>
         signUp.email({
-          callbackURL: callbackUrl,
+          callbackURL: redirectUrl,
           email: values.email,
           fetchOptions: nextFetchOptions,
           name: username,
@@ -96,10 +100,10 @@ export const useSignUp = () => {
 
       if (enableEmailVerification) {
         router.push(
-          `/verify-email?email=${encodeURIComponent(values.email)}&callbackUrl=${encodeURIComponent(callbackUrl)}`,
+          `/verify-email?email=${encodeURIComponent(values.email)}&callbackUrl=${encodeURIComponent(redirectUrl)}`,
         );
       } else {
-        router.push(callbackUrl);
+        router.push(redirectUrl);
       }
     } catch {
       message.error(t('betterAuth.signup.error'));

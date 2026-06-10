@@ -27,6 +27,37 @@ type Setter = StoreSetter<FileStore>;
 export const createFileSlice = (set: Setter, get: () => FileStore, _api?: unknown) =>
   new FileActionImpl(set, get, _api);
 
+const getTrpcErrorCode = (error: unknown): string | undefined => {
+  if (typeof error !== 'object' || error === null || !('data' in error)) return;
+
+  const data = (error as { data?: { code?: unknown } }).data;
+  return typeof data?.code === 'string' ? data.code : undefined;
+};
+
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string') return message;
+  }
+
+  return String(error);
+};
+
+const getUploadErrorDescription = (error: unknown): string => {
+  if (error === UPLOAD_NETWORK_ERROR) return t('upload.networkError', { ns: 'error' });
+
+  if (getTrpcErrorCode(error) === 'FORBIDDEN') {
+    return t('upload.permissionDenied', { ns: 'error' });
+  }
+
+  return typeof error === 'string'
+    ? error
+    : t('upload.unknownError', { ns: 'error', reason: getErrorMessage(error) });
+};
+
 export class FileActionImpl {
   readonly #get: () => FileStore;
   readonly #set: Setter;
@@ -165,16 +196,9 @@ export class FileActionImpl {
         });
       } catch (error) {
         // skip `UNAUTHORIZED` error
-        if ((error as any)?.message !== 'UNAUTHORIZED')
+        if (getErrorMessage(error) !== 'UNAUTHORIZED')
           notification.error({
-            description:
-              // it may be a network error or the cors error
-              error === UPLOAD_NETWORK_ERROR
-                ? t('upload.networkError', { ns: 'error' })
-                : // or the error from the server
-                  typeof error === 'string'
-                  ? error
-                  : t('upload.unknownError', { ns: 'error', reason: (error as Error).message }),
+            description: getUploadErrorDescription(error),
             message: t('upload.uploadFailed', { ns: 'error' }),
           });
 

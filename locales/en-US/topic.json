@@ -60,6 +60,8 @@
   "inPopup.description": "This topic is currently open in a separate window. Continue the conversation there to keep messages in sync.",
   "inPopup.focus": "Focus Popup Window",
   "inPopup.title": "Open in Popup Window",
+  "info.title": "Topic Info",
+  "info.updatedAt": "Updated at {{time}}",
   "loadMore": "Load More",
   "management.actions.newChat": "New chat",
   "management.actions.select": "Select",

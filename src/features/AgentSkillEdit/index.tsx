@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import ContentViewer from '@/features/AgentSkillDetail/ContentViewer';
 import FileTree from '@/features/FileTree';
+import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 
 import SkillEditForm, { type SkillEditFormValues } from './SkillEditForm';
@@ -60,6 +61,7 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
   const { t: tp } = useTranslation('plugin');
   const { t: tc } = useTranslation('common');
   const { message } = App.useApp();
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const [selectedFile, setSelectedFile] = useState('SKILL.md');
   const [saving, setSaving] = useState(false);
@@ -84,6 +86,7 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
   );
 
   const handleSubmit = async (values: SkillEditFormValues) => {
+    if (!canEdit) return;
     setSaving(true);
     try {
       await updateAgentSkill({
@@ -99,6 +102,7 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
   };
 
   const handleDelete = async () => {
+    if (!canEdit) return;
     await deleteAgentSkill(skillId);
     message.success(tp('dev.deleteSuccess'));
     onClose();
@@ -114,15 +118,19 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
         title={tp('dev.confirmDeleteDevPlugin')}
         okButtonProps={{
           danger: true,
+          disabled: !canEdit,
           type: 'primary',
         }}
         onConfirm={handleDelete}
       >
-        <Button danger>{tc('delete')}</Button>
+        <Button danger disabled={!canEdit}>
+          {tc('delete')}
+        </Button>
       </Popconfirm>
       <Flexbox horizontal gap={12}>
         <Button onClick={onClose}>{tc('cancel')}</Button>
         <Button
+          disabled={!canEdit}
           loading={saving}
           type={'primary'}
           onClick={() => {
@@ -181,6 +189,7 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
               }}
             >
               <SkillEditForm
+                disabled={!canEdit}
                 form={form}
                 initialValues={initialValues}
                 name={skillDetail?.name}

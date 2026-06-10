@@ -40,6 +40,7 @@
   "agentMarketplace.render.alreadyInLibraryTag": "이미 라이브러리에 있음",
   "agentMarketplace.render.alreadyInLibrary_one": "{{count}}개가 이미 라이브러리에 있음",
   "agentMarketplace.render.alreadyInLibrary_other": "{{count}}개가 이미 라이브러리에 있음",
+  "claudeCode.askUserQuestion.customOption.placeholder": "또는 직접 작성하세요…",
   "claudeCode.askUserQuestion.escape.back": "옵션으로 돌아가기",
   "claudeCode.askUserQuestion.escape.enter": "직접 입력하세요",
   "claudeCode.askUserQuestion.escape.placeholder": "여기에 답변을 입력하세요…",

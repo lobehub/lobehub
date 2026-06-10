@@ -14,6 +14,7 @@ import { useParams } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { usePathname } from '@/libs/router/navigation';
 import { useActionSWR } from '@/libs/swr';
@@ -35,6 +36,7 @@ const Nav = memo(() => {
   // pathname.includes('/topics') — anchor to end to avoid that false positive.
   const isTopicsActive = pathname.endsWith('/topics');
   const router = useQueryRoute();
+  const { allowed: canCreateTopic } = usePermission('create_content');
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
   const heterogeneousProviderType = useAgentStore(
@@ -49,6 +51,7 @@ const Nav = memo(() => {
 
   const { mutate } = useActionSWR('openNewTopicOrSaveTopic', openNewTopicOrSaveTopic);
   const handleNewTopic = () => {
+    if (!canCreateTopic) return;
     // Always navigate to the bare agent chat URL — drops any sub-route
     // (/profile, /channel, /page, /cron/:cronId, …) and any `:topicId`
     // segment so the new topic isn't conflated with the previous URL.
@@ -61,6 +64,7 @@ const Nav = memo(() => {
   return (
     <Flexbox gap={1} paddingInline={4}>
       <NavItem
+        disabled={!canCreateTopic}
         icon={MessageSquarePlusIcon}
         title={tTopic('actions.addNewTopic')}
         onClick={handleNewTopic}

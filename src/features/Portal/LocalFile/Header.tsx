@@ -4,10 +4,11 @@ import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
 import { ActionIcon } from '@lobehub/ui';
 import { ArrowLeft, X } from 'lucide-react';
 import { Fragment, memo } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 
 import { SESSION_CHAT_TOPIC_PAGE_URL, SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import NavHeader from '@/features/NavHeader';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
@@ -15,7 +16,7 @@ import TabStrip from './TabStrip';
 
 const Header = memo(() => {
   const location = useLocation();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const params = useParams<{ aid?: string; topicId?: string }>();
   const [canGoBack, goBack, clearPortalStack] = useChatStore((s) => [
     chatPortalSelectors.canGoBack(s),

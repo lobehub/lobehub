@@ -6,6 +6,7 @@ import { Plus } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useSessionStore } from '@/store/session';
 import { sessionGroupSelectors } from '@/store/session/selectors';
 import { type SessionGroupItem } from '@/types/session';
@@ -27,6 +28,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
   const { t } = useTranslation('chat');
+  const { allowed: canCreate, reason: createReason } = usePermission('create_content');
+  const { allowed: canEdit } = usePermission('edit_own_content');
   const sessionGroupItems = useSessionStore(sessionGroupSelectors.sessionGroupItems, isEqual);
   const [addSessionGroup, updateSessionGroupSort] = useSessionStore((s) => [
     s.addSessionGroup,
@@ -55,18 +58,22 @@ const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
               id={item.id}
               justify={'space-between'}
             >
-              <GroupItem {...item} />
+              <GroupItem {...item} disabled={!canEdit} />
             </SortableList.Item>
           )}
           onChange={(items: SessionGroupItem[]) => {
+            if (!canEdit) return;
             updateSessionGroupSort(items);
           }}
         />
         <Button
           block
+          disabled={!canCreate}
           icon={Plus}
           loading={loading}
+          title={createReason}
           onClick={async () => {
+            if (!canCreate) return;
             setLoading(true);
             await addSessionGroup(t('sessionGroup.newGroup'));
             setLoading(false);

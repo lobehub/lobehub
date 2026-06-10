@@ -1,20 +1,30 @@
 'use client';
 
 import { Block, Button, Flexbox, Icon, Skeleton, Tag, Text } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { confirmModal, Select } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ArrowLeftIcon, CheckCircle2Icon, Trash2Icon, UserIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { memo } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import { usePermission } from '@/hooks/usePermission';
 import { messengerService } from '@/services/messenger';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import AgentSelect from '../AgentSelect';
 import { type MessengerPlatform, PlatformAvatar } from '../constants';
 import { getMessengerErrorMessage, type MessengerTranslationKey } from '../i18n';
+import {
+  buildMessengerScopeOptions,
+  messengerScopeSelectClassNames,
+  PERSONAL_SCOPE,
+  resolvePersonalScopeLabel,
+} from '../scopeOptions';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   backButton: css`
@@ -214,6 +224,8 @@ interface UserLinkLike {
   activeAgentId: string | null;
   platformUserId: string;
   platformUsername: string | null;
+  /** Active scope of this link: a workspace id, or null for personal. */
+  workspaceId: string | null;
 }
 
 export const formatUserHandle = (link: UserLinkLike): string =>
@@ -222,15 +234,88 @@ export const formatUserHandle = (link: UserLinkLike): string =>
 interface UserAgentConnectionProps {
   extraLabel?: string;
   link: UserLinkLike;
-  onSetActive: (agentId: string | null) => void;
+  onSetActive: (agentId: string | null) => Promise<boolean>;
   onUnlink: () => void;
 }
 
 export const UserAgentConnection = memo<UserAgentConnectionProps>(
   ({ extraLabel, link, onSetActive, onUnlink }) => {
     const { t } = useTranslation('messenger');
+    const { allowed: canEdit } = usePermission('edit_own_content');
+    const enableWorkspaceScopes = useServerConfigStore(
+      (s) =>
+        serverConfigSelectors.enableBusinessFeatures(s) && s.featureFlags.enableWorkspace === true,
+    );
     const handle = formatUserHandle(link);
     const name = extraLabel ? `${handle} · ${extraLabel}` : handle;
+
+    // First-level "scope" selector — personal plus every workspace the user
+    // belongs to. The bot is a single shared bot; which LobeHub context a
+    // conversation runs in is the active agent's scope, so picking a scope just
+    // filters the agent list below. The active scope is persisted server-side
+    // only when an agent is chosen (it derives the workspace from the agent).
+    // `PERSONAL_SCOPE` is the sentinel for personal (null).
+    const scopesSWR = useSWR(enableWorkspaceScopes ? 'messenger:bindingScopes' : null, () =>
+      messengerService.listBindingScopes(),
+    );
+    const [scope, setScope] = useState<string>(
+      enableWorkspaceScopes ? (link.workspaceId ?? PERSONAL_SCOPE) : PERSONAL_SCOPE,
+    );
+    const userAvatar = useUserStore(userProfileSelectors.userAvatar);
+    const userDisplayName = useUserStore(userProfileSelectors.displayUserName);
+    const userFullName = useUserStore(userProfileSelectors.fullName);
+
+    // Mirror the Agent Transfer scope picker: each row is an avatar + name.
+    // Personal uses the user's avatar; workspaces use their own avatar.
+    const scopeOptions = useMemo(() => {
+      const personalLabel = resolvePersonalScopeLabel({
+        fallbackLabel: userDisplayName || t('messenger.scopePersonal'),
+        fullName: userFullName,
+      });
+
+      return buildMessengerScopeOptions({
+        personalAvatar: userAvatar,
+        personalLabel,
+        personalTagLabel: t('messenger.scopePersonalTag', { defaultValue: 'personal' }),
+        workspaces: scopesSWR.data,
+      });
+    }, [scopesSWR.data, t, userAvatar, userDisplayName, userFullName]);
+
+    const scopeWorkspaceId = scope === PERSONAL_SCOPE ? null : scope;
+    const linkIsActiveScope = scopeWorkspaceId === (link.workspaceId ?? null);
+
+    useEffect(() => {
+      if (enableWorkspaceScopes || scope === PERSONAL_SCOPE) return;
+      setScope(PERSONAL_SCOPE);
+    }, [enableWorkspaceScopes, scope]);
+
+    // Optimistic selection for the currently-selected scope. Persisting the
+    // active agent does a server round-trip plus a `linksMutate()` refetch, so
+    // without this the dropdown only reflects the new pick once both finish.
+    // `pending` mirrors the user's choice immediately and is cleared once the
+    // link data catches up. Scoped by workspace so it only applies while the
+    // scope it was made in is selected.
+    const [pending, setPending] = useState<{
+      agentId: string | null;
+      workspaceId: string | null;
+    } | null>(null);
+    const pendingForScope = pending && pending.workspaceId === scopeWorkspaceId ? pending : null;
+
+    useEffect(() => {
+      if (!pending) return;
+      if (
+        (link.workspaceId ?? null) === pending.workspaceId &&
+        (link.activeAgentId ?? null) === pending.agentId
+      ) {
+        setPending(null);
+      }
+    }, [link.workspaceId, link.activeAgentId, pending]);
+
+    const activeAgentId = pendingForScope
+      ? pendingForScope.agentId
+      : linkIsActiveScope
+        ? (link.activeAgentId ?? null)
+        : null;
 
     return (
       <ConnectionRow
@@ -239,20 +324,57 @@ export const UserAgentConnection = memo<UserAgentConnectionProps>(
         name={name}
         status="connected"
         action={
-          <Button danger icon={<Icon icon={Trash2Icon} />} size="small" onClick={onUnlink}>
+          <Button
+            danger
+            disabled={!canEdit}
+            icon={<Icon icon={Trash2Icon} />}
+            size="small"
+            onClick={() => {
+              if (!canEdit) return;
+              onUnlink();
+            }}
+          >
             {t('messenger.detail.disconnect')}
           </Button>
         }
       >
-        <Flexbox gap={6}>
-          <Text style={{ fontSize: 12 }} type="secondary">
-            {t('messenger.activeAgent')}
-          </Text>
-          <AgentSelect
-            placeholder={t('messenger.activeAgentPlaceholder')}
-            value={link.activeAgentId ?? undefined}
-            onChange={(agentId) => onSetActive((agentId ?? null) as string | null)}
-          />
+        <Flexbox horizontal align="flex-end" gap={12}>
+          <Flexbox flex={1} gap={6}>
+            <Text style={{ fontSize: 12 }} type="secondary">
+              {t('messenger.scope')}
+            </Text>
+            <Select
+              classNames={messengerScopeSelectClassNames}
+              disabled={!canEdit}
+              options={scopeOptions}
+              value={scope}
+              onChange={(next) => setScope((next as string | null) ?? PERSONAL_SCOPE)}
+            />
+          </Flexbox>
+          <Flexbox flex={1} gap={6}>
+            <Text style={{ fontSize: 12 }} type="secondary">
+              {t('messenger.activeAgent')}
+            </Text>
+            <AgentSelect
+              // Default to the scope's inbox agent when the selected scope has no
+              // agent yet (neither an optimistic pick nor a persisted one),
+              // rather than leaving the dropdown empty.
+              defaultToInbox={canEdit && !pendingForScope && !linkIsActiveScope}
+              disabled={!canEdit}
+              placeholder={t('messenger.activeAgentPlaceholder')}
+              value={activeAgentId ?? undefined}
+              workspaceId={scopeWorkspaceId}
+              onChange={async (agentId) => {
+                if (!canEdit) return;
+                const next = (agentId ?? null) as string | null;
+                // Reflect the pick immediately, then persist in the background.
+                setPending({ agentId: next, workspaceId: scopeWorkspaceId });
+                const ok = await onSetActive(next);
+                // Roll back to the persisted value if the update failed.
+                if (!ok) setPending(null);
+              }}
+            />
+          </Flexbox>
         </Flexbox>
       </ConnectionRow>
     );
@@ -288,16 +410,16 @@ interface UseLinkActionsArgs {
   platform: MessengerPlatform;
 }
 
-export const useLinkActions = ({
-  installationsMutate,
-  linksMutate,
-  name,
-  platform,
-}: UseLinkActionsArgs) => {
+export const useLinkActions = ({ linksMutate, name, platform }: UseLinkActionsArgs) => {
   const { t } = useTranslation('messenger');
   const { message } = App.useApp();
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
-  const handleSetActive = async (tenantId: string, agentId: string | null) => {
+  // Returns whether the update succeeded so the caller can roll back its
+  // optimistic selection on failure.
+  const handleSetActive = async (tenantId: string, agentId: string | null): Promise<boolean> => {
+    if (!canEdit) return false;
+
     try {
       await messengerService.setActiveAgent({
         agentId,
@@ -306,12 +428,16 @@ export const useLinkActions = ({
       });
       await linksMutate();
       message.success(t('messenger.setActiveSuccess'));
+      return true;
     } catch (error) {
       message.error(getMessengerErrorMessage(error, t, 'messenger.setActiveFailed'));
+      return false;
     }
   };
 
   const handleUnlink = (tenantId: string) => {
+    if (!canEdit) return;
+
     confirmModal({
       content: t('messenger.unlinkConfirm', { platform: name }),
       okButtonProps: { danger: true },
@@ -361,8 +487,11 @@ export const useDisconnectInstallation = ({
 }: UseDisconnectInstallationArgs) => {
   const { t } = useTranslation('messenger');
   const { message } = App.useApp();
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   return (id: string, copy: DisconnectInstallationCopy) => {
+    if (!canEdit) return;
+
     confirmModal({
       content: copy.confirm,
       okButtonProps: { danger: true },

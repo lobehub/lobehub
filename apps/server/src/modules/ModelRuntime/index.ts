@@ -408,7 +408,7 @@ export const initModelRuntimeFromDB = async (
 ): Promise<ModelRuntime> => {
   // 1. Get user's provider configuration from database
   // NOTE: workspace-scoped ai_infra is deferred until the ai_infra surrogate-`_id`
-  // PK migration (LOBE-10056) lands; AiProviderModel stays personal-scoped for now.
+  // PK migration lands; AiProviderModel stays personal-scoped for now.
   const aiProviderModel = new AiProviderModel(db, userId);
 
   // Use getAiProviderById with KeyVaultsGateKeeper.getUserKeyVaults as decryptor

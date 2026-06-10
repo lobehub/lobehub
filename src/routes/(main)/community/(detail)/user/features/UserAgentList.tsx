@@ -23,7 +23,9 @@ const UserAgentList = memo<UserAgentListProps>(({ rows = 4, pageSize = 8 }) => {
     forkedAgents = [],
     favoriteAgents = [],
     isOwner,
+    user,
   } = useUserDetailContext();
+  const isOrg = user.type === 'organization';
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>('published');
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,8 +73,14 @@ const UserAgentList = memo<UserAgentListProps>(({ rows = 4, pageSize = 8 }) => {
   if (agents.length === 0 && forkedAgents.length === 0)
     return (
       <AssistantEmpty
-        description={isOwner ? t('user.noAgents.ownerDescription') : t('user.noAgents')}
         title={t('user.noAgents.title')}
+        description={
+          isOwner
+            ? t('user.noAgents.ownerDescription')
+            : isOrg
+              ? t('user.org.noAgents')
+              : t('user.noAgents')
+        }
       />
     );
 

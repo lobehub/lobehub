@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import McpSettingsModal from '@/features/MCP/MCPSettings/McpSettingsModal';
 import PluginDetailModal from '@/features/PluginDetailModal';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
@@ -35,6 +36,8 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
   const { t } = useTranslation('plugin');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const plugin = useToolStore(pluginSelectors.getToolManifestById(identifier));
+  const { allowed: canCreate } = usePermission('create_content');
+  const { allowed: canEdit } = usePermission('edit_own_content');
   const [togglePlugin, isPluginEnabledInAgent] = useAgentStore((s) => [
     s.togglePlugin,
     agentSelectors.currentAgentPlugins(s).includes(identifier),
@@ -49,7 +52,9 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
 
   const configureButton = (
     <Button
+      disabled={!canEdit}
       onClick={() => {
+        if (!canEdit) return;
         if (isCustomPlugin) {
           setModal(true);
         } else if (isCommunityMCP) {
@@ -81,10 +86,12 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
               items={[
                 {
                   danger: true,
+                  disabled: !canEdit,
                   icon: <Icon icon={Trash2} />,
                   key: 'uninstall',
                   label: t('store.actions.uninstall'),
                   onClick: () => {
+                    if (!canEdit) return;
                     confirmModal({
                       okButtonProps: { danger: true },
                       onOk: async () => {
@@ -105,9 +112,11 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
           </Space.Compact>
         ) : (
           <Button
+            disabled={!canCreate || !canEdit}
             loading={installing}
             size={mobile ? 'small' : undefined}
             onClick={async () => {
+              if (!canCreate || !canEdit) return;
               if (isMCP) {
                 await installMCPPlugin(identifier);
                 await togglePlugin(identifier);

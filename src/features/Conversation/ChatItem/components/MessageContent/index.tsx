@@ -9,6 +9,7 @@ import {
   messageStateSelectors,
   useConversationStore,
 } from '@/features/Conversation/store';
+import { usePermission } from '@/hooks/usePermission';
 import dynamic from '@/libs/next/dynamic';
 
 import { type ChatItemProps } from '../../type';
@@ -89,10 +90,15 @@ const MessageContent = memo<MessageContentProps>(
     });
 
     const { t } = useTranslation('common');
+    const { allowed: canCreate } = usePermission('create_content');
+    const { allowed: canEdit } = usePermission('edit_own_content');
 
     const onEditingChange = useCallback(
-      (edit: boolean) => toggleMessageEditing(id, edit),
-      [id, toggleMessageEditing],
+      (edit: boolean) => {
+        if (!canEdit && edit) return;
+        toggleMessageEditing(id, edit);
+      },
+      [canEdit, id, toggleMessageEditing],
     );
 
     return (
@@ -120,6 +126,7 @@ const MessageContent = memo<MessageContentProps>(
               value={message ? String(message) : ''}
               onCancel={() => onEditingChange(false)}
               onConfirm={async (value, newEditorData) => {
+                if (!canEdit) return;
                 onEditingChange(false);
                 // updateMessageContent does an optimistic state update synchronously before
                 // awaiting the DB round trip. Kick off regenerate in parallel so the old
@@ -127,7 +134,7 @@ const MessageContent = memo<MessageContentProps>(
                 const save = updateMessageContent(id, value, {
                   editorData: newEditorData as Record<string, any> | undefined,
                 });
-                if (shouldSendOnConfirm) {
+                if (canCreate && shouldSendOnConfirm) {
                   await regenerateUserMessage(id);
                 }
                 await save;

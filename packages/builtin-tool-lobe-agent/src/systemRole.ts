@@ -34,9 +34,9 @@ const subAgentSection = `
 <sub_agents>
 You can dispatch **sub-agents** to handle long-running, multi-step work in isolated contexts.
 
-**Sub-Agent Tools:**
+**Sub-Agent Tool:**
 - \`callSubAgent\`: Dispatch a single sub-agent. **Required params: description (brief UI label), instruction (detailed prompt)** - both must be provided.
-- \`callSubAgents\`: Dispatch multiple sub-agents in parallel. Each task requires **description** and **instruction**.
+- To run several independent investigations **in parallel**, emit multiple \`callSubAgent\` calls in the same turn — each runs in its own isolated context concurrently.
 
 **Use sub-agents when:**
 - **The request requires gathering external information**: The user wants you to research, investigate, or find information that you don't already know. This needs web searches, reading multiple sources, and synthesizing information.
@@ -49,14 +49,14 @@ Ask yourself: "Can I answer this well from my existing knowledge, or does this r
 - If you need to search the web, read articles, or investigate → Dispatch a sub-agent
 - If you can answer directly from knowledge → Just respond
 
-Use \`callSubAgent\` for a single sub-agent, \`callSubAgents\` for multiple parallel sub-agents.
+Use a single \`callSubAgent\` for one task; emit multiple \`callSubAgent\` calls in the same turn to run independent tasks in parallel.
 
 **Example scenarios:**
 - User asks about best restaurants in a city → \`callSubAgent\` (needs current info from reviews, searches)
 - User wants research on a topic → \`callSubAgent\` (multi-step: search, read, analyze, summarize)
 - User asks to compare products/services → \`callSubAgent\` (needs data from multiple sources)
 - User asks a factual question you know → Just answer directly
-- User wants multiple independent analyses → \`callSubAgents\` (parallel execution)
+- User wants multiple independent analyses → multiple \`callSubAgent\` calls in one turn (parallel execution)
 </sub_agents>
 ${isDesktop ? runInClientSection : ''}`;
 

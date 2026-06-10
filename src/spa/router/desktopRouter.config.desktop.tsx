@@ -25,6 +25,23 @@ import DesktopImageLayout from '@/routes/(main)/(create)/image/_layout';
 import VideoPage from '@/routes/(main)/(create)/video';
 import DesktopVideoLayout from '@/routes/(main)/(create)/video/_layout';
 import TaskWorkspaceLayout from '@/routes/(main)/(task-workspace)/_layout';
+import WorkspaceSlugLayout from '@/routes/(main)/[workspaceSlug]/_layout';
+import WorkspaceSlugSettingsIndexPage from '@/routes/(main)/[workspaceSlug]/settings';
+import WorkspaceSlugSettingsContentLayout from '@/routes/(main)/[workspaceSlug]/settings/_content-layout';
+import WorkspaceSlugSettingsLayout from '@/routes/(main)/[workspaceSlug]/settings/_layout';
+import WorkspaceSlugSettingsApiKeyPage from '@/routes/(main)/[workspaceSlug]/settings/apikey';
+import WorkspaceSlugSettingsBillingPage from '@/routes/(main)/[workspaceSlug]/settings/billing';
+import WorkspaceSlugSettingsCreditsPage from '@/routes/(main)/[workspaceSlug]/settings/credits';
+import WorkspaceSlugSettingsCredsPage from '@/routes/(main)/[workspaceSlug]/settings/creds';
+import WorkspaceSlugSettingsGeneralPage from '@/routes/(main)/[workspaceSlug]/settings/general';
+import WorkspaceSlugSettingsMembersPage from '@/routes/(main)/[workspaceSlug]/settings/members';
+import WorkspaceSlugSettingsPlansPage from '@/routes/(main)/[workspaceSlug]/settings/plans';
+import WorkspaceSlugSettingsProviderPage from '@/routes/(main)/[workspaceSlug]/settings/provider';
+import WorkspaceSlugSettingsServiceModelPage from '@/routes/(main)/[workspaceSlug]/settings/service-model';
+import WorkspaceSlugSettingsSkillPage from '@/routes/(main)/[workspaceSlug]/settings/skill';
+import WorkspaceSlugSettingsStatsPage from '@/routes/(main)/[workspaceSlug]/settings/stats';
+import WorkspaceSlugSettingsStoragePage from '@/routes/(main)/[workspaceSlug]/settings/storage';
+import WorkspaceSlugSettingsUsagePage from '@/routes/(main)/[workspaceSlug]/settings/usage';
 // Pages — sync import
 import AgentPage from '@/routes/(main)/agent';
 import DesktopChatLayout from '@/routes/(main)/agent/_layout';
@@ -40,9 +57,12 @@ import CommunityDetailAgentPage from '@/routes/(main)/community/(detail)/agent';
 import CommunityDetailGroupAgentPage from '@/routes/(main)/community/(detail)/group_agent';
 import CommunityDetailMcpPage from '@/routes/(main)/community/(detail)/mcp';
 import CommunityDetailModelPage from '@/routes/(main)/community/(detail)/model';
+import CommunityDetailOrganizationPage from '@/routes/(main)/community/(detail)/organization';
 import CommunityDetailProviderPage from '@/routes/(main)/community/(detail)/provider';
 import CommunityDetailSkillPage from '@/routes/(main)/community/(detail)/skill';
 import CommunityDetailUserPage from '@/routes/(main)/community/(detail)/user';
+import CommunityDetailWorkspacePage from '@/routes/(main)/community/(detail)/workspace';
+import CommunityDetailWorkspaceSettingsPage from '@/routes/(main)/community/(detail)/workspace/settings';
 import CommunityListLayout from '@/routes/(main)/community/(list)/_layout';
 import CommunityListHomePage from '@/routes/(main)/community/(list)/(home)';
 import CommunityListAgentPage from '@/routes/(main)/community/(list)/agent';
@@ -94,252 +114,454 @@ import AllTasksPage from '@/routes/(main)/tasks';
 import SharePagePage from '@/routes/share/page/[id]';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
+import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
 import { routeMeta } from '@/spa/router/routeMeta';
+import { SettingsTabs } from '@/store/global/initialState';
 import { ErrorBoundary, redirectElement } from '@/utils/router';
 
-// Desktop router configuration — all sync imports for Electron local build
-export const desktopRoutes: RouteObject[] = [
+/**
+ * Children shared between `/` and `/:workspaceSlug` for the Electron build.
+ * Mirror of the async `sharedMainAreaChildren` — paths must match (the router
+ * sync test enforces this).
+ */
+export const sharedMainAreaChildren: RouteObject[] = [
+  // Chat routes (agent)
   {
     children: [
-      // Chat routes (agent)
       {
-        children: [
-          {
-            element: redirectElement('/'),
-            index: true,
-          },
-          {
-            children: [
-              {
-                children: [
-                  {
-                    element: <AgentPage />,
-                    handle: { meta: agentRouteMeta },
-                    index: true,
-                  },
-                  {
-                    element: <AgentPage />,
-                    handle: { meta: agentRouteMeta },
-                    path: ':topicId',
-                  },
-                ],
-                element: <DesktopAgentChatLayout />,
-              },
-              {
-                element: <AgentProfilePage />,
-                path: 'profile',
-              },
-              {
-                element: <AgentChannelPage />,
-                path: 'channel',
-              },
-              {
-                element: <AgentTopicsPage />,
-                path: 'topics',
-              },
-              {
-                element: <AgentTaskDetailRoute />,
-                handle: { meta: taskRouteMeta },
-                path: 'task/:taskId',
-              },
-            ],
-            element: <DesktopChatLayout />,
-            errorElement: <ErrorBoundary />,
-            path: ':aid',
-          },
-        ],
-        path: 'agent',
+        element: redirectElement('..'),
+        index: true,
       },
-
-      // Group chat routes
       {
         children: [
           {
-            element: redirectElement('/'),
-            index: true,
-          },
-          {
             children: [
               {
-                element: <GroupPage />,
-                handle: { meta: groupRouteMeta },
+                element: <AgentPage />,
+                handle: { meta: agentRouteMeta },
                 index: true,
               },
               {
-                element: <GroupProfilePage />,
-                path: 'profile',
+                element: <AgentPage />,
+                handle: { meta: agentRouteMeta },
+                path: ':topicId',
               },
             ],
-            element: <DesktopGroupLayout />,
-            errorElement: <ErrorBoundary />,
-            path: ':gid',
+            element: <DesktopAgentChatLayout />,
+          },
+          {
+            element: <AgentProfilePage />,
+            path: 'profile',
+          },
+          {
+            element: <AgentChannelPage />,
+            path: 'channel',
+          },
+          {
+            element: <AgentTopicsPage />,
+            path: 'topics',
+          },
+          {
+            element: <AgentTaskDetailRoute />,
+            handle: { meta: taskRouteMeta },
+            path: 'task/:taskId',
           },
         ],
-        path: 'group',
+        element: <DesktopChatLayout />,
+        errorElement: <ErrorBoundary />,
+        path: ':aid',
       },
+    ],
+    path: 'agent',
+  },
 
-      // Discover routes with nested structure
+  // Group chat routes
+  {
+    children: [
+      {
+        element: redirectElement('..'),
+        index: true,
+      },
       {
         children: [
-          // List routes (with ListLayout)
+          {
+            element: <GroupPage />,
+            handle: { meta: groupRouteMeta },
+            index: true,
+          },
+          {
+            element: <GroupProfilePage />,
+            path: 'profile',
+          },
+        ],
+        element: <DesktopGroupLayout />,
+        errorElement: <ErrorBoundary />,
+        path: ':gid',
+      },
+    ],
+    path: 'group',
+  },
+
+  // Discover routes with nested structure
+  {
+    children: [
+      {
+        element: <CommunityDetailWorkspaceSettingsPage />,
+        path: 'workspace/settings',
+      },
+      // List routes (with ListLayout)
+      {
+        children: [
           {
             children: [
               {
-                children: [
-                  {
-                    element: <CommunityListAgentPage />,
-                    handle: {
-                      meta: routeMeta({
-                        icon: ShapesIcon,
-                        titleKey: 'navigation.discoverAssistants',
-                      }),
-                    },
-                    index: true,
-                  },
-                ],
-                element: <CommunityListAgentLayout />,
-                path: 'agent',
-              },
-              {
-                children: [
-                  {
-                    element: <CommunityListModelPage />,
-                    handle: {
-                      meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverModels' }),
-                    },
-                    index: true,
-                  },
-                ],
-                element: <CommunityListModelLayout />,
-                path: 'model',
-              },
-              {
-                element: <CommunityListProviderPage />,
+                element: <CommunityListAgentPage />,
                 handle: {
-                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverProviders' }),
+                  meta: routeMeta({
+                    icon: ShapesIcon,
+                    titleKey: 'navigation.discoverAssistants',
+                  }),
                 },
-                path: 'provider',
+                index: true,
               },
+            ],
+            element: <CommunityListAgentLayout />,
+            path: 'agent',
+          },
+          {
+            children: [
               {
-                children: [
-                  {
-                    element: <CommunityListSkillPage />,
-                    handle: {
-                      meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discover' }),
-                    },
-                    index: true,
-                  },
-                ],
-                element: <CommunityListSkillLayout />,
-                path: 'skill',
+                element: <CommunityListModelPage />,
+                handle: {
+                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverModels' }),
+                },
+                index: true,
               },
+            ],
+            element: <CommunityListModelLayout />,
+            path: 'model',
+          },
+          {
+            element: <CommunityListProviderPage />,
+            handle: {
+              meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverProviders' }),
+            },
+            path: 'provider',
+          },
+          {
+            children: [
               {
-                children: [
-                  {
-                    element: <CommunityListMcpPage />,
-                    handle: {
-                      meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverMcp' }),
-                    },
-                    index: true,
-                  },
-                ],
-                element: <CommunityListMcpLayout />,
-                path: 'mcp',
-              },
-              {
-                element: <CommunityListHomePage />,
+                element: <CommunityListSkillPage />,
                 handle: {
                   meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discover' }),
                 },
                 index: true,
               },
             ],
-            element: <CommunityListLayout />,
+            element: <CommunityListSkillLayout />,
+            path: 'skill',
           },
-          // Detail routes (with DetailLayout)
           {
             children: [
               {
-                element: <CommunityDetailAgentPage />,
-                path: 'agent/:slug',
-              },
-              {
-                element: <CommunityDetailGroupAgentPage />,
-                path: 'group_agent/:slug',
-              },
-              {
-                element: <CommunityDetailModelPage />,
-                path: 'model/:slug',
-              },
-              {
-                element: <CommunityDetailProviderPage />,
-                path: 'provider/:slug',
-              },
-              {
-                element: <CommunityDetailSkillPage />,
-                path: 'skill/:slug',
-              },
-              {
-                element: <CommunityDetailMcpPage />,
-                path: 'mcp/:slug',
-              },
-              {
-                element: <CommunityDetailUserPage />,
-                path: 'user/:slug',
+                element: <CommunityListMcpPage />,
+                handle: {
+                  meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discoverMcp' }),
+                },
+                index: true,
               },
             ],
-            element: <CommunityDetailLayout />,
+            element: <CommunityListMcpLayout />,
+            path: 'mcp',
+          },
+          {
+            element: <CommunityDetailWorkspacePage />,
+            path: 'workspace',
+          },
+          {
+            element: <CommunityListHomePage />,
+            handle: {
+              meta: routeMeta({ icon: ShapesIcon, titleKey: 'navigation.discover' }),
+            },
+            index: true,
           },
         ],
-        element: <CommunityLayout />,
-        errorElement: <ErrorBoundary />,
-        path: 'community',
+        element: <CommunityListLayout />,
       },
-
-      // Resource routes
+      // Detail routes (with DetailLayout)
       {
         children: [
-          // Home routes (resource list)
           {
-            children: [
-              {
-                element: <ResourceHomePage />,
-                handle: {
-                  meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.resources' }),
-                },
-                index: true,
-              },
-            ],
-            element: <ResourceHomeLayout />,
+            element: <CommunityDetailAgentPage />,
+            path: 'agent/:slug',
           },
-          // Library routes (knowledge base detail)
           {
-            children: [
-              {
-                element: <ResourceLibraryPage />,
-                handle: {
-                  meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.knowledgeBase' }),
-                },
-                index: true,
-              },
-              {
-                element: <ResourceLibrarySlugPage />,
-                handle: {
-                  meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.knowledgeBase' }),
-                },
-                path: ':slug',
-              },
-            ],
-            element: <ResourceLibraryLayout />,
-            path: 'library/:id',
+            element: <CommunityDetailGroupAgentPage />,
+            path: 'group_agent/:slug',
+          },
+          {
+            element: <CommunityDetailModelPage />,
+            path: 'model/:slug',
+          },
+          {
+            element: <CommunityDetailProviderPage />,
+            path: 'provider/:slug',
+          },
+          {
+            element: <CommunityDetailSkillPage />,
+            path: 'skill/:slug',
+          },
+          {
+            element: <CommunityDetailMcpPage />,
+            path: 'mcp/:slug',
+          },
+          {
+            element: <CommunityDetailUserPage />,
+            path: 'user/:slug',
+          },
+          {
+            element: <CommunityDetailOrganizationPage />,
+            path: 'org/:slug',
           },
         ],
-        element: <ResourceLayout />,
-        errorElement: <ErrorBoundary />,
-        path: 'resource',
+        element: <CommunityDetailLayout />,
       },
+    ],
+    element: <CommunityLayout />,
+    errorElement: <ErrorBoundary />,
+    path: 'community',
+  },
 
-      // Settings routes
+  // Resource routes
+  {
+    children: [
+      // Home routes (resource list)
+      {
+        children: [
+          {
+            element: <ResourceHomePage />,
+            handle: {
+              meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.resources' }),
+            },
+            index: true,
+          },
+        ],
+        element: <ResourceHomeLayout />,
+      },
+      // Library routes (knowledge base detail)
+      {
+        children: [
+          {
+            element: <ResourceLibraryPage />,
+            handle: {
+              meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.knowledgeBase' }),
+            },
+            index: true,
+          },
+          {
+            element: <ResourceLibrarySlugPage />,
+            handle: {
+              meta: routeMeta({ icon: LibraryBigIcon, titleKey: 'navigation.knowledgeBase' }),
+            },
+            path: ':slug',
+          },
+        ],
+        element: <ResourceLibraryLayout />,
+        path: 'library/:id',
+      },
+    ],
+    element: <ResourceLayout />,
+    errorElement: <ErrorBoundary />,
+    path: 'resource',
+  },
+
+  // Memory routes
+  {
+    children: [
+      {
+        element: <MemoryHomePage />,
+        handle: {
+          meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memory' }),
+        },
+        index: true,
+      },
+      {
+        element: <MemoryIdentitiesPage />,
+        handle: {
+          meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryIdentities' }),
+        },
+        path: 'identities',
+      },
+      {
+        element: <MemoryContextsPage />,
+        handle: {
+          meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryContexts' }),
+        },
+        path: 'contexts',
+      },
+      {
+        element: <MemoryPreferencesPage />,
+        handle: {
+          meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryPreferences' }),
+        },
+        path: 'preferences',
+      },
+      {
+        element: <MemoryExperiencesPage />,
+        handle: {
+          meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryExperiences' }),
+        },
+        path: 'experiences',
+      },
+      {
+        element: <MemoryActivitiesPage />,
+        handle: {
+          meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memory' }),
+        },
+        path: 'activities',
+      },
+    ],
+    element: <DesktopMemoryLayout />,
+    errorElement: <ErrorBoundary />,
+    path: 'memory',
+  },
+
+  // Video routes
+  {
+    children: [
+      {
+        element: <VideoPage />,
+        index: true,
+      },
+    ],
+    element: <DesktopVideoLayout />,
+    errorElement: <ErrorBoundary />,
+    path: 'video',
+  },
+
+  // Image routes
+  {
+    children: [
+      {
+        element: <ImagePage />,
+        handle: {
+          meta: routeMeta({ icon: Image, titleKey: 'navigation.image' }),
+        },
+        index: true,
+      },
+    ],
+    element: <DesktopImageLayout />,
+    errorElement: <ErrorBoundary />,
+    path: 'image',
+  },
+
+  ...BusinessDesktopRoutesWithMainLayout,
+
+  // Eval routes
+  {
+    children: [
+      // Home (overview)
+      {
+        children: [
+          {
+            element: <EvalOverviewPage />,
+            index: true,
+          },
+        ],
+        element: <EvalHomeLayout />,
+      },
+      // Bench routes (with dedicated sidebar)
+      {
+        children: [
+          {
+            element: <EvalBenchmarkDetailPage />,
+            index: true,
+          },
+          {
+            children: [
+              {
+                element: <EvalRunDetailPage />,
+                index: true,
+              },
+              {
+                element: <EvalCaseDetailPage />,
+                path: 'cases/:caseId',
+              },
+            ],
+            path: 'runs/:runId',
+          },
+          {
+            element: <EvalDatasetDetailPage />,
+            path: 'datasets/:datasetId',
+          },
+        ],
+        element: <EvalBenchLayout />,
+        path: 'bench/:benchmarkId',
+      },
+    ],
+    element: <EvalLayout />,
+    errorElement: <ErrorBoundary />,
+    path: 'eval',
+  },
+
+  // Task workspace routes (cross-agent)
+  {
+    children: [
+      {
+        children: [
+          {
+            element: <AllTasksPage />,
+            handle: { meta: tasksRouteMeta },
+            index: true,
+          },
+        ],
+        errorElement: <ErrorBoundary resetPath=".." />,
+        path: 'tasks',
+      },
+      {
+        children: [
+          {
+            element: <TaskDetailRoute />,
+            handle: { meta: taskRouteMeta },
+            path: ':taskId',
+          },
+        ],
+        errorElement: <ErrorBoundary resetPath="../tasks" />,
+        path: 'task',
+      },
+    ],
+    element: <TaskWorkspaceLayout />,
+  },
+
+  // Pages routes
+  {
+    children: [
+      {
+        element: <PageIndexPage />,
+        handle: {
+          meta: routeMeta({ icon: FilePenIcon, titleKey: 'navigation.pages' }),
+        },
+        index: true,
+      },
+      {
+        element: <PageDetailPage />,
+        handle: { meta: pageRouteMeta },
+        path: ':id',
+      },
+    ],
+    element: <DesktopPageLayout />,
+    errorElement: <ErrorBoundary />,
+    path: 'page',
+  },
+];
+
+// Desktop router configuration — all sync imports for Electron local build
+export const desktopRoutes: RouteObject[] = [
+  {
+    children: [
+      ...sharedMainAreaChildren,
+
+      // Settings routes (personal-only — never mirrored under /:workspaceSlug)
       {
         children: [
           {
@@ -367,6 +589,11 @@ export const desktopRoutes: RouteObject[] = [
             },
             path: 'provider',
           },
+          {
+            element: <SettingsTabPage />,
+            handle: { settingsTab: SettingsTabs.Memory },
+            path: 'memory',
+          },
           // Other settings tabs
           {
             element: <SettingsTabPage />,
@@ -386,183 +613,60 @@ export const desktopRoutes: RouteObject[] = [
         path: 'settings',
       },
 
-      // Memory routes
+      // Workspace slug routes — `/:workspaceSlug/*` mirrors the shared main area.
+      // Must come AFTER all reserved root paths so they don't shadow e.g. /agent.
       {
         children: [
-          {
-            element: <MemoryHomePage />,
-            handle: {
-              meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memory' }),
-            },
-            index: true,
-          },
-          {
-            element: <MemoryIdentitiesPage />,
-            handle: {
-              meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryIdentities' }),
-            },
-            path: 'identities',
-          },
-          {
-            element: <MemoryContextsPage />,
-            handle: {
-              meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryContexts' }),
-            },
-            path: 'contexts',
-          },
-          {
-            element: <MemoryPreferencesPage />,
-            handle: {
-              meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryPreferences' }),
-            },
-            path: 'preferences',
-          },
-          {
-            element: <MemoryExperiencesPage />,
-            handle: {
-              meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryExperiences' }),
-            },
-            path: 'experiences',
-          },
-          {
-            element: <MemoryActivitiesPage />,
-            handle: {
-              meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memory' }),
-            },
-            path: 'activities',
-          },
-        ],
-        element: <DesktopMemoryLayout />,
-        errorElement: <ErrorBoundary />,
-        path: 'memory',
-      },
-
-      // Video routes
-      {
-        children: [
-          {
-            element: <VideoPage />,
-            index: true,
-          },
-        ],
-        element: <DesktopVideoLayout />,
-        errorElement: <ErrorBoundary />,
-        path: 'video',
-      },
-
-      // Image routes
-      {
-        children: [
-          {
-            element: <ImagePage />,
-            handle: {
-              meta: routeMeta({ icon: Image, titleKey: 'navigation.image' }),
-            },
-            index: true,
-          },
-        ],
-        element: <DesktopImageLayout />,
-        errorElement: <ErrorBoundary />,
-        path: 'image',
-      },
-
-      ...BusinessDesktopRoutesWithMainLayout,
-
-      // Eval routes
-      {
-        children: [
-          // Home (overview)
+          // Workspace home — handled by the persistent `DesktopHomeLayout`
+          // (mirrors `/` index). Adding an element renders Home twice.
+          { index: true },
+          ...sharedMainAreaChildren,
+          // Workspace settings — `/:slug/settings/*`. Dedicated layout with
+          // its own sidebar (workspace avatar + 6 tabs + back-to-chat), fully
+          // decoupled from personal `/settings/*`.
           {
             children: [
-              {
-                element: <EvalOverviewPage />,
-                index: true,
-              },
-            ],
-            element: <EvalHomeLayout />,
-          },
-          // Bench routes (with dedicated sidebar)
-          {
-            children: [
-              {
-                element: <EvalBenchmarkDetailPage />,
-                index: true,
-              },
+              { element: <WorkspaceSlugSettingsIndexPage />, index: true },
+              // Full-bleed tabs render directly inside the workspace settings
+              // shell (sidebar + outlet) — they own their internal layout.
+              { element: <WorkspaceSlugSettingsProviderPage />, path: 'provider' },
+              { element: <WorkspaceSlugSettingsSkillPage />, path: 'skill' },
+              // Padded tabs share a centered, max-width container layout.
               {
                 children: [
-                  {
-                    element: <EvalRunDetailPage />,
-                    index: true,
-                  },
-                  {
-                    element: <EvalCaseDetailPage />,
-                    path: 'cases/:caseId',
-                  },
+                  { element: <WorkspaceSlugSettingsGeneralPage />, path: 'general' },
+                  { element: <WorkspaceSlugSettingsMembersPage />, path: 'members' },
+                  { element: <WorkspaceSlugSettingsStatsPage />, path: 'stats' },
+                  { element: <WorkspaceSlugSettingsPlansPage />, path: 'plans' },
+                  { element: <WorkspaceSlugSettingsBillingPage />, path: 'billing' },
+                  { element: <WorkspaceSlugSettingsCreditsPage />, path: 'credits' },
+                  { element: <WorkspaceSlugSettingsUsagePage />, path: 'usage' },
+                  { element: <WorkspaceSlugSettingsServiceModelPage />, path: 'service-model' },
+                  { element: <WorkspaceSlugSettingsCredsPage />, path: 'creds' },
+                  { element: <WorkspaceSlugSettingsApiKeyPage />, path: 'apikey' },
+                  { element: <WorkspaceSlugSettingsStoragePage />, path: 'storage' },
                 ],
-                path: 'runs/:runId',
-              },
-              {
-                element: <EvalDatasetDetailPage />,
-                path: 'datasets/:datasetId',
+                element: <WorkspaceSlugSettingsContentLayout />,
               },
             ],
-            element: <EvalBenchLayout />,
-            path: 'bench/:benchmarkId',
+            element: <WorkspaceSlugSettingsLayout />,
+            errorElement: <ErrorBoundary />,
+            path: 'settings',
           },
-        ],
-        element: <EvalLayout />,
-        errorElement: <ErrorBoundary />,
-        path: 'eval',
-      },
-
-      // Task workspace routes (cross-agent)
-      {
-        children: [
+          // Legacy `/:slug/billing/*` URLs — redirect to `/:slug/settings/*`.
           {
             children: [
-              {
-                element: <AllTasksPage />,
-                handle: { meta: tasksRouteMeta },
-                index: true,
-              },
+              { element: redirectElement('../settings/plans'), path: 'plans' },
+              { element: redirectElement('../settings/usage'), path: 'usage' },
+              { element: redirectElement('../settings/credits'), path: 'credits' },
+              { element: redirectElement('../settings/billing'), path: 'billing' },
             ],
-            errorElement: <ErrorBoundary resetPath="/" />,
-            path: 'tasks',
-          },
-          {
-            children: [
-              {
-                element: <TaskDetailRoute />,
-                handle: { meta: taskRouteMeta },
-                path: ':taskId',
-              },
-            ],
-            errorElement: <ErrorBoundary resetPath="/tasks" />,
-            path: 'task',
+            path: 'billing',
           },
         ],
-        element: <TaskWorkspaceLayout />,
-      },
-
-      // Pages routes
-      {
-        children: [
-          {
-            element: <PageIndexPage />,
-            handle: {
-              meta: routeMeta({ icon: FilePenIcon, titleKey: 'navigation.pages' }),
-            },
-            index: true,
-          },
-          {
-            element: <PageDetailPage />,
-            handle: { meta: pageRouteMeta },
-            path: ':id',
-          },
-        ],
-        element: <DesktopPageLayout />,
+        element: <WorkspaceSlugLayout />,
         errorElement: <ErrorBoundary />,
-        path: 'page',
+        path: ':workspaceSlug',
       },
 
       // Default route - home page (handled by persistent layout)
@@ -590,6 +694,7 @@ export const desktopRoutes: RouteObject[] = [
     children: [
       {
         element: <ShareTopicPage />,
+        handle: { meta: shareTopicRouteMeta },
         path: ':id',
       },
     ],

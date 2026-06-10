@@ -6,8 +6,9 @@ import { cx } from 'antd-style';
 import { Plus } from 'lucide-react';
 import { startTransition, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { usePermission } from '@/hooks/usePermission';
 import { electronSystemService } from '@/services/electron/system';
 import { desktopRoutes } from '@/spa/router/desktopRouter.config';
 import { type NewTabAction } from '@/spa/router/routeMeta';
@@ -22,10 +23,17 @@ import TabItem from './TabItem';
 const TAB_WIDTH = 180;
 const TAB_GAP = 0;
 
+// Fallback when the active route doesn't define createNewTab: open the home page,
+// so the "+" button stays available on every page.
+const DEFAULT_NEW_TAB_ACTION: NewTabAction = {
+  onCreate: async () => ({ url: '/' }),
+};
+
 const TabBar = () => {
   const styles = useStyles;
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('electron');
+  const { allowed: canCreate, reason } = usePermission('create_content');
   const viewportRef = useRef<HTMLDivElement>(null);
   const { tabs, activeTabId } = useResolvedTabs();
   const activateTab = useElectronStore((s) => s.activateTab);
@@ -118,13 +126,14 @@ const TabBar = () => {
   }, [activeTabId, tabs]);
 
   const newTabAction: NewTabAction | null = useMemo(() => {
-    if (!activeTabId) return null;
+    if (!canCreate) return null;
+    if (!activeTabId) return DEFAULT_NEW_TAB_ACTION;
     const activeTab = tabs.find((tab) => tab.tab.id === activeTabId);
-    if (!activeTab) return null;
+    if (!activeTab) return DEFAULT_NEW_TAB_ACTION;
 
     const matched = matchRouteMeta(desktopRoutes, activeTab.tab.url);
-    return matched.meta?.createNewTab?.(matched.params) ?? null;
-  }, [activeTabId, tabs]);
+    return matched.meta?.createNewTab?.(matched.params) ?? DEFAULT_NEW_TAB_ACTION;
+  }, [activeTabId, tabs, canCreate]);
 
   useWatchBroadcast('closeCurrentTabOrWindow', () => {
     if (tabs.length > 1 && activeTabId) {
@@ -135,6 +144,7 @@ const TabBar = () => {
   });
 
   const handleNewTab = useCallback(async () => {
+    if (!canCreate) return;
     if (!newTabAction) return;
     let result;
     try {
@@ -147,7 +157,7 @@ const TabBar = () => {
 
     addTab(result.url, result.cached, true);
     startTransition(() => navigate(result.url));
-  }, [newTabAction, addTab, navigate]);
+  }, [canCreate, newTabAction, addTab, navigate]);
 
   useWatchBroadcast('createNewTab', () => {
     void handleNewTab();
@@ -177,13 +187,14 @@ const TabBar = () => {
           onCloseRight={handleCloseRight}
         />
       ))}
-      {newTabAction && (
+      {(newTabAction || !canCreate) && (
         <ActionIcon
           className={cx(electronStylish.nodrag, styles.newTabButton)}
+          disabled={!canCreate}
           icon={Plus}
           size="small"
-          title={t('tab.newTab')}
-          onClick={handleNewTab}
+          title={canCreate ? t('tab.newTab') : reason}
+          onClick={canCreate ? handleNewTab : undefined}
         />
       )}
     </ScrollArea>

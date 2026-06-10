@@ -2,8 +2,8 @@ import { Avatar, Button, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { getPlatformIcon } from '@/routes/(main)/agent/channel/const';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -32,7 +32,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const AgentSummary = memo(() => {
   const { t } = useTranslation(['chat', 'discover']);
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const meta = useAgentStore(agentSelectors.currentAgentMeta);
   const { data: providers = [] } = useAgentStore((s) => s.useFetchBotProviders(activeAgentId));

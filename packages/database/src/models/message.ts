@@ -2392,6 +2392,41 @@ export class MessageModel {
     }
   };
 
+  /**
+   * Id of the most recently-created main-agent `role:'tool'` message under an
+   * assistant message, or `undefined` when the assistant produced no tools.
+   *
+   * Heterogeneous step boundaries chain the next assistant off the previous
+   * step's final tool message (the wire is `asst → tool → … → asst → tool`).
+   * The persistence handler normally derives that anchor from its in-memory
+   * tool state, but on a warm replica that did NOT drain the prior step's
+   * `tools_calling` (or before the assistant's `tools[]` JSONB has its
+   * `result_msg_id` backfilled) that state is empty — so it falls back here.
+   *
+   * The `role:'tool'` rows are the authoritative anchor: they are created
+   * (Phase 2) with `parentId` = their step's assistant, earlier than and
+   * independent of the JSONB mirror's `result_msg_id` backfill (Phase 3).
+   * `threadId IS NULL` excludes subagent tool rows, which live on their own
+   * thread and must not anchor the main-agent wire.
+   */
+  getLastChildToolMessageId = async (assistantMessageId: string): Promise<string | undefined> => {
+    const [row] = await this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.parentId, assistantMessageId),
+          eq(messages.role, 'tool'),
+          isNull(messages.threadId),
+          this.ownership(),
+        ),
+      )
+      .orderBy(desc(messages.createdAt))
+      .limit(1);
+
+    return row?.id;
+  };
+
   updateTranslate = async (id: string, translate: Partial<ChatTranslate>) => {
     const result = await this.db.query.messageTranslates.findFirst({
       where: and(eq(messageTranslates.id, id), this.translatesOwnership()),
@@ -2673,7 +2708,10 @@ export class MessageModel {
 
   // **************** Helper *************** //
 
-  private genId = () => idGenerator('messages', 14);
+  // 18-char hash (was 14): widen the message id space — the coordinator-driven
+  // hetero subagent flow allocates many ids per run, and a few extra chars keep
+  // collision odds negligible at that volume.
+  private genId = () => idGenerator('messages', 18);
 
   private matchSession = (sessionId?: string | null) => {
     if (sessionId === INBOX_SESSION_ID) return isNull(messages.sessionId);

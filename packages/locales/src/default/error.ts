@@ -94,8 +94,10 @@ export default {
   'exceededContext.title': 'Context Window Exceeded',
 
   'unknownError.copyTraceId': 'Trace ID Copied',
+  'unknownError.copyTraceIdTooltip': 'Click to copy',
   'unknownError.desc': 'An unexpected error occurred. You can retry or report on',
   'unknownError.retry': 'Retry',
+  'unknownError.traceIdLabel': 'Trace ID:',
   'unknownError.title': 'Oops, the request took a nap',
 
   'response.ExceededContextWindowCloud':

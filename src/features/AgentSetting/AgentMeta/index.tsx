@@ -22,12 +22,15 @@ const AgentMeta = memo(() => {
   const { t } = useTranslation('setting');
   const [form] = Form.useForm();
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
-  const [hasSystemRole, updateMeta, autocompleteMeta, autocompleteAllMeta] = useStore((s) => [
-    !!s.config.systemRole,
-    s.setAgentMeta,
-    s.autocompleteMeta,
-    s.autocompleteAllMeta,
-  ]);
+  const [hasSystemRole, disabled, updateMeta, autocompleteMeta, autocompleteAllMeta] = useStore(
+    (s) => [
+      !!s.config.systemRole,
+      s.disabled,
+      s.setAgentMeta,
+      s.autocompleteMeta,
+      s.autocompleteAllMeta,
+    ],
+  );
   const [isInbox, loadingState] = useStore((s) => [s.id === INBOX_SESSION_ID, s.loadingState]);
   const meta = useStore(selectors.currentMetaConfig, isEqual);
   const [background, setBackground] = useState(meta.backgroundColor);
@@ -66,10 +69,13 @@ const AgentMeta = memo(() => {
     return {
       children: (
         <AutoGenerate
-          canAutoGenerate={hasSystemRole}
+          canAutoGenerate={hasSystemRole && !disabled}
+          disabled={disabled}
           loading={loadingState?.[item.key]}
           placeholder={item.placeholder}
           onGenerate={() => {
+            if (disabled) return;
+
             autocompleteMeta(item.key as keyof typeof meta);
           }}
         />
@@ -85,9 +91,14 @@ const AgentMeta = memo(() => {
         children: (
           <AutoGenerateAvatar
             background={background}
-            canAutoGenerate={hasSystemRole}
+            canAutoGenerate={hasSystemRole && !disabled}
+            disabled={disabled}
             loading={loadingState?.['avatar']}
-            onGenerate={() => autocompleteMeta('avatar')}
+            onGenerate={() => {
+              if (disabled) return;
+
+              autocompleteMeta('avatar');
+            }}
           />
         ),
         label: t('settingAgent.avatar.title'),
@@ -96,7 +107,9 @@ const AgentMeta = memo(() => {
         name: 'avatar',
       },
       {
-        children: <BackgroundSwatches onValuesChange={(c) => setBackground(c)} />,
+        children: (
+          <BackgroundSwatches disabled={disabled} onValuesChange={(c) => setBackground(c)} />
+        ),
         label: t('settingAgent.backgroundColor.title'),
         minWidth: undefined,
         name: 'backgroundColor',
@@ -112,7 +125,7 @@ const AgentMeta = memo(() => {
         }
       >
         <Button
-          disabled={!hasSystemRole}
+          disabled={disabled || !hasSystemRole}
           icon={Wand2}
           iconPlacement={'end'}
           loading={Object.values(loadingState as any).some((i) => !!i)}
@@ -122,6 +135,8 @@ const AgentMeta = memo(() => {
           }}
           onClick={(e: any) => {
             e.stopPropagation();
+            if (disabled) return;
+
             autocompleteAllMeta(true);
           }}
         >
@@ -134,14 +149,18 @@ const AgentMeta = memo(() => {
 
   return (
     <Form
-      disabled={!isAgentEditable}
+      disabled={disabled || !isAgentEditable}
       footer={<Form.SubmitFooter />}
       form={form}
       initialValues={meta}
       items={[metaData]}
       itemsType={'group'}
       variant={'borderless'}
-      onFinish={updateMeta}
+      onFinish={(values) => {
+        if (disabled) return;
+
+        updateMeta(values);
+      }}
       {...FORM_STYLE}
     />
   );

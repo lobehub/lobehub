@@ -2,9 +2,9 @@ import { Flexbox } from '@lobehub/ui';
 import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import urlJoin from 'url-join';
 
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useQuery } from '@/hooks/useQuery';
 import { type AssistantMarketSource } from '@/types/discover';
 
@@ -45,9 +45,9 @@ const Related = memo(() => {
             { skipNull: true },
           );
           return (
-            <Link key={index} style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
+            <WorkspaceLink key={index} style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
               <Item {...item} />
-            </Link>
+            </WorkspaceLink>
           );
         })}
       </Flexbox>

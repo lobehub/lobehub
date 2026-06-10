@@ -128,6 +128,7 @@ table agent_cron_jobs {
     agent_id [name: 'agent_cron_jobs_agent_id_idx']
     group_id [name: 'agent_cron_jobs_group_id_idx']
     user_id [name: 'agent_cron_jobs_user_id_idx']
+    workspace_id [name: 'agent_cron_jobs_workspace_id_idx']
     enabled [name: 'agent_cron_jobs_enabled_idx']
     remaining_executions [name: 'agent_cron_jobs_remaining_executions_idx']
     last_executed_at [name: 'agent_cron_jobs_last_executed_at_idx']
@@ -379,6 +380,7 @@ table agent_operations {
 
   indexes {
     user_id [name: 'agent_operations_user_id_idx']
+    workspace_id [name: 'agent_operations_workspace_id_idx']
     agent_id [name: 'agent_operations_agent_id_idx']
     topic_id [name: 'agent_operations_topic_id_idx']
     thread_id [name: 'agent_operations_thread_id_idx']
@@ -461,7 +463,8 @@ table ai_models {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (id, provider_id, user_id) [pk]
+    (id, provider_id, user_id) [name: 'ai_models_id_provider_id_user_id_unique', unique]
+    (id, provider_id, user_id, workspace_id) [name: 'ai_models_id_provider_id_user_id_workspace_id_unique', unique]
     user_id [name: 'ai_models_user_id_idx']
     workspace_id [name: 'ai_models_workspace_id_idx']
   }
@@ -488,7 +491,8 @@ table ai_providers {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (id, user_id) [pk]
+    (id, user_id) [name: 'ai_providers_id_user_id_unique', unique]
+    (id, user_id, workspace_id) [name: 'ai_providers_id_user_id_workspace_id_unique', unique]
     user_id [name: 'ai_providers_user_id_idx']
     workspace_id [name: 'ai_providers_workspace_id_idx']
   }
@@ -778,6 +782,7 @@ table document_histories {
   indexes {
     document_id [name: 'document_histories_document_id_idx']
     user_id [name: 'document_histories_user_id_idx']
+    workspace_id [name: 'document_histories_workspace_id_idx']
     saved_at [name: 'document_histories_saved_at_idx']
     workspace_id [name: 'document_histories_workspace_id_idx']
   }
@@ -1027,6 +1032,7 @@ table llm_generation_tracing {
     user_id [name: 'llm_generation_tracing_user_id_idx']
     agent_id [name: 'llm_generation_tracing_agent_id_idx']
     topic_id [name: 'llm_generation_tracing_topic_id_idx']
+    workspace_id [name: 'llm_generation_tracing_workspace_id_idx']
     provider [name: 'llm_generation_tracing_provider_idx']
     model [name: 'llm_generation_tracing_model_idx']
     success [name: 'llm_generation_tracing_success_idx']
@@ -1793,6 +1799,7 @@ table file_chunks {
   indexes {
     (file_id, chunk_id) [pk]
     user_id [name: 'file_chunks_user_id_idx']
+    workspace_id [name: 'file_chunks_workspace_id_idx']
     file_id [name: 'file_chunks_file_id_idx']
     chunk_id [name: 'file_chunks_chunk_id_idx']
     workspace_id [name: 'file_chunks_workspace_id_idx']
@@ -1808,6 +1815,7 @@ table files_to_sessions {
   indexes {
     (file_id, session_id) [pk]
     user_id [name: 'files_to_sessions_user_id_idx']
+    workspace_id [name: 'files_to_sessions_workspace_id_idx']
     file_id [name: 'files_to_sessions_file_id_idx']
     session_id [name: 'files_to_sessions_session_id_idx']
     workspace_id [name: 'files_to_sessions_workspace_id_idx']
@@ -2169,8 +2177,8 @@ table topics {
     provider [name: 'topics_provider_idx']
     (user_id, completed_at) [name: 'topics_user_id_completed_at_idx']
     sender_id [name: 'topics_sender_id_idx']
-    () [name: 'topics_extract_status_gin_idx']
     workspace_id [name: 'topics_workspace_id_idx']
+    () [name: 'topics_extract_status_gin_idx']
   }
 }
 

@@ -16,6 +16,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
       'DeepSeek-V4-Pro is the flagship MoE language model in the DeepSeek-V4 series, with 1.6T total parameters and 49B active parameters, natively supporting an ultra-long context of 1 million tokens. The model adopts an innovative hybrid attention architecture combining Compressed Sparse Attention (CSA) and Highly Compressed Attention (HCA), requiring only 27% of DeepSeek-V3.2 per-token inference FLOPs and 10% KV cache at 1M context. It also introduces Manifold-Constrained Hyper Connections (mHC) to enhance inter-layer signal propagation stability, and employs the Muon optimizer to accelerate convergence. DeepSeek-V4-Pro is pretrained on over 32T high-quality diverse tokens, with post-training using a two-stage paradigm of independent domain expert cultivation plus online policy distillation for unified integration. Its maximum reasoning intensity mode DeepSeek-V4-Pro-Max achieves top performance on coding benchmarks and significantly narrows the gap with leading closed-source models on reasoning and agentic tasks, making it one of the strongest open-source models today, supporting Non-think, Think High, and Think Max reasoning intensity modes.',
     displayName: 'DeepSeek V4 Pro',
     enabled: true,
+    family: 'deepseek',
+    generation: 'deepseek-v4',
     id: 'deepseek-ai/DeepSeek-V4-Pro',
     organization: 'DeepSeek',
     pricing: {
@@ -42,6 +44,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
       'DeepSeek-V4-Flash is a preview version of the MoE language model in the DeepSeek-V4 series. The total parameter size is 284B, the activation parameter size is 13B, and it supports 1M tokens ultra-long context.The model uses a hybrid attention architecture that combines CSA and HCA, and introduces mHC and Muon Optimizer to improve long-context reasoning efficiency, training stability, and overall performance.',
     displayName: 'DeepSeek V4 Flash',
     enabled: true,
+    family: 'deepseek',
+    generation: 'deepseek-v4',
     id: 'deepseek-ai/DeepSeek-V4-Flash',
     organization: 'DeepSeek',
     pricing: {
@@ -68,6 +72,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Kimi K2.6 is an open-source native multimodal agent model from Moonshot AI, achieving open-source state-of-the-art performance on multiple mainstream benchmarks including HLE (with tools), SWE-Bench Pro, and BrowseComp. The model adopts a MoE architecture with 1T total parameters and 32B active parameters, supports a 256K token context window, and integrates native multimodal capabilities.',
     displayName: 'Kimi-K2.6 (Pro)',
+    family: 'kimi',
+    generation: 'kimi-k2.6',
     id: 'Pro/moonshotai/Kimi-K2.6',
     pricing: {
       currency: 'CNY',
@@ -93,6 +99,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3.6-27B is the first open-source medium-sized dense model in the Qwen3.6 series, with key enhancements for code generation, Agent workflows, and real-world development scenarios. Compared to Qwen3.5-27B, this model shows significant improvements in front-end development, repository-level reasoning, tool calling, and complex problem-solving, with newly added historical reasoning capability optimizations.',
     displayName: 'Qwen3.6 27B',
+    family: 'qwen',
+    generation: 'qwen3.6',
     id: 'Qwen/Qwen3.6-27B',
     organization: 'Qwen',
     pricing: {
@@ -140,6 +148,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3.6-35B-A3B is a large language model from the Qwen team in the Qwen3.6 series, using a Mixture-of-Experts (MoE) architecture with 35B total parameters and 3B active parameters. It balances efficient inference with excellent performance and supports both thinking and non-thinking modes, allowing flexible switching between fast response and deep reasoning.',
     displayName: 'Qwen3.6 35B A3B',
+    family: 'qwen',
+    generation: 'qwen3.6',
     id: 'Qwen/Qwen3.6-35B-A3B',
     organization: 'Qwen',
     pricing: {
@@ -187,6 +197,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3.5-397B-A17B is the latest vision-language model in the Qwen3.5 series, using a Mixture-of-Experts (MoE) architecture with 397B total parameters and 17B active parameters. It natively supports 256K context length with extensibility to approximately 1M tokens, supports 201 languages, and provides unified vision-language understanding, tool calling, and reasoning capabilities.',
     displayName: 'Qwen3.5 397B A17B',
+    family: 'qwen',
+    generation: 'qwen3.5',
     id: 'Qwen/Qwen3.5-397B-A17B',
     organization: 'Qwen',
 
@@ -235,6 +247,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3.5-122B-A10B is a native multimodal large language model from the Qwen team with 122B total parameters and only 10B active parameters. It adopts an efficient hybrid architecture combining Gated Delta Networks and Sparse Mixture-of-Experts (MoE), natively supporting 256K context length with extensibility to approximately 1M tokens.',
     displayName: 'Qwen3.5 122B A10B',
+    family: 'qwen',
+    generation: 'qwen3.5',
     id: 'Qwen/Qwen3.5-122B-A10B',
     organization: 'Qwen',
     pricing: {
@@ -282,6 +296,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3.5-35B-A3B is a native multimodal large language model from the Qwen team with 35B total parameters and only 3B active parameters. It adopts an efficient hybrid architecture combining Gated Delta Networks and Sparse Mixture-of-Experts (MoE), natively supporting 256K context length with extensibility to approximately 1M tokens.',
     displayName: 'Qwen3.5 35B A3B',
+    family: 'qwen',
+    generation: 'qwen3.5',
     id: 'Qwen/Qwen3.5-35B-A3B',
     organization: 'Qwen',
     pricing: {
@@ -329,6 +345,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3.5-27B is a native multimodal large language model from the Qwen team with 27B parameters. It adopts an efficient hybrid architecture combining Gated Delta Networks and Gated Attention, natively supporting 256K context length with extensibility to approximately 1M tokens.',
     displayName: 'Qwen3.5 27B',
+    family: 'qwen',
+    generation: 'qwen3.5',
     id: 'Qwen/Qwen3.5-27B',
     organization: 'Qwen',
     pricing: {
@@ -376,6 +394,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3.5-9B is a native multimodal large language model from the Qwen team with 9B parameters. As a lightweight Dense model in the Qwen3.5 series, it adopts an efficient hybrid architecture combining Gated Delta Networks and Gated Attention, natively supporting 256K context length with extensibility to approximately 1M tokens.',
     displayName: 'Qwen3.5 9B',
+    family: 'qwen',
+    generation: 'qwen3.5',
     id: 'Qwen/Qwen3.5-9B',
     organization: 'Qwen',
     pricing: {
@@ -423,6 +443,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3.5-4B is a native multimodal large language model from the Qwen team with 4B parameters, the most lightweight Dense model in the Qwen3.5 series. It adopts an efficient hybrid architecture combining Gated Delta Networks and Gated Attention, natively supporting 256K context length with extensibility to approximately 1M tokens.',
     displayName: 'Qwen3.5 4B',
+    family: 'qwen',
+    generation: 'qwen3.5',
     id: 'Qwen/Qwen3.5-4B',
     organization: 'Qwen',
     pricing: {
@@ -447,6 +469,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'MiniMax-M2.5 is the latest large language model developed by MiniMax, trained through large-scale reinforcement learning across hundreds of thousands of complex, real-world environments. Featuring an MoE architecture with 229 billion parameters, it achieves industry-leading performance in tasks such as programming, agent tool-calling, search, and office scenarios.',
     displayName: 'MiniMax-M2.5',
+    family: 'minimax',
+    generation: 'minimax-m2.5',
     id: 'MiniMaxAI/MiniMax-M2.5',
     pricing: {
       currency: 'CNY',
@@ -471,6 +495,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'MiniMax-M2.5 is the latest large language model developed by MiniMax, trained through large-scale reinforcement learning across hundreds of thousands of complex, real-world environments. Featuring an MoE architecture with 229 billion parameters, it achieves industry-leading performance in tasks such as programming, agent tool-calling, search, and office scenarios.',
     displayName: 'MiniMax-M2.5 (Pro)',
+    family: 'minimax',
+    generation: 'minimax-m2.5',
     id: 'Pro/MiniMaxAI/MiniMax-M2.5',
     pricing: {
       currency: 'CNY',
@@ -492,6 +518,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'GLM-5.1 is Zhipu’s next-generation flagship agent model for intelligent engineering. It uses a 754B Mixture-of-Experts architecture with native tool calling, prefix completion, FIM support, and a 200K context window for long-horizon workflows.',
     displayName: 'GLM-5.1 (Pro)',
+    family: 'glm',
+    generation: 'glm-5.1',
     id: 'Pro/zai-org/glm-5.1',
     pricing: {
       currency: 'CNY',
@@ -549,6 +577,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       "GLM-5 is Zhipu's next-generation large language model, focusing on complex system engineering and long-duration Agent tasks. The model parameters have been expanded to 744B (40B active) and integrate DeepSeek Sparse Attention.",
     displayName: 'GLM-5 (Pro)',
+    family: 'glm',
+    generation: 'glm-5',
     id: 'Pro/zai-org/glm-5',
     pricing: {
       currency: 'CNY',
@@ -606,6 +636,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'GLM-5.1 is a next-generation flagship model designed for agent engineering, using a Mixture of Experts (MoE) architecture with 754B parameters. It significantly enhances programming capabilities, achieving leading results on SWE-Bench Pro, and substantially outperforms its predecessor on benchmarks like NL2Repo and Terminal-Bench 2.0. Designed for long-duration agent tasks, it handles ambiguous questions with better judgment, decomposes complex tasks, executes experiments, analyzes results, and continuously optimizes through hundreds of iterations and thousands of tool calls.',
     displayName: 'GLM-5.1 (Pro)',
+    family: 'glm',
+    generation: 'glm-5.1',
     id: 'Pro/zai-org/GLM-5.1',
     pricing: {
       currency: 'CNY',
@@ -663,6 +695,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       "DeepSeek-V3.2 is a model that combines high computational efficiency with excellent reasoning and Agent performance. Its approach is based on three major technological breakthroughs: DeepSeek Sparse Attention (DSA), an efficient attention mechanism that significantly reduces computational complexity while maintaining model performance, and is specifically optimized for long-context scenarios; a scalable reinforcement learning framework, through which the model's performance can rival GPT-5, and its high-compute version can rival Gemini-3.0-Pro in reasoning capabilities; and a large-scale Agent task synthesis pipeline, designed to integrate reasoning capabilities into tool-using scenarios, thereby improving instruction-following and generalization abilities in complex interactive environments. The model achieved gold medal results in the 2025 International Mathematical Olympiad (IMO) and International Informatics Olympiad (IOI).",
     displayName: 'DeepSeek V3.2',
+    family: 'deepseek',
+    generation: 'deepseek-v3.2',
     id: 'deepseek-ai/DeepSeek-V3.2',
     pricing: {
       currency: 'CNY',
@@ -686,6 +720,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek-V3.2 is a model that combines high computational efficiency with excellent reasoning and Agent performance. Its approach is built on three key technological breakthroughs: DeepSeek Sparse Attention (DSA), an efficient attention mechanism that significantly reduces computational complexity while maintaining model performance, and is specifically optimized for long-context scenarios; a scalable reinforcement learning framework through which model performance can rival GPT-5, with its high-compute version matching Gemini-3.0-Pro in reasoning capabilities; and a large-scale Agent task synthesis pipeline aimed at integrating reasoning capabilities into tool use scenarios, thereby improving instruction following and generalization in complex interactive environments. The model achieved gold medal performance in the 2025 International Mathematical Olympiad (IMO) and International Olympiad in Informatics (IOI).',
     displayName: 'DeepSeek V3.2 (Pro)',
+    family: 'deepseek',
+    generation: 'deepseek-v3.2',
     id: 'Pro/deepseek-ai/DeepSeek-V3.2',
     pricing: {
       currency: 'CNY',
@@ -711,6 +747,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Kimi K2.5 is an open-source native multimodal agent model, built on Kimi-K2-Base, trained on approximately 1.5 trillion mixed vision and text tokens. The model adopts an MoE architecture with 1T total parameters and 32B active parameters, supporting a 256K context window, seamlessly integrating vision and language understanding capabilities.',
     displayName: 'Kimi-K2.5 (Pro)',
+    family: 'kimi',
+    generation: 'kimi-k2.5',
     id: 'Pro/moonshotai/Kimi-K2.5',
     pricing: {
       currency: 'CNY',
@@ -752,6 +790,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       "GLM-4.7 is Zhipu's new generation flagship model with 355B total parameters and 32B active parameters, fully upgraded in general dialogue, reasoning, and agent capabilities. GLM-4.7 enhances Interleaved Thinking and introduces Preserved Thinking and Turn-level Thinking.",
     displayName: 'GLM-4.7 (Pro)',
+    family: 'glm',
+    generation: 'glm-4.7',
     id: 'Pro/zai-org/GLM-4.7',
     pricing: {
       currency: 'CNY',
@@ -812,6 +852,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3-VL-32B-Instruct is a vision-language model from the Qwen team with leading SOTA results on multiple VL benchmarks. It supports megapixel-resolution images and offers strong visual understanding, multilingual OCR, fine-grained visual grounding, and visual dialogue. It handles complex multimodal tasks and supports tool calling and prefix completion.',
     displayName: 'Qwen3 VL 32B Instruct',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'Qwen/Qwen3-VL-32B-Instruct',
     pricing: {
       currency: 'CNY',
@@ -833,6 +875,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3-VL-32B-Thinking is optimized for complex visual reasoning. It includes a built-in thinking mode that generates intermediate reasoning steps before answers, boosting multi-step logic, planning, and complex reasoning. It supports megapixel images, strong visual understanding, multilingual OCR, fine-grained grounding, visual dialogue, tool calling, and prefix completion.',
     displayName: 'Qwen3 VL 32B Thinking',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'Qwen/Qwen3-VL-32B-Thinking',
     pricing: {
       currency: 'CNY',
@@ -855,6 +899,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek-OCR is a vision-language model from DeepSeek AI focused on OCR and "context optical compression." It explores compressing context from images, efficiently processes documents, and converts them to structured text (e.g., Markdown). It accurately recognizes text in images, suited for document digitization, text extraction, and structured processing.',
     displayName: 'DeepSeek OCR',
+    family: 'deepseek',
     id: 'deepseek-ai/DeepSeek-OCR',
     pricing: {
       currency: 'CNY',
@@ -876,6 +921,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3-Omni-30B-A3B-Instruct is a Qwen3-series MoE model with 30B total and 3B active parameters, delivering strong performance at lower inference cost. Trained on high-quality multi-source multilingual data, it supports full-modal inputs (text, images, audio, video) and cross-modal understanding and generation.',
     displayName: 'Qwen3 Omni 30B A3B Instruct',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'Qwen/Qwen3-Omni-30B-A3B-Instruct',
     pricing: {
       currency: 'CNY',
@@ -898,6 +945,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3-Omni-30B-A3B-Thinking is the core "Thinker" component of Qwen3-Omni. It processes multimodal inputs (text, audio, images, video) and performs complex chain-of-thought reasoning, unifying inputs into a shared representation for deep cross-modal understanding. It is an MoE model with 30B total and 3B active parameters, balancing strong reasoning and compute efficiency.',
     displayName: 'Qwen3 Omni 30B A3B Thinking',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'Qwen/Qwen3-Omni-30B-A3B-Thinking',
     pricing: {
       currency: 'CNY',
@@ -922,6 +971,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3-Omni-30B-A3B-Captioner is a Qwen3-series VLM built for high-quality, detailed, accurate image captions. It uses a 30B-parameter MoE architecture to deeply understand images and produce fluent descriptions, excelling at detail capture, scene understanding, object recognition, and relational reasoning.',
     displayName: 'Qwen3 Omni 30B A3B Captioner',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'Qwen/Qwen3-Omni-30B-A3B-Captioner',
     pricing: {
       currency: 'CNY',
@@ -938,6 +989,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Hunyuan Translation Model includes Hunyuan-MT-7B and the ensemble Hunyuan-MT-Chimera. Hunyuan-MT-7B is a 7B lightweight translation model supporting 33 languages plus 5 Chinese minority languages. In WMT25 it took 30 first-place results across 31 language pairs. Tencent Hunyuan uses a full training pipeline from pretraining to SFT to translation RL and ensemble RL, achieving leading performance at its size with efficient, easy deployment.',
     displayName: 'Hunyuan MT 7B',
+    family: 'hunyuan',
     id: 'tencent/Hunyuan-MT-7B',
     pricing: {
       currency: 'CNY',
@@ -959,6 +1011,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3-VL-30B-A3B-Instruct is the instruction-tuned Qwen3-VL model with strong vision-language understanding and generation. It natively supports 256K context for multimodal chat and image-conditioned generation.',
     displayName: 'Qwen3 VL 30B A3B Instruct',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'Qwen/Qwen3-VL-30B-A3B-Instruct',
     pricing: {
       currency: 'CNY',
@@ -980,6 +1034,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3-VL-30B-A3B-Thinking is the reasoning-enhanced version of Qwen3-VL, optimized for multimodal reasoning, image-to-code, and complex visual understanding. It supports 256K context with stronger chain-of-thought ability.',
     displayName: 'Qwen3 VL 30B A3B Thinking',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'Qwen/Qwen3-VL-30B-A3B-Thinking',
     settings: {
       extendParams: ['reasoningBudgetToken'],
@@ -1002,6 +1058,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek-V3.1-Terminus is an updated V3.1 model positioned as a hybrid agent LLM. It fixes user-reported issues and improves stability, language consistency, and reduces mixed Chinese/English and abnormal characters. It integrates Thinking and Non-thinking modes with chat templates for flexible switching. It also improves Code Agent and Search Agent performance for more reliable tool use and multi-step tasks.',
     displayName: 'DeepSeek V3.1 Terminus',
+    family: 'deepseek',
+    generation: 'deepseek-v3.1',
     id: 'deepseek-ai/DeepSeek-V3.1-Terminus',
     pricing: {
       currency: 'CNY',
@@ -1024,6 +1082,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek-V3.1-Terminus is an updated V3.1 model positioned as a hybrid agent LLM. It fixes user-reported issues and improves stability, language consistency, and reduces mixed Chinese/English and abnormal characters. It integrates Thinking and Non-thinking modes with chat templates for flexible switching. It also improves Code Agent and Search Agent performance for more reliable tool use and multi-step tasks.',
     displayName: 'DeepSeek V3.1 Terminus (Pro)',
+    family: 'deepseek',
+    generation: 'deepseek-v3.1',
     id: 'Pro/deepseek-ai/DeepSeek-V3.1-Terminus',
     pricing: {
       currency: 'CNY',
@@ -1047,6 +1107,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3-VL-8B-Instruct is a Qwen3 vision-language model built on Qwen3-8B-Instruct and trained on large image-text data. It excels at general visual understanding, vision-centric dialogue, and multilingual text recognition in images, suitable for visual QA, captioning, multimodal instruction following, and tool use.',
     displayName: 'Qwen3 VL 8B Instruct',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'Qwen/Qwen3-VL-8B-Instruct',
     organization: 'Qwen',
     pricing: {
@@ -1070,6 +1132,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3-VL-8B-Thinking is the visual thinking version of Qwen3, optimized for complex multi-step reasoning. It generates a thinking chain before answers to improve accuracy, ideal for deep visual QA and detailed image analysis.',
     displayName: 'Qwen3 VL 8B Thinking',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'Qwen/Qwen3-VL-8B-Thinking',
     organization: 'Qwen',
     pricing: {
@@ -1093,6 +1157,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Ling-flash-2.0 is the third Ling 2.0 architecture model from Ant Group’s Bailing team. It is an MoE model with 100B total parameters but only 6.1B active per token (4.8B non-embedding). Despite its lightweight configuration, it matches or exceeds 40B dense models and even larger MoE models on multiple benchmarks, exploring high efficiency through architecture and training strategy.',
     displayName: 'Ling Flash 2.0',
+    family: 'ling',
     id: 'inclusionAI/Ling-flash-2.0',
     pricing: {
       currency: 'CNY',
@@ -1112,6 +1177,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Ling-mini-2.0 is a small, high-performance MoE LLM with 16B total parameters and only 1.4B active per token (789M non-embedding), delivering very fast generation. With efficient MoE design and large high-quality training data, it achieves top-tier performance comparable to dense models under 10B and larger MoE models.',
     displayName: 'Ling Mini 2.0',
+    family: 'ling',
     id: 'inclusionAI/Ling-mini-2.0',
     pricing: {
       currency: 'CNY',
@@ -1132,6 +1198,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Seed-OSS is a family of open-source LLMs from ByteDance Seed, designed for strong long-context handling, reasoning, agent, and general abilities. Seed-OSS-36B-Instruct is a 36B instruction-tuned model with native ultra-long context for processing large documents or codebases. It is optimized for reasoning, code generation, and agent tasks (tool use) while retaining strong general ability. A key feature is "Thinking Budget," allowing flexible reasoning length to improve efficiency.',
     displayName: 'Seed OSS 36B Instruct',
+    family: 'doubao',
     id: 'ByteDance-Seed/Seed-OSS-36B-Instruct',
     pricing: {
       currency: 'CNY',
@@ -1154,6 +1221,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3-Coder-30B-A3B-Instruct is a Qwen3 code model from the Qwen team. It is streamlined for high performance and efficiency while boosting code capabilities. It shows strong advantages on agentic coding, automated browser operations, and tool use among open models. It natively supports 256K context and can extend to 1M tokens for codebase-level understanding. It powers agentic coding on platforms like Qwen Code and CLINE with a dedicated function-calling format.',
     displayName: 'Qwen3 Coder 30B A3B Instruct',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'Qwen/Qwen3-Coder-30B-A3B-Instruct',
     pricing: {
       currency: 'CNY',
@@ -1174,6 +1243,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'GLM-4.5V is Zhipu AI’s latest VLM, built on the GLM-4.5-Air flagship text model (106B total, 12B active) with an MoE architecture for strong performance at lower cost. It follows the GLM-4.1V-Thinking path and adds 3D-RoPE to improve 3D spatial reasoning. Optimized through pretraining, SFT, and RL, it handles images, video, and long documents and ranks top among open models on 41 public multimodal benchmarks. A Thinking mode toggle lets users balance speed and depth.',
     displayName: 'GLM-4.5V',
+    family: 'glm',
+    generation: 'glm-4.5',
     id: 'zai-org/GLM-4.5V',
     pricing: {
       currency: 'CNY',
@@ -1197,6 +1268,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'GLM-4.5-Air is a base model for agent applications using a Mixture-of-Experts architecture. It is optimized for tool use, web browsing, software engineering, and frontend coding, and integrates with code agents like Claude Code and Roo Code. It uses hybrid reasoning to handle both complex reasoning and everyday scenarios.',
     displayName: 'GLM-4.5-Air',
+    family: 'glm',
+    generation: 'glm-4.5',
     id: 'zai-org/GLM-4.5-Air',
     settings: {
       extendParams: ['reasoningBudgetToken'],
@@ -1219,6 +1292,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Hunyuan-A13B-Instruct uses 80B total parameters with 13B active to match larger models. It supports fast/slow hybrid reasoning, stable long-text understanding, and leading agent ability on BFCL-v3 and τ-Bench. GQA and multi-quant formats enable efficient inference.',
     displayName: 'Hunyuan A13B Instruct',
+    family: 'hunyuan',
     id: 'tencent/Hunyuan-A13B-Instruct',
     pricing: {
       currency: 'CNY',
@@ -1241,6 +1315,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3-30B-A3B-Instruct-2507 is the updated non-thinking version of Qwen3-30B-A3B. It is an MoE model with 30.5B total and 3.3B active parameters. It significantly improves instruction following, logical reasoning, text understanding, math, science, coding, and tool use, expands multilingual long-tail knowledge, and better aligns with user preferences on subjective open tasks. It supports 256K context. This model is non-thinking only and will not output `נקוד` tags.',
     displayName: 'Qwen3 30B A3B Instruct 2507',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'Qwen/Qwen3-30B-A3B-Instruct-2507',
     organization: 'Qwen',
     pricing: {
@@ -1262,6 +1338,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3 is a next-gen Tongyi Qwen model with major gains in reasoning, general ability, agent capability, and multilingual performance, and supports switching thinking modes.',
     displayName: 'Qwen3 32B',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'Qwen/Qwen3-32B',
     organization: 'Qwen',
     pricing: {
@@ -1286,6 +1364,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3 is a next-gen Tongyi Qwen model with major gains in reasoning, general ability, agent capability, and multilingual performance, and supports switching thinking modes.',
     displayName: 'Qwen3 14B',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'Qwen/Qwen3-14B',
     organization: 'Qwen',
     pricing: {
@@ -1310,6 +1390,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen3 is a next-gen Tongyi Qwen model with major gains in reasoning, general ability, agent capability, and multilingual performance, and supports switching thinking modes.',
     displayName: 'Qwen3 8B (Free)',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'Qwen/Qwen3-8B',
     organization: 'Qwen',
     pricing: {
@@ -1334,6 +1416,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'GLM-Z1-9B-0414 is a small 9B-parameter GLM model that retains open-source strengths while delivering impressive capability. It performs strongly on math reasoning and general tasks, leading its size class among open models.',
     displayName: 'GLM-Z1 9B 0414 (Free)',
+    family: 'glm',
+    generation: 'glm-z1',
     id: 'THUDM/GLM-Z1-9B-0414',
     settings: {
       extendParams: ['reasoningBudgetToken'],
@@ -1356,6 +1440,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'GLM-4-32B-0414 is a next-gen open GLM model with 32B parameters, comparable to OpenAI GPT and DeepSeek V3/R1 series in performance.',
     displayName: 'GLM-4 32B 0414',
+    family: 'glm',
+    generation: 'glm-4',
     id: 'THUDM/GLM-4-32B-0414',
     pricing: {
       currency: 'CNY',
@@ -1375,6 +1461,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'GLM-4-9B-0414 is a 9B GLM model that inherits GLM-4-32B techniques while offering a lighter deployment. It performs well in code generation, web design, SVG generation, and search-based writing.',
     displayName: 'GLM-4 9B 0414 (Free)',
+    family: 'glm',
+    generation: 'glm-4',
     id: 'THUDM/GLM-4-9B-0414',
     pricing: {
       currency: 'CNY',
@@ -1394,6 +1482,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek-R1-0528-Qwen3-8B distills chain-of-thought from DeepSeek-R1-0528 into Qwen3 8B Base. It reaches SOTA among open models, beating Qwen3 8B by 10% on AIME 2024 and matching Qwen3-235B-thinking performance. It excels on math reasoning, programming, and general logic benchmarks. It shares the Qwen3-8B architecture but uses the DeepSeek-R1-0528 tokenizer.',
     displayName: 'DeepSeek R1 0528 Qwen3 8B (Free)',
+    family: 'deepseek',
+    generation: 'deepseek-r1',
     id: 'deepseek-ai/DeepSeek-R1-0528-Qwen3-8B',
     pricing: {
       currency: 'CNY',
@@ -1416,6 +1506,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek-R1 is an RL-driven reasoning model that reduces repetition and improves readability. It uses cold-start data before RL to further boost reasoning, matches OpenAI-o1 on math, code, and reasoning tasks, and improves overall results through careful training.',
     displayName: 'DeepSeek R1',
+    family: 'deepseek',
+    generation: 'deepseek-r1',
     id: 'deepseek-ai/DeepSeek-R1',
     pricing: {
       currency: 'CNY',
@@ -1437,6 +1529,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek-V3 is a 671B-parameter MoE model using MLA and DeepSeekMoE with loss-free load balancing for efficient inference and training. Pretrained on 14.8T high-quality tokens and further tuned with SFT and RL, it outperforms other open models and approaches leading closed models.',
     displayName: 'DeepSeek V3',
+    family: 'deepseek',
+    generation: 'deepseek-v3',
     id: 'deepseek-ai/DeepSeek-V3',
     pricing: {
       currency: 'CNY',
@@ -1456,6 +1550,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek-R1 is an RL-driven reasoning model that reduces repetition and improves readability. It uses cold-start data before RL to further boost reasoning, matches OpenAI-o1 on math, code, and reasoning tasks, and improves overall results through careful training.',
     displayName: 'DeepSeek R1 (Pro)',
+    family: 'deepseek',
+    generation: 'deepseek-r1',
     id: 'Pro/deepseek-ai/DeepSeek-R1',
     settings: {
       extendParams: ['reasoningBudgetToken'],
@@ -1477,6 +1573,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek-V3 is a 671B-parameter MoE model using MLA and DeepSeekMoE with loss-free load balancing for efficient inference and training. Pretrained on 14.8T high-quality tokens and further tuned with SFT and RL, it outperforms other open models and approaches leading closed models.',
     displayName: 'DeepSeek V3 (Pro)',
+    family: 'deepseek',
+    generation: 'deepseek-v3',
     id: 'Pro/deepseek-ai/DeepSeek-V3',
     pricing: {
       currency: 'CNY',
@@ -1495,6 +1593,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen2.5-7B-Instruct is part of Alibaba Cloud’s latest LLM series. The 7B model brings notable gains in coding and math, supports 29+ languages, and improves instruction following, structured data understanding, and structured output (especially JSON).',
     displayName: 'Qwen2.5 7B Instruct (Free)',
+    family: 'qwen',
+    generation: 'qwen2.5',
     id: 'Qwen/Qwen2.5-7B-Instruct',
     pricing: {
       currency: 'CNY',
@@ -1513,6 +1613,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen2.5-7B-Instruct is part of Alibaba Cloud’s latest LLM series. The 7B model brings notable gains in coding and math, supports 29+ languages, and improves instruction following, structured data understanding, and structured output (especially JSON).',
     displayName: 'Qwen2.5 7B Instruct (Pro)',
+    family: 'qwen',
+    generation: 'qwen2.5',
     id: 'Pro/Qwen/Qwen2.5-7B-Instruct',
     pricing: {
       currency: 'CNY',
@@ -1531,6 +1633,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen2.5-14B-Instruct is part of Alibaba Cloud’s latest LLM series. The 14B model brings notable gains in coding and math, supports 29+ languages, and improves instruction following, structured data understanding, and structured output (especially JSON).',
     displayName: 'Qwen2.5 14B Instruct',
+    family: 'qwen',
+    generation: 'qwen2.5',
     id: 'Qwen/Qwen2.5-14B-Instruct',
     pricing: {
       currency: 'CNY',
@@ -1549,6 +1653,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen2.5-32B-Instruct is part of Alibaba Cloud’s latest LLM series. The 32B model brings notable gains in coding and math, supports 29+ languages, and improves instruction following, structured data understanding, and structured output (especially JSON).',
     displayName: 'Qwen2.5 32B Instruct',
+    family: 'qwen',
+    generation: 'qwen2.5',
     id: 'Qwen/Qwen2.5-32B-Instruct',
     pricing: {
       currency: 'CNY',
@@ -1567,6 +1673,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen2.5-72B-Instruct is part of Alibaba Cloud’s latest LLM series. The 72B model brings notable gains in coding and math, supports 29+ languages, and improves instruction following, structured data understanding, and structured output (especially JSON).',
     displayName: 'Qwen2.5 72B Instruct',
+    family: 'qwen',
+    generation: 'qwen2.5',
     id: 'Qwen/Qwen2.5-72B-Instruct',
     pricing: {
       currency: 'CNY',
@@ -1585,6 +1693,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Qwen2.5-72B-Instruct is part of Alibaba Cloud’s latest LLM series. The 72B model improves coding and math, supports up to 128K input and over 8K output, offers 29+ languages, and improves instruction following and structured output (especially JSON).',
     displayName: 'Qwen2.5 72B Instruct 128K',
+    family: 'qwen',
+    generation: 'qwen2.5',
     id: 'Qwen/Qwen2.5-72B-Instruct-128K',
     pricing: {
       currency: 'CNY',
@@ -1604,6 +1714,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     description:
       'Step 3.5 Flash is the most powerful open-source foundation model from StepFun, using sparse Mixture of Experts (MoE) architecture with 196B total parameters, only 11B active parameters per token. Model supports 256K context window, achieving 100-300 tok/s generation throughput through 3-way Multi-Token Prediction (MTP-3). Excellent performance on programming and Agent tasks, SWE-bench Verified reaches 74.4%.',
     displayName: 'Step 3.5 Flash',
+    family: 'step',
+    generation: 'step-3.5',
     id: 'stepfun-ai/Step-3.5-Flash',
     settings: {
       extendParams: ['reasoningBudgetToken'],

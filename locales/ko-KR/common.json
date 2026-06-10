@@ -480,6 +480,9 @@
   "userPanel.setting": "앱 설정",
   "userPanel.upgradePlan": "플랜 업그레이드",
   "userPanel.usages": "사용량 통계",
+  "userPanel.workspaceCredits": "워크스페이스 크레딧",
+  "userPanel.workspaceSetting": "워크스페이스 설정",
+  "userPanel.workspaceUsages": "워크스페이스 사용량",
   "version": "버전",
   "zoom": "확대"
 }

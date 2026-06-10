@@ -836,7 +836,8 @@ export const aiAgentRouter = router({
       log('execSubAgentTask: agentId=%s, groupId=%s', agentId, groupId);
 
       try {
-        return await ctx.aiAgentService.execSubAgentTask({
+        // External procedure name stays `execSubAgentTask`; the service method is `execSubAgent`.
+        return await ctx.aiAgentService.execSubAgent({
           agentId,
           groupId,
           instruction,

@@ -132,6 +132,13 @@ class LobeAgentExecutionRuntime {
     params: CallSubAgentParams,
     ctx: ToolExecutionContext,
   ): Promise<BuiltinServerRuntimeOutput> => {
+    if (ctx.isSubAgent) {
+      return buildError(
+        'Sub-agent calls cannot be triggered from within another sub-agent.',
+        'NESTED_SUB_AGENT_NOT_ALLOWED',
+      );
+    }
+
     if (!ctx.subAgent) {
       return buildError(
         'Sub-agent execution is not available in this runtime.',

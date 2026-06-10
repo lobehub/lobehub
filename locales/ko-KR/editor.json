@@ -13,6 +13,7 @@
   "actions.expand.on": "펼치기",
   "actions.typobar.off": "서식 도구 모음 숨기기",
   "actions.typobar.on": "서식 도구 모음 표시",
+  "actions.typobar.title": "서식 도구",
   "autoSave.latest": "최신 버전이 로드되었습니다",
   "autoSave.saved": "저장되었습니다",
   "autoSave.saving": "자동 저장 중...",

@@ -1,12 +1,13 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { Flexbox, Icon, Popover } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CheckIcon, ChevronDownIcon, SquircleDashed } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -32,6 +33,14 @@ const styles = createStaticStyles(({ css }) => ({
 
     &:hover {
       background: ${cssVar.colorFillTertiary};
+    }
+  `,
+  buttonDisabled: css`
+    cursor: not-allowed;
+    opacity: 0.5;
+
+    &:hover {
+      background: transparent;
     }
   `,
   checkIndicator: css`
@@ -101,6 +110,7 @@ interface CloudRepoSwitcherProps {
 const CloudRepoSwitcher = memo<CloudRepoSwitcherProps>(({ agentId }) => {
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
+  const { allowed: canCreateContent, reason } = usePermission('create_content');
   // Incremented to trigger re-renders when the module-singleton pending selection changes.
   const [, forceUpdate] = useState(0);
 
@@ -129,6 +139,8 @@ const CloudRepoSwitcher = memo<CloudRepoSwitcherProps>(({ agentId }) => {
 
   const toggleRepo = useCallback(
     async (repo: string) => {
+      if (!canCreateContent) return;
+
       if (!activeTopicId) {
         // No topic yet — buffer in the module singleton keyed by agentId.
         // gateway.ts will read and consume this when the first message creates a topic.
@@ -152,7 +164,23 @@ const CloudRepoSwitcher = memo<CloudRepoSwitcherProps>(({ agentId }) => {
 
       await updateTopicMetadata(activeTopicId, patch);
     },
-    [agentId, activeTopicId, currentWorkingDirectory, topicRepos, updateTopicMetadata],
+    [
+      agentId,
+      activeTopicId,
+      canCreateContent,
+      currentWorkingDirectory,
+      topicRepos,
+      updateTopicMetadata,
+    ],
+  );
+
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      if (!canCreateContent) return;
+
+      setOpen(nextOpen);
+    },
+    [canCreateContent],
   );
 
   if (availableRepos.length === 0) return null;
@@ -201,20 +229,31 @@ const CloudRepoSwitcher = memo<CloudRepoSwitcherProps>(({ agentId }) => {
     </Flexbox>
   );
 
+  const button = (
+    <div className={cx(styles.button, !canCreateContent && styles.buttonDisabled)}>
+      {displayRepos.length > 0 ? <Github size={14} /> : <Icon icon={SquircleDashed} size={14} />}
+      <span>{buttonLabel}</span>
+      <Icon icon={ChevronDownIcon} size={12} />
+    </div>
+  );
+
+  if (!canCreateContent)
+    return (
+      <Tooltip title={reason}>
+        <div>{button}</div>
+      </Tooltip>
+    );
+
   return (
     <Popover
       content={content}
-      open={open}
+      open={canCreateContent && open}
       placement="bottomLeft"
       styles={{ content: { padding: 4 } }}
       trigger="click"
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
     >
-      <div className={styles.button}>
-        {displayRepos.length > 0 ? <Github size={14} /> : <Icon icon={SquircleDashed} size={14} />}
-        <span>{buttonLabel}</span>
-        <Icon icon={ChevronDownIcon} size={12} />
-      </div>
+      {button}
     </Popover>
   );
 });

@@ -8,6 +8,7 @@ import { getProviderMeta } from './providerMeta';
 import { SkillConnectionPopupBlockedError, useSkillConnection } from './useSkillConnection';
 
 interface SkillAuthRowProps {
+  disabled?: boolean;
   onError: (error: unknown) => void;
   spec: TaskTemplateSkillRequirement;
 }
@@ -17,19 +18,20 @@ interface SkillAuthRowProps {
  * Renders `null` once the provider is connected so the caller can collapse the
  * surrounding container without extra bookkeeping.
  */
-export const SkillAuthRow = memo<SkillAuthRowProps>(({ spec, onError }) => {
+export const SkillAuthRow = memo<SkillAuthRowProps>(({ disabled, spec, onError }) => {
   const { t } = useTranslation('taskTemplate');
   const specs = useMemo(() => [spec], [spec]);
   const meta = useMemo(() => getProviderMeta(spec), [spec]);
   const { connect, isAllConnected, isConnecting } = useSkillConnection(specs);
 
   const handleConnect = useCallback(async () => {
+    if (disabled) return;
     try {
       await connect();
     } catch (error) {
       onError(error);
     }
-  }, [connect, onError]);
+  }, [connect, disabled, onError]);
 
   if (!meta || isAllConnected) return null;
 
@@ -45,7 +47,13 @@ export const SkillAuthRow = memo<SkillAuthRowProps>(({ spec, onError }) => {
           {meta.label}
         </Text>
       </Flexbox>
-      <Button loading={isConnecting} size={'small'} variant={'text'} onClick={handleConnect}>
+      <Button
+        disabled={disabled}
+        loading={isConnecting}
+        size={'small'}
+        variant={'text'}
+        onClick={handleConnect}
+      >
         {t('action.connect.short')}
       </Button>
     </Flexbox>

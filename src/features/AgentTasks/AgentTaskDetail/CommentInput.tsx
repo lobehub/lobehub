@@ -11,6 +11,7 @@ import {
   insertFilesIntoEditor,
 } from '@/features/EditorCanvas/editorAttachments';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
+import { usePermission } from '@/hooks/usePermission';
 import { useUserAvatar } from '@/hooks/useUserAvatar';
 import { useTaskStore } from '@/store/task';
 
@@ -18,6 +19,7 @@ import { styles } from '../shared/style';
 
 const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
   const { t } = useTranslation('chat');
+  const { allowed: canEditTask } = usePermission('create_content');
   const editor = useEditor();
   const addComment = useTaskStore((s) => s.addComment);
   const userAvatar = useUserAvatar();
@@ -46,7 +48,7 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
   );
 
   const handleSubmit = useCallback(async () => {
-    if (submitting) return;
+    if (!canEditTask || submitting) return;
     const json = editor?.getDocument?.('json') as unknown;
     const markdown = String(editor?.getDocument?.('markdown') ?? '').trim();
     const hasFiles = getAttachmentFileIdsFromEditor(editor).length > 0;
@@ -61,7 +63,7 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
     } finally {
       setSubmitting(false);
     }
-  }, [taskId, editor, addComment, submitting]);
+  }, [canEditTask, taskId, editor, addComment, submitting]);
 
   return (
     <Flexbox className={styles.commentInputCard} gap={6}>
@@ -75,6 +77,7 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
             style={{ fontSize: 14, minHeight: 24, paddingBlock: 0 }}
             onContentChange={handleContentChange}
             onPressEnter={({ event }) => {
+              if (!canEditTask) return true;
               if (shouldSendOnEnter(event)) {
                 handleSubmit();
                 return true;
@@ -85,7 +88,7 @@ const CommentInput = memo<{ taskId: string }>(({ taskId }) => {
         <Flexbox horizontal align={'center'} gap={4} style={{ flexShrink: 0 }}>
           <AttachmentUploadButton onFiles={handleAttach} />
           <SendButton
-            disabled={!canSubmit && !submitting}
+            disabled={!canEditTask || (!canSubmit && !submitting)}
             loading={submitting}
             shape={'round'}
             type={'text'}

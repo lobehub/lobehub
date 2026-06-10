@@ -5,6 +5,8 @@ import {
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { peekOnboardingCallbackUrl, stashOnboardingCallbackUrl } from '@/utils/onboardingRedirect';
+
 import AgentPickerStep from './index';
 
 const navigate = vi.fn();
@@ -96,6 +98,7 @@ beforeEach(() => {
   metrics.trackOnboardingStepCompleted.mockClear();
   swrReturn = { data: templates, error: undefined, isLoading: false };
   searchParams = new URLSearchParams();
+  sessionStorage.clear();
 });
 
 afterEach(() => {
@@ -153,6 +156,20 @@ describe('AgentPickerStep', () => {
       flow: 'classic',
       targetUrl: '/',
     });
+  });
+
+  it('navigates to the stashed signup callbackUrl on finish and clears it', async () => {
+    stashOnboardingCallbackUrl('?callbackUrl=%2Fagent%2Fabc%3Fmessage%3Dhi');
+    render(<AgentPickerStep onBack={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'agentPicker.skip' }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/agent/abc?message=hi'));
+    expect(metrics.trackOnboardingCompleted).toHaveBeenCalledWith({
+      flow: 'classic',
+      targetUrl: '/agent/abc?message=hi',
+    });
+    expect(peekOnboardingCallbackUrl()).toBeUndefined();
   });
 
   it('shows a Back button that calls onBack for a normal classic entry', () => {

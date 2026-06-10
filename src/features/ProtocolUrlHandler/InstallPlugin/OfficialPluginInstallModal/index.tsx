@@ -6,6 +6,7 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DetailLoading from '@/features/MCP/MCPDetail/Loading';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { useDiscoverStore } from '@/store/discover';
 import { useToolStore } from '@/store/tool';
@@ -24,6 +25,8 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
     const { message } = App.useApp();
     const { t } = useTranslation(['plugin', 'common']);
     const [loading, setLoading] = useState(false);
+    const { allowed: canCreate } = usePermission('create_content');
+    const { allowed: canEdit } = usePermission('edit_own_content');
 
     // Fetch MCP plugin details
     const useMcpDetail = useDiscoverStore((s) => s.useFetchMcpDetail);
@@ -39,7 +42,7 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
     const { data, isLoading } = useMcpDetail({ identifier });
 
     const handleConfirm = useCallback(async () => {
-      if (!installRequest || !data) return;
+      if (!canCreate || !canEdit || !installRequest || !data) return;
 
       setLoading(true);
       try {
@@ -55,7 +58,18 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
         message.error(t('protocolInstall.messages.installError'));
         setLoading(false);
       }
-    }, [installRequest, data]);
+    }, [
+      canCreate,
+      canEdit,
+      installRequest,
+      data,
+      installMCPPlugin,
+      identifier,
+      togglePlugin,
+      message,
+      t,
+      onComplete,
+    ]);
 
     if (!installRequest) return null;
 
@@ -85,7 +99,7 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
         title={t('protocolInstall.official.title')}
         width={800}
         okButtonProps={{
-          disabled: installed || isLoading,
+          disabled: installed || isLoading || !canCreate || !canEdit,
           type: installed ? 'default' : 'primary',
         }}
         okText={

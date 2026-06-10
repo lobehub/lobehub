@@ -1,14 +1,16 @@
 'use client';
 
-import { Button, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, DropdownMenu, Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { useTheme } from 'antd-style';
-import { PlayIcon, Settings2Icon } from 'lucide-react';
+import { MoreHorizontalIcon, PlayIcon, Settings2Icon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { useAgentGroupTransferMenuItem } from '@/business/client/hooks/useAgentGroupTransferMenuItem';
 import { EditorCanvas } from '@/features/EditorCanvas';
+import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
@@ -24,12 +26,14 @@ import GroupVersionReviewTag from './GroupVersionReviewTag';
 
 const GroupProfile = memo(() => {
   const { t } = useTranslation(['setting', 'chat']);
+  const { allowed: canEdit } = usePermission('edit_own_content');
   const theme = useTheme();
   const [showAgentSetting, setShowAgentSetting] = useState(false);
   const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
   const currentGroup = useAgentGroupStore(agentGroupSelectors.currentGroup);
   const updateGroup = useAgentGroupStore((s) => s.updateGroup);
   const router = useQueryRoute();
+  const transferMenuItems = useAgentGroupTransferMenuItem(groupId ?? undefined);
 
   const editor = useGroupProfileStore((s) => s.editor);
   const handleContentChange = useGroupProfileStore((s) => s.handleContentChange);
@@ -39,18 +43,21 @@ const GroupProfile = memo(() => {
   // Create save callback that captures latest groupId
   const saveContent = useCallback(
     async (payload: { content: string; editorData: Record<string, any> }) => {
+      if (!canEdit) return;
       if (!groupId) return;
       await updateGroup(groupId, {
         content: payload.content,
         editorData: payload.editorData,
       });
     },
-    [updateGroup, groupId],
+    [canEdit, updateGroup, groupId],
   );
 
   const onContentChange = useCallback(() => {
+    if (!canEdit) return;
+
     handleContentChange(saveContent);
-  }, [handleContentChange, saveContent]);
+  }, [canEdit, handleContentChange, saveContent]);
 
   // Stabilize editorData object reference to prevent unnecessary re-renders
   const editorData = useMemo(
@@ -110,12 +117,26 @@ const GroupProfile = memo(() => {
             {t('startConversation')}
           </Button>
           <GroupPublishButton />
+          {!!transferMenuItems?.length && (
+            <DropdownMenu items={transferMenuItems}>
+              <ActionIcon
+                icon={MoreHorizontalIcon}
+                size={'small'}
+                style={{ color: theme.colorTextSecondary }}
+              />
+            </DropdownMenu>
+          )}
           <Button
+            disabled={!canEdit}
             icon={Settings2Icon}
             size={'small'}
             style={{ color: theme.colorTextSecondary }}
             type={'text'}
-            onClick={() => setShowAgentSetting(true)}
+            onClick={() => {
+              if (!canEdit) return;
+
+              setShowAgentSetting(true);
+            }}
           >
             {t('advancedSettings')}
           </Button>
@@ -124,6 +145,7 @@ const GroupProfile = memo(() => {
       <Divider />
       {/* Group Content Editor */}
       <EditorCanvas
+        disabled={!canEdit}
         editor={editor}
         editorData={editorData}
         entityId={groupId}

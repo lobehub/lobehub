@@ -7,7 +7,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/store/agent';
 
-const CredentialExtras = memo(() => {
+import type { PlatformCredentialExtrasProps } from '../types';
+
+const CredentialExtras = memo<PlatformCredentialExtrasProps>(({ disabled }) => {
   const { t: _t } = useTranslation('agent');
   const t = _t as (key: string) => string;
   const { message } = App.useApp();
@@ -20,6 +22,8 @@ const CredentialExtras = memo(() => {
   const lineFetchBotInfo = useAgentStore((s) => s.lineFetchBotInfo);
 
   const handleFetch = async () => {
+    if (disabled) return;
+
     const token = channelAccessToken?.trim();
     if (!token) {
       message.warning(t('channel.line.fetchBotInfoMissingToken'));
@@ -47,7 +51,7 @@ const CredentialExtras = memo(() => {
 
   return (
     <Button
-      disabled={!channelAccessToken?.trim()}
+      disabled={disabled || !channelAccessToken?.trim()}
       icon={<Download size={14} />}
       loading={loading}
       size="small"

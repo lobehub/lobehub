@@ -110,6 +110,35 @@ export const useCommitWorkingDirectory = (agentId: string) => {
     [activeTopic, t, writeCwd],
   );
 
+  /**
+   * Set the agent's per-device default cwd, ignoring any active topic. Used by
+   * the sidebar "new topic in this directory" (+) action, which always targets
+   * a fresh topic regardless of what conversation is currently open — so it must
+   * write the same high-precedence slot the picker uses for new topics
+   * (`workingDirByDevice`), not the legacy per-agent fallback. The new topic
+   * bakes this value into its own `metadata.workingDirectory` on first send.
+   */
+  const commitAgentDefault = useCallback(
+    async (newPath: string) => {
+      const path = newPath.trim();
+      if (!path) return;
+      if (targetDeviceId) {
+        const prev = agencyConfig?.workingDirByDevice ?? {};
+        await updateAgentConfigById(agentId, {
+          agencyConfig: {
+            ...agencyConfig,
+            workingDirByDevice: { ...prev, [targetDeviceId]: path },
+          },
+        });
+      } else {
+        // No resolvable device (e.g. gateway id unavailable) — fall back to the
+        // legacy per-agent slot so the action still takes effect.
+        await updateAgentRuntimeEnvConfigById(agentId, { workingDirectory: path });
+      }
+    },
+    [agentId, agencyConfig, targetDeviceId, updateAgentConfigById, updateAgentRuntimeEnvConfigById],
+  );
+
   /** Clear the current selection (falls back to the next precedence level). */
   const clear = useCallback(async () => {
     const run = () => writeCwd(undefined);
@@ -129,5 +158,5 @@ export const useCommitWorkingDirectory = (agentId: string) => {
     await run();
   }, [activeTopic, t, writeCwd]);
 
-  return { clear, commit };
+  return { clear, commit, commitAgentDefault };
 };

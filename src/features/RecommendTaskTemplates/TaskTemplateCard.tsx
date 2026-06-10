@@ -135,6 +135,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
           <Flexbox gap={6} onClick={(e) => e.stopPropagation()}>
             {visibleAuthSpecs.map((spec) => (
               <SkillAuthRow
+                disabled={disabled}
                 key={`${spec.source}:${spec.provider}`}
                 spec={spec}
                 onError={handleConnectError}

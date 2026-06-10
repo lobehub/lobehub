@@ -6,7 +6,7 @@
  *   <Link to="/{shared}">                          → <WorkspaceLink to="/{shared}">
  *
  * Idempotent. Re-run after rebasing the lobehub submodule onto upstream canary
- * to re-apply Step B's workspace-aware navigation patches (LOBE-9024).
+ * to re-apply Step B workspace-aware navigation patches.
  *
  * Strategy:
  *   - Scope: lobehub/src/{features,routes,hooks} excluding tests, the router

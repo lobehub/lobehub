@@ -18,8 +18,9 @@ import {
 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { createRunEditModal } from '@/routes/(main)/eval/bench/[benchmarkId]/features/RunEditModal';
 import StatusBadge from '@/routes/(main)/eval/features/StatusBadge';
 import { useEvalStore } from '@/store/eval';
@@ -117,7 +118,7 @@ interface RunHeaderProps {
 const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
   const { t } = useTranslation('eval');
   const { message } = App.useApp();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const abortRun = useEvalStore((s) => s.abortRun);
   const deleteRun = useEvalStore((s) => s.deleteRun);
   const startRun = useEvalStore((s) => s.startRun);
@@ -196,10 +197,10 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
   return (
     <Flexbox gap={16}>
       {/* Back link */}
-      <Link className={styles.backLink} to={`/eval/bench/${benchmarkId}`}>
+      <WorkspaceLink className={styles.backLink} to={`/eval/bench/${benchmarkId}`}>
         <ArrowLeft size={16} />
         {t('run.detail.backToBenchmark')}
-      </Link>
+      </WorkspaceLink>
 
       {/* Header Card */}
       <Card styles={{ body: { padding: 20 } }}>
@@ -221,13 +222,13 @@ const RunHeader = memo<RunHeaderProps>(({ run, benchmarkId, hideStart }) => {
             {/* Meta info row */}
             <Flexbox horizontal align="center" className={styles.metaRow} gap={8}>
               {run.dataset && (
-                <Link
+                <WorkspaceLink
                   className={styles.datasetLink}
                   target="_blank"
                   to={`/eval/bench/${benchmarkId}/datasets/${run.dataset.id}`}
                 >
                   {run.dataset.name}
-                </Link>
+                </WorkspaceLink>
               )}
               {run.targetAgentId && (
                 <>

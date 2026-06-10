@@ -64,15 +64,18 @@ describe('skill command', () => {
 
   describe('list', () => {
     it('should display skills in table format', async () => {
-      mockTrpcClient.agentSkills.list.query.mockResolvedValue([
-        {
-          description: 'A skill',
-          id: 's1',
-          identifier: 'test-skill',
-          name: 'Test Skill',
-          source: 'user',
-        },
-      ]);
+      mockTrpcClient.agentSkills.list.query.mockResolvedValue({
+        data: [
+          {
+            description: 'A skill',
+            id: 's1',
+            identifier: 'test-skill',
+            name: 'Test Skill',
+            source: 'user',
+          },
+        ],
+        total: 1,
+      });
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'skill', 'list']);
@@ -83,7 +86,7 @@ describe('skill command', () => {
 
     it('should output JSON when --json flag is used', async () => {
       const items = [{ id: 's1', name: 'Test' }];
-      mockTrpcClient.agentSkills.list.query.mockResolvedValue(items);
+      mockTrpcClient.agentSkills.list.query.mockResolvedValue({ data: items, total: items.length });
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'skill', 'list', '--json']);
@@ -92,7 +95,7 @@ describe('skill command', () => {
     });
 
     it('should filter by source', async () => {
-      mockTrpcClient.agentSkills.list.query.mockResolvedValue([]);
+      mockTrpcClient.agentSkills.list.query.mockResolvedValue({ data: [], total: 0 });
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'skill', 'list', '--source', 'builtin']);
@@ -111,7 +114,7 @@ describe('skill command', () => {
     });
 
     it('should show message when no skills found', async () => {
-      mockTrpcClient.agentSkills.list.query.mockResolvedValue([]);
+      mockTrpcClient.agentSkills.list.query.mockResolvedValue({ data: [], total: 0 });
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'skill', 'list']);
@@ -211,9 +214,10 @@ describe('skill command', () => {
 
   describe('search', () => {
     it('should search skills', async () => {
-      mockTrpcClient.agentSkills.search.query.mockResolvedValue([
-        { description: 'A skill', id: 's1', name: 'Found Skill' },
-      ]);
+      mockTrpcClient.agentSkills.search.query.mockResolvedValue({
+        data: [{ description: 'A skill', id: 's1', name: 'Found Skill' }],
+        total: 1,
+      });
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'skill', 'search', 'test']);
@@ -223,7 +227,7 @@ describe('skill command', () => {
     });
 
     it('should show message when no results', async () => {
-      mockTrpcClient.agentSkills.search.query.mockResolvedValue([]);
+      mockTrpcClient.agentSkills.search.query.mockResolvedValue({ data: [], total: 0 });
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'skill', 'search', 'nothing']);

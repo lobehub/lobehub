@@ -228,6 +228,16 @@ const isAgentConfigLoading = (s: AgentStoreState) =>
   !s.activeAgentId || !s.agentMap[s.activeAgentId];
 
 /**
+ * Fetch error for the active agent's config (undefined when none).
+ * Distinguishes "fetch failed" from `isAgentConfigLoading`'s "no data yet",
+ * so failure surfaces a retry UI instead of an endless skeleton.
+ */
+const currentAgentConfigError = (s: AgentStoreState): string | undefined =>
+  s.activeAgentId ? s.agentConfigErrorMap[s.activeAgentId] : undefined;
+
+const isAgentConfigError = (s: AgentStoreState) => !!currentAgentConfigError(s);
+
+/**
  * Get agent's slug by ID (used to identify builtin agents)
  */
 const getAgentSlugById = (agentId: string) => (s: AgentStoreState) => s.agentMap[agentId]?.slug;
@@ -244,7 +254,8 @@ const openingMessage = (s: AgentStoreState) => currentAgentConfig(s)?.openingMes
  * collapses the agent to chat mode.
  */
 const currentAgentMode = (s: AgentStoreState): AgentMode | undefined => {
-  const chatConfig = currentAgentConfig(s)?.chatConfig;
+  const config = currentAgentConfig(s);
+  const chatConfig = config?.chatConfig;
   return chatConfig?.enableAgentMode === false ? undefined : 'auto';
 };
 
@@ -319,6 +330,7 @@ export const agentSelectors = {
   currentAgentAvatar,
   currentAgentBackgroundColor,
   currentAgentConfig,
+  currentAgentConfigError,
   currentAgentDescription,
   currentAgentFiles,
   currentAgentKnowledgeBases,
@@ -347,6 +359,7 @@ export const agentSelectors = {
   hasSystemRole,
   inboxAgentConfig,
   inboxAgentModel,
+  isAgentConfigError,
   isAgentConfigLoading,
   isAgentModeEnabled,
   isCurrentAgentExternal,

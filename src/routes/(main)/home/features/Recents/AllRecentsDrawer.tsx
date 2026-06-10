@@ -4,11 +4,11 @@ import { Empty, Flexbox, SearchBar } from '@lobehub/ui';
 import { SearchIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import SideBarDrawer from '@/features/NavPanel/SideBarDrawer';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useClientDataSWR } from '@/libs/swr';
 import { recentService } from '@/services/recent';
 import { ALL_RECENTS_DRAWER_SWR_PREFIX } from '@/store/home/slices/recent/action';
@@ -74,13 +74,13 @@ const AllRecentsDrawer = memo<AllRecentsDrawerProps>(({ open, onClose }) => {
           />
         ) : (
           filteredRecents.map((item) => (
-            <Link
+            <WorkspaceLink
               key={`${item.type}-${item.id}`}
               style={{ color: 'inherit', textDecoration: 'none' }}
               to={getRecentRoute(item)}
             >
               <RecentListItem {...item} />
-            </Link>
+            </WorkspaceLink>
           ))
         )}
       </Flexbox>

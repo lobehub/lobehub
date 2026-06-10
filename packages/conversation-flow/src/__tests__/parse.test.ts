@@ -39,6 +39,128 @@ describe('parse', () => {
 
       expect(serializeParseResult(result)).toEqual(outputs.assistantChainWithFollowup);
     });
+
+    it('should keep assistant tool results scoped when tool call IDs repeat', () => {
+      const result = parse([
+        {
+          content: 'Current request',
+          createdAt: 0,
+          id: 'user-current',
+          role: 'user',
+          updatedAt: 0,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'First step',
+          createdAt: 1,
+          id: 'assistant-current-1',
+          parentId: 'user-current',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'command_execution',
+              arguments: '{}',
+              id: 'item_1',
+              identifier: 'codex',
+              result_msg_id: 'tool-current-1',
+              type: 'default',
+            },
+          ],
+          updatedAt: 1,
+        },
+        {
+          content: 'Current tool result',
+          createdAt: 2,
+          id: 'tool-current-1',
+          parentId: 'assistant-current-1',
+          role: 'tool',
+          tool_call_id: 'item_1',
+          updatedAt: 2,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'Second step',
+          createdAt: 3,
+          id: 'assistant-current-2',
+          parentId: 'tool-current-1',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'command_execution',
+              arguments: '{}',
+              id: 'item_2',
+              identifier: 'codex',
+              result_msg_id: 'tool-current-2',
+              type: 'default',
+            },
+          ],
+          updatedAt: 3,
+        },
+        {
+          content: 'Second tool result',
+          createdAt: 4,
+          id: 'tool-current-2',
+          parentId: 'assistant-current-2',
+          role: 'tool',
+          tool_call_id: 'item_2',
+          updatedAt: 4,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'Final summary',
+          createdAt: 5,
+          id: 'assistant-current-final',
+          parentId: 'tool-current-2',
+          role: 'assistant',
+          updatedAt: 5,
+        },
+        {
+          content: 'Later request',
+          createdAt: 6,
+          id: 'user-later',
+          role: 'user',
+          updatedAt: 6,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'Another turn reuses Codex item ids',
+          createdAt: 7,
+          id: 'assistant-later',
+          parentId: 'user-later',
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'command_execution',
+              arguments: '{}',
+              id: 'item_1',
+              identifier: 'codex',
+              result_msg_id: 'tool-later-1',
+              type: 'default',
+            },
+          ],
+          updatedAt: 7,
+        },
+        {
+          content: 'Later tool result',
+          createdAt: 8,
+          id: 'tool-later-1',
+          parentId: 'assistant-later',
+          role: 'tool',
+          tool_call_id: 'item_1',
+          updatedAt: 8,
+        },
+      ]);
+
+      const currentGroup = result.flatList.find((message) => message.id === 'assistant-current-1');
+
+      expect(currentGroup?.role).toBe('assistantGroup');
+      expect((currentGroup as any).children.map((child: any) => child.id)).toEqual([
+        'assistant-current-1',
+        'assistant-current-2',
+        'assistant-current-final',
+      ]);
+      expect((currentGroup as any).children[0].tools[0].result_msg_id).toBe('tool-current-1');
+    });
   });
 
   describe('Branching', () => {

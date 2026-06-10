@@ -22,7 +22,7 @@ export async function deliverWebhook(
   webhook: AgentHookWebhook,
   payload: Record<string, unknown>,
 ): Promise<void> {
-  const { url, delivery = 'fetch' } = webhook;
+  const { url, delivery = 'fetch', fallback = 'fetch' } = webhook;
 
   // Resolve URL: relative paths joined with INTERNAL_APP_URL or APP_URL
   const resolvedUrl = url.startsWith('http')
@@ -34,6 +34,9 @@ export async function deliverWebhook(
       const { Client } = await import('@upstash/qstash');
       const qstashToken = process.env.QSTASH_TOKEN;
       if (!qstashToken) {
+        if (fallback === 'none') {
+          throw new Error(`QSTASH_TOKEN not available for qstash-only webhook: ${url}`);
+        }
         log('QStash token not available, falling back to fetch delivery');
         await fetchDeliver(resolvedUrl, payload);
         return;
@@ -50,6 +53,11 @@ export async function deliverWebhook(
       });
       log('Webhook delivered via QStash: %s', url);
     } catch (error) {
+      // An unsigned fetch can never authenticate against a QStash-signed
+      // endpoint — falling back would just be a silently-dropped 401. Let
+      // the failure surface to the dispatcher instead.
+      if (fallback === 'none') throw error;
+
       log('QStash delivery failed, falling back to fetch: %O', error);
       await fetchDeliver(resolvedUrl, payload);
     }
@@ -157,13 +165,23 @@ export class HookDispatcher {
             ...hook.webhook.body,
           });
         } catch (error) {
-          log(
-            '[%s][%s] Webhook delivery error (non-fatal): %s %O',
-            operationId,
-            type,
-            hook.id,
-            error,
-          );
+          if (hook.webhook.fallback === 'none') {
+            // No-fallback webhooks carry control flow (e.g. the sub-agent
+            // resume bridge) — losing one strands its consumer, so surface
+            // the failure in production logs, not just the debug namespace.
+            console.error(
+              `[HookDispatcher][${operationId}][${type}] Webhook delivery failed with no fallback: ${hook.id} → ${hook.webhook.url}`,
+              error,
+            );
+          } else {
+            log(
+              '[%s][%s] Webhook delivery error (non-fatal): %s %O',
+              operationId,
+              type,
+              hook.id,
+              error,
+            );
+          }
         }
       }
     }

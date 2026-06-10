@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
 import { useFileStore } from '@/store/file';
 
@@ -20,9 +21,12 @@ export const useUploadFiles = (options: UseUploadFilesOptions = {}) => {
 
   const { canUploadImage, canUploadVideo } = useVisualMediaUploadAbility(model, provider);
   const uploadFiles = useFileStore((s) => s.uploadChatFiles);
+  const { allowed: canUpload } = usePermission('create_content');
 
   const handleUploadFiles = useCallback(
     async (files: File[]) => {
+      if (!canUpload) return;
+
       // Filter out visual files if the model cannot receive them directly or via fallback.
       const filteredFiles = files.filter((file) => {
         if (file.type.startsWith('image')) return canUploadImage;
@@ -34,7 +38,7 @@ export const useUploadFiles = (options: UseUploadFilesOptions = {}) => {
         uploadFiles(filteredFiles);
       }
     },
-    [canUploadImage, canUploadVideo, uploadFiles],
+    [canUpload, canUploadImage, canUploadVideo, uploadFiles],
   );
 
   return { canUploadImage, canUploadVideo, handleUploadFiles };

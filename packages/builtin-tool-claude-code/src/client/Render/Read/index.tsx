@@ -1,20 +1,9 @@
 'use client';
 
-import { ToolResultCard } from '@lobechat/shared-tool-ui/components';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Highlighter, Text } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
-import { FileText } from 'lucide-react';
+import { Highlighter } from '@lobehub/ui';
 import path from 'path-browserify-esm';
 import { memo, useMemo } from 'react';
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  path: css`
-    min-width: 0;
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
 
 interface ReadArgs {
   file_path?: string;
@@ -38,38 +27,21 @@ const stripLineNumbers = (text: string): string => {
 
 const Read = memo<BuiltinRenderProps<ReadArgs>>(({ args, content }) => {
   const filePath = args?.file_path || '';
-  const fileName = filePath ? path.basename(filePath) : '';
-  const dir = filePath ? path.dirname(filePath) : '';
   const ext = filePath ? path.extname(filePath).slice(1).toLowerCase() : '';
 
   const source = useMemo(() => stripLineNumbers(content || ''), [content]);
+  if (!source) return null;
 
   return (
-    <ToolResultCard
-      icon={FileText}
-      header={
-        <>
-          <Text strong>{fileName || 'Read'}</Text>
-          {dir && dir !== '.' && (
-            <Text ellipsis className={styles.path}>
-              {dir}
-            </Text>
-          )}
-        </>
-      }
+    <Highlighter
+      wrap
+      language={ext || 'text'}
+      showLanguage={false}
+      style={{ maxHeight: 240, overflow: 'auto' }}
+      variant={'borderless'}
     >
-      {source && (
-        <Highlighter
-          wrap
-          language={ext || 'text'}
-          showLanguage={false}
-          style={{ maxHeight: 240, overflow: 'auto' }}
-          variant={'borderless'}
-        >
-          {source}
-        </Highlighter>
-      )}
-    </ToolResultCard>
+      {source}
+    </Highlighter>
   );
 });
 

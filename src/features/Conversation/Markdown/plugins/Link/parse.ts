@@ -5,7 +5,7 @@ export type LobeLinkKind = 'github' | 'linear' | 'email' | 'generic';
 export interface ParsedLobeLink {
   /**
    * Canonical label used when the link has no author-provided text, e.g.
-   * `lobehub/lobehub#15554` / `LOBE-10141` / `@lobehub/ui` / the full URL.
+   * `lobehub/lobehub#15554` / `TST-10001` / `@lobehub/ui` / the full URL.
    */
   canonicalLabel: string;
   /** Host for generic links, used to fetch a favicon. */
@@ -84,7 +84,7 @@ export const parseLobeLink = (href?: string): ParsedLobeLink | null => {
   }
 
   if (host === 'linear.app') {
-    // workspace/issue/LOBE-123/slug
+    // workspace/issue/MY-123/slug
     const issueIndex = segments.indexOf('issue');
     const id = issueIndex >= 0 ? segments[issueIndex + 1] : undefined;
     if (id) return { canonicalLabel: id.toUpperCase(), kind: 'linear' };

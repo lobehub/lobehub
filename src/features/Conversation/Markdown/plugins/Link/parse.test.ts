@@ -32,9 +32,9 @@ describe('parseLobeLink', () => {
   });
 
   it('parses linear issue', () => {
-    expect(parseLobeLink('https://linear.app/lobehub/issue/LOBE-10141/codex-pptx-preview')).toEqual(
+    expect(parseLobeLink('https://linear.app/lobehub/issue/TST-10001/codex-pptx-preview')).toEqual(
       {
-        canonicalLabel: 'LOBE-10141',
+        canonicalLabel: 'TST-10001',
         kind: 'linear',
       },
     );

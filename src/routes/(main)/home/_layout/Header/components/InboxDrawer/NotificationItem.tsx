@@ -5,7 +5,8 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import { ArchiveIcon, BellIcon, ImageIcon, VideoIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 const ACTION_CLASS_NAME = 'notification-item-actions';
 
@@ -55,7 +56,7 @@ interface NotificationItemProps {
 
 const NotificationItem = memo<NotificationItemProps>(
   ({ id, type, title, content, createdAt, isRead, actionUrl, onMarkAsRead, onArchive }) => {
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const TypeIcon = TYPE_ICON_MAP[type] || BellIcon;
 
     const handleClick = useCallback(() => {

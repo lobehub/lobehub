@@ -23,7 +23,8 @@ import {
 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 import RunRow from './RunRow';
 
@@ -191,9 +192,9 @@ const BenchmarkCard = memo<BenchmarkCardProps>(
                 />
               </div>
               <Flexbox gap={4}>
-                <Link className={styles.name} to={`/eval/bench/${id}`}>
+                <WorkspaceLink className={styles.name} to={`/eval/bench/${id}`}>
                   {name}
-                </Link>
+                </WorkspaceLink>
                 <Flexbox horizontal align="center" className={styles.meta} gap={4}>
                   <span>{t('benchmark.card.datasetCount', { count: datasetCount })}</span>
                   <span>·</span>
@@ -221,9 +222,9 @@ const BenchmarkCard = memo<BenchmarkCardProps>(
               </Flexbox>
             </Flexbox>
 
-            <Link className={styles.detailLink} to={`/eval/bench/${id}`}>
+            <WorkspaceLink className={styles.detailLink} to={`/eval/bench/${id}`}>
               <Icon icon={ArrowRight} size={16} />
-            </Link>
+            </WorkspaceLink>
           </Flexbox>
 
           {/* Description */}
@@ -262,20 +263,20 @@ const BenchmarkCard = memo<BenchmarkCardProps>(
             >
               {t('benchmark.card.noDatasetHint')}
             </p>
-            <Link style={{ textDecoration: 'none' }} to={`/eval/bench/${id}`}>
+            <WorkspaceLink style={{ textDecoration: 'none' }} to={`/eval/bench/${id}`}>
               <Button icon={Upload} size="small" variant="filled">
                 {t('benchmark.card.importDataset')}
               </Button>
-            </Link>
+            </WorkspaceLink>
           </div>
         ) : (
           <Flexbox gap={8}>
             <Flexbox horizontal align="center" justify="space-between">
               <span className={styles.recentLabel}>{t('benchmark.card.recentRuns')}</span>
               {allRunCount > 3 && (
-                <Link className={styles.viewAll} to={`/eval/bench/${id}`}>
+                <WorkspaceLink className={styles.viewAll} to={`/eval/bench/${id}`}>
                   {t('benchmark.card.viewAll', { count: allRunCount })}
-                </Link>
+                </WorkspaceLink>
               )}
             </Flexbox>
 
@@ -350,11 +351,11 @@ const BenchmarkCard = memo<BenchmarkCardProps>(
                 >
                   {t('benchmark.card.emptyHint')}
                 </p>
-                <Link style={{ textDecoration: 'none' }} to={`/eval/bench/${id}?tab=runs`}>
+                <WorkspaceLink style={{ textDecoration: 'none' }} to={`/eval/bench/${id}?tab=runs`}>
                   <Button icon={Play} size="small" variant="filled">
                     {t('benchmark.card.startFirst')}
                   </Button>
-                </Link>
+                </WorkspaceLink>
               </div>
             )}
           </Flexbox>

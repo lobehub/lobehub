@@ -140,6 +140,22 @@ export class FileService {
   getRecentPages = async (limit?: number) => {
     return lambdaClient.file.recentPages.query({ limit });
   };
+
+  transferEntity = async (
+    id: string,
+    entityType: 'document' | 'file' | 'folder',
+    targetWorkspaceId: string | null,
+  ) => {
+    return lambdaClient.file.transferEntity.mutate({ entityType, id, targetWorkspaceId });
+  };
+
+  copyEntityToWorkspace = async (
+    id: string,
+    entityType: 'document' | 'file' | 'folder',
+    targetWorkspaceId: string | null,
+  ) => {
+    return lambdaClient.file.copyEntityToWorkspace.mutate({ entityType, id, targetWorkspaceId });
+  };
 }
 
 export const fileService = new FileService();

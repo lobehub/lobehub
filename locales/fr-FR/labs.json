@@ -13,5 +13,7 @@
   "features.imessage.title": "Canal iMessage",
   "features.inputMarkdown.desc": "Affichez le Markdown dans la zone de saisie en temps réel (texte en gras, blocs de code, tableaux, etc.).",
   "features.inputMarkdown.title": "Rendu Markdown dans la saisie",
+  "features.platformAgent.desc": "Afficher l'entrée \"Connecter un agent\" dans le menu de création. Les agents connectés (par exemple, OpenClaw, Hermes) fonctionnent sur vos propres appareils et communiquent via lh connect.",
+  "features.platformAgent.title": "Connecter un agent",
   "title": "Laboratoires"
 }

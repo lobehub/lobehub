@@ -1,8 +1,16 @@
 // @vitest-environment node
+import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { documentHistories, documents, files, users } from '../../schemas';
+import {
+  DOCUMENT_FOLDER_TYPE,
+  documentHistories,
+  documents,
+  files,
+  users,
+  workspaces,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { DocumentModel } from '../document';
 import { FileModel } from '../file';
@@ -22,10 +30,11 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await serverDB.delete(users);
   await serverDB.delete(files);
   await serverDB.delete(documentHistories);
   await serverDB.delete(documents);
+  await serverDB.delete(workspaces);
+  await serverDB.delete(users);
 });
 
 // Helper to create a minimal valid document
@@ -606,6 +615,248 @@ describe('DocumentModel', () => {
       expect(found).toBeDefined();
       expect(found?.fileType).toBe('application/pdf');
       expect(found?.content).toBe('PDF content');
+    });
+  });
+
+  describe('countFileUsageInSubtree', () => {
+    it('should return 0 when the root document does not exist', async () => {
+      const total = await documentModel.countFileUsageInSubtree('non-existent-root');
+      expect(total).toBe(0);
+    });
+
+    it('should sum sizes of files anchored to the document and its descendants', async () => {
+      const root = await documentModel.findOrCreateFolder('root-folder');
+      const child = await documentModel.findOrCreateFolder('child-folder', root.id);
+      const grandchild = await documentModel.findOrCreateFolder('grandchild-folder', child.id);
+
+      // Files anchored to documents in the subtree (parentId points at a document)
+      await fileModel.create({
+        fileType: 'text/plain',
+        name: 'root-file.txt',
+        parentId: root.id,
+        size: 100,
+        url: 'https://example.com/root-file.txt',
+      });
+      await fileModel.create({
+        fileType: 'text/plain',
+        name: 'child-file.txt',
+        parentId: child.id,
+        size: 250,
+        url: 'https://example.com/child-file.txt',
+      });
+      await fileModel.create({
+        fileType: 'text/plain',
+        name: 'grandchild-file.txt',
+        parentId: grandchild.id,
+        size: 50,
+        url: 'https://example.com/grandchild-file.txt',
+      });
+
+      const total = await documentModel.countFileUsageInSubtree(root.id);
+      expect(total).toBe(400);
+    });
+
+    it('should return 0 when the subtree has no anchored files', async () => {
+      const root = await documentModel.findOrCreateFolder('empty-folder');
+      const total = await documentModel.countFileUsageInSubtree(root.id);
+      expect(total).toBe(0);
+    });
+
+    it('should not count files owned by another user', async () => {
+      const root = await documentModel.findOrCreateFolder('scoped-folder');
+      // A file anchored to the doc but owned by user2 must be ignored.
+      await fileModel2.create({
+        fileType: 'text/plain',
+        name: 'other-user-file.txt',
+        parentId: root.id,
+        size: 999,
+        url: 'https://example.com/other-user-file.txt',
+      });
+
+      const total = await documentModel.countFileUsageInSubtree(root.id);
+      expect(total).toBe(0);
+    });
+  });
+
+  describe('transferTo', () => {
+    it('should throw when the document does not exist', async () => {
+      await expect(documentModel.transferTo('non-existent-doc', null, userId2)).rejects.toThrow(
+        'Document not found',
+      );
+    });
+
+    it('should transfer a document subtree to another user (personal scope)', async () => {
+      const root = await documentModel.findOrCreateFolder('transfer-root');
+      const child = await documentModel.findOrCreateFolder('transfer-child', root.id);
+      const { id: anchoredFileId } = await fileModel.create({
+        fileType: 'text/plain',
+        name: 'anchored.txt',
+        parentId: child.id,
+        size: 100,
+        url: 'https://example.com/anchored.txt',
+      });
+
+      const { documentIds } = await documentModel.transferTo(root.id, null, userId2);
+
+      expect(documentIds).toHaveLength(2);
+      expect(documentIds).toContain(root.id);
+      expect(documentIds).toContain(child.id);
+
+      // Original owner no longer sees the docs
+      expect(await documentModel.findById(root.id)).toBeUndefined();
+      // New owner sees them
+      const movedRoot = await documentModel2.findById(root.id);
+      expect(movedRoot).toBeDefined();
+      expect(movedRoot?.userId).toBe(userId2);
+
+      // The anchored file was re-homed to the new owner
+      const movedFile = await fileModel2.findById(anchoredFileId);
+      expect(movedFile).toBeDefined();
+      expect(movedFile?.userId).toBe(userId2);
+    });
+
+    it('should resolve slug conflicts in the target scope when transferring', async () => {
+      // Source doc with a known slug
+      const source = await documentModel.create({
+        content: 'source',
+        fileType: 'article',
+        filename: 'source',
+        slug: 'shared-slug',
+        source: 'https://example.com/source',
+        sourceType: 'web',
+        title: 'source',
+        totalCharCount: 6,
+        totalLineCount: 1,
+      });
+
+      // Target user already has a doc with the same slug
+      await documentModel2.create({
+        content: 'existing',
+        fileType: 'article',
+        filename: 'existing',
+        slug: 'shared-slug',
+        source: 'https://example.com/existing',
+        sourceType: 'web',
+        title: 'existing',
+        totalCharCount: 8,
+        totalLineCount: 1,
+      });
+
+      await documentModel.transferTo(source.id, null, userId2);
+
+      const moved = await documentModel2.findById(source.id);
+      expect(moved).toBeDefined();
+      expect(moved?.userId).toBe(userId2);
+      // Slug must have been bumped to avoid the unique conflict
+      expect(moved?.slug).not.toBe('shared-slug');
+      expect(moved?.slug).toBe('shared-slug-1');
+    });
+  });
+
+  describe('copyToWorkspace', () => {
+    const workspaceId = 'document-test-workspace-id';
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Test Workspace',
+        primaryOwnerId: userId,
+        slug: 'doc-test-ws',
+      });
+    });
+
+    it('should throw when the document does not exist', async () => {
+      await expect(
+        documentModel.copyToWorkspace('non-existent-doc', workspaceId, userId),
+      ).rejects.toThrow('Document not found');
+    });
+
+    it('should deep-clone a document subtree preserving topology', async () => {
+      const root = await documentModel.create({
+        content: 'root content',
+        fileType: DOCUMENT_FOLDER_TYPE,
+        filename: 'copy-root',
+        source: '',
+        sourceType: 'api',
+        title: 'copy-root',
+        totalCharCount: 12,
+        totalLineCount: 1,
+      });
+      const child = await documentModel.create({
+        content: 'child content',
+        fileType: 'article',
+        filename: 'copy-child',
+        parentId: root.id,
+        source: '',
+        sourceType: 'api',
+        title: 'copy-child',
+        totalCharCount: 13,
+        totalLineCount: 1,
+      });
+
+      const { rootId: newRootId } = await documentModel.copyToWorkspace(
+        root.id,
+        workspaceId,
+        userId,
+      );
+
+      expect(newRootId).toBeDefined();
+      expect(newRootId).not.toBe(root.id);
+
+      // Cloned root exists in the workspace scope
+      const wsModel = new DocumentModel(serverDB, userId, workspaceId);
+      const clonedRoot = await wsModel.findById(newRootId);
+      expect(clonedRoot).toBeDefined();
+      expect(clonedRoot?.workspaceId).toBe(workspaceId);
+      expect(clonedRoot?.content).toBe('root content');
+      expect(clonedRoot?.metadata).toMatchObject({ duplicatedFrom: root.id });
+
+      // Cloned child points at the cloned root, not the original
+      const wsDocs = await serverDB.query.documents.findMany({
+        where: eq(documents.workspaceId, workspaceId),
+      });
+      const clonedChild = wsDocs.find((d) => d.filename === 'copy-child');
+      expect(clonedChild).toBeDefined();
+      expect(clonedChild?.parentId).toBe(newRootId);
+      expect(clonedChild?.metadata).toMatchObject({ duplicatedFrom: child.id });
+
+      // Original docs untouched
+      expect(await documentModel.findById(root.id)).toBeDefined();
+    });
+
+    it('should resolve slug conflicts in the target workspace when copying', async () => {
+      // Pre-existing doc in the target workspace holding the slug
+      const wsModel = new DocumentModel(serverDB, userId, workspaceId);
+      await wsModel.create({
+        content: 'existing',
+        fileType: 'article',
+        filename: 'existing',
+        slug: 'copy-slug',
+        source: '',
+        sourceType: 'api',
+        title: 'existing',
+        totalCharCount: 8,
+        totalLineCount: 1,
+      });
+
+      const source = await documentModel.create({
+        content: 'source',
+        fileType: 'article',
+        filename: 'source',
+        slug: 'copy-slug',
+        source: '',
+        sourceType: 'api',
+        title: 'source',
+        totalCharCount: 6,
+        totalLineCount: 1,
+      });
+
+      const { rootId } = await documentModel.copyToWorkspace(source.id, workspaceId, userId);
+
+      const cloned = await wsModel.findById(rootId);
+      expect(cloned).toBeDefined();
+      expect(cloned?.slug).not.toBe('copy-slug');
+      expect(cloned?.slug).toBe('copy-slug-1');
     });
   });
 });

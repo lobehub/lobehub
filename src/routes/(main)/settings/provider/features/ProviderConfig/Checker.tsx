@@ -12,6 +12,7 @@ import { type ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useProviderName } from '@/hooks/useProviderName';
 import { chatService } from '@/services/chat';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -66,6 +67,7 @@ interface ConnectionCheckerProps {
 const Checker = memo<ConnectionCheckerProps>(
   ({ model, provider, checkErrorRender: CheckErrorRender, onBeforeCheck, onAfterCheck }) => {
     const { t } = useTranslation('setting');
+    const { allowed: canManageProvider } = usePermission('manage_provider_key');
 
     const [isProviderConfigUpdating, updateAiProviderConfig] = useAiInfraStore((s) => [
       aiProviderSelectors.isProviderConfigUpdating(provider)(s),
@@ -174,6 +176,7 @@ const Checker = memo<ConnectionCheckerProps>(
         <Flexbox horizontal gap={8}>
           <Select
             virtual
+            disabled={!canManageProvider}
             listItemHeight={36}
             options={sortedModels.map((id) => ({ label: id, value: id }))}
             popupClassName={cx(styles.popup)}
@@ -192,6 +195,8 @@ const Checker = memo<ConnectionCheckerProps>(
               overflow: 'hidden',
             }}
             onSelect={async (value) => {
+              if (!canManageProvider) return;
+
               // Update local state
               setCheckModel(value);
               setPass(false);
@@ -203,7 +208,7 @@ const Checker = memo<ConnectionCheckerProps>(
             }}
           />
           <Button
-            disabled={isProviderConfigUpdating}
+            disabled={!canManageProvider || isProviderConfigUpdating}
             loading={loading}
             icon={
               pass ? (
@@ -223,6 +228,8 @@ const Checker = memo<ConnectionCheckerProps>(
                 : undefined
             }
             onClick={async () => {
+              if (!canManageProvider) return;
+
               await onBeforeCheck();
               try {
                 await checkConnection();

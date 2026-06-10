@@ -1,12 +1,12 @@
-import { useNavigate } from 'react-router-dom';
 import { createStoreUpdater } from 'zustand-utils';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePageStore } from '@/store/page';
 
 const DataSync = () => {
   const usePageStoreUpdater = createStoreUpdater(usePageStore);
 
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   usePageStoreUpdater('navigate', navigate);
 
   return null;

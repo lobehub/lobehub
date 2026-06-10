@@ -13,5 +13,7 @@
   "features.imessage.title": "Kanał iMessage",
   "features.inputMarkdown.desc": "Renderuj Markdown w polu wprowadzania w czasie rzeczywistym (pogrubiony tekst, bloki kodu, tabele itp.).",
   "features.inputMarkdown.title": "Renderowanie Markdown w Polu Wprowadzania",
+  "features.platformAgent.desc": "Pokaż opcję „Połącz agenta” w menu tworzenia. Połączone agenty (np. OpenClaw, Hermes) działają na Twoich urządzeniach i komunikują się za pomocą lh connect.",
+  "features.platformAgent.title": "Połącz agenta",
   "title": "Laboratorium"
 }

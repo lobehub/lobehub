@@ -22,6 +22,7 @@
   "InvalidRequestFormat": "Desculpe, o provedor rejeitou a solicitação por estar malformada. Por favor, verifique a entrada ou tente um modelo diferente.",
   "InvalidVertexCredentials": "Falha na autenticação do Vertex. Por favor, verifique suas credenciais e tente novamente.",
   "LocationNotSupportError": "Desculpe, sua localização atual não suporta este serviço de modelo. Isso pode ser devido a restrições regionais ou indisponibilidade do serviço. Por favor, confirme se a localização atual suporta o uso deste serviço ou tente usar uma localização diferente.",
+  "ModelEmptyCompletion": "O modelo retornou uma resposta vazia. Isso geralmente se resolve ao tentar novamente; se persistir, tente simplificar a solicitação ou trocar de modelo.",
   "ModelNotFound": "Desculpe, o modelo solicitado não pôde ser encontrado. Ele pode não existir ou você pode não ter as permissões de acesso necessárias. Por favor, tente novamente após alterar a chave de API ou ajustar suas permissões de acesso.",
   "NoAvailableChannel": "Desculpe, o proxy ou roteador não possui um canal disponível para o modelo solicitado. Por favor, altere a configuração do canal/chave ou tente novamente mais tarde.",
   "OllamaBizError": "Erro ao solicitar o serviço Ollama. Por favor, solucione o problema ou tente novamente com base nas informações a seguir.",
