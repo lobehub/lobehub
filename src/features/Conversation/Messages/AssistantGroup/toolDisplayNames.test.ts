@@ -5,7 +5,9 @@ import { type AssistantContentBlock } from '@/types/index';
 import { POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD } from './constants';
 import {
   getPostToolAnswerSplitIndex,
+  getToolDisplayName,
   getWorkflowStreamingHeadlineState,
+  getWorkflowSummaryText,
   scoreBlockContentAsAnswerLike,
   scorePostToolBlockAsFinalAnswer,
   shapeProseForWorkflowHeadline,
@@ -13,6 +15,32 @@ import {
 
 const blk = (p: Partial<AssistantContentBlock> & { id: string }): AssistantContentBlock =>
   ({ content: '', ...p }) as AssistantContentBlock;
+
+describe('tool display names', () => {
+  it('uses friendly labels for Codex tool api names', () => {
+    expect(getToolDisplayName('command_execution')).toBe('Ran a command');
+    expect(getToolDisplayName('file_change')).toBe('Edited a file');
+    expect(getToolDisplayName('todo_list')).toBe('Updated todos');
+  });
+
+  it('uses friendly Codex labels in workflow summaries', () => {
+    const summary = getWorkflowSummaryText([
+      blk({
+        id: '0',
+        tools: [
+          { apiName: 'command_execution', id: 'tool-1', result: { content: 'ok' } } as any,
+          { apiName: 'command_execution', id: 'tool-2', result: { content: 'ok' } } as any,
+          { apiName: 'file_change', id: 'tool-3', result: { content: 'ok' } } as any,
+        ],
+      }),
+    ]);
+
+    expect(summary).toContain('Ran a command (2)');
+    expect(summary).toContain('Edited a file');
+    expect(summary).not.toContain('Command_execution');
+    expect(summary).not.toContain('File_change');
+  });
+});
 
 describe('shapeProseForWorkflowHeadline', () => {
   it('does not split on dot inside Node.js in CJK prose', () => {

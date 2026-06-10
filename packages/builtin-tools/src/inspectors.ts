@@ -118,7 +118,9 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   [WebOnboardingManifest.identifier]: WebOnboardingInspectors as Record<string, BuiltinInspector>,
   codex: {
     ...CodexInspectors,
-    command_execution: createRunCommandInspector('Run') as BuiltinInspector,
+    command_execution: createRunCommandInspector(
+      'builtins.codex.apiName.command_execution',
+    ) as BuiltinInspector,
   },
   [GithubIdentifier]: GithubInspectors,
   [LinearIdentifier]: LinearInspectors,

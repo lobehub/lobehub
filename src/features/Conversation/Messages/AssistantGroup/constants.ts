@@ -163,6 +163,11 @@ export const TOOL_API_DISPLAY_NAMES: Record<string, string> = {
   // Cloud sandbox
   executeCode: 'workflow.toolDisplayName.executeCode',
 
+  // Codex
+  command_execution: 'workflow.toolDisplayName.runCommand',
+  file_change: 'workflow.toolDisplayName.editLocalFile',
+  todo_list: 'workflow.toolDisplayName.updateTodos',
+
   // Lobe Agent — Plan & Todos
   createPlan: 'workflow.toolDisplayName.createPlan',
   createTodos: 'workflow.toolDisplayName.createTodos',

@@ -5,6 +5,7 @@ import { inspectorTextStyles, shinyTextStyles } from '@lobechat/shared-tool-ui/s
 import type { BuiltinInspectorProps } from '@lobechat/types';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { type CodexFileChangeArgs, type CodexFileChangeState, getFileChangeStats } from './utils';
 
@@ -44,12 +45,22 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const FileChangeInspector = memo<BuiltinInspectorProps<CodexFileChangeArgs, CodexFileChangeState>>(
   ({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
+    const { t } = useTranslation('plugin');
     const stats = getFileChangeStats(args || partialArgs, pluginState);
     const hasLineStats = stats.linesAdded > 0 || stats.linesDeleted > 0;
+    const summary =
+      stats.total > 0
+        ? t('builtins.codex.fileChange.editedFiles', {
+            count: stats.total,
+            defaultValue: stats.total === 1 ? 'Edited {{count}} file' : 'Edited {{count}} files',
+          })
+        : isArgumentsStreaming || isLoading
+          ? t('builtins.codex.fileChange.editing', { defaultValue: 'Editing files' })
+          : t('builtins.codex.fileChange.noChanges', { defaultValue: 'No file changes' });
 
     if (isArgumentsStreaming && !stats.firstPath) {
       return (
-        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>File changes</div>
+        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>{summary}</div>
       );
     }
 
@@ -60,7 +71,7 @@ const FileChangeInspector = memo<BuiltinInspectorProps<CodexFileChangeArgs, Code
           (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
         )}
       >
-        <span>File changes:</span>
+        <span>{summary}</span>
         {stats.firstPath && (
           <span className={styles.chip}>
             <FilePathDisplay filePath={stats.firstPath} />
