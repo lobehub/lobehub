@@ -6,7 +6,25 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/store/chat';
 
+import type { MarkdownElementProps } from '../type';
 import Render from './Render';
+
+interface LocalFileLinkProperties {
+  linkHref?: string;
+  linkLabel?: string;
+}
+
+const createRenderProps = (
+  properties: LocalFileLinkProperties,
+): MarkdownElementProps<LocalFileLinkProperties> => ({
+  children: null,
+  id: 'local-file-link',
+  node: {
+    properties,
+  },
+  tagName: 'lobeLocalFileLink',
+  type: 'element',
+});
 
 vi.mock('@lobechat/const', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
@@ -43,14 +61,10 @@ describe('LocalFileLink Render', () => {
 
     render(
       <Render
-        node={
-          {
-            properties: {
-              linkHref: '/Users/me/project/src/Group.tsx:265',
-              linkLabel: 'Group.tsx',
-            },
-          } as any
-        }
+        {...createRenderProps({
+          linkHref: '/Users/me/project/src/Group.tsx:265',
+          linkLabel: 'Group.tsx',
+        })}
       />,
     );
 
