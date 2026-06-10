@@ -5,6 +5,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import StopLoadingIcon from '@/components/StopLoading';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
@@ -25,6 +26,7 @@ const formatCountdown = (msRemaining: number): string => {
 
 const TaskDetailRunPauseAction = memo(() => {
   const { t } = useTranslation('chat');
+  const { allowed: canEditTask, reason } = usePermission('create_content');
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const canRun = useTaskStore(taskDetailSelectors.canRunActiveTask);
   const canPause = useTaskStore(taskDetailSelectors.canPauseActiveTask);
@@ -47,6 +49,7 @@ const TaskDetailRunPauseAction = memo(() => {
   const [isRunningNow, setIsRunningNow] = useState(false);
 
   const handleRunOrPause = useCallback(async () => {
+    if (!canEditTask) return;
     if (!taskId) return;
     if (canPause) {
       await updateTaskStatus(taskId, 'paused');
@@ -71,9 +74,11 @@ const TaskDetailRunPauseAction = memo(() => {
     runTask,
     updateTask,
     updateTaskStatus,
+    canEditTask,
   ]);
 
   const handleRunNow = useCallback(async () => {
+    if (!canEditTask) return;
     if (!taskId) return;
     setIsRunningNow(true);
     try {
@@ -84,9 +89,10 @@ const TaskDetailRunPauseAction = memo(() => {
     } finally {
       setIsRunningNow(false);
     }
-  }, [taskId, assigneeAgentId, inboxAgentId, runTask, updateTask]);
+  }, [canEditTask, taskId, assigneeAgentId, inboxAgentId, runTask, updateTask]);
 
   const handleCancelSchedule = useCallback(async () => {
+    if (!canEditTask) return;
     if (!taskId) return;
     setIsCancellingSchedule(true);
     try {
@@ -97,7 +103,7 @@ const TaskDetailRunPauseAction = memo(() => {
     } finally {
       setIsCancellingSchedule(false);
     }
-  }, [taskId, setAutomationMode, updateTaskStatus, status]);
+  }, [canEditTask, taskId, setAutomationMode, updateTaskStatus, status]);
 
   const isScheduled = status === 'scheduled';
 
@@ -133,9 +139,10 @@ const TaskDetailRunPauseAction = memo(() => {
       <Flexbox horizontal align={'center'} gap={12}>
         <Space.Compact>
           <Button
-            disabled={isRunningNow}
+            disabled={!canEditTask || isRunningNow}
             icon={CalendarOffIcon}
             loading={isCancellingSchedule}
+            title={canEditTask ? undefined : reason}
             onClick={handleCancelSchedule}
           >
             {t('taskDetail.cancelSchedule')}
@@ -143,7 +150,7 @@ const TaskDetailRunPauseAction = memo(() => {
           <DropdownMenu
             items={[
               {
-                disabled: isRunningNow || isCancellingSchedule,
+                disabled: !canEditTask || isRunningNow || isCancellingSchedule,
                 icon: PlayIcon,
                 key: 'runNow',
                 label: t('taskDetail.runNow'),
@@ -151,7 +158,12 @@ const TaskDetailRunPauseAction = memo(() => {
               },
             ]}
           >
-            <Button disabled={isCancellingSchedule} icon={ChevronDown} loading={isRunningNow} />
+            <Button
+              disabled={!canEditTask || isCancellingSchedule}
+              icon={ChevronDown}
+              loading={isRunningNow}
+              title={canEditTask ? undefined : reason}
+            />
           </DropdownMenu>
         </Space.Compact>
         {countdownText && (
@@ -176,7 +188,12 @@ const TaskDetailRunPauseAction = memo(() => {
 
   if (canPause) {
     return (
-      <Button icon={StopLoadingIcon} onClick={handleRunOrPause}>
+      <Button
+        disabled={!canEditTask}
+        icon={StopLoadingIcon}
+        title={reason}
+        onClick={handleRunOrPause}
+      >
         {t('taskDetail.stopTask')}
       </Button>
     );
@@ -186,7 +203,13 @@ const TaskDetailRunPauseAction = memo(() => {
   const runIcon = isRerun ? RotateCcwIcon : PlayIcon;
 
   return (
-    <Button icon={runIcon} type={'primary'} onClick={handleRunOrPause}>
+    <Button
+      disabled={!canEditTask}
+      icon={runIcon}
+      title={canEditTask ? undefined : reason}
+      type={'primary'}
+      onClick={handleRunOrPause}
+    >
       {runLabel}
     </Button>
   );

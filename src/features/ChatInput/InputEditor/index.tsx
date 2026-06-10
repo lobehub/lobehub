@@ -21,6 +21,7 @@ import { useHotkeysContext } from 'react-hotkeys-hook';
 import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
+import { usePermission } from '@/hooks/usePermission';
 import { aiChatService } from '@/services/aiChat';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -89,6 +90,7 @@ const InputEditor = memo<{
   const { restoreDraft, saveDraftDebounced } = useChatInputDraft();
   const restoredDraftEditorRef = useRef<IEditor | null>(null);
   const state = useEditorState(editor);
+  const { allowed: canCreateContent } = usePermission('create_content');
   const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.AddUserMessage));
   const { enableScope, disableScope } = useHotkeysContext();
 
@@ -453,6 +455,7 @@ const InputEditor = memo<{
       pasteAsPlainText
       className={className}
       content={''}
+      editable={canCreateContent}
       editor={editor}
       {...{ slashPlacement }}
       {...richRenderProps}

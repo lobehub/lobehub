@@ -16,7 +16,7 @@ import { selectors, useStore } from '../store';
 const AgentSelfIteration = memo(() => {
   const { t } = useTranslation('setting');
   const [form] = Form.useForm();
-  const updateConfig = useStore((s) => s.setChatConfig);
+  const [disabled, updateConfig] = useStore((s) => [s.disabled, s.setChatConfig]);
   const config = useStore(selectors.currentChatConfig, isEqual);
   const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
 
@@ -45,13 +45,18 @@ const AgentSelfIteration = memo(() => {
 
   return (
     <Form
+      disabled={disabled}
       footer={isInbox ? undefined : <Form.SubmitFooter />}
       form={form}
       initialValues={config}
       items={[selfIteration]}
       itemsType={'group'}
       variant={'borderless'}
-      onFinish={updateConfig}
+      onFinish={(values) => {
+        if (disabled) return;
+
+        updateConfig(values);
+      }}
       {...FORM_STYLE}
     />
   );

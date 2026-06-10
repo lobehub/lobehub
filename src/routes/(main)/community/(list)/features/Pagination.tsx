@@ -3,8 +3,9 @@
 import { Pagination as Page } from 'antd';
 import { createStaticStyles, useResponsive } from 'antd-style';
 import { memo } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useQuery } from '@/hooks/useQuery';
 import { SCROLL_PARENT_ID } from '@/routes/(main)/community/features/const';
 import { type DiscoverTab } from '@/types/discover';
@@ -38,7 +39,7 @@ interface PaginationProps {
 
 const Pagination = memo<PaginationProps>(({ tab, currentPage, total, pageSize }) => {
   const { page } = useQuery();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const location = useLocation();
   const { mobile } = useResponsive();
 

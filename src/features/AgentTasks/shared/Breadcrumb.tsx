@@ -3,9 +3,9 @@ import { Breadcrumb as AntBreadcrumb } from 'antd';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useTaskStore } from '@/store/task';
 
 import { styles } from './style';
@@ -49,11 +49,11 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
   const ancestorCrumbs = ancestors.map(({ identifier, agentId }) => ({
     key: identifier,
     title: (
-      <Link to={taskDetailPath(identifier, agentId ?? undefined)}>
+      <WorkspaceLink to={taskDetailPath(identifier, agentId ?? undefined)}>
         <Text color={'inherit'} weight={500}>
           {identifier}
         </Text>
-      </Link>
+      </WorkspaceLink>
     ),
   }));
 
@@ -100,7 +100,11 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
       separator={<Icon icon={ChevronRight} />}
       items={[
         {
-          title: taskId ? <Link to={'/tasks'}>{allTasksLabel}</Link> : allTasksLabel,
+          title: taskId ? (
+            <WorkspaceLink to={'/tasks'}>{allTasksLabel}</WorkspaceLink>
+          ) : (
+            allTasksLabel
+          ),
         },
         ...ancestorCrumbs,
         ...(currentTaskCrumb ? [currentTaskCrumb] : []),

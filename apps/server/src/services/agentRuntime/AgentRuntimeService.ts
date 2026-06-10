@@ -67,6 +67,7 @@ import {
   type StartExecutionParams,
   type StartExecutionResult,
   type StepCompletionReason,
+  type SubAgentBridgeParams,
 } from './types';
 
 if (process.env.VERCEL) {
@@ -75,6 +76,25 @@ if (process.env.VERCEL) {
 }
 
 const log = debug('lobe-server:agent-runtime-service');
+
+/**
+ * Delay before a one-shot `verifyAsyncToolBarrier` re-check fires after a
+ * sub-agent completion found the parent not yet resumable. Long enough for
+ * the parent's parking step to finish persisting, short enough that a lost
+ * resume is recovered promptly.
+ */
+const ASYNC_TOOL_VERIFY_DELAY_MS = 15_000;
+
+/**
+ * Format error for storage in message pluginError metadata.
+ * Handles Error objects which don't serialize properly with JSON.stringify.
+ */
+const formatErrorForMetadata = (error: unknown): Record<string, any> | undefined => {
+  if (!error) return undefined;
+  if (error instanceof Error) return { message: error.message, name: error.name };
+  if (typeof error === 'object' && 'message' in error) return error as Record<string, any>;
+  return { message: String(error) };
+};
 
 const toAgentSignalSnapshotEvents = (
   emission: Awaited<ReturnType<typeof emitAgentSignalSourceEvent>> | undefined,
@@ -557,8 +577,23 @@ export class AgentRuntimeService {
       rejectAndContinue,
       resumeAsyncTool,
       toolMessageId,
+      verifyAsyncToolBarrier,
       externalRetryCount = 0,
     } = params;
+
+    // Watchdog re-check for a parked async-tool wait: re-run the barrier + CAS
+    // without claiming the step lock or executing anything. Idempotent — the
+    // CAS guarantees at most one real resume regardless of how many checks run.
+    if (verifyAsyncToolBarrier) {
+      log('[%s][%d] Running async-tool barrier verify', operationId, stepIndex);
+      const resumed = await this.tryResumeParentFromAsyncTool({ parentOperationId: operationId });
+      return {
+        nextStepScheduled: resumed,
+        state: {},
+        stepResult: null,
+        success: true,
+      };
+    }
 
     // ===== Distributed lock: prevent duplicate execution from QStash retries =====
     const claimed = await this.coordinator.tryClaimStep(operationId, stepIndex, 35);
@@ -1046,6 +1081,26 @@ export class AgentRuntimeService {
 
           // Dispatch completion hooks
           await this.completionLifecycle.dispatchHooks(operationId, stepResult.newState, reason);
+
+          // Park-time self-check: sub-agents are dispatched mid-step, so a
+          // fast child can complete BEFORE this op's parked state/row were
+          // persisted — its resume attempt then no-ops against the status
+          // guard and nothing retries. Now that both the Redis state and the
+          // `agent_operations` row (via dispatchHooks → persistCompletion)
+          // say `waiting_for_async_tool`, re-run the barrier once to recover
+          // any resume that raced the park.
+          if (stepResult.newState.status === 'waiting_for_async_tool') {
+            try {
+              await this.tryResumeParentFromAsyncTool({ parentOperationId: operationId });
+            } catch (selfCheckError) {
+              log(
+                '[%s][%d] Park-time async-tool self-check failed (non-fatal): %O',
+                operationId,
+                stepIndex,
+                selfCheckError,
+              );
+            }
+          }
 
           // Finalize tracing snapshot. The error catch below uses the same
           // recorder so propagated failures still write the canonical S3
@@ -1541,12 +1596,33 @@ export class AgentRuntimeService {
    *      the LLM with the refreshed tool results.
    *
    * Returns true only for the CAS winner that scheduled the resume.
+   *
+   * `options.scheduleVerifyOnHold` arms a one-shot delayed re-check
+   * (`verifyAsyncToolBarrier`) when the parent is found not yet resumable.
+   * Sub-agent completions set it to cover the child finishing before the
+   * parent's parked state is persisted, and transient failures around the
+   * last completion (a sibling dying between backfill and resume, a DB
+   * hiccup during the barrier read). Pure concurrency needs no cover: each
+   * completion checks the barrier only after committing its own backfill, so
+   * the last committer always sees every earlier one. The re-check itself
+   * never re-arms, so retries stay bounded.
    */
-  async tryResumeParentFromAsyncTool(params: { parentOperationId: string }): Promise<boolean> {
+  async tryResumeParentFromAsyncTool(
+    params: { parentOperationId: string },
+    options?: { scheduleVerifyOnHold?: boolean },
+  ): Promise<boolean> {
     const { parentOperationId } = params;
 
     const state = await this.coordinator.loadAgentState(parentOperationId);
-    if (!state || state.status !== 'waiting_for_async_tool') return false;
+    if (!state) return false;
+
+    if (state.status !== 'waiting_for_async_tool') {
+      // Not parked (yet). Either the op already resumed/finished — nothing to
+      // do — or the child outran the parent's parking step; the delayed verify
+      // re-checks once the park has had time to land.
+      await this.maybeScheduleAsyncToolVerify(parentOperationId, state, options);
+      return false;
+    }
 
     const pending = (state.pendingToolsCalling ?? []) as ChatToolPayload[];
     if (pending.length === 0) return false;
@@ -1555,6 +1631,7 @@ export class AgentRuntimeService {
     const allFulfilled = await this.allPendingToolsFulfilled(pending);
     if (!allFulfilled) {
       log('[%s] async-tool barrier not yet satisfied, holding', parentOperationId);
+      await this.maybeScheduleAsyncToolVerify(parentOperationId, state, options);
       return false;
     }
 
@@ -1584,6 +1661,121 @@ export class AgentRuntimeService {
     }
 
     return true;
+  }
+
+  /**
+   * Arm a one-shot delayed `verifyAsyncToolBarrier` re-check for a parent op
+   * whose resume attempt found it not yet resumable. Skipped for terminal
+   * states (nothing left to resume) and when the caller didn't opt in — the
+   * verify execution itself never re-arms, keeping retries bounded to one
+   * per completion event.
+   */
+  private async maybeScheduleAsyncToolVerify(
+    parentOperationId: string,
+    state: AgentState,
+    options?: { scheduleVerifyOnHold?: boolean },
+  ): Promise<void> {
+    if (!options?.scheduleVerifyOnHold || !this.queueService) return;
+
+    const status = state.status as string;
+    if (status === 'done' || status === 'error' || status === 'interrupted') return;
+
+    log(
+      '[%s] scheduling async-tool barrier verify in %dms (status: %s)',
+      parentOperationId,
+      ASYNC_TOOL_VERIFY_DELAY_MS,
+      status,
+    );
+
+    try {
+      await this.queueService.scheduleMessage({
+        context: undefined,
+        delay: ASYNC_TOOL_VERIFY_DELAY_MS,
+        endpoint: `${this.baseURL}/run`,
+        operationId: parentOperationId,
+        payload: { verifyAsyncToolBarrier: true },
+        priority: 'high',
+        stepIndex: state.stepCount,
+      });
+    } catch (error) {
+      log(
+        '[%s] failed to schedule async-tool barrier verify (non-fatal): %O',
+        parentOperationId,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Sub-agent completion bridge for the server `callSubAgent` deferred-tool
+   * path. Runs when a child sub-agent op reaches a terminal state — invoked
+   * in-process by the child's `onComplete` hook handler (local mode) or via
+   * the QStash-delivered `/webhooks/subagent-callback` endpoint (queue mode,
+   * where in-memory handler hooks don't survive cross-process steps).
+   *
+   *   1. Backfill the parent's placeholder tool message with the sub-agent's
+   *      final answer (success) or an error note (failure), plus pluginState
+   *      so the UI render can resolve the isolation thread.
+   *   2. Resume the parked parent: barrier-check + CAS via
+   *      `tryResumeParentFromAsyncTool`, arming the delayed verify when the
+   *      parent isn't resumable yet.
+   *
+   * THROWS on infrastructure failure of either half (state load, backfill,
+   * resume) so the queue-mode callback returns non-2xx and QStash redelivers
+   * the whole bridge — the delayed verify alone cannot recover a failed
+   * backfill, it only re-reads the barrier. Redelivery is safe: the backfill
+   * rewrites the same content and the resume is CAS-guarded.
+   *
+   * Returns true when this call won the resume CAS.
+   */
+  async completeSubAgentBridge(params: SubAgentBridgeParams): Promise<boolean> {
+    const { operationId, parentOperationId, reason, threadId, toolMessageId } = params;
+    const failed = reason === 'error' || reason === 'interrupted';
+
+    // Infra errors propagate; a null state (expired) degrades to a stub note.
+    const finalState =
+      params.finalState ?? (await this.coordinator.loadAgentState(operationId)) ?? undefined;
+
+    log(
+      '[%s] sub-agent bridge → parent %s (reason: %s, state: %s)',
+      operationId,
+      parentOperationId,
+      reason,
+      finalState ? 'loaded' : 'missing',
+    );
+
+    // 1. Backfill the placeholder tool message with the result.
+    // `updateToolMessage` swallows transaction errors into `success: false`,
+    // so the flag must be checked — an unfulfilled message would hold the
+    // parent's barrier forever while the callback acked with 200.
+    const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
+    const lastAssistant = [...messages]
+      .reverse()
+      .find((m: { role?: string }) => m?.role === 'assistant');
+    const content = failed
+      ? `Sub-agent did not complete (${reason}).`
+      : (lastAssistant?.content as string | undefined) ||
+        'Sub-agent completed without a textual answer.';
+
+    const backfill = await this.messageModel.updateToolMessage(toolMessageId, {
+      content,
+      pluginError: failed ? formatErrorForMetadata(finalState?.error) : undefined,
+      pluginState: {
+        model: finalState?.modelRuntimeConfig?.model,
+        status: failed ? 'error' : 'completed',
+        threadId,
+        totalToolCalls: finalState?.usage?.tools?.totalCalls,
+        totalTokens: finalState?.usage?.llm?.tokens?.total,
+      },
+    });
+    if (!backfill.success) {
+      throw new Error(
+        `Sub-agent bridge: failed to backfill tool message ${toolMessageId} for parent ${parentOperationId}`,
+      );
+    }
+
+    // 2. Barrier + CAS + resume the parent op (infra errors propagate too)
+    return this.tryResumeParentFromAsyncTool({ parentOperationId }, { scheduleVerifyOnHold: true });
   }
 
   /**

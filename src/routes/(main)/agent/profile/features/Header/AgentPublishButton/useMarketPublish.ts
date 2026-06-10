@@ -2,6 +2,7 @@ import isEqual from 'fast-deep-equal';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { message } from '@/components/AntdStaticMethods';
 import { useTokenCount } from '@/hooks/useTokenCount';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
@@ -56,6 +57,7 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
   const model = useAgentStore(agentSelectors.currentAgentModel);
   const provider = useAgentStore(agentSelectors.currentAgentModelProvider);
   const tokenUsage = useTokenCount(systemRole);
+  const hasActiveWorkspace = useHasActiveWorkspace();
 
   const isSubmit = action === 'submit';
 
@@ -117,9 +119,13 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
       isPublishingRef.current = true;
       setIsPublishing(true);
       message.loading({ content: loadingMessage, key: messageKey });
+      const actAs = hasActiveWorkspace
+        ? (await lambdaClient.workspace.ensureMarketOrganization.mutate()).marketAccountId
+        : undefined;
 
       // Use tRPC publishOrCreate - backend handles ownership check automatically
       const result = await lambdaClient.market.agent.publishOrCreate.mutate({
+        actAs,
         avatar: meta?.avatar,
         changelog,
         config: {
@@ -189,6 +195,7 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
     chatConfig?.historyCount,
     chatConfig?.searchMode,
     editorData,
+    hasActiveWorkspace,
     isAuthenticated,
     isSubmit,
     language,

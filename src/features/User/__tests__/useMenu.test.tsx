@@ -40,12 +40,8 @@ vi.mock('@/services/config', () => ({
   },
 }));
 
-vi.mock('./useNewVersion', () => ({
-  useNewVersion: vi.fn(() => false),
-}));
-
 describe('useMenu', () => {
-  it('should provide correct menu items when user is logged in with auth', () => {
+  it('should keep workspace-aware Settings and drop Account-Panel-only items', () => {
     act(() => {
       useUserStore.setState({ isSignedIn: true });
     });
@@ -53,16 +49,18 @@ describe('useMenu', () => {
     const { result } = renderHook(() => useMenu(), { wrapper });
 
     act(() => {
-      const { mainItems, logoutItems } = result.current;
-      // 'setting' and 'memory' are shown when logged in
+      const { mainItems } = result.current;
+      // Settings stays in the Workspace Panel so workspace-context Settings
+      // is reachable in one click.
       expect(mainItems?.some((item) => item?.key === 'setting')).toBe(true);
-      expect(mainItems?.some((item) => item?.key === 'memory')).toBe(true);
-      // 'logout' is shown when isLoginWithAuth is true
-      expect(logoutItems.some((item) => item?.key === 'logout')).toBe(true);
+      // Account-only items have moved to the Account Panel and must not
+      // appear in the Workspace Panel menu.
+      expect(mainItems?.some((item) => item?.key === 'get-desktop-app')).toBe(false);
+      expect(mainItems?.some((item) => item?.key === 'logout')).toBe(false);
     });
   });
 
-  it('should provide correct menu items when user is not logged in', () => {
+  it('should hide Settings when not logged in', () => {
     act(() => {
       useUserStore.setState({ isSignedIn: false });
     });
@@ -70,11 +68,8 @@ describe('useMenu', () => {
     const { result } = renderHook(() => useMenu(), { wrapper });
 
     act(() => {
-      const { mainItems, logoutItems } = result.current;
-      // When not logged in, setting and memory should not be shown
+      const { mainItems } = result.current;
       expect(mainItems?.some((item) => item?.key === 'setting')).toBe(false);
-      expect(mainItems?.some((item) => item?.key === 'memory')).toBe(false);
-      expect(logoutItems.some((item) => item?.key === 'logout')).toBe(false);
     });
   });
 

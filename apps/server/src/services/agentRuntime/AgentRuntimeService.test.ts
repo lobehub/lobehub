@@ -3,6 +3,7 @@
  */
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import type * as ModelBankModule from 'model-bank';
+import type { MockInstance } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -1623,6 +1624,169 @@ describe('AgentRuntimeService', () => {
 
       expect(won).toBe(false);
       expect(casSpy).not.toHaveBeenCalled();
+    });
+
+    it('arms a one-shot verify when the parent has not parked yet and scheduleVerifyOnHold is set', async () => {
+      // Child completed before the parent's parking step persisted its state.
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        pendingToolsCalling: [],
+        status: 'running',
+        stepCount: 2,
+      });
+
+      const won = await service.tryResumeParentFromAsyncTool(
+        { parentOperationId: parentOpId },
+        { scheduleVerifyOnHold: true },
+      );
+
+      expect(won).toBe(false);
+      expect(mockQueueService.scheduleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          operationId: parentOpId,
+          payload: { verifyAsyncToolBarrier: true },
+          stepIndex: 2,
+        }),
+      );
+    });
+
+    it('arms a one-shot verify when the barrier is unsatisfied and scheduleVerifyOnHold is set', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        pendingToolsCalling: [{ id: 'tc1' }],
+        status: 'waiting_for_async_tool',
+        stepCount: 1,
+      });
+      (service as any).serverDB.query = {
+        messagePlugins: { findFirst: vi.fn().mockResolvedValue(null) },
+      };
+
+      const won = await service.tryResumeParentFromAsyncTool(
+        { parentOperationId: parentOpId },
+        { scheduleVerifyOnHold: true },
+      );
+
+      expect(won).toBe(false);
+      expect(mockQueueService.scheduleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ payload: { verifyAsyncToolBarrier: true } }),
+      );
+    });
+
+    it('does not arm a verify for terminal parent states', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        pendingToolsCalling: [],
+        status: 'done',
+        stepCount: 5,
+      });
+
+      const won = await service.tryResumeParentFromAsyncTool(
+        { parentOperationId: parentOpId },
+        { scheduleVerifyOnHold: true },
+      );
+
+      expect(won).toBe(false);
+      expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('completeSubAgentBridge', () => {
+    const bridgeParams = {
+      operationId: 'child-op-1',
+      parentOperationId: 'parent-op-1',
+      reason: 'done',
+      threadId: 'thread-1',
+      toolMessageId: 'tool-msg-1',
+    };
+
+    const childState = {
+      messages: [
+        { content: 'question', role: 'user' },
+        { content: 'final answer', role: 'assistant' },
+      ],
+      modelRuntimeConfig: { model: 'gpt-test' },
+      status: 'done',
+      usage: { llm: { tokens: { total: 42 } }, tools: { totalCalls: 2 } },
+    };
+
+    let updateToolMessage: ReturnType<typeof vi.fn>;
+    let resumeSpy: MockInstance<AgentRuntimeService['tryResumeParentFromAsyncTool']>;
+
+    beforeEach(() => {
+      updateToolMessage = vi.fn().mockResolvedValue({ success: true });
+      (service as any).messageModel.updateToolMessage = updateToolMessage;
+      resumeSpy = vi.spyOn(service, 'tryResumeParentFromAsyncTool').mockResolvedValue(true);
+    });
+
+    it('backfills the tool message from finalState and resumes with scheduleVerifyOnHold', async () => {
+      const won = await service.completeSubAgentBridge({
+        ...bridgeParams,
+        finalState: childState as any,
+      });
+
+      expect(won).toBe(true);
+      expect(updateToolMessage).toHaveBeenCalledWith('tool-msg-1', {
+        content: 'final answer',
+        pluginError: undefined,
+        pluginState: {
+          model: 'gpt-test',
+          status: 'completed',
+          threadId: 'thread-1',
+          totalToolCalls: 2,
+          totalTokens: 42,
+        },
+      });
+      expect(resumeSpy).toHaveBeenCalledWith(
+        { parentOperationId: 'parent-op-1' },
+        { scheduleVerifyOnHold: true },
+      );
+    });
+
+    it('loads the child state from the coordinator when finalState is not passed (webhook path)', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue(childState);
+
+      await service.completeSubAgentBridge(bridgeParams);
+
+      expect(mockCoordinator.loadAgentState).toHaveBeenCalledWith('child-op-1');
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({ content: 'final answer' }),
+      );
+    });
+
+    it('writes an error note + pluginError when the child failed', async () => {
+      await service.completeSubAgentBridge({
+        ...bridgeParams,
+        finalState: { ...childState, error: { message: 'boom' } } as any,
+        reason: 'error',
+      });
+
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({
+          content: 'Sub-agent did not complete (error).',
+          pluginError: { message: 'boom' },
+          pluginState: expect.objectContaining({ status: 'error' }),
+        }),
+      );
+    });
+
+    it('throws when the backfill reports success: false so the webhook path redelivers', async () => {
+      // updateToolMessage swallows transaction errors into { success: false } —
+      // acking 200 here would strand the parent: the barrier stays unsatisfied
+      // and QStash never retries an acknowledged delivery.
+      updateToolMessage.mockResolvedValue({ success: false });
+
+      await expect(
+        service.completeSubAgentBridge({ ...bridgeParams, finalState: childState as any }),
+      ).rejects.toThrow(/failed to backfill/);
+      expect(resumeSpy).not.toHaveBeenCalled();
+    });
+
+    it('propagates backfill infrastructure errors for the same redelivery', async () => {
+      updateToolMessage.mockRejectedValue(new Error('db down'));
+
+      await expect(
+        service.completeSubAgentBridge({ ...bridgeParams, finalState: childState as any }),
+      ).rejects.toThrow('db down');
+      expect(resumeSpy).not.toHaveBeenCalled();
     });
   });
 });

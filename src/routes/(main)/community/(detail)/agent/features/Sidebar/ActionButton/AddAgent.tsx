@@ -7,9 +7,10 @@ import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import { SESSION_CHAT_URL } from '@/const/url';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { usePermission } from '@/hooks/usePermission';
 import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
 import { useAgentStore } from '@/store/agent';
@@ -39,8 +40,9 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
   const createAgent = useAgentStore((s) => s.createAgent);
   const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
   const { message } = App.useApp();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('discover');
+  const { allowed: canCreate } = usePermission('create_content');
 
   const meta = {
     avatar,
@@ -67,7 +69,7 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
   };
 
   const createAgentWithMarketIdentifier = async (shouldNavigate = true) => {
-    if (!config) return;
+    if (!canCreate || !config) return;
 
     // Note: agentService.createAgent automatically normalizes market config (handles model as object)
     const agentData = {
@@ -97,6 +99,7 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
   };
 
   const handleCreateAndConverse = async () => {
+    if (!canCreate) return;
     setIsLoading(true);
     try {
       const result = await createAgentWithMarketIdentifier(true);
@@ -108,6 +111,7 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
   };
 
   const handleCreate = async () => {
+    if (!canCreate) return;
     setIsLoading(true);
     try {
       await createAgentWithMarketIdentifier(false);
@@ -118,7 +122,7 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
   };
 
   const handleAddAgentAndConverse = async () => {
-    if (!config) return;
+    if (!canCreate || !config) return;
 
     const isDuplicate = await checkDuplicateAgent();
     if (isDuplicate) {
@@ -129,7 +133,7 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
   };
 
   const handleAddAgent = async () => {
-    if (!config) return;
+    if (!canCreate || !config) return;
 
     const isDuplicate = await checkDuplicateAgent();
     if (isDuplicate) {
@@ -141,6 +145,7 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
 
   const menuItems = [
     {
+      disabled: !canCreate,
       key: 'addAgent',
       label: t('assistants.addAgent'),
       onClick: handleAddAgent,
@@ -152,6 +157,7 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
       <Button
         block
         className={styles.primaryButton}
+        disabled={!canCreate}
         loading={isLoading}
         size={'large'}
         style={{ flex: 1, width: 'unset' }}
@@ -163,11 +169,11 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
       <DropdownMenu
         items={menuItems}
         popupProps={{ style: { minWidth: 267 } }}
-        triggerProps={{ disabled: isLoading }}
+        triggerProps={{ disabled: isLoading || !canCreate }}
       >
         <Button
           className={styles.menuButton}
-          disabled={isLoading}
+          disabled={isLoading || !canCreate}
           icon={<Icon icon={ChevronDownIcon} />}
           size={'large'}
           type={'primary'}

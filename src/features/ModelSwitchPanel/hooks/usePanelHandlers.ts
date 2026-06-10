@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 
 interface UsePanelHandlersProps {
@@ -11,6 +12,7 @@ export const usePanelHandlers = ({
   onModelChange: onModelChangeProp,
   onOpenChange,
 }: UsePanelHandlersProps) => {
+  const { allowed: canCreateContent } = usePermission('create_content');
   const updateAgentConfig = useAgentStore((s) => s.updateAgentConfig);
 
   const handleModelChange = useCallback(
@@ -18,6 +20,8 @@ export const usePanelHandlers = ({
       // Defer store update so the panel close animation completes
       // before React re-renders with new data (prevents detail panel flash).
       setTimeout(() => {
+        if (!canCreateContent) return;
+
         const params = { model: modelId, provider: providerId };
         if (onModelChangeProp) {
           onModelChangeProp(params);
@@ -26,7 +30,7 @@ export const usePanelHandlers = ({
         }
       }, 150);
     },
-    [onModelChangeProp, updateAgentConfig],
+    [canCreateContent, onModelChangeProp, updateAgentConfig],
   );
 
   const handleClose = useCallback(() => {

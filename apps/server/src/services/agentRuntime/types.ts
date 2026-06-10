@@ -140,6 +140,15 @@ export interface AgentExecutionParams {
   stepIndex: number;
   /** ID of the pending tool message targeted by the intervention. */
   toolMessageId?: string;
+  /**
+   * Watchdog re-check for a parked `waiting_for_async_tool` op: re-runs the
+   * resume barrier + CAS without claiming the step lock or executing a step.
+   * A no-op when the op already resumed or the barrier is still unsatisfied.
+   * Scheduled one-shot by `tryResumeParentFromAsyncTool` when a sub-agent
+   * completion found the parent not yet resumable (covers the
+   * child-finishes-before-parent-parks race and transient barrier failures).
+   */
+  verifyAsyncToolBarrier?: boolean;
 }
 
 export interface AgentExecutionResult {
@@ -152,6 +161,22 @@ export interface AgentExecutionResult {
   state: any;
   stepResult?: any;
   success: boolean;
+}
+
+/**
+ * Params for the sub-agent completion bridge — see
+ * `AgentRuntimeService.completeSubAgentBridge`.
+ */
+export interface SubAgentBridgeParams {
+  /** Child op's final state — passed in local mode; loaded from the coordinator otherwise. */
+  finalState?: AgentState;
+  /** Child (sub-agent) operation ID. */
+  operationId: string;
+  parentOperationId: string;
+  reason: string;
+  threadId: string;
+  /** The parent's placeholder `role: 'tool'` message to backfill. */
+  toolMessageId: string;
 }
 
 export interface OperationCreationParams {

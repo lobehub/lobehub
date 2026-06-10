@@ -6,10 +6,13 @@ import { createStaticStyles } from 'antd-style';
 import { customAlphabet } from 'nanoid/non-secure';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { lambdaClient } from '@/libs/trpc/client';
 import { chatGroupService } from '@/services/chatGroup';
 import { discoverService } from '@/services/discover';
 import { marketApiService } from '@/services/marketApi';
@@ -46,9 +49,11 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
   const [isLoading, setIsLoading] = useState(false);
   const { message } = App.useApp();
   const { t } = useTranslation('discover');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const loadGroups = useAgentGroupStore((s) => s.loadGroups);
   const { isAuthenticated, signIn } = useMarketAuth();
+  const { allowed: canCreate } = usePermission('create_content');
+  const activeWorkspaceId = useActiveWorkspaceId();
 
   const meta = {
     avatar,
@@ -59,6 +64,7 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
   };
 
   const handleForkAndChat = async () => {
+    if (!canCreate) return;
     // Check if user is authenticated
     if (!isAuthenticated) {
       try {
@@ -91,8 +97,23 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
       // Generate a unique identifier for the forked group
       const newIdentifier = generateMarketIdentifier();
 
+      let actAs: number | undefined;
+      if (activeWorkspaceId) {
+        try {
+          const { marketAccountId } =
+            await lambdaClient.workspace.ensureMarketOrganization.mutate();
+          actAs = marketAccountId;
+        } catch (error) {
+          console.warn(
+            'Failed to resolve Market organization for workspace; falling back to personal group fork:',
+            error,
+          );
+        }
+      }
+
       // Step 2: Fork the group via Market API
       const forkResult = await marketApiService.forkAgentGroup(identifier!, {
+        actAs,
         identifier: newIdentifier,
         name: title,
         status: 'published',
@@ -210,6 +231,7 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
     <Button
       block
       className={styles.buttonGroup}
+      disabled={!canCreate}
       loading={isLoading}
       size={'large'}
       type={'primary'}

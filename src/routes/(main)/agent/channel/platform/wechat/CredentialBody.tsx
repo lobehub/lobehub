@@ -7,7 +7,7 @@ import ConnectedInfo from './ConnectedInfo';
 import QrCodeAuth from './QrCodeAuth';
 
 const CredentialBody = memo<PlatformCredentialBodyProps>(
-  ({ currentConfig, hasConfig, onAuthenticated }) => {
+  ({ currentConfig, disabled, hasConfig, onAuthenticated }) => {
     const handleQrAuthenticated = useCallback(
       (creds: { botId: string; botToken: string; userId: string }) => {
         const botToken = creds.botToken?.trim();
@@ -28,14 +28,18 @@ const CredentialBody = memo<PlatformCredentialBodyProps>(
 
     if (hasConfig && currentConfig) {
       return (
-        <ConnectedInfo currentConfig={currentConfig} onQrAuthenticated={handleQrAuthenticated} />
+        <ConnectedInfo
+          currentConfig={currentConfig}
+          disabled={disabled}
+          onQrAuthenticated={handleQrAuthenticated}
+        />
       );
     }
 
     if (onAuthenticated) {
       return (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '16px 0' }}>
-          <QrCodeAuth onAuthenticated={handleQrAuthenticated} />
+          <QrCodeAuth disabled={disabled} onAuthenticated={handleQrAuthenticated} />
         </div>
       );
     }

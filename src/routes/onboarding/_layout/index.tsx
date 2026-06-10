@@ -8,11 +8,12 @@ import { Divider } from 'antd';
 import { cx, useTheme } from 'antd-style';
 import { type FC, type MouseEvent, type PropsWithChildren, useCallback, useEffect } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 
 import { ProductLogo } from '@/components/Branding';
 import LangButton from '@/features/User/UserPanel/LangButton';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useServerConfigStore } from '@/store/serverConfig';
@@ -27,7 +28,7 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
   const theme = useTheme();
   const { t } = useTranslation('onboarding');
   const { pathname, search } = useLocation();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   // Signup flows land here with a threaded `callbackUrl`; stash it so finish
   // points can restore the original target after onboarding completes.

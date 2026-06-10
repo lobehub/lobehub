@@ -7,6 +7,7 @@ import { Hash, Import, LucideCheck, Trash } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -30,6 +31,8 @@ export const useTopicActionsDropdownMenu = (
   const { t } = useTranslation(['topic', 'common']);
   const { modal } = App.useApp();
   const { onUploadClose } = options;
+  const { allowed: canCreateTopic } = usePermission('create_content');
+  const { allowed: canEditTopic } = usePermission('edit_own_content');
 
   const [removeUnstarredTopic, removeAllTopic, importTopic] = useChatStore((s) => [
     s.removeUnstarredTopic,
@@ -84,10 +87,16 @@ export const useTopicActionsDropdownMenu = (
         type: 'divider' as const,
       },
       {
+        disabled: !canCreateTopic,
         icon: <Icon icon={Import} />,
         key: 'import',
         label: (
-          <Upload accept=".json" beforeUpload={handleImport} showUploadList={false}>
+          <Upload
+            accept=".json"
+            beforeUpload={handleImport}
+            disabled={!canCreateTopic}
+            showUploadList={false}
+          >
             <div className={cx(hotArea)}>{t('actions.import')}</div>
           </Upload>
         ),
@@ -97,6 +106,7 @@ export const useTopicActionsDropdownMenu = (
         type: 'divider' as const,
       },
       {
+        disabled: !canEditTopic,
         icon: <Icon icon={Trash} />,
         key: 'deleteUnstarred',
         label: t('actions.removeUnstarred'),
@@ -112,6 +122,7 @@ export const useTopicActionsDropdownMenu = (
       },
       {
         danger: true,
+        disabled: !canEditTopic,
         icon: <Icon icon={Trash} />,
         key: 'deleteAll',
         label: t('actions.removeAll'),
@@ -130,6 +141,8 @@ export const useTopicActionsDropdownMenu = (
     topicPageSize,
     updateSystemStatus,
     handleImport,
+    canCreateTopic,
+    canEditTopic,
     onUploadClose,
     removeUnstarredTopic,
     removeAllTopic,

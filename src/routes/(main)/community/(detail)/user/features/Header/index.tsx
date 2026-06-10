@@ -1,7 +1,7 @@
 'use client';
 
 import { SiGithub, SiX } from '@icons-pack/react-simple-icons';
-import { ActionIcon, Avatar, Button, Flexbox, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
+import { ActionIcon, Avatar, Button, Flexbox, Tag, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Globe } from 'lucide-react';
 import { memo, useMemo } from 'react';
@@ -18,6 +18,8 @@ const UserHeader = memo(() => {
 
   const displayName = user.displayName || user.userName || user.namespace;
   const username = user.userName || user.namespace;
+  const showEditButton = isOwner && !!onEditProfile;
+  const isOrg = user.type === 'organization';
 
   // Normalize avatar URL - convert relative paths to absolute URLs
   const avatarUrl = useMemo(() => {
@@ -55,19 +57,22 @@ const UserHeader = memo(() => {
               overflow: 'hidden',
             }}
           >
-            <Text ellipsis as={'h1'} fontSize={24} style={{ margin: 0 }} weight={'bold'}>
-              {displayName}
-            </Text>
+            <Flexbox horizontal align={'center'} gap={8}>
+              <Text ellipsis as={'h1'} fontSize={24} style={{ margin: 0 }} weight={'bold'}>
+                {displayName}
+              </Text>
+              {isOrg && (
+                <Tag style={{ flexShrink: 0, margin: 0 }}>{t('user.accountType.organization')}</Tag>
+              )}
+            </Flexbox>
             <Text ellipsis fontSize={12} type={'secondary'}>
               @{username}
             </Text>
           </Flexbox>
-          {isOwner ? (
-            onEditProfile && (
-              <Button shape={'round'} onClick={() => onEditProfile()}>
-                {t('user.editProfile')}
-              </Button>
-            )
+          {showEditButton ? (
+            <Button shape={'round'} onClick={() => onEditProfile?.()}>
+              {t('user.editProfile')}
+            </Button>
           ) : (
             <FollowButton userId={user.id} />
           )}

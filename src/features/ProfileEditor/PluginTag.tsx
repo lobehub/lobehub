@@ -77,6 +77,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 export interface PluginTagProps {
+  disabled?: boolean;
   onRemove: (e: React.MouseEvent) => void;
   pluginId: string | { enabled: boolean; identifier: string; settings: Record<string, any> };
   /**
@@ -92,7 +93,7 @@ export interface PluginTagProps {
 }
 
 const PluginTag = memo<PluginTagProps>(
-  ({ pluginId, onRemove, showDesktopOnlyLabel = false, useAllMetaList = false }) => {
+  ({ pluginId, onRemove, disabled, showDesktopOnlyLabel = false, useAllMetaList = false }) => {
     const isDarkMode = useIsDark();
     const { t } = useTranslation('setting');
 
@@ -264,8 +265,8 @@ const PluginTag = memo<PluginTagProps>(
 
     return (
       <Tag
-        closable
         className={styles.tag}
+        closable={!disabled}
         closeIcon={<X size={12} />}
         color={showErrorState ? 'error' : undefined}
         icon={renderIcon()}
@@ -275,7 +276,11 @@ const PluginTag = memo<PluginTagProps>(
             ? t('tools.notInstalledWarning', { defaultValue: 'This tool is not installed' })
             : undefined
         }
-        onClose={onRemove}
+        onClose={(e) => {
+          if (disabled) return;
+
+          onRemove(e);
+        }}
       >
         {getDisplayText()}
       </Tag>

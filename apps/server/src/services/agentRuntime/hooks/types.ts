@@ -41,6 +41,15 @@ export interface AgentHookWebhook {
   /** Event fields to include in the webhook payload. Defaults to all serializable event fields. */
   eventFields?: (keyof AgentHookEvent)[];
 
+  /**
+   * Behavior when QStash delivery fails (publish error or missing
+   * QSTASH_TOKEN). 'fetch' (default, legacy) retries as a plain unsigned
+   * POST; 'none' throws instead. Use 'none' for endpoints behind QStash
+   * signature auth — an unsigned fallback can never authenticate there, so
+   * it only masks the delivery failure as a silently-dropped 401.
+   */
+  fallback?: 'fetch' | 'none';
+
   /** Webhook endpoint URL (relative or absolute) */
   url: string;
 }

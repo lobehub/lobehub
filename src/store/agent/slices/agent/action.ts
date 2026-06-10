@@ -159,6 +159,13 @@ export class AgentSliceActionImpl {
     this.#set((state) => ({ isAgentPinned: !state.isAgentPinned }), false, 'toggleAgentPinned');
   };
 
+  transferAgent = async (
+    agentId: string,
+    targetWorkspaceId: string | null,
+  ): Promise<{ agentId: string; slug: string | null }> => {
+    return agentService.transferAgent(agentId, targetWorkspaceId);
+  };
+
   toggleAgentPlugin = async (pluginId: string, state?: boolean): Promise<void> => {
     const { activeAgentId, agentMap, updateAgentConfig } = this.#get();
     if (!activeAgentId) return;

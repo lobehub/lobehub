@@ -1,7 +1,7 @@
 'use client';
 
 import { type ComposioAppType } from '@lobechat/const';
-import { Avatar, Button as LobeButton, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { Avatar, Button as LobeButton, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { Button } from 'antd';
 import { cssVar } from 'antd-style';
@@ -9,6 +9,7 @@ import { Loader2, MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'luci
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 import { type ComposioServer } from '@/store/tool/slices/composioStore';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
@@ -28,6 +29,8 @@ interface ComposioSkillItemProps {
 const ComposioSkillItem = memo<ComposioSkillItemProps>(
   ({ serverType, server, isSelected, onSelect }) => {
     const { t } = useTranslation('setting');
+    const { allowed: canCreate, reason: createReason } = usePermission('create_content');
+    const { allowed: canEdit, reason: editReason } = usePermission('edit_own_content');
     const [isConnecting, setIsConnecting] = useState(false);
     const [isWaitingAuth, setIsWaitingAuth] = useState(false);
 
@@ -134,6 +137,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     );
 
     const handleConnect = async () => {
+      if (!canCreate || !canEdit) return;
       if (server) return;
 
       setIsConnecting(true);
@@ -159,6 +163,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     };
 
     const handleDisconnect = () => {
+      if (!canEdit) return;
       if (!server) return;
       confirmModal({
         cancelText: t('cancel', { ns: 'common' }),
@@ -220,22 +225,27 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
 
       if (!server) {
         return (
-          <Button
-            icon={<Icon icon={SquareArrowOutUpRight} />}
-            type="default"
-            onClick={handleConnect}
-          >
-            {t('tools.klavis.connect', { defaultValue: 'Connect' })}
-          </Button>
+          <Tooltip title={!canCreate ? createReason : editReason}>
+            <Button
+              disabled={!canCreate || !canEdit}
+              icon={<Icon icon={SquareArrowOutUpRight} />}
+              type="default"
+              onClick={handleConnect}
+            >
+              {t('tools.klavis.connect', { defaultValue: 'Connect' })}
+            </Button>
+          </Tooltip>
         );
       }
 
       if (server.status === ComposioServerStatus.PENDING_AUTH) {
         return (
           <Button
+            disabled={!canCreate || !canEdit}
             icon={<Icon icon={SquareArrowOutUpRight} />}
             type="default"
             onClick={() => {
+              if (!canCreate || !canEdit) return;
               if (server.redirectUrl) {
                 openOAuthWindow(server.redirectUrl, server.identifier);
               }
@@ -253,6 +263,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
             items={[
               {
                 danger: true,
+                disabled: !canEdit,
                 icon: <Icon icon={Unplug} />,
                 key: 'disconnect',
                 label: t('tools.klavis.disconnect', { defaultValue: 'Disconnect' }),
@@ -260,7 +271,9 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
               },
             ]}
           >
-            <LobeButton icon={MoreHorizontalIcon} />
+            <Tooltip title={editReason}>
+              <LobeButton disabled={!canEdit} icon={MoreHorizontalIcon} />
+            </Tooltip>
           </DropdownMenu>
         );
       }

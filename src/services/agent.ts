@@ -261,6 +261,13 @@ class AgentService {
   rankAgents = async (limit?: number): Promise<AgentRankItem[]> => {
     return lambdaClient.agent.rankAgents.query(limit);
   };
+
+  transferAgent = async (
+    agentId: string,
+    targetWorkspaceId: string | null,
+  ): Promise<{ agentId: string; slug: string | null }> => {
+    return lambdaClient.agent.transferAgent.mutate({ agentId, targetWorkspaceId });
+  };
 }
 
 export const agentService = new AgentService();

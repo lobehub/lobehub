@@ -3,8 +3,8 @@
 import { SESSION_CHAT_URL } from '@lobechat/const';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useCreateMenuItems } from '@/routes/(main)/home/_layout/hooks/useCreateMenuItems';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -16,7 +16,7 @@ import { useChatStore } from '@/store/chat';
  */
 const DesktopFileMenuBridge = () => {
   const { createAgent, createEmptyGroup, createPage } = useCreateMenuItems();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
 

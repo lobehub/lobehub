@@ -2,10 +2,10 @@ import { Avatar, Block, Button, Center, Flexbox, Text } from '@lobehub/ui';
 import { HandIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import GroupAvatar from '@/features/GroupAvatar';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { type SharedTopicData } from '@/types/topic';
 
 interface ActionBarProps {
@@ -81,6 +81,7 @@ const ActionBar = memo<ActionBarProps>(({ data }) => {
           borderRadius: 48,
           boxShadow: '0 2px 12px -4px rgba(0, 0, 0, 0.1)',
           maxWidth: 960,
+          pointerEvents: 'auto',
         }}
       >
         <Flexbox horizontal align="center" gap={8}>
@@ -88,17 +89,17 @@ const ActionBar = memo<ActionBarProps>(({ data }) => {
           {renderAgentOrGroupTitle()}
         </Flexbox>
         <Flexbox horizontal align="center" gap={8}>
-          <Link to={`/community/agent`}>
+          <WorkspaceLink to={`/community/agent`}>
             <Button shape={'round'} variant={'filled'}>
               {t('sharePage.actions.findMord')}
             </Button>
-          </Link>
+          </WorkspaceLink>
           {showActions && (
-            <Link to={`/community/agent/${agentMarketIdentifier}`}>
+            <WorkspaceLink to={`/community/agent/${agentMarketIdentifier}`}>
               <Button icon={HandIcon} shape={'round'} type={'primary'}>
                 {t('sharePage.actions.tryItYourself')}
               </Button>
-            </Link>
+            </WorkspaceLink>
           )}
         </Flexbox>
       </Block>

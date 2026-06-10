@@ -3,6 +3,7 @@ import { Loader2, SquareArrowOutUpRight } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
@@ -39,6 +40,8 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
     const [isConnecting, setIsConnecting] = useState(false);
     const [isToggling, setIsToggling] = useState(false);
     const [isWaitingAuth, setIsWaitingAuth] = useState(false);
+    const { allowed: canCreate } = usePermission('create_content');
+    const { allowed: canEdit } = usePermission('edit_own_content');
 
     const oauthWindowRef = useRef<Window | null>(null);
     const windowCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -192,7 +195,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
     );
 
     const handleConnect = async () => {
-      if (!userId) {
+      if (!canCreate || !canEdit || !userId) {
         return;
       }
 
@@ -229,7 +232,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
     };
 
     const handleToggle = async () => {
-      if (!server) return;
+      if (!canEdit || !server) return;
       setIsToggling(true);
       await togglePlugin(pluginId);
       setIsToggling(false);
@@ -253,9 +256,10 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
             horizontal
             align="center"
             gap={4}
-            style={{ cursor: 'pointer', opacity: 0.65 }}
+            style={{ cursor: canCreate && canEdit ? 'pointer' : 'not-allowed', opacity: 0.65 }}
             onClick={(e) => {
               e.stopPropagation();
+              if (!canCreate || !canEdit) return;
               handleConnect();
             }}
           >
@@ -275,8 +279,10 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
           return (
             <Checkbox
               checked={checked}
+              disabled={!canEdit}
               onClick={(e) => {
                 e.stopPropagation();
+                if (!canEdit) return;
                 handleToggle();
               }}
             />
@@ -296,9 +302,10 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
               horizontal
               align="center"
               gap={4}
-              style={{ cursor: 'pointer', opacity: 0.65 }}
+              style={{ cursor: canEdit ? 'pointer' : 'not-allowed', opacity: 0.65 }}
               onClick={(e) => {
                 e.stopPropagation();
+                if (!canEdit) return;
                 // Click to reopen OAuth window
                 if (server.redirectUrl) {
                   openOAuthWindow(server.redirectUrl, server.identifier);
@@ -332,7 +339,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
         onClick={(e) => {
           e.stopPropagation();
           // If connected, clicking the row toggles state
-          if (server?.status === ComposioServerStatus.ACTIVE) {
+          if (canEdit && server?.status === ComposioServerStatus.ACTIVE) {
             handleToggle();
           }
         }}

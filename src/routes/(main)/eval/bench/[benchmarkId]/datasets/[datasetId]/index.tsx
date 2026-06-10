@@ -6,8 +6,10 @@ import { App, Typography } from 'antd';
 import { ArrowLeft, Database, Pencil, Plus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { agentEvalService } from '@/services/agentEval';
 import { runSelectors, useEvalStore } from '@/store/eval';
 
@@ -24,7 +26,7 @@ import RunCard from '../../features/RunsTab/RunCard';
 const DatasetDetail = memo(() => {
   const { t } = useTranslation('eval');
   const { benchmarkId, datasetId } = useParams<{ benchmarkId: string; datasetId: string }>();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { message } = App.useApp();
 
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
@@ -122,7 +124,7 @@ const DatasetDetail = memo(() => {
           style={{ minWidth: 0, overflow: 'auto', paddingBlock: 24, paddingInline: 32 }}
         >
           {/* Back link */}
-          <Link
+          <WorkspaceLink
             to={`/eval/bench/${benchmarkId}`}
             style={{
               alignItems: 'center',
@@ -143,7 +145,7 @@ const DatasetDetail = memo(() => {
           >
             <ArrowLeft size={16} />
             {t('dataset.detail.backToBenchmark')}
-          </Link>
+          </WorkspaceLink>
 
           {/* Header */}
           <Flexbox horizontal align="start" justify="space-between">

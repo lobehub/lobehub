@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
 import BackgroundSwatches from '@/features/AgentSetting/AgentMeta/BackgroundSwatches';
+import { usePermission } from '@/hooks/usePermission';
 import SupervisorAvatar from '@/routes/(main)/group/features/GroupAvatar';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -22,15 +23,18 @@ import { useGroupProfileStore } from '@/store/groupProfile';
 const MAX_AVATAR_SIZE = 1024 * 1024; // 1MB limit for server actions
 
 interface AgentHeaderProps {
+  disabled?: boolean;
   /**
    * When true, shows fixed title (supervisor) and disables avatar editing
    */
   readOnly?: boolean;
 }
 
-const AgentHeader = memo<AgentHeaderProps>(({ readOnly }) => {
+const AgentHeader = memo<AgentHeaderProps>(({ readOnly, disabled: disabledProp }) => {
   const { t } = useTranslation(['setting', 'common', 'chat']);
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
+  const { allowed: canEdit } = usePermission('edit_own_content');
+  const disabled = disabledProp || !canEdit;
 
   // Get agentId from profile store
   const agentId = useGroupProfileStore((s) => s.activeTabId);
@@ -54,6 +58,8 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly }) => {
   // Debounced save for title - save to agent store
   const { run: debouncedSaveTitle } = useDebounceFn(
     (value: string) => {
+      if (disabled) return;
+
       optimisticUpdateAgentMeta(agentId, { title: value });
     },
     { wait: EDITOR_DEBOUNCE_TIME },
@@ -61,12 +67,16 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly }) => {
 
   // Handle avatar change (immediate save) - save to agent store (supervisor agent)
   const handleAvatarChange = (emoji: string) => {
+    if (disabled) return;
+
     optimisticUpdateAgentMeta(agentId, { avatar: emoji });
   };
 
   // Handle avatar upload
   const handleAvatarUpload = useCallback(
     async (file: File) => {
+      if (disabled) return;
+
       if (file.size > MAX_AVATAR_SIZE) {
         message.error(t('settingAgent.avatar.sizeExceeded', { ns: 'setting' }));
         return;
@@ -82,16 +92,20 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly }) => {
         setUploading(false);
       }
     },
-    [uploadWithProgress, optimisticUpdateAgentMeta, agentId, t],
+    [disabled, uploadWithProgress, optimisticUpdateAgentMeta, agentId, t],
   );
 
   // Handle avatar delete
   const handleAvatarDelete = useCallback(() => {
+    if (disabled) return;
+
     optimisticUpdateAgentMeta(agentId, { avatar: null });
-  }, [optimisticUpdateAgentMeta, agentId]);
+  }, [disabled, optimisticUpdateAgentMeta, agentId]);
 
   // Handle background color change (immediate save) - save to agent store (supervisor agent)
   const handleBackgroundColorChange = (color?: string) => {
+    if (disabled) return;
+
     if (color !== undefined) {
       optimisticUpdateAgentMeta(agentId, { backgroundColor: color });
     }
@@ -139,10 +153,11 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly }) => {
       }}
     >
       <EmojiPicker
-        allowUpload
-        allowDelete={!!agentMeta.avatar}
+        allowDelete={!disabled && !!agentMeta.avatar}
+        allowUpload={!disabled}
         loading={uploading}
         locale={locale}
+        open={disabled ? false : undefined}
         shape={'square'}
         size={72}
         value={agentMeta.avatar}
@@ -180,6 +195,7 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly }) => {
                   }
                 >
                   <BackgroundSwatches
+                    disabled={disabled}
                     gap={8}
                     shape={'square'}
                     size={38}
@@ -200,6 +216,7 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly }) => {
         onUpload={handleAvatarUpload}
       />
       <Input
+        disabled={disabled}
         placeholder={t('settingAgent.name.placeholder', { ns: 'setting' })}
         value={localTitle}
         variant={'borderless'}
@@ -211,6 +228,8 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly }) => {
         }}
         onChange={(e) => {
           setLocalTitle(e.target.value);
+          if (disabled) return;
+
           debouncedSaveTitle(e.target.value);
         }}
       />

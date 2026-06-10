@@ -6,6 +6,8 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
+import { useCommunityPublishGuard } from '@/hooks/useCommunityPublishGuard';
+import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { resolveMarketAuthError } from '@/layout/AuthProvider/MarketAuth/errors';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -23,6 +25,9 @@ interface GroupPublishButtonProps {
 
 const PublishButton = memo<GroupPublishButtonProps>(({ action, onPublishSuccess }) => {
   const { t } = useTranslation(['setting', 'marketAuth']);
+  const { allowed: canEdit } = usePermission('edit_own_content');
+
+  const ensureCommunityPublishAllowed = useCommunityPublishGuard();
 
   const { isAuthenticated, isLoading, signIn } = useMarketAuth();
   const { checkOwnership, isCheckingOwnership, isPublishing, publish } = useMarketGroupPublish({
@@ -76,6 +81,8 @@ const PublishButton = memo<GroupPublishButtonProps>(({ action, onPublishSuccess 
   }, [checkOwnership, publish]);
 
   const handleButtonClick = useCallback(() => {
+    if (!ensureCommunityPublishAllowed()) return;
+
     // Check if the latest version is under review
     if (isUnderReview) {
       message.warning({
@@ -100,7 +107,13 @@ const PublishButton = memo<GroupPublishButtonProps>(({ action, onPublishSuccess 
 
     // Open popconfirm for user confirmation
     setConfirmOpened(true);
-  }, [currentGroupMeta?.title, currentGroup?.content, isUnderReview, t]);
+  }, [
+    currentGroupMeta?.title,
+    currentGroup?.content,
+    ensureCommunityPublishAllowed,
+    isUnderReview,
+    t,
+  ]);
 
   const handleConfirmPublish = useCallback(async () => {
     setConfirmOpened(false);
@@ -157,10 +170,15 @@ const PublishButton = memo<GroupPublishButtonProps>(({ action, onPublishSuccess 
         }}
       >
         <Button
+          disabled={!canEdit}
           icon={ShapesUploadIcon}
           loading={loading}
           title={buttonTitle}
-          onClick={handleButtonClick}
+          onClick={() => {
+            if (!canEdit) return;
+
+            handleButtonClick();
+          }}
         >
           {t('publishToCommunity')}
         </Button>

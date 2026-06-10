@@ -460,6 +460,8 @@ class ChatService {
       },
       provider,
     });
+    const { getBusinessTrpcHeaders } = await import('@/business/client/trpc-headers');
+    Object.assign(headers as Record<string, string>, await getBusinessTrpcHeaders());
 
     const { DEFAULT_MODEL_PROVIDER_LIST } = await import('model-bank/modelProviders');
     const providerConfig = DEFAULT_MODEL_PROVIDER_LIST.find((item) => item.id === provider);

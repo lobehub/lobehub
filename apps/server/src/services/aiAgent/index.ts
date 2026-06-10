@@ -75,6 +75,7 @@ import type {
   AgentExecutionParams,
   AgentExecutionResult,
   AgentRuntimeServiceOptions,
+  SubAgentBridgeParams,
 } from '@/server/services/agentRuntime';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import { getAbortError, isAbortError, throwIfAborted } from '@/server/services/agentRuntime/abort';
@@ -412,6 +413,19 @@ export class AiAgentService {
    */
   executeStep(params: AgentExecutionParams): Promise<AgentExecutionResult> {
     return this.agentRuntimeService.executeStep(params);
+  }
+
+  /**
+   * Run the sub-agent completion bridge against this service's runtime.
+   *
+   * Same rationale as `executeStep`: the QStash `subagent-callback` webhook
+   * drives the bridge through here so the runtime's models stay
+   * workspace-scoped — a bare AgentRuntimeService would be personal-scoped
+   * and the tool-message backfill / resume barrier could miss
+   * workspace-scoped rows.
+   */
+  completeSubAgentBridge(params: SubAgentBridgeParams): Promise<boolean> {
+    return this.agentRuntimeService.completeSubAgentBridge(params);
   }
 
   /**
@@ -3164,14 +3178,18 @@ export class AiAgentService {
   /**
    * Completion bridge for the server `callSubAgent` deferred-tool path.
    *
-   * Fires on the sub-op's completion (success or failure). It:
-   *   1. Backfills the parent's placeholder tool message with the sub-agent's
-   *      final answer (success) or an error note (failure), plus pluginState so
-   *      the UI render can resolve the isolation thread.
-   *   2. Asks the runtime to resume the parent: barrier-check that every pending
-   *      tool in this turn is now fulfilled, atomically claim the resume (CAS),
-   *      and schedule the next parent step. Concurrent sibling completions that
-   *      lose the CAS are no-ops.
+   * Fires on the sub-op's completion (success or failure) and delegates to
+   * `AgentRuntimeService.completeSubAgentBridge`: backfill the parent's
+   * placeholder tool message, then barrier-check + CAS-resume the parked
+   * parent op.
+   *
+   * Transport adapts to the runtime mode like every other lifecycle hook:
+   *   - local mode: the `handler` runs in-process with the child's finalState.
+   *   - queue mode: in-memory handlers don't survive cross-process steps, so
+   *     the serialized `webhook` config is delivered via QStash to
+   *     `/api/agent/webhooks/subagent-callback`, which re-enters the same
+   *     bridge method. `delivery: 'qstash'` is required — a plain fetch would
+   *     be rejected by the endpoint's QStash signature auth.
    */
   private createSubAgentBridgeHook(
     parentOperationId: string,
@@ -3180,45 +3198,18 @@ export class AiAgentService {
   ): AgentHook {
     return {
       handler: async (event) => {
-        const finalState = event.finalState;
-        const failed = event.reason === 'error' || event.reason === 'interrupted';
-
-        // 1. Backfill the placeholder tool message with the result
         try {
-          const lastAssistant = finalState?.messages
-            ?.slice()
-            .reverse()
-            .find((m: { content?: string; role: string }) => m.role === 'assistant');
-
-          const content = failed
-            ? `Sub-agent did not complete (${event.reason}).`
-            : lastAssistant?.content || 'Sub-agent completed without a textual answer.';
-
-          await this.messageModel.updateToolMessage(toolMessageId, {
-            content,
-            pluginError: failed ? formatErrorForMetadata(finalState?.error) : undefined,
-            pluginState: {
-              model: finalState?.modelRuntimeConfig?.model,
-              status: failed ? 'error' : 'completed',
-              threadId,
-              totalToolCalls: finalState?.usage?.tools?.totalCalls,
-              totalTokens: this.calculateTotalTokens(finalState?.usage),
-            },
+          await this.agentRuntimeService.completeSubAgentBridge({
+            finalState: event.finalState,
+            operationId: event.operationId,
+            parentOperationId,
+            reason: event.reason ?? 'done',
+            threadId,
+            toolMessageId,
           });
         } catch (error) {
           console.error(
-            'Sub-agent bridge: failed to backfill tool message %s: %O',
-            toolMessageId,
-            error,
-          );
-        }
-
-        // 2. Barrier + CAS + resume the parent op
-        try {
-          await this.agentRuntimeService.tryResumeParentFromAsyncTool({ parentOperationId });
-        } catch (error) {
-          console.error(
-            'Sub-agent bridge: failed to resume parent %s: %O',
+            'Sub-agent bridge: failed to complete bridge for parent %s: %O',
             parentOperationId,
             error,
           );
@@ -3226,6 +3217,21 @@ export class AiAgentService {
       },
       id: 'sub-agent-bridge',
       type: 'onComplete' as const,
+      webhook: {
+        body: { parentOperationId, threadId, toolMessageId },
+        delivery: 'qstash' as const,
+        // Keep the payload lean: the endpoint reloads the child's final state
+        // from the coordinator, so everything beyond these ids is dead weight.
+        // The default (all event fields) would ship the child's entire final
+        // answer (`lastAssistantContent`) — and any tool-produced attachments
+        // the shared lifecycle event extractor inlines — through QStash.
+        eventFields: ['operationId', 'reason', 'status'],
+        // The endpoint sits behind QStash signature auth, so the unsigned
+        // fetch fallback could never authenticate — it would only mask a
+        // publish failure as a silently-dropped 401, stranding the parent.
+        fallback: 'none' as const,
+        url: '/api/agent/webhooks/subagent-callback',
+      },
     };
   }
 

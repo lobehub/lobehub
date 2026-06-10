@@ -6,8 +6,8 @@ import { Select, useModalContext } from '@lobehub/ui/base-ui';
 import { App, Form } from 'antd';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAiInfraStore } from '@/store/aiInfra/store';
 import { type CreateAiProviderParams } from '@/types/aiProvider';
 
@@ -27,7 +27,7 @@ const CreateNewProviderContent = memo(() => {
   const [loading, setLoading] = useState(false);
   const createNewAiProvider = useAiInfraStore((s) => s.createNewAiProvider);
   const { message } = App.useApp();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { close } = useModalContext();
 
   const onFinish = async (values: CreateAiProviderParams) => {

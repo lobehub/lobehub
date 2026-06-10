@@ -7,12 +7,16 @@ import type { TFunction } from 'i18next';
 import { BotMessageSquareIcon, Download, MoreHorizontal, Settings2Icon, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
+import { useBusinessAgentImportMenuItem } from '@/business/client/hooks/useBusinessAgentImportMenuItem';
 import { message } from '@/components/AntdStaticMethods';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useCommunityPublishGuard } from '@/hooks/useCommunityPublishGuard';
+import { usePermission } from '@/hooks/usePermission';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { resolveMarketAuthError } from '@/layout/AuthProvider/MarketAuth/errors';
 import { useAgentStore } from '@/store/agent';
@@ -30,6 +34,7 @@ import { type OriginalAgentInfo, useMarketPublish } from './AgentPublishButton/u
 import AgentStatusTag from './AgentStatusTag';
 import AgentVersionReviewTag, { useVersionReviewStatus } from './AgentVersionReviewTag';
 import AutoSaveHint from './AutoSaveHint';
+import { openPublishConfirmModal } from './PublishConfirmModal';
 
 type HeaderTranslation = TFunction<
   readonly ['setting', 'marketAuth', 'chat', 'file', 'common'],
@@ -87,7 +92,7 @@ const buildAgentProfileMarkdown = (params: {
 
 const Header = memo(() => {
   const { t } = useTranslation(['setting', 'marketAuth', 'chat', 'file', 'common']);
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
   const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
@@ -102,8 +107,10 @@ const Header = memo(() => {
   ]);
   const removeAgent = useHomeStore((s) => s.removeAgent);
   const editor = useProfileStore((s) => s.editor);
+  const { allowed: canEdit } = usePermission('edit_own_content');
   const { isAuthenticated, isLoading: isAuthLoading, signIn } = useMarketAuth();
   const { isUnderReview } = useVersionReviewStatus();
+  const ensureCommunityPublishAllowed = useCommunityPublishGuard();
 
   const action = meta?.marketIdentifier ? 'upload' : 'submit';
 
@@ -133,6 +140,8 @@ const Header = memo(() => {
   }, [checkOwnership, publish]);
 
   const handlePublishClick = useCallback(async () => {
+    if (!canEdit) return;
+    if (!ensureCommunityPublishAllowed()) return;
     if (isUnderReview) {
       message.warning({
         content: t('marketPublish.validation.underReview', {
@@ -156,36 +165,45 @@ const Header = memo(() => {
       return;
     }
 
-    confirmModal({
-      onOk: async () => {
-        if (!isAuthenticated) {
-          try {
-            await signIn('publish');
-            await doPublish();
-          } catch (error) {
-            console.error(`[MarketPublishButton][${action}] Authorization failed:`, error);
-            const normalizedError = resolveMarketAuthError(error);
-            message.error({
-              content: t(`errors.${normalizedError.code}`, { ns: 'marketAuth' }),
-              key: 'market-auth',
-            });
-          }
-          return;
+    openPublishConfirmModal(async () => {
+      if (!isAuthenticated) {
+        try {
+          await signIn('publish');
+          await doPublish();
+        } catch (error) {
+          console.error(`[MarketPublishButton][${action}] Authorization failed:`, error);
+          const normalizedError = resolveMarketAuthError(error);
+          message.error({
+            content: t(`errors.${normalizedError.code}`, { ns: 'marketAuth' }),
+            key: 'market-auth',
+          });
         }
-        await doPublish();
-      },
-      title: t('marketPublish.validation.confirmPublish', { ns: 'setting' }),
+        return;
+      }
+      await doPublish();
     });
-  }, [action, doPublish, isAuthenticated, isUnderReview, meta?.title, signIn, systemRole, t]);
+  }, [
+    action,
+    canEdit,
+    doPublish,
+    ensureCommunityPublishAllowed,
+    isAuthenticated,
+    isUnderReview,
+    meta?.title,
+    signIn,
+    systemRole,
+    t,
+  ]);
 
   const handleForkConfirm = useCallback(async () => {
+    if (!canEdit) return;
     setShowForkModal(false);
     setOriginalAgentInfo(null);
     await publish();
-  }, [publish]);
+  }, [canEdit, publish]);
 
   const handleDelete = useCallback(() => {
-    if (!activeAgentId) return;
+    if (!canEdit || !activeAgentId) return;
     confirmModal({
       okButtonProps: { danger: true },
       onOk: async () => {
@@ -195,7 +213,7 @@ const Header = memo(() => {
       },
       title: t('confirmRemoveSessionItemAlert', { ns: 'chat' }),
     });
-  }, [activeAgentId, navigate, removeAgent, t]);
+  }, [activeAgentId, canEdit, navigate, removeAgent, t]);
 
   const handleExportMarkdown = useCallback(async () => {
     try {
@@ -242,8 +260,13 @@ const Header = memo(() => {
     }
   }, [config.model, config.plugins, config.provider, editor, meta, systemRole, t]);
 
-  const menuItems = useMemo(
-    () => [
+  const importMenuItem = useBusinessAgentImportMenuItem(activeAgentId ?? undefined);
+  const transferMenuItems = useAgentTransferMenuItem(activeAgentId ?? undefined);
+
+  const menuItems = useMemo(() => {
+    const businessTransferMenuItems = transferMenuItems ?? [];
+
+    return [
       {
         icon: <Icon icon={Settings2Icon} />,
         key: 'advanced-settings',
@@ -274,17 +297,30 @@ const Header = memo(() => {
         key: 'export',
         label: t('pageEditor.menu.export', { ns: 'file' }),
       },
+      importMenuItem ? { type: 'divider' as const } : null,
+      importMenuItem,
+      businessTransferMenuItems.length > 0 ? { type: 'divider' as const } : null,
+      ...businessTransferMenuItems,
       { type: 'divider' as const },
       {
         danger: true,
+        disabled: !canEdit,
         icon: <Icon icon={Trash} />,
         key: 'delete',
         label: t('delete', { ns: 'common' }),
         onClick: handleDelete,
       },
-    ],
-    [canPublishToCommunity, handlePublishClick, handleExportMarkdown, handleDelete, t],
-  );
+    ].filter(Boolean);
+  }, [
+    canEdit,
+    canPublishToCommunity,
+    handlePublishClick,
+    handleExportMarkdown,
+    handleDelete,
+    t,
+    importMenuItem,
+    transferMenuItems,
+  ]);
 
   return (
     <>

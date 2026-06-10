@@ -1,7 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { matchRoutes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
+
+import { desktopRoutes } from './desktopRouter.config';
 
 /**
  * Known path pairs that intentionally differ between web and desktop (Electron).
@@ -56,6 +59,16 @@ async function readDesktopRouterSources() {
 }
 
 describe('desktopRouter config sync', () => {
+  it('personal memory settings route is not shadowed by workspace memory route', () => {
+    const matches = matchRoutes(desktopRoutes, '/settings/memory');
+    const paths = matches?.map((match) => match.route.path);
+
+    expect(paths).toContain('settings');
+    expect(paths).not.toContain(':workspaceSlug');
+    expect(paths?.at(-1)).toBe('memory');
+    expect(matches?.at(-1)?.route.handle).toMatchObject({ settingsTab: 'memory' });
+  });
+
   it('desktop (sync) route paths must match web (async) route paths', async () => {
     const [asyncSource, syncSource] = await readDesktopRouterSources();
 
@@ -86,6 +99,37 @@ describe('desktopRouter config sync', () => {
     expect(syncMetas, 'Desktop config handle.meta declarations must match async config').toEqual(
       asyncMetas,
     );
+  });
+
+  it('workspace settings tree is registered with all tabs in both configs', async () => {
+    const [asyncSource, syncSource] = await readDesktopRouterSources();
+
+    const requiredImportTargets = [
+      '@/routes/(main)/[workspaceSlug]/settings/_layout',
+      '@/routes/(main)/[workspaceSlug]/settings/general',
+      '@/routes/(main)/[workspaceSlug]/settings/members',
+      '@/routes/(main)/[workspaceSlug]/settings/plans',
+      '@/routes/(main)/[workspaceSlug]/settings/billing',
+      '@/routes/(main)/[workspaceSlug]/settings/credits',
+      '@/routes/(main)/[workspaceSlug]/settings/usage',
+      '@/routes/(main)/[workspaceSlug]/settings/skill',
+    ];
+
+    for (const target of requiredImportTargets) {
+      expect(asyncSource, `async config missing ${target}`).toContain(`import('${target}')`);
+      expect(syncSource, `sync config missing ${target}`).toContain(`from '${target}'`);
+    }
+
+    // Old billing route directory is gone in both configs
+    expect(asyncSource).not.toContain('@/routes/(main)/[workspaceSlug]/billing/_layout');
+    expect(asyncSource).not.toContain('@/routes/(main)/[workspaceSlug]/billing/plans');
+    expect(syncSource).not.toContain('@/routes/(main)/[workspaceSlug]/billing/_layout');
+    expect(syncSource).not.toContain('@/routes/(main)/[workspaceSlug]/billing/plans');
+
+    // Legacy /:slug/billing/* redirects still exist (string match — the
+    // `path: 'billing'` block under `:workspaceSlug` is preserved as redirects)
+    expect(asyncSource).toContain("redirectElement('../settings/plans')");
+    expect(syncSource).toContain("redirectElement('../settings/plans')");
   });
 
   it('task list and detail desktop routes share one workspace layout', async () => {

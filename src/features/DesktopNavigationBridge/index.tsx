@@ -2,10 +2,11 @@
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { memo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 const DesktopNavigationBridge = memo(() => {
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   const handleNavigate = useCallback(
     ({ path, replace }: { path: string; replace?: boolean }) => {

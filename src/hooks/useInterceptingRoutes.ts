@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useAgentStore } from '@/store/agent';
 import { ChatSettingsTabs } from '@/store/global/initialState';
@@ -9,7 +10,7 @@ export const useOpenChatSettings = (tab: ChatSettingsTabs = ChatSettingsTabs.Ope
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
 
   const isMobile = useIsMobile();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const location = useLocation();
 
   return useMemo(() => {

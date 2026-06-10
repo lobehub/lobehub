@@ -34,6 +34,7 @@ export class MarketApiService {
 
   // Create new agent
   async createAgent(agentData: {
+    actAs?: number;
     homepage?: string;
     identifier: string;
     isFeatured?: boolean;
@@ -66,6 +67,7 @@ export class MarketApiService {
 
   // Create agent version
   async createAgentVersion(versionData: {
+    actAs?: number;
     a2aProtocolVersion?: string;
     avatar?: string;
     category?: string;

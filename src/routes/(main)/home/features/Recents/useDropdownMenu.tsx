@@ -5,6 +5,7 @@ import { PencilLineIcon, Trash } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { type RecentItem } from '@/server/routers/lambda/recent';
 import { documentService } from '@/services/document';
 import { taskService } from '@/services/task';
@@ -20,6 +21,11 @@ export const useRecentItemDropdownMenu = (
     s.updateRecentTitle,
     s.refreshRecents,
   ]);
+
+  // Viewer can read recents but cannot rename/delete them — keep the menu
+  // items visible-but-disabled so the affordance is clear (per disabled-not-
+  // hidden UX rule).
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const handleRename = useCallback(
     async (newTitle: string) => {
@@ -79,28 +85,24 @@ export const useRecentItemDropdownMenu = (
   }, [item, t, refreshRecents]);
 
   const dropdownMenu = useCallback((): MenuProps['items'] => {
-    const canRename = true;
-
     return [
-      ...(canRename
-        ? [
-            {
-              icon: <Icon icon={PencilLineIcon} />,
-              key: 'rename',
-              label: t('rename'),
-              onClick: () => toggleEditing(true),
-            },
-          ]
-        : []),
+      {
+        disabled: !canEdit,
+        icon: <Icon icon={PencilLineIcon} />,
+        key: 'rename',
+        label: t('rename'),
+        onClick: () => toggleEditing(true),
+      },
       {
         danger: true,
+        disabled: !canEdit,
         icon: <Icon icon={Trash} />,
         key: 'delete',
         label: t('delete'),
         onClick: handleDelete,
       },
     ];
-  }, [item.type, t, toggleEditing, handleDelete]);
+  }, [canEdit, t, toggleEditing, handleDelete]);
 
   return { dropdownMenu, handleRename };
 };
