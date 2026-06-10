@@ -650,7 +650,7 @@ describe('hetero exec command', () => {
   });
 
   it('resets the per-message text accumulator at message boundaries (no cross-message duplication)', async () => {
-    // LOBE-10157 Bug 3: the `replace` snapshot accumulator must not span
+    // The `replace` snapshot accumulator must not span
     // message boundaries. Two assistant messages separated by a
     // stream_end/stream_start boundary must each snapshot only their OWN
     // text — otherwise the second message re-emits the first's text verbatim.
