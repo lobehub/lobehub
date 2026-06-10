@@ -11,6 +11,7 @@ import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
+import AgentConfigError from './AgentConfigError';
 import { useSendMenuItems } from './useSendMenuItems';
 
 const contextWindowRightActions: ActionKeys[] = ['contextWindow'];
@@ -39,19 +40,22 @@ const MainChatInput = memo(() => {
   const leftActions: ActionKeys[] = useMemo(() => ['model', 'plus'], []);
 
   return (
-    <ChatInput
-      skipScrollMarginWithList
-      isConfigLoading={isAgentConfigLoading}
-      leftActions={leftActions}
-      rightActions={rightActions}
-      {...(isDevMode
-        ? { sendMenu: { items: sendMenuItems } }
-        : { sendButtonProps: { shape: 'round' } })}
-      onEditorReady={(instance) => {
-        // Sync to global ChatStore for compatibility with other features
-        useChatStore.setState({ mainInputEditor: instance });
-      }}
-    />
+    <>
+      <AgentConfigError />
+      <ChatInput
+        skipScrollMarginWithList
+        isConfigLoading={isAgentConfigLoading}
+        leftActions={leftActions}
+        rightActions={rightActions}
+        {...(isDevMode
+          ? { sendMenu: { items: sendMenuItems } }
+          : { sendButtonProps: { shape: 'round' } })}
+        onEditorReady={(instance) => {
+          // Sync to global ChatStore for compatibility with other features
+          useChatStore.setState({ mainInputEditor: instance });
+        }}
+      />
+    </>
   );
 });
 

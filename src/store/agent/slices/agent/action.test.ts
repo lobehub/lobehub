@@ -546,6 +546,40 @@ describe('AgentSlice Actions', () => {
       expect(useAgentStore.getState().activeAgentId).toBe('agent-1');
       expect(useAgentStore.getState().agentMap['agent-1']).toBeDefined();
     });
+
+    it('should record fetch error in agentConfigErrorMap and clear it on retry', async () => {
+      const error = Object.assign(new Error('boom'), { meta: { shouldRetry: false } });
+      vi.mocked(agentService.getAgentConfigById).mockRejectedValueOnce(error);
+
+      renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-err'), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() =>
+        expect(useAgentStore.getState().agentConfigErrorMap['agent-err']).toBe('boom'),
+      );
+
+      await act(async () => {
+        await useAgentStore.getState().retryAgentConfigFetch('agent-err');
+      });
+
+      expect(useAgentStore.getState().agentConfigErrorMap['agent-err']).toBeUndefined();
+    });
+
+    it('should clear a stale fetch error once data arrives', async () => {
+      useAgentStore.setState({ agentConfigErrorMap: { 'agent-1': 'boom' } });
+
+      const mockAgentConfig = { id: 'agent-1', model: 'gpt-4' } as LobeAgentConfig;
+      vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce(mockAgentConfig as any);
+
+      const { result } = renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-1'), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => expect(result.current.data).toEqual(mockAgentConfig));
+
+      expect(useAgentStore.getState().agentConfigErrorMap['agent-1']).toBeUndefined();
+    });
   });
 
   describe('useHydrateAgentConfig', () => {

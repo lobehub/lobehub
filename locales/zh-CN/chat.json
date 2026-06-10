@@ -15,6 +15,8 @@
   "agentBuilder.installPlugin.retry": "重试",
   "agentBuilder.title": "助理构建专家",
   "agentBuilder.welcome": "先说说你的使用场景吧。\n\n写作、编程、数据分析都可以——你负责目标与标准，我来帮你把想法拆成可协作、可运行的助理。",
+  "agentConfigError.retry": "重试",
+  "agentConfigError.title": "助理配置加载失败",
   "agentDefaultMessage": "你好，我是 **{{name}}**。从一句话开始就行。\n\n想让我更贴近你的工作方式：去 [助理设置]({{url}}) 补充助理档案（随时可改）",
   "agentDefaultMessageWithSystemRole": "你好，我是 **{{name}}**。从一句话开始就行——决定权在你",
   "agentDefaultMessageWithoutEdit": "你好，我是 **{{name}}**。从一句话开始就行——决定权在你",
