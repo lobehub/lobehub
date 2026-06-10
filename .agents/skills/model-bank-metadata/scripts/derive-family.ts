@@ -18,19 +18,20 @@ const derive = (id: string): R | undefined => {
 
   // ---- anthropic ----
   if (m.startsWith('claude')) {
-    const fam = { family: 'claude' };
+    // family = product-line tier (claude-opus/sonnet/haiku/instant); bare claude-2.x has no tier
+    const tier = m.match(/(opus|sonnet|haiku|instant)/)?.[1];
+    const family = tier ? `claude-${tier}` : 'claude';
     let g = m.match(/^claude-(?:opus|sonnet|haiku)-(\d)[.-](\d)(?!\d)/); // claude-opus-4-8 / claude-haiku-4.5
-    if (g) return { ...fam, generation: `claude-${g[1]}.${g[2]}` };
+    if (g) return { family, generation: `claude-${g[1]}.${g[2]}` };
     g = m.match(/^claude-(?:opus|sonnet|haiku)-(\d)(?!\d)/); // claude-opus-4
-    if (g) return { ...fam, generation: `claude-${g[1]}` };
+    if (g) return { family, generation: `claude-${g[1]}` };
     g = m.match(/^claude-(\d)[.-](\d)(?!\d)/); // claude-3-5-haiku / claude-3.7-sonnet / claude-2.1
-    if (g)
-      return { ...fam, generation: g[2] === '0' ? `claude-${g[1]}` : `claude-${g[1]}.${g[2]}` };
+    if (g) return { family, generation: g[2] === '0' ? `claude-${g[1]}` : `claude-${g[1]}.${g[2]}` };
     g = m.match(/^claude-(\d)(?!\d)/); // claude-3-haiku
-    if (g) return { ...fam, generation: `claude-${g[1]}` };
-    if (m.startsWith('claude-instant')) return { ...fam, generation: 'claude-instant' };
-    if (/^claude-v?2/.test(m)) return { ...fam, generation: 'claude-2' };
-    return fam;
+    if (g) return { family, generation: `claude-${g[1]}` };
+    if (m.startsWith('claude-instant')) return { family: 'claude-instant' };
+    if (/^claude-v?2/.test(m)) return { family: 'claude', generation: 'claude-2' };
+    return { family };
   }
 
   // ---- openai ----

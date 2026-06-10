@@ -218,9 +218,9 @@ export interface AIBaseModelCard {
   displayName?: string;
   enabled?: boolean;
   /**
-   * model lineage, finer than `organization` (e.g. 'claude', 'gpt', 'o-series',
-   * 'qwen', 'deepseek'). Lets the UI group models and match the same model
-   * across aggregator providers.
+   * product-line lineage, finer than `organization` (e.g. 'claude-opus',
+   * 'claude-mythos', 'gpt', 'o-series', 'qwen'). Families contain generations;
+   * lets the UI group models and match the same model across aggregator providers.
    */
   family?: string;
   /**
