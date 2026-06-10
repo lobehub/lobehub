@@ -12,7 +12,12 @@ import type {
   ExplorerTreeHandle,
   ExplorerTreeNode,
 } from '@/features/ExplorerTree';
-import { ExplorerTree, FOLDER_ICON_CSS, getExplorerTreeStyleVars } from '@/features/ExplorerTree';
+import {
+  ExplorerTree,
+  FOLDER_ICON_CSS,
+  getExplorerTreeStyleVars,
+  HIDE_POINTER_FOCUS_RING_CSS,
+} from '@/features/ExplorerTree';
 import { useChatStore } from '@/store/chat';
 
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
@@ -24,6 +29,7 @@ import { canDropDocument } from './utils/canDrop';
 const SKILL_INDEX_FILENAME = 'SKILL.md';
 const FILE_TREE_HOST_TAG = 'file-tree-container';
 const RENAME_INPUT_SELECTOR = 'input[data-item-rename-input]';
+const DOCUMENT_TREE_UNSAFE_CSS = `${FOLDER_ICON_CSS}\n${HIDE_POINTER_FOCUS_RING_CSS}`;
 
 // pierre/trees auto-selects the full value when the rename input mounts. For
 // files with extensions (e.g. `Untitled document.md`), narrow the selection to
@@ -45,18 +51,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     --trees-bg-override: transparent;
     --trees-border-color-override: transparent;
     --trees-selected-bg-override: ${cssVar.colorFillSecondary};
+    --trees-selected-fg-override: ${cssVar.colorText};
     --trees-bg-muted-override: ${cssVar.colorFillTertiary};
-    --trees-fg-override: ${cssVar.colorText};
+    --trees-fg-override: ${cssVar.colorTextSecondary};
     --trees-fg-muted-override: ${cssVar.colorTextSecondary};
     --trees-accent-override: ${cssVar.colorPrimary};
     --trees-padding-inline-override: 0px;
     --trees-font-size-override: 12px;
     --trees-border-radius-override: 6px;
-
-    /* Drop the doubled outline pierre/trees draws via ::before on a
-     * focused+selected row — the filled background from
-     * --trees-selected-bg-override is already a clear selection signal. */
-    --trees-selected-focused-border-color-override: transparent;
   `,
 }));
 
@@ -274,7 +276,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
         nodes={nodes}
         ref={treeRef}
         style={{ height: '100%' }}
-        unsafeCSS={FOLDER_ICON_CSS}
+        unsafeCSS={DOCUMENT_TREE_UNSAFE_CSS}
         header={
           <DocumentExplorerToolbar
             onCreateDocument={() => handleCreateDocument(null)}

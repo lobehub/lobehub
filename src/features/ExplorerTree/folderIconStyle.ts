@@ -7,6 +7,8 @@ import type { CSSProperties } from 'react';
 // properties cascade through shadow DOM, so toggling it on the host reflows
 // the offset live (see `getExplorerTreeStyleVars`).
 const FILE_ICON_OFFSET_VAR = '--explorer-file-icon-offset';
+const FOLDER_ICON_SIZE = '18px';
+const FILE_ICON_SIZE = '16px';
 
 // Chevron column width + row gap at default density (16 + 6). We standardised
 // consumers on default density, so this matches `--trees-icon-width` +
@@ -79,7 +81,7 @@ const MATERIAL_FILE_EXTENSION_RULES = [
   { extensions: ['sh', 'bash', 'zsh', 'fish'], iconName: 'console' },
   { extensions: ['env'], iconName: 'tune' },
   { extensions: ['svg'], iconName: 'svg' },
-  { extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'], iconName: 'image' },
+  { extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'ico'], iconName: 'image' },
   { extensions: ['css'], iconName: 'css' },
   { extensions: ['scss', 'sass'], iconName: 'sass' },
   { extensions: ['less'], iconName: 'less' },
@@ -209,13 +211,13 @@ export const getExplorerTreeIconCSS = (iconsUrl = MATERIAL_FILE_ICON_ASSETS_URL)
   [data-item-type="folder"] [data-item-section="content"]::before {
     content: '';
     flex: 0 0 auto;
-    width: 16px;
-    height: 16px;
-    margin-inline-end: 6px;
+    width: ${FOLDER_ICON_SIZE};
+    height: ${FOLDER_ICON_SIZE};
+    margin-inline-end: 4px;
     background-image: ${iconBackground(iconsUrl, 'folder')};
     background-position: center;
     background-repeat: no-repeat;
-    background-size: contain;
+    background-size: ${FOLDER_ICON_SIZE} ${FOLDER_ICON_SIZE};
   }
   [data-item-type="folder"][aria-expanded="true"] [data-item-section="content"]::before {
     background-image: ${iconBackground(iconsUrl, 'folder', true)};
@@ -225,7 +227,7 @@ export const getExplorerTreeIconCSS = (iconsUrl = MATERIAL_FILE_ICON_ASSETS_URL)
     background-image: ${iconBackground(iconsUrl, 'file')};
     background-position: center;
     background-repeat: no-repeat;
-    background-size: 16px 16px;
+    background-size: ${FILE_ICON_SIZE} ${FILE_ICON_SIZE};
   }
   [data-item-type="file"] > [data-item-section="icon"] > svg {
     visibility: hidden;
@@ -235,6 +237,20 @@ ${getFileIconRules(iconsUrl)}
 `;
 
 export const FOLDER_ICON_CSS = getExplorerTreeIconCSS();
+
+// pierre/trees marks the clicked row as model-focused, which otherwise paints
+// a pointer-only ring.
+// Keep the native :focus-visible ring for keyboard navigation.
+export const HIDE_POINTER_FOCUS_RING_CSS = `
+  [data-type='item'][data-item-focused='true']:not(:focus-visible)::before {
+    outline: none;
+  }
+
+  [data-type='item'][data-item-focused='true']:not(:focus-visible)
+    [data-item-flattened-subitems] {
+    --truncate-marker-block-inset: 0px;
+  }
+`;
 
 export const getExplorerTreeStyleVars = ({
   reserveChevronSlot,
