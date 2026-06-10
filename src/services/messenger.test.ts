@@ -11,6 +11,7 @@ vi.mock('@/libs/trpc/client', () => ({
       confirmLink: { mutate: vi.fn() },
       getMyLink: { query: vi.fn() },
       listAgentsForBinding: { query: vi.fn() },
+      listBindingScopes: { query: vi.fn() },
       listMyInstallations: { query: vi.fn() },
       listMyLinks: { query: vi.fn() },
       peekLinkToken: { query: vi.fn() },
@@ -41,10 +42,22 @@ describe('messengerService', () => {
     expect(messenger.peekLinkToken.query).toHaveBeenCalledWith({ randomId: 'rand-1' });
   });
 
-  it('listAgentsForBinding delegates to query', async () => {
+  it('listAgentsForBinding defaults to the personal scope (workspaceId=null)', async () => {
     messenger.listAgentsForBinding.query.mockResolvedValueOnce([]);
     await messengerService.listAgentsForBinding();
-    expect(messenger.listAgentsForBinding.query).toHaveBeenCalledTimes(1);
+    expect(messenger.listAgentsForBinding.query).toHaveBeenCalledWith({ workspaceId: null });
+  });
+
+  it('listAgentsForBinding forwards the workspace scope', async () => {
+    messenger.listAgentsForBinding.query.mockResolvedValueOnce([]);
+    await messengerService.listAgentsForBinding('ws_1');
+    expect(messenger.listAgentsForBinding.query).toHaveBeenCalledWith({ workspaceId: 'ws_1' });
+  });
+
+  it('listBindingScopes delegates to query', async () => {
+    messenger.listBindingScopes.query.mockResolvedValueOnce([]);
+    await messengerService.listBindingScopes();
+    expect(messenger.listBindingScopes.query).toHaveBeenCalledTimes(1);
   });
 
   it('confirmLink forwards mutate params verbatim', async () => {

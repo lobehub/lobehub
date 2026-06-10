@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Center } from '@lobehub/ui';
+import { Button, Center, Flexbox } from '@lobehub/ui';
 import { TRPCClientError } from '@trpc/client';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
@@ -106,17 +106,25 @@ const ShareTopicPage = memo(() => {
   if (!data) return null;
 
   return (
-    <>
+    <Flexbox height={'100%'} style={{ position: 'relative' }} width={'100%'}>
       <SharedMessageList
         agentId={data.agentId}
         groupId={data.groupId}
         shareId={data.shareId}
         topicId={data.topicId}
       />
-      <Center padding={8}>
+      <Center
+        paddingBlock={16}
+        style={{
+          bottom: 0,
+          insetInline: 0,
+          pointerEvents: 'none',
+          position: 'absolute',
+        }}
+      >
         <ActionBar data={data} />
       </Center>
-    </>
+    </Flexbox>
   );
 });
 

@@ -1,5 +1,5 @@
 import { ModelIcon, ProviderIcon } from '@lobehub/icons';
-import { ActionIcon, Flexbox, Modal } from '@lobehub/ui';
+import { ActionIcon, Avatar, Flexbox, Modal } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { MaximizeIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -27,6 +27,9 @@ const computeList = (data: UsageLog[], groupBy: GroupBy): string[] => {
           if (groupBy === GroupBy.Provider && item.provider?.length !== 0) {
             acc.add(item.provider);
           }
+          if (groupBy === GroupBy.User && item.userId) {
+            acc.add(item.userId);
+          }
         }
       }
       return acc;
@@ -34,7 +37,26 @@ const computeList = (data: UsageLog[], groupBy: GroupBy): string[] => {
   );
 };
 
-const ActiveModels = memo<UsageChartProps>(({ data, isLoading, groupBy }) => {
+const titleI18n = (
+  groupBy: GroupBy,
+): 'usage.activeModels.models' | 'usage.activeModels.providers' | 'usage.activeModels.users' => {
+  if (groupBy === GroupBy.Model) return 'usage.activeModels.models';
+  if (groupBy === GroupBy.Provider) return 'usage.activeModels.providers';
+  return 'usage.activeModels.users';
+};
+
+const tableTitleI18n = (
+  groupBy: GroupBy,
+):
+  | 'usage.activeModels.modelTable'
+  | 'usage.activeModels.providerTable'
+  | 'usage.activeModels.userTable' => {
+  if (groupBy === GroupBy.Model) return 'usage.activeModels.modelTable';
+  if (groupBy === GroupBy.Provider) return 'usage.activeModels.providerTable';
+  return 'usage.activeModels.userTable';
+};
+
+const ActiveModels = memo<UsageChartProps>(({ data, isLoading, groupBy, resolveUser }) => {
   const { t } = useTranslation('auth');
 
   const [open, setOpen] = useState(false);
@@ -44,20 +66,45 @@ const ActiveModels = memo<UsageChartProps>(({ data, isLoading, groupBy }) => {
     [data, groupBy],
   );
 
+  const renderIcon = (item: string, i: number) => {
+    const baseStyle = {
+      border: `2px solid ${cssVar.colorBgContainer}`,
+      boxSizing: 'content-box' as const,
+      marginRight: -8,
+      zIndex: i + 1,
+    };
+    if (groupBy === GroupBy.User) {
+      const display = resolveUser?.(item);
+      return (
+        <Avatar
+          avatar={display?.avatar || display?.name || item}
+          background={cssVar.colorFillSecondary}
+          key={item}
+          shape={'circle'}
+          size={18}
+          style={baseStyle}
+          title={display?.name || item}
+        />
+      );
+    }
+    return groupBy === GroupBy.Provider ? (
+      <ProviderIcon key={item} provider={item} size={18} style={baseStyle} />
+    ) : (
+      <ModelIcon key={item} model={item} size={18} style={baseStyle} />
+    );
+  };
+
   return (
     <>
       <StatisticCard
         key={groupBy}
         loading={isLoading}
+        title={<TitleWithPercentage title={t(titleI18n(groupBy ?? GroupBy.Model))} />}
         extra={
           <ActionIcon
             icon={MaximizeIcon}
             size={'small'}
-            title={
-              groupBy === GroupBy.Model
-                ? t('usage.activeModels.modelTable')
-                : t('usage.activeModels.providerTable')
-            }
+            title={t(tableTitleI18n(groupBy ?? GroupBy.Model))}
             onClick={() => setOpen(true)}
           />
         }
@@ -66,58 +113,21 @@ const ActiveModels = memo<UsageChartProps>(({ data, isLoading, groupBy }) => {
             <Flexbox horizontal wrap={'wrap'}>
               {iconList.map((item, i) => {
                 if (!item) return null;
-                return groupBy === GroupBy.Model ? (
-                  <ModelIcon
-                    key={item}
-                    model={item}
-                    size={18}
-                    style={{
-                      border: `2px solid ${cssVar.colorBgContainer}`,
-                      boxSizing: 'content-box',
-                      marginRight: -8,
-                      zIndex: i + 1,
-                    }}
-                  />
-                ) : (
-                  <ProviderIcon
-                    key={item}
-                    provider={item}
-                    size={18}
-                    style={{
-                      border: `2px solid ${cssVar.colorBgContainer}`,
-                      boxSizing: 'content-box',
-                      marginRight: -8,
-                      zIndex: i + 1,
-                    }}
-                  />
-                );
+                return renderIcon(item, i);
               })}
             </Flexbox>
           ),
           precision: 0,
           value: formatNumber(iconList?.length ?? 0),
         }}
-        title={
-          <TitleWithPercentage
-            title={
-              groupBy === GroupBy.Model
-                ? t('usage.activeModels.models')
-                : t('usage.activeModels.providers')
-            }
-          />
-        }
       />
       <Modal
         footer={null}
         open={open}
-        title={
-          groupBy === GroupBy.Model
-            ? t('usage.activeModels.modelTable')
-            : t('usage.activeModels.providerTable')
-        }
+        title={t(tableTitleI18n(groupBy ?? GroupBy.Model))}
         onCancel={() => setOpen(false)}
       >
-        <ModelTable data={data} groupBy={groupBy} isLoading={isLoading} />
+        <ModelTable data={data} groupBy={groupBy} isLoading={isLoading} resolveUser={resolveUser} />
       </Modal>
     </>
   );

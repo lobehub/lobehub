@@ -25,11 +25,7 @@ import {
   invokeAgentSpanName,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import {
-  type ChatToolPayload,
-  type ExecSubAgentTaskParams,
-  type UIChatMessage,
-} from '@lobechat/types';
+import { type ChatToolPayload, type ExecSubAgentParams, type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
@@ -71,6 +67,7 @@ import {
   type StartExecutionParams,
   type StartExecutionResult,
   type StepCompletionReason,
+  type SubAgentBridgeParams,
 } from './types';
 
 if (process.env.VERCEL) {
@@ -79,6 +76,25 @@ if (process.env.VERCEL) {
 }
 
 const log = debug('lobe-server:agent-runtime-service');
+
+/**
+ * Delay before a one-shot `verifyAsyncToolBarrier` re-check fires after a
+ * sub-agent completion found the parent not yet resumable. Long enough for
+ * the parent's parking step to finish persisting, short enough that a lost
+ * resume is recovered promptly.
+ */
+const ASYNC_TOOL_VERIFY_DELAY_MS = 15_000;
+
+/**
+ * Format error for storage in message pluginError metadata.
+ * Handles Error objects which don't serialize properly with JSON.stringify.
+ */
+const formatErrorForMetadata = (error: unknown): Record<string, any> | undefined => {
+  if (!error) return undefined;
+  if (error instanceof Error) return { message: error.message, name: error.name };
+  if (typeof error === 'object' && 'message' in error) return error as Record<string, any>;
+  return { message: String(error) };
+};
 
 const toAgentSignalSnapshotEvents = (
   emission: Awaited<ReturnType<typeof emitAgentSignalSourceEvent>> | undefined,
@@ -92,6 +108,32 @@ const toAgentSignalSnapshotEvents = (
     source: emission.source,
   });
 };
+
+/**
+ * Operations the runtime delegates UP to its owning layer (AiAgentService).
+ *
+ * The dependency arrow is one-way: AiAgentService → AgentRuntimeService. The
+ * runtime is the low-level step executor — it cannot resolve agent configs,
+ * build tool engines, manage threads, or run the full `execAgent` pipeline;
+ * those live in the layer above it. Yet some tools (e.g. `lobe-agent.callSubAgent`)
+ * need exactly such a high-level action *mid-step*. Rather than import
+ * AiAgentService (which would be a circular dependency), the runtime delegates
+ * these operations back to its owner through callbacks injected here.
+ *
+ * Convention: every future "the runtime, mid-execution, must trigger a
+ * higher-layer pipeline" capability belongs on this delegate — not as a loose
+ * top-level option. One named home for the whole upward-call surface.
+ */
+export interface AgentRuntimeDelegate {
+  /**
+   * Fork a sub-agent through the full high-level pipeline
+   * (AiAgentService.execSubAgent → execAgent: agent-config resolution, tool
+   * engine, context engineering, createOperation). Returns a deferred result;
+   * the parent op parks (`waiting_for_async_tool`) until the completion bridge
+   * backfills the placeholder and resumes it.
+   */
+  execSubAgent?: (params: ExecSubAgentParams) => Promise<unknown>;
+}
 
 export interface AgentRuntimeServiceOptions {
   /**
@@ -107,11 +149,12 @@ export interface AgentRuntimeServiceOptions {
    */
   coordinatorOptions?: AgentRuntimeCoordinatorOptions;
   /**
-   * Callback to spawn a sub-agent task from within a running server-side agent.
-   * Injected by AiAgentService to wire up the exec_task / exec_tasks executors
-   * without creating a circular import between RuntimeExecutors and AiAgentService.
+   * Operations the runtime delegates up to its owning layer. See
+   * {@link AgentRuntimeDelegate}. Injected by AiAgentService so the runtime can
+   * trigger high-level pipelines (e.g. sub-agent forking) mid-step without a
+   * circular import.
    */
-  execSubAgentTask?: (params: ExecSubAgentTaskParams) => Promise<unknown>;
+  delegate?: AgentRuntimeDelegate;
   /**
    * Custom QueueService
    * Set to null to disable queue scheduling (for synchronous execution tests)
@@ -156,7 +199,7 @@ export class AgentRuntimeService {
   private agentFactory?: (config: GeneralAgentConfig) => Agent;
   private completionLifecycle: CompletionLifecycle;
   private coordinator: AgentRuntimeCoordinator;
-  private execSubAgentTaskCallback?: (params: ExecSubAgentTaskParams) => Promise<unknown>;
+  private delegate: AgentRuntimeDelegate;
   private humanIntervention: HumanInterventionHandler;
   private streamManager: IStreamEventManager;
   private queueService: QueueService | null;
@@ -207,7 +250,7 @@ export class AgentRuntimeService {
       options?.snapshotStore ?? this.createDefaultSnapshotStore(),
     );
     this.agentFactory = options?.agentFactory;
-    this.execSubAgentTaskCallback = options?.execSubAgentTask;
+    this.delegate = options?.delegate ?? {};
     this.serverDB = db;
     this.userId = userId;
     this.workspaceId = options?.workspaceId;
@@ -534,8 +577,23 @@ export class AgentRuntimeService {
       rejectAndContinue,
       resumeAsyncTool,
       toolMessageId,
+      verifyAsyncToolBarrier,
       externalRetryCount = 0,
     } = params;
+
+    // Watchdog re-check for a parked async-tool wait: re-run the barrier + CAS
+    // without claiming the step lock or executing anything. Idempotent — the
+    // CAS guarantees at most one real resume regardless of how many checks run.
+    if (verifyAsyncToolBarrier) {
+      log('[%s][%d] Running async-tool barrier verify', operationId, stepIndex);
+      const resumed = await this.tryResumeParentFromAsyncTool({ parentOperationId: operationId });
+      return {
+        nextStepScheduled: resumed,
+        state: {},
+        stepResult: null,
+        success: true,
+      };
+    }
 
     // ===== Distributed lock: prevent duplicate execution from QStash retries =====
     const claimed = await this.coordinator.tryClaimStep(operationId, stepIndex, 35);
@@ -755,6 +813,11 @@ export class AgentRuntimeService {
         // results written out-of-band), and re-enter the LLM with them.
         if (resumeAsyncTool && currentState.status === 'waiting_for_async_tool') {
           const refreshed = await this.refreshMessagesFromDB(currentState);
+          const pendingTools = (currentState.pendingToolsCalling ?? []) as ChatToolPayload[];
+          const resumeParentMessageId = this.resolveAsyncToolResumeParentMessageId(
+            refreshed,
+            pendingTools,
+          );
           currentState = structuredClone(currentState);
           currentState.messages = refreshed;
           currentState.pendingToolsCalling = [];
@@ -762,14 +825,15 @@ export class AgentRuntimeService {
           currentState.interruption = undefined;
           currentState.lastModified = new Date().toISOString();
           currentContext = {
-            payload: { parentMessageId: refreshed.at(-1)?.id },
+            payload: { parentMessageId: resumeParentMessageId },
             phase: 'user_input',
           } as AgentRuntimeContext;
           log(
-            '[%s][%d] Resuming from async tool with %d messages',
+            '[%s][%d] Resuming from async tool with %d messages (parent=%s)',
             operationId,
             stepIndex,
             refreshed.length,
+            resumeParentMessageId,
           );
         }
 
@@ -1023,6 +1087,26 @@ export class AgentRuntimeService {
 
           // Dispatch completion hooks
           await this.completionLifecycle.dispatchHooks(operationId, stepResult.newState, reason);
+
+          // Park-time self-check: sub-agents are dispatched mid-step, so a
+          // fast child can complete BEFORE this op's parked state/row were
+          // persisted — its resume attempt then no-ops against the status
+          // guard and nothing retries. Now that both the Redis state and the
+          // `agent_operations` row (via dispatchHooks → persistCompletion)
+          // say `waiting_for_async_tool`, re-run the barrier once to recover
+          // any resume that raced the park.
+          if (stepResult.newState.status === 'waiting_for_async_tool') {
+            try {
+              await this.tryResumeParentFromAsyncTool({ parentOperationId: operationId });
+            } catch (selfCheckError) {
+              log(
+                '[%s][%d] Park-time async-tool self-check failed (non-fatal): %O',
+                operationId,
+                stepIndex,
+                selfCheckError,
+              );
+            }
+          }
 
           // Finalize tracing snapshot. The error catch below uses the same
           // recorder so propagated failures still write the canonical S3
@@ -1518,12 +1602,33 @@ export class AgentRuntimeService {
    *      the LLM with the refreshed tool results.
    *
    * Returns true only for the CAS winner that scheduled the resume.
+   *
+   * `options.scheduleVerifyOnHold` arms a one-shot delayed re-check
+   * (`verifyAsyncToolBarrier`) when the parent is found not yet resumable.
+   * Sub-agent completions set it to cover the child finishing before the
+   * parent's parked state is persisted, and transient failures around the
+   * last completion (a sibling dying between backfill and resume, a DB
+   * hiccup during the barrier read). Pure concurrency needs no cover: each
+   * completion checks the barrier only after committing its own backfill, so
+   * the last committer always sees every earlier one. The re-check itself
+   * never re-arms, so retries stay bounded.
    */
-  async tryResumeParentFromAsyncTool(params: { parentOperationId: string }): Promise<boolean> {
+  async tryResumeParentFromAsyncTool(
+    params: { parentOperationId: string },
+    options?: { scheduleVerifyOnHold?: boolean },
+  ): Promise<boolean> {
     const { parentOperationId } = params;
 
     const state = await this.coordinator.loadAgentState(parentOperationId);
-    if (!state || state.status !== 'waiting_for_async_tool') return false;
+    if (!state) return false;
+
+    if (state.status !== 'waiting_for_async_tool') {
+      // Not parked (yet). Either the op already resumed/finished — nothing to
+      // do — or the child outran the parent's parking step; the delayed verify
+      // re-checks once the park has had time to land.
+      await this.maybeScheduleAsyncToolVerify(parentOperationId, state, options);
+      return false;
+    }
 
     const pending = (state.pendingToolsCalling ?? []) as ChatToolPayload[];
     if (pending.length === 0) return false;
@@ -1532,6 +1637,7 @@ export class AgentRuntimeService {
     const allFulfilled = await this.allPendingToolsFulfilled(pending);
     if (!allFulfilled) {
       log('[%s] async-tool barrier not yet satisfied, holding', parentOperationId);
+      await this.maybeScheduleAsyncToolVerify(parentOperationId, state, options);
       return false;
     }
 
@@ -1561,6 +1667,121 @@ export class AgentRuntimeService {
     }
 
     return true;
+  }
+
+  /**
+   * Arm a one-shot delayed `verifyAsyncToolBarrier` re-check for a parent op
+   * whose resume attempt found it not yet resumable. Skipped for terminal
+   * states (nothing left to resume) and when the caller didn't opt in — the
+   * verify execution itself never re-arms, keeping retries bounded to one
+   * per completion event.
+   */
+  private async maybeScheduleAsyncToolVerify(
+    parentOperationId: string,
+    state: AgentState,
+    options?: { scheduleVerifyOnHold?: boolean },
+  ): Promise<void> {
+    if (!options?.scheduleVerifyOnHold || !this.queueService) return;
+
+    const status = state.status as string;
+    if (status === 'done' || status === 'error' || status === 'interrupted') return;
+
+    log(
+      '[%s] scheduling async-tool barrier verify in %dms (status: %s)',
+      parentOperationId,
+      ASYNC_TOOL_VERIFY_DELAY_MS,
+      status,
+    );
+
+    try {
+      await this.queueService.scheduleMessage({
+        context: undefined,
+        delay: ASYNC_TOOL_VERIFY_DELAY_MS,
+        endpoint: `${this.baseURL}/run`,
+        operationId: parentOperationId,
+        payload: { verifyAsyncToolBarrier: true },
+        priority: 'high',
+        stepIndex: state.stepCount,
+      });
+    } catch (error) {
+      log(
+        '[%s] failed to schedule async-tool barrier verify (non-fatal): %O',
+        parentOperationId,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Sub-agent completion bridge for the server `callSubAgent` deferred-tool
+   * path. Runs when a child sub-agent op reaches a terminal state — invoked
+   * in-process by the child's `onComplete` hook handler (local mode) or via
+   * the QStash-delivered `/webhooks/subagent-callback` endpoint (queue mode,
+   * where in-memory handler hooks don't survive cross-process steps).
+   *
+   *   1. Backfill the parent's placeholder tool message with the sub-agent's
+   *      final answer (success) or an error note (failure), plus pluginState
+   *      so the UI render can resolve the isolation thread.
+   *   2. Resume the parked parent: barrier-check + CAS via
+   *      `tryResumeParentFromAsyncTool`, arming the delayed verify when the
+   *      parent isn't resumable yet.
+   *
+   * THROWS on infrastructure failure of either half (state load, backfill,
+   * resume) so the queue-mode callback returns non-2xx and QStash redelivers
+   * the whole bridge — the delayed verify alone cannot recover a failed
+   * backfill, it only re-reads the barrier. Redelivery is safe: the backfill
+   * rewrites the same content and the resume is CAS-guarded.
+   *
+   * Returns true when this call won the resume CAS.
+   */
+  async completeSubAgentBridge(params: SubAgentBridgeParams): Promise<boolean> {
+    const { operationId, parentOperationId, reason, threadId, toolMessageId } = params;
+    const failed = reason === 'error' || reason === 'interrupted';
+
+    // Infra errors propagate; a null state (expired) degrades to a stub note.
+    const finalState =
+      params.finalState ?? (await this.coordinator.loadAgentState(operationId)) ?? undefined;
+
+    log(
+      '[%s] sub-agent bridge → parent %s (reason: %s, state: %s)',
+      operationId,
+      parentOperationId,
+      reason,
+      finalState ? 'loaded' : 'missing',
+    );
+
+    // 1. Backfill the placeholder tool message with the result.
+    // `updateToolMessage` swallows transaction errors into `success: false`,
+    // so the flag must be checked — an unfulfilled message would hold the
+    // parent's barrier forever while the callback acked with 200.
+    const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
+    const lastAssistant = [...messages]
+      .reverse()
+      .find((m: { role?: string }) => m?.role === 'assistant');
+    const content = failed
+      ? `Sub-agent did not complete (${reason}).`
+      : (lastAssistant?.content as string | undefined) ||
+        'Sub-agent completed without a textual answer.';
+
+    const backfill = await this.messageModel.updateToolMessage(toolMessageId, {
+      content,
+      pluginError: failed ? formatErrorForMetadata(finalState?.error) : undefined,
+      pluginState: {
+        model: finalState?.modelRuntimeConfig?.model,
+        status: failed ? 'error' : 'completed',
+        threadId,
+        totalToolCalls: finalState?.usage?.tools?.totalCalls,
+        totalTokens: finalState?.usage?.llm?.tokens?.total,
+      },
+    });
+    if (!backfill.success) {
+      throw new Error(
+        `Sub-agent bridge: failed to backfill tool message ${toolMessageId} for parent ${parentOperationId}`,
+      );
+    }
+
+    // 2. Barrier + CAS + resume the parent op (infra errors propagate too)
+    return this.tryResumeParentFromAsyncTool({ parentOperationId }, { scheduleVerifyOnHold: true });
   }
 
   /**
@@ -1613,6 +1834,65 @@ export class AgentRuntimeService {
     return flatList as AgentState['messages'];
   }
 
+  private resolveAsyncToolResumeParentMessageId(
+    messages: AgentState['messages'],
+    pendingTools: ChatToolPayload[],
+  ): string | undefined {
+    const fallbackParentMessageId = messages.at(-1)?.id;
+    if (pendingTools.length === 0) return fallbackParentMessageId;
+
+    const toolResultMessageIds = new Map<string, string>();
+
+    const collectToolResultIds = (message: unknown) => {
+      if (!message || typeof message !== 'object') return;
+
+      const candidate = message as {
+        children?: unknown;
+        id?: unknown;
+        tool_call_id?: unknown;
+        tools?: unknown;
+      };
+
+      if (typeof candidate.tool_call_id === 'string' && typeof candidate.id === 'string') {
+        toolResultMessageIds.set(candidate.tool_call_id, candidate.id);
+      }
+
+      if (Array.isArray(candidate.tools)) {
+        for (const tool of candidate.tools) {
+          if (!tool || typeof tool !== 'object') continue;
+
+          const toolPayload = tool as { id?: unknown; result_msg_id?: unknown };
+          if (
+            typeof toolPayload.id === 'string' &&
+            typeof toolPayload.result_msg_id === 'string'
+          ) {
+            toolResultMessageIds.set(toolPayload.id, toolPayload.result_msg_id);
+          }
+        }
+      }
+
+      if (Array.isArray(candidate.children)) {
+        for (const child of candidate.children) {
+          collectToolResultIds(child);
+        }
+      }
+    };
+
+    for (const message of messages) {
+      collectToolResultIds(message);
+    }
+
+    for (let index = pendingTools.length - 1; index >= 0; index -= 1) {
+      const pendingTool = pendingTools[index];
+      if (pendingTool.result_msg_id) return pendingTool.result_msg_id;
+
+      const resultMessageId = toolResultMessageIds.get(pendingTool.id);
+      if (resultMessageId) return resultMessageId;
+    }
+
+    return fallbackParentMessageId;
+  }
+
   /**
    * Create Agent Runtime instance
    */
@@ -1661,7 +1941,7 @@ export class AgentRuntimeService {
       discordContext: metadata?.discordContext,
       userTimezone: metadata?.userTimezone,
       evalContext: metadata?.evalContext,
-      execSubAgentTask: this.execSubAgentTaskCallback,
+      execSubAgent: this.delegate.execSubAgent,
       hookDispatcher,
       loadAgentState: this.coordinator.loadAgentState.bind(this.coordinator),
       messageModel: this.messageModel,

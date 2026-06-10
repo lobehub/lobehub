@@ -61,7 +61,8 @@ const isAgentConfigLoadingById = (agentId: string) => (s: AgentStoreState) =>
 const getAgentModeById =
   (agentId: string) =>
   (s: AgentStoreState): AgentMode | undefined => {
-    const chatConfig = agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig;
+    const config = agentSelectors.getAgentConfigById(agentId)(s);
+    const chatConfig = config?.chatConfig;
     return chatConfig?.enableAgentMode === false ? undefined : 'auto';
   };
 
@@ -72,7 +73,8 @@ const getAgentModeById =
 const getAgentEnableModeById =
   (agentId: string) =>
   (s: AgentStoreState): boolean => {
-    const chatConfig = agentSelectors.getAgentConfigById(agentId)(s)?.chatConfig;
+    const config = agentSelectors.getAgentConfigById(agentId)(s);
+    const chatConfig = config?.chatConfig;
     return chatConfig?.enableAgentMode !== false;
   };
 

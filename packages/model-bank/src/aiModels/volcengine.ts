@@ -88,6 +88,8 @@ const doubaoChatModels: AIChatModelCard[] = [
       'DeepSeek-V4-Pro is DeepSeek’s flagship MoE model on Volcano Ark, supporting both non-thinking and thinking modes for advanced reasoning, code generation, and complex agent workflows.',
     displayName: 'DeepSeek V4 Pro',
     enabled: true,
+    family: 'deepseek',
+    generation: 'deepseek-v4',
     id: 'deepseek-v4-pro',
     maxOutput: 393_216,
     pricing: {
@@ -120,6 +122,8 @@ const doubaoChatModels: AIChatModelCard[] = [
       'DeepSeek-V4-Flash is DeepSeek’s efficient 1M-context model on Volcano Ark, balancing speed and cost while keeping strong reasoning and agent capabilities.',
     displayName: 'DeepSeek V4 Flash',
     enabled: true,
+    family: 'deepseek',
+    generation: 'deepseek-v4',
     id: 'deepseek-v4-flash',
     maxOutput: 393_216,
     pricing: {
@@ -154,6 +158,8 @@ const doubaoChatModels: AIChatModelCard[] = [
       "Doubao-Seed-2.0-pro is ByteDance's flagship Agent general model, with all-around leaps in complex task planning and execution capabilities.",
     displayName: 'Doubao Seed 2.0 Pro',
     enabled: true,
+    family: 'doubao',
+    generation: 'doubao-2.0',
     id: 'doubao-seed-2.0-pro',
     maxOutput: 128_000,
     pricing: {
@@ -217,6 +223,8 @@ const doubaoChatModels: AIChatModelCard[] = [
       'Doubao-Seed-2.0-lite is a new multimodal deep-reasoning model that delivers better value and a strong choice for common tasks, with a context window up to 256k.',
     displayName: 'Doubao Seed 2.0 Lite',
     enabled: true,
+    family: 'doubao',
+    generation: 'doubao-2.0',
     id: 'doubao-seed-2.0-lite',
     maxOutput: 128_000,
     pricing: {
@@ -279,6 +287,8 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'Doubao-Seed-2.0-mini is a lightweight model with fast response and high performance, suitable for small tasks and high-concurrency scenarios.',
     displayName: 'Doubao Seed 2.0 Mini',
+    family: 'doubao',
+    generation: 'doubao-2.0',
     id: 'doubao-seed-2.0-mini',
     maxOutput: 128_000,
     pricing: {
@@ -341,6 +351,8 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'Doubao-Seed-2.0-code is deeply optimized for agentic coding, supports multimodal inputs and a 256k context window, fitting coding, vision understanding, and agent workflows.',
     displayName: 'Doubao Seed 2.0 Code',
+    family: 'doubao',
+    generation: 'doubao-2.0',
     id: 'doubao-seed-2.0-code',
     maxOutput: 128_000,
     pricing: {
@@ -403,6 +415,8 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'Doubao-Seed-1.8 has stronger multimodal understanding and Agent capabilities, supports text/image/video input and context caching, and can deliver excellent performance in complex tasks.',
     displayName: 'Doubao Seed 1.8',
+    family: 'doubao',
+    generation: 'doubao-1.8',
     id: 'doubao-seed-1.8',
     maxOutput: 64_000,
     pricing: {
@@ -466,6 +480,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'Doubao-Seed-Code is deeply optimized for agentic coding, supports multimodal inputs (text/image/video) and a 256k context window, is compatible with the Anthropic API, and fits coding, vision understanding, and agent workflows.',
     displayName: 'Doubao Seed Code',
+    family: 'doubao',
     id: 'doubao-seed-code',
     maxOutput: 32_000,
     pricing: {
@@ -519,6 +534,8 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'GLM-4.7 is the latest flagship model from Zhipu AI. GLM-4.7 enhances coding capabilities, long-term task planning, and tool collaboration for Agentic Coding scenarios, achieving leading performance among open-source models in multiple public benchmarks. General capabilities are improved, with more concise and natural responses, and more immersive writing. In complex agent tasks, instruction following is stronger during tool calls, and the aesthetics of Artifacts and Agentic Coding frontend, as well as long-term task completion efficiency, are further enhanced. • Stronger programming capabilities: Significantly improved multi-language coding and terminal agent performance; GLM-4.7 can now implement "think first, then act" mechanisms in programming frameworks like Claude Code, Kilo Code, TRAE, Cline, and Roo Code, with more stable performance on complex tasks. • Frontend aesthetics improvement: GLM-4.7 shows significant progress in frontend generation quality, capable of generating websites, PPTs, and posters with better visual appeal. • Stronger tool calling capabilities: GLM-4.7 enhances tool calling abilities, scoring 67 in BrowseComp web task evaluation; achieving 84.7 in τ²-Bench interactive tool calling evaluation, surpassing Claude Sonnet 4.5 as the open-source SOTA. • Reasoning capability improvement: Significantly enhanced math and reasoning abilities, scoring 42.8% in the HLE ("Humanity\'s Last Exam") benchmark, a 41% improvement over GLM-4.6, surpassing GPT-5.1. • General capability enhancement: GLM-4.7 conversations are more concise, intelligent, and humane; writing and role-playing are more literary and immersive.',
     displayName: 'GLM-4.7',
+    family: 'glm',
+    generation: 'glm-4',
     id: 'glm-4-7',
     maxOutput: 128_000,
     pricing: {
@@ -588,6 +605,8 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek-V3.2 is the first hybrid reasoning model from DeepSeek that integrates thinking into tool usage. It uses efficient architecture to save computation, large-scale reinforcement learning to enhance capabilities, and large-scale synthetic task data to strengthen generalization. The combination of these three achieves performance comparable to GPT-5-High, with significantly reduced output length, notably decreasing computational overhead and user wait times.',
     displayName: 'DeepSeek V3.2',
+    family: 'deepseek',
+    generation: 'deepseek-v3.2',
     id: 'deepseek-v3.2',
     maxOutput: 32_768,
     pricing: {
@@ -641,6 +660,8 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'Doubao-Seed-1.6-vision is a visual deep-reasoning model that delivers stronger multimodal understanding and reasoning for education, image review, inspection/security, and AI search Q&A. It supports a 256k context window and up to 64k output tokens.',
     displayName: 'Doubao Seed 1.6 Vision',
+    family: 'doubao',
+    generation: 'doubao-1.6',
     id: 'doubao-seed-1.6-vision',
     maxOutput: 32_000,
     pricing: {
@@ -696,6 +717,8 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'Doubao-Seed-1.6 is a new multimodal deep-reasoning model with auto, thinking, and non-thinking modes. In non-thinking mode, it significantly outperforms Doubao-1.5-pro/250115. It supports a 256k context window and up to 16k output tokens.',
     displayName: 'Doubao Seed 1.6',
+    family: 'doubao',
+    generation: 'doubao-1.6',
     id: 'doubao-seed-1.6',
     maxOutput: 32_000,
     pricing: {
@@ -752,6 +775,8 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'Doubao-Seed-1.6-flash is an ultra-fast multimodal deep-reasoning model with TPOT as low as 10ms. It supports both text and vision, surpasses the previous lite model in text understanding, and matches competing pro models in vision. It supports a 256k context window and up to 16k output tokens.',
     displayName: 'Doubao Seed 1.6 Flash',
+    family: 'doubao',
+    generation: 'doubao-1.6',
     id: 'doubao-seed-1.6-flash',
     maxOutput: 32_000,
     pricing: {
@@ -803,6 +828,8 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'Doubao-1.5-pro is a new-generation flagship model with across-the-board upgrades, excelling in knowledge, coding, and reasoning.',
     displayName: 'Doubao 1.5 Pro 32k',
+    family: 'doubao',
+    generation: 'doubao-1.5',
     id: 'doubao-1.5-pro-32k',
     maxOutput: 16_384,
     pricing: {
@@ -822,6 +849,8 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'Doubao-1.5-pro-256k is a comprehensive upgrade to Doubao-1.5-Pro, improving overall performance by 10%. It supports a 256k context window and up to 12k output tokens, delivering higher performance, a larger window, and strong value for broader use cases.',
     displayName: 'Doubao 1.5 Pro 256k',
+    family: 'doubao',
+    generation: 'doubao-1.5',
     id: 'doubao-1.5-pro-256k',
     maxOutput: 12_288,
     pricing: {
@@ -844,6 +873,8 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'Doubao-1.5-lite is a new lightweight model with ultra-fast response, delivering top-tier quality and latency.',
     displayName: 'Doubao 1.5 Lite 32k',
+    family: 'doubao',
+    generation: 'doubao-1.5',
     id: 'doubao-1.5-lite-32k',
     maxOutput: 12_288,
     pricing: {
@@ -868,6 +899,8 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'Doubao-1.5-vision-pro is an upgraded multimodal model that supports images at any resolution and extreme aspect ratios, enhancing visual reasoning, document recognition, detail understanding, and instruction following.',
     displayName: 'Doubao 1.5 Vision Pro 32k',
+    family: 'doubao',
+    generation: 'doubao-1.5',
     id: 'doubao-1.5-vision-pro-32k',
     maxOutput: 12_288,
     pricing: {
@@ -888,6 +921,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'Ultra-fast response with better value, offering more flexible choices across scenarios. Supports reasoning and fine-tuning with a 32k context window.',
     displayName: 'Doubao Lite 32k',
+    family: 'doubao',
     id: 'doubao-lite-32k',
     maxOutput: 4096,
     pricing: {
@@ -907,6 +941,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     description:
       'The best-performing flagship model for complex tasks, with strong results in reference QA, summarization, creation, text classification, and roleplay. Supports reasoning and fine-tuning with a 32k context window.',
     displayName: 'Doubao Pro 32k',
+    family: 'doubao',
     id: 'doubao-pro-32k',
     maxOutput: 4096,
     pricing: {

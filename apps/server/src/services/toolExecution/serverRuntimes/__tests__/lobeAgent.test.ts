@@ -506,6 +506,21 @@ describe('lobeAgentRuntime', () => {
   });
 
   describe('callSubAgent', () => {
+    it('rejects nested sub-agent execution without calling the injected runner', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi.fn();
+
+      const result = await runtime.callSubAgent(
+        { description: 'Research', instruction: 'Find the answer' },
+        { ...baseContext, isSubAgent: true, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.deferred).toBeUndefined();
+      expect(result).toMatchObject({ error: { code: 'NESTED_SUB_AGENT_NOT_ALLOWED' } });
+      expect(run).not.toHaveBeenCalled();
+    });
+
     it('returns a deferred result and kicks off the sub-agent via the injected runner', async () => {
       const runtime = lobeAgentRuntime.factory(baseContext);
       const run = vi

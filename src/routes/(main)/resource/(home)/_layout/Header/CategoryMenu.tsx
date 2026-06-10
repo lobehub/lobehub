@@ -4,9 +4,10 @@ import { Flexbox } from '@lobehub/ui';
 import { FileText, ImageIcon, LayoutPanelTopIcon, Mic2, SquarePlay } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { FilesTabs } from '@/types/files';
 
 import { useResourceManagerStore } from '../../../features/store';
@@ -14,7 +15,7 @@ import { useResourceManagerStore } from '../../../features/store';
 const CategoryMenu = memo(() => {
   const { t } = useTranslation('file');
   const [activeKey, setMode] = useResourceManagerStore((s) => [s.category, s.setMode]);
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   const items = useMemo(
     () => [

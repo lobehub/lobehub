@@ -265,19 +265,19 @@ const appendWorkflowRangeBlock = (
     return;
   }
 
+  appendWorkflowBlock(
+    segments,
+    createWorkflowRenderBlock(block, {
+      content: '',
+      imageList: undefined,
+    }),
+  );
   appendAnswerBlock(
     segments,
     createAnswerRenderBlock(block, {
       error: undefined,
       reasoning: undefined,
       tools: undefined,
-    }),
-  );
-  appendWorkflowBlock(
-    segments,
-    createWorkflowRenderBlock(block, {
-      content: '',
-      imageList: undefined,
     }),
   );
 };

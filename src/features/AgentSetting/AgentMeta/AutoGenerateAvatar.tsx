@@ -11,6 +11,7 @@ import { globalGeneralSelectors } from '@/store/global/selectors';
 export interface AutoGenerateAvatarProps {
   background?: string;
   canAutoGenerate?: boolean;
+  disabled?: boolean;
   loading?: boolean;
   onChange?: (value: string) => void;
   onGenerate?: () => void;
@@ -18,7 +19,7 @@ export interface AutoGenerateAvatarProps {
 }
 
 const AutoGenerateAvatar = memo<AutoGenerateAvatarProps>(
-  ({ loading, background, value, onChange, onGenerate, canAutoGenerate }) => {
+  ({ loading, background, value, onChange, onGenerate, canAutoGenerate, disabled }) => {
     const { t } = useTranslation('common');
     const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
@@ -45,11 +46,16 @@ const AutoGenerateAvatar = memo<AutoGenerateAvatarProps>(
           value={value}
           style={{
             background: cssVar.colorFillTertiary,
+            opacity: disabled ? 0.5 : 1,
           }}
-          onChange={onChange}
+          onChange={(next) => {
+            if (disabled) return;
+
+            onChange?.(next);
+          }}
         />
         <ActionIcon
-          disabled={!canAutoGenerate}
+          disabled={disabled || !canAutoGenerate}
           icon={Wand2}
           loading={loading}
           size="small"

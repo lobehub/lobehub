@@ -157,6 +157,11 @@ export interface ConversationContext {
    */
   isolatedTopic?: boolean;
   /**
+   * Whether this conversation is an isolated sub-agent execution spawned by
+   * another agent. Used to disable recursive sub-agent dispatch.
+   */
+  isSubAgent?: boolean;
+  /**
    * Whether the current agent is the Supervisor in group orchestration
    * - Used to mark assistant messages with metadata.isSupervisor
    * - conversation-flow will transform role to 'supervisor' for UI rendering

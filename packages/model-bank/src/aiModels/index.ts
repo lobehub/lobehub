@@ -1,3 +1,4 @@
+import { getModelKnowledgeCutoff } from '../const/knowledgeCutoff';
 import type { ModelProvider } from '../const/modelProvider';
 import { type AiFullModelCard, type LobeDefaultAiModelListItem } from '../types/aiModel';
 import { default as ai21 } from './ai21';
@@ -96,6 +97,7 @@ const buildDefaultModelList = (map: ModelsMap): LobeDefaultAiModelListItem[] => 
       ...model,
       abilities: model.abilities ?? {},
       enabled: model.enabled || false,
+      knowledgeCutoff: model.knowledgeCutoff ?? getModelKnowledgeCutoff(model.id),
       providerId: provider,
       source: 'builtin',
     }));

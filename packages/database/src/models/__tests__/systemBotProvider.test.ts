@@ -114,6 +114,34 @@ describe('SystemBotProviderModel', () => {
     });
   });
 
+  describe('findByPlatform', () => {
+    it('returns the row regardless of enabled flag', async () => {
+      await SystemBotProviderModel.upsertByPlatform(
+        serverDB,
+        {
+          credentials: { botToken: 'disabled-token' },
+          enabled: false,
+          platform: 'discord',
+        },
+        mockGateKeeper,
+      );
+
+      const found = await SystemBotProviderModel.findByPlatform(
+        serverDB,
+        'discord',
+        mockGateKeeper,
+      );
+      expect(found?.platform).toBe('discord');
+      expect(found?.enabled).toBe(false);
+      expect(found?.credentials).toEqual({ botToken: 'disabled-token' });
+    });
+
+    it('returns null when no row for that platform', async () => {
+      const found = await SystemBotProviderModel.findByPlatform(serverDB, 'slack');
+      expect(found).toBeNull();
+    });
+  });
+
   describe('update', () => {
     it('re-encrypts credentials when provided and leaves them untouched otherwise', async () => {
       const created = await SystemBotProviderModel.upsertByPlatform(
@@ -148,6 +176,32 @@ describe('SystemBotProviderModel', () => {
         mockGateKeeper,
       );
       expect(afterRotate?.credentials).toEqual({ botToken: 'rotated' });
+    });
+
+    it('updates applicationId, settings and connectionMode when provided', async () => {
+      const created = await SystemBotProviderModel.upsertByPlatform(serverDB, {
+        credentials: { botToken: 'initial' },
+        platform: 'discord',
+      });
+
+      const updated = await SystemBotProviderModel.update(serverDB, created.id, {
+        applicationId: 'app-99',
+        connectionMode: 'gateway',
+        settings: { foo: 'bar' },
+      });
+
+      expect(updated?.applicationId).toBe('app-99');
+      expect(updated?.connectionMode).toBe('gateway');
+      expect(updated?.settings).toEqual({ foo: 'bar' });
+    });
+
+    it('returns undefined when updating a non-existent id', async () => {
+      const updated = await SystemBotProviderModel.update(
+        serverDB,
+        '00000000-0000-0000-0000-000000000000',
+        { enabled: false },
+      );
+      expect(updated).toBeUndefined();
     });
   });
 
@@ -195,6 +249,18 @@ describe('SystemBotProviderModel', () => {
       };
       const found = await SystemBotProviderModel.findById(serverDB, created.id, broken);
       expect(found?.credentials).toEqual({});
+    });
+
+    it('returns credentials = {} when the stored ciphertext is empty', async () => {
+      const [row] = await serverDB
+        .insert(systemBotProviders)
+        .values({ credentials: '', platform: 'discord' })
+        .returning();
+
+      const found = await SystemBotProviderModel.findById(serverDB, row.id, mockGateKeeper);
+      expect(found?.credentials).toEqual({});
+      // gateKeeper.decrypt must be skipped entirely for an empty ciphertext
+      expect(mockGateKeeper.decrypt).not.toHaveBeenCalled();
     });
   });
 });

@@ -22,6 +22,7 @@
   "InvalidRequestFormat": "Üzgünüz, yukarı akış sağlayıcı isteği hatalı biçimlendirilmiş olarak reddetti. Lütfen girdiyi kontrol edin veya farklı bir model deneyin.",
   "InvalidVertexCredentials": "Vertex kimlik doğrulaması başarısız oldu. Lütfen kimlik bilgilerinizi kontrol edip yeniden deneyin.",
   "LocationNotSupportError": "Üzgünüz, mevcut konumunuz bu model hizmetini desteklemiyor. Bu durum bölgesel kısıtlamalardan veya hizmetin mevcut olmamasından kaynaklanıyor olabilir. Lütfen mevcut konumun bu hizmeti kullanmayı destekleyip desteklemediğini doğrulayın veya farklı bir konum deneyin.",
+  "ModelEmptyCompletion": "Model boş bir yanıt döndürdü. Bu genellikle yeniden deneme ile düzelir; eğer devam ederse, isteği basitleştirmeyi veya modelleri değiştirmeyi deneyin.",
   "ModelNotFound": "Üzgünüz, istenen model bulunamadı. Model mevcut olmayabilir veya gerekli erişim izinlerine sahip olmayabilirsiniz. Lütfen API Anahtarını değiştirip veya erişim izinlerinizi ayarladıktan sonra yeniden deneyin.",
   "NoAvailableChannel": "Üzgünüz, proxy veya yönlendiricide istenen model için kullanılabilir bir kanal yok. Lütfen kanal/anahtar yapılandırmasını değiştirin veya daha sonra yeniden deneyin.",
   "OllamaBizError": "Ollama hizmeti istenirken hata oluştu, lütfen aşağıdaki bilgilere dayanarak sorun giderin veya yeniden deneyin.",

@@ -28,10 +28,11 @@ import {
 import qs from 'query-string';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import PublishedTime from '@/components/PublishedTime';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { type DiscoverGroupAgentItem, type GroupAgentStatus } from '@/types/discover';
 import { formatIntergerNumber } from '@/utils/format';
 
@@ -126,7 +127,7 @@ const UserGroupCard = memo<UserGroupCardProps>(
     isValidated,
   }) => {
     const { t } = useTranslation(['discover', 'setting']);
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const { isOwner, onStatusChange } = useUserDetailContext();
 
     const link = qs.stringifyUrl(
@@ -138,6 +139,9 @@ const UserGroupCard = memo<UserGroupCardProps>(
     );
 
     const isPublished = status === 'published';
+    // Under-review groups can't be self-managed (publish is approval-gated and the
+    // market rejects it with `forbidden`), so owners get a view-only card.
+    const isUnderReview = isValidated === false;
 
     const handleCardClick = useCallback(() => {
       navigate(link);
@@ -197,7 +201,7 @@ const UserGroupCard = memo<UserGroupCardProps>(
         }}
         onClick={handleCardClick}
       >
-        {isOwner && (
+        {isOwner && !isUnderReview && (
           <div onClick={stopPropagation}>
             <DropdownMenu items={menuItems as any}>
               <div className={cx('more-button', styles.moreButton)}>
@@ -230,7 +234,7 @@ const UserGroupCard = memo<UserGroupCardProps>(
               }}
             >
               <Flexbox horizontal align={'center'} gap={8}>
-                <Link
+                <WorkspaceLink
                   style={{ color: 'inherit', flex: 1, overflow: 'hidden' }}
                   to={link}
                   onClick={stopPropagation}
@@ -238,7 +242,7 @@ const UserGroupCard = memo<UserGroupCardProps>(
                   <Text ellipsis as={'h3'} className={styles.title} style={{ flex: 1 }}>
                     {title}
                   </Text>
-                </Link>
+                </WorkspaceLink>
                 {isValidated === false ? (
                   <AntTag color="orange" style={{ flexShrink: 0, margin: 0 }}>
                     {t('groupAgents.underReview', { defaultValue: 'Under Review' })}

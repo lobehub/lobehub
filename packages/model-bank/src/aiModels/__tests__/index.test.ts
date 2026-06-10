@@ -59,3 +59,33 @@ describe('loadModels', () => {
     ).rejects.toThrow('model config missing');
   });
 });
+
+describe('knowledgeCutoff backfill', () => {
+  it('fills knowledgeCutoff from the canonical map for builtin models', () => {
+    const opus = LOBE_DEFAULT_MODEL_LIST.find(
+      (m) => m.providerId === 'anthropic' && m.id === 'claude-opus-4-8',
+    );
+    expect(opus?.knowledgeCutoff).toBe('2026-01');
+
+    // aggregator spelling of the same model gets the same cutoff
+    const bedrockOpus = LOBE_DEFAULT_MODEL_LIST.find(
+      (m) => m.providerId === 'bedrock' && m.id === 'global.anthropic.claude-opus-4-7',
+    );
+    expect(bedrockOpus?.knowledgeCutoff).toBe('2026-01');
+  });
+
+  it('keeps an explicit knowledgeCutoff over the map value', async () => {
+    const loader = vi.fn().mockResolvedValue([
+      { enabled: true, id: 'gpt-5', knowledgeCutoff: '2020-01', type: 'chat' },
+      { enabled: true, id: 'gpt-5-mini', type: 'chat' },
+    ]);
+
+    const models = await loadModels({
+      providerLoaders: { [ModelProvider.LobeHub]: loader },
+    });
+
+    const lobehubModels = models.filter((m) => m.providerId === ModelProvider.LobeHub);
+    expect(lobehubModels.find((m) => m.id === 'gpt-5')?.knowledgeCutoff).toBe('2020-01');
+    expect(lobehubModels.find((m) => m.id === 'gpt-5-mini')?.knowledgeCutoff).toBe('2024-05');
+  });
+});

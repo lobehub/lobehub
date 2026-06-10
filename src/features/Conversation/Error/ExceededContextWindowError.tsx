@@ -1,13 +1,15 @@
 import { Icon } from '@lobehub/ui';
 import { Button } from 'antd';
 import { Minimize2 } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 
 import { useConversationStore } from '../store';
 import BaseErrorForm from './BaseErrorForm';
+import { useRetryParentMessage } from './useRetryParentMessage';
 
 interface ExceededContextWindowErrorProps {
   id: string;
@@ -15,25 +17,16 @@ interface ExceededContextWindowErrorProps {
 
 const ExceededContextWindowError = memo<ExceededContextWindowErrorProps>(({ id }) => {
   const { t } = useTranslation('error');
-  const [loading, setLoading] = useState(false);
+  const { allowed: canCreate } = usePermission('create_content');
 
   const context = useConversationStore((s) => s.context);
-  const regenerateUserMessage = useConversationStore((s) => s.regenerateUserMessage);
-  const parentId = useConversationStore(
-    (s) => s.displayMessages.find((m) => m.id === id)?.parentId,
-  );
+  const { disabled, loading, retryParentMessage } = useRetryParentMessage(id);
 
   const handleCompact = useCallback(async () => {
-    if (!context.topicId || !parentId) return;
+    if (!canCreate || !context.topicId) return;
 
-    setLoading(true);
-    try {
-      await useChatStore.getState().executeCompression(context, '');
-      await regenerateUserMessage(parentId);
-    } finally {
-      setLoading(false);
-    }
-  }, [context, parentId, regenerateUserMessage]);
+    await retryParentMessage(() => useChatStore.getState().executeCompression(context, ''));
+  }, [canCreate, context, retryParentMessage]);
 
   return (
     <BaseErrorForm
@@ -42,7 +35,7 @@ const ExceededContextWindowError = memo<ExceededContextWindowErrorProps>(({ id }
       title={t('exceededContext.title')}
       action={
         <Button
-          disabled={!context.topicId}
+          disabled={!canCreate || !context.topicId || disabled}
           loading={loading}
           type={'primary'}
           onClick={handleCompact}

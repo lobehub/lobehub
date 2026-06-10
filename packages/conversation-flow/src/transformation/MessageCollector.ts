@@ -68,10 +68,40 @@ export class MessageCollector {
    * Collect tool messages related to an assistant message
    */
   collectToolMessages(assistant: Message, messages: Message[]): Message[] {
-    const toolCallIds = new Set(assistant.tools?.map((t) => t.id) || []);
-    return messages.filter(
-      (m) => m.role === 'tool' && m.tool_call_id && toolCallIds.has(m.tool_call_id),
+    const tools = assistant.tools || [];
+    if (tools.length === 0) return [];
+
+    const toolMessagesById = new Map(
+      messages.filter((m) => m.role === 'tool').map((m) => [m.id, m]),
     );
+    const collected: Message[] = [];
+    const collectedIds = new Set<string>();
+
+    for (const tool of tools) {
+      const explicitResultId = tool.result_msg_id;
+      const explicitToolMessage = explicitResultId
+        ? toolMessagesById.get(explicitResultId)
+        : undefined;
+
+      if (explicitToolMessage) {
+        if (!collectedIds.has(explicitToolMessage.id)) {
+          collected.push(explicitToolMessage);
+          collectedIds.add(explicitToolMessage.id);
+        }
+        continue;
+      }
+
+      const fallbackToolMessage = messages.find(
+        (m) => m.role === 'tool' && m.parentId === assistant.id && m.tool_call_id === tool.id,
+      );
+
+      if (fallbackToolMessage && !collectedIds.has(fallbackToolMessage.id)) {
+        collected.push(fallbackToolMessage);
+        collectedIds.add(fallbackToolMessage.id);
+      }
+    }
+
+    return collected;
   }
 
   /**

@@ -13,6 +13,7 @@ import { type ChatModelCard } from '@/types/llm';
 import ExtendParamsSelect from './ExtendParamsSelect';
 
 interface ModelConfigFormProps {
+  disabled?: boolean;
   idEditable?: boolean;
   initialValues?: ChatModelCard;
   onFormInstanceReady: (instance: FormInstance) => void;
@@ -21,7 +22,7 @@ interface ModelConfigFormProps {
 }
 
 const ModelConfigForm = memo<ModelConfigFormProps>(
-  ({ showDeployName, idEditable = true, onFormInstanceReady, initialValues }) => {
+  ({ showDeployName, idEditable = true, onFormInstanceReady, initialValues, disabled }) => {
     const { t } = useTranslation('modelProvider');
 
     const [formInstance] = Form.useForm();
@@ -67,6 +68,7 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
       >
         <Form
           colon={false}
+          disabled={disabled}
           form={formInstance}
           initialValues={initialValues}
           labelCol={{ span: 4 }}
@@ -80,7 +82,7 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
             rules={[{ required: true }]}
           >
             <Input
-              disabled={!idEditable}
+              disabled={disabled || !idEditable}
               placeholder={t('providerModels.item.modelConfig.id.placeholder')}
             />
           </Form.Item>

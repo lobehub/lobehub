@@ -11,6 +11,7 @@ import { message } from '@/components/AntdStaticMethods';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
+import { buildOnboardingRedirectUrl } from '@/utils/onboardingRedirect';
 
 import { useAuthServerConfigStore } from '../_layout/AuthServerConfigProvider';
 import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
@@ -70,7 +71,12 @@ export const useSignIn = () => {
       if (!emailValue) return;
 
       const callbackUrl = searchParams.get('callbackUrl') || '/';
-      const { error } = await signIn.magicLink({ callbackURL: callbackUrl, email: emailValue });
+      const { error } = await signIn.magicLink({
+        callbackURL: callbackUrl,
+        email: emailValue,
+        // First-time magic-link users are signups — land them on onboarding first
+        newUserCallbackURL: buildOnboardingRedirectUrl(callbackUrl),
+      });
       if (error) {
         message.error(error.message || t('betterAuth.signin.magicLinkError'));
         return;
@@ -223,17 +229,21 @@ export const useSignIn = () => {
       }
 
       const callbackUrl = searchParams.get('callbackUrl') || '/';
+      // First-time OAuth users are signups — land them on onboarding first
+      const newUserCallbackURL = buildOnboardingRedirectUrl(callbackUrl);
       const additionalData = await getAdditionalData();
       const signInWithAdditionalData = async () =>
         isBuiltinProvider(normalizedProvider)
           ? await signIn.social({
               additionalData,
               callbackURL: callbackUrl,
+              newUserCallbackURL,
               provider: normalizedProvider,
             })
           : await signIn.oauth2({
               additionalData,
               callbackURL: callbackUrl,
+              newUserCallbackURL,
               providerId: normalizedProvider,
             });
 

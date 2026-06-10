@@ -6,7 +6,6 @@ import {
 } from '@aws-sdk/client-bedrock-runtime';
 import { ModelProvider } from 'model-bank';
 
-import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../const/models';
 import type { AnthropicGenerateObjectResponse } from '../../core/anthropicCompatibleFactory/generateObject';
 import {
   buildAnthropicGenerateObjectRequest,
@@ -34,6 +33,7 @@ import type {
   GenerateObjectPayload,
 } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
+import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../utils/claudeModelId';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';

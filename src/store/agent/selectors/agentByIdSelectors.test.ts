@@ -64,6 +64,38 @@ describe('agentByIdSelectors', () => {
     });
   });
 
+  describe('agent mode', () => {
+    it('should default to agent mode when enableAgentMode is not explicitly false', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            chatConfig: {},
+            model: 'gpt-4o',
+            provider: 'openai',
+          },
+        },
+      });
+
+      expect(agentByIdSelectors.getAgentModeById('agent-1')(state)).toBe('auto');
+      expect(agentByIdSelectors.getAgentEnableModeById('agent-1')(state)).toBe(true);
+    });
+
+    it('should keep fable in agent mode when agent mode is enabled', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            chatConfig: { enableAgentMode: true },
+            model: 'claude-fable-5',
+            provider: 'lobehub',
+          },
+        },
+      });
+
+      expect(agentByIdSelectors.getAgentModeById('agent-1')(state)).toBe('auto');
+      expect(agentByIdSelectors.getAgentEnableModeById('agent-1')(state)).toBe(true);
+    });
+  });
+
   describe('getAgentWorkingDirectoryById', () => {
     afterEach(() => {
       vi.restoreAllMocks();

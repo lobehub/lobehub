@@ -8,7 +8,6 @@ export { LobeAgentInspectors } from './Inspector';
 export type { TodoListRenderState } from './Render';
 export {
   CallSubAgentRender,
-  CallSubAgentsRender,
   CreatePlan,
   LobeAgentRenders,
   PlanCard,
@@ -17,12 +16,7 @@ export {
 } from './Render';
 
 // Streaming components (real-time tool execution feedback)
-export {
-  CallSubAgentsStreaming,
-  CallSubAgentStreaming,
-  CreatePlanStreaming,
-  LobeAgentStreamings,
-} from './Streaming';
+export { CallSubAgentStreaming, CreatePlanStreaming, LobeAgentStreamings } from './Streaming';
 
 // Intervention components (interactive editing)
 export {

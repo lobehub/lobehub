@@ -13,5 +13,7 @@
   "features.imessage.title": "قناة iMessage",
   "features.inputMarkdown.desc": "عرض Markdown في منطقة الإدخال في الوقت الفعلي (نص عريض، كتل الشيفرة، جداول، إلخ).",
   "features.inputMarkdown.title": "عرض Markdown في الإدخال",
+  "features.platformAgent.desc": "عرض خيار \"اتصال الوكيل\" في قائمة الإنشاء. الوكلاء المتصلون (مثل OpenClaw، Hermes) يعملون على أجهزتك الخاصة ويتواصلون عبر lh connect.",
+  "features.platformAgent.title": "اتصال الوكيل",
   "title": "المختبرات"
 }

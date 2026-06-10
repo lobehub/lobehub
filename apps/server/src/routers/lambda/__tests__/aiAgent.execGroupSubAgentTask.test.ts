@@ -18,7 +18,7 @@ vi.mock('@/database/core/db-adaptor', () => ({
 const mockExecGroupSubAgentTask = vi.fn();
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn().mockImplementation(() => ({
-    execSubAgentTask: mockExecGroupSubAgentTask,
+    execSubAgent: mockExecGroupSubAgentTask,
   })),
 }));
 

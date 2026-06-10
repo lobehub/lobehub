@@ -97,7 +97,7 @@ describe('useSignUp', () => {
       );
     });
 
-    it('should redirect to callbackUrl on success', async () => {
+    it('should redirect to onboarding on success', async () => {
       mockSignUpEmail.mockResolvedValue({ error: null });
 
       const { result } = renderHook(() => useSignUp());
@@ -106,10 +106,10 @@ describe('useSignUp', () => {
         await result.current.onSubmit(validValues);
       });
 
-      expect(mockPush).toHaveBeenCalledWith('/');
+      expect(mockPush).toHaveBeenCalledWith('/onboarding');
     });
 
-    it('should use callbackUrl from search params', async () => {
+    it('should thread callbackUrl from search params through onboarding', async () => {
       mockSearchParamsGet.mockImplementation((key: string) =>
         key === 'callbackUrl' ? '/dashboard' : null,
       );
@@ -122,9 +122,9 @@ describe('useSignUp', () => {
       });
 
       expect(mockSignUpEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ callbackURL: '/dashboard' }),
+        expect.objectContaining({ callbackURL: '/onboarding?callbackUrl=%2Fdashboard' }),
       );
-      expect(mockPush).toHaveBeenCalledWith('/dashboard');
+      expect(mockPush).toHaveBeenCalledWith('/onboarding?callbackUrl=%2Fdashboard');
     });
 
     it('should redirect to verify-email when email verification is enabled', async () => {
@@ -223,7 +223,7 @@ describe('useSignUp', () => {
         }),
       );
       expect(mockMessageError).not.toHaveBeenCalled();
-      expect(mockPush).toHaveBeenCalledWith('/');
+      expect(mockPush).toHaveBeenCalledWith('/onboarding');
     });
 
     it('should stop sign up when captcha modal is cancelled', async () => {

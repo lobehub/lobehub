@@ -69,11 +69,13 @@ const TabItem = memo<TabItemProps>(
     const contextMenuItems = useCallback(
       (): GenericItemType[] => [
         {
+          disabled: totalCount === 1,
           key: 'closeCurrentTab',
           label: t('tab.closeCurrentTab'),
           onClick: () => onClose(id),
         },
         {
+          disabled: totalCount === 1,
           key: 'closeOtherTabs',
           label: t('tab.closeOtherTabs'),
           onClick: () => onCloseOthers(id),
@@ -129,7 +131,9 @@ const TabItem = memo<TabItemProps>(
             )
           )}
           <span className={styles.tabTitle}>{meta.title}</span>
-          <ActionIcon className={styles.closeIcon} icon={X} size="small" onClick={handleClose} />
+          {totalCount > 1 && (
+            <ActionIcon className={styles.closeIcon} icon={X} size="small" onClick={handleClose} />
+          )}
         </Flexbox>
       </ContextMenuTrigger>
     );

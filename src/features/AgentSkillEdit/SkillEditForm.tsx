@@ -48,108 +48,116 @@ export interface SkillEditFormValues {
 }
 
 interface SkillEditFormProps {
+  disabled?: boolean;
   form: FormInstance;
   initialValues: SkillEditFormValues;
   name?: string;
   onSubmit: (values: SkillEditFormValues) => void;
 }
 
-const SkillEditForm = memo<SkillEditFormProps>(({ name, form, initialValues, onSubmit }) => {
-  const { t } = useTranslation('setting');
-  const editor = useEditor();
-  const currentValueRef = useRef(initialValues.content);
+const SkillEditForm = memo<SkillEditFormProps>(
+  ({ name, disabled, form, initialValues, onSubmit }) => {
+    const { t } = useTranslation('setting');
+    const editor = useEditor();
+    const currentValueRef = useRef(initialValues.content);
 
-  useEffect(() => {
-    form.setFieldsValue(initialValues);
-  }, [initialValues]);
+    useEffect(() => {
+      form.setFieldsValue(initialValues);
+    }, [initialValues]);
 
-  useEffect(() => {
-    currentValueRef.current = initialValues.content;
-  }, [initialValues.content]);
+    useEffect(() => {
+      currentValueRef.current = initialValues.content;
+    }, [initialValues.content]);
 
-  useEffect(() => {
-    if (!editor) return;
-    try {
-      setTimeout(() => {
-        if (initialValues.content) {
+    useEffect(() => {
+      if (!editor) return;
+      try {
+        setTimeout(() => {
+          if (initialValues.content) {
+            editor.setDocument('markdown', initialValues.content);
+          }
+        }, 100);
+      } catch {
+        setTimeout(() => {
           editor.setDocument('markdown', initialValues.content);
-        }
-      }, 100);
-    } catch {
-      setTimeout(() => {
-        editor.setDocument('markdown', initialValues.content);
-      }, 100);
-    }
-  }, [editor, initialValues.content]);
-
-  const handleContentChange = useCallback(
-    (e: any) => {
-      const nextContent = (e.getDocument('markdown') as unknown as string) || '';
-      if (nextContent !== currentValueRef.current) {
-        currentValueRef.current = nextContent;
-        form.setFieldValue('content', nextContent);
+        }, 100);
       }
-    },
-    [form],
-  );
+    }, [editor, initialValues.content]);
 
-  const items: FormItemProps[] = [
-    {
-      children: <Input disabled readOnly value={name} />,
-      desc: t('agentSkillEdit.nameDesc'),
-      label: t('settingAgent.name.title'),
-    },
-    {
-      children: (
-        <Input.TextArea
-          autoSize={{ maxRows: 4, minRows: 2 }}
-          placeholder={t('agentSkillModal.descriptionPlaceholder')}
-        />
-      ),
-      desc: t('agentSkillEdit.descriptionDesc'),
-      label: t('agentSkillModal.description'),
-      name: 'description',
-    },
-    {
-      children: (
-        <div className={styles.editorWrapper}>
-          <Editor
-            content={''}
-            editor={editor}
-            lineEmptyPlaceholder={t('agentSkillEdit.instructionsPlaceholder')}
-            placeholder={t('agentSkillEdit.instructionsPlaceholder')}
-            plugins={PLUGINS}
-            style={{ paddingBottom: 48 }}
-            type={'text'}
-            variant={'chat'}
-            onTextChange={handleContentChange}
+    const handleContentChange = useCallback(
+      (e: any) => {
+        if (disabled) return;
+        const nextContent = (e.getDocument('markdown') as unknown as string) || '';
+        if (nextContent !== currentValueRef.current) {
+          currentValueRef.current = nextContent;
+          form.setFieldValue('content', nextContent);
+        }
+      },
+      [disabled, form],
+    );
+
+    const items: FormItemProps[] = [
+      {
+        children: <Input disabled readOnly value={name} />,
+        desc: t('agentSkillEdit.nameDesc'),
+        label: t('settingAgent.name.title'),
+      },
+      {
+        children: (
+          <Input.TextArea
+            autoSize={{ maxRows: 4, minRows: 2 }}
+            disabled={disabled}
+            placeholder={t('agentSkillModal.descriptionPlaceholder')}
           />
-        </div>
-      ),
-      desc: t('agentSkillEdit.instructionsDesc'),
-      label: t('agentSkillEdit.instructions'),
-    },
-  ];
+        ),
+        desc: t('agentSkillEdit.descriptionDesc'),
+        label: t('agentSkillModal.description'),
+        name: 'description',
+      },
+      {
+        children: (
+          <div
+            className={styles.editorWrapper}
+            style={{ pointerEvents: disabled ? 'none' : undefined }}
+          >
+            <Editor
+              content={''}
+              editor={editor}
+              lineEmptyPlaceholder={t('agentSkillEdit.instructionsPlaceholder')}
+              placeholder={t('agentSkillEdit.instructionsPlaceholder')}
+              plugins={PLUGINS}
+              style={{ paddingBottom: 48 }}
+              type={'text'}
+              variant={'chat'}
+              onTextChange={handleContentChange}
+            />
+          </div>
+        ),
+        desc: t('agentSkillEdit.instructionsDesc'),
+        label: t('agentSkillEdit.instructions'),
+      },
+    ];
 
-  return (
-    <div className={styles.wrapper}>
-      <Form
-        form={form}
-        gap={0}
-        initialValues={initialValues}
-        items={items}
-        itemsType={'flat'}
-        layout={'vertical'}
-        variant={'borderless'}
-        onFinish={onSubmit}
-      >
-        <AForm.Item hidden name="content">
-          <Input type="hidden" />
-        </AForm.Item>
-      </Form>
-    </div>
-  );
-});
+    return (
+      <div className={styles.wrapper}>
+        <Form
+          form={form}
+          gap={0}
+          initialValues={initialValues}
+          items={items}
+          itemsType={'flat'}
+          layout={'vertical'}
+          variant={'borderless'}
+          onFinish={onSubmit}
+        >
+          <AForm.Item hidden name="content">
+            <Input type="hidden" />
+          </AForm.Item>
+        </Form>
+      </div>
+    );
+  },
+);
 
 SkillEditForm.displayName = 'SkillEditForm';
 

@@ -4,10 +4,10 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronRight, ExternalLink, Settings, Store } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import { ScrollSignalProvider } from '@/features/ChatInput/ActionBar/Tools/ScrollSignalContext';
 import ToolsList, { toolsListStyles } from '@/features/ChatInput/ActionBar/Tools/ToolsList';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import Empty from './Empty';
 
@@ -45,7 +45,7 @@ interface PopoverContentProps {
 const PopoverContent = memo<PopoverContentProps>(
   ({ activeTab, onTabChange, allTabItems, installedTabItems, onOpenStore, onClose }) => {
     const { t } = useTranslation('setting');
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
 
     const currentItems = activeTab === 'all' ? allTabItems : installedTabItems;
 

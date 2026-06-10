@@ -2,9 +2,10 @@ import type { TaskTemplate } from '@lobechat/const';
 import { App } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { usePermission } from '@/hooks/usePermission';
 import { taskTemplateService } from '@/services/taskTemplate';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -37,14 +38,16 @@ export const useTaskTemplateCreate = ({
 }: UseTaskTemplateCreateOptions): UseTaskTemplateCreateResult => {
   const { t } = useTranslation('taskTemplate');
   const { message } = App.useApp();
+  const { allowed: canCreateTask } = usePermission('create_content');
   const [loading, setLoading] = useState(false);
   const [created, setCreated] = useState(false);
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const createTask = useTaskStore((s) => s.createTask);
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const requiredConnection = useSkillConnection(template.requiresSkills);
 
   const handleCreate = useCallback(async () => {
+    if (!canCreateTask) return;
     if (!inboxAgentId) return;
     setLoading(true);
     try {
@@ -85,6 +88,7 @@ export const useTaskTemplateCreate = ({
     template.cronPattern,
     template.id,
     title,
+    canCreateTask,
   ]);
 
   const handleConnectError = useCallback(
@@ -124,13 +128,14 @@ export const useTaskTemplateCreate = ({
   }, [pendingCreate, requiredConnection.isConnecting, requiredConnection.needsConnect]);
 
   const handleAddTask = useCallback(() => {
+    if (!canCreateTask) return;
     if (created || !inboxAgentId) return;
     if (requiredConnection.needsConnect) {
       setPendingCreate(true);
       return;
     }
     void handleCreate();
-  }, [created, inboxAgentId, requiredConnection.needsConnect, handleCreate]);
+  }, [canCreateTask, created, inboxAgentId, requiredConnection.needsConnect, handleCreate]);
 
   const primaryButtonLabel = loading
     ? t('action.creating')
@@ -140,7 +145,7 @@ export const useTaskTemplateCreate = ({
 
   return {
     created,
-    disabled: created || !inboxAgentId,
+    disabled: !canCreateTask || created || !inboxAgentId,
     handleAddTask,
     handleConnectError,
     loading,

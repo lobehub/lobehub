@@ -13,5 +13,7 @@
   "features.imessage.title": "iMessage-kanaal",
   "features.inputMarkdown.desc": "Toon Markdown in het invoerveld in realtime (vette tekst, codeblokken, tabellen, enz.).",
   "features.inputMarkdown.title": "Markdown-weergave bij Invoer",
+  "features.platformAgent.desc": "Toon de optie \"Agent Verbinden\" in het aanmaakmenu. Verbonden agents (bijv. OpenClaw, Hermes) draaien op je eigen apparaten en communiceren terug via lh connect.",
+  "features.platformAgent.title": "Agent Verbinden",
   "title": "Labs"
 }

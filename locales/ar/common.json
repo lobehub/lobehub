@@ -480,6 +480,9 @@
   "userPanel.setting": "الإعدادات",
   "userPanel.upgradePlan": "ترقية الخطة",
   "userPanel.usages": "إحصائيات الاستخدام",
+  "userPanel.workspaceCredits": "أرصدة مساحة العمل",
+  "userPanel.workspaceSetting": "إعدادات مساحة العمل",
+  "userPanel.workspaceUsages": "استخدامات مساحة العمل",
   "version": "الإصدار",
   "zoom": "تكبير"
 }

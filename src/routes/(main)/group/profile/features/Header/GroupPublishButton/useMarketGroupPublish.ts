@@ -2,6 +2,7 @@ import isEqual from 'fast-deep-equal';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { message } from '@/components/AntdStaticMethods';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -37,6 +38,7 @@ export const useMarketGroupPublish = ({ action, onSuccess }: UseMarketGroupPubli
   const currentGroupAgents = useAgentGroupStore(agentGroupSelectors.currentGroupAgents);
   const updateGroupMeta = useAgentGroupStore((s) => s.updateGroupMeta);
   const language = useGlobalStore(globalGeneralSelectors.currentLanguage);
+  const hasActiveWorkspace = useHasActiveWorkspace();
 
   const isSubmit = action === 'submit';
 
@@ -55,7 +57,24 @@ export const useMarketGroupPublish = ({ action, onSuccess }: UseMarketGroupPubli
 
     try {
       setIsCheckingOwnership(true);
-      const result = await lambdaClient.market.agentGroup.checkOwnership.query({ identifier });
+      let actAs: number | undefined;
+      if (hasActiveWorkspace) {
+        try {
+          const { marketAccountId } =
+            await lambdaClient.workspace.ensureMarketOrganization.mutate();
+          actAs = marketAccountId;
+        } catch (error) {
+          console.warn(
+            'Failed to resolve Market organization for workspace ownership check:',
+            error,
+          );
+        }
+      }
+
+      const result = await lambdaClient.market.agentGroup.checkOwnership.query({
+        actAs,
+        identifier,
+      });
 
       // If group doesn't exist or user is owner, no confirmation needed
       if (!result.exists || result.isOwner) {
@@ -74,7 +93,7 @@ export const useMarketGroupPublish = ({ action, onSuccess }: UseMarketGroupPubli
     } finally {
       setIsCheckingOwnership(false);
     }
-  }, [currentGroup]);
+  }, [currentGroup, hasActiveWorkspace]);
 
   const publish = useCallback(async () => {
     // Prevent duplicate publishing
@@ -103,6 +122,9 @@ export const useMarketGroupPublish = ({ action, onSuccess }: UseMarketGroupPubli
       isPublishingRef.current = true;
       setIsPublishing(true);
       message.loading({ content: loadingMessage, key: messageKey });
+      const actAs = hasActiveWorkspace
+        ? (await lambdaClient.workspace.ensureMarketOrganization.mutate()).marketAccountId
+        : undefined;
 
       // Prepare member agents data
       const memberAgents = currentGroupAgents.map((agent, index) => ({
@@ -132,6 +154,7 @@ export const useMarketGroupPublish = ({ action, onSuccess }: UseMarketGroupPubli
 
       // Use tRPC publishOrCreate
       const result = await lambdaClient.market.agentGroup.publishOrCreate.mutate({
+        actAs,
         // Only include avatar if it's not null/undefined
         ...(currentGroupMeta.avatar ? { avatar: currentGroupMeta.avatar } : {}),
         // Only include backgroundColor if it's not null/undefined
@@ -199,6 +222,7 @@ export const useMarketGroupPublish = ({ action, onSuccess }: UseMarketGroupPubli
     currentGroupAgents,
     currentGroupConfig,
     currentGroupMeta,
+    hasActiveWorkspace,
     isAuthenticated,
     isSubmit,
     language,

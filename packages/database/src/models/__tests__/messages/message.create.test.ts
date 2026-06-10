@@ -132,7 +132,7 @@ describe('MessageModel Create Tests', () => {
       // Assert result
       const result = await serverDB.select().from(messages).where(eq(messages.userId, userId));
       expect(result[0].id).toBeDefined();
-      expect(result[0].id).toHaveLength(18);
+      expect(result[0].id).toHaveLength(22);
     });
 
     it('should create a tool message and insert into messagePlugins table', async () => {

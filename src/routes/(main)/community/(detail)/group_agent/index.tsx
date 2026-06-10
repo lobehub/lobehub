@@ -75,6 +75,9 @@ const GroupAgentDetailPage = memo<GroupAgentDetailPageProps>(({ mobile }) => {
     likeCount: (data as any)?.group?.likeCount,
     locale: (data as any)?.locale,
     memberAgents: (data as any)?.memberAgents || [],
+    ownerType: ((data as any)?.author?.type === 'organization' ? 'organization' : 'user') as
+      | 'organization'
+      | 'user',
     status: (data as any)?.group?.status,
     summary: (data as any)?.summary,
     tags: (data as any)?.currentVersion?.tags,

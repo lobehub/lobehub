@@ -18,6 +18,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
     }
   `,
+  cardDisabled: css`
+    cursor: not-allowed;
+    opacity: 0.5;
+  `,
   description: css`
     font-size: 12px;
     color: ${cssVar.colorTextSecondary};
@@ -46,6 +50,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface CredTypeSelectorProps {
+  disabled?: boolean;
   onSelect: (type: CredType) => void;
 }
 
@@ -76,13 +81,21 @@ const typeConfigs: Array<{
   },
 ];
 
-const CredTypeSelector: FC<CredTypeSelectorProps> = ({ onSelect }) => {
+const CredTypeSelector: FC<CredTypeSelectorProps> = ({ disabled, onSelect }) => {
   const { t } = useTranslation('setting');
 
   return (
     <div className={styles.grid}>
       {typeConfigs.map(({ type, icon, description }) => (
-        <Card className={styles.card} key={type} size="small" onClick={() => onSelect(type)}>
+        <Card
+          className={`${styles.card} ${disabled ? styles.cardDisabled : ''}`}
+          key={type}
+          size="small"
+          onClick={() => {
+            if (disabled) return;
+            onSelect(type);
+          }}
+        >
           <Flexbox align="center">
             <div className={styles.icon}>{icon}</div>
             <div className={styles.title}>{t(`creds.types.${type}`)}</div>

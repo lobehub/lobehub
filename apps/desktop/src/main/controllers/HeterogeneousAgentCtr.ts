@@ -1338,6 +1338,14 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     } = params;
     const workDir = cwd ?? process.cwd();
 
+    // When CLI tracing is enabled (dev builds, or the Help-menu toggle in
+    // packaged builds), have `lh hetero exec` persist the agent process's RAW
+    // stream-json (pre-adapter) on this device. The remote-device path
+    // otherwise leaves no local record — the CLI consumes stdout internally and
+    // only POSTs adapted events to the server — so without this there's nothing
+    // to inspect when a remote run misbehaves.
+    const rawDumpDir = this.shouldTraceCliOutput ? this.resolveTraceRootDir(workDir) : undefined;
+
     const args = [
       'hetero',
       'exec',
@@ -1354,6 +1362,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       '--cwd',
       workDir,
       ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
+      ...(rawDumpDir ? ['--raw-dump', rawDumpDir] : []),
     ];
 
     const env = {

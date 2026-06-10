@@ -122,6 +122,12 @@ const createHarness = (
       },
     ),
     findById: vi.fn(async (id: string) => messages.get(id) ?? null),
+    getLastChildToolMessageId: vi.fn(async (assistantMessageId: string) => {
+      const match = [...messages.values()].findLast(
+        (m) => m.role === 'tool' && m.parentId === assistantMessageId && !m.threadId,
+      );
+      return match?.id;
+    }),
     listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
   };
 

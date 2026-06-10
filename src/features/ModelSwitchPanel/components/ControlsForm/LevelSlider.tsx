@@ -89,6 +89,7 @@ export interface LevelSliderProps<T extends string = string> {
    * Default value when uncontrolled
    */
   defaultValue?: T;
+  disabled?: boolean;
   /**
    * Ordered array of level values (left to right on slider)
    */
@@ -150,6 +151,7 @@ function LevelSlider<T extends string = string>({
   onChange,
   marks: customMarks,
   style,
+  disabled,
 }: LevelSliderProps<T>) {
   const defaultLevel = defaultValue ?? levels[Math.floor(levels.length / 2)];
 
@@ -173,6 +175,8 @@ function LevelSlider<T extends string = string>({
   const { minWidth: customMinWidth, ...restStyle } = style ?? {};
 
   const handleChange = (index: number) => {
+    if (disabled) return;
+
     const newLevel = levels[index];
     if (newLevel !== undefined) {
       setCurrentLevel(newLevel);
@@ -192,6 +196,7 @@ function LevelSlider<T extends string = string>({
       <div className={styles.slider}>
         <Slider
           dots
+          disabled={disabled}
           max={levels.length - 1}
           min={0}
           step={1}
@@ -211,10 +216,12 @@ function LevelSlider<T extends string = string>({
             <button
               aria-current={selected ? 'true' : undefined}
               className={cx(styles.label, selected && styles.selectedLabel)}
+              disabled={disabled}
               key={option.value}
               style={option.style}
               type="button"
               onClick={() => {
+                if (disabled) return;
                 setCurrentLevel(option.value);
               }}
             >

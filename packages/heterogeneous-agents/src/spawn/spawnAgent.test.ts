@@ -493,4 +493,51 @@ describe('spawnAgent', () => {
       }
     }).rejects.toThrow(/boom/);
   });
+
+  it('tees the child raw stdout to onRawStdout verbatim, before adapting', async () => {
+    const fake = createFakeProc({ stdoutChunks: [ccInit, ccText] });
+    nextFakeProc = fake.proc;
+
+    const rawChunks: string[] = [];
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'claude-code',
+      onRawStdout: (chunk) => rawChunks.push(chunk.toString()),
+      operationId: 'op-1',
+      prompt: 'go',
+    });
+    fake.start();
+
+    const events: any[] = [];
+    for await (const event of handle.events) events.push(event);
+    await handle.exit;
+
+    // The dump receives the untouched stream-json bytes — exactly what CC
+    // emitted — regardless of how the adapter parses them into events.
+    expect(rawChunks.join('')).toBe(`${ccInit}${ccText}`);
+    // ...and the adapter pipeline still produced events from the same stdout.
+    expect(events.length).toBeGreaterThan(0);
+  });
+
+  it('does not let a throwing onRawStdout disrupt the stream', async () => {
+    const fake = createFakeProc({ stdoutChunks: [ccInit, ccText] });
+    nextFakeProc = fake.proc;
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'claude-code',
+      onRawStdout: () => {
+        throw new Error('dump sink exploded');
+      },
+      operationId: 'op-1',
+      prompt: 'go',
+    });
+    fake.start();
+
+    const events: any[] = [];
+    for await (const event of handle.events) events.push(event);
+    await handle.exit;
+
+    expect(events.length).toBeGreaterThan(0);
+  });
 });

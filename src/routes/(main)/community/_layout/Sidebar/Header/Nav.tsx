@@ -5,10 +5,11 @@ import { McpIcon, ProviderIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { Bot, Brain, ShapesIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
 
 import { type NavItemProps } from '@/features/NavPanel/components/NavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { usePathname } from '@/libs/router/navigation';
 import { DiscoverTab } from '@/types/discover';
 import { isModifierClick } from '@/utils/navigation';
@@ -23,54 +24,55 @@ interface Item {
 
 const useActiveTabKey = () => {
   const pathname = usePathname();
-  if (pathname === '/community') return DiscoverTab.Home;
-  return (pathname.split('/community/').find(Boolean)! as DiscoverTab) || DiscoverTab.Home;
+  if (pathname.endsWith('/community')) return DiscoverTab.Home;
+  return (pathname.split('/community/').at(1) as DiscoverTab) || DiscoverTab.Home;
 };
 
 const Nav = memo(() => {
   const tab = useActiveTabKey();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { t } = useTranslation('discover');
 
   const items: Item[] = useMemo(
-    () => [
-      {
-        icon: ShapesIcon,
-        key: DiscoverTab.Home,
-        title: t('tab.home'),
-        url: '/community',
-      },
-      {
-        icon: Bot,
-        key: DiscoverTab.Assistants,
-        title: t('tab.assistant'),
-        url: '/community/agent',
-      },
-      {
-        icon: SkillsIcon,
-        key: DiscoverTab.Skills,
-        title: t('tab.skill'),
-        url: '/community/skill',
-      },
-      {
-        icon: McpIcon,
-        key: DiscoverTab.Mcp,
-        title: `MCP`,
-        url: '/community/mcp',
-      },
-      {
-        icon: Brain,
-        key: DiscoverTab.Models,
-        title: t('tab.model'),
-        url: '/community/model',
-      },
-      {
-        icon: ProviderIcon,
-        key: DiscoverTab.Providers,
-        title: t('tab.provider'),
-        url: '/community/provider',
-      },
-    ],
+    () =>
+      [
+        {
+          icon: ShapesIcon,
+          key: DiscoverTab.Home,
+          title: t('tab.home'),
+          url: '/community',
+        },
+        {
+          icon: Bot,
+          key: DiscoverTab.Assistants,
+          title: t('tab.assistant'),
+          url: '/community/agent',
+        },
+        {
+          icon: SkillsIcon,
+          key: DiscoverTab.Skills,
+          title: t('tab.skill'),
+          url: '/community/skill',
+        },
+        {
+          icon: McpIcon,
+          key: DiscoverTab.Mcp,
+          title: `MCP`,
+          url: '/community/mcp',
+        },
+        {
+          icon: Brain,
+          key: DiscoverTab.Models,
+          title: t('tab.model'),
+          url: '/community/model',
+        },
+        {
+          icon: ProviderIcon,
+          key: DiscoverTab.Providers,
+          title: t('tab.provider'),
+          url: '/community/provider',
+        },
+      ] as Item[],
     [t],
   );
 
@@ -89,7 +91,7 @@ const Nav = memo(() => {
         if (!item.url) return content;
 
         return (
-          <Link
+          <WorkspaceLink
             key={item.key}
             to={item.url}
             onClick={(e) => {
@@ -102,7 +104,7 @@ const Nav = memo(() => {
             }}
           >
             <NavItem active={tab.startsWith(item.key)} icon={item.icon} title={item.title} />
-          </Link>
+          </WorkspaceLink>
         );
       })}
     </Flexbox>

@@ -2,7 +2,8 @@ import { isOnServerSide } from '@lobechat/utils';
 import { type ParsedQuery } from 'query-string';
 import qs from 'query-string';
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 interface QueryRouteOptions {
   hash?: string;
@@ -31,7 +32,7 @@ const genHref = ({ hash, replace, url, prevQuery = {}, query = {} }: GenHrefOpti
 };
 
 export const useQueryRoute = () => {
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   return useMemo(
     () => ({

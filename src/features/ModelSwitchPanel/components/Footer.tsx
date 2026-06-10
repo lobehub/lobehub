@@ -3,7 +3,8 @@ import { cssVar } from 'antd-style';
 import { LucideArrowRight, LucideBolt } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import { styles } from '../styles';
 
@@ -13,7 +14,7 @@ interface FooterProps {
 
 export const Footer: FC<FooterProps> = ({ onClose }) => {
   const { t } = useTranslation('components');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   return (
     <Flexbox className={styles.footer} padding={4}>

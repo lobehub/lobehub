@@ -29,6 +29,7 @@ const documentItemToLobeDocument = (document: DocumentItem): LobeDocument => ({
   totalCharCount: document.content?.length || 0,
   totalLineCount: 0,
   updatedAt: document.updatedAt ? new Date(document.updatedAt) : new Date(),
+  userId: document.userId,
 });
 
 const n = setNamespace('page/list');

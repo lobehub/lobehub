@@ -8,6 +8,8 @@ import { Clock3Icon, CopyPlus, Download, Link2, Maximize2, Trash2 } from 'lucide
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
+import { usePermission } from '@/hooks/usePermission';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 import { useFileStore } from '@/store/file';
@@ -26,6 +28,8 @@ export const useMenu = (): { menuItems: any[] } => {
   const { lg = true } = useResponsive();
 
   const documentId = usePageEditorStore((s) => s.documentId);
+  const { allowed: canCreatePage } = usePermission('create_content');
+  const { allowed: canEditPage } = usePermission('edit_own_content');
 
   // Get lastUpdatedTime from DocumentStore
   const lastUpdatedTime = useDocumentStore((s) =>
@@ -34,6 +38,7 @@ export const useMenu = (): { menuItems: any[] } => {
 
   const duplicateDocument = useFileStore((s) => s.duplicateDocument);
   const setRightPanelMode = usePageEditorStore((s) => s.setRightPanelMode);
+  const transferMenuItems = useDocumentTransferMenuItem(documentId) as DropdownItem[] | null;
 
   const [togglePageAgentPanel, wideScreen, toggleWideScreen] = useGlobalStore((s) => [
     s.togglePageAgentPanel,
@@ -45,6 +50,7 @@ export const useMenu = (): { menuItems: any[] } => {
   const showViewModeSwitch = lg;
 
   const handleDuplicate = async () => {
+    if (!canCreatePage) return;
     if (!documentId) return;
     try {
       await duplicateDocument(documentId);
@@ -107,6 +113,7 @@ export const useMenu = (): { menuItems: any[] } => {
           ]
         : []),
       {
+        disabled: !canCreatePage,
         icon: <Icon icon={CopyPlus} />,
         key: 'duplicate',
         label: t('pageList.duplicate'),
@@ -132,10 +139,12 @@ export const useMenu = (): { menuItems: any[] } => {
       },
       {
         danger: true,
+        disabled: !canEditPage,
         icon: <Icon icon={Trash2} />,
         key: 'delete',
         label: t('delete', { ns: 'common' }),
         onClick: async () => {
+          if (!canEditPage) return;
           const state = storeApi.getState();
           await state.handleDelete(t as any, message, state.onDelete);
         },
@@ -143,6 +152,7 @@ export const useMenu = (): { menuItems: any[] } => {
       {
         type: 'divider' as const,
       },
+      ...((transferMenuItems ?? []) as DropdownItem[]),
       {
         children: [
           {
@@ -182,6 +192,8 @@ export const useMenu = (): { menuItems: any[] } => {
     return items;
   }, [
     lastUpdatedTime,
+    canCreatePage,
+    canEditPage,
     storeApi,
     t,
     message,
@@ -192,6 +204,7 @@ export const useMenu = (): { menuItems: any[] } => {
     showViewModeSwitch,
     handleDuplicate,
     handleExportMarkdown,
+    transferMenuItems,
   ]);
 
   return { menuItems };

@@ -1,4 +1,8 @@
-export { FOLDER_ICON_CSS, getExplorerTreeStyleVars } from './folderIconStyle';
+export {
+  FOLDER_ICON_CSS,
+  getExplorerTreeStyleVars,
+  HIDE_POINTER_FOCUS_RING_CSS,
+} from './folderIconStyle';
 export type {
   ExplorerTreeCanDropCtx,
   ExplorerTreeHandle,

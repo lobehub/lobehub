@@ -468,6 +468,12 @@ export interface BuiltinToolContext {
   groupOrchestration?: GroupOrchestrationCallbacks;
 
   /**
+   * Whether the current tool is executing inside a sub-agent. Sub-agents must
+   * not spawn additional sub-agents.
+   */
+  isSubAgent?: boolean;
+
+  /**
    * The tool message ID
    */
   messageId: string;

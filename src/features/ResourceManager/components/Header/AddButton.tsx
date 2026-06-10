@@ -8,7 +8,7 @@ import {
 } from '@lobechat/const';
 import { Notion } from '@lobehub/icons';
 import { type MenuProps } from '@lobehub/ui';
-import { Button, DropdownMenu, Icon } from '@lobehub/ui';
+import { Button, DropdownMenu, Icon, Tooltip } from '@lobehub/ui';
 import { Upload } from 'antd';
 import { FilePenLine, FileUp, FolderIcon, FolderUp, Link, Plus } from 'lucide-react';
 import { type ChangeEvent } from 'react';
@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { message } from '@/components/AntdStaticMethods';
 import GuideModal from '@/components/GuideModal';
 import GuideVideo from '@/components/GuideVideo';
+import { usePermission } from '@/hooks/usePermission';
 import { useCurrentFolderId } from '@/routes/(main)/resource/features/hooks/useCurrentFolderId';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useFileStore } from '@/store/file';
@@ -53,6 +54,7 @@ const AddButton = () => {
   const createResourceAndSync = useFileStore((s) => s.createResourceAndSync);
   const [menuOpen, setMenuOpen] = useState(false);
   const currentFolderId = useCurrentFolderId();
+  const { allowed: canCreate, reason } = usePermission('create_content');
 
   // TODO: Migrate Notion import to use createResource
   // Keep old functions temporarily for components not yet migrated
@@ -262,15 +264,20 @@ const AddButton = () => {
   return (
     <>
       <DropdownMenu
-        items={items}
+        items={canCreate ? items : []}
         open={menuOpen}
         placement="bottomRight"
         trigger="both"
-        onOpenChange={setMenuOpen}
+        onOpenChange={(open) => {
+          if (!canCreate) return;
+          setMenuOpen(open);
+        }}
       >
-        <Button data-no-highlight icon={Plus} type="primary">
-          {t('addLibrary')}
-        </Button>
+        <Tooltip title={reason}>
+          <Button data-no-highlight disabled={!canCreate} icon={Plus} type="primary">
+            {t('addLibrary')}
+          </Button>
+        </Tooltip>
       </DropdownMenu>
       <GuideModal
         cancelText={t('header.actions.notionGuide.cancel')}

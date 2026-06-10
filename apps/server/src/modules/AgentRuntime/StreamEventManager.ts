@@ -51,7 +51,7 @@ export const getDefaultReasonDetail = (finalState: any, reason?: string): string
  *
  * - `messages` — canonical copy lives in the DB (UIChatMessage rows)
  *   and the runtime in-memory state; in-process consumers that need
- *   it (e.g. `execSubAgentTask.onComplete`) receive the full state
+ *   it (e.g. `execSubAgent.onComplete`) receive the full state
  *   via the local `HookContext` channel, not via the stream.
  * - `operationToolSet`, `toolManifestMap`, `toolSourceMap`, `tools`
  *   — operation-level snapshot; back-compat copies of one struct.

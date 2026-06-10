@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AgentRuntimeService } from '@/server/services/agentRuntime';
+import { AiAgentService } from '@/server/services/aiAgent';
 
 import { runStep, runStepHealth } from '../runStep';
 
@@ -14,8 +14,8 @@ vi.mock('@/server/modules/AgentRuntime', () => ({
   })),
 }));
 
-vi.mock('@/server/services/agentRuntime', () => ({
-  AgentRuntimeService: vi.fn().mockImplementation(() => ({
+vi.mock('@/server/services/aiAgent', () => ({
+  AiAgentService: vi.fn().mockImplementation(() => ({
     executeStep: mockExecuteStep,
   })),
 }));
@@ -86,11 +86,16 @@ describe('runStep handler', () => {
     expect(mockExecuteStep).not.toHaveBeenCalled();
   });
 
-  it('constructs AgentRuntimeService with the workspaceId from operation metadata', async () => {
-    // Regression: a workspace-scoped binding (e.g. Discord bot active agent) runs
-    // its steps through this QStash worker. Dropping workspaceId here makes the
-    // runtime personal-scoped, so the parent-message lookup misses the
-    // workspace-scoped row and throws ConversationParentMissing.
+  it('steps through AiAgentService scoped to the operation workspace', async () => {
+    // Regression (two invariants in one path):
+    // 1. workspaceId — a workspace-scoped binding (e.g. Discord bot active agent)
+    //    runs its steps through this QStash worker. Dropping it makes the runtime
+    //    personal-scoped, so the parent-message lookup misses the workspace-scoped
+    //    row → ConversationParentMissing.
+    // 2. sub-agent forking — stepping MUST go through AiAgentService (not a bare
+    //    AgentRuntimeService), because only AiAgentService's runtime carries the
+    //    in-process `execSubAgent` fork callback. A bare runtime here makes
+    //    `lobe-agent.callSubAgent` fail with SUB_AGENT_UNAVAILABLE.
     mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1', workspaceId: 'ws-1' });
     mockExecuteStep.mockResolvedValue({
       nextStepScheduled: false,
@@ -101,10 +106,13 @@ describe('runStep handler', () => {
     const { ctx } = buildContext({ body: validBody });
     await runStep(ctx);
 
-    expect(AgentRuntimeService).toHaveBeenCalledWith(
+    expect(AiAgentService).toHaveBeenCalledWith(
       expect.anything(),
       'user-1',
       expect.objectContaining({ workspaceId: 'ws-1' }),
+    );
+    expect(mockExecuteStep).toHaveBeenCalledWith(
+      expect.objectContaining({ operationId: 'op-1', stepIndex: 2 }),
     );
   });
 

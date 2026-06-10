@@ -117,6 +117,14 @@ const createHarness = (params: {
       },
     ),
     findById: vi.fn(async (id: string) => messages.get(id) ?? null),
+    getLastChildToolMessageId: vi.fn(async (assistantMessageId: string) => {
+      // Mirror the SQL: last-created main-agent (threadId null) tool row whose
+      // parentId is the assistant. Map insertion order == creation order.
+      const match = [...messages.values()].findLast(
+        (m) => m.role === 'tool' && m.parentId === assistantMessageId && !m.threadId,
+      );
+      return match?.id;
+    }),
     listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
   };
 
@@ -693,6 +701,124 @@ describe('HeterogeneousPersistenceHandler', () => {
       // replica that didn't drain step_complete.
       expect(step2Asst!.model).toBe('claude-sonnet-4-6');
       expect(step2Asst!.provider).toBe('claude-code');
+    });
+
+    it('chains off the tool ROW when the refresh misses the tools[] result_msg_id backfill', async () => {
+      // Residual race the batch-start refresh does NOT cover: the other replica
+      // created the tool row (Phase 2) but its assistant.tools[] result_msg_id
+      // backfill (Phase 3) is not yet visible. The refresh keys off
+      // result_msg_id, so it sees 0 resolved tools → does NOT adopt → toolState
+      // stays empty → pre-fix the step boundary falls back to the previous
+      // assistant and forks the wire. The fix queries the role:'tool' row
+      // itself (committed in Phase 2, independent of the JSONB mirror).
+      const h = createHarness({
+        assistantMessageId: 'asst-init',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const metaState: FakeTopicMetadata = {
+        runningOperation: { assistantMessageId: 'asst-init', operationId: 'op-1' },
+      };
+      h.topicModel.findById.mockImplementation(async (id: string) => {
+        if (id !== 'topic-1') return null;
+        return { agentId: null, id, metadata: { ...metaState } };
+      });
+      h.topicModel.updateMetadata.mockImplementation(async (_id: string, patch: any) => {
+        Object.assign(metaState, patch);
+      });
+
+      // ── Batch 1: this replica drains step 1's stream_start (no tools yet) ──
+      await h.handler.ingest({
+        events: [buildEvent('stream_start', 1, { newStep: true })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      const step1Asst = [...h.messages.values()].find(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init',
+      )!;
+
+      // ── Other replica created the tool ROW but NOT the tools[] backfill ──
+      // Note: step1Asst.tools[] is intentionally left WITHOUT result_msg_id,
+      // so the ingest refresh cannot recover the anchor.
+      h.messages.set('tool-row-only', {
+        agentId: null,
+        content: 'result body',
+        id: 'tool-row-only',
+        parentId: step1Asst.id,
+        role: 'tool',
+        threadId: null,
+        tool_call_id: 'tc-1',
+        topicId: 'topic-1',
+      });
+
+      // ── Batch 2: step 2 stream_start lands on THIS (empty-state) replica ──
+      await h.handler.ingest({
+        events: [buildEvent('stream_start', 2, { newStep: true })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const step2Asst = [...h.messages.values()].find(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init' && m.id !== step1Asst.id,
+      );
+      expect(step2Asst).toBeDefined();
+      // Chains off the tool row, NOT the previous assistant → wire stays linear.
+      expect(step2Asst!.parentId).toBe('tool-row-only');
+    });
+
+    it('ignores subagent tool rows (threadId set) when resolving the step anchor', async () => {
+      // A subagent tool row lives on its own thread and must never anchor the
+      // main-agent wire. If the only `role:'tool'` child carries a threadId,
+      // the fallback must skip it and chain off the previous assistant.
+      const h = createHarness({
+        assistantMessageId: 'asst-init',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const metaState: FakeTopicMetadata = {
+        runningOperation: { assistantMessageId: 'asst-init', operationId: 'op-1' },
+      };
+      h.topicModel.findById.mockImplementation(async (id: string) => {
+        if (id !== 'topic-1') return null;
+        return { agentId: null, id, metadata: { ...metaState } };
+      });
+      h.topicModel.updateMetadata.mockImplementation(async (_id: string, patch: any) => {
+        Object.assign(metaState, patch);
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_start', 1, { newStep: true })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      const step1Asst = [...h.messages.values()].find(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init',
+      )!;
+
+      h.messages.set('subagent-tool', {
+        agentId: null,
+        content: 'sub result',
+        id: 'subagent-tool',
+        parentId: step1Asst.id,
+        role: 'tool',
+        threadId: 'thread-sub',
+        tool_call_id: 'tc-sub',
+        topicId: 'topic-1',
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_start', 2, { newStep: true })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const step2Asst = [...h.messages.values()].find(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init' && m.id !== step1Asst.id,
+      );
+      expect(step2Asst).toBeDefined();
+      expect(step2Asst!.parentId).toBe(step1Asst.id);
     });
 
     it('handleTurnMetadata persists model/provider to DB so other replicas can recover lastModel/lastProvider', async () => {

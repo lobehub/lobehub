@@ -13,5 +13,7 @@
   "features.imessage.title": "Kênh iMessage",
   "features.inputMarkdown.desc": "Hiển thị Markdown trong khu vực nhập liệu theo thời gian thực (văn bản in đậm, khối mã, bảng, v.v.).",
   "features.inputMarkdown.title": "Hiển Thị Markdown Trong Ô Nhập",
+  "features.platformAgent.desc": "Hiển thị mục \"Kết nối Agent\" trong menu tạo. Các agent được kết nối (ví dụ: OpenClaw, Hermes) chạy trên thiết bị của bạn và giao tiếp lại thông qua lh connect.",
+  "features.platformAgent.title": "Kết nối Agent",
   "title": "Phòng Thí Nghiệm"
 }

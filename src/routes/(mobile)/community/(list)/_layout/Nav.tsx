@@ -5,9 +5,9 @@ import { Drawer } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { MenuIcon } from 'lucide-react';
 import { memo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import Menu from '@/components/Menu';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { DiscoverTab } from '@/types/discover';
 
 import { useNav } from '../../../../(main)/community/features/useNav';
@@ -43,7 +43,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 const Nav = memo(() => {
   const [open, setOpen] = useState(false);
   const { items, activeKey, activeItem } = useNav();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   return (
     <>

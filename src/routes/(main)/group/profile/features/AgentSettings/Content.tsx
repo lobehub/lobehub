@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import Menu from '@/components/Menu';
 import { DEFAULT_AVATAR } from '@/const/meta';
 import { AgentSettings as Settings } from '@/features/AgentSetting';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { ChatSettingsTabs } from '@/store/global/initialState';
@@ -17,11 +18,13 @@ import { ChatSettingsTabs } from '@/store/global/initialState';
 const Content = memo(() => {
   const { t } = useTranslation('setting');
   const theme = useTheme();
+  const { allowed: canEdit } = usePermission('edit_own_content');
   const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
   const currentGroup = useAgentGroupStore(agentGroupSelectors.currentGroup);
   const [tab] = useState(ChatSettingsTabs.Opening);
 
   const updateGroupConfig = async (config: any) => {
+    if (!canEdit) return;
     if (!groupId) return;
     // Only update openingMessage and openingQuestions
     const groupConfig = {
@@ -32,6 +35,7 @@ const Content = memo(() => {
   };
 
   const updateGroupMeta = async (meta: any) => {
+    if (!canEdit) return;
     if (!groupId) return;
     await useAgentGroupStore.getState().updateGroup(groupId, meta);
   };
@@ -125,6 +129,7 @@ const Content = memo(() => {
       >
         <Settings
           config={agentConfig}
+          disabled={!canEdit}
           id={groupId}
           loading={false}
           meta={agentMeta}
