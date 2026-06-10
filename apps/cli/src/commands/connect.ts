@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type {
+  AgentRunRequestMessage,
   DeviceSystemInfo,
   SystemInfoRequestMessage,
   ToolCallRequestMessage,
@@ -25,6 +26,7 @@ import {
   stopDaemon,
   writeStatus,
 } from '../daemon/manager';
+import { spawnHeteroAgentRun } from '../device/agentRun';
 import { registerDevice, resolveDeviceIdentity } from '../device/register';
 import { loadOrCreateConnectionId, loadSettings, normalizeUrl, saveSettings } from '../settings';
 import { executeToolCall } from '../tools';
@@ -284,6 +286,37 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
         success: result.success,
       },
     });
+  });
+
+  // Handle gateway-dispatched agent runs (heterogeneous agents, e.g. Claude
+  // Code). Mirrors the desktop app: spawn `lh hetero exec` fire-and-forget and
+  // ack immediately so the gateway doesn't time out — the spawned process owns
+  // the full execution + server-ingest pipeline.
+  client.on('agent_run_request', (request: AgentRunRequestMessage) => {
+    info(
+      `Received agent_run_request: operationId=${request.operationId} type=${request.agentType}`,
+    );
+    try {
+      spawnHeteroAgentRun(
+        {
+          agentType: request.agentType,
+          cwd: request.cwd,
+          jwt: request.jwt,
+          operationId: request.operationId,
+          prompt: request.prompt,
+          resumeSessionId: request.resumeSessionId,
+          serverUrl: auth.serverUrl,
+          systemContext: request.systemContext,
+          topicId: request.topicId,
+        },
+        { error, info },
+      );
+      client.sendAgentRunAck({ operationId: request.operationId, status: 'accepted' });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      error(`agent_run_request failed: ${reason}`);
+      client.sendAgentRunAck({ operationId: request.operationId, reason, status: 'rejected' });
+    }
   });
 
   client.on('connected', () => {
