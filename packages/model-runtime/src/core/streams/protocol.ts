@@ -146,10 +146,19 @@ const ERROR_CHUNK_PREFIX = '%FIRST_CHUNK_ERROR%: ';
 
 export const ABORT_CHUNK = '%ABORT_CHUNK%';
 
-const isAbortError = (error: Error): boolean =>
-  error.name === 'AbortError' ||
-  error.message.includes('aborted') ||
-  error.message.includes('cancelled');
+const isAbortError = (error: unknown): boolean => {
+  // SDK iterators may throw non-Error values (strings, plain objects without
+  // a `message`) — guard before touching `.name`/`.message` so the abort
+  // check itself can't blow up inside the stream error handler.
+  if (!error || typeof error !== 'object') return false;
+
+  const { name, message } = error as { message?: unknown; name?: unknown };
+
+  return (
+    name === 'AbortError' ||
+    (typeof message === 'string' && (message.includes('aborted') || message.includes('cancelled')))
+  );
+};
 
 /**
  * Optional diagnostic context attached to errors that surface from the

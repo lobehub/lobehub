@@ -456,6 +456,56 @@ describe('convertIterableToStream', () => {
     expect(chunks).toEqual(['data', ABORT_CHUNK]);
   });
 
+  it('should emit ABORT_CHUNK for AbortError-named throw without a message', async () => {
+    async function* abortingStream() {
+      yield 'first';
+      // some SDKs throw bare objects rather than Error instances
+      throw { name: 'AbortError' };
+    }
+
+    const readable = convertIterableToStream(abortingStream());
+    const reader = readable.getReader();
+    const chunks: any[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    expect(chunks).toEqual(['first', ABORT_CHUNK]);
+  });
+
+  it('should fall back to error chunk when iterator throws a non-Error value', async () => {
+    async function* erroringStream() {
+      yield 'first';
+      // a string throw must not crash the abort check — it should still
+      // surface as a serialized first-chunk error instead of killing the pipe
+      throw 'upstream exploded';
+    }
+
+    const chunks = await drain(
+      convertIterableToStream(erroringStream()).pipeThrough(createFirstErrorHandleTransformer()),
+    );
+
+    expect(chunks[0]).toBe('first');
+    expect(chunks[1][FIRST_CHUNK_ERROR_KEY]).toBe(true);
+  });
+
+  it('should fall back to error chunk when thrown object has no message', async () => {
+    async function* erroringStream() {
+      yield 'first';
+      throw { code: 'ECONNRESET' };
+    }
+
+    const chunks = await drain(
+      convertIterableToStream(erroringStream()).pipeThrough(createFirstErrorHandleTransformer()),
+    );
+
+    expect(chunks[0]).toBe('first');
+    expect(chunks[1][FIRST_CHUNK_ERROR_KEY]).toBe(true);
+  });
+
   it('should produce stop:abort SSE event through full pipeline when request is aborted', async () => {
     async function* abortingStream() {
       yield { type: 'message_start', message: { id: 'msg_1', content: [] } };
