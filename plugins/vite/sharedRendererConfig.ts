@@ -169,7 +169,7 @@ export const createSharedRolldownOutput = (options: SharedRolldownOutputOptions 
   },
 });
 
-type Platform = 'web' | 'mobile' | 'desktop';
+type Platform = 'web' | 'mobile' | 'desktop' | 'auth';
 
 const isDev = process.env.NODE_ENV !== 'production';
 const enableRouteChunkPreload = process.env.LOBE_ROUTE_CHUNK_PRELOAD !== 'false';

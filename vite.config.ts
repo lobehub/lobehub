@@ -18,12 +18,13 @@ import {
 import { vercelSkewProtection } from './plugins/vite/vercelSkewProtection';
 
 const isMobile = process.env.MOBILE === 'true';
+const isAuth = process.env.AUTH === 'true';
 const mode = process.env.NODE_ENV === 'production' ? 'production' : 'development';
 
 Object.assign(process.env, loadEnv(mode, process.cwd(), ''));
 
 const isDev = process.env.NODE_ENV !== 'production';
-const platform = isMobile ? 'mobile' : 'web';
+const platform = isAuth ? 'auth' : isMobile ? 'mobile' : 'web';
 const enableViteDevTools = process.env.LOBE_VITE_DEVTOOLS === 'true';
 
 const resolveCommandExecutable = (cmd: string) => {
@@ -101,14 +102,17 @@ const openExternalBrowser = async (
 };
 
 export default defineConfig({
-  base: isDev ? '/' : process.env.VITE_CDN_BASE || '/_spa/',
+  base: isDev ? '/' : process.env.VITE_CDN_BASE || (isAuth ? '/_spa-auth/' : '/_spa/'),
   build: {
     modulePreload: sharedModulePreload,
-    outDir: isMobile ? 'dist/mobile' : 'dist/desktop',
+    outDir: isAuth ? 'dist/auth' : isMobile ? 'dist/mobile' : 'dist/desktop',
     reportCompressedSize: false,
     rolldownOptions: {
       ...(enableViteDevTools && { devtools: {} }),
-      input: path.resolve(__dirname, isMobile ? 'index.mobile.html' : 'index.html'),
+      input: path.resolve(
+        __dirname,
+        isAuth ? 'index.auth.html' : isMobile ? 'index.mobile.html' : 'index.html',
+      ),
       output: createSharedRolldownOutput({ strictExecutionOrder: true }),
     },
   },
@@ -250,46 +254,47 @@ export default defineConfig({
       },
     },
 
-    VitePWA({
-      injectRegister: null,
-      manifest: false,
-      registerType: 'prompt',
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,woff2}'],
-        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
-        runtimeCaching: [
-          {
-            handler: 'StaleWhileRevalidate',
-            options: { cacheName: 'google-fonts-stylesheets' },
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-          },
-          {
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-webfonts',
-              expiration: { maxAgeSeconds: 60 * 60 * 24 * 365, maxEntries: 30 },
+    !isAuth &&
+      VitePWA({
+        injectRegister: null,
+        manifest: false,
+        registerType: 'prompt',
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,woff2}'],
+          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+          runtimeCaching: [
+            {
+              handler: 'StaleWhileRevalidate',
+              options: { cacheName: 'google-fonts-stylesheets' },
+              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             },
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-          },
-          {
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'image-assets',
-              expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 100 },
+            {
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'google-fonts-webfonts',
+                expiration: { maxAgeSeconds: 60 * 60 * 24 * 365, maxEntries: 30 },
+              },
+              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
             },
-            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico|avif)$/i,
-          },
-          {
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: { maxAgeSeconds: 60 * 5, maxEntries: 50 },
+            {
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'image-assets',
+                expiration: { maxAgeSeconds: 60 * 60 * 24 * 30, maxEntries: 100 },
+              },
+              urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico|avif)$/i,
             },
-            urlPattern: /\/(api|trpc)\/.*/i,
-          },
-        ],
-      },
-    }),
+            {
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'api-cache',
+                expiration: { maxAgeSeconds: 60 * 5, maxEntries: 50 },
+              },
+              urlPattern: /\/(api|trpc)\/.*/i,
+            },
+          ],
+        },
+      }),
   ].filter(Boolean) as PluginOption[],
 
   server: {

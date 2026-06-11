@@ -59,6 +59,7 @@ bun.lockb
 # Build outputs
 dist/
 public/_spa/
+public/_spa-auth/
 public/spa/
 es/
 lib/
@@ -92,6 +93,7 @@ public/swe-worker*
 
 # Generated files
 src/app/spa/[variants]/[[...path]]/spaHtmlTemplates.ts
+src/app/spa-auth/authHtmlTemplate.ts
 public/*.js
 robots.txt
 

@@ -2,13 +2,17 @@ import { cpSync, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
-const spaDir = path.resolve(root, 'public/_spa');
-const distDirs = ['desktop', 'mobile'] as const;
 const copyDirs = ['assets', 'i18n', 'vendor'] as const;
+const targets = [
+  { distDir: 'desktop', publicDir: 'public/_spa' },
+  { distDir: 'mobile', publicDir: 'public/_spa' },
+  { distDir: 'auth', publicDir: 'public/_spa-auth' },
+] as const;
 
-mkdirSync(spaDir, { recursive: true });
+for (const { distDir, publicDir } of targets) {
+  const spaDir = path.resolve(root, publicDir);
+  mkdirSync(spaDir, { recursive: true });
 
-for (const distDir of distDirs) {
   for (const dir of copyDirs) {
     const sourceDir = path.resolve(root, `dist/${distDir}/${dir}`);
     const targetDir = path.resolve(spaDir, dir);
@@ -16,6 +20,6 @@ for (const distDir of distDirs) {
     if (!existsSync(sourceDir)) continue;
 
     cpSync(sourceDir, targetDir, { recursive: true });
-    console.log(`Copied dist/${distDir}/${dir} -> public/_spa/${dir}`);
+    console.log(`Copied dist/${distDir}/${dir} -> ${publicDir}/${dir}`);
   }
 }
