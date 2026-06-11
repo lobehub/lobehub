@@ -386,6 +386,15 @@ export default {
   'newPlatformAgent': 'Connect Agent',
   'newGroupChat': 'Create Group',
 
+  // Op status tray (floating panel above the chat input during a run)
+  'opStatusTray.status.compressing': 'Compressing context',
+  'opStatusTray.status.generating': 'Generating',
+  'opStatusTray.status.reasoning': 'Thinking',
+  'opStatusTray.status.searching': 'Searching',
+  'opStatusTray.status.toolCalling': 'Calling tools',
+  'opStatusTray.toolCalls': 'tools',
+  'opStatusTray.turns': 'turns',
+
   // Connect agent: per-agent descriptions shown in step 0 of the connect modal
   'platformAgent.create.desc.openclaw': 'Connect to OpenClaw running on one of your devices',
   'platformAgent.create.desc.hermes': 'Connect to Hermes running on one of your devices',
