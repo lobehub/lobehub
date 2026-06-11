@@ -1,7 +1,11 @@
 import { buildAgentSkillIdentifier } from '@lobechat/const';
 import useSWR, { type SWRResponse } from 'swr';
 
-import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
+import {
+  type AgentDocumentListItem,
+  agentDocumentService,
+  agentDocumentSWRKeys,
+} from '@/services/agentDocument';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -12,9 +16,7 @@ const n = setNamespace('agentDocumentSkills');
 
 type Setter = StoreSetter<ToolStore>;
 
-const mapDocsToSkills = (
-  docs: Awaited<ReturnType<typeof agentDocumentService.getDocuments>>,
-): AgentDocumentSkillItem[] =>
+const mapDocsToSkills = (docs: AgentDocumentListItem[]): AgentDocumentSkillItem[] =>
   docs
     .filter((doc) => doc.isSkillBundle)
     .map((doc) => ({
@@ -56,7 +58,7 @@ export class AgentDocumentSkillsActionImpl {
     }
 
     try {
-      const docs = await agentDocumentService.getDocuments({ agentId });
+      const docs = await agentDocumentService.listDocuments({ agentId });
       const items = mapDocsToSkills(docs);
       this.#set(
         { agentDocumentSkills: items, agentDocumentSkillsAgentId: agentId },
@@ -88,14 +90,15 @@ export class AgentDocumentSkillsActionImpl {
   /**
    * SWR-backed hook that fetches the agent's skill bundles and keeps the store
    * in sync. Shares the same SWR key as the working-sidebar panel so the panel
-   * fetch and the registry sync collapse into one network request.
+   * fetch and the registry sync collapse into one network request — both must
+   * fetch the same slim `listDocuments` payload to keep the cache shape stable.
    */
   useFetchAgentDocumentSkills = (
     agentId: string | undefined,
-  ): SWRResponse<Awaited<ReturnType<typeof agentDocumentService.getDocuments>>> =>
-    useSWR<Awaited<ReturnType<typeof agentDocumentService.getDocuments>>>(
+  ): SWRResponse<AgentDocumentListItem[]> =>
+    useSWR<AgentDocumentListItem[]>(
       agentId ? agentDocumentSWRKeys.documentsList(agentId) : null,
-      async () => agentDocumentService.getDocuments({ agentId: agentId! }),
+      async () => agentDocumentService.listDocuments({ agentId: agentId! }),
       {
         onSuccess: (docs) => {
           if (!agentId) return;
