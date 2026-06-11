@@ -898,7 +898,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         toolCalls?.find((item) => item.function?.name === tool.function.name) ?? toolCalls?.[0];
 
       if (!toolCall?.function) {
-        log('no tool call found in structured output response');
+        // tool_choice forces this function, so a missing tool call means the
+        // provider misbehaved — surface it instead of silently returning undefined
+        console.error('no tool call found in structured output response:', res.choices[0]?.message);
         return undefined;
       }
 

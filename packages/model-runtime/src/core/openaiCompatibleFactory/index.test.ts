@@ -3242,6 +3242,7 @@ describe('LobeOpenAICompatibleFactory', () => {
         vi.spyOn(instanceWithToolCalling['client'].chat.completions, 'create').mockResolvedValue(
           mockResponse as any,
         );
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
         const payload = {
           messages: [{ content: 'Generate data', role: 'user' as const }],
@@ -3254,7 +3255,13 @@ describe('LobeOpenAICompatibleFactory', () => {
 
         const result = await instanceWithToolCalling.generateObject(payload);
 
+        expect(consoleSpy).toHaveBeenCalledWith(
+          'no tool call found in structured output response:',
+          mockResponse.choices[0].message,
+        );
         expect(result).toBeUndefined();
+
+        consoleSpy.mockRestore();
       });
 
       it('should return undefined when tool call arguments parsing fails', async () => {
