@@ -913,6 +913,13 @@ export const desktopRoutes: RouteObject[] = [
     path: '/share/page',
   },
 
+  // Messenger verify route (outside main layout)
+  {
+    element: dynamicElement(() => import('@/routes/verify-im'), 'Desktop > VerifyIm'),
+    errorElement: <ErrorBoundary />,
+    path: '/verify-im',
+  },
+
   // Devtools route (outside main layout, dev-only)
   ...(__DEV__
     ? [

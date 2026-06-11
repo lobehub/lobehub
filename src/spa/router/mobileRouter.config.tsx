@@ -524,4 +524,11 @@ export const mobileRoutes: RouteObject[] = [
     ],
     path: '/share/page',
   },
+
+  // Messenger verify route (outside main layout)
+  {
+    element: dynamicElement(() => import('@/routes/verify-im'), 'Mobile > VerifyIm'),
+    errorElement: <ErrorBoundary />,
+    path: '/verify-im',
+  },
 ];

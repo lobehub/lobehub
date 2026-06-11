@@ -43,10 +43,6 @@ export const authRoutes: RouteObject[] = [
         path: 'auth-error',
       },
       {
-        element: lazyElement(() => import('@/routes/auth/verify-im'), 'Auth > VerifyIm'),
-        path: 'verify-im',
-      },
-      {
         element: lazyElement(
           () => import('@/routes/auth/market-auth-callback'),
           'Auth > MarketAuthCallback',
