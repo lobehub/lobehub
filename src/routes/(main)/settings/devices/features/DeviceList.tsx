@@ -37,7 +37,7 @@ const styles = createStaticStyles(({ css }) => ({
   capabilityCard: css`
     padding: 16px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG}px;
+    border-radius: ${cssVar.borderRadiusLG};
 
     background: ${cssVar.colorBgContainer};
 
@@ -54,7 +54,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 36px;
     height: 36px;
-    border-radius: ${cssVar.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
     color: ${cssVar.colorText};
 
@@ -69,7 +69,7 @@ const styles = createStaticStyles(({ css }) => ({
   emptyCard: css`
     overflow: hidden;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG}px;
+    border-radius: ${cssVar.borderRadiusLG};
     background: ${cssVar.colorBgContainer};
   `,
   emptyHero: css`
@@ -88,7 +88,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 56px;
     height: 56px;
-    border-radius: ${cssVar.borderRadiusLG}px;
+    border-radius: ${cssVar.borderRadiusLG};
 
     color: ${cssVar.colorPrimary};
 
@@ -123,7 +123,7 @@ const styles = createStaticStyles(({ css }) => ({
 
     width: 40px;
     height: 40px;
-    border-radius: ${cssVar.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
     color: ${cssVar.colorTextSecondary};
 
