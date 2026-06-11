@@ -14,7 +14,7 @@ const sensenovaChatModels: AIChatModelCard[] = [
       'A lightweight multimodal agent model designed for real-world workflows, supporting both text-based conversations and image understanding. Lightweight and efficient, balancing performance, cost, and deployability. Native multimodal architecture with support for image understanding, including OCR and chart interpretation. Enhanced for office and productivity scenarios, with stable support for complex long-chain tasks. Improved token efficiency, enabling better cost control for complex workloads. Context length of 256K tokens (maximum input: 252K, maximum output: 64K)',
     displayName: 'SenseNova 6.7 Flash Lite',
     enabled: true,
-    family: "sensenova",
+    family: 'sensenova',
     id: 'sensenova-6.7-flash-lite',
     maxOutput: 65_536,
     pricing: {
@@ -39,7 +39,7 @@ const sensenovaChatModels: AIChatModelCard[] = [
     description:
       'A high-performance conversational model from DeepSeek, supporting both reasoning and non-reasoning modes, with a 256K-token context window and up to 64K output tokens. Built-in capabilities include JSON Output and Tool Calls.',
     displayName: 'DeepSeek V4 Flash',
-    family: "sensenova",
+    family: 'deepseek-v4',
     id: 'deepseek-v4-flash',
     maxOutput: 65_536,
     pricing: {
