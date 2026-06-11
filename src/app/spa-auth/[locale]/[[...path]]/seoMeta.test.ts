@@ -19,6 +19,22 @@ describe('buildAuthSeoEntry', () => {
     expect(entry.description).toBe('Start your Agents collaboration space');
   });
 
+  it('uses hand-translated zh-CN keys', async () => {
+    const signin = await buildAuthSeoEntry('zh-CN', '/signin');
+    const signup = await buildAuthSeoEntry('zh-CN', '/signup');
+
+    expect(signin.title).toBe('登录');
+    expect(signup.title).toBe('创建账号');
+    expect(signup.description).toBe('开启 Agents 协作空间');
+  });
+
+  it('strips a trailing slash before matching', async () => {
+    const entry = await buildAuthSeoEntry('en-US', '/signin/');
+
+    expect(entry.canonicalPath).toBe('/signin');
+    expect(entry.title).toBe('Sign In');
+  });
+
   it('falls back to branding for unmapped paths', async () => {
     const entry = await buildAuthSeoEntry('en-US', '/oauth/consent');
 
@@ -34,6 +50,15 @@ describe('buildSeoMeta', () => {
 
     expect(meta).toContain('<title>Sign In</title>');
     expect(meta).toContain('property="og:url" content="https://app.lobehub.com/signin"');
+  });
+
+  it('normalizes hostile locale input to an allowlisted value', async () => {
+    const hostile = '"><script>alert(1)</script>';
+    const meta = await buildSeoMeta(hostile, '/signin');
+
+    expect(meta).not.toContain(hostile);
+    expect(meta).not.toContain('alert(1)');
+    expect(meta).toContain('property="og:locale" content="en-US"');
   });
 
   it('uses official url for unmapped paths', async () => {

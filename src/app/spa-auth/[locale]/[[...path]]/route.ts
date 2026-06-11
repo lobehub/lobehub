@@ -2,7 +2,7 @@ import { getServerFeatureFlagsValue } from '@/config/featureFlags';
 import { analyticsEnv } from '@/envs/analytics';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
-import { type Locales } from '@/locales/resources';
+import { type Locales, normalizeLocale } from '@/locales/resources';
 import { getServerAuthConfig } from '@/server/globalConfig/getServerAuthConfig';
 import { serializeForHtml } from '@/server/utils/serializeForHtml';
 import { type AnalyticsConfig, type AuthSPAServerConfig } from '@/types/spaServerConfig';
@@ -139,7 +139,8 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ locale: string; path?: string[] }> },
 ) {
-  const { locale, path } = await params;
+  const { locale: rawLocale, path } = await params;
+  const locale = normalizeLocale(rawLocale);
 
   const authConfig: AuthSPAServerConfig = {
     analyticsConfig: buildAnalyticsConfig(),

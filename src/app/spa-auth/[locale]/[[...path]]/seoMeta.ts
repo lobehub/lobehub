@@ -4,6 +4,7 @@ import urlJoin from 'url-join';
 
 import { OFFICIAL_URL } from '@/const/url';
 import { isCustomORG } from '@/const/version';
+import { normalizeLocale } from '@/locales/resources';
 import { translation } from '@/server/translation';
 
 interface AuthSeoEntry {
@@ -13,9 +14,11 @@ interface AuthSeoEntry {
 }
 
 export async function buildAuthSeoEntry(locale: string, pathname: string): Promise<AuthSeoEntry> {
-  const { t } = await translation('auth', locale);
+  const { t } = await translation('auth', normalizeLocale(locale));
+  const normalizedPath =
+    pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
 
-  switch (pathname) {
+  switch (normalizedPath) {
     case '/signin': {
       return {
         canonicalPath: '/signin',
@@ -40,7 +43,8 @@ export async function buildAuthSeoEntry(locale: string, pathname: string): Promi
 }
 
 export async function buildSeoMeta(locale: string, pathname: string): Promise<string> {
-  const { title, description, canonicalPath } = await buildAuthSeoEntry(locale, pathname);
+  const lng = normalizeLocale(locale);
+  const { title, description, canonicalPath } = await buildAuthSeoEntry(lng, pathname);
   const ogUrl = canonicalPath ? urlJoin(OFFICIAL_URL, canonicalPath) : OFFICIAL_URL;
 
   return [
@@ -52,7 +56,7 @@ export async function buildSeoMeta(locale: string, pathname: string): Promise<st
     `<meta property="og:url" content="${ogUrl}" />`,
     `<meta property="og:image" content="${OG_URL}" />`,
     `<meta property="og:site_name" content="${BRANDING_NAME}" />`,
-    `<meta property="og:locale" content="${locale}" />`,
+    `<meta property="og:locale" content="${lng}" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${title}" />`,
     `<meta name="twitter:description" content="${description}" />`,
