@@ -24,9 +24,18 @@ export interface ResolveExecutionTargetOptions {
  * - `sandbox` → 云端沙箱 (server cloud sandbox)
  * - `device`  → 远程设备 (dispatched to `boundDeviceId`)
  *
+ * `local` and `device` stay DISTINCT even when the bound device is this very
+ * machine: `device` dispatches through the server gateway, so progress streams
+ * to every client (mobile/web can follow the run); `local` is the faster
+ * in-process IPC path whose run lives only in this desktop session. Which one
+ * to use is the user's observability/latency trade-off — never auto-collapse
+ * `device(currentDeviceId)` into the in-process path.
+ *
  * Defaults: desktop → `local`, web → `none`. On web `local` isn't available
- * (no local filesystem), so a stored `local` (synced from desktop) resolves to
- * `sandbox`.
+ * (no local filesystem), so a stored `local` (synced from desktop) usually
+ * resolves to `sandbox`. For heterogeneous CLI agents, a desktop `local`
+ * selection that has already been bound to that desktop's `deviceId` resolves
+ * to `device` on web, so the same machine can execute through `lh connect`.
  */
 export const resolveExecutionTarget = (
   agencyConfig: LobeAgentAgencyConfig | undefined,
@@ -34,6 +43,9 @@ export const resolveExecutionTarget = (
 ): DeviceExecutionTarget => {
   const stored = agencyConfig?.executionTarget;
   let effective = stored ?? (isDesktop ? 'local' : 'none');
+  if (isHetero && !isDesktop && stored === 'local' && agencyConfig?.boundDeviceId) {
+    return 'device';
+  }
   if (isHetero && effective === 'none') effective = isDesktop ? 'local' : 'sandbox';
   if (!isDesktop && effective === 'local') return 'sandbox';
   return effective;
@@ -84,21 +96,30 @@ export type ExecutionPlanUnroutedReason =
  * Where (and whether) a run executes, resolved ONCE at the entry point.
  * Downstream layers consume the plan instead of re-deriving the answer from
  * `executionTarget` / `boundDeviceId` / online state themselves.
+ *
+ * `target` is the EFFECTIVE execution target (platform defaults and coercions
+ * applied; degraded to `none` when device access is denied) — consumers must
+ * read it instead of re-resolving `agencyConfig.executionTarget`.
  */
-export type ExecutionPlan =
+export type ExecutionPlan = { target: DeviceExecutionTarget } &
   /** route execution / device tools to this device (includes 本机 — the local machine is a registered device) */
-  | { deviceId: string; kind: 'device' }
-  /**
-   * Device-targeted but no routable device right now. The run proceeds without
-   * an active device; the remote-device proxy may let the model activate one
-   * mid-run (native agents), or the caller may treat this as a hard error
-   * (hetero dispatch).
-   */
-  | { kind: 'device-unrouted'; reason: ExecutionPlanUnroutedReason }
-  /** plain chat — no execution environment, no run tools, no device ever */
-  | { kind: 'none' }
-  /** ephemeral cloud sandbox */
-  | { kind: 'sandbox' };
+  (| { deviceId: string; kind: 'device' }
+    /**
+     * Device-targeted but no routable device right now. The run proceeds without
+     * an active device; the remote-device proxy may let the model activate one
+     * mid-run (native agents), or the caller may treat this as a hard error
+     * (hetero dispatch).
+     */
+    | { kind: 'device-unrouted'; reason: ExecutionPlanUnroutedReason }
+    /** plain chat — no execution environment, no run tools, no device ever */
+    | { kind: 'none' }
+    /** ephemeral cloud sandbox */
+    | { kind: 'sandbox' }
+  );
+
+/** Device tools (local-system / remote-device proxy) only exist in device-capable sessions. */
+export const isDeviceCapablePlan = (plan: ExecutionPlan): boolean =>
+  plan.kind === 'device' || plan.kind === 'device-unrouted';
 
 export interface ResolveExecutionPlanParams {
   agencyConfig: LobeAgentAgencyConfig | undefined;
@@ -154,29 +175,36 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
   const wantsDevice = !!requestedDeviceId || target === 'device' || target === 'local';
 
   if (!wantsDevice || !canUseDevice) {
-    if (target === 'sandbox') return { kind: 'sandbox' };
-    return { kind: 'none' };
+    if (target === 'sandbox') return { kind: 'sandbox', target: 'sandbox' };
+    // a device-capable target denied by the access policy degrades to plain
+    // chat — the effective target is `none`, not the stored one
+    return { kind: 'none', target: 'none' };
   }
 
   const boundDeviceId = requestedDeviceId || agencyConfig?.boundDeviceId;
+  // requestedDeviceId may force device routing over a non-device stored target
+  const effectiveTarget = target === 'local' ? 'local' : 'device';
 
   // No online info: trust the binding (the gateway errors on dispatch if the
   // device is offline). No auto-activation without visibility.
   if (!onlineDeviceIds) {
-    if (boundDeviceId) return { deviceId: boundDeviceId, kind: 'device' };
-    return { kind: 'device-unrouted', reason: 'no-bound-device' };
+    if (boundDeviceId) return { deviceId: boundDeviceId, kind: 'device', target: effectiveTarget };
+    return { kind: 'device-unrouted', reason: 'no-bound-device', target: effectiveTarget };
   }
 
   if (boundDeviceId) {
     return onlineDeviceIds.includes(boundDeviceId)
-      ? { deviceId: boundDeviceId, kind: 'device' }
-      : { kind: 'device-unrouted', reason: 'bound-device-offline' };
+      ? { deviceId: boundDeviceId, kind: 'device', target: effectiveTarget }
+      : { kind: 'device-unrouted', reason: 'bound-device-offline', target: effectiveTarget };
   }
 
-  if (onlineDeviceIds.length === 1) return { deviceId: onlineDeviceIds[0], kind: 'device' };
+  if (onlineDeviceIds.length === 1) {
+    return { deviceId: onlineDeviceIds[0], kind: 'device', target: effectiveTarget };
+  }
 
   return {
     kind: 'device-unrouted',
     reason: onlineDeviceIds.length === 0 ? 'no-online-device' : 'ambiguous-online-devices',
+    target: effectiveTarget,
   };
 };

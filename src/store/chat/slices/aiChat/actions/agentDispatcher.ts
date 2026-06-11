@@ -56,9 +56,12 @@ export interface RuntimeSelectionContext {
    *   - `'device'` / `'sandbox'` → route through Gateway so the server can
    *     dispatch to an `lh connect` device or spawn a sandbox.
    *   - `'local'` / `undefined`  → keep today's default (desktop → `hetero`
-   *     in-process spawn, web → `gateway` sandbox).
+   *     in-process spawn, web → `gateway` sandbox unless a desktop-local
+   *     boundDeviceId is available, in which case the server dispatches to it.
    */
   executionTarget?: DeviceExecutionTarget;
+  /** Device bound by the execution switcher. Used when desktop `local` syncs to web. */
+  boundDeviceId?: string;
   /** Per-agent heterogeneous provider config (desktop only — takes priority over gateway). */
   heterogeneousProvider?: HeterogeneousProviderConfig;
   /** Result of `chatStore.isGatewayModeEnabled()`. */
@@ -102,11 +105,11 @@ export const selectRuntimeType = (
   // Local CLI hetero (claude-code / codex) — route by the resolved execution
   // target (shared resolution with the server / the device switcher UI):
   // `device` / `sandbox` need server-side dispatch; `local` runs in-process on
-  // the desktop. Unset and `none` resolve to `local` on desktop (in-process)
-  // and `sandbox` on web (gateway).
+  // the desktop. On web, unbound `local` resolves to sandbox, while a desktop
+  // `local` selection synced with boundDeviceId resolves to device dispatch.
   if (ctx.heterogeneousProvider) {
     const target = resolveExecutionTarget(
-      { executionTarget: ctx.executionTarget },
+      { boundDeviceId: ctx.boundDeviceId, executionTarget: ctx.executionTarget },
       { isDesktop, isHetero: true },
     );
     return target === 'local' ? 'hetero' : 'gateway';

@@ -15,6 +15,9 @@ export const WEB_ONBOARDING: BuiltinAgentDefinition = {
     provider: DEFAULT_ONBOARDING_PROVIDER,
   },
   runtime: (ctx) => ({
+    agencyConfig: {
+      executionTarget: 'none',
+    },
     chatConfig: {
       memory: {
         enabled: false,

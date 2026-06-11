@@ -251,6 +251,7 @@ export class ConversationLifecycleActionImpl {
     const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
     const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
+      boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
       executionTarget: agentConfig?.agencyConfig?.executionTarget,
       heterogeneousProvider,
       isGatewayMode: this.#get().isGatewayModeEnabled(),
@@ -1280,6 +1281,7 @@ export class ConversationLifecycleActionImpl {
         { kind: 'mention', targetAgentId, instruction, parentMessageId: toolMessage.id },
         {
           conversationContext: context,
+          boundDeviceId: parentAgentConfig?.agencyConfig?.boundDeviceId,
           heterogeneousProvider: parentAgentConfig?.agencyConfig?.heterogeneousProvider,
           inPortalThread,
           isGatewayMode: this.#get().isGatewayModeEnabled(),

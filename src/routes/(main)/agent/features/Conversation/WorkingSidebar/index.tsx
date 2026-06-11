@@ -5,9 +5,11 @@ import { lazy, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
+import { isDesktop } from '@/const/version';
 import { useRepoType } from '@/features/ChatInput/ControlBar/useRepoType';
 import RightPanel from '@/features/RightPanel';
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
+import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useAgentStore } from '@/store/agent';
 import {
@@ -99,11 +101,15 @@ const AgentWorkingSidebar = memo(() => {
   const currentDeviceId = useElectronStore((s) => s.gatewayDeviceInfo?.deviceId);
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
   const repoType = useRepoType(workingDirectory, targetDeviceId);
+  const effectiveTarget = resolveExecutionTarget(agencyConfig, {
+    isDesktop,
+    isHetero,
+  });
 
   // Running against a bound device (remote, or this machine as a device): file
   // tree + git reads go over RPC, so both Review and Files are reachable even
   // when runtimeMode isn't `local`.
-  const isDeviceMode = agencyConfig?.executionTarget === 'device' && !!agencyConfig?.boundDeviceId;
+  const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
   // `targetDeviceId` also identifies the local desktop for per-device working
   // directory state. Files/Review only need a deviceId when routing through a
   // remote device RPC; local "This device" must keep Electron IPC + file-open

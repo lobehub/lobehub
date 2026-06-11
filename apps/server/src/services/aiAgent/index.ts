@@ -61,7 +61,12 @@ import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { toolsEnv } from '@/envs/tools';
-import { resolveExecutionPlan, resolveRuntimeMode } from '@/helpers/executionTarget';
+import {
+  type ExecutionPlan,
+  executionTargetToRuntimeMode,
+  isDeviceCapablePlan,
+  resolveExecutionPlan,
+} from '@/helpers/executionTarget';
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { signOperationJwt, signUserJWT } from '@/libs/trpc/utils/internalJwt';
@@ -594,6 +599,13 @@ export class AiAgentService {
           agentConfig.plugins = runtimeConfig.plugins;
           log('execAgent: merged builtin agent runtime plugins for slug=%s', agentSlug);
         }
+        if (runtimeConfig.agencyConfig) {
+          agentConfig.agencyConfig = {
+            ...agentConfig.agencyConfig,
+            ...runtimeConfig.agencyConfig,
+          };
+          log('execAgent: merged builtin agent runtime agencyConfig for slug=%s', agentSlug);
+        }
       }
     }
 
@@ -1095,7 +1107,9 @@ export class AiAgentService {
         // and cloud sandbox via the shared execution plan:
         //   - requestedDeviceId (topic-level override) always wins
         //   - executionTarget 'device' → dispatch to boundDeviceId (errors if unset)
-        //   - everything else ('sandbox' / 'local' / 'none' / unset) → cloud
+        //   - executionTarget 'local' + boundDeviceId (desktop sync opened on web)
+        //     → dispatch to that device
+        //   - everything else ('sandbox' / unbound 'local' / 'none' / unset) → cloud
         //     sandbox (the server can't spawn locally, and a hetero agent must
         //     execute somewhere)
         // `onlineDeviceIds` is intentionally omitted: hetero dispatch trusts
@@ -1277,6 +1291,7 @@ export class AiAgentService {
     const toolExecutorMap: Record<string, ToolExecutor> = {};
     let onlineDevices: DeviceAttachment[] = [];
     let activeDeviceId: string | undefined;
+    let executionPlan: ExecutionPlan | undefined;
     let hasAgentDocuments = false;
     let hasEnabledKnowledgeBases = false;
     const isBotConversation = !!(botContext || discordContext);
@@ -1575,7 +1590,7 @@ export class AiAgentService {
       // `isDesktop` uses `gatewayConfigured` as a proxy: a device-gateway
       // deployment serves desktop-class users, so the unset-target default
       // resolves to `local` there and `none` otherwise.
-      const executionPlan = resolveExecutionPlan({
+      executionPlan = resolveExecutionPlan({
         agencyConfig: agentConfig.agencyConfig,
         canUseDevice,
         isDesktop: gatewayConfigured,
@@ -1585,8 +1600,7 @@ export class AiAgentService {
       // Device tools (local-system / remote-device proxy) only exist in a
       // device-capable session — `none` and `sandbox` sessions must never see
       // them, not even the proxy that could activate a device mid-run.
-      const deviceCapable =
-        executionPlan.kind === 'device' || executionPlan.kind === 'device-unrouted';
+      const deviceCapable = isDeviceCapablePlan(executionPlan);
       activeDeviceId = executionPlan.kind === 'device' ? executionPlan.deviceId : undefined;
       log(
         'execAgent: execution plan → kind=%s deviceId=%s',
@@ -1610,6 +1624,7 @@ export class AiAgentService {
             }
           : undefined,
         disableLocalSystem,
+        executionPlan,
         globalMemoryEnabled,
         hasAgentDocuments,
         hasEnabledKnowledgeBases,
@@ -1670,9 +1685,9 @@ export class AiAgentService {
         canUseDevice,
         disableLocalSystem,
       });
-      // Resolve effective runtimeMode once, mirroring AgentToolsEngine's derivation
-      // from the unified executionTarget field.
-      const agentRuntimeMode = resolveRuntimeMode(agentConfig.agencyConfig, gatewayConfigured);
+      // Effective runtimeMode from the plan's resolved target — same value the
+      // engine derives, single derivation point.
+      const agentRuntimeMode = executionTargetToRuntimeMode(executionPlan.target);
       // When sandbox is not the active runtime, remove lobe-cloud-sandbox from the
       // manifest map. The initial seed via getEnabledPluginManifests (which includes
       // defaultToolIds) may have already placed it there, and the allowedBuiltinTools
@@ -1708,10 +1723,11 @@ export class AiAgentService {
       // lobe-local-system has `discoverable: isDesktop` in builtinTools, which
       // evaluates to false on the Node.js server side, so it never enters the
       // loop above. Explicitly inject it only when the device gateway is
-      // configured AND the runtime mode is 'local' — skip for sandbox/none
-      // targets to avoid leaking local-system into non-local sessions.
+      // configured AND the plan's target is 'local' — skip for sandbox/none
+      // targets to avoid leaking local-system into non-local sessions. (The
+      // plan already degrades to `none` when device access is denied, so no
+      // separate `canUseDevice` check is needed here.)
       if (
-        canUseDevice &&
         !disableLocalSystem &&
         gatewayConfigured &&
         agentRuntimeMode === 'local' &&
@@ -2558,6 +2574,7 @@ export class AiAgentService {
         activeDeviceId,
         agentConfig,
         deviceSystemInfo: Object.keys(deviceSystemInfo).length > 0 ? deviceSystemInfo : undefined,
+        executionPlan,
         userTimezone,
         appContext: {
           // Background self-iteration runs execute under a builtin slug (so they

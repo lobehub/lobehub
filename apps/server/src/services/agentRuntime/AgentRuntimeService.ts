@@ -345,6 +345,7 @@ export class AgentRuntimeService {
       deviceAccessPolicy,
       discordContext,
       evalContext,
+      executionPlan,
       maxSteps,
       userMemory,
       deviceSystemInfo,
@@ -425,6 +426,7 @@ export class AgentRuntimeService {
           deviceSystemInfo,
           discordContext,
           evalContext,
+          executionPlan,
           // need be removed
           modelRuntimeConfig,
           queueRetries,

@@ -129,6 +129,7 @@ export const createServerAgentToolsEngine = (
     canUseDevice = false,
     deviceContext,
     disableLocalSystem = false,
+    executionPlan,
     globalMemoryEnabled = false,
     hasAgentDocuments = false,
     hasEnabledKnowledgeBases = false,
@@ -149,11 +150,15 @@ export const createServerAgentToolsEngine = (
   // treated as web.
   const platform: RuntimePlatform = hasDeviceProxy ? 'desktop' : 'web';
 
-  // Tool gate derived from the single `agencyConfig.executionTarget` param
-  // (sandbox → cloud tools, local → local-system tools, device → gateway).
-  const executionTarget = resolveExecutionTarget(agentConfig.agencyConfig, {
-    isDesktop: platform === 'desktop',
-  });
+  // Tool gate derived from the run's resolved execution plan (sandbox → cloud
+  // tools, local → local-system tools, device → gateway). Callers that don't
+  // resolve a plan (focused sub-agent engines) fall back to deriving the
+  // effective target from agencyConfig.
+  const executionTarget =
+    executionPlan?.target ??
+    resolveExecutionTarget(agentConfig.agencyConfig, {
+      isDesktop: platform === 'desktop',
+    });
   const runtimeMode: RuntimeEnvMode = executionTargetToRuntimeMode(executionTarget);
   // Device tools (local-system, remote-device proxy) only exist for
   // device-capable targets. `none` means NO device — the proxy that could
@@ -209,13 +214,14 @@ export const createServerAgentToolsEngine = (
     // System-level rules (may override user selection for specific tools)
     [CloudSandboxManifest.identifier]: runtimeMode === 'cloud',
     [KnowledgeBaseManifest.identifier]: hasEnabledKnowledgeBases,
-    // Local-system: gated by `canUseDevice` (resolveDeviceAccessPolicy)
-    // first — keeps external bot senders out before runtime checks even
-    // run. Then user must have opted into local runtime on this platform
-    // (`runtimeMode === 'local'`) AND have an online, auto-activated
-    // device registered with the device-gateway.
+    // Local-system: the user must have opted into local runtime
+    // (`runtimeMode === 'local'`) AND have an online, auto-activated device
+    // registered with the device-gateway. Access policy (external bot
+    // senders) is enforced upstream: `resolveExecutionPlan` degrades denied
+    // targets to `none`, and `buildAllowedBuiltinTools` +
+    // `excludeIdentifiers` physically drop the manifest for
+    // `canUseDevice=false` turns.
     [LocalSystemManifest.identifier]:
-      canUseDevice &&
       !disableLocalSystem &&
       runtimeMode === 'local' &&
       hasDeviceProxy &&
@@ -224,16 +230,13 @@ export const createServerAgentToolsEngine = (
     [MemoryManifest.identifier]: globalMemoryEnabled,
     // Only auto-enable in bot conversations; otherwise let user's plugin selection take effect
     ...(isBotConversation && { [MessageManifest.identifier]: true }),
-    // Remote-device proxy: shown only when the server has a proxy but
-    // no specific device is auto-activated yet (user must pick).
-    //
-    // `canUseDevice` is the first short-circuit: external bot senders
-    // (and unconfigured bot owners) never reach the proxy, both because
-    // it would let them poke at the owner's machine AND because its
-    // systemRole would otherwise leak the device list into the LLM
-    // context — see the gated injection in `aiAgent.execAgent`.
+    // Remote-device proxy: shown only for device-capable targets when the
+    // server has a proxy but no specific device is auto-activated yet (user
+    // must pick). External bot senders never reach it: the plan degrades
+    // denied targets to `none` (→ not deviceCapable) and the physical
+    // manifest walls drop it for `canUseDevice=false` turns.
     [RemoteDeviceManifest.identifier]:
-      canUseDevice && deviceCapable && hasDeviceProxy && !deviceContext?.autoActivated,
+      deviceCapable && hasDeviceProxy && !deviceContext?.autoActivated,
     [AgentDocumentsManifest.identifier]: hasAgentDocuments,
     [WebBrowsingManifest.identifier]: isSearchEnabled,
   };

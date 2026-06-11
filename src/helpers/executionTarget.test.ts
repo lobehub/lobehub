@@ -38,6 +38,21 @@ describe('resolveExecutionTarget', () => {
     );
   });
 
+  it('routes hetero desktop-local bindings to the bound device on web', () => {
+    expect(
+      resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
+        isDesktop: false,
+        isHetero: true,
+      }),
+    ).toBe('device');
+
+    expect(
+      resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
+        isDesktop: false,
+      }),
+    ).toBe('sandbox');
+  });
+
   it('keeps `device` on web (a bound device is reachable from anywhere)', () => {
     expect(resolveExecutionTarget(cfg({ executionTarget: 'device' }), { isDesktop: false })).toBe(
       'device',
@@ -114,14 +129,14 @@ describe('resolveExecutionPlan', () => {
           isDesktop: true,
           onlineDeviceIds: ONLINE_A,
         }),
-      ).toEqual({ kind: 'none' });
+      ).toEqual({ kind: 'none', target: 'none' });
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'none' }),
           isDesktop: true,
           onlineDeviceIds: ONLINE_A,
         }),
-      ).toEqual({ kind: 'none' });
+      ).toEqual({ kind: 'none', target: 'none' });
     });
   });
 
@@ -133,7 +148,7 @@ describe('resolveExecutionPlan', () => {
           isDesktop: true,
           onlineDeviceIds: ONLINE_A,
         }),
-      ).toEqual({ kind: 'sandbox' });
+      ).toEqual({ kind: 'sandbox', target: 'sandbox' });
     });
 
     it('survives canUseDevice=false — the sandbox never touches user machines', () => {
@@ -144,7 +159,7 @@ describe('resolveExecutionPlan', () => {
           isDesktop: true,
           onlineDeviceIds: ONLINE_A,
         }),
-      ).toEqual({ kind: 'sandbox' });
+      ).toEqual({ kind: 'sandbox', target: 'sandbox' });
     });
   });
 
@@ -156,7 +171,7 @@ describe('resolveExecutionPlan', () => {
           isDesktop: false,
           onlineDeviceIds: ONLINE_AB,
         }),
-      ).toEqual({ deviceId: 'device-a', kind: 'device' });
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'device' });
     });
 
     it('stays unrouted when the bound device is offline (no silent fallback)', () => {
@@ -166,20 +181,20 @@ describe('resolveExecutionPlan', () => {
           isDesktop: false,
           onlineDeviceIds: ONLINE_AB,
         }),
-      ).toEqual({ kind: 'device-unrouted', reason: 'bound-device-offline' });
+      ).toEqual({ kind: 'device-unrouted', reason: 'bound-device-offline', target: 'device' });
     });
 
     it('auto-activates only when exactly one device is online and nothing is bound', () => {
       const local = cfg({ executionTarget: 'local' });
       expect(
         resolveExecutionPlan({ agencyConfig: local, isDesktop: true, onlineDeviceIds: ONLINE_A }),
-      ).toEqual({ deviceId: 'device-a', kind: 'device' });
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'local' });
       expect(
         resolveExecutionPlan({ agencyConfig: local, isDesktop: true, onlineDeviceIds: ONLINE_AB }),
-      ).toEqual({ kind: 'device-unrouted', reason: 'ambiguous-online-devices' });
+      ).toEqual({ kind: 'device-unrouted', reason: 'ambiguous-online-devices', target: 'local' });
       expect(
         resolveExecutionPlan({ agencyConfig: local, isDesktop: true, onlineDeviceIds: [] }),
-      ).toEqual({ kind: 'device-unrouted', reason: 'no-online-device' });
+      ).toEqual({ kind: 'device-unrouted', reason: 'no-online-device', target: 'local' });
     });
 
     it('treats the desktop default (unset target) as device-capable', () => {
@@ -189,7 +204,7 @@ describe('resolveExecutionPlan', () => {
           isDesktop: true,
           onlineDeviceIds: ONLINE_A,
         }),
-      ).toEqual({ deviceId: 'device-a', kind: 'device' });
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'local' });
     });
 
     it('resolves the unset web target to none', () => {
@@ -199,7 +214,7 @@ describe('resolveExecutionPlan', () => {
           isDesktop: false,
           onlineDeviceIds: ONLINE_A,
         }),
-      ).toEqual({ kind: 'none' });
+      ).toEqual({ kind: 'none', target: 'none' });
     });
   });
 
@@ -212,7 +227,7 @@ describe('resolveExecutionPlan', () => {
           onlineDeviceIds: ONLINE_AB,
           requestedDeviceId: 'device-b',
         }),
-      ).toEqual({ deviceId: 'device-b', kind: 'device' });
+      ).toEqual({ deviceId: 'device-b', kind: 'device', target: 'device' });
     });
 
     it('wins over the agent-bound device', () => {
@@ -223,7 +238,7 @@ describe('resolveExecutionPlan', () => {
           onlineDeviceIds: ONLINE_AB,
           requestedDeviceId: 'device-b',
         }),
-      ).toEqual({ deviceId: 'device-b', kind: 'device' });
+      ).toEqual({ deviceId: 'device-b', kind: 'device', target: 'device' });
     });
   });
 
@@ -238,7 +253,7 @@ describe('resolveExecutionPlan', () => {
             onlineDeviceIds: ONLINE_A,
             requestedDeviceId: 'device-a',
           }),
-        ).toEqual({ kind: 'none' });
+        ).toEqual({ kind: 'none', target: 'none' });
       }
     });
   });
@@ -251,18 +266,28 @@ describe('resolveExecutionPlan', () => {
           isDesktop: false,
           isHetero: true,
         }),
-      ).toEqual({ deviceId: 'device-a', kind: 'device' });
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'device' });
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'device' }),
           isDesktop: false,
           isHetero: true,
         }),
-      ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device' });
+      ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'device' });
+    });
+
+    it('uses the bound desktop device for hetero local runs entered from web', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }),
+          isDesktop: false,
+          isHetero: true,
+        }),
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'device' });
     });
 
     it('sends hetero non-device targets to the sandbox on the server', () => {
-      // server resolves hetero with isDesktop=false: local → sandbox,
+      // server resolves hetero with isDesktop=false: unbound local → sandbox,
       // none → sandbox (hetero coercion), sandbox → sandbox
       for (const executionTarget of ['local', 'none', 'sandbox', undefined] as const) {
         const plan: ExecutionPlan = resolveExecutionPlan({
@@ -270,7 +295,7 @@ describe('resolveExecutionPlan', () => {
           isDesktop: false,
           isHetero: true,
         });
-        expect(plan).toEqual({ kind: 'sandbox' });
+        expect(plan).toEqual({ kind: 'sandbox', target: 'sandbox' });
       }
     });
   });

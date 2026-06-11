@@ -419,6 +419,33 @@ describe('resolveAgentConfig', () => {
       });
     });
 
+    it('should merge runtime agencyConfig with base agencyConfig', () => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+        () =>
+          ({
+            ...mockAgentConfig,
+            agencyConfig: {
+              boundDeviceId: 'device-a',
+              executionTarget: 'device',
+            },
+          }) as any,
+      );
+      vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
+        agencyConfig: {
+          executionTarget: 'none',
+        },
+        plugins: ['runtime-plugin'],
+        systemRole: 'Runtime system role',
+      });
+
+      const result = resolveAgentConfig({ agentId: 'builtin-agent' });
+
+      expect(result.agentConfig.agencyConfig).toEqual({
+        boundDeviceId: 'device-a',
+        executionTarget: 'none',
+      });
+    });
+
     it('should override base chatConfig values with runtime chatConfig', () => {
       vi.spyOn(agentSelectors.chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
         () =>

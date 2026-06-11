@@ -406,6 +406,12 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
     ...chatConfig,
     ...runtimeConfig?.chatConfig,
   };
+  const resolvedAgencyConfig = runtimeConfig?.agencyConfig
+    ? {
+        ...agentConfig.agencyConfig,
+        ...runtimeConfig.agencyConfig,
+      }
+    : agentConfig.agencyConfig;
 
   // === Page Editor Auto-Injection for Builtin Agents ===
   // When a builtin agent (other than page-agent itself) is used in page editor,
@@ -452,6 +458,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   // Merge runtime systemRole into agent config
   const resolvedAgentConfig: LobeAgentConfig = {
     ...agentConfig,
+    ...(resolvedAgencyConfig ? { agencyConfig: resolvedAgencyConfig } : {}),
     systemRole: resolvedSystemRole,
   };
 

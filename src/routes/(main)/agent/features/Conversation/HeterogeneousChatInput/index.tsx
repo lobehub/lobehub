@@ -11,9 +11,11 @@ import { useNavigate, useParams } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { useHeteroAgentCloudConfig } from '@/business/client/hooks/useHeteroAgentCloudConfig';
+import { isDesktop } from '@/const/version';
 import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInput } from '@/features/Conversation';
 import WideScreenContainer from '@/features/WideScreenContainer';
+import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useRemoteAgentDeviceGuard } from '@/hooks/useRemoteAgentDeviceGuard';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -43,15 +45,21 @@ const HeterogeneousChatInput = memo(() => {
   const params = useParams<{ aid: string }>();
   const navigate = useNavigate();
 
-  const providerType = useAgentStore(agentSelectors.currentAgentHeterogeneousProviderType);
-  const executionTarget = useAgentStore(agentSelectors.currentAgentExecutionTarget);
+  const agencyConfig = useAgentStore((s) => agentSelectors.currentAgentConfig(s)?.agencyConfig);
+  const providerType = agencyConfig?.heterogeneousProvider?.type;
+  const executionTarget = resolveExecutionTarget(agencyConfig, {
+    isDesktop,
+    isHetero: !!providerType,
+  });
   const isRemoteAgent = !!providerType && isRemoteHeterogeneousType(providerType);
 
   // A run goes to an `lh connect` device when the provider is a remote-only type
-  // (openclaw / hermes) OR a local-CLI type (claude-code / codex) explicitly
-  // targeted at a device. Either way the bound device must be online before we
-  // let the user send — guard it here instead of failing at dispatch time.
-  const isDeviceExecution = isRemoteAgent || executionTarget === 'device';
+  // (openclaw / hermes) OR a local-CLI type (claude-code / codex) resolves to a
+  // bound device (including desktop "local" opened from web). Either way the
+  // bound device must be online before we let the user send — guard it here
+  // instead of failing at dispatch time.
+  const isDeviceExecution =
+    isRemoteAgent || (executionTarget === 'device' && !!agencyConfig?.boundDeviceId);
 
   const { status, refresh } = useRemoteAgentDeviceGuard({ enabled: isDeviceExecution });
 

@@ -1,6 +1,8 @@
 import { type LobeToolManifest, type PluginEnableChecker } from '@lobechat/context-engine';
 import { type LobeAgentAgencyConfig, type LobeBuiltinTool, type LobeTool } from '@lobechat/types';
 
+import type { ExecutionPlan } from '@/helpers/executionTarget';
+
 /**
  * Installed plugin with manifest
  */
@@ -91,6 +93,12 @@ export interface ServerCreateAgentToolsEngineParams {
   };
   /** Whether to suppress the local-system builtin while preserving other tools. */
   disableLocalSystem?: boolean;
+  /**
+   * The run's resolved execution plan (see `resolveExecutionPlan`). When
+   * provided, its effective `target` drives the runtime tool gate; when
+   * omitted the engine derives the target from `agencyConfig` directly.
+   */
+  executionPlan?: ExecutionPlan;
   /** Whether the user's global memory setting is enabled */
   globalMemoryEnabled?: boolean;
   /** Whether agent has agent documents */

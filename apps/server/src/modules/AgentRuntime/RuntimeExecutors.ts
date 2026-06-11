@@ -73,6 +73,7 @@ import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { type LobeChatDatabase } from '@/database/type';
 import { fileEnv } from '@/envs/file';
+import { type ExecutionPlan, isDeviceCapablePlan } from '@/helpers/executionTarget';
 import { serverMessagesEngine } from '@/server/modules/Mecha/ContextEngineering';
 import { type EvalContext } from '@/server/modules/Mecha/ContextEngineering/types';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -532,17 +533,23 @@ export const createRuntimeExecutors = (
     const provider = llmPayload.provider || state.modelRuntimeConfig?.provider;
     // Resolve tools via ToolResolver (unified tool injection).
     //
-    // Belt-and-suspenders: even if `aiAgent.execAgent` ever forgets to clear
-    // `state.metadata.activeDeviceId` for a non-trusted sender, swallowing
-    // it here keeps `buildStepToolDelta` from re-injecting `local-system` —
-    // the engine's enabledToolIds exclusion alone is not enough, since the
-    // delta builder treats activeDeviceId as an independent activation
-    // signal and only dedupes against already-enabled tools.
+    // Single-track device gate: `buildStepToolDelta` treats activeDeviceId as
+    // an independent activation signal (it only dedupes against already-
+    // enabled tools), so any id that reaches it WILL inject local-system. The
+    // execution plan is the only authority on whether this session may touch
+    // a device — swallow the id for non-device-capable plans (`none`,
+    // `sandbox`) and for denied senders, even if `state.metadata.activeDeviceId`
+    // was populated by a bug or a mid-run side effect. Plans absent on old /
+    // resumed operations fall back to the policy-only gate.
     const devicePolicy = state.metadata?.deviceAccessPolicy as
       | { canUseDevice: boolean; reason: DeviceAccessReason }
       | undefined;
+    const executionPlan = state.metadata?.executionPlan as ExecutionPlan | undefined;
+    const planAllowsDevice = !executionPlan || isDeviceCapablePlan(executionPlan);
     const activeDeviceId =
-      devicePolicy?.canUseDevice === false ? undefined : state.metadata?.activeDeviceId;
+      devicePolicy?.canUseDevice === false || !planAllowsDevice
+        ? undefined
+        : state.metadata?.activeDeviceId;
     const operationToolSet: OperationToolSet = state.operationToolSet ?? {
       enabledToolIds: [],
       executorMap: state.toolExecutorMap ?? {},

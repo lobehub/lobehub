@@ -44,6 +44,7 @@ describe('builtin tool registry', () => {
 
     expect(runtime.plugins).toContain(UserInteractionIdentifier);
     expect(runtime.plugins).toContain(WebOnboardingIdentifier);
+    expect(runtime.agencyConfig?.executionTarget).toBe('none');
   });
 
   it('exposes the marketplace APIs under the web onboarding manifest', () => {

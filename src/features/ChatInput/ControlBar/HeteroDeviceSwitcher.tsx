@@ -21,7 +21,9 @@ import {
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { lambdaQuery } from '@/libs/trpc/client';
+import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useElectronStore } from '@/store/electron';
@@ -297,7 +299,6 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
   const heteroType = agencyConfig?.heterogeneousProvider?.type;
-  const storedTarget = agencyConfig?.executionTarget;
   const boundDeviceId = agencyConfig?.boundDeviceId;
 
   // Heterogeneous agents (Claude Code / Codex — remote types already early-return
@@ -317,13 +318,10 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
 
-  // Effective target: falls back to local on desktop, sandbox for heterogeneous
-  // agents on web (they must execute somewhere), otherwise no device on web. A
-  // hetero agent never resolves to `'none'`, even if one was previously stored.
-  const fallbackTarget: DeviceExecutionTarget = isDesktop ? 'local' : isHetero ? 'sandbox' : 'none';
-  const storedOrFallback = storedTarget ?? fallbackTarget;
-  const executionTarget: DeviceExecutionTarget =
-    isHetero && storedOrFallback === 'none' ? fallbackTarget : storedOrFallback;
+  // Effective target: shared with server dispatch. In particular, a hetero
+  // desktop "local" selection that carries this desktop's boundDeviceId becomes
+  // a device target when the same agent is opened from web.
+  const executionTarget = resolveExecutionTarget(agencyConfig, { isDesktop, isHetero });
 
   const handleSelect = useCallback(
     async (target: DeviceExecutionTarget, deviceId?: string) => {
@@ -331,15 +329,28 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
       // `executionTarget` is the single source of truth — the server tool
       // gate + client `getRuntimeModeById` derive `runtimeMode` from it.
+      let nextBoundDeviceId = target === 'device' ? deviceId : boundDeviceId;
+      if (target === 'local') {
+        nextBoundDeviceId = currentDeviceId;
+        if (!nextBoundDeviceId) {
+          try {
+            nextBoundDeviceId = (await gatewayConnectionService.getDeviceInfo())?.deviceId;
+          } catch {
+            nextBoundDeviceId = undefined;
+          }
+        }
+        if (isHetero && !nextBoundDeviceId) return;
+      }
+
       await updateAgentConfigById(agentId, {
         agencyConfig: {
           ...agencyConfig,
           executionTarget: target,
-          ...(target === 'device' && deviceId ? { boundDeviceId: deviceId } : {}),
+          ...(nextBoundDeviceId ? { boundDeviceId: nextBoundDeviceId } : {}),
         },
       });
     },
-    [agentId, agencyConfig, updateAgentConfigById],
+    [agentId, agencyConfig, boundDeviceId, currentDeviceId, isHetero, updateAgentConfigById],
   );
 
   // Don't render for remote hetero agents — they use RemoteAgentConfigCard in profile.
