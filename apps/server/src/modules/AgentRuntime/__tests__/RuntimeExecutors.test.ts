@@ -1664,16 +1664,27 @@ describe('RuntimeExecutors', () => {
         };
         const executors = createRuntimeExecutors(ctxWithConfig);
         const state = createMockState();
+        const groupedChild = {
+          content: 'Grouped answer',
+          id: 'group-child-1',
+          reasoning: { content: 'grouped child reasoning should stay display-only' },
+          role: 'assistant',
+        };
+        const councilMember = {
+          content: 'Council member answer',
+          id: 'member-1',
+          reasoning: { content: 'member reasoning should stay display-only' },
+          role: 'assistant',
+        };
+        const nestedCouncilChild = {
+          content: 'Nested council answer',
+          id: 'member-child-1',
+          reasoning: { content: 'nested member reasoning should stay display-only' },
+          role: 'assistant',
+        };
         const messages = [
           {
-            children: [
-              {
-                content: 'Grouped answer',
-                id: 'group-child-1',
-                reasoning: { content: 'grouped child reasoning should stay display-only' },
-                role: 'assistant',
-              },
-            ],
+            children: [groupedChild],
             content: '',
             id: 'group-1',
             role: 'assistantGroup',
@@ -1682,21 +1693,9 @@ describe('RuntimeExecutors', () => {
             content: '',
             id: 'council-1',
             members: [
+              councilMember,
               {
-                content: 'Council member answer',
-                id: 'member-1',
-                reasoning: { content: 'member reasoning should stay display-only' },
-                role: 'assistant',
-              },
-              {
-                children: [
-                  {
-                    content: 'Nested council answer',
-                    id: 'member-child-1',
-                    reasoning: { content: 'nested member reasoning should stay display-only' },
-                    role: 'assistant',
-                  },
-                ],
+                children: [nestedCouncilChild],
                 content: '',
                 id: 'member-group-1',
                 role: 'assistantGroup',
@@ -1723,9 +1722,9 @@ describe('RuntimeExecutors', () => {
         expect(engineInput.messages[0].children[0]).not.toHaveProperty('reasoning');
         expect(engineInput.messages[1].members[0]).not.toHaveProperty('reasoning');
         expect(engineInput.messages[1].members[1].children[0]).not.toHaveProperty('reasoning');
-        expect(messages[0].children[0]).toHaveProperty('reasoning');
-        expect(messages[1].members[0]).toHaveProperty('reasoning');
-        expect(messages[1].members[1].children[0]).toHaveProperty('reasoning');
+        expect(groupedChild).toHaveProperty('reasoning');
+        expect(councilMember).toHaveProperty('reasoning');
+        expect(nestedCouncilChild).toHaveProperty('reasoning');
       });
 
       it('should keep stored assistant reasoning before context processing when replay gate is enabled', async () => {

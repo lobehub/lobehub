@@ -202,14 +202,14 @@ const isEmptyModelCompletion = (params: {
   return true;
 };
 
-type ReasoningReplayMessage = UIChatMessage & {
-  children?: ReasoningReplayMessage[];
-  members?: ReasoningReplayMessage[];
+type ReasoningReplayNode = {
+  children?: ReasoningReplayNode[];
+  members?: ReasoningReplayNode[];
   reasoning?: unknown;
 };
 
 const stripAssistantReasoningForReplay = (messages: UIChatMessage[]): UIChatMessage[] => {
-  const stripMessage = (message: ReasoningReplayMessage): ReasoningReplayMessage => {
+  const stripMessage = <T extends ReasoningReplayNode>(message: T): T => {
     let changed = false;
 
     const children = message.children?.map((child) => {
@@ -233,15 +233,15 @@ const stripAssistantReasoningForReplay = (messages: UIChatMessage[]): UIChatMess
       ...messageWithoutReasoning,
       ...(children ? { children } : {}),
       ...(members ? { members } : {}),
-    } as ReasoningReplayMessage;
+    } as T;
   };
 
   let changed = false;
 
   const strippedMessages = messages.map((message) => {
-    const strippedMessage = stripMessage(message as ReasoningReplayMessage);
+    const strippedMessage = stripMessage(message);
     if (strippedMessage !== message) changed = true;
-    return strippedMessage as UIChatMessage;
+    return strippedMessage;
   });
 
   return changed ? strippedMessages : messages;
