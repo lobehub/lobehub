@@ -549,7 +549,7 @@
     "vite": "8.0.14",
     "vite-plugin-pwa": "^1.2.0",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "3.2.4"
+    "vitest": "3.2.6"
   },
   "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319",
   "publishConfig": {
@@ -578,7 +578,7 @@
       "react-dom": "19.2.5",
       "stylelint-config-clean-order": "7.0.0",
       "typescript": "6.0.3",
-      "vitest": "3.2.4"
+      "vitest": "3.2.6"
     },
     "patchedDependencies": {
       "@upstash/qstash": "patches/@upstash__qstash.patch"
