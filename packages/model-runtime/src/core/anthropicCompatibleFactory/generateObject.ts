@@ -12,12 +12,7 @@ const log = debug('lobe-model-runtime:anthropic:generate-object');
 export interface AnthropicGenerateObjectConfig {
   maxTokens?: number;
   requestParams?: Pick<Anthropic.MessageCreateParamsNonStreaming, 'output_config' | 'thinking'>;
-  /**
-   * `auto` is the only tool_choice the Anthropic API (and compatible endpoints)
-   * accepts while extended thinking is active — `any` and named tool choices
-   * are rejected in thinking mode.
-   */
-  schemaToolChoice?: 'any' | 'auto' | 'tool';
+  schemaToolChoice?: 'any' | 'tool';
   schemaToolStrict?: boolean;
 }
 
@@ -65,11 +60,11 @@ export const buildAnthropicGenerateObjectRequest = async (
     : undefined;
 
   let finalTools;
-  let tool_choice: Anthropic.ToolChoiceAny | Anthropic.ToolChoiceAuto | Anthropic.ToolChoiceTool;
+  let tool_choice: Anthropic.ToolChoiceAny | Anthropic.ToolChoiceTool;
   let schemaToolName: string | undefined;
   if (tools) {
     finalTools = buildAnthropicTools(tools);
-    tool_choice = config?.schemaToolChoice === 'auto' ? { type: 'auto' } : { type: 'any' };
+    tool_choice = { type: 'any' };
   } else if (schema) {
     // Convert OpenAI-style schema to Anthropic tool format
     const tool: Anthropic.ToolUnion = {
@@ -84,9 +79,7 @@ export const buildAnthropicGenerateObjectRequest = async (
     finalTools = [tool];
     schemaToolName = tool.name;
     tool_choice =
-      config?.schemaToolChoice === 'any' || config?.schemaToolChoice === 'auto'
-        ? { type: config.schemaToolChoice }
-        : { name: tool.name, type: 'tool' };
+      config?.schemaToolChoice === 'any' ? { type: 'any' } : { name: tool.name, type: 'tool' };
   } else {
     throw new Error('tools or schema is required');
   }

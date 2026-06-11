@@ -50,16 +50,16 @@ describe('LobeDeepSeekAnthropicAI generateObject', () => {
     vi.clearAllMocks();
   });
 
-  it('should disable thinking and force named tool choice by default', async () => {
-    // V4 models default to thinking enabled server-side, and DeepSeek's
-    // thinking mode rejects any forced tool_choice with
-    // `400 Thinking mode does not support this tool_choice`.
+  it('should use any tool choice by default for server-side thinking', async () => {
+    // DeepSeek's Anthropic-compatible endpoint rejects named tool_choice while
+    // thinking is active, but accepts `any`; V4 models can default to thinking
+    // enabled server-side.
     const result = await instance.generateObject(generateObjectPayload);
 
     const payload = getLastRequestPayload();
 
-    expect(payload.thinking).toEqual({ type: 'disabled' });
-    expect(payload.tool_choice).toEqual({ name: 'task_topic_handoff', type: 'tool' });
+    expect(payload.thinking).toBeUndefined();
+    expect(payload.tool_choice).toEqual({ type: 'any' });
     expect(payload.tools).toEqual([
       expect.objectContaining({
         input_schema: expect.objectContaining({
@@ -85,7 +85,7 @@ describe('LobeDeepSeekAnthropicAI generateObject', () => {
     expect(payload.tool_choice).toEqual({ name: 'task_topic_handoff', type: 'tool' });
   });
 
-  it('should use auto tool choice when thinking is explicitly enabled', async () => {
+  it('should use any tool choice when thinking is explicitly enabled', async () => {
     await instance.generateObject({
       ...generateObjectPayload,
       thinking: { budget_tokens: 1024, type: 'enabled' },
@@ -94,10 +94,10 @@ describe('LobeDeepSeekAnthropicAI generateObject', () => {
     const payload = getLastRequestPayload();
 
     expect(payload.thinking).toBeUndefined();
-    expect(payload.tool_choice).toEqual({ type: 'auto' });
+    expect(payload.tool_choice).toEqual({ type: 'any' });
   });
 
-  it('should use auto tool choice for thinking-only deepseek-reasoner', async () => {
+  it('should use any tool choice for thinking-only deepseek-reasoner', async () => {
     await instance.generateObject({
       ...generateObjectPayload,
       model: 'deepseek-reasoner',
@@ -106,7 +106,7 @@ describe('LobeDeepSeekAnthropicAI generateObject', () => {
     const payload = getLastRequestPayload();
 
     expect(payload.thinking).toBeUndefined();
-    expect(payload.tool_choice).toEqual({ type: 'auto' });
+    expect(payload.tool_choice).toEqual({ type: 'any' });
   });
 
   it('should map reasoning_effort to output_config.effort when thinking is enabled', async () => {
@@ -119,7 +119,7 @@ describe('LobeDeepSeekAnthropicAI generateObject', () => {
     const payload = getLastRequestPayload();
 
     expect(payload.output_config).toEqual({ effort: 'high' });
-    expect(payload.tool_choice).toEqual({ type: 'auto' });
+    expect(payload.tool_choice).toEqual({ type: 'any' });
   });
 
   it('should remove lone surrogates from Anthropic generateObject request payload strings', async () => {
