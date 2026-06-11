@@ -12,7 +12,7 @@ import { type Locales } from '@/locales/resources';
 import { parseBrowserLanguage } from '@/utils/locale';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
-import { nextjsOnlyRoutes } from '../nextjsOnlyRoutes';
+import { authSpaRoutes, nextjsOnlyRoutes } from '../nextjsOnlyRoutes';
 import { createRouteMatcher } from './createRouteMatcher';
 
 // Create debug logger instances
@@ -99,6 +99,33 @@ export function defineConfig() {
     ) {
       logDefault('Skipping rewrite for dangerous local dev proxy route: %s', url.pathname);
       return NextResponse.next();
+    }
+
+    const isAuthSpaRoute = authSpaRoutes.some((r) => url.pathname.startsWith(r));
+
+    // Auth SPA routes: rewrite to /spa-auth/[locale]/[[...path]] catch-all
+    if (isAuthSpaRoute) {
+      const authSpaPath = `/spa-auth/${locale}${url.pathname}`;
+      logDefault('Auth SPA route, rewriting to: %s', authSpaPath);
+      url.pathname = authSpaPath;
+
+      const response = NextResponse.rewrite(url);
+
+      if (explicitlyLocale) {
+        const existingLocale = request.cookies.get(LOBE_LOCALE_COOKIE)?.value as
+          | Locales
+          | undefined;
+        if (!existingLocale) {
+          response.cookies.set(LOBE_LOCALE_COOKIE, explicitlyLocale, {
+            maxAge: 60 * 60 * 24 * 90,
+            path: '/',
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production',
+          });
+        }
+      }
+
+      return response;
     }
 
     const isNextjsRoute = nextjsOnlyRoutes.some((r) => url.pathname.startsWith(r));
