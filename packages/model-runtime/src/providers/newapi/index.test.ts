@@ -3,7 +3,6 @@ import { ModelProvider } from 'model-bank';
 import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { responsesAPIModels } from '../../const/models';
 import type { ChatStreamPayload } from '../../types/chat';
 import * as modelParseModule from '../../utils/modelParse';
 import type { NewAPIModelCard, NewAPIPricing } from './index';
@@ -25,7 +24,6 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
   let mockFetch: Mock;
   let mockProcessMultiProviderModelList: Mock;
   let mockDetectModelProvider: Mock;
-  let mockResponsesAPIModels: typeof responsesAPIModels;
 
   beforeEach(() => {
     // Setup fetch mock
@@ -35,7 +33,6 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
     // Setup utility function mocks
     mockProcessMultiProviderModelList = vi.mocked(modelParseModule.processMultiProviderModelList);
     mockDetectModelProvider = vi.mocked(modelParseModule.detectModelProvider);
-    mockResponsesAPIModels = responsesAPIModels;
 
     // Clear environment variables
     delete process.env.DEBUG_NEWAPI_CHAT_COMPLETION;
