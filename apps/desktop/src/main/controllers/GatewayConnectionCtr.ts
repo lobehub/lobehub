@@ -301,6 +301,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       this.heterogeneousAgentCtr.spawnLhHeteroExec({
         agentType: request.agentType,
         cwd: request.cwd,
+        imageList: request.imageList,
         jwt: request.jwt,
         operationId: request.operationId,
         prompt: request.prompt,

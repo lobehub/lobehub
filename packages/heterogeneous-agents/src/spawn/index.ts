@@ -34,6 +34,8 @@ export {
   type AgentTextBlock,
   buildAgentInput,
   type BuildAgentInputOptions,
+  buildHeteroExecStdinPayload,
+  type HeteroExecImageRef,
   materializeImageToPath,
   type NormalizedImage,
   normalizeImage,

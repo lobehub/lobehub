@@ -18,10 +18,15 @@ import {
 } from '@lobechat/electron-client-ipc';
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { AskUserMcpServer } from '@lobechat/heterogeneous-agents/askUser';
-import type { AgentContentBlock, AgentStreamEvent } from '@lobechat/heterogeneous-agents/spawn';
+import type {
+  AgentContentBlock,
+  AgentStreamEvent,
+  HeteroExecImageRef,
+} from '@lobechat/heterogeneous-agents/spawn';
 import {
   AgentStreamPipeline,
   buildAgentInput,
+  buildHeteroExecStdinPayload,
   materializeImageToPath,
   normalizeImage,
   readCodexSessionModel,
@@ -1424,6 +1429,8 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   spawnLhHeteroExec(params: {
     agentType: string;
     cwd?: string;
+    /** Image attachments (signed URLs) appended as image content blocks. */
+    imageList?: HeteroExecImageRef[];
     jwt: string;
     operationId: string;
     prompt: string;
@@ -1435,6 +1442,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const {
       agentType,
       cwd,
+      imageList,
       jwt,
       operationId,
       prompt,
@@ -1487,16 +1495,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       stdio: ['pipe', 'inherit', 'inherit'],
     });
 
-    // When systemContext is provided, send a content-block array so CC sees the
-    // context block first, then the user's actual message — mirrors
-    // spawnHeteroSandbox. lh handles JSON arrays via coerceJsonPrompt, so no lh
-    // changes are required.
-    const stdinPayload = systemContext
-      ? JSON.stringify([
-          { text: systemContext, type: 'text' },
-          { text: prompt, type: 'text' },
-        ])
-      : JSON.stringify(prompt);
+    // systemContext / image attachments turn the payload into a content-block
+    // array so CC sees the context block first, then the user's message, then
+    // the images — mirrors spawnHeteroSandbox. lh handles both shapes via
+    // coerceJsonPrompt, so no lh changes are required.
+    const stdinPayload = buildHeteroExecStdinPayload({ imageList, prompt, systemContext });
     child.stdin.write(stdinPayload);
     child.stdin.end();
 

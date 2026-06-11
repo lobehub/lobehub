@@ -3,6 +3,7 @@ export {
   buildAgentInput,
   type BuildAgentInputOptions,
 } from './buildAgentInput';
+export { buildHeteroExecStdinPayload, type HeteroExecImageRef } from './execStdinPayload';
 export {
   materializeImageToPath,
   type NormalizedImage,

@@ -183,6 +183,8 @@ export class GatewayHttpClient {
     agentType: string;
     cwd?: string;
     deviceId?: string;
+    /** Image attachments forwarded into the `agent_run_request` message. */
+    imageList?: Array<{ id?: string; url: string }>;
     jwt: string;
     operationId: string;
     prompt: string;

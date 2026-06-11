@@ -2,10 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
 
-const { mockMessageCreate, mockSpawnHeteroSandbox } = vi.hoisted(() => ({
-  mockMessageCreate: vi.fn(),
-  mockSpawnHeteroSandbox: vi.fn().mockResolvedValue(undefined),
-}));
+const { mockMessageCreate, mockResolveAttachmentMetadata, mockSpawnHeteroSandbox } = vi.hoisted(
+  () => ({
+    mockMessageCreate: vi.fn(),
+    mockResolveAttachmentMetadata: vi.fn(),
+    mockSpawnHeteroSandbox: vi.fn().mockResolvedValue(undefined),
+  }),
+);
 
 vi.mock('@/libs/trusted-client', () => ({
   generateTrustedClientToken: vi.fn().mockReturnValue(undefined),
@@ -96,6 +99,17 @@ vi.mock('@/server/services/heterogeneousAgent/sandboxRunner', () => ({
   spawnHeteroSandbox: mockSpawnHeteroSandbox,
 }));
 
+vi.mock('@/server/services/file/resolveAttachments', () => ({
+  resolveAttachmentMetadata: mockResolveAttachmentMetadata,
+  resolveAttachmentsByFileIds: vi.fn().mockResolvedValue({
+    fileList: [],
+    imageList: [],
+    orderedFileIds: [],
+    videoList: [],
+    warnings: [],
+  }),
+}));
+
 vi.mock('@/server/services/agentRuntime', () => ({
   AgentRuntimeService: vi.fn().mockImplementation(() => ({
     createOperation: vi.fn().mockResolvedValue({
@@ -133,6 +147,8 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     topicMock.findById.mockResolvedValue(undefined);
     topicMock.updateMetadata.mockResolvedValue(undefined);
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockResolveAttachmentMetadata.mockResolvedValue([]);
+    mockSpawnHeteroSandbox.mockResolvedValue(undefined);
 
     service = new AiAgentService(mockDb, userId);
   });
@@ -191,5 +207,87 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
 
     const userCall = findUserMessageCreate();
     expect(userCall![0].files).toBeUndefined();
+  });
+
+  describe('image delivery to the dispatched CLI', () => {
+    it('should resolve image attachments and pass imageList to the sandbox dispatch', async () => {
+      mockResolveAttachmentMetadata.mockResolvedValue([
+        {
+          fileType: 'image/png',
+          id: 'file-1',
+          name: 'screenshot.png',
+          size: 100,
+          url: 'https://signed/file-1.png',
+        },
+        {
+          fileType: 'application/pdf',
+          id: 'file-2',
+          name: 'doc.pdf',
+          size: 200,
+          url: 'https://signed/file-2.pdf',
+        },
+      ]);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        fileIds: ['file-1', 'file-2'],
+        prompt: 'Look at this image',
+      });
+
+      expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+        expect.objectContaining({
+          imageList: [{ id: 'file-1', url: 'https://signed/file-1.png' }],
+        }),
+      );
+    });
+
+    it('should pass imageList undefined when attachments contain no images', async () => {
+      mockResolveAttachmentMetadata.mockResolvedValue([
+        {
+          fileType: 'application/pdf',
+          id: 'file-2',
+          name: 'doc.pdf',
+          size: 200,
+          url: 'https://signed/file-2.pdf',
+        },
+      ]);
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        fileIds: ['file-2'],
+        prompt: 'Read this doc',
+      });
+
+      expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+        expect.objectContaining({ imageList: undefined }),
+      );
+    });
+
+    it('should not block the run when attachment resolution fails', async () => {
+      mockResolveAttachmentMetadata.mockRejectedValue(new Error('S3 down'));
+
+      const result = await service.execAgent({
+        agentId: 'agent-1',
+        fileIds: ['file-1'],
+        prompt: 'Look at this image',
+      });
+
+      expect(result.success).toBe(true);
+      // Persistence is independent of URL resolution — files still attached.
+      const userCall = findUserMessageCreate();
+      expect(userCall![0].files).toEqual(['file-1']);
+      expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+        expect.objectContaining({ imageList: undefined }),
+      );
+    });
+
+    it('should not resolve attachments when no fileIds are provided', async () => {
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'No attachments here',
+      });
+
+      expect(mockResolveAttachmentMetadata).not.toHaveBeenCalled();
+    });
   });
 });

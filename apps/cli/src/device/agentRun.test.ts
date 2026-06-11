@@ -122,4 +122,24 @@ describe('spawnHeteroAgentRun', () => {
       ]),
     );
   });
+
+  it('appends image blocks to stdin when imageList is provided', async () => {
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const ackPromise = spawnHeteroAgentRun({
+      ...baseParams,
+      imageList: [{ id: 'file-1', url: 'https://signed/a.png' }],
+      prompt: 'look at this',
+    });
+    child.emit('spawn');
+    await ackPromise;
+
+    expect(child.stdin.write).toHaveBeenCalledWith(
+      JSON.stringify([
+        { text: 'look at this', type: 'text' },
+        { source: { id: 'file-1', type: 'url', url: 'https://signed/a.png' }, type: 'image' },
+      ]),
+    );
+  });
 });

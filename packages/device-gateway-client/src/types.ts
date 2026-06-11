@@ -196,6 +196,13 @@ export interface RpcResponseMessage {
 export interface AgentRunRequestMessage {
   agentType: string;
   cwd?: string;
+  /**
+   * Image attachments from the user message, as URLs the device can fetch
+   * (signed S3 URLs). Appended as image content blocks after the prompt so
+   * the CLI gets vision input — mirrors the desktop local-mode
+   * `sendPrompt(imageList)` path. Optional — omitted for older servers.
+   */
+  imageList?: Array<{ id?: string; url: string }>;
   jwt: string;
   operationId: string;
   prompt: string;

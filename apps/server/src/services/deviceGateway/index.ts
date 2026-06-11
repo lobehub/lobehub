@@ -642,6 +642,8 @@ export class DeviceGateway {
     agentType: HeterogeneousAgentType;
     cwd?: string;
     deviceId?: string;
+    /** Image attachments forwarded to the device as fetchable (signed) URLs. */
+    imageList?: Array<{ id?: string; url: string }>;
     jwt: string;
     operationId: string;
     prompt: string;
