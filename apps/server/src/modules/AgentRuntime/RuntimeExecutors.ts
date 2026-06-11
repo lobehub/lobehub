@@ -202,15 +202,46 @@ const isEmptyModelCompletion = (params: {
   return true;
 };
 
+type ReasoningReplayMessage = UIChatMessage & {
+  children?: ReasoningReplayMessage[];
+  members?: ReasoningReplayMessage[];
+  reasoning?: unknown;
+};
+
 const stripAssistantReasoningForReplay = (messages: UIChatMessage[]): UIChatMessage[] => {
+  const stripMessage = (message: ReasoningReplayMessage): ReasoningReplayMessage => {
+    let changed = false;
+
+    const children = message.children?.map((child) => {
+      const strippedChild = stripMessage(child);
+      if (strippedChild !== child) changed = true;
+      return strippedChild;
+    });
+
+    const members = message.members?.map((member) => {
+      const strippedMember = stripMessage(member);
+      if (strippedMember !== member) changed = true;
+      return strippedMember;
+    });
+
+    if ('reasoning' in message) changed = true;
+    if (!changed) return message;
+
+    const { reasoning: _reasoning, ...messageWithoutReasoning } = message;
+
+    return {
+      ...messageWithoutReasoning,
+      ...(children ? { children } : {}),
+      ...(members ? { members } : {}),
+    } as ReasoningReplayMessage;
+  };
+
   let changed = false;
 
   const strippedMessages = messages.map((message) => {
-    if (message.role !== 'assistant' || !('reasoning' in message)) return message;
-
-    changed = true;
-    const { reasoning: _reasoning, ...messageWithoutReasoning } = message;
-    return messageWithoutReasoning as UIChatMessage;
+    const strippedMessage = stripMessage(message as ReasoningReplayMessage);
+    if (strippedMessage !== message) changed = true;
+    return strippedMessage as UIChatMessage;
   });
 
   return changed ? strippedMessages : messages;

@@ -1654,6 +1654,80 @@ describe('RuntimeExecutors', () => {
         );
       });
 
+      it('should strip stored reasoning from grouped assistant messages before context processing when replay gate is off', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            plugins: [],
+            systemRole: 'test',
+          },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+        const messages = [
+          {
+            children: [
+              {
+                content: 'Grouped answer',
+                id: 'group-child-1',
+                reasoning: { content: 'grouped child reasoning should stay display-only' },
+                role: 'assistant',
+              },
+            ],
+            content: '',
+            id: 'group-1',
+            role: 'assistantGroup',
+          },
+          {
+            content: '',
+            id: 'council-1',
+            members: [
+              {
+                content: 'Council member answer',
+                id: 'member-1',
+                reasoning: { content: 'member reasoning should stay display-only' },
+                role: 'assistant',
+              },
+              {
+                children: [
+                  {
+                    content: 'Nested council answer',
+                    id: 'member-child-1',
+                    reasoning: { content: 'nested member reasoning should stay display-only' },
+                    role: 'assistant',
+                  },
+                ],
+                content: '',
+                id: 'member-group-1',
+                role: 'assistantGroup',
+              },
+            ],
+            role: 'agentCouncil',
+          },
+          { content: 'Continue', role: 'user' },
+        ];
+
+        await executors.call_llm!(
+          {
+            payload: {
+              messages,
+              model: 'gpt-4',
+              provider: 'openai',
+            },
+            type: 'call_llm' as const,
+          },
+          state,
+        );
+
+        const engineInput = engineSpy.mock.calls[0][0];
+        expect(engineInput.messages[0].children[0]).not.toHaveProperty('reasoning');
+        expect(engineInput.messages[1].members[0]).not.toHaveProperty('reasoning');
+        expect(engineInput.messages[1].members[1].children[0]).not.toHaveProperty('reasoning');
+        expect(messages[0].children[0]).toHaveProperty('reasoning');
+        expect(messages[1].members[0]).toHaveProperty('reasoning');
+        expect(messages[1].members[1].children[0]).toHaveProperty('reasoning');
+      });
+
       it('should keep stored assistant reasoning before context processing when replay gate is enabled', async () => {
         const ctxWithConfig: RuntimeExecutorContext = {
           ...ctx,
