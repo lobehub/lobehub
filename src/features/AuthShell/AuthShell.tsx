@@ -2,6 +2,7 @@
 
 import { memo, type PropsWithChildren } from 'react';
 
+import BusinessAuthProvider from '@/business/client/BusinessAuthProvider';
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
 import { mapFeatureFlagsEnvToState } from '@/config/featureFlags';
 import NextThemeProvider from '@/layout/GlobalProvider/NextThemeProvider';
@@ -31,7 +32,9 @@ const AuthShell = memo<PropsWithChildren>(({ children }) => {
             }
           >
             <LobeAnalyticsProviderWrapper>
-              <AuthContainer>{children}</AuthContainer>
+              <BusinessAuthProvider>
+                <AuthContainer>{children}</AuthContainer>
+              </BusinessAuthProvider>
             </LobeAnalyticsProviderWrapper>
           </AuthServerConfigProvider>
         </AuthThemeLite>
