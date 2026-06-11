@@ -270,26 +270,6 @@ export function defineConfig(config: CustomNextConfig) {
     reactStrictMode: true,
     redirects: async () => [
       {
-        destination: '/sitemap-index.xml',
-        permanent: true,
-        source: '/sitemap.xml',
-      },
-      {
-        destination: '/sitemap-index.xml',
-        permanent: true,
-        source: '/sitemap-0.xml',
-      },
-      {
-        destination: '/sitemap/plugins-1.xml',
-        permanent: true,
-        source: '/sitemap/plugins.xml',
-      },
-      {
-        destination: '/sitemap/assistants-1.xml',
-        permanent: true,
-        source: '/sitemap/assistants.xml',
-      },
-      {
         destination: '/manifest.webmanifest',
         permanent: true,
         source: '/manifest.json',

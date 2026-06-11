@@ -93,9 +93,6 @@ public/swe-worker*
 # Generated files
 src/app/spa/[variants]/[[...path]]/spaHtmlTemplates.ts
 public/*.js
-public/sitemap.xml
-public/sitemap-index.xml
-sitemap*.xml
 robots.txt
 
 # Git hooks

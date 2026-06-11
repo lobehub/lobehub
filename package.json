@@ -36,7 +36,7 @@
   "scripts": {
     "build": "bun run build:spa && bun run build:spa:copy && bun run build:next",
     "build:analyze": "cross-env NODE_OPTIONS=--max-old-space-size=81920 next experimental-analyze",
-    "build:docker": "pnpm run build:spa && pnpm run build:spa:mobile && pnpm run build:spa:copy && cross-env NODE_OPTIONS=--max-old-space-size=8192 DOCKER=true next build && pnpm run build-sitemap",
+    "build:docker": "pnpm run build:spa && pnpm run build:spa:mobile && pnpm run build:spa:copy && cross-env NODE_OPTIONS=--max-old-space-size=8192 DOCKER=true next build",
     "build:next": "cross-env NODE_OPTIONS=--max-old-space-size=7168 bun run build:next:raw",
     "build:next:raw": "next build",
     "build:raw": "bun run build:spa:raw && bun run build:spa:copy && bun run build:next:raw",
@@ -46,7 +46,6 @@
     "build:spa:raw": "rm -rf public/_spa && vite build",
     "build:vercel": "cross-env-shell NODE_OPTIONS=--max-old-space-size=8192 \"bun run build:raw && bun run db:migrate\"",
     "build-migrate-db": "bun run db:migrate",
-    "build-sitemap": "tsx ./scripts/buildSitemapIndex/index.ts",
     "clean:node_modules": "bash -lc 'set -e; echo \"Removing all node_modules...\"; rm -rf node_modules; pnpm -r exec rm -rf node_modules; rm -rf apps/desktop/node_modules; echo \"All node_modules removed.\"'",
     "codemod:workspace-nav": "tsx ./scripts/codemodWorkspaceNav.ts",
     "codemod:workspace-nav:check": "tsx ./scripts/codemodWorkspaceNav.ts --check",
