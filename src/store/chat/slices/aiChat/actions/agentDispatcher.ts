@@ -49,6 +49,8 @@ export interface AgentInvocationIntent {
 }
 
 export interface RuntimeSelectionContext {
+  /** Device bound by the execution switcher. Used when desktop `local` syncs to web. */
+  boundDeviceId?: string;
   /**
    * Per-agent execution device choice from the composer's Execution Device
    * switcher. Only meaningful when `heterogeneousProvider` is a local CLI
@@ -60,8 +62,6 @@ export interface RuntimeSelectionContext {
    *     boundDeviceId is available, in which case the server dispatches to it.
    */
   executionTarget?: DeviceExecutionTarget;
-  /** Device bound by the execution switcher. Used when desktop `local` syncs to web. */
-  boundDeviceId?: string;
   /** Per-agent heterogeneous provider config (desktop only — takes priority over gateway). */
   heterogeneousProvider?: HeterogeneousProviderConfig;
   /** Result of `chatStore.isGatewayModeEnabled()`. */
