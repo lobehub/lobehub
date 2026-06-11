@@ -3173,9 +3173,9 @@ describe('LobeOpenAICompatibleFactory', () => {
           { headers: undefined, signal: undefined },
         );
 
-        expect(result).toEqual([
-          { arguments: { age: 28, name: 'Alice' }, name: 'person_extractor' },
-        ]);
+        // The fallback returns the parsed schema object, same shape as the
+        // json_schema path
+        expect(result).toEqual({ age: 28, name: 'Alice' });
       });
 
       it('should not forward internal thinking to generic OpenAI-compatible generateObject requests', async () => {
@@ -3242,7 +3242,6 @@ describe('LobeOpenAICompatibleFactory', () => {
         vi.spyOn(instanceWithToolCalling['client'].chat.completions, 'create').mockResolvedValue(
           mockResponse as any,
         );
-        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
         const payload = {
           messages: [{ content: 'Generate data', role: 'user' as const }],
@@ -3255,10 +3254,7 @@ describe('LobeOpenAICompatibleFactory', () => {
 
         const result = await instanceWithToolCalling.generateObject(payload);
 
-        expect(consoleSpy).toHaveBeenCalledWith('parse tool call arguments error:', undefined);
         expect(result).toBeUndefined();
-
-        consoleSpy.mockRestore();
       });
 
       it('should return undefined when tool call arguments parsing fails', async () => {
@@ -3298,7 +3294,7 @@ describe('LobeOpenAICompatibleFactory', () => {
 
         expect(consoleSpy).toHaveBeenCalledWith(
           'parse tool call arguments error:',
-          mockResponse.choices[0].message.tool_calls,
+          mockResponse.choices[0].message.tool_calls[0],
         );
         expect(result).toBeUndefined();
 
@@ -3350,7 +3346,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           { headers: options.headers, signal: options.signal },
         );
 
-        expect(result).toEqual([{ arguments: { data: 'test' }, name: 'data_extractor' }]);
+        expect(result).toEqual({ data: 'test' });
       });
     });
   });
