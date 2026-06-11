@@ -5,7 +5,8 @@ import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactor
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
 import type { ChatStreamPayload } from '../../types';
-import { detectModelProvider, processMultiProviderModelList } from '../../utils/modelParse';
+import { processMultiProviderModelList } from '../../utils/modelParse';
+import { resolveProviderRouteModels } from '../utils/resolveProviderRouteModels';
 
 // ============================================================================
 // Constants
@@ -442,18 +443,6 @@ export const params = {
 
     const anthropicModels = await getAnthropicModels();
 
-    // DeepSeek models need the deepseek runtime: it simulates structured output
-    // via tool calling, while the generic openai fallback sends response_format
-    // json_schema which DeepSeek upstreams reject. The requested model is also
-    // matched dynamically to cover gateway ids missing from the static list.
-    const deepseekModels = LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
-      (id) => detectModelProvider(id) === 'deepseek',
-    );
-    const requestedModel = runtimeContext?.model;
-    if (requestedModel && detectModelProvider(requestedModel) === 'deepseek') {
-      deepseekModels.push(requestedModel);
-    }
-
     return [
       // Anthropic SDK for models with provider.npm === '@ai-sdk/anthropic'
       {
@@ -464,7 +453,11 @@ export const params = {
       // DeepSeek models via the deepseek runtime (OpenAI-compatible endpoint)
       {
         apiType: 'deepseek',
-        models: deepseekModels,
+        models: resolveProviderRouteModels(
+          'deepseek',
+          LOBE_DEFAULT_MODEL_LIST,
+          runtimeContext?.model,
+        ),
         options: { ...options, baseURL, sdkType: 'openai' },
       },
       // OpenAI-compatible fallback for all other models

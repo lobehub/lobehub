@@ -5,6 +5,7 @@ import { responsesAPIModels } from '../../const/models';
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
 import { detectModelProvider, processMultiProviderModelList } from '../../utils/modelParse';
+import { resolveProviderRouteModels } from '../utils/resolveProviderRouteModels';
 
 export interface NewAPIModelCard {
   created: number;
@@ -161,18 +162,6 @@ export const params = {
   routers: (options, runtimeContext?: { model?: string }) => {
     const userBaseURL = options.baseURL?.replace(/\/v\d+[a-z]*\/?$/, '') || '';
 
-    // DeepSeek models need the deepseek runtime: it simulates structured output
-    // via tool calling, while the generic openai fallback sends response_format
-    // json_schema which DeepSeek upstreams reject. The requested model is also
-    // matched dynamically to cover gateway ids missing from the static list.
-    const deepseekModels = LOBE_DEFAULT_MODEL_LIST.map((m) => m.id).filter(
-      (id) => detectModelProvider(id) === 'deepseek',
-    );
-    const requestedModel = runtimeContext?.model;
-    if (requestedModel && detectModelProvider(requestedModel) === 'deepseek') {
-      deepseekModels.push(requestedModel);
-    }
-
     return [
       {
         apiType: 'anthropic',
@@ -206,7 +195,11 @@ export const params = {
       },
       {
         apiType: 'deepseek',
-        models: deepseekModels,
+        models: resolveProviderRouteModels(
+          'deepseek',
+          LOBE_DEFAULT_MODEL_LIST,
+          runtimeContext?.model,
+        ),
         options: {
           ...options,
           baseURL: urlJoin(userBaseURL, '/v1'),

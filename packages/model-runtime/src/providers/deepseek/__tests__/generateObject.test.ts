@@ -181,6 +181,26 @@ describe('DeepSeek OpenAI-compatible generateObject configuration', () => {
     expect(result).not.toHaveProperty('reasoning_effort');
   });
 
+  it('should disable thinking for provider-prefixed V4 generateObject requests', () => {
+    const requestPayload = {
+      messages: [{ role: 'user' as const, content: 'Hello' }],
+      model: 'Deepseek/deepseek-v4-pro',
+      reasoning_effort: 'high' as const,
+    };
+
+    const result = openAIParams.generateObject!.handlePayload!(
+      {
+        messages: [{ role: 'user', content: 'Hello' }],
+        model: 'Deepseek/deepseek-v4-pro',
+      },
+      requestPayload,
+      {},
+    );
+
+    expect(result).toEqual(expect.objectContaining({ thinking: { type: 'disabled' } }));
+    expect(result).not.toHaveProperty('reasoning_effort');
+  });
+
   it('should not inject thinking parameter for thinking-only deepseek-reasoner', () => {
     const requestPayload = {
       messages: [{ role: 'user' as const, content: 'Hello' }],
