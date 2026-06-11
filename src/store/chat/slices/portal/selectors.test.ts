@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 
 import { type ChatStoreState } from '@/store/chat';
 
-import { createLocalFileTabId, PortalViewType } from './initialState';
+import { createLocalFileTabId } from './helpers';
+import { PortalViewType } from './initialState';
 import { chatPortalSelectors } from './selectors';
 
 const localFileTabId = ({

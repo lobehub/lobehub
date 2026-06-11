@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
 import FileIcon from '@/components/FileIcon';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
-import { getLocalFileTabId } from '@/store/chat/slices/portal/initialState';
+import { getLocalFileTabId } from '@/store/chat/slices/portal/helpers';
 
 const SKILL_PATH_RE = /\/\.(?:agents|claude)\/skills\/([^/]+)\/SKILL\.md$/;
 

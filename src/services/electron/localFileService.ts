@@ -1,4 +1,4 @@
-import { isDesktop, MARKDOWN_MIME_TYPES } from '@lobechat/const';
+import { MARKDOWN_MIME_TYPES } from '@lobechat/const';
 import {
   type AuditSafePathsParams,
   type AuditSafePathsResult,
@@ -40,9 +40,7 @@ import {
   type ShowSaveDialogResult,
   type WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
-import type { DeviceLocalFilePreview } from '@lobechat/types';
 
-import { lambdaClient } from '@/libs/trpc/client';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 const TEXT_PREVIEW_MIME_TYPES = new Set([
@@ -78,10 +76,6 @@ export type LocalFilePreview =
   | ImageLocalFilePreview
   | TextLocalFilePreview;
 
-export interface GetLocalFilePreviewParams extends LocalFilePreviewUrlParams {
-  deviceId?: string;
-}
-
 const normalizeContentType = (contentType: string | null): string =>
   contentType?.split(';')[0].trim().toLowerCase() ?? '';
 
@@ -114,31 +108,6 @@ const fetchLocalFilePreview = async (url: string): Promise<LocalFilePreview> => 
   }
 
   return { contentType, type: 'binary' };
-};
-
-const base64ToBlob = (base64: string, contentType: string): Blob => {
-  const bytes = Uint8Array.from(globalThis.atob(base64), (char) => char.charCodeAt(0));
-  return new Blob([bytes], { type: contentType });
-};
-
-const deserializeLocalFilePreview = (preview: DeviceLocalFilePreview): LocalFilePreview => {
-  switch (preview.type) {
-    case 'image': {
-      return {
-        blob: base64ToBlob(preview.base64, preview.contentType),
-        contentType: preview.contentType,
-        type: 'image',
-      };
-    }
-
-    case 'text': {
-      return preview;
-    }
-
-    default: {
-      return preview;
-    }
-  }
 };
 
 class LocalFileService {
@@ -200,28 +169,7 @@ class LocalFileService {
     return ensureElectronIpc().localSystem.getLocalFilePreviewUrl(params);
   }
 
-  async getLocalFilePreview({
-    deviceId,
-    ...params
-  }: GetLocalFilePreviewParams): Promise<LocalFilePreview> {
-    if (deviceId) {
-      const result = await lambdaClient.device.getLocalFilePreview.query({
-        deviceId,
-        path: params.path,
-        workingDirectory: params.workingDirectory,
-      });
-
-      if (!result.success || !result.preview) {
-        throw new Error(result.error || 'Missing local file preview');
-      }
-
-      return deserializeLocalFilePreview(result.preview);
-    }
-
-    if (!isDesktop) {
-      throw new Error('Local file preview requires a connected device');
-    }
-
+  async getLocalFilePreview(params: LocalFilePreviewUrlParams): Promise<LocalFilePreview> {
     const result = await this.getLocalFilePreviewUrl(params);
 
     if (!result.success || !result.url) {

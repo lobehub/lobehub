@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/store/chat';
-import { createLocalFileTabId } from '@/store/chat/slices/portal/initialState';
+import { createLocalFileTabId } from '@/store/chat/slices/portal/helpers';
 
 import type { MarkdownElementProps } from '../type';
 import Render from './Render';

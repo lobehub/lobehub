@@ -3,12 +3,8 @@ import { type ChatStoreState } from '@/store/chat';
 import { type PortalArtifact } from '@/types/artifact';
 
 import { dbMessageSelectors } from '../message/selectors';
-import {
-  getLocalFileTabId,
-  type OpenLocalFileEntry,
-  type PortalFile,
-  type PortalViewData,
-} from './initialState';
+import { getLocalFileTabId } from './helpers';
+import { type OpenLocalFileEntry, type PortalFile, type PortalViewData } from './initialState';
 import { PortalViewType } from './initialState';
 
 // ============== Core Stack Selectors ==============

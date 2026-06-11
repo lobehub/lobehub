@@ -1,3 +1,4 @@
+import { isDesktop } from '@lobechat/const';
 import { Center, Empty, Flexbox, Icon, Markdown, Segmented, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CodeIcon, EyeIcon } from 'lucide-react';
@@ -8,7 +9,7 @@ import CodeEditorPane from '@/components/CodeEditorPane';
 import { InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
 import Loading from '@/components/Loading/CircleLoading';
 import { useClientDataSWR } from '@/libs/swr';
-import { type LocalFilePreview, localFileService } from '@/services/electron/localFileService';
+import { type LocalFilePreview, projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import {
@@ -259,17 +260,16 @@ const ActiveFileView = memo<ActiveFileViewProps>(({ deviceId, filePath, workingD
   const { t } = useTranslation('chat');
 
   const filename = filePath.split('/').at(-1) ?? '';
+  const enabled = Boolean(workingDirectory) && (!!deviceId || isDesktop);
   const {
     data: preview,
     error,
     isLoading,
     mutate,
   } = useClientDataSWR<LocalFilePreview>(
-    workingDirectory
-      ? ['local-file-preview', deviceId ?? 'local', filePath, workingDirectory]
-      : null,
+    enabled ? ['local-file-preview', deviceId ?? 'local', filePath, workingDirectory] : null,
     () =>
-      localFileService.getLocalFilePreview({
+      projectFileService.getLocalFilePreview({
         deviceId,
         path: filePath,
         workingDirectory,

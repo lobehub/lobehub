@@ -3,13 +3,8 @@ import { type ChatStore } from '@/store/chat/store';
 import { type StoreSetter } from '@/store/types';
 import { type PortalArtifact } from '@/types/artifact';
 
-import {
-  createLocalFileTabId,
-  getLocalFileTabId,
-  type OpenLocalFileParams,
-  type PortalFile,
-  type PortalViewData,
-} from './initialState';
+import { createLocalFileTabId, getLocalFileTabId } from './helpers';
+import { type OpenLocalFileParams, type PortalFile, type PortalViewData } from './initialState';
 import { PortalViewType } from './initialState';
 
 // Helper to get current view type from stack

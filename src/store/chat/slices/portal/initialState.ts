@@ -37,20 +37,6 @@ export interface OpenLocalFileEntry extends OpenLocalFileParams {
   id: string;
 }
 
-const LOCAL_FILE_TAB_LOCAL_DEVICE = 'local';
-
-export const createLocalFileTabId = ({
-  deviceId,
-  filePath,
-  workingDirectory,
-}: OpenLocalFileParams): string =>
-  [deviceId ? `device:${deviceId}` : LOCAL_FILE_TAB_LOCAL_DEVICE, workingDirectory, filePath]
-    .map(encodeURIComponent)
-    .join('|');
-
-export const getLocalFileTabId = (entry: OpenLocalFileParams & { id?: string }): string =>
-  entry.id ?? createLocalFileTabId(entry);
-
 export type PortalViewData =
   | { type: PortalViewType.Home }
   | { artifact: PortalArtifact; type: PortalViewType.Artifact }

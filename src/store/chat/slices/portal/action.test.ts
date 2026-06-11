@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/store/chat';
 
-import { createLocalFileTabId, PortalViewType } from './initialState';
+import { createLocalFileTabId } from './helpers';
+import { PortalViewType } from './initialState';
 
 const localFileTabId = ({
   deviceId,
