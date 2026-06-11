@@ -1611,6 +1611,95 @@ describe('RuntimeExecutors', () => {
         );
       });
 
+      it('should strip stored assistant reasoning before context processing when replay gate is off', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            plugins: [],
+            systemRole: 'test',
+          },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+        const messages = [
+          {
+            content: 'Previous answer',
+            reasoning: { content: 'stored reasoning should stay display-only' },
+            role: 'assistant',
+          },
+          { content: 'Continue', role: 'user' },
+        ];
+
+        await executors.call_llm!(
+          {
+            payload: {
+              messages,
+              model: 'gpt-4',
+              provider: 'openai',
+            },
+            type: 'call_llm' as const,
+          },
+          state,
+        );
+
+        const engineInput = engineSpy.mock.calls[0][0];
+        expect(engineInput.messages[0]).toEqual({
+          content: 'Previous answer',
+          role: 'assistant',
+        });
+        expect(messages[0]).toEqual(
+          expect.objectContaining({
+            reasoning: { content: 'stored reasoning should stay display-only' },
+          }),
+        );
+      });
+
+      it('should keep stored assistant reasoning before context processing when replay gate is enabled', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            chatConfig: { preserveThinking: true },
+            plugins: [],
+            systemRole: 'test',
+          },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState({
+          modelRuntimeConfig: {
+            model: 'qwen3.6-plus',
+            provider: 'qwen',
+          },
+        });
+
+        await executors.call_llm!(
+          {
+            payload: {
+              messages: [
+                {
+                  content: 'Previous answer',
+                  reasoning: { content: 'reasoning to replay' },
+                  role: 'assistant',
+                },
+                { content: 'Continue', role: 'user' },
+              ],
+              model: 'qwen3.6-plus',
+              provider: 'qwen',
+            },
+            type: 'call_llm' as const,
+          },
+          state,
+        );
+
+        const engineInput = engineSpy.mock.calls[0][0];
+        expect(engineInput.messages[0]).toEqual(
+          expect.objectContaining({
+            content: 'Previous answer',
+            reasoning: { content: 'reasoning to replay' },
+            role: 'assistant',
+          }),
+        );
+      });
+
       it('should not call serverMessagesEngine when agentConfig is not set', async () => {
         const executors = createRuntimeExecutors(ctx); // ctx without agentConfig
         const state = createMockState();
