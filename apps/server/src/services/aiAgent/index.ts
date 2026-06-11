@@ -849,11 +849,19 @@ export class AiAgentService {
       const operationId = nanoid();
 
       // Create user message so the conversation is visible in the UI immediately.
+      // Attach already-uploaded files (`fileIds` from the SPA gateway path) the
+      // same way `sendMessageInServer` does on the local-mode path — without
+      // the messagesFiles relation the attachment disappears as soon as the
+      // optimistic client message is replaced by the server snapshot.
       const userMsg = runFromHistory
         ? undefined
         : await this.messageModel.create({
             agentId: resolvedAgentId,
             content: prompt,
+            files:
+              attachedFileIds && attachedFileIds.length > 0
+                ? Array.from(new Set(attachedFileIds))
+                : undefined,
             role: 'user',
             threadId: appContext?.threadId ?? undefined,
             topicId,
