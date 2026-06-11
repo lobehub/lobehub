@@ -73,7 +73,7 @@ const InputCompletionErrorAlertContent = memo<{
           showIcon
           action={action}
           description={businessAlert.description ?? t('input.inputCompletionError.desc')}
-          message={t('input.inputCompletionError.title')}
+          title={t('input.inputCompletionError.title')}
           type={'warning'}
           onClose={dismissInputCompletionError}
         />
