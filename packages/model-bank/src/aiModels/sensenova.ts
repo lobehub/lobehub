@@ -39,7 +39,8 @@ const sensenovaChatModels: AIChatModelCard[] = [
     description:
       'A high-performance conversational model from DeepSeek, supporting both reasoning and non-reasoning modes, with a 256K-token context window and up to 64K output tokens. Built-in capabilities include JSON Output and Tool Calls.',
     displayName: 'DeepSeek V4 Flash',
-    family: 'deepseek-v4',
+    family: 'deepseek',
+    generation: 'deepseek-v4',
     id: 'deepseek-v4-flash',
     maxOutput: 65_536,
     pricing: {
