@@ -7,21 +7,21 @@ export const VITE_DEV_ORIGIN = 'http://localhost:9876';
 const SERVER_CONFIG_PLACEHOLDER =
   /window\.__SERVER_CONFIG__\s*=\s*undefined;\s*\/\*\s*SERVER_CONFIG\s*\*\//;
 
-async function rewriteViteAssetUrls(html: string): Promise<string> {
+async function rewriteViteAssetUrls(html: string, origin = VITE_DEV_ORIGIN): Promise<string> {
   const { parseHTML } = await import('linkedom');
   const { document } = parseHTML(html);
 
   document.querySelectorAll('script[src]').forEach((el: Element) => {
     const src = el.getAttribute('src');
     if (src && src.startsWith('/')) {
-      el.setAttribute('src', `${VITE_DEV_ORIGIN}${src}`);
+      el.setAttribute('src', `${origin}${src}`);
     }
   });
 
   document.querySelectorAll('link[href]').forEach((el: Element) => {
     const href = el.getAttribute('href');
     if (href && href.startsWith('/')) {
-      el.setAttribute('href', `${VITE_DEV_ORIGIN}${href}`);
+      el.setAttribute('href', `${origin}${href}`);
     }
   });
 
@@ -30,7 +30,7 @@ async function rewriteViteAssetUrls(html: string): Promise<string> {
     if (text.includes('/@')) {
       el.textContent = text.replaceAll(
         /from\s+["'](\/[@\w].*?)["']/g,
-        (_match: string, p: string) => `from "${VITE_DEV_ORIGIN}${p}"`,
+        (_match: string, p: string) => `from "${origin}${p}"`,
       );
     }
   });
@@ -40,7 +40,7 @@ async function rewriteViteAssetUrls(html: string): Promise<string> {
 var O=globalThis.Worker;
 globalThis.Worker=function(u,o){
 var h=typeof u==='string'?u:u instanceof URL?u.href:'';
-if(h.startsWith('${VITE_DEV_ORIGIN}')){
+if(h.startsWith('${origin}')){
 var b=new Blob(['import "'+h+'";'],{type:'application/javascript'});
 return new O(URL.createObjectURL(b),Object.assign({},o,{type:'module'}));
 }return new O(u,o)};
@@ -54,11 +54,14 @@ globalThis.Worker.prototype=O.prototype;
   return document.toString();
 }
 
-export async function fetchViteDevTemplate(pathname = '/'): Promise<string> {
-  const res = await fetch(`${VITE_DEV_ORIGIN}${pathname}`);
+export async function fetchViteDevTemplate(
+  pathname = '/',
+  origin = VITE_DEV_ORIGIN,
+): Promise<string> {
+  const res = await fetch(`${origin}${pathname}`);
   const html = await res.text();
 
-  return rewriteViteAssetUrls(html);
+  return rewriteViteAssetUrls(html, origin);
 }
 
 export function buildAnalyticsConfig(options: { desktop?: boolean } = {}): AnalyticsConfig {
