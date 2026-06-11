@@ -76,8 +76,8 @@ const loadAuthNamespace = async (lng: string, ns: string) => {
   const normalizedLocale = normalizeLocale(lng);
 
   try {
-    if (normalizedLocale === DEFAULT_LANG) return loadDefaultNamespace(safeNamespace);
-    if (normalizedLocale === 'zh-CN') return loadZhNamespace(safeNamespace);
+    if (normalizedLocale === DEFAULT_LANG) return await loadDefaultNamespace(safeNamespace);
+    if (normalizedLocale === 'zh-CN') return await loadZhNamespace(safeNamespace);
   } catch {
     // fall through to default namespace
   }

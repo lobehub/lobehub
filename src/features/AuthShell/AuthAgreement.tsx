@@ -22,12 +22,12 @@ const AuthAgreement = memo(() => {
         components={{
           privacy: (
             <a href={PRIVACY_URL} style={linkStyle}>
-              {t('footer.terms')}
+              {t('footer.privacy')}
             </a>
           ),
           terms: (
             <a href={TERMS_URL} style={linkStyle}>
-              {t('footer.privacy')}
+              {t('footer.terms')}
             </a>
           ),
         }}

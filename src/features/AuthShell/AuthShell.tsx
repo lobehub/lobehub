@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, type PropsWithChildren, useLayoutEffect } from 'react';
+import { memo, type PropsWithChildren } from 'react';
 
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
 import { mapFeatureFlagsEnvToState } from '@/config/featureFlags';
@@ -13,10 +13,6 @@ import { AuthServerConfigProvider } from './AuthServerConfigProvider';
 import AuthThemeLite from './AuthThemeLite';
 
 const AuthShell = memo<PropsWithChildren>(({ children }) => {
-  useLayoutEffect(() => {
-    document.getElementById('loading-screen')?.remove();
-  }, []);
-
   const serverConfig: SPAServerConfig | undefined = window.__SERVER_CONFIG__;
   const locale = document.documentElement.lang || 'en-US';
 
