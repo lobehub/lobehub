@@ -3,7 +3,17 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/store/chat';
 
-import { PortalViewType } from './initialState';
+import { createLocalFileTabId, PortalViewType } from './initialState';
+
+const localFileTabId = ({
+  deviceId,
+  filePath,
+  workingDirectory,
+}: {
+  deviceId?: string;
+  filePath: string;
+  workingDirectory: string;
+}) => createLocalFileTabId({ deviceId, filePath, workingDirectory });
 
 vi.mock('zustand/traditional');
 
@@ -335,8 +345,15 @@ describe('chatDockSlice', () => {
       });
 
       expect(result.current.openLocalFiles).toEqual([
-        { filePath: '/path/to/file.ts', workingDirectory: '/path/to' },
+        {
+          filePath: '/path/to/file.ts',
+          id: localFileTabId({ filePath: '/path/to/file.ts', workingDirectory: '/path/to' }),
+          workingDirectory: '/path/to',
+        },
       ]);
+      expect(result.current.activeLocalFileId).toBe(
+        localFileTabId({ filePath: '/path/to/file.ts', workingDirectory: '/path/to' }),
+      );
       expect(result.current.activeLocalFilePath).toBe('/path/to/file.ts');
       expect(result.current.portalStack).toHaveLength(1);
       expect(result.current.portalStack[0]).toEqual({ type: PortalViewType.LocalFile });
@@ -370,12 +387,21 @@ describe('chatDockSlice', () => {
       });
 
       expect(result.current.openLocalFiles).toEqual([
-        { deviceId: 'device-1', filePath: '/path/a.ts', workingDirectory: '/path' },
+        {
+          deviceId: 'device-1',
+          filePath: '/path/a.ts',
+          id: localFileTabId({
+            deviceId: 'device-1',
+            filePath: '/path/a.ts',
+            workingDirectory: '/path',
+          }),
+          workingDirectory: '/path',
+        },
       ]);
       expect(result.current.activeLocalFilePath).toBe('/path/a.ts');
     });
 
-    it('should refresh device context when reopening the same file path', () => {
+    it('should keep same file path from different device context as separate tabs', () => {
       const { result } = renderHook(() => useChatStore());
 
       act(() => {
@@ -391,8 +417,29 @@ describe('chatDockSlice', () => {
       });
 
       expect(result.current.openLocalFiles).toEqual([
-        { deviceId: 'device-1', filePath: '/path/a.ts', workingDirectory: '/remote/path' },
+        {
+          filePath: '/path/a.ts',
+          id: localFileTabId({ filePath: '/path/a.ts', workingDirectory: '/path' }),
+          workingDirectory: '/path',
+        },
+        {
+          deviceId: 'device-1',
+          filePath: '/path/a.ts',
+          id: localFileTabId({
+            deviceId: 'device-1',
+            filePath: '/path/a.ts',
+            workingDirectory: '/remote/path',
+          }),
+          workingDirectory: '/remote/path',
+        },
       ]);
+      expect(result.current.activeLocalFileId).toBe(
+        localFileTabId({
+          deviceId: 'device-1',
+          filePath: '/path/a.ts',
+          workingDirectory: '/remote/path',
+        }),
+      );
     });
 
     it('should add multiple files as separate tabs and keep portal as single entry', () => {
@@ -543,6 +590,32 @@ describe('chatDockSlice', () => {
 
       expect(result.current.openLocalFiles).toHaveLength(1);
     });
+
+    it('should not clear local dirty buffer when closing a remote tab with the same file path', () => {
+      const { result } = renderHook(() => useChatStore());
+      const remoteId = localFileTabId({
+        deviceId: 'device-1',
+        filePath: '/path/a.ts',
+        workingDirectory: '/remote/path',
+      });
+
+      act(() => {
+        result.current.openLocalFile({ filePath: '/path/a.ts', workingDirectory: '/path' });
+        result.current.setLocalFileBuffer('/path/a.ts', 'dirty content');
+        result.current.openLocalFile({
+          deviceId: 'device-1',
+          filePath: '/path/a.ts',
+          workingDirectory: '/remote/path',
+        });
+      });
+
+      act(() => {
+        result.current.closeLocalFileTab(remoteId);
+      });
+
+      expect(result.current.openLocalFiles).toHaveLength(1);
+      expect(result.current.dirtyLocalFileContents['/path/a.ts']).toBe('dirty content');
+    });
   });
 
   describe('closeLeftLocalFileTabs', () => {
@@ -640,7 +713,11 @@ describe('chatDockSlice', () => {
       });
 
       expect(result.current.openLocalFiles).toEqual([
-        { filePath: '/path/b.ts', workingDirectory: '/path' },
+        {
+          filePath: '/path/b.ts',
+          id: localFileTabId({ filePath: '/path/b.ts', workingDirectory: '/path' }),
+          workingDirectory: '/path',
+        },
       ]);
       expect(result.current.activeLocalFilePath).toBe('/path/b.ts');
       expect(result.current.portalStack[0]).toEqual({ type: PortalViewType.LocalFile });

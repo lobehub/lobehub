@@ -27,11 +27,29 @@ export interface PortalFile {
   fileId: string;
 }
 
-export interface OpenLocalFileEntry {
+export interface OpenLocalFileParams {
   deviceId?: string;
   filePath: string;
   workingDirectory: string;
 }
+
+export interface OpenLocalFileEntry extends OpenLocalFileParams {
+  id: string;
+}
+
+const LOCAL_FILE_TAB_LOCAL_DEVICE = 'local';
+
+export const createLocalFileTabId = ({
+  deviceId,
+  filePath,
+  workingDirectory,
+}: OpenLocalFileParams): string =>
+  [deviceId ? `device:${deviceId}` : LOCAL_FILE_TAB_LOCAL_DEVICE, workingDirectory, filePath]
+    .map(encodeURIComponent)
+    .join('|');
+
+export const getLocalFileTabId = (entry: OpenLocalFileParams & { id?: string }): string =>
+  entry.id ?? createLocalFileTabId(entry);
 
 export type PortalViewData =
   | { type: PortalViewType.Home }
@@ -54,7 +72,10 @@ export type PortalViewData =
 // ============== Portal State ==============
 
 export interface ChatPortalState {
-  /** Path of the currently active tab; undefined when no tabs open. */
+  /** Composite id of the currently active local-file tab; undefined when no tabs open. */
+  activeLocalFileId?: string;
+
+  /** Path of the currently active tab; kept for legacy consumers that only need display/open path. */
   activeLocalFilePath?: string;
 
   /** Unsaved edit buffers keyed by file path. Presence implies the file is dirty. */

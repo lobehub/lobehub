@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/store/chat';
+import { createLocalFileTabId } from '@/store/chat/slices/portal/initialState';
 
 import type { MarkdownElementProps } from '../type';
 import Render from './Render';
@@ -112,6 +113,10 @@ describe('LocalFileLink Render', () => {
     expect(useChatStore.getState().openLocalFiles).toEqual([
       {
         filePath: '/Users/me/project/src/Group.tsx',
+        id: createLocalFileTabId({
+          filePath: '/Users/me/project/src/Group.tsx',
+          workingDirectory: '/Users/me/project',
+        }),
         workingDirectory: '/Users/me/project',
       },
     ]);

@@ -3,8 +3,18 @@ import { describe, expect, it } from 'vitest';
 
 import { type ChatStoreState } from '@/store/chat';
 
-import { PortalViewType } from './initialState';
+import { createLocalFileTabId, PortalViewType } from './initialState';
 import { chatPortalSelectors } from './selectors';
+
+const localFileTabId = ({
+  deviceId,
+  filePath,
+  workingDirectory,
+}: {
+  deviceId?: string;
+  filePath: string;
+  workingDirectory: string;
+}) => createLocalFileTabId({ deviceId, filePath, workingDirectory });
 
 describe('chatDockSelectors', () => {
   const createState = (overrides?: Partial<ChatStoreState>) => {
@@ -228,11 +238,21 @@ describe('chatDockSelectors', () => {
 
     it('should preserve device context on the active file entry', () => {
       const state = createState({
+        activeLocalFileId: localFileTabId({
+          deviceId: 'device-1',
+          filePath: '/path/to/file.ts',
+          workingDirectory: '/path/to',
+        }),
         activeLocalFilePath: '/path/to/file.ts',
         openLocalFiles: [
           {
             deviceId: 'device-1',
             filePath: '/path/to/file.ts',
+            id: localFileTabId({
+              deviceId: 'device-1',
+              filePath: '/path/to/file.ts',
+              workingDirectory: '/path/to',
+            }),
             workingDirectory: '/path/to',
           },
         ],
@@ -241,7 +261,44 @@ describe('chatDockSelectors', () => {
       expect(chatPortalSelectors.currentLocalFile(state)).toEqual({
         deviceId: 'device-1',
         filePath: '/path/to/file.ts',
+        id: localFileTabId({
+          deviceId: 'device-1',
+          filePath: '/path/to/file.ts',
+          workingDirectory: '/path/to',
+        }),
         workingDirectory: '/path/to',
+      });
+    });
+
+    it('should use activeLocalFileId when multiple tabs share the same filePath', () => {
+      const localId = localFileTabId({
+        filePath: '/path/to/file.ts',
+        workingDirectory: '/local',
+      });
+      const remoteId = localFileTabId({
+        deviceId: 'device-1',
+        filePath: '/path/to/file.ts',
+        workingDirectory: '/remote',
+      });
+      const state = createState({
+        activeLocalFileId: remoteId,
+        activeLocalFilePath: '/path/to/file.ts',
+        openLocalFiles: [
+          { filePath: '/path/to/file.ts', id: localId, workingDirectory: '/local' },
+          {
+            deviceId: 'device-1',
+            filePath: '/path/to/file.ts',
+            id: remoteId,
+            workingDirectory: '/remote',
+          },
+        ],
+      } as Partial<ChatStoreState>);
+
+      expect(chatPortalSelectors.currentLocalFile(state)).toEqual({
+        deviceId: 'device-1',
+        filePath: '/path/to/file.ts',
+        id: remoteId,
+        workingDirectory: '/remote',
       });
     });
 
@@ -308,6 +365,25 @@ describe('chatDockSelectors', () => {
         activeLocalFilePath: '/path/a.ts',
       } as Partial<ChatStoreState>);
       expect(chatPortalSelectors.activeLocalFilePath(state)).toBe('/path/a.ts');
+    });
+  });
+
+  describe('activeLocalFileId', () => {
+    it('should derive an id from the active file path for legacy state', () => {
+      const state = createState({
+        activeLocalFilePath: '/path/a.ts',
+        openLocalFiles: [
+          {
+            filePath: '/path/a.ts',
+            id: localFileTabId({ filePath: '/path/a.ts', workingDirectory: '/path' }),
+            workingDirectory: '/path',
+          },
+        ],
+      } as Partial<ChatStoreState>);
+
+      expect(chatPortalSelectors.activeLocalFileId(state)).toBe(
+        localFileTabId({ filePath: '/path/a.ts', workingDirectory: '/path' }),
+      );
     });
   });
 
