@@ -2,6 +2,8 @@ import { isDesktop as defaultIsDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { type DeviceExecutionTarget, type HeterogeneousProviderConfig } from '@lobechat/types';
 
+import { resolveExecutionTarget } from '@/helpers/executionTarget';
+
 /**
  * Which agent runtime should handle an operation.
  *
@@ -97,14 +99,17 @@ export const selectRuntimeType = (
   if (ctx.heterogeneousProvider && isRemoteHeterogeneousType(ctx.heterogeneousProvider.type)) {
     return 'gateway';
   }
-  // Local CLI hetero (claude-code / codex) — route by executionTarget.
-  // `device` / `sandbox` need server-side dispatch; `local` runs in-process
-  // on the desktop. Default (unset) preserves legacy behavior: desktop → hetero,
-  // web → gateway sandbox.
+  // Local CLI hetero (claude-code / codex) — route by the resolved execution
+  // target (shared resolution with the server / the device switcher UI):
+  // `device` / `sandbox` need server-side dispatch; `local` runs in-process on
+  // the desktop. Unset and `none` resolve to `local` on desktop (in-process)
+  // and `sandbox` on web (gateway).
   if (ctx.heterogeneousProvider) {
-    if (ctx.executionTarget === 'device' || ctx.executionTarget === 'sandbox') return 'gateway';
-    if (ctx.executionTarget === 'local') return isDesktop ? 'hetero' : 'gateway';
-    return isDesktop ? 'hetero' : 'gateway';
+    const target = resolveExecutionTarget(
+      { executionTarget: ctx.executionTarget },
+      { isDesktop, isHetero: true },
+    );
+    return target === 'local' ? 'hetero' : 'gateway';
   }
   if (ctx.isGatewayMode) return 'gateway';
   return 'client';

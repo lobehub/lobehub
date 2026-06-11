@@ -29,13 +29,10 @@ import { createGatewayEventHandler } from './gatewayEventHandler';
  * is otherwise forced to make whenever more than one device is online (with a
  * single device the server's heuristic already covered it).
  *
- * Gated on the effective runtime mode (`isLocalSystemEnabledById`), NOT on
- * `agencyConfig.executionTarget`: the latter is only written by the newer
- * HeteroDeviceSwitcher, whereas the legacy ModeSelector writes just
- * `runtimeMode`. Resolving a device whenever the target is unset would override
- * an explicit `cloud` / `none` choice and wrongly route a cloud run to the
- * local machine. `runtimeMode` is the single source of truth both selectors
- * agree on (and what the server gates CloudSandbox on).
+ * Gated on the effective runtime mode (`isLocalSystemEnabledById`), which
+ * derives from `agencyConfig.executionTarget` — only a `local` target presets
+ * the device. Resolving a device for `sandbox` / `none` / `device` targets
+ * would wrongly route the run to this machine.
  *
  * Desktop-only and best-effort: any failure falls back to the server-side
  * device-resolution heuristics. We don't pre-check online status here — an

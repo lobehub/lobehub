@@ -2,7 +2,7 @@
 
 import { FilePathDisplay } from '@lobechat/shared-tool-ui/components';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Text } from '@lobehub/ui';
+import { Flexbox, PatchDiff, Text } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -60,6 +60,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 2px;
     padding-inline: 4px;
   `,
+  patch: css`
+    overflow: hidden;
+    padding-block-end: 8px;
+    padding-inline-start: 16px;
+  `,
   rowMain: css`
     display: flex;
     flex: 1;
@@ -87,6 +92,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
 }));
+
+const getFileName = (filePath: string): string => {
+  if (!filePath) return '';
+  const normalized = filePath.replaceAll('\\', '/');
+  return normalized.split('/').findLast(Boolean) || filePath;
+};
+
+const getFileLanguage = (filePath: string): string | undefined => {
+  const fileName = getFileName(filePath);
+  const index = fileName.lastIndexOf('.');
+  if (index < 0 || index === fileName.length - 1) return;
+  return fileName.slice(index + 1).toLowerCase();
+};
 
 const getKindClassName = (kind: CodexFileChangeKind) => {
   switch (kind) {
@@ -140,22 +158,36 @@ const FileChangeRender = memo<BuiltinRenderProps<CodexFileChangeArgs, CodexFileC
           const path = change.path || '';
 
           return (
-            <Flexbox horizontal className={styles.row} key={`${path}-${index}`}>
-              <span className={cx(styles.kindDot, getKindClassName(kind))} />
-              <div className={styles.rowMain}>
-                <div className={styles.path}>
-                  {path ? (
-                    <FilePathDisplay filePath={path} />
-                  ) : (
-                    <Text className={styles.unknownPath}>
-                      {t('builtins.codex.fileChange.unknownFile', {
-                        defaultValue: 'Unknown file',
-                      })}
-                    </Text>
-                  )}
+            <Flexbox key={`${path}-${index}`}>
+              <Flexbox horizontal className={styles.row}>
+                <span className={cx(styles.kindDot, getKindClassName(kind))} />
+                <div className={styles.rowMain}>
+                  <div className={styles.path}>
+                    {path ? (
+                      <FilePathDisplay filePath={path} />
+                    ) : (
+                      <Text className={styles.unknownPath}>
+                        {t('builtins.codex.fileChange.unknownFile', {
+                          defaultValue: 'Unknown file',
+                        })}
+                      </Text>
+                    )}
+                  </div>
+                  <LineStats linesAdded={change.linesAdded} linesDeleted={change.linesDeleted} />
                 </div>
-                <LineStats linesAdded={change.linesAdded} linesDeleted={change.linesDeleted} />
-              </div>
+              </Flexbox>
+              {change.diffText && (
+                <div className={styles.patch}>
+                  <PatchDiff
+                    fileName={getFileName(path)}
+                    language={getFileLanguage(path)}
+                    patch={change.diffText}
+                    showHeader={false}
+                    variant="borderless"
+                    viewMode="unified"
+                  />
+                </div>
+              )}
             </Flexbox>
           );
         })}

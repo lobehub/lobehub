@@ -2,6 +2,25 @@
 
 import { defineFixtures, single } from './_helpers';
 
+const addedFileDiff = `diff --git a/src/routes/(main)/devtools/index.tsx b/src/routes/(main)/devtools/index.tsx
+--- /dev/null
++++ b/src/routes/(main)/devtools/index.tsx
+@@ -0,0 +1,4 @@
++import DevtoolsPanel from '@/features/DevPanel';
++
++export default DevtoolsPanel;
+`;
+
+const modifiedRegistryDiff = `diff --git a/packages/builtin-tools/src/renders.ts b/packages/builtin-tools/src/renders.ts
+--- a/packages/builtin-tools/src/renders.ts
++++ b/packages/builtin-tools/src/renders.ts
+@@ -12,6 +12,7 @@
+ export const builtinRenders = {
+   codex: CodexRenders,
++  devtools: DevtoolsRenders,
+ };
+`;
+
 export default defineFixtures({
   identifier: 'codex',
   meta: {
@@ -46,12 +65,14 @@ export default defineFixtures({
       args: {
         changes: [
           {
+            diffText: addedFileDiff,
             kind: 'add',
             linesAdded: 62,
             linesDeleted: 0,
             path: 'src/routes/(main)/devtools/index.tsx',
           },
           {
+            diffText: modifiedRegistryDiff,
             kind: 'modify',
             linesAdded: 23,
             linesDeleted: 0,
@@ -87,6 +108,7 @@ export default defineFixtures({
             path: 'tmp/devtools-preview-old.tsx',
           },
         ],
+        diffText: `${addedFileDiff}\n${modifiedRegistryDiff}`,
         linesAdded: 113,
         linesDeleted: 0,
       },

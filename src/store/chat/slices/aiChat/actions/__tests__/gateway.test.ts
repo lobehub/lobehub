@@ -829,9 +829,8 @@ describe('GatewayActionImpl', () => {
         );
       });
 
-      // Regression guard: the legacy ModeSelector writes only runtimeMode, so an
-      // explicit cloud/none run leaves executionTarget unset. Gating on the
-      // effective runtime mode (not the unset target) keeps it off the device.
+      // Regression guard: an explicit sandbox/none/device target must not
+      // preset this machine's deviceId — only a `local` target does.
       it('does not resolve a deviceId when a non-local runtime mode is selected', async () => {
         mockEnv.isDesktop = true;
         mockRuntime.isLocal = false;

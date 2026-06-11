@@ -187,10 +187,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
 /**
  * Zod schema for RuntimeEnvConfig
  */
-const runtimeEnvModeEnum = z.enum(['local', 'cloud', 'none']);
-
 export const RuntimeEnvConfigSchema = z.object({
-  runtimeMode: z.record(z.string(), runtimeEnvModeEnum).optional(),
   workingDirectory: z.string().optional(),
 });
 

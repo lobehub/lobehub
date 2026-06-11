@@ -48,6 +48,37 @@ describe('CodexAdapter', () => {
     });
   });
 
+  it('emits model metadata when the host configures the Codex session', () => {
+    const adapter = new CodexAdapter();
+
+    const metadata = adapter.adapt({
+      model: 'gpt-5.5',
+      type: 'session_configured',
+    });
+    const start = adapter.adapt({ type: 'turn.started' });
+
+    expect(metadata).toHaveLength(1);
+    expect(metadata[0]).toMatchObject({
+      data: {
+        model: 'gpt-5.5',
+        phase: 'turn_metadata',
+        provider: 'codex',
+      },
+      type: 'step_complete',
+    });
+    expect(start[0]).toMatchObject({
+      data: { model: 'gpt-5.5', provider: 'codex' },
+      type: 'stream_start',
+    });
+  });
+
+  it('deduplicates repeated host session model metadata', () => {
+    const adapter = new CodexAdapter();
+
+    expect(adapter.adapt({ model: 'gpt-5.5', type: 'session_configured' })).toHaveLength(1);
+    expect(adapter.adapt({ model: 'gpt-5.5', type: 'session_configured' })).toEqual([]);
+  });
+
   it('emits terminal errors from Codex JSONL error events', () => {
     const adapter = new CodexAdapter();
     const rawMessage = JSON.stringify({
@@ -387,6 +418,8 @@ describe('CodexAdapter', () => {
 
   it('maps file_change items into readable tool results', () => {
     const adapter = new CodexAdapter();
+    const diffText =
+      'diff --git a/private/tmp/codex-file-change-sample.txt b/private/tmp/codex-file-change-sample.txt\n--- /dev/null\n+++ b/private/tmp/codex-file-change-sample.txt\n@@ -0,0 +1,3 @@\n+line one\n+line two\n+line three\n';
 
     const started = adapter.adapt({
       item: {
@@ -401,12 +434,14 @@ describe('CodexAdapter', () => {
       item: {
         changes: [
           {
+            diffText,
             kind: 'add',
             linesAdded: 3,
             linesDeleted: 0,
             path: '/private/tmp/codex-file-change-sample.txt',
           },
         ],
+        diffText,
         id: 'item_1',
         linesAdded: 3,
         linesDeleted: 0,
@@ -436,12 +471,14 @@ describe('CodexAdapter', () => {
         pluginState: {
           changes: [
             {
+              diffText,
               kind: 'add',
               linesAdded: 3,
               linesDeleted: 0,
               path: '/private/tmp/codex-file-change-sample.txt',
             },
           ],
+          diffText,
           linesAdded: 3,
           linesDeleted: 0,
         },

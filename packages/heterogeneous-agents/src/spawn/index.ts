@@ -16,6 +16,16 @@ export { AgentStreamPipeline, type AgentStreamPipelineOptions } from './agentStr
 export { type CliSpawnPlan, resolveCliSpawnPlan } from './cliSpawn';
 export { CodexFileChangeTracker } from './codexFileChangeTracker';
 export {
+  type CodexInitialModelResolution,
+  type CodexInitialModelSource,
+  type CodexSessionModelInfo,
+  getCodexHome,
+  parseCodexModelFromArgs,
+  parseCodexProfileFromArgs,
+  readCodexSessionModel,
+  resolveCodexInitialModel,
+} from './codexModel';
+export {
   type AgentContentBlock,
   type AgentImageBlock,
   type AgentImageSource,

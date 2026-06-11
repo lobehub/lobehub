@@ -42,6 +42,14 @@ const useIsEditorInit = (editor?: IEditor) => {
   useEffect(() => {
     if (!editor) return;
 
+    // The editor may have initialized between render and this effect
+    // (the Editor canvas mounts earlier and emits 'initialized' synchronously),
+    // so re-check before subscribing to avoid missing the event forever.
+    if (editor.getLexicalEditor()) {
+      setEditInit(true);
+      return;
+    }
+
     const onInit = () => {
       setEditInit(true);
     };

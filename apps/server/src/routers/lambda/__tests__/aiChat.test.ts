@@ -1032,6 +1032,43 @@ describe('aiChatRouter', () => {
       }
     });
 
+    it('maps raw provider 4xx errors to BAD_REQUEST instead of internal errors', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+
+      // Raw SDK APIError shape: carries an HTTP status but no errorType — the
+      // generateObject path rethrows upstream errors verbatim (e.g. a BYOK
+      // gateway rejecting response_format json_schema).
+      const providerError = Object.assign(
+        new Error(
+          '400 Error from provider (DeepSeek): This response_format type is unavailable now',
+        ),
+        { status: 400 },
+      );
+      const mockGenerateObject = vi.fn().mockRejectedValue(providerError);
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        generateObject: mockGenerateObject,
+      } as any);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      try {
+        await caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'deepseek-v4-flash-free',
+          provider: 'opencodezen',
+        });
+        throw new Error('Expected outputJSON to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TRPCError);
+        expect(error).toMatchObject({
+          cause: providerError,
+          code: 'BAD_REQUEST',
+          message: providerError.message,
+        });
+      }
+    });
+
     it('should handle tools parameter when provided', async () => {
       const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
 

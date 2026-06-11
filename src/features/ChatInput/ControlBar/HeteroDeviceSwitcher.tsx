@@ -329,9 +329,8 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     async (target: DeviceExecutionTarget, deviceId?: string) => {
       setOpen(false);
 
-      // `executionTarget` is the single source of truth now — the server tool
-      // gate + client `getRuntimeModeById` derive `runtimeMode` from it, so we no
-      // longer write the legacy per-platform `runtimeMode` record.
+      // `executionTarget` is the single source of truth — the server tool
+      // gate + client `getRuntimeModeById` derive `runtimeMode` from it.
       await updateAgentConfigById(agentId, {
         agencyConfig: {
           ...agencyConfig,

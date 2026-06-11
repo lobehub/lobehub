@@ -918,7 +918,7 @@
   "workflow.toolDisplayName.calculate": "完成了计算",
   "workflow.toolDisplayName.callAgent": "调用了助理",
   "workflow.toolDisplayName.callMcpTool": "调用了 MCP 工具",
-  "workflow.toolDisplayName.callSubAgent": "Call SubAgent",
+  "workflow.toolDisplayName.callSubAgent": "调用了子助理",
   "workflow.toolDisplayName.clearTodos": "清空了待办",
   "workflow.toolDisplayName.copyDocument": "复制了文档",
   "workflow.toolDisplayName.crawlMultiPages": "抓取了多个页面",

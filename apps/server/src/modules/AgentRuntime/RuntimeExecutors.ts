@@ -202,6 +202,51 @@ const isEmptyModelCompletion = (params: {
   return true;
 };
 
+type ReasoningReplayNode = {
+  children?: ReasoningReplayNode[];
+  members?: ReasoningReplayNode[];
+  reasoning?: unknown;
+};
+
+const stripAssistantReasoningForReplay = (messages: UIChatMessage[]): UIChatMessage[] => {
+  const stripMessage = <T extends ReasoningReplayNode>(message: T): T => {
+    let changed = false;
+
+    const children = message.children?.map((child) => {
+      const strippedChild = stripMessage(child);
+      if (strippedChild !== child) changed = true;
+      return strippedChild;
+    });
+
+    const members = message.members?.map((member) => {
+      const strippedMember = stripMessage(member);
+      if (strippedMember !== member) changed = true;
+      return strippedMember;
+    });
+
+    if ('reasoning' in message) changed = true;
+    if (!changed) return message;
+
+    const { reasoning: _reasoning, ...messageWithoutReasoning } = message;
+
+    return {
+      ...messageWithoutReasoning,
+      ...(children ? { children } : {}),
+      ...(members ? { members } : {}),
+    } as T;
+  };
+
+  let changed = false;
+
+  const strippedMessages = messages.map((message) => {
+    const strippedMessage = stripMessage(message);
+    if (strippedMessage !== message) changed = true;
+    return strippedMessage;
+  });
+
+  return changed ? strippedMessages : messages;
+};
+
 const GEN_AI_FUNCTION_TOOL_TYPE: ToolType = 'function';
 
 type ToolFailureKind = 'replan' | 'retry' | 'stop';
@@ -660,7 +705,7 @@ export const createRuntimeExecutors = (
 
     try {
       type ContentPart = { text: string; type: 'text' } | { image: string; type: 'image' };
-      let shouldPersistAssistantReasoning = false;
+      let shouldReplayAssistantReasoning = false;
       let preserveThinkingForPayload: boolean | undefined;
 
       // Process messages through serverMessagesEngine to inject system role, knowledge, etc.
@@ -699,19 +744,21 @@ export const createRuntimeExecutors = (
           modelSupportsPreserveThinkingFromCard ||
           (!modelCard && providerSupportsPreserveThinkingFallback);
 
-        shouldPersistAssistantReasoning =
-          preserveThinkingRequested && modelSupportsPreserveThinking;
+        shouldReplayAssistantReasoning = preserveThinkingRequested && modelSupportsPreserveThinking;
         preserveThinkingForPayload =
           modelSupportsPreserveThinking && typeof preserveThinkingConfigured === 'boolean'
             ? preserveThinkingConfigured
             : undefined;
+        const messagesForContext = shouldReplayAssistantReasoning
+          ? (llmPayload.messages as UIChatMessage[])
+          : stripAssistantReasoningForReplay(llmPayload.messages as UIChatMessage[]);
 
         // Extract <refer_topic> tags from messages and fetch summaries.
         // Skip if messages already contain injected topic_reference_context
         // (e.g., from client-side contextEngineering preprocessing) to avoid double injection.
         let topicReferences;
         const alreadyHasTopicRefs = (
-          llmPayload.messages as Array<{ content: string | unknown }>
+          messagesForContext as Array<{ content: string | unknown }>
         ).some(
           (m) => typeof m.content === 'string' && m.content.includes('topic_reference_context'),
         );
@@ -720,7 +767,7 @@ export const createRuntimeExecutors = (
           const topicModel = new TopicModel(ctx.serverDB, ctx.userId, ctx.workspaceId);
           const messageModel = new MessageModelClass(ctx.serverDB, ctx.userId, ctx.workspaceId);
           topicReferences = await resolveTopicReferences(
-            llmPayload.messages as Array<{ content: string | unknown }>,
+            messagesForContext as Array<{ content: string | unknown }>,
             async (topicId) => topicModel.findById(topicId),
             async (topicId) => {
               const topic = await topicModel.findById(topicId);
@@ -762,7 +809,7 @@ export const createRuntimeExecutors = (
           agentConfig?.slug === 'web-onboarding' ||
           resolved.enabledToolIds.includes('lobe-web-onboarding');
         const alreadyHasOnboardingContext = (
-          llmPayload.messages as Array<{ content: string | unknown }>
+          messagesForContext as Array<{ content: string | unknown }>
         ).some((message) => {
           if (typeof message.content !== 'string') return false;
 
@@ -1043,7 +1090,7 @@ export const createRuntimeExecutors = (
                 name: kb.name ?? '',
               })),
           },
-          messages: llmPayload.messages as UIChatMessage[],
+          messages: messagesForContext,
           model,
           provider,
           systemRole: agentConfig.systemRole ?? undefined,
@@ -1071,14 +1118,14 @@ export const createRuntimeExecutors = (
           CONTEXT_ENGINEERING_SPAN_NAME,
           {
             attributes: buildContextEngineeringAttributes({
-              hasImages: (llmPayload.messages as Array<{ content?: unknown }>).some(
+              hasImages: (messagesForContext as Array<{ content?: unknown }>).some(
                 (m) =>
                   Array.isArray(m.content) &&
                   (m.content as Array<{ type?: string }>).some((p) => p?.type === 'image_url'),
               ),
               historyCompressed:
-                Array.isArray(llmPayload.messages) &&
-                llmPayload.messages.some((m: { role?: string }) => m?.role === 'compressedGroup'),
+                Array.isArray(messagesForContext) &&
+                messagesForContext.some((m: { role?: string }) => m?.role === 'compressedGroup'),
               knowledgeCount:
                 (contextEngineInput.knowledge?.knowledgeBases?.length ?? 0) +
                 (contextEngineInput.knowledge?.fileContents?.length ?? 0),
@@ -1086,7 +1133,7 @@ export const createRuntimeExecutors = (
                 (contextEngineInput.knowledge?.knowledgeBases?.length ?? 0) > 0 ||
                 (contextEngineInput.knowledge?.fileContents?.length ?? 0) > 0,
               memoryInjected: Boolean(contextEngineInput.userMemory?.memories),
-              messageCount: llmPayload.messages.length,
+              messageCount: messagesForContext.length,
               operationId,
               stepIndex,
               systemRoleLength: contextEngineInput.systemRole?.length,
@@ -1639,9 +1686,10 @@ export const createRuntimeExecutors = (
                 };
               }
 
-              const persistedReasoning = shouldPersistAssistantReasoning
-                ? finalReasoning
-                : undefined;
+              // preserveThinking only gates whether reasoning is replayed into the
+              // next LLM payload (state.messages); the DB copy powers UI display
+              // after refresh and must always be saved.
+              const replayedReasoning = shouldReplayAssistantReasoning ? finalReasoning : undefined;
 
               try {
                 // Build metadata object
@@ -1675,7 +1723,7 @@ export const createRuntimeExecutors = (
                   content: finalContent,
                   imageList: imageList.length > 0 ? imageList : undefined,
                   metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-                  reasoning: persistedReasoning,
+                  reasoning: finalReasoning,
                   search: grounding,
                   tools: persistedTools,
                 });
@@ -1708,7 +1756,7 @@ export const createRuntimeExecutors = (
               newState.messages.push({
                 content,
                 id: assistantMessageItem.id,
-                reasoning: persistedReasoning,
+                reasoning: replayedReasoning,
                 role: 'assistant',
                 tool_calls: stateToolCalls,
               });

@@ -1,10 +1,5 @@
 import { type LobeToolManifest, type PluginEnableChecker } from '@lobechat/context-engine';
-import {
-  type LobeAgentAgencyConfig,
-  type LobeBuiltinTool,
-  type LobeTool,
-  type RuntimeEnvConfig,
-} from '@lobechat/types';
+import { type LobeAgentAgencyConfig, type LobeBuiltinTool, type LobeTool } from '@lobechat/types';
 
 /**
  * Installed plugin with manifest
@@ -67,7 +62,6 @@ export interface ServerCreateAgentToolsEngineParams {
        * `plugins` and `alwaysOnToolIds`. Undefined / true → agent mode.
        */
       enableAgentMode?: boolean;
-      runtimeEnv?: RuntimeEnvConfig;
       searchMode?: 'off' | 'on' | 'auto';
       /**
        * Overrides the `enableAgentMode` derivation. `custom` = the toolset is
