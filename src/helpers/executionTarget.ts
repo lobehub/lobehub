@@ -176,6 +176,10 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
 
   if (!wantsDevice || !canUseDevice) {
     if (target === 'sandbox') return { kind: 'sandbox', target: 'sandbox' };
+    // Hetero agents must execute somewhere — a device-capable target denied
+    // by the access policy falls back to the cloud sandbox (which never
+    // touches user machines) instead of the hetero-invalid `none`.
+    if (isHetero) return { kind: 'sandbox', target: 'sandbox' };
     // a device-capable target denied by the access policy degrades to plain
     // chat — the effective target is `none`, not the stored one
     return { kind: 'none', target: 'none' };

@@ -258,6 +258,34 @@ describe('resolveExecutionPlan', () => {
     });
   });
 
+  describe('canUseDevice=false — hetero degrades to sandbox, never a machine', () => {
+    it('sends denied hetero device-capable targets to the sandbox', () => {
+      // regression: the hetero early-dispatch used to omit the policy, so an
+      // external bot sender could run on the owner's bound machine via a
+      // synced local/device binding
+      for (const executionTarget of ['local', 'device'] as const) {
+        expect(
+          resolveExecutionPlan({
+            agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget }),
+            canUseDevice: false,
+            isDesktop: false,
+            isHetero: true,
+          }),
+        ).toEqual({ kind: 'sandbox', target: 'sandbox' });
+      }
+      // requestedDeviceId must not bypass the policy either
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'sandbox' }),
+          canUseDevice: false,
+          isDesktop: false,
+          isHetero: true,
+          requestedDeviceId: 'device-a',
+        }),
+      ).toEqual({ kind: 'sandbox', target: 'sandbox' });
+    });
+  });
+
   describe('onlineDeviceIds=undefined — hetero dispatch semantics', () => {
     it('trusts the binding without online checks and never auto-activates', () => {
       expect(

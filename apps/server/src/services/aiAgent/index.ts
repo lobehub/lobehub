@@ -840,6 +840,23 @@ export class AiAgentService {
     const model = agentConfig.model!;
     const provider = agentConfig.provider!;
 
+    // Resolve device-tool access ONCE per turn, BEFORE the hetero early exit —
+    // hetero dispatch routes the whole run to a user machine, so it must honour
+    // the same policy as native device tools. Discord-only flows (no
+    // botContext) keep the legacy first-party allow path; an external bot
+    // sender returns canUseDevice=false and reason='bot-external-sender',
+    // which degrades device-capable targets (hetero → sandbox, native → plain
+    // chat) and stops the device list from leaking into the LLM context.
+    const { canUseDevice, reason: deviceAccessReason } = resolveDeviceAccessPolicy({
+      botContext,
+    });
+    log(
+      'execAgent: device access policy → canUseDevice=%s, reason=%s, hasBotContext=%s',
+      canUseDevice,
+      deviceAccessReason,
+      !!botContext,
+    );
+
     // 3.5. Hetero-agent early exit — Claude Code / Codex / OpenClaw / Hermes agents bypass the
     // server-side LLM pipeline.  After topic + message creation we hand off to
     // the device gateway (desktop) or cloud sandbox, which will push events
@@ -1009,6 +1026,37 @@ export class AiAgentService {
       // frontend can subscribe before the first lh notify arrives.
 
       if (isRemoteHetero) {
+        // Remote hetero agents are device-only — there is no sandbox to
+        // degrade to, so a denied sender (external bot user) is refused
+        // outright instead of reaching the owner's machine.
+        if (!canUseDevice) {
+          log(
+            'execAgent: device access denied for remote hetero dispatch (reason=%s)',
+            deviceAccessReason,
+          );
+          await this.messageModel.update(assistantMsg.id, {
+            content: '',
+            error: {
+              body: { detail: 'This sender is not allowed to run agents on a bound device.' },
+              message: 'Device access denied',
+              type: 'ServerAgentRuntimeError',
+            },
+          });
+          return {
+            agentId: resolvedAgentId,
+            assistantMessageId: assistantMsg.id,
+            autoStarted: false,
+            createdAt: new Date().toISOString(),
+            error: 'Device access denied',
+            message: 'Remote hetero agent requires device access',
+            operationId,
+            status: 'error',
+            success: false,
+            timestamp: new Date().toISOString(),
+            topicId,
+            userMessageId: userMsg?.id ?? parentMessageId ?? '',
+          };
+        }
         if (!remoteDeviceId) {
           log('execAgent: openclaw/hermes requires a bound device (boundDeviceId not set)');
           await this.messageModel.update(assistantMsg.id, {
@@ -1114,8 +1162,12 @@ export class AiAgentService {
         //     execute somewhere)
         // `onlineDeviceIds` is intentionally omitted: hetero dispatch trusts
         // the binding and fails loudly at the gateway if the device is offline.
+        // `canUseDevice` degrades device-capable targets to the sandbox for
+        // denied senders (e.g. external bot users) — without it a synced
+        // local/device binding would let them run on the owner's machine.
         const heteroPlan = resolveExecutionPlan({
           agencyConfig: agentConfig.agencyConfig,
+          canUseDevice,
           isDesktop: false,
           isHetero: true,
           requestedDeviceId,
@@ -1296,22 +1348,10 @@ export class AiAgentService {
     let hasEnabledKnowledgeBases = false;
     const isBotConversation = !!(botContext || discordContext);
 
-    // Resolve device-tool access ONCE per turn. The decision flows into both
-    // the engine's enable gates (LocalSystem / RemoteDevice) and the
-    // RemoteDevice systemRole injection below. Discord-only flows (no
-    // botContext) keep the legacy first-party allow path; an external bot
-    // sender returns canUseDevice=false and reason='bot-external-sender',
-    // which both denies the tools and stops the device list from leaking
-    // into the LLM context.
-    const { canUseDevice, reason: deviceAccessReason } = resolveDeviceAccessPolicy({
-      botContext,
-    });
-    log(
-      'execAgent: device access policy → canUseDevice=%s, reason=%s, hasBotContext=%s',
-      canUseDevice,
-      deviceAccessReason,
-      !!botContext,
-    );
+    // Device-tool access (`canUseDevice` / `deviceAccessReason`) was resolved
+    // once before the hetero early exit above; the decision flows into the
+    // engine's enable gates (LocalSystem / RemoteDevice) and the RemoteDevice
+    // systemRole injection below.
 
     // These are needed outside the tools block (for agent management context, skill engine, etc.)
     let lobehubSkillManifests: LobeToolManifest[] = [];
