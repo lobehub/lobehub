@@ -8,7 +8,10 @@ import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
-import { useBusinessChatInputSendAreaPrefix } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
+import {
+  useBusinessChatInputCostEstimateAlert,
+  useBusinessChatInputSendAreaPrefix,
+} from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
 import { useBusinessInputCompletionErrorAlert } from '@/business/client/hooks/useBusinessInputCompletionErrorAlert';
 import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
@@ -289,6 +292,7 @@ const ChatInput = memo<ChatInputProps>(
     // When disableQueue is set (e.g. onboarding), block sending while loading.
     const disabled = isInputEmpty || isUploadingFiles || (!!disableQueue && isInputLoading);
     const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
+    const businessCostEstimateAlert = useBusinessChatInputCostEstimateAlert();
     const businessSendAreaPrefix = useBusinessChatInputSendAreaPrefix(sendAreaPrefix);
 
     // Send handler - gets message, clears editor immediately, then sends
@@ -362,6 +366,7 @@ const ChatInput = memo<ChatInputProps>(
             </Flexbox>
           )}
           <InputCompletionErrorAlert />
+          {businessCostEstimateAlert}
           <Flexbox
             paddingInline={12}
             ref={overlayRef}
