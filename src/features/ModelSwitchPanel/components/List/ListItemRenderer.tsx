@@ -147,39 +147,6 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
         const isActive = key === activeKey;
         const restricted = isModelRestricted?.(item.model.id, item.provider.id);
 
-        if (isDevMode) {
-          return (
-            <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
-              <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
-                <DropdownMenuSubmenuTrigger
-                  className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
-                  style={{ paddingBlock: 8, paddingInline: 8 }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setDetailOpen(false);
-                    onClose();
-                    onModelChange(item.model.id, item.provider.id);
-                  }}
-                >
-                  <ModelItemRender
-                    {...item.model}
-                    {...item.model.abilities}
-                    showInfoTag
-                    newBadgeLabel={newLabel}
-                  />
-                </DropdownMenuSubmenuTrigger>
-                <DropdownMenuPortal>
-                  <DropdownMenuPositioner anchor={null} placement="right" sideOffset={12}>
-                    <DropdownMenuPopup className={styles.detailPopup}>
-                      <ModelDetailPanel model={item.model.id} provider={item.provider.id} />
-                    </DropdownMenuPopup>
-                  </DropdownMenuPositioner>
-                </DropdownMenuPortal>
-              </DropdownMenuSubmenuRoot>
-            </Flexbox>
-          );
-        }
-
         return (
           <Flexbox style={{ marginBlock: 1, marginInline: 4 }}>
             <DropdownMenuSubmenuRoot open={detailOpen} onOpenChange={setDetailOpen}>
@@ -203,6 +170,7 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
                   {...item.model.abilities}
                   newBadgeLabel={newLabel}
                   proBadgeLabel={restricted ? proLabel : undefined}
+                  showInfoTag={isDevMode}
                 />
               </DropdownMenuSubmenuTrigger>
               <DropdownMenuPortal>
