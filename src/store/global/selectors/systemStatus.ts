@@ -7,6 +7,18 @@ import {
 
 export const systemStatus = (s: GlobalState) => s.status;
 
+export const NAV_PANEL_MIN_WIDTH = 240;
+export const NAV_PANEL_MAX_WIDTH = 400;
+
+const normalizeNavPanelWidth = (width: number | string | undefined): number => {
+  const parsed = typeof width === 'string' ? Number.parseInt(width) : width;
+  const fallback = INITIAL_STATUS.leftPanelWidth;
+
+  if (!parsed || !Number.isFinite(parsed)) return fallback;
+
+  return Math.min(NAV_PANEL_MAX_WIDTH, Math.max(NAV_PANEL_MIN_WIDTH, parsed));
+};
+
 const agentBuilderPanelWidth = (s: GlobalState) => s.status.agentBuilderPanelWidth || 360;
 
 const sessionGroupKeys = (s: GlobalState): string[] =>
@@ -213,8 +225,7 @@ const pageAgentPanelWidth = (s: GlobalState) => s.status.pageAgentPanelWidth || 
 const showChatHeader = (s: GlobalState) => !s.status.zenMode;
 const inZenMode = (s: GlobalState) => s.status.zenMode;
 const leftPanelWidth = (s: GlobalState): number => {
-  const width = s.status.leftPanelWidth;
-  return typeof width === 'string' ? Number.parseInt(width) : width;
+  return normalizeNavPanelWidth(s.status.leftPanelWidth);
 };
 const portalWidth = (s: GlobalState) => s.status.portalWidth || 400;
 const filePanelWidth = (s: GlobalState) => s.status.filePanelWidth;

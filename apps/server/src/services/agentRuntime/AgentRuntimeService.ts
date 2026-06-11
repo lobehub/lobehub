@@ -813,6 +813,11 @@ export class AgentRuntimeService {
         // results written out-of-band), and re-enter the LLM with them.
         if (resumeAsyncTool && currentState.status === 'waiting_for_async_tool') {
           const refreshed = await this.refreshMessagesFromDB(currentState);
+          const pendingTools = (currentState.pendingToolsCalling ?? []) as ChatToolPayload[];
+          const resumeParentMessageId = this.resolveAsyncToolResumeParentMessageId(
+            refreshed,
+            pendingTools,
+          );
           currentState = structuredClone(currentState);
           currentState.messages = refreshed;
           currentState.pendingToolsCalling = [];
@@ -820,14 +825,15 @@ export class AgentRuntimeService {
           currentState.interruption = undefined;
           currentState.lastModified = new Date().toISOString();
           currentContext = {
-            payload: { parentMessageId: refreshed.at(-1)?.id },
+            payload: { parentMessageId: resumeParentMessageId },
             phase: 'user_input',
           } as AgentRuntimeContext;
           log(
-            '[%s][%d] Resuming from async tool with %d messages',
+            '[%s][%d] Resuming from async tool with %d messages (parent=%s)',
             operationId,
             stepIndex,
             refreshed.length,
+            resumeParentMessageId,
           );
         }
 
@@ -1826,6 +1832,65 @@ export class AgentRuntimeService {
 
     const { flatList } = parse(dbMessages);
     return flatList as AgentState['messages'];
+  }
+
+  private resolveAsyncToolResumeParentMessageId(
+    messages: AgentState['messages'],
+    pendingTools: ChatToolPayload[],
+  ): string | undefined {
+    const fallbackParentMessageId = messages.at(-1)?.id;
+    if (pendingTools.length === 0) return fallbackParentMessageId;
+
+    const toolResultMessageIds = new Map<string, string>();
+
+    const collectToolResultIds = (message: unknown) => {
+      if (!message || typeof message !== 'object') return;
+
+      const candidate = message as {
+        children?: unknown;
+        id?: unknown;
+        tool_call_id?: unknown;
+        tools?: unknown;
+      };
+
+      if (typeof candidate.tool_call_id === 'string' && typeof candidate.id === 'string') {
+        toolResultMessageIds.set(candidate.tool_call_id, candidate.id);
+      }
+
+      if (Array.isArray(candidate.tools)) {
+        for (const tool of candidate.tools) {
+          if (!tool || typeof tool !== 'object') continue;
+
+          const toolPayload = tool as { id?: unknown; result_msg_id?: unknown };
+          if (
+            typeof toolPayload.id === 'string' &&
+            typeof toolPayload.result_msg_id === 'string'
+          ) {
+            toolResultMessageIds.set(toolPayload.id, toolPayload.result_msg_id);
+          }
+        }
+      }
+
+      if (Array.isArray(candidate.children)) {
+        for (const child of candidate.children) {
+          collectToolResultIds(child);
+        }
+      }
+    };
+
+    for (const message of messages) {
+      collectToolResultIds(message);
+    }
+
+    for (let index = pendingTools.length - 1; index >= 0; index -= 1) {
+      const pendingTool = pendingTools[index];
+      if (pendingTool.result_msg_id) return pendingTool.result_msg_id;
+
+      const resultMessageId = toolResultMessageIds.get(pendingTool.id);
+      if (resultMessageId) return resultMessageId;
+    }
+
+    return fallbackParentMessageId;
   }
 
   /**

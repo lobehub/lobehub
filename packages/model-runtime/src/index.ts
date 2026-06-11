@@ -33,6 +33,7 @@ export {
 } from './errors';
 export * from './helpers';
 export { LobeAkashChatAI } from './providers/akashchat';
+export { LobeAntGroupAI } from './providers/antgroup';
 export { LobeAnthropicAI } from './providers/anthropic';
 export { LobeAzureAI } from './providers/azureai';
 export { LobeAzureOpenAI } from './providers/azureOpenai';

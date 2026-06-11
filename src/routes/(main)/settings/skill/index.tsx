@@ -8,7 +8,7 @@ import { FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { AddConnectorModal } from '@/features/Connectors';
+import { CustomConnectorModal } from '@/features/Connectors';
 import NavHeader from '@/features/NavHeader';
 import { createSkillStoreModal } from '@/features/SkillStore';
 import ImportFromGithubModal from '@/features/SkillStore/SkillList/ImportFromGithubModal';
@@ -161,26 +161,56 @@ const Page = memo(() => {
                   {
                     icon: <Icon icon={Link} />,
                     key: 'importUrl',
-                    label: <Flexbox gap={2}><span>{t('tab.importFromUrl')}</span><Text style={{ fontSize: 12 }} type="secondary">{t('tab.importFromUrl.desc')}</Text></Flexbox>,
+                    label: (
+                      <Flexbox gap={2}>
+                        <span>{t('tab.importFromUrl')}</span>
+                        <Text style={{ fontSize: 12 }} type="secondary">
+                          {t('tab.importFromUrl.desc')}
+                        </Text>
+                      </Flexbox>
+                    ),
                     onClick: () => setUrlModal(true),
                   },
                   {
                     icon: <Icon icon={GithubIcon} />,
                     key: 'importGithub',
-                    label: <Flexbox gap={2}><span>{t('tab.importFromGithub')}</span><Text style={{ fontSize: 12 }} type="secondary">{t('tab.importFromGithub.desc')}</Text></Flexbox>,
+                    label: (
+                      <Flexbox gap={2}>
+                        <span>{t('tab.importFromGithub')}</span>
+                        <Text style={{ fontSize: 12 }} type="secondary">
+                          {t('tab.importFromGithub.desc')}
+                        </Text>
+                      </Flexbox>
+                    ),
                     onClick: () => setGithubModal(true),
                   },
                   {
                     icon: <Icon icon={FileArchive} />,
                     key: 'uploadZip',
-                    label: <Flexbox gap={2}><span>{t('tab.uploadZip')}</span><Text style={{ fontSize: 12 }} type="secondary">{t('tab.uploadZip.desc')}</Text></Flexbox>,
+                    label: (
+                      <Flexbox gap={2}>
+                        <span>{t('tab.uploadZip')}</span>
+                        <Text style={{ fontSize: 12 }} type="secondary">
+                          {t('tab.uploadZip.desc')}
+                        </Text>
+                      </Flexbox>
+                    ),
                     onClick: () => setUploadModal(true),
                   },
                   { type: 'divider' as const },
                   {
                     icon: <Icon icon={Grid2x2Plus} />,
                     key: 'addConnector',
-                    label: <Flexbox gap={2}><span>{t('connector.add.title', { defaultValue: 'Add Custom Connector', ns: 'tool' })}</span></Flexbox>,
+                    label: (
+                      <Flexbox gap={2}>
+                        <span>
+                          {t('connector.add.title', {
+                            defaultValue: 'Add Custom Connector',
+                            ns: 'tool',
+                          })}
+                        </span>
+                      </Flexbox>
+                    ),
                     onClick: () => setShowAddConnector(true),
                   },
                 ]}
@@ -210,7 +240,7 @@ const Page = memo(() => {
       <ImportFromUrlModal open={showUrlModal} onOpenChange={setUrlModal} />
       <ImportFromGithubModal open={showGithubModal} onOpenChange={setGithubModal} />
       <UploadSkillModal open={showUploadModal} onOpenChange={setUploadModal} />
-      <AddConnectorModal open={showAddConnector} onClose={() => setShowAddConnector(false)} />
+      <CustomConnectorModal open={showAddConnector} onClose={() => setShowAddConnector(false)} />
     </>
   );
 });

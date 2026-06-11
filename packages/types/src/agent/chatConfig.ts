@@ -129,6 +129,7 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    */
   reasoningBudgetToken80k?: number;
   reasoningEffort?: 'low' | 'medium' | 'high';
+  ring2_6ReasoningEffort?: 'high' | 'xhigh';
   /**
    * Runtime environment configuration (desktop only)
    */
@@ -237,6 +238,7 @@ export const AgentChatConfigSchema = z
     grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
     grok4_3ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
     hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
+    ring2_6ReasoningEffort: z.enum(['high', 'xhigh']).optional(),
     historyCount: z.number().optional(),
     imageAspectRatio: z.string().optional(),
     imageAspectRatio2: z.string().optional(),

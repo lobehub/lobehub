@@ -4,10 +4,8 @@ import { ChevronDown, FileArchive, Grid2x2Plus, Link, PenLine } from 'lucide-rea
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import DevModal from '@/features/PluginDevModal';
+import { CustomConnectorModal } from '@/features/Connectors';
 import { usePermission } from '@/hooks/usePermission';
-import { useAgentStore } from '@/store/agent';
-import { useToolStore } from '@/store/tool';
 
 import ImportFromGithubModal from './ImportFromGithubModal';
 import ImportFromUrlModal from './ImportFromUrlModal';
@@ -31,28 +29,13 @@ const AddSkillButton = () => {
   const { allowed: canCreate } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');
 
-  const [installCustomPlugin, updateNewDevPlugin] = useToolStore((s) => [
-    s.installCustomPlugin,
-    s.updateNewCustomPlugin,
-  ]);
-  const togglePlugin = useAgentStore((s) => s.togglePlugin);
-
   return (
     <div
       onClick={(e) => {
         e.stopPropagation();
       }}
     >
-      <DevModal
-        open={showMcpModal}
-        onOpenChange={setMcpModal}
-        onValueChange={updateNewDevPlugin}
-        onSave={async (devPlugin) => {
-          if (!canCreate || !canEdit) return;
-          await installCustomPlugin(devPlugin);
-          await togglePlugin(devPlugin.identifier);
-        }}
-      />
+      <CustomConnectorModal open={showMcpModal} onClose={() => setMcpModal(false)} />
       <ImportFromUrlModal open={showUrlModal} onOpenChange={setUrlModal} />
       <ImportFromGithubModal open={showGithubModal} onOpenChange={setGithubModal} />
       <UploadSkillModal open={showUploadModal} onOpenChange={setUploadModal} />

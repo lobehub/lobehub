@@ -17,6 +17,7 @@ import type {
   KillCommandParams,
   ListLocalFileParams,
   ListProjectSkillsParams,
+  LocalFilePreviewUrlParams,
   LocalReadFileParams,
   LocalReadFilesParams,
   LocalSearchFilesParams,
@@ -406,6 +407,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
       case 'getProjectFileIndex': {
         return this.localFileCtr.getProjectFileIndex(params as { scope?: string });
+      }
+
+      case 'getLocalFilePreview': {
+        return this.localFileCtr.getLocalFilePreview(params as LocalFilePreviewUrlParams);
       }
 
       case 'listProjectSkills': {

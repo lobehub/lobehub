@@ -33,6 +33,7 @@ import ReasoningEffortSlider from './ReasoningEffortSlider';
 import ReasoningTokenSlider from './ReasoningTokenSlider';
 import ReasoningTokenSlider32k from './ReasoningTokenSlider32k';
 import ReasoningTokenSlider80k from './ReasoningTokenSlider80k';
+import Ring26ReasoningEffortSlider from './Ring26ReasoningEffortSlider';
 import Step3_5ReasoningEffortSlider from './Step3_5ReasoningEffortSlider';
 import TextVerbositySlider from './TextVerbositySlider';
 import ThinkingBudgetSlider from './ThinkingBudgetSlider';
@@ -325,6 +326,17 @@ const ControlsForm = memo<ControlsFormProps>(
         layout: 'vertical',
         minWidth: undefined,
         name: 'hy3ReasoningEffort',
+        style: {
+          paddingBottom: 0,
+        },
+      },
+      {
+        children: <Ring26ReasoningEffortSlider />,
+        desc: 'reasoning_effort',
+        label: t('extendParams.reasoningEffort.title'),
+        layout: 'vertical',
+        minWidth: undefined,
+        name: 'ring2_6ReasoningEffort',
         style: {
           paddingBottom: 0,
         },

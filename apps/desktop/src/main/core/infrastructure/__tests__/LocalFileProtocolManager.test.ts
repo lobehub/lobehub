@@ -278,6 +278,37 @@ describe('LocalFileProtocolManager', () => {
     expect(url).toContain('token=');
   });
 
+  it('reads preview payloads only from approved project roots', async () => {
+    const manager = new LocalFileProtocolManager();
+    await manager.approveIndexedProjectRoot('/Users/alice/project');
+    mockReadFile.mockResolvedValue(Buffer.from('const value = 1;'));
+
+    const result = await manager.readPreviewFile({
+      filePath: '/Users/alice/project/App.tsx',
+      workspaceRoot: '/Users/alice/project',
+    });
+
+    expect(result).toEqual({
+      buffer: Buffer.from('const value = 1;'),
+      contentType: 'text/plain; charset=utf-8',
+      realPath: '/Users/alice/project/App.tsx',
+    });
+    expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/project/App.tsx');
+  });
+
+  it('does not read preview payloads outside the approved workspace root', async () => {
+    const manager = new LocalFileProtocolManager();
+    await manager.approveIndexedProjectRoot('/Users/alice/project');
+
+    const result = await manager.readPreviewFile({
+      filePath: '/Users/alice/.ssh/id_rsa',
+      workspaceRoot: '/Users/alice/project',
+    });
+
+    expect(result).toBeNull();
+    expect(mockReadFile).not.toHaveBeenCalled();
+  });
+
   it('defers registration until app ready when not yet ready', async () => {
     mockApp.isReady.mockReturnValue(false);
     let resolveReady: () => void = () => undefined;

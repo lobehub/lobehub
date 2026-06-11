@@ -100,6 +100,32 @@ describe('systemStatusSelectors', () => {
       });
       expect(systemStatusSelectors.portalWidth(noPortalWidth)).toBe(400);
     });
+
+    it('should clamp persisted left panel width to the draggable panel bounds', () => {
+      expect(
+        systemStatusSelectors.leftPanelWidth(
+          merge(initialState, {
+            status: { leftPanelWidth: 120 },
+          }),
+        ),
+      ).toBe(240);
+
+      expect(
+        systemStatusSelectors.leftPanelWidth(
+          merge(initialState, {
+            status: { leftPanelWidth: 720 },
+          }),
+        ),
+      ).toBe(400);
+
+      expect(
+        systemStatusSelectors.leftPanelWidth(
+          merge(initialState, {
+            status: { leftPanelWidth: '360px' as unknown as number },
+          }),
+        ),
+      ).toBe(360);
+    });
   });
 
   describe('modelDetailPanelExpandedKeys', () => {

@@ -261,7 +261,7 @@ class SerialServerIngester {
     // adapter's `openMainMessage`) must reset it — otherwise it spans the
     // whole run and every later message's snapshot re-emits all prior
     // messages' text verbatim, which the server then persists into the new
-    // DB message (LOBE-10157 Bug 3: cross-message text duplication). Reset
+    // DB message: cross-message text duplication. Reset
     // AFTER flushing the just-ended message's pending snapshot above.
     if (event.type === 'stream_start' || event.type === 'stream_end') {
       this.accumulatedText = '';

@@ -1,3 +1,4 @@
+import { getModelKnowledgeCutoff } from '../const/knowledgeCutoff';
 import type { ModelProvider } from '../const/modelProvider';
 import { type AiFullModelCard, type LobeDefaultAiModelListItem } from '../types/aiModel';
 import { default as ai21 } from './ai21';
@@ -6,6 +7,7 @@ import { default as ai360 } from './ai360';
 import { default as aihubmix } from './aihubmix';
 import { default as akashchat } from './akashchat';
 import { default as atlascloud } from './atlascloud';
+import { default as antgroup } from './antgroup';
 import { default as anthropic } from './anthropic';
 import { default as azure } from './azure';
 import { default as azureai } from './azureai';
@@ -97,6 +99,7 @@ const buildDefaultModelList = (map: ModelsMap): LobeDefaultAiModelListItem[] => 
       ...model,
       abilities: model.abilities ?? {},
       enabled: model.enabled || false,
+      knowledgeCutoff: model.knowledgeCutoff ?? getModelKnowledgeCutoff(model.id),
       providerId: provider,
       source: 'builtin',
     }));
@@ -113,6 +116,7 @@ const staticModelMap: ModelsMap = {
   aihubmix,
   akashchat,
   atlascloud,
+  antgroup,
   anthropic,
   azure,
   azureai,
@@ -227,6 +231,7 @@ export { default as ai360 } from './ai360';
 export { default as aihubmix } from './aihubmix';
 export { default as atlascloud } from './atlascloud';
 export { default as akashchat } from './akashchat';
+export { default as antgroup } from './antgroup';
 export { default as anthropic } from './anthropic';
 export { default as azure } from './azure';
 export { default as azureai } from './azureai';

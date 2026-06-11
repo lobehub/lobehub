@@ -4,6 +4,7 @@ import { LobeAi360AI } from './providers/ai360';
 import { LobeAiHubMixAI } from './providers/aihubmix';
 import { LobeAkashChatAI } from './providers/akashchat';
 import { LobeAtlasCloudAI } from './providers/atlascloud';
+import { LobeAntGroupAI } from './providers/antgroup';
 import { LobeAnthropicAI } from './providers/anthropic';
 import { LobeAzureAI } from './providers/azureai';
 import { LobeAzureOpenAI } from './providers/azureOpenai';
@@ -87,6 +88,7 @@ export const providerRuntimeMap = {
   aihubmix: LobeAiHubMixAI,
   akashchat: LobeAkashChatAI,
   atlascloud: LobeAtlasCloudAI,
+  antgroup: LobeAntGroupAI,
   anthropic: LobeAnthropicAI,
   bailiancodingplan: LobeBailianCodingPlanAI,
   azure: LobeAzureOpenAI,

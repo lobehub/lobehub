@@ -217,7 +217,23 @@ export interface AIBaseModelCard {
    */
   displayName?: string;
   enabled?: boolean;
+  /**
+   * product-line lineage, finer than `organization` (e.g. 'claude-opus',
+   * 'claude-mythos', 'gpt', 'o-series', 'qwen'). Families contain generations;
+   * lets the UI group models and match the same model across aggregator providers.
+   */
+  family?: string;
+  /**
+   * model generation within the family (e.g. 'claude-4.6', 'gpt-5.2', 'qwen3.5').
+   * Only set when confidently derivable from the model line's naming.
+   */
+  generation?: string;
   id: string;
+  /**
+   * knowledge cutoff date (YYYY-MM). When the provider distinguishes a "reliable
+   * knowledge cutoff" from the broader training-data cutoff, use the reliable one.
+   */
+  knowledgeCutoff?: string;
   /**
    * whether model is legacy (deprecated but not removed yet)
    */
@@ -270,6 +286,7 @@ export type ExtendParamsType =
   | 'grok4_20ReasoningEffort'
   | 'grok4_3ReasoningEffort'
   | 'hy3ReasoningEffort'
+  | 'ring2_6ReasoningEffort'
   | 'codexMaxReasoningEffort'
   | 'opus47Effort'
   | 'step3_5ReasoningEffort'
@@ -321,6 +338,7 @@ export const ExtendParamsTypeSchema = z.enum([
   'grok4_20ReasoningEffort',
   'grok4_3ReasoningEffort',
   'hy3ReasoningEffort',
+  'ring2_6ReasoningEffort',
   'codexMaxReasoningEffort',
   'opus47Effort',
   'step3_5ReasoningEffort',
@@ -464,7 +482,10 @@ export interface AiProviderModelListItem {
   contextWindowTokens?: number;
   displayName?: string;
   enabled: boolean;
+  family?: string;
+  generation?: string;
   id: string;
+  knowledgeCutoff?: string;
   parameters?: ModelParamsSchema;
   pricing?: Pricing;
   releasedAt?: string;
@@ -519,7 +540,10 @@ export interface AiModelForSelect {
   contextWindowTokens?: number;
   description?: string;
   displayName?: string;
+  family?: string;
+  generation?: string;
   id: string;
+  knowledgeCutoff?: string;
   parameters?: ModelParamsSchema;
   /**
    * Exact per-image price (USD) calculated from pricing units
@@ -539,7 +563,10 @@ export interface EnabledAiModel {
   contextWindowTokens?: number;
   displayName?: string;
   enabled?: boolean;
+  family?: string;
+  generation?: string;
   id: string;
+  knowledgeCutoff?: string;
   parameters?: ModelParamsSchema;
   providerId: string;
   releasedAt?: string;

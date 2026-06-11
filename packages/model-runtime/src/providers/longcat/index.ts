@@ -2,6 +2,11 @@ import { longcat as longchatCahtModels, ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { getModelMaxOutputs } from '../../utils/getModelMaxOutputs';
+import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
+
+export interface LongCatModelCard {
+  id: string;
+}
 
 export const LobeLongCatAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.longcat.chat/openai/v1',
@@ -23,6 +28,15 @@ export const LobeLongCatAI = createOpenAICompatibleRuntime({
   },
   debug: {
     chatCompletion: () => process.env.DEBUG_LONGCAT_CHAT_COMPLETION === '1',
+  },
+  models: async ({ client }) => {
+    const modelsPage = (await client.models.list()) as any;
+    const modelList: LongCatModelCard[] = modelsPage.data;
+
+    const standardModelList = modelList.map((model) => ({
+      id: model.id,
+    }));
+    return processModelList(standardModelList, MODEL_LIST_CONFIGS.longcat, 'longcat');
   },
   provider: ModelProvider.LongCat,
 });

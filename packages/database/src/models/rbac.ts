@@ -251,7 +251,7 @@ export class RbacModel {
 
   /**
    * List all roles defined inside a workspace (both built-in and custom).
-   * Used by the upcoming custom-role admin UI (LOBE-9193) and any client that
+   * Used by the custom-role admin UI and any client that
    * wants to show available roles for a workspace.
    */
   listWorkspaceRoles = async (workspaceId: string): Promise<RoleItem[]> => {

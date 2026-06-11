@@ -1,11 +1,11 @@
 'use client';
 
-import { FilePathDisplay, ToolResultCard } from '@lobechat/shared-tool-ui/components';
+import { FilePathDisplay } from '@lobechat/shared-tool-ui/components';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Icon, Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { Files, FileText } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   type CodexFileChangeArgs,
@@ -21,34 +21,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding: 4px;
     font-size: 13px;
     color: ${cssVar.colorTextTertiary};
-  `,
-  header: css`
-    flex-wrap: wrap;
-    gap: 6px;
-    align-items: center;
-    min-width: 0;
-  `,
-  headerChip: css`
-    overflow: hidden;
-    display: inline-flex;
-    flex: 0 1 auto;
-    align-items: center;
-
-    min-width: 0;
-    max-width: 100%;
-    padding-block: 4px;
-    padding-inline: 10px;
-    border-radius: 999px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  headerCount: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  headerLabel: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextSecondary};
   `,
   kindAdded: css`
     background: ${cssVar.colorSuccess};
@@ -69,11 +41,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorWarning};
   `,
   lineAdded: css`
-    font-weight: 600;
     color: ${cssVar.colorSuccess};
   `,
   lineDeleted: css`
-    font-weight: 600;
     color: ${cssVar.colorError};
   `,
   lineStats: css`
@@ -85,33 +55,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
   `,
   list: css`
-    gap: 0;
-  `,
-  panel: css`
-    overflow: hidden;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  panelHeader: css`
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-
-    padding: 12px;
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  panelMeta: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
-  panelTitle: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
+    gap: 2px;
     min-width: 0;
+    padding-block: 2px;
+    padding-inline: 4px;
   `,
   rowMain: css`
     display: flex;
@@ -128,13 +75,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     min-width: 0;
   `,
   row: css`
-    gap: 10px;
+    gap: 8px;
     align-items: center;
-    padding: 12px;
 
-    & + & {
-      border-block-start: 1px solid ${cssVar.colorBorderSecondary};
-    }
+    min-height: 26px;
+    padding-block: 3px;
+    padding-inline: 0;
   `,
   unknownPath: css`
     font-size: 13px;
@@ -175,75 +121,45 @@ LineStats.displayName = 'CodexFileChangeLineStats';
 
 const FileChangeRender = memo<BuiltinRenderProps<CodexFileChangeArgs, CodexFileChangeState>>(
   ({ args, pluginState }) => {
+    const { t } = useTranslation('plugin');
     const stats = getFileChangeStats(args, pluginState);
     const data = getFileChangeData(args, pluginState);
-    const summary = stats.total === 1 ? '1 file change' : `${stats.total} file changes`;
-    const detail = [
-      stats.byKind.added > 0 ? `${stats.byKind.added} added` : null,
-      stats.byKind.modified > 0 ? `${stats.byKind.modified} modified` : null,
-      stats.byKind.deleted > 0 ? `${stats.byKind.deleted} deleted` : null,
-      stats.byKind.renamed > 0 ? `${stats.byKind.renamed} renamed` : null,
-    ]
-      .filter(Boolean)
-      .join(', ');
+
+    if (stats.total === 0) {
+      return (
+        <Text className={styles.emptyState}>
+          {t('builtins.codex.fileChange.noChanges', { defaultValue: 'No file changes' })}
+        </Text>
+      );
+    }
 
     return (
-      <ToolResultCard
-        wrapHeader
-        icon={FileText}
-        header={
-          <Flexbox horizontal align={'center'} className={styles.header} wrap={'wrap'}>
-            <Text className={styles.headerLabel}>File changes:</Text>
-            {stats.firstPath && (
-              <span className={styles.headerChip}>
-                <FilePathDisplay filePath={stats.firstPath} />
-              </span>
-            )}
-            {stats.total > 1 && <Text className={styles.headerCount}>+{stats.total - 1}</Text>}
-            <LineStats linesAdded={stats.linesAdded} linesDeleted={stats.linesDeleted} />
-          </Flexbox>
-        }
-      >
-        {stats.total > 0 ? (
-          <div className={styles.panel}>
-            <Flexbox horizontal align={'center'} className={styles.panelHeader} wrap={'wrap'}>
-              <div className={styles.panelTitle}>
-                <Icon icon={Files} size={16} />
-                <Text strong>{summary}</Text>
-              </div>
-              {detail && <Text className={styles.panelMeta}>{detail}</Text>}
-              <LineStats linesAdded={stats.linesAdded} linesDeleted={stats.linesDeleted} />
-            </Flexbox>
-            <Flexbox className={styles.list}>
-              {data.changes.map((change, index) => {
-                const kind = getFileChangeKind(change.kind);
-                const path = change.path || '';
+      <Flexbox className={styles.list}>
+        {data.changes.map((change, index) => {
+          const kind = getFileChangeKind(change.kind);
+          const path = change.path || '';
 
-                return (
-                  <Flexbox horizontal className={styles.row} key={`${path}-${index}`}>
-                    <span className={cx(styles.kindDot, getKindClassName(kind))} />
-                    <div className={styles.rowMain}>
-                      <div className={styles.path}>
-                        {path ? (
-                          <FilePathDisplay filePath={path} />
-                        ) : (
-                          <Text className={styles.unknownPath}>Unknown file</Text>
-                        )}
-                      </div>
-                      <LineStats
-                        linesAdded={change.linesAdded}
-                        linesDeleted={change.linesDeleted}
-                      />
-                    </div>
-                  </Flexbox>
-                );
-              })}
+          return (
+            <Flexbox horizontal className={styles.row} key={`${path}-${index}`}>
+              <span className={cx(styles.kindDot, getKindClassName(kind))} />
+              <div className={styles.rowMain}>
+                <div className={styles.path}>
+                  {path ? (
+                    <FilePathDisplay filePath={path} />
+                  ) : (
+                    <Text className={styles.unknownPath}>
+                      {t('builtins.codex.fileChange.unknownFile', {
+                        defaultValue: 'Unknown file',
+                      })}
+                    </Text>
+                  )}
+                </div>
+                <LineStats linesAdded={change.linesAdded} linesDeleted={change.linesDeleted} />
+              </div>
             </Flexbox>
-          </div>
-        ) : (
-          <Text className={styles.emptyState}>No file changes</Text>
-        )}
-      </ToolResultCard>
+          );
+        })}
+      </Flexbox>
     );
   },
 );

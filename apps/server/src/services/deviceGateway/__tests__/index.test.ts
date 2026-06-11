@@ -674,6 +674,71 @@ describe('DeviceGateway', () => {
     });
   });
 
+  describe('getLocalFilePreview', () => {
+    const configure = () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+    };
+
+    it('returns an error result when not configured', async () => {
+      const proxy = new DeviceGateway();
+      const result = await proxy.getLocalFilePreview({
+        deviceId: 'dev-1',
+        path: '/proj/App.tsx',
+        userId: 'user-1',
+        workingDirectory: '/proj',
+      });
+
+      expect(result).toEqual({ error: 'Device gateway not configured', success: false });
+      expect(mockClient.invokeRpc).not.toHaveBeenCalled();
+    });
+
+    it('passes the device preview result through and invokes the rpc', async () => {
+      configure();
+      const data = {
+        preview: {
+          content: 'const value = 1;',
+          contentType: 'text/plain',
+          type: 'text',
+        },
+        success: true,
+      };
+      mockClient.invokeRpc.mockResolvedValue({ data, success: true });
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.getLocalFilePreview({
+        deviceId: 'dev-1',
+        path: '/proj/App.tsx',
+        userId: 'user-1',
+        workingDirectory: '/proj',
+      });
+
+      expect(result).toEqual(data);
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+        { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
+        {
+          method: 'getLocalFilePreview',
+          params: { path: '/proj/App.tsx', workingDirectory: '/proj' },
+        },
+      );
+    });
+
+    it('returns an error result when the rpc reports failure', async () => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({ error: 'offline', success: false });
+
+      const proxy = new DeviceGateway();
+      const result = await proxy.getLocalFilePreview({
+        deviceId: 'dev-1',
+        path: '/proj/App.tsx',
+        userId: 'user-1',
+        workingDirectory: '/proj',
+      });
+
+      expect(result).toEqual({ error: 'offline', success: false });
+    });
+  });
+
   describe('getClient (lazy initialization)', () => {
     it('should return null when URL is missing', async () => {
       mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';

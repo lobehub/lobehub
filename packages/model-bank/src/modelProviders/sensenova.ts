@@ -1,26 +1,22 @@
 import type { ModelProviderCard } from '@/types/llm';
 
-// ref https://platform.sensenova.cn/pricing
-// ref https://platform.sensenova.cn/release?path=/release-202409.md
 const SenseNova: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'SenseChat-Turbo',
+  checkModel: 'sensenova-6.7-flash-lite',
   description:
     'SenseNova delivers efficient, easy-to-use full-stack LLM services backed by SenseTime infrastructure.',
-  disableBrowserRequest: true,
   id: 'sensenova',
-  modelList: { showModelFetcher: true },
-  modelsUrl: 'https://platform.sensenova.cn/pricing',
+  modelsUrl: 'https://www.sensenova.cn/models',
   name: 'SenseNova',
   settings: {
-    disableBrowserRequest: true,
+    //disableBrowserRequest: true,
     proxyUrl: {
-      placeholder: 'https://api.sensenova.cn/compatible-mode/v2',
+      placeholder: 'https://token.sensenova.cn/v1',
     },
     sdkType: 'openai',
     showModelFetcher: true,
   },
-  url: 'https://platform.sensenova.cn/home',
+  url: 'https://platform.sensenova.cn',
 };
 
 export default SenseNova;

@@ -48,6 +48,12 @@ interface PreviewTokenRecord {
   realPath: string;
 }
 
+export interface PreviewFileReadResult {
+  buffer: Buffer;
+  contentType: string;
+  realPath: string;
+}
+
 /**
  * Custom `localfile://` protocol for project file previews.
  *
@@ -214,34 +220,41 @@ export class LocalFileProtocolManager {
     workspaceRoot: string;
   }): Promise<string | null> {
     const normalizedFilePath = normalizeAbsolutePath(filePath);
-    const normalizedWorkspaceRoot = normalizeAbsolutePath(workspaceRoot);
-    if (!normalizedFilePath || !normalizedWorkspaceRoot) return null;
+    if (!normalizedFilePath) return null;
 
-    const [realFilePath, realWorkspaceRoot] = await Promise.all([
-      realpath(normalizedFilePath),
-      realpath(normalizedWorkspaceRoot),
-    ]);
-    const normalizedRealFilePath = normalizeAbsolutePath(realFilePath);
-    const normalizedRealWorkspaceRoot = normalizeAbsolutePath(realWorkspaceRoot);
-
-    if (!normalizedRealFilePath || !normalizedRealWorkspaceRoot) return null;
-    if (
-      !this.approvedWorkspaceRoots.has(normalizedRealWorkspaceRoot) &&
-      !this.indexedProjectRoots.has(normalizedRealWorkspaceRoot)
-    ) {
-      return null;
-    }
-    if (!isPathWithinRoot(normalizedRealFilePath, normalizedRealWorkspaceRoot)) return null;
+    const realFilePath = await this.resolveApprovedPreviewPath({ filePath, workspaceRoot });
+    if (!realFilePath) return null;
 
     this.cleanupExpiredTokens();
 
     const token = randomUUID();
     this.previewTokens.set(token, {
       expiresAt: Date.now() + PREVIEW_TOKEN_TTL_MS,
-      realPath: normalizedRealFilePath,
+      realPath: realFilePath,
     });
 
     return buildLocalFileUrl(normalizedFilePath, token);
+  }
+
+  async readPreviewFile({
+    filePath,
+    workspaceRoot,
+  }: {
+    filePath: string;
+    workspaceRoot: string;
+  }): Promise<PreviewFileReadResult | null> {
+    const realFilePath = await this.resolveApprovedPreviewPath({ filePath, workspaceRoot });
+    if (!realFilePath) return null;
+
+    const fileStat = await stat(realFilePath);
+    if (!fileStat.isFile()) return null;
+
+    const buffer = await readFile(realFilePath);
+    return {
+      buffer,
+      contentType: resolveLocalFileMimeType(realFilePath, buffer),
+      realPath: realFilePath,
+    };
   }
 
   /**
@@ -281,6 +294,36 @@ export class LocalFileProtocolManager {
     if (!path.isAbsolute(normalized)) return null;
 
     return normalized;
+  }
+
+  private async resolveApprovedPreviewPath({
+    filePath,
+    workspaceRoot,
+  }: {
+    filePath: string;
+    workspaceRoot: string;
+  }): Promise<string | null> {
+    const normalizedFilePath = normalizeAbsolutePath(filePath);
+    const normalizedWorkspaceRoot = normalizeAbsolutePath(workspaceRoot);
+    if (!normalizedFilePath || !normalizedWorkspaceRoot) return null;
+
+    const [realFilePath, realWorkspaceRoot] = await Promise.all([
+      realpath(normalizedFilePath),
+      realpath(normalizedWorkspaceRoot),
+    ]);
+    const normalizedRealFilePath = normalizeAbsolutePath(realFilePath);
+    const normalizedRealWorkspaceRoot = normalizeAbsolutePath(realWorkspaceRoot);
+
+    if (!normalizedRealFilePath || !normalizedRealWorkspaceRoot) return null;
+    if (
+      !this.approvedWorkspaceRoots.has(normalizedRealWorkspaceRoot) &&
+      !this.indexedProjectRoots.has(normalizedRealWorkspaceRoot)
+    ) {
+      return null;
+    }
+    if (!isPathWithinRoot(normalizedRealFilePath, normalizedRealWorkspaceRoot)) return null;
+
+    return normalizedRealFilePath;
   }
 
   private cleanupExpiredTokens() {

@@ -480,6 +480,9 @@
   "userPanel.setting": "アプリ設定",
   "userPanel.upgradePlan": "プランをアップグレード",
   "userPanel.usages": "使用統計",
+  "userPanel.workspaceCredits": "ワークスペースクレジット",
+  "userPanel.workspaceSetting": "ワークスペース設定",
+  "userPanel.workspaceUsages": "ワークスペース使用状況",
   "version": "バージョン",
   "zoom": "ズーム"
 }

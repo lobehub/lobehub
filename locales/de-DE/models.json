@@ -309,6 +309,7 @@
   "claude-3-haiku-20240307.description": "Claude 3 Haiku ist das schnellste und kompakteste Modell von Anthropic, entwickelt für nahezu sofortige Antworten mit schneller, präziser Leistung.",
   "claude-3-opus-20240229.description": "Claude 3 Opus ist das leistungsstärkste Modell von Anthropic für hochkomplexe Aufgaben. Es überzeugt in Leistung, Intelligenz, Sprachfluss und Verständnis.",
   "claude-3-sonnet-20240229.description": "Claude 3 Sonnet bietet eine ausgewogene Kombination aus Intelligenz und Geschwindigkeit für Unternehmensanwendungen. Es liefert hohe Nutzbarkeit bei geringeren Kosten und zuverlässiger Skalierbarkeit.",
+  "claude-fable-5.description": "Claude Fable 5 ist das leistungsfähigste Modell von Anthropic – eine neue Stufe über Opus für die anspruchsvollsten Aufgaben in den Bereichen komplexes Denken und langfristiges agentisches Arbeiten.",
   "claude-haiku-4-5-20251001.description": "Claude Haiku 4.5 ist das schnellste und intelligenteste Haiku-Modell von Anthropic, mit blitzschneller Geschwindigkeit und erweitertem logischen Denken.",
   "claude-haiku-4-5.description": "Claude Haiku 4.5 von Anthropic — Next-Gen-Haiku mit verbessertem Reasoning und Vision.",
   "claude-haiku-4.5.description": "Claude Haiku 4.5 ist das schnellste und intelligenteste Haiku-Modell von Anthropic, mit blitzschneller Geschwindigkeit und erweiterten Denkfähigkeiten.",
