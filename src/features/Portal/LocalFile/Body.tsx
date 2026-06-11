@@ -1,7 +1,7 @@
 import { isDesktop } from '@lobechat/const';
-import { Center, Empty, Flexbox, Icon, Markdown, Segmented, Text } from '@lobehub/ui';
+import { ActionIcon, Center, Empty, Flexbox, Icon, Markdown, Segmented, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { CodeIcon, EyeIcon } from 'lucide-react';
+import { CodeIcon, EyeIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -109,17 +109,32 @@ SkillFrontmatterPreviewCard.displayName = 'SkillFrontmatterPreviewCard';
 
 type TextPreviewMode = 'render' | 'raw';
 
+const NO_TOPIC_KEY = '__no_topic__';
+
 interface TextPreviewPaneProps {
+  activeTopicId?: string | null;
   content: string;
   contentType?: string;
   ext: string;
   filePath: string;
+  onReload?: () => void;
   onSaved?: (savedContent: string) => void;
   readOnly?: boolean;
+  reloading?: boolean;
 }
 
 const TextPreviewPane = memo<TextPreviewPaneProps>(
-  ({ content, contentType, ext, filePath, onSaved, readOnly = false }) => {
+  ({
+    activeTopicId,
+    content,
+    contentType,
+    ext,
+    filePath,
+    onReload,
+    onSaved,
+    readOnly = false,
+    reloading = false,
+  }) => {
     const { t } = useTranslation('chat');
     const isMarkdown = useMemo(() => MARKDOWN_EXTS.has(ext.toLowerCase()), [ext]);
     const isHtml = useMemo(
@@ -178,12 +193,21 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
       ? (frontmatterFields.name ?? '')
       : (filePath.split('/').at(-1) ?? filePath);
 
-    const [mode, setMode] = useState<TextPreviewMode>(canRender ? 'render' : 'raw');
+    const [modeByScope, setModeByScope] = useState<Record<string, TextPreviewMode>>({});
+    const modeScopeKey = `${activeTopicId ?? NO_TOPIC_KEY}:${filePath}`;
+    const mode = canRender ? (modeByScope[modeScopeKey] ?? 'render') : 'raw';
+    const setMode = useCallback(
+      (next: TextPreviewMode) => {
+        setModeByScope((prev) => ({ ...prev, [modeScopeKey]: next }));
+      },
+      [modeScopeKey],
+    );
     const showHtmlPreview = isHtml && mode === 'render';
-
-    useEffect(() => {
-      setMode(canRender ? 'render' : 'raw');
-    }, [canRender, filePath]);
+    const [htmlPreviewRevision, setHtmlPreviewRevision] = useState(0);
+    const handleReloadPreview = useCallback(() => {
+      setHtmlPreviewRevision((prev) => prev + 1);
+      onReload?.();
+    }, [onReload]);
 
     return (
       <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
@@ -199,6 +223,15 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
             <Text ellipsis style={{ flex: 1, fontSize: 13, fontWeight: 500, minWidth: 0 }}>
               {previewTitle}
             </Text>
+            {isHtml && (
+              <ActionIcon
+                icon={RefreshCwIcon}
+                loading={reloading}
+                size={'small'}
+                title={t('workingPanel.localFile.preview.reload')}
+                onClick={handleReloadPreview}
+              />
+            )}
             <Segmented
               size={'small'}
               value={mode}
@@ -229,7 +262,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
               <Markdown style={{ paddingBlock: 8, paddingInline: 12 }}>{body}</Markdown>
             </>
           ) : showHtmlPreview ? (
-            <InlineHtmlPreview content={editingValue} />
+            <InlineHtmlPreview content={editingValue} key={`${filePath}:${htmlPreviewRevision}`} />
           ) : (
             <CodeEditorPane
               language={extensionToLanguage(ext)}
@@ -251,76 +284,87 @@ TextPreviewPane.displayName = 'TextPreviewPane';
 // ============== ActiveFileView ==============
 
 interface ActiveFileViewProps {
+  activeTopicId?: string | null;
   deviceId?: string;
   filePath: string;
   workingDirectory: string;
 }
 
-const ActiveFileView = memo<ActiveFileViewProps>(({ deviceId, filePath, workingDirectory }) => {
-  const { t } = useTranslation('chat');
+const ActiveFileView = memo<ActiveFileViewProps>(
+  ({ activeTopicId, deviceId, filePath, workingDirectory }) => {
+    const { t } = useTranslation('chat');
 
-  const filename = filePath.split('/').at(-1) ?? '';
-  const enabled = Boolean(workingDirectory) && (!!deviceId || isDesktop);
-  const {
-    data: preview,
-    error,
-    isLoading,
-    mutate,
-  } = useClientDataSWR<LocalFilePreview>(
-    enabled ? ['local-file-preview', deviceId ?? 'local', filePath, workingDirectory] : null,
-    () =>
-      projectFileService.getLocalFilePreview({
-        deviceId,
-        path: filePath,
-        workingDirectory,
-      }),
-    { revalidateOnFocus: false },
-  );
-
-  const handleSavedContent = useCallback(
-    (saved: string) => {
-      mutate((prev) => (prev && prev.type === 'text' ? { ...prev, content: saved } : prev), {
-        revalidate: false,
-      });
-    },
-    [mutate],
-  );
-
-  if (isLoading) return <Loading />;
-
-  if (error || !preview) {
-    return (
-      <Center height={'100%'} width={'100%'}>
-        <Empty description={t('workingPanel.localFile.error')} />
-      </Center>
+    const filename = filePath.split('/').at(-1) ?? '';
+    const enabled = Boolean(workingDirectory) && (!!deviceId || isDesktop);
+    const {
+      data: preview,
+      error,
+      isLoading,
+      isValidating,
+      mutate,
+    } = useClientDataSWR<LocalFilePreview>(
+      enabled ? ['local-file-preview', deviceId ?? 'local', filePath, workingDirectory] : null,
+      () =>
+        projectFileService.getLocalFilePreview({
+          deviceId,
+          path: filePath,
+          workingDirectory,
+        }),
+      { revalidateOnFocus: false },
     );
-  }
 
-  if (preview.type === 'image') {
-    return <ImagePreview blob={preview.blob} filename={filename} />;
-  }
-
-  if (preview.type !== 'text') {
-    return (
-      <Center height={'100%'} width={'100%'}>
-        <Empty description={t('workingPanel.localFile.binary')} />
-      </Center>
+    const handleSavedContent = useCallback(
+      (saved: string) => {
+        mutate((prev) => (prev && prev.type === 'text' ? { ...prev, content: saved } : prev), {
+          revalidate: false,
+        });
+      },
+      [mutate],
     );
-  }
 
-  const ext = getFileExtension(filename);
+    const handleReload = useCallback(() => {
+      void mutate();
+    }, [mutate]);
 
-  return (
-    <TextPreviewPane
-      content={preview.content}
-      contentType={preview.contentType}
-      ext={ext}
-      filePath={filePath}
-      readOnly={!!deviceId}
-      onSaved={handleSavedContent}
-    />
-  );
-});
+    if (isLoading) return <Loading />;
+
+    if (error || !preview) {
+      return (
+        <Center height={'100%'} width={'100%'}>
+          <Empty description={t('workingPanel.localFile.error')} />
+        </Center>
+      );
+    }
+
+    if (preview.type === 'image') {
+      return <ImagePreview blob={preview.blob} filename={filename} />;
+    }
+
+    if (preview.type !== 'text') {
+      return (
+        <Center height={'100%'} width={'100%'}>
+          <Empty description={t('workingPanel.localFile.binary')} />
+        </Center>
+      );
+    }
+
+    const ext = getFileExtension(filename);
+
+    return (
+      <TextPreviewPane
+        activeTopicId={activeTopicId}
+        content={preview.content}
+        contentType={preview.contentType}
+        ext={ext}
+        filePath={filePath}
+        readOnly={!!deviceId}
+        reloading={isValidating}
+        onReload={handleReload}
+        onSaved={handleSavedContent}
+      />
+    );
+  },
+);
 
 ActiveFileView.displayName = 'ActiveFileView';
 
@@ -329,6 +373,7 @@ ActiveFileView.displayName = 'ActiveFileView';
 const Body = memo(() => {
   const openLocalFiles = useChatStore(chatPortalSelectors.openLocalFiles);
   const activeFile = useChatStore(chatPortalSelectors.currentLocalFile);
+  const activeTopicId = useChatStore((s) => s.activeTopicId);
 
   if (openLocalFiles.length === 0) return null;
   if (!activeFile) return null;
@@ -336,6 +381,7 @@ const Body = memo(() => {
   return (
     <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
       <ActiveFileView
+        activeTopicId={activeTopicId}
         deviceId={activeFile.deviceId}
         filePath={activeFile.filePath}
         workingDirectory={activeFile.workingDirectory}

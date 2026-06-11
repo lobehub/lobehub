@@ -1110,6 +1110,7 @@ export default {
   'workingPanel.localFile.closeRight': 'Close to the Right',
   'workingPanel.localFile.error': "Couldn't load this file",
   'workingPanel.localFile.preview.raw': 'Raw',
+  'workingPanel.localFile.preview.reload': 'Reload preview',
   'workingPanel.localFile.preview.render': 'Preview',
   'workingPanel.localFile.preview.source': 'Source',
   'workingPanel.localFile.truncated': 'File preview truncated to {{limit}} characters',

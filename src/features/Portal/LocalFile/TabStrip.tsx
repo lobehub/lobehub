@@ -1,5 +1,6 @@
 'use client';
 
+import { isDesktop } from '@lobechat/const';
 import { ContextMenuTrigger, type GenericItemType, Icon } from '@lobehub/ui';
 import { confirmModal, ScrollArea } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
@@ -9,6 +10,7 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
+import { localFileService } from '@/services/electron/localFileService';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { getLocalFileTabId } from '@/store/chat/slices/portal/helpers';
@@ -185,7 +187,7 @@ const TabStrip = memo(() => {
   );
 
   const getContextMenuItems = useCallback(
-    (id: string, index: number): GenericItemType[] => [
+    (id: string, filePath: string, index: number): GenericItemType[] => [
       {
         disabled: index === 0,
         key: 'closeLeft',
@@ -204,6 +206,15 @@ const TabStrip = memo(() => {
         label: t('workingPanel.localFile.closeOther'),
         onClick: () => closeOtherLocalFileTabs(id),
       },
+      ...(isDesktop
+        ? [
+            {
+              key: 'showInSystem',
+              label: t('workingPanel.files.showInSystem'),
+              onClick: () => void localFileService.openFileFolder(filePath),
+            },
+          ]
+        : []),
       { type: 'divider' },
       {
         key: 'close',
@@ -244,7 +255,7 @@ const TabStrip = memo(() => {
         const isActive = id === activeLocalFileId;
 
         return (
-          <ContextMenuTrigger items={() => getContextMenuItems(id, index)} key={id}>
+          <ContextMenuTrigger items={() => getContextMenuItems(id, filePath, index)} key={id}>
             <div
               aria-selected={isActive}
               className={`${styles.tabItem} ${isActive ? styles.tabItemActive : ''}`}
