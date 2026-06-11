@@ -4,8 +4,8 @@ import { Button, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { LaptopIcon, LinkIcon, MonitorUpIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 
@@ -52,7 +52,9 @@ const Page = memo(() => {
           });
         }
       }
-    } catch {}
+    } catch {
+      // silently ignore pairing errors — UI feedback handled by modal
+    }
   };
 
   return (
