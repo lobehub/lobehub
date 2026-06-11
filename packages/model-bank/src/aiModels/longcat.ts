@@ -11,6 +11,7 @@ const longcatModels: AIChatModelCard[] = [
     displayName: 'LongCat-2.0-Preview',
     enabled: true,
     family: 'longcat',
+    generation: 'longcat-2.0',
     id: 'LongCat-2.0-Preview',
     maxOutput: 128_000,
     pricing: {
