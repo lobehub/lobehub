@@ -105,7 +105,7 @@ const FILTER_OPTIONS = [
   { labelKey: 'workingPanel.resources.filter.web', value: 'web' },
 ] as const satisfies readonly { labelKey: string; value: ResourceFilter }[];
 
-type AgentDocumentListItem = Awaited<ReturnType<typeof agentDocumentService.getDocuments>>[number];
+type AgentDocumentListItem = Awaited<ReturnType<typeof agentDocumentService.listDocuments>>[number];
 
 interface DocumentItemProps {
   agentId: string;
@@ -286,7 +286,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       isLoading,
       mutate,
     } = useClientDataSWR(agentId ? agentDocumentSWRKeys.documentsList(agentId) : null, () =>
-      agentDocumentService.getDocuments({ agentId: agentId! }),
+      agentDocumentService.listDocuments({ agentId: agentId! }),
     );
 
     const webData = useMemo(

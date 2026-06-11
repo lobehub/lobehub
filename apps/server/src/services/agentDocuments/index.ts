@@ -617,6 +617,7 @@ export class AgentDocumentsService {
       sourceType && sourceType !== 'all' ? docs.filter((d) => d.sourceType === sourceType) : docs;
     return filtered.map((d) => ({
       ...deriveAgentDocumentFields(d),
+      description: d.description,
       documentId: d.documentId,
       fileType: d.fileType,
       filename: d.filename,
@@ -626,6 +627,7 @@ export class AgentDocumentsService {
       sourceType: d.sourceType,
       templateId: d.templateId,
       title: d.title,
+      updatedAt: d.updatedAt,
     }));
   }
 
@@ -644,6 +646,8 @@ export class AgentDocumentsService {
       .filter((doc): doc is AgentDocumentWithRules => Boolean(doc))
       .filter((doc) => !sourceType || sourceType === 'all' || doc.sourceType === sourceType)
       .map((doc) => ({
+        ...deriveAgentDocumentFields(doc),
+        description: doc.description,
         documentId: doc.documentId,
         fileType: doc.fileType,
         filename: doc.filename,
@@ -651,7 +655,9 @@ export class AgentDocumentsService {
         loadPosition: doc.policy?.context?.position,
         parentId: doc.parentId,
         sourceType: doc.sourceType,
+        templateId: doc.templateId,
         title: doc.title,
+        updatedAt: doc.updatedAt,
       }));
   }
 
