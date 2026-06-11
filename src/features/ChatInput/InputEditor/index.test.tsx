@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import InputEditor from './index';
 
@@ -7,19 +7,57 @@ const permission = vi.hoisted(() => ({
   allowed: false,
 }));
 
+const mocks = vi.hoisted(() => {
+  const chatInputState = {
+    clearInputCompletionError: vi.fn(() => {
+      chatInputState.inputCompletionError = undefined;
+      chatInputState.inputCompletionErrorDismissed = false;
+    }),
+    dismissInputCompletionError: vi.fn(() => {
+      chatInputState.inputCompletionErrorDismissed = true;
+    }),
+    getMessages: vi.fn(() => []),
+    inputCompletionError: undefined as { message: string } | undefined,
+    inputCompletionErrorDismissed: false,
+    pauseInputCompletion: vi.fn((error: { message: string }) => {
+      chatInputState.inputCompletionError = error;
+      chatInputState.inputCompletionErrorDismissed = false;
+    }),
+  };
+
+  return {
+    chainInputCompletion: vi.fn(),
+    chatInputState,
+    generateJSON: vi.fn(),
+    inputCompletionConfig: {
+      enabled: false,
+      model: 'gpt-4o-mini',
+      provider: 'openai',
+    },
+    recordTracingFeedback: vi.fn(),
+  };
+});
+
 type StoreSelector<T = unknown> = (state: Record<PropertyKey, unknown>) => T;
 
-vi.mock('@lobechat/const', () => ({ isDesktop: false }));
+vi.mock('@lobechat/const', () => ({
+  isDesktop: false,
+  TRACING_SCENARIOS: { InputCompletion: 'input_completion' },
+}));
 vi.mock('@lobechat/const/hotkeys', () => ({
   HotkeyEnum: { AddUserMessage: 'add-user-message' },
   KeyEnum: { Alt: 'alt', Enter: 'enter' },
 }));
 vi.mock('@lobechat/heterogeneous-agents', () => ({ HETEROGENEOUS_TYPE_LABELS: {} }));
 vi.mock('@lobechat/prompts', () => ({
-  chainInputCompletion: vi.fn(),
+  chainInputCompletion: mocks.chainInputCompletion,
   escapeXmlAttr: (value: string) => value,
+  INPUT_COMPLETION_PROMPT_VERSION: 'v1',
+  INPUT_COMPLETION_SCHEMA_NAME: 'InputCompletion',
 }));
 vi.mock('@lobechat/utils', () => ({
+  isRecord: (value: unknown): value is Record<PropertyKey, unknown> =>
+    Boolean(value) && typeof value === 'object' && !Array.isArray(value),
   isCommandPressed: vi.fn(() => false),
   merge: vi.fn((...args) => Object.assign({}, ...args)),
 }));
@@ -78,7 +116,12 @@ vi.mock('@/hooks/usePermission', () => ({
   usePermission: () => ({ allowed: permission.allowed, reason: '' }),
 }));
 vi.mock('@/services/chat', () => ({ chatService: { fetchPresetTaskResult: vi.fn() } }));
-vi.mock('@/services/aiChat', () => ({ aiChatService: new Proxy({}, { get: () => vi.fn() }) }));
+vi.mock('@/services/aiChat', () => ({
+  aiChatService: {
+    generateJSON: mocks.generateJSON,
+    recordTracingFeedback: mocks.recordTracingFeedback,
+  },
+}));
 vi.mock('@/store/chat', () => ({
   useChatStore: Object.assign(<T,>(selector: StoreSelector<T>) => selector({}), {
     getState: () => ({ activeTopicId: undefined }),
@@ -108,7 +151,7 @@ vi.mock('@/store/user/selectors', () => ({
   labPreferSelectors: { enableInputMarkdown: () => false },
   settingsSelectors: { getHotkeyById: () => () => 'alt+enter' },
   systemAgentSelectors: {
-    inputCompletion: () => ({ enabled: false }),
+    inputCompletion: () => mocks.inputCompletionConfig,
   },
 }));
 
@@ -131,7 +174,7 @@ vi.mock('../store', () => {
   return {
     useChatInputStore: <T,>(selector: StoreSelector<T>) => selector(state),
     useStoreApi: () => ({
-      getState: () => ({ getMessages: vi.fn() }),
+      getState: () => mocks.chatInputState,
       subscribe: vi.fn(() => vi.fn()),
     }),
   };
@@ -158,11 +201,76 @@ vi.mock('./useLocalFileMention', () => ({
 vi.mock('./useMentionCategories', () => ({ useMentionCategories: () => [] }));
 
 describe('ChatInput InputEditor', () => {
-  it('renders as read-only when create-content permission is denied', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
     permission.allowed = false;
+    mocks.inputCompletionConfig.enabled = false;
+    mocks.inputCompletionConfig.model = 'gpt-4o-mini';
+    mocks.inputCompletionConfig.provider = 'openai';
+    mocks.chatInputState.inputCompletionError = undefined;
+    mocks.chatInputState.inputCompletionErrorDismissed = false;
+    mocks.chainInputCompletion.mockReturnValue({
+      messages: [],
+      schema: {
+        name: 'InputCompletion',
+        schema: { type: 'object' },
+      },
+    });
+  });
 
+  it('renders as read-only when create-content permission is denied', () => {
     render(<InputEditor />);
 
     expect(screen.getByTestId('mock-editor')).toHaveAttribute('data-editable', 'false');
+  });
+
+  it('pauses autocomplete after a non-abort generation error', async () => {
+    permission.allowed = true;
+    mocks.inputCompletionConfig.enabled = true;
+    mocks.generateJSON.mockRejectedValueOnce(new Error('InsufficientBudgetForModel'));
+
+    render(<InputEditor />);
+
+    const { ReactAutoCompletePlugin } = await import('@lobehub/editor');
+    const { Editor } = await import('@lobehub/editor/react');
+    const autoCompleteCall = vi
+      .mocked(Editor.withProps)
+      .mock.calls.find(([plugin]) => plugin === ReactAutoCompletePlugin);
+    const autoCompleteProps = autoCompleteCall?.[1] as
+      | {
+          onAutoComplete: (params: {
+            abortSignal: AbortSignal;
+            afterText: string;
+            input: string;
+            suggestionId: string;
+          }) => Promise<string | null>;
+        }
+      | undefined;
+
+    expect(autoCompleteProps).toBeDefined();
+
+    const abortController = new AbortController();
+    await expect(
+      autoCompleteProps!.onAutoComplete({
+        abortSignal: abortController.signal,
+        afterText: '',
+        input: 'hello',
+        suggestionId: 'suggestion-1',
+      }),
+    ).resolves.toBeNull();
+
+    expect(mocks.generateJSON).toHaveBeenCalledTimes(1);
+    expect(mocks.chatInputState.inputCompletionError?.message).toBe('InsufficientBudgetForModel');
+
+    await expect(
+      autoCompleteProps!.onAutoComplete({
+        abortSignal: abortController.signal,
+        afterText: '',
+        input: 'hello again',
+        suggestionId: 'suggestion-2',
+      }),
+    ).resolves.toBeNull();
+
+    expect(mocks.generateJSON).toHaveBeenCalledTimes(1);
   });
 });

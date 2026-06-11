@@ -218,6 +218,11 @@ export default {
     'Estimated from current context, tools, and model pricing. Actual cost may vary.',
   'input.disclaimer': 'Agents can make mistakes. Use your judgment for critical info.',
   'input.errorMsg': 'Send failed: {{errorMsg}}. Retry, or send again later.',
+  'input.inputCompletionError.desc':
+    'Input suggestions stopped after an error. Retry, or adjust the suggestion model in Settings.',
+  'input.inputCompletionError.retry': 'Retry',
+  'input.inputCompletionError.settings': 'Settings',
+  'input.inputCompletionError.title': 'Input suggestions paused',
   'input.more': 'More',
   'input.send': 'Send',
   'input.sendWithCmdEnter': 'Press <key/> to send',

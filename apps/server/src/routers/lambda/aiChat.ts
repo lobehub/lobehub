@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { TRACING_SCENARIOS } from '@lobechat/const';
 import { getErrorCodeSpec } from '@lobechat/model-runtime';
 import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/types';
 import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
@@ -28,6 +29,7 @@ const log = debug('lobe-lambda-router:ai-chat');
 const { createPrefixedTimingContext, logTiming, runTimedStage } = createTimingHelpers(
   'lobe-server:chat:lobehub:timing',
 );
+const SILENT_TRPC_ERROR_LOG_KEY = '__lobeSilentTRPCErrorLog';
 
 type TRPCErrorCode = ConstructorParameters<typeof TRPCError>[0]['code'];
 type TRPCStatusCode = Parameters<typeof getStatusKeyFromCode>[0];
@@ -49,10 +51,28 @@ const getTRPCErrorCodeFromStatus = (status: number): TRPCErrorCode => {
   return 'INTERNAL_SERVER_ERROR';
 };
 
-const createRuntimeTRPCError = (error: unknown): TRPCError | undefined => {
+const markSilentTRPCErrorLog = (error: unknown) => {
+  if (!error || typeof error !== 'object') return;
+
+  try {
+    Object.defineProperty(error, SILENT_TRPC_ERROR_LOG_KEY, {
+      configurable: true,
+      value: true,
+    });
+  } catch {
+    // Best-effort logging hint; never let it mask the original runtime error.
+  }
+};
+
+const createRuntimeTRPCError = (
+  error: unknown,
+  options?: { silentHandlerLog?: boolean },
+): TRPCError | undefined => {
   const errorType = getRuntimeErrorType(error);
   const spec = getErrorCodeSpec(errorType);
   if (errorType && spec) {
+    if (options?.silentHandlerLog && spec.httpStatus < 500) markSilentTRPCErrorLog(error);
+
     return new TRPCError({
       cause: error,
       code: getTRPCErrorCodeFromStatus(spec.httpStatus),
@@ -67,6 +87,8 @@ const createRuntimeTRPCError = (error: unknown): TRPCError | undefined => {
   // rejecting the request) pollutes server 500 monitoring.
   const status = (error as { status?: unknown } | undefined)?.status;
   if (typeof status === 'number' && status >= 400 && status < 500) {
+    if (options?.silentHandlerLog) markSilentTRPCErrorLog(error);
+
     return new TRPCError({
       cause: error,
       code: getTRPCErrorCodeFromStatus(status),
@@ -129,7 +151,9 @@ export const aiChatRouter = router({
         },
       );
     } catch (error) {
-      const runtimeTRPCError = createRuntimeTRPCError(error);
+      const runtimeTRPCError = createRuntimeTRPCError(error, {
+        silentHandlerLog: input.tracing?.scenario === TRACING_SCENARIOS.InputCompletion,
+      });
       if (runtimeTRPCError) throw runtimeTRPCError;
 
       throw error;
