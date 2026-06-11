@@ -12,7 +12,7 @@ import { useAuthServerConfigStore } from '@/features/AuthShell';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
-import { buildOnboardingRedirectUrl } from '@/utils/onboardingRedirect';
+import { buildOnboardingRedirectUrl, sanitizeRedirectPath } from '@/utils/onboardingRedirect';
 
 import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
 
@@ -195,7 +195,7 @@ export const useSignIn = () => {
           },
           // callbackUrl targets the main app, outside this auth SPA — full page load required
           onSuccess: () => {
-            window.location.href = callbackUrl;
+            window.location.href = sanitizeRedirectPath(callbackUrl);
           },
         },
       );

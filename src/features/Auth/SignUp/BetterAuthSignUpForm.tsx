@@ -12,12 +12,10 @@ import { AuthCard } from '@/features/AuthCard';
 import { AuthAgreement } from '@/features/AuthShell';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 
-import { type SignUpFormValues } from './useSignUp';
 import { useSignUp } from './useSignUp';
 
 const BetterAuthSignUpForm = () => {
-  const [form] = Form.useForm<SignUpFormValues>();
-  const { loading, onSubmit, businessElement } = useSignUp();
+  const { form, loading, onSubmit, businessElement } = useSignUp();
 
   const { t } = useTranslation('auth');
   const navigate = useNavigate();

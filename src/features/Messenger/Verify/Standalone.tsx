@@ -5,7 +5,7 @@ import { Center } from '@lobehub/ui';
 import MessengerVerifyPage from '.';
 
 const MessengerVerifyStandalonePage = () => (
-  <Center padding={16} style={{ minHeight: '100vh' }} width={'100%'}>
+  <Center padding={16} style={{ minHeight: '100dvh' }} width={'100%'}>
     <MessengerVerifyPage />
   </Center>
 );

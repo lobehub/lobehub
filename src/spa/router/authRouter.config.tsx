@@ -1,11 +1,13 @@
-import type { ComponentType, ReactElement } from 'react';
+import type { ComponentType, CSSProperties, ReactElement } from 'react';
 import { lazy, Suspense } from 'react';
 import type { RouteObject } from 'react-router-dom';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useRouteError } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import AuthShell from '@/features/AuthShell';
+import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
 
+// Local helper on purpose: @/utils/router's dynamicElement would pull SPAGlobalProvider/global store into the auth bundle
 const lazyElement = (
   importFn: () => Promise<{ default: ComponentType }>,
   debugId: string,
@@ -16,6 +18,56 @@ const lazyElement = (
     <Suspense fallback={<Loading debugId={debugId} />}>
       <LazyComponent />
     </Suspense>
+  );
+};
+
+const buttonStyle: CSSProperties = {
+  background: 'transparent',
+  border: '1px solid currentcolor',
+  borderRadius: 6,
+  color: 'inherit',
+  cursor: 'pointer',
+  font: 'inherit',
+  padding: '6px 16px',
+};
+
+// Renders outside AuthShell (no theme/i18n providers), so plain elements and English copy only
+const AuthErrorBoundary = () => {
+  const error = useRouteError() as Error;
+
+  if (typeof window !== 'undefined' && isChunkLoadError(error)) {
+    notifyChunkError();
+  }
+
+  return (
+    <div
+      style={{
+        alignItems: 'center',
+        display: 'flex',
+        flexDirection: 'column',
+        fontFamily: 'sans-serif',
+        gap: 16,
+        justifyContent: 'center',
+        minHeight: '100dvh',
+        padding: 16,
+      }}
+    >
+      <h2 style={{ margin: 0 }}>Something went wrong</h2>
+      <div style={{ display: 'flex', gap: 12 }}>
+        <button style={buttonStyle} type={'button'} onClick={() => window.location.reload()}>
+          Retry
+        </button>
+        <button
+          style={buttonStyle}
+          type={'button'}
+          onClick={() => {
+            window.location.href = '/signin';
+          }}
+        >
+          Back to sign in
+        </button>
+      </div>
+    </div>
   );
 };
 
@@ -55,6 +107,7 @@ export const authRoutes: RouteObject[] = [
         <Outlet />
       </AuthShell>
     ),
+    errorElement: <AuthErrorBoundary />,
     path: '/',
   },
 ];

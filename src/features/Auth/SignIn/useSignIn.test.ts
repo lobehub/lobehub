@@ -253,6 +253,35 @@ describe('useSignIn', () => {
       expect(window.location.href).toBe('/');
     });
 
+    it.each(['javascript:alert(1)', 'https://evil.com', '//evil.com'])(
+      'should fall back to "/" instead of redirecting to hostile callbackUrl %s',
+      async (hostileUrl) => {
+        mockSearchParamsGet.mockImplementation((key: string) =>
+          key === 'callbackUrl' ? hostileUrl : null,
+        );
+        mockSignInEmail.mockImplementation(async (_data: any, opts: any) => {
+          opts.onSuccess();
+          return { error: null };
+        });
+        mockFetch.mockResolvedValueOnce({
+          json: async () => ({ exists: true, hasPassword: true }),
+          ok: true,
+        });
+
+        const { result } = renderHook(() => useSignIn());
+
+        await act(async () => {
+          await result.current.handleCheckUser({ email: 'user@example.com' });
+        });
+
+        await act(async () => {
+          await result.current.handleSignIn({ password: 'password123' });
+        });
+
+        expect(window.location.href).toBe('/');
+      },
+    );
+
     it('should show error on sign in failure', async () => {
       mockSignInEmail.mockResolvedValue({
         error: { message: 'Invalid credentials', status: 401 },

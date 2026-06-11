@@ -28,6 +28,17 @@ const toRelativePath = (url: string): string => {
 };
 
 /**
+ * Sanitize a user-supplied redirect target before it reaches
+ * `window.location.href`: same-origin absolute URLs are normalized to relative
+ * paths, anything unsafe (`javascript:`, `https://evil.com`, `//…`) falls back.
+ */
+export const sanitizeRedirectPath = (url: string | null | undefined, fallback = '/'): string => {
+  if (!url) return fallback;
+  const target = toRelativePath(url);
+  return isSafeRedirectPath(target) ? target : fallback;
+};
+
+/**
  * Build the first-hop URL for a freshly signed-up user. New users always land
  * on onboarding first; the original target (if any) is threaded through the
  * `callbackUrl` query param and restored when onboarding finishes.

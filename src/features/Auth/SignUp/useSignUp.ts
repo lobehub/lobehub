@@ -1,5 +1,5 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import { form } from 'motion/react-m';
+import { Form } from 'antd';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -32,6 +32,7 @@ export const useSignUp = () => {
   const { t } = useTranslation(['auth', 'authError']);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const [form] = Form.useForm<SignUpFormValues>();
   const [loading, setLoading] = useState(false);
   const { getCaptchaTokenOnError, getFetchOptions, preSocialSignupCheck, businessElement } =
     useBusinessSignup(form);
@@ -113,5 +114,5 @@ export const useSignUp = () => {
     }
   };
 
-  return { businessElement, loading, onSubmit: handleSignUp };
+  return { businessElement, form, loading, onSubmit: handleSignUp };
 };

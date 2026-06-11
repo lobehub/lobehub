@@ -36,9 +36,6 @@ vi.mock('@/business/client/hooks/useBusinessSignup', () => ({
   }),
 }));
 
-// motion/react-m exports `form` as a motion HTML element — mock the whole module
-vi.mock('motion/react-m', () => ({ form: {} }));
-
 let mockEnableEmailVerification = false;
 vi.mock('@/features/AuthShell', () => ({
   useAuthServerConfigStore: (selector: (s: any) => any) =>
