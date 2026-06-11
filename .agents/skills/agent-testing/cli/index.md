@@ -16,7 +16,7 @@ flakiness.
 | Requirement  | Details                                                                           |
 | ------------ | --------------------------------------------------------------------------------- |
 | Dev server   | `localhost:3010` — see [../references/dev-server.md](../references/dev-server.md) |
-| CLI source   | `apps/cli/` — runs from source, no rebuild needed                                 |
+| CLI source   | `apps/cli/` — runs from source, no rebuild; standalone `node_modules` — run `pnpm install` inside `apps/cli/` (root install does not cover it) |
 | CLI dev mode | `LOBEHUB_CLI_HOME=.lobehub-dev` for isolated credentials                          |
 | Auth         | Device Code Flow login — see [../references/auth.md](../references/auth.md)       |
 

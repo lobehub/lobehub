@@ -19,14 +19,45 @@ also run as full cloud automation. Every test session follows the same
 four-step contract:
 
 ```
-Step 0: Auth ready?  →  Step 1: Pick surface  →  Step 2: Run  →  Step 3: Structured report
+Step 0: Env + Auth  →  Step 1: Pick surface  →  Step 2: Run  →  Step 3: Structured report
 ```
 
-## Step 0 — Auth first (mandatory)
+## Step 0 — Environment setup + auth check (mandatory)
 
-**Auth is the gate for all automated testing.** Prepare and verify it BEFORE
-writing a single test step — a half-finished test run that dies on a login wall
-wastes the whole session.
+Step 0 is about getting the environment ready: **dependencies are healthy**
+and **auth is green**. A test run that dies halfway on a missing dependency or
+a login wall wastes the whole session — clear both gates BEFORE writing a
+single test step.
+
+### 0.1 Dependencies are installed — root AND standalone apps
+
+The root pnpm workspace does **NOT** cover every app: `pnpm-workspace.yaml`
+lists `packages/**`, `e2e`, `apps/server`, and only `apps/desktop/src/main` —
+**`apps/desktop` and `apps/cli` are standalone**, each keeping its own
+`node_modules` with its own links into `packages/`. A root install does not
+refresh them, so install in every app the test will touch:
+
+```bash
+pnpm install                      # root workspace
+cd apps/desktop && pnpm install   # Electron surface
+cd apps/cli && pnpm install       # CLI surface
+```
+
+Symptom of a stale standalone install: the build/launch fails to resolve a
+recently added workspace package — `Rolldown failed to resolve import
+"@lobechat/<pkg>"` (Electron) or `Cannot find module '@lobechat/<pkg>'` (CLI).
+
+### 0.2 Run scripts from the repo root
+
+All paths in this skill (`./.agents/skills/agent-testing/...`) are
+repo-root-relative, and background commands inherit the current working
+directory — a script launched while `cwd` is `apps/desktop` fails with
+`No such file or directory`. Verify `pwd` is the repo root before launching
+long-running scripts.
+
+### 0.3 Auth is green
+
+**Auth is the gate for all automated testing.**
 
 ```bash
 ./.agents/skills/agent-testing/scripts/setup-auth.sh status
