@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { AgentImageSource } from './types';
+import type { AgentImageSource } from '../../protocol';
 
 export interface NormalizedImage {
   buffer: Buffer;

@@ -20,13 +20,13 @@ import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { AskUserMcpServer } from '@lobechat/heterogeneous-agents/askUser';
 import type {
   AgentContentBlock,
-  AgentStreamEvent,
   HeteroExecImageRef,
-} from '@lobechat/heterogeneous-agents/spawn';
+} from '@lobechat/heterogeneous-agents/protocol';
+import { buildHeteroExecStdinPayload } from '@lobechat/heterogeneous-agents/protocol';
+import type { AgentStreamEvent } from '@lobechat/heterogeneous-agents/spawn';
 import {
   AgentStreamPipeline,
   buildAgentInput,
-  buildHeteroExecStdinPayload,
   materializeImageToPath,
   normalizeImage,
   readCodexSessionModel,

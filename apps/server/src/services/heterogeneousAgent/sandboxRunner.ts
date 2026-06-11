@@ -1,7 +1,11 @@
+// IMPORTANT: import from `/protocol`, NOT `/spawn` — the spawn barrel drags
+// fs-heavy machinery into the Next.js server bundle, and its dynamic
+// `process.cwd()`-rooted fs calls make Vercel's file tracing pull the whole
+// repo source tree into every serverless function (250 MB limit blowout).
 import {
   buildHeteroExecStdinPayload,
   type HeteroExecImageRef,
-} from '@lobechat/heterogeneous-agents/spawn';
+} from '@lobechat/heterogeneous-agents/protocol';
 import debug from 'debug';
 
 import { appEnv } from '@/envs/app';
