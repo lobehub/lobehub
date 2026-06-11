@@ -24,6 +24,14 @@ export interface SPAClientEnv {
   s3FilePath?: string;
 }
 
+export interface AuthSPAServerConfig {
+  analyticsConfig: AnalyticsConfig;
+  config: GlobalServerConfig;
+  enableOIDC: boolean;
+  featureFlags: Partial<IFeatureFlags>;
+  globalCDN?: boolean;
+}
+
 export interface SPAServerConfig {
   analyticsConfig: AnalyticsConfig;
   clientEnv: SPAClientEnv;

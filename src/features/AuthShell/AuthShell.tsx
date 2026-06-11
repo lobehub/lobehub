@@ -5,7 +5,7 @@ import { memo, type PropsWithChildren } from 'react';
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
 import { mapFeatureFlagsEnvToState } from '@/config/featureFlags';
 import NextThemeProvider from '@/layout/GlobalProvider/NextThemeProvider';
-import type { SPAServerConfig } from '@/types/spaServerConfig';
+import type { AuthSPAServerConfig } from '@/types/spaServerConfig';
 
 import AuthContainer from './AuthContainer';
 import AuthLocale from './AuthLocale';
@@ -13,13 +13,13 @@ import { AuthServerConfigProvider } from './AuthServerConfigProvider';
 import AuthThemeLite from './AuthThemeLite';
 
 const AuthShell = memo<PropsWithChildren>(({ children }) => {
-  const serverConfig: SPAServerConfig | undefined = window.__SERVER_CONFIG__;
+  const serverConfig = window.__SERVER_CONFIG__ as unknown as AuthSPAServerConfig | undefined;
   const locale = document.documentElement.lang || 'en-US';
 
   return (
     <AuthLocale defaultLang={locale}>
       <NextThemeProvider>
-        <AuthThemeLite>
+        <AuthThemeLite globalCDN={serverConfig?.globalCDN}>
           <AuthServerConfigProvider
             isMobile={false}
             serverConfig={serverConfig?.config}
