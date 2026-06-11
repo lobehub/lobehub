@@ -531,6 +531,30 @@ describe('Browser', () => {
       });
     });
 
+    describe('fullscreen events', () => {
+      it('should broadcast fullscreen state changes', () => {
+        const enterHandler = mockBrowserWindow.on.mock.calls.find(
+          (call) => call[0] === 'enter-full-screen',
+        )?.[1];
+        const leaveHandler = mockBrowserWindow.on.mock.calls.find(
+          (call) => call[0] === 'leave-full-screen',
+        )?.[1];
+
+        expect(enterHandler).toBeDefined();
+        expect(leaveHandler).toBeDefined();
+
+        enterHandler();
+        expect(mockBrowserWindow.webContents.send).toHaveBeenCalledWith('windowFullscreenChanged', {
+          isFullScreen: true,
+        });
+
+        leaveHandler();
+        expect(mockBrowserWindow.webContents.send).toHaveBeenCalledWith('windowFullscreenChanged', {
+          isFullScreen: false,
+        });
+      });
+    });
+
     describe('close', () => {
       it('should close window', () => {
         browser.close();

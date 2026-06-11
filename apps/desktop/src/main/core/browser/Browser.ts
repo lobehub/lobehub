@@ -194,6 +194,7 @@ export default class Browser {
     this.setupReadyToShowListener(browserWindow);
     this.setupCloseListener(browserWindow);
     this.setupFocusListener(browserWindow);
+    this.setupFullscreenListener(browserWindow);
     this.setupWillPreventUnloadListener(browserWindow);
     this.setupContextMenu(browserWindow);
   }
@@ -265,6 +266,18 @@ export default class Browser {
       } catch {
         /* noop — some platforms may not support badge counts */
       }
+    });
+  }
+
+  private setupFullscreenListener(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up fullscreen event listeners.`);
+
+    browserWindow.on('enter-full-screen', () => {
+      this.broadcast('windowFullscreenChanged', { isFullScreen: true });
+    });
+
+    browserWindow.on('leave-full-screen', () => {
+      this.broadcast('windowFullscreenChanged', { isFullScreen: false });
     });
   }
 
