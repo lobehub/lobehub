@@ -29,9 +29,25 @@ output):
 
 2. **Collect evidence as you test** — every asserted behavior gets one evidence
    item in `$DIR/assets/`:
-   - UI: `agent-browser screenshot` or `capture-app-window.sh`, then **verify
-     the screenshot with the Read tool before citing it** — never cite an
-     image you haven't looked at.
+   - UI (static state): `agent-browser screenshot` or `capture-app-window.sh`,
+     then **verify the screenshot with the Read tool before citing it** —
+     never cite an image you haven't looked at.
+   - UI (time-based behavior): **screenshot vs GIF is a judgment you must
+     make per case.** If the assertion is about change over time — streaming
+     output, a ticking timer, loading/progress states, animations,
+     appear/disappear transitions — a static screenshot cannot prove it.
+     Record a frame sequence and synthesize a GIF:
+
+     ```bash
+     # start recording (background), trigger the behavior, wait for it to finish
+     ../scripts/record-gif.sh "$DIR/assets/case2-streaming.gif" 12 2 &
+     GIF_PID=$!
+     # ... drive the scenario ...
+     wait $GIF_PID
+     ```
+
+     Embed it like an image: `![case 2](assets/case2-streaming.gif)`. Verify
+     at least the first/last frames visually (Read the GIF) before citing.
    - CLI: exact command + trimmed output (`$CLI task list | tee "$DIR/assets/task-list.txt"`).
    - Network: `agent-browser network requests` dumps or HAR files.
 
@@ -40,6 +56,16 @@ output):
 4. **Set the verdict** in both `report.md` and `result.json`, then link the
    report directory in your final answer to the user.
 
+## Report language (hard rule)
+
+**`report.md` MUST be written in the language the user is conversing in** —
+the whole file, headings included. If the conversation is in Chinese, the
+report is in Chinese; do not mix English prose into it. The scaffold's English
+headings are placeholders — translate them when filling. Exceptions that stay
+as-is: code/commands, identifiers, log excerpts, and `result.json` (its keys
+and status values are machine-read and stay English; the `title` and case
+`name` fields follow the user's language).
+
 ## report.md sections
 
 | Section         | Content                                                                            |
@@ -47,7 +73,7 @@ output):
 | **Scope**       | What changed / what is being verified; branch + commit                             |
 | **Environment** | Server URL, surfaces used (cli / electron / web / bot), relevant versions          |
 | **Cases**       | Table: `# \| case \| surface \| steps \| expected \| actual \| status \| evidence` |
-| **Evidence**    | Embedded screenshots (`![case 1](assets/case1.png)`), fenced CLI transcripts       |
+| **Evidence**    | Embedded screenshots/GIFs (`![case 1](assets/case1.png)`), fenced CLI transcripts  |
 | **Verdict**     | Pass/fail/blocked counts, optional 0–100 score, open issues / follow-ups           |
 
 Status values: `pass` / `fail` / `blocked` (couldn't run — e.g. auth or env

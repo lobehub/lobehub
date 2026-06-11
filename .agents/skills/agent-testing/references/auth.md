@@ -101,8 +101,16 @@ agent-browser --session lobehub-dev snapshot -i | head -20
 
 The desktop app keeps its own persistent login state in its user-data
 directory — log in once manually inside the app and it survives restarts of
-`electron-dev.sh`. No injection needed; just confirm with a snapshot that the
-app is past the signin screen before running UI tests.
+`electron-dev.sh`. No injection needed. The standard check (do NOT hand-roll a
+store eval) once Electron is up with CDP:
+
+```bash
+./.agents/skills/agent-testing/scripts/app-probe.sh auth
+# → {"ok":true,"isSignedIn":true,"userId":"user_xxx"}
+```
+
+`setup-auth.sh status` runs this probe automatically when CDP 9222 is
+reachable.
 
 ## Scope
 

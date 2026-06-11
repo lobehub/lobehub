@@ -63,12 +63,16 @@ long-running scripts.
 ./.agents/skills/agent-testing/scripts/setup-auth.sh status
 ```
 
-| Surface  | Mechanism                                         | One-key path                   | Human needed?                 |
-| -------- | ------------------------------------------------- | ------------------------------ | ----------------------------- |
-| CLI      | OIDC Device Code Flow (`apps/cli/.lobehub-dev`)   | `setup-auth.sh cli`            | Yes — browser authorization   |
-| Web      | better-auth cookie injection into `agent-browser` | `pbpaste \| setup-auth.sh web` | Copy cookie once per rotation |
-| Electron | App's own persistent login state                  | Log in once in the app         | Once                          |
-| Bot      | Native apps already logged in                     | —                              | Once per app                  |
+| Surface  | Mechanism                                         | One-key path                   | Standard check                 |
+| -------- | ------------------------------------------------- | ------------------------------ | ------------------------------ |
+| CLI      | OIDC Device Code Flow (`apps/cli/.lobehub-dev`)   | `setup-auth.sh cli`            | `setup-auth.sh status`         |
+| Web      | better-auth cookie injection into `agent-browser` | `pbpaste \| setup-auth.sh web` | `setup-auth.sh web-verify`     |
+| Electron | App's own persistent login state                  | Log in once in the app         | `app-probe.sh auth`            |
+| Bot      | Native apps already logged in                     | —                              | per-platform screenshot        |
+
+Login-state checks are standardized — do NOT hand-roll `window.__LOBE_STORES`
+eval snippets; use `scripts/app-probe.sh auth` (returns `{ isSignedIn, userId }`,
+works for Electron CDP and web sessions via `AB_TARGET`).
 
 If `status` is not all green, fix auth first (the steps that need a human must be
 requested from the user explicitly). Full background and failure modes:
@@ -144,15 +148,23 @@ Surface guides above carry the detailed workflows. Shared infrastructure:
 
 All under `.agents/skills/agent-testing/scripts/`:
 
-| Script                    | Usage                                                         |
-| ------------------------- | ------------------------------------------------------------- |
-| `setup-auth.sh`           | One-stop auth setup & status check (`status` / `cli` / `web`) |
-| `report-init.sh`          | Scaffold a structured test report (Step 3)                    |
-| `electron-dev.sh`         | Manage Electron dev env (start/stop/status/restart, CDP 9222) |
-| `capture-app-window.sh`   | Screenshot a specific app window (general; used by bot tests) |
-| `record-app-screen.sh`    | Record app screen (video + periodic screenshots)              |
-| `record-electron-demo.sh` | Record Electron app demo with ffmpeg                          |
-| `agent-gateway/`          | Gateway probe / dump / analyze tools                          |
+| Script                    | Usage                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------ |
+| `setup-auth.sh`           | One-stop auth setup & status check (`status` / `cli` / `web`)                  |
+| `app-probe.sh`            | LobeHub app probes: `auth` / `route` / `ops` / `goto <path>` / `errors`        |
+| `record-gif.sh`           | Frame-sequence → GIF for time-based behavior (streaming, timers, animations)   |
+| `report-init.sh`          | Scaffold a structured test report (Step 3)                                     |
+| `electron-dev.sh`         | Manage Electron dev env (start/stop/status/restart, CDP 9222)                  |
+| `capture-app-window.sh`   | Screenshot a specific app window (general; used by bot tests)                  |
+| `record-app-screen.sh`    | Record app screen (video + periodic screenshots)                               |
+| `record-electron-demo.sh` | Record Electron app demo with ffmpeg                                           |
+| `agent-gateway/`          | Gateway probe / dump / analyze tools                                           |
+
+`app-probe.sh` is the LobeHub-specific fast path into app state — auth check,
+current route, running operations, and `goto <path>` quick navigation
+(`/agent/<agentId>/<topicId>`, `/task/<taskId>`, `/settings`, …) so a test can
+jump straight to the state under test instead of clicking through the UI. See
+[ui/electron.md](./ui/electron.md#lobehub-probes--quick-navigation) for usage.
 
 ## Step 3 — Structured report (mandatory deliverable)
 
@@ -169,6 +181,16 @@ Reports live in `.records/reports/<timestamp>-<slug>/` (gitignored): `report.md`
 (human-readable, with embedded screenshots), `result.json` (machine-readable
 pass/fail + score), `assets/` (evidence). Format spec and evidence rules:
 [references/report.md](./references/report.md).
+
+Two hard rules worth front-loading:
+
+- **Report language = the user's conversation language.** Write the ENTIRE
+  `report.md` (headings included) in the language the user is conversing in —
+  no mixed English. `result.json` keys/status values stay English.
+- **Time-based behavior needs a GIF, not a screenshot.** If a case asserts
+  change over time (streaming output, a ticking timer, loading states,
+  animations), record it with `scripts/record-gif.sh` and embed the GIF —
+  a static screenshot cannot prove the behavior.
 
 ## Directory map
 

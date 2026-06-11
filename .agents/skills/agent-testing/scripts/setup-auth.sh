@@ -63,12 +63,33 @@ check_web() {
   fi
 }
 
+check_electron() {
+  local cdp_port="${CDP_PORT:-9222}"
+  if ! curl -s -o /dev/null --max-time 2 "http://localhost:$cdp_port/json/version" 2> /dev/null; then
+    note "electron: not running (CDP $cdp_port unreachable) — start with electron-dev.sh; check skipped"
+    return 0
+  fi
+  local probe result
+  probe="$(dirname "${BASH_SOURCE[0]}")/app-probe.sh"
+  result=$(bash "$probe" auth 2> /dev/null || true)
+  # agent-browser eval returns the JSON string with escaped quotes — normalize.
+  result="${result//\\/}"
+  if [[ "$result" == *'"isSignedIn":true'* ]]; then
+    ok "electron app signed in ($result)"
+  else
+    bad "electron app NOT signed in ($result)"
+    note "log in once manually inside the app (state persists across restarts)"
+    return 1
+  fi
+}
+
 cmd_status() {
   echo "agent-testing auth status (SERVER_URL=$SERVER_URL):"
   local rc=0
   check_server || rc=1
   check_cli || rc=1
   check_web || rc=1
+  check_electron || rc=1
   if [[ $rc -eq 0 ]]; then
     echo "all green — safe to start automated testing."
   else

@@ -39,6 +39,39 @@ After `start` succeeds, connect with: `agent-browser --cdp 9222 snapshot -i`
 | `ELECTRON_WAIT_S` | `60`                    | Max seconds to wait for Electron process |
 | `RENDERER_WAIT_S` | `60`                    | Max seconds to wait for SPA to load      |
 
+### LobeHub Probes & Quick Navigation
+
+`scripts/app-probe.sh` is the standard fast path into app state — **use it
+instead of hand-rolling `__LOBE_STORES` eval snippets** for these common needs:
+
+```bash
+PROBE=".agents/skills/agent-testing/scripts/app-probe.sh"
+
+$PROBE auth              # login check (Step 0.3) → { isSignedIn, userId }
+$PROBE route             # current SPA route
+$PROBE ops               # running chat operations (type / startTime)
+$PROBE goto /settings    # jump the SPA straight to a route (full reload)
+$PROBE errors-install    # install console.error interceptor
+$PROBE errors            # dump captured errors
+```
+
+`goto` lets a test enter the state under test directly instead of clicking
+through the UI. Common desktop routes:
+
+| Route                         | Where it lands                       |
+| ----------------------------- | ------------------------------------ |
+| `/`                           | Home (has a chat input)              |
+| `/agent/<agentId>`            | Agent conversation (latest topic)    |
+| `/agent/<agentId>/<topicId>`  | Specific topic in a conversation     |
+| `/task` · `/task/<taskId>`    | Task list / task detail              |
+| `/page`                       | Documents (文稿)                     |
+| `/settings`                   | Settings                             |
+| `/community`                  | Discover / community                 |
+
+Targets default to Electron (`--cdp 9222`); set `AB_TARGET="--session <name>"`
+for web sessions. For deeper or one-off state inspection, fall back to raw
+eval below.
+
 ### LobeHub-Specific Patterns
 
 #### Access Zustand Store State
@@ -108,5 +141,14 @@ agent-browser --cdp 9222 eval "JSON.stringify(window.__CAPTURED_ERRORS)"
 
 - **Always use `electron-dev.sh stop` to clean up** — `pkill -f "Electron"` only kills the main process; helper processes (GPU, renderer, network) survive. The script finds and kills all of them via PID matching against the project's electron binary path.
 - **`npx electron-vite dev` must run from `apps/desktop/`** — running from project root fails silently. The `electron-dev.sh` script handles this automatically.
+- **Dev build auto-opens DevTools, which hijacks the CDP target** — `agent-browser --cdp 9222` may attach to the DevTools page (`devtools://…`) instead of the app (`app://renderer/`). Symptom: `get url` returns a `devtools://` URL. Fix: close the DevTools target and reconnect:
+
+  ```bash
+  DT_ID=$(curl -s http://localhost:9222/json/list | python3 -c "import json,sys; ts=json.load(sys.stdin); print(next(t['id'] for t in ts if t['type']=='page' and t['url'].startswith('devtools://')))")
+  curl -s "http://localhost:9222/json/close/$DT_ID" > /dev/null
+  agent-browser close --all && agent-browser --cdp 9222 get url   # expect app://renderer/
+  ```
+
 - **Don't resize the Electron window after load** — resizing triggers full SPA reload
 - **Store is at `window.__LOBE_STORES`** not `window.__ZUSTAND_STORES__`
+- **Streaming / ticking UI needs GIF evidence** — see `scripts/record-gif.sh`; a static screenshot cannot prove time-based behavior.
