@@ -8,6 +8,7 @@ import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 import { viteEnvRestartKeys } from './plugins/vite/envRestartKeys';
+import { loadSharedReactVendor, sharedReactVendorPreload } from './plugins/vite/sharedReactVendor';
 import {
   createSharedRolldownOutput,
   sharedModulePreload,
@@ -26,6 +27,9 @@ Object.assign(process.env, loadEnv(mode, process.cwd(), ''));
 const isDev = process.env.NODE_ENV !== 'production';
 const platform = isAuth ? 'auth' : isMobile ? 'mobile' : 'web';
 const enableViteDevTools = process.env.LOBE_VITE_DEVTOOLS === 'true';
+
+const sharedAssetBase = process.env.VITE_CDN_BASE || '/_spa/';
+const sharedReactVendor = isDev ? null : loadSharedReactVendor(__dirname, sharedAssetBase);
 
 const resolveCommandExecutable = (cmd: string) => {
   const pathValue = process.env.PATH;
@@ -109,11 +113,15 @@ export default defineConfig({
     reportCompressedSize: false,
     rolldownOptions: {
       ...(enableViteDevTools && { devtools: {} }),
+      ...(sharedReactVendor && { external: Object.keys(sharedReactVendor.paths) }),
       input: path.resolve(
         __dirname,
         isAuth ? 'index.auth.html' : isMobile ? 'index.mobile.html' : 'index.html',
       ),
-      output: createSharedRolldownOutput({ strictExecutionOrder: true }),
+      output: {
+        ...createSharedRolldownOutput({ strictExecutionOrder: true }),
+        ...(sharedReactVendor && { paths: sharedReactVendor.paths }),
+      },
     },
   },
   define: sharedRendererDefine({ isMobile, isElectron: false }),
@@ -253,6 +261,8 @@ export default defineConfig({
         };
       },
     },
+
+    sharedReactVendor && sharedReactVendorPreload(sharedReactVendor.urls),
 
     !isAuth &&
       VitePWA({

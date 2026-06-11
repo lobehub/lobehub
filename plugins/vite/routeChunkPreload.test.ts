@@ -393,6 +393,31 @@ describe('routeChunkPreload', () => {
     expect(result).not.toContain("import('@/routes");
   });
 
+  it('skips the auth SPA html entirely', () => {
+    const plugin = routeChunkPreload();
+    const configResolved = plugin.configResolved as (config: {
+      base: string;
+      root: string;
+    }) => void;
+    const bundle = {
+      'assets/agent-CJm8x.js': createChunk({
+        code: 'x'.repeat(2048),
+        facadeModuleId: '/repo/src/routes/(main)/agent/index.tsx',
+        fileName: 'assets/agent-CJm8x.js',
+        moduleIds: ['/repo/src/routes/(main)/agent/index.tsx'],
+      }),
+    } satisfies TestOutputBundle;
+    const transformIndexHtml = plugin.transformIndexHtml as {
+      handler: (html: string, ctx: { bundle: TestOutputBundle; path?: string }) => string;
+    };
+
+    configResolved({ base: '/_spa/', root: '/repo' });
+    const html = '<html><head></head><body></body></html>';
+    const result = transformIndexHtml.handler(html, { bundle, path: '/index.auth.html' });
+
+    expect(result).toBe(html);
+  });
+
   it('does not inject the all-JS warmup manifest by default', () => {
     const plugin = routeChunkPreload();
     const configResolved = plugin.configResolved as (config: {

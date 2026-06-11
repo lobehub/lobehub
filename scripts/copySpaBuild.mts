@@ -23,3 +23,9 @@ for (const { distDir, publicDir } of targets) {
     console.log(`Copied dist/${distDir}/${dir} -> ${publicDir}/${dir}`);
   }
 }
+
+const vendorSharedSource = path.resolve(root, 'dist/vendor-shared');
+if (existsSync(vendorSharedSource)) {
+  cpSync(vendorSharedSource, path.resolve(root, 'public/_spa/vendor-shared'), { recursive: true });
+  console.log('Copied dist/vendor-shared -> public/_spa/vendor-shared');
+}
