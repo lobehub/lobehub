@@ -1,19 +1,19 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { form } from 'motion/react-m';
-import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import type { BusinessSignupFomData } from '@/business/client/hooks/useBusinessSignup';
 import { useBusinessSignup } from '@/business/client/hooks/useBusinessSignup';
 import { message } from '@/components/AntdStaticMethods';
+import type { AuthFetchOptions } from '@/features/Auth/utils/authFetchOptions';
+import { withCaptchaToken } from '@/features/Auth/utils/authFetchOptions';
+import { useAuthServerConfigStore } from '@/features/AuthShell';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { signUp } from '@/libs/better-auth/auth-client';
 import { buildOnboardingRedirectUrl } from '@/utils/onboardingRedirect';
 
-import { useAuthServerConfigStore } from '../../_layout/AuthServerConfigProvider';
-import type { AuthFetchOptions } from '../../utils/authFetchOptions';
-import { withCaptchaToken } from '../../utils/authFetchOptions';
 import type { BaseSignUpFormValues } from './types';
 
 export type SignUpFormValues = BaseSignUpFormValues & BusinessSignupFomData;
@@ -30,8 +30,8 @@ interface SignUpErrorLike {
 
 export const useSignUp = () => {
   const { t } = useTranslation(['auth', 'authError']);
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const { getCaptchaTokenOnError, getFetchOptions, preSocialSignupCheck, businessElement } =
     useBusinessSignup(form);
@@ -99,11 +99,12 @@ export const useSignUp = () => {
       }
 
       if (enableEmailVerification) {
-        router.push(
+        navigate(
           `/verify-email?email=${encodeURIComponent(values.email)}&callbackUrl=${encodeURIComponent(redirectUrl)}`,
         );
       } else {
-        router.push(redirectUrl);
+        // onboarding lives in the main app, outside this auth SPA — full page load required
+        window.location.href = redirectUrl;
       }
     } catch {
       message.error(t('betterAuth.signup.error'));

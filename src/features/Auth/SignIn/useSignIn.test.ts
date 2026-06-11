@@ -1,11 +1,9 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ── import under test ──────────────────────────────────────────
 import { useSignIn } from './useSignIn';
 
-// ── hoisted mocks ──────────────────────────────────────────────
-const mockPush = vi.hoisted(() => vi.fn());
+const mockNavigate = vi.hoisted(() => vi.fn());
 const mockSearchParamsGet = vi.hoisted(() => vi.fn().mockReturnValue(null));
 const mockMessageError = vi.hoisted(() => vi.fn());
 const mockMessageSuccess = vi.hoisted(() => vi.fn());
@@ -25,9 +23,9 @@ const mockLocalStorage = vi.hoisted(() => {
   };
 });
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
-  useSearchParams: () => ({ get: mockSearchParamsGet }),
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => mockNavigate,
+  useSearchParams: () => [{ get: mockSearchParamsGet }],
 }));
 
 vi.mock('@/components/AntdStaticMethods', () => ({
@@ -62,7 +60,7 @@ vi.mock('@/business/client/hooks/useBusinessSignin', () => ({
   }),
 }));
 
-vi.mock('../_layout/AuthServerConfigProvider', () => ({
+vi.mock('@/features/AuthShell', () => ({
   useAuthServerConfigStore: (selector: (s: any) => any) =>
     selector({
       serverConfig: {
@@ -74,7 +72,6 @@ vi.mock('../_layout/AuthServerConfigProvider', () => ({
     }),
 }));
 
-// Mock antd Form.useForm
 const mockSetFieldValue = vi.fn();
 const mockGetFieldValue = vi.fn();
 const mockValidateFields = vi.fn();
@@ -97,19 +94,30 @@ vi.mock('antd', async () => {
   };
 });
 
-// Mock global fetch
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 vi.stubGlobal('localStorage', mockLocalStorage);
+
+const originalLocation = window.location;
 
 describe('useSignIn', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLocalStorage.clear();
     mockSearchParamsGet.mockReturnValue(null);
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, href: '' },
+      writable: true,
+    });
   });
 
   afterEach(() => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+      writable: true,
+    });
     vi.restoreAllMocks();
   });
 
@@ -139,7 +147,7 @@ describe('useSignIn', () => {
         await result.current.handleCheckUser({ email: 'new@example.com' });
       });
 
-      expect(mockPush).toHaveBeenCalledWith(
+      expect(mockNavigate).toHaveBeenCalledWith(
         expect.stringContaining('/signup?email=new%40example.com'),
       );
     });
@@ -242,7 +250,7 @@ describe('useSignIn', () => {
         }),
         expect.any(Object),
       );
-      expect(mockPush).toHaveBeenCalledWith('/');
+      expect(window.location.href).toBe('/');
     });
 
     it('should show error on sign in failure', async () => {
@@ -289,7 +297,7 @@ describe('useSignIn', () => {
         await result.current.handleSignIn({ password: 'password' });
       });
 
-      expect(mockPush).toHaveBeenCalledWith(
+      expect(mockNavigate).toHaveBeenCalledWith(
         expect.stringContaining('/verify-email?email=user%40example.com'),
       );
     });

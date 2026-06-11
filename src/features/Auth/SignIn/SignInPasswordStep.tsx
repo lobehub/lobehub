@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AuthCard from '../../../../features/AuthCard';
+import AuthCard from '@/features/AuthCard';
 
 export interface SignInPasswordStepProps {
   email: string;

@@ -1,19 +1,17 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ── import under test ──────────────────────────────────────────
 import { useSignUp } from './useSignUp';
 
-// ── hoisted mocks ──────────────────────────────────────────────
-const mockPush = vi.hoisted(() => vi.fn());
+const mockNavigate = vi.hoisted(() => vi.fn());
 const mockSearchParamsGet = vi.hoisted(() => vi.fn().mockReturnValue(null));
 const mockMessageError = vi.hoisted(() => vi.fn());
 const mockSignUpEmail = vi.hoisted(() => vi.fn());
 const mockGetCaptchaTokenOnError = vi.hoisted(() => vi.fn());
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
-  useSearchParams: () => ({ get: mockSearchParamsGet }),
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => mockNavigate,
+  useSearchParams: () => [{ get: mockSearchParamsGet }],
 }));
 
 vi.mock('@/components/AntdStaticMethods', () => ({
@@ -42,7 +40,7 @@ vi.mock('@/business/client/hooks/useBusinessSignup', () => ({
 vi.mock('motion/react-m', () => ({ form: {} }));
 
 let mockEnableEmailVerification = false;
-vi.mock('../../_layout/AuthServerConfigProvider', () => ({
+vi.mock('@/features/AuthShell', () => ({
   useAuthServerConfigStore: (selector: (s: any) => any) =>
     selector({
       serverConfig: {
@@ -51,15 +49,27 @@ vi.mock('../../_layout/AuthServerConfigProvider', () => ({
     }),
 }));
 
+const originalLocation = window.location;
+
 describe('useSignUp', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSearchParamsGet.mockReturnValue(null);
     mockGetCaptchaTokenOnError.mockResolvedValue(undefined);
     mockEnableEmailVerification = false;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, href: '' },
+      writable: true,
+    });
   });
 
   afterEach(() => {
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+      writable: true,
+    });
     vi.restoreAllMocks();
   });
 
@@ -106,7 +116,7 @@ describe('useSignUp', () => {
         await result.current.onSubmit(validValues);
       });
 
-      expect(mockPush).toHaveBeenCalledWith('/onboarding');
+      expect(window.location.href).toBe('/onboarding');
     });
 
     it('should thread callbackUrl from search params through onboarding', async () => {
@@ -124,7 +134,7 @@ describe('useSignUp', () => {
       expect(mockSignUpEmail).toHaveBeenCalledWith(
         expect.objectContaining({ callbackURL: '/onboarding?callbackUrl=%2Fdashboard' }),
       );
-      expect(mockPush).toHaveBeenCalledWith('/onboarding?callbackUrl=%2Fdashboard');
+      expect(window.location.href).toBe('/onboarding?callbackUrl=%2Fdashboard');
     });
 
     it('should redirect to verify-email when email verification is enabled', async () => {
@@ -137,7 +147,7 @@ describe('useSignUp', () => {
         await result.current.onSubmit(validValues);
       });
 
-      expect(mockPush).toHaveBeenCalledWith(
+      expect(mockNavigate).toHaveBeenCalledWith(
         expect.stringContaining('/verify-email?email=new%40example.com'),
       );
     });
@@ -169,7 +179,8 @@ describe('useSignUp', () => {
       });
 
       expect(mockMessageError).toHaveBeenCalled();
-      expect(mockPush).not.toHaveBeenCalled();
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(window.location.href).toBe('');
     });
 
     it('should show error for invalid email', async () => {
@@ -184,7 +195,8 @@ describe('useSignUp', () => {
       });
 
       expect(mockMessageError).toHaveBeenCalled();
-      expect(mockPush).not.toHaveBeenCalled();
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(window.location.href).toBe('');
     });
 
     it('should show translated error for known error codes', async () => {
@@ -199,7 +211,8 @@ describe('useSignUp', () => {
       });
 
       expect(mockMessageError).toHaveBeenCalled();
-      expect(mockPush).not.toHaveBeenCalled();
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(window.location.href).toBe('');
     });
 
     it('should retry sign up with captcha token when captcha is required', async () => {
@@ -223,7 +236,7 @@ describe('useSignUp', () => {
         }),
       );
       expect(mockMessageError).not.toHaveBeenCalled();
-      expect(mockPush).toHaveBeenCalledWith('/onboarding');
+      expect(window.location.href).toBe('/onboarding');
     });
 
     it('should stop sign up when captcha modal is cancelled', async () => {
@@ -240,7 +253,8 @@ describe('useSignUp', () => {
 
       expect(mockSignUpEmail).toHaveBeenCalledTimes(1);
       expect(mockMessageError).not.toHaveBeenCalled();
-      expect(mockPush).not.toHaveBeenCalled();
+      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(window.location.href).toBe('');
     });
 
     it('should show generic error on unexpected exception', async () => {

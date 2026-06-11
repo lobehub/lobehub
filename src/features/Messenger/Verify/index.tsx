@@ -1,9 +1,9 @@
 'use client';
 
 import { Button, Flexbox } from '@lobehub/ui';
-import { useSearchParams } from 'next/navigation';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import Loading from '@/components/Loading/BrandTextLoading';
@@ -20,7 +20,7 @@ const isSupportedPlatform = (value: string): value is MessengerPlatform =>
 
 const MessengerVerifyPage = memo(() => {
   const { t } = useTranslation('messenger');
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
 
   const randomId = searchParams.get('random_id') ?? '';
   const imType = searchParams.get('im_type') ?? '';

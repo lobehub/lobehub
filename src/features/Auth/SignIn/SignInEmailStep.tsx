@@ -8,9 +8,8 @@ import { type CSSProperties, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AuthIcons from '@/components/AuthIcons';
-
-import AuthCard from '../../../../features/AuthCard';
-import AuthAgreement from '../_layout/AuthAgreement';
+import AuthCard from '@/features/AuthCard';
+import { AuthAgreement } from '@/features/AuthShell';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   setPasswordLink: css`

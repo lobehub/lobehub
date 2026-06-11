@@ -4,14 +4,14 @@ import { BRANDING_NAME } from '@lobechat/business-const';
 import { Button, Icon, Text } from '@lobehub/ui';
 import { Form, Input, type InputRef } from 'antd';
 import { Lock, Mail } from 'lucide-react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { AuthCard } from '../../../../../features/AuthCard';
-import { trackLoginOrSignupClicked } from '../../../../../features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
-import AuthAgreement from '../../_layout/AuthAgreement';
+import { AuthCard } from '@/features/AuthCard';
+import { AuthAgreement } from '@/features/AuthShell';
+import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
+
 import { type SignUpFormValues } from './useSignUp';
 import { useSignUp } from './useSignUp';
 
@@ -20,7 +20,8 @@ const BetterAuthSignUpForm = () => {
   const { loading, onSubmit, businessElement } = useSignUp();
 
   const { t } = useTranslation('auth');
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const emailInputRef = useRef<InputRef>(null);
   const passwordInputRef = useRef<InputRef>(null);
@@ -39,11 +40,11 @@ const BetterAuthSignUpForm = () => {
     <Text>
       {t('betterAuth.signup.hasAccount')}{' '}
       <Link
-        href={`/signin?${searchParams.toString()}`}
+        to={`/signin?${searchParams.toString()}`}
         onClick={(event) => {
           event.preventDefault();
           void trackLoginOrSignupClicked({ spm: 'signup.go_to_signin.click' }).finally(() => {
-            window.location.href = `/signin?${searchParams.toString()}`;
+            navigate(`/signin?${searchParams.toString()}`);
           });
         }}
       >

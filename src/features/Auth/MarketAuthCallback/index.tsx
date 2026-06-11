@@ -9,10 +9,6 @@ import { persistMarketAuthResult } from '@/layout/AuthProvider/MarketAuth/handof
 
 type CallbackStatus = 'loading' | 'success' | 'error';
 
-/**
- * Market OIDC authorization callback page
- * Handles the authorization code returned from the OIDC server
- */
 const MarketAuthCallbackPage = () => {
   const { t } = useTranslation('marketAuth');
   const [status, setStatus] = useState<CallbackStatus>('loading');

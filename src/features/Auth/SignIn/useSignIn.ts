@@ -1,19 +1,19 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Form } from 'antd';
-import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import type { CheckUserResponseData } from '@/app/(backend)/api/auth/check-user/route';
 import type { ResolveUsernameResponseData } from '@/app/(backend)/api/auth/resolve-username/route';
 import { useBusinessSignin } from '@/business/client/hooks/useBusinessSignin';
 import { message } from '@/components/AntdStaticMethods';
+import { useAuthServerConfigStore } from '@/features/AuthShell';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
 import { buildOnboardingRedirectUrl } from '@/utils/onboardingRedirect';
 
-import { useAuthServerConfigStore } from '../_layout/AuthServerConfigProvider';
 import { EMAIL_REGEX, USERNAME_REGEX } from './SignInEmailStep';
 
 const LAST_AUTH_PROVIDER_KEY = 'lobehub:auth:last-provider:v1';
@@ -32,8 +32,8 @@ interface ResolvedEmailResult {
 
 export const useSignIn = () => {
   const { t } = useTranslation('auth');
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const enableMagicLink = useAuthServerConfigStore((s) => s.serverConfig.enableMagicLink || false);
   const disableEmailPassword = useAuthServerConfigStore(
     (s) => s.serverConfig.disableEmailPassword || false,
@@ -151,7 +151,7 @@ export const useSignIn = () => {
         signupParams.set('callbackUrl', callbackUrl);
         const utmSource = searchParams.get('utm_source');
         if (utmSource) signupParams.set('utm_source', utmSource);
-        router.push(`/signup?${signupParams.toString()}`);
+        navigate(`/signup?${signupParams.toString()}`);
         return;
       }
 
@@ -188,12 +188,15 @@ export const useSignIn = () => {
           onError: (ctx) => {
             console.error('Sign in error:', ctx.error);
             if (ctx.error.status === 403) {
-              router.push(
+              navigate(
                 `/verify-email?email=${encodeURIComponent(email)}&callbackUrl=${encodeURIComponent(callbackUrl)}`,
               );
             }
           },
-          onSuccess: () => router.push(callbackUrl),
+          // callbackUrl targets the main app, outside this auth SPA — full page load required
+          onSuccess: () => {
+            window.location.href = callbackUrl;
+          },
         },
       );
 
@@ -273,7 +276,7 @@ export const useSignIn = () => {
     const utmSource = searchParams.get('utm_source');
     if (utmSource) params.set('utm_source', utmSource);
     void trackLoginOrSignupClicked({ spm: 'signin.go_to_signup.click' }).finally(() => {
-      router.push(`/signup?${params.toString()}`);
+      navigate(`/signup?${params.toString()}`);
     });
   };
 
