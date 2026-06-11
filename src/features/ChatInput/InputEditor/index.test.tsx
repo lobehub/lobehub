@@ -40,6 +40,28 @@ const mocks = vi.hoisted(() => {
 
 type StoreSelector<T = unknown> = (state: Record<PropertyKey, unknown>) => T;
 
+type AutoCompleteProps = {
+  onAutoComplete: (params: {
+    abortSignal: AbortSignal;
+    afterText: string;
+    input: string;
+    suggestionId: string;
+  }) => Promise<string | null>;
+};
+
+const getAutoCompleteProps = async (): Promise<AutoCompleteProps> => {
+  const { ReactAutoCompletePlugin } = await import('@lobehub/editor');
+  const { Editor } = await import('@lobehub/editor/react');
+  const autoCompleteCall = vi
+    .mocked(Editor.withProps)
+    .mock.calls.find(([plugin]) => plugin === ReactAutoCompletePlugin);
+  const autoCompleteProps = autoCompleteCall?.[1] as AutoCompleteProps | undefined;
+
+  expect(autoCompleteProps).toBeDefined();
+
+  return autoCompleteProps!;
+};
+
 vi.mock('@lobechat/const', () => ({
   isDesktop: false,
   TRACING_SCENARIOS: { InputCompletion: 'input_completion' },
@@ -231,27 +253,11 @@ describe('ChatInput InputEditor', () => {
 
     render(<InputEditor />);
 
-    const { ReactAutoCompletePlugin } = await import('@lobehub/editor');
-    const { Editor } = await import('@lobehub/editor/react');
-    const autoCompleteCall = vi
-      .mocked(Editor.withProps)
-      .mock.calls.find(([plugin]) => plugin === ReactAutoCompletePlugin);
-    const autoCompleteProps = autoCompleteCall?.[1] as
-      | {
-          onAutoComplete: (params: {
-            abortSignal: AbortSignal;
-            afterText: string;
-            input: string;
-            suggestionId: string;
-          }) => Promise<string | null>;
-        }
-      | undefined;
-
-    expect(autoCompleteProps).toBeDefined();
+    const autoCompleteProps = await getAutoCompleteProps();
 
     const abortController = new AbortController();
     await expect(
-      autoCompleteProps!.onAutoComplete({
+      autoCompleteProps.onAutoComplete({
         abortSignal: abortController.signal,
         afterText: '',
         input: 'hello',
@@ -263,7 +269,7 @@ describe('ChatInput InputEditor', () => {
     expect(mocks.chatInputState.inputCompletionError?.message).toBe('InsufficientBudgetForModel');
 
     await expect(
-      autoCompleteProps!.onAutoComplete({
+      autoCompleteProps.onAutoComplete({
         abortSignal: abortController.signal,
         afterText: '',
         input: 'hello again',
@@ -272,5 +278,49 @@ describe('ChatInput InputEditor', () => {
     ).resolves.toBeNull();
 
     expect(mocks.generateJSON).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps autocomplete paused when an older in-flight request resolves after a failure', async () => {
+    permission.allowed = true;
+    mocks.inputCompletionConfig.enabled = true;
+
+    let resolveOlderRequest!: (value: { data: { completion: string } }) => void;
+    mocks.generateJSON
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveOlderRequest = resolve;
+          }),
+      )
+      .mockRejectedValueOnce(new Error('InsufficientBudgetForModel'));
+
+    render(<InputEditor />);
+
+    const autoCompleteProps = await getAutoCompleteProps();
+    const olderAbortController = new AbortController();
+    const newerAbortController = new AbortController();
+
+    const olderCompletion = autoCompleteProps.onAutoComplete({
+      abortSignal: olderAbortController.signal,
+      afterText: '',
+      input: 'older request',
+      suggestionId: 'suggestion-1',
+    });
+
+    await expect(
+      autoCompleteProps.onAutoComplete({
+        abortSignal: newerAbortController.signal,
+        afterText: '',
+        input: 'newer request',
+        suggestionId: 'suggestion-2',
+      }),
+    ).resolves.toBeNull();
+
+    expect(mocks.chatInputState.inputCompletionError?.message).toBe('InsufficientBudgetForModel');
+
+    resolveOlderRequest({ data: { completion: 'older completion' } });
+
+    await expect(olderCompletion).resolves.toBeNull();
+    expect(mocks.chatInputState.inputCompletionError?.message).toBe('InsufficientBudgetForModel');
   });
 });

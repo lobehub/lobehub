@@ -276,7 +276,9 @@ const InputEditor = memo<{
 
       if (abortSignal.aborted) return null;
 
-      storeApi.getState().clearInputCompletionError();
+      // Another in-flight request may have failed while this one was waiting.
+      // Keep the breaker active and drop this stale suggestion in that race.
+      if (storeApi.getState().inputCompletionError) return null;
 
       const completion = envelope?.data?.completion?.trimEnd();
       if (!completion) return null;
