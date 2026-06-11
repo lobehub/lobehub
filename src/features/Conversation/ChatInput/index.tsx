@@ -48,10 +48,7 @@ const InputCompletionErrorAlertContent = memo<{
   inputCompletionError: InputCompletionError;
 }>(({ inputCompletionError }) => {
   const { t } = useTranslation('chat');
-  const [clearInputCompletionError, dismissInputCompletionError] = useChatInputStore((s) => [
-    s.clearInputCompletionError,
-    s.dismissInputCompletionError,
-  ]);
+  const clearInputCompletionError = useChatInputStore((s) => s.clearInputCompletionError);
   const businessAlert = useBusinessInputCompletionErrorAlert({
     error: inputCompletionError,
     onRetry: clearInputCompletionError,
@@ -72,13 +69,11 @@ const InputCompletionErrorAlertContent = memo<{
     <>
       <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
         <Alert
-          closable
           showIcon
           action={action}
           description={businessAlert.description ?? t('input.inputCompletionError.desc')}
           title={t('input.inputCompletionError.title')}
           type={'warning'}
-          onClose={dismissInputCompletionError}
         />
       </Flexbox>
       {businessAlert.extra}

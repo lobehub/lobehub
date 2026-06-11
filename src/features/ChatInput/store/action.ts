@@ -34,7 +34,7 @@ export const store: CreateStore = (publicState) => (set, get) => ({
   },
 
   dismissInputCompletionError: () => {
-    set({ inputCompletionErrorDismissed: true });
+    set({ inputCompletionError: undefined, inputCompletionErrorDismissed: false });
   },
 
   getJSONState: () => {
