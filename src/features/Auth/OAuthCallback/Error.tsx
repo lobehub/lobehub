@@ -18,7 +18,7 @@ const FailedPage = () => {
       icon={<FluentEmoji emoji={'🥵'} size={96} type={'anim'} />}
       status="error"
       extra={
-        <a href="/public">
+        <a href="/">
           <Button block size={'large'} style={{ minWidth: 240 }}>
             {t('error.backToHome')}
           </Button>
@@ -32,7 +32,7 @@ const FailedPage = () => {
             })}
           </Text>
           {!!errorMessage && (
-            <Block padding={12} variant={'filled'}>
+            <Block padding={12} style={{ maxHeight: 240, overflowY: 'auto' }} variant={'filled'}>
               <pre
                 style={{
                   fontFamily: 'monospace',

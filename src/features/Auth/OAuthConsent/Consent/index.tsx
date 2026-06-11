@@ -5,18 +5,14 @@ import React, { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AuthCard from '@/features/AuthCard';
+import type { OidcClientMetadata } from '@/types/oidc';
 
 import OAuthApplicationLogo from '../OAuthApplicationLogo';
 import BuiltinConsent from './BuiltinConsent';
 
 interface ClientProps {
   clientId: string;
-  clientMetadata: {
-    clientName?: string;
-    isFirstParty?: boolean;
-    logo?: string;
-  };
-
+  clientMetadata: OidcClientMetadata;
   redirectUri?: string;
   scopes: string[];
   uid: string;

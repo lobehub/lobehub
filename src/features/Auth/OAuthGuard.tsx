@@ -2,9 +2,8 @@
 
 import { memo, type PropsWithChildren } from 'react';
 
+import NotFound from '@/components/404';
 import { useAuthServerConfigStore } from '@/features/AuthShell';
-
-import NotFound from './NotFound';
 
 const OAuthGuard = memo<PropsWithChildren>(({ children }) => {
   const enableOIDC = useAuthServerConfigStore((s) => s.enableOIDC);

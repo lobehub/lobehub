@@ -6,15 +6,12 @@ import { useTranslation } from 'react-i18next';
 
 import AuthCard from '@/features/AuthCard';
 import { useSession } from '@/libs/better-auth/auth-client';
+import type { OidcClientMetadata } from '@/types/oidc';
 
 import OAuthApplicationLogo from './OAuthApplicationLogo';
 
 interface LoginConfirmProps {
-  clientMetadata: {
-    clientName?: string;
-    isFirstParty?: boolean;
-    logo?: string;
-  };
+  clientMetadata: OidcClientMetadata;
   uid: string;
 }
 

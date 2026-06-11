@@ -35,6 +35,7 @@ export const useInteractionDetails = (uid?: string) =>
     ([, id]: [string, string]) => fetchInteractionDetails(id),
     {
       revalidateOnFocus: false,
+      revalidateOnReconnect: false,
       shouldRetryOnError: false,
     },
   );

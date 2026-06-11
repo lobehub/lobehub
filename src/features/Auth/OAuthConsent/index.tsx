@@ -4,9 +4,9 @@ import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useParams } from 'react-router-dom';
 
+import NotFound from '@/components/404';
 import BrandTextLoading from '@/components/Loading/BrandTextLoading';
 
-import NotFound from '../NotFound';
 import OAuthGuard from '../OAuthGuard';
 import ClientError from './ClientError';
 import Consent from './Consent';

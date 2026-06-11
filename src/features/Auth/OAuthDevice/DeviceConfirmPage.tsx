@@ -3,7 +3,8 @@
 import { memo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import NotFound from '../NotFound';
+import NotFound from '@/components/404';
+
 import OAuthGuard from '../OAuthGuard';
 import DeviceCodeConfirm from './DeviceCodeConfirm';
 
