@@ -225,6 +225,7 @@ export class AiInfraRepos {
               displayName: user?.displayName || item.displayName,
               enabled: typeof user.enabled === 'boolean' ? user.enabled : item.enabled,
               id: item.id,
+              pricing: user.pricing || item.pricing,
               providerId: provider.id,
               settings: isEmpty(user.settings)
                 ? item.settings

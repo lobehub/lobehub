@@ -125,6 +125,7 @@ export class AiModelModel {
         id: aiModels.id,
         parameters: aiModels.parameters,
         providerId: aiModels.providerId,
+        pricing: aiModels.pricing,
         releasedAt: aiModels.releasedAt,
         settings: aiModels.settings,
         sort: aiModels.sort,
