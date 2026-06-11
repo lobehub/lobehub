@@ -9,8 +9,8 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import {
+  getBusinessChatInputSendAreaPrefix,
   useBusinessChatInputCostEstimateAlert,
-  useBusinessChatInputSendAreaPrefix,
 } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
 import { useBusinessInputCompletionErrorAlert } from '@/business/client/hooks/useBusinessInputCompletionErrorAlert';
 import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
@@ -293,7 +293,7 @@ const ChatInput = memo<ChatInputProps>(
     const disabled = isInputEmpty || isUploadingFiles || (!!disableQueue && isInputLoading);
     const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
     const businessCostEstimateAlert = useBusinessChatInputCostEstimateAlert();
-    const businessSendAreaPrefix = useBusinessChatInputSendAreaPrefix(sendAreaPrefix);
+    const businessSendAreaPrefix = getBusinessChatInputSendAreaPrefix(sendAreaPrefix);
 
     // Send handler - gets message, clears editor immediately, then sends
     const handleSend: SendButtonHandler = useCallback(
