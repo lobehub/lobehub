@@ -660,7 +660,7 @@ export const createRuntimeExecutors = (
 
     try {
       type ContentPart = { text: string; type: 'text' } | { image: string; type: 'image' };
-      let shouldPersistAssistantReasoning = false;
+      let shouldReplayAssistantReasoning = false;
       let preserveThinkingForPayload: boolean | undefined;
 
       // Process messages through serverMessagesEngine to inject system role, knowledge, etc.
@@ -699,8 +699,7 @@ export const createRuntimeExecutors = (
           modelSupportsPreserveThinkingFromCard ||
           (!modelCard && providerSupportsPreserveThinkingFallback);
 
-        shouldPersistAssistantReasoning =
-          preserveThinkingRequested && modelSupportsPreserveThinking;
+        shouldReplayAssistantReasoning = preserveThinkingRequested && modelSupportsPreserveThinking;
         preserveThinkingForPayload =
           modelSupportsPreserveThinking && typeof preserveThinkingConfigured === 'boolean'
             ? preserveThinkingConfigured
@@ -1639,9 +1638,10 @@ export const createRuntimeExecutors = (
                 };
               }
 
-              const persistedReasoning = shouldPersistAssistantReasoning
-                ? finalReasoning
-                : undefined;
+              // preserveThinking only gates whether reasoning is replayed into the
+              // next LLM payload (state.messages); the DB copy powers UI display
+              // after refresh and must always be saved.
+              const replayedReasoning = shouldReplayAssistantReasoning ? finalReasoning : undefined;
 
               try {
                 // Build metadata object
@@ -1675,7 +1675,7 @@ export const createRuntimeExecutors = (
                   content: finalContent,
                   imageList: imageList.length > 0 ? imageList : undefined,
                   metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-                  reasoning: persistedReasoning,
+                  reasoning: finalReasoning,
                   search: grounding,
                   tools: persistedTools,
                 });
@@ -1708,7 +1708,7 @@ export const createRuntimeExecutors = (
               newState.messages.push({
                 content,
                 id: assistantMessageItem.id,
-                reasoning: persistedReasoning,
+                reasoning: replayedReasoning,
                 role: 'assistant',
                 tool_calls: stateToolCalls,
               });
