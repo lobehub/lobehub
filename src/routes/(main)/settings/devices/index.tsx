@@ -7,6 +7,8 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 
+import { lambdaQuery } from '@/libs/trpc/client';
+
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 
 import ConnectDeviceModal from './features/ConnectDeviceModal';
@@ -23,9 +25,9 @@ const styles = createStaticStyles(({ css }) => ({
 
 const Page = memo(() => {
   const { t } = useTranslation('setting');
+  const utils = lambdaQuery.useUtils();
   const [connectModalOpen, setConnectModalOpen] = useState(false);
   const [browserModalOpen, setBrowserModalOpen] = useState(false);
-  const [listKey, setListKey] = useState(0);
   const [searchParams, setSearchParams] = useSearchParams();
   const pairCode = searchParams.get('pair');
 
@@ -44,7 +46,7 @@ const Page = memo(() => {
       });
       if (res.ok) {
         setBrowserModalOpen(false);
-        setListKey((k) => k + 1);
+        utils.device.listDevices.invalidate();
         if (pairCode) {
           setSearchParams((prev) => {
             prev.delete('pair');
@@ -86,7 +88,7 @@ const Page = memo(() => {
         </Button>
       </Flexbox>
 
-      <DeviceList key={listKey} />
+      <DeviceList />
 
       <ConnectDeviceModal
         onClose={() => setConnectModalOpen(false)}
