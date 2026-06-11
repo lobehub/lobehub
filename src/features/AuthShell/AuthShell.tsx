@@ -21,6 +21,7 @@ const AuthShell = memo<PropsWithChildren>(({ children }) => {
       <NextThemeProvider>
         <AuthThemeLite globalCDN={serverConfig?.globalCDN}>
           <AuthServerConfigProvider
+            enableOIDC={serverConfig?.enableOIDC}
             isMobile={false}
             serverConfig={serverConfig?.config}
             featureFlags={

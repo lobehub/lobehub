@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { authEnv } from '@/envs/auth';
 import { defaultClients } from '@/libs/oidc-provider/config';
 import { OIDCService } from '@/server/services/oidc';
+import type { OidcInteractionDetailsResponse, OidcInteractionErrorResponse } from '@/types/oidc';
 
 const log = debug('lobe-oidc:interaction');
 
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ uid: 
     );
 
     if (details.prompt.name !== 'consent' && details.prompt.name !== 'login') {
-      return NextResponse.json(
+      return NextResponse.json<OidcInteractionErrorResponse>(
         { error: 'unsupported_interaction', promptName: details.prompt.name },
         { status: 409 },
       );
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ uid: 
 
     const clientDetail = await oidcService.getClientMetadata(clientId);
 
-    return NextResponse.json({
+    return NextResponse.json<OidcInteractionDetailsResponse>({
       clientId,
       clientMetadata: {
         clientName: clientDetail?.client_name,
@@ -55,10 +56,16 @@ export async function GET(request: NextRequest, props: { params: Promise<{ uid: 
     const errorMessage = error instanceof Error ? error.message : undefined;
 
     if (errorMessage?.includes('interaction session not found')) {
-      return NextResponse.json({ error: 'session_invalid' }, { status: 400 });
+      return NextResponse.json<OidcInteractionErrorResponse>(
+        { error: 'session_invalid' },
+        { status: 400 },
+      );
     }
 
     log('Error handling OIDC interaction: %O', error);
-    return NextResponse.json({ error: 'server_error' }, { status: 500 });
+    return NextResponse.json<OidcInteractionErrorResponse>(
+      { error: 'server_error' },
+      { status: 500 },
+    );
   }
 }

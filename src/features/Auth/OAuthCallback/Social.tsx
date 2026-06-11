@@ -2,15 +2,15 @@
 
 import { FluentEmoji, Text } from '@lobehub/ui';
 import { Result } from 'antd';
-import { useSearchParams } from 'next/navigation';
 import React, { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 
 type CallbackStatus = 'error' | 'success';
 
 const SocialOAuthCallbackPage = memo(() => {
   const { t } = useTranslation('oauth');
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
   const [countdown, setCountdown] = useState(3);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [status, setStatus] = useState<CallbackStatus>('success');

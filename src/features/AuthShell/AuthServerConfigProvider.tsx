@@ -7,6 +7,7 @@ import type { IFeatureFlagsState } from '@/config/featureFlags';
 import type { GlobalServerConfig } from '@/types/serverConfig';
 
 interface AuthServerConfigState {
+  enableOIDC: boolean;
   featureFlags: Partial<IFeatureFlagsState>;
   isMobile?: boolean;
   serverConfig: GlobalServerConfig;
@@ -17,15 +18,17 @@ const AuthServerConfigContext = createContext<AuthServerConfigState | null>(null
 
 interface Props {
   children: ReactNode;
+  enableOIDC?: boolean;
   featureFlags?: Partial<IFeatureFlagsState>;
   isMobile?: boolean;
   serverConfig?: GlobalServerConfig;
 }
 
 export const AuthServerConfigProvider = memo<Props>(
-  ({ children, featureFlags, serverConfig, isMobile }) => (
+  ({ children, enableOIDC, featureFlags, serverConfig, isMobile }) => (
     <AuthServerConfigContext
       value={{
+        enableOIDC: enableOIDC ?? false,
         featureFlags: featureFlags || {},
         isMobile,
         serverConfig: serverConfig || { aiProvider: {}, telemetry: {} },

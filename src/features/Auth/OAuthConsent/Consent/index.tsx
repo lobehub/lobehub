@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import AuthCard from '@/features/AuthCard';
 
-import OAuthApplicationLogo from '../components/OAuthApplicationLogo';
+import OAuthApplicationLogo from '../OAuthApplicationLogo';
 import BuiltinConsent from './BuiltinConsent';
 
 interface ClientProps {

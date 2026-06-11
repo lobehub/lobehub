@@ -101,6 +101,52 @@ export const authRoutes: RouteObject[] = [
         ),
         path: 'market-auth-callback',
       },
+      {
+        element: lazyElement(
+          () => import('@/routes/auth/oauth/consent/[uid]'),
+          'Auth > OAuthConsent',
+        ),
+        path: 'oauth/consent/:uid',
+      },
+      {
+        element: lazyElement(() => import('@/routes/auth/oauth/device'), 'Auth > OAuthDevice'),
+        path: 'oauth/device',
+      },
+      {
+        element: lazyElement(
+          () => import('@/routes/auth/oauth/device/confirm'),
+          'Auth > OAuthDeviceConfirm',
+        ),
+        path: 'oauth/device/confirm',
+      },
+      {
+        element: lazyElement(
+          () => import('@/routes/auth/oauth/device/success'),
+          'Auth > OAuthDeviceSuccess',
+        ),
+        path: 'oauth/device/success',
+      },
+      {
+        element: lazyElement(
+          () => import('@/routes/auth/oauth/callback/success'),
+          'Auth > OAuthCallbackSuccess',
+        ),
+        path: 'oauth/callback/success',
+      },
+      {
+        element: lazyElement(
+          () => import('@/routes/auth/oauth/callback/social'),
+          'Auth > OAuthCallbackSocial',
+        ),
+        path: 'oauth/callback/social',
+      },
+      {
+        element: lazyElement(
+          () => import('@/routes/auth/oauth/callback/error'),
+          'Auth > OAuthCallbackError',
+        ),
+        path: 'oauth/callback/error',
+      },
     ],
     element: (
       <AuthShell>

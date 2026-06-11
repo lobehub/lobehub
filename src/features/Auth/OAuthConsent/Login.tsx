@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import AuthCard from '@/features/AuthCard';
 import { useSession } from '@/libs/better-auth/auth-client';
 
-import OAuthApplicationLogo from './components/OAuthApplicationLogo';
+import OAuthApplicationLogo from './OAuthApplicationLogo';
 
 interface LoginConfirmProps {
   clientMetadata: {
