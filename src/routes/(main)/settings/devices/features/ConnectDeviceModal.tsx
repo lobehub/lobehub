@@ -1,318 +1,210 @@
 'use client';
 
 import { DOWNLOAD_URL } from '@lobechat/const';
-import { Button, CopyButton, Flexbox, Input, Modal, Tabs, Text } from '@lobehub/ui';
+import { Button, CopyButton, Flexbox, Icon, Modal, Segmented, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { LaptopIcon, LinkIcon, MonitorDownIcon, RefreshCwIcon, TerminalIcon } from 'lucide-react';
+import { DownloadIcon, MonitorDownIcon, ShieldCheckIcon, TerminalIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const styles = createStaticStyles(({ css }) => ({
   codeBlock: css`
-    position: relative;
+    display: flex;
+    gap: 12px;
+    align-items: center;
 
-    overflow: hidden;
-
-    padding: 12px 16px;
+    padding-block: 10px;
+    padding-inline: 14px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius}px;
+
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  command: css`
+    overflow: hidden;
+    flex: 1;
 
     font-family: ${cssVar.fontFamilyCode};
     font-size: 13px;
-    line-height: 1.7;
     color: ${cssVar.colorText};
+    text-overflow: ellipsis;
     white-space: nowrap;
-
-    background: ${cssVar.colorFillQuaternary};
   `,
-  codeBlockInline: css`
-    cursor: pointer;
-    padding: 3px 8px;
-    border-radius: 4px;
+  footer: css`
+    margin-block-start: 4px;
+    padding-block-start: 16px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 12.5px;
-
-    background: ${cssVar.colorFillQuaternary};
-    white-space: nowrap;
-
-    transition: background 0.15s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
   `,
-  copyBtn: css`
-    position: absolute;
-    inset-block-start: 8px;
-    inset-inline-end: 8px;
-  `,
-  dot: css`
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-  `,
-  pairingBox: css`
+  index: css`
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: center;
 
-    padding: 20px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius}px;
-
-    font-family: ${cssVar.fontFamilyCode};
-    font-size: 28px;
-    letter-spacing: 8px;
-    color: ${cssVar.colorText};
-    text-align: center;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  step: css`
-    padding-block: 4px;
-    padding-inline: 8px;
-    border-radius: ${cssVar.borderRadiusSM}px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
 
     font-size: 12px;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
+    font-weight: 600;
+    color: ${cssVar.colorPrimary};
 
-    background: ${cssVar.colorFillQuaternary};
+    background: ${cssVar.colorPrimaryBg};
+  `,
+  line: css`
+    flex: 1;
+    width: 1px;
+    margin-block-start: 4px;
+    background: ${cssVar.colorBorderSecondary};
+  `,
+  stepDesc: css`
+    font-size: 13px;
+    line-height: 1.6;
+    color: ${cssVar.colorTextTertiary};
   `,
   subtitle: css`
     font-size: 13px;
     color: ${cssVar.colorTextTertiary};
   `,
-  tabContent: css`
-    padding-block-start: 20px;
-  `,
 }));
 
 interface ConnectDeviceModalProps {
-  initialCode?: string;
-  initialTab?: string;
+  initialTab?: 'cli' | 'desktop';
   onClose: () => void;
-  onPaired?: (code: string) => void;
   open: boolean;
 }
 
-const terminalCommands: {
-  code: string;
-  description: string;
-  key: string;
+interface StepProps {
+  children?: React.ReactNode;
+  desc: string;
+  index: number;
+  last?: boolean;
   title: string;
-}[] = [
-  {
-    code: 'npm install -g @lobehub/cli',
-    description: 'installDesc',
-    key: 'install',
-    title: 'installTitle',
-  },
-  {
-    code: 'lh login',
-    description: 'loginDesc',
-    key: 'login',
-    title: 'loginTitle',
-  },
-  {
-    code: 'lh connect --daemon',
-    description: 'connectDesc',
-    key: 'connect',
-    title: 'connectTitle',
-  },
-];
+}
 
-const generatePairingCode = () =>
-  Math.random().toString(36).slice(2, 8).toUpperCase();
+const Step = memo<StepProps>(({ index, title, desc, children, last }) => (
+  <Flexbox horizontal gap={14}>
+    <Flexbox align={'center'}>
+      <span className={styles.index}>{index}</span>
+      {!last && <span className={styles.line} />}
+    </Flexbox>
+    <Flexbox flex={1} gap={4} style={{ paddingBlockEnd: last ? 0 : 24 }}>
+      <Text style={{ fontSize: 14, fontWeight: 500 }}>{title}</Text>
+      <Text className={styles.stepDesc}>{desc}</Text>
+      {children && <div style={{ marginBlockStart: 12 }}>{children}</div>}
+    </Flexbox>
+  </Flexbox>
+));
 
-const ConnectDeviceModal = memo<ConnectDeviceModalProps>(({
-  onClose,
-  open,
-  initialCode,
-  initialTab,
-  onPaired,
-}) => {
+const CommandLine = memo<{ command: string }>(({ command }) => (
+  <div className={styles.codeBlock}>
+    <code className={styles.command}>{command}</code>
+    <CopyButton content={command} size={'small'} />
+  </div>
+));
+
+const cliCommands = {
+  connect: 'lh connect --daemon',
+  install: 'npm install -g @lobehub/cli',
+  login: 'lh login',
+};
+
+const ConnectDeviceModal = memo<ConnectDeviceModalProps>(({ onClose, open, initialTab }) => {
   const { t } = useTranslation('setting');
-  const [pairingCode, setPairingCode] = useState('');
-  const [inputCode, setInputCode] = useState('');
+  const [active, setActive] = useState<'cli' | 'desktop'>(initialTab ?? 'desktop');
 
   useEffect(() => {
-    if (open) {
-      setInputCode(initialCode ?? '');
-      setPairingCode('');
-    }
-  }, [open, initialCode]);
-
-  const handleConfirmPair = () => {
-    if (!inputCode.trim()) return;
-    onPaired?.(inputCode.trim());
-  };
-
-  const tabItems = [
-    {
-      children: (
-        <Flexbox className={styles.tabContent} gap={20}>
-          <Flexbox gap={12}>
-            <Text style={{ fontSize: 14, fontWeight: 500 }}>
-              {t('devices.connectWizard.desktop.step1')}
-            </Text>
-            <Text className={styles.subtitle}>{t('devices.connectWizard.desktop.step1Desc')}</Text>
-            <a
-              href={DOWNLOAD_URL.default}
-              rel="noreferrer"
-              style={{ display: 'inline-block', width: 'fit-content' }}
-              target="_blank"
-            >
-              <Flexbox
-                horizontal
-                align={'center'}
-                className={styles.codeBlockInline}
-                gap={6}
-              >
-                <MonitorDownIcon size={14} />
-                <span>{t('devices.connectWizard.desktop.downloadLink')}</span>
-              </Flexbox>
-            </a>
-          </Flexbox>
-
-          <Flexbox gap={12}>
-            <Text style={{ fontSize: 14, fontWeight: 500 }}>
-              {t('devices.connectWizard.desktop.step2')}
-            </Text>
-            <Text className={styles.subtitle}>{t('devices.connectWizard.desktop.step2Desc')}</Text>
-          </Flexbox>
-
-          <Flexbox gap={12}>
-            <Text style={{ fontSize: 14, fontWeight: 500 }}>
-              {t('devices.connectWizard.desktop.step3')}
-            </Text>
-            <Text className={styles.subtitle}>{t('devices.connectWizard.desktop.step3Desc')}</Text>
-            <Flexbox horizontal align={'center'} gap={8}>
-              <span className={styles.dot} style={{ background: cssVar.colorSuccess }} />
-              <Text style={{ fontSize: 13 }} type={'secondary'}>
-                {t('devices.connectWizard.desktop.step3Hint')}
-              </Text>
-            </Flexbox>
-          </Flexbox>
-        </Flexbox>
-      ),
-      icon: <MonitorDownIcon size={16} />,
-      key: 'desktop',
-      label: t('devices.connectWizard.method.desktop'),
-    },
-    {
-      children: (
-        <Flexbox className={styles.tabContent} gap={20}>
-          <Text className={styles.subtitle}>{t('devices.connectWizard.cli.intro')}</Text>
-
-          {terminalCommands.map((cmd, idx) => (
-            <Flexbox gap={10} key={cmd.key}>
-              <Flexbox horizontal align={'center'} gap={8}>
-                <span className={styles.step}>{idx + 1}</span>
-                <Text style={{ fontSize: 14, fontWeight: 500 }}>
-                  {t(`devices.connectWizard.cli.${cmd.title}`)}
-                </Text>
-              </Flexbox>
-              <Text className={styles.subtitle} style={{ paddingInlineStart: 28 }}>
-                {t(`devices.connectWizard.cli.${cmd.description}`)}
-              </Text>
-              <div className={styles.codeBlock} style={{ marginInlineStart: 28 }}>
-                <code style={{ paddingInlineEnd: 36, display: 'block' }}>{cmd.code}</code>
-                <span className={styles.copyBtn}>
-                  <CopyButton content={cmd.code} size={'small'} />
-                </span>
-              </div>
-            </Flexbox>
-          ))}
-
-          {/* Privacy notice */}
-          <Text className={styles.subtitle} style={{ fontSize: 12 }}>
-            {t('devices.connectWizard.cli.privacyNote')}
-          </Text>
-        </Flexbox>
-      ),
-      icon: <TerminalIcon size={16} />,
-      key: 'cli',
-      label: t('devices.connectWizard.method.cli'),
-    },
-    {
-      children: (
-        <Flexbox className={styles.tabContent} gap={20}>
-          {/* Step 1: Show pairing code */}
-          <Flexbox gap={10}>
-            <Flexbox horizontal align={'center'} gap={8}>
-              <span className={styles.step}>1</span>
-              <Text style={{ fontSize: 14, fontWeight: 500 }}>
-                {t('devices.connectWizard.browser.step1')}
-              </Text>
-            </Flexbox>
-            <Text className={styles.subtitle} style={{ paddingInlineStart: 28 }}>
-              {t('devices.connectWizard.browser.step1Desc')}
-            </Text>
-            <div className={styles.pairingBox} style={{ marginInlineStart: 28 }}>
-              {pairingCode || '●●●●●●'}
-            </div>
-            <div style={{ paddingInlineStart: 28 }}>
-              <Button
-                icon={<RefreshCwIcon size={14} />}
-                size={'small'}
-                onClick={() => setPairingCode(generatePairingCode())}
-              >
-                {t('devices.connectWizard.browser.refresh')}
-              </Button>
-            </div>
-          </Flexbox>
-
-          {/* Step 2: Enter pairing code from another device */}
-          <Flexbox gap={10}>
-            <Flexbox horizontal align={'center'} gap={8}>
-              <span className={styles.step}>2</span>
-              <Text style={{ fontSize: 14, fontWeight: 500 }}>
-                {t('devices.connectWizard.browser.step2')}
-              </Text>
-            </Flexbox>
-            <Text className={styles.subtitle} style={{ paddingInlineStart: 28 }}>
-              {t('devices.connectWizard.browser.step2Desc')}
-            </Text>
-            <Flexbox horizontal gap={8} style={{ paddingInlineStart: 28 }}>
-              <Input
-                prefix={<LaptopIcon size={14} />}
-                placeholder={t('devices.connectWizard.browser.inputPlaceholder')}
-                value={inputCode}
-                onChange={(e) => setInputCode(e.target.value)}
-                onPressEnter={handleConfirmPair}
-                style={{ flex: 1 }}
-              />
-              <Button
-                icon={<LinkIcon size={14} />}
-                type={'primary'}
-                onClick={handleConfirmPair}
-              >
-                {t('devices.connectWizard.browser.confirm')}
-              </Button>
-            </Flexbox>
-          </Flexbox>
-        </Flexbox>
-      ),
-      icon: <LaptopIcon size={16} />,
-      key: 'browser',
-      label: t('devices.connectWizard.method.browser'),
-    },
-  ];
+    if (open) setActive(initialTab ?? 'desktop');
+  }, [open, initialTab]);
 
   return (
     <Modal
       footer={null}
-      onClose={onClose}
       open={open}
       title={t('devices.connectWizard.title')}
-      width={540}
+      width={560}
+      onCancel={onClose}
     >
-      <Tabs defaultActiveKey={initialTab ?? 'desktop'} items={tabItems} />
-      {/* Subtitle below tabs to explain what the overall modal is about */}
-      <Flexbox gap={8} style={{ marginBlockStart: 4 }}>
+      <Flexbox gap={20}>
         <Text className={styles.subtitle}>{t('devices.connectWizard.subtitle')}</Text>
+
+        <Segmented
+          block
+          value={active}
+          options={[
+            {
+              icon: <Icon icon={MonitorDownIcon} />,
+              label: t('devices.connectWizard.method.desktop'),
+              value: 'desktop',
+            },
+            {
+              icon: <Icon icon={TerminalIcon} />,
+              label: t('devices.connectWizard.method.cli'),
+              value: 'cli',
+            },
+          ]}
+          onChange={(value) => setActive(value as 'cli' | 'desktop')}
+        />
+
+        {active === 'desktop' ? (
+          <Flexbox>
+            <Step
+              desc={t('devices.connectWizard.desktop.step1Desc')}
+              index={1}
+              title={t('devices.connectWizard.desktop.step1')}
+            >
+              <a href={DOWNLOAD_URL.default} rel="noreferrer" target="_blank">
+                <Button icon={<Icon icon={DownloadIcon} />} size={'small'} type={'primary'}>
+                  {t('devices.connectWizard.desktop.downloadLink')}
+                </Button>
+              </a>
+            </Step>
+            <Step
+              desc={t('devices.connectWizard.desktop.step2Desc')}
+              index={2}
+              title={t('devices.connectWizard.desktop.step2')}
+            />
+            <Step
+              last
+              desc={t('devices.connectWizard.desktop.step3Desc')}
+              index={3}
+              title={t('devices.connectWizard.desktop.step3')}
+            />
+          </Flexbox>
+        ) : (
+          <Flexbox>
+            <Step
+              desc={t('devices.connectWizard.cli.installDesc')}
+              index={1}
+              title={t('devices.connectWizard.cli.installTitle')}
+            >
+              <CommandLine command={cliCommands.install} />
+            </Step>
+            <Step
+              desc={t('devices.connectWizard.cli.loginDesc')}
+              index={2}
+              title={t('devices.connectWizard.cli.loginTitle')}
+            >
+              <CommandLine command={cliCommands.login} />
+            </Step>
+            <Step
+              last
+              desc={t('devices.connectWizard.cli.connectDesc')}
+              index={3}
+              title={t('devices.connectWizard.cli.connectTitle')}
+            >
+              <CommandLine command={cliCommands.connect} />
+            </Step>
+          </Flexbox>
+        )}
+
+        <Flexbox horizontal align={'center'} className={styles.footer} gap={8}>
+          <Icon icon={ShieldCheckIcon} size={14} style={{ color: cssVar.colorPrimary }} />
+          {t('devices.connectWizard.footer')}
+        </Flexbox>
       </Flexbox>
     </Modal>
   );

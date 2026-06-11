@@ -353,56 +353,48 @@ export default {
   'devices.edit.friendlyNamePlaceholder': 'A name to recognize this device',
   'devices.edit.save': 'Save',
   'devices.edit.title': 'Edit device',
+  'devices.capabilities.commands.desc': 'Safely execute terminal commands in your environment.',
+  'devices.capabilities.commands.title': 'Run commands',
+  'devices.capabilities.files.desc':
+    'Let agents directly access and organize the files on your computer.',
+  'devices.capabilities.files.title': 'Read & write local files',
+  'devices.capabilities.title': 'What you can do once connected',
+  'devices.capabilities.tools.desc': 'Connect local tools to extend what agents can do.',
+  'devices.capabilities.tools.title': 'Call system tools',
   'devices.connectWizard.button': 'Connect Device',
   'devices.connectWizard.cli.connectDesc':
     'Start the background daemon to keep the device online and listening for remote operations.',
-  'devices.connectWizard.cli.connectTitle': 'Start daemon',
+  'devices.connectWizard.cli.connectTitle': 'Start the daemon',
   'devices.connectWizard.cli.installDesc':
-    'Install the LobeHub CLI globally with your preferred package manager to enable device connectivity.',
-  'devices.connectWizard.cli.installTitle': 'Install CLI',
-  'devices.connectWizard.cli.intro':
-    'For servers, remote dev machines, or any headless computer. The CLI registers as a device and maintains a persistent connection.',
+    'Install the LobeHub CLI globally with your preferred package manager to enable device connectivity and management.',
+  'devices.connectWizard.cli.installTitle': 'Install the CLI',
   'devices.connectWizard.cli.loginDesc':
     'Complete OAuth authorization in your browser to link the CLI with your account.',
   'devices.connectWizard.cli.loginTitle': 'Sign in',
-  'devices.connectWizard.cli.privacyNote':
-    '⋅ Commands run in your terminal. Only device metadata is registered — your data is never accessed.',
   'devices.connectWizard.desktop.downloadLink': 'Download LobeHub Desktop',
-  'devices.connectWizard.desktop.step1': '1. Download the desktop app',
+  'devices.connectWizard.desktop.step1': 'Download the desktop app',
   'devices.connectWizard.desktop.step1Desc':
     'Visit the LobeHub downloads page and get the app for your operating system.',
-  'devices.connectWizard.desktop.step2': '2. Sign in and open the device gateway',
+  'devices.connectWizard.desktop.step2': 'Sign in and open the device gateway',
   'devices.connectWizard.desktop.step2Desc':
     "After signing in, click the device gateway icon in the top-right corner and confirm it's turned on.",
-  'devices.connectWizard.desktop.step3': '3. Your device will appear automatically',
-  'devices.connectWizard.desktop.step3Desc': 'The desktop app registers itself as a device on launch.',
-  'devices.connectWizard.desktop.step3Hint':
-    'The gateway switch is on by default — no extra step needed',
-  'devices.connectWizard.browser.confirm': 'Pair',
-  'devices.connectWizard.browser.inputPlaceholder': 'Enter pairing code',
-  'devices.connectWizard.browser.refresh': 'Refresh pairing code',
-  'devices.connectWizard.browser.step1': '1. Get your pairing code',
-  'devices.connectWizard.browser.step1Desc':
-    'Click "Refresh pairing code" to generate a code, then enter it on the device you want to connect from.',
-  'devices.connectWizard.browser.step2': '2. Enter the pairing code from another device',
-  'devices.connectWizard.browser.step2Desc':
-    'If another device provided a pairing code, enter it below to confirm the connection.',
-  'devices.connectWizard.method.browser': 'Via Browser',
+  'devices.connectWizard.desktop.step3': 'Your device appears automatically',
+  'devices.connectWizard.desktop.step3Desc':
+    "The desktop app registers itself as a device on launch — you'll see it in the list once connected.",
+  'devices.connectWizard.footer':
+    'Only device metadata is registered — your data is never accessed.',
   'devices.connectWizard.method.cli': 'Via CLI',
   'devices.connectWizard.method.desktop': 'Via Desktop',
-  'devices.connectWizard.sync.button': 'Pair',
-  'devices.connectWizard.sync.title': 'Register this browser as a device',
-  'devices.connectWizard.subtitle':
-    'Connect a computer to let LobeHub agents use its local filesystem, run commands, and call system tools.',
+  'devices.connectWizard.subtitle': 'Choose how to connect your computer to LobeHub.',
   'devices.connectWizard.title': 'Connect Device',
-  'devices.empty': 'No devices yet. Connect a computer to use its local filesystem and system tools.',
   'devices.empty.desc':
     'Once connected, LobeHub agents can read/write files, run commands, and call system tools directly on your computer.',
   'devices.empty.methodCli.desc':
-    'Install the CLI in your terminal — great for servers or headless machines',
+    'Install the CLI in your terminal — great for servers or headless machines.',
   'devices.empty.methodCli.title': 'Connect via CLI',
+  'devices.empty.methodDesktop.badge': 'Recommended',
   'devices.empty.methodDesktop.desc':
-    'Download the desktop app, sign in, and your device connects automatically',
+    'Download the desktop app, sign in, and your device connects automatically.',
   'devices.empty.methodDesktop.title': 'Connect via Desktop',
   'devices.empty.title': 'Connect your first device',
   'devices.fallbackBadge': 'Unstable identity',
