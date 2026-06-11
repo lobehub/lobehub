@@ -35,29 +35,24 @@ const FileChangeInspector = memo<BuiltinInspectorProps<CodexFileChangeArgs, Code
     const { t } = useTranslation('plugin');
     const stats = getFileChangeStats(args || partialArgs, pluginState);
     const hasLineStats = stats.linesAdded > 0 || stats.linesDeleted > 0;
-    const summary =
-      stats.total > 0
+    const isEditing = isArgumentsStreaming || isLoading;
+    const summary = isEditing
+      ? t('builtins.codex.fileChange.editing', { defaultValue: 'Editing files' })
+      : stats.total > 0
         ? t('builtins.codex.fileChange.editedFiles', {
             count: stats.total,
             defaultValue: stats.total === 1 ? 'Edited {{count}} file' : 'Edited {{count}} files',
           })
-        : isArgumentsStreaming || isLoading
-          ? t('builtins.codex.fileChange.editing', { defaultValue: 'Editing files' })
-          : t('builtins.codex.fileChange.noChanges', { defaultValue: 'No file changes' });
+        : t('builtins.codex.fileChange.noChanges', { defaultValue: 'No file changes' });
 
-    if (isArgumentsStreaming && !stats.firstPath) {
+    if (isEditing && !stats.firstPath) {
       return (
         <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>{summary}</div>
       );
     }
 
     return (
-      <div
-        className={cx(
-          inspectorTextStyles.root,
-          (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-        )}
-      >
+      <div className={cx(inspectorTextStyles.root, isEditing && shinyTextStyles.shinyText)}>
         {stats.firstPath ? (
           <>
             <span className={styles.summary}>{summary}:</span>

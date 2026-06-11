@@ -21,7 +21,7 @@
   "builtins.codex.commandExecution.readFile": "读取文件",
   "builtins.codex.fileChange.editedFiles_one": "已编辑 {{count}} 个文件",
   "builtins.codex.fileChange.editedFiles_other": "已编辑 {{count}} 个文件",
-  "builtins.codex.fileChange.editing": "正在编辑文件",
+  "builtins.codex.fileChange.editing": "编辑文件中",
   "builtins.codex.fileChange.noChanges": "没有文件改动",
   "builtins.codex.fileChange.unknownFile": "未知文件",
   "builtins.codex.mcpTool.error": "错误",

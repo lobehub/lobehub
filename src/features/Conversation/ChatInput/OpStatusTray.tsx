@@ -1,9 +1,10 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { CircleDollarSignIcon, HammerIcon, HashIcon, Repeat2Icon, TimerIcon } from 'lucide-react';
-import { Fragment, memo, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { CircleDollarSignIcon, CoinsIcon, FootprintsIcon, HammerIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Fragment, memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
@@ -12,6 +13,7 @@ import {
   AI_RUNTIME_OPERATION_TYPES,
   type OperationType,
 } from '@/store/chat/slices/operation/types';
+import { shinyTextStyles } from '@/styles';
 
 import { contextSelectors, dataSelectors, useConversationStore } from '../store';
 
@@ -49,46 +51,120 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 10px;
     align-items: center;
   `,
-  pulse: css`
-    position: relative;
+  metricIcon: css`
+    color: ${cssVar.colorTextTertiary};
+  `,
+  statusText: css`
+    font-weight: 500;
+    white-space: nowrap;
+  `,
+  timerValue: css`
+    color: ${cssVar.colorTextTertiary};
+  `,
+  activityGlyph: css`
+    overflow: visible;
+    flex: none;
 
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
+    width: 16px;
+    height: 16px;
 
-    background: ${cssVar.colorSuccess};
+    color: ${cssVar.colorPrimary};
 
-    &::before {
-      content: '';
+    filter: drop-shadow(0 0 6px color-mix(in srgb, ${cssVar.colorPrimary} 48%, transparent));
 
-      position: absolute;
-      inset: 0;
-
-      border-radius: 50%;
-
-      background: ${cssVar.colorSuccess};
-
-      animation: op-status-tray-ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+    @keyframes op-status-tray-glyph-spin {
+      to {
+        transform: rotate(360deg);
+      }
     }
 
-    @keyframes op-status-tray-ping {
-      0% {
-        transform: scale(1);
-        opacity: 0.7;
+    @keyframes op-status-tray-glyph-spin-reverse {
+      to {
+        transform: rotate(-360deg);
       }
+    }
 
-      80%,
+    @keyframes op-status-tray-glyph-core {
+      0%,
       100% {
-        transform: scale(2.8);
-        opacity: 0;
+        transform: scale(0.86);
+        opacity: 0.9;
+      }
+
+      50% {
+        transform: scale(1);
+        opacity: 1;
       }
     }
+
+    @keyframes op-status-tray-glyph-halo {
+      0%,
+      100% {
+        transform: scale(0.92);
+        opacity: 0.25;
+      }
+
+      50% {
+        transform: scale(1.08);
+        opacity: 0.62;
+      }
+    }
+  `,
+  glyphCore: css`
+    transform-origin: center;
+    transform-box: fill-box;
+    fill: color-mix(in srgb, ${cssVar.colorPrimary} 72%, #86f7ff);
+    animation: op-status-tray-glyph-core 1.5s ease-in-out infinite;
+  `,
+  glyphHalo: css`
+    transform-origin: center;
+    transform-box: fill-box;
+
+    fill: color-mix(in srgb, ${cssVar.colorPrimary} 16%, transparent);
+    stroke: color-mix(in srgb, ${cssVar.colorPrimary} 45%, transparent);
+    stroke-width: 1.2;
+
+    animation: op-status-tray-glyph-halo 1.8s ease-in-out infinite;
+  `,
+  glyphOrbit: css`
+    transform-origin: center;
+    transform-box: fill-box;
+
+    fill: none;
+    stroke: color-mix(in srgb, ${cssVar.colorPrimary} 76%, #9b5cff);
+    stroke-dasharray: 9 18;
+    stroke-linecap: round;
+    stroke-width: 1.5;
+
+    animation: op-status-tray-glyph-spin 2s linear infinite;
+  `,
+  glyphOrbitInner: css`
+    transform-origin: center;
+    transform-box: fill-box;
+
+    fill: none;
+    stroke: color-mix(in srgb, ${cssVar.colorPrimary} 54%, #80f7ff);
+    stroke-dasharray: 4 13;
+    stroke-linecap: round;
+    stroke-width: 1.4;
+
+    animation: op-status-tray-glyph-spin-reverse 1.35s linear infinite;
   `,
   value: css`
     font-family: ${cssVar.fontFamilyCode};
-    color: ${cssVar.colorText};
   `,
 }));
+
+const ActivityGlyph = memo(() => (
+  <svg aria-hidden className={styles.activityGlyph} viewBox="0 0 16 16">
+    <circle className={styles.glyphHalo} cx="8" cy="8" r="5.8" />
+    <circle className={styles.glyphOrbit} cx="8" cy="8" r="6.1" />
+    <circle className={styles.glyphOrbitInner} cx="8" cy="8" r="3.9" />
+    <circle className={styles.glyphCore} cx="8" cy="8" r="2.7" />
+  </svg>
+));
+
+ActivityGlyph.displayName = 'ActivityGlyph';
 
 const formatDuration = (ms: number) => {
   if (ms < 0) ms = 0;
@@ -110,6 +186,11 @@ const formatTokens = (n: number) => {
 const formatCost = (cost: number) => {
   if (cost < 0.01) return `$${cost.toFixed(4)}`;
   return `$${cost.toFixed(2)}`;
+};
+
+const normalizeStepCount = (stepCount: unknown) => {
+  if (typeof stepCount !== 'number' || !Number.isFinite(stepCount)) return 0;
+  return Math.max(0, Math.floor(stepCount));
 };
 
 type ActivityKey = 'compressing' | 'generating' | 'reasoning' | 'searching' | 'toolCalling';
@@ -191,6 +272,25 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
     return current ?? 'generating';
   });
 
+  const steps = useChatStore((s) => {
+    const ops = operationSelectors.getOperationsByContext(context)(s);
+    let stepCount = 0;
+
+    for (const op of ops) {
+      if (
+        op.status !== 'running' ||
+        op.metadata.isAborting ||
+        !AI_RUNTIME_OPERATION_TYPES.includes(op.type)
+      ) {
+        continue;
+      }
+
+      stepCount = Math.max(stepCount, normalizeStepCount(op.metadata.stepCount));
+    }
+
+    return stepCount;
+  });
+
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!startTime) return;
@@ -199,17 +299,11 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
     return () => clearInterval(id);
   }, [startTime]);
 
-  // Aggregate turns / tool calls / tokens / cost across the current
-  // conversation. `usage` lives on the top-level message field for the
-  // standard agent-runtime path; the heterogeneous executor only writes
-  // `metadata.usage`. Read both. Time-based filtering proved unreliable (the
-  // assistant message can be created before the AI_RUNTIME op's startTime),
-  // so we total the whole session — within a fresh topic this matches
-  // "current op" anyway.
-  const { toolCalls, totalCost, totalTokens, turns } = useMemo(() => {
+  // Aggregate tool calls / tokens / cost across the current conversation.
+  // New code reads usage only from the top-level message field.
+  const { toolCalls, totalCost, totalTokens } = useMemo(() => {
     let tokens = 0;
     let cost = 0;
-    let turnCount = 0;
     let toolCount = 0;
     for (const m of dbMessages) {
       if (m.role === 'tool') {
@@ -217,50 +311,53 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
         continue;
       }
       if (m.role !== 'assistant') continue;
-      turnCount += 1;
-      const usage = m.usage ?? m.metadata?.usage;
+      const usage = m.usage;
       if (!usage) continue;
       tokens += usage.totalTokens ?? 0;
       cost += usage.cost ?? 0;
     }
-    return { toolCalls: toolCount, totalCost: cost, totalTokens: tokens, turns: turnCount };
+    return { toolCalls: toolCount, totalCost: cost, totalTokens: tokens };
   }, [dbMessages]);
 
   if (!startTime) return null;
 
   const elapsed = now - startTime;
+  const tokenLabel = t('opStatusTray.tokens', { defaultValue: 'tokens' });
 
-  // Zero-valued metrics render nothing; turns only matter for long-running
-  // multi-turn tasks, so a single turn stays hidden too.
+  // Zero-valued metrics render nothing; steps only matter for long-running
+  // multi-step tasks, so a single step stays hidden too.
   const metrics: ReactNode[] = [];
-  if (turns > 1)
+  if (steps > 1)
     metrics.push(
-      <span className={styles.metric} key="turns">
-        <Icon icon={Repeat2Icon} size={13} />
-        <span className={styles.value}>{turns}</span>
-        <span>{t('opStatusTray.turns')}</span>
-      </span>,
+      <Tooltip key="steps" title={`${steps} ${t('opStatusTray.steps')}`}>
+        <span className={styles.metric}>
+          <Icon className={styles.metricIcon} icon={FootprintsIcon} size={13} />
+          <span className={styles.value}>{steps}</span>
+        </span>
+      </Tooltip>,
     );
   if (toolCalls > 0)
     metrics.push(
-      <span className={styles.metric} key="toolCalls">
-        <Icon icon={HammerIcon} size={13} />
-        <span className={styles.value}>{toolCalls}</span>
-        <span>{t('opStatusTray.toolCalls')}</span>
-      </span>,
+      <Tooltip key="toolCalls" title={`${toolCalls} ${t('opStatusTray.toolCalls')}`}>
+        <span className={styles.metric}>
+          <Icon className={styles.metricIcon} icon={HammerIcon} size={13} />
+          <span className={styles.value}>{toolCalls}</span>
+        </span>
+      </Tooltip>,
     );
   if (totalTokens > 0)
     metrics.push(
-      <span className={styles.metric} key="tokens">
-        <Icon icon={HashIcon} size={13} />
-        <span className={styles.value}>{formatTokens(totalTokens)}</span>
-        <span>tokens</span>
-      </span>,
+      <Tooltip key="tokens" title={`${formatTokens(totalTokens)} ${tokenLabel}`}>
+        <span className={styles.metric}>
+          <Icon className={styles.metricIcon} icon={CoinsIcon} size={13} />
+          <span className={styles.value}>{formatTokens(totalTokens)}</span>
+        </span>
+      </Tooltip>,
     );
   if (totalCost > 0)
     metrics.push(
       <span className={styles.metric} key="cost">
-        <Icon icon={CircleDollarSignIcon} size={13} />
+        <Icon className={styles.metricIcon} icon={CircleDollarSignIcon} size={13} />
         <span className={styles.value}>{formatCost(totalCost)}</span>
       </span>,
     );
@@ -273,10 +370,11 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
       justify="space-between"
     >
       <span className={styles.metric}>
-        <span className={styles.pulse} />
-        <span>{t(`opStatusTray.status.${activity}`)}</span>
-        <Icon icon={TimerIcon} size={13} />
-        <span className={styles.value}>{formatDuration(elapsed)}</span>
+        <ActivityGlyph />
+        <span className={cx(styles.statusText, shinyTextStyles.shinyText)}>
+          {t(`opStatusTray.status.${activity}`)}...
+        </span>
+        <span className={cx(styles.value, styles.timerValue)}>{formatDuration(elapsed)}</span>
       </span>
 
       {metrics.length > 0 && (
