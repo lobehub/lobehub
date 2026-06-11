@@ -117,7 +117,7 @@ interface TextPreviewPaneProps {
   contentType?: string;
   ext: string;
   filePath: string;
-  onReload?: () => void;
+  onReload?: () => Promise<unknown> | void;
   onSaved?: (savedContent: string) => void;
   readOnly?: boolean;
   reloading?: boolean;
@@ -204,9 +204,9 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
     );
     const showHtmlPreview = isHtml && mode === 'render';
     const [htmlPreviewRevision, setHtmlPreviewRevision] = useState(0);
-    const handleReloadPreview = useCallback(() => {
+    const handleReloadPreview = useCallback(async () => {
+      await onReload?.();
       setHtmlPreviewRevision((prev) => prev + 1);
-      onReload?.();
     }, [onReload]);
 
     return (
@@ -322,9 +322,7 @@ const ActiveFileView = memo<ActiveFileViewProps>(
       [mutate],
     );
 
-    const handleReload = useCallback(() => {
-      void mutate();
-    }, [mutate]);
+    const handleReload = useCallback(() => mutate(), [mutate]);
 
     if (isLoading) return <Loading />;
 
