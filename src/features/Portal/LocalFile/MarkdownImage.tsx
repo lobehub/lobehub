@@ -30,6 +30,7 @@ const MarkdownImage = memo<MarkdownImageProps>(
         : null,
       () =>
         projectFileService.getLocalFilePreview({
+          accept: 'image',
           deviceId,
           path: resolvedPath!,
           workingDirectory,

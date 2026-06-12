@@ -275,9 +275,17 @@ export const deviceRouter = router({
    * receives render data, not a `localfile://` URL; saving remains unsupported.
    */
   getLocalFilePreview: deviceProcedure
-    .input(z.object({ deviceId: z.string(), path: z.string(), workingDirectory: z.string() }))
+    .input(
+      z.object({
+        accept: z.enum(['image']).optional(),
+        deviceId: z.string(),
+        path: z.string(),
+        workingDirectory: z.string(),
+      }),
+    )
     .query(async ({ ctx, input }) =>
       deviceGateway.getLocalFilePreview({
+        ...(input.accept ? { accept: input.accept } : {}),
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,

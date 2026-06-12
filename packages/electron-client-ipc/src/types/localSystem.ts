@@ -111,7 +111,10 @@ export interface AuditSafePathsResult {
   allSafe: boolean;
 }
 
+export type LocalFilePreviewAccept = 'image';
+
 export interface LocalFilePreviewUrlParams {
+  accept?: LocalFilePreviewAccept;
   path: string;
   workingDirectory: string;
 }

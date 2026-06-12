@@ -247,6 +247,28 @@ describe('LocalFileCtr', () => {
         success: false,
       });
     });
+
+    it('should forward image-only preview URL constraints', async () => {
+      mockLocalFileProtocolManager.createPreviewUrl.mockResolvedValue(
+        'localfile://file/workspace/image.png?token=abc',
+      );
+
+      const result = await localFileCtr.getLocalFilePreviewUrl({
+        accept: 'image',
+        path: '/workspace/image.png',
+        workingDirectory: '/workspace',
+      });
+
+      expect(mockLocalFileProtocolManager.createPreviewUrl).toHaveBeenCalledWith({
+        accept: 'image',
+        filePath: '/workspace/image.png',
+        workspaceRoot: '/workspace',
+      });
+      expect(result).toEqual({
+        success: true,
+        url: 'localfile://file/workspace/image.png?token=abc',
+      });
+    });
   });
 
   describe('getLocalFilePreview', () => {
@@ -287,6 +309,34 @@ describe('LocalFileCtr', () => {
       expect(result).toEqual({
         error: 'File is outside the approved workspace',
         success: false,
+      });
+    });
+
+    it('should forward image-only preview read constraints', async () => {
+      mockLocalFileProtocolManager.readPreviewFile.mockResolvedValue({
+        buffer: Buffer.from('image-bytes'),
+        contentType: 'image/png',
+        realPath: '/workspace/image.png',
+      });
+
+      const result = await localFileCtr.getLocalFilePreview({
+        accept: 'image',
+        path: '/workspace/image.png',
+        workingDirectory: '/workspace',
+      });
+
+      expect(mockLocalFileProtocolManager.readPreviewFile).toHaveBeenCalledWith({
+        accept: 'image',
+        filePath: '/workspace/image.png',
+        workspaceRoot: '/workspace',
+      });
+      expect(result).toEqual({
+        preview: {
+          base64: Buffer.from('image-bytes').toString('base64'),
+          contentType: 'image/png',
+          type: 'image',
+        },
+        success: true,
       });
     });
   });
