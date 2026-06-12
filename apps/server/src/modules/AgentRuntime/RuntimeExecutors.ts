@@ -931,8 +931,7 @@ export const createRuntimeExecutors = (
         const providerSupportsPreserveThinkingFallback =
           provider === 'qwen' ||
           provider === 'zhipu' ||
-          provider === 'moonshot' ||
-          provider === 'kimicodingplan';
+          provider === 'moonshot';
         const modelSupportsPreserveThinking =
           modelSupportsPreserveThinkingFromCard ||
           (!modelCard && providerSupportsPreserveThinkingFallback);
