@@ -13,6 +13,7 @@ import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { ChatStreamPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
+import { isKimiNativeThinkingModel, isKimiThinkingToggleModel } from '../../utils/kimiModelId';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 
 export interface MoonshotModelCard {
@@ -30,14 +31,6 @@ type MoonshotSDKType = 'anthropic' | 'openai';
 
 // Shared constants and helpers
 const MOONSHOT_SEARCH_TOOL = { function: { name: '$web_search' }, type: 'builtin_function' } as any;
-/**
- * Matches kimi-k2.N models (K2.5, K2.6, ...) that expose a thinking toggle via
- * `payload.thinking.type`. Assumes every future kimi-k2.N release keeps the same
- * toggle contract and param constraints; if Moonshot diverges, introduce an
- * explicit allowlist instead of widening this prefix.
- */
-const isKimiThinkingToggleModel = (model: string) => model.startsWith('kimi-k2.');
-const isKimiNativeThinkingModel = (model: string) => model.startsWith('kimi-k2-thinking');
 const isEmptyContent = (content: any) =>
   content === '' || content === null || content === undefined;
 const hasValidReasoning = (reasoning: any) => reasoning?.content && !reasoning?.signature;

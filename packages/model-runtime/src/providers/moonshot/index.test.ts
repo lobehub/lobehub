@@ -11,12 +11,24 @@ import {
   params,
 } from './index';
 
+const { loadModelsMock } = vi.hoisted(() => ({
+  loadModelsMock: vi.fn(),
+}));
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: loadModelsMock,
+}));
+
 const defaultOpenAIBaseURL = 'https://api.moonshot.cn/v1';
 const anthropicBaseURL = 'https://api.moonshot.cn/anthropic';
 
 // Mock the console.error and console.warn to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
 vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+beforeEach(() => {
+  loadModelsMock.mockResolvedValue([]);
+});
 
 describe('LobeMoonshotAI', () => {
   const createRuntime = ({
@@ -390,6 +402,18 @@ describe('LobeMoonshotOpenAI', () => {
         expect(payload.temperature).toBe(1);
       });
 
+      it('should always enable thinking for kimi-k2.7-code', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.7-code',
+          thinking: { budget_tokens: 0, type: 'disabled' },
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.thinking).toEqual({ type: 'enabled' });
+        expect(payload.temperature).toBe(1);
+      });
+
       it('should force reasoning_content on assistant messages', async () => {
         await instance.chat({
           messages: [
@@ -651,6 +675,21 @@ describe('LobeMoonshotAnthropicAI', () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
           model: 'kimi-k2-thinking',
+          thinking: { budget_tokens: 0, type: 'disabled' },
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.thinking).toEqual({
+          budget_tokens: 1024,
+          type: 'enabled',
+        });
+        expect(payload.temperature).toBe(1);
+      });
+
+      it('should always enable thinking for kimi-k2.7-code', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.7-code',
           thinking: { budget_tokens: 0, type: 'disabled' },
         });
 
