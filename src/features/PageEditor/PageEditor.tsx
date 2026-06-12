@@ -3,8 +3,8 @@
 import { DEFAULT_BLOCK_ANCHOR_PADDING, EditorProvider } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
 import { createStyles, cssVar } from 'antd-style';
-import type { CSSProperties, FC, ReactNode } from 'react';
-import { memo } from 'react';
+import type { CSSProperties, FC, ReactNode, UIEvent } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 
 import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import DiffAllToolbar from '@/features/EditorCanvas/DiffAllToolbar';
@@ -39,15 +39,37 @@ type PageEditorHeader = ReactNode | null;
 const WIDE_SCREEN_CONTAINER_PADDING = 16;
 const TABLE_BASE_BLEED = DEFAULT_BLOCK_ANCHOR_PADDING + WIDE_SCREEN_CONTAINER_PADDING;
 
+const getMaxScrollTop = (node: HTMLElement) => Math.max(node.scrollHeight - node.clientHeight, 0);
+
+const shouldRestoreEditorScroll = ({
+  isUserInteractingWithEditor,
+  maxScrollTop,
+  nextScrollTop,
+  previousScrollTop,
+}: {
+  isUserInteractingWithEditor: boolean;
+  maxScrollTop: number;
+  nextScrollTop: number;
+  previousScrollTop: number;
+}) =>
+  previousScrollTop > 0 &&
+  nextScrollTop === 0 &&
+  maxScrollTop >= previousScrollTop &&
+  !isUserInteractingWithEditor;
+
 const styles = StyleSheet.create({
   contentWrapper: {
     containerType: 'inline-size',
     display: 'flex',
+    flex: 1,
+    minHeight: 0,
     overflowY: 'auto',
     position: 'relative',
   },
   editorContainer: {
+    minHeight: 0,
     minWidth: 0,
+    overflow: 'hidden',
     position: 'relative',
   },
   editorContent: {
@@ -111,6 +133,113 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>(({ header, fullWidthHeader 
     ...styles.editorContent,
     '--lobe-pageeditor-table-bleed-inline': tableBleedInline,
   } as CSSProperties;
+  const resizeFrameRef = useRef<number | undefined>(undefined);
+  const restoreScrollFrameRef = useRef<number | undefined>(undefined);
+  const isRestoringScrollRef = useRef(false);
+  const isPointerInsideEditorPaneRef = useRef(false);
+  const lastEditorScrollTopRef = useRef(0);
+  const editorPaneRef = useRef<HTMLDivElement>(null);
+  const contentWrapperRef = useRef<HTMLDivElement>(null);
+
+  const isUserInteractingWithEditor = useCallback(() => {
+    if (isPointerInsideEditorPaneRef.current) return true;
+
+    const activeElement = document.activeElement;
+    return !!activeElement && !!editorPaneRef.current?.contains(activeElement);
+  }, []);
+
+  const restoreEditorScrollPosition = useCallback(() => {
+    const node = contentWrapperRef.current;
+    if (!node || typeof window === 'undefined') return;
+
+    const maxScrollTop = getMaxScrollTop(node);
+    const targetScrollTop = Math.min(lastEditorScrollTopRef.current, maxScrollTop);
+
+    if (targetScrollTop <= 0 || node.scrollTop === targetScrollTop) return;
+
+    isRestoringScrollRef.current = true;
+    node.scrollTop = targetScrollTop;
+
+    window.requestAnimationFrame(() => {
+      isRestoringScrollRef.current = false;
+    });
+  }, []);
+
+  const scheduleRestoreEditorScrollPosition = useCallback(() => {
+    if (typeof window === 'undefined') return;
+
+    if (restoreScrollFrameRef.current) {
+      window.cancelAnimationFrame(restoreScrollFrameRef.current);
+    }
+
+    restoreScrollFrameRef.current = window.requestAnimationFrame(() => {
+      restoreScrollFrameRef.current = undefined;
+      restoreEditorScrollPosition();
+    });
+  }, [restoreEditorScrollPosition]);
+
+  const handleEditorScroll = useCallback(
+    (event: UIEvent<HTMLDivElement>) => {
+      if (isRestoringScrollRef.current) return;
+
+      const node = event.currentTarget;
+      const nextScrollTop = node.scrollTop;
+      const previousScrollTop = lastEditorScrollTopRef.current;
+
+      if (
+        shouldRestoreEditorScroll({
+          isUserInteractingWithEditor: isUserInteractingWithEditor(),
+          maxScrollTop: getMaxScrollTop(node),
+          nextScrollTop,
+          previousScrollTop,
+        })
+      ) {
+        scheduleRestoreEditorScrollPosition();
+        return;
+      }
+
+      lastEditorScrollTopRef.current = nextScrollTop;
+    },
+    [isUserInteractingWithEditor, scheduleRestoreEditorScrollPosition],
+  );
+
+  const notifyEditorLayoutChange = useCallback(() => {
+    if (typeof window === 'undefined') return;
+
+    if (resizeFrameRef.current) {
+      window.cancelAnimationFrame(resizeFrameRef.current);
+    }
+
+    resizeFrameRef.current = window.requestAnimationFrame(() => {
+      resizeFrameRef.current = undefined;
+      window.dispatchEvent(new Event('resize'));
+      scheduleRestoreEditorScrollPosition();
+    });
+  }, [scheduleRestoreEditorScrollPosition]);
+
+  useEffect(() => {
+    const node = editorPaneRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(() => notifyEditorLayoutChange());
+    observer.observe(node);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [notifyEditorLayoutChange]);
+
+  useEffect(
+    () => () => {
+      if (resizeFrameRef.current && typeof window !== 'undefined') {
+        window.cancelAnimationFrame(resizeFrameRef.current);
+      }
+      if (restoreScrollFrameRef.current && typeof window !== 'undefined') {
+        window.cancelAnimationFrame(restoreScrollFrameRef.current);
+      }
+    },
+    [],
+  );
 
   // Register Files scope and save document hotkey
   useRegisterFilesHotkeys();
@@ -118,11 +247,30 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>(({ header, fullWidthHeader 
   const headerSlot = header === undefined ? <Header /> : header;
 
   const editorPane = (
-    <Flexbox flex={1} height={'100%'} style={styles.editorContainer}>
+    <Flexbox
+      flex={1}
+      height={'100%'}
+      ref={editorPaneRef}
+      style={styles.editorContainer}
+      onPointerEnter={() => {
+        isPointerInsideEditorPaneRef.current = true;
+      }}
+      onPointerLeave={() => {
+        isPointerInsideEditorPaneRef.current = false;
+      }}
+    >
       {!fullWidthHeader && headerSlot}
-      <Flexbox horizontal height={'100%'} style={styles.contentWrapper} width={'100%'}>
+      <Flexbox
+        horizontal
+        height={'100%'}
+        ref={contentWrapperRef}
+        style={styles.contentWrapper}
+        width={'100%'}
+        onScroll={handleEditorScroll}
+      >
         <WideScreenContainer
           wrapperStyle={{ cursor: canEdit ? 'text' : 'not-allowed' }}
+          onChange={notifyEditorLayoutChange}
           onClick={() => {
             if (!canEdit) return;
 
