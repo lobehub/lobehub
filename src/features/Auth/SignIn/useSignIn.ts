@@ -151,6 +151,8 @@ export const useSignIn = () => {
         signupParams.set('callbackUrl', callbackUrl);
         const utmSource = searchParams.get('utm_source');
         if (utmSource) signupParams.set('utm_source', utmSource);
+        const referral = searchParams.get('referral');
+        if (referral) signupParams.set('referral', referral);
         navigate(`/signup?${signupParams.toString()}`);
         return;
       }
@@ -275,6 +277,8 @@ export const useSignIn = () => {
     params.set('callbackUrl', callbackUrl);
     const utmSource = searchParams.get('utm_source');
     if (utmSource) params.set('utm_source', utmSource);
+    const referral = searchParams.get('referral');
+    if (referral) params.set('referral', referral);
     void trackLoginOrSignupClicked({ spm: 'signin.go_to_signup.click' }).finally(() => {
       navigate(`/signup?${params.toString()}`);
     });

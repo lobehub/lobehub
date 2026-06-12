@@ -39,10 +39,16 @@ const AuthErrorBoundary = () => {
     notifyChunkError();
   }
 
+  // index.auth.html paints the body black in dark mode before React mounts
+  const isDark =
+    typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark';
+
   return (
     <div
       style={{
         alignItems: 'center',
+        background: isDark ? '#000' : '#f8f8f8',
+        color: isDark ? '#e6e6e6' : '#1a1a1a',
         display: 'flex',
         flexDirection: 'column',
         fontFamily: 'sans-serif',
