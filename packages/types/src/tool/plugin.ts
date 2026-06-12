@@ -25,17 +25,6 @@ export interface CustomPluginParams {
   };
   description?: string;
   enableSettings?: boolean;
-  /**
-   * Composio integration parameters
-   */
-  composio?: {
-    instanceId: string;
-    isAuthenticated: boolean;
-    redirectUrl?: string;
-    serverName: string;
-    serverUrl: string;
-  };
-
   manifestMode?: 'local' | 'url';
   manifestUrl?: string;
   /**
