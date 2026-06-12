@@ -46,7 +46,7 @@ export const composioExecutor: RemoteToolExecutor = async (p, _context) => {
   const args = safeParseJSON(p.arguments) || {};
 
   const result = await useToolStore.getState().callComposioTool({
-    connectedAccountId: server.connectedAccountId,
+    identifier,
     toolArgs: args,
     toolSlug: p.apiName,
   });

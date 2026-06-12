@@ -1,27 +1,45 @@
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { PluginModel } from '@/database/models/plugin';
 import { getComposioClient } from '@/libs/composio';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
+import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { MCPService } from '@/server/services/mcp';
 
-const composioProcedure = authedProcedure.use(async (opts) => {
+const composioProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const composioClient = getComposioClient();
-  return opts.next({ ctx: { ...opts.ctx, composioClient } });
+  const pluginModel = new PluginModel(opts.ctx.serverDB, opts.ctx.userId);
+  return opts.next({ ctx: { ...opts.ctx, composioClient, pluginModel } });
 });
 
 export const composioToolsRouter = router({
   executeAction: composioProcedure
     .input(
       z.object({
-        connectedAccountId: z.string(),
+        identifier: z.string(),
         toolArgs: z.record(z.unknown()).optional(),
         toolSlug: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // Resolve the connected account server-side from the caller's own plugin
+      // record (PluginModel is user-scoped). Never trust a connectedAccountId
+      // supplied by the client — that would let a user drive another user's
+      // connection.
+      const plugin = await ctx.pluginModel.findById(input.identifier);
+      const connectedAccountId = plugin?.customParams?.composio?.connectedAccountId;
+
+      if (!connectedAccountId) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `No Composio connection found for "${input.identifier}".`,
+        });
+      }
+
       const result = await (ctx.composioClient.tools as any).execute(input.toolSlug, {
         arguments: input.toolArgs || {},
-        connectedAccountId: input.connectedAccountId,
+        connectedAccountId,
         // Toolkit version resolves to "latest"; allow manual execution without a
         // pinned version (Composio otherwise throws ComposioToolVersionRequiredError).
         dangerouslySkipVersionCheck: true,

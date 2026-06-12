@@ -35,7 +35,7 @@ export interface CreateComposioServerParams {
 }
 
 export interface CallComposioToolParams {
-  connectedAccountId: string;
+  identifier: string;
   toolArgs?: Record<string, unknown>;
   toolSlug: string;
 }
