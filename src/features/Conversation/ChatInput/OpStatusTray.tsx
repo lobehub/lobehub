@@ -113,7 +113,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   glyphCore: css`
     transform-origin: center;
     transform-box: fill-box;
-    fill: color-mix(in srgb, ${cssVar.colorPrimary} 72%, #86f7ff);
+    fill: ${cssVar.colorPrimary};
     animation: op-status-tray-glyph-core 1.5s ease-in-out infinite;
   `,
   glyphHalo: css`
@@ -131,7 +131,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     transform-box: fill-box;
 
     fill: none;
-    stroke: color-mix(in srgb, ${cssVar.colorPrimary} 76%, #9b5cff);
+    stroke: color-mix(in srgb, ${cssVar.colorPrimary} 76%, transparent);
     stroke-dasharray: 9 18;
     stroke-linecap: round;
     stroke-width: 1.5;
@@ -143,7 +143,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     transform-box: fill-box;
 
     fill: none;
-    stroke: color-mix(in srgb, ${cssVar.colorPrimary} 54%, #80f7ff);
+    stroke: color-mix(in srgb, ${cssVar.colorPrimary} 54%, transparent);
     stroke-dasharray: 4 13;
     stroke-linecap: round;
     stroke-width: 1.4;
