@@ -95,27 +95,18 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
         };
       }
 
-      // OAuth needed — open popup and poll for completion
+      // OAuth needed — return the authorization link for the user to open.
+      // This tool runs from the agent's response, which carries no user gesture,
+      // so the browser would block any popup we tried to open ourselves. Handing
+      // back the link lets the user click it (a real gesture) to authorize; the
+      // connection moves to ACTIVE once they finish.
       if (server.redirectUrl) {
-        const result = await this.openComposioOAuthAndWait(server.redirectUrl, server.identifier);
-
-        if (result.success) {
-          return {
-            content: `Successfully connected to ${appType.label}! You can now use ${appType.label} tools.`,
-            state: {
-              connected: true,
-              identifier: service,
-              serviceName: appType.label,
-            },
-            success: true,
-          };
-        }
-
         return {
-          content: `Authorization was cancelled or timed out for ${appType.label}. You can try again later.`,
+          content: `To connect ${appType.label}, ask the user to open this authorization link and complete the sign-in:\n\n${server.redirectUrl}\n\nOnce they have authorized, ${appType.label} tools will be ready to use.`,
           state: {
             connected: false,
             identifier: service,
+            redirectUrl: server.redirectUrl,
             serviceName: appType.label,
           },
           success: true,
@@ -293,90 +284,6 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
           }
         },
         5 * 60 * 1000,
-      );
-    });
-  };
-
-  /**
-   * Open Composio OAuth popup and poll for authorization completion
-   */
-  private openComposioOAuthAndWait = (
-    redirectUrl: string,
-    identifier: string,
-  ): Promise<{ success: boolean }> => {
-    return new Promise((resolve) => {
-      const popup = window.open(redirectUrl, '_blank', 'width=600,height=700');
-
-      if (!popup) {
-        resolve({ success: false });
-        return;
-      }
-
-      let resolved = false;
-      // eslint-disable-next-line prefer-const
-      let pollInterval: ReturnType<typeof setInterval>;
-      // eslint-disable-next-line prefer-const
-      let windowCheckInterval: ReturnType<typeof setInterval>;
-
-      const checkConnected = async (): Promise<boolean> => {
-        try {
-          await useToolStore.getState().refreshComposioConnectionStatus(identifier);
-          const toolState = getToolStoreState();
-          const server = composioStoreSelectors.getServerByIdentifier(identifier)(toolState);
-          return server?.status === ComposioServerStatus.ACTIVE;
-        } catch {
-          return false;
-        }
-      };
-
-      const cleanup = () => {
-        if (resolved) return;
-        resolved = true;
-        clearInterval(pollInterval);
-        clearInterval(windowCheckInterval);
-      };
-
-      // Poll for authentication completion every 1s
-      pollInterval = setInterval(async () => {
-        if (resolved) return;
-        if (await checkConnected()) {
-          cleanup();
-          resolve({ success: true });
-        }
-      }, 1000);
-
-      // Monitor popup closure — give a short grace period then treat as cancelled
-      windowCheckInterval = setInterval(() => {
-        if (popup.closed) {
-          clearInterval(windowCheckInterval);
-          if (resolved) return;
-
-          // Grace period: check a few more times after popup closes (4s)
-          // User may have authorized right before closing
-          setTimeout(async () => {
-            if (resolved) return;
-            // One final check
-            if (await checkConnected()) {
-              cleanup();
-              resolve({ success: true });
-            } else {
-              cleanup();
-              resolve({ success: false });
-            }
-          }, 4000);
-        }
-      }, 500);
-
-      // Hard timeout after 2 minutes
-      setTimeout(
-        () => {
-          if (!resolved) {
-            cleanup();
-            if (!popup.closed) popup.close();
-            resolve({ success: false });
-          }
-        },
-        2 * 60 * 1000,
       );
     });
   };
