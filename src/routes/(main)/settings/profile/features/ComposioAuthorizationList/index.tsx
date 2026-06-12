@@ -7,11 +7,11 @@ import { useTranslation } from 'react-i18next';
 import { useToolStore } from '@/store/tool';
 import { type ComposioServer } from '@/store/tool/slices/composioStore';
 
-interface KlavisAuthItemProps {
+interface ComposioAuthItemProps {
   server: ComposioServer;
 }
 
-const KlavisAuthItem = memo<KlavisAuthItemProps>(({ server }) => {
+const ComposioAuthItem = memo<ComposioAuthItemProps>(({ server }) => {
   const { t } = useTranslation('auth');
   const [isRevoking, setIsRevoking] = useState(false);
 
@@ -69,7 +69,7 @@ export const ComposioAuthorizationList = memo<ComposioAuthorizationListProps>(({
   return (
     <Flexbox horizontal gap={8} wrap="wrap">
       {servers.map((server) => (
-        <KlavisAuthItem key={server.identifier} server={server} />
+        <ComposioAuthItem key={server.identifier} server={server} />
       ))}
     </Flexbox>
   );

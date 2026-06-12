@@ -14,7 +14,7 @@ The injected context includes:
 - **group_config**: systemPrompt (group-level shared content)
 - **group_members**: List of agents in the group with their names, avatars, and roles (including the supervisor agent)
 - **supervisor_agent**: The supervisor agent's configuration (model, provider, plugins, systemRole)
-- **official_tools**: List of available official tools including built-in tools and Klavis integrations
+- **official_tools**: List of available official tools including built-in tools and Composio integrations
 
 You should use this context to understand the current state of the group and its members before making any modifications.
 </context_awareness>

@@ -82,7 +82,7 @@ export class ToolExecutionService {
 
     // ── Connector tool permission gate (covers ALL paths + qstash) ────────
     // Check before any execution so that disabled tools are blocked universally:
-    // Lobehub market skills, Klavis, MCP connectors, and execAgent/qstash alike.
+    // Lobehub market skills, Composio, MCP connectors, and execAgent/qstash alike.
     // needs_approval is handled via humanIntervention in the manifest; we only
     // hard-block 'disabled' here (and needs_approval in headless/qstash context
     // since the manifest's humanIntervention auto-rejects them there already).

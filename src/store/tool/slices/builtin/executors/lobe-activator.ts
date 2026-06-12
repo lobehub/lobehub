@@ -3,7 +3,7 @@
  *
  * Creates and exports the ActivatorExecutor instance for registration.
  * Resolves tool manifests from the tool store (installedPlugins + builtinTools +
- * lobehubSkillServers + klavis servers).
+ * lobehubSkillServers + composio servers).
  *
  * State tracking (getActivatedToolIds / markActivated) is intentionally a no-op
  * because the activated state is persisted in message pluginState and accumulated

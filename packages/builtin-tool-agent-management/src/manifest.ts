@@ -194,7 +194,7 @@ export const AgentManagementManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Install a plugin/tool for an agent. Use 'official' source for builtin tools, Klavis integrations, and LobehubSkill providers. Use 'market' source for MCP marketplace plugins.",
+        "Install a plugin/tool for an agent. Use 'official' source for builtin tools, Composio integrations, and LobehubSkill providers. Use 'market' source for MCP marketplace plugins.",
       name: AgentManagementApiName.installPlugin,
       parameters: {
         properties: {
@@ -208,7 +208,7 @@ export const AgentManagementManifest: BuiltinToolManifest = {
           },
           source: {
             description:
-              "Plugin source: 'official' (builtin tools, Klavis, LobehubSkill) or 'market' (MCP marketplace)",
+              "Plugin source: 'official' (builtin tools, Composio, LobehubSkill) or 'market' (MCP marketplace)",
             enum: ['official', 'market'],
             type: 'string',
           },

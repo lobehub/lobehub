@@ -1165,29 +1165,29 @@ export class DiscoverService {
       return plugin;
     }
 
-    // Step 4: Try to find in Klavis server types (builtin tools that require env config)
-    const klavisTool = COMPOSIO_APP_TYPES.find((tool) => tool.identifier === identifier);
-    if (klavisTool) {
-      log('getPluginDetail: found Klavis tool for identifier=%s', identifier);
+    // Step 4: Try to find in Composio server types (builtin tools that require env config)
+    const composioTool = COMPOSIO_APP_TYPES.find((tool) => tool.identifier === identifier);
+    if (composioTool) {
+      log('getPluginDetail: found Composio tool for identifier=%s', identifier);
 
-      // Avatar is empty here because frontend will render Klavis icons using KlavisIcon component
+      // Avatar is empty here because frontend will render Composio icons using ComposioIcon component
       // which handles both string URLs and React component icons
       const plugin: DiscoverPluginDetail = {
-        author: 'Klavis',
-        avatar: typeof klavisTool.icon === 'string' ? klavisTool.icon : '',
+        author: 'Composio',
+        avatar: typeof composioTool.icon === 'string' ? composioTool.icon : '',
         category: undefined,
         createdAt: '',
-        description: `LobeHub Mcp Server: ${klavisTool.label}`,
-        homepage: 'https://klavis.ai',
-        identifier: klavisTool.identifier,
+        description: `LobeHub Mcp Server: ${composioTool.label}`,
+        homepage: 'https://composio.dev',
+        identifier: composioTool.identifier,
         manifest: undefined,
         related: [],
         schemaVersion: 1,
         source: 'builtin',
         tags: ['composio', 'mcp'],
-        title: klavisTool.label,
+        title: composioTool.label,
       };
-      log('getPluginDetail: returning Klavis tool plugin');
+      log('getPluginDetail: returning Composio tool plugin');
       return plugin;
     }
 

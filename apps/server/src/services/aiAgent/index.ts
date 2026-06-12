@@ -1390,7 +1390,7 @@ export class AiAgentService {
 
     // These are needed outside the tools block (for agent management context, skill engine, etc.)
     let lobehubSkillManifests: LobeToolManifest[] = [];
-    let klavisManifests: LobeToolManifest[] = [];
+    let composioManifests: LobeToolManifest[] = [];
     let connectorManifests: ReturnType<typeof buildConnectorManifests> = [];
     let agentPlugins: string[] = [...(agentConfig?.plugins ?? []), ...(additionalPluginIds || [])];
 
@@ -1455,7 +1455,7 @@ export class AiAgentService {
           : [];
 
       // Only connectors WITH a real MCP endpoint (mcpServerUrl or stdio) can replace plugins in the
-      // manifest. Connectors WITHOUT an endpoint (e.g. Lobehub/Klavis OAuth skills synced via
+      // manifest. Connectors WITHOUT an endpoint (e.g. Lobehub/Composio OAuth skills synced via
       // syncToolsFromClient) must continue using their original plugin executor path — otherwise
       // after humanIntervention approval the runtime tries to call mcpServerUrl='' and returns empty.
       const connectorsMcp = connectors.filter(
@@ -1500,24 +1500,24 @@ export class AiAgentService {
       }
       log('execAgent: got %d lobehub skill manifests', lobehubSkillManifests.length);
 
-      // 5d. Fetch Klavis tool manifests from database
+      // 5d. Fetch Composio tool manifests from database
       try {
-        klavisManifests = await this.composioService.getComposioManifests();
+        composioManifests = await this.composioService.getComposioManifests();
       } catch (error) {
-        log('execAgent: failed to fetch klavis manifests: %O', error);
+        log('execAgent: failed to fetch composio manifests: %O', error);
       }
-      log('execAgent: got %d klavis manifests', klavisManifests.length);
+      log('execAgent: got %d composio manifests', composioManifests.length);
 
-      // 5d-1. Patch Lobehub/Klavis manifests AND community-MCP plugin manifests
+      // 5d-1. Patch Lobehub/Composio manifests AND community-MCP plugin manifests
       // with connector tool permissions. This enables needs_approval (→
       // humanIntervention: 'required') and disabled (→ blocking description) for
       // any tool managed via the connector system but executed through a
-      // non-connector path (Lobehub/Klavis skills, community MCP plugins).
+      // non-connector path (Lobehub/Composio skills, community MCP plugins).
       // The 'disabled' hard-block is already enforced universally in
       // ToolExecutionService; this surfaces the permission to the model too.
       if (
         lobehubSkillManifests.length > 0 ||
-        klavisManifests.length > 0 ||
+        composioManifests.length > 0 ||
         pluginsWithoutConnectors.length > 0
       ) {
         try {
@@ -1526,7 +1526,7 @@ export class AiAgentService {
           const { ConnectorToolModel } = await import('@/database/models/connectorTool');
           const allIdentifiers = [
             ...lobehubSkillManifests.map((m) => m.identifier),
-            ...klavisManifests.map((m) => m.identifier),
+            ...composioManifests.map((m) => m.identifier),
             ...pluginsWithoutConnectors.map((p) => p.identifier),
           ];
           const connectorEntries =
@@ -1552,7 +1552,7 @@ export class AiAgentService {
                 : m;
             });
 
-            klavisManifests = klavisManifests.map((m) => {
+            composioManifests = composioManifests.map((m) => {
               const perms = connectorToolsMap.get(m.identifier);
               return perms && perms.size > 0
                 ? (patchManifestWithPermissions(m as any, perms as any) as any)
@@ -1684,7 +1684,7 @@ export class AiAgentService {
       );
 
       const toolsEngine = createServerAgentToolsEngine(toolsContext, {
-        additionalManifests: [...lobehubSkillManifests, ...klavisManifests, ...connectorManifests],
+        additionalManifests: [...lobehubSkillManifests, ...composioManifests, ...connectorManifests],
         agentConfig: {
           chatConfig: agentConfig.chatConfig ?? undefined,
           plugins: agentPlugins,
@@ -1714,9 +1714,9 @@ export class AiAgentService {
           ...agentPlugins,
           ...(disableLocalSystem ? [] : [LocalSystemManifest.identifier]),
           RemoteDeviceManifest.identifier,
-          // Include LobeHub Skills and Klavis tools so they are passed to generateToolsDetailed
+          // Include LobeHub Skills and Composio tools so they are passed to generateToolsDetailed
           ...lobehubSkillManifests.map((m) => m.identifier),
-          ...klavisManifests.map((m) => m.identifier),
+          ...composioManifests.map((m) => m.identifier),
           // Connector manifests are also injected as additionalManifests
           ...connectorManifests.map((m) => m.identifier),
         ]),
@@ -1737,7 +1737,7 @@ export class AiAgentService {
 
       // Single guard for every `toolManifestMap[id] = ...` ingest below.
       // Mirrors the post-merge filter in `createServerToolsEngine`: an
-      // installed plugin, a LobeHub Skill, or a Klavis manifest declaring
+      // installed plugin, a LobeHub Skill, or a Composio manifest declaring
       // `identifier: 'lobe-remote-device'` would otherwise reach the
       // activator-discovery map and let an external bot sender enable it
       // (). Centralising the check at the ingest layer means
@@ -1811,14 +1811,14 @@ export class AiAgentService {
         toolManifestMap[LocalSystemManifest.identifier] = LocalSystemManifest as LobeToolManifest;
       }
 
-      // Include lobehub skill and klavis manifests for activator discovery
+      // Include lobehub skill and composio manifests for activator discovery
       for (const manifest of lobehubSkillManifests) {
         if (!isManifestIngestAllowed(manifest.identifier)) continue;
         if (!toolManifestMap[manifest.identifier]) {
           toolManifestMap[manifest.identifier] = manifest;
         }
       }
-      for (const manifest of klavisManifests) {
+      for (const manifest of composioManifests) {
         if (!isManifestIngestAllowed(manifest.identifier)) continue;
         if (!toolManifestMap[manifest.identifier]) {
           toolManifestMap[manifest.identifier] = manifest;
@@ -1829,7 +1829,7 @@ export class AiAgentService {
         if (!isManifestIngestAllowed(manifest.identifier)) continue;
         toolSourceMap[manifest.identifier] = 'lobehubSkill';
       }
-      for (const manifest of klavisManifests) {
+      for (const manifest of composioManifests) {
         if (!isManifestIngestAllowed(manifest.identifier)) continue;
         toolSourceMap[manifest.identifier] = 'composio';
       }
@@ -1863,10 +1863,10 @@ export class AiAgentService {
       }
 
       log(
-        'execAgent: generated %d tools, %d lobehub skills, %d klavis tools',
+        'execAgent: generated %d tools, %d lobehub skills, %d composio tools',
         tools?.length ?? 0,
         lobehubSkillManifests.length,
-        klavisManifests.length,
+        composioManifests.length,
       );
 
       const agentSelfIterationEnabled = agentConfig.chatConfig?.selfIteration?.enabled === true;
@@ -2092,8 +2092,8 @@ export class AiAgentService {
           name: manifest.meta?.title || manifest.identifier,
           type: 'lobehub-skill' as const,
         })),
-        // Klavis tools
-        ...klavisManifests.map((manifest) => ({
+        // Composio tools
+        ...composioManifests.map((manifest) => ({
           description: manifest.meta?.description,
           identifier: manifest.identifier,
           name: manifest.meta?.title || manifest.identifier,

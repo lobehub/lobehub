@@ -56,7 +56,7 @@ export class MCPService {
 
   /**
    * Process MCP tool call result with content blocks processing
-   * This is a common utility method that can be used by both internal MCP calls and external services (e.g., Klavis)
+   * This is a common utility method that can be used by both internal MCP calls and external services (e.g., Composio)
    */
   static async processToolCallResult(
     result: MCPToolCallRawResult,

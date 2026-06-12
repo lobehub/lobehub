@@ -6,7 +6,7 @@ import { memo } from 'react';
 export const SKILL_ICON_SIZE = 20;
 
 /**
- * Klavis server icon component
+ * Composio server icon component
  */
 const ComposioSkillIcon = memo<Pick<ComposioAppType, 'icon' | 'label'> & { size: number }>(
   ({ icon, label, size = SKILL_ICON_SIZE }) => {

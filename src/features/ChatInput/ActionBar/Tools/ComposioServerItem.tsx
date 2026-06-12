@@ -101,7 +101,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
           try {
             await refreshComposioConnectionStatus(serverName);
           } catch (error) {
-            console.info('[Klavis] Polling check (expected during auth):', error);
+            console.info('[Composio] Polling check (expected during auth):', error);
           }
         }, POLL_INTERVAL_MS);
 
@@ -139,7 +139,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
             }
           } catch {
             // COOP blocked access, falling back to polling
-            console.info('[Klavis] COOP blocked window.closed access, falling back to polling');
+            console.info('[Composio] COOP blocked window.closed access, falling back to polling');
             if (windowCheckIntervalRef.current) {
               clearInterval(windowCheckIntervalRef.current);
               windowCheckIntervalRef.current = null;
@@ -225,7 +225,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
           }
         }
       } catch (error) {
-        console.error('[Klavis] Failed to connect server:', error);
+        console.error('[Composio] Failed to connect server:', error);
       } finally {
         setIsConnecting(false);
       }
@@ -263,7 +263,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
               handleConnect();
             }}
           >
-            {t('tools.klavis.connect', { defaultValue: 'Connect' })}
+            {t('tools.composio.connect', { defaultValue: 'Connect' })}
             <Icon icon={SquareArrowOutUpRight} size="small" />
           </Flexbox>
         );
@@ -312,7 +312,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
                 }
               }}
             >
-              {t('tools.klavis.pendingAuth', { defaultValue: 'Authorize' })}
+              {t('tools.composio.pendingAuth', { defaultValue: 'Authorize' })}
               <Icon icon={SquareArrowOutUpRight} size="small" />
             </Flexbox>
           );
@@ -320,7 +320,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
         case ComposioServerStatus.ERROR: {
           return (
             <span style={{ color: 'red', fontSize: 12 }}>
-              {t('tools.klavis.error', { defaultValue: 'Error' })}
+              {t('tools.composio.error', { defaultValue: 'Error' })}
             </span>
           );
         }

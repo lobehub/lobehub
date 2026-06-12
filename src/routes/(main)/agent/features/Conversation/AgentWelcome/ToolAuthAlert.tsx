@@ -45,12 +45,12 @@ interface PendingMarketTool {
 
 type PendingAuthTool = PendingComposioTool | PendingMarketTool;
 
-interface KlavisToolAuthItemProps {
+interface ComposioToolAuthItemProps {
   onAuthComplete: () => void;
   tool: PendingComposioTool;
 }
 
-const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete }) => {
+const ComposioToolAuthItem = memo<ComposioToolAuthItemProps>(({ tool, onAuthComplete }) => {
   const { t } = useTranslation('chat');
   const [isConnecting, setIsConnecting] = useState(false);
   const [isWaitingAuth, setIsWaitingAuth] = useState(false);
@@ -102,7 +102,7 @@ const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete
         try {
           await refreshComposioConnectionStatus(identifier);
         } catch (error) {
-          console.info('[Klavis] Polling check (expected during auth):', error);
+          console.info('[Composio] Polling check (expected during auth):', error);
         }
       }, POLL_INTERVAL_MS);
 
@@ -227,7 +227,7 @@ const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete
   );
 });
 
-KlavisToolAuthItem.displayName = 'KlavisToolAuthItem';
+ComposioToolAuthItem.displayName = 'ComposioToolAuthItem';
 
 interface MarketToolAuthItemProps {
   tool: PendingMarketTool;
@@ -280,7 +280,7 @@ const ToolAuthAlert = memo(() => {
   const { t } = useTranslation('chat');
 
   const plugins = useAgentStore(agentSelectors.currentAgentPlugins, isEqual);
-  const klavisServers = useToolStore(composioStoreSelectors.getServers, isEqual);
+  const composioServers = useToolStore(composioStoreSelectors.getServers, isEqual);
   const { isAuthenticated: isMarketAuthenticated } = useMarketAuth();
 
   // Filter out tools that need authorization
@@ -288,13 +288,13 @@ const ToolAuthAlert = memo(() => {
     const result: PendingAuthTool[] = [];
 
     for (const pluginId of plugins) {
-      // Check if this is a Klavis tool
-      const klavisType = COMPOSIO_APP_TYPES.find((t) => t.identifier === pluginId);
-      if (klavisType) {
-        const server = klavisServers.find((s) => s.identifier === pluginId);
+      // Check if this is a Composio tool
+      const composioType = COMPOSIO_APP_TYPES.find((t) => t.identifier === pluginId);
+      if (composioType) {
+        const server = composioServers.find((s) => s.identifier === pluginId);
         // Not installed or pending auth
         if (!server || server.status === ComposioServerStatus.PENDING_AUTH) {
-          result.push({ ...klavisType, authType: 'composio', server });
+          result.push({ ...composioType, authType: 'composio', server });
         }
         continue;
       }
@@ -307,7 +307,7 @@ const ToolAuthAlert = memo(() => {
     }
 
     return result;
-  }, [plugins, klavisServers, isMarketAuthenticated]);
+  }, [plugins, composioServers, isMarketAuthenticated]);
 
   // Don't render if no pending auth tools
   if (pendingAuthTools.length === 0) {
@@ -326,7 +326,7 @@ const ToolAuthAlert = memo(() => {
           <Flexbox gap={12} style={{ marginTop: 8 }}>
             {pendingAuthTools.map((tool) =>
               tool.authType === 'composio' ? (
-                <KlavisToolAuthItem
+                <ComposioToolAuthItem
                   key={tool.identifier}
                   tool={tool}
                   onAuthComplete={() => {

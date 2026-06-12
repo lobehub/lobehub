@@ -383,7 +383,7 @@ export interface InstallPluginParams {
    */
   identifier: string;
   /**
-   * Plugin source: 'official' (builtin/klavis/lobehub-skill) or 'market' (MCP marketplace)
+   * Plugin source: 'official' (builtin/composio/lobehub-skill) or 'market' (MCP marketplace)
    */
   source: InstallPluginSource;
 }

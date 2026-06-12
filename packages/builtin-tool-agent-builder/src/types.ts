@@ -164,7 +164,7 @@ export interface InstallPluginParams {
    */
   identifier: string;
   /**
-   * Plugin source type: 'market' for MCP marketplace, 'official' for builtin/klavis/lobehubSkill tools
+   * Plugin source type: 'market' for MCP marketplace, 'official' for builtin/composio/lobehubSkill tools
    */
   source: 'market' | 'official';
 }
@@ -172,7 +172,7 @@ export interface InstallPluginParams {
 export interface InstallPluginState {
   /**
    * Whether the plugin requires human approval to continue installation
-   * (e.g., Klavis tools need OAuth connection)
+   * (e.g., Composio tools need OAuth connection)
    */
   awaitingApproval?: boolean;
   /**
@@ -184,7 +184,7 @@ export interface InstallPluginState {
    */
   installed: boolean;
   /**
-   * Whether the plugin is a Klavis tool that needs OAuth connection
+   * Whether the plugin is a Composio tool that needs OAuth connection
    */
   isComposio?: boolean;
   /**
@@ -200,15 +200,15 @@ export interface InstallPluginState {
    */
   pluginName?: string;
   /**
-   * Klavis OAuth URL if authorization is needed
+   * Composio OAuth URL if authorization is needed
    */
   redirectUrl?: string;
   /**
-   * Klavis server name (for Klavis tools)
+   * Composio server name (for Composio tools)
    */
   serverName?: string;
   /**
-   * Server status (for Klavis tools and LobehubSkill providers)
+   * Server status (for Composio tools and LobehubSkill providers)
    */
   serverStatus?: 'connected' | 'pending_auth' | 'error' | 'not_connected';
   /**

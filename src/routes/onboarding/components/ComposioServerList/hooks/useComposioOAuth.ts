@@ -7,11 +7,11 @@ const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
 const WINDOW_CLOSED_POLL_TIMEOUT_MS = 4000; // Shorter timeout when window is closed
 
-interface UseKlavisOAuthProps {
+interface UseComposioOAuthProps {
   serverStatus?: ComposioServerStatus;
 }
 
-export const useKlavisOAuth = ({ serverStatus }: UseKlavisOAuthProps) => {
+export const useComposioOAuth = ({ serverStatus }: UseComposioOAuthProps) => {
   const [isWaitingAuth, setIsWaitingAuth] = useState(false);
 
   const oauthWindowRef = useRef<Window | null>(null);
@@ -58,7 +58,7 @@ export const useKlavisOAuth = ({ serverStatus }: UseKlavisOAuthProps) => {
         try {
           await refreshComposioConnectionStatus(serverName);
         } catch (error) {
-          console.info('[Klavis] Polling check (expected during auth):', error);
+          console.info('[Composio] Polling check (expected during auth):', error);
         }
       }, POLL_INTERVAL_MS);
 

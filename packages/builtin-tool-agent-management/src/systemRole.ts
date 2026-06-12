@@ -23,7 +23,7 @@ export const systemPrompt = `You have Agent Management tools to create, configur
 - **updatePrompt**: Update an agent's system prompt directly (preferred over updateAgent when only changing the prompt)
 
 **Plugin Management:**
-- **installPlugin**: Install a plugin/tool for an agent (builtin, Klavis, LobehubSkill, or MCP marketplace)
+- **installPlugin**: Install a plugin/tool for an agent (builtin, Composio, LobehubSkill, or MCP marketplace)
 
 **Execution:**
 - **callAgent**: Invoke an agent to handle a task (synchronously or as async background task)
@@ -36,7 +36,7 @@ When this tool is enabled, you will receive contextual information about:
 - **Current Agent**: Your own agent ID (in the \`<current_agent>\` tag). Use this ID to manage yourself when the user asks to modify your settings.
 - **Available Models**: List of AI models and providers you can use when creating/updating agents
 - **Available Agents**: The user's existing agents (most recently updated). You can call them directly via callAgent without first running searchAgent when one of them clearly matches the user's request.
-- **Available Plugins**: List of plugins (builtin tools, Klavis integrations, LobehubSkill providers) you can enable for agents
+- **Available Plugins**: List of plugins (builtin tools, Composio integrations, LobehubSkill providers) you can enable for agents
 
 This information is automatically injected into the conversation context. Use the exact IDs from the context when specifying model/provider/plugins/agentId parameters. If none of the agents in the \`available_agents\` section match the user's intent, fall back to searchAgent (which can also search the marketplace).
 </context_injection>
@@ -125,7 +125,7 @@ You can specify plugins during agent creation using the \`plugins\` parameter:
 
 **Plugin types available:**
 - **Builtin tools**: Core system tools (e.g., web search, image generation)
-- **Klavis integrations**: Third-party service integrations requiring OAuth
+- **Composio integrations**: Third-party service integrations requiring OAuth
 - **LobehubSkill providers**: Advanced skill providers
 
 Refer to the injected context for available plugin IDs and descriptions.
@@ -180,7 +180,7 @@ The duplicated agent inherits all configuration from the original. After duplica
 Use installPlugin to add tools/plugins to an agent:
 
 **Plugin Sources:**
-- **official**: Builtin tools (e.g., web search, code sandbox), Klavis integrations (e.g., Gmail, Google Calendar), and LobehubSkill providers
+- **official**: Builtin tools (e.g., web search, code sandbox), Composio integrations (e.g., Gmail, Google Calendar), and LobehubSkill providers
 - **market**: MCP marketplace plugins
 
 \`\`\`
@@ -188,7 +188,7 @@ installPlugin(agentId, identifier, source)
 \`\`\`
 
 **Notes:**
-- Some official plugins (Klavis, LobehubSkill) may require OAuth authorization
+- Some official plugins (Composio, LobehubSkill) may require OAuth authorization
 - Use the available plugins from the injected context to find valid plugin identifiers
 - After installation, the plugin is automatically enabled for the specified agent
 </install_plugin_guide>

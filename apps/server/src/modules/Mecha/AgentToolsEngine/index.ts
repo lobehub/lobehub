@@ -86,7 +86,7 @@ export const createServerToolsEngine = (
   // Combine all manifests, then drop anything whose identifier the caller
   // has explicitly forbidden for this turn. The post-merge filter closes
   // the second half of the wall: an installed plugin or a
-  // Skill/Klavis manifest claiming `lobe-remote-device` would otherwise
+  // Skill/Composio manifest claiming `lobe-remote-device` would otherwise
   // slip through `buildAllowedBuiltinTools` (which only touches the
   // builtin source).
   const combinedManifests = [...pluginManifests, ...builtinManifests, ...additionalManifests];
@@ -256,7 +256,7 @@ export const createServerAgentToolsEngine = (
       : isChatMode
         ? chatModeAllowedToolIds
         : defaultToolIds,
-    // Post-merge wall: a plugin or Skill/Klavis manifest claiming a
+    // Post-merge wall: a plugin or Skill/Composio manifest claiming a
     // device identifier survives `buildAllowedBuiltinTools` (which only
     // filters the builtin source). Excluding the identifiers here drops
     // them from the combined `manifestSchemas` so the activator cannot

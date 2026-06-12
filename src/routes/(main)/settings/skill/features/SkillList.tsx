@@ -436,7 +436,7 @@ const SkillList = memo<SkillListProps>(
     // Skills tab: prompt/agent-based skills (show description/content)
     const hasBuiltinTools = builtinToolItems.length > 0 && isConnectorView;
     const hasBuiltinSkills = builtinSkillItems.length > 0 && !isConnectorView;
-    // Skills tab only shows agent-based community skills; Lobehub/Klavis OAuth
+    // Skills tab only shows agent-based community skills; Lobehub/Composio OAuth
     // connectors live exclusively in the Connectors view (hasCommunityConnectors).
     const hasCommunitySkills = !isConnectorView && marketAgentSkills.length > 0;
     const hasCommunityTools = communityMCPs.length > 0 && isConnectorView;

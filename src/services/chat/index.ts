@@ -202,19 +202,19 @@ class ChatService {
       const activeAgentConfig =
         agentSelectors.getAgentConfigById(activeAgentId)(getAgentStoreState());
 
-      // Build official tools list (builtin tools + Klavis tools)
+      // Build official tools list (builtin tools + Composio tools)
       const toolState = getToolStoreState();
       const enabledPlugins = activeAgentConfig?.plugins || [];
 
       const officialTools: OfficialToolItem[] = [];
 
-      // Get builtin tools (excluding Klavis tools)
+      // Get builtin tools (excluding Composio tools)
       const builtinTools = builtinToolSelectors.metaList(toolState);
-      const klavisIdentifiers = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
+      const composioIdentifiers = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
 
       for (const tool of builtinTools) {
-        // Skip Klavis tools in builtin list (they'll be shown separately)
-        if (klavisIdentifiers.has(tool.identifier)) continue;
+        // Skip Composio tools in builtin list (they'll be shown separately)
+        if (composioIdentifiers.has(tool.identifier)) continue;
 
         officialTools.push({
           description: tool.meta?.description,
@@ -226,23 +226,23 @@ class ChatService {
         });
       }
 
-      // Get Klavis tools (if enabled)
-      const isKlavisEnabled =
+      // Get Composio tools (if enabled)
+      const isComposioEnabled =
         typeof window !== 'undefined' &&
         window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio;
 
-      if (isKlavisEnabled) {
-        const allKlavisServers = composioStoreSelectors.getServers(toolState);
+      if (isComposioEnabled) {
+        const allComposioServers = composioStoreSelectors.getServers(toolState);
 
-        for (const klavisType of COMPOSIO_APP_TYPES) {
-          const server = allKlavisServers.find((s) => s.identifier === klavisType.identifier);
+        for (const composioType of COMPOSIO_APP_TYPES) {
+          const server = allComposioServers.find((s) => s.identifier === composioType.identifier);
 
           officialTools.push({
-            description: `LobeHub Mcp Server: ${klavisType.label}`,
-            enabled: enabledPlugins.includes(klavisType.identifier),
-            identifier: klavisType.identifier,
+            description: `LobeHub Mcp Server: ${composioType.label}`,
+            enabled: enabledPlugins.includes(composioType.identifier),
+            identifier: composioType.identifier,
             installed: !!server,
-            name: klavisType.label,
+            name: composioType.label,
             type: 'composio',
           });
         }

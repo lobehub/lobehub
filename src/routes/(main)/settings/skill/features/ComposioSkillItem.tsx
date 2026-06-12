@@ -190,25 +190,25 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
       if (!server) {
         return (
           <span className={styles.disconnected}>
-            {t('tools.klavis.disconnected', { defaultValue: 'Disconnected' })}
+            {t('tools.composio.disconnected', { defaultValue: 'Disconnected' })}
           </span>
         );
       }
 
       switch (server.status) {
         case ComposioServerStatus.ACTIVE: {
-          return <span className={styles.connected}>{t('tools.klavis.connected')}</span>;
+          return <span className={styles.connected}>{t('tools.composio.connected')}</span>;
         }
         case ComposioServerStatus.PENDING_AUTH: {
-          return <span className={styles.pending}>{t('tools.klavis.authRequired')}</span>;
+          return <span className={styles.pending}>{t('tools.composio.authRequired')}</span>;
         }
         case ComposioServerStatus.ERROR: {
-          return <span className={styles.error}>{t('tools.klavis.error')}</span>;
+          return <span className={styles.error}>{t('tools.composio.error')}</span>;
         }
         default: {
           return (
             <span className={styles.disconnected}>
-              {t('tools.klavis.disconnected', { defaultValue: 'Disconnected' })}
+              {t('tools.composio.disconnected', { defaultValue: 'Disconnected' })}
             </span>
           );
         }
@@ -219,7 +219,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
       if (isConnecting || isWaitingAuth) {
         return (
           <Button disabled icon={<Icon spin icon={Loader2} />} type="default">
-            {t('tools.klavis.connect', { defaultValue: 'Connect' })}
+            {t('tools.composio.connect', { defaultValue: 'Connect' })}
           </Button>
         );
       }
@@ -233,7 +233,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
               type="default"
               onClick={handleConnect}
             >
-              {t('tools.klavis.connect', { defaultValue: 'Connect' })}
+              {t('tools.composio.connect', { defaultValue: 'Connect' })}
             </Button>
           </Tooltip>
         );
@@ -252,7 +252,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
               }
             }}
           >
-            {t('tools.klavis.pendingAuth', { defaultValue: 'Authorize' })}
+            {t('tools.composio.pendingAuth', { defaultValue: 'Authorize' })}
           </Button>
         );
       }
@@ -267,7 +267,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
                 disabled: !canEdit,
                 icon: <Icon icon={Unplug} />,
                 key: 'disconnect',
-                label: t('tools.klavis.disconnect', { defaultValue: 'Disconnect' }),
+                label: t('tools.composio.disconnect', { defaultValue: 'Disconnect' }),
                 onClick: handleDisconnect,
               },
             ]}

@@ -51,7 +51,7 @@ export interface UseSkillConnectionResult {
  */
 export const useIsSkillConnected = () => {
   const lobehubServers = useToolStore(lobehubSkillStoreSelectors.getServers);
-  const klavisServers = useToolStore(composioStoreSelectors.getServers);
+  const composioServers = useToolStore(composioStoreSelectors.getServers);
 
   return useCallback(
     (spec: TaskTemplateSkillRequirement): boolean => {
@@ -60,11 +60,11 @@ export const useIsSkillConnected = () => {
           (s) => s.identifier === spec.provider && s.status === LobehubSkillStatus.CONNECTED,
         );
       }
-      return klavisServers.some(
+      return composioServers.some(
         (s) => s.identifier === spec.provider && s.status === ComposioServerStatus.ACTIVE,
       );
     },
-    [lobehubServers, klavisServers],
+    [lobehubServers, composioServers],
   );
 };
 
@@ -224,7 +224,7 @@ export const useSkillConnection = (
     [cleanup, startWindowMonitor],
   );
 
-  // Only LobeHub Skill OAuth signals completion via postMessage; Klavis relies on polling.
+  // Only LobeHub Skill OAuth signals completion via postMessage; Composio relies on polling.
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
@@ -260,20 +260,20 @@ export const useSkillConnection = (
 
       const userId = useUserStore.getState().user?.id;
       if (!userId) throw new Error('Sign-in required');
-      const klavisType = COMPOSIO_APP_TYPES.find((t) => t.identifier === next.provider);
-      if (!klavisType) throw new Error(`Unknown Klavis provider: ${next.provider}`);
+      const composioType = COMPOSIO_APP_TYPES.find((t) => t.identifier === next.provider);
+      if (!composioType) throw new Error(`Unknown Composio provider: ${next.provider}`);
       const newServer = await createComposioConnection({
-        appSlug: klavisType.appSlug,
+        appSlug: composioType.appSlug,
         identifier: next.provider,
-        label: klavisType.label,
+        label: composioType.label,
       });
-      if (!newServer) throw new Error('Failed to create Klavis server');
+      if (!newServer) throw new Error('Failed to create Composio server');
       if (newServer.status === ComposioServerStatus.ACTIVE) {
         await refreshComposioConnectionStatus(newServer.identifier);
       } else if (newServer.redirectUrl) {
         openOAuthWindow(newServer.redirectUrl, next);
       } else {
-        throw new Error('Klavis server is missing an OAuth URL');
+        throw new Error('Composio server is missing an OAuth URL');
       }
     } catch (error) {
       console.error('[useSkillConnection] Failed to connect:', error);

@@ -220,17 +220,17 @@ export const contextEngineering = async ({
           enabledPlugins = supervisorAgentConfig.plugins || [];
         }
 
-        // Build official tools list (builtin tools + Klavis tools)
+        // Build official tools list (builtin tools + Composio tools)
         const toolState = getToolStoreState();
         const officialTools: GroupOfficialToolItem[] = [];
 
-        // Get builtin tools (excluding Klavis tools)
+        // Get builtin tools (excluding Composio tools)
         const builtinTools = builtinToolSelectors.metaList(toolState);
-        const klavisIdentifiers = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
+        const composioIdentifiers = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
 
         for (const tool of builtinTools) {
-          // Skip Klavis tools in builtin list (they'll be shown separately)
-          if (klavisIdentifiers.has(tool.identifier)) continue;
+          // Skip Composio tools in builtin list (they'll be shown separately)
+          if (composioIdentifiers.has(tool.identifier)) continue;
 
           officialTools.push({
             description: tool.meta?.description,
@@ -242,23 +242,23 @@ export const contextEngineering = async ({
           });
         }
 
-        // Get Klavis tools (if enabled)
-        const isKlavisEnabled =
+        // Get Composio tools (if enabled)
+        const isComposioEnabled =
           typeof window !== 'undefined' &&
           window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio;
 
-        if (isKlavisEnabled) {
-          const allKlavisServers = composioStoreSelectors.getServers(toolState);
+        if (isComposioEnabled) {
+          const allComposioServers = composioStoreSelectors.getServers(toolState);
 
-          for (const klavisType of COMPOSIO_APP_TYPES) {
-            const server = allKlavisServers.find((s) => s.identifier === klavisType.identifier);
+          for (const composioType of COMPOSIO_APP_TYPES) {
+            const server = allComposioServers.find((s) => s.identifier === composioType.identifier);
 
             officialTools.push({
-              description: `LobeHub Mcp Server: ${klavisType.label}`,
-              enabled: enabledPlugins.includes(klavisType.identifier),
-              identifier: klavisType.identifier,
+              description: `LobeHub Mcp Server: ${composioType.label}`,
+              enabled: enabledPlugins.includes(composioType.identifier),
+              identifier: composioType.identifier,
               installed: !!server,
-              name: klavisType.label,
+              name: composioType.label,
               type: 'composio',
             });
           }
@@ -397,20 +397,20 @@ export const contextEngineering = async ({
     }
   }
 
-  // Build Klavis services list for creds context
-  // Shows which Klavis services are connected (authorized) and which are available to connect
+  // Build Composio services list for creds context
+  // Shows which Composio services are connected (authorized) and which are available to connect
   let composioServicesList = '';
 
-  const isKlavisEnabled =
+  const isComposioEnabled =
     typeof window !== 'undefined' &&
     window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio;
 
-  if (isCredsEnabled && isKlavisEnabled) {
+  if (isCredsEnabled && isComposioEnabled) {
     try {
       const toolState = getToolStoreState();
-      const allKlavisServers = composioStoreSelectors.getServers(toolState);
+      const allComposioServers = composioStoreSelectors.getServers(toolState);
 
-      const connected: ComposioServiceSummary[] = allKlavisServers
+      const connected: ComposioServiceSummary[] = allComposioServers
         .filter((s) => s.status === ComposioServerStatus.ACTIVE)
         .map((s) => ({ identifier: s.identifier, name: s.label }));
 
@@ -421,12 +421,12 @@ export const contextEngineering = async ({
 
       composioServicesList = generateComposioServicesList(connected, available);
       log(
-        'Klavis services context resolved: connected=%d, available=%d',
+        'Composio services context resolved: connected=%d, available=%d',
         connected.length,
         available.length,
       );
     } catch (error) {
-      log('Failed to resolve Klavis services context:', error);
+      log('Failed to resolve Composio services context:', error);
     }
   }
 
@@ -530,7 +530,7 @@ export const contextEngineering = async ({
     // Builtin tools (use allMetaList to include hidden tools like web-browsing, cloud-sandbox, etc.)
     // Exclude only truly internal tools (agent-management itself, agent-builder, page-agent)
     const allBuiltinTools = builtinToolSelectors.allMetaList(toolState);
-    const klavisIdentifiers = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
+    const composioIdentifiers = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
     const INTERNAL_TOOLS = new Set([
       'lobe-agent-management', // Don't show agent-management in its own context
       'lobe-agent-builder', // Used for editing current agent, not for creating new agents
@@ -539,8 +539,8 @@ export const contextEngineering = async ({
     ]);
 
     for (const tool of allBuiltinTools) {
-      // Skip Klavis tools in builtin list (they'll be shown separately)
-      if (klavisIdentifiers.has(tool.identifier)) continue;
+      // Skip Composio tools in builtin list (they'll be shown separately)
+      if (composioIdentifiers.has(tool.identifier)) continue;
       // Skip internal tools
       if (INTERNAL_TOOLS.has(tool.identifier)) continue;
 
@@ -552,17 +552,17 @@ export const contextEngineering = async ({
       });
     }
 
-    // Klavis tools (if enabled)
-    const isKlavisEnabled =
+    // Composio tools (if enabled)
+    const isComposioEnabled =
       typeof window !== 'undefined' &&
       window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio;
 
-    if (isKlavisEnabled) {
-      for (const klavisType of COMPOSIO_APP_TYPES) {
+    if (isComposioEnabled) {
+      for (const composioType of COMPOSIO_APP_TYPES) {
         availablePlugins.push({
-          description: klavisType.description,
-          identifier: klavisType.identifier,
-          name: klavisType.label,
+          description: composioType.description,
+          identifier: composioType.identifier,
+          name: composioType.label,
           type: 'composio' as const,
         });
       }
@@ -729,8 +729,8 @@ export const contextEngineering = async ({
       ...VARIABLE_GENERATORS,
       // NOTICE: required by builtin-tool-creds/src/systemRole.ts
       CREDS_LIST: () => (credsList ? generateCredsList(credsList) : ''),
-      // NOTICE: required by builtin-tool-creds/src/systemRole.ts (Klavis integrations)
-      KLAVIS_SERVICES_LIST: () => composioServicesList,
+      // NOTICE: required by builtin-tool-creds/src/systemRole.ts (Composio integrations)
+      COMPOSIO_SERVICES_LIST: () => composioServicesList,
       // NOTICE: required by builtin-tool-creds/src/systemRole.ts (session_context)
       session_date: () =>
         new Intl.DateTimeFormat('en-US', {

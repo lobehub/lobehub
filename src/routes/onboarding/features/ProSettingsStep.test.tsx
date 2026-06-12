@@ -47,7 +47,7 @@ afterEach(() => {
 });
 
 describe('ProSettingsStep', () => {
-  it('uses the connector title as the step title and renders the Klavis server list', () => {
+  it('uses the connector title as the step title and renders the Composio server list', () => {
     render(<ProSettingsStep onBack={vi.fn()} onNext={vi.fn()} />);
 
     expect(screen.getAllByText('Connect Your Favorite Tools')).toHaveLength(1);

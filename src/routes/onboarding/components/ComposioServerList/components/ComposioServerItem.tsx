@@ -8,8 +8,8 @@ import { type ComposioAppType } from '@/const/index';
 import { type ComposioServer } from '@/store/tool/slices/composioStore';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 
-import { useKlavisOAuth } from '../hooks/useKlavisOAuth';
-import { useKlavisServerActions } from '../hooks/useKlavisServerActions';
+import { useComposioOAuth } from '../hooks/useComposioOAuth';
+import { useComposioServerActions } from '../hooks/useComposioServerActions';
 import ServerIcon from './ServerIcon';
 import ServerStatusControl from './ServerStatusControl';
 
@@ -23,11 +23,11 @@ interface ComposioServerItemProps {
 
 const ComposioServerItem = memo<ComposioServerItemProps>(
   ({ identifier, label, server, appSlug, icon }) => {
-    const { isWaitingAuth, openOAuthWindow } = useKlavisOAuth({
+    const { isWaitingAuth, openOAuthWindow } = useComposioOAuth({
       serverStatus: server?.status,
     });
 
-    const { isConnecting, handleConnect } = useKlavisServerActions({
+    const { isConnecting, handleConnect } = useComposioServerActions({
       appSlug,
       identifier,
       label,

@@ -16,7 +16,7 @@ describe('getProviderMeta', () => {
     expect(meta?.icon).toBeDefined();
   });
 
-  it('resolves klavis source via COMPOSIO_APP_TYPES', () => {
+  it('resolves composio source via COMPOSIO_APP_TYPES', () => {
     const meta = getProviderMeta({ provider: 'gmail', source: 'composio' });
     expect(meta).toMatchObject({ label: 'Gmail', provider: 'gmail', source: 'composio' });
     expect(meta?.icon).toBeDefined();
@@ -27,8 +27,8 @@ describe('getProviderMeta', () => {
     expect(getProviderMeta({ provider: 'nonexistent-x', source: 'composio' })).toBeUndefined();
   });
 
-  it('does not cross namespaces (lobehub id under klavis source returns undefined)', () => {
-    // 'github' is a lobehub provider id, not a klavis identifier.
+  it('does not cross namespaces (lobehub id under composio source returns undefined)', () => {
+    // 'github' is a lobehub provider id, not a composio identifier.
     expect(getProviderMeta({ provider: 'github', source: 'composio' })).toBeUndefined();
   });
 });

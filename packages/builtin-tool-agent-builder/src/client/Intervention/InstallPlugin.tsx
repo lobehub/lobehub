@@ -34,8 +34,8 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
     // Tool store selectors
     const isPluginInstalled = useToolStore((s) => pluginSelectors.isPluginInstalled(identifier)(s));
 
-    // Get Klavis server state
-    const klavisServer = useToolStore((s) =>
+    // Get Composio server state
+    const composioServer = useToolStore((s) =>
       composioStoreSelectors.getServers(s).find((srv) => srv.identifier === identifier),
     );
 
@@ -52,7 +52,7 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
       s.builtinTools.find((tool) => tool.identifier === identifier),
     );
 
-    // Check if it's a Klavis tool
+    // Check if it's a Composio tool
     const composioAppInfo = COMPOSIO_APP_TYPES.find((t) => t.identifier === identifier);
     const isComposio = source === 'official' && !!composioAppInfo;
 
@@ -88,10 +88,10 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
       );
     }
 
-    // Render Klavis tool
+    // Render Composio tool
     if (isComposio) {
       const icon = typeof composioAppInfo?.icon === 'string' ? composioAppInfo.icon : undefined;
-      const isPendingAuth = klavisServer?.status === ComposioServerStatus.PENDING_AUTH;
+      const isPendingAuth = composioServer?.status === ComposioServerStatus.PENDING_AUTH;
 
       return (
         <Flexbox
@@ -113,7 +113,7 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
             <Flexbox flex={1} gap={4}>
               <Flexbox horizontal align="center" gap={8}>
                 <span style={{ fontWeight: 600 }}>{composioAppInfo?.label || identifier}</span>
-                <span style={{ color: 'var(--lobe-text-tertiary)', fontSize: 12 }}>Klavis</span>
+                <span style={{ color: 'var(--lobe-text-tertiary)', fontSize: 12 }}>Composio</span>
               </Flexbox>
               <span style={{ color: 'var(--lobe-text-secondary)', fontSize: 12 }}>
                 {isPendingAuth

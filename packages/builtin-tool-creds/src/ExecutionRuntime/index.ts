@@ -89,8 +89,8 @@ export class CredsExecutionRuntime {
   }
 
   /**
-   * Connect a Klavis integration service
-   * In server-side context, Klavis OAuth requires browser interaction,
+   * Connect a Composio integration service
+   * In server-side context, Composio OAuth requires browser interaction,
    * so we return a message guiding the user to connect via the UI.
    */
   async connectComposioService(
@@ -101,9 +101,9 @@ export class CredsExecutionRuntime {
     const serverType = getComposioAppByIdentifier(service);
     if (!serverType) {
       return {
-        content: `Unknown Klavis service: "${service}". Check the available Klavis services list in the credentials context.`,
+        content: `Unknown Composio service: "${service}". Check the available Composio services list in the credentials context.`,
         error: {
-          message: `Unknown Klavis service: ${service}`,
+          message: `Unknown Composio service: ${service}`,
           type: 'UnknownService',
         },
         success: false,
@@ -113,7 +113,7 @@ export class CredsExecutionRuntime {
     // Server-side cannot open OAuth popups or access browser stores.
     // Guide the user to connect via the frontend UI.
     return {
-      content: `To connect ${serverType.label}, please use the LobeHub app UI to initiate the Klavis OAuth flow. Server-side execution cannot open OAuth popups. Go to Settings or the onboarding page to connect ${serverType.label}.`,
+      content: `To connect ${serverType.label}, please use the LobeHub app UI to initiate the Composio OAuth flow. Server-side execution cannot open OAuth popups. Go to Settings or the onboarding page to connect ${serverType.label}.`,
       state: {
         connected: false,
         identifier: service,

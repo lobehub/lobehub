@@ -190,7 +190,7 @@ describe('ClassicOnboardingPage', () => {
     expect(mocks.goToNextStep).toHaveBeenCalledTimes(1);
   });
 
-  it('skips ProSettings when moving forward from interests without Klavis', () => {
+  it('skips ProSettings when moving forward from interests without Composio', () => {
     mocks.currentStep = 2;
     mocks.enableComposio = false;
 
@@ -238,7 +238,7 @@ describe('ClassicOnboardingPage', () => {
     expect(mocks.goToNextStep).not.toHaveBeenCalled();
   });
 
-  it('skips a persisted ProSettings step when Klavis is disabled', async () => {
+  it('skips a persisted ProSettings step when Composio is disabled', async () => {
     mocks.currentStep = 3;
     mocks.enableComposio = false;
 
@@ -266,7 +266,7 @@ describe('ClassicOnboardingPage', () => {
     expect(mocks.goToNextStep).not.toHaveBeenCalled();
   });
 
-  it('keeps ProSettings in the flow when Klavis is enabled', () => {
+  it('keeps ProSettings in the flow when Composio is enabled', () => {
     mocks.currentStep = 3;
     mocks.enableComposio = true;
 

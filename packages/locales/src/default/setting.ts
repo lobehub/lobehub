@@ -2313,168 +2313,168 @@ When I am ___, I need ___
   'tools.builtins.uninstallConfirm.title': 'Uninstall {{name}}',
   'tools.builtins.uninstalled': 'Uninstalled',
   'tools.disabled': 'The current model does not support function calls and cannot use the skill',
-  'tools.klavis.addServer': 'Add Server',
-  'tools.klavis.authCompleted': 'Authentication Completed',
-  'tools.klavis.authFailed': 'Authentication Failed',
-  'tools.klavis.authRequired': 'Authentication Required',
-  'tools.klavis.connect': 'Connect',
-  'tools.klavis.connected': 'Connected',
-  'tools.klavis.disconnect': 'Disconnect',
-  'tools.klavis.disconnected': 'Disconnected',
-  'tools.klavis.error': 'Error',
-  'tools.klavis.remove': 'Remove',
-  'tools.klavis.removeConfirm.desc':
+  'tools.composio.addServer': 'Add Server',
+  'tools.composio.authCompleted': 'Authentication Completed',
+  'tools.composio.authFailed': 'Authentication Failed',
+  'tools.composio.authRequired': 'Authentication Required',
+  'tools.composio.connect': 'Connect',
+  'tools.composio.connected': 'Connected',
+  'tools.composio.disconnect': 'Disconnect',
+  'tools.composio.disconnected': 'Disconnected',
+  'tools.composio.error': 'Error',
+  'tools.composio.remove': 'Remove',
+  'tools.composio.removeConfirm.desc':
     '{{name}} will be permanently removed from your connected services. This action cannot be undone.',
-  'tools.klavis.removeConfirm.title': 'Remove {{name}}?',
-  'tools.klavis.groupName': 'Klavis Tools',
-  'tools.klavis.manage': 'Manage Klavis',
-  'tools.klavis.manageTitle': 'Manage Klavis Integration',
-  'tools.klavis.noServers': 'No connected servers',
-  'tools.klavis.notEnabled': 'Klavis service not enabled',
-  'tools.klavis.oauthRequired': 'Please complete OAuth authentication in the new window',
-  'tools.klavis.pendingAuth': 'Pending Authentication',
-  'tools.klavis.serverCreated': 'Server created successfully',
-  'tools.klavis.serverCreatedFailed': 'Failed to create server',
-  'tools.klavis.serverRemoved': 'Server removed',
-  'tools.klavis.servers': 'servers',
+  'tools.composio.removeConfirm.title': 'Remove {{name}}?',
+  'tools.composio.groupName': 'Composio Tools',
+  'tools.composio.manage': 'Manage Composio',
+  'tools.composio.manageTitle': 'Manage Composio Integration',
+  'tools.composio.noServers': 'No connected servers',
+  'tools.composio.notEnabled': 'Composio service not enabled',
+  'tools.composio.oauthRequired': 'Please complete OAuth authentication in the new window',
+  'tools.composio.pendingAuth': 'Pending Authentication',
+  'tools.composio.serverCreated': 'Server created successfully',
+  'tools.composio.serverCreatedFailed': 'Failed to create server',
+  'tools.composio.serverRemoved': 'Server removed',
+  'tools.composio.servers': 'servers',
 
-  'tools.klavis.servers.airtable.description':
+  'tools.composio.servers.airtable.description':
     'Airtable is a cloud-based database and spreadsheet platform that combines the flexibility of a spreadsheet with the power of a database, enabling teams to organize, track, and collaborate on projects with customizable views and powerful automation features',
 
-  'tools.klavis.servers.airtable.readme':
+  'tools.composio.servers.airtable.readme':
     'Integrate with Airtable to manage your databases and workflows. Query records, create entries, update data, and automate operations with customizable views and powerful tracking features.',
 
-  'tools.klavis.servers.cal-com.description':
+  'tools.composio.servers.cal-com.description':
     'Cal.com is an open-source scheduling platform that helps you schedule meetings without the back-and-forth emails. Manage event types, bookings, availability, and integrate with calendars for seamless appointment scheduling',
 
-  'tools.klavis.servers.cal-com.readme':
+  'tools.composio.servers.cal-com.readme':
     'Connect to Cal.com to manage your scheduling and appointments. View availability, book meetings, manage event types, and automate your calendar through natural conversation.',
 
-  'tools.klavis.servers.clickup.description':
+  'tools.composio.servers.clickup.description':
     'ClickUp is a comprehensive project management and productivity platform that helps teams organize tasks, manage projects, and collaborate effectively with customizable workflows and powerful tracking features',
 
-  'tools.klavis.servers.clickup.readme':
+  'tools.composio.servers.clickup.readme':
     'Connect to ClickUp to manage tasks, track projects, and organize your work. Create tasks, update statuses, manage custom workflows, and collaborate with your team through natural language commands.',
 
-  'tools.klavis.servers.confluence.description':
+  'tools.composio.servers.confluence.description':
     'Confluence is a team workspace where knowledge and collaboration meet',
 
-  'tools.klavis.servers.confluence.readme':
+  'tools.composio.servers.confluence.readme':
     'Connect to Confluence to access and manage team documentation. Search pages, create content, organize spaces, and build your knowledge base through conversational AI assistance.',
 
-  'tools.klavis.servers.dropbox.description':
+  'tools.composio.servers.dropbox.description':
     'Complete file management solution for Dropbox cloud storage. Upload, download, organize files and folders, manage sharing and collaboration, handle file versions, create file requests, and perform batch operations on your Dropbox files and folders',
 
-  'tools.klavis.servers.dropbox.readme':
+  'tools.composio.servers.dropbox.readme':
     'Integrate with Dropbox to access and manage your files. Upload, download, share files, manage folders, handle file versions, and organize your cloud storage through conversational AI.',
 
-  'tools.klavis.servers.figma.description':
+  'tools.composio.servers.figma.description':
     'Figma is a collaborative interface design tool for web and mobile applications.',
 
-  'tools.klavis.servers.figma.readme':
+  'tools.composio.servers.figma.readme':
     'Connect to Figma to access design files and collaborate on projects. View designs, export assets, browse components, and manage your design workflow through natural conversation.',
 
-  'tools.klavis.servers.github.description': 'Enhanced GitHub MCP Server',
+  'tools.composio.servers.github.description': 'Enhanced GitHub MCP Server',
 
-  'tools.klavis.servers.github.readme':
+  'tools.composio.servers.github.readme':
     'Connect to GitHub to manage repositories, issues, pull requests, and code. Search code, review changes, create branches, and collaborate on software development projects through conversational AI.',
 
-  // Klavis Servers i18n
-  'tools.klavis.servers.gmail.description': 'Gmail is a free email service provided by Google',
+  // Composio Servers i18n
+  'tools.composio.servers.gmail.description': 'Gmail is a free email service provided by Google',
 
-  'tools.klavis.servers.gmail.readme':
+  'tools.composio.servers.gmail.readme':
     'Bring the power of Gmail directly into your AI assistant. Read, compose, and send emails, search your inbox, manage labels, and organize your communications—all through natural conversation.',
 
-  'tools.klavis.servers.google-calendar.description':
+  'tools.composio.servers.google-calendar.description':
     'Google Calendar is a time-management and scheduling calendar service',
 
-  'tools.klavis.servers.google-calendar.readme':
+  'tools.composio.servers.google-calendar.readme':
     'Integrate Google Calendar to view, create, and manage your events seamlessly. Schedule meetings, set reminders, check availability, and coordinate your time—all through natural language commands.',
 
-  'tools.klavis.servers.google-docs.description':
+  'tools.composio.servers.google-docs.description':
     'Google Docs is a word processor included as part of the free, web-based Google Docs Editors suite',
 
-  'tools.klavis.servers.google-docs.readme':
+  'tools.composio.servers.google-docs.readme':
     'Integrate with Google Docs to create, edit, and manage documents. Write content, format text, collaborate in real-time, and access your documents through natural conversation.',
 
-  'tools.klavis.servers.google-drive.description': 'Google Drive is a cloud storage service',
+  'tools.composio.servers.google-drive.description': 'Google Drive is a cloud storage service',
 
-  'tools.klavis.servers.google-drive.readme':
+  'tools.composio.servers.google-drive.readme':
     'Connect to Google Drive to access, organize, and manage your files. Search documents, upload files, share content, and navigate your cloud storage efficiently through AI assistance.',
 
-  'tools.klavis.servers.google-sheets.description':
+  'tools.composio.servers.google-sheets.description':
     'Google Sheets is a web-based spreadsheet application that allows users to create, edit, and collaborate on spreadsheets online',
 
-  'tools.klavis.servers.google-sheets.readme':
+  'tools.composio.servers.google-sheets.readme':
     'Connect to Google Sheets to read, write, and analyze spreadsheet data. Perform calculations, generate reports, create charts, and manage tabular data collaboratively with AI assistance.',
 
-  'tools.klavis.servers.hubspot.description':
+  'tools.composio.servers.hubspot.description':
     'HubSpot is a developer and marketer of software products for inbound marketing, sales, and customer service',
 
-  'tools.klavis.servers.hubspot.readme':
+  'tools.composio.servers.hubspot.readme':
     'Integrate with HubSpot to manage contacts, deals, and marketing campaigns. Access CRM data, track pipelines, automate workflows, and streamline your sales and marketing operations.',
 
-  'tools.klavis.servers.jira.description':
+  'tools.composio.servers.jira.description':
     'Jira is a project management and issue tracking tool developed by Atlassian',
 
-  'tools.klavis.servers.jira.readme':
+  'tools.composio.servers.jira.readme':
     'Integrate with Jira to manage issues, track progress, and organize sprints. Create tickets, update statuses, query project data, and streamline your development workflow through natural conversation.',
 
-  'tools.klavis.servers.notion.description':
+  'tools.composio.servers.notion.description':
     'Notion is a collaborative productivity and note-taking application',
 
-  'tools.klavis.servers.notion.readme':
+  'tools.composio.servers.notion.readme':
     'Connect to Notion to access and manage your workspace. Create pages, search content, update databases, and organize your knowledge base—all through natural conversation with your AI assistant.',
 
-  'tools.klavis.servers.onedrive.description':
+  'tools.composio.servers.onedrive.description':
     'OneDrive is a file hosting service and synchronization service operated by Microsoft',
 
-  'tools.klavis.servers.onedrive.readme':
+  'tools.composio.servers.onedrive.readme':
     'Connect to OneDrive to access and manage your Microsoft cloud files. Upload, download, share files, organize folders, and collaborate on documents through AI-powered assistance.',
 
-  'tools.klavis.servers.outlook-mail.description':
+  'tools.composio.servers.outlook-mail.description':
     'Outlook Mail is a web-based suite of webmail, contacts, tasks, and calendaring services from Microsoft.',
 
-  'tools.klavis.servers.outlook-mail.readme':
+  'tools.composio.servers.outlook-mail.readme':
     'Integrate with Outlook Mail to read, send, and manage your Microsoft emails. Search messages, compose emails, manage folders, and organize your inbox through natural conversation.',
 
-  'tools.klavis.servers.salesforce.description':
+  'tools.composio.servers.salesforce.description':
     "Salesforce is the world's leading customer relationship management (CRM) platform that helps businesses connect with customers, partners, and potential customers",
 
-  'tools.klavis.servers.salesforce.readme':
+  'tools.composio.servers.salesforce.readme':
     'Connect to Salesforce to manage customer relationships and sales data. Query records, update opportunities, track leads, and automate your CRM workflows through natural language commands.',
 
-  'tools.klavis.servers.slack.description':
+  'tools.composio.servers.slack.description':
     'Slack is a messaging app for business that connects people to the information they need',
 
-  'tools.klavis.servers.slack.readme':
+  'tools.composio.servers.slack.readme':
     'Integrate with Slack to send messages, search conversations, and manage channels. Connect with your team, automate communication workflows, and access workspace information through natural language.',
 
-  'tools.klavis.servers.supabase.description': 'Supabase official MCP Server',
+  'tools.composio.servers.supabase.description': 'Supabase official MCP Server',
 
-  'tools.klavis.servers.supabase.readme':
+  'tools.composio.servers.supabase.readme':
     'Integrate with Supabase to manage your database and backend services. Query data, manage authentication, handle storage, and interact with your application backend through natural conversation.',
 
-  'tools.klavis.servers.whatsapp.description':
+  'tools.composio.servers.whatsapp.description':
     'WhatsApp Business API integration that enables sending text messages, media, and managing conversations with customers. Perfect for customer support, marketing campaigns, and automated messaging workflows through the official WhatsApp Business platform.',
 
-  'tools.klavis.servers.whatsapp.readme':
+  'tools.composio.servers.whatsapp.readme':
     'Integrate with WhatsApp Business to send messages, manage conversations, and engage with customers. Automate messaging workflows and handle communications through conversational AI.',
 
-  'tools.klavis.servers.youtube.description':
+  'tools.composio.servers.youtube.description':
     'YouTube is a video-sharing platform where users can upload, share, and discover content. Access video information, transcripts, and metadata programmatically.',
 
-  'tools.klavis.servers.youtube.readme':
+  'tools.composio.servers.youtube.readme':
     'Connect to YouTube to search videos, access transcripts, and retrieve video information. Analyze content, extract metadata, and discover videos through natural conversation.',
 
-  'tools.klavis.servers.zendesk.description': 'Zendesk is a customer service software company',
+  'tools.composio.servers.zendesk.description': 'Zendesk is a customer service software company',
 
-  'tools.klavis.servers.zendesk.readme':
+  'tools.composio.servers.zendesk.readme':
     'Integrate with Zendesk to manage support tickets and customer interactions. Create, update, and track support requests, access customer data, and streamline your support operations.',
 
-  'tools.klavis.tools': 'tools',
+  'tools.composio.tools': 'tools',
 
-  'tools.klavis.verifyAuth': 'I have completed authentication',
+  'tools.composio.verifyAuth': 'I have completed authentication',
 
   'tools.lobehubSkill.authorize': 'Authorize',
 

@@ -27,11 +27,11 @@ export const ComposioDetailProvider = ({
 
   const config = useMemo(() => getComposioAppByIdentifier(identifier), [identifier]);
 
-  const klavisServers = useToolStore(composioStoreSelectors.getServers);
+  const composioServers = useToolStore(composioStoreSelectors.getServers);
 
   const serverState = useMemo(
-    () => klavisServers.find((s) => s.identifier === identifier),
-    [identifier, klavisServers],
+    () => composioServers.find((s) => s.identifier === identifier),
+    [identifier, composioServers],
   );
 
   const isConnected = useMemo(
@@ -46,10 +46,10 @@ export const ComposioDetailProvider = ({
 
   const { author, authorUrl, description, icon, readme, label } = config;
 
-  const localizedDescription = t(`tools.klavis.servers.${identifier}.description`, {
+  const localizedDescription = t(`tools.composio.servers.${identifier}.description`, {
     defaultValue: description,
   });
-  const localizedReadme = t(`tools.klavis.servers.${identifier}.readme`, {
+  const localizedReadme = t(`tools.composio.servers.${identifier}.readme`, {
     defaultValue: readme,
   });
 

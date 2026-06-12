@@ -78,7 +78,7 @@ export class BuiltinToolsExecutor implements IToolExecutor {
       });
     }
 
-    // Route Klavis tools to ComposioService
+    // Route Composio tools to ComposioService
     if (source === 'composio') {
       return this.composioService.executeComposioTool({
         args,

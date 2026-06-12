@@ -36,15 +36,15 @@ export const createBuiltinSkillDetailModal = ({
     width: 800,
   });
 
-export interface CreateKlavisSkillDetailModalOptions {
+export interface CreateComposioSkillDetailModalOptions {
   identifier: string;
   serverName: string;
 }
 
-export const createKlavisSkillDetailModal = ({
+export const createComposioSkillDetailModal = ({
   identifier,
   serverName,
-}: CreateKlavisSkillDetailModalOptions) =>
+}: CreateComposioSkillDetailModalOptions) =>
   createModal({
     content: <ComposioSkillDetailContent identifier={identifier} serverName={serverName} />,
     footer: null,

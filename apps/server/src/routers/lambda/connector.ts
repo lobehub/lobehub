@@ -358,7 +358,7 @@ export const connectorRouter = router({
     }),
 
   /**
-   * Sync tools from a client-provided list (for Lobehub OAuth skills, Klavis, etc.
+   * Sync tools from a client-provided list (for Lobehub OAuth skills, Composio, etc.
    * that already have their tool list available on the client side).
    * Idempotent — safe to call whenever the detail panel opens.
    */

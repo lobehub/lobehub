@@ -16,7 +16,7 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useDiscoverStore } from '@/store/discover';
 
 /**
- * Icon component for built-in tools (Klavis & LobehubSkill)
+ * Icon component for built-in tools (Composio & LobehubSkill)
  * For string type icon, use Image component to render
  * For IconType type icon, use Icon component to render with theme fill color
  */
@@ -78,8 +78,8 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
   const usePluginDetail = useDiscoverStore((s) => s.usePluginDetail);
   const { data: apiData, isLoading } = usePluginDetail({ identifier, withManifest: false });
 
-  // Try to get Klavis tool info if API returns no data
-  const klavisTool = useMemo(() => {
+  // Try to get Composio tool info if API returns no data
+  const composioTool = useMemo(() => {
     return COMPOSIO_APP_TYPES.find((tool) => tool.identifier === identifier);
   }, [identifier]);
 
@@ -97,22 +97,22 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
   const data: DiscoverPluginDetail | undefined = useMemo(() => {
     if (apiData) return apiData;
 
-    // Check Klavis tools
-    if (klavisTool) {
+    // Check Composio tools
+    if (composioTool) {
       return {
-        author: 'Klavis',
+        author: 'Composio',
         avatar: '', // Avatar will be rendered by BuiltinToolIcon component
         category: undefined,
         createdAt: '',
-        description: `LobeHub Mcp Server: ${klavisTool.label}`,
-        homepage: 'https://klavis.ai',
-        identifier: klavisTool.identifier,
+        description: `LobeHub Mcp Server: ${composioTool.label}`,
+        homepage: 'https://composio.dev',
+        identifier: composioTool.identifier,
         manifest: undefined,
         related: [],
         schemaVersion: 1,
         source: 'builtin' as const,
         tags: ['composio', 'mcp'],
-        title: klavisTool.label,
+        title: composioTool.label,
       };
     }
 
@@ -155,7 +155,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
     }
 
     return undefined;
-  }, [apiData, klavisTool, lobehubSkill, builtinTool]);
+  }, [apiData, composioTool, lobehubSkill, builtinTool]);
 
   const sourceConfig = useMemo(() => {
     const source: PluginSource = data?.source || 'market';
@@ -205,8 +205,8 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
 
   // Render avatar - use BuiltinToolIcon for built-in tools, Avatar for others
   const renderAvatar = () => {
-    if (klavisTool) {
-      return <BuiltinToolIcon icon={klavisTool.icon} label={klavisTool.label} />;
+    if (composioTool) {
+      return <BuiltinToolIcon icon={composioTool.icon} label={composioTool.label} />;
     }
     if (lobehubSkill) {
       return <BuiltinToolIcon icon={lobehubSkill.icon} label={lobehubSkill.label} />;

@@ -2438,7 +2438,7 @@ export const createRuntimeExecutors = (
           execution = { attempts: 1, result: dispatchResult };
         } else {
           // Inject source from sourceMap so BuiltinToolsExecutor can route
-          // lobehubSkill / klavis tools correctly (LLM responses don't carry source)
+          // lobehubSkill / composio tools correctly (LLM responses don't carry source)
           if (toolSource && !chatToolPayload.source) {
             chatToolPayload.source = toolSource;
           }
@@ -3017,7 +3017,7 @@ export const createRuntimeExecutors = (
               execution = { attempts: 1, result: dispatchResult };
             } else {
               // Inject source from sourceMap so BuiltinToolsExecutor can route
-              // lobehubSkill / klavis tools correctly (LLM responses don't carry source)
+              // lobehubSkill / composio tools correctly (LLM responses don't carry source)
               const batchToolSource =
                 state.operationToolSet?.sourceMap?.[chatToolPayload.identifier] ??
                 state.toolSourceMap?.[chatToolPayload.identifier];

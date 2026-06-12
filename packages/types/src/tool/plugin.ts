@@ -26,9 +26,9 @@ export interface CustomPluginParams {
   description?: string;
   enableSettings?: boolean;
   /**
-   * Klavis integration parameters
+   * Composio integration parameters
    */
-  klavis?: {
+  composio?: {
     instanceId: string;
     isAuthenticated: boolean;
     redirectUrl?: string;

@@ -11,13 +11,13 @@ import { composioStoreSelectors } from '@/store/tool/slices/composioStore';
 import ComposioServerItem from './components/ComposioServerItem';
 
 const ComposioServerList = memo(() => {
-  const allKlavisServers = useToolStore(composioStoreSelectors.getServers, isEqual);
+  const allComposioServers = useToolStore(composioStoreSelectors.getServers, isEqual);
   const useFetchUserComposioConnections = useToolStore((s) => s.useFetchUserComposioConnections);
 
   useFetchUserComposioConnections(true);
 
   const getServerByIdentifier = (identifier: string) => {
-    return allKlavisServers.find((server) => server.identifier === identifier);
+    return allComposioServers.find((server) => server.identifier === identifier);
   };
 
   return (

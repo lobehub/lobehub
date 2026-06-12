@@ -134,7 +134,7 @@ export class ConnectorToolModel {
 
   /**
    * Look up a single tool by its toolName for this user.
-   * Used for direct permission checks (e.g. Klavis gate).
+   * Used for direct permission checks (e.g. Composio gate).
    */
   findByToolName = async (toolName: string): Promise<UserConnectorToolItem | undefined> => {
     const results = await this.db

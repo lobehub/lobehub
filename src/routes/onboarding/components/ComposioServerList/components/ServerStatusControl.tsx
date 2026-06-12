@@ -42,7 +42,7 @@ const ServerStatusControl = memo<ServerStatusControlProps>(
           <Icon
             color={cssVar.colorError}
             icon={CircleX}
-            title={t('tools.klavis.error', { defaultValue: 'Error' })}
+            title={t('tools.composio.error', { defaultValue: 'Error' })}
           />
         );
       }

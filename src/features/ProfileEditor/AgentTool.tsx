@@ -95,9 +95,9 @@ const AgentTool = memo<AgentToolProps>(
       chatConfigByIdSelectors.isEnableSearchById(effectiveAgentId),
     );
 
-    // Klavis-related state
-    const allKlavisServers = useToolStore(composioStoreSelectors.getServers, isEqual);
-    const isKlavisEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableComposio);
+    // Composio-related state
+    const allComposioServers = useToolStore(composioStoreSelectors.getServers, isEqual);
+    const isComposioEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableComposio);
 
     // LobeHub Skill-related state
     const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
@@ -131,8 +131,8 @@ const AgentTool = memo<AgentToolProps>(
     useFetchAgentSkills(true);
     useCheckPluginsIsInstalled(plugins);
 
-    // Load user's Klavis integrations via SWR (from database)
-    useFetchUserComposioConnections(isKlavisEnabledInEnv);
+    // Load user's Composio integrations via SWR (from database)
+    useFetchUserComposioConnections(isComposioEnabledInEnv);
 
     // Load user's LobeHub Skill connections via SWR
     useFetchLobehubSkillConnections(isLobehubSkillEnabled);
@@ -195,11 +195,11 @@ const AgentTool = memo<AgentToolProps>(
 
     // Get connected server by identifier
     const getServerByName = (identifier: string) => {
-      return allKlavisServers.find((server) => server.identifier === identifier);
+      return allComposioServers.find((server) => server.identifier === identifier);
     };
 
-    // Get all Klavis server type identifiers (used to filter builtinList)
-    const allKlavisTypeIdentifiers = useMemo(
+    // Get all Composio server type identifiers (used to filter builtinList)
+    const allComposioTypeIdentifiers = useMemo(
       () => new Set(COMPOSIO_APP_TYPES.map((type) => type.identifier)),
       [],
     );
@@ -213,7 +213,7 @@ const AgentTool = memo<AgentToolProps>(
       return ids;
     }, [installedBuiltinSkills, marketAgentSkills, userAgentSkills]);
 
-    // Filter out Klavis tools and skills from builtinList (they are displayed separately)
+    // Filter out Composio tools and skills from builtinList (they are displayed separately)
     // Optionally filter out tools with availableInWeb: false based on config (e.g., LocalSystem is desktop-only)
     const filteredBuiltinList = useMemo(() => {
       // Cast to LobeToolMetaWithAvailability for type safety when filterAvailableInWeb is used
@@ -227,9 +227,9 @@ const AgentTool = memo<AgentToolProps>(
         ) as ListType;
       }
 
-      // Filter out Klavis tools if Klavis is enabled
-      if (isKlavisEnabledInEnv) {
-        list = list.filter((item) => !allKlavisTypeIdentifiers.has(item.identifier));
+      // Filter out Composio tools if Composio is enabled
+      if (isComposioEnabledInEnv) {
+        list = list.filter((item) => !allComposioTypeIdentifiers.has(item.identifier));
       }
 
       // Filter out skills (they are shown separately)
@@ -238,17 +238,17 @@ const AgentTool = memo<AgentToolProps>(
       return list;
     }, [
       builtinList,
-      allKlavisTypeIdentifiers,
-      isKlavisEnabledInEnv,
+      allComposioTypeIdentifiers,
+      isComposioEnabledInEnv,
       filterAvailableInWeb,
       useAllMetaList,
       allSkillIdentifiers,
     ]);
 
-    // Klavis server list items
-    const klavisServerItems = useMemo(
+    // Composio server list items
+    const composioServerItems = useMemo(
       () =>
-        isKlavisEnabledInEnv
+        isComposioEnabledInEnv
           ? COMPOSIO_APP_TYPES.map((type) => ({
               icon: (
                 <ComposioSkillIcon icon={type.icon} label={type.label} size={SKILL_ICON_SIZE} />
@@ -269,14 +269,14 @@ const AgentTool = memo<AgentToolProps>(
                   identifier={type.identifier}
                   sourceLabel={type.author}
                   title={type.label}
-                  description={t(`tools.klavis.servers.${type.identifier}.description` as any, {
+                  description={t(`tools.composio.servers.${type.identifier}.description` as any, {
                     defaultValue: type.description,
                   })}
                 />
               ),
             }))
           : [],
-      [isKlavisEnabledInEnv, allKlavisServers, effectiveAgentId, t],
+      [isComposioEnabledInEnv, allComposioServers, effectiveAgentId, t],
     );
 
     // LobeHub Skill Provider list items
@@ -450,7 +450,7 @@ const AgentTool = memo<AgentToolProps>(
       [userAgentSkills, isToolEnabled, handleToggleTool, t],
     );
 
-    // Merge Builtin Agent Skills, builtin tools, LobeHub Skill Providers, and Klavis servers
+    // Merge Builtin Agent Skills, builtin tools, LobeHub Skill Providers, and Composio servers
     const builtinItems = useMemo(
       () => [
         // 1. Builtin Agent Skills
@@ -499,13 +499,13 @@ const AgentTool = memo<AgentToolProps>(
         })),
         // 3. LobeHub Skill Providers
         ...lobehubSkillItems,
-        // 4. Klavis servers
-        ...klavisServerItems,
+        // 4. Composio servers
+        ...composioServerItems,
       ],
       [
         builtinAgentSkillItems,
         filteredBuiltinList,
-        klavisServerItems,
+        composioServerItems,
         lobehubSkillItems,
         isToolEnabled,
         handleToggleTool,
@@ -650,14 +650,14 @@ const AgentTool = memo<AgentToolProps>(
     const validIdentifiers = useMemo(() => {
       const all = new Set<string>();
 
-      // 1. Builtin tools (includes Klavis metas)
+      // 1. Builtin tools (includes Composio metas)
       for (const tool of builtinList) all.add(tool.identifier);
 
       // 2. Installed plugins
       for (const plugin of installedPluginList) all.add(plugin.identifier);
 
       // 3. Composio server types (if enabled)
-      if (isKlavisEnabledInEnv) {
+      if (isComposioEnabledInEnv) {
         for (const type of COMPOSIO_APP_TYPES) all.add(type.identifier);
       }
 
@@ -679,7 +679,7 @@ const AgentTool = memo<AgentToolProps>(
     }, [
       builtinList,
       installedPluginList,
-      isKlavisEnabledInEnv,
+      isComposioEnabledInEnv,
       isLobehubSkillEnabled,
       installedBuiltinSkills,
       marketAgentSkills,
@@ -696,7 +696,7 @@ const AgentTool = memo<AgentToolProps>(
       if (validIdentifiers.size === 0) return;
       if (plugins.length === 0) return;
 
-      // Defer cleanup to avoid race with async data loading (SWR, Klavis, etc.)
+      // Defer cleanup to avoid race with async data loading (SWR, Composio, etc.)
       const timer = setTimeout(() => {
         const stalePlugins = plugins.filter((id) => !validIdentifiers.has(id));
 

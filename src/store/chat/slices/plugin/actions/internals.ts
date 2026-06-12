@@ -57,9 +57,9 @@ export class PluginInternalsActionImpl {
       }
     }
 
-    // Get all Klavis tools
-    const klavisTools = composioStoreSelectors.composioAsLobeTools(toolStoreState);
-    for (const tool of klavisTools) {
+    // Get all Composio tools
+    const composioTools = composioStoreSelectors.composioAsLobeTools(toolStoreState);
+    for (const tool of composioTools) {
       if (tool.manifest) {
         manifests[tool.identifier] = tool.manifest as ToolManifest;
         sourceMap[tool.identifier] = 'composio';

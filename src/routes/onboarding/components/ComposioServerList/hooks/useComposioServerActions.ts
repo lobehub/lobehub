@@ -12,7 +12,7 @@ interface UseComposioServerActionsProps {
   server?: ComposioServer;
 }
 
-export const useKlavisServerActions = ({
+export const useComposioServerActions = ({
   identifier,
   appSlug,
   label,

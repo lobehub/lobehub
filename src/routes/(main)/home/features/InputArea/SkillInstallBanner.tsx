@@ -83,7 +83,7 @@ const SkillInstallBanner = memo(() => {
   const { t } = useTranslation('plugin');
 
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
-  const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableComposio);
+  const isComposioEnabled = useServerConfigStore(serverConfigSelectors.enableComposio);
 
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
 
@@ -93,7 +93,7 @@ const SkillInstallBanner = memo(() => {
     s.useFetchUserComposioConnections,
   ]);
   useFetchLobehubSkillConnections(isLobehubSkillEnabled);
-  useFetchUserComposioConnections(isKlavisEnabled);
+  useFetchUserComposioConnections(isComposioEnabled);
 
   const skillIcons = useMemo(() => {
     const icons: Array<{ icon: string | React.ComponentType<{ size?: number }>; key: string }> = [];

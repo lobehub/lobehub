@@ -697,9 +697,9 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [renderPolicyMenu, renderToolLabel],
   );
 
-  // Klavis-related state
-  const allKlavisServers = useToolStore(composioStoreSelectors.getServers, isEqual);
-  const isKlavisEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableComposio);
+  // Composio-related state
+  const allComposioServers = useToolStore(composioStoreSelectors.getServers, isEqual);
+  const isComposioEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableComposio);
 
   // LobeHub Skill related state
   const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
@@ -735,8 +735,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   useFetchAgentSkills(true);
   useCheckPluginsIsInstalled(plugins);
 
-  // Load user's Klavis integrations via SWR (from database)
-  useFetchUserComposioConnections(isKlavisEnabledInEnv);
+  // Load user's Composio integrations via SWR (from database)
+  useFetchUserComposioConnections(isComposioEnabledInEnv);
 
   // Load user's LobeHub Skill connections via SWR
   useFetchLobehubSkillConnections(isLobehubSkillEnabled);
@@ -744,14 +744,14 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   // Get connected server by identifier
   const getServerByName = useCallback(
     (identifier: string) => {
-      return allKlavisServers.find((server) => server.identifier === identifier);
+      return allComposioServers.find((server) => server.identifier === identifier);
     },
-    [allKlavisServers],
+    [allComposioServers],
   );
 
-  // Get all Klavis server type identifier sets (used for filtering builtinList)
-  // Using COMPOSIO_APP_TYPES instead of connected servers here, because we want to filter out all possible Klavis types
-  const allKlavisTypeIdentifiers = useMemo(
+  // Get all Composio server type identifier sets (used for filtering builtinList)
+  // Using COMPOSIO_APP_TYPES instead of connected servers here, because we want to filter out all possible Composio types
+  const allComposioTypeIdentifiers = useMemo(
     () => new Set(COMPOSIO_APP_TYPES.map((type) => type.identifier)),
     [],
   );
@@ -764,17 +764,17 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     return ids;
   }, [installedBuiltinSkills, marketAgentSkills, userAgentSkills]);
 
-  // Filter out Klavis tools and skills from builtinList (they will be displayed separately)
+  // Filter out Composio tools and skills from builtinList (they will be displayed separately)
   const filteredBuiltinList = useMemo(() => {
     let list = builtinList;
-    if (isKlavisEnabledInEnv) {
-      list = list.filter((item) => !allKlavisTypeIdentifiers.has(item.identifier));
+    if (isComposioEnabledInEnv) {
+      list = list.filter((item) => !allComposioTypeIdentifiers.has(item.identifier));
     }
     return list.filter((item) => !allSkillIdentifiers.has(item.identifier));
-  }, [builtinList, allKlavisTypeIdentifiers, isKlavisEnabledInEnv, allSkillIdentifiers]);
+  }, [builtinList, allComposioTypeIdentifiers, isComposioEnabledInEnv, allSkillIdentifiers]);
 
-  // Get recommended Klavis skill IDs
-  const recommendedKlavisIds = useMemo(
+  // Get recommended Composio skill IDs
+  const recommendedComposioIds = useMemo(
     () =>
       new Set(
         RECOMMENDED_SKILLS.filter((s) => s.type === RecommendedSkillType.Composio).map((s) => s.id),
@@ -791,10 +791,10 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [],
   );
 
-  // Get installed Klavis server IDs
-  const installedKlavisIds = useMemo(
-    () => new Set(allKlavisServers.map((s) => s.identifier)),
-    [allKlavisServers],
+  // Get installed Composio server IDs
+  const installedComposioIds = useMemo(
+    () => new Set(allComposioServers.map((s) => s.identifier)),
+    [allComposioServers],
   );
 
   // Get installed Lobehub skill IDs
@@ -803,13 +803,13 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [allLobehubSkillServers],
   );
 
-  // Klavis server list items - only show installed or recommended
-  const klavisServerItems = useMemo(
+  // Composio server list items - only show installed or recommended
+  const composioServerItems = useMemo(
     () =>
-      isKlavisEnabledInEnv
+      isComposioEnabledInEnv
         ? COMPOSIO_APP_TYPES.filter(
             (type) =>
-              installedKlavisIds.has(type.identifier) || recommendedKlavisIds.has(type.identifier),
+              installedComposioIds.has(type.identifier) || recommendedComposioIds.has(type.identifier),
           ).map((type) => {
             const server = getServerByName(type.identifier);
             const icon = (
@@ -821,7 +821,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
                 identifier={type.identifier}
                 sourceLabel={type.author}
                 title={type.label}
-                description={t(`tools.klavis.servers.${type.identifier}.description` as any, {
+                description={t(`tools.composio.servers.${type.identifier}.description` as any, {
                   defaultValue: type.description,
                 })}
               />
@@ -861,9 +861,9 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           })
         : [],
     [
-      isKlavisEnabledInEnv,
-      installedKlavisIds,
-      recommendedKlavisIds,
+      isComposioEnabledInEnv,
+      installedComposioIds,
+      recommendedComposioIds,
       agentId,
       t,
       createManagedSkillItem,
@@ -938,7 +938,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     ],
   );
 
-  // Builtin tool list items (excluding Klavis and LobeHub Skill)
+  // Builtin tool list items (excluding Composio and LobeHub Skill)
   const builtinItems = useMemo(
     () =>
       filteredBuiltinList.map((item) => {
@@ -1197,10 +1197,10 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [customConnectors, t, createManagedSkillItem],
   );
 
-  // Skills list items (including LobeHub Skill and Klavis)
+  // Skills list items (including LobeHub Skill and Composio)
   // Connected items listed first, deduplicated by key (LobeHub takes priority)
   const skillItems = useMemo(() => {
-    // Deduplicate by key - LobeHub items take priority over Klavis
+    // Deduplicate by key - LobeHub items take priority over Composio
     const seenKeys = new Set<string>();
     const allItems: typeof lobehubSkillItems = [];
 
@@ -1212,8 +1212,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       }
     }
 
-    // Add Klavis items only if not already present
-    for (const item of klavisServerItems) {
+    // Add Composio items only if not already present
+    for (const item of composioServerItems) {
       if (!seenKeys.has(item.key as string)) {
         seenKeys.add(item.key as string);
         allItems.push(item);
@@ -1222,15 +1222,15 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
 
     return allItems.sort((a, b) => {
       const isConnectedA =
-        installedLobehubIds.has(a.key as string) || installedKlavisIds.has(a.key as string);
+        installedLobehubIds.has(a.key as string) || installedComposioIds.has(a.key as string);
       const isConnectedB =
-        installedLobehubIds.has(b.key as string) || installedKlavisIds.has(b.key as string);
+        installedLobehubIds.has(b.key as string) || installedComposioIds.has(b.key as string);
 
       if (isConnectedA && !isConnectedB) return -1;
       if (!isConnectedA && isConnectedB) return 1;
       return 0;
     });
-  }, [lobehubSkillItems, klavisServerItems, installedLobehubIds, installedKlavisIds]);
+  }, [lobehubSkillItems, composioServerItems, installedLobehubIds, installedComposioIds]);
 
   // Distinguish community plugins and custom plugins
   const communityPlugins = list.filter((item) => item.type !== 'customPlugin');
@@ -1291,13 +1291,13 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     });
   };
 
-  // Build LobeHub group children (including Builtin Agent Skills, builtin tools, and LobeHub Skill/Klavis)
+  // Build LobeHub group children (including Builtin Agent Skills, builtin tools, and LobeHub Skill/Composio)
   const lobehubGroupChildren: ItemType[] = [
     // 1. Builtin Agent Skills
     ...builtinAgentSkillItems,
     // 2. Builtin tools
     ...builtinItems,
-    // 3. LobeHub Skill and Klavis (as builtin skills)
+    // 3. LobeHub Skill and Composio (as builtin skills)
     ...skillItems,
   ];
 
@@ -1547,8 +1547,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         ),
       }));
 
-    // Connected Klavis servers
-    const connectedKlavisItems = klavisServerItems.filter((item) =>
+    // Connected Composio servers
+    const connectedComposioItems = composioServerItems.filter((item) =>
       checked.includes(item.key as string),
     );
 
@@ -1557,8 +1557,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       checked.includes(item.key as string),
     );
 
-    // Merge enabled LobeHub Skill and Klavis (as builtin skills)
-    const enabledSkillItems = [...connectedLobehubSkillItems, ...connectedKlavisItems];
+    // Merge enabled LobeHub Skill and Composio (as builtin skills)
+    const enabledSkillItems = [...connectedLobehubSkillItems, ...connectedComposioItems];
 
     // Enabled Builtin Agent Skills
     const enabledBuiltinAgentSkillItems = installedBuiltinSkills
@@ -1608,7 +1608,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         ),
       }));
 
-    // Build builtin tools group children (including Builtin Agent Skills, builtin tools, and LobeHub Skill/Klavis)
+    // Build builtin tools group children (including Builtin Agent Skills, builtin tools, and LobeHub Skill/Composio)
     const allBuiltinItems: ItemType[] = [
       // 1. Builtin Agent Skills
       ...enabledBuiltinAgentSkillItems,
@@ -1618,7 +1618,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       ...(enabledBuiltinItems.length > 0 && enabledSkillItems.length > 0
         ? [{ key: 'installed-divider-builtin-skill', type: 'divider' as const }]
         : []),
-      // 4. LobeHub Skill and Klavis
+      // 4. LobeHub Skill and Composio
       ...enabledSkillItems,
     ];
 
@@ -1814,7 +1814,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     userAgentSkills,
     communityPlugins,
     customPlugins,
-    klavisServerItems,
+    composioServerItems,
     lobehubSkillItems,
     checked,
     togglePlugin,

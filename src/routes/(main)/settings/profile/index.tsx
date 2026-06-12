@@ -50,7 +50,7 @@ const ProfileSetting = () => {
   ]);
   const connectedServers = servers.filter((s) => s.status === ComposioServerStatus.ACTIVE);
 
-  // Fetch Klavis servers
+  // Fetch Composio servers
   useFetchUserComposioConnections(enableComposio);
 
   const isLoading =

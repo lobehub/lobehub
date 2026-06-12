@@ -41,7 +41,7 @@ const InputArea = () => {
   );
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
-  const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableComposio);
+  const isComposioEnabled = useServerConfigStore(serverConfigSelectors.enableComposio);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
   const isSkillBannerDismissed = useGlobalStore(
     systemStatusSelectors.isBannerDismissed(SKILL_INSTALL_BANNER_ID),
@@ -67,7 +67,7 @@ const InputArea = () => {
     if (!serverConfigInit || !inboxAgentId) return;
 
     const candidates: BannerKind[] = [];
-    if ((isLobehubSkillEnabled || isKlavisEnabled) && !isSkillBannerDismissed) {
+    if ((isLobehubSkillEnabled || isComposioEnabled) && !isSkillBannerDismissed) {
       candidates.push('skill');
     }
     if (!isBotIntegrationBannerDismissed) candidates.push('botIntegration');
@@ -79,7 +79,7 @@ const InputArea = () => {
   }, [
     inboxAgentId,
     isBotIntegrationBannerDismissed,
-    isKlavisEnabled,
+    isComposioEnabled,
     isLobehubSkillEnabled,
     isMessengerBannerDismissed,
     isSkillBannerDismissed,

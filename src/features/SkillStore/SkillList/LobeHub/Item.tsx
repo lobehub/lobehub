@@ -38,7 +38,7 @@ const Item = memo<ItemProps>(
 
     // Get localized description
     const i18nPrefix =
-      type === 'composio' ? 'tools.klavis.servers' : 'tools.lobehubSkill.providers';
+      type === 'composio' ? 'tools.composio.servers' : 'tools.lobehubSkill.providers';
     // @ts-ignore
     const localizedDescription = t(`${i18nPrefix}.${identifier}.description`, {
       defaultValue: description,

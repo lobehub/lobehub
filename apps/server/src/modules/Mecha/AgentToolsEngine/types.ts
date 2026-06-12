@@ -22,7 +22,7 @@ export interface ServerAgentToolsContext {
  * Configuration options for createServerToolsEngine
  */
 export interface ServerAgentToolsEngineConfig {
-  /** Additional manifests to include (e.g., Klavis tools) */
+  /** Additional manifests to include (e.g., Composio tools) */
   additionalManifests?: LobeToolManifest[];
   /**
    * Override the list of builtin tools fed into the engine's
@@ -39,7 +39,7 @@ export interface ServerAgentToolsEngineConfig {
   /**
    * Identifiers to drop from `manifestSchemas` after combining plugin,
    * builtin, and additional manifests. Filtering builtins alone is not
-   * enough: an installed plugin or a Skill/Klavis manifest can declare
+   * enough: an installed plugin or a Skill/Composio manifest can declare
    * `identifier: 'lobe-remote-device'` and slip past `buildAllowedBuiltinTools`.
    * This is the final post-merge wall referenced in .
    */

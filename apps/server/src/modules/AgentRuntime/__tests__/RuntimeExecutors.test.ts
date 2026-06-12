@@ -78,8 +78,8 @@ vi.mock('model-bank', () => ({
 
 // composioEnv uses @t3-oss/env-nextjs which throws in jsdom (treats it as client context)
 vi.mock('@/config/composio', () => ({
-  getKlavisConfig: vi.fn(),
-  getServerKlavisApiKey: vi.fn().mockReturnValue(undefined),
+  getComposioConfig: vi.fn(),
+  getServerComposioApiKey: vi.fn().mockReturnValue(undefined),
   composioEnv: { COMPOSIO_API_KEY: undefined },
 }));
 
