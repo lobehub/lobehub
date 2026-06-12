@@ -49,6 +49,15 @@ describe('LocalFile Body helpers', () => {
       ).toBe('C:\\repo\\docs\\assets\\screen.png');
     });
 
+    it('preserves UNC network share prefixes', () => {
+      expect(
+        resolveMarkdownRelativeAssetPath({
+          markdownFilePath: '\\\\server\\share\\docs\\README.md',
+          src: 'assets\\screen.png',
+        }),
+      ).toBe('\\\\server\\share\\docs\\assets\\screen.png');
+    });
+
     it('ignores URLs, root-relative paths, anchors, and empty values', () => {
       const markdownFilePath = '/repo/report.md';
 

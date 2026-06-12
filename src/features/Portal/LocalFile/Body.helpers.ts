@@ -79,12 +79,22 @@ const fromSlashPath = (filePath: string, sourcePath: string): string => {
   return usesWindowsSeparator ? filePath.replaceAll('/', '\\') : filePath;
 };
 
-const normalizeSlashPath = (filePath: string): string => {
+const normalizeSlashPath = (
+  filePath: string,
+  { preserveLeadingDoubleSlash = false }: { preserveLeadingDoubleSlash?: boolean } = {},
+): string => {
+  const leadingEmptySegmentLimit = preserveLeadingDoubleSlash && filePath.startsWith('//') ? 2 : 1;
   const normalizedSegments: string[] = [];
 
   for (const segment of filePath.split('/')) {
     if (!segment || segment === '.') {
-      if (segment === '' && normalizedSegments.length === 0) normalizedSegments.push('');
+      if (
+        segment === '' &&
+        normalizedSegments.length < leadingEmptySegmentLimit &&
+        normalizedSegments.every((item) => item === '')
+      ) {
+        normalizedSegments.push('');
+      }
       continue;
     }
 
@@ -111,6 +121,7 @@ export const resolveMarkdownRelativeAssetPath = ({
   if (!assetPath || URL_LIKE_PREFIX.test(assetPath)) return;
 
   const slashMarkdownPath = toSlashPath(markdownFilePath);
+  const isUncPath = slashMarkdownPath.startsWith('//');
   const lastSeparatorIndex = slashMarkdownPath.lastIndexOf('/');
   const baseDirectory =
     lastSeparatorIndex > 0 ? slashMarkdownPath.slice(0, lastSeparatorIndex) : '';
@@ -119,6 +130,7 @@ export const resolveMarkdownRelativeAssetPath = ({
     slashMarkdownPath.startsWith('/') && lastSeparatorIndex === 0 ? '/' : baseDirectory;
   const resolvedPath = normalizeSlashPath(
     basePath ? [basePath, ...assetSegments].join('/') : assetSegments.join('/'),
+    { preserveLeadingDoubleSlash: isUncPath },
   );
 
   return fromSlashPath(resolvedPath, markdownFilePath);
