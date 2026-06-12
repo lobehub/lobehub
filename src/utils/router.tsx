@@ -15,6 +15,7 @@ import {
 import BusinessGlobalProvider from '@/business/client/BusinessGlobalProvider';
 import ErrorCapture from '@/components/Error';
 import Loading from '@/components/Loading/BrandTextLoading';
+import { useIsDark } from '@/hooks/useIsDark';
 import SPAGlobalProvider from '@/layout/SPAGlobalProvider';
 import { useGlobalStore } from '@/store/global';
 import { createNavigationRef } from '@/store/global/initialState';
@@ -98,13 +99,20 @@ export interface ErrorBoundaryProps {
 
 export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
   const error = useRouteError() as Error;
+  const isDark = useIsDark();
+  const appearance = isDark ? 'dark' : 'light';
 
   if (typeof window !== 'undefined' && isChunkLoadError(error)) {
     notifyChunkError();
   }
 
   return (
-    <ThemeProvider theme={{ cssVar: { key: 'lobe-vars' } }}>
+    <ThemeProvider
+      appearance={appearance}
+      defaultAppearance={appearance}
+      defaultThemeMode={appearance}
+      theme={{ cssVar: { key: 'lobe-vars' } }}
+    >
       <ErrorCapture error={error} resetPath={resetPath} />
     </ThemeProvider>
   );

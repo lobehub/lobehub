@@ -5,7 +5,6 @@ import { memo, type PropsWithChildren } from 'react';
 import BusinessAuthProvider from '@/business/client/BusinessAuthProvider';
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
 import { mapFeatureFlagsEnvToState } from '@/config/featureFlags';
-import NextThemeProvider from '@/layout/GlobalProvider/NextThemeProvider';
 import type { AuthSPAServerConfig } from '@/types/spaServerConfig';
 
 import AuthContainer from './AuthContainer';
@@ -19,26 +18,24 @@ const AuthShell = memo<PropsWithChildren>(({ children }) => {
 
   return (
     <AuthLocale defaultLang={locale}>
-      <NextThemeProvider>
-        <AuthThemeLite globalCDN={serverConfig?.globalCDN}>
-          <AuthServerConfigProvider
-            enableOIDC={serverConfig?.enableOIDC}
-            isMobile={false}
-            serverConfig={serverConfig?.config}
-            featureFlags={
-              serverConfig?.featureFlags
-                ? mapFeatureFlagsEnvToState(serverConfig.featureFlags)
-                : undefined
-            }
-          >
-            <LobeAnalyticsProviderWrapper>
-              <BusinessAuthProvider>
-                <AuthContainer>{children}</AuthContainer>
-              </BusinessAuthProvider>
-            </LobeAnalyticsProviderWrapper>
-          </AuthServerConfigProvider>
-        </AuthThemeLite>
-      </NextThemeProvider>
+      <AuthThemeLite globalCDN={serverConfig?.globalCDN}>
+        <AuthServerConfigProvider
+          enableOIDC={serverConfig?.enableOIDC}
+          isMobile={false}
+          serverConfig={serverConfig?.config}
+          featureFlags={
+            serverConfig?.featureFlags
+              ? mapFeatureFlagsEnvToState(serverConfig.featureFlags)
+              : undefined
+          }
+        >
+          <LobeAnalyticsProviderWrapper>
+            <BusinessAuthProvider>
+              <AuthContainer>{children}</AuthContainer>
+            </BusinessAuthProvider>
+          </LobeAnalyticsProviderWrapper>
+        </AuthServerConfigProvider>
+      </AuthThemeLite>
     </AuthLocale>
   );
 });

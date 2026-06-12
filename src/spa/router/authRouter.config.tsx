@@ -1,3 +1,4 @@
+import { useTheme } from 'next-themes';
 import type { ComponentType, CSSProperties, ReactElement } from 'react';
 import { lazy, Suspense } from 'react';
 import type { RouteObject } from 'react-router-dom';
@@ -31,17 +32,17 @@ const buttonStyle: CSSProperties = {
   padding: '6px 16px',
 };
 
-// Renders outside AuthShell (no theme/i18n providers), so plain elements and English copy only
+// Renders outside AuthShell (no i18n provider), so plain elements and English copy only
 const AuthErrorBoundary = () => {
   const error = useRouteError() as Error;
+  const { resolvedTheme } = useTheme();
 
   if (typeof window !== 'undefined' && isChunkLoadError(error)) {
     notifyChunkError();
   }
 
   // index.auth.html paints the body black in dark mode before React mounts
-  const isDark =
-    typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark';
+  const isDark = resolvedTheme === 'dark';
 
   return (
     <div
