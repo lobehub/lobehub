@@ -2878,6 +2878,7 @@ export class AiAgentService {
       parentMessageId,
       agentId,
       instruction,
+      isSubAgent,
       title,
       parentOperationId,
       resumeParentOnComplete,
@@ -2957,12 +2958,19 @@ export class AiAgentService {
       }
     }
 
+    const appContext: NonNullable<InternalExecAgentParams['appContext']> = {
+      groupId,
+      threadId: thread.id,
+      topicId,
+    };
+    if (isSubAgent) appContext.isSubAgent = true;
+
     // 4. Delegate to execAgent with threadId in appContext and hooks
     // The instruction will be created as user message in the Thread
     // Use headless mode to skip human approval in async task execution
     const result = await this.execAgent({
       agentId,
-      appContext: { groupId, threadId: thread.id, topicId },
+      appContext,
       autoStart: true,
       hooks,
       parentOperationId,

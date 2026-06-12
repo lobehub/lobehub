@@ -266,6 +266,8 @@ export interface ExecSubAgentParams {
   groupId?: string;
   /** Task instruction/prompt for the SubAgent */
   instruction: string;
+  /** Whether the child run is a lobe-agent virtual sub-agent and must not spawn more sub-agents */
+  isSubAgent?: boolean;
   /** The parent message ID (Supervisor's tool call message or task message) */
   parentMessageId: string;
   /** Parent operation ID for dispatching callAgent hooks */

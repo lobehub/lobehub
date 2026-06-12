@@ -371,6 +371,7 @@ const buildServerSubAgentRunner = (
         agentId: targetAgentId ?? agentId,
         groupId: state.metadata?.groupId ?? undefined,
         instruction,
+        isSubAgent: true,
         parentMessageId: placeholder.id,
         parentOperationId: ctx.operationId,
         resumeParentOnComplete: true,
