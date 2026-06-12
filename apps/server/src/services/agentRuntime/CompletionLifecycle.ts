@@ -344,11 +344,16 @@ export class CompletionLifecycle {
           metadata?.assistantMessageId,
           metadata?.userId || this.userId,
         );
-        void runVerifyOnCompletion(this.serverDB, metadata?.userId || this.userId, {
-          deliverable: event.lastAssistantContent ?? '',
-          goal,
-          operationId,
-        });
+        void runVerifyOnCompletion(
+          this.serverDB,
+          metadata?.userId || this.userId,
+          {
+            deliverable: event.lastAssistantContent ?? '',
+            goal,
+            operationId,
+          },
+          this.workspaceId,
+        );
       }
 
       if (reason === 'error') {

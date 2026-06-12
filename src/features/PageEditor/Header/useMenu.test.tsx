@@ -18,6 +18,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@lobechat/const', () => ({
+  CUSTOM_DOCUMENT_FILE_TYPE: 'custom/document',
   isDesktop: false,
 }));
 

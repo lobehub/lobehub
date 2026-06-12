@@ -915,6 +915,7 @@
   "workflow.toolDisplayName.addPreferenceMemory": "Zapisana pamięć",
   "workflow.toolDisplayName.calculate": "Obliczone",
   "workflow.toolDisplayName.callAgent": "Wywołano agenta",
+  "workflow.toolDisplayName.callMcpTool": "Wywołano narzędzie MCP",
   "workflow.toolDisplayName.callSubAgent": "Wysłano pod-agenta",
   "workflow.toolDisplayName.clearTodos": "Wyczyszczono zadania",
   "workflow.toolDisplayName.copyDocument": "Skopiowano dokument",

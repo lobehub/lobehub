@@ -608,6 +608,7 @@ export default {
   'notification.item.image_generation_completed': 'Image generation completed',
   'notification.item.storage_overage_cap_reached': 'Storage pay-as-you-go cap reached',
   'notification.item.video_generation_completed': 'Video generation completed',
+  'notification.item.workspace_member_invited': 'Workspace invitation',
   'notification.item.workspace_member_joined': 'New member joined',
   'notification.item.workspace_member_removed': 'Removed from workspace',
   'notification.item.workspace_payment_failed': 'Renewal payment failed',
@@ -1519,7 +1520,7 @@ When I am ___, I need ___
   'workspace.billingPage.plans.modelsHint': 'Estimated messages from the shared pool',
   'workspace.billingPage.plans.modelsTitle': 'Featured models',
   'workspace.billingPage.plans.perMonth': '/ month',
-  'workspace.billingPage.plans.popularTag': 'Popular',
+  'workspace.billingPage.plans.popularTag': 'Recommended',
   'workspace.billingPage.plans.priceProCaption': 'Platform fee · billed monthly',
   'workspace.billingPage.plans.priceProHeadline': '${{fee}} / mo',
   'workspace.billingPage.plans.proCapacity': 'Up to {{max}} seats · ${{seatFee}}/seat / month',
@@ -1898,6 +1899,7 @@ When I am ___, I need ___
     'Add new members by entering their email address and assigning a role',
   'workspace.members.invite.addAnother': 'Add another',
   'workspace.members.invite.button': 'Invite',
+  'workspace.members.invite.modal.billIncrease': ' Your bill will increase by ${{amount}}/mo.',
   'workspace.members.invite.modal.cancel': 'Cancel',
   'workspace.members.invite.modal.confirm': 'Confirm',
   'workspace.members.invite.modal.description_one':
@@ -1934,7 +1936,7 @@ When I am ___, I need ___
   'workspace.upgradeModal.alreadyUpgraded': 'Already upgraded',
   'workspace.upgradeModal.changeWorkspace': 'Back',
   'workspace.upgradeModal.chargeDisclosure':
-    'Upon clicking Upgrade, you will be charged ${{fee}}, plus any applicable taxes and fees, immediately and then every month, until you cancel. Seat fees and on-demand usage are settled at month-end; if your usage exceeds a billing threshold during a cycle, your payment method on file may be charged before the cycle ends.',
+    'Clicking Upgrade charges ${{fee}} now, plus any applicable taxes. The subscription renews monthly until you cancel. Seats and on-demand usage are billed at month-end.',
   'workspace.upgradeModal.inviteLaterHint':
     'You can invite more members to your team in the next step.',
   'workspace.upgradeModal.memberCount_one': '{{count}} member',
@@ -1947,6 +1949,7 @@ When I am ___, I need ___
   'workspace.upgradeModal.createTeam': 'Create workspace',
   'workspace.upgradeModal.formSubtitle':
     'Only the platform fee is charged today — seat fees are settled at month-end.',
+  'workspace.upgradeModal.formDescription': 'Review the details below and confirm your upgrade.',
   'workspace.upgradeModal.formTitle': 'Upgrade {{name}} to Pro',
   'workspace.upgradeModal.heading': 'Upgrade a workspace to Pro',
   'workspace.upgradeModal.hobbyTag': 'Hobby',
@@ -2046,11 +2049,13 @@ When I am ___, I need ___
     "You've reached the maximum of {{limit}} workspaces. Leave one before creating another.",
   'workspace.wizard.step2.features.hobby.share': 'Single-owner workspace',
   'workspace.wizard.step2.features.hobby.solo': 'Solo workspace, no member seats',
-  'workspace.wizard.step2.features.hobby.onDemand': 'On-demand usage · AutoTopUp (${{price}}/M)',
+  'workspace.wizard.step2.features.hobby.onDemand':
+    'On-demand usage · Auto top-up (${{price}} / 1M credits)',
   'workspace.wizard.step2.features.hobby.upgradable': 'Upgrade anytime to invite members',
   'workspace.wizard.step2.features.pro.adminControls': 'Centralized billing, roles, and audit logs',
   'workspace.wizard.step2.features.pro.collaboration': 'Invite members · share agents and files',
-  'workspace.wizard.step2.features.pro.onDemand': 'On-demand usage · AutoTopUp (${{price}}/M)',
+  'workspace.wizard.step2.features.pro.onDemand':
+    'On-demand usage · Auto top-up (${{price}} / 1M credits)',
   'workspace.wizard.step2.features.pro.priorityModels': 'Priority premium models',
   'workspace.wizard.step2.features.pro.support': 'Priority email support',
   'workspace.wizard.step2.left.creditsHobbyHint': 'No monthly credits · pay as you go',

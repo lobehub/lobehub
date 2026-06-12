@@ -185,6 +185,7 @@ export class DocumentHistoryService {
         isCurrent: true,
         saveSource: 'system',
         savedAt: headDocument.updatedAt,
+        userId: headDocument.userId,
       });
     }
 
@@ -193,6 +194,7 @@ export class DocumentHistoryService {
       isCurrent: false,
       saveSource: row.saveSource as DocumentHistorySaveSource,
       savedAt: row.savedAt,
+      userId: row.userId,
     }));
 
     // If head consumed a slot and we fetched a full page of history rows,

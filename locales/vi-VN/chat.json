@@ -915,6 +915,7 @@
   "workflow.toolDisplayName.addPreferenceMemory": "Bộ nhớ đã lưu",
   "workflow.toolDisplayName.calculate": "Đã tính toán",
   "workflow.toolDisplayName.callAgent": "Đã gọi một tác nhân",
+  "workflow.toolDisplayName.callMcpTool": "Đã gọi công cụ MCP",
   "workflow.toolDisplayName.callSubAgent": "Đã phân phối một tác nhân phụ",
   "workflow.toolDisplayName.clearTodos": "Đã xóa danh sách việc cần làm",
   "workflow.toolDisplayName.copyDocument": "Đã sao chép một tài liệu",

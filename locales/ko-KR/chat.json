@@ -915,6 +915,7 @@
   "workflow.toolDisplayName.addPreferenceMemory": "저장된 메모리",
   "workflow.toolDisplayName.calculate": "계산됨",
   "workflow.toolDisplayName.callAgent": "에이전트를 호출했습니다",
+  "workflow.toolDisplayName.callMcpTool": "MCP 도구 호출됨",
   "workflow.toolDisplayName.callSubAgent": "하위 에이전트가 디스패치되었습니다",
   "workflow.toolDisplayName.clearTodos": "할 일 목록이 삭제되었습니다",
   "workflow.toolDisplayName.copyDocument": "문서를 복사했습니다",

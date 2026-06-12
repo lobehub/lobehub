@@ -915,6 +915,7 @@
   "workflow.toolDisplayName.addPreferenceMemory": "الذاكرة المحفوظة",
   "workflow.toolDisplayName.calculate": "محسوب",
   "workflow.toolDisplayName.callAgent": "تم استدعاء وكيل",
+  "workflow.toolDisplayName.callMcpTool": "تم استدعاء أداة MCP",
   "workflow.toolDisplayName.callSubAgent": "تم إرسال وكيل فرعي",
   "workflow.toolDisplayName.clearTodos": "تم مسح المهام",
   "workflow.toolDisplayName.copyDocument": "تم نسخ مستند",

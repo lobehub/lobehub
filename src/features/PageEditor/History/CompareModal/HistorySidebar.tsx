@@ -6,6 +6,7 @@ import dayjs from 'dayjs';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import type {
   DocumentHistoryListItem,
   DocumentHistorySaveSource,
@@ -86,6 +87,18 @@ const styles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillSecondary};
     }
   `,
+  source: css`
+    overflow: hidden;
+
+    margin-inline-start: auto;
+    padding-inline-start: 8px;
+
+    font-size: 11px;
+    line-height: 1.3;
+    color: ${cssVar.colorTextTertiary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
   meta: css`
     overflow: hidden;
 
@@ -150,6 +163,62 @@ const createGroups = (
   return [...groups.values()];
 };
 
+interface HistorySidebarRowProps {
+  isSelected: boolean;
+  item: DocumentHistoryListItem;
+  onSelect: (historyId: string) => void;
+  saveSourceLabels: Record<DocumentHistorySaveSource, string>;
+}
+
+const HistorySidebarRow = memo<HistorySidebarRowProps>(
+  ({ item, isSelected, onSelect, saveSourceLabels }) => {
+    const { t } = useTranslation('file');
+    const authorInfo = useAuthorInfo(item.userId);
+    const disabled = item.isCurrent;
+
+    return (
+      <div className={styles.row}>
+        <div
+          className={cx(
+            styles.dot,
+            item.isCurrent && styles.dotCurrent,
+            !item.isCurrent && isSelected && styles.dotSelected,
+          )}
+        />
+        <div
+          className={cx(
+            styles.item,
+            item.isCurrent && styles.itemCurrent,
+            !item.isCurrent && isSelected && styles.itemSelected,
+          )}
+          onClick={() => {
+            if (disabled) return;
+            onSelect(item.id);
+          }}
+        >
+          <Flexbox gap={2}>
+            <Flexbox horizontal align={'center'} gap={4}>
+              <Text className={styles.time}>{formatHistoryRowTime(item.savedAt)}</Text>
+              {item.isCurrent && (
+                <Tag className={styles.tag} variant={'borderless'}>
+                  {t('pageEditor.history.current')}
+                </Tag>
+              )}
+              <span className={styles.source}>{saveSourceLabels[item.saveSource]}</span>
+            </Flexbox>
+            <Text className={styles.meta} type={'secondary'}>
+              {authorInfo?.fullName ? `${authorInfo.fullName} · ` : ''}
+              {dayjs(item.savedAt).fromNow()}
+            </Text>
+          </Flexbox>
+        </div>
+      </div>
+    );
+  },
+);
+
+HistorySidebarRow.displayName = 'HistorySidebarRow';
+
 interface HistorySidebarProps {
   items: DocumentHistoryListItem[];
   onSelect: (historyId: string) => void;
@@ -182,47 +251,15 @@ const HistorySidebar = memo<HistorySidebarProps>(
             </div>
             <div className={styles.group}>
               <div className={styles.rail} />
-              {group.items.map((item) => {
-                const isSelected = selectedHistoryId === item.id;
-                const disabled = item.isCurrent;
-
-                return (
-                  <div className={styles.row} key={item.id}>
-                    <div
-                      className={cx(
-                        styles.dot,
-                        item.isCurrent && styles.dotCurrent,
-                        !item.isCurrent && isSelected && styles.dotSelected,
-                      )}
-                    />
-                    <div
-                      className={cx(
-                        styles.item,
-                        item.isCurrent && styles.itemCurrent,
-                        !item.isCurrent && isSelected && styles.itemSelected,
-                      )}
-                      onClick={() => {
-                        if (disabled) return;
-                        onSelect(item.id);
-                      }}
-                    >
-                      <Flexbox gap={2}>
-                        <Flexbox horizontal align={'center'} gap={4}>
-                          <Text className={styles.time}>{formatHistoryRowTime(item.savedAt)}</Text>
-                          {item.isCurrent && (
-                            <Tag className={styles.tag} variant={'borderless'}>
-                              {t('pageEditor.history.current')}
-                            </Tag>
-                          )}
-                        </Flexbox>
-                        <Text className={styles.meta} type={'secondary'}>
-                          {dayjs(item.savedAt).fromNow()} · {saveSourceLabels[item.saveSource]}
-                        </Text>
-                      </Flexbox>
-                    </div>
-                  </div>
-                );
-              })}
+              {group.items.map((item) => (
+                <HistorySidebarRow
+                  isSelected={selectedHistoryId === item.id}
+                  item={item}
+                  key={item.id}
+                  saveSourceLabels={saveSourceLabels}
+                  onSelect={onSelect}
+                />
+              ))}
             </div>
           </Flexbox>
         ))}

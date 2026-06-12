@@ -915,6 +915,7 @@
   "workflow.toolDisplayName.addPreferenceMemory": "Memória salva",
   "workflow.toolDisplayName.calculate": "Calculado",
   "workflow.toolDisplayName.callAgent": "Chamou um agente",
+  "workflow.toolDisplayName.callMcpTool": "Ferramenta MCP chamada",
   "workflow.toolDisplayName.callSubAgent": "Subagente despachado",
   "workflow.toolDisplayName.clearTodos": "Tarefas apagadas",
   "workflow.toolDisplayName.copyDocument": "Copiou um documento",

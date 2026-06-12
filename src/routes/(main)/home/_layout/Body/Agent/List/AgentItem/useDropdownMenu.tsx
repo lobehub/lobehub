@@ -18,6 +18,7 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
 import { openEditingPopover } from '@/features/EditingPopover/store';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
@@ -61,6 +62,9 @@ export const useAgentDropdownMenu = ({
   // pure read so it stays enabled.
   const { allowed: canEdit } = usePermission('edit_own_content');
   const { allowed: canCreate } = usePermission('create_content');
+
+  // Cross-workspace Transfer to… / Copy to… items (null when workspace feature is off)
+  const transferMenuItems = useAgentTransferMenuItem(id);
 
   const isDefault = group === SessionDefaultGroup.Default;
 
@@ -137,6 +141,8 @@ export const useAgentDropdownMenu = ({
           label: t('sessionGroup.moveGroup'),
         },
         { type: 'divider' },
+        ...(transferMenuItems ?? []),
+        ...(transferMenuItems?.length ? [{ type: 'divider' as const }] : []),
         {
           danger: true,
           disabled: !canEdit,
@@ -172,6 +178,7 @@ export const useAgentDropdownMenu = ({
       isDefault,
       openCreateGroupModal,
       message,
+      transferMenuItems,
     ],
   );
 };

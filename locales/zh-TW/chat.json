@@ -915,6 +915,7 @@
   "workflow.toolDisplayName.addPreferenceMemory": "已儲存的記憶",
   "workflow.toolDisplayName.calculate": "已計算",
   "workflow.toolDisplayName.callAgent": "已呼叫代理程式",
+  "workflow.toolDisplayName.callMcpTool": "呼叫 MCP 工具",
   "workflow.toolDisplayName.callSubAgent": "已調度子代理",
   "workflow.toolDisplayName.clearTodos": "已清除待辦事項",
   "workflow.toolDisplayName.copyDocument": "已複製文件",

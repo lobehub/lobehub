@@ -17,6 +17,8 @@
   "storage_overage_cap_reached_title": "스토리지 종량제 한도 도달",
   "video_generation_completed": "동영상 \"{{prompt}}\"이(가) 준비되었습니다.",
   "video_generation_completed_title": "동영상 생성 완료",
+  "workspace_member_invited": "{{inviterLabel}}님이 {{workspaceName}} 워크스페이스에 {{role}} 역할로 초대했습니다.",
+  "workspace_member_invited_title": "{{workspaceName}}에 참여 초대",
   "workspace_member_joined": "{{memberLabel}}님이 \"{{workspaceName}}\" 워크스페이스에 {{role}}로 참여했습니다.",
   "workspace_member_joined_member": "{{memberLabel}}님이 \"{{workspaceName}}\" 워크스페이스에 멤버로 참여했습니다.",
   "workspace_member_joined_member_title": "{{workspaceName}}에 새로운 멤버가 참여했습니다",

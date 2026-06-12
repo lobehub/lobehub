@@ -915,6 +915,7 @@
   "workflow.toolDisplayName.addPreferenceMemory": "حافظه ذخیره‌شده",
   "workflow.toolDisplayName.calculate": "محاسبه‌شده",
   "workflow.toolDisplayName.callAgent": "یک عامل فراخوانی شد",
+  "workflow.toolDisplayName.callMcpTool": "ابزار MCP فراخوانی شد",
   "workflow.toolDisplayName.callSubAgent": "زیرعامل ارسال شد",
   "workflow.toolDisplayName.clearTodos": "وظایف پاک شدند",
   "workflow.toolDisplayName.copyDocument": "یک سند کپی شد",

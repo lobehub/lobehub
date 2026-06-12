@@ -22,6 +22,7 @@ export interface DocumentHistoryListItem {
   isCurrent: boolean;
   savedAt: Date;
   saveSource: DocumentHistorySaveSource;
+  userId: string;
 }
 
 export interface DocumentHistoryItemResult {

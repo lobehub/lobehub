@@ -915,6 +915,7 @@
   "workflow.toolDisplayName.addPreferenceMemory": "Opgeslagen geheugen",
   "workflow.toolDisplayName.calculate": "Berekend",
   "workflow.toolDisplayName.callAgent": "Agent aangeroepen",
+  "workflow.toolDisplayName.callMcpTool": "Geroepen MCP-tool",
   "workflow.toolDisplayName.callSubAgent": "Een sub-agent verzonden",
   "workflow.toolDisplayName.clearTodos": "Taken gewist",
   "workflow.toolDisplayName.copyDocument": "Een document gekopieerd",

@@ -17,6 +17,8 @@
   "storage_overage_cap_reached_title": "存储按量付费上限已触达",
   "video_generation_completed": "视频「{{prompt}}」已生成。",
   "video_generation_completed_title": "视频生成完成",
+  "workspace_member_invited": "{{inviterLabel}} 邀请您以 {{role}} 的身份加入工作区 \"{{workspaceName}}\"。",
+  "workspace_member_invited_title": "加入 {{workspaceName}} 的邀请",
   "workspace_member_joined": "{{memberLabel}} 已加入工作区 \"{{workspaceName}}\"，角色为 {{role}}。",
   "workspace_member_joined_member": "{{memberLabel}} 已加入工作区 \"{{workspaceName}}\"，角色为成员。",
   "workspace_member_joined_member_title": "新成员加入了 {{workspaceName}}",

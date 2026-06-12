@@ -38,6 +38,7 @@ const serializeHistoryList = <
       isCurrent: boolean;
       saveSource: ListHistoryOutput['items'][number]['saveSource'];
       savedAt: Date | string;
+      userId: string;
     }>;
     nextBeforeSavedAt?: Date | string;
   },

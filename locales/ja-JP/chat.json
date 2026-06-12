@@ -915,6 +915,7 @@
   "workflow.toolDisplayName.addPreferenceMemory": "保存済みメモリ",
   "workflow.toolDisplayName.calculate": "計算済み",
   "workflow.toolDisplayName.callAgent": "エージェントを呼び出しました",
+  "workflow.toolDisplayName.callMcpTool": "MCPツールを呼び出しました",
   "workflow.toolDisplayName.callSubAgent": "サブエージェントを派遣しました",
   "workflow.toolDisplayName.clearTodos": "ToDoをクリアしました",
   "workflow.toolDisplayName.copyDocument": "ドキュメントをコピーしました",

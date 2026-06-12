@@ -33,9 +33,10 @@ export const runVerifyOnCompletion = async (
   db: LobeChatDatabase,
   userId: string,
   params: RunVerifyOnCompletionParams,
+  workspaceId?: string,
 ): Promise<void> => {
   try {
-    const operationModel = new AgentOperationModel(db, userId);
+    const operationModel = new AgentOperationModel(db, userId, workspaceId);
     const state = await operationModel.getVerifyState(params.operationId);
 
     // Opt-in gate: only runs with a confirmed plan that hasn't been verified yet.
@@ -48,7 +49,7 @@ export const runVerifyOnCompletion = async (
       return;
     }
 
-    const executor = new VerifyExecutorService(db, userId);
+    const executor = new VerifyExecutorService(db, userId, workspaceId);
     await executor.execute({
       deliverable: params.deliverable,
       goal: params.goal,
@@ -63,13 +64,14 @@ export const runVerifyOnCompletion = async (
         provider: op.provider,
         topicId: op.topicId,
         userId,
+        workspaceId,
       }),
     });
 
     // Auto-repair once verification has fully resolved. For runs with only inline
     // (LLM/program) checks, everything is resolved now; runs with async agent
     // checks no-op here and re-trigger from the verifier's writeback path.
-    await maybeAutoRepair(db, userId, params.operationId);
+    await maybeAutoRepair(db, userId, params.operationId, workspaceId);
   } catch (error) {
     log('runVerifyOnCompletion failed for op %s (non-fatal): %O', params.operationId, error);
   }

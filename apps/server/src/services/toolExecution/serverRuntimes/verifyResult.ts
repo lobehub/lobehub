@@ -15,6 +15,7 @@ interface VerifyResultRuntimeContext {
   operationId?: string;
   serverDB: LobeChatDatabase;
   userId: string;
+  workspaceId?: string;
 }
 
 /**
@@ -27,11 +28,13 @@ class VerifyResultExecutionRuntime {
   private operationId?: string;
   private db: LobeChatDatabase;
   private userId: string;
+  private workspaceId?: string;
 
   constructor(context: VerifyResultRuntimeContext) {
     this.operationId = context.operationId;
     this.db = context.serverDB;
     this.userId = context.userId;
+    this.workspaceId = context.workspaceId;
   }
 
   submitVerifyResult = async (params: SubmitVerifyResultParams) => {
@@ -47,11 +50,13 @@ class VerifyResultExecutionRuntime {
     }
 
     // The verifier runs as a sub-agent; the row to update belongs to the parent run.
-    const op = await new AgentOperationModel(this.db, this.userId).findById(this.operationId);
+    const op = await new AgentOperationModel(this.db, this.userId, this.workspaceId).findById(
+      this.operationId,
+    );
     const targetOperationId = op?.parentOperationId ?? this.operationId;
 
     const status = params.verdict === 'passed' ? 'passed' : 'failed';
-    await new VerifyCheckResultModel(this.db, this.userId).updateByCheckItem(
+    await new VerifyCheckResultModel(this.db, this.userId, this.workspaceId).updateByCheckItem(
       targetOperationId,
       params.checkItemId,
       {
@@ -66,10 +71,12 @@ class VerifyResultExecutionRuntime {
         verdict: params.verdict,
       },
     );
-    await new VerifyStatusService(this.db, this.userId).recompute(targetOperationId);
+    await new VerifyStatusService(this.db, this.userId, this.workspaceId).recompute(
+      targetOperationId,
+    );
     // This may be the last check to resolve — kick auto-repair if the run failed
     // with auto_repair checks (no-op until everything has a terminal result).
-    await maybeAutoRepair(this.db, this.userId, targetOperationId);
+    await maybeAutoRepair(this.db, this.userId, targetOperationId, this.workspaceId);
 
     log(
       'submitted verdict %s for check %s (op %s)',
@@ -94,6 +101,7 @@ export const verifyResultRuntime: ServerRuntimeRegistration = {
       operationId: context.operationId,
       serverDB: context.serverDB,
       userId: context.userId,
+      workspaceId: context.workspaceId,
     });
   },
   identifier: VerifyToolIdentifier,

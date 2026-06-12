@@ -990,6 +990,7 @@ export class BotMessageRouter {
           agentId,
           db: serverDB,
           userId,
+          workspaceId: workspaceId ?? undefined,
         },
         { ignoreError: true },
       );
@@ -1175,6 +1176,7 @@ export class BotMessageRouter {
           agentId,
           db: serverDB,
           userId,
+          workspaceId: workspaceId ?? undefined,
         },
         { ignoreError: true },
       );
@@ -1392,6 +1394,7 @@ export class BotMessageRouter {
             agentId,
             db: serverDB,
             userId,
+            workspaceId: workspaceId ?? undefined,
           },
           { ignoreError: true },
         );

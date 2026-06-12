@@ -17,6 +17,8 @@
   "storage_overage_cap_reached_title": "Limiet voor opslag op basis van verbruik bereikt",
   "video_generation_completed": "Uw video \"{{prompt}}\" is klaar.",
   "video_generation_completed_title": "Videogeneratie voltooid",
+  "workspace_member_invited": "{{inviterLabel}} heeft je uitgenodigd om lid te worden van de werkruimte \"{{workspaceName}}\" als {{role}}.",
+  "workspace_member_invited_title": "Uitnodiging om lid te worden van {{workspaceName}}",
   "workspace_member_joined": "{{memberLabel}} is lid geworden van werkruimte \"{{workspaceName}}\" als {{role}}.",
   "workspace_member_joined_member": "{{memberLabel}} is lid geworden van werkruimte \"{{workspaceName}}\" als Lid.",
   "workspace_member_joined_member_title": "Nieuw lid toegevoegd aan {{workspaceName}}",

@@ -75,13 +75,13 @@ export class VerifyPlanGeneratorService {
   private readonly operationModel: AgentOperationModel;
   private readonly documentModel: DocumentModel;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
-    this.criterionModel = new VerifyCriterionModel(db, userId);
-    this.rubricModel = new VerifyRubricModel(db, userId);
-    this.operationModel = new AgentOperationModel(db, userId);
-    this.documentModel = new DocumentModel(db, userId);
+    this.criterionModel = new VerifyCriterionModel(db, userId, workspaceId);
+    this.rubricModel = new VerifyRubricModel(db, userId, workspaceId);
+    this.operationModel = new AgentOperationModel(db, userId, workspaceId);
+    this.documentModel = new DocumentModel(db, userId, workspaceId);
   }
 
   /**

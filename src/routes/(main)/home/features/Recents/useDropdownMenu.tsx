@@ -5,6 +5,8 @@ import { PencilLineIcon, Trash } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
+import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransferMenuItem';
 import { usePermission } from '@/hooks/usePermission';
 import { type RecentItem } from '@/server/routers/lambda/recent';
 import { documentService } from '@/services/document';
@@ -26,6 +28,15 @@ export const useRecentItemDropdownMenu = (
   // items visible-but-disabled so the affordance is clear (per disabled-not-
   // hidden UX rule).
   const { allowed: canEdit } = usePermission('edit_own_content');
+
+  // Cross-workspace Transfer to… / Copy to… items. Only document and task recents
+  // have a transfer flow today; topic has none. Hooks are called unconditionally and
+  // return null unless the matching id is passed (and the workspace feature is on).
+  const documentTransferItems = useDocumentTransferMenuItem(
+    item.type === 'document' ? item.id : undefined,
+  );
+  const taskTransferItems = useTaskTransferMenuItem(item.type === 'task' ? item.id : undefined);
+  const transferMenuItems = documentTransferItems ?? taskTransferItems;
 
   const handleRename = useCallback(
     async (newTitle: string) => {
@@ -93,6 +104,8 @@ export const useRecentItemDropdownMenu = (
         label: t('rename'),
         onClick: () => toggleEditing(true),
       },
+      ...(transferMenuItems ?? []),
+      ...(transferMenuItems?.length ? [{ type: 'divider' as const }] : []),
       {
         danger: true,
         disabled: !canEdit,
@@ -102,7 +115,7 @@ export const useRecentItemDropdownMenu = (
         onClick: handleDelete,
       },
     ];
-  }, [canEdit, t, toggleEditing, handleDelete]);
+  }, [canEdit, t, toggleEditing, handleDelete, transferMenuItems]);
 
   return { dropdownMenu, handleRename };
 };

@@ -338,7 +338,7 @@
   "plans.workspace.maxMembers": "最多 {{count}} 名成员",
   "plans.workspace.noSharedCredits": "无共享积分",
   "plans.workspace.sharedCredits": "~{{count}} 积分 / 月",
-  "plans.workspace.solo": "个人版 (1 名成员)",
+  "plans.workspace.solo": "单人工作区 (1 名成员)",
   "promoBanner.fableYearly": "年付订阅用户限时享 {{percent}}% 用量优惠",
   "qa.desc": "如果您的问题未被解答，请查看 <1>产品文档</1> 获取更多常见问题，或联系我们。",
   "qa.detail": "查看详情",

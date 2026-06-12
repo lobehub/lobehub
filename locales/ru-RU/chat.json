@@ -915,6 +915,7 @@
   "workflow.toolDisplayName.addPreferenceMemory": "Сохранённая память",
   "workflow.toolDisplayName.calculate": "Рассчитано",
   "workflow.toolDisplayName.callAgent": "Вызван агент",
+  "workflow.toolDisplayName.callMcpTool": "Вызван инструмент MCP",
   "workflow.toolDisplayName.callSubAgent": "Вызван подагент",
   "workflow.toolDisplayName.clearTodos": "Задачи очищены",
   "workflow.toolDisplayName.copyDocument": "Документ скопирован",

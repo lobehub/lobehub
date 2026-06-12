@@ -85,6 +85,7 @@ export const agentSignalRouter = router({
       return enqueueAgentSignalSourceEvent(sourceEvent, {
         agentId: input.agentId,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
       });
     }),
   listReceipts: agentSignalProcedure

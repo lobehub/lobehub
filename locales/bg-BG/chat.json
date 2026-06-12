@@ -915,6 +915,7 @@
   "workflow.toolDisplayName.addPreferenceMemory": "Запазена памет",
   "workflow.toolDisplayName.calculate": "Изчислено",
   "workflow.toolDisplayName.callAgent": "Извикан агент",
+  "workflow.toolDisplayName.callMcpTool": "Извикан MCP инструмент",
   "workflow.toolDisplayName.callSubAgent": "Изпратен под-агент",
   "workflow.toolDisplayName.clearTodos": "Изчистени задачи",
   "workflow.toolDisplayName.copyDocument": "Копиран документ",

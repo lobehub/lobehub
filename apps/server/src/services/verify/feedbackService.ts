@@ -23,8 +23,8 @@ export const computeFalseFlags = (
 export class VerifyFeedbackService {
   private readonly resultModel: VerifyCheckResultModel;
 
-  constructor(db: LobeChatDatabase, userId: string) {
-    this.resultModel = new VerifyCheckResultModel(db, userId);
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.resultModel = new VerifyCheckResultModel(db, userId, workspaceId);
   }
 
   /** Record a user's decision on a result and precompute its FP/FN flags. */

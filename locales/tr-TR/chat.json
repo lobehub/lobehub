@@ -915,6 +915,7 @@
   "workflow.toolDisplayName.addPreferenceMemory": "Kaydedilmiş bellek",
   "workflow.toolDisplayName.calculate": "Hesaplandı",
   "workflow.toolDisplayName.callAgent": "Bir temsilci çağrıldı",
+  "workflow.toolDisplayName.callMcpTool": "MCP aracını çağırdı",
   "workflow.toolDisplayName.callSubAgent": "Bir alt ajan gönderildi",
   "workflow.toolDisplayName.clearTodos": "Yapılacaklar temizlendi",
   "workflow.toolDisplayName.copyDocument": "Bir belge kopyalandı",

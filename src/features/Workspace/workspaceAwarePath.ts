@@ -8,23 +8,22 @@ export interface WorkspaceAwareNavigateOptions extends NavigateOptions {
 /**
  * Top-level path segments that are never mirrored under `/:workspaceSlug`.
  *
- * Kept in sync with `sharedMainAreaChildren` in the router configs and with
- * the `PERSONAL_PATH_REGEX` in `scripts/codemodWorkspaceNav.ts`. If you add
+ * Kept in sync with `sharedMainAreaChildren` in the router configs. If you add
  * a new top-level personal-only route, append it here.
  *
  * `/settings` is handled separately via {@link WORKSPACE_SETTINGS_TABS} —
  * sub-paths in the allowlist get auto-prefixed; everything else (profile,
  * llm, referral, system-tools, etc.) stays personal.
  */
-const PERSONAL_PATH_REGEX = /^\/(?:onboarding|me|share|devtools|desktop-onboarding)(?:[/?#]|$)/;
+const PERSONAL_PATH_REGEX =
+  /^\/(?:invite|onboarding|me|share|devtools|desktop-onboarding)(?:[/?#]|$)/;
 
 const isPersonalPath = (to: string): boolean => PERSONAL_PATH_REGEX.test(to);
 
 /**
  * Settings sub-paths that have a `/:workspaceSlug/settings/<tab>` mirror in
  * the SPA routers. Kept in sync with the workspace settings subtree in
- * `src/spa/router/{desktopRouter.config,desktopRouter.config.desktop,mobileRouter.config}.tsx`
- * and with `SHARED_SETTINGS_TABS` in `scripts/codemodWorkspaceNav.ts`.
+ * `src/spa/router/{desktopRouter.config,desktopRouter.config.desktop,mobileRouter.config}.tsx`.
  *
  * Tabs absent from this set (profile, llm, referral, system-tools, security,
  * sync, plugin, tts, hotkey, agent, about, common, system-agent, ...) are
