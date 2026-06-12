@@ -19,10 +19,10 @@ export interface ResolveExecutionTargetOptions {
  * Single source of truth for where an agent executes — one global
  * `agencyConfig.executionTarget` drives both desktop and web.
  *
- * - `none`    → 无设备 (no execution environment; plain chat)
- * - `local`   → 本机 (this machine, in-process; desktop only)
- * - `sandbox` → 云端沙箱 (server cloud sandbox)
- * - `device`  → 远程设备 (dispatched to `boundDeviceId`)
+ * - `none`    → no device (no execution environment; plain chat)
+ * - `local`   → local machine (this machine, in-process; desktop only)
+ * - `sandbox` → cloud sandbox (server cloud sandbox)
+ * - `device`  → remote device (dispatched to `boundDeviceId`)
  *
  * `local` and `device` stay DISTINCT even when the bound device is this very
  * machine: `device` dispatches through the server gateway, so progress streams
