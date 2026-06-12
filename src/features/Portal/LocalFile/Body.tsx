@@ -1,4 +1,5 @@
 import { isDesktop } from '@lobechat/const';
+import type { MarkdownProps } from '@lobehub/ui';
 import { ActionIcon, Center, Empty, Flexbox, Icon, Markdown, Segmented, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CodeIcon, EyeIcon, RefreshCwIcon } from 'lucide-react';
@@ -20,6 +21,7 @@ import {
 } from '@/utils/skillMarkdown';
 
 import { extensionToLanguage, getFileExtension } from './Body.helpers';
+import MarkdownImage from './MarkdownImage';
 
 interface ImagePreviewProps {
   blob: Blob;
@@ -115,12 +117,14 @@ interface TextPreviewPaneProps {
   activeTopicId?: string | null;
   content: string;
   contentType?: string;
+  deviceId?: string;
   ext: string;
   filePath: string;
   onReload?: () => Promise<unknown> | void;
   onSaved?: (savedContent: string) => void;
   readOnly?: boolean;
   reloading?: boolean;
+  workingDirectory: string;
 }
 
 const TextPreviewPane = memo<TextPreviewPaneProps>(
@@ -128,12 +132,14 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
     activeTopicId,
     content,
     contentType,
+    deviceId,
     ext,
     filePath,
     onReload,
     onSaved,
     readOnly = false,
     reloading = false,
+    workingDirectory,
   }) => {
     const { t } = useTranslation('chat');
     const isMarkdown = useMemo(() => MARKDOWN_EXTS.has(ext.toLowerCase()), [ext]);
@@ -192,6 +198,20 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
     const previewTitle = isMarkdown
       ? (frontmatterFields.name ?? '')
       : (filePath.split('/').at(-1) ?? filePath);
+    const markdownComponents = useMemo(
+      () =>
+        ({
+          img: (props) => (
+            <MarkdownImage
+              {...props}
+              deviceId={deviceId}
+              markdownFilePath={filePath}
+              workingDirectory={workingDirectory}
+            />
+          ),
+        }) satisfies MarkdownProps['components'],
+      [deviceId, filePath, workingDirectory],
+    );
 
     const [modeByScope, setModeByScope] = useState<Record<string, TextPreviewMode>>({});
     const modeScopeKey = `${activeTopicId ?? NO_TOPIC_KEY}:${filePath}`;
@@ -259,7 +279,12 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
           {isMarkdown && mode === 'render' ? (
             <>
               <SkillFrontmatterPreviewCard metadata={frontmatterMetadata} />
-              <Markdown style={{ paddingBlock: 8, paddingInline: 12 }}>{body}</Markdown>
+              <Markdown
+                components={markdownComponents}
+                style={{ paddingBlock: 8, paddingInline: 12 }}
+              >
+                {body}
+              </Markdown>
             </>
           ) : showHtmlPreview ? (
             <InlineHtmlPreview content={editingValue} key={`${filePath}:${htmlPreviewRevision}`} />
@@ -353,10 +378,12 @@ const ActiveFileView = memo<ActiveFileViewProps>(
         activeTopicId={activeTopicId}
         content={preview.content}
         contentType={preview.contentType}
+        deviceId={deviceId}
         ext={ext}
         filePath={filePath}
         readOnly={!!deviceId}
         reloading={isValidating}
+        workingDirectory={workingDirectory}
         onReload={handleReload}
         onSaved={handleSavedContent}
       />
