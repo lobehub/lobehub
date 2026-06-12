@@ -14,8 +14,15 @@ import {
   type OperationType,
 } from '@/store/chat/slices/operation/types';
 import { shinyTextStyles } from '@/styles';
+import {
+  calculateOperationUsageMetrics,
+  hasOperationUsageMetrics,
+  mergeOperationUsageMetrics,
+  type OperationUsageMetrics,
+} from '@/utils/operationUsageMetrics';
 
 import { contextSelectors, dataSelectors, useConversationStore } from '../store';
+import { parseStatusPhrases, pickStableStatusPhrase } from './OpStatusTray/logic';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -240,108 +247,109 @@ interface MetricItem {
 }
 
 const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'opStatusTray']);
   const context = useConversationStore(contextSelectors.context);
   const dbMessages = useConversationStore(dataSelectors.dbMessages);
 
-  // Detect any running AI-runtime op (excludes sub-ops like callLLM/toolCalling)
-  // and capture the earliest start time as the op's anchor.
-  const startTime = useChatStore((s) => {
+  const operationState = useChatStore((s) => {
     const ops = operationSelectors.getOperationsByContext(context)(s);
-    let earliest: number | undefined;
-    for (const op of ops) {
-      if (
-        op.status !== 'running' ||
-        op.metadata.isAborting ||
-        !AI_RUNTIME_OPERATION_TYPES.includes(op.type)
-      ) {
-        continue;
-      }
-      if (earliest === undefined || op.metadata.startTime < earliest) {
-        earliest = op.metadata.startTime;
-      }
-    }
-    return earliest;
-  });
+    let activity: ActivityKey | undefined;
+    let earliestStart: number | undefined;
+    let latestActivityStart = -1;
+    let statusSeed: string | undefined;
+    let stepCount = 0;
+    let usageMetrics: OperationUsageMetrics | undefined;
+    const runtimeOperationIds: string[] = [];
 
-  // The most recently started running sub-op decides the streaming phase.
-  // Server-side runtimes surface no sub-ops on the client, so fall back to
-  // 'generating' — the dominant phase for plain server-streamed chat.
-  const activity = useChatStore((s): ActivityKey => {
-    const ops = operationSelectors.getOperationsByContext(context)(s);
-    let current: ActivityKey | undefined;
-    let latest = -1;
     for (const op of ops) {
       if (op.status !== 'running' || op.metadata.isAborting) continue;
+
       const mapped = resolveActivity(op.type);
-      if (!mapped) continue;
-      if (op.metadata.startTime > latest) {
-        latest = op.metadata.startTime;
-        current = mapped;
+      if (mapped && op.metadata.startTime > latestActivityStart) {
+        latestActivityStart = op.metadata.startTime;
+        activity = mapped;
       }
-    }
-    return current ?? 'generating';
-  });
 
-  const steps = useChatStore((s) => {
-    const ops = operationSelectors.getOperationsByContext(context)(s);
-    let stepCount = 0;
-
-    for (const op of ops) {
-      if (
-        op.status !== 'running' ||
-        op.metadata.isAborting ||
-        !AI_RUNTIME_OPERATION_TYPES.includes(op.type)
-      ) {
+      if (!AI_RUNTIME_OPERATION_TYPES.includes(op.type)) {
         continue;
       }
 
+      runtimeOperationIds.push(op.id);
       stepCount = Math.max(stepCount, normalizeStepCount(op.metadata.stepCount));
-    }
+      if (hasOperationUsageMetrics(op.metadata.usageMetrics)) {
+        usageMetrics = mergeOperationUsageMetrics(usageMetrics, op.metadata.usageMetrics);
+      }
 
-    return stepCount;
+      if (earliestStart === undefined || op.metadata.startTime < earliestStart) {
+        earliestStart = op.metadata.startTime;
+        statusSeed = op.id;
+      }
+    }
+    return {
+      activity: activity ?? 'generating',
+      operationIdsKey: runtimeOperationIds.join('|'),
+      startTime: earliestStart,
+      statusSeed,
+      steps: stepCount,
+      usageMetrics,
+    };
   });
+  const operationsByMessage = useChatStore((s) => s.operationsByMessage);
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!startTime) return;
+    if (!operationState.startTime) return;
     setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [startTime]);
+  }, [operationState.startTime]);
 
-  // Aggregate tokens / cost across the current conversation.
-  // New code reads usage only from the top-level message field.
-  const { totalCost, totalTokens } = useMemo(() => {
-    let tokens = 0;
-    let cost = 0;
-    for (const m of dbMessages) {
-      if (m.role !== 'assistant') continue;
-      const usage = m.usage;
-      if (!usage) continue;
-      tokens += usage.totalTokens ?? 0;
-      cost += usage.cost ?? 0;
-    }
-    return { totalCost: cost, totalTokens: tokens };
-  }, [dbMessages]);
+  const operationIds = useMemo(
+    () => new Set(operationState.operationIdsKey.split('|').filter(Boolean)),
+    [operationState.operationIdsKey],
+  );
 
-  if (!startTime) return null;
+  // Fallback for older / reloaded operation state: derive usage from messages
+  // produced by this operation when live operation metadata is unavailable.
+  const fallbackMetrics = useMemo(() => {
+    return calculateOperationUsageMetrics(dbMessages, operationIds, operationsByMessage);
+  }, [dbMessages, operationIds, operationsByMessage]);
 
-  const elapsed = now - startTime;
-  const costLabel = t('opStatusTray.cost');
-  const stepLabel = t('opStatusTray.steps');
-  const tokenLabel = t('opStatusTray.tokens', { defaultValue: 'tokens' });
+  if (!operationState.startTime) return null;
+
+  const { totalCost, totalTokens } = hasOperationUsageMetrics(operationState.usageMetrics)
+    ? operationState.usageMetrics
+    : fallbackMetrics;
+  const elapsed = now - operationState.startTime;
+  const costLabel = t('chat:opStatusTray.cost');
+  const stepLabel = t('chat:opStatusTray.steps');
+  const tokenLabel = t('chat:opStatusTray.tokens', { defaultValue: 'tokens' });
+  const generatingPhrases = parseStatusPhrases(
+    t('opStatusTray:generatingPhrases', {
+      defaultValue: [],
+      returnObjects: true,
+    }),
+  );
+  const randomGeneratingStatus =
+    pickStableStatusPhrase(
+      generatingPhrases,
+      operationState.statusSeed ?? String(operationState.startTime),
+    ) ?? t('chat:opStatusTray.status.generating');
+  const statusText =
+    operationState.activity === 'generating'
+      ? randomGeneratingStatus
+      : t(`chat:opStatusTray.status.${operationState.activity}`);
 
   // Zero-valued metrics render nothing; steps only matter for long-running
   // multi-step tasks, so a single step stays hidden too.
   const metrics = [
-    steps > 1
+    operationState.steps > 1
       ? {
           icon: FootprintsIcon,
           key: 'steps',
           label: stepLabel,
-          title: `${steps} ${stepLabel}`,
-          value: String(steps),
+          title: `${operationState.steps} ${stepLabel}`,
+          value: String(operationState.steps),
         }
       : undefined,
     totalTokens > 0
@@ -404,9 +412,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
     >
       <span className={cx(styles.metric, styles.statusMetric)}>
         <ActivityGlyph />
-        <span className={cx(styles.statusText, shinyTextStyles.shinyText)}>
-          {t(`opStatusTray.status.${activity}`)}...
-        </span>
+        <span className={cx(styles.statusText, shinyTextStyles.shinyText)}>{statusText}...</span>
         <span className={styles.timerValue}>{formatDuration(elapsed)}</span>
       </span>
 

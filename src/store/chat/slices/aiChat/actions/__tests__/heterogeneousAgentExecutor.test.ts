@@ -159,14 +159,19 @@ function createMockStore(overrides: Record<string, any> = {}) {
   // for each subagent run, mirroring `startOperation`'s contract just
   // enough that the executor can build dispatchers + completion calls.
   let subOpCounter = 0;
-  return {
+  const store = {
     associateMessageWithOperation: vi.fn(),
     completeOperation: vi.fn(),
     drainQueuedMessages: vi.fn(() => []),
     internal_dispatchMessage: vi.fn(),
     internal_toggleToolCallingStreaming: vi.fn(),
     markUnreadCompleted: vi.fn(),
-    operations: {} as Record<string, any>,
+    operations: {
+      'op-1': {
+        context: { agentId: 'agent-1', scope: 'main', topicId: 'topic-1' },
+        metadata: { startTime: 0 },
+      },
+    } as Record<string, any>,
     refreshMessages: vi.fn(async () => {}),
     refreshThreads: vi.fn(async () => {}),
     replaceMessages: vi.fn(),
@@ -181,6 +186,19 @@ function createMockStore(overrides: Record<string, any> = {}) {
     updateTopicMetadata: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as any;
+
+  if (!store.updateOperationMetadata) {
+    store.updateOperationMetadata = vi.fn((operationId: string, metadata: Record<string, any>) => {
+      const operation = store.operations[operationId];
+      if (!operation) return;
+      operation.metadata = {
+        ...operation.metadata,
+        ...metadata,
+      };
+    });
+  }
+
+  return store;
 }
 
 const defaultContext = {
@@ -726,7 +744,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       // Realistic CC partial-messages flow: message_start primes the turn,
       // assistant events echo a stale usage, message_delta carries the final.
-      await runWithEvents([
+      const { store } = await runWithEvents([
         ccInit(),
         ccMessageStart('msg_01'),
         ccAssistant('msg_01', [{ text: 'a', type: 'text' }]),
@@ -772,6 +790,13 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       // No cache tokens for this turn — these fields should be absent
       expect(u2.inputCachedTokens).toBeUndefined();
       expect(u2.inputWriteCacheTokens).toBeUndefined();
+
+      expect(store.operations['op-1'].metadata.usageMetrics).toEqual({
+        totalCost: 0,
+        totalInputTokens: 650,
+        totalOutputTokens: 130,
+        totalTokens: 780,
+      });
     });
 
     it('should ignore stale usage on assistant events (from message_start echo)', async () => {

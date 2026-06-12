@@ -37,7 +37,10 @@ function createMockStore() {
     internal_toggleToolCallingStreaming: vi.fn(),
     markUnreadCompleted: vi.fn(),
     operations: {
-      'op-1': { context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } },
+      'op-1': {
+        context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' },
+        metadata: { startTime: 0, usageMetrics: { totalTokens: 100 } },
+      },
     } as Record<string, any>,
     replaceMessages: vi.fn(),
     startOperation: vi.fn(() => {
@@ -620,6 +623,29 @@ describe('createGatewayEventHandler', () => {
       handler(makeEvent('step_complete', { phase: 'human_approval' }));
       await flush();
 
+      expect(store.replaceMessages).not.toHaveBeenCalled();
+    });
+
+    it('should accumulate turn metadata usage onto the operation', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('step_complete', {
+          phase: 'turn_metadata',
+          usage: { cost: 0.2, totalInputTokens: 40, totalOutputTokens: 10, totalTokens: 50 },
+        }),
+      );
+      await flush();
+
+      expect(store.updateOperationMetadata).toHaveBeenCalledWith('op-1', {
+        usageMetrics: {
+          totalCost: 0.2,
+          totalInputTokens: 40,
+          totalOutputTokens: 10,
+          totalTokens: 150,
+        },
+      });
       expect(store.replaceMessages).not.toHaveBeenCalled();
     });
   });

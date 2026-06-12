@@ -39,6 +39,7 @@ import { threadService } from '@/services/thread';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
 import { resolveNotificationNavigatePath } from '@/store/chat/utils/desktopNotification';
 import { markdownToTxt } from '@/utils/markdownToTxt';
+import { addUsageToOperationMetrics } from '@/utils/operationUsageMetrics';
 
 import { messageMapKey } from '../../../utils/messageMapKey';
 import { mergeQueuedMessages } from '../../operation/types';
@@ -1225,6 +1226,13 @@ export const executeHeterogeneousAgent = async (
           const mainAsstId = currentAssistantMessageId;
           persistQueue = persistQueue.then(() => reduceAndApplySubagent(event, mainAsstId));
           return;
+        }
+
+        if (turnUsage) {
+          const operation = get().operations[operationId];
+          get().updateOperationMetadata(operationId, {
+            usageMetrics: addUsageToOperationMetrics(operation?.metadata?.usageMetrics, turnUsage),
+          });
         }
 
         if (event.data.model) lastModel = event.data.model;
