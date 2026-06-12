@@ -1,9 +1,9 @@
 'use client';
 
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
+import type { LucideIcon } from 'lucide-react';
 import { CircleDollarSignIcon, CoinsIcon, FootprintsIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
 import { Fragment, memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,6 +21,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     padding-block: 8px;
     padding-inline: 14px;
+    container-type: inline-size;
     border: 1px solid ${cssVar.colorFillSecondary};
     border-block-end: none;
     border-start-start-radius: 12px;
@@ -45,21 +46,71 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 4px;
     align-items: center;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   `,
   metricGroup: css`
     display: inline-flex;
+    flex: none;
     gap: 10px;
     align-items: center;
   `,
+  metricGroupFull: css`
+    @container (max-width: 360px) {
+      display: none;
+    }
+  `,
   metricIcon: css`
+    flex: none;
     color: ${cssVar.colorTextTertiary};
   `,
+  metricPopover: css`
+    min-width: 150px;
+    padding: 2px;
+  `,
+  metricPopoverLabel: css`
+    color: ${cssVar.colorTextTertiary};
+  `,
+  metricPopoverRow: css`
+    font-size: 12px;
+  `,
+  metricPopoverValue: css`
+    color: ${cssVar.colorTextSecondary};
+    font-variant-numeric: tabular-nums;
+  `,
+  metricValue: css`
+    overflow: hidden;
+    max-width: 56px;
+    text-overflow: ellipsis;
+  `,
+  compactMetric: css`
+    display: none;
+    flex: none;
+
+    cursor: default;
+
+    @container (max-width: 360px) {
+      display: inline-flex;
+    }
+  `,
+  statusMetric: css`
+    overflow: hidden;
+    flex: 1 1 auto;
+    min-width: 0;
+  `,
   statusText: css`
+    overflow: hidden;
+
     font-weight: 500;
+    text-overflow: ellipsis;
     white-space: nowrap;
   `,
   timerValue: css`
+    flex: none;
     color: ${cssVar.colorTextTertiary};
+
+    @container (max-width: 260px) {
+      display: none;
+    }
   `,
   activityGlyph: css`
     overflow: visible;
@@ -180,6 +231,14 @@ interface OpStatusTrayProps {
   topAttached?: boolean;
 }
 
+interface MetricItem {
+  icon: LucideIcon;
+  key: 'cost' | 'steps' | 'tokens';
+  label: string;
+  title: string;
+  value: string;
+}
+
 const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
   const { t } = useTranslation('chat');
   const context = useConversationStore(contextSelectors.context);
@@ -269,36 +328,72 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
   if (!startTime) return null;
 
   const elapsed = now - startTime;
+  const costLabel = t('opStatusTray.cost');
+  const stepLabel = t('opStatusTray.steps');
   const tokenLabel = t('opStatusTray.tokens', { defaultValue: 'tokens' });
 
   // Zero-valued metrics render nothing; steps only matter for long-running
   // multi-step tasks, so a single step stays hidden too.
-  const metrics: ReactNode[] = [];
-  if (steps > 1)
-    metrics.push(
-      <Tooltip key="steps" title={`${steps} ${t('opStatusTray.steps')}`}>
-        <span className={styles.metric}>
-          <Icon className={styles.metricIcon} icon={FootprintsIcon} size={13} />
-          <span>{steps}</span>
-        </span>
-      </Tooltip>,
-    );
-  if (totalTokens > 0)
-    metrics.push(
-      <Tooltip key="tokens" title={`${formatTokens(totalTokens)} ${tokenLabel}`}>
-        <span className={styles.metric}>
-          <Icon className={styles.metricIcon} icon={CoinsIcon} size={13} />
-          <span>{formatTokens(totalTokens)}</span>
-        </span>
-      </Tooltip>,
-    );
-  if (totalCost > 0)
-    metrics.push(
-      <span className={styles.metric} key="cost">
-        <Icon className={styles.metricIcon} icon={CircleDollarSignIcon} size={13} />
-        <span>{formatCost(totalCost)}</span>
-      </span>,
-    );
+  const metrics = [
+    steps > 1
+      ? {
+          icon: FootprintsIcon,
+          key: 'steps',
+          label: stepLabel,
+          title: `${steps} ${stepLabel}`,
+          value: String(steps),
+        }
+      : undefined,
+    totalTokens > 0
+      ? {
+          icon: CoinsIcon,
+          key: 'tokens',
+          label: tokenLabel,
+          title: `${formatTokens(totalTokens)} ${tokenLabel}`,
+          value: formatTokens(totalTokens),
+        }
+      : undefined,
+    totalCost > 0
+      ? {
+          icon: CircleDollarSignIcon,
+          key: 'cost',
+          label: costLabel,
+          title: `${costLabel}: ${formatCost(totalCost)}`,
+          value: formatCost(totalCost),
+        }
+      : undefined,
+  ].filter((item): item is MetricItem => !!item);
+  const tokenMetric = metrics.find((metric) => metric.key === 'tokens');
+
+  const renderMetric = ({ icon, title, value }: MetricItem) => (
+    <Tooltip title={title}>
+      <span className={styles.metric}>
+        <Icon className={styles.metricIcon} icon={icon} size={13} />
+        <span className={styles.metricValue}>{value}</span>
+      </span>
+    </Tooltip>
+  );
+
+  const metricPopoverContent = (
+    <Flexbox className={styles.metricPopover} gap={8}>
+      {metrics.map(({ icon, key, label, value }) => (
+        <Flexbox
+          horizontal
+          align="center"
+          className={styles.metricPopoverRow}
+          gap={20}
+          justify="space-between"
+          key={key}
+        >
+          <span className={cx(styles.metric, styles.metricPopoverLabel)}>
+            <Icon className={styles.metricIcon} icon={icon} size={13} />
+            <span>{label}</span>
+          </span>
+          <span className={styles.metricPopoverValue}>{value}</span>
+        </Flexbox>
+      ))}
+    </Flexbox>
+  );
 
   return (
     <Flexbox
@@ -307,7 +402,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
       className={cx(styles.container, topAttached && styles.containerTopAttached)}
       justify="space-between"
     >
-      <span className={styles.metric}>
+      <span className={cx(styles.metric, styles.statusMetric)}>
         <ActivityGlyph />
         <span className={cx(styles.statusText, shinyTextStyles.shinyText)}>
           {t(`opStatusTray.status.${activity}`)}...
@@ -316,14 +411,24 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
       </span>
 
       {metrics.length > 0 && (
-        <span className={styles.metricGroup}>
-          {metrics.map((node, i) => (
-            <Fragment key={i}>
-              {i > 0 && <span className={styles.divider} />}
-              {node}
-            </Fragment>
-          ))}
-        </span>
+        <>
+          <span className={cx(styles.metricGroup, styles.metricGroupFull)}>
+            {metrics.map((metric, i) => (
+              <Fragment key={metric.key}>
+                {i > 0 && <span className={styles.divider} />}
+                {renderMetric(metric)}
+              </Fragment>
+            ))}
+          </span>
+          {tokenMetric && (
+            <Popover content={metricPopoverContent} placement="topRight" trigger="hover">
+              <span className={cx(styles.metric, styles.compactMetric)}>
+                <Icon className={styles.metricIcon} icon={tokenMetric.icon} size={13} />
+                <span className={styles.metricValue}>{tokenMetric.value}</span>
+              </span>
+            </Popover>
+          )}
+        </>
       )}
     </Flexbox>
   );

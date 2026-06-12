@@ -375,6 +375,7 @@
   "opStatusTray.status.reasoning": "思考中",
   "opStatusTray.status.searching": "检索中",
   "opStatusTray.status.toolCalling": "调用工具中",
+  "opStatusTray.cost": "花费",
   "opStatusTray.steps": "步",
   "opStatusTray.tokens": "tokens",
   "openInNewWindow": "在新窗口打开",

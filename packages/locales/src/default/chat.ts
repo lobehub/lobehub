@@ -392,6 +392,7 @@ export default {
   'opStatusTray.status.reasoning': 'Thinking',
   'opStatusTray.status.searching': 'Searching',
   'opStatusTray.status.toolCalling': 'Calling tools',
+  'opStatusTray.cost': 'cost',
   'opStatusTray.steps': 'steps',
   'opStatusTray.tokens': 'tokens',
 
