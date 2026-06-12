@@ -66,6 +66,12 @@ export default {
   'inPopup.focus': 'Focus Popup Window',
   'inPopup.title': 'Open in Popup Window',
   'loadMore': 'Load More',
+  'projectStatus.failed_one': '{{count}} failed topic',
+  'projectStatus.failed_other': '{{count}} failed topics',
+  'projectStatus.loading_one': '{{count}} loading topic',
+  'projectStatus.loading_other': '{{count}} loading topics',
+  'projectStatus.waitingForHuman_one': '{{count}} topic awaiting input',
+  'projectStatus.waitingForHuman_other': '{{count}} topics awaiting input',
   'management.actions.newChat': 'New chat',
   'management.actions.select': 'Select',
   'management.actionsMenu.archiveStale.confirm':

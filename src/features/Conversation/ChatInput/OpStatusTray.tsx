@@ -1,5 +1,6 @@
 'use client';
 
+import { formatElapsedClockTime } from '@lobechat/utils';
 import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
@@ -26,9 +27,10 @@ import { parseStatusPhrases, pickStableStatusPhrase } from './OpStatusTray/logic
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
+    container-type: inline-size;
+
     padding-block: 8px;
     padding-inline: 14px;
-    container-type: inline-size;
     border: 1px solid ${cssVar.colorFillSecondary};
     border-block-end: none;
     border-start-start-radius: 12px;
@@ -52,6 +54,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     display: inline-flex;
     gap: 4px;
     align-items: center;
+
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   `,
@@ -81,8 +84,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
   `,
   metricPopoverValue: css`
-    color: ${cssVar.colorTextSecondary};
     font-variant-numeric: tabular-nums;
+    color: ${cssVar.colorTextSecondary};
   `,
   metricValue: css`
     overflow: hidden;
@@ -90,10 +93,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     text-overflow: ellipsis;
   `,
   compactMetric: css`
+    cursor: default;
     display: none;
     flex: none;
-
-    cursor: default;
 
     @container (max-width: 360px) {
       display: inline-flex;
@@ -106,7 +108,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   statusText: css`
     overflow: hidden;
-
     font-weight: 500;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -175,17 +176,6 @@ const ActivityGlyph = memo(() => (
 ));
 
 ActivityGlyph.displayName = 'ActivityGlyph';
-
-const formatDuration = (ms: number) => {
-  if (ms < 0) ms = 0;
-  const totalSeconds = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  const mm = String(minutes).padStart(2, '0');
-  const ss = String(seconds).padStart(2, '0');
-  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
-};
 
 const formatTokens = (n: number) => {
   if (n < 1000) return String(n);
@@ -413,7 +403,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
       <span className={cx(styles.metric, styles.statusMetric)}>
         <ActivityGlyph />
         <span className={cx(styles.statusText, shinyTextStyles.shinyText)}>{statusText}...</span>
-        <span className={styles.timerValue}>{formatDuration(elapsed)}</span>
+        <span className={styles.timerValue}>{formatElapsedClockTime(elapsed)}</span>
       </span>
 
       {metrics.length > 0 && (
