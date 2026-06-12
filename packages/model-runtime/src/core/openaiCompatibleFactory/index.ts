@@ -437,8 +437,14 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     private resolvePromptCacheKey(model?: string, user?: string) {
       if (!user) return;
 
-      // Keep the default key at {userId}:{model}; {agentId} can be added later if a narrower cache bucket is needed.
+      // Keep the default key at {userId}:{model}; {agentId/topicId} can be added later if a narrower cache bucket is needed.
       if (model?.startsWith('gpt-') || /^o\d/.test(model || '') || model === 'chat-latest') {
+        return `lobe:${user}:${model}`;
+      }
+
+      // Kimi models support prompt_cache_key for multi-turn session cache optimization.
+      // Docs: https://platform.kimi.com/docs/api/chat#body-one-of-0-prompt-cache-key
+      if (model?.startsWith('kimi-')) {
         return `lobe:${user}:${model}`;
       }
     }
