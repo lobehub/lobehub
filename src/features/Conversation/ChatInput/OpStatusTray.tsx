@@ -2,7 +2,7 @@
 
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import { CircleDollarSignIcon, CoinsIcon, FootprintsIcon, HammerIcon } from 'lucide-react';
+import { CircleDollarSignIcon, CoinsIcon, FootprintsIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Fragment, memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -251,24 +251,19 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
     return () => clearInterval(id);
   }, [startTime]);
 
-  // Aggregate tool calls / tokens / cost across the current conversation.
+  // Aggregate tokens / cost across the current conversation.
   // New code reads usage only from the top-level message field.
-  const { toolCalls, totalCost, totalTokens } = useMemo(() => {
+  const { totalCost, totalTokens } = useMemo(() => {
     let tokens = 0;
     let cost = 0;
-    let toolCount = 0;
     for (const m of dbMessages) {
-      if (m.role === 'tool') {
-        toolCount += 1;
-        continue;
-      }
       if (m.role !== 'assistant') continue;
       const usage = m.usage;
       if (!usage) continue;
       tokens += usage.totalTokens ?? 0;
       cost += usage.cost ?? 0;
     }
-    return { toolCalls: toolCount, totalCost: cost, totalTokens: tokens };
+    return { totalCost: cost, totalTokens: tokens };
   }, [dbMessages]);
 
   if (!startTime) return null;
@@ -285,15 +280,6 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
         <span className={styles.metric}>
           <Icon className={styles.metricIcon} icon={FootprintsIcon} size={13} />
           <span>{steps}</span>
-        </span>
-      </Tooltip>,
-    );
-  if (toolCalls > 0)
-    metrics.push(
-      <Tooltip key="toolCalls" title={`${toolCalls} ${t('opStatusTray.toolCalls')}`}>
-        <span className={styles.metric}>
-          <Icon className={styles.metricIcon} icon={HammerIcon} size={13} />
-          <span>{toolCalls}</span>
         </span>
       </Tooltip>,
     );

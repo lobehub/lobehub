@@ -377,7 +377,6 @@
   "opStatusTray.status.toolCalling": "调用工具中",
   "opStatusTray.steps": "步",
   "opStatusTray.tokens": "tokens",
-  "opStatusTray.toolCalls": "工具",
   "openInNewWindow": "在新窗口打开",
   "operation.contextCompression": "上下文过长，正在压缩历史记录……",
   "operation.execAgentRuntime": "准备响应中",

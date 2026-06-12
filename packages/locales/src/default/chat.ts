@@ -394,7 +394,6 @@ export default {
   'opStatusTray.status.toolCalling': 'Calling tools',
   'opStatusTray.steps': 'steps',
   'opStatusTray.tokens': 'tokens',
-  'opStatusTray.toolCalls': 'tools',
 
   // Connect agent: per-agent descriptions shown in step 0 of the connect modal
   'platformAgent.create.desc.openclaw': 'Connect to OpenClaw running on one of your devices',

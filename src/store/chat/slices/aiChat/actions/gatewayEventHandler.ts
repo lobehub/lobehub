@@ -440,6 +440,13 @@ export const createGatewayEventHandler = (
           uiMessages?: UIChatMessage[];
         };
 
+        // The server's stepIndex is the authoritative step counter — mirror it
+        // onto the operation so step-based UI (OpStatusTray) stays correct
+        // even across page-refresh reconnects.
+        if (typeof event.stepIndex === 'number') {
+          get().updateOperationMetadata(operationId, { stepCount: event.stepIndex + 1 });
+        }
+
         // Server attaches the canonical UIChatMessage[] snapshot at every
         // step boundary (agent-runtime #15152). Use it as Source of Truth
         // instead of issuing a DB refetch — the refetch returns a stale

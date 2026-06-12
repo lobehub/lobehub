@@ -377,7 +377,6 @@
   "opStatusTray.status.toolCalling": "Calling tools",
   "opStatusTray.steps": "steps",
   "opStatusTray.tokens": "tokens",
-  "opStatusTray.toolCalls": "tools",
   "openInNewWindow": "Open in New Window",
   "operation.contextCompression": "Context too long, compressing history...",
   "operation.execAgentRuntime": "Preparing response",

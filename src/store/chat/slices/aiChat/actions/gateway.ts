@@ -597,11 +597,21 @@ export class GatewayActionImpl {
       topicId,
     };
 
+    // Anchor the operation to the run's real start: the assistant message was
+    // created when the run began. Defaulting to Date.now() here would reset
+    // elapsed-time displays (OpStatusTray) to zero on every page refresh.
+    const assistantMessage = Object.values(this.#get().messagesMap)
+      .flat()
+      .find((m) => m.id === assistantMessageId);
+
     // Create a local operation for UI loading state, stashing the server op id
     // so intervention flows can find it after reconnect as well.
     const { operationId: gatewayOpId } = this.#get().startOperation({
       context,
-      metadata: { serverOperationId: operationId },
+      metadata: {
+        serverOperationId: operationId,
+        ...(assistantMessage?.createdAt ? { startTime: assistantMessage.createdAt } : {}),
+      },
       type: 'execServerAgentRuntime',
     });
 
