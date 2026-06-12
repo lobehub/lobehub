@@ -31,6 +31,7 @@ const RESERVED_FIRST_SEGMENTS = new Set([
   'task',
   // Personal-only:
   'settings',
+  'billing',
   'onboarding',
   'me',
   'share',
@@ -43,6 +44,21 @@ const FIRST_SEGMENT_REGEX = /^\/([^/?#]+)/;
 const parseFirstSegment = (pathname: string): string | null => {
   const match = pathname.match(FIRST_SEGMENT_REGEX);
   return match ? match[1] : null;
+};
+
+/**
+ * Whether `pathname`'s first segment could be an (as-yet-unresolved) workspace
+ * slug — i.e. it's present and not one of the reserved root segments.
+ *
+ * Top-level rendering only needs to block on the workspace list (to avoid a
+ * false 404 / wrong-scope paint) when this is `true`. On personal / reserved
+ * routes (`/`, `/agent/...`, `/settings/...`) the list isn't required to render,
+ * so callers can show personal context immediately and let the list hydrate in
+ * the background.
+ */
+export const isWorkspaceSlugCandidatePath = (pathname: string): boolean => {
+  const first = parseFirstSegment(pathname);
+  return !!first && !RESERVED_FIRST_SEGMENTS.has(first);
 };
 
 /**
