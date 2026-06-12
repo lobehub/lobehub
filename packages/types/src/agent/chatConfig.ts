@@ -36,6 +36,11 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    * Disable context caching
    */
   disableContextCaching?: boolean;
+  /**
+   * Disable Gateway mode for this agent. Undefined means Gateway mode follows
+   * the app-level default and stays enabled when the server supports it.
+   */
+  disableGatewayMode?: boolean;
 
   effort?: 'low' | 'medium' | 'high' | 'max';
   /**
@@ -215,6 +220,7 @@ export const AgentChatConfigSchema = z
     deepseekV4ReasoningEffort: z.enum(['none', 'high', 'max']).optional(),
     compressionModelId: z.string().optional(),
     disableContextCaching: z.boolean().optional(),
+    disableGatewayMode: z.boolean().optional(),
     effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
     enableAdaptiveThinking: z.boolean().optional(),
     enableAgentMode: z.boolean().optional(),

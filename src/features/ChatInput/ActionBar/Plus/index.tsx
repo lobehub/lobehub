@@ -10,6 +10,7 @@ import {
   Brain,
   CheckIcon,
   ChevronRight,
+  Cloud,
   CloudCog,
   FileUp,
   Globe,
@@ -37,7 +38,13 @@ import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { settingsSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
@@ -257,6 +264,10 @@ const PlusAction = memo(() => {
 
   const upload = useFileStore((s) => s.uploadChatFiles);
   const { enableKnowledgeBase } = useServerConfigStore(featureFlagsSelectors);
+  const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
+  const defaultDisableGatewayMode = useUserStore(
+    (s) => settingsSelectors.defaultAgentConfig(s).chatConfig?.disableGatewayMode,
+  );
 
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
@@ -272,10 +283,12 @@ const PlusAction = memo(() => {
   const skillActivateMode = useAgentStore((s) =>
     chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
   );
-  const [searchMode, useModelBuiltinSearch] = useAgentStore((s) => [
+  const [searchMode, useModelBuiltinSearch, disableGatewayMode] = useAgentStore((s) => [
     chatConfigByIdSelectors.getSearchModeById(agentId)(s),
     chatConfigByIdSelectors.getUseModelBuiltinSearchById(agentId)(s),
+    chatConfigByIdSelectors.getChatConfigById(agentId)(s).disableGatewayMode,
   ]);
+  const isGatewayModeEnabled = (disableGatewayMode ?? defaultDisableGatewayMode) !== true;
 
   const isMemoryEnabled = useMemoryEnabled(agentId);
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
@@ -333,6 +346,13 @@ const PlusAction = memo(() => {
       } else {
         await updateAgentChatConfig({ searchMode: 'auto', useModelBuiltinSearch: true });
       }
+    },
+    [updateAgentChatConfig],
+  );
+
+  const handleToggleGatewayMode = useCallback(
+    async (checked: boolean) => {
+      await updateAgentChatConfig({ disableGatewayMode: checked ? false : true });
     },
     [updateAgentChatConfig],
   );
@@ -535,6 +555,18 @@ const PlusAction = memo(() => {
               type: 'switch',
             } as ActionDropdownMenuItems[number],
           ]),
+      ...(enableGatewayMode
+        ? [
+            {
+              checked: isGatewayModeEnabled,
+              icon: activeIcon(Cloud, isGatewayModeEnabled),
+              key: 'gateway-mode',
+              label: t('gatewayMode.title'),
+              onCheckedChange: handleToggleGatewayMode,
+              type: 'switch',
+            } as ActionDropdownMenuItems[number],
+          ]
+        : []),
       { type: 'divider' },
       // Skills (with "Add Skills..." merged in) sits directly under the Web Search divider.
       ...toolsItems,
@@ -585,11 +617,15 @@ const PlusAction = memo(() => {
     canUploadVideo,
     editor,
     enableFC,
+    enableGatewayMode,
     enableKnowledgeBase,
+    defaultDisableGatewayMode,
     handleSelectSearch,
+    handleToggleGatewayMode,
     handleToggleMemory,
     handleToggleParams,
     isAgentModeEnabled,
+    isGatewayModeEnabled,
     isMemoryEnabled,
     isParamsPanelActive,
     knowledgeEnabledCount,

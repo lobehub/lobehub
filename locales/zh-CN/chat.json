@@ -164,6 +164,7 @@
   "extendParams.urlContext.title": "提取网页链接内容",
   "followUpPlaceholder": "继续跟进。",
   "followUpPlaceholderHeterogeneous": "继续跟进。",
+  "gatewayMode.title": "Gateway 模式",
   "group.desc": "在同一对话空间，让多个助理一起推进任务",
   "group.memberTooltip": "群组内有 {{count}} 名成员",
   "group.orchestratorThinking": "主持人思考中…",

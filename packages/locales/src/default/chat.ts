@@ -473,6 +473,7 @@ export default {
   'memory.on.desc': 'Allow AI to actively search and manage your memories during conversation.',
   'memory.on.title': 'Enable Memory Tool',
   'memory.title': 'Memory',
+  'gatewayMode.title': 'Gateway Mode',
   'search.grounding.imageSearchQueries': 'Image Search Keywords',
   'search.grounding.imageTitle': 'Found {{count}} images',
   'chatMode.agent': 'Agent',

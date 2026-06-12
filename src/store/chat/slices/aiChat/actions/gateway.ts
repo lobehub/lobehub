@@ -18,6 +18,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
+import { settingsSelectors } from '@/store/user/selectors';
 
 import { createGatewayEventHandler } from './gatewayEventHandler';
 
@@ -261,14 +262,25 @@ export class GatewayActionImpl {
 
   /**
    * Check if Gateway mode is available and enabled.
-   * Returns true if both server config and user lab toggle are set.
+   * Returns true when the server supports Gateway mode and the agent config
+   * has not disabled it. `disableGatewayMode: undefined` means enabled.
    */
-  isGatewayModeEnabled = (): boolean => {
-    const agentGatewayUrl =
-      window.global_serverConfigStore?.getState()?.serverConfig?.agentGatewayUrl;
-    const enableGatewayMode = useUserStore.getState().preference.lab?.enableGatewayMode;
+  isGatewayModeEnabled = (agentId?: string): boolean => {
+    const serverConfig = window.global_serverConfigStore?.getState()?.serverConfig;
+    const agentState = getAgentStoreState();
+    const resolvedAgentId = agentId ?? agentState.activeAgentId;
+    const agentDisableGatewayMode = resolvedAgentId
+      ? chatConfigByIdSelectors.getChatConfigById(resolvedAgentId)(agentState).disableGatewayMode
+      : undefined;
+    const defaultDisableGatewayMode = settingsSelectors.defaultAgentConfig(useUserStore.getState())
+      .chatConfig?.disableGatewayMode;
+    const disableGatewayMode = agentDisableGatewayMode ?? defaultDisableGatewayMode;
 
-    return !!agentGatewayUrl && !!enableGatewayMode;
+    return (
+      !!serverConfig?.agentGatewayUrl &&
+      !!serverConfig.enableGatewayMode &&
+      disableGatewayMode !== true
+    );
   };
 
   /**

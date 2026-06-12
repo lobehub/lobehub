@@ -1201,6 +1201,9 @@ When I am ___, I need ___
   'tab.about': 'About',
   'tab.advanced': 'Advanced',
   'tab.advanced.appUpdates.title': 'App updates',
+  'tab.advanced.gatewayMode.desc':
+    'Run supported agent tasks through the cloud Gateway by default. Individual agents can override this from the chat menu.',
+  'tab.advanced.gatewayMode.title': 'Gateway Mode',
   'tab.advanced.toolsAndDiagnostics.title': 'Tools and diagnostics',
   'tab.addAgentSkill': 'Add Agent Skill',
   'tab.advanced.updateChannel.canary': 'Canary',

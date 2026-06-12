@@ -15,7 +15,10 @@ const mocks = vi.hoisted(() => ({
   ),
 }));
 
-const mockGlobalConfigDependencies = (enableBusinessFeatures: boolean) => {
+const mockGlobalConfigDependencies = (
+  enableBusinessFeatures: boolean,
+  agentGatewayUrl?: string,
+) => {
   vi.doMock('@lobechat/business-const', () => ({
     ENABLE_BUSINESS_FEATURES: enableBusinessFeatures,
   }));
@@ -29,7 +32,7 @@ const mockGlobalConfigDependencies = (enableBusinessFeatures: boolean) => {
   }));
 
   vi.doMock('@/envs/app', () => ({
-    appEnv: {},
+    appEnv: agentGatewayUrl ? { AGENT_GATEWAY_URL: agentGatewayUrl } : {},
     getAppConfig: vi.fn(() => ({
       DEFAULT_AGENT_CONFIG: '',
     })),
@@ -113,6 +116,15 @@ const loadCapturedProviderConfig = async (enableBusinessFeatures: boolean) => {
   >;
 };
 
+const loadServerConfig = async (enableBusinessFeatures: boolean, agentGatewayUrl?: string) => {
+  vi.resetModules();
+  mocks.genServerAiProvidersConfig.mockClear();
+  mockGlobalConfigDependencies(enableBusinessFeatures, agentGatewayUrl);
+
+  const { getServerGlobalConfig } = await import('./index');
+  return getServerGlobalConfig();
+};
+
 describe('getServerGlobalConfig', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -138,5 +150,21 @@ describe('getServerGlobalConfig', () => {
     expect(providerConfig[ModelProvider.LobeHub]).toBeUndefined();
     expect(providerConfig[ModelProvider.OpenAI]).toBeUndefined();
     expect(providerConfig[ModelProvider.DeepSeek].enabled).toBe(true);
+  });
+
+  it('should enable gateway mode only when business features and agent gateway url are both enabled', async () => {
+    await expect(loadServerConfig(true, 'https://gateway.test.com')).resolves.toMatchObject({
+      agentGatewayUrl: 'https://gateway.test.com',
+      enableGatewayMode: true,
+    });
+
+    await expect(loadServerConfig(false, 'https://gateway.test.com')).resolves.toMatchObject({
+      agentGatewayUrl: 'https://gateway.test.com',
+      enableGatewayMode: false,
+    });
+
+    await expect(loadServerConfig(true)).resolves.toMatchObject({
+      enableGatewayMode: false,
+    });
   });
 });
