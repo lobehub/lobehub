@@ -2333,6 +2333,7 @@ When I am ___, I need ___
   'tools.composio.notEnabled': 'Composio service not enabled',
   'tools.composio.oauthRequired': 'Please complete OAuth authentication in the new window',
   'tools.composio.pendingAuth': 'Pending Authentication',
+  'tools.composio.reauthorize': 'Re-authorize',
   'tools.composio.serverCreated': 'Server created successfully',
   'tools.composio.serverCreatedFailed': 'Failed to create server',
   'tools.composio.serverRemoved': 'Server removed',

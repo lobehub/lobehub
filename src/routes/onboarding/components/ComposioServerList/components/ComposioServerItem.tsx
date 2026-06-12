@@ -27,7 +27,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
       serverStatus: server?.status,
     });
 
-    const { isConnecting, handleConnect } = useComposioServerActions({
+    const { isConnecting, handleConnect, handleReauthorize } = useComposioServerActions({
       appSlug,
       identifier,
       label,
@@ -37,6 +37,7 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
 
     const isConnected = server?.status === ComposioServerStatus.ACTIVE;
     const isPendingAuth = server?.status === ComposioServerStatus.PENDING_AUTH;
+    const isError = server?.status === ComposioServerStatus.ERROR;
     const isClickable = !isConnected;
 
     const handleItemClick = () => {
@@ -44,8 +45,9 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
 
       if (!server) {
         handleConnect();
-      } else if (isPendingAuth && server.redirectUrl) {
-        openOAuthWindow(server.redirectUrl, server.identifier);
+      } else if (isPendingAuth || isError) {
+        // Mint a fresh link rather than reopening the (likely expired) one.
+        handleReauthorize();
       }
     };
 

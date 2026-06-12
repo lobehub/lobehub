@@ -23,6 +23,7 @@ export const useComposioServerActions = ({
 
   const createComposioConnection = useToolStore((s) => s.createComposioConnection);
   const refreshComposioConnectionStatus = useToolStore((s) => s.refreshComposioConnectionStatus);
+  const reauthorizeComposioConnection = useToolStore((s) => s.reauthorizeComposioConnection);
   const toggleDefaultPlugin = useUserStore((s) => s.toggleInboxAgentDefaultPlugin);
 
   const handleConnect = async () => {
@@ -53,8 +54,27 @@ export const useComposioServerActions = ({
     }
   };
 
+  // Re-mint a fresh link (the prior one likely expired) instead of reopening the
+  // stale redirectUrl, so a pending/errored row can always be retried.
+  const handleReauthorize = async () => {
+    if (!server) return;
+
+    setIsConnecting(true);
+    try {
+      const newServer = await reauthorizeComposioConnection(server.identifier);
+      if (newServer?.redirectUrl) {
+        onAuthRequired?.(newServer.redirectUrl, newServer.identifier);
+      }
+    } catch (error) {
+      console.error('[Composio] Failed to re-authorize server:', error);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
   return {
     handleConnect,
+    handleReauthorize,
     isConnecting,
   };
 };

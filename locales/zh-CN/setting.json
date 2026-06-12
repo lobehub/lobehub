@@ -1188,6 +1188,7 @@
   "tools.composio.notEnabled": "Composio 服务未启用",
   "tools.composio.oauthRequired": "请在新窗口中完成 OAuth 认证",
   "tools.composio.pendingAuth": "待认证",
+  "tools.composio.reauthorize": "重新授权",
   "tools.composio.serverCreated": "服务器创建成功",
   "tools.composio.serverCreatedFailed": "服务器创建失败",
   "tools.composio.serverRemoved": "服务器已删除",

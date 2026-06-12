@@ -246,6 +246,33 @@ export class ComposioStoreActionImpl {
     }
   };
 
+  reauthorizeComposioConnection = async (
+    identifier: string,
+  ): Promise<ComposioServer | undefined> => {
+    const { composioServers } = this.#get();
+    const existing = composioServers.find((s) => s.identifier === identifier);
+    if (!existing) return undefined;
+
+    // Clean up the stale connection on Composio's side (the prior link likely
+    // expired). Best-effort — if it's already gone we still mint a fresh one.
+    try {
+      await lambdaClient.composio.deleteConnection.mutate({
+        connectedAccountId: existing.connectedAccountId,
+        identifier,
+      });
+    } catch (error) {
+      console.error('[Composio] Failed to clean up stale connection:', error);
+    }
+
+    // Mint a fresh link; createComposioConnection replaces the record in place
+    // (by identifier), so the UI keeps showing the same row with a new redirectUrl.
+    return this.#get().createComposioConnection({
+      appSlug: existing.appSlug,
+      identifier,
+      label: existing.label,
+    });
+  };
+
   removeComposioConnection = async (identifier: string): Promise<void> => {
     const { composioServers } = this.#get();
     const server = composioServers.find((s) => s.identifier === identifier);

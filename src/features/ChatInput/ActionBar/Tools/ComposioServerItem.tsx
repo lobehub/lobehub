@@ -1,5 +1,5 @@
-import { Checkbox, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { Loader2, SquareArrowOutUpRight } from 'lucide-react';
+import { Checkbox, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { Loader2, MoreHorizontalIcon, RotateCcw, SquareArrowOutUpRight, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -51,6 +51,8 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
     const userId = useUserStore(userProfileSelectors.userId);
     const createComposioConnection = useToolStore((s) => s.createComposioConnection);
     const refreshComposioConnectionStatus = useToolStore((s) => s.refreshComposioConnectionStatus);
+    const removeComposioConnection = useToolStore((s) => s.removeComposioConnection);
+    const reauthorizeComposioConnection = useToolStore((s) => s.reauthorizeComposioConnection);
 
     // Get effective agent ID (agentId prop or current active agent)
     const activeAgentId = useAgentStore((s) => s.activeAgentId);
@@ -238,6 +240,26 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
       setIsToggling(false);
     };
 
+    const handleReauthorize = async () => {
+      if (!canCreate || !canEdit || !server) return;
+      setIsConnecting(true);
+      try {
+        const newServer = await reauthorizeComposioConnection(server.identifier);
+        if (newServer?.redirectUrl) {
+          openOAuthWindow(newServer.redirectUrl, newServer.identifier);
+        }
+      } catch (error) {
+        console.error('[Composio] Failed to re-authorize server:', error);
+      } finally {
+        setIsConnecting(false);
+      }
+    };
+
+    const handleDelete = async () => {
+      if (!canEdit || !server) return;
+      await removeComposioConnection(server.identifier);
+    };
+
     // Render right-side controls
     const renderRightControl = () => {
       // Connecting in progress
@@ -288,7 +310,8 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
             />
           );
         }
-        case ComposioServerStatus.PENDING_AUTH: {
+        case ComposioServerStatus.PENDING_AUTH:
+        case ComposioServerStatus.ERROR: {
           // Waiting for authentication
           if (isWaitingAuth) {
             return (
@@ -297,31 +320,40 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
               </Flexbox>
             );
           }
+          // The OAuth link may have expired — offer re-authorize (clean up the
+          // stale connection + mint a fresh link) and delete, so the row can
+          // never get stuck unable to retry or be removed.
           return (
-            <Flexbox
-              horizontal
-              align="center"
-              gap={4}
-              style={{ cursor: canEdit ? 'pointer' : 'not-allowed', opacity: 0.65 }}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!canEdit) return;
-                // Click to reopen OAuth window
-                if (server.redirectUrl) {
-                  openOAuthWindow(server.redirectUrl, server.identifier);
-                }
-              }}
+            <DropdownMenu
+              placement="bottomRight"
+              items={[
+                {
+                  disabled: !canCreate || !canEdit,
+                  icon: <Icon icon={RotateCcw} />,
+                  key: 'reauthorize',
+                  label: t('tools.composio.reauthorize', { defaultValue: 'Re-authorize' }),
+                  onClick: handleReauthorize,
+                },
+                {
+                  danger: true,
+                  disabled: !canEdit,
+                  icon: <Icon icon={Trash2} />,
+                  key: 'delete',
+                  label: t('tools.composio.remove', { defaultValue: 'Remove' }),
+                  onClick: handleDelete,
+                },
+              ]}
             >
-              {t('tools.composio.pendingAuth', { defaultValue: 'Authorize' })}
-              <Icon icon={SquareArrowOutUpRight} size="small" />
-            </Flexbox>
-          );
-        }
-        case ComposioServerStatus.ERROR: {
-          return (
-            <span style={{ color: 'red', fontSize: 12 }}>
-              {t('tools.composio.error', { defaultValue: 'Error' })}
-            </span>
+              <Flexbox
+                horizontal
+                align="center"
+                gap={4}
+                style={{ cursor: canEdit ? 'pointer' : 'not-allowed' }}
+                onClick={stopPropagation}
+              >
+                <Icon icon={MoreHorizontalIcon} size="small" />
+              </Flexbox>
+            </DropdownMenu>
           );
         }
         default: {

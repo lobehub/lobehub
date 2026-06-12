@@ -5,7 +5,14 @@ import { Avatar, Button as LobeButton, DropdownMenu, Flexbox, Icon, Tooltip } fr
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { Button } from 'antd';
 import { cssVar } from 'antd-style';
-import { Loader2, MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
+import {
+  Loader2,
+  MoreHorizontalIcon,
+  RotateCcw,
+  SquareArrowOutUpRight,
+  Trash2,
+  Unplug,
+} from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -43,6 +50,7 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
     const createComposioConnection = useToolStore((s) => s.createComposioConnection);
     const refreshComposioConnectionStatus = useToolStore((s) => s.refreshComposioConnectionStatus);
     const removeComposioConnection = useToolStore((s) => s.removeComposioConnection);
+    const reauthorizeComposioConnection = useToolStore((s) => s.reauthorizeComposioConnection);
 
     const cleanup = useCallback(() => {
       if (windowCheckIntervalRef.current) {
@@ -163,6 +171,26 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
       }
     };
 
+    const handleReauthorize = async () => {
+      if (!canCreate || !canEdit || !server) return;
+      setIsConnecting(true);
+      try {
+        const newServer = await reauthorizeComposioConnection(server.identifier);
+        if (newServer?.redirectUrl) {
+          openOAuthWindow(newServer.redirectUrl, newServer.identifier);
+        }
+      } catch (error) {
+        console.error('[Composio] Failed to re-authorize server:', error);
+      } finally {
+        setIsConnecting(false);
+      }
+    };
+
+    const handleDelete = async () => {
+      if (!canEdit || !server) return;
+      await removeComposioConnection(server.identifier);
+    };
+
     const handleDisconnect = () => {
       if (!canEdit) return;
       if (!server) return;
@@ -239,21 +267,38 @@ const ComposioSkillItem = memo<ComposioSkillItemProps>(
         );
       }
 
-      if (server.status === ComposioServerStatus.PENDING_AUTH) {
+      // A pending/errored connection often means the OAuth link expired. Offer
+      // both re-authorize (clean up the stale connection + mint a fresh link)
+      // and delete, so the row can never get stuck unable to retry or be removed.
+      if (
+        server.status === ComposioServerStatus.PENDING_AUTH ||
+        server.status === ComposioServerStatus.ERROR
+      ) {
         return (
-          <Button
-            disabled={!canCreate || !canEdit}
-            icon={<Icon icon={SquareArrowOutUpRight} />}
-            type="default"
-            onClick={() => {
-              if (!canCreate || !canEdit) return;
-              if (server.redirectUrl) {
-                openOAuthWindow(server.redirectUrl, server.identifier);
-              }
-            }}
+          <DropdownMenu
+            placement="bottomRight"
+            items={[
+              {
+                disabled: !canCreate || !canEdit,
+                icon: <Icon icon={RotateCcw} />,
+                key: 'reauthorize',
+                label: t('tools.composio.reauthorize', { defaultValue: 'Re-authorize' }),
+                onClick: handleReauthorize,
+              },
+              {
+                danger: true,
+                disabled: !canEdit,
+                icon: <Icon icon={Trash2} />,
+                key: 'delete',
+                label: t('tools.composio.remove', { defaultValue: 'Remove' }),
+                onClick: handleDelete,
+              },
+            ]}
           >
-            {t('tools.composio.pendingAuth', { defaultValue: 'Authorize' })}
-          </Button>
+            <Tooltip title={editReason}>
+              <LobeButton disabled={!canEdit} icon={MoreHorizontalIcon} />
+            </Tooltip>
+          </DropdownMenu>
         );
       }
 
