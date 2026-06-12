@@ -26,10 +26,11 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const formatCost = (cost: number) => {
-  if (cost < 0.01) return cost.toFixed(4);
-  return cost.toFixed(2);
-};
+// Cheap messages don't need a cost callout — only surface it once it's
+// expensive enough to matter.
+const MIN_DISPLAY_COST = 0.2;
+
+const formatCost = (cost: number) => cost.toFixed(2);
 
 interface UsageProps {
   model: string;
@@ -83,7 +84,7 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
             usage={usage}
           />
         )}
-        {!isShowCredit && !!usage?.cost && (
+        {!isShowCredit && !!usage?.cost && usage.cost >= MIN_DISPLAY_COST && (
           <Center horizontal gap={2}>
             <Icon icon={CircleDollarSignIcon} />
             {formatCost(usage.cost)}
