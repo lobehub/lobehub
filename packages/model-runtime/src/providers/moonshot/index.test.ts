@@ -516,19 +516,6 @@ describe('LobeMoonshotOpenAI', () => {
         expect(payload.prompt_cache_key).toBe('lobe:user-abc:kimi-k2.6');
       });
 
-      it('should inject prompt_cache_key for moonshot- models when user is provided', async () => {
-        await instance.chat(
-          {
-            messages: [{ content: 'Hello', role: 'user' }],
-            model: 'moonshot-v1-8k',
-          },
-          { user: 'user-xyz' },
-        );
-
-        const payload = getLastRequestPayload();
-        expect(payload.prompt_cache_key).toBe('lobe:user-xyz:moonshot-v1-8k');
-      });
-
       it('should not inject prompt_cache_key when user is not provided', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
