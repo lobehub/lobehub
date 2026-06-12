@@ -2322,6 +2322,10 @@ When I am ___, I need ___
   'tools.klavis.disconnect': 'Disconnect',
   'tools.klavis.disconnected': 'Disconnected',
   'tools.klavis.error': 'Error',
+  'tools.klavis.remove': 'Remove',
+  'tools.klavis.removeConfirm.desc':
+    '{{name}} will be permanently removed from your connected services. This action cannot be undone.',
+  'tools.klavis.removeConfirm.title': 'Remove {{name}}?',
   'tools.klavis.groupName': 'Klavis Tools',
   'tools.klavis.manage': 'Manage Klavis',
   'tools.klavis.manageTitle': 'Manage Klavis Integration',

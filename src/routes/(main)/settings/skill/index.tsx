@@ -233,7 +233,11 @@ const Page = memo(() => {
         {/* Right: tool detail + permissions */}
         {selected && (
           <div className={styles.detail}>
-            <SkillDetail identifier={selected.identifier} type={selected.type} />
+            <SkillDetail
+              identifier={selected.identifier}
+              type={selected.type}
+              onDelete={() => setSelected(null)}
+            />
           </div>
         )}
       </div>

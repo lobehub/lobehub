@@ -1,5 +1,6 @@
+import { confirmModal } from '@lobehub/ui/base-ui';
 import { Button } from 'antd';
-import { RefreshCwIcon } from 'lucide-react';
+import { RefreshCwIcon, Trash2 } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,9 +13,10 @@ import ToolPermissionGroup from './ToolPermissionGroup';
 
 interface ConnectorDetailProps {
   connectorId: string;
+  onDelete?: () => void;
 }
 
-const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
+const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId, onDelete }) => {
   const { t } = useTranslation('tool');
 
   const connector = useToolStore(connectorSelectors.connectorById(connectorId));
@@ -28,6 +30,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
   const syncPluginTools = useToolStore((s) => s.syncPluginTools);
   const resetConnectorPermissions = useToolStore((s) => s.resetConnectorPermissions);
   const disconnectConnector = useToolStore((s) => s.disconnectConnector);
+  const deleteConnector = useToolStore((s) => s.deleteConnector);
   const updateToolPermission = useToolStore((s) => s.updateToolPermission);
 
   const isMcpConnector = connector?.sourceType === ConnectorSourceType.custom;
@@ -89,9 +92,28 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId }) => {
             {syncLabel}
           </Button>
           {isMcpConnector && (
-            <Button danger size="small" onClick={() => disconnectConnector(connectorId)}>
-              {t('connector.disconnect', 'Disconnect')}
-            </Button>
+            <>
+              <Button danger size="small" onClick={() => disconnectConnector(connectorId)}>
+                {t('connector.disconnect', 'Disconnect')}
+              </Button>
+              <Button
+                danger
+                icon={<Trash2 size={14} />}
+                size="small"
+                onClick={() => {
+                  confirmModal({
+                    okButtonProps: { danger: true },
+                    onOk: async () => {
+                      await deleteConnector(connectorId);
+                      onDelete?.();
+                    },
+                    title: t('connector.deleteConfirm', 'Delete this connector?'),
+                  });
+                }}
+              >
+                {t('connector.delete', 'Delete')}
+              </Button>
+            </>
           )}
         </div>
       </div>

@@ -50,6 +50,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 interface SkillDetailProps {
   identifier: string;
+  onDelete?: () => void;
   type: ToolDetailType;
 }
 
@@ -60,7 +61,7 @@ interface SkillDetailProps {
  * - 'builtin-skill': renders BuiltinSkill description panel (Artifacts, Task, etc.)
  * - 'builtin'/'plugin'/'mcp-connector': syncs connector entry, renders permission editor
  */
-const SkillDetail = memo<SkillDetailProps>(({ identifier, type }) => {
+const SkillDetail = memo<SkillDetailProps>(({ identifier, type, onDelete }) => {
   const [syncing, setSyncing] = useState(false);
   const [noManifest, setNoManifest] = useState(false);
 
@@ -184,7 +185,7 @@ const SkillDetail = memo<SkillDetailProps>(({ identifier, type }) => {
     );
   }
 
-  return <ConnectorDetail connectorId={connector.id} />;
+  return <ConnectorDetail connectorId={connector.id} onDelete={onDelete} />;
 });
 
 SkillDetail.displayName = 'SkillDetail';

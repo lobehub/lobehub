@@ -306,6 +306,24 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
           </Flexbox>
           {!isConnected && renderStatus()}
         </Flexbox>
+        {/* In list mode show compact ... for connected items so users can disconnect */}
+        {onSelect && isConnected && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu
+              placement="bottomRight"
+              items={[
+                {
+                  icon: <Icon icon={Unplug} />,
+                  key: 'disconnect',
+                  label: t('tools.lobehubSkill.disconnect'),
+                  onClick: handleDisconnect,
+                },
+              ]}
+            >
+              <LobeButton icon={MoreHorizontalIcon} />
+            </DropdownMenu>
+          </div>
+        )}
         {!onSelect && (
           <Flexbox horizontal align="center" gap={8}>
             {isConnected && renderStatus()}

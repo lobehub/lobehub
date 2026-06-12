@@ -5,7 +5,7 @@ import { Avatar, Button as LobeButton, DropdownMenu, Flexbox, Icon, Tooltip } fr
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { Button } from 'antd';
 import { cssVar } from 'antd-style';
-import { Loader2, MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
+import { Loader2, MoreHorizontalIcon, SquareArrowOutUpRight, Trash2, Unplug } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -183,6 +183,20 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
       });
     };
 
+    const handleRemove = () => {
+      if (!server) return;
+      confirmModal({
+        cancelText: t('cancel', { ns: 'common' }),
+        content: t('tools.klavis.removeConfirm.desc', { name: serverType.label }),
+        okButtonProps: { danger: true },
+        okText: t('tools.klavis.remove'),
+        onOk: async () => {
+          await removeKlavisServer(server.identifier);
+        },
+        title: t('tools.klavis.removeConfirm.title', { name: serverType.label }),
+      });
+    };
+
     const renderIcon = () => {
       const { icon, label } = serverType;
       if (typeof icon === 'string') {
@@ -327,6 +341,25 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
           </Flexbox>
           {!isConnected && renderStatus()}
         </Flexbox>
+        {/* In list mode show compact ... for connected/pending servers so users can remove them */}
+        {onSelect && server && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu
+              placement="bottomRight"
+              items={[
+                {
+                  danger: true,
+                  icon: <Icon icon={Trash2} />,
+                  key: 'remove',
+                  label: t('tools.klavis.remove'),
+                  onClick: handleRemove,
+                },
+              ]}
+            >
+              <LobeButton icon={MoreHorizontalIcon} />
+            </DropdownMenu>
+          </div>
+        )}
         {!onSelect && (
           <Flexbox horizontal align="center" gap={8}>
             {isConnected && renderStatus()}
