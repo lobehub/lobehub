@@ -1041,17 +1041,16 @@ export const createAgentExecutors = (context: {
 
           const stateType = result.state?.type;
 
-          // Sub-agent dispatches need to be forwarded to the Agent runtime as an
-          // exec_sub_agent / exec_sub_agents instruction. Covers both server-side
-          // (execSubAgent / execSubAgents) and client-side (execClientSubAgent /
-          // execClientSubAgents) wire-level state types.
-          const subAgentStateTypes = [
+          // Legacy agent-invocation dispatches need to be forwarded to the Agent
+          // runtime as exec_sub_agent / exec_sub_agents instructions. This covers
+          // server-side callAgent task states plus the desktop client-side variants.
+          const legacyAgentInvocationStateTypes = [
             'execSubAgent',
             'execSubAgents',
             'execClientSubAgent',
             'execClientSubAgents',
           ];
-          if (subAgentStateTypes.includes(stateType)) {
+          if (legacyAgentInvocationStateTypes.includes(stateType)) {
             log(
               '[%s][call_tool] Detected %s state, passing to Agent for decision',
               sessionLogId,

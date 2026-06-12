@@ -417,9 +417,10 @@ export class AiAgentService {
    * Execute a single agent step against this service's runtime.
    *
    * Delegates to the internal AgentRuntimeService, which is already wired with
-   * the `execSubAgent` fork callback. The QStash step worker drives stepping
-   * through here so `lobe-agent.callSubAgent` can fork sub-agents — building a
-   * bare runtime there would lose the callback and fail with SUB_AGENT_UNAVAILABLE.
+   * the agent-invocation fork callbacks. The QStash step worker drives stepping
+   * through here so `lobe-agent.callSubAgent` can fork virtual sub-agents —
+   * building a bare runtime there would lose the callback and fail with
+   * SUB_AGENT_UNAVAILABLE.
    */
   executeStep(params: AgentExecutionParams): Promise<AgentExecutionResult> {
     return this.agentRuntimeService.executeStep(params);
@@ -2298,7 +2299,7 @@ export class AiAgentService {
         : undefined;
 
     // 13. Create user message in database
-    // Include threadId if provided (for SubAgent task execution in isolated Thread)
+    // Include threadId if provided (for isolated agent execution)
     const userMessageRecord = runFromHistory
       ? undefined
       : await this.messageModel.create({
@@ -2346,7 +2347,7 @@ export class AiAgentService {
     }
 
     // 14. Create assistant message placeholder in database
-    // Include threadId if provided (for SubAgent task execution in isolated Thread)
+    // Include threadId if provided (for isolated agent execution)
     const assistantMessageRecord = await this.messageModel.create({
       agentId: persistAgentId,
       content: LOADING_FLAT,
@@ -2940,7 +2941,12 @@ export class AiAgentService {
     });
 
     // 3. Create hooks for updating Thread metadata and source message
-    const threadHooks = this.createThreadHooks(thread.id, startedAt, parentMessageId);
+    const threadHooks = this.createThreadHooks(
+      thread.id,
+      startedAt,
+      parentMessageId,
+      options.logScope,
+    );
     // For the virtual sub-agent path, also register the completion bridge that
     // backfills the parent's placeholder tool message and resumes the parked
     // parent op once the child run is done. Registered last so its tool-message
@@ -3063,6 +3069,7 @@ export class AiAgentService {
     threadId: string,
     startedAt: string,
     sourceMessageId: string,
+    logScope: 'execSubAgent' | 'execVirtualSubAgent' = 'execSubAgent',
   ): StepLifecycleCallbacks {
     // Accumulator for tracking metrics across steps
     let accumulatedToolCalls = 0;
@@ -3088,9 +3095,9 @@ export class AiAgentService {
               totalToolCalls: accumulatedToolCalls,
             },
           });
-          log('execSubAgent: updated thread %s metadata after step %d', threadId, state.stepCount);
+          log('%s: updated thread %s metadata after step %d', logScope, threadId, state.stepCount);
         } catch (error) {
-          log('execSubAgent: failed to update thread metadata: %O', error);
+          log('%s: failed to update thread metadata: %O', logScope, error);
         }
       },
 
@@ -3124,7 +3131,7 @@ export class AiAgentService {
 
         // Log error when the isolated run fails
         if (reason === 'error' && finalState.error) {
-          console.error('execSubAgent: run failed for thread %s:', threadId, finalState.error);
+          console.error('%s: run failed for thread %s:', logScope, threadId, finalState.error);
         }
 
         try {
@@ -3138,7 +3145,7 @@ export class AiAgentService {
             await this.messageModel.update(sourceMessageId, {
               content: lastAssistantMessage.content,
             });
-            log('execSubAgent: updated source message %s with summary', sourceMessageId);
+            log('%s: updated source message %s with summary', logScope, sourceMessageId);
           }
 
           // Format error for proper serialization (Error objects don't serialize with JSON.stringify)
@@ -3161,13 +3168,14 @@ export class AiAgentService {
           });
 
           log(
-            'execSubAgent: thread %s completed with status %s, reason: %s',
+            '%s: thread %s completed with status %s, reason: %s',
+            logScope,
             threadId,
             status,
             reason,
           );
         } catch (error) {
-          console.error('execSubAgent: failed to update thread on completion: %O', error);
+          console.error('%s: failed to update thread on completion: %O', logScope, error);
         }
       },
     };
@@ -3181,6 +3189,7 @@ export class AiAgentService {
     threadId: string,
     startedAt: string,
     sourceMessageId: string,
+    logScope: 'execSubAgent' | 'execVirtualSubAgent',
   ): AgentHook[] {
     let accumulatedToolCalls = 0;
 
@@ -3207,7 +3216,7 @@ export class AiAgentService {
               },
             });
           } catch (error) {
-            log('Thread hook afterStep: failed to update metadata: %O', error);
+            log('%s: thread hook afterStep failed to update metadata: %O', logScope, error);
           }
         },
         id: 'thread-metadata-update',
@@ -3247,7 +3256,8 @@ export class AiAgentService {
 
           if (event.reason === 'error' && finalState.error) {
             console.error(
-              'Thread hook onComplete: run failed for thread %s:',
+              '%s: thread hook onComplete run failed for thread %s:',
+              logScope,
               threadId,
               finalState.error,
             );
@@ -3284,13 +3294,14 @@ export class AiAgentService {
             });
 
             log(
-              'Thread hook onComplete: thread %s status=%s reason=%s',
+              '%s: thread hook onComplete thread %s status=%s reason=%s',
+              logScope,
               threadId,
               status,
               event.reason,
             );
           } catch (error) {
-            console.error('Thread hook onComplete: failed to update: %O', error);
+            console.error('%s: thread hook onComplete failed to update: %O', logScope, error);
           }
         },
         id: 'thread-completion',

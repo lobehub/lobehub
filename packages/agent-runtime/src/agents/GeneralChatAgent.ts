@@ -570,13 +570,13 @@ export class GeneralChatAgent implements Agent {
         const { data, parentMessageId, stop } =
           context.payload as GeneralAgentCallToolResultPayload;
 
-        // Check if this is a sub-agent dispatch request (lobe-agent.callSubAgent
-        // and similarly-shaped tools emit state.type=execSubAgent* with stop=true
-        // so the runtime forks a sub-agent here).
+        // Legacy async agent invocation path. `callAgent({ runAsTask: true })`
+        // emits state.type=execSubAgent* with stop=true so the runtime can fork
+        // a background agent run after the tool call is persisted.
         if (stop && data?.state) {
           const stateType = data.state.type;
 
-          // Server-side sub-agent (single)
+          // Server-side legacy agent invocation (single)
           if (stateType === 'execSubAgent') {
             const { parentMessageId: execParentId, task } = data.state as {
               parentMessageId: string;
@@ -588,7 +588,7 @@ export class GeneralChatAgent implements Agent {
             };
           }
 
-          // Server-side sub-agents (multiple)
+          // Server-side legacy agent invocations (multiple)
           if (stateType === 'execSubAgents') {
             const { parentMessageId: execParentId, tasks } = data.state as {
               parentMessageId: string;
