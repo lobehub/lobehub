@@ -70,17 +70,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     color: ${cssVar.colorPrimary};
 
-    filter: drop-shadow(0 0 6px color-mix(in srgb, ${cssVar.colorPrimary} 48%, transparent));
-
     @keyframes op-status-tray-glyph-spin {
       to {
         transform: rotate(360deg);
-      }
-    }
-
-    @keyframes op-status-tray-glyph-spin-reverse {
-      to {
-        transform: rotate(-360deg);
       }
     }
 
@@ -96,35 +88,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
         opacity: 1;
       }
     }
-
-    @keyframes op-status-tray-glyph-halo {
-      0%,
-      100% {
-        transform: scale(0.92);
-        opacity: 0.25;
-      }
-
-      50% {
-        transform: scale(1.08);
-        opacity: 0.62;
-      }
-    }
   `,
   glyphCore: css`
     transform-origin: center;
     transform-box: fill-box;
     fill: ${cssVar.colorPrimary};
     animation: op-status-tray-glyph-core 1.5s ease-in-out infinite;
-  `,
-  glyphHalo: css`
-    transform-origin: center;
-    transform-box: fill-box;
-
-    fill: color-mix(in srgb, ${cssVar.colorPrimary} 16%, transparent);
-    stroke: color-mix(in srgb, ${cssVar.colorPrimary} 45%, transparent);
-    stroke-width: 1.2;
-
-    animation: op-status-tray-glyph-halo 1.8s ease-in-out infinite;
   `,
   glyphOrbit: css`
     transform-origin: center;
@@ -138,18 +107,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     animation: op-status-tray-glyph-spin 2s linear infinite;
   `,
-  glyphOrbitInner: css`
-    transform-origin: center;
-    transform-box: fill-box;
-
-    fill: none;
-    stroke: color-mix(in srgb, ${cssVar.colorPrimary} 54%, transparent);
-    stroke-dasharray: 4 13;
-    stroke-linecap: round;
-    stroke-width: 1.4;
-
-    animation: op-status-tray-glyph-spin-reverse 1.35s linear infinite;
-  `,
   value: css`
     font-family: ${cssVar.fontFamilyCode};
   `,
@@ -157,9 +114,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const ActivityGlyph = memo(() => (
   <svg aria-hidden className={styles.activityGlyph} viewBox="0 0 16 16">
-    <circle className={styles.glyphHalo} cx="8" cy="8" r="5.8" />
     <circle className={styles.glyphOrbit} cx="8" cy="8" r="6.1" />
-    <circle className={styles.glyphOrbitInner} cx="8" cy="8" r="3.9" />
     <circle className={styles.glyphCore} cx="8" cy="8" r="2.7" />
   </svg>
 ));
