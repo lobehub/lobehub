@@ -31,20 +31,25 @@ export const pushTokenRouter = router({
     }),
 
   /**
-   * Public on purpose: clients call this during sign-out, when their session
-   * may already be invalid (expired token / cleared cookie). Authenticating by
-   * session here causes a 401 storm on every logout in the wild — the original
-   * intent was "clean up before clearing auth", but in practice the auth has
-   * already been cleared on the server long before logout fires.
+   * Public on purpose: clients call this during sign-out, and in the wild many
+   * of those calls arrive after the session is already gone (expired OIDC
+   * token / cleared cookie). Authenticating by session here causes a 401
+   * storm on every such logout.
    *
-   * Authorization model: the caller presents the (deviceId, expoToken) pair it
-   * received at registration. Holding both = proof of ownership of the row,
-   * same trust model as APNs/FCM unregister.
+   * Authorization model (Path A — new clients ≥ 1.0.8): the caller presents the
+   * (deviceId, expoToken) pair it received at registration. Holding both = proof
+   * of ownership of the row, same trust model as APNs/FCM unregister.
    *
-   * Backwards compat: older clients (≤ 1.0.7) only send `deviceId`. We silently
-   * succeed in that case and let the `process-push-receipts` worker clean up
-   * stale rows via `DeviceNotRegistered` receipts from Expo. Returning 200 here
-   * is what actually stops the 401 storm in production.
+   * Backwards compat for v1.0.7 (only sends `deviceId`):
+   *  - Path B — when the request still carries a valid session, fall back to
+   *    the original (userId, deviceId) delete. This covers the *active*
+   *    sign-out path so PushChannel doesn't keep notifying a signed-out device
+   *    until the user uninstalls (Expo's DeviceNotRegistered receipt only
+   *    fires on uninstall, not on logout).
+   *  - Path C — when there's no session either, silently succeed. The orphan
+   *    row will be cleaned up by the existing `process-push-receipts` worker
+   *    via Expo's DeviceNotRegistered receipts. Returning 200 here is what
+   *    actually stops the 401 storm in production.
    */
   unregister: publicProcedure
     .use(serverDatabase)
@@ -57,10 +62,20 @@ export const pushTokenRouter = router({
     .mutation(async ({ ctx, input }) => {
       const { deviceId, expoToken } = input;
 
+      // Path A: new clients — precise delete by (expoToken, deviceId), no session needed
       if (expoToken) {
         await deletePushTokenByExpoTokenAndDevice(ctx.serverDB, { deviceId, expoToken });
+        return { success: true };
       }
 
+      // Path B: legacy v1.0.7 + valid session — fall back to (userId, deviceId)
+      if (ctx.userId) {
+        const pushTokenModel = new PushTokenModel(ctx.serverDB, ctx.userId);
+        await pushTokenModel.unregister(deviceId);
+        return { success: true };
+      }
+
+      // Path C: legacy v1.0.7 with no session — silent OK, cron worker cleans up
       return { success: true };
     }),
 });
