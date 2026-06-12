@@ -46,7 +46,7 @@ export class UserService extends BaseService {
     });
 
     if (!user) {
-      throw this.createNotFoundError('用户不存在');
+      throw this.createNotFoundError('User not found');
     }
 
     if (!includeCount) {
@@ -88,7 +88,7 @@ export class UserService extends BaseService {
    * @returns User info
    */
   async getCurrentUser(includeCount = true): ServiceResult<UserWithRoles> {
-    this.log('info', '获取当前登录用户信息及角色信息');
+    this.log('info', 'get current logged-in user info and role info');
 
     // Query basic user info
     return this.getUserWithRoles(this.userId!, includeCount);
@@ -99,14 +99,14 @@ export class UserService extends BaseService {
    * @returns User list (including role info and message count)
    */
   async queryUsers(request: UserListRequest): ServiceResult<UserListResponse> {
-    this.log('info', '获取系统中所有用户列表');
+    this.log('info', 'get all users list in the system');
 
     try {
       // Permission validation
       const permissionResult = await this.resolveOperationPermission('USER_READ', ALL_SCOPE);
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '没有权限查看用户列表');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to view user list');
       }
 
       // Build query conditions
@@ -152,14 +152,14 @@ export class UserService extends BaseService {
         }),
       );
 
-      this.log('info', '成功获取所有用户信息及其角色、sessions和消息数量');
+      this.log('info', 'Successfully retrieved all user info with roles, sessions and message counts');
 
       return {
         total: countResult[0]?.count ?? 0,
         users: usersWithRoles,
       };
     } catch (error) {
-      return this.handleServiceError(error, '获取用户列表');
+      return this.handleServiceError(error, 'get user list');
     }
   }
 
@@ -169,14 +169,14 @@ export class UserService extends BaseService {
    * @returns Created user info (including role info)
    */
   async createUser(userData: CreateUserRequest): ServiceResult<UserWithRoles> {
-    this.log('info', '创建新用户', { userData });
+    this.log('info', 'create new user', { userData });
 
     try {
       // Permission validation
       const permissionResult = await this.resolveOperationPermission('USER_CREATE');
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '没有权限创建用户');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to create user');
       }
 
       const { roleIds, ...rest } = userData;
@@ -205,13 +205,13 @@ export class UserService extends BaseService {
 
       if (existingUser) {
         if (existingUser.id === rest.id) {
-          throw this.createBusinessError('指定的用户ID已存在');
+          throw this.createBusinessError('The specified user ID already exists');
         } else if (existingUser.username === rest.username) {
-          throw this.createBusinessError('用户名已存在');
+          throw this.createBusinessError('Username already exists');
         } else if (existingUser.email === rest.email) {
-          throw this.createBusinessError('邮箱已存在');
+          throw this.createBusinessError('Email already exists');
         } else {
-          throw this.createBusinessError('用户名、邮箱或ID已存在');
+          throw this.createBusinessError('Username, email, or ID already exists');
         }
       }
 
@@ -233,12 +233,12 @@ export class UserService extends BaseService {
         await rbacModel.updateUserRoles(userId, roleIds);
       }
 
-      this.log('info', '用户创建成功', { userId: createdUser.id });
+      this.log('info', 'User created successfully', { userId: createdUser.id });
 
       // Return user data including role info
       return this.getUserWithRoles(userId);
     } catch (error) {
-      return this.handleServiceError(error, '创建用户');
+      return this.handleServiceError(error, 'create user');
     }
   }
 
@@ -249,7 +249,7 @@ export class UserService extends BaseService {
    * @returns Updated user info (including role info)
    */
   async updateUser(userId: string, userData: UpdateUserRequest): ServiceResult<UserWithRoles> {
-    this.log('info', '更新用户信息', { userData, userId });
+    this.log('info', 'update user info', { userData, userId });
 
     try {
       // Permission validation
@@ -258,7 +258,7 @@ export class UserService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '没有权限更新该用户');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to update this user');
       }
 
       const { roleIds, ...rest } = userData;
@@ -269,7 +269,7 @@ export class UserService extends BaseService {
       });
 
       if (!existingUser) {
-        throw this.createNotFoundError('用户不存在');
+        throw this.createNotFoundError('User not found');
       }
 
       // Check if the username or email is already used by another user
@@ -279,7 +279,7 @@ export class UserService extends BaseService {
         });
 
         if (existingUserByUsername) {
-          throw this.createBusinessError('用户名已被其他用户使用');
+          throw this.createBusinessError('Username is already in use by another user');
         }
       }
 
@@ -288,7 +288,7 @@ export class UserService extends BaseService {
           where: and(eq(users.email, rest.email), ne(users.id, userId)),
         });
         if (existingUserByEmail) {
-          throw this.createBusinessError('邮箱已被其他用户使用');
+          throw this.createBusinessError('Email is already in use by another user');
         }
       }
 
@@ -306,11 +306,11 @@ export class UserService extends BaseService {
         })
         .where(eq(users.id, userId));
 
-      this.log('info', '用户信息更新成功', { userId });
+      this.log('info', 'User info updated successfully', { userId });
 
       return this.getUserWithRoles(userId);
     } catch (error) {
-      return this.handleServiceError(error, '更新用户');
+      return this.handleServiceError(error, 'update user');
     }
   }
 
@@ -320,7 +320,7 @@ export class UserService extends BaseService {
    * @returns Delete operation result
    */
   async deleteUser(userId: string): ServiceResult<{ id: string }> {
-    this.log('info', '删除用户', { userId });
+    this.log('info', 'delete user', { userId });
 
     try {
       // Permission validation
@@ -329,21 +329,21 @@ export class UserService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '没有权限删除该用户');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to delete this user');
       }
 
       // Check if the user exists
       const result = await this.db.delete(users).where(eq(users.id, userId));
 
       if (!result.rowCount) {
-        throw this.createNotFoundError('用户不存在');
+        throw this.createNotFoundError('User not found');
       }
 
-      this.log('info', '用户删除成功', { userId });
+      this.log('info', 'User deleted successfully', { userId });
 
       return { id: userId };
     } catch (error) {
-      return this.handleServiceError(error, '删除用户');
+      return this.handleServiceError(error, 'delete user');
     }
   }
 
@@ -353,7 +353,7 @@ export class UserService extends BaseService {
    * @returns User info (including role info and message count)
    */
   async getUserById(userId: string): ServiceResult<UserWithRoles> {
-    this.log('info', '根据ID获取用户信息', { userId });
+    this.log('info', 'get user info by ID', { userId });
 
     try {
       // Permission validation
@@ -362,13 +362,13 @@ export class UserService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '没有权限查看该用户信息');
+        throw this.createAuthorizationError(permissionResult.message || "No permission to view this user's info");
       }
 
       // Query basic user info
       return this.getUserWithRoles(userId);
     } catch (error) {
-      return this.handleServiceError(error, '获取用户信息');
+      return this.handleServiceError(error, 'get user info');
     }
   }
 
@@ -383,7 +383,7 @@ export class UserService extends BaseService {
     request: UpdateUserRolesRequest,
   ): ServiceResult<UserRolesResponse> {
     try {
-      this.log('info', '更新用户角色', {
+      this.log('info', 'update user roles', {
         addRoles: request.addRoles,
         removeRoles: request.removeRoles,
         userId,
@@ -395,7 +395,7 @@ export class UserService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '没有权限更新用户角色');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to update user roles');
       }
 
       return await this.db.transaction(async (tx) => {
@@ -405,7 +405,7 @@ export class UserService extends BaseService {
         });
 
         if (!targetUser) {
-          throw this.createNotFoundError(`用户 ${userId} 不存在`);
+          throw this.createNotFoundError(`User ${userId} not found`);
         }
 
         // 2. Collect all role IDs that need to be validated
@@ -427,7 +427,7 @@ export class UserService extends BaseService {
           const missingRoleIds = Array.from(allRoleIds).filter((id) => !existingRoleIds.has(id));
 
           if (missingRoleIds.length > 0) {
-            throw this.createBusinessError(`以下角色不存在或未激活: ${missingRoleIds.join(', ')}`);
+            throw this.createBusinessError(`The following roles do not exist or are not active: ${missingRoleIds.join(', ')}`);
           }
         }
 
@@ -449,7 +449,7 @@ export class UserService extends BaseService {
               ),
             );
 
-          this.log('info', '移除用户角色成功');
+          this.log('info', 'User roles removed successfully');
         }
 
         // 6. Handle role addition
@@ -478,7 +478,7 @@ export class UserService extends BaseService {
             and(eq(userRoles.userId, userId), this.buildPermissionWhere(userRoles, { userId })),
           );
 
-        this.log('info', '用户角色更新完成', {
+        this.log('info', 'User roles update completed', {
           result,
           totalRoles: userWithRoles.length,
           userId,
@@ -492,7 +492,7 @@ export class UserService extends BaseService {
         }));
       });
     } catch (error) {
-      return this.handleServiceError(error, '更新用户角色');
+      return this.handleServiceError(error, 'update user roles');
     }
   }
 
@@ -502,7 +502,7 @@ export class UserService extends BaseService {
    * @returns User role details
    */
   async getUserRoles(userId: string): ServiceResult<UserRolesResponse> {
-    this.log('info', '获取用户角色信息', { userId });
+    this.log('info', 'get user role info', { userId });
 
     try {
       // Permission validation
@@ -511,7 +511,7 @@ export class UserService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '没有权限查看用户角色');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to view user roles');
       }
 
       // First check if the user exists
@@ -520,7 +520,7 @@ export class UserService extends BaseService {
       });
 
       if (!user) {
-        throw this.createNotFoundError(`用户 ID "${userId}" 不存在`);
+        throw this.createNotFoundError(`User ID "${userId}" not found`);
       }
 
       // Get user role info
@@ -537,7 +537,7 @@ export class UserService extends BaseService {
         roleName: r.role.name,
       }));
     } catch (error) {
-      return this.handleServiceError(error, '获取用户角色');
+      return this.handleServiceError(error, 'get user roles');
     }
   }
 
@@ -545,7 +545,7 @@ export class UserService extends BaseService {
    * Clear all roles for a user
    */
   async clearUserRoles(userId: string): ServiceResult<{ removed: number; userId: string }> {
-    this.log('info', '清空用户角色', { userId });
+    this.log('info', 'clear user roles', { userId });
 
     try {
       // Permission validation
@@ -554,13 +554,13 @@ export class UserService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || '没有权限清空用户角色');
+        throw this.createAuthorizationError(permissionResult.message || 'No permission to clear user roles');
       }
 
       // Check if the user exists
       const exist = await this.db.query.users.findFirst({ where: eq(users.id, userId) });
       if (!exist) {
-        throw this.createNotFoundError(`用户 ${userId} 不存在`);
+        throw this.createNotFoundError(`User ${userId} not found`);
       }
 
       // Count and delete
@@ -575,7 +575,7 @@ export class UserService extends BaseService {
 
       return { removed: beforeCount[0]?.count || 0, userId };
     } catch (error) {
-      return this.handleServiceError(error, '清空用户角色');
+      return this.handleServiceError(error, 'clear user roles');
     }
   }
 }
