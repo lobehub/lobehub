@@ -15,9 +15,14 @@ const mocks = vi.hoisted(() => ({
   ),
 }));
 
+interface MockGlobalConfigOptions {
+  agentGatewayUrl?: string;
+  enableAgentGateway?: boolean;
+}
+
 const mockGlobalConfigDependencies = (
   enableBusinessFeatures: boolean,
-  agentGatewayUrl?: string,
+  options: MockGlobalConfigOptions = {},
 ) => {
   vi.doMock('@lobechat/business-const', () => ({
     ENABLE_BUSINESS_FEATURES: enableBusinessFeatures,
@@ -32,7 +37,12 @@ const mockGlobalConfigDependencies = (
   }));
 
   vi.doMock('@/envs/app', () => ({
-    appEnv: agentGatewayUrl ? { AGENT_GATEWAY_URL: agentGatewayUrl } : {},
+    appEnv: {
+      ...(options.agentGatewayUrl ? { AGENT_GATEWAY_URL: options.agentGatewayUrl } : {}),
+      ...(options.enableAgentGateway === undefined
+        ? {}
+        : { ENABLE_AGENT_GATEWAY: options.enableAgentGateway }),
+    },
     getAppConfig: vi.fn(() => ({
       DEFAULT_AGENT_CONFIG: '',
     })),
@@ -116,10 +126,13 @@ const loadCapturedProviderConfig = async (enableBusinessFeatures: boolean) => {
   >;
 };
 
-const loadServerConfig = async (enableBusinessFeatures: boolean, agentGatewayUrl?: string) => {
+const loadServerConfig = async (
+  enableBusinessFeatures: boolean,
+  options?: MockGlobalConfigOptions,
+) => {
   vi.resetModules();
   mocks.genServerAiProvidersConfig.mockClear();
-  mockGlobalConfigDependencies(enableBusinessFeatures, agentGatewayUrl);
+  mockGlobalConfigDependencies(enableBusinessFeatures, options);
 
   const { getServerGlobalConfig } = await import('./index');
   return getServerGlobalConfig();
@@ -152,18 +165,34 @@ describe('getServerGlobalConfig', () => {
     expect(providerConfig[ModelProvider.DeepSeek].enabled).toBe(true);
   });
 
-  it('should enable gateway mode only when business features and agent gateway url are both enabled', async () => {
-    await expect(loadServerConfig(true, 'https://gateway.test.com')).resolves.toMatchObject({
+  it('should enable gateway mode for business builds', async () => {
+    await expect(loadServerConfig(true)).resolves.toMatchObject({
+      enableGatewayMode: true,
+    });
+  });
+
+  it('should enable gateway mode for self-hosted builds only when explicitly enabled with a gateway url', async () => {
+    await expect(
+      loadServerConfig(false, {
+        agentGatewayUrl: 'https://gateway.test.com',
+        enableAgentGateway: true,
+      }),
+    ).resolves.toMatchObject({
       agentGatewayUrl: 'https://gateway.test.com',
       enableGatewayMode: true,
     });
 
-    await expect(loadServerConfig(false, 'https://gateway.test.com')).resolves.toMatchObject({
+    await expect(
+      loadServerConfig(false, {
+        agentGatewayUrl: 'https://gateway.test.com',
+        enableAgentGateway: false,
+      }),
+    ).resolves.toMatchObject({
       agentGatewayUrl: 'https://gateway.test.com',
       enableGatewayMode: false,
     });
 
-    await expect(loadServerConfig(true)).resolves.toMatchObject({
+    await expect(loadServerConfig(false, { enableAgentGateway: true })).resolves.toMatchObject({
       enableGatewayMode: false,
     });
   });
