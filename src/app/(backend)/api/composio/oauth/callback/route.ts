@@ -1,52 +1,21 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
-import { appEnv } from '@/envs/app';
-
-/** Origin allowed to receive the postMessage result (the app itself). */
-const targetOrigin = (): string => {
-  try {
-    return appEnv.APP_URL ? new URL(appEnv.APP_URL).origin : '*';
-  } catch {
-    return '*';
-  }
-};
-
-/**
- * Serialize a value for safe embedding inside an inline `<script>`. Escaping
- * `<`, `>` and `&` to their `\uXXXX` form prevents an attacker-controlled OAuth
- * query param from breaking out of the script context (e.g. via `</script>`).
- */
-const jsonForScript = (value: unknown): string =>
-  JSON.stringify(value).replaceAll(
-    /[&<>]/g,
-    (c) => '\\u' + c.codePointAt(0)!.toString(16).padStart(4, '0'),
-  );
-
 /**
  * Composio OAuth callback.
  *
  * Composio uses managed auth — the provider token exchange happens on Composio's
  * side, so this route does not exchange any code itself. It only lands the user
  * back from the provider and closes the popup. The opener window detects the
- * close (or the postMessage below) and polls `composio.getConnection` to pick up
- * the now-active connection and sync its tools.
+ * close and polls `composio.getConnection` to pick up the now-active connection
+ * and sync its tools.
  */
 export const GET = async (req: NextRequest) => {
   const searchParams = req.nextUrl.searchParams;
   const status = searchParams.get('status') ?? undefined;
-  const connectedAccountId =
-    searchParams.get('connectedAccountId') ?? searchParams.get('connected_account_id') ?? undefined;
   const oauthError = searchParams.get('error') ?? undefined;
 
   // Composio appends `status=success` / `status=failed` to the callback URL.
   const success = !oauthError && status !== 'failed';
-  const payload = jsonForScript({
-    connectedAccountId,
-    error: oauthError,
-    status,
-    success,
-    type: 'lobe-composio-oauth',
-  });
 
   const html = `<!doctype html>
 <html>
@@ -55,11 +24,6 @@ export const GET = async (req: NextRequest) => {
     <p>${success ? 'Authorization complete. You can close this window.' : 'Authorization failed.'}</p>
     <script>
       (function () {
-        try {
-          if (window.opener) {
-            window.opener.postMessage(${payload}, ${jsonForScript(targetOrigin())});
-          }
-        } catch (e) {}
         setTimeout(function () { window.close(); }, 300);
       })();
     </script>
