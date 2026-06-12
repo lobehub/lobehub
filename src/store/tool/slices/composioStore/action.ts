@@ -37,9 +37,9 @@ export class ComposioStoreActionImpl {
   }
 
   callComposioTool = async (params: CallComposioToolParams): Promise<CallComposioToolResult> => {
-    const { connectedAccountId, toolSlug, toolArgs } = params;
+    const { identifier, toolSlug, toolArgs } = params;
 
-    const toolId = `${connectedAccountId}:${toolSlug}`;
+    const toolId = `${identifier}:${toolSlug}`;
 
     this.#set(
       produce((draft: ComposioStoreState) => {
@@ -51,7 +51,7 @@ export class ComposioStoreActionImpl {
 
     try {
       const response = await toolsClient.composio.executeAction.mutate({
-        connectedAccountId,
+        identifier,
         toolArgs,
         toolSlug,
       });
@@ -291,34 +291,11 @@ export class ComposioStoreActionImpl {
 
         const validPlugins = composioPlugins.filter((plugin) => plugin.customParams?.composio);
 
-        const deprecatedPlugins = validPlugins.filter(
-          (plugin) => !VALID_COMPOSIO_IDENTIFIERS.has(plugin.identifier),
-        );
-
-        for (const plugin of deprecatedPlugins) {
-          const connectedAccountId = plugin.customParams?.composio?.connectedAccountId;
-
-          if (connectedAccountId) {
-            try {
-              await lambdaClient.composio.deleteConnection.mutate({
-                connectedAccountId,
-                identifier: plugin.identifier,
-              });
-              continue;
-            } catch {
-              // fall through to remove local record
-            }
-          }
-
-          try {
-            await lambdaClient.composio.removeComposioPlugin.mutate({
-              identifier: plugin.identifier,
-            });
-          } catch (error) {
-            console.error('[Composio] Failed to remove plugin:', plugin.identifier, error);
-          }
-        }
-
+        // Only surface connections this client knows how to render. Identifiers
+        // outside the static catalog are hidden locally — never deleted: an
+        // outdated bundle (missing a newly-added app) would otherwise silently
+        // destroy a legitimate remote connection. Deprecating an app is a
+        // server-side concern, not a side effect of a client fetch.
         return validPlugins
           .filter((plugin) => VALID_COMPOSIO_IDENTIFIERS.has(plugin.identifier))
           .map((plugin) => {
