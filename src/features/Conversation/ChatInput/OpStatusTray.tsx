@@ -107,9 +107,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     animation: op-status-tray-glyph-spin 2s linear infinite;
   `,
-  value: css`
-    font-family: ${cssVar.fontFamilyCode};
-  `,
 }));
 
 const ActivityGlyph = memo(() => (
@@ -139,8 +136,8 @@ const formatTokens = (n: number) => {
 };
 
 const formatCost = (cost: number) => {
-  if (cost < 0.01) return `$${cost.toFixed(4)}`;
-  return `$${cost.toFixed(2)}`;
+  if (cost < 0.01) return cost.toFixed(4);
+  return cost.toFixed(2);
 };
 
 const normalizeStepCount = (stepCount: unknown) => {
@@ -287,7 +284,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
       <Tooltip key="steps" title={`${steps} ${t('opStatusTray.steps')}`}>
         <span className={styles.metric}>
           <Icon className={styles.metricIcon} icon={FootprintsIcon} size={13} />
-          <span className={styles.value}>{steps}</span>
+          <span>{steps}</span>
         </span>
       </Tooltip>,
     );
@@ -296,7 +293,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
       <Tooltip key="toolCalls" title={`${toolCalls} ${t('opStatusTray.toolCalls')}`}>
         <span className={styles.metric}>
           <Icon className={styles.metricIcon} icon={HammerIcon} size={13} />
-          <span className={styles.value}>{toolCalls}</span>
+          <span>{toolCalls}</span>
         </span>
       </Tooltip>,
     );
@@ -305,7 +302,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
       <Tooltip key="tokens" title={`${formatTokens(totalTokens)} ${tokenLabel}`}>
         <span className={styles.metric}>
           <Icon className={styles.metricIcon} icon={CoinsIcon} size={13} />
-          <span className={styles.value}>{formatTokens(totalTokens)}</span>
+          <span>{formatTokens(totalTokens)}</span>
         </span>
       </Tooltip>,
     );
@@ -313,7 +310,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
     metrics.push(
       <span className={styles.metric} key="cost">
         <Icon className={styles.metricIcon} icon={CircleDollarSignIcon} size={13} />
-        <span className={styles.value}>{formatCost(totalCost)}</span>
+        <span>{formatCost(totalCost)}</span>
       </span>,
     );
 
@@ -329,7 +326,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
         <span className={cx(styles.statusText, shinyTextStyles.shinyText)}>
           {t(`opStatusTray.status.${activity}`)}...
         </span>
-        <span className={cx(styles.value, styles.timerValue)}>{formatDuration(elapsed)}</span>
+        <span className={styles.timerValue}>{formatDuration(elapsed)}</span>
       </span>
 
       {metrics.length > 0 && (
