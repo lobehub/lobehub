@@ -50,6 +50,7 @@ describe('projectFileService', () => {
     });
 
     expect(mockDeviceClient.getLocalFilePreview.query).toHaveBeenCalledWith({
+      accept: undefined,
       deviceId: 'device-1',
       path: '/repo/index.html',
       workingDirectory: '/repo',

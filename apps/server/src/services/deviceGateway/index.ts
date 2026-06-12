@@ -489,7 +489,7 @@ export class DeviceGateway {
         { deviceId, timeout, userId },
         {
           method: 'getLocalFilePreview',
-          params: { ...(accept ? { accept } : {}), path, workingDirectory },
+          params: { accept, path, workingDirectory },
         },
       );
 

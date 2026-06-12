@@ -718,7 +718,7 @@ describe('DeviceGateway', () => {
         { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
         {
           method: 'getLocalFilePreview',
-          params: { path: '/proj/App.tsx', workingDirectory: '/proj' },
+          params: { accept: undefined, path: '/proj/App.tsx', workingDirectory: '/proj' },
         },
       );
     });

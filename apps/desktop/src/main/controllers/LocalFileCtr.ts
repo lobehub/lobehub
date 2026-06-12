@@ -443,7 +443,7 @@ export default class LocalFileCtr extends ControllerModule {
   }: LocalFilePreviewUrlParams): Promise<LocalFilePreviewUrlResult> {
     try {
       const url = await this.app.localFileProtocolManager.createPreviewUrl({
-        ...(accept ? { accept } : {}),
+        accept,
         filePath,
         workspaceRoot: workingDirectory,
       });
@@ -467,7 +467,7 @@ export default class LocalFileCtr extends ControllerModule {
   }: LocalFilePreviewUrlParams): Promise<LocalFilePreviewResult> {
     try {
       const preview = await this.app.localFileProtocolManager.readPreviewFile({
-        ...(accept ? { accept } : {}),
+        accept,
         filePath,
         workspaceRoot: workingDirectory,
       });

@@ -285,7 +285,7 @@ export const deviceRouter = router({
     )
     .query(async ({ ctx, input }) =>
       deviceGateway.getLocalFilePreview({
-        ...(input.accept ? { accept: input.accept } : {}),
+        accept: input.accept,
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,

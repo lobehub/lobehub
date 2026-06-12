@@ -225,6 +225,7 @@ describe('LocalFileCtr', () => {
       });
 
       expect(mockLocalFileProtocolManager.createPreviewUrl).toHaveBeenCalledWith({
+        accept: undefined,
         filePath: '/workspace/app.ts',
         workspaceRoot: '/workspace',
       });
@@ -285,6 +286,7 @@ describe('LocalFileCtr', () => {
       });
 
       expect(mockLocalFileProtocolManager.readPreviewFile).toHaveBeenCalledWith({
+        accept: undefined,
         filePath: '/workspace/app.ts',
         workspaceRoot: '/workspace',
       });

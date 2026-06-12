@@ -65,7 +65,7 @@ class ProjectFileService {
   }: GetLocalFilePreviewParams): Promise<LocalFilePreview> {
     if (deviceId) {
       const result = await lambdaClient.device.getLocalFilePreview.query({
-        ...(params.accept ? { accept: params.accept } : {}),
+        accept: params.accept,
         deviceId,
         path: params.path,
         workingDirectory: params.workingDirectory,
