@@ -38,9 +38,9 @@ lists `packages/**`, `e2e`, `apps/server`, and only `apps/desktop/src/main` —
 refresh them, so install in every app the test will touch:
 
 ```bash
-pnpm install                      # root workspace
-cd apps/desktop && pnpm install   # Electron surface
-cd apps/cli && pnpm install       # CLI surface
+pnpm install                    # root workspace
+cd apps/desktop && pnpm install # Electron surface
+cd apps/cli && pnpm install     # CLI surface
 ```
 
 Symptom of a stale standalone install: the build/launch fails to resolve a
@@ -63,12 +63,12 @@ long-running scripts.
 ./.agents/skills/agent-testing/scripts/setup-auth.sh status
 ```
 
-| Surface  | Mechanism                                         | One-key path                   | Standard check                 |
-| -------- | ------------------------------------------------- | ------------------------------ | ------------------------------ |
-| CLI      | OIDC Device Code Flow (`apps/cli/.lobehub-dev`)   | `setup-auth.sh cli`            | `setup-auth.sh status`         |
-| Web      | better-auth cookie injection into `agent-browser` | `pbpaste \| setup-auth.sh web` | `setup-auth.sh web-verify`     |
-| Electron | App's own persistent login state                  | Log in once in the app         | `app-probe.sh auth`            |
-| Bot      | Native apps already logged in                     | —                              | per-platform screenshot        |
+| Surface  | Mechanism                                         | One-key path                   | Standard check             |
+| -------- | ------------------------------------------------- | ------------------------------ | -------------------------- |
+| CLI      | OIDC Device Code Flow (`apps/cli/.lobehub-dev`)   | `setup-auth.sh cli`            | `setup-auth.sh status`     |
+| Web      | better-auth cookie injection into `agent-browser` | `pbpaste \| setup-auth.sh web` | `setup-auth.sh web-verify` |
+| Electron | App's own persistent login state                  | Log in once in the app         | `app-probe.sh auth`        |
+| Bot      | Native apps already logged in                     | —                              | per-platform screenshot    |
 
 Login-state checks are standardized — do NOT hand-roll `window.__LOBE_STORES`
 eval snippets; use `scripts/app-probe.sh auth` (returns `{ isSignedIn, userId }`,
@@ -148,17 +148,17 @@ Surface guides above carry the detailed workflows. Shared infrastructure:
 
 All under `.agents/skills/agent-testing/scripts/`:
 
-| Script                    | Usage                                                                          |
-| ------------------------- | ------------------------------------------------------------------------------ |
-| `setup-auth.sh`           | One-stop auth setup & status check (`status` / `cli` / `web`)                  |
-| `app-probe.sh`            | LobeHub app probes: `auth` / `route` / `ops` / `goto <path>` / `errors`        |
-| `record-gif.sh`           | Frame-sequence → GIF for time-based behavior (streaming, timers, animations)   |
-| `report-init.sh`          | Scaffold a structured test report (Step 3)                                     |
-| `electron-dev.sh`         | Manage Electron dev env (start/stop/status/restart, CDP 9222)                  |
-| `capture-app-window.sh`   | Screenshot a specific app window (general; used by bot tests)                  |
-| `record-app-screen.sh`    | Record app screen (video + periodic screenshots)                               |
-| `record-electron-demo.sh` | Record Electron app demo with ffmpeg                                           |
-| `agent-gateway/`          | Gateway probe / dump / analyze tools                                           |
+| Script                    | Usage                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------- |
+| `setup-auth.sh`           | One-stop auth setup & status check (`status` / `cli` / `web`)                |
+| `app-probe.sh`            | LobeHub app probes: `auth` / `route` / `ops` / `goto <path>` / `errors`      |
+| `record-gif.sh`           | Frame-sequence → GIF for time-based behavior (streaming, timers, animations) |
+| `report-init.sh`          | Scaffold a structured test report (Step 3)                                   |
+| `electron-dev.sh`         | Manage Electron dev env (start/stop/status/restart, CDP 9222)                |
+| `capture-app-window.sh`   | Screenshot a specific app window (general; used by bot tests)                |
+| `record-app-screen.sh`    | Record app screen (video + periodic screenshots)                             |
+| `record-electron-demo.sh` | Record Electron app demo with ffmpeg                                         |
+| `agent-gateway/`          | Gateway probe / dump / analyze tools                                         |
 
 `app-probe.sh` is the LobeHub-specific fast path into app state — auth check,
 current route, running operations, and `goto <path>` quick navigation
@@ -174,12 +174,13 @@ not a chat-only summary. Scaffold it up front and fill it as you test:
 ```bash
 DIR=$(./.agents/skills/agent-testing/scripts/report-init.sh my-feature "Verify my feature")
 # ... test, saving screenshots / CLI transcripts into $DIR/assets/ ...
-# fill $DIR/report.md (case table, embedded evidence, verdict) and $DIR/result.json
+# fill $DIR/report.md (scope, case table with inline evidence, verdict, score) and $DIR/result.json
 ```
 
 Reports live in `.records/reports/<timestamp>-<slug>/` (gitignored): `report.md`
-(human-readable, with embedded screenshots), `result.json` (machine-readable
-pass/fail + score), `assets/` (evidence). Format spec and evidence rules:
+(human-readable, with screenshots/GIFs embedded directly in the case table),
+`result.json` (machine-readable pass/fail + score), `assets/` (evidence).
+Format spec and evidence rules:
 [references/report.md](./references/report.md).
 
 Two hard rules worth front-loading:
@@ -187,6 +188,10 @@ Two hard rules worth front-loading:
 - **Report language = the user's conversation language.** Write the ENTIRE
   `report.md` (headings included) in the language the user is conversing in —
   no mixed English. `result.json` keys/status values stay English.
+- **The case table is the main reading surface.** Prefer the compact
+  `# | case | result | key observation | evidence` shape and embed the
+  screenshot/GIF in the evidence cell. Use separate evidence sections only for
+  long CLI transcripts, HAR summaries, or supplemental detail.
 - **Time-based behavior needs a GIF, not a screenshot.** If a case asserts
   change over time (streaming output, a ticking timer, loading states,
   animations), record it with `scripts/record-gif.sh` and embed the GIF —

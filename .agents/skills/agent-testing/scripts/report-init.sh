@@ -24,39 +24,53 @@ DATE_HUMAN=$(date '+%Y-%m-%d %H:%M')
 DATE_ISO=$(date '+%Y-%m-%dT%H:%M:%S%z')
 
 cat > "$DIR/report.md" << EOF
-# Test Report: $TITLE
+# 测试报告：$TITLE
 
-## Scope
+## 范围
 
-<!-- What changed / what is being verified -->
+<!-- 测试目标 / 变更范围 / 重点风险 -->
 
-- Branch: \`$BRANCH\`
-- Commit: \`$COMMIT\`
-- Date: $DATE_HUMAN
+- 分支：\`$BRANCH\`
+- 当前提交：\`$COMMIT\`
+- 日期：$DATE_HUMAN
+- 表面：<!-- CLI / Electron + CDP / Web / Bot:<platform> -->
+- 测试页 / 入口：<!-- e.g. /settings or http://localhost:3010 -->
+- 重点：<!-- 本轮最关心的体验、功能或回归点 -->
 
-## Environment
+## 用例
 
-- Server: <!-- e.g. http://localhost:3010 -->
-- Surfaces: <!-- cli / electron / web / bot:<platform> -->
+| # | 用例 | 结果 | 关键现象 | 证据 |
+| - | ---- | ---- | -------- | ---- |
+| 1 |      | 待测 |          | ![用例 1](assets/case1.png) |
 
-## Cases
+## 结论
 
-| # | Case | Surface | Steps | Expected | Actual | Status | Evidence |
-| - | ---- | ------- | ----- | -------- | ------ | ------ | -------- |
-| 1 |      |         |       |          |        |        |          |
+整体结论：\`pending\`。
 
-## Evidence
+<!-- 用 1-2 段概括用户最需要知道的结果；失败和阻塞必须明确说明影响。 -->
 
-<!-- Embed screenshots: ![case 1](assets/case1.png) -->
-<!-- CLI transcripts in fenced blocks, with the exact command -->
+仍需处理 / 跟进：
 
-## Verdict
+- <!-- TODO -->
 
-- Passed: 0 / 0
-- Failed: 0
-- Blocked: 0
-- Score (optional): —
-- Open issues / follow-ups:
+## 本轮验证
+
+<!-- 如有自动化或命令行验证，保留精简命令与结果；没有则写“未运行额外自动化验证”。 -->
+
+\`\`\`bash
+# command
+\`\`\`
+
+结果：
+
+- <!-- TODO -->
+
+## 评分
+
+- 通过：0
+- 失败：0
+- 阻塞：0
+- 评分：— / 100
 EOF
 
 cat > "$DIR/result.json" << EOF
