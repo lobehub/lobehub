@@ -24,6 +24,13 @@ export interface FormattedMcpValue {
 
 const LINEAR_CODEX_PREFIX = 'linear_';
 const LINEAR_CODEX_SERVER_PREFIX = 'server_';
+const CODEX_LINEAR_GENERIC_TOOL_NAMES = new Set(['fetch', 'search']);
+const CODEX_LINEAR_FETCH_API_BY_ENTITY: Record<string, string> = {
+  document: 'get_document',
+  initiative: 'get_initiative',
+  issue: 'get_issue',
+  project: 'get_project',
+};
 const SERVER_KEYS = ['server', 'serverName', 'server_name', 'connector', 'connector_id'];
 const TOOL_KEYS = ['tool', 'toolName', 'tool_name', 'name'];
 const INPUT_KEYS = ['arguments', 'args', 'input', 'params', 'parameters'];
@@ -83,16 +90,53 @@ export const getMcpInputRecord = (
   }
 };
 
-export const getCodexLinearMcpApiName = (toolName: string) => {
+const normalizeCodexLinearToolName = (toolName: string) => {
   if (!toolName) return '';
 
   let apiName = toolName.trim();
-  if (apiName.startsWith(LINEAR_CODEX_PREFIX)) {
-    apiName = apiName.slice(LINEAR_CODEX_PREFIX.length);
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+
+    if (apiName.startsWith(LINEAR_CODEX_PREFIX)) {
+      apiName = apiName.slice(LINEAR_CODEX_PREFIX.length);
+      changed = true;
+    }
+
+    if (apiName.startsWith(LINEAR_CODEX_SERVER_PREFIX)) {
+      apiName = apiName.slice(LINEAR_CODEX_SERVER_PREFIX.length);
+      changed = true;
+    }
+
+    while (apiName.startsWith('_')) {
+      apiName = apiName.slice(1);
+      changed = true;
+    }
   }
-  if (apiName.startsWith(LINEAR_CODEX_SERVER_PREFIX)) {
-    apiName = apiName.slice(LINEAR_CODEX_SERVER_PREFIX.length);
-  }
+
+  return apiName;
+};
+
+const getCodexLinearFetchApiName = (input?: Record<string, unknown>) => {
+  const id = normalizeString(input?.id);
+  const entityPrefix = id.includes(':') ? id.slice(0, id.indexOf(':')).toLowerCase() : '';
+  const prefixedApiName = CODEX_LINEAR_FETCH_API_BY_ENTITY[entityPrefix];
+  if (prefixedApiName) return prefixedApiName;
+
+  if (/^[A-Z][A-Z0-9]+-\d+$/u.test(id)) return 'get_issue';
+
+  return 'fetch';
+};
+
+export const getCodexLinearMcpApiName = (
+  toolName: string,
+  input?: Record<string, unknown>,
+) => {
+  const apiName = normalizeCodexLinearToolName(toolName);
+
+  if (apiName === 'fetch') return getCodexLinearFetchApiName(input);
+  if (CODEX_LINEAR_GENERIC_TOOL_NAMES.has(apiName)) return apiName;
 
   return apiName;
 };
