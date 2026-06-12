@@ -47,6 +47,7 @@ function createMockStore() {
         operationId: `op-reasoning-${reasoningCounter}`,
       };
     }),
+    updateOperationMetadata: vi.fn(),
   };
 }
 
