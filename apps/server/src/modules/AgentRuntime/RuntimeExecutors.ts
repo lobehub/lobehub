@@ -61,6 +61,7 @@ import { chainCompressContext } from '@lobechat/prompts';
 import {
   type ChatToolPayload,
   type ExecSubAgentParams,
+  type ExecVirtualSubAgentParams,
   type MessageToolCall,
   type UIChatMessage,
 } from '@lobechat/types';
@@ -331,8 +332,9 @@ const buildPostProcessUrl = (
  * The runner creates the pending placeholder tool message that anchors the
  * isolation thread (so the UI shows a loading state and the completion bridge
  * has a message to backfill), then kicks off the child op asynchronously and
- * returns immediately. Returns `undefined` when sub-agent execution is not
- * available (no `execSubAgent` callback, or missing agent/topic context).
+ * returns immediately. Returns `undefined` when virtual sub-agent execution is
+ * not available (no `execVirtualSubAgent` callback, or missing agent/topic
+ * context).
  */
 const buildServerSubAgentRunner = (
   ctx: RuntimeExecutorContext,
@@ -340,8 +342,8 @@ const buildServerSubAgentRunner = (
   chatToolPayload: ChatToolPayload,
   parentMessageId: string,
 ): ServerSubAgentRunner | undefined => {
-  const execSubAgent = ctx.execSubAgent;
-  if (!execSubAgent) return undefined;
+  const execVirtualSubAgent = ctx.execVirtualSubAgent;
+  if (!execVirtualSubAgent) return undefined;
 
   const agentId = state.metadata?.agentId;
   const topicId = ctx.topicId ?? state.metadata?.topicId;
@@ -364,17 +366,15 @@ const buildServerSubAgentRunner = (
         topicId,
       });
 
-      // 2. Fork the child op anchored to the placeholder. `resumeParentOnComplete`
-      //    tells execSubAgent to register the completion bridge that
-      //    backfills this tool message and resumes the parent op.
-      const result = (await execSubAgent({
+      // 2. Fork the virtual child op anchored to the placeholder. The virtual
+      //    entry marks the child as `isSubAgent` and registers the completion
+      //    bridge that backfills this tool message and resumes the parent op.
+      const result = (await execVirtualSubAgent({
         agentId: targetAgentId ?? agentId,
         groupId: state.metadata?.groupId ?? undefined,
         instruction,
-        isSubAgent: true,
         parentMessageId: placeholder.id,
         parentOperationId: ctx.operationId,
-        resumeParentOnComplete: true,
         timeout,
         title: description,
         topicId,
@@ -523,11 +523,17 @@ export interface RuntimeExecutorContext {
   discordContext?: any;
   evalContext?: EvalContext;
   /**
-   * Callback to spawn a sub-agent task server-side.
+   * Callback to run a legacy agent invocation server-side.
    * Injected by AiAgentService so exec_sub_agent / exec_sub_agents executors
-   * can dispatch callAgent-triggered tasks without a circular import.
+   * can dispatch callAgent-triggered runs without a circular import.
    */
   execSubAgent?: (params: ExecSubAgentParams) => Promise<unknown>;
+  /**
+   * Callback to fork a `lobe-agent.callSubAgent` virtual child run. Unlike
+   * execSubAgent, this path installs the async completion bridge and marks the
+   * child operation as a sub-agent.
+   */
+  execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<unknown>;
   hookDispatcher?: HookDispatcher;
   loadAgentState?: (operationId: string) => Promise<AgentState | null>;
   messageModel: MessageModel;

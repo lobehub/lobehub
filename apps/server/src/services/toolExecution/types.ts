@@ -61,9 +61,9 @@ export interface ToolExecutionContext {
   /** Current page document ID for page-scoped conversations */
   documentId?: string | null;
   /**
-   * Spawn a sub-agent as an independent async operation. Injected by the agent
-   * runtime (forwarded from `RuntimeExecutorContext.execSubAgent`) so the
-   * `callSubAgent` server tool can fork a child op without a circular import.
+   * Legacy agent invocation callback forwarded from RuntimeExecutorContext.
+   * Kept for tool runtimes that still dispatch through exec_sub_agent style
+   * flows; `lobe-agent.callSubAgent` uses the per-call `subAgent` runner below.
    */
   execSubAgent?: (params: ExecSubAgentParams) => Promise<unknown>;
   /** Per-call execution timeout resolved by the agent runtime. */
