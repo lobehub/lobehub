@@ -47,6 +47,7 @@ export class DocumentHistoryService {
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documentHistories);
 
   createHistory = async (params: {
+    breakAutosaveWindow?: boolean;
     documentId: string;
     editorData: Record<string, any>;
     saveSource: DocumentHistorySaveSource;
@@ -67,7 +68,7 @@ export class DocumentHistoryService {
     // overwritten row's savedAt keeps moving — a sliding anchor would collapse
     // an entire continuous editing session into a single version.
     // Any non-autosave version in between closes the window.
-    if (params.saveSource === 'autosave') {
+    if (params.saveSource === 'autosave' && !params.breakAutosaveWindow) {
       const latest = await this.db.query.documentHistories.findFirst({
         orderBy: [desc(documentHistories.savedAt), desc(documentHistories.id)],
         where: and(eq(documentHistories.documentId, params.documentId), this.historiesOwnership()),

@@ -54,6 +54,7 @@ export interface ListDocumentHistoryResult {
 export type DatabaseLike = LobeChatDatabase | Transaction;
 
 export interface UpdateDocumentParams {
+  breakAutosaveWindow?: boolean;
   content?: string;
   editorData?: Record<string, any>;
   fileType?: string;

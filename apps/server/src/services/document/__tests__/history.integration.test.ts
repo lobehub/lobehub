@@ -579,6 +579,67 @@ describe('DocumentHistoryService', () => {
 
       expect(rows).toHaveLength(2);
     });
+
+    it('should insert a new row within the same window when breakAutosaveWindow is true', async () => {
+      const doc = await createTestDocument('Hello');
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 1 },
+        saveSource: 'autosave',
+        savedAt: base,
+      });
+
+      await historyService.createHistory({
+        breakAutosaveWindow: true,
+        documentId: doc.id,
+        editorData: { v: 2 },
+        saveSource: 'autosave',
+        savedAt: minutes(3),
+      });
+
+      const rows = await listRows(doc.id);
+
+      expect(rows).toHaveLength(2);
+      expect(rows[0].editorData).toEqual({ v: 2 });
+      expect(rows[0].savedAt).toEqual(minutes(3));
+      expect(rows[1].editorData).toEqual({ v: 1 });
+      expect(rows[1].savedAt).toEqual(base);
+    });
+
+    it('should coalesce into the break row on the next autosave without the flag', async () => {
+      const doc = await createTestDocument('Hello');
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 1 },
+        saveSource: 'autosave',
+        savedAt: base,
+      });
+
+      await historyService.createHistory({
+        breakAutosaveWindow: true,
+        documentId: doc.id,
+        editorData: { v: 2 },
+        saveSource: 'autosave',
+        savedAt: minutes(3),
+      });
+
+      await historyService.createHistory({
+        documentId: doc.id,
+        editorData: { v: 3 },
+        saveSource: 'autosave',
+        savedAt: minutes(5),
+      });
+
+      const rows = await listRows(doc.id);
+
+      expect(rows).toHaveLength(2);
+      expect(rows[0].editorData).toEqual({ v: 3 });
+      expect(rows[0].savedAt).toEqual(minutes(5));
+      expect(rows[1].editorData).toEqual({ v: 1 });
+      expect(rows[1].savedAt).toEqual(base);
+    });
   });
 
   describe('getDocumentHistoryItem', () => {

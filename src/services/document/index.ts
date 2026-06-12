@@ -122,6 +122,8 @@ export interface DocumentHistoryClientSurface {
   updateDocument: (params: UpdateDocumentParams) => Promise<UpdateDocumentOutput>;
 }
 
+const autosavedOnceIds = new Set<string>();
+
 export class DocumentService {
   async createDocument(params: CreateDocumentParams): Promise<DocumentItem> {
     return lambdaClient.document.createDocument.mutate(params);
@@ -211,7 +213,10 @@ export class DocumentService {
   }
 
   async updateDocument(params: UpdateDocumentParams): Promise<UpdateDocumentOutput> {
-    const result = await lambdaClient.document.updateDocument.mutate(params);
+    const isFirstAutosave = params.saveSource === 'autosave' && !autosavedOnceIds.has(params.id);
+    const mutationParams = isFirstAutosave ? { ...params, breakAutosaveWindow: true } : params;
+    const result = await lambdaClient.document.updateDocument.mutate(mutationParams);
+    if (isFirstAutosave) autosavedOnceIds.add(params.id);
 
     return {
       ...result,

@@ -395,6 +395,7 @@ export class DocumentService {
       if (historyAppended) {
         savedAt = new Date();
         await documentHistoryService.createHistory({
+          breakAutosaveWindow: params.breakAutosaveWindow,
           documentId: id,
           editorData: currentEditorDataAccepted,
           saveSource: params.saveSource ?? 'autosave',
