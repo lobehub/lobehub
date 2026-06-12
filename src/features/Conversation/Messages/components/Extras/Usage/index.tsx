@@ -4,13 +4,16 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import { type ModelPerformance, type ModelUsage } from '@lobechat/types';
 import { ModelIcon } from '@lobehub/icons';
-import { Center, Flexbox } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
+import { CircleDollarSignIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { isDev } from '@/utils/env';
 
 import { contextSelectors, useConversationStore } from '../../../../store';
@@ -23,6 +26,11 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+const formatCost = (cost: number) => {
+  if (cost < 0.01) return cost.toFixed(4);
+  return cost.toFixed(2);
+};
+
 interface UsageProps {
   model: string;
   performance?: ModelPerformance;
@@ -33,6 +41,8 @@ interface UsageProps {
 const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
   const onboardingAgentId = useAgentStore(builtinAgentSelectors.webOnboardingAgentId);
   const conversationAgentId = useConversationStore(contextSelectors.agentId);
+  // Credit mode already expresses cost in credits — showing USD alongside would conflict.
+  const isShowCredit = useGlobalStore(systemStatusSelectors.isShowCredit);
 
   if (!isDev && onboardingAgentId && conversationAgentId === onboardingAgentId) return null;
 
@@ -64,14 +74,22 @@ const Usage = memo<UsageProps>(({ model, usage, performance, provider }) => {
         )}
       </Center>
 
-      {!!usage?.totalTokens && (
-        <TokenDetail
-          model={model as string}
-          performance={performance}
-          provider={provider}
-          usage={usage}
-        />
-      )}
+      <Center horizontal gap={8}>
+        {!!usage?.totalTokens && (
+          <TokenDetail
+            model={model as string}
+            performance={performance}
+            provider={provider}
+            usage={usage}
+          />
+        )}
+        {!isShowCredit && !!usage?.cost && (
+          <Center horizontal gap={2}>
+            <Icon icon={CircleDollarSignIcon} />
+            {formatCost(usage.cost)}
+          </Center>
+        )}
+      </Center>
     </Flexbox>
   );
 }, isEqual);
