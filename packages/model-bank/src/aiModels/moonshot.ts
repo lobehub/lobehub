@@ -12,6 +12,34 @@ const moonshotChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
+      "Kimi K2.7 Code is Kimi's most intelligent coding model to date. It can follow instructions more reliably in long contexts and complete programming tasks with a higher success rate. It also supports text, image and video input, thinking mode, dialogue and Agent tasks.",
+    displayName: 'Kimi K2.7 Code',
+    enabled: true,
+    family: 'kimi',
+    generation: 'kimi-k2.7',
+    id: 'kimi-k2.7-code',
+    maxOutput: 32_768,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 1.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 6.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 27, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-06-12',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      structuredOutput: true,
+      video: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
       "Kimi K2.6 is Kimi's latest and most capable model, delivering stronger long-horizon coding, instruction following, and self-correction while supporting text, image, and video inputs plus chat and agent tasks.",
     displayName: 'Kimi K2.6',
     enabled: true,
