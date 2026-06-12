@@ -24,13 +24,14 @@ const POLL_TIMEOUT_MS = 15_000;
 
 interface KlavisSkillItemProps {
   isSelected?: boolean;
+  onDelete?: () => void;
   onSelect?: () => void;
   server?: KlavisServer;
   serverType: KlavisServerType;
 }
 
 const KlavisSkillItem = memo<KlavisSkillItemProps>(
-  ({ serverType, server, isSelected, onSelect }) => {
+  ({ serverType, server, isSelected, onSelect, onDelete }) => {
     const { t } = useTranslation('setting');
     const { allowed: canCreate, reason: createReason } = usePermission('create_content');
     const { allowed: canEdit, reason: editReason } = usePermission('edit_own_content');
@@ -184,6 +185,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
     };
 
     const handleRemove = () => {
+      if (!canEdit) return;
       if (!server) return;
       confirmModal({
         cancelText: t('cancel', { ns: 'common' }),
@@ -192,6 +194,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
         okText: t('tools.klavis.remove'),
         onOk: async () => {
           await removeKlavisServer(server.identifier);
+          if (isSelected) onDelete?.();
         },
         title: t('tools.klavis.removeConfirm.title', { name: serverType.label }),
       });
@@ -349,6 +352,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
               items={[
                 {
                   danger: true,
+                  disabled: !canEdit,
                   icon: <Icon icon={Trash2} />,
                   key: 'remove',
                   label: t('tools.klavis.remove'),

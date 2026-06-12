@@ -225,6 +225,7 @@ const Page = memo(() => {
             <SkillList
               selectedIdentifier={selected?.identifier}
               viewMode={viewMode}
+              onDeleteSelected={() => setSelected(null)}
               onSelect={handleSelect}
             />
           </div>
