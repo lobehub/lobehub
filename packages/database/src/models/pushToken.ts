@@ -60,3 +60,18 @@ export async function deletePushTokensByExpoTokens(
   if (tokens.length === 0) return;
   await db.delete(pushTokens).where(inArray(pushTokens.expoToken, tokens));
 }
+
+/**
+ * Static helper used by the public `unregister` endpoint — lets a signed-out
+ * client clean up its own token without a session, by presenting the
+ * (expoToken, deviceId) pair it received at registration. Both fields must
+ * match so a stale row for a different device can't be deleted by accident.
+ */
+export async function deletePushTokenByExpoTokenAndDevice(
+  db: LobeChatDatabase,
+  args: { deviceId: string; expoToken: string },
+): Promise<void> {
+  await db
+    .delete(pushTokens)
+    .where(and(eq(pushTokens.expoToken, args.expoToken), eq(pushTokens.deviceId, args.deviceId)));
+}

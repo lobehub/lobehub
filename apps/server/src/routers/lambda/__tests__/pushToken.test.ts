@@ -4,12 +4,15 @@ import { pushTokenRouter } from '@/server/routers/lambda/pushToken';
 
 const mockUpsert = vi.fn();
 const mockUnregister = vi.fn();
+const mockDeleteByExpoTokenAndDevice = vi.fn();
 
 vi.mock('@/database/models/pushToken', () => ({
   PushTokenModel: vi.fn(() => ({
     unregister: mockUnregister,
     upsert: mockUpsert,
   })),
+  deletePushTokenByExpoTokenAndDevice: (...args: unknown[]) =>
+    mockDeleteByExpoTokenAndDevice(...args),
 }));
 
 const createCaller = (ctxOverrides: Partial<any> = {}) => {
@@ -91,18 +94,59 @@ describe('pushTokenRouter', () => {
   });
 
   describe('unregister', () => {
-    it('should call model.unregister with deviceId', async () => {
-      mockUnregister.mockResolvedValueOnce(undefined);
+    it('should delete by (expoToken, deviceId) when expoToken is provided', async () => {
+      mockDeleteByExpoTokenAndDevice.mockResolvedValueOnce(undefined);
       const caller = createCaller();
 
-      await caller.unregister({ deviceId: 'device-1' });
+      const result = await caller.unregister({
+        deviceId: 'device-1',
+        expoToken: 'ExponentPushToken[abc]',
+      });
 
-      expect(mockUnregister).toHaveBeenCalledWith('device-1');
+      expect(mockDeleteByExpoTokenAndDevice).toHaveBeenCalledWith(expect.anything(), {
+        deviceId: 'device-1',
+        expoToken: 'ExponentPushToken[abc]',
+      });
+      expect(result).toEqual({ success: true });
+      // Legacy (userId, deviceId) path must not fire when expoToken is present
+      expect(mockUnregister).not.toHaveBeenCalled();
+    });
+
+    it('should silently succeed without expoToken (1.0.7 legacy clients)', async () => {
+      const caller = createCaller();
+
+      const result = await caller.unregister({ deviceId: 'device-1' });
+
+      // Cleanup happens via process-push-receipts cron — no DB delete here
+      expect(mockDeleteByExpoTokenAndDevice).not.toHaveBeenCalled();
+      expect(mockUnregister).not.toHaveBeenCalled();
+      expect(result).toEqual({ success: true });
+    });
+
+    it('should succeed for an unauthenticated caller (no userId)', async () => {
+      // The whole point of making this public: clients call it during sign-out
+      // when their session may already be gone. Must not 401.
+      const caller = createCaller({ userId: undefined });
+
+      const result = await caller.unregister({
+        deviceId: 'device-1',
+        expoToken: 'ExponentPushToken[abc]',
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(mockDeleteByExpoTokenAndDevice).toHaveBeenCalled();
     });
 
     it('should reject empty deviceId', async () => {
       const caller = createCaller();
       await expect(caller.unregister({ deviceId: '' })).rejects.toThrow();
+    });
+
+    it('should reject empty expoToken when provided', async () => {
+      const caller = createCaller();
+      await expect(
+        caller.unregister({ deviceId: 'device-1', expoToken: '' }),
+      ).rejects.toThrow();
     });
   });
 });
