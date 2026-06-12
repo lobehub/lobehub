@@ -656,9 +656,9 @@ const AgentTool = memo<AgentToolProps>(
       // 2. Installed plugins
       for (const plugin of installedPluginList) all.add(plugin.identifier);
 
-      // 3. Klavis server types (if enabled)
+      // 3. Composio server types (if enabled)
       if (isKlavisEnabledInEnv) {
-        for (const type of KLAVIS_SERVER_TYPES) all.add(type.identifier);
+        for (const type of COMPOSIO_APP_TYPES) all.add(type.identifier);
       }
 
       // 4. LobeHub Skill providers (if enabled)

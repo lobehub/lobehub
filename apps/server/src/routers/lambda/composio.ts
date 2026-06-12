@@ -1,4 +1,5 @@
 import { type ToolManifest } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { getServerComposioAuthConfigId } from '@/config/composio';
@@ -48,6 +49,13 @@ export const composioRouter = router({
           });
         }
         authConfigId = authConfig.id;
+      }
+
+      if (!authConfigId) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to resolve a Composio auth config for "${appSlug}".`,
+        });
       }
 
       // Composio-managed OAuth auth configs no longer support `initiate`; use
