@@ -370,7 +370,6 @@ export const aiChatRouter = router({
             { assistantMessage, userMessage },
             {
               ...(modelTiming ? { timing: modelTiming } : {}),
-              touchTopicUpdatedAt: !isCreateNewTopic,
             },
           );
         },

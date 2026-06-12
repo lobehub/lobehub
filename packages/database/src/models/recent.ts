@@ -2,7 +2,7 @@ import type { TaskStatus } from '@lobechat/types';
 import { and, desc, eq, inArray, isNotNull, isNull, ne, not, or, sql } from 'drizzle-orm';
 import { unionAll } from 'drizzle-orm/pg-core';
 
-import { agents, DOCUMENT_FOLDER_TYPE, documents, tasks, topics } from '../schemas';
+import { agents, DOCUMENT_FOLDER_TYPE, documents, messages, tasks, topics } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
@@ -48,6 +48,17 @@ export class RecentModel {
     const taskScopeWhere = this.workspaceId
       ? eq(tasks.workspaceId, this.workspaceId)
       : and(eq(tasks.createdByUserId, this.userId), isNull(tasks.workspaceId));
+    const latestTopicMessageAtSubquery = this.db
+      .select({ value: messages.updatedAt })
+      .from(messages)
+      .where(and(eq(messages.topicId, topics.id), buildWorkspaceWhere(scope, messages)))
+      .orderBy(desc(messages.updatedAt))
+      .limit(1);
+
+    const topicActivityAt =
+      sql<Date>`COALESCE((${latestTopicMessageAtSubquery}), ${topics.updatedAt})`.mapWith(
+        topics.updatedAt,
+      );
 
     const topicArm = this.db
       .select({
@@ -58,7 +69,7 @@ export class RecentModel {
         status: sql<TaskStatus | null>`NULL`.as('status'),
         title: sql<string>`COALESCE(${topics.title}, 'Untitled Topic')`.as('title'),
         type: sql<RecentDbItem['type']>`'topic'`.as('type'),
-        updatedAt: topics.updatedAt,
+        updatedAt: topicActivityAt.as('updated_at'),
       })
       .from(topics)
       .leftJoin(agents, eq(topics.agentId, agents.id))

@@ -134,10 +134,10 @@ const STATUS_SORT_RANK = sql`CASE ${topics.status}
 
 // Favorites always float to the top; the rest are ordered by the requested
 // strategy. `status` adds the priority bucket before the recency tiebreaker.
-const buildTopicOrderBy = (sortBy?: TopicQuerySortBy): SQL[] =>
+const buildTopicOrderBy = (topicActivityAt: SQL, sortBy?: TopicQuerySortBy): SQL[] =>
   sortBy === 'status'
-    ? [desc(topics.favorite), asc(STATUS_SORT_RANK), desc(topics.updatedAt)]
-    : [desc(topics.favorite), desc(topics.updatedAt)];
+    ? [desc(topics.favorite), asc(STATUS_SORT_RANK), desc(topicActivityAt)]
+    : [desc(topics.favorite), desc(topicActivityAt)];
 
 export class TopicModel {
   private userId: string;
@@ -171,7 +171,6 @@ export class TopicModel {
     triggers,
     withDetails = false,
   }: QueryTopicParams = {}) => {
-    const orderBy = buildTopicOrderBy(sortBy);
     const queryStartedAt = Date.now();
     logTiming(timing, 'db.topic.query:start', {
       current,
@@ -208,6 +207,17 @@ export class TopicModel {
       .select({ value: sql<number>`count(*)::int` })
       .from(messages)
       .where(eq(messages.topicId, topics.id));
+    const latestMessageAtSubquery = this.db
+      .select({ value: messages.updatedAt })
+      .from(messages)
+      .where(and(eq(messages.topicId, topics.id), this.messageOwnership()))
+      .orderBy(desc(messages.updatedAt))
+      .limit(1);
+    const topicActivityAt =
+      sql<Date>`COALESCE((${latestMessageAtSubquery}), ${topics.updatedAt})`.mapWith(
+        topics.updatedAt,
+      );
+    const orderBy = buildTopicOrderBy(topicActivityAt, sortBy);
 
     const detailColumns = withDetails
       ? {
@@ -556,6 +566,17 @@ export class TopicModel {
    * - For inbox: includes topics with slug='inbox'
    */
   queryRecent = async (limit: number = 12) => {
+    const latestMessageAtSubquery = this.db
+      .select({ value: messages.updatedAt })
+      .from(messages)
+      .where(and(eq(messages.topicId, topics.id), this.messageOwnership()))
+      .orderBy(desc(messages.updatedAt))
+      .limit(1);
+    const topicActivityAt =
+      sql<Date>`COALESCE((${latestMessageAtSubquery}), ${topics.updatedAt})`.mapWith(
+        topics.updatedAt,
+      );
+
     const result = await this.db
       .select({
         agentId: topics.agentId,
@@ -563,7 +584,7 @@ export class TopicModel {
         id: topics.id,
         sessionId: topics.sessionId,
         title: topics.title,
-        updatedAt: topics.updatedAt,
+        updatedAt: topicActivityAt,
       })
       .from(topics)
       .leftJoin(agents, eq(topics.agentId, agents.id))
@@ -580,12 +601,13 @@ export class TopicModel {
           ),
         ),
       )
-      .orderBy(desc(topics.updatedAt))
+      .orderBy(desc(topicActivityAt))
       .limit(limit);
 
     return result.map((item) => ({
       ...item,
       type: item.groupId ? ('group' as const) : ('agent' as const),
+      updatedAt: item.updatedAt instanceof Date ? item.updatedAt : new Date(item.updatedAt),
     }));
   };
 

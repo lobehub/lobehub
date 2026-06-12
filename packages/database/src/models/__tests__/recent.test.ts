@@ -2,7 +2,16 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, chatGroups, documents, knowledgeBases, tasks, topics, users } from '../../schemas';
+import {
+  agents,
+  chatGroups,
+  documents,
+  knowledgeBases,
+  messages,
+  tasks,
+  topics,
+  users,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { RecentModel } from '../recent';
 
@@ -102,6 +111,41 @@ describe('RecentModel', () => {
           routeId: 'agent-inbox',
           routeGroupId: null,
         });
+      });
+
+      it('orders topic rows by latest message activity', async () => {
+        await serverDB.insert(agents).values({ id: 'agent-activity', userId, virtual: false });
+        await serverDB.insert(topics).values([
+          {
+            agentId: 'agent-activity',
+            id: 'topic-old-row-latest-message',
+            title: 'latest message wins',
+            updatedAt: minutesAgo(30),
+            userId,
+          },
+          {
+            agentId: 'agent-activity',
+            id: 'topic-new-row-old-message',
+            title: 'newer topic row',
+            updatedAt: minutesAgo(5),
+            userId,
+          },
+        ]);
+        await serverDB.insert(messages).values({
+          id: 'recent-topic-latest-message',
+          role: 'user',
+          topicId: 'topic-old-row-latest-message',
+          updatedAt: now(),
+          userId,
+        });
+
+        const result = await recentModel.queryRecent();
+
+        expect(result.map((row) => row.id)).toEqual([
+          'topic-old-row-latest-message',
+          'topic-new-row-old-message',
+        ]);
+        expect(result[0].updatedAt.getTime()).toBeGreaterThan(result[1].updatedAt.getTime());
       });
 
       it('includes topics on non-virtual non-group agents', async () => {

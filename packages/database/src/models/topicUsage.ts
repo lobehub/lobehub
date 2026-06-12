@@ -52,10 +52,15 @@ const num = (v: unknown): number => (v == null ? 0 : Number(v));
  * usage (e.g. after deletions), the columns are reset to NULL ("not measured"),
  * so deletes / regenerations are reflected correctly.
  *
- * NOTE: this writes through drizzle, whose `topics.updatedAt` has `$onUpdate`,
- * so calling it bumps `updated_at`. That's intended for the live path (the
- * topic is active anyway). The historical backfill must NOT use this — it runs
- * its own raw-SQL aggregate that leaves `updated_at` untouched.
+ * Keep activity timestamps stable: recency is derived from `messages.updated_at`,
+ * so this projection update must not bump `topics.updated_at` / `accessed_at`.
+ * Drizzle `$onUpdate` is bypassed by explicitly assigning the columns to
+ * themselves.
+ *
+ * TODO: This still updates the `topics` row for usage/cost/token rollups. Under
+ * high-concurrency assistant finalization for the same topic, it can still
+ * serialize on the topic row lock. Consider moving this projection to a
+ * debounced/asynchronous rollup or a separate per-topic usage table.
  */
 export const recomputeTopicUsage = async (
   trx: Transaction,
@@ -99,6 +104,7 @@ export const recomputeTopicUsage = async (
     await trx
       .update(topics)
       .set({
+        accessedAt: topics.accessedAt,
         cost: null,
         model: null,
         provider: null,
@@ -106,6 +112,7 @@ export const recomputeTopicUsage = async (
         totalInputTokens: null,
         totalOutputTokens: null,
         totalTokens: null,
+        updatedAt: topics.updatedAt,
         usage: null,
       })
       .where(and(eq(topics.id, topicId), buildWorkspaceWhere({ userId, workspaceId }, topics)));
@@ -191,6 +198,7 @@ export const recomputeTopicUsage = async (
   await trx
     .update(topics)
     .set({
+      accessedAt: topics.accessedAt,
       cost,
       model: primary?.model ?? null,
       provider: primary?.provider ?? null,
@@ -198,6 +206,7 @@ export const recomputeTopicUsage = async (
       totalInputTokens,
       totalOutputTokens,
       totalTokens,
+      updatedAt: topics.updatedAt,
       usage,
     })
     .where(and(eq(topics.id, topicId), buildWorkspaceWhere({ userId, workspaceId }, topics)));
