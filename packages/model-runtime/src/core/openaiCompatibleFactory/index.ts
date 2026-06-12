@@ -40,6 +40,7 @@ import { desensitizeUrl } from '../../utils/desensitizeUrl';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { handleOpenAIError } from '../../utils/handleOpenAIError';
+import { detectModelProvider } from '../../utils/modelParse';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import {
   assertContextWithinWindow,
@@ -61,6 +62,22 @@ import { transformResponseAPIToStream, transformResponseToStream } from './nonSt
 export type { PollVideoStatusResult };
 export * from './createVideo';
 export * from './nonStreamToStream';
+
+/**
+ * Detect provider 400/422 errors that reject `response_format: { type: 'json_schema' }`.
+ * Known message variants from the DeepSeek family (official API and gateways proxying it):
+ * - `This response_format type is unavailable now`
+ * - `response_format.type \`json_schema\` is unavailable now`
+ */
+export const isResponseFormatUnsupportedError = (error: unknown): boolean => {
+  const err = error as { error?: { message?: unknown }; message?: unknown };
+  const message = [err?.message, err?.error?.message]
+    .filter((value): value is string => typeof value === 'string')
+    .join('\n');
+  if (!message) return false;
+
+  return /(?:response_format|json_schema)[^]*?(?:unavailable|not +support)/i.test(message);
+};
 
 // the model contains the following keywords is not a chat model, so we should filter them out
 export const CHAT_MODELS_BLOCK_LIST = [
@@ -826,6 +843,75 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       );
     }
 
+    /**
+     * Simulate schema-based structured output through a forced tool call, for
+     * providers that do not support `response_format: { type: 'json_schema' }`.
+     * Returns the parsed schema object — the same shape as the json_schema path.
+     */
+    private async generateObjectViaToolCalling(
+      payload: GenerateObjectPayload,
+      options: GenerateObjectOptions | undefined,
+      usagePayload: Parameters<typeof convertOpenAIUsage>[1],
+    ) {
+      const log = debug(`${this.logPrefix}:generateObject`);
+      const { messages, schema, model } = payload;
+
+      // Apply schema transformation if configured
+      const processedSchema = generateObjectConfig?.handleSchema
+        ? { ...schema!, schema: generateObjectConfig.handleSchema(schema!.schema) }
+        : schema!;
+
+      const tool: ChatCompletionTool = {
+        function: {
+          description:
+            processedSchema.description ||
+            'Generate structured output according to the provided schema',
+          name: processedSchema.name || 'structured_output',
+          parameters: processedSchema.schema,
+        },
+        type: 'function',
+      };
+
+      const res = await this.client.chat.completions.create(
+        this.handleGenerateObjectPayload(payload, {
+          ...getGenerateObjectReasoningParams(payload),
+          messages,
+          model,
+          ...this.resolvePromptCacheKeyParams(model, options?.user),
+          tool_choice: { function: { name: tool.function.name }, type: 'function' },
+          tools: [tool],
+          user: options?.user,
+        }) as OpenAI.ChatCompletionCreateParamsNonStreaming,
+        { headers: options?.headers, signal: options?.signal },
+      );
+
+      if (res.usage) {
+        await options?.onUsage?.(convertOpenAIUsage(res.usage, usagePayload));
+      }
+
+      // Structural type keeps this compatible across openai SDK majors (v6
+      // widened tool_calls to a function/custom union).
+      const toolCalls = res.choices[0].message.tool_calls as
+        | { function?: { arguments: string; name: string } }[]
+        | undefined;
+      const toolCall =
+        toolCalls?.find((item) => item.function?.name === tool.function.name) ?? toolCalls?.[0];
+
+      if (!toolCall?.function) {
+        // tool_choice forces this function, so a missing tool call means the
+        // provider misbehaved — surface it instead of silently returning undefined
+        console.error('no tool call found in structured output response:', res.choices[0]?.message);
+        return undefined;
+      }
+
+      try {
+        return JSON.parse(toolCall.function.arguments);
+      } catch {
+        console.error('parse tool call arguments error:', toolCall);
+        return undefined;
+      }
+    }
+
     async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
       try {
         const { messages, schema, model, responseApi, tools } = payload;
@@ -848,54 +934,15 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         if (!schema) throw new Error('tools or schema is required');
 
-        // Use tool calling fallback if configured
-        if (generateObjectConfig?.useToolsCalling) {
+        // Use tool calling fallback if configured, or when the model is known to
+        // reject `response_format: { type: 'json_schema' }`. The DeepSeek API only
+        // supports `json_object` and replies `400 This response_format type is
+        // unavailable now` to json_schema requests, so DeepSeek-family models served
+        // through generic OpenAI-compatible providers (aggregator gateways, custom
+        // endpoints) must simulate structured output via forced tool calling.
+        if (generateObjectConfig?.useToolsCalling || detectModelProvider(model) === 'deepseek') {
           log('using tool calling fallback for structured output');
-
-          // Apply schema transformation if configured
-          const processedSchema = generateObjectConfig.handleSchema
-            ? { ...schema, schema: generateObjectConfig.handleSchema(schema.schema) }
-            : schema;
-
-          const tool: ChatCompletionTool = {
-            function: {
-              description:
-                processedSchema.description ||
-                'Generate structured output according to the provided schema',
-              name: processedSchema.name || 'structured_output',
-              parameters: processedSchema.schema,
-            },
-            type: 'function',
-          };
-
-          const res = await this.client.chat.completions.create(
-            this.handleGenerateObjectPayload(payload, {
-              ...getGenerateObjectReasoningParams(payload),
-              messages,
-              model,
-              ...this.resolvePromptCacheKeyParams(model, options?.user),
-              tool_choice: { function: { name: tool.function.name }, type: 'function' },
-              tools: [tool],
-              user: options?.user,
-            }) as OpenAI.ChatCompletionCreateParamsNonStreaming,
-            { headers: options?.headers, signal: options?.signal },
-          );
-
-          if (res.usage) {
-            await options?.onUsage?.(convertOpenAIUsage(res.usage, usagePayload));
-          }
-
-          const toolCalls = res.choices[0].message.tool_calls!;
-
-          try {
-            return toolCalls.map((item) => ({
-              arguments: JSON.parse(item.function.arguments),
-              name: item.function.name,
-            }));
-          } catch {
-            console.error('parse tool call arguments error:', toolCalls);
-            return undefined;
-          }
+          return await this.generateObjectViaToolCalling(payload, options, usagePayload);
         }
 
         // Factory-level Responses API routing control (supports instance override)
@@ -955,17 +1002,29 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         }
 
         log('calling chat.completions.create for structured output');
-        const res = await this.client.chat.completions.create(
-          this.handleGenerateObjectPayload(payload, {
-            ...getGenerateObjectReasoningParams(payload),
-            messages,
-            model,
-            response_format: { json_schema: processedSchema, type: 'json_schema' },
-            ...this.resolvePromptCacheKeyParams(model, options?.user),
-            user: options?.user,
-          }) as OpenAI.ChatCompletionCreateParamsNonStreaming,
-          { headers: options?.headers, signal: options?.signal },
-        );
+        let res: OpenAI.ChatCompletion;
+        try {
+          res = await this.client.chat.completions.create(
+            this.handleGenerateObjectPayload(payload, {
+              ...getGenerateObjectReasoningParams(payload),
+              messages,
+              model,
+              response_format: { json_schema: processedSchema, type: 'json_schema' },
+              ...this.resolvePromptCacheKeyParams(model, options?.user),
+              user: options?.user,
+            }) as OpenAI.ChatCompletionCreateParamsNonStreaming,
+            { headers: options?.headers, signal: options?.signal },
+          );
+        } catch (error) {
+          // Gateways can serve json_schema-incapable upstreams under arbitrary
+          // model ids (e.g. OpenCode Zen's `big-pickle` proxies DeepSeek), which
+          // the model-id detection above cannot catch. Retry once via forced
+          // tool calling when the upstream rejects the response_format type.
+          if (!isResponseFormatUnsupportedError(error)) throw error;
+
+          log('provider rejected json_schema response_format, retrying via tool calling');
+          return await this.generateObjectViaToolCalling(payload, options, usagePayload);
+        }
         if (res.usage) {
           await options?.onUsage?.(convertOpenAIUsage(res.usage, usagePayload));
         }

@@ -1,8 +1,15 @@
 import { spawn } from 'node:child_process';
 
+import {
+  buildHeteroExecStdinPayload,
+  type HeteroExecImageRef,
+} from '@lobechat/heterogeneous-agents/protocol';
+
 export interface SpawnHeteroAgentRunParams {
   agentType: string;
   cwd?: string;
+  /** Image attachments (signed URLs) appended as image content blocks. */
+  imageList?: HeteroExecImageRef[];
   jwt: string;
   operationId: string;
   prompt: string;
@@ -46,6 +53,7 @@ export function spawnHeteroAgentRun(
   const {
     agentType,
     cwd,
+    imageList,
     jwt,
     operationId,
     prompt,
@@ -77,15 +85,11 @@ export function spawnHeteroAgentRun(
     ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
   ];
 
-  // With systemContext, send a content-block array so the agent sees the
-  // context block first, then the user's actual prompt — mirrors the desktop
-  // path. `lh hetero exec` coerces both shapes via coerceJsonPrompt.
-  const stdinPayload = systemContext
-    ? JSON.stringify([
-        { text: systemContext, type: 'text' },
-        { text: prompt, type: 'text' },
-      ])
-    : JSON.stringify(prompt);
+  // systemContext / image attachments turn the payload into a content-block
+  // array: context block first, then the user's prompt, then images — mirrors
+  // the desktop path. `lh hetero exec` coerces both shapes via
+  // coerceJsonPrompt.
+  const stdinPayload = buildHeteroExecStdinPayload({ imageList, prompt, systemContext });
 
   return new Promise<AgentRunAckResult>((resolve) => {
     let settled = false;

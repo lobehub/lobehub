@@ -8,6 +8,7 @@ import type {
 } from '@lobechat/context-engine';
 import type { ChatTopicBotContext, UserInterventionConfig } from '@lobechat/types';
 
+import type { ExecutionPlan } from '@/helpers/executionTarget';
 import { type ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import type { AgentSignalOperationMarker } from '@/server/services/agentSignal/operationMarker';
 import type { DeviceAccessReason } from '@/server/services/aiAgent/deviceAccessPolicy';
@@ -220,6 +221,13 @@ export interface OperationCreationParams {
   deviceAccessPolicy?: { canUseDevice: boolean; reason: DeviceAccessReason };
   /** Device system info for placeholder variable replacement in Local System systemRole */
   deviceSystemInfo?: Record<string, string>;
+  /**
+   * Resolved execution plan for the run (see `resolveExecutionPlan`).
+   * Forwarded into `state.metadata.executionPlan` so step-level layers (the
+   * `call_llm` device-tool injection) consume the plan instead of re-deriving
+   * device capability from raw config.
+   */
+  executionPlan?: ExecutionPlan;
   /** Discord context for injecting channel/guild info into agent system message */
   discordContext?: any;
   evalContext?: any;

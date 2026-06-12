@@ -132,6 +132,7 @@ vi.mock('@/features/ExplorerTree', () => {
   return {
     ExplorerTree,
     FOLDER_ICON_CSS: '',
+    HIDE_POINTER_FOCUS_RING_CSS: '',
     getExplorerTreeStyleVars: () => ({}),
   };
 });

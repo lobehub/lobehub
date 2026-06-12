@@ -2,12 +2,13 @@ import { Alert, Button, Flexbox, FormItem, Input, InputPassword } from '@lobehub
 import { type FormInstance } from 'antd';
 import { Divider, Form, Radio } from 'antd';
 import isEqual from 'fast-deep-equal';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import KeyValueEditor from '@/components/KeyValueEditor';
 import MCPStdioCommandInput from '@/components/MCPStdioCommandInput';
 import ErrorDetails from '@/features/MCP/MCPInstallProgress/InstallError/ErrorDetails';
+import { lambdaClient } from '@/libs/trpc/client';
 import { useToolStore } from '@/store/tool';
 import { mcpStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
 import { type MCPErrorInfoMetadata } from '@/types/plugins';
@@ -18,8 +19,20 @@ import MCPTypeSelect from './MCPTypeSelect';
 import QuickImportSection from './QuickImportSection';
 
 interface MCPManifestFormProps {
+  /**
+   * Expose the OAuth auth type. Only the custom-connector entry sets this — the
+   * OAuth flow is backed by the connector subsystem, so it must NOT show up for
+   * the plain custom-plugin DevModal callers (editing plugins, agent tools, …).
+   */
+  enableOAuth?: boolean;
   form: FormInstance;
   isEditMode?: boolean;
+  /**
+   * Run the connector OAuth authorize flow. Called instead of the token-less
+   * manifest test when the OAuth auth type is selected (testing an OAuth server
+   * without authorizing first only ever 401s).
+   */
+  onAuthorizeOAuth?: () => void;
 }
 
 const HTTP_URL_KEY = ['customParams', 'mcp', 'url'];
@@ -31,13 +44,39 @@ const DESC_TYPE = ['customParams', 'description'];
 // Authentication-related constants
 const AUTH_TYPE = ['customParams', 'mcp', 'auth', 'type'];
 const AUTH_TOKEN = ['customParams', 'mcp', 'auth', 'token'];
+const AUTH_CLIENT_ID = ['customParams', 'mcp', 'auth', 'clientId'];
+const AUTH_CLIENT_SECRET = ['customParams', 'mcp', 'auth', 'clientSecret'];
 // Headers-related constants
 const HEADERS = ['customParams', 'mcp', 'headers'];
 
-const MCPManifestForm = ({ form, isEditMode }: MCPManifestFormProps) => {
+const MCPManifestForm = ({
+  form,
+  isEditMode,
+  enableOAuth,
+  onAuthorizeOAuth,
+}: MCPManifestFormProps) => {
   const { t } = useTranslation('plugin');
   const mcpType = Form.useWatch(MCP_TYPE, form);
   const authType = Form.useWatch(AUTH_TYPE, form);
+  // For OAuth servers there is no token to test with — "testing" the connection
+  // means running the authorize flow instead.
+  const isOAuth = enableOAuth && mcpType === 'http' && authType === 'oauth2';
+
+  // The redirect URI the server will use at authorize time (APP_URL-based), shown
+  // so the user registers a matching URI on their OAuth app. Fetched lazily once
+  // the OAuth auth type is in play.
+  const [redirectUri, setRedirectUri] = useState('');
+  useEffect(() => {
+    if (!enableOAuth || authType !== 'oauth2' || redirectUri) return;
+    lambdaClient.connector.getRedirectUri
+      .query()
+      .then((r) => setRedirectUri(r.redirectUri))
+      .catch(() => {
+        if (typeof window !== 'undefined') {
+          setRedirectUri(`${window.location.origin}/oauth/connector/callback`);
+        }
+      });
+  }, [enableOAuth, authType, redirectUri]);
 
   const pluginIds = useToolStore(pluginSelectors.storeAndInstallPluginsIdList);
   const [isTesting, setIsTesting] = useState(false);
@@ -224,6 +263,14 @@ const MCPManifestForm = ({ form, isEditMode }: MCPManifestFormProps) => {
                       label: t('dev.mcp.auth.bear'),
                       value: 'bearer',
                     },
+                    ...(enableOAuth
+                      ? [
+                          {
+                            label: t('dev.mcp.auth.oauth'),
+                            value: 'oauth2',
+                          },
+                        ]
+                      : []),
                   ]}
                 />
               </FormItem>
@@ -236,6 +283,35 @@ const MCPManifestForm = ({ form, isEditMode }: MCPManifestFormProps) => {
                 >
                   <InputPassword placeholder={t('dev.mcp.auth.token.placeholder')} />
                 </FormItem>
+              )}
+              {enableOAuth && authType === 'oauth2' && (
+                <>
+                  <FormItem
+                    desc={t('dev.mcp.auth.oauth.clientId.desc')}
+                    label={t('dev.mcp.auth.oauth.clientId.label')}
+                    name={AUTH_CLIENT_ID}
+                  >
+                    <Input placeholder={t('dev.mcp.auth.oauth.clientId.placeholder')} />
+                  </FormItem>
+                  <FormItem
+                    desc={t('dev.mcp.auth.oauth.clientSecret.desc')}
+                    label={t('dev.mcp.auth.oauth.clientSecret.label')}
+                    name={AUTH_CLIENT_SECRET}
+                  >
+                    <InputPassword placeholder={t('dev.mcp.auth.oauth.clientSecret.placeholder')} />
+                  </FormItem>
+                  <div
+                    style={{
+                      color: 'var(--lobe-colors-textDescription)',
+                      fontSize: 12,
+                      marginBottom: 8,
+                    }}
+                  >
+                    {t('dev.mcp.auth.oauth.redirectHint')}
+                    <br />
+                    <code style={{ wordBreak: 'break-all' }}>{redirectUri}</code>
+                  </div>
+                </>
               )}
               <CollapsibleSection title={t('dev.mcp.advanced.title')}>
                 <FormItem
@@ -286,9 +362,9 @@ const MCPManifestForm = ({ form, isEditMode }: MCPManifestFormProps) => {
               <Button
                 loading={isTesting}
                 type={!!mcpType ? 'primary' : undefined}
-                onClick={handleTestConnection}
+                onClick={isOAuth ? onAuthorizeOAuth : handleTestConnection}
               >
-                {t('dev.mcp.testConnection')}
+                {isOAuth ? t('dev.mcp.auth.oauth.authorize') : t('dev.mcp.testConnection')}
               </Button>
             </Flexbox>
           </FormItem>

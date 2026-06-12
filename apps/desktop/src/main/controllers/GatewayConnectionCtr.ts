@@ -17,6 +17,7 @@ import type {
   KillCommandParams,
   ListLocalFileParams,
   ListProjectSkillsParams,
+  LocalFilePreviewUrlParams,
   LocalReadFileParams,
   LocalReadFilesParams,
   LocalSearchFilesParams,
@@ -300,6 +301,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       this.heterogeneousAgentCtr.spawnLhHeteroExec({
         agentType: request.agentType,
         cwd: request.cwd,
+        imageList: request.imageList,
         jwt: request.jwt,
         operationId: request.operationId,
         prompt: request.prompt,
@@ -406,6 +408,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
       case 'getProjectFileIndex': {
         return this.localFileCtr.getProjectFileIndex(params as { scope?: string });
+      }
+
+      case 'getLocalFilePreview': {
+        return this.localFileCtr.getLocalFilePreview(params as LocalFilePreviewUrlParams);
       }
 
       case 'listProjectSkills': {

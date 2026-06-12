@@ -20,6 +20,8 @@ export default {
   'agentBuilder.title': 'Agent Builder',
   'agentBuilder.welcome':
     'Tell me your use case.\n\nWriting, coding, or data analysis—anything works. You own the goal and standards; I’ll break it down into collaborative, runnable Agents.',
+  'agentConfigError.retry': 'Retry',
+  'agentConfigError.title': 'Failed to load agent settings',
   'agentDefaultMessage':
     'Hi, I’m **{{name}}**. One sentence is enough.\n\nWant me to match your workflow better? Go to [Agent Settings]({{url}}) and fill in the Agent Profile (you can edit it anytime).',
   'agentDefaultMessageWithSystemRole':
@@ -216,6 +218,11 @@ export default {
     'Estimated from current context, tools, and model pricing. Actual cost may vary.',
   'input.disclaimer': 'Agents can make mistakes. Use your judgment for critical info.',
   'input.errorMsg': 'Send failed: {{errorMsg}}. Retry, or send again later.',
+  'input.inputCompletionError.desc':
+    'Input suggestions stopped after an error. Retry, or adjust the suggestion model in Settings.',
+  'input.inputCompletionError.retry': 'Retry',
+  'input.inputCompletionError.settings': 'Settings',
+  'input.inputCompletionError.title': 'Input suggestions paused',
   'input.more': 'More',
   'input.send': 'Send',
   'input.sendWithCmdEnter': 'Press <key/> to send',
@@ -1003,7 +1010,8 @@ export default {
   'workflow.toolDisplayName.addPreferenceMemory': 'Saved memory',
   'workflow.toolDisplayName.calculate': 'Calculated',
   'workflow.toolDisplayName.callAgent': 'Called an agent',
-  'workflow.toolDisplayName.callSubAgent': 'Call SubAgent',
+  'workflow.toolDisplayName.callMcpTool': 'Called MCP tool',
+  'workflow.toolDisplayName.callSubAgent': 'Called a sub-agent',
   'workflow.toolDisplayName.clearTodos': 'Cleared todos',
   'workflow.toolDisplayName.copyDocument': 'Copied a document',
   'workflow.toolDisplayName.crawlMultiPages': 'Crawled pages',
@@ -1107,7 +1115,9 @@ export default {
   'workingPanel.localFile.closeRight': 'Close to the Right',
   'workingPanel.localFile.error': "Couldn't load this file",
   'workingPanel.localFile.preview.raw': 'Raw',
+  'workingPanel.localFile.preview.reload': 'Reload preview',
   'workingPanel.localFile.preview.render': 'Preview',
+  'workingPanel.localFile.preview.source': 'Source',
   'workingPanel.localFile.truncated': 'File preview truncated to {{limit}} characters',
   'workingPanel.skills.empty': 'No skills available',
   'workingPanel.skills.section.agent': 'Agent skills',

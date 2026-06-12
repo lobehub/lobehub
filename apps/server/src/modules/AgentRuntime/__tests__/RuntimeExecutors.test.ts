@@ -408,8 +408,11 @@ describe('RuntimeExecutors', () => {
       );
     });
 
-    describe('reasoning persistence gate', () => {
-      it('should persist assistant reasoning with tool calls when preserveThinking is enabled on a supported model', async () => {
+    // preserveThinking gates whether reasoning is replayed into the next LLM
+    // payload (state.messages). The DB copy powers UI display after refresh and
+    // is always persisted regardless of the gate.
+    describe('reasoning replay gate', () => {
+      it('should replay assistant reasoning with tool calls when preserveThinking is enabled on a supported model', async () => {
         const toolCallPayload = [
           {
             function: { arguments: '{}', name: 'search' },
@@ -474,7 +477,7 @@ describe('RuntimeExecutors', () => {
         );
       });
 
-      it('should not persist assistant reasoning when preserveThinking is not enabled', async () => {
+      it('should persist reasoning to DB but not replay it when preserveThinking is not enabled', async () => {
         const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
           await options?.callback?.onThinking?.('hidden reasoning');
           await options?.callback?.onText?.('answer');
@@ -498,9 +501,14 @@ describe('RuntimeExecutors', () => {
         const assistant = result.newState.messages.at(-1) as any;
 
         expect(assistant.reasoning).toBeUndefined();
+        // DB persistence must NOT be gated — UI shows reasoning after refresh
+        expect(mockMessageModel.update).toHaveBeenCalledWith(
+          'msg-123',
+          expect.objectContaining({ reasoning: { content: 'hidden reasoning' } }),
+        );
       });
 
-      it('should persist assistant reasoning when preserveThinking is enabled on a supported model', async () => {
+      it('should replay assistant reasoning when preserveThinking is enabled on a supported model', async () => {
         const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
           await options?.callback?.onThinking?.('preserved reasoning');
           await options?.callback?.onText?.('answer');
@@ -546,7 +554,7 @@ describe('RuntimeExecutors', () => {
         );
       });
 
-      it('should persist reasoning for unknown custom deployments on supported providers', async () => {
+      it('should replay reasoning for unknown custom deployments on supported providers', async () => {
         const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
           await options?.callback?.onThinking?.('custom deployment reasoning');
           await options?.callback?.onText?.('answer');
@@ -592,9 +600,9 @@ describe('RuntimeExecutors', () => {
         );
       });
 
-      it('should not persist reasoning when model does not declare preserveThinking capability', async () => {
+      it('should persist reasoning to DB but not replay it when model does not declare preserveThinking capability', async () => {
         const mockChat = vi.fn().mockImplementation(async (_payload, options) => {
-          await options?.callback?.onThinking?.('reasoning that should not be saved');
+          await options?.callback?.onThinking?.('reasoning on an unsupported model');
           await options?.callback?.onText?.('answer');
           return new Response('done');
         });
@@ -633,6 +641,13 @@ describe('RuntimeExecutors', () => {
         expect(mockChat).toHaveBeenCalledWith(
           expect.not.objectContaining({ preserveThinking: expect.any(Boolean) }),
           expect.anything(),
+        );
+        // DB persistence must NOT be gated — UI shows reasoning after refresh
+        expect(mockMessageModel.update).toHaveBeenCalledWith(
+          'msg-123',
+          expect.objectContaining({
+            reasoning: { content: 'reasoning on an unsupported model' },
+          }),
         );
       });
     });
@@ -771,9 +786,9 @@ describe('RuntimeExecutors', () => {
         });
         vi.mocked(initModelRuntimeFromDB).mockResolvedValueOnce({ chat: mockChat } as any);
 
-        // Reasoning only lands in the finalized message when preserveThinking is
-        // enabled on a supported model; otherwise it is intentionally dropped.
-        // Enable it here so this still guards reasoning_part capture (not drop).
+        // Reasoning is only replayed into state.messages when preserveThinking is
+        // enabled on a supported model. Enable it here so this asserts
+        // reasoning_part capture via the state replay path.
         const ctxWithThinking: RuntimeExecutorContext = {
           ...ctx,
           agentConfig: { chatConfig: { preserveThinking: true }, plugins: [], systemRole: 'test' },
@@ -1593,6 +1608,168 @@ describe('RuntimeExecutors', () => {
         );
         expect(chatMessages).not.toContainEqual(
           expect.objectContaining({ content: 'History response', role: 'assistant' }),
+        );
+      });
+
+      it('should strip stored assistant reasoning before context processing when replay gate is off', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            plugins: [],
+            systemRole: 'test',
+          },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+        const messages = [
+          {
+            content: 'Previous answer',
+            reasoning: { content: 'stored reasoning should stay display-only' },
+            role: 'assistant',
+          },
+          { content: 'Continue', role: 'user' },
+        ];
+
+        await executors.call_llm!(
+          {
+            payload: {
+              messages,
+              model: 'gpt-4',
+              provider: 'openai',
+            },
+            type: 'call_llm' as const,
+          },
+          state,
+        );
+
+        const engineInput = engineSpy.mock.calls[0][0];
+        expect(engineInput.messages[0]).toEqual({
+          content: 'Previous answer',
+          role: 'assistant',
+        });
+        expect(messages[0]).toEqual(
+          expect.objectContaining({
+            reasoning: { content: 'stored reasoning should stay display-only' },
+          }),
+        );
+      });
+
+      it('should strip stored reasoning from grouped assistant messages before context processing when replay gate is off', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            plugins: [],
+            systemRole: 'test',
+          },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+        const groupedChild = {
+          content: 'Grouped answer',
+          id: 'group-child-1',
+          reasoning: { content: 'grouped child reasoning should stay display-only' },
+          role: 'assistant',
+        };
+        const councilMember = {
+          content: 'Council member answer',
+          id: 'member-1',
+          reasoning: { content: 'member reasoning should stay display-only' },
+          role: 'assistant',
+        };
+        const nestedCouncilChild = {
+          content: 'Nested council answer',
+          id: 'member-child-1',
+          reasoning: { content: 'nested member reasoning should stay display-only' },
+          role: 'assistant',
+        };
+        const messages = [
+          {
+            children: [groupedChild],
+            content: '',
+            id: 'group-1',
+            role: 'assistantGroup',
+          },
+          {
+            content: '',
+            id: 'council-1',
+            members: [
+              councilMember,
+              {
+                children: [nestedCouncilChild],
+                content: '',
+                id: 'member-group-1',
+                role: 'assistantGroup',
+              },
+            ],
+            role: 'agentCouncil',
+          },
+          { content: 'Continue', role: 'user' },
+        ];
+
+        await executors.call_llm!(
+          {
+            payload: {
+              messages,
+              model: 'gpt-4',
+              provider: 'openai',
+            },
+            type: 'call_llm' as const,
+          },
+          state,
+        );
+
+        const engineInput = engineSpy.mock.calls[0][0];
+        expect(engineInput.messages[0].children[0]).not.toHaveProperty('reasoning');
+        expect(engineInput.messages[1].members[0]).not.toHaveProperty('reasoning');
+        expect(engineInput.messages[1].members[1].children[0]).not.toHaveProperty('reasoning');
+        expect(groupedChild).toHaveProperty('reasoning');
+        expect(councilMember).toHaveProperty('reasoning');
+        expect(nestedCouncilChild).toHaveProperty('reasoning');
+      });
+
+      it('should keep stored assistant reasoning before context processing when replay gate is enabled', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            chatConfig: { preserveThinking: true },
+            plugins: [],
+            systemRole: 'test',
+          },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState({
+          modelRuntimeConfig: {
+            model: 'qwen3.6-plus',
+            provider: 'qwen',
+          },
+        });
+
+        await executors.call_llm!(
+          {
+            payload: {
+              messages: [
+                {
+                  content: 'Previous answer',
+                  reasoning: { content: 'reasoning to replay' },
+                  role: 'assistant',
+                },
+                { content: 'Continue', role: 'user' },
+              ],
+              model: 'qwen3.6-plus',
+              provider: 'qwen',
+            },
+            type: 'call_llm' as const,
+          },
+          state,
+        );
+
+        const engineInput = engineSpy.mock.calls[0][0];
+        expect(engineInput.messages[0]).toEqual(
+          expect.objectContaining({
+            content: 'Previous answer',
+            reasoning: { content: 'reasoning to replay' },
+            role: 'assistant',
+          }),
         );
       });
 

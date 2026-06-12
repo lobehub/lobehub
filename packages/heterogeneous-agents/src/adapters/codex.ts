@@ -3,6 +3,7 @@ import type {
   HeterogeneousAgentEvent,
   HeterogeneousTerminalErrorData,
   StepCompleteData,
+  StreamStartData,
   ToolCallPayload,
   ToolResultData,
   UsageData,
@@ -12,6 +13,7 @@ const CODEX_IDENTIFIER = 'codex';
 const CODEX_COLLAB_TOOL_CALL_API = 'collab_tool_call';
 const CODEX_COMMAND_API = 'command_execution';
 const CODEX_FILE_CHANGE_API = 'file_change';
+const CODEX_MCP_TOOL_CALL_API = 'mcp_tool_call';
 const CODEX_TODO_LIST_API = 'todo_list';
 
 interface CodexBaseItem {
@@ -36,6 +38,7 @@ interface CodexTodoListItem extends CodexBaseItem {
 }
 
 interface CodexFileChangeEntry {
+  diffText?: string;
   kind?: string;
   linesAdded?: number;
   linesDeleted?: number;
@@ -44,8 +47,17 @@ interface CodexFileChangeEntry {
 
 interface CodexFileChangeItem extends CodexBaseItem {
   changes?: CodexFileChangeEntry[];
+  diffText?: string;
   linesAdded?: number;
   linesDeleted?: number;
+}
+
+interface CodexMcpToolCallItem extends CodexBaseItem {
+  arguments?: unknown;
+  error?: unknown;
+  result?: unknown;
+  server?: string;
+  tool?: string;
 }
 
 interface CodexCollabAgentState {
@@ -66,6 +78,7 @@ type CodexToolItem =
   | CodexCollabToolCallItem
   | CodexCommandExecutionItem
   | CodexFileChangeItem
+  | CodexMcpToolCallItem
   | CodexTodoListItem;
 
 const isCommandExecutionItem = (item: CodexToolItem): item is CodexCommandExecutionItem =>
@@ -76,6 +89,9 @@ const isCollabToolCallItem = (item: CodexToolItem): item is CodexCollabToolCallI
 
 const isFileChangeItem = (item: CodexToolItem): item is CodexFileChangeItem =>
   item.type === CODEX_FILE_CHANGE_API;
+
+const isMcpToolCallItem = (item: CodexToolItem): item is CodexMcpToolCallItem =>
+  item.type === CODEX_MCP_TOOL_CALL_API;
 
 const isTodoListItem = (item: CodexToolItem): item is CodexTodoListItem =>
   item.type === CODEX_TODO_LIST_API;
@@ -145,6 +161,7 @@ const synthesizeTodoListPluginState = (item: CodexTodoListItem) => {
 
 const synthesizeFileChangePluginState = (item: CodexFileChangeItem) => {
   const changes = (item.changes || []).map((change) => ({
+    ...(change.diffText ? { diffText: change.diffText } : {}),
     kind: change.kind,
     linesAdded: change.linesAdded ?? 0,
     linesDeleted: change.linesDeleted ?? 0,
@@ -157,17 +174,131 @@ const synthesizeFileChangePluginState = (item: CodexFileChangeItem) => {
 
   return {
     changes,
+    ...(item.diffText ? { diffText: item.diffText } : {}),
     linesAdded: item.linesAdded ?? 0,
     linesDeleted: item.linesDeleted ?? 0,
   };
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const stringifyUnknown = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  if (value === undefined || value === null) return '';
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+};
+
+const getRecordString = (record: Record<string, unknown>, key: string): string | undefined => {
+  const value = record[key];
+  return typeof value === 'string' && value.trim() ? value : undefined;
+};
+
+const unwrapMcpResultEnvelope = (value: unknown): unknown => {
+  if (!isRecord(value)) return value;
+
+  if ('Ok' in value) return value.Ok;
+  if ('Err' in value) return value.Err;
+  if ('ok' in value) return value.ok;
+
+  return value;
+};
+
+const getMcpContentItemText = (item: unknown): string => {
+  if (typeof item === 'string') return item;
+  if (!isRecord(item)) return stringifyUnknown(item);
+
+  const text = getRecordString(item, 'text') || getRecordString(item, 'content');
+  if (text) return text;
+
+  return stringifyUnknown(item);
+};
+
+const getMcpResultContent = (item: CodexMcpToolCallItem): string => {
+  const result = unwrapMcpResultEnvelope(item.result);
+
+  if (Array.isArray(result)) {
+    return result.map(getMcpContentItemText).filter(Boolean).join('\n\n');
+  }
+
+  if (isRecord(result)) {
+    if (Array.isArray(result.content)) {
+      return result.content.map(getMcpContentItemText).filter(Boolean).join('\n\n');
+    }
+
+    const text = getRecordString(result, 'text') || getRecordString(result, 'output');
+    if (text) return text;
+  }
+
+  return stringifyUnknown(result);
+};
+
+const getMcpErrorContent = (item: CodexMcpToolCallItem): string => {
+  const error = item.error || unwrapMcpResultEnvelope(item.result);
+
+  if (isRecord(error)) {
+    return (
+      getRecordString(error, 'message') ||
+      getRecordString(error, 'error') ||
+      stringifyUnknown(error)
+    );
+  }
+
+  return stringifyUnknown(error);
+};
+
+const hasMcpResultError = (item: CodexMcpToolCallItem): boolean => {
+  if (item.error) return true;
+
+  const result = item.result;
+  if (!isRecord(result)) return false;
+  if ('Err' in result) return true;
+
+  const ok = unwrapMcpResultEnvelope(result);
+  return isRecord(ok) && ok.isError === true;
+};
+
+const synthesizeMcpToolPluginState = (item: CodexMcpToolCallItem) => ({
+  arguments: item.arguments,
+  error: item.error,
+  result: item.result,
+  server: item.server,
+  status: item.status,
+  tool: item.tool,
+});
+
+const synthesizeCollabToolPluginState = (item: CodexCollabToolCallItem) => ({
+  agents_states: item.agents_states,
+  prompt: item.prompt,
+  receiver_thread_ids: item.receiver_thread_ids,
+  sender_thread_id: item.sender_thread_id,
+  status: item.status,
+  tool: item.tool,
+});
+
 const pluralize = (count: number, singular: string, plural = `${singular}s`) =>
   count === 1 ? singular : plural;
 
+const toMcpToolPayloadArguments = (item: CodexMcpToolCallItem) => ({
+  arguments: item.arguments,
+  server: item.server,
+  tool: item.tool,
+});
+
 const toToolPayload = (item: CodexToolItem): ToolCallPayload => ({
   apiName: item.type || CODEX_COMMAND_API,
-  arguments: JSON.stringify(isCommandExecutionItem(item) ? { command: item.command || '' } : item),
+  arguments: JSON.stringify(
+    isCommandExecutionItem(item)
+      ? { command: item.command || '' }
+      : isMcpToolCallItem(item)
+        ? toMcpToolPayloadArguments(item)
+        : item,
+  ),
   id: item.id,
   identifier: CODEX_IDENTIFIER,
   type: 'default',
@@ -253,6 +384,9 @@ const getFailureVerb = (item: CodexToolItem): 'cancelled' | 'failed' =>
 const getToolFailureContent = (item: CodexToolItem): string => {
   if (isTodoListItem(item)) return `Todo list update ${getFailureVerb(item)}.`;
   if (isFileChangeItem(item)) return `File changes ${getFailureVerb(item)}.`;
+  if (isMcpToolCallItem(item)) {
+    return getMcpErrorContent(item) || `MCP tool ${getFailureVerb(item)}.`;
+  }
   if (isCollabToolCallItem(item)) return `${item.tool || 'Collaboration'} ${getFailureVerb(item)}.`;
 
   return `${item.type} ${getFailureVerb(item)}.`;
@@ -267,6 +401,7 @@ const getToolContent = (item: CodexToolItem, isSuccess: boolean): string => {
 
   if (isTodoListItem(item)) return summarizeTodoList(item);
   if (isFileChangeItem(item)) return summarizeFileChange(item);
+  if (isMcpToolCallItem(item)) return getMcpResultContent(item);
   if (isCollabToolCallItem(item)) return summarizeCollabToolCall(item);
 
   return summarizeFallbackTool(item);
@@ -277,6 +412,8 @@ const isSuccessfulToolCompletion = (item: CodexToolItem): boolean => {
     const exitCode = item.exit_code ?? undefined;
     return item.status === 'completed' && (exitCode === undefined || exitCode === 0);
   }
+
+  if (isMcpToolCallItem(item) && hasMcpResultError(item)) return false;
 
   return item.status !== 'cancelled' && item.status !== 'error' && item.status !== 'failed';
 };
@@ -308,7 +445,11 @@ const getToolResultData = (item: CodexToolItem): ToolResultData => {
       ? synthesizeTodoListPluginState(item)
       : isSuccess && isFileChangeItem(item)
         ? synthesizeFileChangePluginState(item)
-        : undefined;
+        : isMcpToolCallItem(item)
+          ? synthesizeMcpToolPluginState(item)
+          : isCollabToolCallItem(item)
+            ? synthesizeCollabToolPluginState(item)
+            : undefined;
 
   return {
     content: output,
@@ -483,9 +624,16 @@ export class CodexAdapter implements AgentEventAdapter {
 
   private handleSessionConfigured(raw: any): HeterogeneousAgentEvent[] {
     const model = getEventModel(raw);
-    if (model) this.currentModel = model;
+    if (!model || model === this.currentModel) return [];
 
-    return [];
+    this.currentModel = model;
+    return [
+      this.makeEvent('step_complete', {
+        model,
+        phase: 'turn_metadata',
+        provider: CODEX_IDENTIFIER,
+      } satisfies StepCompleteData),
+    ];
   }
 
   private handleTurnStarted(): HeterogeneousAgentEvent[] {
@@ -496,13 +644,13 @@ export class CodexAdapter implements AgentEventAdapter {
 
     if (!this.started) {
       this.started = true;
-      return [this.makeEvent('stream_start', { provider: CODEX_IDENTIFIER })];
+      return [this.makeEvent('stream_start', this.getStreamStartData())];
     }
 
     this.stepIndex += 1;
     return [
       this.makeEvent('stream_end', {}),
-      this.makeEvent('stream_start', { newStep: true, provider: CODEX_IDENTIFIER }),
+      this.makeEvent('stream_start', this.getStreamStartData({ newStep: true })),
     ];
   }
 
@@ -535,7 +683,7 @@ export class CodexAdapter implements AgentEventAdapter {
         this.resetStepToolCalls();
         this.hasTextInCurrentStep = false;
         events.push(this.makeEvent('stream_end', {}));
-        events.push(this.makeEvent('stream_start', { newStep: true, provider: CODEX_IDENTIFIER }));
+        events.push(this.makeEvent('stream_start', this.getStreamStartData({ newStep: true })));
       }
 
       const content =
@@ -616,6 +764,14 @@ export class CodexAdapter implements AgentEventAdapter {
   private resetStepToolCalls(): void {
     this.stepToolCalls = [];
     this.stepToolCallIds.clear();
+  }
+
+  private getStreamStartData(extra: Record<string, unknown> = {}): StreamStartData {
+    return {
+      ...(this.currentModel ? { model: this.currentModel } : {}),
+      provider: CODEX_IDENTIFIER,
+      ...extra,
+    };
   }
 
   private makeEvent(type: HeterogeneousAgentEvent['type'], data: any): HeterogeneousAgentEvent {

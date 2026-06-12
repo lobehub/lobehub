@@ -309,6 +309,7 @@
   "claude-3-haiku-20240307.description": "Claude 3 Haiku는 Anthropic의 가장 빠르고 컴팩트한 모델로, 빠르고 정확한 성능으로 즉각적인 응답을 위해 설계되었습니다.",
   "claude-3-opus-20240229.description": "Claude 3 Opus는 Anthropic의 가장 강력한 모델로, 고난도 작업에서 뛰어난 성능, 지능, 유창성, 이해력을 자랑합니다.",
   "claude-3-sonnet-20240229.description": "Claude 3 Sonnet은 엔터프라이즈 워크로드를 위한 지능과 속도의 균형을 제공하며, 낮은 비용으로 높은 효용성과 안정적인 대규모 배포를 지원합니다.",
+  "claude-fable-5.description": "Claude Fable 5는 Anthropic의 가장 강력한 모델로, 가장 까다로운 추론 작업과 장기적인 에이전트 작업을 위해 Opus를 뛰어넘는 새로운 수준을 제공합니다.",
   "claude-haiku-4-5-20251001.description": "Claude Haiku 4.5는 Anthropic의 가장 빠르고 스마트한 Haiku 모델로, 번개 같은 속도와 확장된 추론 능력을 자랑합니다.",
   "claude-haiku-4-5.description": "Anthropic의 Claude Haiku 4.5 — 향상된 추론 및 비전을 갖춘 차세대 Haiku.",
   "claude-haiku-4.5.description": "Claude Haiku 4.5는 Anthropic의 가장 빠르고 똑똑한 Haiku 모델로, 번개 같은 속도와 확장된 추론 능력을 자랑합니다.",

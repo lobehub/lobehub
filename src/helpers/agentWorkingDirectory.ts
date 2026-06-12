@@ -1,7 +1,8 @@
 import type { LobeAgentAgencyConfig } from '@lobechat/types';
 
 /**
- * The device a run targets: an explicitly bound device, else this machine.
+ * The device a run targets: an explicitly bound remote device, this machine,
+ * or (on web) a desktop-local binding synced from the desktop app.
  * Local execution treats the current machine as its own device, so local and
  * remote share one resolution model.
  */
@@ -9,7 +10,11 @@ export const resolveTargetDeviceId = (
   agencyConfig: LobeAgentAgencyConfig | undefined,
   currentDeviceId: string | undefined,
 ): string | undefined =>
-  agencyConfig?.executionTarget === 'device' ? agencyConfig?.boundDeviceId : currentDeviceId;
+  agencyConfig?.executionTarget === 'device'
+    ? agencyConfig?.boundDeviceId
+    : agencyConfig?.executionTarget === 'local'
+      ? currentDeviceId || agencyConfig?.boundDeviceId
+      : currentDeviceId;
 
 /**
  * Unified working-directory precedence (mirrors the server's resolution):

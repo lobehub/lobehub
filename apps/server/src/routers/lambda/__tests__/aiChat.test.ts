@@ -1032,6 +1032,93 @@ describe('aiChatRouter', () => {
       }
     });
 
+    it('marks input completion runtime 4xx errors to skip tRPC handler logging', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const runtimeError = {
+        error: { message: 'rate limited' },
+        errorType: AgentRuntimeErrorType.RateLimitExceeded,
+      };
+
+      vi.mocked(initModelRuntimeFromDB).mockRejectedValueOnce(runtimeError);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      try {
+        await caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'gpt-4o',
+          provider: 'openai',
+          tracing: { scenario: 'input_completion' },
+        });
+        throw new Error('Expected outputJSON to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TRPCError);
+        expect((runtimeError as any).__lobeSilentTRPCErrorLog).toBe(true);
+      }
+    });
+
+    it('does not mark non-input-completion runtime errors as silent', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+      const runtimeError = {
+        error: { message: 'rate limited' },
+        errorType: AgentRuntimeErrorType.RateLimitExceeded,
+      };
+
+      vi.mocked(initModelRuntimeFromDB).mockRejectedValueOnce(runtimeError);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      try {
+        await caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'gpt-4o',
+          provider: 'openai',
+          tracing: { scenario: 'topic_title' },
+        });
+        throw new Error('Expected outputJSON to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TRPCError);
+        expect((runtimeError as any).__lobeSilentTRPCErrorLog).toBeUndefined();
+      }
+    });
+
+    it('maps raw provider 4xx errors to BAD_REQUEST instead of internal errors', async () => {
+      const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+
+      // Raw SDK APIError shape: carries an HTTP status but no errorType — the
+      // generateObject path rethrows upstream errors verbatim (e.g. a BYOK
+      // gateway rejecting response_format json_schema).
+      const providerError = Object.assign(
+        new Error(
+          '400 Error from provider (DeepSeek): This response_format type is unavailable now',
+        ),
+        { status: 400 },
+      );
+      const mockGenerateObject = vi.fn().mockRejectedValue(providerError);
+
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue({
+        generateObject: mockGenerateObject,
+      } as any);
+
+      const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
+
+      try {
+        await caller.outputJSON({
+          messages: [{ content: 'test', role: 'user' }],
+          model: 'deepseek-v4-flash-free',
+          provider: 'opencodezen',
+        });
+        throw new Error('Expected outputJSON to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TRPCError);
+        expect(error).toMatchObject({
+          cause: providerError,
+          code: 'BAD_REQUEST',
+          message: providerError.message,
+        });
+      }
+    });
+
     it('should handle tools parameter when provided', async () => {
       const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
 

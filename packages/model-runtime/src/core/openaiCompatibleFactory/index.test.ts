@@ -3173,9 +3173,9 @@ describe('LobeOpenAICompatibleFactory', () => {
           { headers: undefined, signal: undefined },
         );
 
-        expect(result).toEqual([
-          { arguments: { age: 28, name: 'Alice' }, name: 'person_extractor' },
-        ]);
+        // The fallback returns the parsed schema object, same shape as the
+        // json_schema path
+        expect(result).toEqual({ age: 28, name: 'Alice' });
       });
 
       it('should not forward internal thinking to generic OpenAI-compatible generateObject requests', async () => {
@@ -3255,7 +3255,10 @@ describe('LobeOpenAICompatibleFactory', () => {
 
         const result = await instanceWithToolCalling.generateObject(payload);
 
-        expect(consoleSpy).toHaveBeenCalledWith('parse tool call arguments error:', undefined);
+        expect(consoleSpy).toHaveBeenCalledWith(
+          'no tool call found in structured output response:',
+          mockResponse.choices[0].message,
+        );
         expect(result).toBeUndefined();
 
         consoleSpy.mockRestore();
@@ -3298,7 +3301,7 @@ describe('LobeOpenAICompatibleFactory', () => {
 
         expect(consoleSpy).toHaveBeenCalledWith(
           'parse tool call arguments error:',
-          mockResponse.choices[0].message.tool_calls,
+          mockResponse.choices[0].message.tool_calls[0],
         );
         expect(result).toBeUndefined();
 
@@ -3350,7 +3353,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           { headers: options.headers, signal: options.signal },
         );
 
-        expect(result).toEqual([{ arguments: { data: 'test' }, name: 'data_extractor' }]);
+        expect(result).toEqual({ data: 'test' });
       });
     });
   });
@@ -3382,7 +3385,10 @@ describe('LobeOpenAICompatibleFactory', () => {
             'ChatGPT-4o is a dynamic model that updates in real time to stay current. It combines strong language understanding and generation, suitable for large-scale applications such as customer support, education, and technical support.',
           displayName: 'GPT-4o',
           enabled: true,
+          family: 'gpt',
+          generation: 'gpt-4o',
           id: 'gpt-4o',
+          knowledgeCutoff: '2023-10',
           maxOutput: 4096,
           pricing: {
             units: [
@@ -3423,7 +3429,10 @@ describe('LobeOpenAICompatibleFactory', () => {
             "Claude 3.7 Sonnet is Anthropic's fastest next-gen model. Compared to Claude 3 Haiku, it improves across skills and surpasses the previous flagship Claude 3 Opus on many intelligence benchmarks.",
           displayName: 'Claude 3.7 Sonnet',
           enabled: false,
+          family: 'claude-sonnet',
+          generation: 'claude-3.7',
           id: 'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
+          knowledgeCutoff: '2024-10',
           maxOutput: 64_000,
           pricing: {
             units: [
@@ -3462,7 +3471,10 @@ describe('LobeOpenAICompatibleFactory', () => {
             'GPT-4o Mini is a small, efficient model with performance similar to GPT-4o.',
           displayName: 'GPT 4o Mini',
           enabled: false,
+          family: 'gpt',
+          generation: 'gpt-4o',
           id: 'gpt-4o-mini',
+          knowledgeCutoff: '2023-10',
           maxOutput: 4096,
           pricing: {
             units: [

@@ -61,7 +61,12 @@ import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { toolsEnv } from '@/envs/tools';
-import { resolveRuntimeMode } from '@/helpers/executionTarget';
+import {
+  type ExecutionPlan,
+  executionTargetToRuntimeMode,
+  isDeviceCapablePlan,
+  resolveExecutionPlan,
+} from '@/helpers/executionTarget';
 import { shouldEnableBuiltinSkill } from '@/helpers/skillFilters';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { signOperationJwt, signUserJWT } from '@/libs/trpc/utils/internalJwt';
@@ -93,7 +98,10 @@ import { ComposioService } from '@/server/services/composio';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
-import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
+import {
+  resolveAttachmentMetadata,
+  resolveAttachmentsByFileIds,
+} from '@/server/services/file/resolveAttachments';
 import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent';
 import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { MarketService } from '@/server/services/market';
@@ -594,6 +602,13 @@ export class AiAgentService {
           agentConfig.plugins = runtimeConfig.plugins;
           log('execAgent: merged builtin agent runtime plugins for slug=%s', agentSlug);
         }
+        if (runtimeConfig.agencyConfig) {
+          agentConfig.agencyConfig = {
+            ...agentConfig.agencyConfig,
+            ...runtimeConfig.agencyConfig,
+          };
+          log('execAgent: merged builtin agent runtime agencyConfig for slug=%s', agentSlug);
+        }
       }
     }
 
@@ -828,6 +843,23 @@ export class AiAgentService {
     const model = agentConfig.model!;
     const provider = agentConfig.provider!;
 
+    // Resolve device-tool access ONCE per turn, BEFORE the hetero early exit —
+    // hetero dispatch routes the whole run to a user machine, so it must honour
+    // the same policy as native device tools. Discord-only flows (no
+    // botContext) keep the legacy first-party allow path; an external bot
+    // sender returns canUseDevice=false and reason='bot-external-sender',
+    // which degrades device-capable targets (hetero → sandbox, native → plain
+    // chat) and stops the device list from leaking into the LLM context.
+    const { canUseDevice, reason: deviceAccessReason } = resolveDeviceAccessPolicy({
+      botContext,
+    });
+    log(
+      'execAgent: device access policy → canUseDevice=%s, reason=%s, hasBotContext=%s',
+      canUseDevice,
+      deviceAccessReason,
+      !!botContext,
+    );
+
     // 3.5. Hetero-agent early exit — Claude Code / Codex / OpenClaw / Hermes agents bypass the
     // server-side LLM pipeline.  After topic + message creation we hand off to
     // the device gateway (desktop) or cloud sandbox, which will push events
@@ -849,11 +881,19 @@ export class AiAgentService {
       const operationId = nanoid();
 
       // Create user message so the conversation is visible in the UI immediately.
+      // Attach already-uploaded files (`fileIds` from the SPA gateway path) the
+      // same way `sendMessageInServer` does on the local-mode path — without
+      // the messagesFiles relation the attachment disappears as soon as the
+      // optimistic client message is replaced by the server snapshot.
       const userMsg = runFromHistory
         ? undefined
         : await this.messageModel.create({
             agentId: resolvedAgentId,
             content: prompt,
+            files:
+              attachedFileIds && attachedFileIds.length > 0
+                ? Array.from(new Set(attachedFileIds))
+                : undefined,
             role: 'user',
             threadId: appContext?.threadId ?? undefined,
             topicId,
@@ -957,10 +997,34 @@ export class AiAgentService {
         repos: topicRepos,
       });
 
+      // Resolve image attachments into signed URLs for the dispatched CLI —
+      // mirrors the local-mode path, where the client feeds the persisted
+      // message's imageList into `sendPrompt` for vision. Metadata-only
+      // (no document parsing) and non-fatal: a resolution failure must not
+      // block the run, the text prompt still works without the images.
+      let heteroImageList: Array<{ id: string; url: string }> | undefined;
+      if (attachedFileIds && attachedFileIds.length > 0) {
+        try {
+          const attachmentMeta = await resolveAttachmentMetadata({
+            db: this.db,
+            fileIds: attachedFileIds,
+            userId: this.userId,
+            workspaceId: this.workspaceId,
+          });
+          const images = attachmentMeta
+            .filter((file) => (file.fileType || '').startsWith('image'))
+            .map((file) => ({ id: file.id, url: file.url }));
+          if (images.length > 0) heteroImageList = images;
+        } catch (err) {
+          log('execAgent: failed to resolve hetero image attachments: %O', err);
+        }
+      }
+
       const heteroParams = {
         agentType: heteroType,
         assistantMessageId: assistantMsg.id,
         githubToken,
+        imageList: heteroImageList,
         jwt: operationJwt,
         operationId,
         prompt,
@@ -997,6 +1061,37 @@ export class AiAgentService {
       // frontend can subscribe before the first lh notify arrives.
 
       if (isRemoteHetero) {
+        // Remote hetero agents are device-only — there is no sandbox to
+        // degrade to, so a denied sender (external bot user) is refused
+        // outright instead of reaching the owner's machine.
+        if (!canUseDevice) {
+          log(
+            'execAgent: device access denied for remote hetero dispatch (reason=%s)',
+            deviceAccessReason,
+          );
+          await this.messageModel.update(assistantMsg.id, {
+            content: '',
+            error: {
+              body: { detail: 'This sender is not allowed to run agents on a bound device.' },
+              message: 'Device access denied',
+              type: 'ServerAgentRuntimeError',
+            },
+          });
+          return {
+            agentId: resolvedAgentId,
+            assistantMessageId: assistantMsg.id,
+            autoStarted: false,
+            createdAt: new Date().toISOString(),
+            error: 'Device access denied',
+            message: 'Remote hetero agent requires device access',
+            operationId,
+            status: 'error',
+            success: false,
+            timestamp: new Date().toISOString(),
+            topicId,
+            userMessageId: userMsg?.id ?? parentMessageId ?? '',
+          };
+        }
         if (!remoteDeviceId) {
           log('execAgent: openclaw/hermes requires a bound device (boundDeviceId not set)');
           await this.messageModel.update(assistantMsg.id, {
@@ -1092,17 +1187,29 @@ export class AiAgentService {
         }
       } else {
         // Local CLI hetero (claude-code / codex) — fork between device dispatch
-        // and cloud sandbox based on:
-        //   1. requestedDeviceId (topic-level override) — always wins
-        //   2. agencyConfig.executionTarget (agent-level default)
-        //        - 'device'  → dispatch to boundDeviceId (errors if unset/offline)
-        //        - 'sandbox' → cloud sandbox
-        //        - 'local' / undefined → cloud sandbox (server can't spawn locally)
-        const executionTarget = agentConfig.agencyConfig?.executionTarget;
-        const dispatchDeviceId = requestedDeviceId || agentConfig.agencyConfig?.boundDeviceId;
-        const useDevice = !!requestedDeviceId || executionTarget === 'device';
+        // and cloud sandbox via the shared execution plan:
+        //   - requestedDeviceId (topic-level override) always wins
+        //   - executionTarget 'device' → dispatch to boundDeviceId (errors if unset)
+        //   - executionTarget 'local' + boundDeviceId (desktop sync opened on web)
+        //     → dispatch to that device
+        //   - everything else ('sandbox' / unbound 'local' / 'none' / unset) → cloud
+        //     sandbox (the server can't spawn locally, and a hetero agent must
+        //     execute somewhere)
+        // `onlineDeviceIds` is intentionally omitted: hetero dispatch trusts
+        // the binding and fails loudly at the gateway if the device is offline.
+        // `canUseDevice` degrades device-capable targets to the sandbox for
+        // denied senders (e.g. external bot users) — without it a synced
+        // local/device binding would let them run on the owner's machine.
+        const heteroPlan = resolveExecutionPlan({
+          agencyConfig: agentConfig.agencyConfig,
+          canUseDevice,
+          isDesktop: false,
+          isHetero: true,
+          requestedDeviceId,
+        });
 
-        if (useDevice) {
+        if (heteroPlan.kind !== 'sandbox') {
+          const dispatchDeviceId = heteroPlan.kind === 'device' ? heteroPlan.deviceId : undefined;
           if (!dispatchDeviceId) {
             log('execAgent: hetero executionTarget=device but no boundDeviceId set');
             await this.messageModel.update(assistantMsg.id, {
@@ -1271,26 +1378,15 @@ export class AiAgentService {
     const toolExecutorMap: Record<string, ToolExecutor> = {};
     let onlineDevices: DeviceAttachment[] = [];
     let activeDeviceId: string | undefined;
+    let executionPlan: ExecutionPlan | undefined;
     let hasAgentDocuments = false;
     let hasEnabledKnowledgeBases = false;
     const isBotConversation = !!(botContext || discordContext);
 
-    // Resolve device-tool access ONCE per turn. The decision flows into both
-    // the engine's enable gates (LocalSystem / RemoteDevice) and the
-    // RemoteDevice systemRole injection below. Discord-only flows (no
-    // botContext) keep the legacy first-party allow path; an external bot
-    // sender returns canUseDevice=false and reason='bot-external-sender',
-    // which both denies the tools and stops the device list from leaking
-    // into the LLM context.
-    const { canUseDevice, reason: deviceAccessReason } = resolveDeviceAccessPolicy({
-      botContext,
-    });
-    log(
-      'execAgent: device access policy → canUseDevice=%s, reason=%s, hasBotContext=%s',
-      canUseDevice,
-      deviceAccessReason,
-      !!botContext,
-    );
+    // Device-tool access (`canUseDevice` / `deviceAccessReason`) was resolved
+    // once before the hetero early exit above; the decision flows into the
+    // engine's enable gates (LocalSystem / RemoteDevice) and the RemoteDevice
+    // systemRole injection below.
 
     // These are needed outside the tools block (for agent management context, skill engine, etc.)
     let lobehubSkillManifests: LobeToolManifest[] = [];
@@ -1556,40 +1652,36 @@ export class AiAgentService {
         ...(shouldEnableVisualUnderstanding ? [LobeAgentManifest.identifier] : []),
       ];
 
-      // Derive activeDeviceId from device context. Gated on `canUseDevice`
-      // first — without this guard, an external bot sender's turn would still
-      // populate `state.metadata.activeDeviceId`, and `buildStepToolDelta`
-      // re-injects `LocalSystemManifest` whenever activeDeviceId is set,
-      // bypassing the engine's enabledToolIds exclusion. Skipping the
-      // assignment here closes that bypass at the source.
+      // Resolve THE device decision for this run. All rules live in
+      // `resolveExecutionPlan` (gated on `canUseDevice` first, `none`/`sandbox`
+      // never route to a device, offline bindings stay unrouted, unbound runs
+      // auto-activate only with exactly one device online). Without the
+      // `canUseDevice` gate an external bot sender's turn would still populate
+      // `state.metadata.activeDeviceId`, and `buildStepToolDelta` re-injects
+      // `LocalSystemManifest` whenever activeDeviceId is set, bypassing the
+      // engine's enabledToolIds exclusion — resolving the plan here closes
+      // that bypass at the source.
       //
-      // Resolution order:
-      // 0. executionTarget === 'sandbox': always skip — sandbox and device are
-      //    mutually exclusive. Without this gate a single online device would
-      //    be auto-activated and local-system tool calls would silently route
-      //    to that device instead of being suppressed for the sandbox session.
-      // 1. boundDeviceId (topic-bound > agent-bound): use if online; if offline,
-      //    respect the explicit choice and stay unrouted — don't silently fall
-      //    back to a different device, that would surprise the user.
-      // 2. No bound device: auto-activate only when EXACTLY ONE device is
-      //    online. Multi-device users must bind explicitly — picking by
-      //    recency / first-online would be a guess that could route tool calls
-      //    to the wrong machine. This applies uniformly to regular chat and
-      //    IM/Bot — the previous "regular-chat does nothing" path was the bug
-      //    behind (the local-system system prompt's
-      //    `{{workingDirectory}}` reached the LLM as a literal, wasting the
-      //    first N steps groping for cwd).
-      const regularAgentExecutionTarget = agentConfig.agencyConfig?.executionTarget;
-      activeDeviceId =
-        !canUseDevice || regularAgentExecutionTarget === 'sandbox'
-          ? undefined
-          : boundDeviceId
-            ? onlineDevices.some((device) => device.deviceId === boundDeviceId)
-              ? boundDeviceId
-              : undefined
-            : onlineDevices.length === 1
-              ? onlineDevices[0].deviceId
-              : undefined;
+      // `isDesktop` uses `gatewayConfigured` as a proxy: a device-gateway
+      // deployment serves desktop-class users, so the unset-target default
+      // resolves to `local` there and `none` otherwise.
+      executionPlan = resolveExecutionPlan({
+        agencyConfig: agentConfig.agencyConfig,
+        canUseDevice,
+        isDesktop: gatewayConfigured,
+        onlineDeviceIds: onlineDevices.map((device) => device.deviceId),
+        requestedDeviceId,
+      });
+      // Device tools (local-system / remote-device proxy) only exist in a
+      // device-capable session — `none` and `sandbox` sessions must never see
+      // them, not even the proxy that could activate a device mid-run.
+      const deviceCapable = isDeviceCapablePlan(executionPlan);
+      activeDeviceId = executionPlan.kind === 'device' ? executionPlan.deviceId : undefined;
+      log(
+        'execAgent: execution plan → kind=%s deviceId=%s',
+        executionPlan.kind,
+        activeDeviceId ?? 'none',
+      );
 
       const toolsEngine = createServerAgentToolsEngine(toolsContext, {
         additionalManifests: [...lobehubSkillManifests, ...klavisManifests, ...connectorManifests],
@@ -1607,6 +1699,7 @@ export class AiAgentService {
             }
           : undefined,
         disableLocalSystem,
+        executionPlan,
         globalMemoryEnabled,
         hasAgentDocuments,
         hasEnabledKnowledgeBases,
@@ -1667,14 +1760,9 @@ export class AiAgentService {
         canUseDevice,
         disableLocalSystem,
       });
-      // Resolve effective runtimeMode once, mirroring AgentToolsEngine's derivation:
-      // executionTarget wins; falls back to per-platform chatConfig.runtimeEnv.runtimeMode
-      // for legacy agents that predate the unified executionTarget field.
-      const agentRuntimeMode = resolveRuntimeMode(
-        agentConfig.agencyConfig,
-        agentConfig.chatConfig?.runtimeEnv?.runtimeMode?.[gatewayConfigured ? 'desktop' : 'web'],
-        gatewayConfigured,
-      );
+      // Effective runtimeMode from the plan's resolved target — same value the
+      // engine derives, single derivation point.
+      const agentRuntimeMode = executionTargetToRuntimeMode(executionPlan.target);
       // When sandbox is not the active runtime, remove lobe-cloud-sandbox from the
       // manifest map. The initial seed via getEnabledPluginManifests (which includes
       // defaultToolIds) may have already placed it there, and the allowedBuiltinTools
@@ -1683,12 +1771,25 @@ export class AiAgentService {
       if (agentRuntimeMode !== 'cloud') {
         delete toolManifestMap[CloudSandboxManifest.identifier];
       }
+      // Same single-point deletion for the device tools: a `none` / `sandbox`
+      // session must not expose the remote-device proxy either — leaving it
+      // discoverable would let the model activate a device mid-run and bypass
+      // the execution plan ("无设备" means NO device, not "no device yet").
+      // Scoped to gateway deployments: in the standalone Electron deployment
+      // (no DEVICE_GATEWAY) local-system routes in-process via the 'client'
+      // executor marking below, and the desktop client owns the tool gate.
+      const stripDeviceTools = gatewayConfigured && !deviceCapable;
+      if (stripDeviceTools) {
+        delete toolManifestMap[RemoteDeviceManifest.identifier];
+        delete toolManifestMap[LocalSystemManifest.identifier];
+      }
       for (const tool of allowedBuiltinTools) {
         // lobe-cloud-sandbox is only activator-discoverable when runtimeMode resolves
-        // to 'cloud'. Handles both executionTarget='sandbox' (new) and the legacy
-        // chatConfig.runtimeEnv.runtimeMode='cloud' path via resolveRuntimeMode.
+        // to 'cloud' (i.e. executionTarget='sandbox').
         if (tool.identifier === CloudSandboxManifest.identifier && agentRuntimeMode !== 'cloud')
           continue;
+        // device tools are only activator-discoverable in device-capable sessions
+        if (stripDeviceTools && isDeviceToolIdentifier(tool.identifier)) continue;
         if (tool.discoverable !== false && !toolManifestMap[tool.identifier]) {
           toolManifestMap[tool.identifier] = tool.manifest as LobeToolManifest;
         }
@@ -1697,10 +1798,11 @@ export class AiAgentService {
       // lobe-local-system has `discoverable: isDesktop` in builtinTools, which
       // evaluates to false on the Node.js server side, so it never enters the
       // loop above. Explicitly inject it only when the device gateway is
-      // configured AND the runtime mode is 'local' — skip for sandbox/none
-      // targets to avoid leaking local-system into non-local sessions.
+      // configured AND the plan's target is 'local' — skip for sandbox/none
+      // targets to avoid leaking local-system into non-local sessions. (The
+      // plan already degrades to `none` when device access is denied, so no
+      // separate `canUseDevice` check is needed here.)
       if (
-        canUseDevice &&
         !disableLocalSystem &&
         gatewayConfigured &&
         agentRuntimeMode === 'local' &&
@@ -2547,6 +2649,7 @@ export class AiAgentService {
         activeDeviceId,
         agentConfig,
         deviceSystemInfo: Object.keys(deviceSystemInfo).length > 0 ? deviceSystemInfo : undefined,
+        executionPlan,
         userTimezone,
         appContext: {
           // Background self-iteration runs execute under a builtin slug (so they

@@ -3,7 +3,6 @@ import { ModelProvider } from 'model-bank';
 import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { responsesAPIModels } from '../../const/models';
 import type { ChatStreamPayload } from '../../types/chat';
 import * as modelParseModule from '../../utils/modelParse';
 import type { NewAPIModelCard, NewAPIPricing } from './index';
@@ -25,7 +24,6 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
   let mockFetch: Mock;
   let mockProcessMultiProviderModelList: Mock;
   let mockDetectModelProvider: Mock;
-  let mockResponsesAPIModels: typeof responsesAPIModels;
 
   beforeEach(() => {
     // Setup fetch mock
@@ -35,7 +33,6 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
     // Setup utility function mocks
     mockProcessMultiProviderModelList = vi.mocked(modelParseModule.processMultiProviderModelList);
     mockDetectModelProvider = vi.mocked(modelParseModule.detectModelProvider);
-    mockResponsesAPIModels = responsesAPIModels;
 
     // Clear environment variables
     delete process.env.DEBUG_NEWAPI_CHAT_COMPLETION;
@@ -708,11 +705,20 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       const options = { apiKey: 'test', baseURL: 'https://api.newapi.com/v1' };
       const routers = params.routers(options);
 
-      expect(routers).toHaveLength(4);
+      expect(routers).toHaveLength(5);
       expect(routers[0].apiType).toBe('anthropic');
       expect(routers[1].apiType).toBe('google');
       expect(routers[2].apiType).toBe('xai');
-      expect(routers[3].apiType).toBe('openai');
+      expect(routers[3].apiType).toBe('deepseek');
+      expect(routers[4].apiType).toBe('openai');
+    });
+
+    it('should configure deepseek router with /v1 path and openai sdkType', () => {
+      const options = { apiKey: 'test', baseURL: 'https://custom.com/v1' };
+      const routers = params.routers(options);
+
+      expect(routers[3].options.baseURL).toBe('https://custom.com/v1');
+      expect((routers[3].options as any).sdkType).toBe('openai');
     });
 
     it('should process baseURL by removing version paths', () => {
@@ -750,14 +756,14 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       const options = { apiKey: 'test', baseURL: 'https://custom.com/v1' };
       const routers = params.routers(options);
 
-      expect(routers[3].options.baseURL).toBe('https://custom.com/v1');
+      expect(routers[4].options.baseURL).toBe('https://custom.com/v1');
     });
 
     it('should configure openai router with useResponseModels', () => {
       const options = { apiKey: 'test', baseURL: 'https://custom.com/v1' };
       const routers = params.routers(options);
 
-      expect((routers[3].options as any).chatCompletion?.useResponseModels).toBeDefined();
+      expect((routers[4].options as any).chatCompletion?.useResponseModels).toBeDefined();
     });
 
     it('should filter anthropic models for anthropic router', () => {
@@ -803,9 +809,9 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       const options = { apiKey: 'test' }; // No baseURL
       const routers = params.routers(options);
 
-      expect(routers).toHaveLength(4);
+      expect(routers).toHaveLength(5);
       expect(routers[0].options.baseURL).toBe('');
-      expect(routers[3].options.baseURL).toBe('v1'); // urlJoin('', '/v1') returns 'v1'
+      expect(routers[4].options.baseURL).toBe('v1'); // urlJoin('', '/v1') returns 'v1'
     });
   });
 

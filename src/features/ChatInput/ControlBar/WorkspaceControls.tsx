@@ -3,6 +3,7 @@
 import { isDesktop } from '@lobechat/const';
 import { memo } from 'react';
 
+import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 
@@ -35,8 +36,11 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
     const runtimeMode = useAgentStore(chatConfigByIdSelectors.getRuntimeModeById(agentId));
     const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
     const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
-    const isDeviceMode =
-      agencyConfig?.executionTarget === 'device' && !!agencyConfig?.boundDeviceId;
+    const effectiveTarget = resolveExecutionTarget(agencyConfig, {
+      isDesktop,
+      isHetero: isHeterogeneous,
+    });
+    const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
 
     const renderWorkspace = () => {
       // Remote device runs get the device-scoped picker, regardless of runtimeMode

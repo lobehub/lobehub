@@ -1,3 +1,11 @@
+// IMPORTANT: import from `/protocol`, NOT `/spawn` — the spawn barrel drags
+// fs-heavy machinery into the Next.js server bundle, and its dynamic
+// `process.cwd()`-rooted fs calls make Vercel's file tracing pull the whole
+// repo source tree into every serverless function (250 MB limit blowout).
+import {
+  buildHeteroExecStdinPayload,
+  type HeteroExecImageRef,
+} from '@lobechat/heterogeneous-agents/protocol';
 import debug from 'debug';
 
 import { appEnv } from '@/envs/app';
@@ -15,6 +23,12 @@ export interface SandboxRunParams {
   cwd?: string;
   /** GitHub OAuth token for cloning private repos. */
   githubToken?: string;
+  /**
+   * Image attachments from the user message, as URLs the sandbox can fetch
+   * (signed S3 URLs). Appended as image content blocks after the prompt so
+   * the CLI gets vision input.
+   */
+  imageList?: HeteroExecImageRef[];
   /** Operation-scoped JWT injected as LOBEHUB_JWT env in the sandbox. */
   jwt: string;
   marketService: MarketService;
@@ -153,16 +167,14 @@ export async function spawnHeteroSandbox(params: SandboxRunParams): Promise<void
 
   // Encode the prompt as base64 to avoid all shell quoting issues.
   // echo + shell quoting mangled inner JSON quotes; base64 is quote-safe.
-  // When systemContext is provided, send a content-block array so CC sees the
-  // context block first, then the user's actual message. lh already handles
-  // JSON arrays via coerceJsonPrompt — no lh changes required.
-  const { systemContext } = params;
-  const stdinPayload = systemContext
-    ? JSON.stringify([
-        { text: systemContext, type: 'text' },
-        { text: prompt, type: 'text' },
-      ])
-    : JSON.stringify(prompt);
+  // systemContext / image attachments turn the payload into a content-block
+  // array. lh already handles both shapes via coerceJsonPrompt — no lh
+  // changes required.
+  const stdinPayload = buildHeteroExecStdinPayload({
+    imageList: params.imageList,
+    prompt,
+    systemContext: params.systemContext,
+  });
   const base64Payload = Buffer.from(stdinPayload).toString('base64');
 
   // LOBEHUB_HETERO_SERVER_URL overrides the server URL for local dev/testing

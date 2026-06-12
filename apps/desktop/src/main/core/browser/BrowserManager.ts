@@ -368,6 +368,11 @@ export class BrowserManager {
     return browser?.browserWindow.isMaximized() ?? false;
   }
 
+  isWindowFullScreen(identifier: string) {
+    const browser = this.browsers.get(identifier);
+    return browser?.browserWindow.isFullScreen() ?? false;
+  }
+
   setWindowSize(identifier: string, size: { height?: number; width?: number }) {
     const browser = this.browsers.get(identifier);
     browser?.setWindowSize(size);

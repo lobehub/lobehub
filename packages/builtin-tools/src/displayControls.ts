@@ -4,7 +4,7 @@ import {
 } from '@lobechat/builtin-tool-claude-code/client';
 import { type RenderDisplayControl } from '@lobechat/types';
 
-import { CodexRenderDisplayControls } from './codex';
+import { CodexRenderDisplayControls } from './codex/displayControls';
 
 // Kept separate from `./renders` so consumers that only need display-control
 // fallbacks (e.g. the tool store selector) don't pull in every builtin tool's

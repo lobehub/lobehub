@@ -17,24 +17,23 @@ const log = debug('lobe-server:agent-runtime:coordinator');
  * decision) starts, but that resume runs under a **new** operationId with
  * its own event stream. For the paused operationId no further events will
  * arrive, so clients should stop waiting the same way they do on done.
+ *
+ * `waiting_for_async_tool` is different: deferred tools such as server
+ * sub-agents resume the SAME operationId after the out-of-band result is
+ * backfilled. Ending the stream at park time makes the client mark the turn
+ * as stopped while the server is still waiting for sub-agents.
  */
 const STREAM_END_STATUSES = new Set<AgentState['status']>([
   'done',
   'error',
   'interrupted',
   'waiting_for_human',
-  'waiting_for_async_tool',
 ]);
 
 const hasEnteredStreamEndState = (
   previousStatus?: AgentState['status'],
   nextStatus?: AgentState['status'],
-): nextStatus is
-  | 'done'
-  | 'error'
-  | 'interrupted'
-  | 'waiting_for_human'
-  | 'waiting_for_async_tool' => {
+): nextStatus is 'done' | 'error' | 'interrupted' | 'waiting_for_human' => {
   const wasStreamEnd = previousStatus ? STREAM_END_STATUSES.has(previousStatus) : false;
   return Boolean(nextStatus && STREAM_END_STATUSES.has(nextStatus) && !wasStreamEnd);
 };

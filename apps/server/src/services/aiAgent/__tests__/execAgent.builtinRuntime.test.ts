@@ -300,6 +300,7 @@ describe('AiAgentService.execAgent - builtin agent runtime config', () => {
     });
 
     const callArgs = mockCreateOperation.mock.calls[0][0];
+    expect(callArgs.agentConfig.agencyConfig?.executionTarget).toBe('none');
     expect(callArgs.agentConfig.systemRole).toContain('Preferred reply language: zh-CN');
     expect(callArgs.agentConfig.systemRole).toContain(
       'Every visible reply, question, and visible choice label must be entirely in zh-CN',

@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { zipSync } from 'fflate';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -88,6 +90,7 @@ const mockLocalFileProtocolManager = {
   approveIndexedProjectRoot: vi.fn(),
   approveProjectRootFromScope: vi.fn(),
   createPreviewUrl: vi.fn(),
+  readPreviewFile: vi.fn(),
 };
 
 // Mock makeSureDirExist
@@ -146,7 +149,6 @@ describe('LocalFileCtr', () => {
 
     it('should expand a leading ~ to the user home directory', async () => {
       const os = await import('node:os');
-      const path = await import('node:path');
       vi.mocked(mockShell.openPath).mockResolvedValue('');
 
       const result = await localFileCtr.handleOpenLocalFile({ path: '~/git/work/file.txt' });
@@ -171,7 +173,6 @@ describe('LocalFileCtr', () => {
 
     it('should expand a leading ~ when opening a directory', async () => {
       const os = await import('node:os');
-      const path = await import('node:path');
       vi.mocked(mockShell.openPath).mockResolvedValue('');
 
       const result = await localFileCtr.handleOpenLocalFolder({
@@ -237,6 +238,48 @@ describe('LocalFileCtr', () => {
       mockLocalFileProtocolManager.createPreviewUrl.mockResolvedValue(null);
 
       const result = await localFileCtr.getLocalFilePreviewUrl({
+        path: '/Users/alice/.ssh/id_rsa',
+        workingDirectory: '/workspace',
+      });
+
+      expect(result).toEqual({
+        error: 'File is outside the approved workspace',
+        success: false,
+      });
+    });
+  });
+
+  describe('getLocalFilePreview', () => {
+    it('should return text preview content for an approved workspace file', async () => {
+      mockLocalFileProtocolManager.readPreviewFile.mockResolvedValue({
+        buffer: Buffer.from('const value = 1;'),
+        contentType: 'text/plain; charset=utf-8',
+        realPath: '/workspace/app.ts',
+      });
+
+      const result = await localFileCtr.getLocalFilePreview({
+        path: '/workspace/app.ts',
+        workingDirectory: '/workspace',
+      });
+
+      expect(mockLocalFileProtocolManager.readPreviewFile).toHaveBeenCalledWith({
+        filePath: '/workspace/app.ts',
+        workspaceRoot: '/workspace',
+      });
+      expect(result).toEqual({
+        preview: {
+          content: 'const value = 1;',
+          contentType: 'text/plain',
+          type: 'text',
+        },
+        success: true,
+      });
+    });
+
+    it('should reject preview payload creation outside an approved workspace', async () => {
+      mockLocalFileProtocolManager.readPreviewFile.mockResolvedValue(null);
+
+      const result = await localFileCtr.getLocalFilePreview({
         path: '/Users/alice/.ssh/id_rsa',
         workingDirectory: '/workspace',
       });

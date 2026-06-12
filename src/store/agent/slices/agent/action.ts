@@ -11,7 +11,12 @@ import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT } from '@/services/agent';
-import { agentDocumentSWRKeys, resolveAgentDocumentsContext } from '@/services/agentDocument';
+import {
+  type AgentDocumentListItem,
+  agentDocumentService,
+  agentDocumentSWRKeys,
+  resolveAgentDocumentsContext,
+} from '@/services/agentDocument';
 import type { StoreSetter } from '@/store/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -300,8 +305,50 @@ export class AgentSliceActionImpl {
           if (!data) return;
           this.#get().internal_dispatchAgentMap(agentId, data);
           this.#set({ activeAgentId: data.id }, false, 'fetchAgentConfig');
+          this.#clearAgentConfigError(agentId);
+        },
+        onError: (error) => {
+          this.#set(
+            (state) => ({
+              agentConfigErrorMap: {
+                ...state.agentConfigErrorMap,
+                [agentId]: error?.message || String(error),
+              },
+            }),
+            false,
+            'fetchAgentConfig/error',
+          );
         },
       },
+    );
+  };
+
+  /**
+   * Re-trigger the agent config fetch after a failure. Clears the recorded
+   * error first so consumers fall back to the loading skeleton, then
+   * revalidates every SWR entry for this agent (keys may carry a workspace
+   * suffix, hence the filter form).
+   */
+  retryAgentConfigFetch = async (agentId?: string): Promise<void> => {
+    const id = agentId ?? this.#get().activeAgentId;
+    if (!id) return;
+
+    this.#clearAgentConfigError(id);
+
+    await mutate((key) => Array.isArray(key) && key[0] === FETCH_AGENT_CONFIG_KEY && key[1] === id);
+  };
+
+  #clearAgentConfigError = (agentId: string) => {
+    if (!this.#get().agentConfigErrorMap[agentId]) return;
+
+    this.#set(
+      (state) => {
+        const next = { ...state.agentConfigErrorMap };
+        delete next[agentId];
+        return { agentConfigErrorMap: next };
+      },
+      false,
+      'clearAgentConfigError',
     );
   };
 
@@ -329,16 +376,11 @@ export class AgentSliceActionImpl {
     );
   };
 
-  useFetchAgentDocuments = (agentId?: string | null): SWRResponse<AgentContextDocument[]> => {
-    return useClientDataSWRWithSync<AgentContextDocument[]>(
-      agentId ? agentDocumentSWRKeys.documents(agentId) : null,
-      async () => (await resolveAgentDocumentsContext({ agentId: agentId! })) ?? [],
+  useFetchAgentDocuments = (agentId?: string | null): SWRResponse<AgentDocumentListItem[]> => {
+    return useClientDataSWRWithSync<AgentDocumentListItem[]>(
+      agentId ? agentDocumentSWRKeys.documentsList(agentId) : null,
+      async () => agentDocumentService.listDocuments({ agentId: agentId! }),
       {
-        onData: (data) => {
-          if (!agentId) return;
-
-          this.#syncAgentDocuments(agentId, data);
-        },
         revalidateOnFocus: false,
       },
     );

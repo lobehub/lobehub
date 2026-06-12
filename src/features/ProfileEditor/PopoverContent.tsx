@@ -1,8 +1,8 @@
 import { type ItemType } from '@lobehub/ui';
-import { Flexbox, Icon, Segmented, stopPropagation } from '@lobehub/ui';
+import { Flexbox, Icon, SearchBar, stopPropagation } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronRight, ExternalLink, Settings, Store } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ScrollSignalProvider } from '@/features/ChatInput/ActionBar/Tools/ScrollSignalContext';
@@ -11,9 +11,32 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 
 import Empty from './Empty';
 
-type TabType = 'all' | 'installed';
-
 const SKILL_ICON_SIZE = 20;
+
+const filterItems = (items: ItemType[], keyword: string): ItemType[] => {
+  const lower = keyword.toLowerCase();
+
+  return items
+    .map((item) => {
+      if (!item) return null;
+
+      if (item.type === 'group' && 'children' in item && item.children) {
+        const filtered = item.children.filter((child) => {
+          if (!child) return false;
+          const key = String(child.key || '').toLowerCase();
+          return key.includes(lower);
+        });
+        if (filtered.length === 0) return null;
+        return { ...item, children: filtered };
+      }
+
+      if (item.type === 'divider') return item;
+
+      const key = String('key' in item ? item.key : '').toLowerCase();
+      return key.includes(lower) ? item : null;
+    })
+    .filter(Boolean) as ItemType[];
+};
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
@@ -21,8 +44,9 @@ const styles = createStaticStyles(({ css }) => ({
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   header: css`
-    padding: ${cssVar.paddingXS};
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+    padding-block: 8px;
+    padding-inline: 8px;
+    border-block-end: 1px solid ${cssVar.colorFill};
     background: transparent;
   `,
   scroller: css`
@@ -34,77 +58,67 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface PopoverContentProps {
-  activeTab: TabType;
-  allTabItems: ItemType[];
-  installedTabItems: ItemType[];
+  items: ItemType[];
   onClose?: () => void;
   onOpenStore: () => void;
-  onTabChange: (tab: TabType) => void;
 }
 
-const PopoverContent = memo<PopoverContentProps>(
-  ({ activeTab, onTabChange, allTabItems, installedTabItems, onOpenStore, onClose }) => {
-    const { t } = useTranslation('setting');
-    const navigate = useWorkspaceAwareNavigate();
+const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore, onClose }) => {
+  const { t } = useTranslation('setting');
+  const navigate = useWorkspaceAwareNavigate();
+  const [searchKeyword, setSearchKeyword] = useState('');
 
-    const currentItems = activeTab === 'all' ? allTabItems : installedTabItems;
+  const filteredItems = useMemo(
+    () => (searchKeyword ? filterItems(items, searchKeyword) : items),
+    [items, searchKeyword],
+  );
 
-    return (
-      <Flexbox style={{ maxHeight: 500, width: '100%' }}>
-        {/* stopPropagation prevents dropdown's onClick from calling preventDefault on Segmented */}
-        <div className={styles.header} onClick={stopPropagation}>
-          <Segmented
-            block
-            size="small"
-            value={activeTab}
-            options={[
-              {
-                label: t('tools.tabs.all', { defaultValue: 'All' }),
-                value: 'all',
-              },
-              {
-                label: t('tools.tabs.installed', { defaultValue: 'Installed' }),
-                value: 'installed',
-              },
-            ]}
-            onChange={(v) => onTabChange(v as TabType)}
-          />
-        </div>
-        <ScrollSignalProvider className={styles.scroller} style={{ flex: 1 }}>
-          {activeTab === 'installed' && installedTabItems.length === 0 ? (
-            <Empty />
-          ) : (
-            <ToolsList items={currentItems} />
-          )}
-        </ScrollSignalProvider>
-        <div className={styles.footer}>
-          <div className={toolsListStyles.item} role="button" tabIndex={0} onClick={onOpenStore}>
-            <div className={toolsListStyles.itemIcon}>
-              <Icon icon={Store} size={SKILL_ICON_SIZE} />
-            </div>
-            <div className={toolsListStyles.itemContent}>{t('skillStore.title')}</div>
-            <Icon className={styles.trailingIcon} icon={ChevronRight} size={16} />
+  const isEmpty = filteredItems.length === 0;
+
+  return (
+    <Flexbox style={{ maxHeight: 500, width: '100%' }}>
+      <div className={styles.header} onClick={stopPropagation}>
+        <SearchBar
+          allowClear
+          placeholder={t('tools.search')}
+          size="small"
+          style={{ flex: 1 }}
+          value={searchKeyword}
+          variant="borderless"
+          onChange={(e) => setSearchKeyword(e.target.value)}
+          onKeyDown={stopPropagation}
+        />
+      </div>
+      <ScrollSignalProvider className={styles.scroller} style={{ flex: 1 }}>
+        {isEmpty ? <Empty /> : <ToolsList items={filteredItems} />}
+      </ScrollSignalProvider>
+      <div className={styles.footer}>
+        <div className={toolsListStyles.item} role="button" tabIndex={0} onClick={onOpenStore}>
+          <div className={toolsListStyles.itemIcon}>
+            <Icon icon={Store} size={SKILL_ICON_SIZE} />
           </div>
-          <div
-            className={toolsListStyles.item}
-            role="button"
-            tabIndex={0}
-            onClick={() => {
-              onClose?.();
-              navigate('/settings/skill');
-            }}
-          >
-            <div className={toolsListStyles.itemIcon}>
-              <Icon icon={Settings} size={SKILL_ICON_SIZE} />
-            </div>
-            <div className={toolsListStyles.itemContent}>{t('tools.plugins.management')}</div>
-            <Icon className={styles.trailingIcon} icon={ExternalLink} size={16} />
-          </div>
+          <div className={toolsListStyles.itemContent}>{t('skillStore.title')}</div>
+          <Icon className={styles.trailingIcon} icon={ChevronRight} size={16} />
         </div>
-      </Flexbox>
-    );
-  },
-);
+        <div
+          className={toolsListStyles.item}
+          role="button"
+          tabIndex={0}
+          onClick={() => {
+            onClose?.();
+            navigate('/settings/skill');
+          }}
+        >
+          <div className={toolsListStyles.itemIcon}>
+            <Icon icon={Settings} size={SKILL_ICON_SIZE} />
+          </div>
+          <div className={toolsListStyles.itemContent}>{t('tools.plugins.management')}</div>
+          <Icon className={styles.trailingIcon} icon={ExternalLink} size={16} />
+        </div>
+      </div>
+    </Flexbox>
+  );
+});
 
 PopoverContent.displayName = 'PopoverContent';
 

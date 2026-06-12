@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
 import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
+import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -26,6 +27,9 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, activeTopicId, activeT
 
   const agentId = useAgentStore((s) => s.activeAgentId);
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId ?? ''));
+  const isHeterogeneous = useAgentStore((s) =>
+    agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
+  );
   const { commitAgentDefault } = useCommitWorkingDirectory(agentId ?? '');
 
   const handleAddTopic = useCallback(async () => {
@@ -39,7 +43,11 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, activeTopicId, activeT
 
   // Web can add a topic in a directory too when the agent targets a bound
   // device — the write goes to `workingDirByDevice`, no Electron dependency.
-  const isDeviceMode = agencyConfig?.executionTarget === 'device' && !!agencyConfig?.boundDeviceId;
+  const effectiveTarget = resolveExecutionTarget(agencyConfig, {
+    isDesktop,
+    isHetero: isHeterogeneous,
+  });
+  const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
   const canAddTopic = (isDesktop || isDeviceMode) && !!workingDirectory;
 
   return (

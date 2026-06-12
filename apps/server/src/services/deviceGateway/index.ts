@@ -22,6 +22,7 @@ import type {
   DeviceGitWorkingTreePatches,
   DeviceGitWorkingTreeStatus,
   DeviceListProjectSkillsResult,
+  DeviceLocalFilePreviewResult,
   DeviceProjectFileIndexResult,
   ProjectSkillMeta,
   WorkspaceInitResult,
@@ -467,6 +468,40 @@ export class DeviceGateway {
   }
 
   /**
+   * Read a preview payload for a file on a remote device. This is read-only and
+   * deliberately mirrors the desktop local-file preview contract without
+   * exposing a `localfile://` URL to web callers.
+   */
+  async getLocalFilePreview(params: {
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+    workingDirectory: string;
+  }): Promise<DeviceLocalFilePreviewResult> {
+    const { userId, deviceId, path, workingDirectory, timeout = 30_000 } = params;
+    const client = this.getClient();
+    if (!client) return { error: 'Device gateway not configured', success: false };
+
+    try {
+      const result = await client.invokeRpc<DeviceLocalFilePreviewResult>(
+        { deviceId, timeout, userId },
+        { method: 'getLocalFilePreview', params: { path, workingDirectory } },
+      );
+
+      if (!result.success || !result.data) {
+        log('getLocalFilePreview: failed for deviceId=%s — %s', deviceId, result.error);
+        return { error: result.error || 'Failed to load local file preview', success: false };
+      }
+
+      return result.data;
+    } catch (error) {
+      log('getLocalFilePreview: error for deviceId=%s — %O', deviceId, error);
+      return { error: (error as Error).message, success: false };
+    }
+  }
+
+  /**
    * Project skills (`.agents/skills` / `.claude/skills`) for a directory on a
    * remote device via the `listProjectSkills` device RPC — the Resources tab's
    * skills group in device mode. Mirrors `getProjectFileIndex`; returns
@@ -607,6 +642,8 @@ export class DeviceGateway {
     agentType: HeterogeneousAgentType;
     cwd?: string;
     deviceId?: string;
+    /** Image attachments forwarded to the device as fetchable (signed) URLs. */
+    imageList?: Array<{ id?: string; url: string }>;
     jwt: string;
     operationId: string;
     prompt: string;

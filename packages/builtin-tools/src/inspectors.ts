@@ -64,7 +64,6 @@ import {
   WebOnboardingInspectors,
   WebOnboardingManifest,
 } from '@lobechat/builtin-tool-web-onboarding/client';
-import { createRunCommandInspector } from '@lobechat/shared-tool-ui/inspectors';
 import type { BuiltinInspector } from '@lobechat/types';
 
 import { CodexInspectors } from './codex';
@@ -116,10 +115,7 @@ const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = 
   [TaskManifest.identifier]: TaskInspectors as Record<string, BuiltinInspector>,
   [WebBrowsingManifest.identifier]: WebBrowsingInspectors as Record<string, BuiltinInspector>,
   [WebOnboardingManifest.identifier]: WebOnboardingInspectors as Record<string, BuiltinInspector>,
-  codex: {
-    ...CodexInspectors,
-    command_execution: createRunCommandInspector('Run') as BuiltinInspector,
-  },
+  codex: CodexInspectors,
   [GithubIdentifier]: GithubInspectors,
   [LinearIdentifier]: LinearInspectors,
   [TwitterIdentifier]: TwitterInspectors,

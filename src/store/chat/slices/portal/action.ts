@@ -3,7 +3,8 @@ import { type ChatStore } from '@/store/chat/store';
 import { type StoreSetter } from '@/store/types';
 import { type PortalArtifact } from '@/types/artifact';
 
-import { type PortalFile, type PortalViewData } from './initialState';
+import { createLocalFileTabId, getLocalFileTabId } from './helpers';
+import { type OpenLocalFileParams, type PortalFile, type PortalViewData } from './initialState';
 import { PortalViewType } from './initialState';
 
 // Helper to get current view type from stack
@@ -11,6 +12,33 @@ const getCurrentViewType = (portalStack: PortalViewData[]): PortalViewType | nul
   const top = portalStack.at(-1);
   return top?.type ?? null;
 };
+
+const findLocalFileIndexById = (
+  openLocalFiles: Array<OpenLocalFileParams & { id?: string }>,
+  id: string,
+) => {
+  const index = openLocalFiles.findIndex((file) => getLocalFileTabId(file) === id);
+  return index >= 0 ? index : openLocalFiles.findIndex((file) => file.filePath === id);
+};
+
+const findLocalFileById = (
+  openLocalFiles: Array<OpenLocalFileParams & { id?: string }>,
+  id: string | undefined,
+) =>
+  id
+    ? (openLocalFiles.find((file) => getLocalFileTabId(file) === id) ??
+      openLocalFiles.find((file) => file.filePath === id))
+    : undefined;
+
+const resolveActiveLocalFile = (
+  openLocalFiles: Array<OpenLocalFileParams & { id?: string }>,
+  activeLocalFileId: string | undefined,
+  activeLocalFilePath: string | undefined,
+) =>
+  findLocalFileById(openLocalFiles, activeLocalFileId) ??
+  (activeLocalFilePath
+    ? openLocalFiles.find((file) => file.filePath === activeLocalFilePath)
+    : undefined);
 
 type Setter = StoreSetter<ChatStore>;
 export const chatPortalSlice = (set: Setter, get: () => ChatStore, _api?: unknown) =>
@@ -58,30 +86,45 @@ export class ChatPortalActionImpl {
     }
   };
 
-  closeLocalFileTab = (filePath: string): void => {
-    const { openLocalFiles, activeLocalFilePath, dirtyLocalFileContents } = this.#get();
-    const idx = openLocalFiles.findIndex((f) => f.filePath === filePath);
+  closeLocalFileTab = (id: string): void => {
+    const { openLocalFiles, activeLocalFileId, activeLocalFilePath, dirtyLocalFileContents } =
+      this.#get();
+    const idx = findLocalFileIndexById(openLocalFiles, id);
     if (idx === -1) return;
 
+    const target = openLocalFiles[idx];
+    const targetId = getLocalFileTabId(target);
     const nextFiles = openLocalFiles.filter((_, i) => i !== idx);
 
-    let nextActive: string | undefined;
-    if (activeLocalFilePath === filePath) {
+    let nextActiveId: string | undefined;
+    let nextActivePath: string | undefined;
+    const activeFile = resolveActiveLocalFile(
+      openLocalFiles,
+      activeLocalFileId,
+      activeLocalFilePath,
+    );
+    if (activeFile && getLocalFileTabId(activeFile) === targetId) {
       const neighbor = nextFiles[idx] ?? nextFiles[idx - 1];
-      nextActive = neighbor?.filePath;
+      nextActiveId = neighbor ? getLocalFileTabId(neighbor) : undefined;
+      nextActivePath = neighbor?.filePath;
     } else {
-      nextActive = activeLocalFilePath;
+      nextActiveId = activeLocalFileId;
+      nextActivePath = activeLocalFilePath;
     }
 
     let nextDirty = dirtyLocalFileContents;
-    if (filePath in dirtyLocalFileContents) {
-      const { [filePath]: _, ...rest } = dirtyLocalFileContents;
+    const shouldClearDirty =
+      !target.deviceId &&
+      !nextFiles.some((file) => !file.deviceId && file.filePath === target.filePath);
+    if (shouldClearDirty && target.filePath in dirtyLocalFileContents) {
+      const { [target.filePath]: _, ...rest } = dirtyLocalFileContents;
       nextDirty = rest;
     }
 
     this.#set(
       {
-        activeLocalFilePath: nextActive,
+        activeLocalFileId: nextActiveId,
+        activeLocalFilePath: nextActivePath,
         dirtyLocalFileContents: nextDirty,
         openLocalFiles: nextFiles,
       },
@@ -94,47 +137,77 @@ export class ChatPortalActionImpl {
     }
   };
 
-  closeLeftLocalFileTabs = (filePath: string): void => {
-    const { openLocalFiles, activeLocalFilePath } = this.#get();
-    const idx = openLocalFiles.findIndex((f) => f.filePath === filePath);
+  closeLeftLocalFileTabs = (id: string): void => {
+    const { openLocalFiles, activeLocalFileId, activeLocalFilePath } = this.#get();
+    const idx = findLocalFileIndexById(openLocalFiles, id);
     if (idx <= 0) return;
 
     const nextFiles = openLocalFiles.slice(idx);
-    const nextActive = nextFiles.some((f) => f.filePath === activeLocalFilePath)
-      ? activeLocalFilePath
-      : filePath;
+    const activeFile = resolveActiveLocalFile(
+      openLocalFiles,
+      activeLocalFileId,
+      activeLocalFilePath,
+    );
+    const currentActiveId = activeFile ? getLocalFileTabId(activeFile) : undefined;
+    const targetId = getLocalFileTabId(openLocalFiles[idx]);
+    const nextActiveId = nextFiles.some((f) => getLocalFileTabId(f) === currentActiveId)
+      ? currentActiveId
+      : targetId;
+    const nextActiveFile = findLocalFileById(nextFiles, nextActiveId);
 
     this.#set(
-      { activeLocalFilePath: nextActive, openLocalFiles: nextFiles },
+      {
+        activeLocalFileId: nextActiveId,
+        activeLocalFilePath: nextActiveFile?.filePath,
+        openLocalFiles: nextFiles,
+      },
       false,
       'closeLeftLocalFileTabs',
     );
   };
 
-  closeOtherLocalFileTabs = (filePath: string): void => {
+  closeOtherLocalFileTabs = (id: string): void => {
     const { openLocalFiles } = this.#get();
-    const target = openLocalFiles.find((f) => f.filePath === filePath);
+    const target = findLocalFileById(openLocalFiles, id);
     if (!target) return;
+    const targetId = getLocalFileTabId(target);
+    const targetFile = { ...target, id: targetId };
 
     this.#set(
-      { activeLocalFilePath: filePath, openLocalFiles: [target] },
+      {
+        activeLocalFileId: targetId,
+        activeLocalFilePath: target.filePath,
+        openLocalFiles: [targetFile],
+      },
       false,
       'closeOtherLocalFileTabs',
     );
   };
 
-  closeRightLocalFileTabs = (filePath: string): void => {
-    const { openLocalFiles, activeLocalFilePath } = this.#get();
-    const idx = openLocalFiles.findIndex((f) => f.filePath === filePath);
+  closeRightLocalFileTabs = (id: string): void => {
+    const { openLocalFiles, activeLocalFileId, activeLocalFilePath } = this.#get();
+    const idx = findLocalFileIndexById(openLocalFiles, id);
     if (idx < 0 || idx >= openLocalFiles.length - 1) return;
 
     const nextFiles = openLocalFiles.slice(0, idx + 1);
-    const nextActive = nextFiles.some((f) => f.filePath === activeLocalFilePath)
-      ? activeLocalFilePath
-      : filePath;
+    const activeFile = resolveActiveLocalFile(
+      openLocalFiles,
+      activeLocalFileId,
+      activeLocalFilePath,
+    );
+    const currentActiveId = activeFile ? getLocalFileTabId(activeFile) : undefined;
+    const targetId = getLocalFileTabId(openLocalFiles[idx]);
+    const nextActiveId = nextFiles.some((f) => getLocalFileTabId(f) === currentActiveId)
+      ? currentActiveId
+      : targetId;
+    const nextActiveFile = findLocalFileById(nextFiles, nextActiveId);
 
     this.#set(
-      { activeLocalFilePath: nextActive, openLocalFiles: nextFiles },
+      {
+        activeLocalFileId: nextActiveId,
+        activeLocalFilePath: nextActiveFile?.filePath,
+        openLocalFiles: nextFiles,
+      },
       false,
       'closeRightLocalFileTabs',
     );
@@ -188,22 +261,35 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ file, type: PortalViewType.FilePreview });
   };
 
-  openLocalFile = ({
-    filePath,
-    workingDirectory,
-  }: {
-    filePath: string;
-    workingDirectory: string;
-  }): void => {
+  openLocalFile = ({ deviceId, filePath, workingDirectory }: OpenLocalFileParams): void => {
     const { openLocalFiles } = this.#get();
-    const exists = openLocalFiles.some((f) => f.filePath === filePath);
-    const nextFiles = exists ? openLocalFiles : [...openLocalFiles, { filePath, workingDirectory }];
-    this.#set({ activeLocalFilePath: filePath, openLocalFiles: nextFiles }, false, 'openLocalFile');
+    const id = createLocalFileTabId({ deviceId, filePath, workingDirectory });
+    const exists = openLocalFiles.some((f) => getLocalFileTabId(f) === id);
+    const nextFile = deviceId
+      ? { deviceId, filePath, id, workingDirectory }
+      : { filePath, id, workingDirectory };
+    const nextFiles = exists
+      ? openLocalFiles.map((file) => (getLocalFileTabId(file) === id ? nextFile : file))
+      : [...openLocalFiles, nextFile];
+    this.#set(
+      { activeLocalFileId: id, activeLocalFilePath: filePath, openLocalFiles: nextFiles },
+      false,
+      'openLocalFile',
+    );
     this.#get().pushPortalView({ type: PortalViewType.LocalFile });
   };
 
-  setActiveLocalFile = (filePath: string): void => {
-    this.#set({ activeLocalFilePath: filePath }, false, 'setActiveLocalFile');
+  setActiveLocalFile = (id: string): void => {
+    const { openLocalFiles } = this.#get();
+    const activeFile = findLocalFileById(openLocalFiles, id);
+    this.#set(
+      {
+        activeLocalFileId: activeFile ? getLocalFileTabId(activeFile) : id,
+        activeLocalFilePath: activeFile?.filePath ?? id,
+      },
+      false,
+      'setActiveLocalFile',
+    );
   };
 
   setLocalFileBuffer = (filePath: string, content: string | undefined): void => {

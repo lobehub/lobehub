@@ -309,6 +309,7 @@
   "claude-3-haiku-20240307.description": "Claude 3 Haikuは、Anthropicの最速かつ最小のモデルで、即時応答と高速かつ正確な性能を実現するよう設計されています。",
   "claude-3-opus-20240229.description": "Claude 3 Opusは、Anthropicの最も強力なモデルで、非常に複雑なタスクにおいて卓越した性能、知性、流暢さ、理解力を発揮します。",
   "claude-3-sonnet-20240229.description": "Claude 3 Sonnetは、知性と速度のバランスを取り、エンタープライズ向けのワークロードにおいて高い実用性とコスト効率、信頼性のある大規模展開を実現します。",
+  "claude-fable-5.description": "クロード・フェーブル5は、Anthropicの最も高性能なモデルです。最も高度な推論や長期的なエージェント作業に対応するため、Opusを超える新たなレベルを提供します。",
   "claude-haiku-4-5-20251001.description": "Claude Haiku 4.5は、Anthropicが提供する最速かつ最も賢いHaikuモデルで、驚異的なスピードと高度な推論能力を備えています。",
   "claude-haiku-4-5.description": "Claude Haiku 4.5 by Anthropic — 次世代Haikuモデルで、推論能力とビジョンが強化されています。",
   "claude-haiku-4.5.description": "Claude Haiku 4.5は、Anthropicの最速かつ最も賢いHaikuモデルで、驚異的なスピードと高度な推論能力を備えています。",

@@ -302,6 +302,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
         {
           agentType: request.agentType,
           cwd: request.cwd,
+          imageList: request.imageList,
           jwt: request.jwt,
           operationId: request.operationId,
           prompt: request.prompt,

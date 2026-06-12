@@ -292,3 +292,7 @@ export const resolveAgentDocumentsContext = async (params: {
 };
 
 export const agentDocumentService = new AgentDocumentService();
+
+export type AgentDocumentListItem = Awaited<
+  ReturnType<typeof agentDocumentService.listDocuments>
+>[number];

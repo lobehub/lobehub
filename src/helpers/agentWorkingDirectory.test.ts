@@ -18,6 +18,21 @@ describe('resolveTargetDeviceId', () => {
     expect(resolveTargetDeviceId(undefined, 'cur')).toBe('cur');
   });
 
+  it('uses the synced local binding when no current machine id is available', () => {
+    expect(
+      resolveTargetDeviceId(cfg({ boundDeviceId: 'dev-1', executionTarget: 'local' }), undefined),
+    ).toBe('dev-1');
+  });
+
+  it('does not use stale bindings for sandbox targets', () => {
+    expect(
+      resolveTargetDeviceId(
+        cfg({ boundDeviceId: 'dev-1', executionTarget: 'sandbox' }),
+        undefined,
+      ),
+    ).toBeUndefined();
+  });
+
   it('returns undefined when device target has no boundDeviceId', () => {
     expect(resolveTargetDeviceId(cfg({ executionTarget: 'device' }), 'cur')).toBeUndefined();
   });

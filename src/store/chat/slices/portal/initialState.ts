@@ -27,6 +27,16 @@ export interface PortalFile {
   fileId: string;
 }
 
+export interface OpenLocalFileParams {
+  deviceId?: string;
+  filePath: string;
+  workingDirectory: string;
+}
+
+export interface OpenLocalFileEntry extends OpenLocalFileParams {
+  id: string;
+}
+
 export type PortalViewData =
   | { type: PortalViewType.Home }
   | { artifact: PortalArtifact; type: PortalViewType.Artifact }
@@ -48,7 +58,10 @@ export type PortalViewData =
 // ============== Portal State ==============
 
 export interface ChatPortalState {
-  /** Path of the currently active tab; undefined when no tabs open. */
+  /** Composite id of the currently active local-file tab; undefined when no tabs open. */
+  activeLocalFileId?: string;
+
+  /** Path of the currently active tab; kept for legacy consumers that only need display/open path. */
   activeLocalFilePath?: string;
 
   /** Unsaved edit buffers keyed by file path. Presence implies the file is dirty. */
@@ -57,7 +70,7 @@ export interface ChatPortalState {
   // Legacy fields (kept for backward compatibility during migration)
   // TODO: Remove after Phase 3 migration complete
   /** Open file tabs in the LocalFile portal. */
-  openLocalFiles: Array<{ filePath: string; workingDirectory: string }>;
+  openLocalFiles: OpenLocalFileEntry[];
   /** @deprecated Use portalStack instead */
   portalArtifact?: PortalArtifact;
   portalArtifactDisplayMode: ArtifactDisplayMode;

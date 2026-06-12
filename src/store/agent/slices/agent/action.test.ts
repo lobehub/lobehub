@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentService } from '@/services/agent';
-import { resolveAgentDocumentsContext } from '@/services/agentDocument';
+import { agentDocumentService } from '@/services/agentDocument';
 import { type LobeAgentConfig } from '@/types/agent';
 import { withSWR } from '~test-utils';
 
@@ -26,8 +26,12 @@ vi.mock('@/services/agent', () => ({
 }));
 
 vi.mock('@/services/agentDocument', () => ({
+  agentDocumentService: {
+    listDocuments: vi.fn(),
+  },
   agentDocumentSWRKeys: {
     documents: (agentId: string) => ['agent-documents', agentId] as const,
+    documentsList: (agentId: string) => ['agent-documents-list', agentId] as const,
   },
   resolveAgentDocumentsContext: vi.fn(),
 }));
@@ -96,37 +100,27 @@ describe('AgentSlice Actions', () => {
   });
 
   describe('useFetchAgentDocuments', () => {
-    it('should sync fetched agent documents into store cache', async () => {
-      vi.mocked(resolveAgentDocumentsContext).mockResolvedValue([
+    it('should fetch agent documents via listDocuments', async () => {
+      const docs = [
         {
-          content: 'setup steps',
+          documentId: 'doc-1',
           filename: 'setup.md',
           id: 'doc-1',
-          loadRules: {},
-          policyId: null,
-          policyLoadFormat: undefined,
           title: 'Setup',
         },
-      ]);
+      ];
+      vi.mocked(agentDocumentService.listDocuments).mockResolvedValue(docs as any);
 
-      const { result } = renderHook(() => useAgentStore(), { wrapper: withSWR });
+      const store = renderHook(() => useAgentStore(), { wrapper: withSWR });
 
-      renderHook(() => result.current.useFetchAgentDocuments('agent-1'), { wrapper: withSWR });
+      const { result } = renderHook(() => store.result.current.useFetchAgentDocuments('agent-1'), {
+        wrapper: withSWR,
+      });
 
       await waitFor(() => {
-        expect(result.current.agentDocumentsMap['agent-1']).toEqual([
-          {
-            content: 'setup steps',
-            filename: 'setup.md',
-            id: 'doc-1',
-            loadRules: {},
-            policyId: null,
-            policyLoadFormat: undefined,
-            title: 'Setup',
-          },
-        ]);
+        expect(result.current.data).toEqual(docs);
       });
-      expect(resolveAgentDocumentsContext).toHaveBeenCalledWith({ agentId: 'agent-1' });
+      expect(agentDocumentService.listDocuments).toHaveBeenCalledWith({ agentId: 'agent-1' });
     });
   });
 
@@ -545,6 +539,40 @@ describe('AgentSlice Actions', () => {
       expect(agentService.getAgentConfigById).toHaveBeenCalledWith('agent-1');
       expect(useAgentStore.getState().activeAgentId).toBe('agent-1');
       expect(useAgentStore.getState().agentMap['agent-1']).toBeDefined();
+    });
+
+    it('should record fetch error in agentConfigErrorMap and clear it on retry', async () => {
+      const error = Object.assign(new Error('boom'), { meta: { shouldRetry: false } });
+      vi.mocked(agentService.getAgentConfigById).mockRejectedValueOnce(error);
+
+      renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-err'), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() =>
+        expect(useAgentStore.getState().agentConfigErrorMap['agent-err']).toBe('boom'),
+      );
+
+      await act(async () => {
+        await useAgentStore.getState().retryAgentConfigFetch('agent-err');
+      });
+
+      expect(useAgentStore.getState().agentConfigErrorMap['agent-err']).toBeUndefined();
+    });
+
+    it('should clear a stale fetch error once data arrives', async () => {
+      useAgentStore.setState({ agentConfigErrorMap: { 'agent-1': 'boom' } });
+
+      const mockAgentConfig = { id: 'agent-1', model: 'gpt-4' } as LobeAgentConfig;
+      vi.mocked(agentService.getAgentConfigById).mockResolvedValueOnce(mockAgentConfig as any);
+
+      const { result } = renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-1'), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => expect(result.current.data).toEqual(mockAgentConfig));
+
+      expect(useAgentStore.getState().agentConfigErrorMap['agent-1']).toBeUndefined();
     });
   });
 

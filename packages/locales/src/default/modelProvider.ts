@@ -271,6 +271,8 @@ export default {
     'For Grok 4.3 series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint':
     'For Hy3 models; controls reasoning intensity. no_think (ultra-fast response), low (quick reasoning), and high (deep reasoning)—to accommodate varying latency and depth requirements, from high-frequency interactions to complex engineering tasks.',
+  'providerModels.item.modelConfig.extendParams.options.ring2_6ReasoningEffort.hint':
+    'For Ring 2.6 series; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.deepseekV4ReasoningEffort.hint':
     'For DeepSeek V4 thinking mode; controls reasoning intensity. `high` is the default, `max` unlocks the deepest reasoning used by complex agent workflows.',
   'providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint':
