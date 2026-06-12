@@ -239,6 +239,7 @@
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "Voor GLM-5 en GLM-4.7; beheert het tokenbudget voor redeneren (maximaal 32k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "Voor Qwen3-serie; beheert het tokenbudget voor redeneren (maximaal 80k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint": "Voor OpenAI en andere redeneermodellen; regelt de inspanning voor redeneren.",
+  "providerModels.item.modelConfig.extendParams.options.ring2_6ReasoningEffort.hint": "Voor Ring 2.6-serie; regelt de intensiteit van het redeneren.",
   "providerModels.item.modelConfig.extendParams.options.step3_5ReasoningEffort.hint": "Voor Step 3.5-serie; regelt de intensiteit van het redeneren.",
   "providerModels.item.modelConfig.extendParams.options.textVerbosity.hint": "Voor GPT-5+-serie; regelt de uitvoerige aard van de output.",
   "providerModels.item.modelConfig.extendParams.options.thinking.hint": "Voor sommige Doubao-modellen; laat het model beslissen of diep nadenken nodig is.",

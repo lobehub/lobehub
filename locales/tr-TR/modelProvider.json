@@ -239,6 +239,7 @@
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "GLM-5 ve GLM-4.7 için; akıl yürütme için token bütçesini kontrol eder (maksimum 32k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "Qwen3 serisi için; akıl yürütme için token bütçesini kontrol eder (maksimum 80k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint": "OpenAI ve akıl yürütme yeteneğine sahip diğer modeller için; akıl yürütme çabasını kontrol eder.",
+  "providerModels.item.modelConfig.extendParams.options.ring2_6ReasoningEffort.hint": "Ring 2.6 serisi için; akıl yürütme yoğunluğunu kontrol eder.",
   "providerModels.item.modelConfig.extendParams.options.step3_5ReasoningEffort.hint": "Step 3.5 serisi için; akıl yürütme yoğunluğunu kontrol eder.",
   "providerModels.item.modelConfig.extendParams.options.textVerbosity.hint": "GPT-5+ serisi için; çıktıdaki ayrıntı düzeyini kontrol eder.",
   "providerModels.item.modelConfig.extendParams.options.thinking.hint": "Bazı Doubao modelleri için; modelin derin düşünme gerekip gerekmediğine karar vermesine izin verir.",

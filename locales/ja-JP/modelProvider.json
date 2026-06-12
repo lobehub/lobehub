@@ -239,6 +239,7 @@
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "GLM-5およびGLM-4.7用；推論のためのトークン予算を制御します（最大32k）。",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "Qwen3シリーズ用；推論のためのトークン予算を制御します（最大80k）。",
   "providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint": "OpenAIなどの推論対応モデル向け；推論の努力度を制御します。",
+  "providerModels.item.modelConfig.extendParams.options.ring2_6ReasoningEffort.hint": "リング2.6シリーズ用；推論の強度を制御します。",
   "providerModels.item.modelConfig.extendParams.options.step3_5ReasoningEffort.hint": "Step 3.5シリーズ用: 推論の強度を制御します。",
   "providerModels.item.modelConfig.extendParams.options.textVerbosity.hint": "GPT-5+シリーズ向け；出力の詳細度を制御します。",
   "providerModels.item.modelConfig.extendParams.options.thinking.hint": "一部のDoubaoモデル向け；モデルが深く思考するかどうかを判断させます。",

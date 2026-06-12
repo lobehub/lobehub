@@ -4,6 +4,7 @@
   "ai360.description": "360 AI는 360에서 제공하는 모델 및 서비스 플랫폼으로, 360GPT2 Pro, 360GPT Pro, 360GPT Turbo와 같은 NLP 모델을 통해 텍스트 생성, 의미 이해, 대화, 코드 작업을 지원하며, 대규모 파라미터와 멀티모달 기능을 결합하고 다양한 요구에 맞춘 유연한 요금제를 제공합니다.",
   "aihubmix.description": "AiHubMix는 통합 API를 통해 다양한 AI 모델에 접근할 수 있도록 지원합니다.",
   "akashchat.description": "Akash는 허가가 필요 없는 클라우드 자원 시장으로, 전통적인 클라우드 제공업체에 비해 경쟁력 있는 가격을 제공합니다.",
+  "antgroup.description": "앤트 링은 앤트 그룹의 범용 인공지능(AGI) 이니셔티브의 핵심 기초 모델 시리즈로, 최첨단 기초 모델 역량을 구축하고 개방하는 데 전념하고 있습니다. 우리는 지능 개발이 개방성, 공유, 확장성을 향해 나아가야 한다고 믿으며, 작은 실용적인 단계에서 시작하여 AGI의 지속적인 진화와 실제 배치를 추진합니다.",
   "anthropic.description": "Anthropic은 Claude 3.5 Sonnet, Claude 3 Sonnet, Claude 3 Opus, Claude 3 Haiku와 같은 고급 언어 모델을 개발하며, 지능, 속도, 비용의 균형을 통해 기업부터 빠른 응답이 필요한 사용 사례까지 폭넓게 대응합니다.",
   "azure.description": "Azure는 GPT-3.5 및 GPT-4 시리즈를 포함한 고급 AI 모델을 제공하며, 다양한 데이터 유형과 복잡한 작업을 안전하고 신뢰할 수 있으며 지속 가능한 방식으로 처리합니다.",
   "azureai.description": "Azure는 GPT-3.5 및 GPT-4 시리즈를 포함한 고급 AI 모델을 제공하며, 다양한 데이터 유형과 복잡한 작업을 안전하고 신뢰할 수 있으며 지속 가능한 방식으로 처리합니다.",

@@ -239,6 +239,7 @@
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "За GLM-5 и GLM-4.7; контролира бюджета за токени за разсъждение (максимум 32k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "За серията Qwen3; контролира бюджета за токени за разсъждение (максимум 80k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint": "За OpenAI и други модели с логическо мислене; контролира усилието за разсъждение.",
+  "providerModels.item.modelConfig.extendParams.options.ring2_6ReasoningEffort.hint": "За серия Ring 2.6; контролира интензивността на разсъжденията.",
   "providerModels.item.modelConfig.extendParams.options.step3_5ReasoningEffort.hint": "За серията Step 3.5; контролира интензивността на разсъжденията.",
   "providerModels.item.modelConfig.extendParams.options.textVerbosity.hint": "За серията GPT-5+; контролира обемността на изходния текст.",
   "providerModels.item.modelConfig.extendParams.options.thinking.hint": "За някои модели Doubao; позволява на модела да реши дали да мисли задълбочено.",

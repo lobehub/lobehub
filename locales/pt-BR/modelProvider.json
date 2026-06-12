@@ -239,6 +239,7 @@
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "Para GLM-5 e GLM-4.7; controla o orçamento de tokens para raciocínio (máximo de 32k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "Para a série Qwen3; controla o orçamento de tokens para raciocínio (máximo de 80k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint": "Para modelos da OpenAI e outros com capacidade de raciocínio; controla o esforço de raciocínio.",
+  "providerModels.item.modelConfig.extendParams.options.ring2_6ReasoningEffort.hint": "Para a série Ring 2.6; controla a intensidade do raciocínio.",
   "providerModels.item.modelConfig.extendParams.options.step3_5ReasoningEffort.hint": "Para a série Step 3.5; controla a intensidade do raciocínio.",
   "providerModels.item.modelConfig.extendParams.options.textVerbosity.hint": "Para a série GPT-5+; controla a verbosidade da saída.",
   "providerModels.item.modelConfig.extendParams.options.thinking.hint": "Para alguns modelos Doubao; permite que o modelo decida se deve pensar profundamente.",

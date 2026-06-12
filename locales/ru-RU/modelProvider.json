@@ -239,6 +239,7 @@
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken32k.hint": "Для GLM-5 и GLM-4.7; управляет бюджетом токенов для рассуждений (максимум 32k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken80k.hint": "Для серии Qwen3; управляет бюджетом токенов для рассуждений (максимум 80k).",
   "providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint": "Для моделей OpenAI и других с поддержкой рассуждений; управляет усилиями на рассуждение.",
+  "providerModels.item.modelConfig.extendParams.options.ring2_6ReasoningEffort.hint": "Для серии Ring 2.6; регулирует интенсивность рассуждений.",
   "providerModels.item.modelConfig.extendParams.options.step3_5ReasoningEffort.hint": "Для серии Step 3.5; регулирует интенсивность рассуждений.",
   "providerModels.item.modelConfig.extendParams.options.textVerbosity.hint": "Для серии GPT-5+; управляет подробностью вывода.",
   "providerModels.item.modelConfig.extendParams.options.thinking.hint": "Для некоторых моделей Doubao; позволяет модели решать, нужно ли углублённое мышление.",
