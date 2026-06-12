@@ -82,3 +82,10 @@ export const isKimiThinkingToggleModel = (model: string): boolean => {
     !isKimiNativeThinkingModel(model)
   );
 };
+
+export const isKimiPreserveThinkingModel = (model: string): boolean => {
+  const parsed = parseKimiModelId(model);
+  if (!parsed) return false;
+
+  return parsed.majorVersion === 2 && parsed.minorVersion === 6;
+};

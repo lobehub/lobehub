@@ -929,7 +929,10 @@ export const createRuntimeExecutors = (
         const modelSupportsPreserveThinkingFromCard =
           Array.isArray(modelExtendParams) && modelExtendParams.includes('preserveThinking');
         const providerSupportsPreserveThinkingFallback =
-          provider === 'qwen' || provider === 'zhipu';
+          provider === 'qwen' ||
+          provider === 'zhipu' ||
+          provider === 'moonshot' ||
+          provider === 'kimicodingplan';
         const modelSupportsPreserveThinking =
           modelSupportsPreserveThinkingFromCard ||
           (!modelCard && providerSupportsPreserveThinkingFallback);

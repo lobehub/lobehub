@@ -57,7 +57,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-04-20',
     settings: {
-      extendParams: ['enableReasoning'],
+      extendParams: ['enableReasoning', 'preserveThinking'],
     },
     type: 'chat',
   },
