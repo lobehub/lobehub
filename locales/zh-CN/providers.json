@@ -18,6 +18,7 @@
   "cometapi.description": "CometAPI 提供对 OpenAI、Anthropic、Google 等前沿模型的访问，用户可根据不同需求选择最优模型与价格。",
   "comfyui.description": "一个强大的开源工作流引擎，支持图像、视频和音频生成，兼容 SD、FLUX、Qwen、混元、WAN 等模型，支持节点式编辑与私有部署。",
   "deepseek.description": "DeepSeek 专注于人工智能研究与应用。其最新的 DeepSeek V4 系列包含 Flash 和 Pro 两个版本，具备 100 万上下文窗口和混合式思维能力，在推理与智能体基准测试中可与领先的闭源前沿模型竞争。",
+  "empiriolabs.description": "EmpirioLabs AI 通过一个 OpenAI 兼容的 API 提供开源、专有与定制模型（Qwen、DeepSeek、GLM、Kimi、MiniMax、Gemma 等），按量计费。",
   "fal.description": "一个为开发者打造的生成式媒体平台。",
   "fireworksai.description": "Fireworks AI 提供先进的语言模型服务，支持函数调用与多模态处理。Firefunction V2（基于 Llama-3）优化了函数调用、对话与指令执行，FireLLaVA-13B 支持图文混合输入，另有 Llama 与 Mixtral 系列模型。",
   "giteeai.description": "Gitee AI Serverless API 为开发者提供即插即用的大模型推理服务。",
