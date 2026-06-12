@@ -285,6 +285,11 @@ export function defineConfig(config: CustomNextConfig) {
       {
         destination: LANDING_SITEMAP_URL,
         permanent: true,
+        source: '/sitemap-index.xml',
+      },
+      {
+        destination: LANDING_SITEMAP_URL,
+        permanent: true,
         source: '/sitemap/:path*',
       },
       {
