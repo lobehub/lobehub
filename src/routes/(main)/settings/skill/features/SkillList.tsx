@@ -81,13 +81,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 export type SkillViewMode = 'connector' | 'skill';
 
 interface SkillListProps {
+  onDeleteSelected?: () => void;
   onSelect?: (identifier: string, type: ToolDetailType) => void;
   selectedIdentifier?: string;
   viewMode?: SkillViewMode;
 }
 
 const SkillList = memo<SkillListProps>(
-  ({ onSelect, selectedIdentifier, viewMode = 'connector' }) => {
+  ({ onSelect, onDeleteSelected, selectedIdentifier, viewMode = 'connector' }) => {
     const { t } = useTranslation('setting');
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
@@ -507,6 +508,7 @@ const SkillList = memo<SkillListProps>(
                     key={item.provider.id}
                     provider={item.provider}
                     server={getLobehubSkillServerByProvider(item.provider.id)}
+                    onDelete={onDeleteSelected}
                     onSelect={
                       onSelect ? () => onSelect(item.provider.id, 'lobehub-connector') : undefined
                     }
@@ -519,6 +521,7 @@ const SkillList = memo<SkillListProps>(
                   key={item.serverType.identifier}
                   server={getComposioServerByIdentifier(item.serverType.identifier)}
                   serverType={item.serverType}
+                  onDelete={onDeleteSelected}
                   onSelect={
                     onSelect ? () => onSelect(item.serverType.identifier, 'plugin') : undefined
                   }

@@ -22,13 +22,14 @@ const POLL_TIMEOUT_MS = 15_000;
 
 interface LobehubSkillItemProps {
   isSelected?: boolean;
+  onDelete?: () => void;
   onSelect?: () => void;
   provider: LobehubSkillProviderType;
   server?: LobehubSkillServer;
 }
 
 const LobehubSkillItem = memo<LobehubSkillItemProps>(
-  ({ provider, server, isSelected, onSelect }) => {
+  ({ provider, server, isSelected, onSelect, onDelete }) => {
     const { t } = useTranslation('setting');
     const { allowed: canCreate, reason: createReason } = usePermission('create_content');
     const { allowed: canEdit, reason: editReason } = usePermission('edit_own_content');
@@ -175,14 +176,17 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(
 
     const handleDisconnect = () => {
       if (!canEdit) return;
-      if (!server) return;
       confirmModal({
         cancelText: t('cancel', { ns: 'common' }),
         content: t('tools.lobehubSkill.disconnectConfirm.desc', { name: provider.label }),
         okButtonProps: { danger: true },
         okText: t('tools.lobehubSkill.disconnect'),
         onOk: async () => {
-          await revokeConnect(server.identifier);
+          if (server) {
+            await revokeConnect(server.identifier);
+          } else if (isSelected) {
+            onDelete?.();
+          }
         },
         title: t('tools.lobehubSkill.disconnectConfirm.title', { name: provider.label }),
       });

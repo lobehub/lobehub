@@ -21,6 +21,7 @@ const POLL_TIMEOUT_MS = 15_000;
 
 interface ComposioSkillItemProps {
   isSelected?: boolean;
+  onDelete?: () => void;
   onSelect?: () => void;
   server?: ComposioServer;
   serverType: ComposioAppType;
