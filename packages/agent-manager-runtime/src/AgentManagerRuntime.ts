@@ -853,9 +853,11 @@ export class AgentManagerRuntime {
     });
 
     if (newServer) {
-      await this.enablePluginForAgent(agentId, identifier);
-
+      // Enable the plugin only once the connection is actually usable. Enabling
+      // before OAuth completes would leave an enabled-but-unauthorized tool on
+      // the agent if the user cancels the authorization.
       if (newServer.status === ComposioServerStatus.ACTIVE) {
+        await this.enablePluginForAgent(agentId, identifier);
         await getToolStoreState().refreshComposioConnectionStatus(newServer.identifier);
         return {
           content: `Successfully connected and enabled Composio tool: ${composioAppInfo.label}`,
@@ -875,6 +877,7 @@ export class AgentManagerRuntime {
           newServer.identifier,
         );
         if (authResult.success) {
+          await this.enablePluginForAgent(agentId, identifier);
           return {
             content: `Successfully connected and enabled Composio tool: ${composioAppInfo.label}`,
             state: {
