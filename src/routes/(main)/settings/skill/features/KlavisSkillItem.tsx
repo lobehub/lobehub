@@ -186,14 +186,15 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
 
     const handleRemove = () => {
       if (!canEdit) return;
-      if (!server) return;
       confirmModal({
         cancelText: t('cancel', { ns: 'common' }),
         content: t('tools.klavis.removeConfirm.desc', { name: serverType.label }),
         okButtonProps: { danger: true },
         okText: t('tools.klavis.remove'),
         onOk: async () => {
-          await removeKlavisServer(server.identifier);
+          if (server) {
+            await removeKlavisServer(server.identifier);
+          }
           if (isSelected) onDelete?.();
         },
         title: t('tools.klavis.removeConfirm.title', { name: serverType.label }),
@@ -344,8 +345,8 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(
           </Flexbox>
           {!isConnected && renderStatus()}
         </Flexbox>
-        {/* In list mode show compact ... for connected/pending servers so users can remove them */}
-        {onSelect && server && (
+        {/* In list mode show compact ... for all servers so users can remove them */}
+        {onSelect && (
           <div onClick={(e) => e.stopPropagation()}>
             <DropdownMenu
               placement="bottomRight"

@@ -508,6 +508,7 @@ const SkillList = memo<SkillListProps>(
                     key={item.provider.id}
                     provider={item.provider}
                     server={getLobehubSkillServerByProvider(item.provider.id)}
+                    onDelete={onDeleteSelected}
                     onSelect={
                       onSelect ? () => onSelect(item.provider.id, 'lobehub-connector') : undefined
                     }
