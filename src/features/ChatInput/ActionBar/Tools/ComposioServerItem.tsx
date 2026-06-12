@@ -1,5 +1,5 @@
-import { Checkbox, DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { Loader2, MoreHorizontalIcon, RotateCcw, SquareArrowOutUpRight, Trash2 } from 'lucide-react';
+import { Checkbox, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import { Loader2, SquareArrowOutUpRight } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -51,7 +51,6 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
     const userId = useUserStore(userProfileSelectors.userId);
     const createComposioConnection = useToolStore((s) => s.createComposioConnection);
     const refreshComposioConnectionStatus = useToolStore((s) => s.refreshComposioConnectionStatus);
-    const removeComposioConnection = useToolStore((s) => s.removeComposioConnection);
     const reauthorizeComposioConnection = useToolStore((s) => s.reauthorizeComposioConnection);
 
     // Get effective agent ID (agentId prop or current active agent)
@@ -255,11 +254,6 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
       }
     };
 
-    const handleDelete = async () => {
-      if (!canEdit || !server) return;
-      await removeComposioConnection(server.identifier);
-    };
-
     // Render right-side controls
     const renderRightControl = () => {
       // Connecting in progress
@@ -320,40 +314,24 @@ const ComposioServerItem = memo<ComposioServerItemProps>(
               </Flexbox>
             );
           }
-          // The OAuth link may have expired — offer re-authorize (clean up the
-          // stale connection + mint a fresh link) and delete, so the row can
-          // never get stuck unable to retry or be removed.
+          // Not yet authorized — show an explicit authorize affordance (matching
+          // other pending tools) so the row never looks connected. Clicking
+          // re-mints a fresh link (the prior one may have expired) and opens it.
           return (
-            <DropdownMenu
-              placement="bottomRight"
-              items={[
-                {
-                  disabled: !canCreate || !canEdit,
-                  icon: <Icon icon={RotateCcw} />,
-                  key: 'reauthorize',
-                  label: t('tools.composio.reauthorize', { defaultValue: 'Re-authorize' }),
-                  onClick: handleReauthorize,
-                },
-                {
-                  danger: true,
-                  disabled: !canEdit,
-                  icon: <Icon icon={Trash2} />,
-                  key: 'delete',
-                  label: t('tools.composio.remove', { defaultValue: 'Remove' }),
-                  onClick: handleDelete,
-                },
-              ]}
+            <Flexbox
+              horizontal
+              align="center"
+              gap={4}
+              style={{ cursor: canCreate && canEdit ? 'pointer' : 'not-allowed', opacity: 0.65 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!canCreate || !canEdit) return;
+                handleReauthorize();
+              }}
             >
-              <Flexbox
-                horizontal
-                align="center"
-                gap={4}
-                style={{ cursor: canEdit ? 'pointer' : 'not-allowed' }}
-                onClick={stopPropagation}
-              >
-                <Icon icon={MoreHorizontalIcon} size="small" />
-              </Flexbox>
-            </DropdownMenu>
+              {t('tools.composio.reauthorize', { defaultValue: 'Re-authorize' })}
+              <Icon icon={SquareArrowOutUpRight} size="small" />
+            </Flexbox>
           );
         }
         default: {
