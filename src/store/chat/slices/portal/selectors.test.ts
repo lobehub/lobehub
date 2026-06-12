@@ -2,8 +2,9 @@ import { type UIChatMessage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { type ChatStoreState } from '@/store/chat';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
-import { createLocalFileTabId } from './helpers';
+import { createLocalFileScopeKey, createLocalFileTabId } from './helpers';
 import { PortalViewType } from './initialState';
 import { chatPortalSelectors } from './selectors';
 
@@ -16,6 +17,25 @@ const localFileTabId = ({
   filePath: string;
   workingDirectory: string;
 }) => createLocalFileTabId({ deviceId, filePath, workingDirectory });
+
+const createTopicState = (
+  activeTopicId: string,
+  workingDirectoriesByTopic: Record<string, string>,
+) => ({
+  activeTopicId,
+  topicDataMap: {
+    [topicMapKey({ agentId: 'test-id' })]: {
+      currentPage: 1,
+      hasMore: false,
+      items: Object.entries(workingDirectoriesByTopic).map(([id, workingDirectory]) => ({
+        id,
+        metadata: { workingDirectory },
+      })),
+      pageSize: 20,
+      total: Object.keys(workingDirectoriesByTopic).length,
+    },
+  },
+});
 
 describe('chatDockSelectors', () => {
   const createState = (overrides?: Partial<ChatStoreState>) => {
@@ -310,6 +330,40 @@ describe('chatDockSelectors', () => {
       } as Partial<ChatStoreState>);
       expect(chatPortalSelectors.currentLocalFile(state)).toBeUndefined();
     });
+
+    it('should restore the active local file for the current topic working directory', () => {
+      const projectAActiveId = localFileTabId({
+        filePath: '/project-a/b.ts',
+        workingDirectory: '/project-a',
+      });
+      const projectBActiveId = localFileTabId({
+        filePath: '/project-b/c.ts',
+        workingDirectory: '/project-b',
+      });
+      const state = createState({
+        ...createTopicState('topic-a', {
+          'topic-a': '/project-a',
+          'topic-b': '/project-b',
+        }),
+        activeLocalFileId: projectBActiveId,
+        activeLocalFileIdsByScope: {
+          [createLocalFileScopeKey('/project-a')]: projectAActiveId,
+          [createLocalFileScopeKey('/project-b')]: projectBActiveId,
+        },
+        activeLocalFilePath: '/project-b/c.ts',
+        openLocalFiles: [
+          { filePath: '/project-a/a.ts', workingDirectory: '/project-a' },
+          { filePath: '/project-a/b.ts', id: projectAActiveId, workingDirectory: '/project-a' },
+          { filePath: '/project-b/c.ts', id: projectBActiveId, workingDirectory: '/project-b' },
+        ],
+      } as Partial<ChatStoreState>);
+
+      expect(chatPortalSelectors.currentLocalFile(state)).toEqual({
+        filePath: '/project-a/b.ts',
+        id: projectAActiveId,
+        workingDirectory: '/project-a',
+      });
+    });
   });
 
   describe('localFilePath', () => {
@@ -354,6 +408,23 @@ describe('chatDockSelectors', () => {
       const state = createState({ openLocalFiles: files } as Partial<ChatStoreState>);
       expect(chatPortalSelectors.openLocalFiles(state)).toEqual(files);
     });
+
+    it('should only return files from the current topic working directory', () => {
+      const state = createState({
+        ...createTopicState('topic-b', {
+          'topic-a': '/project-a',
+          'topic-b': '/project-b',
+        }),
+        openLocalFiles: [
+          { filePath: '/project-a/a.ts', workingDirectory: '/project-a' },
+          { filePath: '/project-b/b.ts', workingDirectory: '/project-b' },
+        ],
+      } as Partial<ChatStoreState>);
+
+      expect(chatPortalSelectors.openLocalFiles(state)).toEqual([
+        { filePath: '/project-b/b.ts', workingDirectory: '/project-b' },
+      ]);
+    });
   });
 
   describe('activeLocalFilePath', () => {
@@ -366,6 +437,21 @@ describe('chatDockSelectors', () => {
         activeLocalFilePath: '/path/a.ts',
       } as Partial<ChatStoreState>);
       expect(chatPortalSelectors.activeLocalFilePath(state)).toBe('/path/a.ts');
+    });
+
+    it('should not leak the previous project active path into a topic with no open files', () => {
+      const state = createState({
+        ...createTopicState('topic-b', {
+          'topic-a': '/project-a',
+          'topic-b': '/project-b',
+        }),
+        activeLocalFilePath: '/project-a/a.ts',
+        openLocalFiles: [{ filePath: '/project-a/a.ts', workingDirectory: '/project-a' }],
+      } as Partial<ChatStoreState>);
+
+      expect(chatPortalSelectors.openLocalFiles(state)).toEqual([]);
+      expect(chatPortalSelectors.activeLocalFilePath(state)).toBeUndefined();
+      expect(chatPortalSelectors.currentLocalFile(state)).toBeUndefined();
     });
   });
 

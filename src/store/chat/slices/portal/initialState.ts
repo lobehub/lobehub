@@ -61,6 +61,9 @@ export interface ChatPortalState {
   /** Composite id of the currently active local-file tab; undefined when no tabs open. */
   activeLocalFileId?: string;
 
+  /** Active local-file tab id keyed by project/root working directory. */
+  activeLocalFileIdsByScope: Record<string, string>;
+
   /** Path of the currently active tab; kept for legacy consumers that only need display/open path. */
   activeLocalFilePath?: string;
 
@@ -92,6 +95,7 @@ export interface ChatPortalState {
 }
 
 export const initialChatPortalState: ChatPortalState = {
+  activeLocalFileIdsByScope: {},
   dirtyLocalFileContents: {},
   openLocalFiles: [],
   portalArtifactDisplayMode: ArtifactDisplayMode.Preview,
