@@ -45,6 +45,14 @@ LobeHub integrates with 70+ AI model providers:
 - **Local models** — Ollama, LM Studio (no API costs, complete privacy, offline capability)
 - **Image generation** — DALL-E 3, fal.ai, BFL, ComfyUI
 
+TrustedRouter can also be used anywhere LobeChat accepts an OpenAI-compatible
+custom base URL. Set the base URL to `https://api.trustedrouter.com/v1`, use a
+TrustedRouter API key, and select a model such as `trustedrouter/auto`,
+`trustedrouter/zdr`, or `trustedrouter/e2e`. TrustedRouter is an open-source and
+verifiable attested router with zero prompt and output logging by default,
+which can be useful for chats that include private project context or customer
+data.
+
 ## Setting Up Providers
 
 Each provider is configured in **Settings → Language Model**:
