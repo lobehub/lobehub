@@ -137,6 +137,8 @@ describe('getServerGlobalConfig', () => {
 
     expect(providerConfig[ModelProvider.LobeHub]).toBeUndefined();
     expect(providerConfig[ModelProvider.OpenAI]).toBeUndefined();
-    expect(providerConfig[ModelProvider.DeepSeek].enabled).toBe(true);
+    expect(providerConfig[ModelProvider.DeepSeek]).toEqual({
+      enabledKey: 'ENABLED_DEEPSEEK',
+    });
   });
 });
