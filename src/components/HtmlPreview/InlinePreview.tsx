@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { memo, useMemo } from 'react';
 
 import { applyHtmlPreviewBaseUrl } from './applyBaseUrl';
+import { injectDialogInterceptor } from './dialogInterceptor';
 
 const hideHtmlPreviewActions = () => null;
 
@@ -38,7 +39,7 @@ const InlineHtmlPreview = memo<InlineHtmlPreviewProps>(
           iframe: { height: '100%' },
         }}
       >
-        {previewContent}
+        {injectDialogInterceptor(previewContent)}
       </HtmlPreview>
     );
   },
