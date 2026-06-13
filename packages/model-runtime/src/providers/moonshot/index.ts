@@ -225,8 +225,7 @@ const fetchMoonshotModels = async ({ client }: { client: OpenAI }): Promise<Chat
 
     return processModelList(processedList, MODEL_LIST_CONFIGS.moonshot, 'moonshot');
   } catch (error) {
-    console.warn('Failed to fetch Moonshot models:', error);
-    return [];
+    throw new Error('Failed to fetch Moonshot models', { cause: error });
   }
 };
 

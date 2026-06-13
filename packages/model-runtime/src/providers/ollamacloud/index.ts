@@ -30,11 +30,7 @@ export const params = {
 
       return await processMultiProviderModelList(modelList, 'ollamacloud');
     } catch (error) {
-      console.warn(
-        'Failed to fetch Ollama Cloud models. Please ensure your Ollama Cloud API key is valid:',
-        error,
-      );
-      return [];
+      throw new Error('Failed to fetch Ollama Cloud models', { cause: error });
     }
   },
   provider: ModelProvider.OllamaCloud,

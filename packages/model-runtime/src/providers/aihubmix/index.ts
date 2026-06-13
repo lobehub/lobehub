@@ -182,11 +182,7 @@ export const params: CreateRouterRuntimeOptions = {
         .map((m: any) => mapAiHubMixModel(m));
       return await processMultiProviderModelList(modelList, 'aihubmix');
     } catch (error) {
-      console.warn(
-        'Failed to fetch AiHubMix models. Please ensure your AiHubMix API key is valid:',
-        error,
-      );
-      return [];
+      throw new Error('Failed to fetch AiHubMix models', { cause: error });
     } finally {
       clearTimeout(timeoutId);
     }

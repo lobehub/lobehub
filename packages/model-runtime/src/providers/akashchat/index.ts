@@ -46,11 +46,7 @@ export const params = {
 
       return await processMultiProviderModelList(modelList, 'akashchat');
     } catch (error) {
-      console.warn(
-        'Failed to fetch AkashChat models. Please ensure your AkashChat API key is valid:',
-        error,
-      );
-      return [];
+      throw new Error('Failed to fetch AkashChat models', { cause: error });
     }
   },
   provider: ModelProvider.AkashChat,

@@ -1,4 +1,5 @@
 import { Button, Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { BrainIcon, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
 import { memo, use, useState } from 'react';
@@ -9,6 +10,7 @@ import { useAiInfraStore } from '@/store/aiInfra';
 
 import { createCreateNewModelModal } from './CreateNewModelModal';
 import { ProviderSettingsContext } from './ProviderSettingsContext';
+import { getRemoteModelFetchErrorMessage } from './utils';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   circle: css`
@@ -48,6 +50,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const EmptyState = memo<{ provider: string }>(({ provider }) => {
   const { t } = useTranslation('modelProvider');
+  const { message } = App.useApp();
   const { allowed: canManageProvider, reason } = usePermission('manage_provider_key');
 
   const [fetchRemoteModelList] = useAiInfraStore((s) => [s.fetchRemoteModelList]);
@@ -89,10 +92,17 @@ const EmptyState = memo<{ provider: string }>(({ provider }) => {
               setFetchRemoteModelsLoading(true);
               try {
                 await fetchRemoteModelList(provider);
-              } catch (e) {
-                console.error(e);
+              } catch (error) {
+                message.error(
+                  t('providerModels.list.fetcher.error', {
+                    message:
+                      getRemoteModelFetchErrorMessage(error) ??
+                      t('providerModels.list.fetcher.errorFallback'),
+                  }),
+                );
+              } finally {
+                setFetchRemoteModelsLoading(false);
               }
-              setFetchRemoteModelsLoading(false);
             }}
           >
             {fetchRemoteModelsLoading

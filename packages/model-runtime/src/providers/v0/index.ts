@@ -24,8 +24,7 @@ export const params = {
 
       return processModelList(modelList, MODEL_LIST_CONFIGS.v0, 'v0');
     } catch (error) {
-      console.warn('Failed to fetch V0 models. Please ensure your V0 API key is valid:', error);
-      return [];
+      throw new Error('Failed to fetch V0 models', { cause: error });
     }
   },
   provider: ModelProvider.V0,

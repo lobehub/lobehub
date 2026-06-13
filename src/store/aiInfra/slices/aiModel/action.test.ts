@@ -224,6 +224,7 @@ describe('AiModelAction', () => {
         .mockResolvedValue(undefined);
 
       // Mock dynamic import
+      vi.resetModules();
       vi.doMock('@/services/models', () => ({
         modelsService: {
           getModels: vi.fn().mockResolvedValue(mockRemoteModels),
@@ -274,6 +275,7 @@ describe('AiModelAction', () => {
         .mockResolvedValue(undefined);
 
       // Mock dynamic import with null response
+      vi.resetModules();
       vi.doMock('@/services/models', () => ({
         modelsService: {
           getModels: vi.fn().mockResolvedValue(null),
@@ -283,6 +285,28 @@ describe('AiModelAction', () => {
       await act(async () => {
         await result.current.fetchRemoteModelList('test-provider');
       });
+
+      expect(batchUpdateSpy).not.toHaveBeenCalled();
+    });
+
+    it('should propagate remote service errors', async () => {
+      const { result } = renderHook(() => useStore());
+      const batchUpdateSpy = vi
+        .spyOn(result.current, 'batchUpdateAiModels')
+        .mockResolvedValue(undefined);
+
+      vi.resetModules();
+      vi.doMock('@/services/models', () => ({
+        modelsService: {
+          getModels: vi.fn().mockRejectedValue(new Error('model fetch failed')),
+        },
+      }));
+
+      await expect(async () => {
+        await act(async () => {
+          await result.current.fetchRemoteModelList('test-provider');
+        });
+      }).rejects.toThrow('model fetch failed');
 
       expect(batchUpdateSpy).not.toHaveBeenCalled();
     });

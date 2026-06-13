@@ -40,11 +40,7 @@ export const params = {
 
       return await processMultiProviderModelList(modelList, 'cometapi');
     } catch (error) {
-      console.warn(
-        'Failed to fetch CometAPI models. Please ensure your CometAPI API key is valid:',
-        error,
-      );
-      return [];
+      throw new Error('Failed to fetch CometAPI models', { cause: error });
     }
   },
   provider: ModelProvider.CometAPI,

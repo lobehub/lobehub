@@ -24,11 +24,7 @@ export const params = {
 
       return processModelList(modelList, MODEL_LIST_CONFIGS.zeroone);
     } catch (error) {
-      console.warn(
-        'Failed to fetch ZeroOne models. Please ensure your ZeroOne API key is valid:',
-        error,
-      );
-      return [];
+      throw new Error('Failed to fetch ZeroOne models', { cause: error });
     }
   },
   provider: ModelProvider.ZeroOne,

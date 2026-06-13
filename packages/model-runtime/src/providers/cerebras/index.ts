@@ -31,11 +31,7 @@ export const params = {
 
       return await processMultiProviderModelList(modelList, 'cerebras');
     } catch (error) {
-      console.warn(
-        'Failed to fetch Cerebras models. Please ensure your Cerebras API key is valid:',
-        error,
-      );
-      return [];
+      throw new Error('Failed to fetch Cerebras models', { cause: error });
     }
   },
   provider: ModelProvider.Cerebras,

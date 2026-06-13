@@ -54,17 +54,18 @@ export const params = {
     chatCompletion: () => process.env.DEBUG_HUGGINGFACE_CHAT_COMPLETION === '1',
   },
   models: async () => {
-    let modelList: HuggingFaceRouterModelCard[] = [];
+    let modelList: HuggingFaceRouterModelCard[];
 
     try {
       const response = await fetch('https://router.huggingface.co/v1/models');
       if (response.ok) {
         const data: HuggingFaceRouterResponse = await response.json();
         modelList = data.data;
+      } else {
+        throw new Error(`HuggingFace models API request failed with status ${response.status}`);
       }
     } catch (error) {
-      console.error('Failed to fetch HuggingFace router models:', error);
-      return [];
+      throw new Error('Failed to fetch HuggingFace models', { cause: error });
     }
 
     const formattedModels = modelList

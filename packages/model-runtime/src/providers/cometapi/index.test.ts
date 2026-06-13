@@ -5,6 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testProvider } from '../../providerTestUtils';
 import { LobeCometAPIAI, params } from './index';
 
+const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: loadModelsMock,
+}));
+
 // Basic provider tests
 testProvider({
   Runtime: LobeCometAPIAI,
@@ -295,16 +301,9 @@ describe('LobeCometAPIAI - custom features', () => {
         },
       };
 
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      const models = await params.models!({ client: mockClient as any });
-      expect(models).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch CometAPI models. Please ensure your CometAPI API key is valid:',
-        expect.any(Error),
+      await expect(params.models!({ client: mockClient as any })).rejects.toThrow(
+        'Failed to fetch CometAPI models',
       );
-
-      consoleWarnSpy.mockRestore();
     });
 
     it('should handle network error', async () => {
@@ -316,12 +315,9 @@ describe('LobeCometAPIAI - custom features', () => {
         },
       };
 
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      const models = await params.models!({ client: mockClient as any });
-      expect(models).toEqual([]);
-
-      consoleWarnSpy.mockRestore();
+      await expect(params.models!({ client: mockClient as any })).rejects.toThrow(
+        'Failed to fetch CometAPI models',
+      );
     });
 
     it('should handle unauthorized error', async () => {
@@ -333,12 +329,9 @@ describe('LobeCometAPIAI - custom features', () => {
         },
       };
 
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      const models = await params.models!({ client: mockClient as any });
-      expect(models).toEqual([]);
-
-      consoleWarnSpy.mockRestore();
+      await expect(params.models!({ client: mockClient as any })).rejects.toThrow(
+        'Failed to fetch CometAPI models',
+      );
     });
 
     it('should process multi-provider model list', async () => {

@@ -6,6 +6,12 @@ import { testProvider } from '../../providerTestUtils';
 import type { ModelScopeModelCard } from './index';
 import { LobeModelScopeAI, params } from './index';
 
+const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: loadModelsMock,
+}));
+
 const provider = ModelProvider.ModelScope;
 const defaultBaseURL = 'https://api-inference.modelscope.cn/v1';
 
@@ -55,7 +61,6 @@ describe('LobeModelScopeAI - custom features', () => {
 
   describe('models function', () => {
     let mockClient: any;
-    let consoleWarnSpy: any;
 
     beforeEach(() => {
       mockClient = {
@@ -63,7 +68,6 @@ describe('LobeModelScopeAI - custom features', () => {
           list: vi.fn(),
         },
       };
-      consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     });
 
     it('should fetch and process models successfully', async () => {
@@ -91,7 +95,6 @@ describe('LobeModelScopeAI - custom features', () => {
       expect(mockClient.models.list).toHaveBeenCalledTimes(1);
       expect(models).toBeDefined();
       expect(Array.isArray(models)).toBe(true);
-      expect(consoleWarnSpy).not.toHaveBeenCalled();
     });
 
     it('should handle empty model list', async () => {
@@ -105,7 +108,6 @@ describe('LobeModelScopeAI - custom features', () => {
       expect(models).toBeDefined();
       expect(Array.isArray(models)).toBe(true);
       expect(models).toHaveLength(0);
-      expect(consoleWarnSpy).not.toHaveBeenCalled();
     });
 
     it('should handle missing data field', async () => {
@@ -117,33 +119,24 @@ describe('LobeModelScopeAI - custom features', () => {
       expect(models).toBeDefined();
       expect(Array.isArray(models)).toBe(true);
       expect(models).toHaveLength(0);
-      expect(consoleWarnSpy).not.toHaveBeenCalled();
     });
 
     it('should handle API errors gracefully', async () => {
       const mockError = new Error('API Error');
       mockClient.models.list.mockRejectedValue(mockError);
 
-      const models = await params.models({ client: mockClient });
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-      expect(models).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch ModelScope models. Please ensure your ModelScope API key is valid and your Alibaba Cloud account is properly bound:',
-        mockError,
+      await expect(params.models({ client: mockClient })).rejects.toThrow(
+        'Failed to fetch ModelScope models',
       );
+      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
 
     it('should handle network errors', async () => {
       const networkError = new Error('Network timeout');
       mockClient.models.list.mockRejectedValue(networkError);
 
-      const models = await params.models({ client: mockClient });
-
-      expect(models).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch ModelScope models. Please ensure your ModelScope API key is valid and your Alibaba Cloud account is properly bound:',
-        networkError,
+      await expect(params.models({ client: mockClient })).rejects.toThrow(
+        'Failed to fetch ModelScope models',
       );
     });
 
@@ -151,12 +144,8 @@ describe('LobeModelScopeAI - custom features', () => {
       const authError = new Error('Invalid API key');
       mockClient.models.list.mockRejectedValue(authError);
 
-      const models = await params.models({ client: mockClient });
-
-      expect(models).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch ModelScope models. Please ensure your ModelScope API key is valid and your Alibaba Cloud account is properly bound:',
-        authError,
+      await expect(params.models({ client: mockClient })).rejects.toThrow(
+        'Failed to fetch ModelScope models',
       );
     });
 

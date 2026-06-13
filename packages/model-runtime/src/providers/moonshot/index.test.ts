@@ -873,15 +873,15 @@ describe('models', () => {
     expect(models).toEqual([]);
   });
 
-  it('should handle fetch error gracefully', async () => {
+  it('should throw when model fetch fails', async () => {
     const mockClient = {
       models: {
         list: vi.fn().mockRejectedValue(new Error('Network error')),
       },
     } as unknown as OpenAI;
 
-    const models = await fetchModels({ client: mockClient });
-
-    expect(models).toEqual([]);
+    await expect(fetchModels({ client: mockClient })).rejects.toThrow(
+      'Failed to fetch Moonshot models',
+    );
   });
 });

@@ -23,11 +23,7 @@ export const params = {
 
       return await processMultiProviderModelList(modelList, 'modelscope');
     } catch (error) {
-      console.warn(
-        'Failed to fetch ModelScope models. Please ensure your ModelScope API key is valid and your Alibaba Cloud account is properly bound:',
-        error,
-      );
-      return [];
+      throw new Error('Failed to fetch ModelScope models', { cause: error });
     }
   },
   provider: ModelProvider.ModelScope,

@@ -13,6 +13,7 @@ import { aiModelSelectors } from '@/store/aiInfra/selectors';
 
 import { createCreateNewModelModal } from '../CreateNewModelModal';
 import { ProviderSettingsContext } from '../ProviderSettingsContext';
+import { getRemoteModelFetchErrorMessage } from '../utils';
 import Search from './Search';
 
 interface ModelFetcherProps {
@@ -127,10 +128,17 @@ const ModelTitle = memo<ModelFetcherProps>(
                         setFetchRemoteModelsLoading(true);
                         try {
                           await fetchRemoteModelList(provider);
-                        } catch (e) {
-                          console.error(e);
+                        } catch (error) {
+                          message.error(
+                            t('providerModels.list.fetcher.error', {
+                              message:
+                                getRemoteModelFetchErrorMessage(error) ??
+                                t('providerModels.list.fetcher.errorFallback'),
+                            }),
+                          );
+                        } finally {
+                          setFetchRemoteModelsLoading(false);
                         }
-                        setFetchRemoteModelsLoading(false);
                       }}
                     >
                       {fetchRemoteModelsLoading

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { type LobeRuntimeAI } from '@lobechat/model-runtime';
+import { AgentRuntimeErrorType, type LobeRuntimeAI } from '@lobechat/model-runtime';
 import { ModelRuntime } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -28,6 +28,8 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 let request: Request;
 
 beforeEach(() => {
+  vi.spyOn(console, 'error').mockImplementation(() => {});
+
   request = new Request(new URL('https://test.com'), {
     method: 'GET',
   });
@@ -41,6 +43,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe('GET handler', () => {
@@ -99,7 +102,7 @@ describe('GET handler', () => {
       expect(responseBody.body.error.stack).toBeUndefined();
     });
 
-    it('should pass through structured error objects as-is', async () => {
+    it('should return provider error status for structured model fetch errors', async () => {
       const mockParams = Promise.resolve({ provider: 'google' });
 
       const structuredError = {
@@ -117,11 +120,13 @@ describe('GET handler', () => {
       const response = await GET(request, { params: mockParams });
       const responseBody = await response.json();
 
+      expect(response.status).toBe(471);
+      expect(responseBody.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
       expect(responseBody.body.error.code).toBe('PROVIDER_ERROR');
       expect(responseBody.body.error.details).toBe('API limit exceeded');
     });
 
-    it('should return correct status code for errors', async () => {
+    it('should return provider status code for model fetch errors', async () => {
       const mockParams = Promise.resolve({ provider: 'google' });
 
       const mockRuntime: LobeRuntimeAI = {
@@ -132,8 +137,24 @@ describe('GET handler', () => {
       vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
 
       const response = await GET(request, { params: mockParams });
+      const responseBody = await response.json();
+
+      expect(response.status).toBe(471);
+      expect(responseBody.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
+      expect(responseBody.body.message).toBe('Failed');
+    });
+
+    it('should keep setup errors as internal server errors', async () => {
+      const mockParams = Promise.resolve({ provider: 'google' });
+
+      vi.mocked(initModelRuntimeFromDB).mockRejectedValue(new Error('Setup failed'));
+
+      const response = await GET(request, { params: mockParams });
+      const responseBody = await response.json();
 
       expect(response.status).toBe(500);
+      expect(responseBody.errorType).toBe(ChatErrorType.InternalServerError);
+      expect(responseBody.body.message).toBe('Setup failed');
     });
 
     it('should include provider in error response', async () => {

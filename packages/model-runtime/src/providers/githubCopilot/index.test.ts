@@ -216,6 +216,29 @@ describe('LobeGithubCopilotAI', () => {
 
       expect(models).toEqual([]);
     });
+
+    it('should throw regular Error when models request fails', async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: () => Promise.resolve({ error: { message: 'Copilot access denied' } }),
+        ok: false,
+        status: 403,
+      });
+
+      const instance = new LobeGithubCopilotAI({
+        bearerToken: 'cached-bearer-token',
+        bearerTokenExpiresAt: Date.now() + 60 * 60 * 1000,
+      });
+
+      try {
+        await instance.models();
+        expect.fail('Expected models() to reject');
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toBe('GitHub Copilot models API request failed');
+        expect((error as Error).cause).toEqual({ status: 403 });
+        expect((error as Error & { errorType?: string }).errorType).toBeUndefined();
+      }
+    });
   });
 
   describe('error handling in constructor', () => {

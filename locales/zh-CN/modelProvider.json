@@ -307,6 +307,8 @@
   "providerModels.list.enabledActions.sort": "自定义模型排序",
   "providerModels.list.enabledEmpty": "还没有启用模型。先从下方列表挑一个启用，之后随时可以调整",
   "providerModels.list.fetcher.clear": "清除获取的模型",
+  "providerModels.list.fetcher.error": "获取模型列表失败：{{message}}",
+  "providerModels.list.fetcher.errorFallback": "未知错误",
   "providerModels.list.fetcher.fetch": "获取模型列表",
   "providerModels.list.fetcher.fetching": "正在获取模型列表…",
   "providerModels.list.fetcher.latestTime": "上次更新时间：{{time}}",

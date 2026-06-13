@@ -93,17 +93,18 @@ export const params = {
     chatCompletion: () => process.env.DEBUG_OPENROUTER_CHAT_COMPLETION === '1',
   },
   models: async () => {
-    let modelList: OpenRouterModelCard[] = [];
+    let modelList: OpenRouterModelCard[];
 
     try {
       const response = await fetch('https://openrouter.ai/api/v1/models');
       if (response.ok) {
         const data = await response.json();
         modelList = data['data'];
+      } else {
+        throw new Error(`OpenRouter models API request failed with status ${response.status}`);
       }
     } catch (error) {
-      console.error('Failed to fetch OpenRouter frontend models:', error);
-      return [];
+      throw new Error('Failed to fetch OpenRouter models', { cause: error });
     }
 
     // Process the model info fetched from the frontend and convert to standard format

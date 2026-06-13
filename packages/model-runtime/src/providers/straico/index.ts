@@ -27,7 +27,6 @@ export const LobeStraicoAI = createOpenAICompatibleRuntime({
   baseURL: 'https://api.straico.com/v0',
   chatCompletion: {
     handlePayload: (payload) => {
-       
       const { model, ...rest } = payload;
 
       return {
@@ -85,11 +84,7 @@ export const LobeStraicoAI = createOpenAICompatibleRuntime({
 
       return await processMultiProviderModelList(formattedModels, 'straico');
     } catch (error) {
-      console.warn(
-        'Failed to fetch Straico models. Please ensure your Straico API key is valid:',
-        error,
-      );
-      return [];
+      throw new Error('Failed to fetch Straico models', { cause: error });
     }
   },
   provider: ModelProvider.Straico,

@@ -109,5 +109,46 @@ describe('ModelsService', () => {
 
       spyIsClient.mockRestore();
     });
+
+    it('should throw model fetch error details when server response is not ok', async () => {
+      (fetch as Mock).mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            body: {
+              error: {
+                message: 'Cloudflare models API returned an invalid response',
+                name: 'Error',
+              },
+              message: 'Cloudflare models API returned an invalid response',
+              provider: 'cloudflare',
+            },
+            errorType: 'ProviderBizError',
+          }),
+          { status: 471 },
+        ),
+      );
+
+      await expect(modelsService.getModels('cloudflare')).rejects.toThrow(
+        'Cloudflare models API returned an invalid response',
+      );
+    });
+
+    it('should propagate server fetch network errors', async () => {
+      (fetch as Mock).mockRejectedValueOnce(new Error('network down'));
+
+      await expect(modelsService.getModels('openai')).rejects.toThrow('network down');
+    });
+
+    it('should propagate client runtime model fetch errors', async () => {
+      const spyIsClient = vi
+        .spyOn(aiProviderSelectors, 'isProviderFetchOnClient')
+        .mockReturnValue(() => true);
+      const mockModels = vi.fn().mockRejectedValue(new Error('client runtime failed'));
+      mockedInitializeWithClientStore.mockResolvedValue({ models: mockModels } as any);
+
+      await expect(modelsService.getModels('openai')).rejects.toThrow('client runtime failed');
+
+      spyIsClient.mockRestore();
+    });
   });
 });

@@ -5,6 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testProvider } from '../../providerTestUtils';
 import { LobeV0AI, params } from './index';
 
+const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: loadModelsMock,
+}));
+
 testProvider({
   Runtime: LobeV0AI,
   bizErrorType: 'ProviderBizError',
@@ -206,8 +212,7 @@ describe('LobeV0AI - custom features', () => {
       expect(models).toHaveLength(0);
     });
 
-    it('should handle network error and return empty array', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('should throw when network error occurs', async () => {
       const mockClient = {
         apiKey: 'test_api_key',
         baseURL: 'https://api.v0.dev/v1',
@@ -216,22 +221,14 @@ describe('LobeV0AI - custom features', () => {
         },
       } as any;
 
-      const models = await params.models!({ client: mockClient });
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-      expect(models).toBeDefined();
-      expect(Array.isArray(models)).toBe(true);
-      expect(models).toHaveLength(0);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch V0 models. Please ensure your V0 API key is valid:',
-        expect.any(Error),
+      await expect(params.models!({ client: mockClient })).rejects.toThrow(
+        'Failed to fetch V0 models',
       );
 
-      consoleWarnSpy.mockRestore();
+      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
 
-    it('should handle API authentication error and return empty array', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('should throw when API authentication fails', async () => {
       const mockClient = {
         apiKey: 'invalid_key',
         baseURL: 'https://api.v0.dev/v1',
@@ -240,20 +237,14 @@ describe('LobeV0AI - custom features', () => {
         },
       } as any;
 
-      const models = await params.models!({ client: mockClient });
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-      expect(models).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch V0 models. Please ensure your V0 API key is valid:',
-        expect.any(Error),
+      await expect(params.models!({ client: mockClient })).rejects.toThrow(
+        'Failed to fetch V0 models',
       );
 
-      consoleWarnSpy.mockRestore();
+      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
 
-    it('should handle API rate limit error and return empty array', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('should throw when API rate limit fails', async () => {
       const mockClient = {
         apiKey: 'test_api_key',
         baseURL: 'https://api.v0.dev/v1',
@@ -262,20 +253,14 @@ describe('LobeV0AI - custom features', () => {
         },
       } as any;
 
-      const models = await params.models!({ client: mockClient });
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-      expect(models).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch V0 models. Please ensure your V0 API key is valid:',
-        expect.any(Error),
+      await expect(params.models!({ client: mockClient })).rejects.toThrow(
+        'Failed to fetch V0 models',
       );
 
-      consoleWarnSpy.mockRestore();
+      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
 
-    it('should handle timeout error and return empty array', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('should throw when request times out', async () => {
       const mockClient = {
         apiKey: 'test_api_key',
         baseURL: 'https://api.v0.dev/v1',
@@ -284,20 +269,14 @@ describe('LobeV0AI - custom features', () => {
         },
       } as any;
 
-      const models = await params.models!({ client: mockClient });
-
-      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
-      expect(models).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch V0 models. Please ensure your V0 API key is valid:',
-        expect.any(Error),
+      await expect(params.models!({ client: mockClient })).rejects.toThrow(
+        'Failed to fetch V0 models',
       );
 
-      consoleWarnSpy.mockRestore();
+      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
 
     it('should handle malformed JSON response', async () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const mockClient = {
         apiKey: 'test_api_key',
         baseURL: 'https://api.v0.dev/v1',
@@ -306,15 +285,11 @@ describe('LobeV0AI - custom features', () => {
         },
       } as any;
 
-      const models = await params.models!({ client: mockClient });
-
-      expect(models).toEqual([]);
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        'Failed to fetch V0 models. Please ensure your V0 API key is valid:',
-        expect.any(Error),
+      await expect(params.models!({ client: mockClient })).rejects.toThrow(
+        'Failed to fetch V0 models',
       );
 
-      consoleWarnSpy.mockRestore();
+      expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
 
     it('should pass correct client to processModelList', async () => {

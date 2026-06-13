@@ -24,11 +24,7 @@ export const params = {
 
       return await processMultiProviderModelList(modelList, 'giteeai');
     } catch (error) {
-      console.warn(
-        'Failed to fetch GiteeAI models. Please ensure your GiteeAI API key is valid:',
-        error,
-      );
-      return [];
+      throw new Error('Failed to fetch GiteeAI models', { cause: error });
     }
   },
   provider: ModelProvider.GiteeAI,
