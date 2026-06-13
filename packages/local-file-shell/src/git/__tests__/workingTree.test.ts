@@ -1,15 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { dequoteGitPath, quoteGitPath } from '../GitCtr';
-
-vi.mock('@/utils/logger', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  }),
-}));
+import { dequoteGitPath, quoteGitPath } from '../workingTree';
 
 describe('quoteGitPath', () => {
   it('leaves plain ASCII paths unquoted (including spaces)', () => {
@@ -33,8 +24,6 @@ describe('quoteGitPath', () => {
   });
 
   it('puts the prefix inside the quotes', () => {
-    // Real git output for `git diff` of a tab-containing file:
-    //   diff --git "a/with\there" "b/with\there"
     expect(quoteGitPath('a/', 'with\there')).toBe('"a/with\\there"');
     expect(quoteGitPath('b/', 'with\there')).toBe('"b/with\\there"');
   });
@@ -51,7 +40,6 @@ describe('quoteGitPath', () => {
     ];
     for (const original of cases) {
       const quoted = quoteGitPath('b/', original);
-      // Strip the surrounding quotes + b/ prefix, then de-escape.
       expect(quoted.startsWith('"b/')).toBe(true);
       expect(quoted.endsWith('"')).toBe(true);
       const stripped = quoted.slice(1, -1).slice('b/'.length);

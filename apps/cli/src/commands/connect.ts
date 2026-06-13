@@ -2,9 +2,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import {
+  defaultGetLocalFilePreview,
+  defaultGetProjectFileIndex,
+  type DeviceControlDeps,
+  executeDeviceRpc,
+} from '@lobechat/device-control';
 import type {
   AgentRunRequestMessage,
   DeviceSystemInfo,
+  RpcRequestMessage,
   SystemInfoRequestMessage,
   ToolCallRequestMessage,
 } from '@lobechat/device-gateway-client';
@@ -290,6 +297,31 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
         success: result.success,
       },
     });
+  });
+
+  // Handle generic server-internal device RPCs (git / workspace / file ops).
+  // Shares the `@lobechat/device-control` dispatcher with the desktop app so the
+  // CLI exposes the same remote-device control surface. File preview / index use
+  // the package's portable defaults (no preview-protocol approval on the CLI).
+  const deviceControlDeps: DeviceControlDeps = {
+    getLocalFilePreview: defaultGetLocalFilePreview,
+    getProjectFileIndex: defaultGetProjectFileIndex,
+  };
+
+  client.on('rpc_request', async (request: RpcRequestMessage) => {
+    const { method, params, requestId } = request;
+    if (isDaemonChild) appendLog(`[RPC] ${method} (${requestId})`);
+    else info(`Received rpc_request: method=${method} (${requestId})`);
+
+    try {
+      const data = await executeDeviceRpc(method, params, deviceControlDeps);
+      client.sendRpcResponse({ requestId, result: { data, success: true } });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (isDaemonChild) appendLog(`[RPC ERROR] ${method}: ${message} (${requestId})`);
+      else error(`rpc_request method=${method} failed: ${message}`);
+      client.sendRpcResponse({ requestId, result: { error: message, success: false } });
+    }
   });
 
   // Handle gateway-dispatched agent runs (heterogeneous agents, e.g. Claude

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { type DeviceControlDeps, executeDeviceRpc as runDeviceRpc } from '@lobechat/device-control';
 import type {
   AgentRunRequestMessage,
   GatewayMcpStdioParams,
@@ -13,11 +14,8 @@ import type {
   GetCommandOutputParams,
   GlobFilesParams,
   GrepContentParams,
-  InitWorkspaceParams,
   KillCommandParams,
   ListLocalFileParams,
-  ListProjectSkillsParams,
-  LocalFilePreviewUrlParams,
   LocalReadFileParams,
   LocalReadFilesParams,
   LocalSearchFilesParams,
@@ -30,15 +28,16 @@ import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat
 
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
+import { createLogger } from '@/utils/logger';
 
-import GitCtr from './GitCtr';
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, IpcMethod } from './index';
 import LocalFileCtr from './LocalFileCtr';
 import McpCtr from './McpCtr';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 import ShellCommandCtr from './ShellCommandCtr';
-import WorkspaceCtr from './WorkspaceCtr';
+
+const logger = createLogger('controllers:GatewayConnectionCtr');
 
 /**
  * Inject the lh-notify protocol into the first turn of a new hetero-agent session.
@@ -165,14 +164,6 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
   private get localFileCtr() {
     return this.app.getController(LocalFileCtr);
-  }
-
-  private get workspaceCtr() {
-    return this.app.getController(WorkspaceCtr);
-  }
-
-  private get gitCtr() {
-    return this.app.getController(GitCtr);
   }
 
   private get shellCommandCtr() {
@@ -354,98 +345,32 @@ export default class GatewayConnectionCtr extends ControllerModule {
   }
 
   /**
+   * Platform-specific handlers the shared `@lobechat/device-control` dispatcher
+   * delegates to. Git + workspace-scan methods run inside device-control over
+   * `@lobechat/local-file-shell`; only file preview / index (and preview
+   * approval) are desktop-specific and routed back to the controllers here.
+   */
+  private get deviceControlDeps(): DeviceControlDeps {
+    return {
+      approveProjectRoot: async (root) => {
+        try {
+          await this.app.localFileProtocolManager.approveIndexedProjectRoot(root);
+        } catch (error) {
+          logger.error(`Failed to approve project preview root ${root}:`, error);
+        }
+      },
+      getLocalFilePreview: (params) => this.localFileCtr.getLocalFilePreview(params),
+      getProjectFileIndex: (params) => this.localFileCtr.getProjectFileIndex(params),
+    };
+  }
+
+  /**
    * Dispatch a generic server-internal device RPC (not an agent tool call) by
-   * method name. Currently only `initWorkspace` (scan the bound project root for
-   * skills + AGENTS.md); add new server-only device methods here.
+   * method name. The dispatch logic lives in `@lobechat/device-control` so the
+   * desktop main process and the CLI daemon share one device RPC surface.
    */
   private async executeDeviceRpc(method: string, params: unknown): Promise<unknown> {
-    switch (method) {
-      case 'initWorkspace': {
-        return this.workspaceCtr.initWorkspace(params as InitWorkspaceParams);
-      }
-
-      case 'getGitBranch': {
-        return this.gitCtr.getGitBranch((params as { path: string }).path);
-      }
-
-      case 'getLinkedPullRequest': {
-        return this.gitCtr.getLinkedPullRequest(params as { branch: string; path: string });
-      }
-
-      case 'getGitWorkingTreeStatus': {
-        return this.gitCtr.getGitWorkingTreeStatus((params as { path: string }).path);
-      }
-
-      case 'getGitAheadBehind': {
-        return this.gitCtr.getGitAheadBehind((params as { path: string }).path);
-      }
-
-      case 'listGitBranches': {
-        return this.gitCtr.listGitBranches((params as { path: string }).path);
-      }
-
-      case 'checkoutGitBranch': {
-        return this.gitCtr.checkoutGitBranch(
-          params as { branch: string; create?: boolean; path: string },
-        );
-      }
-
-      case 'renameGitBranch': {
-        return this.gitCtr.renameGitBranch(params as { from: string; path: string; to: string });
-      }
-
-      case 'deleteGitBranch': {
-        return this.gitCtr.deleteGitBranch(params as { branch: string; path: string });
-      }
-
-      case 'pullGitBranch': {
-        return this.gitCtr.pullGitBranch(params as { path: string });
-      }
-
-      case 'pushGitBranch': {
-        return this.gitCtr.pushGitBranch(params as { path: string });
-      }
-
-      case 'getGitWorkingTreePatches': {
-        return this.gitCtr.getGitWorkingTreePatches((params as { path: string }).path);
-      }
-
-      case 'getGitWorkingTreeFiles': {
-        return this.gitCtr.getGitWorkingTreeFiles((params as { path: string }).path);
-      }
-
-      case 'getProjectFileIndex': {
-        return this.localFileCtr.getProjectFileIndex(params as { scope?: string });
-      }
-
-      case 'getLocalFilePreview': {
-        return this.localFileCtr.getLocalFilePreview(params as LocalFilePreviewUrlParams);
-      }
-
-      case 'listProjectSkills': {
-        return this.workspaceCtr.listProjectSkills(params as ListProjectSkillsParams);
-      }
-
-      case 'getGitBranchDiff': {
-        return this.gitCtr.getGitBranchDiff(params as { baseRef?: string; path: string });
-      }
-
-      case 'listGitRemoteBranches': {
-        return this.gitCtr.listGitRemoteBranches((params as { path: string }).path);
-      }
-
-      case 'revertGitFile': {
-        return this.gitCtr.revertGitFile(params as { filePath: string; path: string });
-      }
-
-      case 'statPath': {
-        return this.workspaceCtr.statPath(params as { path: string });
-      }
-
-      default: {
-        throw new Error(`Unknown device RPC method: ${method}`);
-      }
-    }
+    return runDeviceRpc(method, params, this.deviceControlDeps);
   }
 
   private async executeToolCall(
