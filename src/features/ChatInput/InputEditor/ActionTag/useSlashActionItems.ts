@@ -1,5 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import { type ListProjectSkillsResult, type ProjectSkillItem } from '@lobechat/electron-client-ipc';
+import { type ProjectSkillItem } from '@lobechat/electron-client-ipc';
 import type { IEditor, SlashOptions } from '@lobehub/editor';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
@@ -10,8 +10,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
-import { useClientDataSWR } from '@/libs/swr';
-import { projectSkillService } from '@/services/projectSkill';
+import { useFetchProjectSkills } from '@/hooks/useFetchProjectSkills';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -70,13 +69,9 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   // makes project skills reachable even when this client isn't the desktop app
   // (previously gated on `isDesktop` alone, so remote/web runs got nothing).
   const projectSkillsEnabled = (isDesktop || !!remoteDeviceId) && !!workingDirectory;
-  // Share the SWR key shape with `useProjectSkills` so the slash menu and the
-  // working sidebar dedupe the same fetch.
-  const { data: projectSkillsData } = useClientDataSWR<ListProjectSkillsResult | undefined>(
-    projectSkillsEnabled ? ['project-skills', remoteDeviceId ?? 'local', workingDirectory] : null,
-    () =>
-      projectSkillService.listProjectSkills({ deviceId: remoteDeviceId, scope: workingDirectory! }),
-    { revalidateOnFocus: false, shouldRetryOnError: false },
+  const { data: projectSkillsData } = useFetchProjectSkills(
+    projectSkillsEnabled ? workingDirectory : undefined,
+    remoteDeviceId,
   );
   const projectSkills = projectSkillsData?.skills;
 
