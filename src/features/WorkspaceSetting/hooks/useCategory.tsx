@@ -113,7 +113,7 @@ export const useWorkspaceSettingCategory = (): WorkspaceSettingCategoryGroup[] =
             key: WorkspaceSettingsTabs.Creds,
             label: t('tab.creds'),
           },
-          // Messenger (聊天平台) is intentionally omitted from workspace
+          // Messenger (chat platform) is intentionally omitted from workspace
           // settings: the System Bot binding is a per-user/personal identity
           // (the link is owned by `userId`, not the workspace), and reaching a
           // workspace's agents happens via the scope selector on the *personal*
