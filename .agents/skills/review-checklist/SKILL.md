@@ -29,8 +29,9 @@ user-invocable: false
 ## i18n
 
 - New user-facing strings use i18n keys, not hardcoded text
-- Keys added to `src/locales/default/{namespace}.ts` with `{feature}.{context}.{action|status}` naming
-- For PRs: `locales/` translations for all languages updated (`pnpm i18n`)
+- Keys added to `src/locales/default/{namespace}.ts` with English source text and `{feature}.{context}.{action|status}` naming
+- PRs manually mirror the same keys to `locales/en-US/{namespace}.json` and hand-translate them in `locales/zh-CN/{namespace}.json`
+- Do not require all other `locales/*` files or `pnpm i18n`; the daily auto-i18n workflow handles missing languages unless the branch needs generated translations immediately
 
 ## SPA / routing
 

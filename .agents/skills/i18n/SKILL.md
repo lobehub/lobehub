@@ -8,8 +8,11 @@ user-invocable: false
 
 - Default language: English (en-US)
 - Framework: react-i18next
-- **Only edit files in `src/locales/default/`** - Never edit JSON files in `locales/`
-- Run `pnpm i18n` to generate translations (or manually translate zh-CN/en-US for dev preview)
+- Add or update the English source copy in `src/locales/default/{namespace}.ts`
+- Mirror the same keys by hand to `locales/en-US/{namespace}.json`
+- Hand-translate the same keys to `locales/zh-CN/{namespace}.json`
+- Leave all other locale files to the daily `auto-i18n.yml` workflow
+- Do **not** run `pnpm i18n` by default. Run it only when the branch needs translated locales immediately; it is slow, requires `OPENAI_API_KEY`, and value-only edits do not need it.
 
 ## Key Naming Convention
 
@@ -18,9 +21,9 @@ user-invocable: false
 ```typescript
 // ✅ Correct
 export default {
-  'alert.cloud.action': '立即体验',
-  'sync.actions.sync': '立即同步',
-  'sync.status.ready': '已连接',
+  'alert.cloud.action': 'Try now',
+  'sync.actions.sync': 'Sync now',
+  'sync.status.ready': 'Connected',
 };
 
 // ❌ Avoid nested objects
@@ -34,7 +37,7 @@ export default {
 **Parameters:** Use `{{variableName}}` syntax
 
 ```typescript
-'alert.cloud.desc': '我们提供 {{credit}} 额度积分',
+'alert.cloud.desc': 'We provide {{credit}} credits',
 ```
 
 **Avoid key conflicts:**
@@ -51,10 +54,12 @@ export default {
 
 ## Workflow
 
-1. Add keys to `src/locales/default/{namespace}.ts`
-2. Export new namespace in `src/locales/default/index.ts`
-3. For dev preview: manually translate `locales/zh-CN/{namespace}.json` and `locales/en-US/{namespace}.json`
-4. Remind the user to run `pnpm i18n` before creating PR — do NOT run it yourself (very slow)
+1. Add keys or value edits to `src/locales/default/{namespace}.ts` using English source text.
+2. Export a new namespace in `src/locales/default/index.ts` if the namespace did not exist.
+3. Mirror the same keys and English values to `locales/en-US/{namespace}.json`.
+4. Add the Chinese translation to `locales/zh-CN/{namespace}.json`.
+5. Do not edit other `locales/*` files manually; CI will fill missing languages.
+6. Do not run `pnpm i18n` unless this branch must ship generated translations immediately.
 
 ## Usage
 
