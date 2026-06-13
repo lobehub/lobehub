@@ -21,6 +21,25 @@ const logBetterAuth = debug('middleware:better-auth');
 
 // Dev-only debug proxy route should bypass all middleware rewrites.
 const dangerousLocalDevProxyRoute = '/_dangerous_local_dev_proxy';
+const canonicalRedirectMethods = new Set(['GET', 'HEAD']);
+
+const getCanonicalAppRedirect = (request: NextRequest) => {
+  if (!appEnv.APP_URL) return;
+
+  try {
+    const appUrl = new URL(appEnv.APP_URL);
+    const requestUrl = new URL(request.url);
+
+    if (requestUrl.origin === appUrl.origin) return;
+
+    requestUrl.protocol = appUrl.protocol;
+    requestUrl.host = appUrl.host;
+
+    return NextResponse.redirect(requestUrl, 307);
+  } catch {
+    return;
+  }
+};
 
 export function defineConfig() {
   // `/oauth/connector` is a backend route handler (custom connector OAuth callback);
@@ -174,6 +193,8 @@ export function defineConfig() {
   };
 
   const isPublicRoute = createRouteMatcher([
+    dangerousLocalDevProxyRoute,
+    `${dangerousLocalDevProxyRoute}(.*)`,
     // backend api
     '/api/v1(.*)', // OpenAPI routes should use OpenAPI auth (API Key/OIDC), not BetterAuth session
     '/api/auth(.*)',
@@ -220,6 +241,11 @@ export function defineConfig() {
     const isProtected = !isPublicRoute(req);
 
     logBetterAuth('Route protection status: %s, %s', req.url, isProtected ? 'protected' : 'public');
+
+    if (isProtected && canonicalRedirectMethods.has(req.method)) {
+      const canonicalRedirect = getCanonicalAppRedirect(req);
+      if (canonicalRedirect) return canonicalRedirect;
+    }
 
     // Skip session lookup for public routes to reduce latency
     if (!isProtected) return response;
