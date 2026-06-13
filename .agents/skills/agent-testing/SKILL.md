@@ -55,7 +55,94 @@ directory — a script launched while `cwd` is `apps/desktop` fails with
 `No such file or directory`. Verify `pwd` is the repo root before launching
 long-running scripts.
 
-### 0.3 Auth is green
+### 0.3 Init local dev env without `.env`
+
+For Web smoke against local code, start a **normal local dev environment**.
+First check the repo root for `.env`:
+
+- If `.env` exists, use the existing local configuration and start the dev
+  server normally.
+- If `.env` does not exist, use the agent-testing env bootstrap.
+
+Do not start the standalone e2e server as the product under test.
+
+Use `scripts/init-dev-env.sh`. It follows the e2e setup pattern — Postgres,
+migrations, auth/key-vault/S3 test env, seed user — but it is owned by this
+skill and starts the repo's dev server (`pnpm run dev:next` / `bun run dev`),
+not `e2e/scripts/setup.ts --start`. The script hard-blocks when root `.env`
+exists, so it cannot accidentally override a user's local config. When `.env`
+exists, do not call any `init-dev-env.sh` subcommand.
+
+Decision flow:
+
+```bash
+if [[ -f .env ]]; then
+  bun run dev
+else
+  ./.agents/skills/agent-testing/scripts/init-dev-env.sh setup-db
+  ./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user
+  ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev
+fi
+```
+
+Bootstrap flow when no `.env` exists:
+
+```bash
+# From repo root. Managed DB flow requires Docker Desktop.
+./.agents/skills/agent-testing/scripts/init-dev-env.sh setup-db
+./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user
+./.agents/skills/agent-testing/scripts/init-dev-env.sh dev
+```
+
+If using an existing Postgres instead of the managed Docker DB, set
+`DATABASE_URL` and skip `setup-db`:
+
+```bash
+DATABASE_URL=postgresql://... ./.agents/skills/agent-testing/scripts/init-dev-env.sh migrate
+DATABASE_URL=postgresql://... ./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user
+DATABASE_URL=postgresql://... ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev
+```
+
+For backend-only checks, `dev-next` is available, but Web smoke needs the
+full-stack `dev` command so Next can proxy the SPA HTML from Vite:
+
+```bash
+./.agents/skills/agent-testing/scripts/init-dev-env.sh dev-next
+```
+
+Useful subcommands:
+
+```bash
+./.agents/skills/agent-testing/scripts/init-dev-env.sh env      # print exports
+./.agents/skills/agent-testing/scripts/init-dev-env.sh write    # write .records/env/agent-testing-dev.env
+./.agents/skills/agent-testing/scripts/init-dev-env.sh migrate  # migrations only
+./.agents/skills/agent-testing/scripts/init-dev-env.sh clean-db # remove managed DB container
+```
+
+Default script env:
+
+- `APP_URL=http://localhost:3010`
+- `DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres`
+- `DATABASE_DRIVER=node`
+- `FEATURE_FLAGS=-agent_self_iteration` so local smoke does not require QStash
+- `KEY_VAULTS_SECRET`, `AUTH_SECRET`, auth verification off
+- S3 mock vars
+- Managed DB container: `lobehub-agent-testing-postgres`
+
+`seed-user` creates `agent-testing@lobehub.com` / `TestPassword123!` with
+onboarding already completed for manual or agent-browser checks. When running
+Cucumber against this dev server, pass the same script env into the test process
+too; Cucumber has its own `BeforeAll` seed path and it must see `DATABASE_URL`
+instead of silently skipping setup:
+
+```bash
+cd e2e
+# Only in the no-.env branch.
+eval "$(../.agents/skills/agent-testing/scripts/init-dev-env.sh env)"
+BASE_URL=http://localhost:3010 HEADLESS=true bun run test:smoke
+```
+
+### 0.4 Auth is green
 
 **Auth is the gate for all automated testing.**
 
@@ -151,6 +238,7 @@ All under `.agents/skills/agent-testing/scripts/`:
 | Script                    | Usage                                                                        |
 | ------------------------- | ---------------------------------------------------------------------------- |
 | `setup-auth.sh`           | One-stop auth setup & status check (`status` / `cli` / `web`)                |
+| `init-dev-env.sh`         | Self-contained local dev env (`setup-db` / `seed-user` / `dev-next` / `dev`) |
 | `app-probe.sh`            | LobeHub app probes: `auth` / `route` / `ops` / `goto <path>` / `errors`      |
 | `record-gif.sh`           | Frame-sequence → GIF for time-based behavior (streaming, timers, animations) |
 | `report-init.sh`          | Scaffold a structured test report (Step 3)                                   |

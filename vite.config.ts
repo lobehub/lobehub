@@ -351,5 +351,8 @@ export default defineConfig({
         './packages/agent-manager-runtime/src/**/*.ts',
       ],
     },
+    watch: {
+      ignored: ['**/e2e/reports/**', '**/e2e/screenshots/**'],
+    },
   },
 });
