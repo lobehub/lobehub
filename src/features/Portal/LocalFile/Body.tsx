@@ -399,6 +399,13 @@ const Body = memo(() => {
   const openLocalFiles = useChatStore(chatPortalSelectors.openLocalFiles);
   const activeFile = useChatStore(chatPortalSelectors.currentLocalFile);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const clearPortalStack = useChatStore((s) => s.clearPortalStack);
+
+  useEffect(() => {
+    if (openLocalFiles.length > 0 && activeFile) return;
+
+    clearPortalStack();
+  }, [activeFile, clearPortalStack, openLocalFiles.length]);
 
   if (openLocalFiles.length === 0) return null;
   if (!activeFile) return null;
