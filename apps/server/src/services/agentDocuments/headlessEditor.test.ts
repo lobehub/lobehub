@@ -30,6 +30,13 @@ const getSpanId = (litexml: string, text: string): string => {
   return match![1];
 };
 
+const getParagraphId = (litexml: string, text: string): string => {
+  const match = litexml.match(new RegExp(`<p id="([^"]+)">\\s*<span id="[^"]+">${text}</span>`));
+  expect(match).not.toBeNull();
+
+  return match![1];
+};
+
 describe('agent document headless editor', () => {
   it('should create a valid empty snapshot for whitespace-only markdown', async () => {
     const snapshot = await createMarkdownEditorSnapshot(' \n ');
@@ -64,6 +71,33 @@ describe('agent document headless editor', () => {
 
     // editorData (the persisted form) retains the diff node so the page editor
     // can render a review UI when the user next opens the document.
+    expect(hasNodeType(snapshot.editorData, 'diff')).toBe(true);
+  });
+
+  it('should apply LiteXML image insert operations as block images', async () => {
+    const imageUrl = 'https://example.com/diagram.png';
+    const initial = await exportEditorDataSnapshot({
+      fallbackContent: 'Before',
+      litexml: true,
+    });
+    const paragraphId = getParagraphId(initial.litexml!, 'Before');
+
+    const snapshot = await applyLiteXMLOperations({
+      editorData: initial.editorData,
+      fallbackContent: initial.content,
+      operations: [
+        {
+          action: 'insert',
+          afterId: paragraphId,
+          litexml: `<img src="${imageUrl}" alt="diagram" />`,
+        },
+      ],
+    });
+
+    expect(snapshot.content).toContain(`![diagram](${imageUrl})`);
+    expect(snapshot.litexml).toContain('<img');
+    expect(snapshot.litexml).toContain(`src="${imageUrl}"`);
+    expect(hasNodeType(snapshot.editorData, 'block-image')).toBe(true);
     expect(hasNodeType(snapshot.editorData, 'diff')).toBe(true);
   });
 });
