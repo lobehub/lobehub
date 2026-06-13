@@ -5,7 +5,7 @@
 // reason the labels file lives separately from `LinearMcp.tsx`.
 
 import {
-  LINEAR_MCP_PREFIX,
+  isLinearMcpApiName,
   LINEAR_TOOL_NAMES,
   parseToolName,
   staticLabelFor,
@@ -13,6 +13,8 @@ import {
 
 export {
   capitalize,
+  getLinearToolSuffix,
+  isLinearMcpApiName,
   LINEAR_MCP_PREFIX,
   type ParsedTool,
   parseToolName,
@@ -24,6 +26,6 @@ export {
 export const LINEAR_MCP_TOOL_NAMES = LINEAR_TOOL_NAMES;
 
 export const formatLinearMcpShortLabel = (apiName: string): string | null => {
-  if (!apiName.startsWith(LINEAR_MCP_PREFIX)) return null;
+  if (!isLinearMcpApiName(apiName)) return null;
   return `Linear · ${staticLabelFor(parseToolName(apiName))}`;
 };
