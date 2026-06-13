@@ -35,7 +35,11 @@ const McpToolInspector = memo<BuiltinInspectorProps<CodexMcpToolArgs, CodexMcpTo
     const tool = getMcpToolName(args, pluginState) || getMcpToolName(partialArgs);
     const input = getMcpInputRecord(args, pluginState);
     const partialInput = getMcpInputRecord(partialArgs);
-    const linearApiName = getCodexLinearMcpApiName(tool, input || partialInput);
+    const linearApiName = getCodexLinearMcpApiName({
+      input: input || partialInput,
+      server,
+      toolName: tool,
+    });
 
     if (LINEAR_TOOL_NAME_SET.has(linearApiName)) {
       return (
