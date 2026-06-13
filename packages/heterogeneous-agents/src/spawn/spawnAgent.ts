@@ -5,7 +5,7 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
 import { AgentStreamPipeline } from './agentStreamPipeline';
 import { resolveCliSpawnPlan } from './cliSpawn';
-import { resolveCodexInitialModel } from './codexModel';
+import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import type { AgentPromptInput, BuildAgentInputOptions } from './input';
 import { buildAgentInput } from './input';
 
@@ -262,6 +262,11 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     options.agentType === 'codex'
       ? (await resolveCodexInitialModel({ args, env: childEnv }))?.model
       : undefined;
+  const resumedCodexSession =
+    options.agentType === 'codex' && options.resumeSessionId
+      ? await readCodexSessionModel(options.resumeSessionId, { env: childEnv })
+      : undefined;
+  const initialCumulativeUsage = resumedCodexSession?.cumulativeUsage;
 
   const cliSpawnPlan = await resolveCliSpawnPlan(command, args);
   const proc = spawn(cliSpawnPlan.command, cliSpawnPlan.args, {
@@ -287,6 +292,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   const pipeline = new AgentStreamPipeline({
     agentType: options.agentType,
     cwd,
+    initialCumulativeUsage,
     initialModel,
     operationId: options.operationId,
   });

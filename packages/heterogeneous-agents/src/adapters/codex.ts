@@ -1,6 +1,7 @@
 import type {
   AgentEventAdapter,
   HeterogeneousAgentEvent,
+  HeterogeneousRateLimitInfo,
   HeterogeneousTerminalErrorData,
   StepCompleteData,
   StreamStartData,
@@ -8,6 +9,7 @@ import type {
   ToolResultData,
   UsageData,
 } from '../types';
+import { toCodexUsageData, toTurnUsageFromCumulative } from '../utils/codexUsage';
 
 const CODEX_IDENTIFIER = 'codex';
 const CODEX_COLLAB_TOOL_CALL_API = 'collab_tool_call';
@@ -15,6 +17,15 @@ const CODEX_COMMAND_API = 'command_execution';
 const CODEX_FILE_CHANGE_API = 'file_change';
 const CODEX_MCP_TOOL_CALL_API = 'mcp_tool_call';
 const CODEX_TODO_LIST_API = 'todo_list';
+const CODEX_USAGE_SETTINGS_URL = 'https://chatgpt.com/codex/settings/usage';
+
+const CODEX_USER_RATE_LIMIT_PATTERNS = [
+  /you'?ve hit your usage limit/i,
+  /purchase more credits/i,
+  /\busage limit\b/i,
+] as const;
+
+const CODEX_RETRY_AT_PATTERN = /\btry again at\s+(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?\b/i;
 
 interface CodexBaseItem {
   id: string;
@@ -95,34 +106,6 @@ const isMcpToolCallItem = (item: CodexToolItem): item is CodexMcpToolCallItem =>
 
 const isTodoListItem = (item: CodexToolItem): item is CodexTodoListItem =>
   item.type === CODEX_TODO_LIST_API;
-
-const toUsageData = (
-  raw:
-    | {
-        cached_input_tokens?: number;
-        input_tokens?: number;
-        output_tokens?: number;
-      }
-    | null
-    | undefined,
-): UsageData | undefined => {
-  if (!raw) return undefined;
-
-  const inputCacheMissTokens = raw.input_tokens || 0;
-  const inputCachedTokens = raw.cached_input_tokens || 0;
-  const totalInputTokens = inputCacheMissTokens + inputCachedTokens;
-  const totalOutputTokens = raw.output_tokens || 0;
-
-  if (totalInputTokens + totalOutputTokens === 0) return undefined;
-
-  return {
-    inputCachedTokens: inputCachedTokens || undefined,
-    inputCacheMissTokens,
-    totalInputTokens,
-    totalOutputTokens,
-    totalTokens: totalInputTokens + totalOutputTokens,
-  };
-};
 
 const normalizeTodoListItems = (item: CodexTodoListItem) =>
   (item.items || [])
@@ -522,9 +505,50 @@ const getCodexTerminalErrorStderr = (raw: any): string | undefined => {
   );
 };
 
+const parseCodexRetryAt = (message: string, now = new Date()): number | undefined => {
+  const match = CODEX_RETRY_AT_PATTERN.exec(message);
+  if (!match) return;
+
+  const hour = Number(match[1]);
+  const minute = match[2] ? Number(match[2]) : 0;
+  const meridiem = match[3]?.toUpperCase();
+
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || minute < 0 || minute > 59) {
+    return;
+  }
+
+  let normalizedHour = hour;
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return;
+    normalizedHour = (hour % 12) + (meridiem === 'PM' ? 12 : 0);
+  } else if (hour < 0 || hour > 23) {
+    return;
+  }
+
+  const resetAt = new Date(now);
+  resetAt.setHours(normalizedHour, minute, 0, 0);
+  if (resetAt.getTime() <= now.getTime()) {
+    resetAt.setDate(resetAt.getDate() + 1);
+  }
+
+  return Math.floor(resetAt.getTime() / 1000);
+};
+
+const getCodexRateLimitInfo = (message: string): HeterogeneousRateLimitInfo | undefined => {
+  if (!CODEX_USER_RATE_LIMIT_PATTERNS.some((pattern) => pattern.test(message))) return;
+
+  const resetsAt = parseCodexRetryAt(message);
+
+  return {
+    ...(resetsAt ? { resetsAt } : {}),
+    status: 'rejected',
+  };
+};
+
 export class CodexAdapter implements AgentEventAdapter {
   private currentAgentMessageItemId?: string;
   private currentModel?: string;
+  private lastCumulativeUsage?: UsageData;
   sessionId?: string;
 
   private hasTextInCurrentStep = false;
@@ -537,6 +561,10 @@ export class CodexAdapter implements AgentEventAdapter {
   private stepIndex = 0;
   private terminalEndEmitted = false;
   private terminalErrorEmitted = false;
+
+  constructor(options: { initialCumulativeUsage?: UsageData | undefined } = {}) {
+    this.lastCumulativeUsage = options.initialCumulativeUsage;
+  }
 
   adapt(raw: any): HeterogeneousAgentEvent[] {
     if (!raw || typeof raw !== 'object') return [];
@@ -583,7 +611,9 @@ export class CodexAdapter implements AgentEventAdapter {
     const model = getEventModel(raw) || this.currentModel;
     if (model) this.currentModel = model;
 
-    const usage = toUsageData(raw.usage);
+    const cumulativeUsage = toCodexUsageData(raw.usage);
+    const usage = toTurnUsageFromCumulative(cumulativeUsage, this.lastCumulativeUsage);
+    if (cumulativeUsage) this.lastCumulativeUsage = cumulativeUsage;
     const events = this.drainPendingToolEndEvents();
 
     if (usage || model) {
@@ -607,11 +637,21 @@ export class CodexAdapter implements AgentEventAdapter {
     if (this.terminalErrorEmitted || this.terminalEndEmitted) return [];
 
     this.terminalErrorEmitted = true;
+    const message = getCodexTerminalErrorMessage(raw);
+    const stderr = getCodexTerminalErrorStderr(raw);
+    const rateLimitInfo = getCodexRateLimitInfo(message);
     const data: HeterogeneousTerminalErrorData = {
       agentType: CODEX_IDENTIFIER,
       clearEchoedContent: true,
-      message: getCodexTerminalErrorMessage(raw),
-      stderr: getCodexTerminalErrorStderr(raw),
+      ...(rateLimitInfo
+        ? {
+            code: 'rate_limit',
+            docsUrl: CODEX_USAGE_SETTINGS_URL,
+            rateLimitInfo,
+          }
+        : {}),
+      message,
+      stderr,
     };
 
     const events: HeterogeneousAgentEvent[] = this.started
@@ -623,6 +663,10 @@ export class CodexAdapter implements AgentEventAdapter {
   }
 
   private handleSessionConfigured(raw: any): HeterogeneousAgentEvent[] {
+    if (raw.initialCumulativeUsage) {
+      this.lastCumulativeUsage = raw.initialCumulativeUsage;
+    }
+
     const model = getEventModel(raw);
     if (!model || model === this.currentModel) return [];
 

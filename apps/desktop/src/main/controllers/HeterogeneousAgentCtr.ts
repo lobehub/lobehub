@@ -23,7 +23,7 @@ import type {
   HeteroExecImageRef,
 } from '@lobechat/heterogeneous-agents/protocol';
 import { buildHeteroExecStdinPayload } from '@lobechat/heterogeneous-agents/protocol';
-import type { AgentStreamEvent } from '@lobechat/heterogeneous-agents/spawn';
+import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
 import {
   AgentStreamPipeline,
   buildAgentInput,
@@ -911,6 +911,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     let spawnPlan;
     let traceSession;
     let cwd: string;
+    let initialCumulativeUsage: UsageData | undefined;
     let spawnEnv: NodeJS.ProcessEnv;
     try {
       const driver = getHeterogeneousAgentDriver(session.agentType);
@@ -944,6 +945,12 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
         if (initialModel?.model) {
           session.model = initialModel.model;
           session.modelSource = initialModel.source;
+        }
+
+        if (session.agentSessionId) {
+          initialCumulativeUsage = (
+            await readCodexSessionModel(session.agentSessionId, { env: spawnEnv })
+          )?.cumulativeUsage;
         }
       }
 
@@ -1001,6 +1008,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
         reject,
         resolve,
         session,
+        initialCumulativeUsage,
         spawnEnv,
         traceSession,
         useStdin,
@@ -1070,6 +1078,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
 
   private handleSpawnedAgentProcess({
     cwd,
+    initialCumulativeUsage,
     intervention,
     params,
     proc,
@@ -1088,6 +1097,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     reject: (reason?: unknown) => void;
     resolve: () => void;
     session: AgentSession;
+    initialCumulativeUsage?: UsageData | undefined;
     spawnEnv: NodeJS.ProcessEnv;
     spawnPlan: HeterogeneousAgentBuildPlan;
     traceSession: CliTraceSession | undefined;
@@ -1128,6 +1138,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const pipeline = new AgentStreamPipeline({
       agentType: session.agentType,
       cwd,
+      initialCumulativeUsage,
       initialModel: session.model,
       operationId: params.operationId,
     });

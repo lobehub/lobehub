@@ -1,7 +1,7 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 
 import { createAdapter } from '../registry';
-import type { AgentEventAdapter, HeterogeneousAgentEvent } from '../types';
+import type { AgentEventAdapter, HeterogeneousAgentEvent, UsageData } from '../types';
 import { CodexFileChangeTracker } from './codexFileChangeTracker';
 import { JsonlStreamProcessor } from './jsonlProcessor';
 import { toStreamEvent } from './streamEvent';
@@ -11,8 +11,10 @@ export interface AgentStreamPipelineOptions {
   agentType: string;
   /** Working directory used to resolve relative file paths emitted by CLI tools. */
   cwd?: string;
+  /** Last known Codex cumulative usage before a resumed turn starts. */
+  initialCumulativeUsage?: UsageData | undefined;
   /** Host-known model to emit before the CLI's first stdout payload. */
-  initialModel?: string;
+  initialModel?: string | undefined;
   /** Operation id to stamp onto every emitted `AgentStreamEvent`. */
   operationId: string;
 }
@@ -42,8 +44,13 @@ export class AgentStreamPipeline {
     this.codexTracker =
       options.agentType === 'codex' ? new CodexFileChangeTracker(options.cwd) : undefined;
 
-    if (options.initialModel) {
-      this.queuedEvents.push(...this.configureSession({ model: options.initialModel }));
+    if (options.initialModel || options.initialCumulativeUsage) {
+      this.queuedEvents.push(
+        ...this.configureSession({
+          initialCumulativeUsage: options.initialCumulativeUsage,
+          model: options.initialModel,
+        }),
+      );
     }
   }
 
@@ -71,7 +78,10 @@ export class AgentStreamPipeline {
     return [...trailing, ...flushed];
   }
 
-  configureSession(data: { model?: string }): AgentStreamEvent[] {
+  configureSession(data: {
+    initialCumulativeUsage?: UsageData | undefined;
+    model?: string | undefined;
+  }): AgentStreamEvent[] {
     return this.toStreamEvents(
       this.adapter.adapt({
         ...data,
