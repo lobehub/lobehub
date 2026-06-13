@@ -21,7 +21,11 @@ import {
 
 import { contextSelectors, dataSelectors, useConversationStore } from '../store';
 import { type ActivityKey, resolveOperationActivity } from '../utils/operationActivity';
-import { parseStatusPhrases, pickStableStatusPhrase } from './OpStatusTray/logic';
+import { parseStatusPhrases, pickRotatingStatusPhrase } from './OpStatusTray/logic';
+
+// Cycle the generating phrase like a carousel so a long-running task doesn't
+// stare back with the same line the whole time.
+const STATUS_PHRASE_ROTATION_MS = 4000;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -109,6 +113,22 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-weight: 500;
     text-overflow: ellipsis;
     white-space: nowrap;
+  `,
+  statusPhrase: css`
+    @keyframes op-status-tray-phrase-enter {
+      from {
+        transform: translateY(3px);
+        opacity: 0;
+      }
+
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+
+    display: inline-block;
+    animation: op-status-tray-phrase-enter 0.4s ease;
   `,
   timerValue: css`
     flex: none;
@@ -290,10 +310,12 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
       returnObjects: true,
     }),
   );
+  const rotationStep = Math.floor(elapsed / STATUS_PHRASE_ROTATION_MS);
   const randomGeneratingStatus =
-    pickStableStatusPhrase(
+    pickRotatingStatusPhrase(
       generatingPhrases,
       operationState.statusSeed ?? String(operationState.startTime),
+      rotationStep,
     ) ?? t('chat:opStatusTray.status.generating');
   const statusText =
     operationState.activity === 'generating'
@@ -372,7 +394,11 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
     >
       <span className={cx(styles.metric, styles.statusMetric)}>
         <ActivityGlyph />
-        <span className={cx(styles.statusText, shinyTextStyles.shinyText)}>{statusText}...</span>
+        <span className={styles.statusText}>
+          <span className={styles.statusPhrase} key={statusText}>
+            <span className={shinyTextStyles.shinyText}>{statusText}...</span>
+          </span>
+        </span>
         <span className={styles.timerValue}>{formatElapsedClockTime(elapsed)}</span>
       </span>
 
