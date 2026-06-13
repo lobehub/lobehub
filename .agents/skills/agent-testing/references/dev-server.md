@@ -3,22 +3,62 @@
 Single source of truth for starting / restarting the backend that all test
 surfaces (CLI, Electron, Web) hit.
 
+## Resolve ports first
+
+Run this before starting or probing any local test surface:
+
+```bash
+./.agents/skills/agent-testing/scripts/test-env.sh
+eval "$(./.agents/skills/agent-testing/scripts/test-env.sh --exports)"
+```
+
+The resolver prints `APP_URL`, `PORT`, `SERVER_URL`,
+`AUTH_TRUSTED_ORIGINS`, `SPA_PORT`, `MOBILE_SPA_PORT`, and `DESKTOP_PORT`.
+These resolved values are the source of truth for the current test session.
+
+In a typical cloud worktree this should look like:
+
+```bash
+APP_URL=http://localhost:3020
+PORT=3020
+AUTH_TRUSTED_ORIGINS=http://localhost:3020,http://localhost:9800
+SPA_PORT=9800
+MOBILE_SPA_PORT=3810
+DESKTOP_PORT=3030
+```
+
 ## Ports & modes
 
-| Command             | What it runs                                              | Port                              |
-| ------------------- | --------------------------------------------------------- | --------------------------------- |
-| `pnpm run dev:next` | Next.js backend (API + auth)                              | `3010`                            |
-| `bun run dev`       | Full-stack (Next.js + Vite SPA, via `devStartupSequence`) | `3010` (API) + SPA on `9876`      |
-| `bun run dev:spa`   | Vite SPA only, proxies API to `3010`                      | `9876` (prints a Debug Proxy URL) |
+| Command             | What it runs                                              | Port source         |
+| ------------------- | --------------------------------------------------------- | ------------------- |
+| `pnpm run dev:next` | Next.js backend (API + auth)                              | `PORT`              |
+| `bun run dev`       | Full-stack (Next.js + Vite SPA, via `devStartupSequence`) | `PORT` + `SPA_PORT` |
+| `bun run dev:spa`   | Vite SPA only, proxies API to `PORT`                      | `SPA_PORT`          |
 
-In the **cloud repo** (where this repo is the `lobehub/` submodule) the dev
-server conventionally runs on `3011` — set `SERVER_URL=http://localhost:3011`
-for the scripts in this skill when testing there.
+In the **cloud repo** (where this repo is the `lobehub/` submodule), local
+worktree names map to fallback defaults only when `.env` and shell env do not
+provide values:
+
+| Workspace directory | Default `SERVER_URL`             |
+| ------------------- | -------------------------------- |
+| `lobehub`           | `http://localhost:3010`          |
+| `lobehub-cloud`     | `http://localhost:3020`          |
+| `lobehub-cloud-1`   | `http://localhost:3021`          |
+| `lobehub-cloud-N`   | `http://localhost:$((3020 + N))` |
+
+`test-env.sh` and `setup-auth.sh` both use the resolved env first and these
+worktree defaults only as fallback. Treat the dev-server terminal output as the
+final source of truth when testing a non-standard port, then export it for every
+agent-testing command:
+
+```bash
+export SERVER_URL=http://localhost:<port-from-dev-output>
+```
 
 ## Health check
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}' http://localhost:3010/
+curl -s -o /dev/null -w '%{http_code}' "$SERVER_URL/"
 ```
 
 ## Start / restart
@@ -39,7 +79,7 @@ bun run dev
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev
 
 # Restart — required to pick up server-side code changes
-lsof -ti:3010 | xargs kill
+lsof -ti:"$PORT" | xargs kill
 pnpm run dev:next
 # or, when no root .env exists:
 # ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev-next

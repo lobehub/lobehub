@@ -5,28 +5,98 @@
 # test step. Background and failure modes: ../references/auth.md
 #
 # Usage:
-#   setup-auth.sh status        # check server + CLI + web auth readiness
+#   setup-auth.sh status        # check server + CLI + web + Electron readiness
+#   setup-auth.sh status --surface web  # check only the Web surface gate
 #   setup-auth.sh cli           # interactive CLI device-code login (run by a human)
 #   setup-auth.sh web           # stdin = Cookie header -> inject into agent-browser session
 #   setup-auth.sh web-verify    # live-check the agent-browser session is authenticated
 #
 # Env:
-#   SERVER_URL  (default http://localhost:3010)   dev server under test
+#   SERVER_URL  (default from test-env.sh)        dev server under test
 #   SESSION     (default lobehub-dev)             agent-browser session name
 #   AUTH_DIR    (default ~/.lobehub-agent-testing) where web state is persisted
 
 set -euo pipefail
 
-SERVER_URL="${SERVER_URL:-http://localhost:3010}"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+
+workspace_root_for_port() {
+  local root="$REPO_ROOT"
+  local name
+  name="$(basename "$root")"
+
+  if [[ "$name" == "lobehub" ]]; then
+    local parent
+    parent="$(cd "$root/.." && pwd)"
+    local parent_name
+    parent_name="$(basename "$parent")"
+    if [[ "$parent_name" == lobehub-cloud* ]]; then
+      root="$parent"
+    fi
+  fi
+
+  printf '%s\n' "$root"
+}
+
+default_server_url() {
+  local env_resolver resolved
+  env_resolver="$(dirname "${BASH_SOURCE[0]}")/test-env.sh"
+  if [[ -x "$env_resolver" ]]; then
+    resolved="$("$env_resolver" --value SERVER_URL 2> /dev/null || true)"
+    if [[ -n "$resolved" ]]; then
+      printf '%s\n' "$resolved"
+      return 0
+    fi
+  fi
+
+  local root name suffix port
+  root="$(workspace_root_for_port)"
+  name="$(basename "$root")"
+
+  case "$name" in
+    lobehub-cloud)
+      port=3020
+      ;;
+    lobehub-cloud-*)
+      suffix="${name#lobehub-cloud-}"
+      if [[ "$suffix" =~ ^[0-9]+$ ]]; then
+        port=$((3020 + 10#$suffix))
+      else
+        port=3010
+      fi
+      ;;
+    *)
+      port=3010
+      ;;
+  esac
+
+  printf 'http://localhost:%s\n' "$port"
+}
+
+SERVER_URL="${SERVER_URL:-$(default_server_url)}"
 SESSION="${SESSION:-lobehub-dev}"
 AUTH_DIR="${AUTH_DIR:-$HOME/.lobehub-agent-testing}"
 STATE_FILE="$AUTH_DIR/web-state.json"
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 CLI_HOME="$REPO_ROOT/apps/cli/.lobehub-dev"
 
 ok()   { printf '  \033[32m✔\033[0m %s\n' "$1"; }
 bad()  { printf '  \033[31m✘\033[0m %s\n' "$1"; }
 note() { printf '      %s\n' "$1"; }
+
+usage() {
+  cat << EOF
+Usage:
+  $0 status [--surface all|cli|web|electron]
+  $0 cli
+  $0 web
+  $0 web-verify
+
+Env:
+  SERVER_URL=$SERVER_URL
+  SESSION=$SESSION
+  AUTH_DIR=$AUTH_DIR
+EOF
+}
 
 check_server() {
   local code
@@ -54,11 +124,21 @@ check_cli() {
 check_web() {
   if [[ -f "$STATE_FILE" ]]; then
     ok "web auth state saved ($STATE_FILE)"
-    note "live-verify: $0 web-verify"
   else
     bad "no web auth state for agent-browser"
     note "copy the Cookie header from Chrome DevTools (Network tab), then:"
     note "pbpaste | $0 web   (see references/auth.md)"
+    return 1
+  fi
+  cmd_web_verify --skip-server-check
+}
+
+check_agent_browser() {
+  if command -v agent-browser > /dev/null 2>&1; then
+    ok "agent-browser available"
+  else
+    bad "agent-browser command not found"
+    note "install or expose agent-browser before Web/Electron UI testing"
     return 1
   fi
 }
@@ -84,16 +164,75 @@ check_electron() {
 }
 
 cmd_status() {
-  echo "agent-testing auth status (SERVER_URL=$SERVER_URL):"
+  local surface="all"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --surface)
+        if [[ $# -lt 2 ]]; then
+          echo "--surface requires one of: all, cli, web, electron" >&2
+          return 2
+        fi
+        surface="${2:-}"
+        shift 2
+        ;;
+      --surface=*)
+        surface="${1#*=}"
+        shift
+        ;;
+      all|cli|web|electron)
+        surface="$1"
+        shift
+        ;;
+      -h|--help)
+        usage
+        return 0
+        ;;
+      *)
+        echo "unknown status option: $1" >&2
+        usage >&2
+        return 2
+        ;;
+    esac
+  done
+
+  case "$surface" in
+    all|cli|web|electron) ;;
+    "")
+      echo "--surface requires one of: all, cli, web, electron" >&2
+      return 2
+      ;;
+    *)
+      echo "unknown surface: $surface" >&2
+      usage >&2
+      return 2
+      ;;
+  esac
+
+  echo "agent-testing auth status (surface=$surface, SERVER_URL=$SERVER_URL):"
   local rc=0
-  check_server || rc=1
-  check_cli || rc=1
-  check_web || rc=1
-  check_electron || rc=1
+  case "$surface" in
+    all)
+      check_server || rc=1
+      check_cli || rc=1
+      check_web || rc=1
+      check_electron || rc=1
+      ;;
+    cli)
+      check_server || rc=1
+      check_cli || rc=1
+      ;;
+    web)
+      check_server || rc=1
+      check_web || rc=1
+      ;;
+    electron)
+      check_electron || rc=1
+      ;;
+  esac
   if [[ $rc -eq 0 ]]; then
-    echo "all green — safe to start automated testing."
+    echo "$surface auth green — safe to start automated testing on this surface."
   else
-    echo "auth NOT ready — fix the ✘ items before writing any test step."
+    echo "$surface auth NOT ready — fix the ✘ items before writing any test step."
   fi
   return $rc
 }
@@ -110,18 +249,30 @@ cmd_cli() {
 # header must come from a Network request (HttpOnly) and why httpOnly=false.
 cmd_web() {
   mkdir -p "$AUTH_DIR"
-  python3 - "$STATE_FILE" << 'PY'
-import json, sys, time
+  local raw
+  raw="$(cat)"
+  COOKIE_INPUT="$raw" python3 - "$STATE_FILE" << 'PY'
+import json, os, sys, time
 
-raw = sys.stdin.read().strip()
-if raw.lower().startswith("cookie:"):
-    raw = raw.split(":", 1)[1].strip()
+raw = os.environ.get("COOKIE_INPUT", "").strip()
+cookie_lines = []
+for line in raw.splitlines():
+    stripped = line.strip()
+    if not stripped:
+        continue
+    if stripped.lower().startswith("cookie:"):
+        cookie_lines.append(stripped.split(":", 1)[1].strip())
+    else:
+        cookie_lines.append(stripped)
 
-WANTED = {"better-auth.session_token", "better-auth.state"}
+raw = "; ".join(cookie_lines)
+
+WANTED = {"better-auth.session_token", "better-auth.session_data", "better-auth.state"}
 exp = int(time.time()) + 30 * 24 * 3600  # 30 days
 
 cookies = []
-for pair in raw.split("; "):
+for pair in raw.split(";"):
+    pair = pair.strip()
     if "=" not in pair:
         continue
     name, _, value = pair.partition("=")
@@ -146,14 +297,35 @@ with open(sys.argv[1], "w") as f:
     json.dump({"cookies": cookies, "origins": []}, f, indent=2)
 print(f"wrote {len(cookies)} cookie(s) to {sys.argv[1]}")
 PY
-  agent-browser --session "$SESSION" state load "$STATE_FILE"
   cmd_web_verify
 }
 
 cmd_web_verify() {
-  agent-browser --session "$SESSION" open "$SERVER_URL/" > /dev/null
+  local skip_server_check="${1:-}"
+  if [[ "$skip_server_check" != "--skip-server-check" ]]; then
+    check_server || return 1
+  fi
+  if [[ ! -f "$STATE_FILE" ]]; then
+    bad "no web auth state for agent-browser"
+    note "copy the Cookie header from Chrome DevTools (Network tab), then:"
+    note "pbpaste | $0 web"
+    return 1
+  fi
+  check_agent_browser || return 1
+  if ! agent-browser --session "$SESSION" state load "$STATE_FILE" > /dev/null; then
+    bad "failed to load web auth state into agent-browser session '$SESSION'"
+    return 1
+  fi
+  if ! agent-browser --session "$SESSION" open "$SERVER_URL/" > /dev/null; then
+    bad "failed to open $SERVER_URL in agent-browser session '$SESSION'"
+    return 1
+  fi
   local url
-  url=$(agent-browser --session "$SESSION" get url)
+  url=$(agent-browser --session "$SESSION" get url 2> /dev/null || true)
+  if [[ -z "$url" ]]; then
+    bad "agent-browser session '$SESSION' did not report a current URL"
+    return 1
+  fi
   if [[ "$url" == *"/signin"* || "$url" == *"/login"* ]]; then
     bad "agent-browser session '$SESSION' NOT authenticated (landed on $url)"
     note "re-copy the Cookie header and re-run: pbpaste | $0 web"
@@ -163,10 +335,14 @@ cmd_web_verify() {
 }
 
 case "${1:-status}" in
-  status) cmd_status ;;
+  status)
+    shift || true
+    cmd_status "$@"
+    ;;
   cli) cmd_cli ;;
   web) cmd_web ;;
   web-verify) cmd_web_verify ;;
+  -h|--help) usage ;;
   *)
     echo "Usage: $0 {status|cli|web|web-verify}" >&2
     exit 2

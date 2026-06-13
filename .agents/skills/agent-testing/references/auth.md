@@ -5,16 +5,28 @@ writing any test step. The one-stop entry point is:
 
 ```bash
 SCRIPT=".agents/skills/agent-testing/scripts/setup-auth.sh"
+TEST_ENV=".agents/skills/agent-testing/scripts/test-env.sh"
 
-$SCRIPT status        # check server + CLI + web auth readiness
-$SCRIPT cli           # interactive CLI device-code login (must be run by the user)
-pbpaste | $SCRIPT web # inject a copied Cookie header into the agent-browser session
-$SCRIPT web-verify    # live-check that the agent-browser session is authenticated
+$TEST_ENV # print APP_URL/PORT/SERVER_URL/auth origins before testing
+eval "$($TEST_ENV --exports)"
+$SCRIPT status               # check server + CLI + web auth readiness
+$SCRIPT status --surface web # check only the Web surface gate
+$SCRIPT cli                  # interactive CLI device-code login (must be run by the user)
+pbpaste | $SCRIPT web        # inject a copied Cookie header into the agent-browser session
+$SCRIPT web-verify           # live-check that the agent-browser session is authenticated
 ```
 
-`SERVER_URL` defaults to `http://localhost:3010` (this repo's `dev:next` port).
-Override it when testing against another server (e.g. `SERVER_URL=http://localhost:3011`
-in the cloud repo).
+`SERVER_URL` comes from `test-env.sh`: current shell env and `.env` files win;
+worktree-name defaults are fallback only. Override it with the actual URL
+printed by the running dev server before checking auth when needed:
+
+```bash
+eval "$(.agents/skills/agent-testing/scripts/test-env.sh --exports)"
+$SCRIPT status --surface web
+```
+
+Use `localhost` for Web auth when possible; local better-auth cookies are stored
+for the `localhost` domain, not `127.0.0.1`.
 
 ## Per-surface overview
 
@@ -45,6 +57,11 @@ cd apps/cli && LOBEHUB_CLI_HOME=.lobehub-dev bun src/index.ts login --server htt
 
 ## Web — better-auth cookie injection (agent-browser)
 
+The Web test surface is `agent-browser --session lobehub-dev`. The user's
+ordinary Chrome is only a cookie source; Chrome screenshots, Chrome Network
+records, and Chrome logged-in state do not prove the agent-browser test session
+is authenticated.
+
 `agent-browser --headed` on macOS often creates the Chromium window off-screen —
 the user can't see or interact with it, so manual login inside the agent-browser
 session fails. Instead, copy the **better-auth session cookie** out of the
@@ -55,7 +72,17 @@ secret: don't paste it into shared logs, PRs, or commit it anywhere.
 
 ### One-key path
 
-1. Ask the user to copy the Cookie header **from a Network request, NOT
+0. First verify the agent-browser session:
+
+```bash
+eval "$(./.agents/skills/agent-testing/scripts/test-env.sh --exports)"
+./.agents/skills/agent-testing/scripts/setup-auth.sh status --surface web
+```
+
+If this is green, start testing. Do not ask for a Cookie header and do not open
+a login page.
+
+1. If verification fails, ask the user to copy the Cookie header **from a Network request, NOT
    `document.cookie`** (`document.cookie` cannot see HttpOnly cookies, which is
    exactly where better-auth puts its session):
    - Open the logged-in tab (`http://localhost:<port>/…`) in Chrome.
@@ -64,18 +91,20 @@ secret: don't paste it into shared logs, PRs, or commit it anywhere.
 2. Inject and verify in one shot:
 
 ```bash
+eval "$(./.agents/skills/agent-testing/scripts/test-env.sh --exports)"
 pbpaste | ./.agents/skills/agent-testing/scripts/setup-auth.sh web
 ```
 
 The script filters the header down to the better-auth cookies
-(`better-auth.session_token`, `better-auth.state`), builds the Playwright
-`storageState` JSON, loads it into the `agent-browser` session (default name
-`lobehub-dev`), opens `SERVER_URL`, and asserts the URL is not `/signin`.
+(`better-auth.session_token`, `better-auth.session_data`, `better-auth.state`),
+builds the Playwright `storageState` JSON, loads it into the `agent-browser`
+session (default name `lobehub-dev`), opens `SERVER_URL`, and asserts the URL is
+not `/signin`.
 
 ### Using the authenticated session
 
 ```bash
-agent-browser --session lobehub-dev open "http://localhost:3010/"
+agent-browser --session lobehub-dev open "$SERVER_URL/"
 agent-browser --session lobehub-dev snapshot -i | head -20
 # Look for the user's avatar/name in the sidebar, or absence of the signin form.
 ```
@@ -90,12 +119,12 @@ agent-browser --session lobehub-dev snapshot -i | head -20
 
 ### Common failure modes
 
-| Symptom                                       | Cause                                                                     | Fix                                               |
-| --------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------- |
-| Still redirects to `/signin` after injection  | User pasted from `document.cookie` → missed HttpOnly session              | Re-pull from Network request Headers, not console |
-| Script reports `no better-auth cookies found` | Separator wrong, or user pasted URL-decoded value                         | Keep the raw `Cookie:` header as-is               |
-| Login works briefly then expires              | `better-auth.session_token` rotated (user logged out / signed in again)   | Re-copy and re-inject                             |
-| Domain mismatch                               | Cookie domain must be `localhost` literally, no leading dot for local dev | —                                                 |
+| Symptom                                       | Cause                                                                     | Fix                                                                                            |
+| --------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Still redirects to `/signin` after injection  | User pasted from `document.cookie` → missed HttpOnly session              | Re-pull from Network request Headers, not console                                              |
+| Script reports `no better-auth cookies found` | User pasted the wrong value, or the cookie parser regressed               | Keep the raw `Cookie:` header as-is; run `scripts/setup-auth.test.sh` if the input looks valid |
+| Login works briefly then expires              | `better-auth.session_token` rotated (user logged out / signed in again)   | Re-copy and re-inject                                                                          |
+| Domain mismatch                               | Cookie domain must be `localhost` literally, no leading dot for local dev | —                                                                                              |
 
 ## Electron
 

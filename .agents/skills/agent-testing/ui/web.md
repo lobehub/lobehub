@@ -10,22 +10,39 @@ backend-only changes prefer [../cli/index.md](../cli/index.md).
 
 ## Prerequisites
 
-- Local dev server running — [../references/dev-server.md](../references/dev-server.md)
-- Web auth injected into agent-browser — [../references/auth.md](../references/auth.md):
+- Local dev server running. Use the actual URL printed by the dev server —
+  [../references/dev-server.md](../references/dev-server.md)
+- Web auth verified in agent-browser —
+  [../references/auth.md](../references/auth.md):
 
 ```bash
-pbpaste | ./.agents/skills/agent-testing/scripts/setup-auth.sh web # after copying the Cookie header
+./.agents/skills/agent-testing/scripts/test-env.sh
+eval "$(./.agents/skills/agent-testing/scripts/test-env.sh --exports)"
+./.agents/skills/agent-testing/scripts/setup-auth.sh status --surface web
 ```
+
+If this fails and the user's normal Chrome is already logged in, ask for the
+Network `Cookie:` header and run `pbpaste | setup-auth.sh web`. Do not open a
+login page unless the login flow itself is the case under test.
+
+Before touching the browser, follow the Step -1 approval gate in
+[../SKILL.md](../SKILL.md#step--1--get-approval-for-non-trivial-test-plans).
+Keep approved cases small enough that each one has clear network evidence and
+visual evidence in the final report.
 
 ## Option A — agent-browser with injected auth (recommended)
 
 ```bash
 SESSION=lobehub-dev
 
-agent-browser --session $SESSION open "http://localhost:3010/"
+agent-browser --session $SESSION open "$SERVER_URL/"
 agent-browser --session $SESSION snapshot -i
 # interact via refs — full command reference: ../references/agent-browser.md
 ```
+
+Use this session as the evidence source. Do not use ordinary Chrome screenshots
+or Chrome Network records as proof for Web tests; ordinary Chrome is only a
+source for copying cookies into agent-browser.
 
 ### Watch the API while driving the UI
 
