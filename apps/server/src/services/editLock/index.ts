@@ -45,11 +45,28 @@ return 0
  */
 export class EditLockService {
   private userId: string;
-  private redis: Redis | null;
+  private explicitRedis: Redis | null | undefined;
+  private lazyRedis: Redis | null = null;
+  private lazyResolved = false;
 
-  constructor(userId: string, redis: Redis | null = getAgentRuntimeRedisClient()) {
+  constructor(userId: string, redis?: Redis | null) {
     this.userId = userId;
-    this.redis = redis;
+    this.explicitRedis = redis;
+  }
+
+  /**
+   * The Redis client, resolved lazily on first use. Resolving eagerly in the
+   * constructor would read server-only env (`getAgentRuntimeRedisClient`) the
+   * moment any owning service is built — which throws in client/test contexts
+   * that construct the service but never take a lock.
+   */
+  private get redis(): Redis | null {
+    if (this.explicitRedis !== undefined) return this.explicitRedis;
+    if (!this.lazyResolved) {
+      this.lazyRedis = getAgentRuntimeRedisClient();
+      this.lazyResolved = true;
+    }
+    return this.lazyRedis;
   }
 
   /**
@@ -57,25 +74,26 @@ export class EditLockService {
    * otherwise report whoever currently holds it. Doubles as the heartbeat.
    */
   async acquire(type: EditLockResourceType, id: string): Promise<EditLockResult> {
-    if (!this.redis) return UNLOCKED;
+    const redis = this.redis;
+    if (!redis) return UNLOCKED;
     const key = lockKey(type, id);
 
     try {
       // Claim only when the key is absent (NX). The TTL gives automatic expiry, so
       // a hard-closed tab frees the lock without any cleanup job.
-      const claimed = await this.redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS, 'NX');
+      const claimed = await redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS, 'NX');
       if (claimed) return this.held();
 
-      const holder = await this.redis.get(key);
+      const holder = await redis.get(key);
       if (holder === this.userId) {
         // Already mine — refresh the lease (heartbeat).
-        await this.redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS);
+        await redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS);
         return this.held();
       }
       if (holder) return { expiresAt: null, holderId: holder, lockedByOther: true };
 
       // Freed between the NX and the GET — try once more.
-      const reclaimed = await this.redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS, 'NX');
+      const reclaimed = await redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS, 'NX');
       return reclaimed ? this.held() : UNLOCKED;
     } catch (error) {
       // Fail-open: a Redis outage (configured but unreachable) must never block
@@ -87,9 +105,10 @@ export class EditLockService {
 
   /** Current holder of the lock, or undefined when unlocked / Redis is down. */
   async getActiveHolder(type: EditLockResourceType, id: string): Promise<string | undefined> {
-    if (!this.redis) return undefined;
+    const redis = this.redis;
+    if (!redis) return undefined;
     try {
-      const holder = await this.redis.get(lockKey(type, id));
+      const holder = await redis.get(lockKey(type, id));
       return holder ?? undefined;
     } catch (error) {
       // Fail-open: a Redis outage must not turn the write guards into 500s.

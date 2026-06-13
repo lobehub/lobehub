@@ -1,11 +1,13 @@
 import debug from 'debug';
 
-import {
-  isRedisAvailable,
-  type IStreamEventManager,
-  StreamEventManager,
-} from '@/server/modules/AgentRuntime';
+// Import the transport pieces from their concrete modules rather than the
+// `@/server/modules/AgentRuntime` barrel: the barrel re-exports RuntimeExecutors,
+// which eagerly constructs the ModelRuntime ApiKeyManager at module load and
+// throws in client/test contexts. These leaf modules pull no ModelRuntime.
 import { inMemoryStreamEventManager } from '@/server/modules/AgentRuntime/InMemoryStreamEventManager';
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
+import { StreamEventManager } from '@/server/modules/AgentRuntime/StreamEventManager';
+import type { IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 
 import type { ReceivedResourceEvent, ResourceEvent, ResourceRef } from './types';
 
@@ -23,7 +25,7 @@ export const resourceChannelId = (ref: ResourceRef): string => `resource:${ref.t
  * Evaluated per call so it picks up Redis becoming (un)available.
  */
 const getManager = (): IStreamEventManager =>
-  isRedisAvailable() ? new StreamEventManager() : inMemoryStreamEventManager;
+  getAgentRuntimeRedisClient() !== null ? new StreamEventManager() : inMemoryStreamEventManager;
 
 /**
  * Realtime event fan-out for editable resources, keyed by (resourceType, id).
