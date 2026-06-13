@@ -192,6 +192,10 @@ Two hard rules worth front-loading:
   `# | case | result | key observation | evidence` shape and embed the
   screenshot/GIF in the evidence cell. Use separate evidence sections only for
   long CLI transcripts, HAR summaries, or supplemental detail.
+- **Visual evidence must render inline.** Screenshots and GIFs in `report.md`
+  must use Markdown image syntax like `![case 1](assets/case1.png)`. Do not
+  use bare file paths, Markdown links, or local file links as the primary
+  visual evidence; those make the report unreadable without opening each asset.
 - **Time-based behavior needs a GIF, not a screenshot.** If a case asserts
   change over time (streaming output, a ticking timer, loading states,
   animations), record it with `scripts/record-gif.sh` and embed the GIF —

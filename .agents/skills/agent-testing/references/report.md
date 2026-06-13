@@ -34,6 +34,7 @@ output):
    - UI (static state): `agent-browser screenshot` or `capture-app-window.sh`,
      then **verify the screenshot with the Read tool before citing it** —
      never cite an image you haven't looked at.
+
    - UI (time-based behavior): **screenshot vs GIF is a judgment you must
      make per case.** If the assertion is about change over time — streaming
      output, a ticking timer, loading/progress states, animations,
@@ -52,12 +53,15 @@ output):
      at least the first/last frames visually (Read the GIF) before citing.
 
    - CLI: exact command + trimmed output (`$CLI task list | tee "$DIR/assets/task-list.txt"`).
+
    - Network: `agent-browser network requests` dumps or HAR files.
 
 3. **Fill `report.md` as you go** — don't reconstruct from memory at the end.
    The primary evidence belongs in the case table itself: each row should pair
-   the assertion with the screenshot/GIF/link that proves it, so readers can
-   scan the result without jumping between sections.
+   the assertion with the screenshot/GIF or non-visual artifact that proves it,
+   so readers can scan the result without jumping between sections. UI evidence
+   must render inline with Markdown image syntax; a plain link or file path is
+   not acceptable as primary visual evidence.
 
 4. **Set the verdict** in both `report.md` and `result.json`, then link the
    report directory in your final answer to the user.
@@ -96,6 +100,27 @@ scenario or regression assertion, and put the screenshot/GIF directly in the
 | 2   | Respect requested length | fail   | Requested about 600 Chinese characters; final body was about 1286 | ![final article](assets/write-article-final.png) |
 ```
 
+## Inline visual evidence
+
+Screenshots and GIFs must be embedded so the report shows the image inline:
+
+```markdown
+![case 1 result](assets/case1-result.png)
+![streaming response](assets/case2-streaming.gif)
+```
+
+Do **not** use these as the primary evidence for UI cases:
+
+```markdown
+[case 1 result](assets/case1-result.png)
+assets/case1-result.png
+file:///tmp/case1-result.png
+```
+
+Links are acceptable for non-visual artifacts such as CLI transcripts, HAR
+files, or long logs. For videos, embed a representative screenshot/GIF inline in
+the case row and link the full video as supplemental evidence.
+
 Avoid the old wide table with separate `steps`, `expected`, and `actual`
 columns unless the test is purely non-visual and truly needs that breakdown.
 For UI reports, those columns make screenshot-backed reading harder. Put
@@ -104,9 +129,10 @@ interpretation of the result.
 
 Use an extra evidence/detail section only when the inline table cannot carry
 the material cleanly, such as long CLI transcripts, HAR summaries, or multiple
-screenshots for one case. In that situation, keep the table evidence cell as a
-short inline proof or link, then put the longer material under `Verification`
-or a brief `Additional Evidence` section.
+screenshots for one case. In that situation, keep the table evidence cell as an
+inline visual proof for UI cases or a concise link for non-visual artifacts,
+then put the longer material under `Verification` or a brief
+`Additional Evidence` section.
 
 Status values: `pass` / `fail` / `blocked` (couldn't run — e.g. auth or env
 missing; a blocked case is not a pass).
@@ -147,7 +173,8 @@ word the user reads first: `pass`, `fail`, or `partial`.
 ## Rules
 
 - **No evidence, no claim** — every `pass`/`fail` in the case table must link
-  at least one asset.
+  at least one asset. UI cases must inline-embed their primary screenshot/GIF;
+  non-visual CLI/network cases may link transcripts, HAR files, or logs.
 - **Screenshots must be visually verified** with the Read tool before being
   cited.
 - **Report failures faithfully** — a failing case with clear evidence is a good
