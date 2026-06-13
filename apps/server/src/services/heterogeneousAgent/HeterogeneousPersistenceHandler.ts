@@ -584,8 +584,17 @@ export class HeterogeneousPersistenceHandler {
       for (const thread of threads ?? []) {
         if (thread.type !== ThreadType.Isolation) continue;
         if (thread.status !== ThreadStatus.Processing) continue;
-        const parentToolCallId = (thread.metadata as { sourceToolCallId?: string } | null)
-          ?.sourceToolCallId;
+        const meta = thread.metadata as { operationId?: string; sourceToolCallId?: string } | null;
+        // Operation-scoped: only rehydrate threads THIS operation created.
+        // Topics are reused across turns, so a prior run that crashed / was
+        // cancelled without an ingested terminal event can leave its subagent
+        // thread stuck in `Processing`. Without this guard the next operation
+        // would merge that unrelated thread into its reducer state and then
+        // finalize/mutate it on its own terminal drain. Threads written before
+        // this field existed have no `operationId` and are skipped (safe — we
+        // can't attribute them, and the live run re-creates what it needs).
+        if (meta?.operationId !== state.operationId) continue;
+        const parentToolCallId = meta?.sourceToolCallId;
         if (!parentToolCallId || existing.has(parentToolCallId)) continue;
 
         const messages = await this.deps.messageModel.query({
@@ -620,12 +629,12 @@ export class HeterogeneousPersistenceHandler {
     messages: Array<{ id: string; parentId?: string | null; role: string; tool_call_id?: string }>,
   ): SubagentRunSnapshot | undefined {
     const assistants = messages.filter((m) => m.role === 'assistant');
-    if (assistants.length === 0) return undefined;
-
     const currentAssistant = assistants.at(-1);
+    if (!currentAssistant) return undefined;
+
     const toolRows = messages.filter((m) => m.role === 'tool' && m.tool_call_id);
     const childTools = toolRows.filter((m) => m.parentId === currentAssistant.id);
-    const lastChainParentId = childTools.length > 0 ? childTools.at(-1).id : currentAssistant.id;
+    const lastChainParentId = childTools.at(-1)?.id ?? currentAssistant.id;
 
     return {
       currentAssistantId: currentAssistant.id,
@@ -931,6 +940,10 @@ export class HeterogeneousPersistenceHandler {
         await this.deps.threadModel.create({
           id: intent.threadId,
           metadata: {
+            // Stamp the owning hetero operation so `refreshSubagentRunsFromDb`
+            // only rehydrates threads from THIS run — never a stale Processing
+            // thread a prior crashed/cancelled run left on the same topic.
+            operationId: state.operationId,
             sourceToolCallId: intent.sourceToolCallId,
             startedAt: new Date().toISOString(),
             subagentType: intent.subagentType,

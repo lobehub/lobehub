@@ -267,4 +267,108 @@ describe('HeterogeneousPersistenceHandler — subagent run survives a cold repli
     // And we must never produce a generic-titled "Subagent" duplicate.
     expect([...h.threads.values()].some((t) => t.title === 'Subagent')).toBe(false);
   });
+
+  // P1: a tools_calling batch reprocessed on a cold replica (BatchIngester
+  // retry, or a turn split across a cold boundary so the cumulative array is
+  // re-seen) must NOT mint a second tool message for an inner tool the run
+  // already persisted. Rehydration restores `lifetimeToolCallIds`, and the
+  // reducer de-dupes against it.
+  it('does NOT re-create an already-persisted inner tool row after a cold replica', async () => {
+    const h = createHarness({
+      assistantMessageId: 'asst-1',
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+    const PARENT = 'tc-spawn-1';
+
+    // Batch 1: turn sub-msg-1 persists inner-1.
+    await h.handler.ingest({
+      assistantMessageId: 'asst-1',
+      events: [
+        buildEvent('stream_chunk', 0, {
+          chunkType: 'tools_calling',
+          subagent: {
+            parentToolCallId: PARENT,
+            spawnMetadata: { prompt: 'go', subagentType: 'Explore' },
+            subagentMessageId: 'sub-msg-1',
+          },
+          toolsCalling: [innerTool('inner-1')],
+        }),
+      ],
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+
+    __resetOperationStatesForTesting(); // cold replica
+
+    // Batch 2 (replica B): the SAME turn's cumulative array is re-seen (inner-1
+    // again) plus a new inner-2.
+    await h.handler.ingest({
+      assistantMessageId: 'asst-1',
+      events: [
+        buildEvent('stream_chunk', 1, {
+          chunkType: 'tools_calling',
+          subagent: { parentToolCallId: PARENT, subagentMessageId: 'sub-msg-1' },
+          toolsCalling: [innerTool('inner-1'), innerTool('inner-2')],
+        }),
+      ],
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+
+    const toolRows = (callId: string) =>
+      [...h.messages.values()].filter((m) => m.role === 'tool' && m.tool_call_id === callId);
+    // inner-1 persisted exactly once (no duplicate row), inner-2 once.
+    expect(toolRows('inner-1')).toHaveLength(1);
+    expect(toolRows('inner-2')).toHaveLength(1);
+    expect(h.threads.size).toBe(1);
+  });
+
+  // P2: a stale `Processing` isolation thread left by a PRIOR operation on the
+  // same topic must not be rehydrated into — or finalized by — the current
+  // operation. The rehydration is scoped by `metadata.operationId`.
+  it('ignores a stale Processing thread from a different operation on the same topic', async () => {
+    const h = createHarness({
+      assistantMessageId: 'asst-1',
+      operationId: 'op-2',
+      topicId: 'topic-1',
+    });
+
+    // Seed a thread (+ its in-thread assistant) left Processing by op-1.
+    h.threads.set('thd-stale', {
+      id: 'thd-stale',
+      metadata: { operationId: 'op-1', sourceToolCallId: 'tc-old' },
+      sourceMessageId: 'asst-old',
+      status: 'processing',
+      title: 'Old Subagent',
+      topicId: 'topic-1',
+      type: 'isolation',
+    });
+    h.messages.set('stale-asst', {
+      agentId: null,
+      content: '',
+      id: 'stale-asst',
+      parentId: 'asst-old',
+      role: 'assistant',
+      threadId: 'thd-stale',
+      topicId: 'topic-1',
+    } as any);
+
+    // op-2 runs and terminates. The terminal orphan-drain would finalize every
+    // run in the reducer state — so if the stale thread were merged in, it would
+    // be flipped to Active here.
+    await h.handler.ingest({
+      assistantMessageId: 'asst-1',
+      events: [
+        buildEvent('stream_chunk', 0, { chunkType: 'text', content: 'working' }),
+        buildEvent('agent_runtime_end', 1, {}),
+      ],
+      operationId: 'op-2',
+      topicId: 'topic-1',
+    });
+
+    // The unrelated thread is untouched: still Processing, never updated.
+    expect(h.threads.get('thd-stale')!.status).toBe('processing');
+    expect(h.threadModel.update).not.toHaveBeenCalledWith('thd-stale', expect.anything());
+  });
 });

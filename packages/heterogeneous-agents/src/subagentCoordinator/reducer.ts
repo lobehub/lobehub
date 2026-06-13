@@ -281,24 +281,33 @@ const reduceToolsChunk = (
   const run = ensured.run;
   const intents = ensured.intents;
 
-  for (const tool of tools) run.lifetimeToolCallIds.add(tool.id);
-
   const newToolMsgIds: string[] = [];
   for (const tool of tools) {
-    if (!run.toolState.persistedIds.has(tool.id)) {
-      run.toolState.persistedIds.add(tool.id);
-      run.toolState.payloads.push({
-        apiName: tool.apiName,
-        arguments: tool.arguments,
-        id: tool.id,
-        identifier: tool.identifier,
-        type: tool.type,
-      });
-      const toolMessageId = ctx.newId('message');
-      run.toolState.toolMsgIdByCallId.set(tool.id, toolMessageId);
-      newToolMsgIds.push(toolMessageId);
-    }
+    // Run-lifetime de-dupe FIRST: a tool already persisted anywhere in this run
+    // must never be re-created. Per-turn `persistedIds` is reset on every turn
+    // boundary — and starts empty after a cold-replica rehydration — so it alone
+    // would let a replayed / continued `tools_calling` mint a SECOND tool message
+    // for an id the run already wrote (duplicate inner-tool row in the thread).
+    // `lifetimeToolCallIds` survives turn boundaries and is restored from DB on
+    // rehydration, so it is the durable de-dupe key. (Checked BEFORE the
+    // add-to-lifetime loop below, which would otherwise mark this batch's ids as
+    // already-seen and skip everything.)
+    if (run.lifetimeToolCallIds.has(tool.id)) continue;
+    if (run.toolState.persistedIds.has(tool.id)) continue;
+    run.toolState.persistedIds.add(tool.id);
+    run.toolState.payloads.push({
+      apiName: tool.apiName,
+      arguments: tool.arguments,
+      id: tool.id,
+      identifier: tool.identifier,
+      type: tool.type,
+    });
+    const toolMessageId = ctx.newId('message');
+    run.toolState.toolMsgIdByCallId.set(tool.id, toolMessageId);
+    newToolMsgIds.push(toolMessageId);
   }
+
+  for (const tool of tools) run.lifetimeToolCallIds.add(tool.id);
 
   intents.push({
     assistantMessageId: run.currentAssistantId,
