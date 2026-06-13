@@ -1,14 +1,27 @@
-import { AgentRuntimeErrorType, type ILobeAgentRuntimeErrorType } from '@lobechat/types';
+import {
+  AgentRuntimeErrorType,
+  ChatErrorType,
+  type ILobeAgentRuntimeErrorType,
+} from '@lobechat/types';
 
 import { matchErrorPattern } from './match';
 
 /**
- * Error codes that are generic enough to be worth re-deriving from the upstream
- * message / HTTP status. Specific codes assigned by a provider adapter are left
- * untouched — we only refine the `ProviderBizError` catch-all, which absorbs
- * any non-OK upstream response that the adapter couldn't name.
+ * Error codes generic enough to be worth re-deriving from the message / HTTP
+ * status. Specific codes assigned by a provider adapter are left untouched.
+ *
+ * Besides the `ProviderBizError` upstream catch-all, this covers the two
+ * fallback wrappers `formatErrorForState` produces for un-typed throws: a raw
+ * `Error` is wrapped as `InternalServerError` (HTTP 500) and any other value as
+ * `AgentRuntimeError`. They must be refinable so persistence-layer throws
+ * (`Failed query: …`) and state-store drops reach `matchErrorPattern` — without
+ * them those land as a bare, un-classified 500.
  */
-const REFINABLE_CODES = new Set<string>([AgentRuntimeErrorType.ProviderBizError]);
+const REFINABLE_CODES = new Set<string>([
+  AgentRuntimeErrorType.AgentRuntimeError,
+  AgentRuntimeErrorType.ProviderBizError,
+  String(ChatErrorType.InternalServerError),
+]);
 
 /**
  * Last-resort mapping from a bare HTTP status to a code, used only when the
@@ -50,10 +63,11 @@ export interface RefineErrorInput {
 }
 
 /**
- * Reclassify a generic provider catch-all (`ProviderBizError`) into a more
- * specific code using the upstream message and HTTP status. Returns the refined
- * code, or `undefined` when no better classification is found (caller keeps the
- * original errorType).
+ * Reclassify a generic catch-all (`ProviderBizError`, or the
+ * `InternalServerError` / `AgentRuntimeError` fallback wrappers) into a more
+ * specific code using the message and HTTP status. Returns the refined code, or
+ * `undefined` when no better classification is found (caller keeps the original
+ * errorType).
  *
  * Priority:
  *   1. `matchErrorPattern` over the message — most specific, covers the rich

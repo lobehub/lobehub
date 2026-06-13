@@ -1,4 +1,4 @@
-import { AgentRuntimeErrorType } from '@lobechat/types';
+import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { refineErrorCode } from './refine';
@@ -11,6 +11,38 @@ describe('refineErrorCode', () => {
         message: '429 status code (no body)',
       }),
     ).toBeUndefined();
+  });
+
+  describe('un-typed throw wrappers', () => {
+    // A raw `Error` (e.g. a Drizzle "Failed query: …" throw) is wrapped by
+    // formatErrorForState as InternalServerError (HTTP 500). It must still reach
+    // the message patterns, otherwise it persists as a bare, un-classified 500.
+    it('reclassifies a 500-wrapped Drizzle throw into DatabasePersistError', () => {
+      expect(
+        refineErrorCode({
+          errorType: String(ChatErrorType.InternalServerError),
+          message: 'Failed query: rollback\nparams: ',
+        }),
+      ).toBe(AgentRuntimeErrorType.DatabasePersistError);
+    });
+
+    it('reclassifies an AgentRuntimeError-wrapped throw via its message', () => {
+      expect(
+        refineErrorCode({
+          errorType: AgentRuntimeErrorType.AgentRuntimeError,
+          message: 'Failed query: select "id" from "messages"',
+        }),
+      ).toBe(AgentRuntimeErrorType.DatabasePersistError);
+    });
+
+    it('leaves a 500 wrapper unrefined when nothing matches', () => {
+      expect(
+        refineErrorCode({
+          errorType: String(ChatErrorType.InternalServerError),
+          message: 'Agent state not found for operation op_xxx',
+        }),
+      ).toBeUndefined();
+    });
   });
 
   describe('message-pattern pass', () => {
