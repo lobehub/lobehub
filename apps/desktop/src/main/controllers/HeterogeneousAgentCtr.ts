@@ -188,6 +188,13 @@ interface AgentSession {
   modelVerificationLastAttemptAt?: number;
   modelVerificationLastAttemptSessionId?: string;
   process?: ChildProcess;
+  /**
+   * Absolute CLI path resolved by spawn preflight detection. Used for spawn()
+   * when the configured command is bare: detection can find the CLI through
+   * the login-shell PATH or a well-known install location (e.g. the Codex.app
+   * bundled CLI) that plain spawn() with the inherited env can't resolve.
+   */
+  resolvedCommandPath?: string;
   resumeSessionId?: string;
   sessionId: string;
   verifiedModel?: string;
@@ -470,11 +477,17 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
             session.agentType === 'claude-code' ? 'claude-code' : 'codex',
             command,
           );
-    const cliMissingError = this.buildCliMissingError(session);
 
-    if (!status || status.available || !cliMissingError) return;
+    if (!status || status.available) {
+      // Spawn through the detector-resolved absolute path when the configured
+      // command is bare — detection may have located the CLI somewhere plain
+      // spawn() can't (login-shell PATH, Codex.app bundled CLI, …).
+      session.resolvedCommandPath =
+        status?.path && !command.includes(path.sep) ? status.path : undefined;
+      return;
+    }
 
-    return cliMissingError;
+    return this.buildCliMissingError(session);
   }
 
   private get shouldTraceCliOutput(): boolean {
@@ -966,7 +979,10 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     }
     const useStdin = spawnPlan.stdinPayload !== undefined;
     const cliArgs = spawnPlan.args;
-    const resolvedCliSpawnPlan = await resolveCliSpawnPlan(session.command, cliArgs);
+    const resolvedCliSpawnPlan = await resolveCliSpawnPlan(
+      session.resolvedCommandPath ?? session.command,
+      cliArgs,
+    );
 
     logger.info(
       'Spawning agent:',
