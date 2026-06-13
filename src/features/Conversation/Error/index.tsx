@@ -116,10 +116,34 @@ const hasLocalizedErrorMessage = (
   return LEGACY_LOCALIZED_ERROR_TYPES.has(String(errorType));
 };
 
+const isGoogleBlockedProviderError = (error?: ChatMessageError | null): boolean => {
+  if (error?.type !== 'ProviderBizError') return false;
+
+  const body = error.body as
+    | {
+        context?: {
+          finishReason?: unknown;
+          promptFeedback?: {
+            blockReason?: unknown;
+          };
+        };
+        provider?: unknown;
+      }
+    | undefined;
+
+  if (body?.provider !== 'google') return false;
+
+  return (
+    typeof body.context?.promptFeedback?.blockReason === 'string' ||
+    typeof body.context?.finishReason === 'string'
+  );
+};
+
 const shouldShowTraceIdError = (
   error?: ChatMessageError | null,
 ): error is ChatMessageError & { body: { traceId: string } } => {
   if (typeof error?.body?.traceId !== 'string') return false;
+  if (isGoogleBlockedProviderError(error)) return false;
 
   const errorType = error.type;
   if (errorType === undefined || errorType === null) return true;

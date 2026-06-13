@@ -184,6 +184,36 @@ describe('ErrorMessageExtra', () => {
     expect(screen.getByText('dynamic')).toBeInTheDocument();
   });
 
+  it('keeps localized Google block errors even when ProviderBizError carries a traceId', () => {
+    serverConfigMock.enableBusinessFeatures = true;
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.GoogleAIBlockReason.SAFETY' }}
+        data={{
+          error: {
+            body: {
+              context: {
+                promptFeedback: {
+                  blockReason: 'SAFETY',
+                },
+              },
+              message: 'response.GoogleAIBlockReason.SAFETY',
+              provider: 'google',
+              traceId: 'trace-google-block',
+            },
+            message: 'response.GoogleAIBlockReason.SAFETY',
+            type: 'ProviderBizError',
+          } as any,
+          id: 'msg-google-block-trace',
+        }}
+      />,
+    );
+
+    expect(screen.queryByText('dynamic')).not.toBeInTheDocument();
+    expect(screen.getByText('response.GoogleAIBlockReason.SAFETY')).toBeInTheDocument();
+  });
+
   it('renders the auth guide when the refreshed error is missing type but still carries session code', () => {
     render(
       <ErrorMessageExtra
