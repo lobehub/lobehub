@@ -351,6 +351,13 @@ Two hard rules worth front-loading:
   must use Markdown image syntax like `![case 1](assets/case1.png)`. Do not
   use bare file paths, Markdown links, or local file links as the primary
   visual evidence; those make the report unreadable without opening each asset.
+- **Final replies must include visual evidence links.** When a run includes UI
+  screenshots or GIFs, include the report directory and the most important
+  visual artifacts in the final chat response. Each item must include a stable
+  label, an evidence caption describing the observed UI outcome, and a
+  repo-relative path, for example:
+  `[Image #1 - error toast shows provider auth failure](<report-dir>/assets/foo.png)`.
+  Use repo-relative paths, not absolute paths.
 - **Time-based behavior needs a GIF, not a screenshot.** If a case asserts
   change over time (streaming output, a ticking timer, loading states,
   animations), record it with `scripts/record-gif.sh` and embed the GIF —
