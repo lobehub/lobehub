@@ -1535,6 +1535,59 @@ describe('TopicModel - Query', () => {
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('title-match-topic');
     });
+
+    it('should match topics by agentId when the scope provides one (no sessionId)', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(agents).values([{ id: 'search-agent', userId }]);
+        await tx.insert(topics).values([
+          // New agent system: topic carries agentId but no sessionId.
+          { id: 'agent-topic', title: 'Hello world', agentId: 'search-agent', userId },
+          { id: 'other-topic', title: 'Hello world', sessionId, userId },
+        ]);
+      });
+
+      const result = await topicModel.queryByKeyword('hello', { agentId: 'search-agent' });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('agent-topic');
+    });
+
+    it('should also match legacy sessionId topics when agentId scope is given', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(agents).values([{ id: 'search-agent', userId }]);
+        await tx.insert(topics).values([
+          // Migrated: stamped with agentId.
+          { id: 'agent-topic', title: 'Hello world', agentId: 'search-agent', userId },
+          // Legacy: not yet backfilled, only the resolved sessionId.
+          { id: 'legacy-topic', title: 'Hello legacy', sessionId, userId },
+        ]);
+      });
+
+      const result = await topicModel.queryByKeyword('hello', {
+        agentId: 'search-agent',
+        containerId: sessionId,
+      });
+
+      expect(result.map((t) => t.id).sort()).toEqual(['agent-topic', 'legacy-topic']);
+    });
+
+    it('should not leak other agents topics when scoped by agentId', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(agents).values([
+          { id: 'search-agent', userId },
+          { id: 'other-agent', userId },
+        ]);
+        await tx.insert(topics).values([
+          { id: 'agent-topic', title: 'Hello world', agentId: 'search-agent', userId },
+          { id: 'other-agent-topic', title: 'Hello world', agentId: 'other-agent', userId },
+        ]);
+      });
+
+      const result = await topicModel.queryByKeyword('hello', { agentId: 'search-agent' });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('agent-topic');
+    });
   });
 
   describe('queryRecent', () => {

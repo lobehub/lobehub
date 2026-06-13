@@ -570,7 +570,16 @@ export const topicRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      return ctx.topicModel.queryByKeyword(input.keywords, resolved.sessionId);
+      // Filter by agentId directly (the new agent system stamps every topic
+      // with an agentId). `containerId` keeps matching legacy topics that still
+      // only carry the resolved sessionId. Passing only the sessionId here used
+      // to miss every agentId-scoped topic — the cause of "no topics match" in
+      // the per-agent Topics search.
+      return ctx.topicModel.queryByKeyword(input.keywords, {
+        agentId: input.agentId,
+        containerId: resolved.sessionId,
+        groupId: input.groupId,
+      });
     }),
 
   /**

@@ -110,6 +110,27 @@ interface QueryTopicParams {
 
 export interface ModelTimingContext extends TimingSink {}
 
+/**
+ * Scope used to constrain a keyword search to a single conversation owner.
+ * Mirrors the precedence of {@link TopicModel.query}: groupId > agentId >
+ * containerId (legacy sessionId / groupId).
+ */
+export interface TopicKeywordScope {
+  agentId?: string | null;
+  /**
+   * @deprecated Use agentId or groupId instead. Kept for backward compatibility.
+   * Container ID (sessionId or groupId) to filter topics by.
+   */
+  containerId?: string | null;
+  groupId?: string | null;
+  /**
+   * When true, the agent scope also adopts legacy orphan rows where every owner
+   * column (session / group / agent) is null — matching the inbox behaviour of
+   * {@link TopicModel.query}.
+   */
+  isInbox?: boolean;
+}
+
 export interface ListTopicsForMemoryExtractorCursor {
   createdAt: Date;
   id: string;
@@ -440,8 +461,17 @@ export class TopicModel {
     return this.db.select().from(topics).orderBy(topics.updatedAt).where(and(this.ownership()));
   };
 
-  queryByKeyword = async (keyword: string, containerId?: string | null): Promise<TopicItem[]> => {
+  queryByKeyword = async (
+    keyword: string,
+    scope?: string | null | TopicKeywordScope,
+  ): Promise<TopicItem[]> => {
     if (!keyword.trim()) return [];
+
+    // Backward compatibility: a bare string / null second argument is treated
+    // as the legacy `containerId` (sessionId or groupId).
+    const scopeOptions: TopicKeywordScope =
+      scope && typeof scope === 'object' ? scope : { containerId: scope ?? null };
+    const scopeCondition = this.matchKeywordScope(scopeOptions);
 
     const bm25Query = sanitizeBm25Query(keyword);
 
@@ -451,13 +481,7 @@ export class TopicModel {
       this.db
         .select()
         .from(topics)
-        .where(
-          and(
-            this.ownership(),
-            this.matchContainer(containerId),
-            sql`${topics.title} @@@ ${bm25Query}`,
-          ),
-        )
+        .where(and(this.ownership(), scopeCondition, sql`${topics.title} @@@ ${bm25Query}`))
         .orderBy(desc(topics.updatedAt)),
       // Query topic IDs matching by message content (BM25)
       this.db
@@ -469,7 +493,7 @@ export class TopicModel {
             this.messageOwnership(),
             sql`${messages.content} @@@ ${bm25Query}`,
             this.ownership(),
-            this.matchContainer(containerId),
+            scopeCondition,
           ),
         )
         .groupBy(messages.topicId),
@@ -968,6 +992,38 @@ export class TopicModel {
     if (containerId) return or(eq(topics.sessionId, containerId), eq(topics.groupId, containerId));
     // If neither is provided, match topics with no session or group
     return and(isNull(topics.sessionId), isNull(topics.groupId));
+  };
+
+  /**
+   * Build the WHERE condition that scopes a keyword search to a single
+   * conversation owner. Mirrors {@link TopicModel.query}'s precedence
+   * (groupId > agentId > containerId).
+   *
+   * The agent branch matches `topics.agentId` directly — the new agent system
+   * stamps every topic with an agentId, and the old `matchContainer` path
+   * (sessionId / groupId only) would miss those rows entirely. It also keeps
+   * matching the resolved containerId (sessionId) so legacy topics that haven't
+   * been backfilled with an agentId yet are still found.
+   */
+  private matchKeywordScope = ({
+    agentId,
+    containerId,
+    groupId,
+    isInbox,
+  }: TopicKeywordScope): SQL | undefined => {
+    if (groupId) return eq(topics.groupId, groupId);
+
+    if (agentId) {
+      const conditions: (SQL | undefined)[] = [eq(topics.agentId, agentId)];
+      if (containerId) conditions.push(eq(topics.sessionId, containerId));
+      if (isInbox)
+        conditions.push(
+          and(isNull(topics.sessionId), isNull(topics.groupId), isNull(topics.agentId)),
+        );
+      return or(...conditions);
+    }
+
+    return this.matchContainer(containerId);
   };
 
   listTopicsForMemoryExtractor = async (

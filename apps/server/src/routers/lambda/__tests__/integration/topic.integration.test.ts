@@ -332,7 +332,9 @@ describe('Topic Router Integration Tests', () => {
     });
   });
 
-  // BM25 search requires pg_search extension (ParadeDB), not available in integration test DB
+  // BM25 search requires pg_search extension (ParadeDB), not available in the
+  // default integration test DB (PGlite). Run with TEST_SERVER_DB=1 +
+  // DATABASE_TEST_URL pointing at a ParadeDB instance to exercise these.
   describe.skip('searchTopics', () => {
     it('should search topics using agentId', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
@@ -356,6 +358,31 @@ describe('Topic Router Integration Tests', () => {
 
       expect(result.length).toBeGreaterThan(0);
       expect(result[0].title).toContain('TypeScript');
+    });
+
+    // Regression for the "No topics match these filters" bug: topics created by
+    // the new agent system carry `agentId` directly with a NULL `sessionId`.
+    // The old search resolved agentId -> sessionId and filtered by the
+    // container only, so these rows were never matched even though the topics
+    // list (which filters by agentId) showed them.
+    it('should find agentId-scoped topics that have no sessionId', async () => {
+      const caller = topicRouter.createCaller(createTestContext(userId));
+
+      // Insert a topic the way the agent runtime does: agentId set, sessionId null.
+      await serverDB.insert(topics).values({
+        agentId: testAgentId,
+        sessionId: null,
+        title: 'rinabrown84@gmail.com',
+        userId,
+      });
+
+      const result = await caller.searchTopics({
+        agentId: testAgentId,
+        keywords: 'rinabrown84@gmail.com',
+      });
+
+      expect(result.length).toBeGreaterThan(0);
+      expect(result[0].title).toBe('rinabrown84@gmail.com');
     });
   });
 
