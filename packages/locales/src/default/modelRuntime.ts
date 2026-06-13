@@ -69,6 +69,8 @@ export default {
     "Sorry, the token usage or request count has reached the rate limit for this key. Please try again later or increase the key's quota.",
   StateStorePersistError:
     'A temporary issue with the conversation state store interrupted this operation. Please try again; if it persists, contact support.',
+  StateStoreReadError:
+    'This operation was ended because the connection closed before it finished. This is usually harmless — reopen the conversation to continue.',
   StreamChunkError:
     'Error parsing the message chunk of the streaming request. Please check if the current API interface complies with the standard specifications, or contact your API provider for assistance.',
   UpstreamGatewayError:

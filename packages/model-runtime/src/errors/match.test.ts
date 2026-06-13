@@ -94,14 +94,17 @@ describe('matchErrorPattern', () => {
     ).toBe(AgentRuntimeErrorType.StateStorePersistError);
   });
 
-  it('classifies Upstash readonly-upgrade and dropped-caller drops as StateStorePersistError', () => {
+  it('classifies the Upstash readonly-upgrade write rejection as StateStorePersistError', () => {
     expect(
       matchErrorPattern({
         message: 'READONLY Writes are temporarily rejected due to server upgrade',
       })?.code,
     ).toBe(AgentRuntimeErrorType.StateStorePersistError);
+  });
+
+  it('classifies a caller-gone blocking-read abort as StateStoreReadError (benign, not a persist failure)', () => {
     expect(matchErrorPattern({ message: 'ERR caller gone' })?.code).toBe(
-      AgentRuntimeErrorType.StateStorePersistError,
+      AgentRuntimeErrorType.StateStoreReadError,
     );
   });
 

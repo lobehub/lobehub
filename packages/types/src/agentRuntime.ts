@@ -138,6 +138,15 @@ export const AgentRuntimeErrorType = {
    */
   StateStorePersistError: 'StateStorePersistError',
   /**
+   * A blocking state-store read (XREAD / BLPOP, e.g. consuming the agent event
+   * stream or waiting on a tool result) was aborted because the originating
+   * caller disconnected — Upstash replies "ERR caller gone". Benign client
+   * abandonment tied to the request lifecycle, not a harness fault; kept
+   * distinct from the write-side StateStorePersistError so it is not counted
+   * as a failure.
+   */
+  StateStoreReadError: 'StateStoreReadError',
+  /**
    * A context-engine pipeline processor threw while building the prompt
    * context ("Processor [<name>] execution failed"). Harness-side bug in the
    * context assembly stage — the `PipelineError` thrown by
