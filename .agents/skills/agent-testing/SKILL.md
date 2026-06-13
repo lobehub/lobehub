@@ -22,33 +22,19 @@ four-step contract:
 Step -1: Plan approval  →  Step 0: Env + Auth  →  Step 1: Pick surface  →  Step 2: Run  →  Step 3: Structured report
 ```
 
-## Step -1 — Get approval for non-trivial test plans
+## Step -1 — Plan approval for non-trivial tests
 
-When the user invokes this skill directly, do not immediately start a dev
-server, fix auth, open agent-browser, or run a test unless one of these is true:
+Skip directly to Step 0 if: the test is a single re-run after a fix, the plan
+was already agreed on, or the user gave exact commands.
 
-- the test surface is tiny and obvious, such as re-running one already-named
-  case after a small fix;
-- the test plan was already discussed and accepted in the current conversation;
-- the user gave exact cases or commands to execute.
+Otherwise, propose a test plan (surface, cases, expected evidence, assumptions)
+and use the runtime structured question tool (`request_user_input` /
+ask-user-question equivalent) with two fixed choices:
 
-Otherwise, first propose a concrete test plan and ask for approval with the
-runtime structured question tool (`request_user_input` / ask-user-question
-equivalent). The proposal must name the target surface, cases, expected
-evidence, and any auth/dev-server assumptions. Use these two choices:
+1. `开始执行 (Recommended)` — 测试方案没问题，开始执行
+2. `先讨论下` — 方案有问题，先讨论下
 
-1. `测试方案没问题, 开始执行`
-2. `方案有问题, 先讨论下`
-
-When the tool requires short labels plus descriptions, map them as:
-
-- label `开始执行 (Recommended)`, description `测试方案没问题, 开始执行`
-- label `先讨论下`, description `方案有问题, 先讨论下`
-
-Wait for the user's choice. If they approve, continue to Step 0. If they choose
-discussion, do not run the test; discuss and revise the plan first. If the
-runtime has no structured question tool, ask the same two-choice question in
-plain text and wait.
+Wait for the user's choice before proceeding.
 
 ## Step 0 — Environment setup + auth check (mandatory)
 

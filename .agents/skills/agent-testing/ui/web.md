@@ -10,27 +10,9 @@ backend-only changes prefer [../cli/index.md](../cli/index.md).
 
 ## Prerequisites
 
-- Local dev server running. Use the actual URL printed by the dev server —
-  [../references/dev-server.md](../references/dev-server.md)
-- Web auth verified in agent-browser —
-  [../references/auth.md](../references/auth.md):
-
-```bash
-./.agents/skills/agent-testing/scripts/test-env.sh
-eval "$(./.agents/skills/agent-testing/scripts/test-env.sh --exports)"
-./.agents/skills/agent-testing/scripts/setup-auth.sh status --surface web
-```
-
-If this fails and the user's normal Chrome is already logged in, ask for the
-Network `Cookie:` header, but first run `setup-auth.sh open-chrome` so Chrome
-opens at `SERVER_URL` with DevTools Network requested. Then run
-`pbpaste | setup-auth.sh web`. Do not open a login page unless the login flow
-itself is the case under test.
-
-Before touching the browser, follow the Step -1 approval gate in
-[../SKILL.md](../SKILL.md#step--1--get-approval-for-non-trivial-test-plans).
-Keep approved cases small enough that each one has clear network evidence and
-visual evidence in the final report.
+- Complete [Step 0.0](../SKILL.md#00-resolve-the-current-test-environment) (resolve ports) and [Step -1](../SKILL.md#step--1--plan-approval-for-non-trivial-tests) (plan approval) first.
+- Local dev server running — [../references/dev-server.md](../references/dev-server.md)
+- Web auth verified in agent-browser — see [auth decision flow](../references/auth.md#web--decision-flow).
 
 ## Option A — agent-browser with injected auth (recommended)
 

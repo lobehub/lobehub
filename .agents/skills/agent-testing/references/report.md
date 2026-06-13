@@ -124,19 +124,6 @@ Links are acceptable for non-visual artifacts such as CLI transcripts, HAR
 files, or long logs. For videos, embed a representative screenshot/GIF inline in
 the case row and link the full video as supplemental evidence.
 
-## Final answer visual links
-
-For UI runs, the final chat response should include compact links to the most
-important screenshots/GIFs so the user can open them from CLI output. This is
-an answer-format rule, not an extra `report.md` section. Use repo-relative
-paths, not absolute paths. Each link label must describe the observed outcome
-or UI state, not the filename.
-
-```markdown
-- [Image #1 - error state shows actionable provider message](<report-dir>/assets/case1.png)
-- [Image #2 - empty state keeps retry action visible](<report-dir>/assets/case2.png)
-```
-
 Avoid the old wide table with separate `steps`, `expected`, and `actual`
 columns unless the test is purely non-visual and truly needs that breakdown.
 For UI reports, those columns make screenshot-backed reading harder. Put

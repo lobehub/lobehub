@@ -5,27 +5,9 @@ surfaces (CLI, Electron, Web) hit.
 
 ## Resolve ports first
 
-Run this before starting or probing any local test surface:
-
-```bash
-./.agents/skills/agent-testing/scripts/test-env.sh
-eval "$(./.agents/skills/agent-testing/scripts/test-env.sh --exports)"
-```
-
-The resolver prints `APP_URL`, `PORT`, `SERVER_URL`,
-`AUTH_TRUSTED_ORIGINS`, `SPA_PORT`, `MOBILE_SPA_PORT`, and `DESKTOP_PORT`.
-These resolved values are the source of truth for the current test session.
-
-In a typical cloud worktree this should look like:
-
-```bash
-APP_URL=http://localhost:3020
-PORT=3020
-AUTH_TRUSTED_ORIGINS=http://localhost:3020,http://localhost:9800
-SPA_PORT=9800
-MOBILE_SPA_PORT=3810
-DESKTOP_PORT=3030
-```
+Run `test-env.sh` as described in
+[SKILL.md Step 0.0](../SKILL.md#00-resolve-the-current-test-environment)
+before starting or probing any local test surface.
 
 ## Ports & modes
 

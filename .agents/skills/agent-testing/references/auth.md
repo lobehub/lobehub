@@ -1,33 +1,31 @@
 # Auth Setup for Local Agent Testing
 
-**Auth is the gate for all automated testing.** Prepare and verify it before
-writing any test step. The one-stop entry point is:
+**Auth is the gate for all automated testing.** Complete
+[Step 0.0](../SKILL.md#00-resolve-the-current-test-environment) first so
+`SERVER_URL` and ports are resolved, then verify auth before writing any test
+step.
+
+Initialize helpers first:
 
 ```bash
-SCRIPT=".agents/skills/agent-testing/scripts/setup-auth.sh"
-TEST_ENV=".agents/skills/agent-testing/scripts/test-env.sh"
-
-$TEST_ENV # print APP_URL/PORT/SERVER_URL/auth origins before testing
+SCRIPT="./.agents/skills/agent-testing/scripts/setup-auth.sh"
+TEST_ENV="./.agents/skills/agent-testing/scripts/test-env.sh"
 eval "$($TEST_ENV --exports)"
-$SCRIPT status               # check server + CLI + web auth readiness
-$SCRIPT status --surface web # check only the Web surface gate
-$SCRIPT cli                  # interactive CLI device-code login (must be run by the user)
-$SCRIPT open-chrome          # open Chrome at SERVER_URL and show DevTools Network
-pbpaste | $SCRIPT web        # inject a copied Cookie header into the agent-browser session
-$SCRIPT web-verify           # live-check that the agent-browser session is authenticated
 ```
 
-`SERVER_URL` comes from `test-env.sh`: current shell env and `.env` files win;
-worktree-name defaults are fallback only. Override it with the actual URL
-printed by the running dev server before checking auth when needed:
+Quick reference after initialization:
 
-```bash
-eval "$(.agents/skills/agent-testing/scripts/test-env.sh --exports)"
-$SCRIPT status --surface web
-```
+| Command                        | Purpose                                            |
+| ------------------------------ | -------------------------------------------------- |
+| `$SCRIPT status`               | Check all surfaces (server + CLI + web + Electron) |
+| `$SCRIPT status --surface web` | Check only the Web surface gate                    |
+| `$SCRIPT cli`                  | Interactive CLI device-code login (user must run)  |
+| `$SCRIPT open-chrome`          | Open Chrome at `SERVER_URL` with DevTools          |
+| `pbpaste \| $SCRIPT web`       | Inject a copied Cookie header into agent-browser   |
+| `$SCRIPT web-verify`           | Live-check agent-browser session auth              |
 
-Use `localhost` for Web auth when possible; local better-auth cookies are stored
-for the `localhost` domain, not `127.0.0.1`.
+Use `localhost` for Web auth; better-auth cookies are stored for `localhost`,
+not `127.0.0.1`.
 
 ## Per-surface overview
 
@@ -71,48 +69,18 @@ user's own logged-in Chrome and inject it as a Playwright-style state file.
 Do **not** use this on production URLs — only local dev. Treat the cookie as a
 secret: don't paste it into shared logs, PRs, or commit it anywhere.
 
-### One-key path
+### Web — decision flow
 
-0. First verify the agent-browser session:
-
-```bash
-eval "$(./.agents/skills/agent-testing/scripts/test-env.sh --exports)"
-./.agents/skills/agent-testing/scripts/setup-auth.sh status --surface web
-```
-
-If this is green, start testing. Do not ask for a Cookie header and do not open
-a login page.
-
-1. If verification fails, ask the user to copy the Cookie header **from a Network request, NOT
-   `document.cookie`** (`document.cookie` cannot see HttpOnly cookies, which is
-   exactly where better-auth puts its session):
-   - First open Chrome and DevTools Network for the user:
-     ```bash
-     eval "$(./.agents/skills/agent-testing/scripts/test-env.sh --exports)"
-     ./.agents/skills/agent-testing/scripts/setup-auth.sh open-chrome
-     ```
-   - If DevTools does not land on **Network**, click the **Network** tab manually.
-   - Refresh → click any same-origin request.
-   - Under **Request Headers**, right-click the `Cookie:` line → **Copy value**.
-2. Inject and verify in one shot:
-
-```bash
-eval "$(./.agents/skills/agent-testing/scripts/test-env.sh --exports)"
-pbpaste | ./.agents/skills/agent-testing/scripts/setup-auth.sh web
-```
-
-The script filters the header down to the better-auth cookies
-(`better-auth.session_token`, `better-auth.session_data`, `better-auth.state`),
-builds the Playwright `storageState` JSON, loads it into the `agent-browser`
-session (default name `lobehub-dev`), opens `SERVER_URL`, and asserts the URL is
-not `/signin`.
+1. `$SCRIPT status --surface web` — green? Start testing. Do not ask for a Cookie header.
+2. Not green → `$SCRIPT open-chrome` opens Chrome at `SERVER_URL` with DevTools.
+3. User copies the `Cookie:` header from Network tab → any same-origin request → Request Headers → right-click `Cookie:` → **Copy value**. Must be from Network, NOT `document.cookie` (HttpOnly cookies are invisible to `document.cookie`).
+4. `pbpaste | $SCRIPT web` — filters to better-auth cookies (`session_token`, `session_data`, `state`), builds Playwright `storageState`, loads it into the `agent-browser` session (`lobehub-dev`), opens `SERVER_URL`, and asserts the URL is not `/signin`.
 
 ### Using the authenticated session
 
 ```bash
 agent-browser --session lobehub-dev open "$SERVER_URL/"
 agent-browser --session lobehub-dev snapshot -i | head -20
-# Look for the user's avatar/name in the sidebar, or absence of the signin form.
 ```
 
 ### Notes
