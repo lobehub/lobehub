@@ -9,7 +9,6 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { type OperationType } from '@/store/chat/slices/operation/types';
 import { elapsedTimeStyles, shinyTextStyles } from '@/styles/loading';
-import { resolveOperationLoadingLabelKey } from '@/utils/operationActivity';
 
 const ELAPSED_TIME_THRESHOLD = 2100; // Show elapsed time after 2 seconds
 
@@ -51,8 +50,7 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
   const getOperationLabel = () => {
     if (!operationType) return undefined;
     if (operationType !== 'execHeterogeneousAgent') {
-      const labelKey = resolveOperationLoadingLabelKey(operationType);
-      return labelKey ? (t(labelKey as any) as string) : undefined;
+      return t(`operation.${operationType}` as any) as string;
     }
     const heterogeneousType = runningOp?.metadata?.heterogeneousType as string | undefined;
     const name = heterogeneousType
