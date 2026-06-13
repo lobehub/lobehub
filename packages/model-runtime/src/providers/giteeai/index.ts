@@ -14,18 +14,14 @@ export const params = {
     chatCompletion: () => process.env.DEBUG_GITEE_AI_CHAT_COMPLETION === '1',
   },
   models: async ({ client }) => {
-    try {
-      const modelsPage = (await client.models.list()) as any;
-      const modelList: GiteeAIModelCard[] = Array.isArray(modelsPage?.data)
-        ? modelsPage.data
-        : Array.isArray(modelsPage)
-          ? modelsPage
-          : [];
+    const modelsPage = (await client.models.list()) as any;
+    const modelList: GiteeAIModelCard[] = Array.isArray(modelsPage?.data)
+      ? modelsPage.data
+      : Array.isArray(modelsPage)
+        ? modelsPage
+        : [];
 
-      return await processMultiProviderModelList(modelList, 'giteeai');
-    } catch (error) {
-      throw new Error('Failed to fetch GiteeAI models', { cause: error });
-    }
+    return await processMultiProviderModelList(modelList, 'giteeai');
   },
   provider: ModelProvider.GiteeAI,
 } satisfies OpenAICompatibleFactoryOptions;

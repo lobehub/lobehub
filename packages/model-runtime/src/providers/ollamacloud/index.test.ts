@@ -229,9 +229,7 @@ describe('LobeOllamaCloudAI - custom features', () => {
         },
       };
 
-      await expect(params.models({ client: mockClient as any })).rejects.toThrow(
-        'Failed to fetch Ollama Cloud models',
-      );
+      await expect(params.models({ client: mockClient as any })).rejects.toThrow('API Error');
 
       expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
@@ -245,9 +243,7 @@ describe('LobeOllamaCloudAI - custom features', () => {
         },
       };
 
-      await expect(params.models({ client: mockClient as any })).rejects.toThrow(
-        'Failed to fetch Ollama Cloud models',
-      );
+      await expect(params.models({ client: mockClient as any })).rejects.toThrow('Network Error');
     });
 
     it('should handle invalid API key error', async () => {
@@ -259,9 +255,7 @@ describe('LobeOllamaCloudAI - custom features', () => {
         },
       };
 
-      await expect(params.models({ client: mockClient as any })).rejects.toThrow(
-        'Failed to fetch Ollama Cloud models',
-      );
+      await expect(params.models({ client: mockClient as any })).rejects.toThrow('Invalid API Key');
     });
 
     it('should handle null response', async () => {
@@ -359,9 +353,7 @@ describe('LobeOllamaCloudAI - custom features', () => {
         },
       };
 
-      await expect(params.models({ client: mockClient as any })).rejects.toThrow(
-        'Failed to fetch Ollama Cloud models',
-      );
+      await expect(params.models({ client: mockClient as any })).rejects.toThrow('Request timeout');
     });
   });
 

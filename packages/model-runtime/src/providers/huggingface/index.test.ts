@@ -683,7 +683,7 @@ describe('LobeHuggingFaceAI', () => {
     it('should handle API errors gracefully', async () => {
       global.fetch = vi.fn().mockRejectedValue(new Error('API Error'));
 
-      await expect(params.models!()).rejects.toThrow('Failed to fetch HuggingFace models');
+      await expect(params.models!()).rejects.toThrow('API Error');
     });
 
     it('should handle invalid JSON response', async () => {
@@ -694,7 +694,7 @@ describe('LobeHuggingFaceAI', () => {
         },
       } as unknown as Response);
 
-      await expect(params.models!()).rejects.toThrow('Failed to fetch HuggingFace models');
+      await expect(params.models!()).rejects.toThrow('Invalid JSON');
     });
 
     it('should preserve contextWindowTokens from provider info', async () => {

@@ -200,13 +200,13 @@ describe('LobeAiHubMixAI', () => {
     it('should throw on non-ok HTTP response', async () => {
       mockFetch.mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }));
 
-      await expect(instance.models()).rejects.toThrow('Failed to fetch AiHubMix models');
+      await expect(instance.models()).rejects.toThrow('HTTP 401: Unauthorized');
     });
 
     it('should throw on network error', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network Error'));
 
-      await expect(instance.models()).rejects.toThrow('Failed to fetch AiHubMix models');
+      await expect(instance.models()).rejects.toThrow('Network Error');
     });
 
     it('should throw on timeout (AbortError)', async () => {
@@ -214,7 +214,7 @@ describe('LobeAiHubMixAI', () => {
         Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }),
       );
 
-      await expect(instance.models()).rejects.toThrow('Failed to fetch AiHubMix models');
+      await expect(instance.models()).rejects.toThrow('The operation was aborted');
     });
   });
 });

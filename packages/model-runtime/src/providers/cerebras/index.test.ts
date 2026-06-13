@@ -345,9 +345,7 @@ describe('LobeCerebrasAI - custom features', () => {
         },
       } as any;
 
-      await expect(params.models!({ client: mockClient })).rejects.toThrow(
-        'Failed to fetch Cerebras models',
-      );
+      await expect(params.models!({ client: mockClient })).rejects.toThrow('Network error');
 
       expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
@@ -361,9 +359,7 @@ describe('LobeCerebrasAI - custom features', () => {
         },
       } as any;
 
-      await expect(params.models!({ client: mockClient })).rejects.toThrow(
-        'Failed to fetch Cerebras models',
-      );
+      await expect(params.models!({ client: mockClient })).rejects.toThrow('401 Unauthorized');
 
       expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
@@ -377,9 +373,7 @@ describe('LobeCerebrasAI - custom features', () => {
         },
       } as any;
 
-      await expect(params.models!({ client: mockClient })).rejects.toThrow(
-        'Failed to fetch Cerebras models',
-      );
+      await expect(params.models!({ client: mockClient })).rejects.toThrow('429 Too Many Requests');
 
       expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
@@ -393,9 +387,7 @@ describe('LobeCerebrasAI - custom features', () => {
         },
       } as any;
 
-      await expect(params.models!({ client: mockClient })).rejects.toThrow(
-        'Failed to fetch Cerebras models',
-      );
+      await expect(params.models!({ client: mockClient })).rejects.toThrow('Request timeout');
 
       expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
@@ -409,9 +401,7 @@ describe('LobeCerebrasAI - custom features', () => {
         },
       } as any;
 
-      await expect(params.models!({ client: mockClient })).rejects.toThrow(
-        'Failed to fetch Cerebras models',
-      );
+      await expect(params.models!({ client: mockClient })).rejects.toThrow('Invalid JSON');
 
       expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });

@@ -27,7 +27,7 @@ describe('LobeStraicoAI', () => {
 
       const instance = new LobeStraicoAI({ apiKey: 'test-api-key' });
 
-      await expect(instance.models()).rejects.toThrow('Failed to fetch Straico models');
+      await expect(instance.models()).rejects.toThrow('HTTP 401');
     });
   });
 });

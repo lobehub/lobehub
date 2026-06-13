@@ -17,14 +17,10 @@ export const params = {
     chatCompletion: () => process.env.DEBUG_MODELSCOPE_CHAT_COMPLETION === '1',
   },
   models: async ({ client }) => {
-    try {
-      const modelsPage = (await client.models.list()) as any;
-      const modelList: ModelScopeModelCard[] = modelsPage.data || [];
+    const modelsPage = (await client.models.list()) as any;
+    const modelList: ModelScopeModelCard[] = modelsPage.data || [];
 
-      return await processMultiProviderModelList(modelList, 'modelscope');
-    } catch (error) {
-      throw new Error('Failed to fetch ModelScope models', { cause: error });
-    }
+    return await processMultiProviderModelList(modelList, 'modelscope');
   },
   provider: ModelProvider.ModelScope,
 } satisfies OpenAICompatibleFactoryOptions;

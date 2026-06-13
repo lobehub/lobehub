@@ -162,6 +162,7 @@ export const params: CreateRouterRuntimeOptions = {
     // 'APP-Code' is an AiHubMix-required client identifier.
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10_000);
+
     try {
       const response = await fetch('https://aihubmix.com/api/v1/models', {
         headers: {
@@ -181,8 +182,6 @@ export const params: CreateRouterRuntimeOptions = {
         .filter((m: any) => !UNSUPPORTED_AIHUBMIX_TYPES.has(m.types ?? ''))
         .map((m: any) => mapAiHubMixModel(m));
       return await processMultiProviderModelList(modelList, 'aihubmix');
-    } catch (error) {
-      throw new Error('Failed to fetch AiHubMix models', { cause: error });
     } finally {
       clearTimeout(timeoutId);
     }

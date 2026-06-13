@@ -1362,13 +1362,15 @@ describe('LobeOpenRouterAI - custom features', () => {
         }),
       );
 
-      await expect(params.models()).rejects.toThrow('Failed to fetch OpenRouter models');
+      await expect(params.models()).rejects.toThrow(
+        'OpenRouter models API request failed with status 401',
+      );
     });
 
     it('should throw when fetch throws error', async () => {
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
 
-      await expect(params.models()).rejects.toThrow('Failed to fetch OpenRouter models');
+      await expect(params.models()).rejects.toThrow('Network error');
     });
 
     it('should handle models with missing optional fields', async () => {

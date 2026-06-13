@@ -328,9 +328,7 @@ describe('LobeAkashChatAI - custom features', () => {
         },
       };
 
-      await expect(params.models({ client: mockClient as any })).rejects.toThrow(
-        'Failed to fetch AkashChat models',
-      );
+      await expect(params.models({ client: mockClient as any })).rejects.toThrow('API Error');
     });
 
     it('should handle network timeout errors', async () => {
@@ -342,9 +340,7 @@ describe('LobeAkashChatAI - custom features', () => {
         },
       };
 
-      await expect(params.models({ client: mockClient as any })).rejects.toThrow(
-        'Failed to fetch AkashChat models',
-      );
+      await expect(params.models({ client: mockClient as any })).rejects.toThrow('Network timeout');
     });
 
     it('should handle invalid API key errors', async () => {
@@ -356,9 +352,7 @@ describe('LobeAkashChatAI - custom features', () => {
         },
       };
 
-      await expect(params.models({ client: mockClient as any })).rejects.toThrow(
-        'Failed to fetch AkashChat models',
-      );
+      await expect(params.models({ client: mockClient as any })).rejects.toThrow('Unauthorized');
     });
 
     it('should throw on malformed response data', async () => {
@@ -373,7 +367,7 @@ describe('LobeAkashChatAI - custom features', () => {
       };
 
       await expect(params.models({ client: mockClient as any })).rejects.toThrow(
-        'Failed to fetch AkashChat models',
+        /Cannot destructure property 'created'/,
       );
     });
   });

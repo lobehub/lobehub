@@ -880,8 +880,6 @@ describe('models', () => {
       },
     } as unknown as OpenAI;
 
-    await expect(fetchModels({ client: mockClient })).rejects.toThrow(
-      'Failed to fetch Moonshot models',
-    );
+    await expect(fetchModels({ client: mockClient })).rejects.toThrow('Network error');
   });
 });

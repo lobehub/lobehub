@@ -213,20 +213,16 @@ const buildMoonshotOpenAIPayload = (
  * Fetch Moonshot models from the API using OpenAI client
  */
 const fetchMoonshotModels = async ({ client }: { client: OpenAI }): Promise<ChatModelCard[]> => {
-  try {
-    const modelsPage = (await client.models.list()) as any;
-    const modelList: MoonshotModelCard[] = modelsPage.data || [];
+  const modelsPage = (await client.models.list()) as any;
+  const modelList: MoonshotModelCard[] = modelsPage.data || [];
 
-    const processedList = modelList.map((model) => ({
-      contextWindowTokens: model.context_length,
-      id: model.id,
-      vision: model.supports_image_in,
-    }));
+  const processedList = modelList.map((model) => ({
+    contextWindowTokens: model.context_length,
+    id: model.id,
+    vision: model.supports_image_in,
+  }));
 
-    return processModelList(processedList, MODEL_LIST_CONFIGS.moonshot, 'moonshot');
-  } catch (error) {
-    throw new Error('Failed to fetch Moonshot models', { cause: error });
-  }
+  return processModelList(processedList, MODEL_LIST_CONFIGS.moonshot, 'moonshot');
 };
 
 /**

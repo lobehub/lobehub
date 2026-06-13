@@ -301,9 +301,7 @@ describe('LobeCometAPIAI - custom features', () => {
         },
       };
 
-      await expect(params.models!({ client: mockClient as any })).rejects.toThrow(
-        'Failed to fetch CometAPI models',
-      );
+      await expect(params.models!({ client: mockClient as any })).rejects.toThrow('API Error');
     });
 
     it('should handle network error', async () => {
@@ -315,9 +313,7 @@ describe('LobeCometAPIAI - custom features', () => {
         },
       };
 
-      await expect(params.models!({ client: mockClient as any })).rejects.toThrow(
-        'Failed to fetch CometAPI models',
-      );
+      await expect(params.models!({ client: mockClient as any })).rejects.toThrow('Network Error');
     });
 
     it('should handle unauthorized error', async () => {
@@ -329,9 +325,7 @@ describe('LobeCometAPIAI - custom features', () => {
         },
       };
 
-      await expect(params.models!({ client: mockClient as any })).rejects.toThrow(
-        'Failed to fetch CometAPI models',
-      );
+      await expect(params.models!({ client: mockClient as any })).rejects.toThrow('Unauthorized');
     });
 
     it('should process multi-provider model list', async () => {

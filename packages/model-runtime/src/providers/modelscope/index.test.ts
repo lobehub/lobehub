@@ -125,9 +125,7 @@ describe('LobeModelScopeAI - custom features', () => {
       const mockError = new Error('API Error');
       mockClient.models.list.mockRejectedValue(mockError);
 
-      await expect(params.models({ client: mockClient })).rejects.toThrow(
-        'Failed to fetch ModelScope models',
-      );
+      await expect(params.models({ client: mockClient })).rejects.toThrow('API Error');
       expect(mockClient.models.list).toHaveBeenCalledTimes(1);
     });
 
@@ -135,18 +133,14 @@ describe('LobeModelScopeAI - custom features', () => {
       const networkError = new Error('Network timeout');
       mockClient.models.list.mockRejectedValue(networkError);
 
-      await expect(params.models({ client: mockClient })).rejects.toThrow(
-        'Failed to fetch ModelScope models',
-      );
+      await expect(params.models({ client: mockClient })).rejects.toThrow('Network timeout');
     });
 
     it('should handle invalid API key errors', async () => {
       const authError = new Error('Invalid API key');
       mockClient.models.list.mockRejectedValue(authError);
 
-      await expect(params.models({ client: mockClient })).rejects.toThrow(
-        'Failed to fetch ModelScope models',
-      );
+      await expect(params.models({ client: mockClient })).rejects.toThrow('Invalid API key');
     });
 
     it('should process models with processMultiProviderModelList', async () => {

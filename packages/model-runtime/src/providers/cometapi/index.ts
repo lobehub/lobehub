@@ -27,21 +27,17 @@ export const params = {
     chatCompletion: () => process.env.DEBUG_COMETAPI_COMPLETION === '1',
   },
   models: async ({ client }) => {
-    try {
-      const modelsPage = (await client.models.list()) as any;
-      const rawList: any[] = modelsPage.data || [];
+    const modelsPage = (await client.models.list()) as any;
+    const rawList: any[] = modelsPage.data || [];
 
-      // Process the model list and remove unnecessary fields
-      const modelList: CometAPIModelCard[] = rawList.map((model) => ({
-        id: model.id,
-        object: model.object,
-        owned_by: model.owned_by,
-      }));
+    // Process the model list and remove unnecessary fields
+    const modelList: CometAPIModelCard[] = rawList.map((model) => ({
+      id: model.id,
+      object: model.object,
+      owned_by: model.owned_by,
+    }));
 
-      return await processMultiProviderModelList(modelList, 'cometapi');
-    } catch (error) {
-      throw new Error('Failed to fetch CometAPI models', { cause: error });
-    }
+    return await processMultiProviderModelList(modelList, 'cometapi');
   },
   provider: ModelProvider.CometAPI,
 } satisfies OpenAICompatibleFactoryOptions;
