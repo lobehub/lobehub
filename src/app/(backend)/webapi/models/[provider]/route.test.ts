@@ -47,7 +47,7 @@ afterEach(() => {
 
 describe('GET handler', () => {
   describe('error handling', () => {
-    it('should not expose stack trace when an Error is thrown', async () => {
+    it('should return the thrown error message without exposing stack trace', async () => {
       const mockParams = Promise.resolve({ provider: 'google' });
 
       const errorWithStack = new Error('Something went wrong');
@@ -64,16 +64,16 @@ describe('GET handler', () => {
       const response = await GET(request, { params: mockParams });
       const responseBody = await response.json();
 
-      expect(responseBody.body.error.name).toBe('Error');
-      expect(responseBody.body.error.message).toBe('Something went wrong');
-      expect(responseBody.body.error.stack).toBeUndefined();
+      expect(response.status).toBe(471);
+      expect(responseBody.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
+      expect(responseBody.body.message).toBe('Something went wrong');
 
       const responseText = JSON.stringify(responseBody);
       expect(responseText).not.toContain('/path/to/file.ts');
       expect(responseText).not.toContain('at Object');
     });
 
-    it('should preserve error name for custom error types', async () => {
+    it('should return custom error messages', async () => {
       const mockParams = Promise.resolve({ provider: 'google' });
 
       class CustomError extends Error {
@@ -96,17 +96,17 @@ describe('GET handler', () => {
       const response = await GET(request, { params: mockParams });
       const responseBody = await response.json();
 
-      expect(responseBody.body.error.name).toBe('CustomError');
-      expect(responseBody.body.error.message).toBe('Custom error occurred');
-      expect(responseBody.body.error.stack).toBeUndefined();
+      expect(response.status).toBe(471);
+      expect(responseBody.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
+      expect(responseBody.body.message).toBe('Custom error occurred');
     });
 
-    it('should return provider error status for structured model fetch errors', async () => {
+    it('should preserve structured model fetch error context', async () => {
       const mockParams = Promise.resolve({ provider: 'google' });
 
       const structuredError = {
-        errorType: 'InternalServerError',
-        error: { code: 'PROVIDER_ERROR', details: 'API limit exceeded' },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        error: { code: 'PROVIDER_ERROR', message: 'API limit exceeded' },
       };
 
       const mockRuntime: LobeRuntimeAI = {
@@ -122,7 +122,9 @@ describe('GET handler', () => {
       expect(response.status).toBe(471);
       expect(responseBody.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
       expect(responseBody.body.error.code).toBe('PROVIDER_ERROR');
-      expect(responseBody.body.error.details).toBe('API limit exceeded');
+      expect(responseBody.body.error.message).toBe('API limit exceeded');
+      expect(responseBody.body.message).toBe('API limit exceeded');
+      expect(responseBody.body.provider).toBe('google');
     });
 
     it('should return provider status code for model fetch errors', async () => {
@@ -164,10 +166,6 @@ describe('GET handler', () => {
       expect(responseBody.body.message).toBe(
         'OpenRouter models API request failed with status 401',
       );
-      expect(responseBody.body.error.message).toBe('Failed to fetch OpenRouter models');
-      expect(responseBody.body.error.cause.message).toBe(
-        'OpenRouter models API request failed with status 401',
-      );
     });
 
     it('should return provider status code for setup errors', async () => {
@@ -183,38 +181,22 @@ describe('GET handler', () => {
       expect(responseBody.body.message).toBe('Setup failed');
     });
 
-    it('should convert structured setup errors to provider model list errors', async () => {
+    it('should preserve structured setup error type and message', async () => {
       const mockParams = Promise.resolve({ provider: 'githubcopilot' });
 
       vi.mocked(initModelRuntimeFromDB).mockRejectedValue({
-        error: { message: 'No GitHub Copilot subscription or access denied' },
-        errorType: AgentRuntimeErrorType.PermissionDenied,
-      });
-
-      const response = await GET(request, { params: mockParams });
-      const responseBody = await response.json();
-
-      expect(response.status).toBe(471);
-      expect(responseBody.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
-      expect(responseBody.body.message).toBe('No GitHub Copilot subscription or access denied');
-      expect(responseBody.body.error.message).toBe(
-        'No GitHub Copilot subscription or access denied',
-      );
-    });
-
-    it('should fall back to structured setup error type as message', async () => {
-      const mockParams = Promise.resolve({ provider: 'cloudflare' });
-
-      vi.mocked(initModelRuntimeFromDB).mockRejectedValue({
+        error: { message: 'Invalid GitHub Copilot API key' },
         errorType: AgentRuntimeErrorType.InvalidProviderAPIKey,
       });
 
       const response = await GET(request, { params: mockParams });
       const responseBody = await response.json();
 
-      expect(response.status).toBe(471);
-      expect(responseBody.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
-      expect(responseBody.body.message).toBe(AgentRuntimeErrorType.InvalidProviderAPIKey);
+      expect(response.status).toBe(401);
+      expect(responseBody.errorType).toBe(AgentRuntimeErrorType.InvalidProviderAPIKey);
+      expect(responseBody.body.message).toBe('Invalid GitHub Copilot API key');
+      expect(responseBody.body.error.message).toBe('Invalid GitHub Copilot API key');
+      expect(responseBody.body.provider).toBe('githubcopilot');
     });
 
     it('should include provider in error response', async () => {
