@@ -895,8 +895,15 @@ export const executeHeterogeneousAgent = async (
         return;
       }
 
-      // Live token-level UI is driven by forwarding raw events to the gateway
-      // handler, so the main-scope streamContent intent has no DB/UI surface.
+      // No-op ON PURPOSE — not dead code. Main-agent live token UI is already
+      // driven by forwarding the RAW stream_chunk to the gateway `eventHandler`
+      // (see handleStreamEvent: it dispatches into `messagesMap` for live
+      // display). Applying streamContent here too would be a redundant double
+      // write. (Contrast the SUBAGENT interpreter, whose `streamContent` DOES
+      // update the thread bucket — subagent events are dropped before the
+      // gateway forward, so the intent is their only live-UI path.)
+      // Verified: in-memory content streams 3→…→N while the op runs; the durable
+      // write still lands via persistAssistant / persistToolBatch.
       case 'streamContent': {
         return;
       }
