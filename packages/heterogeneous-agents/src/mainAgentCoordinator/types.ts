@@ -77,12 +77,6 @@ export interface MainAgentRunState {
   lastToolMsgIdEver: string | undefined;
   /** Nested subagent runs — delegated to `reduceSubagentRuns`. */
   subagents: SubagentRunsState;
-  /**
-   * Run-global `tool_call_id → tool-message id` lookup. Spans turns AND
-   * subagents so a `tool_result` arriving after its owning turn / on a
-   * different replica still resolves. Never cleared at turn boundaries.
-   */
-  toolMsgIdByCallId: Map<string, string>;
   /** Per-turn tool persistence state. */
   toolState: MainAgentTurnToolState;
   /** Accumulated metadata (usage, snapshot seq) for the current assistant. */
@@ -107,7 +101,6 @@ export const createMainAgentRunState = (seedAssistantId: string): MainAgentRunSt
   lastTextSnapshotSeq: 0,
   lastToolMsgIdEver: undefined,
   subagents: createSubagentRunsState(),
-  toolMsgIdByCallId: new Map(),
   toolState: { payloads: [], persistedIds: new Set(), toolMsgIdByCallId: new Map() },
   turnMetadata: {},
   turnModel: undefined,

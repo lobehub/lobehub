@@ -136,9 +136,9 @@ describe('main agent reducer', () => {
       { isNew: true, payload: tool('t1'), toolMessageId: 'msg_1' },
       { isNew: true, payload: tool('t2'), toolMessageId: 'msg_2' },
     ]);
-    // run-global map populated for later tool_result resolution
-    expect(state.toolMsgIdByCallId.get('t1')).toBe('msg_1');
-    expect(state.toolMsgIdByCallId.get('t2')).toBe('msg_2');
+    // per-turn pre-allocated map carries the interpreter's create ids
+    expect(state.toolState.toolMsgIdByCallId.get('t1')).toBe('msg_1');
+    expect(state.toolState.toolMsgIdByCallId.get('t2')).toBe('msg_2');
     expect(state.lastToolMsgIdEver).toBe('msg_2');
   });
 
@@ -320,13 +320,13 @@ describe('main agent reducer', () => {
     const before = JSON.stringify({
       acc: state.accContent,
       ever: state.lastToolMsgIdEver,
-      tools: [...state.toolMsgIdByCallId],
+      tools: [...state.toolState.toolMsgIdByCallId],
     });
     reduceMainAgent(state, toolsEvent([tool('t1')]), makeCtx());
     const after = JSON.stringify({
       acc: state.accContent,
       ever: state.lastToolMsgIdEver,
-      tools: [...state.toolMsgIdByCallId],
+      tools: [...state.toolState.toolMsgIdByCallId],
     });
     expect(after).toBe(before);
   });

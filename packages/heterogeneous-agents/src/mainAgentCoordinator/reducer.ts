@@ -47,7 +47,6 @@ const emptyToolState = (): MainAgentTurnToolState => ({
 /** Deep-copy the parts of state a handler may mutate; subagents is swapped wholesale. */
 const copyState = (s: MainAgentRunState): MainAgentRunState => ({
   ...s,
-  toolMsgIdByCallId: new Map(s.toolMsgIdByCallId),
   toolState: copyToolState(s.toolState),
   turnMetadata: { ...s.turnMetadata },
 });
@@ -219,7 +218,6 @@ const reduceToolsChunk = (
     });
     const toolMessageId = ctx.newId('message');
     next.toolState.toolMsgIdByCallId.set(tool.id, toolMessageId);
-    next.toolMsgIdByCallId.set(tool.id, toolMessageId); // run-global, for tool_result
     newToolMsgIds.push(toolMessageId);
   }
 
