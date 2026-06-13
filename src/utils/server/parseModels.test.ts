@@ -324,6 +324,24 @@ describe('parseModelString', () => {
         type: 'chat',
       });
     });
+
+    it('should infer type as embedding if model ID contains embed or embedding', async () => {
+      const result = await parseModelString('test-provider', 'bge-large-zh-v1.5,nomic-embed-text');
+      expect(result.add).toMatchObject([
+        { id: 'bge-large-zh-v1.5', abilities: {}, type: 'embedding' },
+        { id: 'nomic-embed-text', abilities: {}, type: 'embedding' },
+      ]);
+    });
+
+    it('should set type as embedding if explicitly declared as capability', async () => {
+      const result = await parseModelString('test-provider', 'my-custom-model<1024:embedding>');
+      expect(result.add[0]).toMatchObject({
+        id: 'my-custom-model',
+        contextWindowTokens: 1024,
+        abilities: {},
+        type: 'embedding',
+      });
+    });
   });
 
   describe('FAL image models', () => {

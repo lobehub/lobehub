@@ -50,11 +50,24 @@ export const parseModelString = async (
     }
 
     // Use new type lookup function, prioritizing same provider first, then fallback to other providers
-    const modelType: AiModelType = await getModelPropertyWithFallback<AiModelType>(
+    let modelType: AiModelType = await getModelPropertyWithFallback<AiModelType>(
       id,
       'type',
       providerId,
     );
+
+    if (modelType === 'chat') {
+      const lowerId = id.toLowerCase();
+      if (
+        lowerId.includes('embed') ||
+        lowerId.includes('embedding') ||
+        lowerId.includes('bge') ||
+        lowerId.includes('minilm') ||
+        lowerId.startsWith('gte-')
+      ) {
+        modelType = 'embedding';
+      }
+    }
 
     const model: AiFullModelCard = {
       abilities: {},
@@ -75,6 +88,10 @@ export const parseModelString = async (
         switch (capability) {
           case 'reasoning': {
             model.abilities!.reasoning = true;
+            break;
+          }
+          case 'embedding': {
+            model.type = 'embedding';
             break;
           }
           case 'vision': {
