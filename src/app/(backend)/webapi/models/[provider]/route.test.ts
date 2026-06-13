@@ -143,6 +143,33 @@ describe('GET handler', () => {
       expect(responseBody.body.message).toBe('Failed');
     });
 
+    it('should prefer wrapped cause message for model fetch errors', async () => {
+      const mockParams = Promise.resolve({ provider: 'openrouter' });
+
+      const cause = new Error('OpenRouter models API request failed with status 401');
+      const wrappedError = new Error('Failed to fetch OpenRouter models', { cause });
+
+      const mockRuntime: LobeRuntimeAI = {
+        baseURL: 'abc',
+        chat: vi.fn(),
+        models: vi.fn().mockRejectedValue(wrappedError),
+      };
+      vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
+
+      const response = await GET(request, { params: mockParams });
+      const responseBody = await response.json();
+
+      expect(response.status).toBe(471);
+      expect(responseBody.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
+      expect(responseBody.body.message).toBe(
+        'OpenRouter models API request failed with status 401',
+      );
+      expect(responseBody.body.error.message).toBe('Failed to fetch OpenRouter models');
+      expect(responseBody.body.error.cause.message).toBe(
+        'OpenRouter models API request failed with status 401',
+      );
+    });
+
     it('should return provider status code for setup errors', async () => {
       const mockParams = Promise.resolve({ provider: 'google' });
 

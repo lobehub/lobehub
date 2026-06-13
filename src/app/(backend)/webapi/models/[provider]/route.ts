@@ -101,16 +101,30 @@ const toJsonSafeValue = (value: unknown, seen = new WeakSet<object>(), depth = 0
   return result;
 };
 
-const getMessageFromValue = (error: unknown): string | undefined => {
+const getMessageFromValue = (
+  error: unknown,
+  seen = new WeakSet<object>(),
+  depth = 0,
+): string | undefined => {
   if (error === null || error === undefined) return;
   if (typeof error === 'string') return error || undefined;
   if (typeof error === 'number' || typeof error === 'boolean' || typeof error === 'bigint') {
     return String(error);
   }
   if (!isRecord(error)) return;
-  if (error instanceof Error && error.message) return error.message;
+  if (seen.has(error) || depth >= MAX_ERROR_DEPTH) return;
+
+  seen.add(error);
+
+  if (error instanceof Error) {
+    const causeMessage = getMessageFromValue(error.cause, seen, depth + 1);
+    if (causeMessage) return causeMessage;
+    if (error.message) return error.message;
+  }
 
   const record = error as Record<string, unknown>;
+  const causeMessage = getMessageFromValue(record.cause, seen, depth + 1);
+  if (causeMessage) return causeMessage;
   if (typeof record.message === 'string' && record.message) return record.message;
   if (typeof record.status === 'number') return `HTTP ${record.status}`;
   if (typeof record.statusCode === 'number') return `HTTP ${record.statusCode}`;
