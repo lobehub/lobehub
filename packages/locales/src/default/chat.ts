@@ -461,6 +461,7 @@ export default {
   'operation.execServerAgentRuntime':
     'Task is running in the server. You are safe to leave this page',
   'operation.sendMessage': 'Sending message',
+  'operation.toolCalling': 'Calling tools',
   'owner': 'Group owner',
   'pageCopilot.title': 'Page Agent',
   'pageCopilot.welcome': `**Clearer, sharper writing**\n\nDraft, rewrite, or polish—tell me your intent and I'll refine the rest.`,
