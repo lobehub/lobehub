@@ -138,12 +138,12 @@ export const AgentRuntimeErrorType = {
    */
   StateStorePersistError: 'StateStorePersistError',
   /**
-   * A blocking state-store read (XREAD / BLPOP, e.g. consuming the agent event
-   * stream or waiting on a tool result) was aborted because the originating
-   * caller disconnected — Upstash replies "ERR caller gone". Benign client
-   * abandonment tied to the request lifecycle, not a harness fault; kept
-   * distinct from the write-side StateStorePersistError so it is not counted
-   * as a failure.
+   * A state-store (Redis / Upstash) READ failed: either a blocking read
+   * (XREAD / BLPOP, consuming the agent event stream or waiting on a tool
+   * result) was aborted because the caller disconnected ("ERR caller gone"), or
+   * the operation's agent state could not be loaded ("Agent state not found for
+   * operation …"). System-side read failure, kept distinct from the write-side
+   * StateStorePersistError; counts as a failure.
    */
   StateStoreReadError: 'StateStoreReadError',
   /**

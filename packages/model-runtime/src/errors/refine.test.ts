@@ -39,7 +39,7 @@ describe('refineErrorCode', () => {
       expect(
         refineErrorCode({
           errorType: String(ChatErrorType.InternalServerError),
-          message: 'Agent state not found for operation op_xxx',
+          message: 'some opaque internal failure with no registered pattern',
         }),
       ).toBeUndefined();
     });

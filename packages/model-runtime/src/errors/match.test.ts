@@ -102,10 +102,18 @@ describe('matchErrorPattern', () => {
     ).toBe(AgentRuntimeErrorType.StateStorePersistError);
   });
 
-  it('classifies a caller-gone blocking-read abort as StateStoreReadError (benign, not a persist failure)', () => {
+  it('classifies a caller-gone blocking-read abort as StateStoreReadError', () => {
     expect(matchErrorPattern({ message: 'ERR caller gone' })?.code).toBe(
       AgentRuntimeErrorType.StateStoreReadError,
     );
+  });
+
+  it('classifies a missing-agent-state read as StateStoreReadError', () => {
+    expect(
+      matchErrorPattern({
+        message: 'Agent state not found for operation op_1781276404066_agt_x_tpc_y_z',
+      })?.code,
+    ).toBe(AgentRuntimeErrorType.StateStoreReadError);
   });
 
   it('classifies harness JS runtime crashes as AgentRuntimeError', () => {

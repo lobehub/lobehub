@@ -515,14 +515,20 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // StateStoreReadError — a blocking state-store READ (XREAD / BLPOP) aborted
-  // because the caller disconnected. Benign client abandonment; must precede
-  // StateStorePersistError so the write-side bucket doesn't claim it.
+  // StateStoreReadError — a state-store READ failed: either a blocking read
+  // (XREAD / BLPOP) aborted because the caller disconnected, or the operation's
+  // agent state could not be loaded. Must precede StateStorePersistError so the
+  // write-side bucket doesn't claim it.
   // ─────────────────────────────────────────────────────────────────────────
   {
     code: AgentRuntimeErrorType.StateStoreReadError,
     match: sub('ERR caller gone'),
     note: 'Upstash aborts the in-flight blocking read (XREAD/BLPOP) when the originating request is already gone.',
+  },
+  {
+    code: AgentRuntimeErrorType.StateStoreReadError,
+    match: sub('Agent state not found for operation'),
+    note: 'coordinator.loadAgentState() returned null — the operation state was evicted/cleaned up before this read.',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
