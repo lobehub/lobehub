@@ -8,6 +8,7 @@
 #   setup-auth.sh status        # check server + CLI + web + Electron readiness
 #   setup-auth.sh status --surface web  # check only the Web surface gate
 #   setup-auth.sh cli           # interactive CLI device-code login (run by a human)
+#   setup-auth.sh open-chrome   # open SERVER_URL in Chrome and show DevTools
 #   setup-auth.sh web           # stdin = Cookie header -> inject into agent-browser session
 #   setup-auth.sh web-verify    # live-check the agent-browser session is authenticated
 #
@@ -88,6 +89,7 @@ usage() {
 Usage:
   $0 status [--surface all|cli|web|electron]
   $0 cli
+  $0 open-chrome [--dry-run]
   $0 web
   $0 web-verify
 
@@ -244,6 +246,61 @@ cmd_cli() {
   LOBEHUB_CLI_HOME=.lobehub-dev bun src/index.ts login --server "$SERVER_URL"
 }
 
+cmd_open_chrome() {
+  local mode="${1:-}"
+  if [[ "$mode" != "" && "$mode" != "--dry-run" ]]; then
+    echo "unknown open-chrome option: $mode" >&2
+    usage >&2
+    return 2
+  fi
+
+  if [[ "$mode" == "--dry-run" ]]; then
+    echo "would open Google Chrome at $SERVER_URL/"
+    echo "would press Cmd+Option+I to open DevTools"
+    echo "would open DevTools command menu and run 'Show Network'"
+    return 0
+  fi
+
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    bad "open-chrome is macOS-only"
+    note "open $SERVER_URL/ in your browser and open DevTools manually"
+    return 1
+  fi
+
+  if ! command -v osascript > /dev/null 2>&1; then
+    bad "osascript not found"
+    note "open $SERVER_URL/ in Chrome and press Cmd+Option+I manually"
+    return 1
+  fi
+
+  SERVER_URL="$SERVER_URL" osascript << 'OSA'
+set targetUrl to (system attribute "SERVER_URL") & "/"
+
+tell application "Google Chrome"
+  activate
+  if (count of windows) = 0 then
+    make new window
+  end if
+  tell front window to make new tab with properties {URL:targetUrl}
+end tell
+
+delay 1
+
+tell application "System Events"
+  tell process "Google Chrome"
+    set frontmost to true
+    keystroke "i" using {command down, option down}
+    delay 1
+    keystroke "p" using {command down, shift down}
+    delay 0.2
+    keystroke "Show Network"
+    key code 36
+  end tell
+end tell
+OSA
+  ok "opened Chrome at $SERVER_URL/ and requested DevTools Network panel"
+}
+
 # Build a Playwright storageState file from a raw Cookie header on stdin,
 # keeping only the better-auth cookies. See references/auth.md for why the
 # header must come from a Network request (HttpOnly) and why httpOnly=false.
@@ -340,6 +397,10 @@ case "${1:-status}" in
     cmd_status "$@"
     ;;
   cli) cmd_cli ;;
+  open-chrome)
+    shift || true
+    cmd_open_chrome "$@"
+    ;;
   web) cmd_web ;;
   web-verify) cmd_web_verify ;;
   -h|--help) usage ;;

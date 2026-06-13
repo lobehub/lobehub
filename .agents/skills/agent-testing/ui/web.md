@@ -22,8 +22,10 @@ eval "$(./.agents/skills/agent-testing/scripts/test-env.sh --exports)"
 ```
 
 If this fails and the user's normal Chrome is already logged in, ask for the
-Network `Cookie:` header and run `pbpaste | setup-auth.sh web`. Do not open a
-login page unless the login flow itself is the case under test.
+Network `Cookie:` header, but first run `setup-auth.sh open-chrome` so Chrome
+opens at `SERVER_URL` with DevTools Network requested. Then run
+`pbpaste | setup-auth.sh web`. Do not open a login page unless the login flow
+itself is the case under test.
 
 Before touching the browser, follow the Step -1 approval gate in
 [../SKILL.md](../SKILL.md#step--1--get-approval-for-non-trivial-test-plans).

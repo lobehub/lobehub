@@ -12,6 +12,7 @@ eval "$($TEST_ENV --exports)"
 $SCRIPT status               # check server + CLI + web auth readiness
 $SCRIPT status --surface web # check only the Web surface gate
 $SCRIPT cli                  # interactive CLI device-code login (must be run by the user)
+$SCRIPT open-chrome          # open Chrome at SERVER_URL and show DevTools Network
 pbpaste | $SCRIPT web        # inject a copied Cookie header into the agent-browser session
 $SCRIPT web-verify           # live-check that the agent-browser session is authenticated
 ```
@@ -85,8 +86,13 @@ a login page.
 1. If verification fails, ask the user to copy the Cookie header **from a Network request, NOT
    `document.cookie`** (`document.cookie` cannot see HttpOnly cookies, which is
    exactly where better-auth puts its session):
-   - Open the logged-in tab (`http://localhost:<port>/…`) in Chrome.
-   - `Cmd+Option+I` → **Network** tab → refresh → click any same-origin request.
+   - First open Chrome and DevTools Network for the user:
+     ```bash
+     eval "$(./.agents/skills/agent-testing/scripts/test-env.sh --exports)"
+     ./.agents/skills/agent-testing/scripts/setup-auth.sh open-chrome
+     ```
+   - If DevTools does not land on **Network**, click the **Network** tab manually.
+   - Refresh → click any same-origin request.
    - Under **Request Headers**, right-click the `Cookie:` line → **Copy value**.
 2. Inject and verify in one shot:
 
