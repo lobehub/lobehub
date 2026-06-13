@@ -94,6 +94,17 @@ describe('matchErrorPattern', () => {
     ).toBe(AgentRuntimeErrorType.StateStorePersistError);
   });
 
+  it('classifies Upstash readonly-upgrade and dropped-caller drops as StateStorePersistError', () => {
+    expect(
+      matchErrorPattern({
+        message: 'READONLY Writes are temporarily rejected due to server upgrade',
+      })?.code,
+    ).toBe(AgentRuntimeErrorType.StateStorePersistError);
+    expect(matchErrorPattern({ message: 'ERR caller gone' })?.code).toBe(
+      AgentRuntimeErrorType.StateStorePersistError,
+    );
+  });
+
   it('classifies harness JS runtime crashes as AgentRuntimeError', () => {
     for (const message of [
       'e.trim is not a function',

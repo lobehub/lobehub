@@ -516,7 +516,9 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
 
   // ─────────────────────────────────────────────────────────────────────────
   // StateStorePersistError — Redis / Upstash agent-state store (NOT the LLM
-  // provider). ioredis aborts, request-size cap, suspended DB.
+  // provider). ioredis aborts, request-size cap, suspended DB, readonly upgrade
+  // window, dropped caller. These describe the connection/server condition, not
+  // a specific command, so there is no read-vs-write signal to split on.
   // ─────────────────────────────────────────────────────────────────────────
   {
     code: AgentRuntimeErrorType.StateStorePersistError,
@@ -530,6 +532,16 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   {
     code: AgentRuntimeErrorType.StateStorePersistError,
     match: sub('database has been suspended'),
+  },
+  {
+    code: AgentRuntimeErrorType.StateStorePersistError,
+    match: sub('READONLY Writes are temporarily rejected'),
+    note: 'Upstash rejects writes against the read-only replica during a server upgrade.',
+  },
+  {
+    code: AgentRuntimeErrorType.StateStorePersistError,
+    match: sub('ERR caller gone'),
+    note: 'Upstash REST aborts the command when the originating request is already gone.',
   },
 
   // ─────────────────────────────────────────────────────────────────────────
