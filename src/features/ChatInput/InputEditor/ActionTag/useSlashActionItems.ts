@@ -11,7 +11,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useClientDataSWR } from '@/libs/swr';
-import { localFileService } from '@/services/electron/localFileService';
+import { projectSkillService } from '@/services/projectSkill';
+import { useAgentStore } from '@/store/agent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useToolStore } from '@/store/tool';
 import { agentDocumentSkillsSelectors } from '@/store/tool/selectors';
@@ -53,10 +55,27 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   // set (and for local-device runs), not just an explicit agent/topic pick.
   const workingDirectory = useEffectiveWorkingDirectory(agentId);
 
-  const projectSkillsEnabled = isDesktop && !!workingDirectory;
-  const { data: projectSkillsData } = useClientDataSWR<ListProjectSkillsResult>(
-    projectSkillsEnabled ? ['project-skills', workingDirectory] : null,
-    () => localFileService.listProjectSkills({ scope: workingDirectory! }),
+  // Device-bound (remote) runs scan project skills on that device over the
+  // `device.listProjectSkills` RPC; the local desktop reads over Electron IPC.
+  // Mirror the WorkingSidebar's `remoteDeviceId`: only treat it as remote when
+  // the agent explicitly targets a bound device, so a local "This device" run
+  // keeps the IPC path (no deviceId).
+  const agencyConfig = useAgentStore((s) =>
+    agentId ? agentByIdSelectors.getAgencyConfigById(agentId)(s) : undefined,
+  );
+  const remoteDeviceId =
+    agencyConfig?.executionTarget === 'device' ? agencyConfig?.boundDeviceId : undefined;
+
+  // Local desktop reads over IPC; a bound device reads over RPC. Either path
+  // makes project skills reachable even when this client isn't the desktop app
+  // (previously gated on `isDesktop` alone, so remote/web runs got nothing).
+  const projectSkillsEnabled = (isDesktop || !!remoteDeviceId) && !!workingDirectory;
+  // Share the SWR key shape with `useProjectSkills` so the slash menu and the
+  // working sidebar dedupe the same fetch.
+  const { data: projectSkillsData } = useClientDataSWR<ListProjectSkillsResult | undefined>(
+    projectSkillsEnabled ? ['project-skills', remoteDeviceId ?? 'local', workingDirectory] : null,
+    () =>
+      projectSkillService.listProjectSkills({ deviceId: remoteDeviceId, scope: workingDirectory! }),
     { revalidateOnFocus: false, shouldRetryOnError: false },
   );
   const projectSkills = projectSkillsData?.skills;
