@@ -3,7 +3,7 @@ import type {
   ILobeAgentRuntimeErrorType,
 } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
-import { ChatErrorType, type ErrorType } from '@lobechat/types';
+import { type ErrorType } from '@lobechat/types';
 import { NextResponse } from 'next/server';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
@@ -168,7 +168,9 @@ export const GET = checkAuth(async (req, { params, userId, serverDB }) => {
     // Read user's provider config from database
     agentRuntime = await initModelRuntimeFromDB(serverDB, userId, provider, workspaceId);
   } catch (e) {
-    return createModelListErrorResponse(provider, e, ChatErrorType.InternalServerError);
+    return createModelListErrorResponse(provider, e, AgentRuntimeErrorType.ProviderBizError, {
+      usePayloadErrorType: false,
+    });
   }
 
   try {

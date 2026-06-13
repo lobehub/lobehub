@@ -239,19 +239,37 @@ describe('LobeGithubCopilotAI', () => {
         expect((error as Error & { errorType?: string }).errorType).toBeUndefined();
       }
     });
+
+    it('should throw regular Error when token exchange fails before models request', async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: () => Promise.resolve({}),
+        ok: false,
+        status: 403,
+      });
+
+      const instance = new LobeGithubCopilotAI({ apiKey: 'ghp_models_denied' });
+
+      try {
+        await instance.models();
+        expect.fail('Expected models() to reject');
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toBe('No GitHub Copilot subscription or access denied');
+        expect((error as Error & { errorType?: string }).errorType).toBeUndefined();
+        expect((error as Error & { status?: number }).status).toBe(403);
+      }
+    });
   });
 
   describe('error handling in constructor', () => {
-    it('should throw InvalidGithubCopilotToken when no credentials provided', () => {
-      expect(() => new LobeGithubCopilotAI({})).toThrow();
-    });
-
-    it('should throw with descriptive message', () => {
+    it('should throw regular Error when no credentials provided', () => {
       try {
         new LobeGithubCopilotAI({});
         expect.fail('Should have thrown');
       } catch (error: any) {
-        expect(error.errorType).toBe('InvalidGithubCopilotToken');
+        expect(error).toBeInstanceOf(Error);
+        expect(error.message).toBe('GitHub Personal Access Token or OAuth token is required');
+        expect(error.errorType).toBeUndefined();
       }
     });
   });
