@@ -49,6 +49,7 @@ const TabBar = () => {
   const { t } = useTranslation('electron');
   const { allowed: canCreate, reason } = usePermission('create_content');
   const viewportRef = useRef<HTMLDivElement>(null);
+  const scrolledActiveTabIdRef = useRef<string | null>(null);
   const { tabs, activeTabId } = useResolvedTabs();
   const activateTab = useElectronStore((s) => s.activateTab);
   const addTab = useElectronStore((s) => s.addTab);
@@ -150,6 +151,13 @@ const TabBar = () => {
 
     const activeIndex = tabs.findIndex((tab) => tab.tab.id === activeTabId);
     if (activeIndex < 0) return;
+
+    // Only scroll into view when the active tab itself changes. Reordering
+    // background tabs keeps the same active tab, so skip it — otherwise every
+    // drop would yank the viewport back to the active tab and lose the user's
+    // scroll position.
+    if (scrolledActiveTabIdRef.current === activeTabId) return;
+    scrolledActiveTabIdRef.current = activeTabId;
 
     const tabLeft = activeIndex * (TAB_WIDTH + TAB_GAP);
     const tabRight = tabLeft + TAB_WIDTH;
