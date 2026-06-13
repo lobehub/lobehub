@@ -1,5 +1,16 @@
 'use client';
 
+import {
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  type Modifier,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import { horizontalListSortingStrategy, SortableContext } from '@dnd-kit/sortable';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { ActionIcon, ScrollArea } from '@lobehub/ui';
 import { cx } from 'antd-style';
@@ -23,6 +34,9 @@ import TabItem from './TabItem';
 const TAB_WIDTH = 180;
 const TAB_GAP = 0;
 
+// Tabs only reorder along the horizontal axis, so lock the drag transform to X.
+const restrictToHorizontalAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 });
+
 // Fallback when the active route doesn't define createNewTab: open the home page,
 // so the "+" button stays available on every page.
 const DEFAULT_NEW_TAB_ACTION: NewTabAction = {
@@ -42,6 +56,29 @@ const TabBar = () => {
   const closeOtherTabs = useElectronStore((s) => s.closeOtherTabs);
   const closeLeftTabs = useElectronStore((s) => s.closeLeftTabs);
   const closeRightTabs = useElectronStore((s) => s.closeRightTabs);
+  const reorderTabs = useElectronStore((s) => s.reorderTabs);
+
+  const sensors = useSensors(
+    // Require a small drag distance so a plain click still activates the tab.
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor),
+  );
+
+  const tabIds = useMemo(() => tabs.map((tab) => tab.tab.id), [tabs]);
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+
+      const fromIndex = tabIds.indexOf(active.id as string);
+      const toIndex = tabIds.indexOf(over.id as string);
+      if (fromIndex < 0 || toIndex < 0) return;
+
+      reorderTabs(fromIndex, toIndex);
+    },
+    [tabIds, reorderTabs],
+  );
 
   const handleActivate = useCallback(
     (id: string, url: string) => {
@@ -173,20 +210,29 @@ const TabBar = () => {
         style: { alignItems: 'center', flexDirection: 'row', gap: TAB_GAP },
       }}
     >
-      {tabs.map((tab, index) => (
-        <TabItem
-          index={index}
-          isActive={tab.tab.id === activeTabId}
-          item={tab}
-          key={tab.tab.id}
-          totalCount={tabs.length}
-          onActivate={handleActivate}
-          onClose={handleClose}
-          onCloseLeft={handleCloseLeft}
-          onCloseOthers={handleCloseOthers}
-          onCloseRight={handleCloseRight}
-        />
-      ))}
+      <DndContext
+        collisionDetection={closestCenter}
+        modifiers={[restrictToHorizontalAxis]}
+        sensors={sensors}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext items={tabIds} strategy={horizontalListSortingStrategy}>
+          {tabs.map((tab, index) => (
+            <TabItem
+              index={index}
+              isActive={tab.tab.id === activeTabId}
+              item={tab}
+              key={tab.tab.id}
+              totalCount={tabs.length}
+              onActivate={handleActivate}
+              onClose={handleClose}
+              onCloseLeft={handleCloseLeft}
+              onCloseOthers={handleCloseOthers}
+              onCloseRight={handleCloseRight}
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
       {(newTabAction || !canCreate) && (
         <ActionIcon
           className={cx(electronStylish.nodrag, styles.newTabButton)}

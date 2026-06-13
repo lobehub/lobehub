@@ -92,6 +92,17 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
       opacity: 0;
     }
   `,
+  tabDragging: css`
+    cursor: grabbing;
+    z-index: 1;
+    background-color: ${cssVar.colorBgElevated};
+    box-shadow: ${cssVar.boxShadowSecondary};
+
+    &::before,
+    & + &::before {
+      opacity: 0;
+    }
+  `,
   tabActive: css`
     background-color: ${cssVar.colorBgElevated};
 
