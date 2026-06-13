@@ -25,7 +25,7 @@ const getMessageFromError = (error: unknown): string | undefined => {
 
 const createModelListErrorResponse = (provider: string, e: unknown) => {
   let error = e;
-  let errorType = AgentRuntimeErrorType.ProviderBizError;
+  let errorType: ChatCompletionErrorPayload['errorType'] = AgentRuntimeErrorType.ProviderBizError;
   let rest: Partial<ChatCompletionErrorPayload> = {};
 
   if (e && typeof e === 'object') {
