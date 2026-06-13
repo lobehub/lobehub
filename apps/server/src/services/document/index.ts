@@ -294,6 +294,21 @@ export class DocumentService {
       throw new Error(`Document not found: ${documentId}`);
     }
 
+    // Same collaborative edit-lock guard as updateDocument: don't record a
+    // history snapshot for a workspace document another member is editing, so a
+    // locked-out actor (e.g. a Copilot mutation that will itself be rejected)
+    // can't pollute the version timeline.
+    if (this.workspaceId) {
+      const blockedBy = await this.editLockService.getBlockingHolder('document', documentId);
+      if (blockedBy) {
+        throw new TRPCError({
+          cause: { data: { code: 'DocumentLocked' } },
+          code: 'CONFLICT',
+          message: 'Document is being edited by another user',
+        });
+      }
+    }
+
     const normalizedEditorData = normalizeEditorDataDiffNodes(editorData);
     const savedAt = new Date();
     await this.documentHistoryService.createHistory({
