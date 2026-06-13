@@ -486,9 +486,9 @@ describe('HeterogeneousPersistenceHandler', () => {
         if (id === 'asst-1') order.push('update-asst');
         return origUpdate(id, patch);
       });
-      h.messageModel.create.mockImplementation(async (input: any) => {
+      h.messageModel.create.mockImplementation(async (input: any, id?: string) => {
         order.push(input.role === 'tool' ? 'create-tool' : 'create-other');
-        return origCreate(input);
+        return origCreate(input, id);
       });
 
       const tool = {
