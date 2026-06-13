@@ -43,6 +43,25 @@ describe('refineErrorCode', () => {
         }),
       ).toBeUndefined();
     });
+
+    // The HTTP-status fallback is provider-only: a leading "429"/"500" in a
+    // harness/DB/Redis throw is not a real upstream status and must NOT recast
+    // the error with provider retry/failure semantics.
+    it('does not apply the HTTP-status fallback to un-typed wrappers', () => {
+      expect(
+        refineErrorCode({
+          errorType: String(ChatErrorType.InternalServerError),
+          message: '429 some harness throw with no registered pattern',
+        }),
+      ).toBeUndefined();
+      expect(
+        refineErrorCode({
+          errorType: AgentRuntimeErrorType.AgentRuntimeError,
+          httpStatus: 500,
+          message: 'opaque internal failure',
+        }),
+      ).toBeUndefined();
+    });
   });
 
   describe('message-pattern pass', () => {
