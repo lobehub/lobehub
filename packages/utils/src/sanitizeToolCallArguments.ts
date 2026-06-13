@@ -15,7 +15,17 @@ import { safeParseJSON, safeParsePartialJSON } from './safeParseJSON';
  *   - Unrecoverable → "{}" so the tool_call structure survives and the
  *     model can replan on the next turn.
  */
-export const sanitizeToolCallArguments = (argsStr: string | undefined): string => {
+export const sanitizeToolCallArguments = (argsStr: unknown): string => {
+  if (argsStr === undefined || argsStr === null) return '{}';
+
+  if (typeof argsStr === 'object') {
+    try {
+      return JSON.stringify(argsStr);
+    } catch {
+      return '{}';
+    }
+  }
+
   if (typeof argsStr !== 'string' || argsStr.length === 0) return '{}';
 
   if (safeParseJSON(argsStr) !== undefined) return argsStr;

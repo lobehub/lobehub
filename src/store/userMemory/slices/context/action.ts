@@ -3,6 +3,8 @@ import { produce } from 'immer';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
+import { mutate } from '@/libs/swr';
+
 import { type DisplayContextMemory } from '@/database/repositories/userMemory';
 import { userMemoryKeys } from '@/libs/swr/keys';
 import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
@@ -39,6 +41,8 @@ export class ContextActionImpl {
     await memoryCRUDService.deleteContext(id);
     // Reset list to refresh
     this.#get().resetContextsList({ q: this.#get().contextsQuery, sort: this.#get().contextsSort });
+    await mutate((key) => typeof key === 'string' && key.startsWith('useFetchContexts'));
+    await mutate(`memoryDetail-context-${id}`, undefined, { revalidate: false });
   };
 
   loadMoreContexts = (): void => {
