@@ -44,13 +44,26 @@ describe('defaultGetProjectFileIndex', () => {
   it('falls back to a glob walk when the scope is not a git repo', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'dc-index-glob-'));
     cleanup.push(dir);
+    await mkdir(path.join(dir, 'nested', 'deep'), { recursive: true });
+    await mkdir(path.join(dir, '.agents'), { recursive: true });
     await writeFile(path.join(dir, 'one.txt'), '1\n');
-    await writeFile(path.join(dir, 'two.txt'), '2\n');
+    await writeFile(path.join(dir, 'nested', 'deep', 'two.txt'), '2\n');
+    await writeFile(path.join(dir, '.agents', 'config.md'), '# cfg\n');
 
     const result = await defaultGetProjectFileIndex({ scope: dir });
 
     expect(result.source).toBe('glob');
-    const names = result.entries.map((e) => e.name).sort();
-    expect(names).toEqual(expect.arrayContaining(['one.txt', 'two.txt']));
+    const byRel = Object.fromEntries(result.entries.map((e) => [e.relativePath, e]));
+
+    // Nested files are present and attached to synthesized directory entries.
+    expect(byRel['nested/deep/two.txt']?.isDirectory).toBe(false);
+    expect(byRel['nested/']?.isDirectory).toBe(true);
+    expect(byRel['nested/deep/']?.isDirectory).toBe(true);
+
+    // Dot-directories (and their files) are preserved, matching the git path.
+    expect(byRel['.agents/']?.isDirectory).toBe(true);
+    expect(byRel['.agents/config.md']?.isDirectory).toBe(false);
+
+    expect(result.totalCount).toBe(result.entries.length);
   });
 });

@@ -1,9 +1,8 @@
 import { execFile } from 'node:child_process';
-import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { globLocalFiles } from '@lobechat/local-file-shell';
+import fg from 'fast-glob';
 
 import type {
   ProjectFileIndexEntry,
@@ -42,16 +41,23 @@ const collectProjectDirectories = (files: string[], root: string): ProjectFileIn
   return [...directories].map((directory) => createProjectFileEntry(root, directory, true));
 };
 
-const createDetectedProjectFileEntry = async (
-  root: string,
-  absolutePath: string,
-): Promise<ProjectFileIndexEntry> => {
-  try {
-    const stats = await stat(absolutePath);
-    return createProjectFileEntry(root, absolutePath, stats.isDirectory());
-  } catch {
-    return createProjectFileEntry(root, absolutePath, false);
-  }
+/**
+ * Build the entry list (synthesized directories first, then files) from a flat
+ * list of absolute file paths — the shared shape the Files tree builder expects,
+ * so nested files attach to explicit parent directory entries instead of
+ * flattening to the root.
+ */
+const buildEntries = (files: string[], root: string): ProjectFileIndexEntry[] => {
+  const seen = new Set<string>();
+  const fileEntries = files
+    .filter((filePath) => {
+      if (seen.has(filePath)) return false;
+      seen.add(filePath);
+      return true;
+    })
+    .map((filePath) => createProjectFileEntry(root, filePath, false));
+
+  return [...collectProjectDirectories(files, root), ...fileEntries];
 };
 
 /**
@@ -94,16 +100,7 @@ export const defaultGetProjectFileIndex = async (
         .filter(Boolean)
         .map((relativePath) => path.resolve(root, relativePath));
 
-      const seen = new Set<string>();
-      const fileEntries = files
-        .filter((filePath) => {
-          if (seen.has(filePath)) return false;
-          seen.add(filePath);
-          return true;
-        })
-        .map((filePath) => createProjectFileEntry(root, filePath, false));
-
-      const entries = [...collectProjectDirectories(files, root), ...fileEntries];
+      const entries = buildEntries(files, root);
 
       return {
         entries,
@@ -117,11 +114,17 @@ export const defaultGetProjectFileIndex = async (
     // fall through to glob
   }
 
-  const fallback = await globLocalFiles({ pattern: '**/*', scope: requestedScope });
-  const files = fallback.files.map((filePath) => path.resolve(requestedScope, filePath));
-  const entries = await Promise.all(
-    files.map((filePath) => createDetectedProjectFileEntry(requestedScope, filePath)),
-  );
+  // Non-git scope: walk with fast-glob. `dot: true` keeps dot-directories (e.g.
+  // `.agents`) that the git path would surface via `ls-files`, and `onlyFiles`
+  // leaves directory entries to `buildEntries` so nesting matches the git path.
+  const relFiles = await fg('**/*', {
+    cwd: requestedScope,
+    dot: true,
+    ignore: ['**/node_modules/**', '**/.git/**'],
+    onlyFiles: true,
+  });
+  const files = relFiles.map((relativePath) => path.resolve(requestedScope, relativePath));
+  const entries = buildEntries(files, requestedScope);
 
   return {
     entries,

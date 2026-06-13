@@ -13,7 +13,8 @@
     "test:coverage": "bunx vitest run --coverage"
   },
   "dependencies": {
-    "@lobechat/local-file-shell": "workspace:*"
+    "@lobechat/local-file-shell": "workspace:*",
+    "fast-glob": "^3.3.3"
   },
   "devDependencies": {
     "vitest": "^3.2.6"
