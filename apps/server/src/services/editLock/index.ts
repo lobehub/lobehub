@@ -107,13 +107,20 @@ export class EditLockService {
     return holder && holder !== this.userId ? holder : null;
   }
 
-  /** Release the lock, but only if the caller still holds it. */
-  async release(type: EditLockResourceType, id: string): Promise<void> {
-    if (!this.redis) return;
+  /**
+   * Release the lock, but only if the caller still holds it (compare-and-delete).
+   * Returns true only when the caller's lock was actually deleted — false when
+   * the lease had already expired or another member has since taken it over, so
+   * callers can avoid broadcasting a bogus "unlocked" event.
+   */
+  async release(type: EditLockResourceType, id: string): Promise<boolean> {
+    if (!this.redis) return false;
     try {
-      await this.redis.eval(RELEASE_SCRIPT, 1, lockKey(type, id), this.userId);
+      const deleted = await this.redis.eval(RELEASE_SCRIPT, 1, lockKey(type, id), this.userId);
+      return deleted === 1;
     } catch (error) {
       log('release failed for %s:%s %O', type, id, error);
+      return false;
     }
   }
 

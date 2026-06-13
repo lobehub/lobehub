@@ -75,12 +75,16 @@ describe('EditLockService', () => {
     const redis = makeFakeRedis();
     await new EditLockService('user-1', redis as any).acquire('document', 'doc-1');
 
-    // A non-holder release is a no-op.
-    await new EditLockService('user-2', redis as any).release('document', 'doc-1');
+    // A non-holder release is a no-op and reports it did not release.
+    expect(await new EditLockService('user-2', redis as any).release('document', 'doc-1')).toBe(
+      false,
+    );
     expect(redis.store.get('editlock:document:doc-1')).toBe('user-1');
 
-    // The holder can release.
-    await new EditLockService('user-1', redis as any).release('document', 'doc-1');
+    // The holder can release, and reports the lock was actually freed.
+    expect(await new EditLockService('user-1', redis as any).release('document', 'doc-1')).toBe(
+      true,
+    );
     expect(redis.store.has('editlock:document:doc-1')).toBe(false);
   });
 
@@ -93,7 +97,7 @@ describe('EditLockService', () => {
       lockedByOther: false,
     });
     expect(await svc.getBlockingHolder('document', 'doc-1')).toBeNull();
-    await expect(svc.release('document', 'doc-1')).resolves.toBeUndefined();
+    await expect(svc.release('document', 'doc-1')).resolves.toBe(false);
   });
 
   it('fails open when Redis is configured but commands reject (unreachable)', async () => {
@@ -114,6 +118,6 @@ describe('EditLockService', () => {
     });
     expect(await svc.getActiveHolder('document', 'doc-1')).toBeUndefined();
     expect(await svc.getBlockingHolder('document', 'doc-1')).toBeNull();
-    await expect(svc.release('document', 'doc-1')).resolves.toBeUndefined();
+    await expect(svc.release('document', 'doc-1')).resolves.toBe(false);
   });
 });

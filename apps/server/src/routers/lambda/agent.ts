@@ -509,7 +509,10 @@ export const agentRouter = router({
     .input(z.object({ agentId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       if (!ctx.workspaceId) return;
-      await ctx.editLockService.release('agent', input.agentId);
+      // Only broadcast "unlocked" when we actually released our own lock — if the
+      // lease expired and another member took over, the lock is still held.
+      const released = await ctx.editLockService.release('agent', input.agentId);
+      if (!released) return;
       void publishResourceEvent(
         { id: input.agentId, type: 'agent' },
         { actorId: ctx.userId, data: { holderId: null }, type: 'lock.changed' },

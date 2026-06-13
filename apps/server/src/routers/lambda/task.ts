@@ -992,7 +992,10 @@ export const taskRouter = router({
   releaseTaskLock: taskProcedureWrite.input(idInput).mutation(async ({ ctx, input }) => {
     if (!ctx.workspaceId) return;
     const resolved = await resolveOrThrow(ctx.taskModel, input.id);
-    await ctx.editLockService.release('task', resolved.id);
+    // Only broadcast "unlocked" when we actually released our own lock — if the
+    // lease expired and another member took over, the lock is still held.
+    const released = await ctx.editLockService.release('task', resolved.id);
+    if (!released) return;
     void publishResourceEvent(
       { id: resolved.id, type: 'task' },
       { actorId: ctx.userId, data: { holderId: null }, type: 'lock.changed' },

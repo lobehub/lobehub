@@ -253,7 +253,11 @@ export class DocumentService {
    */
   async releaseDocumentLock(id: string): Promise<void> {
     if (!this.workspaceId) return;
-    await this.editLockService.release('document', id);
+    // Only broadcast "unlocked" when we actually released our own lock — if the
+    // lease had expired and another member took over, the lock is still held and
+    // a bogus holderId:null would wrongly flip their viewers to editable.
+    const released = await this.editLockService.release('document', id);
+    if (!released) return;
     void publishResourceEvent(
       { id, type: 'document' },
       { actorId: this.userId, data: { holderId: null }, type: 'lock.changed' },
