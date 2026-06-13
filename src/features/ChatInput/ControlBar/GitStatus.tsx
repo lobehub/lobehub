@@ -153,7 +153,6 @@ interface GitStatusProps {
 
 const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
   const { t } = useTranslation('device');
-  const local = !deviceId;
   // Transport (Electron IPC vs device RPC) is decided inside the service; the
   // component just reads, identically for local and remote.
   const { data, mutate } = useFetchGitInfo(deviceId, path, isGithub);
@@ -365,11 +364,7 @@ const GitStatus = memo<GitStatusProps>(({ path, isGithub, deviceId }) => {
   const diffNode = (() => {
     if (!hasChanges || !workingStatus) return null;
     const diffButton = (
-      <div
-        className={styles.trigger}
-        role={local ? 'button' : undefined}
-        onClick={local ? handleToggleReview : undefined}
-      >
+      <div className={styles.trigger} role="button" onClick={handleToggleReview}>
         <span className={styles.diffStat}>
           {workingStatus.added > 0 && (
             <span className={styles.diffStatAdded}>+{workingStatus.added}</span>
