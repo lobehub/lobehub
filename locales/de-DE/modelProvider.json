@@ -307,6 +307,8 @@
   "providerModels.list.enabledActions.sort": "Benutzerdefinierte Modellsortierung",
   "providerModels.list.enabledEmpty": "Keine aktivierten Modelle verfügbar. Bitte aktivieren Sie Ihre bevorzugten Modelle aus der Liste unten~",
   "providerModels.list.fetcher.clear": "Abgerufene Modelle löschen",
+  "providerModels.list.fetcher.error": "Fehler beim Abrufen der Modelle: {{message}}",
+  "providerModels.list.fetcher.errorFallback": "Unbekannter Fehler",
   "providerModels.list.fetcher.fetch": "Modelle abrufen",
   "providerModels.list.fetcher.fetching": "Modellliste wird abgerufen...",
   "providerModels.list.fetcher.latestTime": "Zuletzt aktualisiert: {{time}}",

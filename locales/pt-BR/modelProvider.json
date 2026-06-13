@@ -307,6 +307,8 @@
   "providerModels.list.enabledActions.sort": "Ordenação de Modelos Personalizados",
   "providerModels.list.enabledEmpty": "Nenhum modelo ativado disponível. Ative seus modelos preferidos na lista abaixo~",
   "providerModels.list.fetcher.clear": "Limpar modelos buscados",
+  "providerModels.list.fetcher.error": "Falha ao buscar modelos: {{message}}",
+  "providerModels.list.fetcher.errorFallback": "Erro desconhecido",
   "providerModels.list.fetcher.fetch": "Buscar modelos",
   "providerModels.list.fetcher.fetching": "Buscando lista de modelos...",
   "providerModels.list.fetcher.latestTime": "Última atualização: {{time}}",

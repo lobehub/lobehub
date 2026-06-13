@@ -307,6 +307,8 @@
   "providerModels.list.enabledActions.sort": "Ordinamento modelli personalizzati",
   "providerModels.list.enabledEmpty": "Nessun modello abilitato disponibile. Abilita i tuoi modelli preferiti dall'elenco qui sotto~",
   "providerModels.list.fetcher.clear": "Cancella modelli recuperati",
+  "providerModels.list.fetcher.error": "Errore durante il recupero dei modelli: {{message}}",
+  "providerModels.list.fetcher.errorFallback": "Errore sconosciuto",
   "providerModels.list.fetcher.fetch": "Recupera modelli",
   "providerModels.list.fetcher.fetching": "Recupero elenco modelli in corso...",
   "providerModels.list.fetcher.latestTime": "Ultimo aggiornamento: {{time}}",

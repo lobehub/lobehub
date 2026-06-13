@@ -35,6 +35,7 @@
   "QuotaLimitReached": "Üzgünüz, jeton kullanımı veya istek sayısı bu anahtar için kota sınırına ulaştı. Lütfen anahtarın kotasını artırın veya daha sonra yeniden deneyin.",
   "RateLimitExceeded": "Üzgünüz, jeton kullanımı veya istek sayısı bu anahtar için hız sınırına ulaştı. Lütfen daha sonra yeniden deneyin veya anahtarın kotasını artırın.",
   "StateStorePersistError": "Konuşma durumu deposundaki geçici bir sorun bu işlemi kesintiye uğrattı. Lütfen yeniden deneyin; devam ederse destekle iletişime geçin.",
+  "StateStoreReadError": "Bu işlem devam ettirilemedi çünkü oturum durumu kullanılamıyordu. Devam etmek için lütfen konuşmayı yeniden açın; sorun devam ederse, destek ile iletişime geçin.",
   "StreamChunkError": "Akış isteğinin mesaj parçası ayrıştırılırken hata oluştu. Lütfen mevcut API arayüzünün standart spesifikasyonlara uygun olup olmadığını kontrol edin veya API sağlayıcınızdan yardım alın.",
   "UpstreamGatewayError": "Yukarı akış ağ geçidi veya proxy bir hata döndürdü. Lütfen kısa bir süre sonra yeniden deneyin; devam ederse proxy / uç nokta yapılandırmanızı kontrol edin.",
   "UpstreamHttpError": "Sağlayıcı ayrıntı vermeden bir HTTP hatası döndürdü. Lütfen yeniden deneyin veya isteğinizi ve model yapılandırmanızı kontrol edin.",

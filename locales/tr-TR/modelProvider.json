@@ -307,6 +307,8 @@
   "providerModels.list.enabledActions.sort": "Özel Model Sıralaması",
   "providerModels.list.enabledEmpty": "Etkin model bulunamadı. Lütfen aşağıdaki listeden tercih ettiğiniz modelleri etkinleştirin~",
   "providerModels.list.fetcher.clear": "Getirilen modelleri temizle",
+  "providerModels.list.fetcher.error": "Modeller alınamadı: {{message}}",
+  "providerModels.list.fetcher.errorFallback": "Bilinmeyen hata",
   "providerModels.list.fetcher.fetch": "Modelleri getir",
   "providerModels.list.fetcher.fetching": "Model listesi getiriliyor...",
   "providerModels.list.fetcher.latestTime": "Son güncelleme: {{time}}",

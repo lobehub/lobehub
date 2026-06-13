@@ -307,6 +307,8 @@
   "providerModels.list.enabledActions.sort": "ترتيب النماذج المخصصة",
   "providerModels.list.enabledEmpty": "لا توجد نماذج مفعلة. يرجى تفعيل النماذج المفضلة من القائمة أدناه~",
   "providerModels.list.fetcher.clear": "مسح النماذج المسحوبة",
+  "providerModels.list.fetcher.error": "فشل في جلب النماذج: {{message}}",
+  "providerModels.list.fetcher.errorFallback": "خطأ غير معروف",
   "providerModels.list.fetcher.fetch": "جلب النماذج",
   "providerModels.list.fetcher.fetching": "جارٍ جلب قائمة النماذج...",
   "providerModels.list.fetcher.latestTime": "آخر تحديث: {{time}}",

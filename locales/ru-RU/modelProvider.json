@@ -307,6 +307,8 @@
   "providerModels.list.enabledActions.sort": "Пользовательская сортировка моделей",
   "providerModels.list.enabledEmpty": "Нет включенных моделей. Пожалуйста, включите нужные модели из списка ниже~",
   "providerModels.list.fetcher.clear": "Очистить загруженные модели",
+  "providerModels.list.fetcher.error": "Не удалось получить модели: {{message}}",
+  "providerModels.list.fetcher.errorFallback": "Неизвестная ошибка",
   "providerModels.list.fetcher.fetch": "Загрузить модели",
   "providerModels.list.fetcher.fetching": "Загрузка списка моделей...",
   "providerModels.list.fetcher.latestTime": "Последнее обновление: {{time}}",

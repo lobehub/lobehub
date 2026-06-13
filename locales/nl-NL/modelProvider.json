@@ -307,6 +307,8 @@
   "providerModels.list.enabledActions.sort": "Aangepaste modelsortering",
   "providerModels.list.enabledEmpty": "Geen ingeschakelde modellen beschikbaar. Schakel je favoriete modellen hieronder in~",
   "providerModels.list.fetcher.clear": "Opgehaalde modellen wissen",
+  "providerModels.list.fetcher.error": "Kan modellen niet ophalen: {{message}}",
+  "providerModels.list.fetcher.errorFallback": "Onbekende fout",
   "providerModels.list.fetcher.fetch": "Modellen ophalen",
   "providerModels.list.fetcher.fetching": "Modellenlijst wordt opgehaald...",
   "providerModels.list.fetcher.latestTime": "Laatst bijgewerkt: {{time}}",

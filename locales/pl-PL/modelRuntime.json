@@ -35,6 +35,7 @@
   "QuotaLimitReached": "Przepraszamy, wykorzystanie tokenów lub liczba żądań osiągnęły limit przydziału dla tego klucza. Proszę zwiększyć przydział klucza lub spróbować ponownie później.",
   "RateLimitExceeded": "Przepraszamy, wykorzystanie tokenów lub liczba żądań osiągnęły limit szybkości dla tego klucza. Proszę spróbować ponownie później lub zwiększyć przydział klucza.",
   "StateStorePersistError": "Tymczasowy problem z magazynem stanu rozmowy przerwał tę operację. Proszę spróbować ponownie; jeśli problem będzie się powtarzał, skontaktuj się z pomocą techniczną.",
+  "StateStoreReadError": "Nie można wznowić tej operacji, ponieważ stan sesji był niedostępny. Proszę ponownie otworzyć rozmowę, aby kontynuować; jeśli problem będzie się powtarzał, skontaktuj się z pomocą techniczną.",
   "StreamChunkError": "Błąd podczas parsowania fragmentu wiadomości w żądaniu strumieniowym. Proszę sprawdzić, czy obecny interfejs API jest zgodny ze standardowymi specyfikacjami, lub skontaktować się z dostawcą API w celu uzyskania pomocy.",
   "UpstreamGatewayError": "Bramka upstream lub proxy zwróciły błąd. Proszę spróbować ponownie za chwilę; jeśli problem będzie się powtarzał, sprawdź konfigurację proxy / punktu końcowego.",
   "UpstreamHttpError": "Dostawca zwrócił błąd HTTP bez dodatkowych szczegółów. Proszę spróbować ponownie, lub sprawdzić swoje żądanie i konfigurację modelu.",

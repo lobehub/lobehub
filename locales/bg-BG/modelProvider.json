@@ -307,6 +307,8 @@
   "providerModels.list.enabledActions.sort": "Сортиране на персонализирани модели",
   "providerModels.list.enabledEmpty": "Няма активирани модели. Моля, активирайте предпочитаните модели от списъка по-долу~",
   "providerModels.list.fetcher.clear": "Изчисти изтеглените модели",
+  "providerModels.list.fetcher.error": "Неуспешно извличане на модели: {{message}}",
+  "providerModels.list.fetcher.errorFallback": "Неизвестна грешка",
   "providerModels.list.fetcher.fetch": "Изтегли модели",
   "providerModels.list.fetcher.fetching": "Изтегляне на списък с модели...",
   "providerModels.list.fetcher.latestTime": "Последна актуализация: {{time}}",

@@ -307,6 +307,8 @@
   "providerModels.list.enabledActions.sort": "Sắp xếp mô hình tùy chỉnh",
   "providerModels.list.enabledEmpty": "Không có mô hình nào được bật. Vui lòng bật các mô hình bạn muốn sử dụng từ danh sách bên dưới~",
   "providerModels.list.fetcher.clear": "Xóa mô hình đã lấy",
+  "providerModels.list.fetcher.error": "Không thể lấy danh sách mô hình: {{message}}",
+  "providerModels.list.fetcher.errorFallback": "Lỗi không xác định",
   "providerModels.list.fetcher.fetch": "Lấy mô hình",
   "providerModels.list.fetcher.fetching": "Đang lấy danh sách mô hình...",
   "providerModels.list.fetcher.latestTime": "Cập nhật lần cuối: {{time}}",

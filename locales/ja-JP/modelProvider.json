@@ -307,6 +307,8 @@
   "providerModels.list.enabledActions.sort": "カスタムモデルの並べ替え",
   "providerModels.list.enabledEmpty": "有効なモデルはありません。下のリストからお気に入りのモデルを有効にしてください〜",
   "providerModels.list.fetcher.clear": "取得したモデルをクリア",
+  "providerModels.list.fetcher.error": "モデルの取得に失敗しました: {{message}}",
+  "providerModels.list.fetcher.errorFallback": "不明なエラー",
   "providerModels.list.fetcher.fetch": "モデルリストを取得",
   "providerModels.list.fetcher.fetching": "モデルリストを取得中...",
   "providerModels.list.fetcher.latestTime": "最終更新日時：{{time}}",
