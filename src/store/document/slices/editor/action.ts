@@ -345,12 +345,22 @@ export class EditorActionImpl {
           lastSavedContent: currentContent,
           lastSavedEditorData: structuredClone(currentEditorData),
           lastUpdatedTime: result.savedAt ? new Date(result.savedAt) : new Date(),
+          saveBlockedByLock: false,
           saveStatus: 'saved',
         },
       });
     } catch (error) {
-      console.error('[DocumentStore] Failed to save:', error);
-      internal_dispatchDocument({ id, type: 'updateDocument', value: { saveStatus: 'idle' } });
+      // The server rejects writes to a workspace document another collaborator is
+      // actively editing (CONFLICT). Surface it as a lock block so the editor can
+      // flip to read-only at once instead of silently dropping the edit, and keep
+      // `isDirty` so the unsaved content stays visible to copy out.
+      const lockBlocked = (error as { data?: { code?: string } })?.data?.code === 'CONFLICT';
+      if (!lockBlocked) console.error('[DocumentStore] Failed to save:', error);
+      internal_dispatchDocument({
+        id,
+        type: 'updateDocument',
+        value: { saveBlockedByLock: lockBlocked || undefined, saveStatus: 'idle' },
+      });
     }
   };
 

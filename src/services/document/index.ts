@@ -229,6 +229,23 @@ export class DocumentService {
     };
   }
 
+  /**
+   * Acquire or refresh the collaborative edit lock for a workspace page.
+   * Doubles as the heartbeat. Personal pages always report as unlocked.
+   */
+  async acquireDocumentLock(id: string) {
+    return lambdaClient.document.acquireDocumentLock.mutate({ id });
+  }
+
+  /** Read-only peek of the current edit lock (does not acquire). */
+  async getDocumentLock(id: string) {
+    return lambdaClient.document.getDocumentLock.query({ id });
+  }
+
+  async releaseDocumentLock(id: string): Promise<void> {
+    await lambdaClient.document.releaseDocumentLock.mutate({ id });
+  }
+
   async saveDocumentHistory(params: SaveDocumentHistoryInput): Promise<SaveDocumentHistoryOutput> {
     const result = await lambdaClient.document.saveDocumentHistory.mutate(params);
 

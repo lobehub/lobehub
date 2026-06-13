@@ -75,3 +75,12 @@ export interface UpdateDocumentResult {
 export interface SaveDocumentHistoryResult {
   savedAt: Date;
 }
+
+export interface DocumentLockResult {
+  /** Lease expiry of the active lock, if any. */
+  expiresAt: Date | null;
+  /** The user id currently holding the lock, or null when unlocked. */
+  holderId: string | null;
+  /** True when another active user holds the lock (caller is locked out). */
+  lockedByOther: boolean;
+}

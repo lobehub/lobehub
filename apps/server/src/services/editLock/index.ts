@@ -1,0 +1,114 @@
+import debug from 'debug';
+import type { Redis } from 'ioredis';
+
+import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
+
+const log = debug('lobe-server:edit-lock');
+
+/** Lease lifetime in seconds; clients heartbeat well within this to keep it alive. */
+export const EDIT_LOCK_TTL_SECONDS = 30;
+
+/** Editable resource families that can take a collaborative edit lock. */
+export type EditLockResourceType = 'agent' | 'chatGroup' | 'document' | 'task';
+
+export interface EditLockResult {
+  /** Lease expiry of the active lock, if the caller now holds it. */
+  expiresAt: Date | null;
+  /** The user id currently holding the lock, or null when unlocked. */
+  holderId: string | null;
+  /** True when another user holds the lock (caller is locked out). */
+  lockedByOther: boolean;
+}
+
+const UNLOCKED: EditLockResult = { expiresAt: null, holderId: null, lockedByOther: false };
+
+const lockKey = (type: EditLockResourceType, id: string) => `editlock:${type}:${id}`;
+
+// Release only if the caller still holds the lock (compare-and-delete), so a
+// stale releaser can't drop a lease another member has since taken over.
+const RELEASE_SCRIPT = `
+if redis.call('get', KEYS[1]) == ARGV[1] then
+  return redis.call('del', KEYS[1])
+end
+return 0
+`;
+
+/**
+ * Redis-backed collaborative edit lock, keyed by (resourceType, resourceId).
+ *
+ * Intentionally a thin, table-agnostic lease: there is no DB schema, so it
+ * applies uniformly to any editable resource (documents, briefs, …) and can be
+ * removed wholesale once real-time co-editing lands — the keys simply expire.
+ *
+ * The lock is advisory: when Redis is unavailable every method degrades to
+ * "unlocked" so the lock infrastructure can never block editing or saving.
+ */
+export class EditLockService {
+  private userId: string;
+  private redis: Redis | null;
+
+  constructor(userId: string, redis: Redis | null = getAgentRuntimeRedisClient()) {
+    this.userId = userId;
+    this.redis = redis;
+  }
+
+  /**
+   * Acquire the lock when it is free (or already mine), refreshing the lease;
+   * otherwise report whoever currently holds it. Doubles as the heartbeat.
+   */
+  async acquire(type: EditLockResourceType, id: string): Promise<EditLockResult> {
+    if (!this.redis) return UNLOCKED;
+    const key = lockKey(type, id);
+
+    // Claim only when the key is absent (NX). The TTL gives automatic expiry, so
+    // a hard-closed tab frees the lock without any cleanup job.
+    const claimed = await this.redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS, 'NX');
+    if (claimed) return this.held();
+
+    const holder = await this.redis.get(key);
+    if (holder === this.userId) {
+      // Already mine — refresh the lease (heartbeat).
+      await this.redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS);
+      return this.held();
+    }
+    if (holder) return { expiresAt: null, holderId: holder, lockedByOther: true };
+
+    // Freed between the NX and the GET — try once more.
+    const reclaimed = await this.redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS, 'NX');
+    return reclaimed ? this.held() : UNLOCKED;
+  }
+
+  /** Current holder of the lock, or undefined when unlocked / Redis is down. */
+  async getActiveHolder(type: EditLockResourceType, id: string): Promise<string | undefined> {
+    if (!this.redis) return undefined;
+    const holder = await this.redis.get(lockKey(type, id));
+    return holder ?? undefined;
+  }
+
+  /**
+   * The holder when someone *other* than the caller holds the lock, else null.
+   * Used by write guards; returns null when Redis is down (fail-open).
+   */
+  async getBlockingHolder(type: EditLockResourceType, id: string): Promise<string | null> {
+    const holder = await this.getActiveHolder(type, id);
+    return holder && holder !== this.userId ? holder : null;
+  }
+
+  /** Release the lock, but only if the caller still holds it. */
+  async release(type: EditLockResourceType, id: string): Promise<void> {
+    if (!this.redis) return;
+    try {
+      await this.redis.eval(RELEASE_SCRIPT, 1, lockKey(type, id), this.userId);
+    } catch (error) {
+      log('release failed for %s:%s %O', type, id, error);
+    }
+  }
+
+  private held(): EditLockResult {
+    return {
+      expiresAt: new Date(Date.now() + EDIT_LOCK_TTL_SECONDS * 1000),
+      holderId: this.userId,
+      lockedByOther: false,
+    };
+  }
+}

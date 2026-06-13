@@ -5,10 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 
+import { EditLockService } from '../../editLock';
 import { FileService } from '../../file';
 import { DocumentHistoryService } from '../history';
 import { DocumentService } from '../index';
 
+vi.mock('@/server/modules/AgentRuntime/redis', () => ({ getAgentRuntimeRedisClient: () => null }));
 vi.mock('@/database/models/document');
 vi.mock('@/database/models/file');
 vi.mock('../../file');
@@ -793,6 +795,79 @@ describe('DocumentService', () => {
       await expect(service.updateDocument('missing-doc', { title: 'Missing' })).rejects.toThrow(
         'Document not found: missing-doc',
       );
+    });
+
+    it('should reject a workspace save when another member holds the edit lock', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument({ workspaceId: 'ws-1' }));
+      vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue('other-user');
+
+      await expect(wsService.updateDocument('doc-1', { content: 'x' })).rejects.toMatchObject({
+        code: 'CONFLICT',
+      });
+      expect(mockDocumentModel.update).not.toHaveBeenCalled();
+    });
+
+    it('should allow a workspace save when no other member holds the lock', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument({ workspaceId: 'ws-1' }));
+      vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue(null);
+
+      await wsService.updateDocument('doc-1', { content: 'x' });
+
+      expect(mockDocumentModel.update).toHaveBeenCalled();
+    });
+  });
+
+  describe('document edit lock', () => {
+    it('reports unlocked for personal documents without touching the lock service', async () => {
+      const acquireSpy = vi.spyOn(EditLockService.prototype, 'acquire');
+
+      const result = await service.acquireDocumentLock('doc-1');
+
+      expect(result).toEqual({ expiresAt: null, holderId: null, lockedByOther: false });
+      expect(acquireSpy).not.toHaveBeenCalled();
+    });
+
+    it('delegates to the edit lock service in workspace mode', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      const expiresAt = new Date(Date.now() + 60_000);
+      const acquireSpy = vi
+        .spyOn(EditLockService.prototype, 'acquire')
+        .mockResolvedValue({ expiresAt, holderId: userId, lockedByOther: false });
+
+      const result = await wsService.acquireDocumentLock('doc-1');
+
+      expect(acquireSpy).toHaveBeenCalledWith('document', 'doc-1');
+      expect(result).toEqual({ expiresAt, holderId: userId, lockedByOther: false });
+    });
+
+    it('reports another member as holder when the lock is taken', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      const expiresAt = new Date(Date.now() + 60_000);
+      vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+        expiresAt,
+        holderId: 'other-user',
+        lockedByOther: true,
+      });
+
+      const result = await wsService.acquireDocumentLock('doc-1');
+
+      expect(result).toEqual({ expiresAt, holderId: 'other-user', lockedByOther: true });
+    });
+
+    it('releaseDocumentLock is a no-op for personal documents', async () => {
+      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release');
+      await service.releaseDocumentLock('doc-1');
+      expect(releaseSpy).not.toHaveBeenCalled();
+    });
+
+    it('releaseDocumentLock delegates to the lock service in workspace mode', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release').mockResolvedValue();
+      await wsService.releaseDocumentLock('doc-1');
+      expect(releaseSpy).toHaveBeenCalledWith('document', 'doc-1');
     });
   });
 

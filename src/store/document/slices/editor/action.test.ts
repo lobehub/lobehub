@@ -870,6 +870,71 @@ name: skill-name
       expect(result.current.documents['doc-1'].saveStatus).toBe('idle');
     });
 
+    it('marks the document lock-blocked (keeping unsaved content) when another editor holds the lock', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = createValidMockEditor() as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'page',
+        });
+        result.current.markDirty('doc-1');
+      });
+
+      const lockError = Object.assign(new Error('Document is being edited by another user'), {
+        data: { code: 'CONFLICT' },
+      });
+      vi.mocked(documentService.updateDocument).mockRejectedValueOnce(lockError);
+
+      await act(async () => {
+        await result.current.performSave('doc-1');
+      });
+
+      expect(result.current.documents['doc-1'].saveBlockedByLock).toBe(true);
+      // Unsaved content is preserved, not silently dropped.
+      expect(result.current.documents['doc-1'].isDirty).toBe(true);
+      expect(result.current.documents['doc-1'].saveStatus).toBe('idle');
+    });
+
+    it('clears the lock-blocked flag after the next successful save', async () => {
+      const { result } = renderHook(() => useDocumentStore());
+      const mockEditor = createValidMockEditor() as any;
+
+      act(() => {
+        result.current.initDocumentWithEditor({
+          content: '# Test',
+          documentId: 'doc-1',
+          editor: mockEditor,
+          sourceType: 'page',
+        });
+        result.current.markDirty('doc-1');
+      });
+
+      const lockError = Object.assign(new Error('locked'), { data: { code: 'CONFLICT' } });
+      vi.mocked(documentService.updateDocument).mockRejectedValueOnce(lockError);
+      await act(async () => {
+        await result.current.performSave('doc-1');
+      });
+      expect(result.current.documents['doc-1'].saveBlockedByLock).toBe(true);
+
+      vi.mocked(documentService.updateDocument).mockResolvedValue({
+        historyAppended: false,
+        id: 'doc-1',
+      });
+      act(() => {
+        result.current.markDirty('doc-1');
+      });
+      await act(async () => {
+        await result.current.performSave('doc-1');
+      });
+
+      expect(result.current.documents['doc-1'].saveBlockedByLock).toBe(false);
+      expect(result.current.documents['doc-1'].isDirty).toBe(false);
+    });
+
     it('should save metadata-only updates when history is not appended', async () => {
       const { result } = renderHook(() => useDocumentStore());
       const mockEditor = createValidMockEditor() as any;

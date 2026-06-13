@@ -18,10 +18,13 @@ import { usePageEditorStore } from './store';
 
 const TitleSection = memo(() => {
   const { t } = useTranslation('file');
-  const { allowed: canEdit } = usePermission('edit_own_content');
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
   const documentId = usePageEditorStore((s) => s.documentId);
+  // Title/emoji are metadata, not the locked rich-text body — they stay editable
+  // (permission only) even while another member holds the body edit lock. The
+  // server lets metadata-only saves through the lock guard.
+  const { allowed: canEdit } = usePermission('edit_own_content');
   const emoji = usePageEditorStore((s) => s.emoji);
   const title = usePageEditorStore((s) => s.title);
   const setEmoji = usePageEditorStore((s) => s.setEmoji);

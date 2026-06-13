@@ -26,7 +26,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
-import { useProfileStore } from '../store';
+import { selectors as profileSelectors, useProfileStore } from '../store';
 import AgentForkTag from './AgentForkTag';
 import ForkConfirmModal from './AgentPublishButton/ForkConfirmModal';
 import PublishResultModal from './AgentPublishButton/PublishResultModal';
@@ -107,6 +107,8 @@ const Header = memo(() => {
   ]);
   const removeAgent = useHomeStore((s) => s.removeAgent);
   const editor = useProfileStore((s) => s.editor);
+  const lockedByOther = useProfileStore(profileSelectors.lockedByOther);
+  const lockPending = useProfileStore(profileSelectors.lockPending);
   const { allowed: canEdit } = usePermission('edit_own_content');
   const { isAuthenticated, isLoading: isAuthLoading, signIn } = useMarketAuth();
   const { isUnderReview } = useVersionReviewStatus();
@@ -326,7 +328,7 @@ const Header = memo(() => {
     <>
       <NavHeader
         left={
-          <Flexbox horizontal gap={8}>
+          <Flexbox horizontal align={'center'} gap={8}>
             <AutoSaveHint />
             <AgentStatusTag />
             <AgentVersionReviewTag />
@@ -342,7 +344,7 @@ const Header = memo(() => {
                 size={DESKTOP_HEADER_ICON_SMALL_SIZE}
               />
             </DropdownMenu>
-            {!isHeterogeneous && isStatusInit && (
+            {!isHeterogeneous && isStatusInit && !lockedByOther && !lockPending && (
               <ToggleRightPanelButton
                 expand={showAgentBuilderPanel}
                 icon={BotMessageSquareIcon}

@@ -17,6 +17,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { usePageStore } from '@/store/page';
 import { StyleSheet } from '@/utils/styles';
 
+import EditingIndicator from './EditingIndicator';
 import EditorCanvas from './EditorCanvas';
 import Header from './Header';
 import { PageAgentProvider } from './PageAgentProvider';
@@ -24,6 +25,7 @@ import { PageEditorProvider } from './PageEditorProvider';
 import RightPanel from './RightPanel';
 import { usePageEditorStore } from './store';
 import TitleSection from './TitleSection';
+import { usePageEditable } from './usePageEditable';
 
 /**
  * Header slot for PageEditor.
@@ -121,7 +123,7 @@ interface PageEditorCanvasProps {
 }
 
 const PageEditorCanvas = memo<PageEditorCanvasProps>(({ header, fullWidthHeader }) => {
-  const { allowed: canEdit } = usePermission('edit_own_content');
+  const editable = usePageEditable();
   const editor = usePageEditorStore((s) => s.editor);
   const documentId = usePageEditorStore((s) => s.documentId);
   const wideScreen = useGlobalStore(systemStatusSelectors.wideScreen);
@@ -269,10 +271,10 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>(({ header, fullWidthHeader 
         onScroll={handleEditorScroll}
       >
         <WideScreenContainer
-          wrapperStyle={{ cursor: canEdit ? 'text' : 'not-allowed' }}
+          wrapperStyle={{ cursor: editable ? 'text' : 'default' }}
           onChange={notifyEditorLayoutChange}
           onClick={() => {
-            if (!canEdit) return;
+            if (!editable) return;
 
             editor?.focus();
           }}
@@ -280,6 +282,8 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>(({ header, fullWidthHeader 
           <Flexbox className={overrideStyles.editorContent} flex={1} style={editorContentStyle}>
             <TitleSection />
             <PageMetaBar />
+            {/* Body-only lock indicator: title/avatar above stay editable. */}
+            <EditingIndicator />
             <EditorCanvas />
           </Flexbox>
         </WideScreenContainer>

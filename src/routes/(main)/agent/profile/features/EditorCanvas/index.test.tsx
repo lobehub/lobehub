@@ -66,7 +66,14 @@ vi.mock('../ProfileEditor/MentionList', () => ({
 }));
 
 vi.mock('../store', () => ({
-  useProfileStore: (selector: any) => selector({ editor, handleContentChange }),
+  useProfileStore: (selector: any) =>
+    selector({
+      editor,
+      handleContentChange,
+      hasEdited: false,
+      lockState: { holderId: null, lockedByOther: false, pending: false },
+      setHasEdited: vi.fn(),
+    }),
 }));
 
 vi.mock('./TypoBar', () => ({

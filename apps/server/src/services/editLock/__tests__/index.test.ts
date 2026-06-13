@@ -1,0 +1,98 @@
+import { describe, expect, it, vi } from 'vitest';
+
+import { EditLockService } from '../index';
+
+/**
+ * Minimal in-memory fake of the ioredis calls EditLockService uses:
+ * `set(k, v, 'EX', ttl[, 'NX'])`, `get(k)`, and the compare-and-delete `eval`.
+ */
+const makeFakeRedis = () => {
+  const store = new Map<string, string>();
+  return {
+    eval: vi.fn(async (_script: string, _numKeys: number, key: string, arg: string) => {
+      if (store.get(key) === arg) {
+        store.delete(key);
+        return 1;
+      }
+      return 0;
+    }),
+    get: vi.fn(async (key: string) => store.get(key) ?? null),
+    set: vi.fn(async (key: string, value: string, ...args: unknown[]) => {
+      if (args.includes('NX') && store.has(key)) return null;
+      store.set(key, value);
+      return 'OK';
+    }),
+    store,
+  };
+};
+
+describe('EditLockService', () => {
+  it('acquires a free lock and reports the caller as holder', async () => {
+    const redis = makeFakeRedis();
+    const svc = new EditLockService('user-1', redis as any);
+
+    const result = await svc.acquire('document', 'doc-1');
+
+    expect(result.holderId).toBe('user-1');
+    expect(result.lockedByOther).toBe(false);
+    expect(result.expiresAt).toBeInstanceOf(Date);
+    expect(redis.store.get('editlock:document:doc-1')).toBe('user-1');
+  });
+
+  it('reports another member as holder when the lock is already taken', async () => {
+    const redis = makeFakeRedis();
+    await new EditLockService('user-1', redis as any).acquire('document', 'doc-1');
+
+    const result = await new EditLockService('user-2', redis as any).acquire('document', 'doc-1');
+
+    expect(result).toEqual({ expiresAt: null, holderId: 'user-1', lockedByOther: true });
+  });
+
+  it('lets the holder refresh their own lease', async () => {
+    const redis = makeFakeRedis();
+    const svc = new EditLockService('user-1', redis as any);
+    await svc.acquire('document', 'doc-1');
+
+    const result = await svc.acquire('document', 'doc-1');
+
+    expect(result.holderId).toBe('user-1');
+    expect(result.lockedByOther).toBe(false);
+  });
+
+  it('getBlockingHolder returns the holder only when it is someone else', async () => {
+    const redis = makeFakeRedis();
+    await new EditLockService('user-1', redis as any).acquire('document', 'doc-1');
+
+    expect(
+      await new EditLockService('user-2', redis as any).getBlockingHolder('document', 'doc-1'),
+    ).toBe('user-1');
+    expect(
+      await new EditLockService('user-1', redis as any).getBlockingHolder('document', 'doc-1'),
+    ).toBeNull();
+  });
+
+  it('only releases the lock for the current holder', async () => {
+    const redis = makeFakeRedis();
+    await new EditLockService('user-1', redis as any).acquire('document', 'doc-1');
+
+    // A non-holder release is a no-op.
+    await new EditLockService('user-2', redis as any).release('document', 'doc-1');
+    expect(redis.store.get('editlock:document:doc-1')).toBe('user-1');
+
+    // The holder can release.
+    await new EditLockService('user-1', redis as any).release('document', 'doc-1');
+    expect(redis.store.has('editlock:document:doc-1')).toBe(false);
+  });
+
+  it('degrades to unlocked / no-op when Redis is unavailable', async () => {
+    const svc = new EditLockService('user-1', null);
+
+    expect(await svc.acquire('document', 'doc-1')).toEqual({
+      expiresAt: null,
+      holderId: null,
+      lockedByOther: false,
+    });
+    expect(await svc.getBlockingHolder('document', 'doc-1')).toBeNull();
+    await expect(svc.release('document', 'doc-1')).resolves.toBeUndefined();
+  });
+});

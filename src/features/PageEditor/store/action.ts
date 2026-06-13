@@ -26,6 +26,9 @@ export interface Action {
   initMeta: (title?: string, emoji?: string) => void;
   performMetaSave: () => Promise<void>;
   setEmoji: (emoji: string | undefined) => void;
+  /** True while the lock state is still being resolved (editor read-only meanwhile). */
+  setLockPending: (pending: boolean) => void;
+  setLockState: (lock: { holderId: string | null; lockedByOther: boolean }) => void;
   setRightPanelMode: (mode: RightPanelMode) => void;
   setTitle: (title: string) => void;
   triggerDebouncedMetaSave: () => void;
@@ -178,6 +181,16 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         if (isDirty) {
           triggerDebouncedMetaSave();
         }
+      },
+
+      setLockPending: (pending) => {
+        if (get().isLockPending !== pending) set({ isLockPending: pending });
+      },
+
+      setLockState: ({ holderId, lockedByOther }) => {
+        const { isLockedByOther, lockHolderId } = get();
+        if (isLockedByOther === lockedByOther && lockHolderId === holderId) return;
+        set({ isLockedByOther: lockedByOther, lockHolderId: holderId });
       },
 
       setRightPanelMode: (rightPanelMode) => {

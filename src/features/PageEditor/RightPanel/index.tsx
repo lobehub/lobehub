@@ -20,6 +20,7 @@ import {
 import Conversation from '../Copilot/Conversation';
 import HistoryPanel from '../History';
 import { selectors, usePageEditorStore } from '../store';
+import { usePageEditable } from '../usePageEditable';
 import { usePageAgentPanelControl } from './OverrideContext';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -105,15 +106,21 @@ PageEditorRightPanelContent.displayName = 'PageEditorRightPanelContent';
 
 const PageEditorRightPanel = memo(() => {
   const { expand, toggle } = usePageAgentPanelControl();
+  const rightPanelMode = usePageEditorStore(selectors.rightPanelMode);
+  const editable = usePageEditable();
   const [width, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.pageAgentPanelWidth(s),
     s.updateSystemStatus,
   ]);
 
+  // The Page Agent (copilot) edits the document, so hide it in read-only mode.
+  // History stays available. Re-entering edit mode restores the saved preference.
+  const effectiveExpand = expand && (rightPanelMode === 'history' || editable);
+
   return (
     <RightPanel
       defaultWidth={width}
-      expand={expand}
+      expand={effectiveExpand}
       onExpandChange={(next) => toggle(next)}
       onSizeChange={(size) => {
         if (size?.width) {
