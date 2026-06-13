@@ -1,5 +1,4 @@
 import { getMessageError } from '@lobechat/fetch-sse';
-import { type ChatMessageError } from '@lobechat/types';
 
 import { createHeaderWithAuth } from '@/services/_auth';
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
@@ -11,20 +10,6 @@ import { initializeWithClientStore } from './chat/mecha';
 
 const isEnableFetchOnClient = (provider: string) =>
   aiProviderSelectors.isProviderFetchOnClient(provider)(getAiInfraStoreState());
-
-const getMessageFromValue = (value: unknown): string | undefined => {
-  if (value instanceof Error && value.message) return value.message;
-  if (typeof value === 'string' && value) return value;
-  if (!value || typeof value !== 'object') return;
-
-  const record = value as Record<string, unknown>;
-  if (typeof record.message === 'string' && record.message) return record.message;
-
-  return getMessageFromValue(record.error);
-};
-
-const createModelFetchError = (error: ChatMessageError) =>
-  new Error(getMessageFromValue(error.body) ?? error.message, { cause: error });
 
 // Progress information interface
 export interface ModelProgressInfo {
@@ -62,7 +47,15 @@ export class ModelsService {
     }
 
     const res = await fetch(API_ENDPOINTS.models(provider), { headers });
-    if (!res.ok) throw createModelFetchError(await getMessageError(res));
+    if (!res.ok) {
+      const error = await getMessageError(res);
+      const message =
+        typeof error.body?.message === 'string' && error.body.message
+          ? error.body.message
+          : error.message;
+
+      throw new Error(message, { cause: error });
+    }
 
     return res.json();
   };
