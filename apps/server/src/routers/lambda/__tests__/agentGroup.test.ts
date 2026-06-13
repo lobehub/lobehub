@@ -7,8 +7,14 @@ import * as ChatGroupModelModule from '@/database/models/chatGroup';
 import * as UserModelModule from '@/database/models/user';
 import * as AgentGroupRepoModule from '@/database/repositories/agentGroup';
 import * as ChatGroupServiceModule from '@/server/services/agentGroup';
+import { EditLockService } from '@/server/services/editLock';
+import { publishResourceEvent } from '@/server/services/resourceEvents';
 
 import { agentGroupRouter } from '../agentGroup';
+
+vi.mock('@/server/services/resourceEvents', () => ({ publishResourceEvent: vi.fn() }));
+
+const publishResourceEventMock = vi.mocked(publishResourceEvent);
 
 describe('agentGroupRouter', () => {
   const userId = 'testUserId';
@@ -437,6 +443,128 @@ describe('agentGroupRouter', () => {
         config: undefined,
       });
       expect(result).toEqual(mockUpdatedGroup);
+    });
+  });
+
+  describe('edit lock', () => {
+    const wsCtx = () => ({ serverDB: {}, userId, workspaceId: 'ws-1' });
+
+    describe('updateGroup write guard', () => {
+      it('rejects the update when another member holds the lock', async () => {
+        vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue('other-user');
+
+        const caller = agentGroupRouter.createCaller(wsCtx());
+
+        await expect(
+          caller.updateGroup({ id: 'group-1', value: { title: 'New' } }),
+        ).rejects.toMatchObject({ code: 'CONFLICT' });
+        expect(chatGroupModelMock.update).not.toHaveBeenCalled();
+      });
+
+      it('allows the update when no other member holds the lock', async () => {
+        vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue(null);
+        chatGroupModelMock.update.mockResolvedValue({ id: 'group-1' });
+
+        const caller = agentGroupRouter.createCaller(wsCtx());
+        await caller.updateGroup({ id: 'group-1', value: { title: 'New' } });
+
+        expect(chatGroupModelMock.update).toHaveBeenCalled();
+      });
+
+      it('does not check the lock for personal (non-workspace) groups', async () => {
+        const guardSpy = vi.spyOn(EditLockService.prototype, 'getBlockingHolder');
+        chatGroupModelMock.update.mockResolvedValue({ id: 'group-1' });
+
+        const caller = agentGroupRouter.createCaller(mockCtx);
+        await caller.updateGroup({ id: 'group-1', value: { title: 'New' } });
+
+        expect(guardSpy).not.toHaveBeenCalled();
+        expect(chatGroupModelMock.update).toHaveBeenCalled();
+      });
+    });
+
+    describe('acquireGroupLock', () => {
+      it('returns unlocked without touching the lock service for personal groups', async () => {
+        const acquireSpy = vi.spyOn(EditLockService.prototype, 'acquire');
+
+        const caller = agentGroupRouter.createCaller(mockCtx);
+        const result = await caller.acquireGroupLock({ id: 'group-1' });
+
+        expect(result).toEqual({ expiresAt: null, holderId: null, lockedByOther: false });
+        expect(acquireSpy).not.toHaveBeenCalled();
+      });
+
+      it('broadcasts lock.changed on a holder edge (first claim)', async () => {
+        vi.spyOn(EditLockService.prototype, 'getActiveHolder').mockResolvedValue(undefined);
+        vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+          expiresAt: new Date(),
+          holderId: userId,
+          lockedByOther: false,
+        });
+
+        const caller = agentGroupRouter.createCaller(wsCtx());
+        await caller.acquireGroupLock({ id: 'group-1' });
+
+        expect(publishResourceEventMock).toHaveBeenCalledWith(
+          { id: 'group-1', type: 'chatGroup' },
+          expect.objectContaining({ data: { holderId: userId }, type: 'lock.changed' }),
+        );
+      });
+
+      it('does NOT broadcast on a steady-state heartbeat (same holder)', async () => {
+        vi.spyOn(EditLockService.prototype, 'getActiveHolder').mockResolvedValue(userId);
+        vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+          expiresAt: new Date(),
+          holderId: userId,
+          lockedByOther: false,
+        });
+
+        const caller = agentGroupRouter.createCaller(wsCtx());
+        await caller.acquireGroupLock({ id: 'group-1' });
+
+        expect(publishResourceEventMock).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('getGroupLock', () => {
+      it('reports another member as the holder', async () => {
+        vi.spyOn(EditLockService.prototype, 'getActiveHolder').mockResolvedValue('other-user');
+
+        const caller = agentGroupRouter.createCaller(wsCtx());
+        const result = await caller.getGroupLock({ id: 'group-1' });
+
+        expect(result).toEqual({ expiresAt: null, holderId: 'other-user', lockedByOther: true });
+      });
+
+      it('returns unlocked for personal groups', async () => {
+        const caller = agentGroupRouter.createCaller(mockCtx);
+        const result = await caller.getGroupLock({ id: 'group-1' });
+
+        expect(result).toEqual({ expiresAt: null, holderId: null, lockedByOther: false });
+      });
+    });
+
+    describe('releaseGroupLock', () => {
+      it('broadcasts unlocked only when it actually freed the lock', async () => {
+        vi.spyOn(EditLockService.prototype, 'release').mockResolvedValue(true);
+
+        const caller = agentGroupRouter.createCaller(wsCtx());
+        await caller.releaseGroupLock({ id: 'group-1' });
+
+        expect(publishResourceEventMock).toHaveBeenCalledWith(
+          { id: 'group-1', type: 'chatGroup' },
+          expect.objectContaining({ data: { holderId: null }, type: 'lock.changed' }),
+        );
+      });
+
+      it('does NOT broadcast when the lease expired / was taken over', async () => {
+        vi.spyOn(EditLockService.prototype, 'release').mockResolvedValue(false);
+
+        const caller = agentGroupRouter.createCaller(wsCtx());
+        await caller.releaseGroupLock({ id: 'group-1' });
+
+        expect(publishResourceEventMock).not.toHaveBeenCalled();
+      });
     });
   });
 });

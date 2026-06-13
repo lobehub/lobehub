@@ -7,6 +7,7 @@ import { FileModel } from '@/database/models/file';
 
 import { EditLockService } from '../../editLock';
 import { FileService } from '../../file';
+import { publishResourceEvent } from '../../resourceEvents';
 import { DocumentHistoryService } from '../history';
 import { DocumentService } from '../index';
 
@@ -15,6 +16,11 @@ vi.mock('@/database/models/document');
 vi.mock('@/database/models/file');
 vi.mock('../../file');
 vi.mock('../history');
+// Spy on the realtime broadcast so we can assert lock.changed is published only
+// on a genuine state change (holder edge / actual release).
+vi.mock('../../resourceEvents', () => ({ publishResourceEvent: vi.fn() }));
+
+const publishResourceEventMock = vi.mocked(publishResourceEvent);
 vi.mock('@lobechat/file-loaders', () => ({
   loadFile: vi.fn(),
   UnsupportedFileTypeError: class UnsupportedFileTypeError extends Error {
@@ -818,6 +824,43 @@ describe('DocumentService', () => {
 
       expect(mockDocumentModel.update).toHaveBeenCalled();
     });
+
+    it('allows a metadata-only save while another member holds the lock (only the body is locked)', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      // Current body matches what the autosave re-sends — only title changes.
+      mockDocumentModel.findById.mockResolvedValue(
+        createCurrentDocument({ content: 'body', editorData: { blocks: [] }, workspaceId: 'ws-1' }),
+      );
+      const guardSpy = vi.spyOn(EditLockService.prototype, 'getBlockingHolder');
+
+      await wsService.updateDocument('doc-1', {
+        content: 'body',
+        editorData: { blocks: [] },
+        title: 'New Title',
+      });
+
+      // Content unchanged → the lock guard never runs and the meta save lands.
+      expect(guardSpy).not.toHaveBeenCalled();
+      expect(mockDocumentModel.update).toHaveBeenCalledWith(
+        'doc-1',
+        expect.objectContaining({ title: 'New Title' }),
+      );
+    });
+
+    it('rejects a body change while locked even when the content string is unchanged', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      mockDocumentModel.findById.mockResolvedValue(
+        createCurrentDocument({ editorData: { blocks: [] }, workspaceId: 'ws-1' }),
+      );
+      vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue('other-user');
+
+      // editorData changed (historyAppended) → guard runs even with no `content`.
+      await expect(
+        wsService.updateDocument('doc-1', { editorData: { blocks: [{ type: 'paragraph' }] } }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(mockDocumentModel.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('document edit lock', () => {
@@ -865,9 +908,61 @@ describe('DocumentService', () => {
 
     it('releaseDocumentLock delegates to the lock service in workspace mode', async () => {
       const wsService = new DocumentService(mockDb, userId, 'ws-1');
-      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release').mockResolvedValue();
+      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release').mockResolvedValue(true);
       await wsService.releaseDocumentLock('doc-1');
       expect(releaseSpy).toHaveBeenCalledWith('document', 'doc-1');
+    });
+
+    it('acquireDocumentLock broadcasts lock.changed on a holder edge (first claim)', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'getActiveHolder').mockResolvedValue(undefined);
+      vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+        expiresAt: new Date(),
+        holderId: userId,
+        lockedByOther: false,
+      });
+
+      await wsService.acquireDocumentLock('doc-1');
+
+      expect(publishResourceEventMock).toHaveBeenCalledWith(
+        { id: 'doc-1', type: 'document' },
+        expect.objectContaining({ data: { holderId: userId }, type: 'lock.changed' }),
+      );
+    });
+
+    it('acquireDocumentLock does NOT broadcast on a steady-state heartbeat (same holder)', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'getActiveHolder').mockResolvedValue(userId);
+      vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+        expiresAt: new Date(),
+        holderId: userId,
+        lockedByOther: false,
+      });
+
+      await wsService.acquireDocumentLock('doc-1');
+
+      expect(publishResourceEventMock).not.toHaveBeenCalled();
+    });
+
+    it('releaseDocumentLock broadcasts unlocked only when it actually freed the lock', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'release').mockResolvedValue(true);
+
+      await wsService.releaseDocumentLock('doc-1');
+
+      expect(publishResourceEventMock).toHaveBeenCalledWith(
+        { id: 'doc-1', type: 'document' },
+        expect.objectContaining({ data: { holderId: null }, type: 'lock.changed' }),
+      );
+    });
+
+    it('releaseDocumentLock does NOT broadcast when the lease expired / was taken over', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'release').mockResolvedValue(false);
+
+      await wsService.releaseDocumentLock('doc-1');
+
+      expect(publishResourceEventMock).not.toHaveBeenCalled();
     });
   });
 
@@ -911,6 +1006,37 @@ describe('DocumentService', () => {
         'Document not found: missing-doc',
       );
       expect(mockDocumentHistoryService.createHistory).not.toHaveBeenCalled();
+    });
+
+    it('does not check the lock for personal documents', async () => {
+      mockDocumentModel.findById.mockResolvedValue({ id: 'doc-1', editorData: { blocks: [] } });
+      const guardSpy = vi.spyOn(EditLockService.prototype, 'getBlockingHolder');
+
+      await service.saveDocumentHistory('doc-1', { blocks: [] }, 'llm_call');
+
+      expect(guardSpy).not.toHaveBeenCalled();
+      expect(mockDocumentHistoryService.createHistory).toHaveBeenCalled();
+    });
+
+    it('rejects a workspace history snapshot when another member holds the lock', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      mockDocumentModel.findById.mockResolvedValue({ id: 'doc-1', editorData: { blocks: [] } });
+      vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue('other-user');
+
+      await expect(
+        wsService.saveDocumentHistory('doc-1', { blocks: [] }, 'llm_call'),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(mockDocumentHistoryService.createHistory).not.toHaveBeenCalled();
+    });
+
+    it('allows a workspace history snapshot when no other member holds the lock', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      mockDocumentModel.findById.mockResolvedValue({ id: 'doc-1', editorData: { blocks: [] } });
+      vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue(null);
+
+      await wsService.saveDocumentHistory('doc-1', { blocks: [] }, 'llm_call');
+
+      expect(mockDocumentHistoryService.createHistory).toHaveBeenCalled();
     });
   });
 

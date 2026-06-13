@@ -59,6 +59,31 @@ describe('EditLockService', () => {
     expect(result.lockedByOther).toBe(false);
   });
 
+  it('getActiveHolder reports the current holder, or undefined when free', async () => {
+    const redis = makeFakeRedis();
+    expect(
+      await new EditLockService('user-1', redis as any).getActiveHolder('document', 'doc-1'),
+    ).toBeUndefined();
+
+    await new EditLockService('user-1', redis as any).acquire('document', 'doc-1');
+    expect(
+      await new EditLockService('user-2', redis as any).getActiveHolder('document', 'doc-1'),
+    ).toBe('user-1');
+  });
+
+  it('keys locks per resource type, so the same id does not collide across types', async () => {
+    const redis = makeFakeRedis();
+    await new EditLockService('user-1', redis as any).acquire('document', 'shared-id');
+
+    // A different resource family with the same id is independently lockable.
+    const result = await new EditLockService('user-2', redis as any).acquire('agent', 'shared-id');
+
+    expect(result.holderId).toBe('user-2');
+    expect(result.lockedByOther).toBe(false);
+    expect(redis.store.get('editlock:document:shared-id')).toBe('user-1');
+    expect(redis.store.get('editlock:agent:shared-id')).toBe('user-2');
+  });
+
   it('getBlockingHolder returns the holder only when it is someone else', async () => {
     const redis = makeFakeRedis();
     await new EditLockService('user-1', redis as any).acquire('document', 'doc-1');

@@ -9,9 +9,15 @@ import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
 import { AgentService } from '@/server/services/agent';
+import { EditLockService } from '@/server/services/editLock';
+import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { KnowledgeType } from '@/types/knowledgeBase';
 
 import { agentRouter } from '../agent';
+
+vi.mock('@/server/services/resourceEvents', () => ({ publishResourceEvent: vi.fn() }));
+
+const publishResourceEventMock = vi.mocked(publishResourceEvent);
 
 vi.mock('@/database/models/user', () => ({
   UserModel: {
@@ -327,6 +333,124 @@ describe('agentRouter', () => {
       await caller.updateAgentPinned(mockInput);
 
       expect(agentModelMock.update).toHaveBeenCalledWith(mockInput.id, { pinned: false });
+    });
+  });
+
+  describe('edit lock', () => {
+    const wsCtx = () => ({ ...mockCtx, workspaceId: 'ws-1' });
+
+    describe('updateAgentConfig write guard', () => {
+      it('rejects the update when another member holds the lock', async () => {
+        agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
+        vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue('other-user');
+
+        const caller = agentRouter.createCaller(wsCtx());
+
+        await expect(
+          caller.updateAgentConfig({ agentId: 'agent-1', value: { systemRole: 'x' } }),
+        ).rejects.toMatchObject({ code: 'CONFLICT' });
+        expect(agentServiceMock.updateAgentConfig).not.toHaveBeenCalled();
+      });
+
+      it('allows the update when no other member holds the lock', async () => {
+        agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
+        vi.spyOn(EditLockService.prototype, 'getBlockingHolder').mockResolvedValue(null);
+
+        const caller = agentRouter.createCaller(wsCtx());
+        await caller.updateAgentConfig({ agentId: 'agent-1', value: { systemRole: 'x' } });
+
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalledWith('agent-1', {
+          systemRole: 'x',
+        });
+      });
+
+      it('does not check the lock for personal (non-workspace) agents', async () => {
+        agentServiceMock.updateAgentConfig = vi.fn().mockResolvedValue({ id: 'agent-1' });
+        const guardSpy = vi.spyOn(EditLockService.prototype, 'getBlockingHolder');
+
+        const caller = agentRouter.createCaller(mockCtx);
+        await caller.updateAgentConfig({ agentId: 'agent-1', value: { systemRole: 'x' } });
+
+        expect(guardSpy).not.toHaveBeenCalled();
+        expect(agentServiceMock.updateAgentConfig).toHaveBeenCalled();
+      });
+    });
+
+    describe('acquireAgentLock', () => {
+      it('returns unlocked without touching the lock service for personal agents', async () => {
+        const acquireSpy = vi.spyOn(EditLockService.prototype, 'acquire');
+
+        const caller = agentRouter.createCaller(mockCtx);
+        const result = await caller.acquireAgentLock({ agentId: 'agent-1' });
+
+        expect(result).toEqual({ expiresAt: null, holderId: null, lockedByOther: false });
+        expect(acquireSpy).not.toHaveBeenCalled();
+      });
+
+      it('broadcasts lock.changed on a holder edge (first claim)', async () => {
+        vi.spyOn(EditLockService.prototype, 'getActiveHolder').mockResolvedValue(undefined);
+        vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+          expiresAt: new Date(),
+          holderId: userId,
+          lockedByOther: false,
+        });
+
+        const caller = agentRouter.createCaller(wsCtx());
+        await caller.acquireAgentLock({ agentId: 'agent-1' });
+
+        expect(publishResourceEventMock).toHaveBeenCalledWith(
+          { id: 'agent-1', type: 'agent' },
+          expect.objectContaining({ data: { holderId: userId }, type: 'lock.changed' }),
+        );
+      });
+
+      it('does NOT broadcast on a steady-state heartbeat (same holder)', async () => {
+        vi.spyOn(EditLockService.prototype, 'getActiveHolder').mockResolvedValue(userId);
+        vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+          expiresAt: new Date(),
+          holderId: userId,
+          lockedByOther: false,
+        });
+
+        const caller = agentRouter.createCaller(wsCtx());
+        await caller.acquireAgentLock({ agentId: 'agent-1' });
+
+        expect(publishResourceEventMock).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('getAgentLock', () => {
+      it('reports another member as the holder', async () => {
+        vi.spyOn(EditLockService.prototype, 'getActiveHolder').mockResolvedValue('other-user');
+
+        const caller = agentRouter.createCaller(wsCtx());
+        const result = await caller.getAgentLock({ agentId: 'agent-1' });
+
+        expect(result).toEqual({ expiresAt: null, holderId: 'other-user', lockedByOther: true });
+      });
+    });
+
+    describe('releaseAgentLock', () => {
+      it('broadcasts unlocked only when it actually freed the lock', async () => {
+        vi.spyOn(EditLockService.prototype, 'release').mockResolvedValue(true);
+
+        const caller = agentRouter.createCaller(wsCtx());
+        await caller.releaseAgentLock({ agentId: 'agent-1' });
+
+        expect(publishResourceEventMock).toHaveBeenCalledWith(
+          { id: 'agent-1', type: 'agent' },
+          expect.objectContaining({ data: { holderId: null }, type: 'lock.changed' }),
+        );
+      });
+
+      it('does NOT broadcast when the lease expired / was taken over', async () => {
+        vi.spyOn(EditLockService.prototype, 'release').mockResolvedValue(false);
+
+        const caller = agentRouter.createCaller(wsCtx());
+        await caller.releaseAgentLock({ agentId: 'agent-1' });
+
+        expect(publishResourceEventMock).not.toHaveBeenCalled();
+      });
     });
   });
 });
