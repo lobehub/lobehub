@@ -10,12 +10,14 @@ import type {
   GitBranchInfo,
   GitBranchListItem,
   GitCheckoutResult,
+  GitDeleteBranchResult,
   GitFileDiffStatus,
   GitFileRevertResult,
   GitLinkedPullRequestResult,
   GitPullResult,
   GitPushResult,
   GitRemoteBranchListItem,
+  GitRenameBranchResult,
   GitWorkingTreeFiles,
   GitWorkingTreePatch,
   GitWorkingTreePatches,
@@ -1081,6 +1083,67 @@ export default class GitController extends ControllerModule {
       const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
       logger.debug('[checkoutGitBranch] failed', { args, stderr });
       return { error: stderr || 'git checkout failed', success: false };
+    }
+  }
+
+  /**
+   * Rename a local branch (`git branch -m <from> <to>`). Works on the current
+   * branch too. Uses the non-force `-m`, so git rejects (and we surface) a
+   * rename onto an existing branch name. Mirrors `checkoutGitBranch`'s early
+   * ref validation on the new name.
+   */
+  @IpcMethod()
+  async renameGitBranch(payload: {
+    from: string;
+    path: string;
+    to: string;
+  }): Promise<GitRenameBranchResult> {
+    const { path: dirPath, from, to } = payload;
+    if (!from?.trim() || !to?.trim()) {
+      return { error: 'Branch name is required', success: false };
+    }
+    // Reject obviously invalid refs early to avoid a confusing git error
+    if (/[\s~^:?*[\\]/.test(to) || to.startsWith('-') || to.includes('..')) {
+      return { error: `Invalid branch name: ${to}`, success: false };
+    }
+
+    const execFileAsync = promisify(execFile);
+    try {
+      await execFileAsync('git', ['branch', '-m', from, to], { cwd: dirPath, timeout: 10_000 });
+      return { success: true };
+    } catch (error: any) {
+      const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
+      logger.debug('[renameGitBranch] failed', { from, stderr, to });
+      return { error: stderr || 'git branch rename failed', success: false };
+    }
+  }
+
+  /**
+   * Delete a local branch (`git branch -D <branch>`). Force delete (`-D`) is
+   * intentional: the UI gates this behind an explicit confirm, so we don't want
+   * git's "not fully merged" guard to block a deliberate cleanup. git still
+   * refuses to delete the currently checked-out branch, and that error is
+   * surfaced to the renderer.
+   */
+  @IpcMethod()
+  async deleteGitBranch(payload: { branch: string; path: string }): Promise<GitDeleteBranchResult> {
+    const { path: dirPath, branch } = payload;
+    if (!branch?.trim()) {
+      return { error: 'Branch name is required', success: false };
+    }
+    // Reject obviously invalid refs early to avoid a confusing git error
+    if (/[\s~^:?*[\\]/.test(branch) || branch.startsWith('-') || branch.includes('..')) {
+      return { error: `Invalid branch name: ${branch}`, success: false };
+    }
+
+    const execFileAsync = promisify(execFile);
+    try {
+      await execFileAsync('git', ['branch', '-D', branch], { cwd: dirPath, timeout: 10_000 });
+      return { success: true };
+    } catch (error: any) {
+      const stderr: string = (error?.stderr ?? error?.message ?? '').toString().trim();
+      logger.debug('[deleteGitBranch] failed', { branch, stderr });
+      return { error: stderr || 'git branch delete failed', success: false };
     }
   }
 

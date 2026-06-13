@@ -173,6 +173,16 @@ export interface GitFileRevertResult {
   success: boolean;
 }
 
+export interface GitRenameBranchResult {
+  error?: string;
+  success: boolean;
+}
+
+export interface GitDeleteBranchResult {
+  error?: string;
+  success: boolean;
+}
+
 export interface GitPullResult {
   error?: string;
   /** True when `git pull` reported the branch was already up-to-date */
