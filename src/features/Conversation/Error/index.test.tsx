@@ -165,6 +165,25 @@ describe('ErrorMessageExtra', () => {
     expect(screen.getByText('dynamic')).toBeInTheDocument();
   });
 
+  it('shows the trace-id report UI for fallback provider errors', () => {
+    serverConfigMock.enableBusinessFeatures = true;
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.ProviderBizError' }}
+        data={{
+          error: {
+            body: { traceId: 'trace-provider' },
+            type: 'ProviderBizError',
+          } as any,
+          id: 'msg-provider-fallback',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('dynamic')).toBeInTheDocument();
+  });
+
   it('renders the auth guide when the refreshed error is missing type but still carries session code', () => {
     render(
       <ErrorMessageExtra

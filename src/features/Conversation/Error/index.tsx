@@ -116,6 +116,21 @@ const hasLocalizedErrorMessage = (
   return LEGACY_LOCALIZED_ERROR_TYPES.has(String(errorType));
 };
 
+const shouldShowTraceIdError = (
+  error?: ChatMessageError | null,
+): error is ChatMessageError & { body: { traceId: string } } => {
+  if (typeof error?.body?.traceId !== 'string') return false;
+
+  const errorType = error.type;
+  if (errorType === undefined || errorType === null) return true;
+  if (typeof errorType === 'number') return false;
+
+  const spec = getErrorCodeSpec(String(errorType));
+  if (spec?.isFallback) return true;
+
+  return !hasLocalizedErrorMessage(errorType);
+};
+
 const isHeterogeneousAgentStatusGuideError = (
   value: unknown,
 ): value is HeterogeneousAgentSessionError => {
@@ -297,13 +312,9 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data, onRe
     return <ChatInvalidAPIKey id={data.id} provider={data.error?.body?.provider} />;
   }
 
-  // Show a report action for unknown traceable errors instead of the raw body.
-  // Error types with a dedicated localized message keep the ErrorContent below.
-  if (
-    enableBusinessFeatures &&
-    !hasLocalizedErrorMessage(error?.type) &&
-    typeof error?.body?.traceId === 'string'
-  ) {
+  // Show a report action for unknown or fallback-bucket traceable errors.
+  // Specific known error types keep their dedicated localized message below.
+  if (enableBusinessFeatures && shouldShowTraceIdError(error)) {
     return <TraceIdError id={data.id} traceId={error.body.traceId} />;
   }
 
