@@ -34,6 +34,7 @@ vi.mock('@lobehub/ui', () => ({
   Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
   Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Icon: () => null,
+  Image: ({ alt, src }: { alt?: string; src?: string }) => <img alt={alt} src={src} />,
   Markdown: ({ children }: { children: ReactNode }) => <div>{children}</div>,
   Segmented: () => null,
   Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,

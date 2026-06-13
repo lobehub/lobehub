@@ -1,3 +1,4 @@
+import { Image } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import type { ComponentProps } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
@@ -15,7 +16,7 @@ interface MarkdownImageProps extends ComponentProps<'img'> {
 }
 
 const MarkdownImage = memo<MarkdownImageProps>(
-  ({ alt, deviceId, markdownFilePath, node, src, style, workingDirectory, ...rest }) => {
+  ({ alt, className, deviceId, markdownFilePath, node, src, style, workingDirectory, ...rest }) => {
     void node;
 
     const markdownSrc = typeof src === 'string' ? src : undefined;
@@ -71,11 +72,16 @@ const MarkdownImage = memo<MarkdownImageProps>(
       );
     }
 
+    const resolvedSrc = imageSrc ?? src;
+
     return (
-      <img
+      <Image
         alt={alt}
-        src={imageSrc ?? src}
-        style={{ maxWidth: '100%', ...style }}
+        classNames={className ? { image: className } : undefined}
+        objectFit={'contain'}
+        src={resolvedSrc}
+        styles={{ image: { maxWidth: '100%', ...style } }}
+        variant={'borderless'}
         {...rest}
       />
     );
