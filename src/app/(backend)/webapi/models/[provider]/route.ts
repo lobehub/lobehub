@@ -1,5 +1,5 @@
 import type { ChatCompletionErrorPayload } from '@lobechat/model-runtime';
-import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
+import { ChatErrorType } from '@lobechat/types';
 import { NextResponse } from 'next/server';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
@@ -25,7 +25,7 @@ const getMessageFromError = (error: unknown): string | undefined => {
 
 const createModelListErrorResponse = (provider: string, e: unknown) => {
   let error = e;
-  let errorType: ChatCompletionErrorPayload['errorType'] = AgentRuntimeErrorType.ProviderBizError;
+  let errorType: ChatCompletionErrorPayload['errorType'] = ChatErrorType.InternalServerError;
   let rest: Partial<ChatCompletionErrorPayload> = {};
 
   if (e && typeof e === 'object') {

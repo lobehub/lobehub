@@ -1,6 +1,7 @@
 // @vitest-environment node
-import { AgentRuntimeErrorType, type LobeRuntimeAI } from '@lobechat/model-runtime';
-import { ModelRuntime } from '@lobechat/model-runtime';
+import type { LobeRuntimeAI } from '@lobechat/model-runtime';
+import { AgentRuntimeErrorType, ModelRuntime } from '@lobechat/model-runtime';
+import { ChatErrorType } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { auth } from '@/auth';
@@ -64,8 +65,8 @@ describe('GET handler', () => {
       const response = await GET(request, { params: mockParams });
       const responseBody = await response.json();
 
-      expect(response.status).toBe(471);
-      expect(responseBody.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
+      expect(response.status).toBe(500);
+      expect(responseBody.errorType).toBe(ChatErrorType.InternalServerError);
       expect(responseBody.body.message).toBe('Something went wrong');
 
       const responseText = JSON.stringify(responseBody);
@@ -96,8 +97,8 @@ describe('GET handler', () => {
       const response = await GET(request, { params: mockParams });
       const responseBody = await response.json();
 
-      expect(response.status).toBe(471);
-      expect(responseBody.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
+      expect(response.status).toBe(500);
+      expect(responseBody.errorType).toBe(ChatErrorType.InternalServerError);
       expect(responseBody.body.message).toBe('Custom error occurred');
     });
 
@@ -127,7 +128,7 @@ describe('GET handler', () => {
       expect(responseBody.body.provider).toBe('google');
     });
 
-    it('should return provider status code for model fetch errors', async () => {
+    it('should return generic status code for model fetch errors', async () => {
       const mockParams = Promise.resolve({ provider: 'google' });
 
       const mockRuntime: LobeRuntimeAI = {
@@ -140,8 +141,8 @@ describe('GET handler', () => {
       const response = await GET(request, { params: mockParams });
       const responseBody = await response.json();
 
-      expect(response.status).toBe(471);
-      expect(responseBody.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
+      expect(response.status).toBe(500);
+      expect(responseBody.errorType).toBe(ChatErrorType.InternalServerError);
       expect(responseBody.body.message).toBe('Failed');
     });
 
@@ -161,14 +162,14 @@ describe('GET handler', () => {
       const response = await GET(request, { params: mockParams });
       const responseBody = await response.json();
 
-      expect(response.status).toBe(471);
-      expect(responseBody.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
+      expect(response.status).toBe(500);
+      expect(responseBody.errorType).toBe(ChatErrorType.InternalServerError);
       expect(responseBody.body.message).toBe(
         'OpenRouter models API request failed with status 401',
       );
     });
 
-    it('should return provider status code for setup errors', async () => {
+    it('should return generic status code for setup errors', async () => {
       const mockParams = Promise.resolve({ provider: 'google' });
 
       vi.mocked(initModelRuntimeFromDB).mockRejectedValue(new Error('Setup failed'));
@@ -176,8 +177,8 @@ describe('GET handler', () => {
       const response = await GET(request, { params: mockParams });
       const responseBody = await response.json();
 
-      expect(response.status).toBe(471);
-      expect(responseBody.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
+      expect(response.status).toBe(500);
+      expect(responseBody.errorType).toBe(ChatErrorType.InternalServerError);
       expect(responseBody.body.message).toBe('Setup failed');
     });
 
