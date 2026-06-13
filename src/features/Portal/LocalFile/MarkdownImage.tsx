@@ -16,7 +16,7 @@ interface MarkdownImageProps extends ComponentProps<'img'> {
 }
 
 const MarkdownImage = memo<MarkdownImageProps>(
-  ({ alt, className, deviceId, markdownFilePath, node, src, style, workingDirectory, ...rest }) => {
+  ({ alt, className, deviceId, markdownFilePath, node, src, style, workingDirectory }) => {
     void node;
 
     const markdownSrc = typeof src === 'string' ? src : undefined;
@@ -72,7 +72,7 @@ const MarkdownImage = memo<MarkdownImageProps>(
       );
     }
 
-    const resolvedSrc = imageSrc ?? src;
+    const resolvedSrc = imageSrc ?? markdownSrc;
 
     return (
       <Image
@@ -82,7 +82,6 @@ const MarkdownImage = memo<MarkdownImageProps>(
         src={resolvedSrc}
         styles={{ image: { maxWidth: '100%', ...style } }}
         variant={'borderless'}
-        {...rest}
       />
     );
   },
