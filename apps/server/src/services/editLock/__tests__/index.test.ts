@@ -95,4 +95,25 @@ describe('EditLockService', () => {
     expect(await svc.getBlockingHolder('document', 'doc-1')).toBeNull();
     await expect(svc.release('document', 'doc-1')).resolves.toBeUndefined();
   });
+
+  it('fails open when Redis is configured but commands reject (unreachable)', async () => {
+    // ioredis is non-null but every command rejects after retries — the write
+    // guards must not turn this into a 500; treat the resource as unlocked.
+    const down = new Error('Connection is closed.');
+    const redis = {
+      eval: vi.fn().mockRejectedValue(down),
+      get: vi.fn().mockRejectedValue(down),
+      set: vi.fn().mockRejectedValue(down),
+    };
+    const svc = new EditLockService('user-1', redis as any);
+
+    expect(await svc.acquire('document', 'doc-1')).toEqual({
+      expiresAt: null,
+      holderId: null,
+      lockedByOther: false,
+    });
+    expect(await svc.getActiveHolder('document', 'doc-1')).toBeUndefined();
+    expect(await svc.getBlockingHolder('document', 'doc-1')).toBeNull();
+    await expect(svc.release('document', 'doc-1')).resolves.toBeUndefined();
+  });
 });

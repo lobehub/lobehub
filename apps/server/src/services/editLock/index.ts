@@ -60,29 +60,42 @@ export class EditLockService {
     if (!this.redis) return UNLOCKED;
     const key = lockKey(type, id);
 
-    // Claim only when the key is absent (NX). The TTL gives automatic expiry, so
-    // a hard-closed tab frees the lock without any cleanup job.
-    const claimed = await this.redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS, 'NX');
-    if (claimed) return this.held();
+    try {
+      // Claim only when the key is absent (NX). The TTL gives automatic expiry, so
+      // a hard-closed tab frees the lock without any cleanup job.
+      const claimed = await this.redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS, 'NX');
+      if (claimed) return this.held();
 
-    const holder = await this.redis.get(key);
-    if (holder === this.userId) {
-      // Already mine — refresh the lease (heartbeat).
-      await this.redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS);
-      return this.held();
+      const holder = await this.redis.get(key);
+      if (holder === this.userId) {
+        // Already mine — refresh the lease (heartbeat).
+        await this.redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS);
+        return this.held();
+      }
+      if (holder) return { expiresAt: null, holderId: holder, lockedByOther: true };
+
+      // Freed between the NX and the GET — try once more.
+      const reclaimed = await this.redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS, 'NX');
+      return reclaimed ? this.held() : UNLOCKED;
+    } catch (error) {
+      // Fail-open: a Redis outage (configured but unreachable) must never block
+      // editing — report unlocked rather than surfacing the command rejection.
+      log('acquire failed for %s:%s %O', type, id, error);
+      return UNLOCKED;
     }
-    if (holder) return { expiresAt: null, holderId: holder, lockedByOther: true };
-
-    // Freed between the NX and the GET — try once more.
-    const reclaimed = await this.redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS, 'NX');
-    return reclaimed ? this.held() : UNLOCKED;
   }
 
   /** Current holder of the lock, or undefined when unlocked / Redis is down. */
   async getActiveHolder(type: EditLockResourceType, id: string): Promise<string | undefined> {
     if (!this.redis) return undefined;
-    const holder = await this.redis.get(lockKey(type, id));
-    return holder ?? undefined;
+    try {
+      const holder = await this.redis.get(lockKey(type, id));
+      return holder ?? undefined;
+    } catch (error) {
+      // Fail-open: a Redis outage must not turn the write guards into 500s.
+      log('getActiveHolder failed for %s:%s %O', type, id, error);
+      return undefined;
+    }
   }
 
   /**
