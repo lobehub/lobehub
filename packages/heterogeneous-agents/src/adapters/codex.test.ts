@@ -141,6 +141,68 @@ describe('CodexAdapter', () => {
     }
   });
 
+  it('parses Codex retry metadata in the timezone stated by the error message', () => {
+    const previousTimezone = process.env.TZ;
+    process.env.TZ = 'Asia/Shanghai';
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-13T03:09:27+08:00'));
+
+    try {
+      const adapter = new CodexAdapter();
+      const message =
+        "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 3:10 AM (UTC).";
+      const expectedResetAt = Math.floor(new Date('2026-06-13T03:10:00Z').getTime() / 1000);
+
+      adapter.adapt({ type: 'turn.started' });
+      const events = adapter.adapt({
+        message,
+        type: 'error',
+      });
+
+      expect(events[1].data).toMatchObject({
+        code: 'rate_limit',
+        rateLimitInfo: {
+          resetsAt: expectedResetAt,
+          status: 'rejected',
+        },
+      });
+    } finally {
+      vi.useRealTimers();
+      if (previousTimezone === undefined) {
+        delete process.env.TZ;
+      } else {
+        process.env.TZ = previousTimezone;
+      }
+    }
+  });
+
+  it('omits Codex retry timestamps when the stated timezone cannot be interpreted', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-13T03:09:27Z'));
+
+    try {
+      const adapter = new CodexAdapter();
+      const message =
+        "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 3:10 AM (Codex HQ).";
+
+      adapter.adapt({ type: 'turn.started' });
+      const events = adapter.adapt({
+        message,
+        type: 'error',
+      });
+
+      expect(events[1].data).toMatchObject({
+        code: 'rate_limit',
+        rateLimitInfo: {
+          status: 'rejected',
+        },
+      });
+      expect(events[1].data.rateLimitInfo).not.toHaveProperty('resetsAt');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('deduplicates the following turn.failed after a Codex JSONL error event', () => {
     const adapter = new CodexAdapter();
 

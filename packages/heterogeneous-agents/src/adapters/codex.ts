@@ -25,7 +25,8 @@ const CODEX_USER_RATE_LIMIT_PATTERNS = [
   /\busage limit\b/i,
 ] as const;
 
-const CODEX_RETRY_AT_PATTERN = /\btry again at\s+(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?\b/i;
+const CODEX_RETRY_AT_PATTERN =
+  /\btry again at\s+(\d{1,2})(?::(\d{2}))?(?:\s+(AM|PM))?(?:\s+\(([^()]+)\))?/i;
 
 interface CodexBaseItem {
   id: string;
@@ -91,6 +92,15 @@ type CodexToolItem =
   | CodexFileChangeItem
   | CodexMcpToolCallItem
   | CodexTodoListItem;
+
+interface ZonedDateTimeParts {
+  day: number;
+  hour: number;
+  minute: number;
+  month: number;
+  second: number;
+  year: number;
+}
 
 const isCommandExecutionItem = (item: CodexToolItem): item is CodexCommandExecutionItem =>
   item.type === CODEX_COMMAND_API;
@@ -505,13 +515,155 @@ const getCodexTerminalErrorStderr = (raw: any): string | undefined => {
   );
 };
 
+const getZonedDateTimeParts = (date: Date, timeZone: string): ZonedDateTimeParts | undefined => {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23',
+      minute: '2-digit',
+      month: '2-digit',
+      second: '2-digit',
+      timeZone,
+      year: 'numeric',
+    }).formatToParts(date);
+    const values = new Map(parts.map(({ type, value }) => [type, value]));
+    const zonedParts = {
+      day: Number(values.get('day')),
+      hour: Number(values.get('hour')),
+      minute: Number(values.get('minute')),
+      month: Number(values.get('month')),
+      second: Number(values.get('second')),
+      year: Number(values.get('year')),
+    };
+
+    if (Object.values(zonedParts).some((value) => !Number.isInteger(value))) return;
+
+    return zonedParts;
+  } catch {
+    return;
+  }
+};
+
+const getTimeZoneOffsetMs = (date: Date, timeZone: string): number | undefined => {
+  const parts = getZonedDateTimeParts(date, timeZone);
+  if (!parts) return;
+
+  const zonedAsUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+  );
+
+  return zonedAsUtc - date.getTime();
+};
+
+const matchesZonedWallClock = (
+  date: Date,
+  timeZone: string,
+  expected: ZonedDateTimeParts,
+): boolean => {
+  const actual = getZonedDateTimeParts(date, timeZone);
+
+  return (
+    !!actual &&
+    actual.year === expected.year &&
+    actual.month === expected.month &&
+    actual.day === expected.day &&
+    actual.hour === expected.hour &&
+    actual.minute === expected.minute &&
+    actual.second === expected.second
+  );
+};
+
+const zonedWallClockToEpochMs = (
+  parts: ZonedDateTimeParts,
+  timeZone: string,
+): number | undefined => {
+  const utcGuess = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+  );
+  const initialOffset = getTimeZoneOffsetMs(new Date(utcGuess), timeZone);
+  if (initialOffset === undefined) return;
+
+  let epochMs = utcGuess - initialOffset;
+  const adjustedOffset = getTimeZoneOffsetMs(new Date(epochMs), timeZone);
+  if (adjustedOffset === undefined) return;
+
+  epochMs = utcGuess - adjustedOffset;
+  if (!matchesZonedWallClock(new Date(epochMs), timeZone, parts)) return;
+
+  return epochMs;
+};
+
+const addDaysToZonedDate = (
+  parts: Pick<ZonedDateTimeParts, 'day' | 'month' | 'year'>,
+  days: number,
+) => {
+  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days));
+
+  return {
+    day: date.getUTCDate(),
+    month: date.getUTCMonth() + 1,
+    year: date.getUTCFullYear(),
+  };
+};
+
+const parseCodexRetryAtInTimeZone = (
+  hour: number,
+  minute: number,
+  timeZone: string,
+  now: Date,
+): number | undefined => {
+  const nowParts = getZonedDateTimeParts(now, timeZone);
+  if (!nowParts) return;
+
+  let retryAt = zonedWallClockToEpochMs(
+    {
+      day: nowParts.day,
+      hour,
+      minute,
+      month: nowParts.month,
+      second: 0,
+      year: nowParts.year,
+    },
+    timeZone,
+  );
+  if (retryAt === undefined) return;
+
+  if (retryAt <= now.getTime()) {
+    const nextDate = addDaysToZonedDate(nowParts, 1);
+    retryAt = zonedWallClockToEpochMs(
+      {
+        ...nextDate,
+        hour,
+        minute,
+        second: 0,
+      },
+      timeZone,
+    );
+  }
+
+  return retryAt === undefined ? undefined : Math.floor(retryAt / 1000);
+};
+
 const parseCodexRetryAt = (message: string, now = new Date()): number | undefined => {
   const match = CODEX_RETRY_AT_PATTERN.exec(message);
   if (!match) return;
 
-  const hour = Number(match[1]);
-  const minute = match[2] ? Number(match[2]) : 0;
-  const meridiem = match[3]?.toUpperCase();
+  const [, rawHour, rawMinute, rawMeridiem, rawTimeZone] = match;
+  const hour = Number(rawHour);
+  const minute = rawMinute ? Number(rawMinute) : 0;
+  const meridiem = rawMeridiem?.toUpperCase();
+  const timeZone = rawTimeZone?.trim();
 
   if (!Number.isInteger(hour) || !Number.isInteger(minute) || minute < 0 || minute > 59) {
     return;
@@ -523,6 +675,10 @@ const parseCodexRetryAt = (message: string, now = new Date()): number | undefine
     normalizedHour = (hour % 12) + (meridiem === 'PM' ? 12 : 0);
   } else if (hour < 0 || hour > 23) {
     return;
+  }
+
+  if (timeZone) {
+    return parseCodexRetryAtInTimeZone(normalizedHour, minute, timeZone, now);
   }
 
   const resetAt = new Date(now);
