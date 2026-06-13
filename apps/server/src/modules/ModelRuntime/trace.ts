@@ -22,6 +22,19 @@ export const createTraceOptions = (
   const messageLength = messages.length;
   const systemRole = messages.find((message) => message.role === 'system')?.content;
 
+  const modelParameters: Record<string, any> = {};
+  for (const [key, value] of Object.entries(parameters)) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      for (const [subKey, subValue] of Object.entries(value)) {
+        if (subValue !== undefined && subValue !== null) {
+          modelParameters[`${key}_${subKey}`] = subValue;
+        }
+      }
+    } else if (value !== undefined && value !== null) {
+      modelParameters[key] = value;
+    }
+  }
+
   const trace = traceClient.createTrace({
     id: tracePayload?.traceId,
     input: messages,
@@ -38,7 +51,7 @@ export const createTraceOptions = (
     input: messages,
     metadata: { messageLength, model, provider },
     model,
-    modelParameters: parameters as any,
+    modelParameters,
     name: `Chat Completion (${provider})`,
     startTime: new Date(),
   });

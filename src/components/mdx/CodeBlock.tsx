@@ -37,7 +37,8 @@ const CodeBlock: FC<PropsWithChildren> = ({ children }) => {
 
   if (code.isSingleLine) return <PreSingleLine language={code.lang}>{code.content}</PreSingleLine>;
   if (code.lang === 'mermaid') {
-    return <Mermaid variant={'borderless'}>{code.content}</Mermaid>;
+    const unescapedContent = code.content.replace(/\\([\\`*_{}[\]()#+\-.!|"'<>~])/g, '$1');
+    return <Mermaid variant={'borderless'}>{unescapedContent}</Mermaid>;
   }
   return (
     <Pre fullFeatured allowChangeLanguage={false} language={code.lang}>

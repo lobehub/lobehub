@@ -21,7 +21,7 @@ export const copyAction = defineAction({
 
       return {
         handleClick: async () => {
-          await copyToClipboard(content);
+          await copyToClipboard(content.trim());
           toast.success(t('copySuccess'));
         },
         icon: Copy,
