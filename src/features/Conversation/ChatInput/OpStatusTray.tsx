@@ -9,11 +9,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
-import {
-  AI_RUNTIME_OPERATION_TYPES,
-  type OperationType,
-} from '@/store/chat/slices/operation/types';
+import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { shinyTextStyles } from '@/styles';
+import { type OperationActivityKey, resolveOperationActivity } from '@/utils/operationActivity';
 import {
   calculateOperationUsageMetrics,
   hasOperationUsageMetrics,
@@ -26,9 +24,10 @@ import { parseStatusPhrases, pickStableStatusPhrase } from './OpStatusTray/logic
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
+    container-type: inline-size;
+
     padding-block: 8px;
     padding-inline: 14px;
-    container-type: inline-size;
     border: 1px solid ${cssVar.colorFillSecondary};
     border-block-end: none;
     border-start-start-radius: 12px;
@@ -52,6 +51,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     display: inline-flex;
     gap: 4px;
     align-items: center;
+
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   `,
@@ -81,8 +81,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 12px;
   `,
   metricPopoverValue: css`
-    color: ${cssVar.colorTextSecondary};
     font-variant-numeric: tabular-nums;
+    color: ${cssVar.colorTextSecondary};
   `,
   metricValue: css`
     overflow: hidden;
@@ -90,10 +90,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     text-overflow: ellipsis;
   `,
   compactMetric: css`
+    cursor: default;
     display: none;
     flex: none;
-
-    cursor: default;
 
     @container (max-width: 360px) {
       display: inline-flex;
@@ -106,7 +105,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   statusText: css`
     overflow: hidden;
-
     font-weight: 500;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -203,34 +201,6 @@ const normalizeStepCount = (stepCount: unknown) => {
   return Math.max(0, Math.floor(stepCount));
 };
 
-type ActivityKey = 'compressing' | 'generating' | 'reasoning' | 'searching' | 'toolCalling';
-
-/**
- * Map a running sub-operation type to the streaming phase shown on the left.
- * Container ops (AI_RUNTIME) and bookkeeping ops return undefined.
- */
-const resolveActivity = (type: OperationType): ActivityKey | undefined => {
-  if (type === 'reasoning') return 'reasoning';
-  if (
-    type === 'toolCalling' ||
-    type === 'executeToolCall' ||
-    type === 'createToolMessage' ||
-    type === 'pluginApi' ||
-    type.startsWith('builtinTool')
-  )
-    return 'toolCalling';
-  if (type === 'rag' || type === 'searchWorkflow') return 'searching';
-  if (type === 'contextCompression' || type === 'generateSummary') return 'compressing';
-  if (
-    type === 'callLLM' ||
-    type === 'groupAgentStream' ||
-    type === 'createAssistantMessage' ||
-    type === 'supervisorDecision'
-  )
-    return 'generating';
-  return undefined;
-};
-
 interface OpStatusTrayProps {
   /**
    * Square the top corners when another panel sits flush above this one.
@@ -253,7 +223,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
 
   const operationState = useChatStore((s) => {
     const ops = operationSelectors.getOperationsByContext(context)(s);
-    let activity: ActivityKey | undefined;
+    let activity: OperationActivityKey | undefined;
     let earliestStart: number | undefined;
     let latestActivityStart = -1;
     let statusSeed: string | undefined;
@@ -264,7 +234,7 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
     for (const op of ops) {
       if (op.status !== 'running' || op.metadata.isAborting) continue;
 
-      const mapped = resolveActivity(op.type);
+      const mapped = resolveOperationActivity(op.type);
       if (mapped && op.metadata.startTime > latestActivityStart) {
         latestActivityStart = op.metadata.startTime;
         activity = mapped;
