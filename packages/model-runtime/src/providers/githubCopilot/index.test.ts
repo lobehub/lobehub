@@ -240,7 +240,7 @@ describe('LobeGithubCopilotAI', () => {
       }
     });
 
-    it('should throw regular Error when token exchange fails before models request', async () => {
+    it('should throw runtime payload when token exchange fails before models request', async () => {
       mockFetch.mockResolvedValueOnce({
         json: () => Promise.resolve({}),
         ok: false,
@@ -253,23 +253,24 @@ describe('LobeGithubCopilotAI', () => {
         await instance.models();
         expect.fail('Expected models() to reject');
       } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-        expect((error as Error).message).toBe('No GitHub Copilot subscription or access denied');
-        expect((error as Error & { errorType?: string }).errorType).toBeUndefined();
-        expect((error as Error & { status?: number }).status).toBe(403);
+        expect(error).toEqual({
+          error: { message: 'No GitHub Copilot subscription or access denied' },
+          errorType: 'PermissionDenied',
+        });
       }
     });
   });
 
   describe('error handling in constructor', () => {
-    it('should throw regular Error when no credentials provided', () => {
+    it('should throw runtime payload when no credentials provided', () => {
       try {
         new LobeGithubCopilotAI({});
         expect.fail('Should have thrown');
       } catch (error: any) {
-        expect(error).toBeInstanceOf(Error);
-        expect(error.message).toBe('GitHub Personal Access Token or OAuth token is required');
-        expect(error.errorType).toBeUndefined();
+        expect(error).toEqual({
+          error: { message: 'GitHub Personal Access Token or OAuth token is required' },
+          errorType: 'InvalidGithubCopilotToken',
+        });
       }
     });
   });

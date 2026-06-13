@@ -42,12 +42,6 @@ class CopilotTokenManager {
   private cache = new Map<string, CachedToken>();
   private pendingRefresh = new Map<string, Promise<string>>();
 
-  private createTokenError(message: string, status?: number): Error {
-    return Object.assign(new Error(message, { cause: status ? { status } : undefined }), {
-      ...(status ? { status } : {}),
-    });
-  }
-
   async getToken(githubToken: string): Promise<string> {
     const cacheKey = this.hashToken(githubToken);
     const cached = this.cache.get(cacheKey);
@@ -92,24 +86,26 @@ class CopilotTokenManager {
     });
 
     if (response.status === 401) {
-      throw this.createTokenError('Invalid GitHub Personal Access Token', response.status);
+      throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidGithubCopilotToken, {
+        message: 'Invalid GitHub Personal Access Token',
+      });
     }
     if (response.status === 403) {
-      throw this.createTokenError(
-        'No GitHub Copilot subscription or access denied',
-        response.status,
-      );
+      throw AgentRuntimeError.createError(AgentRuntimeErrorType.PermissionDenied, {
+        message: 'No GitHub Copilot subscription or access denied',
+      });
     }
     if (!response.ok) {
-      throw this.createTokenError(
-        `Token exchange failed: ${response.status} ${response.statusText}`,
-        response.status,
-      );
+      throw AgentRuntimeError.createError(AgentRuntimeErrorType.ProviderBizError, {
+        message: `Token exchange failed: ${response.status} ${response.statusText}`,
+      });
     }
 
     const data = await response.json();
     if (!data?.token || typeof data.expires_at !== 'number') {
-      throw new Error('Invalid token response format');
+      throw AgentRuntimeError.createError(AgentRuntimeErrorType.ProviderBizError, {
+        message: 'Invalid token response format',
+      });
     }
 
     this.cache.set(cacheKey, {
@@ -164,7 +160,9 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
     else if (apiKey) {
       this.githubToken = apiKey;
     } else {
-      throw new Error('GitHub Personal Access Token or OAuth token is required');
+      throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidGithubCopilotToken, {
+        message: 'GitHub Personal Access Token or OAuth token is required',
+      });
     }
   }
 

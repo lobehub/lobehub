@@ -156,6 +156,40 @@ describe('GET handler', () => {
       expect(responseBody.body.message).toBe('Setup failed');
     });
 
+    it('should convert structured setup errors to provider model list errors', async () => {
+      const mockParams = Promise.resolve({ provider: 'githubcopilot' });
+
+      vi.mocked(initModelRuntimeFromDB).mockRejectedValue({
+        error: { message: 'No GitHub Copilot subscription or access denied' },
+        errorType: AgentRuntimeErrorType.PermissionDenied,
+      });
+
+      const response = await GET(request, { params: mockParams });
+      const responseBody = await response.json();
+
+      expect(response.status).toBe(471);
+      expect(responseBody.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
+      expect(responseBody.body.message).toBe('No GitHub Copilot subscription or access denied');
+      expect(responseBody.body.error.message).toBe(
+        'No GitHub Copilot subscription or access denied',
+      );
+    });
+
+    it('should fall back to structured setup error type as message', async () => {
+      const mockParams = Promise.resolve({ provider: 'cloudflare' });
+
+      vi.mocked(initModelRuntimeFromDB).mockRejectedValue({
+        errorType: AgentRuntimeErrorType.InvalidProviderAPIKey,
+      });
+
+      const response = await GET(request, { params: mockParams });
+      const responseBody = await response.json();
+
+      expect(response.status).toBe(471);
+      expect(responseBody.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
+      expect(responseBody.body.message).toBe(AgentRuntimeErrorType.InvalidProviderAPIKey);
+    });
+
     it('should include provider in error response', async () => {
       const mockParams = Promise.resolve({ provider: 'openai' });
 

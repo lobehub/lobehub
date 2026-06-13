@@ -9,7 +9,15 @@ describe('getRemoteModelFetchErrorMessage', () => {
     );
   });
 
-  it('should unwrap nested runtime payload messages', () => {
+  it('should read top-level object messages', () => {
+    expect(
+      getRemoteModelFetchErrorMessage({
+        message: 'model fetch failed',
+      }),
+    ).toBe('model fetch failed');
+  });
+
+  it('should not inspect nested runtime payload messages', () => {
     expect(
       getRemoteModelFetchErrorMessage({
         error: {
@@ -17,26 +25,6 @@ describe('getRemoteModelFetchErrorMessage', () => {
         },
         errorType: 'PermissionDenied',
       }),
-    ).toBe('No GitHub Copilot subscription or access denied');
-  });
-
-  it('should prefer nested body messages over generic top-level messages', () => {
-    expect(
-      getRemoteModelFetchErrorMessage({
-        body: {
-          error: {
-            message: 'Cloudflare models API returned an invalid response',
-          },
-        },
-        message: 'ProviderBizError',
-      }),
-    ).toBe('Cloudflare models API returned an invalid response');
-  });
-
-  it('should avoid circular payloads', () => {
-    const payload: Record<string, unknown> = { message: 'fallback message' };
-    payload.error = payload;
-
-    expect(getRemoteModelFetchErrorMessage(payload)).toBe('fallback message');
+    ).toBeUndefined();
   });
 });

@@ -101,11 +101,7 @@ const toJsonSafeValue = (value: unknown, seen = new WeakSet<object>(), depth = 0
   return result;
 };
 
-const extractModelFetchErrorMessage = (
-  error: unknown,
-  seen = new WeakSet<object>(),
-  depth = 0,
-): string | undefined => {
+const getMessageFromValue = (error: unknown): string | undefined => {
   if (error === null || error === undefined) return;
   if (typeof error === 'string') return error || undefined;
   if (typeof error === 'number' || typeof error === 'boolean' || typeof error === 'bigint') {
@@ -113,23 +109,8 @@ const extractModelFetchErrorMessage = (
   }
   if (!isRecord(error)) return;
   if (error instanceof Error && error.message) return error.message;
-  if (seen.has(error) || depth >= MAX_ERROR_DEPTH) return;
-
-  seen.add(error);
 
   const record = error as Record<string, unknown>;
-  for (const key of ['error', 'body', 'cause', 'response', 'detail', 'details', 'reason']) {
-    const message = extractModelFetchErrorMessage(record[key], seen, depth + 1);
-    if (message) return message;
-  }
-
-  if (Array.isArray(record.errors)) {
-    for (const item of record.errors) {
-      const message = extractModelFetchErrorMessage(item, seen, depth + 1);
-      if (message) return message;
-    }
-  }
-
   if (typeof record.message === 'string' && record.message) return record.message;
   if (typeof record.status === 'number') return `HTTP ${record.status}`;
   if (typeof record.statusCode === 'number') return `HTTP ${record.statusCode}`;
@@ -147,7 +128,11 @@ const createModelListErrorResponse = (
       ? fallbackErrorType
       : errorPayload?.errorType || fallbackErrorType;
   const error = errorPayload?.error || e;
-  const message = extractModelFetchErrorMessage(error) || errorPayload?.message;
+  const message =
+    getMessageFromValue(errorPayload?.error) ||
+    getMessageFromValue(e) ||
+    getMessageFromValue(errorPayload?.message) ||
+    getMessageFromValue(errorPayload?.errorType);
 
   console.error(`Route: [${provider}] ${errorType}:`, error);
 
