@@ -493,6 +493,17 @@ export const executeHeterogeneousAgent = async (
    * Without this, tools_calling gets dispatched to the OLD assistant → orphan.
    */
   let pendingStepTransition = false;
+  /**
+   * Set synchronously the moment any output-bearing stream event (stream_chunk /
+   * tool_result) ARRIVES, before it's queued onto `persistQueue`. The reducer
+   * now accumulates content/tools/subagent state only INSIDE the queued
+   * `reduceAndApplyMain`, so `hasStreamedState()` (which reads `mainState`) is
+   * blind to events that arrived but haven't drained yet. `retryWithoutResume`
+   * runs its guard synchronously in `onError` BEFORE awaiting the queue, so
+   * without this flag a recoverable resume error landing after partial output
+   * was queued could start a second run and duplicate/interleave messages.
+   */
+  let sawStreamedEvent = false;
 
   // Subscribe to the operation's abort signal so we can drop late events and
   // stop writing to DB the moment the user clicks Stop. If the op is gone
@@ -501,6 +512,7 @@ export const executeHeterogeneousAgent = async (
   const isAborted = () => !!abortSignal?.aborted;
   const updateTopicMetadata = get().updateTopicMetadata;
   const hasStreamedState = () =>
+    sawStreamedEvent ||
     !!mainState.accContent ||
     !!mainState.accReasoning ||
     mainState.toolState.payloads.length > 0 ||
@@ -868,7 +880,14 @@ export const executeHeterogeneousAgent = async (
             topicId: intent.topicId ?? context.topicId ?? undefined,
           } as any);
         } catch (err) {
+          // Rethrow so `reduceAndApplyMain` skips the state commit — DO NOT
+          // advance `currentAssistantId` to a row that was never created, or
+          // every later content/tool/result write (and the gateway handler's
+          // switch) would target a missing assistant and be lost. Keeping the
+          // prior state lets the next event re-derive against the still-valid
+          // current assistant. Mirrors the subagent createMessage path.
           console.error('[HeterogeneousAgent] Failed to create step assistant:', err);
+          throw err;
         }
         // Associate so cancellation / cleanup tracks the new step's message.
         get().associateMessageWithOperation(intent.messageId, operationId);
@@ -1170,6 +1189,7 @@ export const executeHeterogeneousAgent = async (
       // inner subagent tool_result resolves into its thread. Not forwarded —
       // the following tool_end triggers fetchAndReplaceMessages.
       if (event.type === 'tool_result') {
+        sawStreamedEvent = true; // sync: partial output exists even before the queue drains
         persistQueue = persistQueue.then(() => reduceAndApplyMain(event));
         return;
       }
@@ -1230,6 +1250,11 @@ export const executeHeterogeneousAgent = async (
       // UI is still driven by the raw-event forward below (subagent events are
       // dropped from that forward).
       if (event.type === 'stream_chunk' || event.type === 'stream_start') {
+        // A stream_chunk = partial output (text / reasoning / tools / subagent
+        // activity). Flag it synchronously so a resume-error retry can't fire
+        // before the queued reduce records it. (stream_start init carries only
+        // model/provider — no output — so it doesn't count.)
+        if (event.type === 'stream_chunk') sawStreamedEvent = true;
         persistQueue = persistQueue.then(() => reduceAndApplyMain(event));
       }
 

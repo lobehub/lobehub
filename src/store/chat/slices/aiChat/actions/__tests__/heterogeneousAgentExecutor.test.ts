@@ -1278,6 +1278,92 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         workingDirectory: '/Users/me/repo',
       });
     });
+
+    it('does NOT retry resume once partial output streamed, even before the persist queue drains', async () => {
+      // Regression: content/tool/subagent state now lives in `mainState` and is
+      // only updated inside the QUEUED reduceAndApplyMain. retryWithoutResume's
+      // guard runs synchronously in onError BEFORE the queue drains, so it must
+      // rely on a synchronous "saw streamed event" flag — not on mainState —
+      // or it would start a second run and duplicate the partial output.
+      const store = createMockStore();
+      const get = vi.fn(() => store);
+      let startCount = 0;
+      mockStartSession.mockImplementation(async (params: any) => {
+        startCount += 1;
+        const sid = startCount === 1 ? 'ipc-sess-1' : 'ipc-sess-2';
+        ipc.setAgentType(sid, params.agentType ?? 'claude-code');
+        return { sessionId: sid };
+      });
+      // sendPrompt hangs so the run stays in-flight; onError drives the decision.
+      mockSendPrompt.mockImplementation(() => new Promise<void>(() => {}));
+      // Block the persist queue: updateMessage never resolves, so the queued
+      // reduce can't commit into mainState — the exact window the old guard missed.
+      let releaseUpdate: () => void = () => {};
+      mockUpdateMessage.mockImplementation(
+        () => new Promise<void>((resolve) => (releaseUpdate = resolve)),
+      );
+
+      void executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        resumeSessionId: 'sess_stale',
+        workingDirectory: '/repo',
+      });
+      await flush();
+
+      // init → stream_start(model) → reduce blocks on the hung updateMessage.
+      ipc.emitRawLine('ipc-sess-1', ccInit());
+      // a text chunk = partial output: sets the sync flag, but its reduce sits
+      // behind the blocked init reduce and never commits accContent.
+      ipc.emitRawLine('ipc-sess-1', ccText('msg_01', 'partial answer so far'));
+      await flush();
+
+      // Recoverable resume error arrives while the queue is still blocked.
+      ipc.emitError('ipc-sess-1', {
+        agentType: 'claude-code',
+        code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+        message: 'resume gone',
+      });
+      await flush();
+
+      // Output already streamed → no second run, no resume-metadata clear.
+      expect(startCount).toBe(1);
+      expect(store.updateTopicMetadata).not.toHaveBeenCalled();
+
+      releaseUpdate();
+    });
+
+    it('does NOT advance currentAssistantId when a step-boundary assistant create fails', async () => {
+      // Regression: a transient createMessage failure on the new-step assistant
+      // must skip the reducer commit (like the subagent createMessage path),
+      // NOT advance currentAssistantId to a row that was never created — else
+      // every later content/tool write targets a missing assistant and is lost.
+      mockCreateMessage.mockImplementation(async (p: any) => {
+        if (p.role === 'assistant') throw new Error('transient create failure');
+        return { id: p.id ?? `tool-${Date.now()}` };
+      });
+
+      await runWithEvents([
+        ccInit(),
+        // Turn 1 on the seed assistant (ast-initial): text + tool + result.
+        ccText('msg_01', 'turn one'),
+        ccToolUse('msg_01', 't1', 'Bash', { command: 'ls' }),
+        ccToolResult('t1', 'ok'),
+        // Turn 2 (new message.id → step boundary): the new-assistant create FAILS,
+        // then a tool_use arrives for this turn.
+        ccToolUse('msg_02', 't2', 'Read', { file_path: '/a' }),
+        ccToolResult('t2', 'data'),
+        ccResult(),
+      ]);
+
+      // Commit was skipped on the failed create → currentAssistantId stayed at
+      // the seed, so turn-2's tool parents off ast-initial, never off the
+      // assistant row that was never created.
+      const t2Create = mockCreateMessage.mock.calls.find(
+        ([p]: any) => p.role === 'tool' && p.tool_call_id === 't2',
+      );
+      expect(t2Create).toBeDefined();
+      expect(t2Create![0].parentId).toBe('ast-initial');
+    });
   });
 
   describe('Codex multi-turn persistence', () => {
