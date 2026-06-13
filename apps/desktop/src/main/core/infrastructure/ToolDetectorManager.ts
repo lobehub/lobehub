@@ -15,6 +15,15 @@ export interface ToolStatus {
   error?: string;
   lastChecked?: Date;
   path?: string;
+  /**
+   * PATH value used to resolve/validate the command, surfaced only when it
+   * differs from the detector process's `process.env.PATH` (e.g. resolution
+   * fell back to the login-shell PATH). A caller that spawns the resolved
+   * `path` must carry this into the child's PATH, or a `#!/usr/bin/env node`
+   * shim that resolved here still fails with `env: node: No such file or
+   * directory` under the leaner inherited env.
+   */
+  resolvedPathEnv?: string;
   version?: string;
 }
 

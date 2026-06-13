@@ -181,6 +181,8 @@ describe('cliAgentDetectors', () => {
       expect(status.path).toBe('/usr/local/bin/claude');
       expect(execMock).not.toHaveBeenCalled();
       expect(execFileMock).toHaveBeenCalledTimes(2);
+      // Resolved on the inherited PATH — nothing extra to carry into spawn.
+      expect(status.resolvedPathEnv).toBeUndefined();
     });
 
     it('falls back to the Codex.app bundled CLI when `codex` is not on any PATH', async () => {
@@ -269,6 +271,12 @@ describe('cliAgentDetectors', () => {
         expect(status.available).toBe(true);
         expect(status.path).toBe('/Users/Hanam/.local/share/mise/shims/gemini');
         expect(status.version).toBe('gemini 0.2.0');
+        // The login-shell PATH that resolved the shim must be surfaced so the
+        // spawn site can carry it into the child env (mise/nvm `node` lives
+        // there, not on the leaner inherited PATH).
+        expect(status.resolvedPathEnv).toBe(
+          '/opt/homebrew/bin:/Users/Hanam/.local/share/mise/shims:/usr/bin:/bin',
+        );
 
         expect(execFileMock).toHaveBeenCalledTimes(4);
         expect(execFileMock.mock.calls[0]![0]).toBe('which');

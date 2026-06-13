@@ -190,6 +190,11 @@ const detectValidatedCommand = async (
     return {
       available: true,
       path: resolvedPath,
+      // `env` is set only when resolution fell back to the login-shell PATH.
+      // Surface that PATH so the spawn site can carry it into the child env —
+      // otherwise a `#!/usr/bin/env node` shim resolved here can't find `node`
+      // under the leaner inherited PATH (Finder-launched Electron).
+      resolvedPathEnv: env?.PATH,
       version: output.split(/\r?\n/)[0],
     };
   } catch {

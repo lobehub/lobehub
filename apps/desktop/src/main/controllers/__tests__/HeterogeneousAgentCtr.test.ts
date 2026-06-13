@@ -503,6 +503,30 @@ describe('HeterogeneousAgentCtr', () => {
       expect(spawnCalls[0].command).toBe(resolvedPath);
     });
 
+    it('carries the detector login-shell PATH into the spawn env for `env node` shims', async () => {
+      // `codex` resolved via the login-shell PATH (mise/nvm). Spawning the
+      // absolute shim under the leaner inherited PATH would fail at its
+      // `#!/usr/bin/env node` shebang — the resolved PATH must reach the child.
+      const resolvedPath = '/Users/h/.local/share/mise/shims/codex';
+      const searchPath = '/Users/h/.local/share/mise/shims:/usr/bin:/bin';
+      const detect = vi
+        .fn()
+        .mockResolvedValue({ available: true, path: resolvedPath, resolvedPathEnv: searchPath });
+      const { proc } = createFakeProc();
+      nextFakeProc = proc;
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        toolDetectorManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'codex', command: 'codex' });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
+
+      expect(spawnCalls[0].command).toBe(resolvedPath);
+      expect(spawnCalls[0].options.env.PATH).toBe(searchPath);
+    });
+
     it('keeps an explicit path-like command for spawn instead of the detector result', async () => {
       // detectHeterogeneousCliCommand validates the custom path via --version.
       execFileMock.mockImplementation(
