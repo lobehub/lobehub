@@ -162,6 +162,18 @@ export const topicRouter = router({
       return ctx.topicModel.batchDeleteBySessionId(resolved.sessionId);
     }),
 
+  batchMoveTopics: topicProcedure
+    .use(withScopedPermission('topic:update'))
+    .input(
+      z.object({
+        targetAgentId: z.string(),
+        topicIds: z.array(z.string()),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return ctx.topicModel.batchMoveToAgent(input.topicIds, input.targetAgentId);
+    }),
+
   cloneTopic: topicProcedure
     .use(withScopedPermission('topic:create'))
     .input(z.object({ id: z.string(), newTitle: z.string().optional() }))
