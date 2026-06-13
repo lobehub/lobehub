@@ -530,9 +530,14 @@ export class HeterogeneousPersistenceHandler {
     if (snapshot.model) state.main.turnModel = snapshot.model;
     if (snapshot.provider) state.main.turnProvider = snapshot.provider;
 
+    // Prefer the authoritative child tool row over the assistant.tools[] JSONB
+    // mirror. During multi-tool batches, an earlier tool may already have
+    // result_msg_id backfilled while a later tool row exists but Phase 3 has not
+    // rewritten the JSONB payload yet; anchoring from the snapshot would pick
+    // the earlier tool and fork the main wire.
     const currentTurnToolId =
-      this.getLastSnapshotToolMessageId(snapshot, state.toolMsgIdByCallId) ??
-      (await this.getLastChildToolMessageId(state.main.currentAssistantId));
+      (await this.getLastChildToolMessageId(state.main.currentAssistantId)) ??
+      this.getLastSnapshotToolMessageId(snapshot, state.toolMsgIdByCallId);
     if (currentTurnToolId) {
       state.main.lastToolMsgIdEver = currentTurnToolId;
       return;
