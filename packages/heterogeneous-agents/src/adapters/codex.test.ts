@@ -141,6 +141,34 @@ describe('CodexAdapter', () => {
     }
   });
 
+  it('preserves adjacent Codex retry meridiem parsing', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 13, 15, 9, 27));
+
+    try {
+      const adapter = new CodexAdapter();
+      const message =
+        "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 3:10PM.";
+      const expectedResetAt = Math.floor(new Date(2026, 5, 13, 15, 10).getTime() / 1000);
+
+      adapter.adapt({ type: 'turn.started' });
+      const events = adapter.adapt({
+        message,
+        type: 'error',
+      });
+
+      expect(events[1].data).toMatchObject({
+        code: 'rate_limit',
+        rateLimitInfo: {
+          resetsAt: expectedResetAt,
+          status: 'rejected',
+        },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('parses Codex retry metadata in the timezone stated by the error message', () => {
     const previousTimezone = process.env.TZ;
     process.env.TZ = 'Asia/Shanghai';

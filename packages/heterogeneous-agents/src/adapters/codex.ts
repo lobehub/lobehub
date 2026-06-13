@@ -26,7 +26,7 @@ const CODEX_USER_RATE_LIMIT_PATTERNS = [
 ] as const;
 
 const CODEX_RETRY_AT_PATTERN =
-  /\btry again at\s+(\d{1,2})(?::(\d{2}))?(?:\s+(AM|PM))?(?:\s+\(([^()]+)\))?/i;
+  /\btry again at\s+(\d{1,2})(?::(\d{2}))?(?:(AM|PM)|\s+(AM|PM))?(?:\s+\(([^()]+)\))?/i;
 
 interface CodexBaseItem {
   id: string;
@@ -659,10 +659,10 @@ const parseCodexRetryAt = (message: string, now = new Date()): number | undefine
   const match = CODEX_RETRY_AT_PATTERN.exec(message);
   if (!match) return;
 
-  const [, rawHour, rawMinute, rawMeridiem, rawTimeZone] = match;
+  const [, rawHour, rawMinute, rawAdjacentMeridiem, rawSpacedMeridiem, rawTimeZone] = match;
   const hour = Number(rawHour);
   const minute = rawMinute ? Number(rawMinute) : 0;
-  const meridiem = rawMeridiem?.toUpperCase();
+  const meridiem = (rawAdjacentMeridiem || rawSpacedMeridiem)?.toUpperCase();
   const timeZone = rawTimeZone?.trim();
 
   if (!Number.isInteger(hour) || !Number.isInteger(minute) || minute < 0 || minute > 59) {
