@@ -255,6 +255,17 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
     }
     child.unref();
 
+    child.on('error', (err) => {
+      log.error(`Failed to start openclaw process: ${err.message}`);
+      removeTask(taskId);
+      void sendAutoNotify(
+        topicId,
+        taskId,
+        `Failed to run OpenClaw Platform Agent: ${err.message}. Please make sure 'openclaw' is installed and available in the PATH.`,
+        agentId,
+      ).finally(() => sendDoneSignal(topicId, agentId));
+    });
+
     saveTask({
       agentId,
       agentType,
@@ -347,6 +358,17 @@ export async function runHeteroTask(params: RunHeteroTaskParams): Promise<string
     const pid = child.pid;
     if (pid === undefined) throw new Error('Failed to get PID for hermes process');
     child.unref();
+
+    child.on('error', (err) => {
+      log.error(`Failed to start hermes process: ${err.message}`);
+      removeTask(taskId);
+      void sendAutoNotify(
+        topicId,
+        taskId,
+        `Failed to run Hermes Platform Agent: ${err.message}. Please make sure 'hermes' is installed and available in the PATH.`,
+        agentId,
+      ).finally(() => sendDoneSignal(topicId, agentId));
+    });
 
     saveTask({
       agentId,
