@@ -60,6 +60,9 @@ bun run dev
 # Without root .env:
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev
 
+# Local QStash. Run in a separate terminal only when testing workflow paths.
+./.agents/skills/agent-testing/scripts/init-dev-env.sh qstash
+
 # Restart — required to pick up server-side code changes
 lsof -ti:"$PORT" | xargs kill
 pnpm run dev:next
@@ -83,8 +86,13 @@ in doubt.
 
 ## Troubleshooting
 
-| Issue                     | Solution                                                |
-| ------------------------- | ------------------------------------------------------- |
-| `ECONNREFUSED`            | Server not running — start it                           |
-| `EADDRINUSE` on the port  | Already running — `lsof -ti:<port> \| xargs kill` first |
-| Stale data / old behavior | Server needs a restart to pick up code changes          |
+| Issue                     | Solution                                                                                      |
+| ------------------------- | --------------------------------------------------------------------------------------------- |
+| `ECONNREFUSED`            | Server not running — start it                                                                 |
+| `EADDRINUSE` on the port  | Already running — `lsof -ti:<port> \| xargs kill` first                                       |
+| Stale data / old behavior | Server needs a restart to pick up code changes                                                |
+| QStash workflow failures  | Start `init-dev-env.sh qstash` and make sure dev server inherited the script's `QSTASH_*` env |
+
+Marketplace/community endpoints are not part of the local agent-testing auth
+gate. Do not block local product-chain verification on marketplace API auth
+unless the change explicitly targets marketplace behavior.

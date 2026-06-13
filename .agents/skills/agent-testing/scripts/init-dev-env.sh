@@ -14,13 +14,14 @@
 #   init-dev-env.sh write [file]     # write a source-able env file
 #   init-dev-env.sh setup-db         # start local Postgres and run migrations
 #   init-dev-env.sh migrate          # run DB migrations against the configured DB
-#   init-dev-env.sh seed-user        # seed the baseline test user
+#   init-dev-env.sh seed-user        # seed the baseline test user + CLI API key
+#   init-dev-env.sh qstash           # run local Upstash QStash dev server
 #   init-dev-env.sh dev-next         # exec `pnpm run dev:next` with this env
 #   init-dev-env.sh dev              # exec `bun run dev` with this env
 #   init-dev-env.sh clean-db         # remove the managed Postgres container
 #
 # Overrides:
-#   SERVER_PORT=3010 DB_PORT=5433 DB_CONTAINER=lobehub-agent-testing-postgres
+#   SERVER_PORT=3010 DB_PORT=5433 DB_CONTAINER=lobehub-agent-testing-postgres QSTASH_DEV_PORT=8080
 
 set -euo pipefail
 
@@ -32,6 +33,12 @@ DB_PORT="${DB_PORT:-5433}"
 DB_CONTAINER="${DB_CONTAINER:-lobehub-agent-testing-postgres}"
 DATABASE_URL="${DATABASE_URL:-postgresql://postgres:postgres@localhost:${DB_PORT}/postgres}"
 ENV_FILE_DEFAULT="$REPO_ROOT/.records/env/agent-testing-dev.env"
+CLI_ENV_FILE_DEFAULT="$REPO_ROOT/.records/env/agent-testing-cli.env"
+AGENT_TESTING_API_KEY="${AGENT_TESTING_API_KEY:-sk-lh-agenttesting0001}"
+QSTASH_DEV_PORT="${QSTASH_DEV_PORT:-8080}"
+QSTASH_LOCAL_TOKEN="${QSTASH_LOCAL_TOKEN:-eyJVc2VySUQiOiJkZWZhdWx0VXNlciIsIlBhc3N3b3JkIjoiZGVmYXVsdFBhc3N3b3JkIn0=}"
+QSTASH_LOCAL_CURRENT_SIGNING_KEY="${QSTASH_LOCAL_CURRENT_SIGNING_KEY:-sig_7kYjw48mhY7kAjqNGcy6cr29RJ6r}"
+QSTASH_LOCAL_NEXT_SIGNING_KEY="${QSTASH_LOCAL_NEXT_SIGNING_KEY:-sig_5ZB6DVzB1wjE8S6rZ7eenA8Pdnhs}"
 
 ok() { printf '  \033[32m✔\033[0m %s\n' "$1"; }
 bad() { printf '  \033[31m✘\033[0m %s\n' "$1"; }
@@ -57,6 +64,11 @@ apply_env() {
   export NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION="${NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION:-0}"
   export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=6144}"
   export PORT="${PORT:-$SERVER_PORT}"
+  export QSTASH_CURRENT_SIGNING_KEY="${QSTASH_CURRENT_SIGNING_KEY:-$QSTASH_LOCAL_CURRENT_SIGNING_KEY}"
+  export QSTASH_DEV_PORT
+  export QSTASH_NEXT_SIGNING_KEY="${QSTASH_NEXT_SIGNING_KEY:-$QSTASH_LOCAL_NEXT_SIGNING_KEY}"
+  export QSTASH_TOKEN="${QSTASH_TOKEN:-$QSTASH_LOCAL_TOKEN}"
+  export QSTASH_URL="${QSTASH_URL:-http://127.0.0.1:${QSTASH_DEV_PORT}}"
   export S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID:-agent-testing-access-key}"
   export S3_BUCKET="${S3_BUCKET:-agent-testing-bucket}"
   export S3_ENDPOINT="${S3_ENDPOINT:-https://agent-testing-s3.localhost}"
@@ -75,6 +87,11 @@ env_keys() {
     NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION \
     NODE_OPTIONS \
     PORT \
+    QSTASH_CURRENT_SIGNING_KEY \
+    QSTASH_DEV_PORT \
+    QSTASH_NEXT_SIGNING_KEY \
+    QSTASH_TOKEN \
+    QSTASH_URL \
     S3_ACCESS_KEY_ID \
     S3_BUCKET \
     S3_ENDPOINT \
@@ -148,9 +165,14 @@ migrate_db() {
 
 seed_user() {
   apply_env
+  export AGENT_TESTING_API_KEY
+  export AGENT_TESTING_CLI_ENV_FILE="${AGENT_TESTING_CLI_ENV_FILE:-$CLI_ENV_FILE_DEFAULT}"
   cd "$REPO_ROOT"
   node <<'NODE'
 const bcrypt = require('bcryptjs');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
 const pg = require('pg');
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -166,13 +188,72 @@ const TEST_USER = {
   username: 'agent_testing_user',
 };
 
+const TEST_API_KEY = {
+  id: 'api_key_agent_testing_001',
+  key: process.env.AGENT_TESTING_API_KEY || 'sk-lh-agenttesting0001',
+  name: 'Agent Testing CLI API Key',
+};
+
+const validateApiKeyFormat = (apiKey) => /^sk-lh-[\da-z]{16}$/.test(apiKey);
+
+const hashApiKey = (apiKey) => {
+  const secret = process.env.KEY_VAULTS_SECRET;
+  if (!secret) throw new Error('KEY_VAULTS_SECRET is required to seed the baseline API key.');
+
+  return crypto.createHmac('sha256', secret).update(apiKey).digest('hex');
+};
+
+const encryptWithKeyVaultsSecret = (plaintext) => {
+  const secret = process.env.KEY_VAULTS_SECRET;
+  if (!secret) throw new Error('KEY_VAULTS_SECRET is required to seed the baseline API key.');
+
+  const rawKey = Buffer.from(secret, 'base64');
+  if (![16, 24, 32].includes(rawKey.length)) {
+    throw new Error(
+      `KEY_VAULTS_SECRET must decode to 16, 24, or 32 bytes, got ${rawKey.length} bytes.`,
+    );
+  }
+
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv(`aes-${rawKey.length * 8}-gcm`, rawKey, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+
+  return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted.toString('hex')}`;
+};
+
+const writeCliEnvFile = () => {
+  const file = process.env.AGENT_TESTING_CLI_ENV_FILE || '.records/env/agent-testing-cli.env';
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(
+    file,
+    [
+      '# Source this file before running LobeHub CLI agent tests.',
+      '# Generated by init-dev-env.sh seed-user',
+      `export LOBE_API_KEY=${TEST_API_KEY.key}`,
+      `export LOBEHUB_CLI_API_KEY="${'${LOBE_API_KEY}'}"`,
+      `export LOBEHUB_SERVER=${process.env.APP_URL}`,
+      'export LOBEHUB_CLI_HOME=.lobehub-dev',
+      '',
+    ].join('\n'),
+  );
+
+  return file;
+};
+
 const client = new pg.Client({ connectionString: databaseUrl });
 
 (async () => {
+  if (!validateApiKeyFormat(TEST_API_KEY.key)) {
+    throw new Error(`Invalid AGENT_TESTING_API_KEY format: ${TEST_API_KEY.key}`);
+  }
+
   await client.connect();
   const now = new Date().toISOString();
   const onboarding = JSON.stringify({ finishedAt: now, version: 1 });
   const passwordHash = await bcrypt.hash(TEST_USER.password, 10);
+  const encryptedApiKey = encryptWithKeyVaultsSecret(TEST_API_KEY.key);
+  const apiKeyHash = hashApiKey(TEST_API_KEY.key);
 
   await client.query(
     `INSERT INTO users (id, email, normalized_email, username, full_name, email_verified, onboarding, created_at, updated_at, last_active_at)
@@ -204,9 +285,35 @@ const client = new pg.Client({ connectionString: databaseUrl });
     ],
   );
 
+  await client.query(
+    `INSERT INTO api_keys (id, name, key, key_hash, enabled, expires_at, user_id, workspace_id, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, NULL, $6, NULL, $7, $7)
+     ON CONFLICT (id) DO UPDATE
+     SET name = EXCLUDED.name,
+         key = EXCLUDED.key,
+         key_hash = EXCLUDED.key_hash,
+         enabled = EXCLUDED.enabled,
+         expires_at = NULL,
+         updated_at = EXCLUDED.updated_at`,
+    [
+      TEST_API_KEY.id,
+      TEST_API_KEY.name,
+      encryptedApiKey,
+      apiKeyHash,
+      true,
+      TEST_USER.id,
+      now,
+    ],
+  );
+
+  const cliEnvFile = writeCliEnvFile();
+
   console.log('seeded baseline user:');
   console.log(`  email: ${TEST_USER.email}`);
   console.log(`  password: ${TEST_USER.password}`);
+  console.log('seeded baseline API key:');
+  console.log(`  LOBE_API_KEY: ${TEST_API_KEY.key}`);
+  console.log(`  CLI env: ${cliEnvFile}`);
 })()
   .finally(() => client.end())
   .catch((error) => {
@@ -222,6 +329,7 @@ cmd_status() {
   note "APP_URL=$APP_URL"
   note "DATABASE_URL=$DATABASE_URL"
   note "PORT=$PORT"
+  note "QSTASH_URL=$QSTASH_URL"
   if command -v docker > /dev/null 2>&1; then
     ok "docker CLI available"
     if docker ps --format '{{.Names}}' | grep -Fxq "$DB_CONTAINER"; then
@@ -232,6 +340,14 @@ cmd_status() {
   else
     bad "docker CLI is not available"
   fi
+}
+
+cmd_qstash() {
+  apply_env
+  cd "$REPO_ROOT"
+  note "starting local QStash dev server at $QSTASH_URL"
+  note "keep this process running while testing workflow paths"
+  exec pnpm run qstash -- -port "$QSTASH_DEV_PORT"
 }
 
 cmd_dev_next() {
@@ -279,6 +395,7 @@ case "$COMMAND" in
     ;;
   migrate) migrate_db ;;
   seed-user) seed_user ;;
+  qstash) cmd_qstash ;;
   dev-next) cmd_dev_next ;;
   dev) cmd_dev ;;
   clean-db) cmd_clean_db ;;

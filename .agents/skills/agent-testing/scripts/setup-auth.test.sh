@@ -29,6 +29,7 @@ cleanup() {
   rm -rf "$tmp_dir"
 }
 trap cleanup EXIT
+export HOME="$tmp_dir/home"
 
 port="$(python3 - << 'PY'
 import socket
@@ -40,8 +41,59 @@ sock.close()
 PY
 )"
 
-python3 -m http.server "$port" --bind localhost --directory "$tmp_dir" \
-  > "$tmp_dir/http.log" 2>&1 &
+python3 - "$port" << 'PY' > "$tmp_dir/http.log" 2>&1 &
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import sys
+
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path.startswith("/api/v1/users/me"):
+            if self.headers.get("authorization") != "Bearer sk-lh-agenttesting0001":
+                self.send_response(401)
+                self.end_headers()
+                self.wfile.write(b'{"success":false}')
+                return
+
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"success":true,"data":{"id":"user_agent_testing_001"}}')
+            return
+
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"ok")
+
+    def do_POST(self):
+        length = int(self.headers.get("content-length") or "0")
+        if length:
+            self.rfile.read(length)
+
+        if self.path != "/api/auth/sign-in/email":
+            self.send_response(404)
+            self.end_headers()
+            return
+
+        self.send_response(200)
+        self.send_header(
+            "Set-Cookie",
+            "better-auth.session_token=seed.token; Path=/; HttpOnly; SameSite=Lax",
+        )
+        self.send_header(
+            "Set-Cookie",
+            "better-auth.session_data=seed.data; Path=/; HttpOnly; SameSite=Lax",
+        )
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"ok":true}')
+
+    def log_message(self, format, *args):
+        return
+
+
+ThreadingHTTPServer(("localhost", int(sys.argv[1])), Handler).serve_forever()
+PY
 server_pid="$!"
 
 server_url="http://localhost:$port"
@@ -103,9 +155,39 @@ if names != expected:
     raise SystemExit(f"unexpected cookies: {sorted(names)}")
 PY
 
+"$SCRIPT" web-seed > "$tmp_dir/web-seed.out"
+
+python3 - "$AUTH_DIR/web-state.json" << 'PY'
+import json, sys
+
+with open(sys.argv[1]) as f:
+    state = json.load(f)
+
+values = {cookie["name"]: cookie["value"] for cookie in state["cookies"]}
+expected = {
+    "better-auth.session_token": "seed.token",
+    "better-auth.session_data": "seed.data",
+}
+if values != expected:
+    raise SystemExit(f"unexpected seeded cookies: {values}")
+PY
+
 "$SCRIPT" status --surface web > "$tmp_dir/status.out"
 assert_contains "$tmp_dir/status.out" "surface=web"
 assert_contains "$tmp_dir/status.out" "web auth green"
+
+"$SCRIPT" cli-seed > "$tmp_dir/cli-seed.out"
+assert_contains "$tmp_dir/cli-seed.out" "CLI API-key auth valid"
+assert_contains "$tmp_dir/cli-seed.out" "settings saved at: $HOME/.lobehub-dev/settings.json"
+
+if "$SCRIPT" status --surface cli > "$tmp_dir/cli-no-env.out"; then
+  fail "cli status without API key unexpectedly passed"
+fi
+assert_contains "$tmp_dir/cli-no-env.out" "CLI not logged in"
+
+LOBEHUB_CLI_API_KEY=sk-lh-agenttesting0001 "$SCRIPT" status --surface cli > "$tmp_dir/cli-status.out"
+assert_contains "$tmp_dir/cli-status.out" "CLI API-key auth valid"
+assert_contains "$tmp_dir/cli-status.out" "cli auth green"
 
 if printf 'foo=bar\n' | "$SCRIPT" web > "$tmp_dir/invalid.out" 2> "$tmp_dir/invalid.err"; then
   fail "invalid cookie unexpectedly passed"

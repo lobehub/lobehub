@@ -157,10 +157,12 @@ full-stack `dev` command so Next can proxy the SPA HTML from Vite:
 Useful subcommands:
 
 ```bash
-./.agents/skills/agent-testing/scripts/init-dev-env.sh env      # print exports
-./.agents/skills/agent-testing/scripts/init-dev-env.sh write    # write .records/env/agent-testing-dev.env
-./.agents/skills/agent-testing/scripts/init-dev-env.sh migrate  # migrations only
-./.agents/skills/agent-testing/scripts/init-dev-env.sh clean-db # remove managed DB container
+./.agents/skills/agent-testing/scripts/init-dev-env.sh env       # print exports
+./.agents/skills/agent-testing/scripts/init-dev-env.sh write     # write .records/env/agent-testing-dev.env
+./.agents/skills/agent-testing/scripts/init-dev-env.sh migrate   # migrations only
+./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user # seed user + CLI API key
+./.agents/skills/agent-testing/scripts/init-dev-env.sh qstash    # local QStash for workflow paths
+./.agents/skills/agent-testing/scripts/init-dev-env.sh clean-db  # remove managed DB container
 ```
 
 Default script env:
@@ -169,14 +171,18 @@ Default script env:
 - `DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres`
 - `DATABASE_DRIVER=node`
 - `FEATURE_FLAGS=-agent_self_iteration` so local smoke does not require QStash
+- Local QStash defaults (`QSTASH_URL`, `QSTASH_TOKEN`, signing keys) are exported;
+  run `init-dev-env.sh qstash` in a separate terminal when the path under test
+  triggers QStash/Workflow.
 - `KEY_VAULTS_SECRET`, `AUTH_SECRET`, auth verification off
 - S3 mock vars
 - Managed DB container: `lobehub-agent-testing-postgres`
 
 `seed-user` creates `agent-testing@lobehub.com` / `TestPassword123!` with
-onboarding already completed for manual or agent-browser checks. When running
-Cucumber against this dev server, pass the same script env into the test process
-too; Cucumber has its own `BeforeAll` seed path and it must see `DATABASE_URL`
+onboarding already completed, plus a local API key in
+`.records/env/agent-testing-cli.env` for CLI automation. When running Cucumber
+against this dev server, pass the same script env into the test process too;
+Cucumber has its own `BeforeAll` seed path and it must see `DATABASE_URL`
 instead of silently skipping setup:
 
 ```bash
@@ -199,22 +205,23 @@ Electron login state unless the test spans those surfaces.
 
 Use `status` with no `--surface` only for cross-surface test plans.
 
-| Surface  | Mechanism                                         | One-key path                   | Standard check                            |
-| -------- | ------------------------------------------------- | ------------------------------ | ----------------------------------------- |
-| CLI      | OIDC Device Code Flow (`apps/cli/.lobehub-dev`)   | `setup-auth.sh cli`            | `setup-auth.sh status --surface cli`      |
-| Web      | better-auth cookie injection into `agent-browser` | `pbpaste \| setup-auth.sh web` | `setup-auth.sh status --surface web`      |
-| Electron | App's own persistent login state                  | Log in once in the app         | `setup-auth.sh status --surface electron` |
-| Bot      | Native apps already logged in                     | —                              | per-platform screenshot                   |
+| Surface  | Mechanism                                     | One-key path             | Standard check                            |
+| -------- | --------------------------------------------- | ------------------------ | ----------------------------------------- |
+| CLI      | Seeded API key, device-code fallback          | `setup-auth.sh cli-seed` | `setup-auth.sh status --surface cli`      |
+| Web      | Seeded better-auth login into `agent-browser` | `setup-auth.sh web-seed` | `setup-auth.sh status --surface web`      |
+| Electron | App's own persistent login state              | Log in once in the app   | `setup-auth.sh status --surface electron` |
+| Bot      | Native apps already logged in                 | —                        | per-platform screenshot                   |
 
 Login-state checks are standardized — do NOT hand-roll `window.__LOBE_STORES`
 eval snippets; use `scripts/app-probe.sh auth` (returns `{ isSignedIn, userId }`,
 works for Electron CDP and web sessions via `AB_TARGET`).
 
 For Web tests, the test surface is always `agent-browser --session lobehub-dev`.
-The user's normal Chrome is only a source for copying the Cookie header when
-`status --surface web` fails. If Chrome is already logged in, do not open a
-login page; verify agent-browser first, then request the Network `Cookie:`
-header only if that verification fails. Full background and failure modes:
+Use `setup-auth.sh web-seed` first in the seeded local env. The user's normal
+Chrome is only a source for copying the Cookie header when seed auth is not
+available or `status --surface web` still fails. If Chrome is already logged in,
+do not open a login page; verify agent-browser first, then request the Network
+`Cookie:` header only if that verification fails. Full background and failure modes:
 [references/auth.md](./references/auth.md).
 
 ## Step 1 — Pick the surface by change scope
