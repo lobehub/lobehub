@@ -2,6 +2,8 @@ import { type ConversationContext, RequestTrigger } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
+
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
 import { createMockMessage, createMockResolvedAgentConfig, TEST_IDS } from './fixtures';
@@ -1779,6 +1781,235 @@ describe('ConversationControl actions', () => {
             agentId: globalAgentId,
             topicId: globalTopicId,
           }),
+        }),
+      );
+    });
+  });
+
+  // ===========================================================================
+  // CHARACTERIZATION TESTS (lifecycle refactor regression net)
+  //
+  // Lock the CURRENT behavior of these non-sendMessage entry points so an
+  // upcoming lifecycle refactor cannot silently change them. They assert what
+  // the code does NOW.
+  // ===========================================================================
+  describe('rejectAndContinueToolCalling client characterization (lifecycle refactor regression net)', () => {
+    it('runs rejectToolCalling (one op completes) then starts a NEW op and executes client agent with phase=user_input', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const agentId = 'client-agent';
+      const topicId = 'client-topic';
+      const chatKey = messageMapKey({ agentId, topicId });
+
+      const toolMessage = createMockMessage({
+        id: 'tool-msg-1',
+        plugin: { apiName: 'test', arguments: '{}', identifier: 'test-plugin', type: 'default' },
+        role: 'tool',
+        tool_call_id: 'call_client',
+      } as any);
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          activeThreadId: undefined,
+          dbMessagesMap: { [chatKey]: [toolMessage] },
+          messagesMap: { [chatKey]: [toolMessage] },
+        });
+      });
+
+      // Client-mode (no Gateway resume): let the real rejectToolCalling chain
+      // run so we can observe the dual-op sequence. Only stub the persistence
+      // primitives and the runtime executor.
+      vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(false);
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+      const rejectToolCallingSpy = vi.spyOn(result.current, 'rejectToolCalling');
+      vi.spyOn(result.current, 'internal_createAgentState').mockReturnValue({
+        agentConfig: createMockResolvedAgentConfig(),
+        context: { phase: 'init' } as any,
+        state: {} as any,
+      });
+      const executeClientAgentSpy = vi
+        .spyOn(result.current, 'executeClientAgent')
+        .mockResolvedValue(undefined);
+
+      await act(async () => {
+        await result.current.rejectAndContinueToolCalling('tool-msg-1', 'not safe');
+      });
+
+      // 1) The halting reject runs first (it creates + completes its own op).
+      expect(rejectToolCallingSpy).toHaveBeenCalledWith('tool-msg-1', 'not safe', undefined);
+
+      // 2) Then a SECOND op is created and the client runtime continues with
+      //    phase overridden to 'user_input', resuming from the tool message.
+      expect(executeClientAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          initialContext: expect.objectContaining({ phase: 'user_input' }),
+          parentMessageId: 'tool-msg-1',
+          parentMessageType: 'tool',
+        }),
+      );
+
+      // Two 'rejectToolCalling' ops exist (the halting reject's own op + the
+      // continue op). Both reach 'completed' on the happy path.
+      const rejectOps = Object.values(result.current.operations).filter(
+        (op: any) => op.type === 'rejectToolCalling',
+      );
+      expect(rejectOps).toHaveLength(2);
+      expect(rejectOps.every((op: any) => op.status === 'completed')).toBe(true);
+    });
+  });
+
+  describe('submitHeteroIntervention characterization (lifecycle refactor regression net)', () => {
+    it('submits via IPC, persists optimistic intervention, and flips topic status to running (submit)', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const agentId = 'hetero-agent';
+      const topicId = 'hetero-topic';
+      const chatKey = messageMapKey({ agentId, topicId });
+
+      const assistantMessage = createMockMessage({
+        id: 'assistant-msg-1',
+        role: 'assistant',
+      });
+      const toolMessage = createMockMessage({
+        id: 'tool-msg-1',
+        parentId: assistantMessage.id,
+        plugin: {
+          apiName: 'askUserQuestion',
+          arguments: '{}',
+          identifier: 'lobe-claude-code',
+          type: 'default',
+        },
+        role: 'tool',
+        tool_call_id: 'cc_call_1',
+      } as any);
+
+      let assistantOpId!: string;
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          activeThreadId: undefined,
+          dbMessagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+          messagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+        });
+
+        // The running CC stream op is associated with the assistant that owns
+        // the tool message; submitHeteroIntervention walks up to find it.
+        assistantOpId = result.current.startOperation({
+          context: { agentId, topicId, threadId: null },
+          type: 'execHeterogeneousAgent',
+        }).operationId;
+
+        useChatStore.setState((s) => ({
+          messageOperationMap: { ...s.messageOperationMap, [assistantMessage.id]: assistantOpId },
+        }));
+      });
+
+      vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+      const updateTopicStatusSpy = vi
+        .spyOn(result.current, 'updateTopicStatus')
+        .mockResolvedValue(undefined as any);
+      const submitInterventionSpy = vi
+        .spyOn(heterogeneousAgentService, 'submitIntervention')
+        .mockResolvedValue(undefined as any);
+
+      const payload = { 'Which color?': 'Blue' };
+      await act(async () => {
+        await result.current.submitHeteroIntervention('tool-msg-1', 'submit', payload);
+      });
+
+      // Optimistic approval runs against the resolved op (operationId carried).
+      expect(result.current.optimisticUpdateMessagePlugin).toHaveBeenCalledWith(
+        'tool-msg-1',
+        { intervention: { status: 'approved' } },
+        { operationId: assistantOpId },
+      );
+
+      // IPC submit forwards the resolved operationId + toolCallId + result.
+      expect(submitInterventionSpy).toHaveBeenCalledWith({
+        operationId: assistantOpId,
+        result: payload,
+        toolCallId: 'cc_call_1',
+      });
+
+      // Topic row flips back from waitingForHuman to running.
+      expect(updateTopicStatusSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'running', topicId }),
+      );
+    });
+
+    it("CURRENT BEHAVIOR: falls back to global-state optimistic context (empty op) and still submits when the operation is GC'd", async () => {
+      // Characterizes action.ts ~735/~758: when the resolved op has already been
+      // garbage-collected (not present in `operations`), the optimistic context
+      // is the empty object `{}` (global-state fallback) rather than carrying the
+      // stale operationId — but the IPC submit STILL fires with that operationId,
+      // and the call does NOT throw. Locked as-is.
+      const { result } = renderHook(() => useChatStore());
+
+      const agentId = 'hetero-agent';
+      const topicId = 'hetero-topic';
+      const chatKey = messageMapKey({ agentId, topicId });
+
+      const assistantMessage = createMockMessage({ id: 'assistant-msg-1', role: 'assistant' });
+      const toolMessage = createMockMessage({
+        id: 'tool-msg-1',
+        parentId: assistantMessage.id,
+        plugin: {
+          apiName: 'askUserQuestion',
+          arguments: '{}',
+          identifier: 'lobe-claude-code',
+          type: 'default',
+        },
+        role: 'tool',
+        tool_call_id: 'cc_call_1',
+      } as any);
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          activeThreadId: undefined,
+          dbMessagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+          messagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+          // Point the assistant at an opId that does NOT exist in `operations`
+          // (simulating a garbage-collected / completed-and-pruned op).
+          messageOperationMap: { [assistantMessage.id]: 'gc-op-id' },
+          operations: {},
+        });
+      });
+
+      const pluginSpy = vi
+        .spyOn(result.current, 'optimisticUpdateMessagePlugin')
+        .mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+      vi.spyOn(result.current, 'updateTopicStatus').mockResolvedValue(undefined as any);
+      const submitInterventionSpy = vi
+        .spyOn(heterogeneousAgentService, 'submitIntervention')
+        .mockResolvedValue(undefined as any);
+
+      await act(async () => {
+        await expect(
+          result.current.submitHeteroIntervention('tool-msg-1', 'cancel'),
+        ).resolves.toBeUndefined();
+      });
+
+      // Optimistic write uses the empty global-state fallback context.
+      expect(pluginSpy).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({ intervention: expect.objectContaining({ status: 'rejected' }) }),
+        {},
+      );
+
+      // IPC submit still fires with the (stale) resolved operationId + cancel.
+      expect(submitInterventionSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cancelled: true,
+          operationId: 'gc-op-id',
+          toolCallId: 'cc_call_1',
         }),
       );
     });

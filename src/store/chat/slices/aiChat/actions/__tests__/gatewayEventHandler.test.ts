@@ -1071,6 +1071,133 @@ describe('createGatewayEventHandler', () => {
     });
   });
 
+  // ─── Characterization net (LOCKS CURRENT BEHAVIOR for an upcoming
+  // lifecycle refactor). These tests must PASS against the code as-is.
+  // They describe what the gateway terminal path does NOW, not ideal
+  // behavior. If something reads like a bug it is locked as-is with a note.
+  describe('gateway terminal characterization (lifecycle refactor regression net)', () => {
+    // CURRENT BEHAVIOR (gatewayEventHandler.ts ~622-624): the `error` event
+    // handler completes the operation but, UNLIKE `agent_runtime_end`
+    // (~552-557 which calls markUnreadCompleted when the operation has a
+    // context.agentId), the error path NEVER calls markUnreadCompleted.
+    // This is an intentional asymmetry to lock: an errored run does not get
+    // marked as an unread "completed" agent run. If a future refactor unifies
+    // the terminal paths, revisit whether errors SHOULD mark unread —
+    // changing this assertion is the signal that the contract moved.
+    it('error event completes the operation but does NOT call markUnreadCompleted (asymmetry vs agent_runtime_end)', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('error', { message: 'kaboom' }));
+      await flush();
+
+      // completeOperation IS called on error.
+      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      // markUnreadCompleted is NOT — even though operations['op-1'] has a
+      // context.agentId (which WOULD trigger it on agent_runtime_end).
+      expect(store.markUnreadCompleted).not.toHaveBeenCalled();
+    });
+
+    // Contrast probe: agent_runtime_end on the SAME operation (which has a
+    // context.agentId) DOES mark unread completed — proving the negative
+    // assertion above is the error path's own behavior, not a missing agentId.
+    it('agent_runtime_end (same op, has context.agentId) DOES call markUnreadCompleted', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(makeEvent('agent_runtime_end'));
+      await flush();
+
+      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      expect(store.markUnreadCompleted).toHaveBeenCalledWith('agent-1', 'topic-1');
+    });
+
+    // CURRENT BEHAVIOR: completeOperation runs once in the agent_runtime_end
+    // handler (gatewayEventHandler.ts:552) and again in gateway.ts
+    // onSessionComplete (gateway.ts:532) for the same operationId. The
+    // underlying reducer (operation/actions.ts:281-306) is idempotent: a
+    // second completeOperation on an already-'completed' op leaves status as
+    // 'completed' (it only refuses to overwrite a 'cancelled' status). This
+    // models the real reducer so the double-call is locked as a no-throw,
+    // no-flip stable terminal state.
+    it('completeOperation is idempotent: double-calling the same op leaves status=completed (no throw, no flip)', async () => {
+      // Local harness whose completeOperation MIRRORS the real reducer
+      // (operation/actions.ts completeOperation): set status to 'completed'
+      // unless the op was 'cancelled'.
+      const operations: Record<string, any> = {
+        'op-1': {
+          context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' },
+          metadata: { startTime: 0 },
+          status: 'running',
+        },
+      };
+      const completeOperation = vi.fn((operationId: string) => {
+        const op = operations[operationId];
+        if (!op) return;
+        if (op.status !== 'cancelled') op.status = 'completed';
+        op.metadata.endTime = Date.now();
+      });
+      const store = {
+        ...createMockStore(),
+        completeOperation,
+        operations,
+      } as ReturnType<typeof createMockStore>;
+      const get = vi.fn(() => store) as any;
+      const handler = createGatewayEventHandler(get, {
+        assistantMessageId: 'msg-initial',
+        context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any,
+        operationId: 'op-1',
+      });
+
+      // First terminal completion (agent_runtime_end handler).
+      handler(makeEvent('agent_runtime_end'));
+      await flush();
+      expect(operations['op-1'].status).toBe('completed');
+
+      // Second completion (as onSessionComplete in gateway.ts would issue).
+      store.completeOperation('op-1');
+      expect(operations['op-1'].status).toBe('completed');
+      expect(completeOperation).toHaveBeenCalledTimes(2);
+    });
+
+    // CURRENT BEHAVIOR: if the op was cancelled mid-flight, completeOperation
+    // does NOT flip it to 'completed' (operation/actions.ts:288-291 preserves
+    // the user's interruption state). Lock this so the refactor can't quietly
+    // resurrect a cancelled op into 'completed' on a stray terminal event.
+    it('completeOperation preserves a cancelled op (does not flip cancelled → completed)', async () => {
+      const operations: Record<string, any> = {
+        'op-1': {
+          context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' },
+          metadata: { startTime: 0 },
+          status: 'cancelled',
+        },
+      };
+      const completeOperation = vi.fn((operationId: string) => {
+        const op = operations[operationId];
+        if (!op) return;
+        if (op.status !== 'cancelled') op.status = 'completed';
+        op.metadata.endTime = Date.now();
+      });
+      const store = {
+        ...createMockStore(),
+        completeOperation,
+        operations,
+      } as ReturnType<typeof createMockStore>;
+      const get = vi.fn(() => store) as any;
+      const handler = createGatewayEventHandler(get, {
+        assistantMessageId: 'msg-initial',
+        context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any,
+        operationId: 'op-1',
+      });
+
+      handler(makeEvent('agent_runtime_end', { reason: 'interrupted' }));
+      await flush();
+
+      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      expect(operations['op-1'].status).toBe('cancelled');
+    });
+  });
+
   describe('step transition timing (orphan tool regression)', () => {
     /**
      * Verifies that after the executor fix, tools_calling events at step

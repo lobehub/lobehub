@@ -1,5 +1,6 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import * as agentRuntime from '@lobechat/agent-runtime';
+import type * as LobeChatConst from '@lobechat/const';
 import { type UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import { type EnabledAiModel, ModelProvider } from 'model-bank';
@@ -92,6 +93,23 @@ const createMockRuntimeState = (operationId: string, status: AgentState['status'
 vi.mock('zustand/traditional');
 vi.mock('@/store/chat/slices/aiChat/actions/agentSignalBridge', () => ({
   emitClientAgentSignalSourceEvent: agentSignalBridgeMock.emitClientAgentSignalSourceEvent,
+}));
+// Desktop notification gating: isDesktop defaults to false (web/test env), matching
+// the real env so the existing suite is unaffected; flipped true per-test to exercise
+// the notification branch. The service is dynamically imported inside executeClientAgent.
+const desktopFlag = vi.hoisted(() => ({ value: false }));
+const desktopNotificationMock = vi.hoisted(() => ({ showNotification: vi.fn() }));
+vi.mock('@lobechat/const', async (importOriginal) => {
+  const actual = await importOriginal<typeof LobeChatConst>();
+  return {
+    ...actual,
+    get isDesktop() {
+      return desktopFlag.value;
+    },
+  };
+});
+vi.mock('@/services/electron/desktopNotification', () => ({
+  desktopNotificationService: desktopNotificationMock,
 }));
 vi.mock('@/store/serverConfig', () => ({
   getServerConfigStoreState: () => ({
@@ -2392,6 +2410,227 @@ describe('StreamingExecutor actions', () => {
       expect(resolveAgentConfigSpy).toHaveBeenCalled();
 
       resolveAgentConfigSpy.mockRestore();
+    });
+  });
+
+  // Characterization net for the upcoming unified run-lifecycle refactor (LOBE-10377).
+  // These lock the CURRENT client completion behavior across terminal branches so the
+  // refactor can't silently drift queue-drain gating, unread marking, afterCompletion
+  // timing, or the normalized client.runtime.complete signal status.
+  describe('terminal-branch characterization (lifecycle refactor regression net)', () => {
+    const driveTerminal = (operationId: string, status: AgentState['status']) => {
+      mockInternalCreateAgentState({
+        state: createMockRuntimeState(operationId, status),
+        context: {
+          phase: 'init',
+          payload: { model: 'gpt-4o-mini', provider: 'openai' },
+          session: {
+            sessionId: TEST_IDS.SESSION_ID,
+            messageCount: 0,
+            status,
+            stepCount: 1,
+          },
+        },
+        agentConfig: createMockResolvedAgentConfig(),
+      });
+    };
+
+    const restoreExecutor = () =>
+      act(() => {
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
+      });
+
+    const runExecutor = async (result: any, operationId: string) => {
+      await act(async () => {
+        await result.current.executeClientAgent({
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          messages: [],
+          parentMessageId: TEST_IDS.USER_MESSAGE_ID,
+          parentMessageType: 'user',
+          operationId,
+        });
+      });
+    };
+
+    beforeEach(() => {
+      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
+        agentConfig: createMockAgentConfig(),
+        chatConfig: createMockChatConfig(),
+        isBuiltinAgent: false,
+        plugins: [],
+      });
+    });
+
+    it('runs afterCompletion callbacks even when the run terminates in error', async () => {
+      const { result } = renderHook(() => useChatStore());
+      restoreExecutor();
+
+      let operationId!: string;
+      const afterCompletion = vi.fn();
+      act(() => {
+        operationId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+        }).operationId;
+        result.current.registerAfterCompletionCallback(operationId, afterCompletion);
+      });
+
+      driveTerminal(operationId, 'error');
+      await runExecutor(result, operationId);
+
+      expect(afterCompletion).toHaveBeenCalledTimes(1);
+      expect(result.current.operations[operationId].status).toBe('failed');
+    });
+
+    it('emits client.runtime.complete with status "failed" on runtime error', async () => {
+      const { result } = renderHook(() => useChatStore());
+      restoreExecutor();
+
+      let operationId!: string;
+      act(() => {
+        operationId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+        }).operationId;
+      });
+
+      driveTerminal(operationId, 'error');
+      await runExecutor(result, operationId);
+
+      expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({ operationId, status: 'failed' }),
+          sourceId: `${operationId}:client:complete`,
+          sourceType: 'client.runtime.complete',
+        }),
+      );
+    });
+
+    it('does NOT drain the input queue or mark unread when the run errors', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const contextKey = messageMapKey({
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      });
+      const drainQueuedMessages = vi.fn(() => []);
+      const markUnreadCompleted = vi.fn();
+
+      restoreExecutor();
+      act(() => {
+        useChatStore.setState({
+          drainQueuedMessages,
+          markUnreadCompleted,
+          queuedMessages: {
+            [contextKey]: [
+              { content: 'queued', createdAt: Date.now(), id: 'q1', interruptMode: 'soft' },
+            ],
+          },
+        });
+      });
+
+      let operationId!: string;
+      act(() => {
+        operationId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+        }).operationId;
+      });
+
+      driveTerminal(operationId, 'error');
+      await runExecutor(result, operationId);
+
+      expect(drainQueuedMessages).not.toHaveBeenCalled();
+      expect(markUnreadCompleted).not.toHaveBeenCalled();
+    });
+
+    it('marks unread on a successful (done) terminal with an empty queue', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const markUnreadCompleted = vi.fn();
+
+      restoreExecutor();
+      act(() => {
+        useChatStore.setState({ markUnreadCompleted });
+      });
+
+      let operationId!: string;
+      act(() => {
+        operationId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+        }).operationId;
+      });
+
+      driveTerminal(operationId, 'done');
+      await runExecutor(result, operationId);
+
+      expect(markUnreadCompleted).toHaveBeenCalledWith(TEST_IDS.SESSION_ID, TEST_IDS.TOPIC_ID);
+      expect(result.current.operations[operationId].status).toBe('completed');
+    });
+
+    describe('desktop notification gating', () => {
+      afterEach(() => {
+        desktopFlag.value = false;
+        desktopNotificationMock.showNotification.mockClear();
+      });
+
+      const seedAssistant = (overrides: any) => {
+        act(() => {
+          useChatStore.setState((state) => ({
+            messagesMap: {
+              ...state.messagesMap,
+              [messageMapKey({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID })]: [
+                {
+                  ...createMockMessage({ id: 'assistant-notif', role: 'assistant' }),
+                  ...overrides,
+                },
+              ],
+            },
+          }));
+        });
+      };
+
+      it('shows a desktop notification on success when the last assistant message has content and no tools', async () => {
+        const { result } = renderHook(() => useChatStore());
+        restoreExecutor();
+        desktopFlag.value = true;
+
+        let operationId!: string;
+        act(() => {
+          operationId = result.current.startOperation({
+            type: 'execAgentRuntime',
+            context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          }).operationId;
+        });
+
+        seedAssistant({ content: 'hello world', tools: undefined });
+        driveTerminal(operationId, 'done');
+        await runExecutor(result, operationId);
+
+        expect(desktopNotificationMock.showNotification).toHaveBeenCalledTimes(1);
+        expect(desktopNotificationMock.showNotification).toHaveBeenCalledWith(
+          expect.objectContaining({ body: expect.stringContaining('hello world') }),
+        );
+      });
+
+      it('suppresses the notification when the last assistant message is still in tool-calling mode', async () => {
+        const { result } = renderHook(() => useChatStore());
+        restoreExecutor();
+        desktopFlag.value = true;
+
+        let operationId!: string;
+        act(() => {
+          operationId = result.current.startOperation({
+            type: 'execAgentRuntime',
+            context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+          }).operationId;
+        });
+
+        seedAssistant({ content: 'partial', tools: [{ id: 'tool-1' }] });
+        driveTerminal(operationId, 'done');
+        await runExecutor(result, operationId);
+
+        expect(desktopNotificationMock.showNotification).not.toHaveBeenCalled();
+      });
     });
   });
 });

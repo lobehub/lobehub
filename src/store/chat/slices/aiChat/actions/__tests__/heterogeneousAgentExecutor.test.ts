@@ -11,11 +11,14 @@
  */
 import path from 'node:path';
 
+import type * as LobeChatConst from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import type { AgentEventAdapter } from '@lobechat/heterogeneous-agents';
 import { createAdapter } from '@lobechat/heterogeneous-agents';
 import { ThreadStatus } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { useChatStore } from '@/store/chat/store';
 
 import { createGatewayEventHandler } from '../gatewayEventHandler';
 import type { HeterogeneousAgentExecutorParams } from '../heterogeneousAgentExecutor';
@@ -68,6 +71,33 @@ vi.mock('@/services/electron/heterogeneousAgent', () => ({
 // Gateway event handler — we spy on it but let it run (it calls getMessages)
 vi.mock('../gatewayEventHandler', () => ({
   createGatewayEventHandler: vi.fn(() => vi.fn()),
+}));
+
+// isDesktop — defaults to `false` (matching the real test env / __ELECTRON__
+// undefined) so the existing suite is unaffected. The completion-notification
+// characterization tests flip `desktopFlag.value` to `true` to exercise the
+// desktop-only `notifyCompletion` branch, then restore it in afterEach.
+// `vi.hoisted` so the flag exists when the hoisted `vi.mock` factory runs at
+// module-evaluation time (which happens during collection, before any test).
+const desktopFlag = vi.hoisted(() => ({ value: false }));
+vi.mock('@lobechat/const', async (importOriginal) => {
+  const actual = await importOriginal<typeof LobeChatConst>();
+  return {
+    ...actual,
+    get isDesktop() {
+      return desktopFlag.value;
+    },
+  };
+});
+
+// Desktop notification IPC — dynamically imported inside `notifyCompletion`.
+const mockShowNotification = vi.fn(async (..._args: any[]) => {});
+const mockSetBadgeCount = vi.fn(async (..._args: any[]) => {});
+vi.mock('@/services/electron/desktopNotification', () => ({
+  desktopNotificationService: {
+    setBadgeCount: (...args: any[]) => mockSetBadgeCount(...args),
+    showNotification: (...args: any[]) => mockShowNotification(...args),
+  },
 }));
 
 // ─── Helpers ───
@@ -3653,6 +3683,343 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       // weird ordering where the last write happens to have 7 entries but
       // the wrong ones (e.g. dedupe bug repopulating from a stale set).
       for (const id of toolIds) expect(writtenIds).toContain(id);
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Characterization tests locking the CURRENT hetero-completion lifecycle.
+  //
+  // These are a REGRESSION NET ahead of the send-message run-lifecycle refactor:
+  // they pin what the code does NOW (notifyCompletion fan-out, metadata-save
+  // isolation, queue-drain gating, the onError/abort skips), not idealized
+  // behavior. If something here looks like a bug it is intentionally locked
+  // as-is so the refactor surfaces any behavior change as a failing test.
+  // ════════════════════════════════════════════════════════════════════════
+  describe('hetero completion characterization (lifecycle refactor regression net)', () => {
+    afterEach(() => {
+      // Restore the global default so the rest of the suite keeps seeing the
+      // non-desktop env that every other test assumes.
+      desktopFlag.value = false;
+    });
+
+    /**
+     * Drive a full run to a non-error terminal (`ccResult()` → agent_runtime_end)
+     * with a caller-supplied store, mirroring the error-handling tests' manual
+     * harness so per-test store overrides (abortController / drainQueuedMessages /
+     * updateTopicStatus) are observable.
+     */
+    async function runToComplete(
+      store: any,
+      ccEvents: any[],
+      paramOverrides: Partial<typeof defaultParams> = {},
+    ) {
+      const get = vi.fn(() => store);
+      let resolveSendPrompt: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((r) => {
+          resolveSendPrompt = r;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        ...paramOverrides,
+      });
+      await flush();
+
+      for (const event of ccEvents) ipc.emitRawLine('ipc-sess-1', event);
+      ipc.emitComplete('ipc-sess-1');
+      await flush();
+
+      resolveSendPrompt!();
+      await executorPromise.catch(() => {});
+      await flush();
+
+      return { get, store };
+    }
+
+    /**
+     * Like `runToComplete` but ends the stream with a TRUE error terminal
+     * (`ccResult(true)` → `deferredTerminalEvent.type === 'error'`). This is the
+     * event-shape that drives the error branch in onComplete (isErrorTerminal)
+     * AND gates the linear-flow queue drain off via `terminalEvent?.type !== 'error'`.
+     */
+    async function runToError(store: any, paramOverrides: Partial<typeof defaultParams> = {}) {
+      const get = vi.fn(() => store);
+      let resolveSendPrompt: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((r) => {
+          resolveSendPrompt = r;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        ...paramOverrides,
+      });
+      await flush();
+
+      ipc.emitRawLine('ipc-sess-1', ccInit());
+      ipc.emitRawLine('ipc-sess-1', ccText('msg_01', 'partial content'));
+      ipc.emitRawLine('ipc-sess-1', ccResult(true, 'the run failed'));
+      ipc.emitComplete('ipc-sess-1');
+      await flush();
+
+      resolveSendPrompt!();
+      await executorPromise.catch(() => {});
+      await flush();
+
+      return { get, store };
+    }
+
+    // ── 1. onComplete success → notifyCompletion (notification + dock badge) ──
+    it('fires the desktop notification AND dock badge on a successful non-aborted completion', async () => {
+      desktopFlag.value = true;
+      const store = createMockStore();
+
+      await runToComplete(store, [
+        ccInit(),
+        ccText('msg_01', 'All done with the task.'),
+        ccResult(),
+      ]);
+
+      // notifyCompletion = Promise.allSettled([showNotification(...), setBadgeCount(1)]).
+      expect(mockShowNotification).toHaveBeenCalledTimes(1);
+      expect(mockShowNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          // body = markdownToTxt(finalContent)
+          body: expect.stringContaining('All done with the task'),
+          // navigate path resolved from agentId + topicId
+          navigate: { path: expect.any(String) },
+          title: expect.any(String),
+        }),
+      );
+      expect(mockSetBadgeCount).toHaveBeenCalledTimes(1);
+      expect(mockSetBadgeCount).toHaveBeenCalledWith(1);
+    });
+
+    it('does NOT touch the desktop notification IPC when isDesktop is false (web/default env)', async () => {
+      // desktopFlag.value stays false here — the early `if (!isDesktop) return` guard.
+      const store = createMockStore();
+
+      await runToComplete(store, [ccInit(), ccText('msg_01', 'done'), ccResult()]);
+
+      expect(mockShowNotification).not.toHaveBeenCalled();
+      expect(mockSetBadgeCount).not.toHaveBeenCalled();
+    });
+
+    // ── 2. metadata-save failure isolation (CURRENT behavior, locked as-is) ──
+    it('swallows an updateTopicMetadata REJECTION without surfacing an error to the caller', async () => {
+      // CHARACTERIZATION — locks ACTUAL current behavior, which DIFFERS from the
+      // intended acceptance criterion ("metadata failure must not block the
+      // drain"):
+      //
+      //   const sessionInfo = await getSessionInfo(...).catch(() => undefined);
+      //   if (sessionInfo?.agentSessionId && context.topicId)
+      //     await updateTopicMetadata?.(...);   // ← NO .catch here
+      //   if (!isAborted() && terminalEvent?.type !== 'error') { ...drain... }
+      //
+      // Because the `updateTopicMetadata` await is UNGUARDED, a rejection throws
+      // past the drain block into the function's outer try/catch. `completed` is
+      // already `true` (onComplete ran), so `catch { if (!completed) ... }` is a
+      // no-op: the executor resolves cleanly (no error escapes to the caller),
+      // BUT the queue drain is SKIPPED. The completion notification still fired
+      // (it runs inside onComplete, before this metadata await). Pinned here so
+      // the lifecycle refactor surfaces any change to this latent edge.
+      desktopFlag.value = true;
+      const queued = [
+        {
+          content: 'follow-up please',
+          editorData: undefined,
+          files: [],
+          id: 'q1',
+          metadata: {},
+        },
+      ];
+      const store = createMockStore({
+        drainQueuedMessages: vi.fn(() => queued),
+        updateTopicMetadata: vi.fn().mockRejectedValue(new Error('metadata save boom')),
+      });
+      const get = vi.fn(() => store);
+
+      let resolveSendPrompt: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((r) => {
+          resolveSendPrompt = r;
+        }),
+      );
+
+      let threw = false;
+      const executorPromise = executeHeterogeneousAgent(get, defaultParams).catch(() => {
+        threw = true;
+      });
+      await flush();
+
+      ipc.emitRawLine('ipc-sess-1', ccInit());
+      ipc.emitRawLine('ipc-sess-1', ccText('msg_01', 'done'));
+      ipc.emitRawLine('ipc-sess-1', ccResult());
+      ipc.emitComplete('ipc-sess-1');
+      await flush();
+
+      resolveSendPrompt!();
+      await executorPromise;
+      await flush();
+
+      // The metadata save was attempted (and rejected)...
+      expect(store.updateTopicMetadata).toHaveBeenCalled();
+      // ...and the rejection did NOT escape to the caller (executor resolved).
+      expect(threw).toBe(false);
+      // The completion notification still fired (runs in onComplete, BEFORE the
+      // unguarded metadata await throws).
+      expect(mockSetBadgeCount).toHaveBeenCalledWith(1);
+      // Current behavior: the unguarded throw bypasses the drain → it is SKIPPED.
+      expect(store.drainQueuedMessages).not.toHaveBeenCalled();
+    });
+
+    // ── 3. queue-drain gating ──
+    it('(success + queued) drains, marks unread completed, and schedules a delayed sendMessage', async () => {
+      const queued = [
+        {
+          content: 'next message',
+          editorData: undefined,
+          files: [],
+          id: 'q1',
+          metadata: {},
+        },
+      ];
+      const store = createMockStore({
+        drainQueuedMessages: vi.fn(() => queued),
+      });
+      const get = vi.fn(() => store);
+
+      // The delayed drain dispatch goes through the SINGLETON store
+      // (`useChatStore.getState().sendMessage`), NOT the per-call `get()` mock —
+      // so spy on the real store's sendMessage to observe it.
+      const realSendMessage = vi
+        .spyOn(useChatStore.getState(), 'sendMessage')
+        .mockResolvedValue(undefined as any);
+
+      let resolveSendPrompt: () => void;
+      mockSendPrompt.mockReturnValue(
+        new Promise<void>((r) => {
+          resolveSendPrompt = r;
+        }),
+      );
+
+      const executorPromise = executeHeterogeneousAgent(get, defaultParams);
+      await flush();
+
+      ipc.emitRawLine('ipc-sess-1', ccInit());
+      ipc.emitRawLine('ipc-sess-1', ccText('msg_01', 'done'));
+      ipc.emitRawLine('ipc-sess-1', ccResult());
+      ipc.emitComplete('ipc-sess-1');
+      await flush();
+
+      resolveSendPrompt!();
+      await executorPromise;
+      // Extra real-time wait so the drain's `setTimeout(() => sendMessage, 100)`
+      // fires before we assert on it.
+      await new Promise((r) => setTimeout(r, 200));
+      await flush();
+
+      expect(store.drainQueuedMessages).toHaveBeenCalled();
+      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      // op-1 context carries agentId/topicId → markUnreadCompleted fires.
+      expect(store.markUnreadCompleted).toHaveBeenCalledWith('agent-1', 'topic-1');
+
+      // The merged follow-up is dispatched via the setTimeout(100) sendMessage.
+      expect(realSendMessage).toHaveBeenCalledTimes(1);
+      expect(realSendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'next message' }),
+      );
+
+      realSendMessage.mockRestore();
+    });
+
+    it('(terminal type "error") does NOT drain the queue', async () => {
+      const store = createMockStore({
+        drainQueuedMessages: vi.fn(() => [{ content: 'queued', id: 'q1' }]),
+      });
+
+      await runToError(store);
+
+      // Gate is `terminalEvent?.type !== 'error'` — drainQueuedMessages is never
+      // even consulted, so no merged follow-up can be dispatched.
+      expect(store.drainQueuedMessages).not.toHaveBeenCalled();
+    });
+
+    it('(aborted) does NOT drain the queue even on an otherwise-clean stream end', async () => {
+      const abortController = new AbortController();
+      abortController.abort();
+      const store = createMockStore({
+        drainQueuedMessages: vi.fn(() => [{ content: 'queued', id: 'q1' }]),
+        operations: {
+          'op-1': {
+            abortController,
+            context: { agentId: 'agent-1', scope: 'main', topicId: 'topic-1' },
+            metadata: { startTime: 0 },
+          },
+        },
+      });
+
+      await runToComplete(store, [ccInit(), ccText('msg_01', 'done'), ccResult()]);
+
+      // Gate is `!isAborted()` — drainQueuedMessages is never consulted.
+      expect(store.drainQueuedMessages).not.toHaveBeenCalled();
+    });
+
+    // ── 4. error terminal → no notification, no drain (the onError branch) ──
+    it('an error terminal fires NO completion notification and NO queue drain', async () => {
+      desktopFlag.value = true; // even on desktop, the error terminal must stay silent
+      const store = createMockStore({
+        drainQueuedMessages: vi.fn(() => [{ content: 'queued', id: 'q1' }]),
+      });
+
+      await runToError(store);
+
+      // No completion signal on the error path (onComplete skips notifyCompletion
+      // when isErrorTerminal).
+      expect(mockShowNotification).not.toHaveBeenCalled();
+      expect(mockSetBadgeCount).not.toHaveBeenCalled();
+      // No queue drain on the error path (gated by terminalEvent?.type !== 'error').
+      expect(store.drainQueuedMessages).not.toHaveBeenCalled();
+      // The error itself is still persisted as a terminal error (persistTerminalError).
+      expect(mockUpdateMessageError).toHaveBeenCalled();
+    });
+
+    // ── 5. abort path → no notification, no drain, topic status 'active' ──
+    it('user abort fires NO notification, NO drain, and writes topic status "active"', async () => {
+      desktopFlag.value = true;
+      const updateTopicStatus = vi.fn();
+      const abortController = new AbortController();
+      abortController.abort();
+      const store = createMockStore({
+        drainQueuedMessages: vi.fn(() => [{ content: 'queued', id: 'q1' }]),
+        operations: {
+          'op-1': {
+            abortController,
+            context: { agentId: 'agent-1', scope: 'main', topicId: 'topic-1' },
+            metadata: { startTime: 0 },
+          },
+        },
+        updateTopicStatus,
+      });
+
+      await runToComplete(store, [ccInit(), ccText('msg_01', 'partial'), ccResult()]);
+
+      expect(mockShowNotification).not.toHaveBeenCalled();
+      expect(mockSetBadgeCount).not.toHaveBeenCalled();
+      expect(store.drainQueuedMessages).not.toHaveBeenCalled();
+
+      // Characterize the actual behavior: onComplete's non-error branch still
+      // writes 'active' (the abort gate only guards the notification + drain,
+      // not the writeTopicStatus('active') call on a clean stream end).
+      expect(updateTopicStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'active',
+          topicId: 'topic-1',
+        }),
+      );
     });
   });
 });
