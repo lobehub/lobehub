@@ -11,6 +11,7 @@ import { type SWRResponse } from 'swr';
 import { message } from '@/components/AntdStaticMethods';
 import { FILE_UPLOAD_BLACKLIST, MAX_UPLOAD_FILE_COUNT } from '@/const/file';
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { fileKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
 import { FileService, fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
@@ -26,7 +27,6 @@ import { type FileStore } from '../../store';
 import { fileManagerSelectors } from './selectors';
 
 const serverFileService = new FileService();
-const FETCH_ALL_KNOWLEDGE_KEY = 'useFetchKnowledgeItems';
 
 export interface FolderCrumb {
   id: string;
@@ -189,7 +189,7 @@ export class FileManageActionImpl {
       });
 
       // Update SWR cache so the component sees the new items
-      await mutate([FETCH_ALL_KNOWLEDGE_KEY, queryListParams], updatedFileList, {
+      await mutate(fileKeys.knowledgeItems(queryListParams), updatedFileList, {
         revalidate: false,
       });
     } catch (error) {
@@ -200,7 +200,7 @@ export class FileManageActionImpl {
   moveFileToFolder = async (fileId: string, parentId: string | null): Promise<void> => {
     // Optimistically update all file list caches
     await mutate(
-      (key) => Array.isArray(key) && key[0] === FETCH_ALL_KNOWLEDGE_KEY,
+      (key) => Array.isArray(key) && key[0] === fileKeys.knowledgeItems.root,
       async (currentData: FileListItem[] | undefined) => {
         if (!currentData) return currentData;
         // Update the moved file's parentId in the cache
@@ -367,12 +367,12 @@ export class FileManageActionImpl {
   };
 
   #refreshKnowledgeListCaches = async (): Promise<void> => {
-    // Invalidate all queries that start with FETCH_ALL_KNOWLEDGE_KEY
+    // Invalidate all queries under the file:knowledgeItems namespace
     // This ensures all file lists (explorer, tree, etc.) are refreshed
     // Note: We don't pass data as undefined to avoid clearing the cache,
     // which would cause isLoading to become true and show skeleton screen
     await mutate(
-      (key) => Array.isArray(key) && key[0] === FETCH_ALL_KNOWLEDGE_KEY,
+      (key) => Array.isArray(key) && key[0] === fileKeys.knowledgeItems.root,
       async (currentData) => currentData,
       {
         revalidate: true,
@@ -406,7 +406,7 @@ export class FileManageActionImpl {
   renameFolder = async (folderId: string, newName: string): Promise<void> => {
     // Optimistically update all file list caches
     await mutate(
-      (key) => Array.isArray(key) && key[0] === FETCH_ALL_KNOWLEDGE_KEY,
+      (key) => Array.isArray(key) && key[0] === fileKeys.knowledgeItems.root,
       async (currentData: FileListItem[] | undefined) => {
         if (!currentData) return currentData;
         // Update the folder's name in the cache
@@ -681,7 +681,7 @@ export class FileManageActionImpl {
   };
 
   useFetchKnowledgeItems = (params: QueryFileListParams): SWRResponse<FileListItem[]> => {
-    return useClientDataSWR<FileListItem[]>([FETCH_ALL_KNOWLEDGE_KEY, params], async () => {
+    return useClientDataSWR<FileListItem[]>(fileKeys.knowledgeItems(params), async () => {
       const response = await serverFileService.getKnowledgeItems({
         ...params,
         limit: params.limit ?? 50,

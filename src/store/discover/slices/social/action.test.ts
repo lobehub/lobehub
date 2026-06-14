@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mutate } from '@/libs/swr';
+import { discoverKeys } from '@/libs/swr/keys';
 import type { FollowCounts } from '@/services/social';
 import { socialService } from '@/services/social';
 
@@ -30,12 +31,14 @@ describe('SocialActionImpl', () => {
 
       expect(socialService.follow).toHaveBeenCalledWith(42);
       expect(mutateMock).toHaveBeenCalledWith(
-        'follow-status-42',
+        discoverKeys.followStatus(42),
         { isFollowing: true, isMutual: false },
         { revalidate: false },
       );
 
-      const countsCall = mutateMock.mock.calls.find(([key]) => key === 'follow-counts-42');
+      const countsCall = mutateMock.mock.calls.find(
+        ([key]) => Array.isArray(key) && key[0] === discoverKeys.followCounts.root && key[1] === 42,
+      );
       const updateCounts = countsCall?.[1] as
         | ((current?: FollowCounts) => FollowCounts)
         | undefined;
@@ -57,12 +60,14 @@ describe('SocialActionImpl', () => {
 
       expect(socialService.unfollow).toHaveBeenCalledWith(42);
       expect(mutateMock).toHaveBeenCalledWith(
-        'follow-status-42',
+        discoverKeys.followStatus(42),
         { isFollowing: false, isMutual: false },
         { revalidate: false },
       );
 
-      const countsCall = mutateMock.mock.calls.find(([key]) => key === 'follow-counts-42');
+      const countsCall = mutateMock.mock.calls.find(
+        ([key]) => Array.isArray(key) && key[0] === discoverKeys.followCounts.root && key[1] === 42,
+      );
       const updateCounts = countsCall?.[1] as
         | ((current?: FollowCounts) => FollowCounts)
         | undefined;

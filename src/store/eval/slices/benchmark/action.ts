@@ -2,14 +2,12 @@ import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { evalKeys } from '@/libs/swr/keys';
 import { agentEvalService } from '@/services/agentEval';
 import { type EvalStore } from '@/store/eval/store';
 import { type StoreSetter } from '@/store/types';
 
 import { type BenchmarkDetailDispatch, benchmarkDetailReducer } from './reducer';
-
-const FETCH_BENCHMARKS_KEY = 'FETCH_BENCHMARKS';
-const FETCH_BENCHMARK_DETAIL_KEY = 'FETCH_BENCHMARK_DETAIL';
 
 type Setter = StoreSetter<EvalStore>;
 
@@ -62,11 +60,11 @@ export class BenchmarkActionImpl {
   };
 
   refreshBenchmarkDetail = async (id: string): Promise<void> => {
-    await mutate([FETCH_BENCHMARK_DETAIL_KEY, id]);
+    await mutate(evalKeys.benchmarkDetail(id));
   };
 
   refreshBenchmarks = async (): Promise<void> => {
-    await mutate(FETCH_BENCHMARKS_KEY);
+    await mutate(evalKeys.benchmarks());
   };
 
   updateBenchmark = async (params: {
@@ -106,7 +104,7 @@ export class BenchmarkActionImpl {
 
   useFetchBenchmarkDetail = (id?: string): SWRResponse =>
     useClientDataSWR(
-      id ? [FETCH_BENCHMARK_DETAIL_KEY, id] : null,
+      id ? evalKeys.benchmarkDetail(id) : null,
       () => agentEvalService.getBenchmark(id!),
       {
         onSuccess: (data: any) => {
@@ -121,7 +119,7 @@ export class BenchmarkActionImpl {
     );
 
   useFetchBenchmarks = (): SWRResponse =>
-    useClientDataSWR(FETCH_BENCHMARKS_KEY, () => agentEvalService.listBenchmarks(), {
+    useClientDataSWR(evalKeys.benchmarks(), () => agentEvalService.listBenchmarks(), {
       onSuccess: (data: any) => {
         this.#set(
           { benchmarkList: data, benchmarkListInit: true, isLoadingBenchmarkList: false },

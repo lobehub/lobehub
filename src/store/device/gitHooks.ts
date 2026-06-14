@@ -2,6 +2,7 @@ import { isDesktop } from '@lobechat/const';
 import type { DeviceGitAheadBehind, DeviceGitWorkingTreeStatus } from '@lobechat/types';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { deviceKeys } from '@/libs/swr/keys';
 import { type GitInfo, gitService } from '@/services/git';
 
 /**
@@ -20,7 +21,7 @@ const isEnabled = (deviceId: string | undefined, path: string | undefined): path
  */
 export const useFetchGitInfo = (deviceId: string | undefined, path?: string, isGithub = false) =>
   useClientDataSWR<GitInfo>(
-    isEnabled(deviceId, path) ? ['git-info', deviceId ?? 'local', path, isGithub] : null,
+    isEnabled(deviceId, path) ? deviceKeys.gitInfo(deviceId ?? 'local', path, isGithub) : null,
     () => gitService.getGitInfo({ deviceId, isGithub, path: path! }),
     { dedupingInterval: 60 * 1000, focusThrottleInterval: 60 * 1000, shouldRetryOnError: false },
   );
@@ -31,7 +32,7 @@ export const useFetchGitInfo = (deviceId: string | undefined, path?: string, isG
  */
 export const useFetchGitWorkingTreeStatus = (deviceId: string | undefined, path?: string) =>
   useClientDataSWR<DeviceGitWorkingTreeStatus | undefined>(
-    isEnabled(deviceId, path) ? ['git-working-tree-status', deviceId ?? 'local', path] : null,
+    isEnabled(deviceId, path) ? deviceKeys.gitWorkingTreeStatus(deviceId ?? 'local', path) : null,
     () => gitService.getGitWorkingTreeStatus({ deviceId, path: path! }),
     { focusThrottleInterval: 5 * 1000, revalidateOnFocus: true, shouldRetryOnError: false },
   );
@@ -42,7 +43,7 @@ export const useFetchGitWorkingTreeStatus = (deviceId: string | undefined, path?
  */
 export const useFetchGitAheadBehind = (deviceId: string | undefined, path?: string) =>
   useClientDataSWR<DeviceGitAheadBehind | undefined>(
-    isEnabled(deviceId, path) ? ['git-ahead-behind', deviceId ?? 'local', path] : null,
+    isEnabled(deviceId, path) ? deviceKeys.gitAheadBehind(deviceId ?? 'local', path) : null,
     () => gitService.getGitAheadBehind({ deviceId, path: path! }),
     { focusThrottleInterval: 5 * 1000, revalidateOnFocus: true, shouldRetryOnError: false },
   );

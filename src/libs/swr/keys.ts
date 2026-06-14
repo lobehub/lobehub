@@ -159,6 +159,157 @@ export const serverConfigKeys = {
   get: 'serverConfig:get' as const,
 };
 
+// ---- discover (marketplace) ---------------------------------------------
+// NOTE: discover/eval/ragEval/knowledgeBase/device/userMemory/agentKnowledge/
+// agentBot/file/chatTool prefixes are deliberately kept OUT of `CACHE_TIERS`
+// (see localStorageProvider.ts) so this key-convergence introduces no new
+// persistence — they stay memory-only exactly as before.
+export const discoverKeys = {
+  assistantCategories: def('discover:assistantCategories', (locale: string, params: unknown) => [
+    'discover:assistantCategories',
+    locale,
+    params,
+  ]),
+  assistantDetail: def('discover:assistantDetail', (locale: string, params: unknown) => [
+    'discover:assistantDetail',
+    locale,
+    params,
+  ]),
+  assistantIdentifiers: def('discover:assistantIdentifiers', (source?: string) => [
+    'discover:assistantIdentifiers',
+    source,
+  ]),
+  assistantList: def('discover:assistantList', (locale: string, params: unknown) => [
+    'discover:assistantList',
+    locale,
+    params,
+  ]),
+  favoriteAgents: def('discover:favoriteAgents', (userId: number, params?: unknown) => [
+    'discover:favoriteAgents',
+    userId,
+    params,
+  ]),
+  favoritePlugins: def('discover:favoritePlugins', (userId: number, params?: unknown) => [
+    'discover:favoritePlugins',
+    userId,
+    params,
+  ]),
+  followCounts: def('discover:followCounts', (userId: number) => ['discover:followCounts', userId]),
+  followStatus: def('discover:followStatus', (userId: number) => ['discover:followStatus', userId]),
+  followers: def('discover:followers', (userId: number, params?: unknown) => [
+    'discover:followers',
+    userId,
+    params,
+  ]),
+  following: def('discover:following', (userId: number, params?: unknown) => [
+    'discover:following',
+    userId,
+    params,
+  ]),
+  modelIdentifiers: def('discover:modelIdentifiers', () => ['discover:modelIdentifiers']),
+  pluginIdentifiers: def('discover:pluginIdentifiers', () => ['discover:pluginIdentifiers']),
+  providerIdentifiers: def('discover:providerIdentifiers', () => ['discover:providerIdentifiers']),
+};
+
+// ---- agent eval ---------------------------------------------------------
+export const evalKeys = {
+  benchmarkDetail: def('eval:benchmarkDetail', (id: string) => ['eval:benchmarkDetail', id]),
+  benchmarks: def('eval:benchmarks', () => ['eval:benchmarks']),
+  datasetDetail: def('eval:datasetDetail', (id: string) => ['eval:datasetDetail', id]),
+  datasetRuns: def('eval:datasetRuns', (datasetId: string) => ['eval:datasetRuns', datasetId]),
+  datasets: def('eval:datasets', (benchmarkId: string) => ['eval:datasets', benchmarkId]),
+  runDetail: def('eval:runDetail', (id: string) => ['eval:runDetail', id]),
+  runResults: def('eval:runResults', (id: string) => ['eval:runResults', id]),
+  runs: def('eval:runs', (benchmarkId?: string) => ['eval:runs', benchmarkId]),
+  testCases: def('eval:testCases', (datasetId: string, limit?: number, offset?: number) => [
+    'eval:testCases',
+    datasetId,
+    limit,
+    offset,
+  ]),
+};
+
+// ---- RAG eval -----------------------------------------------------------
+export const ragEvalKeys = {
+  datasetList: def('ragEval:datasetList', (knowledgeBaseId?: string) => [
+    'ragEval:datasetList',
+    knowledgeBaseId,
+  ]),
+  datasetRecords: def('ragEval:datasetRecords', (datasetId: string) => [
+    'ragEval:datasetRecords',
+    datasetId,
+  ]),
+  evaluationList: def('ragEval:evaluationList', (knowledgeBaseId?: string) => [
+    'ragEval:evaluationList',
+    knowledgeBaseId,
+  ]),
+};
+
+// ---- knowledge base -----------------------------------------------------
+export const knowledgeBaseKeys = {
+  item: def('knowledgeBase:item', (id: string) => ['knowledgeBase:item', id]),
+  list: def('knowledgeBase:list', (workspaceId?: string | null) =>
+    workspaceId ? ['knowledgeBase:list', workspaceId] : ['knowledgeBase:list'],
+  ),
+};
+
+// ---- device -------------------------------------------------------------
+export const deviceKeys = {
+  gitAheadBehind: def('device:gitAheadBehind', (deviceId: string, path: string) => [
+    'device:gitAheadBehind',
+    deviceId,
+    path,
+  ]),
+  gitInfo: def('device:gitInfo', (deviceId: string, path: string, isGithub: boolean) => [
+    'device:gitInfo',
+    deviceId,
+    path,
+    isGithub,
+  ]),
+  gitWorkingTreeStatus: def('device:gitWorkingTreeStatus', (deviceId: string, path: string) => [
+    'device:gitWorkingTreeStatus',
+    deviceId,
+    path,
+  ]),
+  listDevices: def('device:listDevices', () => ['device:listDevices']),
+};
+
+// ---- user memory --------------------------------------------------------
+export const userMemoryKeys = {
+  identities: def('userMemory:identities', () => ['userMemory:identities']),
+  persona: def('userMemory:persona', () => ['userMemory:persona']),
+  tags: def('userMemory:tags', () => ['userMemory:tags']),
+  topicMemories: def('userMemory:topicMemories', (topicId: string) => [
+    'userMemory:topicMemories',
+    topicId,
+  ]),
+};
+
+// ---- agent knowledge (kept off the `agent:` idb tier on purpose) --------
+export const agentKnowledgeKeys = {
+  list: def('agentKnowledge:list', (agentId: string | undefined) => [
+    'agentKnowledge:list',
+    agentId,
+  ]),
+};
+
+// ---- agent bot ----------------------------------------------------------
+export const agentBotKeys = {
+  platformDefinitions: def('agentBot:platformDefinitions', () => ['agentBot:platformDefinitions']),
+  providers: def('agentBot:providers', (agentId: string) => ['agentBot:providers', agentId]),
+};
+
+// ---- file ---------------------------------------------------------------
+export const fileKeys = {
+  knowledgeItems: def('file:knowledgeItems', (params: unknown) => ['file:knowledgeItems', params]),
+  ttsFile: def('file:ttsFile', (messageId: string) => ['file:ttsFile', messageId]),
+};
+
+// ---- chat tools ---------------------------------------------------------
+export const chatToolKeys = {
+  interpreterFile: def('chat:interpreterFile', (id: string) => ['chat:interpreterFile', id]),
+};
+
 /**
  * Build a `mutate` matcher that selects every key in a `domain:` namespace.
  *
@@ -174,19 +325,29 @@ export const matchDomain =
  */
 export const swrKeys = {
   agent: { ...agentKeys, ...agentConfigKeys },
+  agentBot: agentBotKeys,
   agentDocument: agentDocumentSWRKeys,
+  agentKnowledge: agentKnowledgeKeys,
   aiModel: aiModelKeys,
   brief: briefKeys,
+  chatTool: chatToolKeys,
+  device: deviceKeys,
+  discover: discoverKeys,
   document: documentSWRKeys,
+  eval: evalKeys,
+  file: fileKeys,
   group: groupKeys,
   image: imageKeys,
+  knowledgeBase: knowledgeBaseKeys,
   message: messageKeys,
   notebook: notebookSWRKeys,
+  ragEval: ragEvalKeys,
   recent: recentKeys,
   serverConfig: serverConfigKeys,
   session: sessionKeys,
   task: taskKeys,
   thread: threadKeys,
   topic: topicKeys,
+  userMemory: userMemoryKeys,
   video: videoKeys,
 };

@@ -2,14 +2,13 @@ import { type SWRResponse } from 'swr';
 
 import { type QueryIdentityRolesResult } from '@/database/models/userMemory';
 import { useClientDataSWR } from '@/libs/swr';
+import { userMemoryKeys } from '@/libs/swr/keys';
 import { userMemoryService } from '@/services/userMemory';
 import { type StoreSetter } from '@/store/types';
 
 import { type PersonaData } from '../../initialState';
 import { type UserMemoryStore } from '../../store';
 
-const FETCH_TAGS_KEY = 'useFetchTags';
-const FETCH_PERSONA_KEY = 'useFetchPersona';
 const n = (namespace: string) => namespace;
 
 type Setter = StoreSetter<UserMemoryStore>;
@@ -27,7 +26,7 @@ export class HomeActionImpl {
 
   useFetchPersona = (isLogin = true): SWRResponse<PersonaData | null> => {
     return useClientDataSWR(
-      isLogin ? FETCH_PERSONA_KEY : null,
+      isLogin ? userMemoryKeys.persona() : null,
       () => userMemoryService.getPersona(),
       {
         onSuccess: (data: PersonaData | null | undefined) => {
@@ -46,7 +45,7 @@ export class HomeActionImpl {
 
   useFetchTags = (): SWRResponse<QueryIdentityRolesResult> => {
     return useClientDataSWR(
-      FETCH_TAGS_KEY,
+      userMemoryKeys.tags(),
       () =>
         userMemoryService.queryIdentityRoles({
           page: 1,
