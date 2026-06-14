@@ -125,7 +125,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
             auth: {
               clientId: oidcConfig?.clientId,
               token: authType === 'bearer' ? credentials?.token : undefined,
-              type: authType,
+              type: authType === 'header' ? 'none' : authType,
             },
             command: mcpStdioConfig?.command,
             env: mcpStdioConfig?.env,
@@ -158,10 +158,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         const newUrl = isHttp ? mcp.url?.trim() : undefined;
         const urlChanged = newUrl !== (connector?.mcpServerUrl ?? undefined);
 
-        const patch: Parameters<typeof updateConnector>[1] & {
-          credentials?: null | { headers: Record<string, string>; type: 'header' } | { token: string; type: 'bearer' };
-          oidcConfig?: { clientId?: string; clientSecret?: string; scheme?: 'pre_registration' | 'dcr' };
-        } = {};
+        const patch: Record<string, any> = {};
 
         if (newUrl !== undefined) patch.mcpServerUrl = newUrl;
 
@@ -186,10 +183,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
           };
         }
 
-        await (updateConnector as (id: string, patch: typeof patch) => Promise<void>)(
-          connectorId,
-          patch,
-        );
+        await updateConnector(connectorId, patch);
 
         if (authType === 'oauth2' && isHttp) {
           const popup = ctx?.oauthPopup ?? null;
