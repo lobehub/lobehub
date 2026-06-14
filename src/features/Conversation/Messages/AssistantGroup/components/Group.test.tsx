@@ -140,11 +140,14 @@ describe('Group', () => {
     mockIsGenerating = false;
   });
 
-  it('keeps long structured mixed content visible after the single inline tool', () => {
+  it('keeps a long mixed single-tool block inline in its natural order', () => {
+    // No promotion/relocation: a block carrying both a tool call and long prose
+    // renders as ONE inline unit (content above its tool inside ContentBlock),
+    // never split into a tool-first / text-after layout.
     const longContent =
       '后宫番 + 实际项目中的状态管理问题，这个组合挺有意思的！\n\n对于实际项目中的状态管理，你目前遇到的具体问题是什么？比如：\n- 不知道什么时候该用 useState，什么时候该用 Context\n- 组件间状态传递变得混乱\n- 性能问题（不必要的重渲染）';
 
-    const { container } = render(
+    render(
       <Group
         id="assistant-1"
         messageIndex={0}
@@ -158,86 +161,20 @@ describe('Group', () => {
       />,
     );
 
-    const sequence = Array.from(container.querySelectorAll('[data-testid]')).map((node) =>
-      node.getAttribute('data-testid'),
-    );
-
-    expect(sequence).toEqual(['answer-segment', 'answer-segment']);
+    expect(screen.queryByTestId('workflow-segment')).not.toBeInTheDocument();
     expect(parseAnswerSegments()).toEqual([
       {
-        content: '',
-        contentOverride: '',
+        content: longContent,
+        contentOverride: undefined,
         disableMarkdownStreaming: false,
-        domId: 'block-1__workflow',
+        domId: undefined,
         hasError: false,
-        hasToolsOverride: true,
+        hasToolsOverride: undefined,
         id: 'block-1',
         isFirstBlock: false,
         toolCount: 1,
       },
-      {
-        content: longContent,
-        contentOverride: longContent,
-        disableMarkdownStreaming: false,
-        domId: 'block-1__answer',
-        hasError: false,
-        hasToolsOverride: false,
-        id: 'block-1',
-        isFirstBlock: false,
-        toolCount: 0,
-      },
     ]);
-  });
-
-  it('keeps a final-looking mixed block after a folded multi-tool workflow', () => {
-    const finalSummary =
-      '我已经完成改动和验证，准备汇总。\n\n- targeted ESLint 通过\n- targeted Prettier check 通过\n- git diff --check 通过';
-
-    const { container } = render(
-      <Group
-        id="assistant-1"
-        messageIndex={0}
-        blocks={[
-          blk({
-            content: finalSummary,
-            id: 'block-1',
-            tools: [
-              { apiName: 'command_execution', id: 'tool-1' } as any,
-              { apiName: 'command_execution', id: 'tool-2' } as any,
-              { apiName: 'command_execution', id: 'tool-3' } as any,
-            ],
-          }),
-        ]}
-      />,
-    );
-
-    const sequence = Array.from(container.querySelectorAll('[data-testid]')).map((node) =>
-      node.getAttribute('data-testid'),
-    );
-
-    expect(sequence).toEqual(['workflow-segment', 'answer-segment']);
-    expect(parseWorkflowSegment()).toEqual([
-      {
-        content: '',
-        contentOverride: '',
-        disableMarkdownStreaming: false,
-        domId: 'block-1__workflow',
-        hasError: false,
-        hasToolsOverride: true,
-        toolCount: 3,
-      },
-    ]);
-    expect(parseAnswerSegment()).toEqual({
-      content: finalSummary,
-      contentOverride: finalSummary,
-      disableMarkdownStreaming: false,
-      domId: 'block-1__answer',
-      hasError: false,
-      hasToolsOverride: false,
-      id: 'block-1',
-      isFirstBlock: false,
-      toolCount: 0,
-    });
   });
 
   it('keeps a short mixed status block inline when there is only one tool call', () => {

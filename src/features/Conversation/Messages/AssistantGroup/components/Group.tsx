@@ -9,12 +9,7 @@ import { type AssistantContentBlock } from '@/types/index';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import { MessageAggregationContext } from '../../Contexts/MessageAggregationContext';
-import { POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD } from '../constants';
-import {
-  areWorkflowToolsComplete,
-  getPostToolAnswerSplitIndex,
-  scorePostToolBlockAsFinalAnswer,
-} from '../toolDisplayNames';
+import { areWorkflowToolsComplete, getPostToolAnswerSplitIndex } from '../toolDisplayNames';
 import { CollapsedMessage } from './CollapsedMessage';
 import GroupItem from './GroupItem';
 import type { RenderableAssistantContentBlock } from './types';
@@ -196,15 +191,6 @@ const appendWorkflowBlock = (
   segments.push({ blocks: [block], kind: 'workflow' });
 };
 
-const shouldPromoteMixedBlockContent = (block: AssistantContentBlock): boolean => {
-  if (!hasTools(block) || !hasSubstantiveContent(block)) return false;
-
-  return (
-    scorePostToolBlockAsFinalAnswer({ ...block, tools: undefined }) >=
-    POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD
-  );
-};
-
 const appendWorkflowRangeBlock = (
   segments: GroupRenderSegment[],
   block: AssistantContentBlock,
@@ -235,51 +221,39 @@ const appendWorkflowRangeBlock = (
     return;
   }
 
-  if (!shouldPromoteMixedBlockContent(block)) {
-    const leadingSentenceSplit =
-      allowLeadingSentencePromotion && segments.length === 0 && hasTools(block)
-        ? extractLeadingSentenceSplit(block)
-        : null;
+  // A block that carries both tool calls and prose keeps its NATURAL order
+  // (content above the tool). Within one assistant message the model's text
+  // always precedes its tool_use — tool_use ends the turn, so any post-tool
+  // prose lands in a separate, tool-less block. A mixed block's content is
+  // therefore always a preamble, never a post-tool summary, so there's nothing
+  // to "promote" below the tool. We still peel off a short leading sentence as a
+  // headline above a folded multi-tool workflow (order is preserved either way).
+  const leadingSentenceSplit =
+    allowLeadingSentencePromotion && segments.length === 0 && hasTools(block)
+      ? extractLeadingSentenceSplit(block)
+      : null;
 
-    if (leadingSentenceSplit) {
-      appendAnswerBlock(
-        segments,
-        createAnswerRenderBlock(block, {
-          content: leadingSentenceSplit.lead,
-          error: undefined,
-          imageList: undefined,
-          reasoning: undefined,
-          tools: undefined,
-        }),
-      );
-      appendWorkflowBlock(
-        segments,
-        createWorkflowRenderBlock(block, {
-          content: leadingSentenceSplit.remainder,
-        }),
-      );
-      return;
-    }
-
-    appendWorkflowBlock(segments, block);
+  if (leadingSentenceSplit) {
+    appendAnswerBlock(
+      segments,
+      createAnswerRenderBlock(block, {
+        content: leadingSentenceSplit.lead,
+        error: undefined,
+        imageList: undefined,
+        reasoning: undefined,
+        tools: undefined,
+      }),
+    );
+    appendWorkflowBlock(
+      segments,
+      createWorkflowRenderBlock(block, {
+        content: leadingSentenceSplit.remainder,
+      }),
+    );
     return;
   }
 
-  appendWorkflowBlock(
-    segments,
-    createWorkflowRenderBlock(block, {
-      content: '',
-      imageList: undefined,
-    }),
-  );
-  appendAnswerBlock(
-    segments,
-    createAnswerRenderBlock(block, {
-      error: undefined,
-      reasoning: undefined,
-      tools: undefined,
-    }),
-  );
+  appendWorkflowBlock(segments, block);
 };
 
 const appendPostToolBlocks = (
