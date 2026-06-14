@@ -9,7 +9,7 @@ import { type FleetColumn, fleetColumnKey } from './types';
 // Topic statuses considered "actively running" for the Fleet board.
 const RUNNING_STATUSES: ChatTopicStatus[] = ['running'];
 
-// getAllTopics returns raw topic rows, which carry agentId even though the
+// queryTopics returns raw topic rows, which carry agentId even though the
 // shared ChatTopic type does not declare it.
 type RunningTopic = ChatTopic & { agentId?: string | null };
 
@@ -25,27 +25,17 @@ const toColumn = (topic: RunningTopic): FleetColumn | null => {
 };
 
 /**
- * Account-wide source of "running" work. Pulls every topic for the current
- * user and keeps the ones whose status is actively running — one column per
+ * Account-wide source of "running" work. Queries the current user's topics
+ * filtered server-side to the actively-running statuses — one column per
  * running topic. Exposes the derived columns (board) plus a key→status map
  * (sidebar / column badge).
  */
 export const useRunningTopics = () => {
-  // NOTE: getAllTopics returns the full topic set and we filter client-side.
-  // For accounts with many topics this is heavy — a dedicated server-side
-  // `getRunningTopics` query (topicModel.queryByStatuses + TRPC) is a planned
-  // follow-up optimisation.
   const { data, isLoading } = useClientDataSWR('fleet-running-topics', () =>
-    topicService.getAllTopics(),
+    topicService.queryTopics({ statuses: RUNNING_STATUSES }),
   );
 
-  const running = useMemo(
-    () =>
-      ((data ?? []) as RunningTopic[]).filter(
-        (t) => !!t.status && RUNNING_STATUSES.includes(t.status),
-      ),
-    [data],
-  );
+  const running = useMemo(() => (data ?? []) as RunningTopic[], [data]);
 
   const columns = useMemo(
     () => running.map(toColumn).filter((c): c is FleetColumn => Boolean(c)),

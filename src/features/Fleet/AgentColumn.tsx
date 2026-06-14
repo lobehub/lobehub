@@ -43,7 +43,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   dragging: css`
     z-index: 2;
-    opacity: 0.5;
+    box-shadow:
+      inset 0 0 0 2px ${cssVar.colorPrimary},
+      ${cssVar.boxShadowSecondary};
   `,
   grip: css`
     cursor: grab;
@@ -215,7 +217,7 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
           }}
         >
           <ChatList disableActionsBar />
-          <ChatInput skipScrollMarginWithList />
+          <ChatInput skipScrollMarginWithList isConfigLoading={messages === undefined} />
         </ConversationProvider>
       </Flexbox>
 
