@@ -332,6 +332,7 @@
   "messages.modelCard.pricing.outputTokens": "输出 {{amount}} 积分 · ${{amount}}/M",
   "messages.modelCard.pricing.writeCacheInputTokens": "缓存写入 {{amount}} 积分 · ${{amount}}/M",
   "messages.tokenDetails.average": "平均单价",
+  "messages.tokenDetails.cacheRate": "缓存率",
   "messages.tokenDetails.input": "输入",
   "messages.tokenDetails.inputAudio": "音频输入",
   "messages.tokenDetails.inputCached": "输入缓存",

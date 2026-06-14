@@ -27,19 +27,25 @@ export const getDetailsToken = (usage: ModelUsage, modelCard?: LobeDefaultAiMode
     typeof usage.outputTextTokens === 'number'
       ? usage.outputTextTokens
       : Math.max(
-        0,
-        totalOutputTokens -
-        outputReasoningTokens -
-        (usage.outputAudioTokens || 0) -
-        outputImageTokens,
-      );
+          0,
+          totalOutputTokens -
+            outputReasoningTokens -
+            (usage.outputAudioTokens || 0) -
+            outputImageTokens,
+        );
 
   const inputWriteCacheTokens = usage.inputWriteCacheTokens || 0;
   const inputCacheTokens = usage.inputCachedTokens || (usage as any).cachedTokens || 0;
 
-  const inputCacheMissTokens = usage?.inputCacheMissTokens
-    ? usage?.inputCacheMissTokens
-    : totalInputTokens - (inputCacheTokens || 0) - inputToolTokens;
+  const inputCacheMissTokens =
+    typeof usage?.inputCacheMissTokens === 'number'
+      ? usage.inputCacheMissTokens
+      : totalInputTokens - (inputCacheTokens || 0) - inputToolTokens;
+  const cacheRateInputTokens = inputCacheMissTokens + inputCacheTokens + inputWriteCacheTokens;
+  const cacheRate =
+    cacheRateInputTokens > 0 && (inputCacheTokens > 0 || inputWriteCacheTokens > 0)
+      ? inputCacheTokens / cacheRateInputTokens
+      : undefined;
 
   // Pricing
   const formatPrice = getPrice(modelCard?.pricing || { units: [] });
@@ -76,9 +82,9 @@ export const getDetailsToken = (usage: ModelUsage, modelCard?: LobeDefaultAiMode
   return {
     inputAudio: !!usage.inputAudioTokens
       ? {
-        credit: calcCredit(usage.inputAudioTokens, getAudioInputUnitRate(modelCard?.pricing)),
-        token: usage.inputAudioTokens,
-      }
+          credit: calcCredit(usage.inputAudioTokens, getAudioInputUnitRate(modelCard?.pricing)),
+          token: usage.inputAudioTokens,
+        }
       : undefined,
     inputCacheMiss: !!inputCacheMissTokens
       ? { credit: inputCacheMissCredit, token: inputCacheMissTokens }
@@ -89,50 +95,51 @@ export const getDetailsToken = (usage: ModelUsage, modelCard?: LobeDefaultAiMode
     inputCachedWrite: !!inputWriteCacheTokens
       ? { credit: inputWriteCachedCredit, token: inputWriteCacheTokens }
       : undefined,
+    inputCacheRate: cacheRate,
     inputCitation: !!usage.inputCitationTokens
       ? {
-        credit: calcCredit(usage.inputCitationTokens, formatPrice.input),
-        token: usage.inputCitationTokens,
-      }
+          credit: calcCredit(usage.inputCitationTokens, formatPrice.input),
+          token: usage.inputCitationTokens,
+        }
       : undefined,
     inputText: !!inputTextTokens
       ? {
-        credit: calcCredit(inputTextTokens, formatPrice.input),
-        token: inputTextTokens,
-      }
+          credit: calcCredit(inputTextTokens, formatPrice.input),
+          token: inputTextTokens,
+        }
       : undefined,
     inputTool: !!inputToolTokens
       ? {
-        credit: inputToolCredit,
-        token: inputToolTokens,
-      }
+          credit: inputToolCredit,
+          token: inputToolTokens,
+        }
       : undefined,
 
     outputAudio: !!usage.outputAudioTokens
       ? {
-        credit: calcCredit(usage.outputAudioTokens, getAudioOutputUnitRate(modelCard?.pricing)),
-        id: 'outputAudio',
-        token: usage.outputAudioTokens,
-      }
+          credit: calcCredit(usage.outputAudioTokens, getAudioOutputUnitRate(modelCard?.pricing)),
+          id: 'outputAudio',
+          token: usage.outputAudioTokens,
+        }
       : undefined,
     outputImage: !!outputImageTokens
       ? {
-        credit: calcCredit(outputImageTokens, formatPrice.output),
-        id: 'outputImage',
-        token: outputImageTokens,
-      }
+          credit: calcCredit(outputImageTokens, formatPrice.output),
+          id: 'outputImage',
+          token: outputImageTokens,
+        }
       : undefined,
     outputReasoning: !!outputReasoningTokens
       ? {
-        credit: calcCredit(outputReasoningTokens, formatPrice.output),
-        token: outputReasoningTokens,
-      }
+          credit: calcCredit(outputReasoningTokens, formatPrice.output),
+          token: outputReasoningTokens,
+        }
       : undefined,
     outputText: !!outputTextTokens
       ? {
-        credit: calcCredit(outputTextTokens, formatPrice.output),
-        token: outputTextTokens,
-      }
+          credit: calcCredit(outputTextTokens, formatPrice.output),
+          token: outputTextTokens,
+        }
       : undefined,
 
     totalInput: !!totalInputTokens
