@@ -43,6 +43,9 @@ cd packages/database && TEST_SERVER_DB=1 bunx vitest run --silent='passed-only' 
 2. **Tests must pass type check** - Run `bun run type-check` after writing tests
 3. **After 1-2 failed fix attempts, stop and ask for help**
 4. **Test behavior, not implementation details**
+5. **Regression tests for bug fixes** - After fixing a bug, add a regression test that fails before the fix and passes after, to prevent recurrence
+6. **No new component tests** - Only update existing React component tests. Complex logic should be extracted into hooks and tested there instead
+7. **All source changes before any test changes** - Complete all source file edits first, then update tests in a separate pass. Interleaving disrupts reasoning about the source changes, especially across many files
 
 ## Basic Test Structure
 
