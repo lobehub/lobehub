@@ -130,6 +130,7 @@ const ensureRun = (
         messageId: firstAssistantId,
         parentId: userMsgId,
         role: 'assistant',
+        subagentMessageId: subCtx.subagentMessageId,
         threadId,
         topicId: ctx.topicId,
       },
@@ -170,6 +171,7 @@ const ensureRun = (
       messageId: nextAssistantId,
       parentId: run.lastChainParentId,
       role: 'assistant',
+      subagentMessageId: subCtx.subagentMessageId,
       threadId: run.threadId,
       topicId: ctx.topicId,
     });

@@ -101,7 +101,13 @@ const createHarness = (params: {
     update: vi.fn(async (id: string, patch: Partial<FakeMessage>) => {
       const existing = messages.get(id);
       if (!existing) return { success: false };
-      messages.set(id, { ...existing, ...patch });
+      // Mirror the real MessageModel.update: metadata is DEEP-MERGED, not
+      // replaced — so e.g. a usage write doesn't clobber subagentMessageId.
+      const next = { ...existing, ...patch };
+      if (patch.metadata && existing.metadata) {
+        next.metadata = { ...existing.metadata, ...patch.metadata };
+      }
+      messages.set(id, next);
       return { success: true };
     }),
     updateToolMessage: vi.fn(async (id: string, patch: any) => {
@@ -370,5 +376,70 @@ describe('HeterogeneousPersistenceHandler — subagent run survives a cold repli
     // The unrelated thread is untouched: still Processing, never updated.
     expect(h.threads.get('thd-stale')!.status).toBe('processing');
     expect(h.threadModel.update).not.toHaveBeenCalledWith('thd-stale', expect.anything());
+  });
+
+  // The in-thread analog of the cold-replica bug: one CC subagent turn continued
+  // on a fresh replica must NOT fork into a second in-thread assistant. The turn's
+  // CC message.id is persisted on the assistant's metadata and recovered into
+  // `currentSubagentMessageId`, so a continuation is recognized as the SAME turn.
+  it('does NOT fragment one CC subagent turn across a cold replica (no split / empty shell)', async () => {
+    const h = createHarness({
+      assistantMessageId: 'asst-1',
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+    const PARENT = 'tc-spawn-1';
+
+    // Batch 1: turn sub-1's first tool → lazy-create thread + user + in-thread
+    // assistant (stamped subagentMessageId=sub-1) + tool t1.
+    await h.handler.ingest({
+      assistantMessageId: 'asst-1',
+      events: [
+        buildEvent('stream_chunk', 0, {
+          chunkType: 'tools_calling',
+          subagent: {
+            parentToolCallId: PARENT,
+            spawnMetadata: { prompt: 'go', subagentType: 'Explore' },
+            subagentMessageId: 'sub-1',
+          },
+          toolsCalling: [innerTool('t1')],
+        }),
+      ],
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+
+    const threadId = [...h.threads.keys()][0];
+    const assistantsOf = () =>
+      [...h.messages.values()].filter((m) => m.role === 'assistant' && m.threadId === threadId);
+    expect(assistantsOf()).toHaveLength(1);
+    // The turn id was persisted so a cold replica can recover it.
+    expect(assistantsOf()[0].metadata?.subagentMessageId).toBe('sub-1');
+
+    __resetOperationStatesForTesting(); // cold replica
+
+    // Batch 2 (fresh replica): SAME turn sub-1 continues (cumulative [t1, t2]).
+    await h.handler.ingest({
+      assistantMessageId: 'asst-1',
+      events: [
+        buildEvent('stream_chunk', 1, {
+          chunkType: 'tools_calling',
+          subagent: { parentToolCallId: PARENT, subagentMessageId: 'sub-1' },
+          toolsCalling: [innerTool('t1'), innerTool('t2')],
+        }),
+      ],
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+
+    // Still exactly ONE in-thread assistant — no fork, no empty shell.
+    const assistants = assistantsOf();
+    expect(assistants).toHaveLength(1);
+    // Both tool rows hang off that same assistant (t1 not duplicated).
+    const toolRows = [...h.messages.values()].filter(
+      (m) => m.role === 'tool' && (m.tool_call_id === 't1' || m.tool_call_id === 't2'),
+    );
+    expect(toolRows).toHaveLength(2);
+    expect(new Set(toolRows.map((m) => m.parentId))).toEqual(new Set([assistants[0].id]));
   });
 });

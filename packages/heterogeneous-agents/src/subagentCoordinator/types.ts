@@ -93,16 +93,21 @@ export const createSubagentRunsState = (): SubagentRunsState => ({
  * server rebuilds main-agent state from DB on cold start; this lets it rebuild
  * the subagent runs the same way.
  *
- * Only the fields needed to keep the run attached to its EXISTING thread are
- * required. `currentSubagentMessageId` is intentionally NOT recoverable from DB
- * (CC's per-turn `message.id` is not persisted) — leaving it empty makes the
- * first post-rehydration subagent event read as a turn boundary, cutting a fresh
- * in-thread assistant chained off `lastChainParentId`. That is correct and safe:
- * it reuses the thread (no duplicate) and never appends to a half-written turn.
+ * Only the fields needed to keep the run attached to its EXISTING thread and to
+ * its IN-FLIGHT turn are required. `currentSubagentMessageId` is recovered from
+ * the latest in-thread assistant's persisted `metadata.subagentMessageId`: a
+ * cold replica must know the in-flight turn's CC `message.id`, otherwise the
+ * next event (`'' !== realId`) reads as a spurious turn boundary and splits one
+ * CC turn across multiple assistant rows (text on one, tools on another) plus
+ * empty shells. When the latest assistant predates this field (or is the
+ * terminal result row), it's omitted and falls back to `''` — same single-extra-
+ * turn behavior as before, no duplicate thread.
  */
 export interface SubagentRunSnapshot {
   /** Latest in-thread assistant id (where a continuation turn would otherwise append). */
   currentAssistantId: string;
+  /** CC `message.id` of the in-flight turn, from the latest assistant's `metadata.subagentMessageId`. */
+  currentSubagentMessageId?: string;
   /** Chain anchor for the next turn's assistant — last tool row of the thread, else the assistant. */
   lastChainParentId?: string;
   /** Every inner tool_call_id already persisted in the thread (delayed tool_results resolve via this). */
@@ -127,7 +132,7 @@ export const rehydrateSubagentRunsState = (snapshots: SubagentRunSnapshot[]): Su
       accContent: '',
       accReasoning: '',
       currentAssistantId: s.currentAssistantId,
-      currentSubagentMessageId: '',
+      currentSubagentMessageId: s.currentSubagentMessageId ?? '',
       lastChainParentId: s.lastChainParentId ?? s.currentAssistantId,
       lifetimeToolCallIds: new Set(s.lifetimeToolCallIds ?? []),
       threadId: s.threadId,
@@ -200,6 +205,16 @@ export interface CreateMessageIntent {
   messageId: string;
   parentId: string;
   role: 'user' | 'assistant';
+  /**
+   * CC's per-turn `message.id` for an `assistant` turn row. Persisted (server:
+   * onto `metadata.subagentMessageId`) so a cold serverless replica can recover
+   * {@link SubagentRun.currentSubagentMessageId} via {@link SubagentRunSnapshot}
+   * and recognize a CONTINUING turn instead of forcing a spurious turn boundary
+   * — which would split one CC turn across multiple in-thread assistant rows
+   * (text on one, tools on another) and leave empty shells. Absent on the user
+   * seed and the terminal result assistant.
+   */
+  subagentMessageId?: string;
   threadId: string;
   topicId: string | null;
 }

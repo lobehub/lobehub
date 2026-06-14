@@ -626,7 +626,13 @@ export class HeterogeneousPersistenceHandler {
   private buildSubagentSnapshot(
     parentToolCallId: string,
     threadId: string,
-    messages: Array<{ id: string; parentId?: string | null; role: string; tool_call_id?: string }>,
+    messages: Array<{
+      id: string;
+      metadata?: Record<string, any> | null;
+      parentId?: string | null;
+      role: string;
+      tool_call_id?: string;
+    }>,
   ): SubagentRunSnapshot | undefined {
     const assistants = messages.filter((m) => m.role === 'assistant');
     const currentAssistant = assistants.at(-1);
@@ -635,9 +641,16 @@ export class HeterogeneousPersistenceHandler {
     const toolRows = messages.filter((m) => m.role === 'tool' && m.tool_call_id);
     const childTools = toolRows.filter((m) => m.parentId === currentAssistant.id);
     const lastChainParentId = childTools.at(-1)?.id ?? currentAssistant.id;
+    // Recover the in-flight turn's CC message.id so a continuation event is
+    // recognized as the SAME turn (no spurious boundary → no fragmentation).
+    const currentSubagentMessageId =
+      typeof currentAssistant.metadata?.subagentMessageId === 'string'
+        ? currentAssistant.metadata.subagentMessageId
+        : undefined;
 
     return {
       currentAssistantId: currentAssistant.id,
+      currentSubagentMessageId,
       lastChainParentId,
       lifetimeToolCallIds: toolRows.map((m) => m.tool_call_id!),
       parentToolCallId,
@@ -962,11 +975,18 @@ export class HeterogeneousPersistenceHandler {
           {
             agentId: intent.agentId ?? undefined,
             content: intent.content,
+            // Persist the turn's CC message.id so a cold replica can recover
+            // `currentSubagentMessageId` (via buildSubagentSnapshot) and avoid
+            // a spurious turn boundary that fragments one CC turn into multiple
+            // in-thread assistant rows + empty shells.
+            ...(intent.subagentMessageId
+              ? { metadata: { subagentMessageId: intent.subagentMessageId } }
+              : {}),
             parentId: intent.parentId,
             role: intent.role,
             threadId: intent.threadId,
             topicId: intent.topicId ?? state.topicId,
-          },
+          } as any,
           intent.messageId,
         );
         return;
