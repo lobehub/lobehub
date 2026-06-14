@@ -940,8 +940,11 @@ describe('GatewayActionImpl', () => {
         topicId: 'topic-1',
       });
 
-      const metadata = startOperation.mock.calls[0][0].metadata;
-      expect(metadata).not.toHaveProperty('startTime');
+      expect(startOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.not.objectContaining({ startTime: expect.anything() }),
+        }),
+      );
     });
   });
 });
