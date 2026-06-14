@@ -7,9 +7,11 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { CircleCheck } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import { message } from '@/components/AntdStaticMethods';
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import { SESSION_CHAT_URL } from '@/const/url';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
@@ -53,6 +55,7 @@ const styles = createStaticStyles(({ css }) => ({
 const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId, topicIds }) => {
   const { t } = useTranslation(['topic', 'chat', 'common']);
   const { close, setCanDismissByClickOutside } = useModalContext();
+  const navigate = useNavigate();
 
   const [step, setStep] = useState<Step>('pick');
   const [search, setSearch] = useState('');
@@ -191,12 +194,25 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
 
   // done
   return (
-    <Flexbox align={'center'} gap={16} justify={'center'} padding={48}>
-      <Icon color={cssVar.colorSuccess} icon={CircleCheck} size={32} />
-      <Text weight={500}>{t('management.moveModal.done', { count })}</Text>
-      <Button type={'primary'} onClick={close}>
-        {t('management.moveModal.doneOk')}
-      </Button>
+    <Flexbox align={'center'} gap={20} justify={'center'} padding={48}>
+      <Flexbox align={'center'} gap={12}>
+        <Icon color={cssVar.colorSuccess} icon={CircleCheck} size={32} />
+        <Text weight={500}>{t('management.moveModal.done', { count })}</Text>
+      </Flexbox>
+      <Flexbox horizontal gap={8}>
+        <Button onClick={close}>{t('management.moveModal.doneOk')}</Button>
+        {target && (
+          <Button
+            type={'primary'}
+            onClick={() => {
+              navigate(SESSION_CHAT_URL(target.id));
+              close();
+            }}
+          >
+            {t('management.moveModal.goToTarget', { title: target.title })}
+          </Button>
+        )}
+      </Flexbox>
     </Flexbox>
   );
 });

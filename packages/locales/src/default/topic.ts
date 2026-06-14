@@ -143,6 +143,7 @@ export default {
   'management.moveModal.done_other': '{{count}} topics moved',
   'management.moveModal.doneOk': 'Done',
   'management.moveModal.error': 'Move failed, please try again',
+  'management.moveModal.goToTarget': 'Go to “{{title}}”',
   'management.moveModal.moving': 'Moving…',
   'management.moveModal.title': 'Move topics',
   'management.searchPlaceholder': "Search this agent's topics…",

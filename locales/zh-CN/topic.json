@@ -130,6 +130,7 @@
   "management.moveModal.done_one": "已移动 {{count}} 个话题",
   "management.moveModal.done_other": "已移动 {{count}} 个话题",
   "management.moveModal.error": "移动失败，请重试",
+  "management.moveModal.goToTarget": "前往「{{title}}」查看",
   "management.moveModal.moving": "正在移动…",
   "management.moveModal.title": "移动话题",
   "management.searchPlaceholder": "在当前助手的话题中搜索…",

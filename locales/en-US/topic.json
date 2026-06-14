@@ -130,6 +130,7 @@
   "management.moveModal.done_one": "{{count}} topic moved",
   "management.moveModal.done_other": "{{count}} topics moved",
   "management.moveModal.error": "Move failed, please try again",
+  "management.moveModal.goToTarget": "Go to “{{title}}”",
   "management.moveModal.moving": "Moving…",
   "management.moveModal.title": "Move topics",
   "management.searchPlaceholder": "Search this agent's topics…",
