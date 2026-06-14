@@ -1,6 +1,6 @@
 ---
 name: ux
-description: 'LobeHub product design values (自然 Natural / 意义感 Meaningful / 确定性 Certainty / 生长性 Growth) and per-aspect UX execution checklists. Use when designing or reviewing any user-facing flow — empty/loading/error states, confirmations, async feedback, button hierarchy, action parity, lists at scale, pickers, discoverability, and loading visuals.'
+description: 'LobeHub product design values (自然 Natural / 意义感 Meaningful / 确定性 Certainty / 生长性 Growth) and per-aspect UX execution checklists. Use when designing or reviewing any user-facing flow — empty/loading/error states, confirmations, async feedback, button hierarchy, action parity, lists at scale, pickers, discoverability, loading visuals, and capability-gated config reminders (warn when the selected model can not deliver an agentic/tool-calling feature).'
 user-invocable: false
 ---
 
@@ -131,6 +131,30 @@ it explicitly _before_ building. Worked example, the tools/connectors list:
 - [ ] **An intentionally-absent op is a documented decision, not an oversight**
       (e.g. official tools can't be deleted — by design). _(确定性)_
 
+## 9. Capability-gated features・Certainty・Meaningful
+
+A feature can be fully built and still produce a broken result when the selected
+model — or its still-loading config — **can't deliver the capability the feature
+depends on** (for example, an agentic run on a model without tool calling). This
+is usually the user's configuration choice, not a defect; but if the product stays
+silent the user reads it as the product being broken. When a feature's success
+depends on a capability the current config may lack, the product owes a
+**proactive, non-blocking reminder** — a guardrail, not a gate.
+
+- [ ] **Surface the mismatch, don't fail silently.** When a feature needs a model
+      capability (tool calling, vision, reasoning, long context) the current model
+      lacks, show a soft inline warning at the point of action — never a hard block
+      or a modal that stops the user. _(Meaningful)_
+- [ ] **Stay reactive.** The reminder clears the moment the user switches to a
+      capable model — derive it from live state, not a one-shot check. _(Natural)_
+- [ ] **Don't warn while config is loading.** A capability that hasn't resolved yet
+      looks "unsupported"; warning then is a false alarm — exactly the glitch users
+      mistake for a product bug. Warn only on a _resolved_ unsupported state. _(Certainty)_
+- [ ] **Scope to the mode that needs it.** Show only when the capability-dependent
+      mode is on; one reminder per root cause, never a pile of overlapping notices. _(Natural・Certainty)_
+- [ ] **State the problem and the remedy.** The copy says what's wrong _and_ what
+      the user should do about it. _(Meaningful)_
+
 ## Quick review checklist
 
 - [ ] Action leads the user forward; success offers a primary "go to result".
@@ -143,6 +167,7 @@ it explicitly _before_ building. Worked example, the tools/connectors list:
 - [ ] No antd `Spin`; use `NeuralNetworkLoading` / project loaders.
 - [ ] Advanced capability is progressively disclosed / discoverable at the moment of need.
 - [ ] Listed entities have their full lifecycle (not display-only); ops match source (built-in / installed / custom).
+- [ ] Capability-gated feature warns (soft, reactive, load-gated) when the model can't deliver it; copy gives the remedy.
 
 ## Related skills
 
