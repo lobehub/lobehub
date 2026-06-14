@@ -84,7 +84,7 @@ export function registerSearchCommand(program: Command) {
     .option('--json [fields]', 'Output JSON, optionally specify fields (comma-separated)')
     .option(
       '-i, --impl <impls>',
-      'Crawler implementations for web URLs (comma-separated: browserless, exa, firecrawl, jina, naive, search1api, tavily)',
+      'Crawler implementations for web URLs (comma-separated: browserless, crw, exa, firecrawl, jina, naive, search1api, tavily)',
     )
     .action(
       async (
@@ -220,7 +220,7 @@ async function crawlView(url: string, options: { impl?: string; json?: string | 
   const toolsClient = await getToolsTrpcClient();
 
   const input: {
-    impls?: ('browserless' | 'exa' | 'firecrawl' | 'jina' | 'naive' | 'search1api' | 'tavily')[];
+    impls?: ('browserless' | 'crw' | 'exa' | 'firecrawl' | 'jina' | 'naive' | 'search1api' | 'tavily')[];
     urls: string[];
   } = { urls: [url] };
 

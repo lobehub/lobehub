@@ -10,7 +10,7 @@ export const searchRouter = router({
     .input(
       z.object({
         impls: z
-          .enum(['browserless', 'exa', 'firecrawl', 'jina', 'naive', 'search1api', 'tavily'])
+          .enum(['browserless', 'crw', 'exa', 'firecrawl', 'jina', 'naive', 'search1api', 'tavily'])
           .array()
           .optional(),
         urls: z.string().array(),
