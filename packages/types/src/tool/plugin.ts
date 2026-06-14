@@ -43,6 +43,8 @@ export interface CustomPluginParams {
       type: 'none' | 'bearer' | 'oauth2';
       token?: string; // Bearer Token
       accessToken?: string; // OAuth2 Access Token
+      clientId?: string; // OAuth2 client ID
+      clientSecret?: string; // OAuth2 client secret
     };
     // Added headers configuration support
     headers?: Record<string, string>;
