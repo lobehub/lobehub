@@ -1,8 +1,10 @@
 'use client';
 
+import { Center, Flexbox } from '@lobehub/ui';
 import { type PropsWithChildren, useEffect, useState } from 'react';
 import { useSyncExternalStore } from 'react';
 
+import { ProductLogo } from '@/components/Branding';
 import { cacheHydration } from '@/libs/swr/cacheHydration';
 import { useCacheScope } from '@/libs/swr/useCacheScope';
 import { useUserStore } from '@/store/user';
@@ -44,7 +46,17 @@ const CacheHydrationGate = ({ children }: PropsWithChildren) => {
   }, [ready, scope]);
 
   // Only gate once auth has resolved (so we wait on the real scope, not anon).
-  if (isAuthLoaded && !ready && !timedOut) return null;
+  // While gating, mirror the boot loading screen (centered brand logo) rather
+  // than blanking the page, so the hand-off from the static HTML loading screen
+  // to the routed app stays seamless instead of flashing white.
+  if (isAuthLoaded && !ready && !timedOut)
+    return (
+      <Flexbox height={'100%'} style={{ userSelect: 'none' }} width={'100%'}>
+        <Center flex={1} gap={16} width={'100%'}>
+          <ProductLogo size={48} type={'combine'} />
+        </Center>
+      </Flexbox>
+    );
 
   return <>{children}</>;
 };

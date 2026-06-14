@@ -285,13 +285,31 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
     }
   }
 
-  // Flush both tiers immediately on unload.
-  window.addEventListener('beforeunload', () => {
-    if (localTimer) clearTimeout(localTimer);
-    if (idbTimer) clearTimeout(idbTimer);
+  // Flush both tiers as early as possible. IndexedDB writes are async and can't
+  // be awaited during teardown, so we must not wait for `beforeunload`: by then
+  // the browser is free to kill the page before `flushIdb()`'s writes land.
+  // Instead flush the moment the page is *hidden* (tab switch / minimize / app
+  // background) — the page is still alive there, so the async writes have time
+  // to complete well before any actual unload. `pagehide` is a best-effort
+  // backstop for the desktop close case (and is bfcache-friendly, unlike
+  // `beforeunload`).
+  const flushAll = () => {
+    if (localTimer) {
+      clearTimeout(localTimer);
+      localTimer = null;
+    }
+    if (idbTimer) {
+      clearTimeout(idbTimer);
+      idbTimer = null;
+    }
     saveLocal();
     flushIdb();
+  };
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushAll();
   });
+  window.addEventListener('pagehide', flushAll);
 
   // Multi-tab sync for the localStorage tier only.
   window.addEventListener('storage', (event) => {
