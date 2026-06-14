@@ -1,6 +1,5 @@
 'use client';
 
-import { type TaskItem } from '@lobechat/types';
 import { Avatar, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useCallback } from 'react';
@@ -8,8 +7,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { NavPanelPortal } from '@/features/NavPanel';
-import BackButton from '@/features/NavPanel/components/BackButton';
+import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
+import { type ChatTopicStatus } from '@/types/topic';
 
 import { resolveStatusTone } from './status';
 import StatusBadge from './StatusBadge';
@@ -18,7 +18,6 @@ import { type FleetColumn } from './types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   count: css`
-    margin-inline-start: auto;
     font-size: 13px;
     color: ${cssVar.colorTextTertiary};
   `,
@@ -29,11 +28,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 13px;
     color: ${cssVar.colorTextQuaternary};
     text-align: center;
-  `,
-  header: css`
-    flex: none;
-    height: 44px;
-    padding-inline: 12px;
   `,
   item: css`
     cursor: pointer;
@@ -49,12 +43,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 interface SidebarTaskItemProps {
   column: FleetColumn;
   onActivate: (column: FleetColumn) => void;
-  task: TaskItem | undefined;
+  status: ChatTopicStatus | undefined;
 }
 
-const SidebarTaskItem = memo<SidebarTaskItemProps>(({ column, task, onActivate }) => {
+const SidebarTaskItem = memo<SidebarTaskItemProps>(({ column, status, onActivate }) => {
   const meta = useAgentDisplayMeta(column.agentId);
-  const tone = resolveStatusTone(task?.status, false);
+  const tone = resolveStatusTone(status ?? undefined, false);
 
   return (
     <Flexbox
@@ -93,15 +87,16 @@ SidebarTaskItem.displayName = 'FleetSidebarTaskItem';
 
 interface RunningTaskSidebarProps {
   columns: FleetColumn[];
-  taskByColumnKey: Record<string, TaskItem>;
+  statusByColumnKey: Record<string, ChatTopicStatus | undefined>;
 }
 
 /**
- * Fleet's left navigation. Portals into the global NavPanel so the running-task
- * list *replaces* the standard nav rail while the Fleet view is active. Clicking
- * an item opens (or re-opens) its column on the board and scrolls it into view.
+ * Fleet's left navigation. Portals into the global NavPanel so the running-topic
+ * list *replaces* the standard nav rail while the Fleet view is active. The
+ * top bar (`SideBarHeaderLayout`) carries the back-to-home action across its
+ * full width; clicking an item opens (or re-opens) its column on the board.
  */
-const RunningTaskSidebar = memo<RunningTaskSidebarProps>(({ columns, taskByColumnKey }) => {
+const RunningTaskSidebar = memo<RunningTaskSidebarProps>(({ columns, statusByColumnKey }) => {
   const { t } = useTranslation('electron');
   const addColumn = useFleetStore((s) => s.addColumn);
 
@@ -118,11 +113,12 @@ const RunningTaskSidebar = memo<RunningTaskSidebarProps>(({ columns, taskByColum
   );
 
   const header = (
-    <Flexbox horizontal align={'center'} className={styles.header} gap={6}>
-      <BackButton title={t('fleet.backToHome')} to={'/'} />
-      <Text style={{ fontSize: 14, fontWeight: 600 }}>{t('fleet.runningTasks')}</Text>
-      <span className={styles.count}>{columns.length}</span>
-    </Flexbox>
+    <SideBarHeaderLayout
+      backTo={'/'}
+      left={t('fleet.runningTasks')}
+      right={<span className={styles.count}>{columns.length}</span>}
+      showTogglePanelButton={false}
+    />
   );
 
   const body =
@@ -134,7 +130,7 @@ const RunningTaskSidebar = memo<RunningTaskSidebarProps>(({ columns, taskByColum
           <SidebarTaskItem
             column={column}
             key={column.key}
-            task={taskByColumnKey[column.key]}
+            status={statusByColumnKey[column.key]}
             onActivate={handleActivate}
           />
         ))}

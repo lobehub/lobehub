@@ -1,13 +1,21 @@
 'use client';
 
-import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import {
+  DndContext,
+  type DragEndEvent,
+  type Modifier,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
 import { arrayMove, horizontalListSortingStrategy, SortableContext } from '@dnd-kit/sortable';
-import { type TaskItem } from '@lobechat/types';
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { LayersIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { type ChatTopicStatus } from '@/types/topic';
 
 import AddColumnButton from './AddColumnButton';
 import AgentColumn from './AgentColumn';
@@ -25,13 +33,16 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+// Reorder is horizontal-only — lock the drag transform to the X axis.
+const restrictToHorizontalAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 });
+
 interface ColumnsBoardProps {
   /** Live running columns — used by the trailing "+" menu to re-add closed ones. */
   runningColumns: FleetColumn[];
-  taskByColumnKey: Record<string, TaskItem>;
+  statusByColumnKey: Record<string, ChatTopicStatus | undefined>;
 }
 
-const ColumnsBoard = memo<ColumnsBoardProps>(({ runningColumns, taskByColumnKey }) => {
+const ColumnsBoard = memo<ColumnsBoardProps>(({ runningColumns, statusByColumnKey }) => {
   const { t } = useTranslation('electron');
   const columns = useFleetStore((s) => s.columns);
   const reorderColumns = useFleetStore((s) => s.reorderColumns);
@@ -64,11 +75,11 @@ const ColumnsBoard = memo<ColumnsBoardProps>(({ runningColumns, taskByColumnKey 
   }
 
   return (
-    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+    <DndContext modifiers={[restrictToHorizontalAxis]} sensors={sensors} onDragEnd={handleDragEnd}>
       <div className={styles.board}>
         <SortableContext items={columns.map((c) => c.key)} strategy={horizontalListSortingStrategy}>
           {columns.map((column) => (
-            <AgentColumn column={column} key={column.key} task={taskByColumnKey[column.key]} />
+            <AgentColumn column={column} key={column.key} status={statusByColumnKey[column.key]} />
           ))}
         </SortableContext>
         <AddColumnButton columns={runningColumns} />

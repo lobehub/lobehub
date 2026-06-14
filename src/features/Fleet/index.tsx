@@ -8,7 +8,7 @@ import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 import ColumnsBoard from './ColumnsBoard';
 import RunningTaskSidebar from './RunningTaskSidebar';
 import { useFleetStore } from './store';
-import { useRunningTasks } from './useRunningTasks';
+import { useRunningTopics } from './useRunningTopics';
 
 /**
  * FleetView — a side-by-side dashboard of running agent tasks. The running-task
@@ -21,7 +21,7 @@ const FleetView = memo(() => {
   // (avatar/title) — otherwise a fresh entry shows the default-assistant fallback.
   useFetchAgentList();
 
-  const { columns, isInit, taskByColumnKey } = useRunningTasks();
+  const { columns, isInit, statusByColumnKey } = useRunningTopics();
   const seedColumns = useFleetStore((s) => s.seedColumns);
 
   // Default: show all currently-running topics, one column each. Seeds once
@@ -33,8 +33,8 @@ const FleetView = memo(() => {
 
   return (
     <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
-      <RunningTaskSidebar columns={columns} taskByColumnKey={taskByColumnKey} />
-      <ColumnsBoard runningColumns={columns} taskByColumnKey={taskByColumnKey} />
+      <RunningTaskSidebar columns={columns} statusByColumnKey={statusByColumnKey} />
+      <ColumnsBoard runningColumns={columns} statusByColumnKey={statusByColumnKey} />
     </Flexbox>
   );
 });

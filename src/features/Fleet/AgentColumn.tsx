@@ -2,7 +2,6 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { type TaskItem } from '@lobechat/types';
 import { ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { GripVertical, MessageSquareIcon, XIcon } from 'lucide-react';
@@ -16,6 +15,7 @@ import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { type ChatTopicStatus } from '@/types/topic';
 
 import { resolveStatusTone } from './status';
 import StatusBadge from './StatusBadge';
@@ -40,10 +40,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex: none;
     height: 100%;
     border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
-
-    &:hover .fleet-col-resize {
-      opacity: 1;
-    }
   `,
   dragging: css`
     z-index: 2;
@@ -94,6 +90,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
       background: ${cssVar.colorPrimaryBorder};
     }
+
+    &:hover {
+      opacity: 1;
+    }
   `,
 }));
 
@@ -102,10 +102,10 @@ const buildChatPath = (column: FleetColumn) =>
 
 interface AgentColumnProps {
   column: FleetColumn;
-  task: TaskItem | undefined;
+  status: ChatTopicStatus | undefined;
 }
 
-const AgentColumn = memo<AgentColumnProps>(({ column, task }) => {
+const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
   const { t } = useTranslation('electron');
   const navigate = useWorkspaceAwareNavigate();
   const meta = useAgentDisplayMeta(column.agentId);
@@ -122,7 +122,7 @@ const AgentColumn = memo<AgentColumnProps>(({ column, task }) => {
   const replaceMessages = useChatStore((s) => s.replaceMessages);
   const operationState = useOperationState(context);
   const liveRunning = useChatStore(operationSelectors.isAgentRuntimeRunningByContext(context));
-  const tone = resolveStatusTone(task?.status, liveRunning);
+  const tone = resolveStatusTone(status ?? undefined, liveRunning);
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: column.key,
@@ -197,7 +197,7 @@ const AgentColumn = memo<AgentColumnProps>(({ column, task }) => {
             style={{ color: cssVar.colorTextSecondary, flex: 1, fontSize: 13 }}
             title={column.fallbackTitle}
           >
-            {task?.name || column.fallbackTitle}
+            {column.fallbackTitle}
           </Text>
           <StatusBadge tone={tone} />
         </Flexbox>

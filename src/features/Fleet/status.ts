@@ -10,8 +10,7 @@ export type StatusTone = 'idle' | 'paused' | 'running' | 'scheduled';
  */
 export const resolveStatusTone = (status: string | undefined, liveRunning: boolean): StatusTone => {
   if (liveRunning || status === 'running') return 'running';
-  if (status === 'scheduled') return 'scheduled';
-  if (status === 'paused' || status === 'needsInput') return 'paused';
+  if (status === 'paused' || status === 'waitingForHuman') return 'paused';
   return 'idle';
 };
 
