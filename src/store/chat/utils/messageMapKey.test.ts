@@ -79,6 +79,34 @@ describe('messageMapKey', () => {
     });
   });
 
+  describe('Page mode', () => {
+    it('should bind a page conversation to the open document id', () => {
+      const result = messageMapKey({ scope: 'page', agentId: 'agt_page', documentId: 'doc_aaa' });
+      expect(result).toBe('page_agt_page_doc_aaa');
+    });
+
+    it('should isolate different documents sharing the same page agent', () => {
+      const a = messageMapKey({ scope: 'page', agentId: 'agt_page', documentId: 'doc_aaa' });
+      const b = messageMapKey({ scope: 'page', agentId: 'agt_page', documentId: 'doc_bbb' });
+      expect(a).not.toBe(b);
+    });
+
+    it('should fall back to the new bucket when no document is open', () => {
+      const result = messageMapKey({ scope: 'page', agentId: 'agt_page' });
+      expect(result).toBe('page_agt_page_new');
+    });
+
+    it('should include topicId alongside documentId when a page topic exists', () => {
+      const result = messageMapKey({
+        scope: 'page',
+        agentId: 'agt_page',
+        documentId: 'doc_aaa',
+        topicId: 'tpc_yyy',
+      });
+      expect(result).toBe('page_agt_page_tpc_yyy_doc_aaa');
+    });
+  });
+
   describe('Group mode with groupId (auto-detected)', () => {
     it('should auto-detect group scope when groupId is present', () => {
       const result = messageMapKey({

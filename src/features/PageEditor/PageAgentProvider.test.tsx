@@ -70,8 +70,12 @@ vi.mock('@/store/chat', () => ({
 }));
 
 vi.mock('@/store/chat/utils/messageMapKey', () => ({
-  messageMapKey: (context: { agentId?: string; scope?: string; topicId?: string | null }) =>
-    `${context.scope}_${context.agentId}_${context.topicId ?? 'new'}`,
+  messageMapKey: (context: {
+    agentId?: string;
+    documentId?: string | null;
+    scope?: string;
+    topicId?: string | null;
+  }) => `${context.scope}_${context.agentId}_${context.topicId ?? context.documentId ?? 'new'}`,
 }));
 
 beforeEach(() => {
