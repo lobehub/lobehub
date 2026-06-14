@@ -11,6 +11,7 @@ import DeviceGateway from '../connection/DeviceGateway';
 import { useTabNavigation } from '../navigation/useTabNavigation';
 import { useWatchThemeUpdate } from '../system/useWatchThemeUpdate';
 import { UpdateNotification } from '../updater/UpdateNotification';
+import FleetButton from './FleetButton';
 import { getTitleBarLayoutConfig } from './layout';
 import NavigationBar from './NavigationBar';
 import TabBar from './TabBar';
@@ -40,6 +41,7 @@ const TitleBar = memo(() => {
       <Flexbox horizontal align={'center'} gap={4}>
         <Flexbox horizontal className={electronStylish.nodrag} gap={8}>
           <UpdateNotification />
+          <FleetButton />
           <DeviceGateway />
           <Connection />
         </Flexbox>

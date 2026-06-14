@@ -52,6 +52,7 @@ const WORKSPACE_SETTINGS_NAV_KEY = 'workspace-settings';
 const DEDICATED_ROUTE_NAV_SEGMENTS = new Set([
   'community',
   'eval',
+  'fleet',
   'group',
   'image',
   'memory',

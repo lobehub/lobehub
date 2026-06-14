@@ -8,6 +8,9 @@ export default {
   'features.assistantMessageGroup.desc':
     'Group agent messages and their tool call results together for display',
   'features.assistantMessageGroup.title': 'Agent Message Grouping',
+  'features.fleet.desc':
+    'Show the Fleet entry in the title bar — a side-by-side dashboard of all running tasks across your agents.',
+  'features.fleet.title': 'Fleet View',
   'features.imessage.desc':
     'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
   'features.imessage.title': 'iMessage Channel',

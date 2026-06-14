@@ -104,6 +104,13 @@ export const sharedMainAreaChildren: RouteObject[] = [
     path: 'agent',
   },
 
+  // Fleet view (side-by-side agent dashboard)
+  {
+    element: dynamicElement(() => import('@/routes/(main)/fleet'), 'Desktop > Fleet'),
+    errorElement: <ErrorBoundary />,
+    path: 'fleet',
+  },
+
   // Group chat routes
   {
     children: [

@@ -5,6 +5,8 @@
   "features.agentSelfIteration.title": "Agent 自我迭代",
   "features.assistantMessageGroup.desc": "将代理消息及其工具调用结果组合在一起显示",
   "features.assistantMessageGroup.title": "代理消息分组",
+  "features.fleet.desc": "在标题栏显示 Fleet 入口——把当前账号下所有运行中的任务并排展示的看板。",
+  "features.fleet.title": "Fleet 并排视图",
   "features.groupChat.desc": "启用多代理协同群聊功能。",
   "features.groupChat.title": "群聊（多代理）",
   "features.imessage.desc": "通过本地 LobeHub 桌面 BlueBubbles 桥接器将代理连接到 iMessage。",
