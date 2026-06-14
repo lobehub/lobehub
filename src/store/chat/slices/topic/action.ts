@@ -926,6 +926,25 @@ export class ChatTopicActionImpl {
     switchTopic(null);
   };
 
+  batchMoveTopicsToAgent = async (topicIds: string[], targetAgentId: string): Promise<void> => {
+    if (topicIds.length === 0) return;
+
+    const { activeTopicId, switchTopic, refreshTopic, purgeUnreadTopics } = this.#get();
+
+    await topicService.batchMoveTopics(topicIds, targetAgentId);
+
+    // Moved topics leave the current agent's list — drop them locally so the UI
+    // updates immediately, then refetch to reconcile with the server.
+    topicIds.forEach((id) =>
+      this.#get().internal_dispatchTopic({ type: 'deleteTopic', id }, 'batchMoveTopicsToAgent'),
+    );
+    purgeUnreadTopics(topicIds);
+    await refreshTopic();
+
+    // If the active topic was moved away, fall back to the default topic.
+    if (activeTopicId && topicIds.includes(activeTopicId)) switchTopic(null);
+  };
+
   internal_updateTopicTitleInSummary = (id: string, title: string): void => {
     this.#get().internal_dispatchTopic(
       { type: 'updateTopic', id, value: { title } },
