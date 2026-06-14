@@ -1977,7 +1977,6 @@
   "workspace.wizard.step1.slug.invalidReserved": "Dieser Slug ist reserviert. Bitte wählen Sie einen anderen.",
   "workspace.wizard.step1.slug.label": "Workspace-URL",
   "workspace.wizard.step1.slug.placeholder": "beispiel-team",
-  "workspace.wizard.step1.slug.prefix": "lobehub.com/",
   "workspace.wizard.step1.slug.required": "Workspace-URL ist erforderlich",
   "workspace.wizard.step1.slug.taken": "Diese URL ist bereits vergeben",
   "workspace.wizard.step1.subtitle": "Agenten-Kollaboration mit Ihrem Team freischalten",

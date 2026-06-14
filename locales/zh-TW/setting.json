@@ -1977,7 +1977,6 @@
   "workspace.wizard.step1.slug.invalidReserved": "該 URL 已被保留。請選擇其他。",
   "workspace.wizard.step1.slug.label": "工作空間 URL",
   "workspace.wizard.step1.slug.placeholder": "example-team",
-  "workspace.wizard.step1.slug.prefix": "lobehub.com/",
   "workspace.wizard.step1.slug.required": "工作空間 URL 為必填項目",
   "workspace.wizard.step1.slug.taken": "此 URL 已被使用",
   "workspace.wizard.step1.subtitle": "與您的團隊解鎖代理協作",

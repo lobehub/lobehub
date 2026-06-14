@@ -1977,7 +1977,6 @@
   "workspace.wizard.step1.slug.invalidReserved": "این slug رزرو شده است. لطفاً یکی دیگر را انتخاب کنید.",
   "workspace.wizard.step1.slug.label": "URL فضای کاری",
   "workspace.wizard.step1.slug.placeholder": "تیم-نمونه",
-  "workspace.wizard.step1.slug.prefix": "lobehub.com/",
   "workspace.wizard.step1.slug.required": "URL فضای کاری الزامی است",
   "workspace.wizard.step1.slug.taken": "این URL قبلاً گرفته شده است",
   "workspace.wizard.step1.subtitle": "باز کردن همکاری نمایندگان با اعضای تیم خود",

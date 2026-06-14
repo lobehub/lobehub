@@ -1977,7 +1977,6 @@
   "workspace.wizard.step1.slug.invalidReserved": "Този URL адрес е запазен. Моля, изберете друг.",
   "workspace.wizard.step1.slug.label": "URL адрес на работното пространство",
   "workspace.wizard.step1.slug.placeholder": "example-team",
-  "workspace.wizard.step1.slug.prefix": "lobehub.com/",
   "workspace.wizard.step1.slug.required": "URL адресът на работното пространство е задължителен",
   "workspace.wizard.step1.slug.taken": "Този URL адрес вече е зает",
   "workspace.wizard.step1.subtitle": "Отключете сътрудничеството на агенти с вашите съотборници",

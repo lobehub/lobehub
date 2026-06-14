@@ -1977,7 +1977,6 @@
   "workspace.wizard.step1.slug.invalidReserved": "이 슬러그는 예약되어 있습니다. 다른 것을 선택하세요.",
   "workspace.wizard.step1.slug.label": "워크스페이스 URL",
   "workspace.wizard.step1.slug.placeholder": "예: 팀 이름",
-  "workspace.wizard.step1.slug.prefix": "lobehub.com/",
   "workspace.wizard.step1.slug.required": "워크스페이스 URL은 필수입니다",
   "workspace.wizard.step1.slug.taken": "이 URL은 이미 사용 중입니다",
   "workspace.wizard.step1.subtitle": "팀원과 에이전트 협업을 잠금 해제하세요",

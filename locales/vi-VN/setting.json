@@ -1977,7 +1977,6 @@
   "workspace.wizard.step1.slug.invalidReserved": "Slug này đã được dành riêng. Vui lòng chọn một slug khác.",
   "workspace.wizard.step1.slug.label": "URL không gian làm việc",
   "workspace.wizard.step1.slug.placeholder": "nhóm-vi-du",
-  "workspace.wizard.step1.slug.prefix": "lobehub.com/",
   "workspace.wizard.step1.slug.required": "URL không gian làm việc là bắt buộc",
   "workspace.wizard.step1.slug.taken": "URL này đã được sử dụng",
   "workspace.wizard.step1.subtitle": "Mở khóa Cộng tác Đại lý Với Đồng đội của Bạn",

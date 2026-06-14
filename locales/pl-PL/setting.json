@@ -1977,7 +1977,6 @@
   "workspace.wizard.step1.slug.invalidReserved": "Ten slug jest zarezerwowany. Proszę wybrać inny.",
   "workspace.wizard.step1.slug.label": "URL przestrzeni roboczej",
   "workspace.wizard.step1.slug.placeholder": "przykladowy-zespol",
-  "workspace.wizard.step1.slug.prefix": "lobehub.com/",
   "workspace.wizard.step1.slug.required": "URL przestrzeni roboczej jest wymagany",
   "workspace.wizard.step1.slug.taken": "Ten URL jest już zajęty",
   "workspace.wizard.step1.subtitle": "Odblokuj współpracę agentów ze swoimi współpracownikami",

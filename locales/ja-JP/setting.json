@@ -1977,7 +1977,6 @@
   "workspace.wizard.step1.slug.invalidReserved": "そのスラッグは予約されています。別のものを選んでください。",
   "workspace.wizard.step1.slug.label": "ワークスペースURL",
   "workspace.wizard.step1.slug.placeholder": "例: チーム名",
-  "workspace.wizard.step1.slug.prefix": "lobehub.com/",
   "workspace.wizard.step1.slug.required": "ワークスペースURLは必須です",
   "workspace.wizard.step1.slug.taken": "このURLはすでに使用されています",
   "workspace.wizard.step1.subtitle": "チームメイトとエージェントのコラボレーションをアンロック",

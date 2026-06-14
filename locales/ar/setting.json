@@ -1977,7 +1977,6 @@
   "workspace.wizard.step1.slug.invalidReserved": "هذا العنوان محجوز. يرجى اختيار عنوان آخر.",
   "workspace.wizard.step1.slug.label": "عنوان URL الخاص بمساحة العمل",
   "workspace.wizard.step1.slug.placeholder": "example-team",
-  "workspace.wizard.step1.slug.prefix": "lobehub.com/",
   "workspace.wizard.step1.slug.required": "عنوان URL الخاص بمساحة العمل مطلوب",
   "workspace.wizard.step1.slug.taken": "عنوان URL هذا مستخدم بالفعل",
   "workspace.wizard.step1.subtitle": "افتح تعاون الوكلاء مع زملائك في الفريق",

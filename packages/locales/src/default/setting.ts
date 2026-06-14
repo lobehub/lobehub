@@ -2015,7 +2015,6 @@ When I am ___, I need ___
   'workspace.wizard.step1.slug.invalidReserved': 'That slug is reserved. Please choose another.',
   'workspace.wizard.step1.slug.label': 'Workspace URL',
   'workspace.wizard.step1.slug.placeholder': 'example-team',
-  'workspace.wizard.step1.slug.prefix': 'lobehub.com/',
   'workspace.wizard.step1.slug.required': 'Workspace URL is required',
   'workspace.wizard.step1.slug.taken': 'This URL is already taken',
   'workspace.wizard.step1.subtitle': 'Unlock Agent Collaboration With Your Teammates',

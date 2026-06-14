@@ -1977,7 +1977,6 @@
   "workspace.wizard.step1.slug.invalidReserved": "Bu slug rezerve edilmiştir. Lütfen başka bir tane seçin.",
   "workspace.wizard.step1.slug.label": "Çalışma alanı URL'si",
   "workspace.wizard.step1.slug.placeholder": "ornek-ekip",
-  "workspace.wizard.step1.slug.prefix": "lobehub.com/",
   "workspace.wizard.step1.slug.required": "Çalışma alanı URL'si gereklidir",
   "workspace.wizard.step1.slug.taken": "Bu URL zaten alınmış",
   "workspace.wizard.step1.subtitle": "Ekip arkadaşlarınızla Ajan İş Birliğinin Kilidini Açın",

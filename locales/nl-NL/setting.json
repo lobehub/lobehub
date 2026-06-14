@@ -1977,7 +1977,6 @@
   "workspace.wizard.step1.slug.invalidReserved": "Die slug is gereserveerd. Kies een andere.",
   "workspace.wizard.step1.slug.label": "Werkruimte URL",
   "workspace.wizard.step1.slug.placeholder": "voorbeeld-team",
-  "workspace.wizard.step1.slug.prefix": "lobehub.com/",
   "workspace.wizard.step1.slug.required": "Werkruimte URL is verplicht",
   "workspace.wizard.step1.slug.taken": "Deze URL is al in gebruik",
   "workspace.wizard.step1.subtitle": "Ontgrendel Agent Samenwerking Met Uw Teamleden",
