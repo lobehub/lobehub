@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Circle,
   ExternalLink,
+  FolderInput,
   Hash,
   Link2,
   LucideCopy,
@@ -23,6 +24,7 @@ import { useTranslation } from 'react-i18next';
 import { openRenameModal } from '@/components/RenameModal';
 import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { isDesktop } from '@/const/version';
+import { createMoveTopicsModal } from '@/features/AgentTopicManager/MoveTopicsModal';
 import { openShareModal } from '@/features/ShareModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
@@ -194,6 +196,15 @@ export const useTopicItemDropdownMenu = ({
         label: t('actions.duplicate'),
         onClick: () => {
           duplicateTopic(id);
+        },
+      },
+      {
+        disabled: !canEditTopic,
+        icon: <Icon icon={FolderInput} />,
+        key: 'moveToAgent',
+        label: t('actions.moveToAgent'),
+        onClick: () => {
+          createMoveTopicsModal({ sourceAgentId: activeAgentId, topicIds: [id] });
         },
       },
       {
