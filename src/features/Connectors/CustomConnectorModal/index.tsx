@@ -95,8 +95,6 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
     const isEditMode = Boolean(connectorId);
 
     // Build the pre-fill value for edit mode from the stored connector.
-    // Credentials are never sent from the server (they're encrypted at rest),
-    // so auth type is inferred from oidcConfig presence alone.
     const editValue = useMemo((): LobeToolCustomPlugin | undefined => {
       if (!isEditMode || !connector) return undefined;
 
@@ -108,7 +106,17 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       const oidcConfig = c.oidcConfig;
       const mcpStdioConfig = c.mcpStdioConfig;
 
-      const authType = oidcConfig ? 'oauth2' : 'none';
+      const credentials = (c as typeof c & {
+        credentials?: { headers?: Record<string, string>; token?: string; type?: string };
+      }).credentials;
+
+      const authType = oidcConfig
+        ? 'oauth2'
+        : credentials?.type === 'bearer'
+          ? 'bearer'
+          : credentials?.type === 'header'
+            ? 'header'
+            : 'none';
 
       return {
         customParams: {
@@ -116,10 +124,12 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
             args: mcpStdioConfig?.args,
             auth: {
               clientId: oidcConfig?.clientId,
+              token: authType === 'bearer' ? credentials?.token : undefined,
               type: authType,
             },
             command: mcpStdioConfig?.command,
             env: mcpStdioConfig?.env,
+            headers: authType === 'header' ? credentials?.headers : undefined,
             type: (connector.mcpConnectionType ?? 'http') as 'http' | 'stdio',
             url: connector.mcpServerUrl ?? undefined,
           },
@@ -180,6 +190,24 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
           connectorId,
           patch,
         );
+
+        if (authType === 'oauth2' && isHttp) {
+          const popup = ctx?.oauthPopup ?? null;
+          if (!popup) throw new Error('OAuth popup was blocked');
+          try {
+            const authorizationUrl = await startConnectorOAuth(connectorId);
+            popup.location.href = authorizationUrl;
+            const result = await waitForOAuthPopup(popup, connectorId);
+            await fetchConnectors();
+            if (result.status !== 'success') {
+              throw new Error(result.error || 'Authorization was not completed');
+            }
+          } catch (e) {
+            if (!popup.closed) popup.close();
+            throw e;
+          }
+        }
+
         onEditSuccess?.();
         return;
       }
@@ -245,7 +273,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
     return (
       <DevModal
-        enableOAuth={!isEditMode}
+        enableOAuth
         mode={isEditMode ? 'edit' : 'create'}
         open={open}
         value={editValue}
