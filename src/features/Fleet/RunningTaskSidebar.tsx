@@ -1,6 +1,6 @@
 'use client';
 
-import { Avatar, Button, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { PlusIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
@@ -121,32 +121,36 @@ const RunningTaskSidebar = memo<RunningTaskSidebarProps>(({ columns, statusByCol
     <SideBarHeaderLayout
       backTo={'/'}
       left={t('fleet.runningTasks')}
-      right={<span className={styles.count}>{columns.length}</span>}
       showTogglePanelButton={false}
+      right={
+        <Flexbox horizontal align={'center'} gap={6}>
+          <ActionIcon
+            icon={PlusIcon}
+            size={'small'}
+            title={t('fleet.createTask')}
+            onClick={handleCreateTask}
+          />
+          <span className={styles.count}>{columns.length}</span>
+        </Flexbox>
+      }
     />
   );
 
-  const body = (
-    <Flexbox gap={8} paddingBlock={'4px 12px'} paddingInline={8}>
-      <Button block icon={PlusIcon} variant={'filled'} onClick={handleCreateTask}>
-        {t('fleet.createTask')}
-      </Button>
-      {columns.length === 0 ? (
-        <div className={styles.empty}>{t('fleet.noRunningTasks')}</div>
-      ) : (
-        <Flexbox gap={2}>
-          {columns.map((column) => (
-            <SidebarTaskItem
-              column={column}
-              key={column.key}
-              status={statusByColumnKey[column.key]}
-              onActivate={handleActivate}
-            />
-          ))}
-        </Flexbox>
-      )}
-    </Flexbox>
-  );
+  const body =
+    columns.length === 0 ? (
+      <div className={styles.empty}>{t('fleet.noRunningTasks')}</div>
+    ) : (
+      <Flexbox gap={2} paddingBlock={'4px 12px'} paddingInline={8}>
+        {columns.map((column) => (
+          <SidebarTaskItem
+            column={column}
+            key={column.key}
+            status={statusByColumnKey[column.key]}
+            onActivate={handleActivate}
+          />
+        ))}
+      </Flexbox>
+    );
 
   return (
     <NavPanelPortal navKey={'fleet'}>

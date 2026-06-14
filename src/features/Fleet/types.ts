@@ -14,6 +14,8 @@ export interface FleetColumn {
   taskIdentifier?: string;
   threadId: string | null;
   topicId: string | null;
+  /** Topic working directory (CC session cwd / repo), for the column subtitle. */
+  workingDirectory?: string | null;
 }
 
 /** Stable, content-derived key so a given agent+topic always maps to one column. */

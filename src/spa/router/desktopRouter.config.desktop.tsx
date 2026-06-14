@@ -16,6 +16,7 @@ import {
   BusinessDesktopRoutesWithoutMainLayout,
 } from '@/business/client/BusinessDesktopRoutes';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
+import { fleetRouteMeta } from '@/features/Fleet/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import DesktopOnboarding from '@/routes/(desktop)/desktop-onboarding';
 // Layouts — sync import (Electron local, no network overhead)
@@ -181,6 +182,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
   {
     element: <FleetPage />,
     errorElement: <ErrorBoundary />,
+    handle: { meta: fleetRouteMeta },
     path: 'fleet',
   },
 

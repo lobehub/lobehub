@@ -20,7 +20,6 @@ import { type ChatTopicStatus } from '@/types/topic';
 import AddColumnButton from './AddColumnButton';
 import AgentColumn from './AgentColumn';
 import { useFleetStore } from './store';
-import { type FleetColumn } from './types';
 
 const styles = createStaticStyles(({ css }) => ({
   board: css`
@@ -37,12 +36,10 @@ const styles = createStaticStyles(({ css }) => ({
 const restrictToHorizontalAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 });
 
 interface ColumnsBoardProps {
-  /** Live running columns — used by the trailing "+" menu to re-add closed ones. */
-  runningColumns: FleetColumn[];
   statusByColumnKey: Record<string, ChatTopicStatus | undefined>;
 }
 
-const ColumnsBoard = memo<ColumnsBoardProps>(({ runningColumns, statusByColumnKey }) => {
+const ColumnsBoard = memo<ColumnsBoardProps>(({ statusByColumnKey }) => {
   const { t } = useTranslation('electron');
   const columns = useFleetStore((s) => s.columns);
   const reorderColumns = useFleetStore((s) => s.reorderColumns);
@@ -62,18 +59,6 @@ const ColumnsBoard = memo<ColumnsBoardProps>(({ runningColumns, statusByColumnKe
     [reorderColumns],
   );
 
-  if (columns.length === 0) {
-    return (
-      <Flexbox align={'center'} flex={1} gap={8} justify={'center'}>
-        <Icon icon={LayersIcon} size={40} style={{ color: 'var(--lobe-color-text-quaternary)' }} />
-        <Text style={{ fontSize: 15, fontWeight: 500 }}>{t('fleet.empty')}</Text>
-        <Text style={{ color: 'var(--lobe-color-text-tertiary)', fontSize: 13 }}>
-          {t('fleet.emptyDesc')}
-        </Text>
-      </Flexbox>
-    );
-  }
-
   return (
     <DndContext modifiers={[restrictToHorizontalAxis]} sensors={sensors} onDragEnd={handleDragEnd}>
       <div className={styles.board}>
@@ -82,7 +67,20 @@ const ColumnsBoard = memo<ColumnsBoardProps>(({ runningColumns, statusByColumnKe
             <AgentColumn column={column} key={column.key} status={statusByColumnKey[column.key]} />
           ))}
         </SortableContext>
-        <AddColumnButton columns={runningColumns} />
+        {columns.length === 0 ? (
+          <Flexbox align={'center'} flex={1} gap={8} justify={'center'}>
+            <Icon
+              icon={LayersIcon}
+              size={40}
+              style={{ color: 'var(--lobe-color-text-quaternary)' }}
+            />
+            <Text style={{ fontSize: 15, fontWeight: 500 }}>{t('fleet.empty')}</Text>
+            <Text style={{ color: 'var(--lobe-color-text-tertiary)', fontSize: 13 }}>
+              {t('fleet.emptyDesc')}
+            </Text>
+          </Flexbox>
+        ) : null}
+        <AddColumnButton />
       </div>
     </DndContext>
   );

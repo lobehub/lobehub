@@ -1,13 +1,16 @@
 'use client';
 
-import { type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { PlusIcon } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AssigneeAgentSelector from '@/features/AgentTasks/features/AssigneeAgentSelector';
+import { topicService } from '@/services/topic';
+
 import { useFleetStore } from './store';
-import { type FleetColumn } from './types';
+import { fleetColumnKey } from './types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   trigger: css`
@@ -32,37 +35,36 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-interface AddColumnButtonProps {
-  columns: FleetColumn[];
-}
-
 /**
- * Trailing "+" affordance at the right edge of the board. Opens a menu of
- * running tasks not currently shown so a closed column can be re-added.
+ * Trailing "+" at the right edge of the board. Opens an agent picker; selecting
+ * an agent creates a fresh topic for it and opens it as a new column ready to
+ * receive messages.
  */
-const AddColumnButton = memo<AddColumnButtonProps>(({ columns }) => {
-  const { t } = useTranslation('electron');
-  const openColumns = useFleetStore((s) => s.columns);
+const AddColumnButton = memo(() => {
+  const { t } = useTranslation(['electron', 'topic']);
   const addColumn = useFleetStore((s) => s.addColumn);
 
-  const items = useMemo<DropdownItem[]>(() => {
-    const openKeySet = new Set(openColumns.map((c) => c.key));
-    const available = columns.filter((c) => !openKeySet.has(c.key));
-    if (available.length === 0)
-      return [{ disabled: true, key: '__empty__', label: t('fleet.allShown') }];
-    return available.map((column) => ({
-      key: column.key,
-      label: column.fallbackTitle,
-      onClick: () => addColumn(column),
-    }));
-  }, [columns, openColumns, addColumn, t]);
+  const handleSelectAgent = useCallback(
+    async (agentId: string) => {
+      const title = t('defaultTitle', { ns: 'topic' });
+      const topicId = await topicService.createTopic({ agentId, messages: [], title });
+      const key = fleetColumnKey(agentId, topicId);
+      addColumn({ agentId, fallbackTitle: title, key, threadId: null, topicId });
+      requestAnimationFrame(() => {
+        document
+          .querySelector(`[data-fleet-col="${CSS.escape(key)}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'end' });
+      });
+    },
+    [addColumn, t],
+  );
 
   return (
-    <DropdownMenu items={items} placement={'bottomRight'}>
+    <AssigneeAgentSelector onChange={handleSelectAgent}>
       <div className={styles.trigger} title={t('fleet.addColumn')}>
         <Icon icon={PlusIcon} size={20} />
       </div>
-    </DropdownMenu>
+    </AssigneeAgentSelector>
   );
 });
 

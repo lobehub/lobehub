@@ -2,19 +2,29 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ActionIcon, Avatar, Button, Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
-import { GripVertical, MessageCirclePlus, MessageSquareIcon, XIcon } from 'lucide-react';
+import { ActionIcon, Avatar, Button, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  FolderIcon,
+  GitBranchIcon,
+  GripVertical,
+  MessageCirclePlus,
+  MessageSquareIcon,
+  MoreHorizontalIcon,
+  XIcon,
+} from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import StatusDot from '@/features/AgentTopicManager/StatusDot';
 import { ChatInput, ChatList, ConversationProvider } from '@/features/Conversation';
-import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import OpStatusTray from '@/features/Conversation/ChatInput/OpStatusTray';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { useFetchGitInfo } from '@/store/device/gitHooks';
+import { useElectronStore } from '@/store/electron';
 import { type ChatTopicStatus } from '@/types/topic';
 
 import { useFleetStore } from './store';
@@ -41,19 +51,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   dragging: css`
     z-index: 2;
-    box-shadow: inset 0 0 0 1px ${cssVar.colorBorder};
 
-    /* tint overlay above the column content while dragging */
-    &::before {
-      pointer-events: none;
-      content: '';
-
-      position: absolute;
-      z-index: 5;
-      inset: 0;
-
-      background: ${cssVar.colorFillTertiary};
-    }
+    /* opaque while dragging so it doesn't show columns underneath */
+    background: ${cssVar.colorBgContainer};
+    box-shadow:
+      inset 0 0 0 1px ${cssVar.colorBorder},
+      ${cssVar.boxShadowSecondary};
   `,
   grip: css`
     cursor: grab;
@@ -116,6 +119,37 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const buildChatPath = (column: FleetColumn) =>
   column.topicId ? `/agent/${column.agentId}/${column.topicId}` : `/agent/${column.agentId}`;
 
+/** Working directory + git branch subtitle (branch resolved live for local cwd). */
+const WorkingDirRow = memo<{ workingDirectory: string }>(({ workingDirectory }) => {
+  const { data } = useFetchGitInfo(undefined, workingDirectory);
+  const dirName = workingDirectory.split('/').findLast(Boolean) ?? workingDirectory;
+
+  return (
+    <Flexbox
+      horizontal
+      align={'center'}
+      gap={4}
+      paddingInline={'22px 0'}
+      style={{ color: cssVar.colorTextTertiary, overflow: 'hidden' }}
+    >
+      <Icon icon={FolderIcon} size={12} style={{ flex: 'none' }} />
+      <Text ellipsis fontSize={11} style={{ color: 'inherit', flex: 'none', maxWidth: '55%' }}>
+        {dirName}
+      </Text>
+      {data?.branch ? (
+        <>
+          <Icon icon={GitBranchIcon} size={12} style={{ flex: 'none' }} />
+          <Text ellipsis fontSize={11} style={{ color: 'inherit', flex: 1 }}>
+            {data.branch}
+          </Text>
+        </>
+      ) : null}
+    </Flexbox>
+  );
+});
+
+WorkingDirRow.displayName = 'FleetWorkingDirRow';
+
 interface AgentColumnProps {
   column: FleetColumn;
   status: ChatTopicStatus | undefined;
@@ -123,8 +157,8 @@ interface AgentColumnProps {
 
 const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
   const { t } = useTranslation('electron');
-  const navigate = useWorkspaceAwareNavigate();
   const meta = useAgentDisplayMeta(column.agentId);
+  const addTab = useElectronStore((s) => s.addTab);
   const context = useMemo(() => toConversationContext(column), [column]);
 
   const storedWidth = useFleetStore((s) => s.widths[column.key]);
@@ -175,7 +209,7 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
         width,
       }}
     >
-      {/* Column header — topic title (primary), then agent name + status */}
+      {/* Column header — topic title (primary), agent name + status, dir + branch */}
       <Flexbox className={styles.header} gap={4}>
         <Flexbox horizontal align={'center'} gap={6}>
           <span className={cx(styles.grip)} {...attributes} {...listeners}>
@@ -185,12 +219,19 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
             {column.fallbackTitle}
           </Text>
           <Flexbox horizontal align={'center'} gap={2} style={{ flex: 'none' }}>
-            <ActionIcon
-              icon={MessageSquareIcon}
-              size={'small'}
-              title={t('fleet.openInChat')}
-              onClick={() => navigate(buildChatPath(column))}
-            />
+            <DropdownMenu
+              placement={'bottomRight'}
+              items={[
+                {
+                  icon: <Icon icon={MessageSquareIcon} />,
+                  key: 'open-in-chat',
+                  label: t('fleet.openInChat'),
+                  onClick: () => addTab(buildChatPath(column)),
+                },
+              ]}
+            >
+              <ActionIcon icon={MoreHorizontalIcon} size={'small'} />
+            </DropdownMenu>
             <ActionIcon
               icon={XIcon}
               size={'small'}
@@ -212,9 +253,12 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
           </Text>
           <StatusDot status={status ?? 'running'} />
         </Flexbox>
+        {column.workingDirectory ? (
+          <WorkingDirRow workingDirectory={column.workingDirectory} />
+        ) : null}
       </Flexbox>
 
-      {/* Conversation body — ChatList, plus an on-demand reply input */}
+      {/* Conversation body — ChatList, running-op tray, on-demand reply input */}
       <Flexbox className={styles.body}>
         <ConversationProvider
           context={context}
@@ -226,6 +270,7 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
           }}
         >
           <ChatList disableActionsBar />
+          <OpStatusTray />
           {replyOpen ? (
             <ChatInput skipScrollMarginWithList isConfigLoading={messages === undefined} />
           ) : (

@@ -21,6 +21,7 @@ const toColumn = (topic: RunningTopic): FleetColumn | null => {
     key: fleetColumnKey(topic.agentId, topic.id),
     threadId: null,
     topicId: topic.id,
+    workingDirectory: topic.metadata?.workingDirectory ?? null,
   };
 };
 

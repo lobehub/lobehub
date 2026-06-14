@@ -17,6 +17,7 @@ export default {
   'navigation.memoryIdentities': 'Memory - Identities',
   'navigation.memoryPreferences': 'Memory - Preferences',
   'navigation.noPages': 'No pages yet',
+  'navigation.observation': 'Observation Mode',
   'navigation.onboarding': 'Onboarding',
   'navigation.page': 'Page',
   'navigation.pages': 'Pages',
