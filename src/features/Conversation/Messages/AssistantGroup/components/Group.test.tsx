@@ -206,7 +206,10 @@ describe('Group', () => {
     ]);
   });
 
-  it('promotes the first sentence before folding a multi-tool workflow', () => {
+  it('keeps a mixed block full preamble visible above a folded multi-tool workflow', () => {
+    // The whole preamble (every sentence) stays in a visible answer segment; the
+    // workflow fold holds only the tools. Otherwise the prose past the first
+    // sentence would be hidden inside the collapsed-by-default workflow body.
     const { container } = render(
       <Group
         id="assistant-1"
@@ -232,8 +235,8 @@ describe('Group', () => {
 
     expect(sequence).toEqual(['answer-segment', 'workflow-segment']);
     expect(parseAnswerSegment()).toEqual({
-      content: '我先帮你查一下。',
-      contentOverride: '我先帮你查一下。',
+      content: '我先帮你查一下。接下来我会继续整理结果。',
+      contentOverride: '我先帮你查一下。接下来我会继续整理结果。',
       disableMarkdownStreaming: true,
       domId: 'block-1__answer',
       hasError: false,
@@ -244,8 +247,8 @@ describe('Group', () => {
     });
     expect(parseWorkflowSegment()).toEqual([
       {
-        content: '接下来我会继续整理结果。',
-        contentOverride: '接下来我会继续整理结果。',
+        content: '',
+        contentOverride: '',
         disableMarkdownStreaming: true,
         domId: 'block-1__workflow',
         hasError: false,

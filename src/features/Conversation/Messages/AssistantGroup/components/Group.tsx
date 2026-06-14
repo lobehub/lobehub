@@ -53,11 +53,6 @@ interface PartitionedBlocks {
   segments: GroupRenderSegment[];
 }
 
-interface LeadingSentenceSplit {
-  lead: string;
-  remainder: string;
-}
-
 const ANSWER_DOM_ID_SUFFIX = '__answer';
 const WORKFLOW_DOM_ID_SUFFIX = '__workflow';
 
@@ -81,55 +76,6 @@ const hasSubstantiveContent = (block: AssistantContentBlock): boolean => {
 
 const hasReasoningContent = (block: AssistantContentBlock): boolean => {
   return !!block.reasoning?.content?.trim();
-};
-
-const isSentenceBoundary = (content: string, index: number): boolean => {
-  const char = content[index];
-  if (!char) return false;
-  if (char === '。' || char === '！' || char === '？' || char === '!' || char === '?') return true;
-  if (char !== '.') return false;
-
-  const prev = content[index - 1] ?? '';
-  const next = content[index + 1] ?? '';
-  if (/[a-z\d]/i.test(prev) && /[a-z\d]/i.test(next)) return false;
-  if (/\d/.test(prev) && /\d/.test(next)) return false;
-
-  return true;
-};
-
-const extractLeadingSentenceSplit = (block: AssistantContentBlock): LeadingSentenceSplit | null => {
-  const content = block.content ?? '';
-  const trimmed = content.trim();
-
-  if (!trimmed || trimmed === LOADING_FLAT) return null;
-
-  let splitIndex = -1;
-
-  for (let i = 0; i < content.length; i++) {
-    if (!isSentenceBoundary(content, i)) continue;
-    splitIndex = i + 1;
-    break;
-  }
-
-  if (splitIndex === -1) {
-    const paragraphBreak = content.search(/\n\s*\n/);
-    if (paragraphBreak >= 0) splitIndex = paragraphBreak;
-  }
-
-  if (splitIndex === -1) {
-    const firstLineBreak = content.indexOf('\n');
-    if (firstLineBreak >= 0) splitIndex = firstLineBreak;
-  }
-
-  if (splitIndex === -1) return null;
-
-  const lead = content.slice(0, splitIndex).trim();
-  const remainder = content.slice(splitIndex).trimStart();
-
-  if (!lead) return null;
-  if (!remainder && !hasTools(block) && !hasReasoningContent(block) && !block.error) return null;
-
-  return { lead, remainder };
 };
 
 const isTrailingReasoningCandidate = (block: AssistantContentBlock): boolean => {
@@ -194,7 +140,7 @@ const appendWorkflowBlock = (
 const appendWorkflowRangeBlock = (
   segments: GroupRenderSegment[],
   block: AssistantContentBlock,
-  allowLeadingSentencePromotion = false,
+  collapsesIntoWorkflow = false,
 ) => {
   if (block.error) {
     if (hasTools(block)) {
@@ -225,29 +171,27 @@ const appendWorkflowRangeBlock = (
   // (content above the tool). Within one assistant message the model's text
   // always precedes its tool_use — tool_use ends the turn, so any post-tool
   // prose lands in a separate, tool-less block. A mixed block's content is
-  // therefore always a preamble, never a post-tool summary, so there's nothing
-  // to "promote" below the tool. We still peel off a short leading sentence as a
-  // headline above a folded multi-tool workflow (order is preserved either way).
-  const leadingSentenceSplit =
-    allowLeadingSentencePromotion && segments.length === 0 && hasTools(block)
-      ? extractLeadingSentenceSplit(block)
-      : null;
-
-  if (leadingSentenceSplit) {
+  // therefore always a preamble, never a post-tool summary.
+  //
+  // In a single-tool turn the block renders inline as-is (content above its
+  // tool). In a multi-tool turn the tools collapse into a WorkflowCollapse that
+  // defaults to folded once complete, so we lift the full preamble into its own
+  // visible answer segment first and leave only the tool(s) in the fold —
+  // otherwise the explanation would be hidden inside the collapsed body.
+  if (collapsesIntoWorkflow && hasTools(block) && hasSubstantiveContent(block)) {
     appendAnswerBlock(
       segments,
       createAnswerRenderBlock(block, {
-        content: leadingSentenceSplit.lead,
         error: undefined,
-        imageList: undefined,
-        reasoning: undefined,
         tools: undefined,
       }),
     );
     appendWorkflowBlock(
       segments,
       createWorkflowRenderBlock(block, {
-        content: leadingSentenceSplit.remainder,
+        content: '',
+        imageList: undefined,
+        reasoning: undefined,
       }),
     );
     return;
