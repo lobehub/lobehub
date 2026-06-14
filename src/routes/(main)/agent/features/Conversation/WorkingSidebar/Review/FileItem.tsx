@@ -168,7 +168,7 @@ export const FileItemHeader = memo<FileItemHeaderProps>(
           path: revertContext.workingDirectory,
         });
         if (result.success) {
-          message.success(t('workingPanel.review.revert.success', { filePath }));
+          message.success(t('workingPanel.review.revert.success', { fileName }));
           onReverted?.();
         } else {
           message.error(
@@ -187,7 +187,7 @@ export const FileItemHeader = memo<FileItemHeaderProps>(
         setReverting(false);
         setConfirmOpen(false);
       }
-    }, [filePath, onReverted, revertContext, t]);
+    }, [fileName, filePath, onReverted, revertContext, t]);
 
     return (
       <div className={styles.header}>
@@ -226,7 +226,7 @@ export const FileItemHeader = memo<FileItemHeaderProps>(
             <Popconfirm
               arrow={false}
               cancelText={t('workingPanel.review.revert.confirm.cancel')}
-              description={t('workingPanel.review.revert.confirm.description', { filePath })}
+              description={t('workingPanel.review.revert.confirm.description')}
               okButtonProps={{ danger: true, loading: reverting, type: 'primary' }}
               okText={t('workingPanel.review.revert.confirm.ok')}
               open={confirmOpen}
