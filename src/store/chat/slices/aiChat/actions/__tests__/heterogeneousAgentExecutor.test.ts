@@ -3732,7 +3732,12 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       await flush();
 
       resolveSendPrompt!();
-      await executorPromise.catch(() => {});
+      // Clean-completion helper: a successful run MUST resolve. Do NOT swallow the
+      // rejection here — otherwise a regression that makes the happy path reject
+      // (e.g. before the notification side effect runs) would spuriously satisfy the
+      // negative assertions (e.g. isDesktop=false → notification NOT called). Let it
+      // propagate so such a regression fails the test instead of passing silently.
+      await executorPromise;
       await flush();
 
       return { get, store };
@@ -3766,7 +3771,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       await flush();
 
       resolveSendPrompt!();
-      await executorPromise.catch(() => {});
+      // An error TERMINAL is still handled internally (onError / persistTerminalError):
+      // the executor RESOLVES, it does not reject. Don't swallow a rejection — if a
+      // regression makes the error path reject, the negative assertions (no notification,
+      // no drain) must fail rather than be satisfied by an early bail-out.
+      await executorPromise;
       await flush();
 
       return { get, store };
