@@ -339,7 +339,7 @@ export const PageEditor: FC<PageEditorProps> = ({
   const deletePage = usePageStore((s) => s.deletePage);
 
   return (
-    <PageAgentProvider>
+    <PageAgentProvider pageId={pageId}>
       <EditorProvider>
         <PageEditorProvider
           emoji={emoji}
