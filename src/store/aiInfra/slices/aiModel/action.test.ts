@@ -367,7 +367,7 @@ describe('AiModelAction', () => {
         await result.current.refreshAiModelList();
       });
 
-      expect(mutate).toHaveBeenCalledWith(['FETCH_AI_PROVIDER_MODELS', 'test-provider']);
+      expect(mutate).toHaveBeenCalledWith(['aiModel:list', 'test-provider']);
       expect(refreshRuntimeSpy).toHaveBeenCalled();
     });
   });

@@ -196,12 +196,9 @@ export class SessionActionImpl {
     }
   };
 
-  useFetchSessions = (
-    enabled: boolean,
-    isLogin: boolean | undefined,
-  ): SWRResponse<ChatSessionList> => {
+  useFetchSessions = (enabled: boolean): SWRResponse<ChatSessionList> => {
     return useClientDataSWR<ChatSessionList>(
-      enabled ? sessionKeys.list(isLogin) : null,
+      enabled ? sessionKeys.list() : null,
       () => sessionService.getGroupedSessions(),
       {
         fallbackData: {
@@ -318,7 +315,7 @@ export class SessionActionImpl {
   };
 
   refreshSessions = async (): Promise<void> => {
-    await mutate(sessionKeys.list(true));
+    await mutate(sessionKeys.list());
   };
 }
 

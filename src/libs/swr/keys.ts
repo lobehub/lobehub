@@ -33,11 +33,21 @@ const def = <A extends unknown[]>(
 ): KeyFactory<A> => Object.assign(build, { root });
 
 // ---- message ------------------------------------------------------------
+/**
+ * Message cache schema version. Baked into the message list key so a bump
+ * invalidates every persisted message cache entry (e.g. after a message shape
+ * change), without touching other domains. Increment when the cached
+ * `UIChatMessage[]` shape changes incompatibly.
+ */
+export const MESSAGE_CACHE_VERSION = 1;
+
 export const messageKeys = {
-  /** Conversation store messages, keyed by request context. */
-  list: def('message:list', (context: unknown) => ['message:list', context]),
-  /** Legacy chat store messages, keyed by request context. */
-  listLegacy: def('message:listLegacy', (context: unknown) => ['message:listLegacy', context]),
+  /**
+   * Messages for a conversation, keyed by request context + cache version.
+   * Shared by the conversation store and the chat store so a single fetch
+   * serves both.
+   */
+  list: def('message:list', (context: unknown) => ['message:list', context, MESSAGE_CACHE_VERSION]),
 };
 
 // ---- topic --------------------------------------------------------------
@@ -63,18 +73,18 @@ export const topicKeys = {
 // ---- agent --------------------------------------------------------------
 export const agentKeys = {
   /** Sidebar agent list. */
-  list: def('agent:list', (isLogin: boolean) => ['agent:list', isLogin]),
+  list: def('agent:list', () => ['agent:list']),
 };
 
 // ---- group --------------------------------------------------------------
 export const groupKeys = {
   detail: def('group:detail', (groupId: string) => ['group:detail', groupId]),
-  list: def('group:list', (isLogin: boolean) => ['group:list', isLogin]),
+  list: def('group:list', () => ['group:list']),
 };
 
 // ---- session ------------------------------------------------------------
 export const sessionKeys = {
-  list: def('session:list', (isLogin: boolean | undefined) => ['session:list', isLogin]),
+  list: def('session:list', () => ['session:list']),
   search: def('session:search', (keyword?: string) => ['session:search', keyword]),
 };
 
@@ -87,8 +97,8 @@ export const threadKeys = {
 export const recentKeys = {
   /** Home "all recents" drawer list, keyed by open state. */
   allDrawer: def('recent:allDrawer', (open: boolean) => ['recent:allDrawer', open]),
-  /** Home recents list, keyed by login + limit. */
-  list: def('recent:list', (isLogin: boolean, limit: number) => ['recent:list', isLogin, limit]),
+  /** Home recents list, keyed by limit. */
+  list: def('recent:list', (limit: number) => ['recent:list', limit]),
 };
 
 // ---- task ---------------------------------------------------------------
@@ -100,7 +110,53 @@ export const taskKeys = {
 
 // ---- brief --------------------------------------------------------------
 export const briefKeys = {
-  list: def('brief:list', (isLogin: boolean) => ['brief:list', isLogin]),
+  list: def('brief:list', () => ['brief:list']),
+};
+
+// ---- agent config / available / search ----------------------------------
+// (agentKeys.list defined above)
+export const agentConfigKeys = {
+  available: def('agent:available', () => ['agent:available']),
+  config: def('agent:config', (agentId: string) => ['agent:config', agentId]),
+  search: def('agent:search', (keyword?: string) => ['agent:search', keyword]),
+};
+
+// ---- aiModel ------------------------------------------------------------
+export const aiModelKeys = {
+  list: def('aiModel:list', (provider: string | undefined) => ['aiModel:list', provider]),
+};
+
+// ---- image generation ---------------------------------------------------
+export const imageKeys = {
+  generationBatches: def('image:generationBatches', (topicId: string) => [
+    'image:generationBatches',
+    topicId,
+  ]),
+  generationStatus: def('image:generationStatus', (generationId: string, asyncTaskId?: string) => [
+    'image:generationStatus',
+    generationId,
+    asyncTaskId,
+  ]),
+  generationTopics: def('image:generationTopics', () => ['image:generationTopics']),
+};
+
+// ---- video generation ---------------------------------------------------
+export const videoKeys = {
+  generationBatches: def('video:generationBatches', (topicId: string) => [
+    'video:generationBatches',
+    topicId,
+  ]),
+  generationStatus: def('video:generationStatus', (generationId: string, asyncTaskId?: string) => [
+    'video:generationStatus',
+    generationId,
+    asyncTaskId,
+  ]),
+  generationTopics: def('video:generationTopics', () => ['video:generationTopics']),
+};
+
+// ---- serverConfig -------------------------------------------------------
+export const serverConfigKeys = {
+  get: 'serverConfig:get' as const,
 };
 
 /**
@@ -117,16 +173,20 @@ export const matchDomain =
  * Aggregate registry — one entry point for every domain's keys.
  */
 export const swrKeys = {
-  agent: agentKeys,
+  agent: { ...agentKeys, ...agentConfigKeys },
   agentDocument: agentDocumentSWRKeys,
+  aiModel: aiModelKeys,
   brief: briefKeys,
   document: documentSWRKeys,
   group: groupKeys,
+  image: imageKeys,
   message: messageKeys,
   notebook: notebookSWRKeys,
   recent: recentKeys,
+  serverConfig: serverConfigKeys,
   session: sessionKeys,
   task: taskKeys,
   thread: threadKeys,
   topic: topicKeys,
+  video: videoKeys,
 };

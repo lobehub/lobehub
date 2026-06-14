@@ -13,8 +13,6 @@ import { type MessageMapKeyInput } from '../../../utils/messageMapKey';
 import { messageMapKey } from '../../../utils/messageMapKey';
 import { reconcileAssistantToolLinks } from '../utils/reconcileTools';
 
-const SWR_USE_FETCH_MESSAGES = 'SWR_USE_FETCH_MESSAGES';
-
 /**
  * Data query and synchronization actions
  * Handles fetching, refreshing, and replacing message data
@@ -37,9 +35,14 @@ export class MessageQueryActionImpl {
   refreshMessages = async (context?: Partial<ConversationContext>): Promise<void> => {
     const agentId = context?.agentId ?? this.#get().activeAgentId;
     const topicId = context?.topicId !== undefined ? context.topicId : this.#get().activeTopicId;
-    // TODO: Support threadId refresh when needed
-    await mutate([SWR_USE_FETCH_MESSAGES, agentId, topicId, 'session']);
-    await mutate([SWR_USE_FETCH_MESSAGES, agentId, topicId, 'group']);
+    // Invalidate every `message:list` entry for this agent+topic (any scope /
+    // thread / page-size variant). The key shape is
+    // `[message:list, ConversationContext, version]`, so match on key[1].
+    await mutate((key) => {
+      if (!Array.isArray(key) || key[0] !== messageKeys.list.root) return false;
+      const ctx = key[1] as ConversationContext | undefined;
+      return !!ctx && ctx.agentId === agentId && ctx.topicId === topicId;
+    });
   };
 
   replaceMessages = (
@@ -137,7 +140,7 @@ export class MessageQueryActionImpl {
     const shouldFetch = !skipFetch && !!context.agentId && !!context.topicId;
 
     return useClientDataSWRWithSync<UIChatMessage[]>(
-      shouldFetch ? messageKeys.listLegacy(context) : null,
+      shouldFetch ? messageKeys.list(context) : null,
       () => messageService.getMessages(context),
       {
         onData: (data) => {

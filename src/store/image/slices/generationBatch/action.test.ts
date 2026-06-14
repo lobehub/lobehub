@@ -404,7 +404,7 @@ describe('GenerationBatchAction', () => {
         await result.current.refreshGenerationBatches();
       });
 
-      expect(mutate).toHaveBeenCalledWith(['SWR_USE_FETCH_GENERATION_BATCHES', topicId]);
+      expect(mutate).toHaveBeenCalledWith(['image:generationBatches', topicId]);
     });
 
     it('should not call mutate when no active topic', async () => {

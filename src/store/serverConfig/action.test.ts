@@ -156,7 +156,7 @@ describe('ServerConfigAction', () => {
       store.getState().useInitServerConfig();
 
       expect(useOnlyFetchOnceSWR).toHaveBeenCalledWith(
-        'FETCH_SERVER_CONFIG',
+        'serverConfig:get',
         expect.any(Function),
         expect.objectContaining({
           onError: expect.any(Function),
@@ -172,7 +172,7 @@ describe('ServerConfigAction', () => {
       store.getState().useInitServerConfig();
 
       expect(useOnlyFetchOnceSWR).toHaveBeenCalledWith(
-        'FETCH_SERVER_CONFIG',
+        'serverConfig:get',
         expect.any(Function),
         expect.any(Object),
       );
