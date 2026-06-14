@@ -1552,13 +1552,27 @@ describe('TopicModel - Query', () => {
       expect(result[0].id).toBe('agent-topic');
     });
 
-    it('should also match legacy sessionId topics when agentId scope is given', async () => {
+    it('should not fall back to the session when scoped by agentId (stays consistent with the list)', async () => {
+      // The agent scope mirrors `query` exactly: it matches by agentId only,
+      // with NO sessionId fallback. A legacy row that another agent owns but
+      // shares the resolved session must not leak into this agent's search,
+      // and un-backfilled rows the list hides must not appear here either.
       await serverDB.transaction(async (tx) => {
-        await tx.insert(agents).values([{ id: 'search-agent', userId }]);
+        await tx.insert(agents).values([
+          { id: 'search-agent', userId },
+          { id: 'other-agent', userId },
+        ]);
         await tx.insert(topics).values([
-          // Migrated: stamped with agentId.
           { id: 'agent-topic', title: 'Hello world', agentId: 'search-agent', userId },
-          // Legacy: not yet backfilled, only the resolved sessionId.
+          // Same session mapping, but already stamped for a DIFFERENT agent.
+          {
+            id: 'other-agent-topic',
+            title: 'Hello world',
+            agentId: 'other-agent',
+            sessionId,
+            userId,
+          },
+          // Legacy, un-backfilled (agentId null) — the list doesn't show it either.
           { id: 'legacy-topic', title: 'Hello legacy', sessionId, userId },
         ]);
       });
@@ -1568,7 +1582,8 @@ describe('TopicModel - Query', () => {
         containerId: sessionId,
       });
 
-      expect(result.map((t) => t.id).sort()).toEqual(['agent-topic', 'legacy-topic']);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('agent-topic');
     });
 
     it('should not leak other agents topics when scoped by agentId', async () => {

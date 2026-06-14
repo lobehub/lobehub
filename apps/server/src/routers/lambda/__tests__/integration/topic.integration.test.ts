@@ -6,7 +6,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { topicRouter } from '../../topic';
-import { cleanupTestUser, createTestContext, createTestUser } from './setup';
+import { cleanupTestUser, createTestAgent, createTestContext, createTestUser } from './setup';
 
 // We need to mock getServerDB to return our test database instance
 let testDB: LobeChatDatabase;
@@ -339,21 +339,15 @@ describe('Topic Router Integration Tests', () => {
     it('should search topics using agentId', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
 
-      // Create test topics
-      await caller.createTopic({
-        title: 'TypeScript Discussion',
-        sessionId: testSessionId,
-      });
+      // Topics are agent-native: stored with agentId directly.
+      await serverDB.insert(topics).values([
+        { agentId: testAgentId, title: 'TypeScript Discussion', userId },
+        { agentId: testAgentId, title: 'JavaScript Basics', userId },
+      ]);
 
-      await caller.createTopic({
-        title: 'JavaScript Basics',
-        sessionId: testSessionId,
-      });
-
-      // Search using agentId
       const result = await caller.searchTopics({
-        keywords: 'TypeScript',
         agentId: testAgentId,
+        keywords: 'TypeScript',
       });
 
       expect(result.length).toBeGreaterThan(0);
@@ -383,6 +377,33 @@ describe('Topic Router Integration Tests', () => {
 
       expect(result.length).toBeGreaterThan(0);
       expect(result[0].title).toBe('rinabrown84@gmail.com');
+    });
+
+    // The agent scope mirrors the topics list exactly (agentId only). A row that
+    // shares this agent's resolved session but is owned by a DIFFERENT agent
+    // must not leak in — the bug the constrained-session-fallback review flagged.
+    it('should not leak another agent topic that shares the session mapping', async () => {
+      const caller = topicRouter.createCaller(createTestContext(userId));
+
+      const otherAgentId = await createTestAgent(serverDB, userId);
+
+      await serverDB.insert(topics).values([
+        { agentId: testAgentId, title: 'mine rinabrown84@gmail.com', userId },
+        // Same session, different agent — used to leak via the session fallback.
+        {
+          agentId: otherAgentId,
+          sessionId: testSessionId,
+          title: 'theirs rinabrown84@gmail.com',
+          userId,
+        },
+      ]);
+
+      const result = await caller.searchTopics({
+        agentId: testAgentId,
+        keywords: 'rinabrown84@gmail.com',
+      });
+
+      expect(result.map((t) => t.title)).toEqual(['mine rinabrown84@gmail.com']);
     });
   });
 

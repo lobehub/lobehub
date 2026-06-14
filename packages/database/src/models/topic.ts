@@ -118,17 +118,12 @@ export interface ModelTimingContext extends TimingSink {}
 export interface TopicKeywordScope {
   agentId?: string | null;
   /**
-   * @deprecated Use agentId or groupId instead. Kept for backward compatibility.
+   * @deprecated Use agentId or groupId instead. Only consulted when neither
+   * agentId nor groupId is provided (legacy / mobile string-arg callers).
    * Container ID (sessionId or groupId) to filter topics by.
    */
   containerId?: string | null;
   groupId?: string | null;
-  /**
-   * When true, the agent scope also adopts legacy orphan rows where every owner
-   * column (session / group / agent) is null — matching the inbox behaviour of
-   * {@link TopicModel.query}.
-   */
-  isInbox?: boolean;
 }
 
 export interface ListTopicsForMemoryExtractorCursor {
@@ -996,33 +991,26 @@ export class TopicModel {
 
   /**
    * Build the WHERE condition that scopes a keyword search to a single
-   * conversation owner. Mirrors {@link TopicModel.query}'s precedence
-   * (groupId > agentId > containerId).
+   * conversation owner. Mirrors {@link TopicModel.query}'s precedence and
+   * conditions exactly (groupId > agentId > containerId), so search returns the
+   * same set the topics list shows.
    *
    * The agent branch matches `topics.agentId` directly — the new agent system
    * stamps every topic with an agentId, and the old `matchContainer` path
-   * (sessionId / groupId only) would miss those rows entirely. It also keeps
-   * matching the resolved containerId (sessionId) so legacy topics that haven't
-   * been backfilled with an agentId yet are still found.
+   * (sessionId / groupId only) would miss those rows entirely. It deliberately
+   * does NOT fall back to the resolved sessionId: the list has no such fallback
+   * either, so adding one would (a) surface un-migrated rows the list hides and
+   * (b) leak topics owned by another agent that shares the same session mapping.
+   * Legacy rows are backfilled with an agentId by the migration the list query
+   * triggers, after which the agentId match finds them.
    */
   private matchKeywordScope = ({
     agentId,
     containerId,
     groupId,
-    isInbox,
   }: TopicKeywordScope): SQL | undefined => {
     if (groupId) return eq(topics.groupId, groupId);
-
-    if (agentId) {
-      const conditions: (SQL | undefined)[] = [eq(topics.agentId, agentId)];
-      if (containerId) conditions.push(eq(topics.sessionId, containerId));
-      if (isInbox)
-        conditions.push(
-          and(isNull(topics.sessionId), isNull(topics.groupId), isNull(topics.agentId)),
-        );
-      return or(...conditions);
-    }
-
+    if (agentId) return eq(topics.agentId, agentId);
     return this.matchContainer(containerId);
   };
 
