@@ -71,11 +71,23 @@ export interface SubagentRun {
 }
 
 export interface SubagentRunsState {
+  /**
+   * `parentToolCallId`s whose subagent already FINALIZED (thread is `Active`).
+   * The run itself is deleted from `runs` on finalize, but the parent is
+   * remembered here so a REPLAYED first-event (cold-replica retry, double IPC
+   * delivery) does NOT fork a brand-new duplicate thread for a spawn that is
+   * already done. Distinct from `runs` on purpose: finalized spawns must block
+   * re-creation WITHOUT being resurrected into the live turn machinery (which
+   * would mint spurious empty assistants / re-finalize churn). Survives turn
+   * boundaries; on the server it is reseeded from DB `Active` isolation threads.
+   */
+  finalizedParents: Set<string>;
   /** Active subagent runs, keyed by `parentToolCallId`. */
   runs: Map<string, SubagentRun>;
 }
 
 export const createSubagentRunsState = (): SubagentRunsState => ({
+  finalizedParents: new Set(),
   runs: new Map(),
 });
 
@@ -124,8 +136,16 @@ export interface SubagentRunSnapshot {
  * instead of forking a new one. `accContent` / `accReasoning` / per-turn
  * `toolState` start empty — the next turn boundary opens a fresh in-thread
  * assistant, and inner tool_results still resolve through `lifetimeToolCallIds`.
+ *
+ * `finalizedParentToolCallIds` seeds {@link SubagentRunsState.finalizedParents}
+ * — `parentToolCallId`s whose thread already finalized (`Active`). These are NOT
+ * live runs (a completed spawn is never resurrected); they only block a replayed
+ * first-event from forking a duplicate thread on a cold replica.
  */
-export const rehydrateSubagentRunsState = (snapshots: SubagentRunSnapshot[]): SubagentRunsState => {
+export const rehydrateSubagentRunsState = (
+  snapshots: SubagentRunSnapshot[],
+  finalizedParentToolCallIds: string[] = [],
+): SubagentRunsState => {
   const runs = new Map<string, SubagentRun>();
   for (const s of snapshots) {
     runs.set(s.parentToolCallId, {
@@ -139,7 +159,7 @@ export const rehydrateSubagentRunsState = (snapshots: SubagentRunSnapshot[]): Su
       toolState: { payloads: [], persistedIds: new Set(), toolMsgIdByCallId: new Map() },
     });
   }
-  return { runs };
+  return { finalizedParents: new Set(finalizedParentToolCallIds), runs };
 };
 
 // ─── Reduce context (per event) ───

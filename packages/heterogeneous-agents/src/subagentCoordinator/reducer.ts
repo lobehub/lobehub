@@ -60,13 +60,25 @@ const withRun = (
 ): SubagentRunsState => {
   const runs = new Map(state.runs);
   runs.set(parentToolCallId, run);
-  return { runs };
+  return { ...state, runs };
 };
 
-const withoutRun = (state: SubagentRunsState, parentToolCallId: string): SubagentRunsState => {
+/**
+ * Finalize bookkeeping: drop the live run AND remember its `parentToolCallId` in
+ * `finalizedParents` so a replayed first-event never re-creates the (now
+ * `Active`) thread. The remembered set is what makes thread creation idempotent
+ * across cold-replica retries / double IPC delivery — keyed by the DB-homed
+ * `sourceToolCallId`, independent of whether the live `runs` map still holds it.
+ */
+const markRunFinalized = (
+  state: SubagentRunsState,
+  parentToolCallId: string,
+): SubagentRunsState => {
   const runs = new Map(state.runs);
   runs.delete(parentToolCallId);
-  return { runs };
+  const finalizedParents = new Set(state.finalizedParents);
+  finalizedParents.add(parentToolCallId);
+  return { ...state, finalizedParents, runs };
 };
 
 const SUBAGENT_TITLE_MAX = 80;
@@ -82,14 +94,23 @@ interface ReduceResult {
  * run, the next state, and any structural intents (thread + message creates,
  * prior-turn flush). The returned `run` is a fresh copy safe to mutate further
  * by the caller before it calls `withRun` to fold it back into state.
+ *
+ * Returns `run: null` when the parent already FINALIZED (its thread is `Active`,
+ * tracked in `finalizedParents`): the event is a stale replay of a completed
+ * spawn — re-creating its thread would duplicate it. The caller drops the event.
  */
 const ensureRun = (
   state: SubagentRunsState,
   subCtx: SubagentEventContext,
   ctx: SubagentReduceCtx,
-): { intents: SubagentIntent[]; run: SubagentRun; state: SubagentRunsState } => {
+): { intents: SubagentIntent[]; run: SubagentRun | null; state: SubagentRunsState } => {
   const intents: SubagentIntent[] = [];
   const existing = state.runs.get(subCtx.parentToolCallId);
+
+  // ─── Stale replay of an already-finalized spawn → no-op (no duplicate thread) ───
+  if (!existing && state.finalizedParents.has(subCtx.parentToolCallId)) {
+    return { intents, run: null, state };
+  }
 
   // ─── First event for this parent → lazy-create Thread + seed + assistant ───
   if (!existing) {
@@ -235,7 +256,7 @@ const finalizeRun = (
 
   intents.push({ kind: 'finalizeThread', threadId: run.threadId });
 
-  return { intents, state: withoutRun(state, parentToolCallId) };
+  return { intents, state: markRunFinalized(state, parentToolCallId) };
 };
 
 /** Find the run that owns an inner tool_call id (lifetime lookup). */
@@ -259,6 +280,8 @@ const reduceTextChunk = (
   const ensured = ensureRun(state, subCtx, ctx);
   const run = ensured.run;
   const intents = ensured.intents;
+  // Stale replay of a finalized spawn — drop without re-creating its thread.
+  if (!run) return { intents, state: ensured.state };
 
   if (kind === 'text') run.accContent += chunk;
   else run.accReasoning += chunk;
@@ -282,6 +305,8 @@ const reduceToolsChunk = (
   const ensured = ensureRun(state, subCtx, ctx);
   const run = ensured.run;
   const intents = ensured.intents;
+  // Stale replay of a finalized spawn — drop without re-creating its thread.
+  if (!run) return { intents, state: ensured.state };
 
   const newToolMsgIds: string[] = [];
   for (const tool of tools) {

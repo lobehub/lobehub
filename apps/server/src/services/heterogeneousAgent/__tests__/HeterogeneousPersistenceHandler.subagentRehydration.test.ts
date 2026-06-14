@@ -274,6 +274,66 @@ describe('HeterogeneousPersistenceHandler — subagent run survives a cold repli
     expect([...h.threads.values()].some((t) => t.title === 'Subagent')).toBe(false);
   });
 
+  // The screenshot bug: a subagent that already FINISHED (its parent
+  // tool_result landed → thread flipped Active) has its FIRST event replayed on
+  // a cold replica (BatchIngester retry / re-delivery where the in-memory
+  // `processedKeys` dedupe is gone). Because finalized threads aren't rehydrated
+  // as live runs, the empty reducer used to hit `!existing` and fork a SECOND
+  // thread with the identical title ("一模一样的两个 thread"). The fix records
+  // the finalized parent's `sourceToolCallId` in `finalizedParents` from the DB
+  // `Active` thread, so the replayed first-event is a stale no-op.
+  it('does NOT re-create the thread when a FINISHED subagent replays its first event on a fresh replica', async () => {
+    const h = createHarness({
+      assistantMessageId: 'asst-1',
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+    const PARENT = 'tc-spawn-1';
+
+    const firstChunk = buildEvent('stream_chunk', 0, {
+      chunkType: 'tools_calling',
+      subagent: {
+        parentToolCallId: PARENT,
+        spawnMetadata: {
+          description: 'Map client runtime completion paths',
+          prompt: 'investigate',
+          subagentType: 'Explore',
+        },
+        subagentMessageId: 'sub-msg-1',
+      },
+      toolsCalling: [innerTool('inner-1')],
+    });
+
+    // ── Batch 1 (replica A): subagent runs, then its parent tool_result lands →
+    //    the run finalizes and the thread is flipped Active. ──
+    await h.handler.ingest({
+      assistantMessageId: 'asst-1',
+      events: [firstChunk, buildEvent('tool_result', 1, { content: 'done', toolCallId: PARENT })],
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+
+    expect(h.threads.size).toBe(1);
+    const finishedThreadId = [...h.threads.keys()][0];
+    expect(h.threads.get(finishedThreadId)!.status).toBe('active');
+
+    // ── Cold replica: warm state gone, DB persists. ──
+    __resetOperationStatesForTesting();
+
+    // ── Replay of the SAME first event (processedKeys is empty on the fresh
+    //    replica, so it is NOT deduped away — it really re-enters the reducer). ──
+    await h.handler.ingest({
+      assistantMessageId: 'asst-1',
+      events: [firstChunk],
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+
+    // Still exactly one thread — no duplicate, no second "Map client runtime…".
+    expect(h.threads.size).toBe(1);
+    expect([...h.threads.keys()]).toEqual([finishedThreadId]);
+  });
+
   // P1: a tools_calling batch reprocessed on a cold replica (BatchIngester
   // retry, or a turn split across a cold boundary so the cumulative array is
   // re-seen) must NOT mint a second tool message for an inner tool the run

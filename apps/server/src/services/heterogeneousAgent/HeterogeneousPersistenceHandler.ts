@@ -575,9 +575,16 @@ export class HeterogeneousPersistenceHandler {
    *
    * Merge semantics: only runs MISSING from the in-memory map are rehydrated, so
    * a warm replica's live per-turn accumulators (`accContent`, current
-   * `toolState`) are never clobbered by the DB projection. Finalized runs are
-   * excluded (their thread is `Active`, not `Processing`), so a completed spawn
-   * is never resurrected.
+   * `toolState`) are never clobbered by the DB projection.
+   *
+   * Finalized (`Active`) spawns are NOT rehydrated as live runs (a completed
+   * spawn is never resurrected — that would mint spurious empty assistants and
+   * re-finalize churn), but their `sourceToolCallId` IS recorded in
+   * `finalizedParents` so a REPLAYED first-event on a cold replica can't fork a
+   * duplicate thread for a spawn that already finished (the "一模一样的两个
+   * thread" bug). This mirrors #15838's main-turn idempotency for the subagent
+   * thread-create step: dedup keyed by the DB-homed `sourceToolCallId`,
+   * independent of in-memory state and of thread status.
    *
    * Best-effort: any DB hiccup (or a partial test mock without the query
    * methods) leaves `state.main.subagents` untouched rather than aborting the
@@ -588,12 +595,13 @@ export class HeterogeneousPersistenceHandler {
       const threads = await this.deps.threadModel.queryByTopicId(state.topicId);
       const existing = state.main.subagents.runs;
       const snapshots: SubagentRunSnapshot[] = [];
+      // Union with any parents finalized in-memory on a warm replica.
+      const finalizedParents = new Set(state.main.subagents.finalizedParents);
 
       for (const thread of threads ?? []) {
         if (thread.type !== ThreadType.Isolation) continue;
-        if (thread.status !== ThreadStatus.Processing) continue;
         const meta = thread.metadata as { operationId?: string; sourceToolCallId?: string } | null;
-        // Operation-scoped: only rehydrate threads THIS operation created.
+        // Operation-scoped: only attend to threads THIS operation created.
         // Topics are reused across turns, so a prior run that crashed / was
         // cancelled without an ingested terminal event can leave its subagent
         // thread stuck in `Processing`. Without this guard the next operation
@@ -605,6 +613,13 @@ export class HeterogeneousPersistenceHandler {
         const parentToolCallId = meta?.sourceToolCallId;
         if (!parentToolCallId || existing.has(parentToolCallId)) continue;
 
+        // Finalized spawn → remember the key (blocks duplicate create), don't
+        // rehydrate it as a live run.
+        if (thread.status !== ThreadStatus.Processing) {
+          finalizedParents.add(parentToolCallId);
+          continue;
+        }
+
         const messages = await this.deps.messageModel.query({
           threadId: thread.id,
           topicId: state.topicId,
@@ -613,11 +628,20 @@ export class HeterogeneousPersistenceHandler {
         if (snapshot) snapshots.push(snapshot);
       }
 
-      if (snapshots.length === 0) return;
+      // Nothing new to project: no rehydratable runs AND no finalized keys
+      // beyond what memory already tracked (the set started as a copy of it and
+      // only grows, so an unchanged size means no new Active threads were found).
+      if (
+        snapshots.length === 0 &&
+        finalizedParents.size === state.main.subagents.finalizedParents.size
+      ) {
+        return;
+      }
 
       // Union: rehydrated (missing) runs + the in-memory ones (which win, since
-      // they carry live accumulators the DB hasn't caught up to yet).
-      const merged = rehydrateSubagentRunsState(snapshots);
+      // they carry live accumulators the DB hasn't caught up to yet) + the
+      // finalized-parent guard set.
+      const merged = rehydrateSubagentRunsState(snapshots, [...finalizedParents]);
       for (const [parentToolCallId, run] of existing) merged.runs.set(parentToolCallId, run);
       state.main = { ...state.main, subagents: merged };
     } catch (err) {
