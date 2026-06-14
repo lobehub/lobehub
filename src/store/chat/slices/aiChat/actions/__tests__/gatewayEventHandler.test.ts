@@ -246,6 +246,44 @@ describe('createGatewayEventHandler', () => {
 
       expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
     });
+
+    it('should DROP subagent-tagged tool chunks so they do not leak into the main bubble', async () => {
+      // Regression: on a live gateway / remote-CC stream, a subagent (Agent/Task)
+      // inner tool chunk is tagged with `data.subagent`. It belongs to an
+      // isolation Thread, not the main assistant. If dispatched here it appends
+      // to the MAIN assistant's tools[] until the terminal DB refetch corrects it
+      // ("流式时漏出来、结束后正常"). It must be dropped before any dispatch.
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('stream_chunk', {
+          chunkType: 'tools_calling',
+          subagent: { parentToolCallId: 'toolu_agent', subagentMessageId: 'sub-1' },
+          toolsCalling: [{ id: 'inner-1' }],
+        }),
+      );
+      await flush();
+
+      // Not dispatched onto the main assistant, and no tool-calling spinner.
+      expect(store.internal_dispatchMessage).not.toHaveBeenCalled();
+      expect(store.internal_toggleToolCallingStreaming).not.toHaveBeenCalled();
+    });
+
+    it('should still dispatch a NON-subagent tool chunk (drop is scoped to subagent)', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('stream_chunk', { chunkType: 'tools_calling', toolsCalling: [{ id: 'm-1' }] }),
+      );
+      await flush();
+
+      expect(store.internal_dispatchMessage).toHaveBeenCalledWith(
+        { id: 'msg-initial', type: 'updateMessage', value: { tools: [{ id: 'm-1' }] } },
+        { operationId: 'op-1' },
+      );
+    });
   });
 
   describe('reasoning operation lifecycle', () => {

@@ -267,6 +267,13 @@ export const createGatewayEventHandler = (
   return (event: AgentStreamEvent) => {
     if (terminalState) return;
 
+    // Subagent (`Agent`/`Task`) inner-tool events are tagged `data.subagent` and
+    // belong to an isolation Thread. This handler is main-agent-only, so
+    // dispatching them leaks the subagent's tools into the parent bubble
+    // mid-stream until the terminal fetch corrects it. The local executor drops
+    // them before forwarding; the gateway path doesn't. (DB is unaffected.)
+    if ((event.data as { subagent?: unknown } | undefined)?.subagent) return;
+
     if (event.type === 'agent_runtime_end' || event.type === 'error') {
       terminalState = event.type === 'error' ? 'error' : 'completed';
     }
