@@ -1,5 +1,6 @@
 'use client';
 
+import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { useModalContext } from '@lobehub/ui/base-ui';
 import { Spin } from 'antd';
@@ -12,6 +13,8 @@ import { message } from '@/components/AntdStaticMethods';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import AgentItem from '@/features/PageEditor/Copilot/AgentSelector/AgentItem';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
@@ -59,16 +62,38 @@ const MoveTopicsContent = memo<MoveTopicsContentProps>(({ onMoved, sourceAgentId
   const agents = useHomeStore(homeAgentListSelectors.allAgents);
   const isAgentListInit = useHomeStore(homeAgentListSelectors.isAgentListInit);
 
+  // The inbox (default "LobeAI") agent is virtual, so it's filtered out of the
+  // sidebar agent list — add it back so topics can be moved to it too.
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const inboxMeta = useAgentStore((s) =>
+    inboxAgentId ? agentSelectors.getAgentMetaById(inboxAgentId)(s) : undefined,
+  );
+
   useFetchAgentList();
 
   const count = topicIds.length;
 
   // Source agent is excluded — moving topics back to where they already live
-  // would be a no-op.
-  const targetAgents = useMemo(
-    () => agents.filter((a) => a.type === 'agent' && a.id !== sourceAgentId),
-    [agents, sourceAgentId],
-  );
+  // would be a no-op. The inbox agent is prepended when not already present.
+  const targetAgents = useMemo(() => {
+    const available = agents.filter((a) => a.type === 'agent');
+    const withInbox =
+      inboxAgentId && !available.some((a) => a.id === inboxAgentId)
+        ? [
+            {
+              avatar: inboxMeta?.avatar || DEFAULT_INBOX_AVATAR,
+              description: null,
+              id: inboxAgentId,
+              pinned: false,
+              title: inboxMeta?.title || t('inbox.title', { ns: 'chat' }),
+              type: 'agent' as const,
+              updatedAt: new Date(),
+            },
+            ...available,
+          ]
+        : available;
+    return withInbox.filter((a) => a.id !== sourceAgentId);
+  }, [agents, inboxAgentId, inboxMeta, sourceAgentId, t]);
 
   const filteredAgents = useMemo(() => {
     const q = search.trim().toLowerCase();
