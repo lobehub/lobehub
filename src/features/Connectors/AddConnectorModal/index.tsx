@@ -7,8 +7,11 @@ import { useTranslation } from 'react-i18next';
 import { ConnectorSourceType } from '@/database/schemas';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useToolStore } from '@/store/tool';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 
 interface AddConnectorModalProps {
+  /** If provided, opens in edit mode pre-filling the form from the existing connector. */
+  connectorId?: string;
   onClose: () => void;
   open: boolean;
 }
@@ -63,13 +66,17 @@ const waitForOAuthPopup = (popup: Window, connectorId: string): Promise<OAuthPop
     }, 800);
   });
 
-const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose }) => {
+const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose, connectorId }) => {
   const { t } = useTranslation('tool');
   const { message } = App.useApp();
   const createConnector = useToolStore((s) => s.createConnector);
+  const updateConnector = useToolStore((s) => s.updateConnector);
   const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
   const syncConnectorTools = useToolStore((s) => s.syncConnectorTools);
   const fetchConnectors = useToolStore((s) => s.fetchConnectors);
+
+  const existingConnector = useToolStore(connectorSelectors.connectorById(connectorId ?? ''));
+  const isEditMode = !!connectorId;
 
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
@@ -77,6 +84,17 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose }) => {
   const [clientSecret, setClientSecret] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Pre-fill form when opening in edit mode
+  useEffect(() => {
+    if (open && isEditMode && existingConnector) {
+      setName(existingConnector.name);
+      setUrl(existingConnector.mcpServerUrl ?? '');
+      setClientId('');
+      setClientSecret('');
+      setShowAdvanced(false);
+    }
+  }, [open, isEditMode, existingConnector]);
 
   // Show the exact redirect URI the SERVER will use (APP_URL-based), so what the
   // user registers matches what is sent at authorize time. Fall back to the
@@ -130,7 +148,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose }) => {
       // client_id present → pre-registration; absent → dynamic client registration (DCR).
       const scheme = trimmedClientId ? 'pre_registration' : 'dcr';
 
-      const connectorId = await createConnector({
+      const newConnectorId = await createConnector({
         identifier: name.toLowerCase().replaceAll(/\s+/g, '-'),
         mcpConnectionType: 'http',
         mcpServerUrl: url.trim(),
@@ -148,9 +166,9 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose }) => {
       // If the server turns out not to require OAuth (no authorization server
       // discovered), fall back to a plain tool sync for public MCP servers.
       try {
-        const authorizationUrl = await startConnectorOAuth(connectorId);
+        const authorizationUrl = await startConnectorOAuth(newConnectorId);
         popup.location.href = authorizationUrl;
-        const result = await waitForOAuthPopup(popup, connectorId);
+        const result = await waitForOAuthPopup(popup, newConnectorId);
         // Reflect the server-side state regardless of how the popup ended
         // (window.close is often blocked for cross-origin-navigated popups).
         await fetchConnectors();
@@ -177,7 +195,7 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose }) => {
       } catch {
         popup.close();
         try {
-          await syncConnectorTools(connectorId);
+          await syncConnectorTools(newConnectorId);
           message.success(t('connector.add.success', 'Connector connected'));
         } catch {
           message.error(
@@ -196,21 +214,119 @@ const AddConnectorModal = memo<AddConnectorModalProps>(({ open, onClose }) => {
     }
   };
 
+  const handleEdit = async () => {
+    if (!name.trim() || !url.trim() || !connectorId) return;
+
+    const trimmedClientId = clientId.trim();
+    const trimmedClientSecret = clientSecret.trim();
+    const hasNewCredentials = !!trimmedClientId || !!trimmedClientSecret;
+    const urlChanged = url.trim() !== (existingConnector?.mcpServerUrl ?? '');
+    // Re-run OAuth if the URL changed or new credentials were supplied
+    const needsReAuth = urlChanged || hasNewCredentials;
+
+    let popup: Window | null = null;
+    if (needsReAuth) {
+      popup = window.open('about:blank', 'lobe-connector-oauth', 'width=600,height=720');
+      if (!popup) {
+        message.error(
+          t('connector.add.popupBlocked', 'Please allow popups for this site and try again.'),
+        );
+        return;
+      }
+    }
+
+    setSubmitting(true);
+    try {
+      const scheme = trimmedClientId ? 'pre_registration' : 'dcr';
+      await updateConnector(connectorId, {
+        ...(urlChanged ? { credentials: null } : {}),
+        mcpServerUrl: url.trim(),
+        name: name.trim(),
+        ...(hasNewCredentials
+          ? {
+              oidcConfig: {
+                clientId: trimmedClientId || undefined,
+                clientSecret: trimmedClientSecret || undefined,
+                scheme,
+              },
+            }
+          : {}),
+      });
+
+      if (needsReAuth && popup) {
+        try {
+          const authorizationUrl = await startConnectorOAuth(connectorId);
+          popup.location.href = authorizationUrl;
+          const result = await waitForOAuthPopup(popup, connectorId);
+          await fetchConnectors();
+          if (result.status === 'success') {
+            if (result.synced === false) {
+              message.warning(
+                t(
+                  'connector.add.syncFailed',
+                  'Authorized, but tools could not be synced. Click Sync to retry.',
+                ),
+              );
+            } else {
+              message.success(t('connector.edit.success', 'Connector updated'));
+            }
+          } else if (result.status === 'error') {
+            message.error(
+              t('connector.add.authError', 'Authorization failed: {{reason}}', {
+                reason: result.error || t('connector.add.unknownError', 'unknown error'),
+              }),
+            );
+          } else {
+            message.warning(t('connector.add.cancelled', 'Authorization was not completed'));
+          }
+        } catch {
+          popup.close();
+          try {
+            await syncConnectorTools(connectorId);
+            message.success(t('connector.edit.success', 'Connector updated'));
+          } catch {
+            message.error(
+              t(
+                'connector.add.authFailed',
+                'Could not connect. This server may require an OAuth Client ID in Advanced settings.',
+              ),
+            );
+          }
+        }
+      } else {
+        message.success(t('connector.edit.success', 'Connector updated'));
+      }
+
+      reset();
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleCancel = () => {
     reset();
     onClose();
   };
+
+  const modalTitle = isEditMode
+    ? t('connector.add.editTitle', 'Edit Connector')
+    : t('connector.add.title', 'Add custom connector');
+
+  const okText = isEditMode
+    ? t('connector.add.update', 'Save')
+    : t('connector.add.confirm', 'Add');
 
   return (
     <Modal
       cancelText={t('connector.add.cancel', 'Cancel')}
       confirmLoading={submitting}
       okButtonProps={{ disabled: !name.trim() || !url.trim() }}
-      okText={t('connector.add.confirm', 'Add')}
+      okText={okText}
       open={open}
-      title={t('connector.add.title', 'Add custom connector')}
+      title={modalTitle}
       onCancel={handleCancel}
-      onOk={handleAdd}
+      onOk={isEditMode ? handleEdit : handleAdd}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div>

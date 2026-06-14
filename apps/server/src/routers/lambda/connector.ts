@@ -268,9 +268,14 @@ export const connectorRouter = router({
       await ctx.connectorModel.update(input.id, {
         ...patch,
         // undefined → leave untouched; null → clear; object → encrypt the JSON string.
+        // When credentials are cleared, also drop the cached expiry timestamp so
+        // token-refresh logic doesn't act on a stale value for the new server.
         ...(credentials === undefined
           ? {}
-          : { credentials: credentials ? JSON.stringify(credentials) : null }),
+          : {
+              credentials: credentials ? JSON.stringify(credentials) : null,
+              ...(credentials === null ? { tokenExpiresAt: null } : {}),
+            }),
       } as any);
     }),
 
