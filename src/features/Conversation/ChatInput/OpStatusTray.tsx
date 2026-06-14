@@ -12,12 +12,7 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { shinyTextStyles } from '@/styles';
-import {
-  calculateOperationUsageMetrics,
-  hasOperationUsageMetrics,
-  mergeOperationUsageMetrics,
-  type OperationUsageMetrics,
-} from '@/utils/operationUsageMetrics';
+import { calculateOperationUsageMetrics } from '@/utils/operationUsageMetrics';
 
 import { contextSelectors, dataSelectors, useConversationStore } from '../store';
 import { type ActivityKey, resolveOperationActivity } from '../utils/operationActivity';
@@ -238,7 +233,6 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
     let latestActivityStart = -1;
     let statusSeed: string | undefined;
     let stepCount = 0;
-    let usageMetrics: OperationUsageMetrics | undefined;
     const runtimeOperationIds: string[] = [];
 
     for (const op of ops) {
@@ -256,9 +250,6 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
 
       runtimeOperationIds.push(op.id);
       stepCount = Math.max(stepCount, normalizeStepCount(op.metadata.stepCount));
-      if (hasOperationUsageMetrics(op.metadata.usageMetrics)) {
-        usageMetrics = mergeOperationUsageMetrics(usageMetrics, op.metadata.usageMetrics);
-      }
 
       if (earliestStart === undefined || op.metadata.startTime < earliestStart) {
         earliestStart = op.metadata.startTime;
@@ -271,7 +262,6 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
       startTime: earliestStart,
       statusSeed,
       steps: stepCount,
-      usageMetrics,
     };
   });
   const operationsByMessage = useChatStore((s) => s.operationsByMessage);
@@ -289,17 +279,16 @@ const OpStatusTray = memo<OpStatusTrayProps>(({ topAttached }) => {
     [operationState.operationIdsKey],
   );
 
-  // Fallback for older / reloaded operation state: derive usage from messages
-  // produced by this operation when live operation metadata is unavailable.
-  const fallbackMetrics = useMemo(() => {
+  // Single source of truth: derive the operation total from the same per-message
+  // usage shown on each bubble, so the tray always equals their sum. (Updates as
+  // messages refresh — no separate live accumulation that can drift.)
+  const usageMetrics = useMemo(() => {
     return calculateOperationUsageMetrics(dbMessages, operationIds, operationsByMessage);
   }, [dbMessages, operationIds, operationsByMessage]);
 
   if (!operationState.startTime) return null;
 
-  const { totalCost, totalTokens } = hasOperationUsageMetrics(operationState.usageMetrics)
-    ? operationState.usageMetrics
-    : fallbackMetrics;
+  const { totalCost, totalTokens } = usageMetrics;
   const elapsed = now - operationState.startTime;
   const costLabel = t('chat:opStatusTray.cost');
   const stepLabel = t('chat:opStatusTray.steps');

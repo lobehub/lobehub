@@ -19,7 +19,6 @@ import { messageService } from '@/services/message';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/aiChat/actions/agentSignalBridge';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
-import { addUsageToOperationMetrics, type OperationUsageLike } from '@/utils/operationUsageMetrics';
 
 // Lazy-loaded to break the import cycle:
 //   gateway.ts → gatewayEventHandler.ts → executors/index.ts (which pulls in
@@ -55,10 +54,6 @@ interface ToolPayloadIdentity {
   params: unknown;
   toolCallId?: string;
 }
-
-type StepCompleteDataWithUsage = StepCompleteData & {
-  usage?: OperationUsageLike | null;
-};
 
 /**
  * Extract `{ identifier, apiName, params, toolCallId }` from a stream event's
@@ -512,14 +507,7 @@ export const createGatewayEventHandler = (
       }
 
       case 'step_complete': {
-        const data = event.data as StepCompleteDataWithUsage | undefined;
-
-        if (data?.phase === 'turn_metadata' && data.usage) {
-          const operation = get().operations[operationId];
-          get().updateOperationMetadata(operationId, {
-            usageMetrics: addUsageToOperationMetrics(operation?.metadata?.usageMetrics, data.usage),
-          });
-        }
+        const data = event.data as StepCompleteData | undefined;
 
         // Refresh on execution_complete to ensure final step state is consistent
         if (data?.phase === 'execution_complete') {

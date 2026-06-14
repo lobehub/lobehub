@@ -720,7 +720,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     it('should persist per-step usage to each step assistant message, not accumulated', async () => {
       // Realistic CC partial-messages flow: message_start primes the turn,
       // assistant events echo a stale usage, message_delta carries the final.
-      const { store } = await runWithEvents([
+      await runWithEvents([
         ccInit(),
         ccMessageStart('msg_01'),
         ccAssistant('msg_01', [{ text: 'a', type: 'text' }]),
@@ -769,13 +769,6 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       // No cache tokens for this turn — these fields should be absent
       expect(u2.inputCachedTokens).toBeUndefined();
       expect(u2.inputWriteCacheTokens).toBeUndefined();
-
-      expect(store.operations['op-1'].metadata.usageMetrics).toEqual({
-        totalCost: 0,
-        totalInputTokens: 650,
-        totalOutputTokens: 130,
-        totalTokens: 780,
-      });
     });
 
     it('should ignore stale usage on assistant events (from message_start echo)', async () => {

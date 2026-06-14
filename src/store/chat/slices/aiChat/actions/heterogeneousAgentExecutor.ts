@@ -38,7 +38,6 @@ import { threadService } from '@/services/thread';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
 import { resolveNotificationNavigatePath } from '@/store/chat/utils/desktopNotification';
 import { markdownToTxt } from '@/utils/markdownToTxt';
-import { addUsageToOperationMetrics } from '@/utils/operationUsageMetrics';
 
 import { messageMapKey } from '../../../utils/messageMapKey';
 import { mergeQueuedMessages } from '../../operation/types';
@@ -1197,19 +1196,11 @@ export const executeHeterogeneousAgent = async (
       // ─── step_complete with turn_metadata: per-step usage + model/provider ───
       // The reducer writes usage/model/provider onto the current step's
       // assistant (main) or the subagent's in-thread assistant (delegated).
-      // `result_usage` (grand total) is ignored by the reducer. Main usage also
-      // feeds the operation's usage-metrics tray — a renderer-only side effect
-      // the reducer doesn't model, so it stays here. Not forwarded (bookkeeping).
+      // `result_usage` (grand total) is ignored by the reducer. The operation
+      // usage tray derives its total from these per-message usages directly
+      // (OpStatusTray → calculateOperationUsageMetrics), so there is no separate
+      // accumulation here. Not forwarded (bookkeeping).
       if (event.type === 'step_complete' && event.data?.phase === 'turn_metadata') {
-        if (!event.data.subagent && event.data.usage) {
-          const operation = get().operations[operationId];
-          get().updateOperationMetadata(operationId, {
-            usageMetrics: addUsageToOperationMetrics(
-              operation?.metadata?.usageMetrics,
-              event.data.usage,
-            ),
-          });
-        }
         persistQueue = persistQueue.then(() => reduceAndApplyMain(event));
         return;
       }
