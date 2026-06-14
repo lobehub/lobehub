@@ -2,23 +2,21 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { GripVertical, MessageSquareIcon, XIcon } from 'lucide-react';
+import { ActionIcon, Avatar, Button, Flexbox, Text } from '@lobehub/ui';
+import { createStaticStyles, cx } from 'antd-style';
+import { GripVertical, MessageCirclePlus, MessageSquareIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import StatusDot from '@/features/AgentTopicManager/StatusDot';
 import { ChatInput, ChatList, ConversationProvider } from '@/features/Conversation';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
-import { operationSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { type ChatTopicStatus } from '@/types/topic';
 
-import { resolveStatusTone } from './status';
-import StatusBadge from './StatusBadge';
 import { useFleetStore } from './store';
 import {
   DEFAULT_COLUMN_WIDTH,
@@ -43,9 +41,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   dragging: css`
     z-index: 2;
-    box-shadow:
-      inset 0 0 0 2px ${cssVar.colorPrimary},
-      ${cssVar.boxShadowSecondary};
+    box-shadow: inset 0 0 0 1px ${cssVar.colorBorder};
+
+    /* tint overlay above the column content while dragging */
+    &::before {
+      pointer-events: none;
+      content: '';
+
+      position: absolute;
+      z-index: 5;
+      inset: 0;
+
+      background: ${cssVar.colorFillTertiary};
+    }
   `,
   grip: css`
     cursor: grab;
@@ -67,11 +75,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: 8px 6px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
+  replyBar: css`
+    flex: none;
+    padding-block: 8px;
+    padding-inline: 12px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+  `,
   resize: css`
     cursor: col-resize;
 
     position: absolute;
-    z-index: 3;
+    z-index: 6;
     inset-block: 0;
     inset-inline-end: -3px;
 
@@ -117,14 +131,13 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
   const setWidth = useFleetStore((s) => s.setWidth);
   const removeColumn = useFleetStore((s) => s.removeColumn);
   const [dragWidth, setDragWidth] = useState<number | null>(null);
+  const [replyOpen, setReplyOpen] = useState(false);
   const width = dragWidth ?? storedWidth ?? DEFAULT_COLUMN_WIDTH;
 
   const chatKey = useMemo(() => messageMapKey(context), [context]);
   const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
   const replaceMessages = useChatStore((s) => s.replaceMessages);
   const operationState = useOperationState(context);
-  const liveRunning = useChatStore(operationSelectors.isAgentRuntimeRunningByContext(context));
-  const tone = resolveStatusTone(status ?? undefined, liveRunning);
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: column.key,
@@ -162,21 +175,14 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
         width,
       }}
     >
-      {/* Column header — agent name + ops, then topic title + status */}
-      <Flexbox className={styles.header} gap={6}>
+      {/* Column header — topic title (primary), then agent name + status */}
+      <Flexbox className={styles.header} gap={4}>
         <Flexbox horizontal align={'center'} gap={6}>
           <span className={cx(styles.grip)} {...attributes} {...listeners}>
             <GripVertical size={16} />
           </span>
-          <Avatar
-            emojiScaleWithBackground
-            avatar={meta?.avatar}
-            background={meta?.backgroundColor}
-            shape={'square'}
-            size={22}
-          />
-          <Text ellipsis style={{ flex: 1, fontWeight: 600 }}>
-            {meta?.title}
+          <Text ellipsis style={{ flex: 1, fontWeight: 600 }} title={column.fallbackTitle}>
+            {column.fallbackTitle}
           </Text>
           <Flexbox horizontal align={'center'} gap={2} style={{ flex: 'none' }}>
             <ActionIcon
@@ -193,19 +199,22 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
             />
           </Flexbox>
         </Flexbox>
-        <Flexbox horizontal align={'center'} gap={8} paddingInline={'22px 0'}>
-          <Text
-            ellipsis
-            style={{ color: cssVar.colorTextSecondary, flex: 1, fontSize: 13 }}
-            title={column.fallbackTitle}
-          >
-            {column.fallbackTitle}
+        <Flexbox horizontal align={'center'} gap={6} paddingInline={'22px 0'}>
+          <Avatar
+            emojiScaleWithBackground
+            avatar={meta?.avatar}
+            background={meta?.backgroundColor}
+            shape={'square'}
+            size={16}
+          />
+          <Text ellipsis fontSize={12} style={{ flex: 1 }} type={'secondary'}>
+            {meta?.title}
           </Text>
-          <StatusBadge tone={tone} />
+          <StatusDot status={status ?? 'running'} />
         </Flexbox>
       </Flexbox>
 
-      {/* Conversation body — ChatList + scoped ChatInput */}
+      {/* Conversation body — ChatList, plus an on-demand reply input */}
       <Flexbox className={styles.body}>
         <ConversationProvider
           context={context}
@@ -217,7 +226,20 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
           }}
         >
           <ChatList disableActionsBar />
-          <ChatInput skipScrollMarginWithList isConfigLoading={messages === undefined} />
+          {replyOpen ? (
+            <ChatInput skipScrollMarginWithList isConfigLoading={messages === undefined} />
+          ) : (
+            <Flexbox className={styles.replyBar}>
+              <Button
+                block
+                icon={MessageCirclePlus}
+                variant={'filled'}
+                onClick={() => setReplyOpen(true)}
+              >
+                {t('fleet.reply')}
+              </Button>
+            </Flexbox>
+          )}
         </ConversationProvider>
       </Flexbox>
 

@@ -1,18 +1,19 @@
 'use client';
 
-import { Avatar, Flexbox, Text } from '@lobehub/ui';
+import { Avatar, Button, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
+import { PlusIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { createTaskModal } from '@/features/AgentTasks/CreateTaskModal';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+import StatusDot from '@/features/AgentTopicManager/StatusDot';
 import { NavPanelPortal } from '@/features/NavPanel';
 import SideBarHeaderLayout from '@/features/NavPanel/SideBarHeaderLayout';
 import SideBarLayout from '@/features/NavPanel/SideBarLayout';
 import { type ChatTopicStatus } from '@/types/topic';
 
-import { resolveStatusTone } from './status';
-import StatusBadge from './StatusBadge';
 import { useFleetStore } from './store';
 import { type FleetColumn } from './types';
 
@@ -22,7 +23,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
   `,
   empty: css`
-    padding-block: 32px;
+    padding-block: 24px;
     padding-inline: 16px;
 
     font-size: 13px;
@@ -48,7 +49,6 @@ interface SidebarTaskItemProps {
 
 const SidebarTaskItem = memo<SidebarTaskItemProps>(({ column, status, onActivate }) => {
   const meta = useAgentDisplayMeta(column.agentId);
-  const tone = resolveStatusTone(status ?? undefined, false);
 
   return (
     <Flexbox
@@ -76,7 +76,7 @@ const SidebarTaskItem = memo<SidebarTaskItemProps>(({ column, status, onActivate
           <Text ellipsis fontSize={12} style={{ flex: 1 }} type={'secondary'}>
             {meta?.title}
           </Text>
-          <StatusBadge size={6} tone={tone} />
+          <StatusDot status={status ?? 'running'} />
         </Flexbox>
       </Flexbox>
     </Flexbox>
@@ -93,8 +93,9 @@ interface RunningTaskSidebarProps {
 /**
  * Fleet's left navigation. Portals into the global NavPanel so the running-topic
  * list *replaces* the standard nav rail while the Fleet view is active. The
- * top bar (`SideBarHeaderLayout`) carries the back-to-home action across its
- * full width; clicking an item opens (or re-opens) its column on the board.
+ * top bar (`SideBarHeaderLayout`) carries the back-to-home action; the body
+ * offers a "create task" entry plus the running-topic list. Clicking an item
+ * opens (or re-opens) its column on the board.
  */
 const RunningTaskSidebar = memo<RunningTaskSidebarProps>(({ columns, statusByColumnKey }) => {
   const { t } = useTranslation('electron');
@@ -112,6 +113,10 @@ const RunningTaskSidebar = memo<RunningTaskSidebarProps>(({ columns, statusByCol
     [addColumn],
   );
 
+  const handleCreateTask = useCallback(() => {
+    createTaskModal({ showInlineToggle: false });
+  }, []);
+
   const header = (
     <SideBarHeaderLayout
       backTo={'/'}
@@ -121,21 +126,27 @@ const RunningTaskSidebar = memo<RunningTaskSidebarProps>(({ columns, statusByCol
     />
   );
 
-  const body =
-    columns.length === 0 ? (
-      <div className={styles.empty}>{t('fleet.noRunningTasks')}</div>
-    ) : (
-      <Flexbox gap={2} paddingBlock={'0 12px'} paddingInline={8}>
-        {columns.map((column) => (
-          <SidebarTaskItem
-            column={column}
-            key={column.key}
-            status={statusByColumnKey[column.key]}
-            onActivate={handleActivate}
-          />
-        ))}
-      </Flexbox>
-    );
+  const body = (
+    <Flexbox gap={8} paddingBlock={'4px 12px'} paddingInline={8}>
+      <Button block icon={PlusIcon} variant={'filled'} onClick={handleCreateTask}>
+        {t('fleet.createTask')}
+      </Button>
+      {columns.length === 0 ? (
+        <div className={styles.empty}>{t('fleet.noRunningTasks')}</div>
+      ) : (
+        <Flexbox gap={2}>
+          {columns.map((column) => (
+            <SidebarTaskItem
+              column={column}
+              key={column.key}
+              status={statusByColumnKey[column.key]}
+              onActivate={handleActivate}
+            />
+          ))}
+        </Flexbox>
+      )}
+    </Flexbox>
+  );
 
   return (
     <NavPanelPortal navKey={'fleet'}>

@@ -30,6 +30,8 @@ export default {
   'navigation.tasks': 'Tasks',
   'navigation.unpin': 'Unpin',
   'fleet.addColumn': 'Add column',
+  'fleet.createTask': 'Create task',
+  'fleet.reply': 'Reply',
   'fleet.allShown': 'All running tasks are shown',
   'fleet.backToHome': 'Back to home',
   'fleet.closeColumn': 'Close column',
