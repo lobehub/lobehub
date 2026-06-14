@@ -25,6 +25,7 @@ import { useSkillDrop } from '../InputEditor/ActionTag/useSkillDrop';
 import { type PlaceholderVariant } from '../InputEditor/Placeholder';
 import SendArea from '../SendArea';
 import TypoBar from '../TypoBar';
+import AgentModeNotice from './AgentModeNotice';
 import ContextContainer from './ContextContainer';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -157,6 +158,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
         onDragOver={skillDrop.onDragOver}
         onDrop={skillDrop.onDrop}
       >
+        {!isConfigLoading && <AgentModeNotice />}
         <ChatInput
           data-testid="chat-input"
           defaultHeight={chatInputHeight || 32}

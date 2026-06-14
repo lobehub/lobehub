@@ -208,6 +208,8 @@ export default {
   'inbox.title': 'Lobe AI',
   'input.addAi': 'Add an AI message',
   'input.addUser': 'Add a user message',
+  'input.agentModeUnsupportedModel':
+    'The current model doesn’t support agentic tool calling. Switch to a model with agent capability for the best experience.',
   'input.costEstimate.creditsPerMillionTokens': '{{credits}} credits/M tokens',
   'input.costEstimate.hint': 'Estimated cost: ~{{credits}} credits',
   'input.costEstimate.inputLabel': 'Input',

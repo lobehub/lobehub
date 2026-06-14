@@ -246,6 +246,7 @@
   "inbox.title": "Lobe AI",
   "input.addAi": "添加一条助理消息",
   "input.addUser": "添加一条用户消息",
+  "input.agentModeUnsupportedModel": "当前模型不支持 Agentic 工具调用，建议切换为具备 Agent 能力的模型以获得最佳体验。",
   "input.costEstimate.creditsPerMillionTokens": "{{credits}} 积分/百万标记",
   "input.costEstimate.hint": "预计费用：约{{credits}}积分",
   "input.costEstimate.inputLabel": "输入",
