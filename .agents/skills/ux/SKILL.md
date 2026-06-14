@@ -1,6 +1,6 @@
 ---
 name: ux
-description: 'LobeHub product design values (自然 Natural / 意义感 Meaningful / 确定性 Certainty / 生长性 Growth) and per-aspect UX execution checklists. Load this skill whenever the work touches user-interface features or implementation — designing or building any user-facing flow — to get better UX results.'
+description: 'LobeHub product design values / principles / checklists. Load this skill whenever the work touches user-interface features or implementation — designing or building any user-facing flow — to get better UX results.'
 user-invocable: false
 ---
 
