@@ -63,6 +63,16 @@ export interface MainAgentRunState {
   accReasoning: string;
   /** The main-agent assistant message currently being appended to. */
   currentAssistantId: string;
+  /**
+   * CC `message.id` of the turn currently open on `currentAssistantId`. The
+   * turn's idempotency key: a `stream_start { newStep }` whose `messageId`
+   * EQUALS this is a replay of an already-opened turn (e.g. a BatchIngester
+   * retry reprocessed on a cold serverless replica, where `processedKeys` is
+   * empty) and must NOT mint a second assistant. Recovered on a cold replica
+   * from the current assistant's `metadata.mainMessageId`. Undefined for the
+   * host-seeded first turn (which never opens via `newStep`, so can't fork).
+   */
+  currentMainMessageId: string | undefined;
   /** Set once a terminal event has been reduced (idempotent finalize). */
   ended: boolean;
   /** Highest seen text snapshot sequence (replace-mode de-dup). */
@@ -97,6 +107,7 @@ export const createMainAgentRunState = (seedAssistantId: string): MainAgentRunSt
   accContent: '',
   accReasoning: '',
   currentAssistantId: seedAssistantId,
+  currentMainMessageId: undefined,
   ended: false,
   lastTextSnapshotSeq: 0,
   lastToolMsgIdEver: undefined,
@@ -148,6 +159,13 @@ export type MainAgentIntent =
 export interface CreateAssistantIntent {
   agentId?: string | null;
   kind: 'createAssistant';
+  /**
+   * CC `message.id` of the turn this assistant represents. The interpreter
+   * stamps it on `metadata.mainMessageId` so a cold replica can recover
+   * {@link MainAgentRunState.currentMainMessageId} and dedupe a replayed
+   * `newStep` (mirrors the subagent path's `metadata.subagentMessageId`).
+   */
+  mainMessageId?: string;
   messageId: string;
   /** Last known model carried from the prior turn (real model lands via usage). */
   model?: string;

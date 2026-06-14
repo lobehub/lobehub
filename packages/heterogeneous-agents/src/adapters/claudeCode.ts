@@ -1453,6 +1453,11 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       this.makeEvent('stream_end', {}),
       this.makeEvent('stream_start', {
         externalSignal: this.pendingExternalSignal,
+        // The turn's CC message.id — the server stamps it on the new assistant
+        // (`metadata.mainMessageId`) as a turn idempotency key, so a cold-replica
+        // batch retry that reprocesses this `newStep` recognizes the same turn
+        // instead of forking a duplicate + usage-only empty shell.
+        messageId,
         model,
         newStep: true,
         provider: 'claude-code',

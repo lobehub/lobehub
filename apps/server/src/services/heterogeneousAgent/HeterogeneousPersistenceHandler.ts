@@ -502,6 +502,14 @@ export class HeterogeneousPersistenceHandler {
     const currentMsg = await this.deps.messageModel.findById(state.main.currentAssistantId);
     const snapshot = this.toAssistantSnapshot(currentMsg);
 
+    // Recover the in-flight turn's CC message.id so a replayed `newStep` (cold
+    // replica retry) is recognized as the SAME turn — no duplicate assistant,
+    // no usage-only empty shell. Mirrors the subagent path's recovery of
+    // `currentSubagentMessageId` from `metadata.subagentMessageId`.
+    if (typeof snapshot.metadata.mainMessageId === 'string') {
+      state.main.currentMainMessageId = snapshot.metadata.mainMessageId;
+    }
+
     if (snapshot.textSnapshotSeq > state.main.lastTextSnapshotSeq) {
       state.main.accContent = snapshot.content;
       state.main.lastTextSnapshotSeq = snapshot.textSnapshotSeq;
@@ -740,11 +748,17 @@ export class HeterogeneousPersistenceHandler {
   private async applyMainIntent(state: OperationState, intent: MainAgentIntent) {
     switch (intent.kind) {
       case 'createAssistant': {
+        const createMetadata: Record<string, any> = {};
+        if (intent.signal) createMetadata.signal = intent.signal;
+        // Persist the turn's CC message.id so a cold replica can recover
+        // `currentMainMessageId` (via refreshMainStateFromDb) and dedupe a
+        // replayed `newStep` instead of forking a duplicate + empty shell.
+        if (intent.mainMessageId) createMetadata.mainMessageId = intent.mainMessageId;
         await this.deps.messageModel.create(
           {
             agentId: intent.agentId ?? undefined,
             content: '',
-            ...(intent.signal ? { metadata: { signal: intent.signal } } : {}),
+            ...(Object.keys(createMetadata).length > 0 ? { metadata: createMetadata } : {}),
             model: intent.model,
             parentId: intent.parentId,
             provider: intent.provider,

@@ -125,9 +125,11 @@ const openTurn = (state: MainAgentRunState, data: any, ctx: MainAgentReduceCtx):
 
   // 2. Open the new turn's assistant, chained off the last tool (chain rule).
   const messageId = ctx.newId('message');
+  const mainMessageId = typeof data?.messageId === 'string' ? data.messageId : undefined;
   intents.push({
     agentId: ctx.agentId,
     kind: 'createAssistant',
+    mainMessageId,
     messageId,
     model: state.turnModel,
     parentId: computeTurnParentId(state),
@@ -139,6 +141,7 @@ const openTurn = (state: MainAgentRunState, data: any, ctx: MainAgentReduceCtx):
   // 3. Advance: model/provider carry across (a fresh turn_metadata overwrites).
   const next = copyState(state);
   next.currentAssistantId = messageId;
+  next.currentMainMessageId = mainMessageId;
   next.accContent = '';
   next.accReasoning = '';
   next.lastTextSnapshotSeq = 0;
@@ -359,7 +362,17 @@ export const reduce = (
   const data = event.data ?? {};
   switch (event.type) {
     case 'stream_start': {
-      return data?.newStep ? openTurn(state, data, ctx) : streamInit(state, data);
+      if (!data?.newStep) return streamInit(state, data);
+      // Idempotency: a `newStep` whose CC message.id matches the turn already
+      // open is a REPLAY (BatchIngester retry reprocessed on a cold replica
+      // with an empty in-memory `processedKeys`). Opening again would mint a
+      // duplicate assistant and orphan the first as a usage-only empty shell.
+      // The adapter only emits `newStep` when message.id CHANGES, so a genuine
+      // new turn never collides with the current id.
+      if (typeof data.messageId === 'string' && data.messageId === state.currentMainMessageId) {
+        return { intents: [], state };
+      }
+      return openTurn(state, data, ctx);
     }
     case 'stream_chunk': {
       return reduceStreamChunk(state, data, ctx);

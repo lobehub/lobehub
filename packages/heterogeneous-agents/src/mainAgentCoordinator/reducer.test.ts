@@ -331,3 +331,47 @@ describe('main agent reducer', () => {
     expect(after).toBe(before);
   });
 });
+
+// A `newStep` carries the turn's CC message.id; the reducer records it as the
+// turn idempotency key and dedupes a replay (cold-replica BatchIngester retry).
+const newStepWithId = (messageId?: string) => ({
+  data: { messageId, newStep: true },
+  type: 'stream_start',
+});
+
+describe('reduceMainAgent — newStep idempotency key', () => {
+  it('opens a turn on a new message.id and records it as currentMainMessageId', () => {
+    const { state, steps } = run([textEvent('first'), newStepWithId('M2')]);
+    const created = ofKind(steps[1], 'createAssistant');
+    expect(created).toHaveLength(1);
+    expect(created[0].mainMessageId).toBe('M2');
+    expect(state.currentMainMessageId).toBe('M2');
+    expect(state.currentAssistantId).toBe('msg_1');
+  });
+
+  it('does NOT open a second assistant when the SAME message.id newStep is replayed', () => {
+    const { state, steps } = run([
+      textEvent('first'),
+      newStepWithId('M2'), // opens msg_1
+      newStepWithId('M2'), // replay (cold-replica retry) → must be a no-op
+    ]);
+    expect(ofKind(steps[1], 'createAssistant')).toHaveLength(1);
+    expect(ofKind(steps[2], 'createAssistant')).toHaveLength(0);
+    expect(steps[2]).toEqual([]);
+    // Still anchored on the single turn assistant — no fork.
+    expect(state.currentAssistantId).toBe('msg_1');
+  });
+
+  it('still opens a genuine new turn when the message.id changes', () => {
+    const { state, steps } = run([textEvent('first'), newStepWithId('M2'), newStepWithId('M3')]);
+    expect(ofKind(steps[1], 'createAssistant')).toHaveLength(1);
+    expect(ofKind(steps[2], 'createAssistant')).toHaveLength(1);
+    expect(state.currentMainMessageId).toBe('M3');
+    expect(state.currentAssistantId).toBe('msg_2');
+  });
+
+  it('falls back to opening a turn when no message.id is present (legacy events)', () => {
+    const { steps } = run([textEvent('first'), newStepWithId(undefined)]);
+    expect(ofKind(steps[1], 'createAssistant')).toHaveLength(1);
+  });
+});
