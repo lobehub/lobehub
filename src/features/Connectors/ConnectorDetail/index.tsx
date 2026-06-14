@@ -9,7 +9,7 @@ import { ConnectorSourceType } from '@/database/schemas';
 import { useToolStore } from '@/store/tool';
 import { connectorSelectors } from '@/store/tool/slices/connector';
 
-import AddConnectorModal from '../AddConnectorModal';
+import CustomConnectorModal from '../CustomConnectorModal';
 import ToolPermissionGroup from './ToolPermissionGroup';
 
 interface ConnectorDetailProps {
@@ -19,7 +19,7 @@ interface ConnectorDetailProps {
 
 const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId, onDelete }) => {
   const { t } = useTranslation('tool');
-  const [editOpen, setEditOpen] = useState(false);
+  const [customModalOpen, setCustomModalOpen] = useState(false);
 
   const connector = useToolStore(connectorSelectors.connectorById(connectorId));
   const { readTools, createTools, updateTools, deleteTools } = useToolStore(
@@ -35,6 +35,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId, onDelete }) =
   const deleteConnector = useToolStore((s) => s.deleteConnector);
   const uninstallBuiltinTool = useToolStore((s) => s.uninstallBuiltinTool);
   const uninstallMCPPlugin = useToolStore((s) => s.uninstallMCPPlugin);
+  const fetchConnectors = useToolStore((s) => s.fetchConnectors);
   const updateToolPermission = useToolStore((s) => s.updateToolPermission);
 
   const isMcpConnector = connector?.sourceType === ConnectorSourceType.custom;
@@ -119,7 +120,7 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId, onDelete }) =
             <Button
               icon={<PencilIcon size={14} />}
               size="small"
-              onClick={() => setEditOpen(true)}
+              onClick={() => setCustomModalOpen(true)}
             >
               {t('connector.edit', 'Edit')}
             </Button>
@@ -212,10 +213,13 @@ const ConnectorDetail = memo<ConnectorDetailProps>(({ connectorId, onDelete }) =
 
       {/* Edit modal — only http connectors have a server URL to edit */}
       {isMcpConnector && connector?.mcpConnectionType === 'http' && (
-        <AddConnectorModal
+        <CustomConnectorModal
           connectorId={connectorId}
-          open={editOpen}
-          onClose={() => setEditOpen(false)}
+          open={customModalOpen}
+          onClose={() => setCustomModalOpen(false)}
+          onEditSuccess={() => {
+            fetchConnectors();
+          }}
         />
       )}
     </div>
