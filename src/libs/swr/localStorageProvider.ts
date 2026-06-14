@@ -371,11 +371,11 @@ export const CACHE_TIERS = {
   ],
   /** Small, frequently-changing list shells → localStorage (sync first paint). */
   local: [
-    'fetchRecents',
+    'recent:list',
     'fetchRecentTopics',
     'fetchRecentResources',
     'fetchRecentPages',
-    'fetchGroups',
+    'group:list',
   ],
 } as const;
 

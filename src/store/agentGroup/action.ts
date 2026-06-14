@@ -24,8 +24,6 @@ import { ChatGroupMemberAction } from './slices/member';
 
 const n = setNamespace('chatGroup');
 
-const FETCH_GROUPS_KEY = 'fetchGroups';
-
 /**
  * Convert ChatGroupItem to AgentGroupDetail by adding empty agents array if not present
  */
@@ -145,7 +143,7 @@ class ChatGroupInternalAction implements ResetableStore {
   };
 
   refreshGroups = async () => {
-    await mutate([FETCH_GROUPS_KEY, true]);
+    await mutate(groupKeys.list(true));
   };
 
   toggleGroupSetting = (open: boolean) => {
@@ -220,7 +218,7 @@ class ChatGroupInternalAction implements ResetableStore {
   // This is not used for now, as we are combining group in the session lambda's response
   useFetchGroups = (enabled: boolean, isLogin: boolean) =>
     useClientDataSWRWithSync<ChatGroupItem[]>(
-      enabled ? [FETCH_GROUPS_KEY, isLogin] : null,
+      enabled ? groupKeys.list(isLogin) : null,
       async () => chatGroupService.getGroups(),
       {
         fallbackData: [],
