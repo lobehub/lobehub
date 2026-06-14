@@ -120,6 +120,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
       return {
         customParams: {
+          description: connector.metadata?.description as string | undefined,
           mcp: {
             args: mcpStdioConfig?.args,
             auth: {
@@ -134,8 +135,8 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
             url: connector.mcpServerUrl ?? undefined,
           },
         },
-        description: connector.metadata?.description as string | undefined,
         identifier: connector.identifier,
+        type: 'customPlugin' as const,
       };
     }, [isEditMode, connector]);
 
