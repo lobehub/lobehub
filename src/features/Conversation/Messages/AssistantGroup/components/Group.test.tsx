@@ -38,6 +38,7 @@ vi.mock('./CollapsedMessage', () => ({
 vi.mock('./WorkflowCollapse', () => ({
   default: ({
     blocks,
+    workflowChromeComplete,
   }: {
     blocks: Array<{
       content: string;
@@ -48,8 +49,10 @@ vi.mock('./WorkflowCollapse', () => ({
       hasToolsOverride?: boolean;
       tools?: unknown[];
     }>;
+    workflowChromeComplete?: boolean;
   }) => (
     <div
+      data-chrome-complete={String(!!workflowChromeComplete)}
       data-testid="workflow-segment"
       data-blocks={JSON.stringify(
         blocks.map(
@@ -145,7 +148,7 @@ describe('Group', () => {
     // renders as ONE inline unit (content above its tool inside ContentBlock),
     // never split into a tool-first / text-after layout.
     const longContent =
-      '后宫番 + 实际项目中的状态管理问题，这个组合挺有意思的！\n\n对于实际项目中的状态管理，你目前遇到的具体问题是什么？比如：\n- 不知道什么时候该用 useState，什么时候该用 Context\n- 组件间状态传递变得混乱\n- 性能问题（不必要的重渲染）';
+      'State management in real projects is an interesting topic!\n\nWhat specific problem are you running into right now? For example:\n- Not sure when to use useState vs Context\n- State passing between components gets messy\n- Performance issues from unnecessary re-renders';
 
     render(
       <Group
@@ -431,5 +434,78 @@ describe('Group', () => {
       { disableMarkdownStreaming: true, id: 'block-2' },
       { disableMarkdownStreaming: false, id: 'block-3' },
     ]);
+  });
+
+  it('marks the workflow chrome complete once content renders below a settled fold while generating', () => {
+    // An errored multi-tool block splits into a folded workflow (the tools) plus
+    // a trailing answer segment (the error text). While still generating, the
+    // collapse must not keep showing its streaming "working" header now that the
+    // model has moved past it and content renders below.
+    mockIsGenerating = true;
+
+    const { container } = render(
+      <Group
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'Something failed while running the commands.',
+            error: { message: 'boom' } as any,
+            id: 'block-1',
+            tools: [
+              { apiName: 'command_execution', id: 'tool-1', result: { content: 'ok' } } as any,
+              { apiName: 'command_execution', id: 'tool-2', result: { content: 'ok' } } as any,
+            ],
+          }),
+        ]}
+      />,
+    );
+
+    const sequence = Array.from(container.querySelectorAll('[data-testid]')).map((node) =>
+      node.getAttribute('data-testid'),
+    );
+
+    expect(sequence).toEqual(['workflow-segment', 'answer-segment']);
+    expect(screen.getByTestId('workflow-segment').getAttribute('data-chrome-complete')).toBe(
+      'true',
+    );
+  });
+
+  it('keeps the fold streaming when it still holds a pending intervention, even with content below', () => {
+    // Same shape as above, but one tool awaits user confirmation. The completion
+    // shortcut must be suppressed so the "awaiting confirmation" chrome survives —
+    // areWorkflowToolsComplete ignores pending tools, so we cannot rely on it.
+    mockIsGenerating = true;
+
+    const { container } = render(
+      <Group
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'Partial output before the failure.',
+            error: { message: 'boom' } as any,
+            id: 'block-1',
+            tools: [
+              { apiName: 'command_execution', id: 'tool-1', result: { content: 'ok' } } as any,
+              {
+                apiName: 'command_execution',
+                id: 'tool-2',
+                intervention: { status: 'pending' },
+              } as any,
+            ],
+          }),
+        ]}
+      />,
+    );
+
+    const sequence = Array.from(container.querySelectorAll('[data-testid]')).map((node) =>
+      node.getAttribute('data-testid'),
+    );
+
+    expect(sequence).toEqual(['workflow-segment', 'answer-segment']);
+    expect(screen.getByTestId('workflow-segment').getAttribute('data-chrome-complete')).toBe(
+      'false',
+    );
   });
 });

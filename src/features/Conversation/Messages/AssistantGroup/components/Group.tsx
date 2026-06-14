@@ -331,6 +331,29 @@ const shouldInlineWorkflowSegment = (blocks: RenderableAssistantContentBlock[]):
   return toolCount === 1;
 };
 
+/**
+ * A workflow segment is only the "active" step while it is the last thing in the
+ * group. Once any later segment has real content below it (e.g. an errored
+ * tool block whose error text renders as a trailing answer segment), the tools
+ * are settled and the collapse should read as done rather than keep showing its
+ * streaming "working" header. Empty trailing blocks (an answer not streamed yet)
+ * don't count. `postToolTailPromoted` already covers the promoted-final-answer
+ * path at the group level; this catches the remaining segment-ordering cases.
+ */
+const hasRenderedContentAfter = (segments: GroupRenderSegment[], index: number): boolean =>
+  segments
+    .slice(index + 1)
+    .some((seg) => (seg.kind === 'workflow' ? seg.blocks.length > 0 : !isEmptyBlock(seg.block)));
+
+/**
+ * A pending intervention still needs the user's confirmation, so the collapse
+ * must keep its streaming "awaiting confirmation" chrome even when a later
+ * segment has already rendered below it. `areWorkflowToolsComplete` ignores
+ * pending tools, so the completion shortcut must not be applied here.
+ */
+const hasPendingIntervention = (blocks: RenderableAssistantContentBlock[]): boolean =>
+  blocks.some((block) => block.tools?.some((tool) => tool.intervention?.status === 'pending'));
+
 const Group = memo<GroupChildrenProps>(
   ({
     blocks,
@@ -410,10 +433,14 @@ const Group = memo<GroupChildrenProps>(
                   defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
                   disableEditing={disableEditing}
                   key={segment.blocks[0]?.renderKey ?? `${id}.workflow.${index}`}
-                  workflowChromeComplete={workflowChromeComplete}
                   blocks={segment.blocks.map((block) =>
                     withMarkdownStreamingState(block, lastBlockId),
                   )}
+                  workflowChromeComplete={
+                    workflowChromeComplete ||
+                    (hasRenderedContentAfter(segments, index) &&
+                      !hasPendingIntervention(segment.blocks))
+                  }
                 />
               );
             }
