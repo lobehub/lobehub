@@ -9,6 +9,7 @@ import { ArchiveIcon, MessageSquarePlusIcon } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
 import { useFetchProjectSkills } from '@/hooks/useFetchProjectSkills';
 import { useAgentStore } from '@/store/agent';
@@ -56,14 +57,21 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
 
   // Device-bound (remote) runs scan project skills on that device over the
   // `device.listProjectSkills` RPC; the local desktop reads over Electron IPC.
-  // Mirror the WorkingSidebar's `remoteDeviceId`: only treat it as remote when
-  // the agent explicitly targets a bound device, so a local "This device" run
-  // keeps the IPC path (no deviceId).
+  // Mirror the WorkingSidebar exactly: resolve the EFFECTIVE target first, then
+  // treat it as remote only when it lands on `device` with a bound device. The
+  // effective target matters because a hetero agent saved as desktop "This
+  // device" (`local` + boundDeviceId) coerces to `device` when opened on web —
+  // reading the raw stored target would miss that and leave the menu empty even
+  // though the sidebar lists the skills.
   const agencyConfig = useAgentStore((s) =>
     agentId ? agentByIdSelectors.getAgencyConfigById(agentId)(s) : undefined,
   );
-  const remoteDeviceId =
-    agencyConfig?.executionTarget === 'device' ? agencyConfig?.boundDeviceId : undefined;
+  const isHetero = useAgentStore((s) =>
+    agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
+  );
+  const effectiveTarget = resolveExecutionTarget(agencyConfig, { isDesktop, isHetero });
+  const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
+  const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;
 
   // Local desktop reads over IPC; a bound device reads over RPC. Either path
   // makes project skills reachable even when this client isn't the desktop app
