@@ -858,4 +858,90 @@ describe('GatewayActionImpl', () => {
       });
     });
   });
+
+  describe('reconnectToGatewayOperation', () => {
+    function createReconnectTestAction(assistantMessage: any) {
+      const startOperation = vi.fn(() => ({ operationId: 'gw-op-reconnect' }));
+      const mockClient = createMockClient();
+      const state: Record<string, any> = {
+        activeAgentId: 'agent-1',
+        gatewayConnections: {},
+        messagesMap: { 'agent-1_topic-1': assistantMessage ? [assistantMessage] : [] },
+        // getTopicById reads here; an empty map yields no running op so the
+        // reconnect guards fall through to startOperation.
+        topicDataMap: {},
+      };
+      const set = vi.fn((updater: any) => {
+        if (typeof updater === 'function') Object.assign(state, updater(state));
+        else Object.assign(state, updater);
+      });
+      const get = vi.fn(() => ({
+        ...state,
+        associateMessageWithOperation: vi.fn(),
+        connectToGateway: vi.fn(),
+        internal_updateTopicLoading: vi.fn(),
+        onOperationCancel: vi.fn(),
+        startOperation,
+      })) as any;
+
+      (globalThis as any).window = {
+        global_serverConfigStore: {
+          getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+        },
+      };
+
+      vi.mocked(aiAgentService.refreshGatewayToken).mockResolvedValue({
+        token: 'fresh-token',
+      } as any);
+
+      const action = new GatewayActionImpl(set as any, get, undefined);
+      action.createClient = vi.fn(() => mockClient);
+
+      return { action, startOperation };
+    }
+
+    afterEach(() => {
+      delete (globalThis as any).window;
+    });
+
+    // After a DB rehydrate (e.g. quit + relaunch), `createdAt` can arrive as an
+    // ISO string instead of epoch ms. Anchoring startTime to it raw makes
+    // `Date.now() - startTime` evaluate to NaN, which the elapsed-time label
+    // renders as "NaN:NaN". The reconnect path must normalize it to a number.
+    it('normalizes an ISO-string createdAt into an epoch-ms startTime', async () => {
+      const createdAtMs = 1_700_000_000_000;
+      const { action, startOperation } = createReconnectTestAction({
+        createdAt: new Date(createdAtMs).toISOString(),
+        id: 'ast-1',
+      });
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      expect(startOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ startTime: createdAtMs }),
+        }),
+      );
+    });
+
+    it('omits startTime when createdAt is not a parseable date', async () => {
+      const { action, startOperation } = createReconnectTestAction({
+        createdAt: 'not-a-date',
+        id: 'ast-1',
+      });
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      const metadata = startOperation.mock.calls[0][0].metadata;
+      expect(metadata).not.toHaveProperty('startTime');
+    });
+  });
 });

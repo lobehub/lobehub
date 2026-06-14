@@ -604,13 +604,22 @@ export class GatewayActionImpl {
       .flat()
       .find((m) => m.id === assistantMessageId);
 
+    // `createdAt` is typed as a number but, after a DB rehydrate, it can arrive
+    // as a Date / ISO string (the message service casts rows `as unknown` without
+    // converting). Normalize to epoch ms here so the elapsed-time math stays a
+    // number — passing a string/Invalid Date straight through makes
+    // `Date.now() - startTime` resolve to NaN and renders as "NaN:NaN".
+    const startTime = assistantMessage?.createdAt
+      ? new Date(assistantMessage.createdAt).getTime()
+      : undefined;
+
     // Create a local operation for UI loading state, stashing the server op id
     // so intervention flows can find it after reconnect as well.
     const { operationId: gatewayOpId } = this.#get().startOperation({
       context,
       metadata: {
         serverOperationId: operationId,
-        ...(assistantMessage?.createdAt ? { startTime: assistantMessage.createdAt } : {}),
+        ...(Number.isFinite(startTime) ? { startTime } : {}),
       },
       type: 'execServerAgentRuntime',
     });
