@@ -2567,6 +2567,79 @@ describe('StreamingExecutor actions', () => {
       expect(result.current.operations[operationId].status).toBe('completed');
     });
 
+    // Parked states (run ≠ operation). These lock the CURRENT per-state handling that
+    // the unified run-lifecycle + normalized parked signal (LOBE-10382) will rewrite.
+    const pinStep = (operationId: string, status: AgentState['status']) => {
+      vi.spyOn(agentRuntime.AgentRuntime.prototype, 'step').mockResolvedValue({
+        events: [],
+        newState: createMockRuntimeState(operationId, status),
+        nextContext: undefined,
+      });
+    };
+
+    it('on waiting_for_async_tool: leaves the op uncompleted and emits an undefined complete-signal status', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const drainQueuedMessages = vi.fn(() => []);
+      restoreExecutor();
+      act(() => {
+        useChatStore.setState({ drainQueuedMessages });
+      });
+
+      let operationId!: string;
+      act(() => {
+        operationId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+        }).operationId;
+      });
+
+      driveTerminal(operationId, 'waiting_for_async_tool');
+      pinStep(operationId, 'waiting_for_async_tool');
+      await runExecutor(result, operationId);
+
+      // CURRENT BEHAVIOR (suspected gap, locked for LOBE-10382): the completion switch
+      // has no `waiting_for_async_tool` case, so the op is never completed (stays
+      // 'running') and the queue is not drained.
+      expect(result.current.operations[operationId].status).toBe('running');
+      expect(drainQueuedMessages).not.toHaveBeenCalled();
+
+      // normalizeClientRuntimeCompleteStatus falls through for async_tool → undefined.
+      const completeCall = agentSignalBridgeMock.emitClientAgentSignalSourceEvent.mock.calls.find(
+        (c: any) => c[0]?.sourceType === 'client.runtime.complete',
+      );
+      expect(completeCall).toBeTruthy();
+      expect(completeCall![0].payload.status).toBeUndefined();
+    });
+
+    it('on waiting_for_human (parked): completes the op for the UI but does NOT drain queue or mark unread', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const drainQueuedMessages = vi.fn(() => []);
+      const markUnreadCompleted = vi.fn();
+      restoreExecutor();
+      act(() => {
+        useChatStore.setState({ drainQueuedMessages, markUnreadCompleted });
+      });
+
+      let operationId!: string;
+      act(() => {
+        operationId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID },
+        }).operationId;
+      });
+
+      driveTerminal(operationId, 'waiting_for_human');
+      pinStep(operationId, 'waiting_for_human');
+      await runExecutor(result, operationId);
+
+      // Parked ≠ terminal: the op is completed so the loading UI clears, but the
+      // success-only terminal effects (queue drain, unread marker) MUST NOT fire — a
+      // new operation runs them when the user approves/rejects.
+      expect(result.current.operations[operationId].status).toBe('completed');
+      expect(drainQueuedMessages).not.toHaveBeenCalled();
+      expect(markUnreadCompleted).not.toHaveBeenCalled();
+    });
+
     describe('desktop notification gating', () => {
       afterEach(() => {
         desktopFlag.value = false;
