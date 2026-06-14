@@ -159,6 +159,7 @@ const InputArea = () => {
             <DesktopChatInput
               dropdownPlacement="bottomLeft"
               inputContainerProps={inputContainerProps}
+              isConfigLoading={isAgentConfigLoading}
               placeholder={dailyHint}
               showControlBar={false}
             />
