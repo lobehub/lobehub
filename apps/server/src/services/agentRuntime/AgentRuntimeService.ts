@@ -61,6 +61,7 @@ import { CompletionLifecycle } from './CompletionLifecycle';
 import { hookDispatcher } from './hooks';
 import { HumanInterventionHandler } from './HumanInterventionHandler';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
+import { createDefaultSnapshotStore } from './snapshotStore';
 import { buildStepPresentation, formatTokenCount } from './stepPresentation';
 import {
   type AgentExecutionParams,
@@ -256,7 +257,7 @@ export class AgentRuntimeService {
     this.queueService =
       options?.queueService === null ? null : (options?.queueService ?? new QueueService());
     this.traceRecorder = new OperationTraceRecorder(
-      options?.snapshotStore ?? this.createDefaultSnapshotStore(),
+      options?.snapshotStore ?? createDefaultSnapshotStore(),
     );
     this.agentFactory = options?.agentFactory;
     this.delegate = options?.delegate ?? {};
@@ -1972,34 +1973,6 @@ export class AgentRuntimeService {
     });
 
     return { agent, runtime };
-  }
-
-  /**
-   * Create default snapshot store based on environment.
-   * - ENABLE_AGENT_S3_TRACING=1 → S3SnapshotStore
-   * - NODE_ENV=development → FileSnapshotStore
-   * - Otherwise → null (no tracing)
-   */
-  private createDefaultSnapshotStore(): ISnapshotStore | null {
-    if (process.env.ENABLE_AGENT_S3_TRACING === '1') {
-      try {
-        const { S3SnapshotStore } = require('@/server/modules/AgentTracing');
-        return new S3SnapshotStore();
-      } catch {
-        // S3SnapshotStore not available
-      }
-    }
-
-    if (process.env.NODE_ENV === 'development') {
-      try {
-        const { FileSnapshotStore } = require('@lobechat/agent-tracing');
-        return new FileSnapshotStore();
-      } catch {
-        // agent-tracing not available
-      }
-    }
-
-    return null;
   }
 
   /**

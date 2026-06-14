@@ -10,6 +10,7 @@ import type { LobeChatDatabase } from '@/database/type';
 import { AgentRuntimeCoordinator } from '@/server/modules/AgentRuntime/AgentRuntimeCoordinator';
 
 import { OperationTraceRecorder } from './OperationTraceRecorder';
+import { createDefaultSnapshotStore } from './snapshotStore';
 
 const log = debug('lobe-server:abandon-operation');
 
@@ -126,26 +127,4 @@ export class AbandonOperationService {
     log('[%s] abandoned op finalized (reason=%s): %O', operationId, reason, result);
     return result;
   }
-}
-
-function createDefaultSnapshotStore(): ISnapshotStore | null {
-  if (process.env.ENABLE_AGENT_S3_TRACING === '1') {
-    try {
-      const { S3SnapshotStore } = require('@/server/modules/AgentTracing');
-      return new S3SnapshotStore();
-    } catch {
-      /* S3SnapshotStore not available */
-    }
-  }
-
-  if (process.env.NODE_ENV === 'development') {
-    try {
-      const { FileSnapshotStore } = require('@lobechat/agent-tracing');
-      return new FileSnapshotStore();
-    } catch {
-      /* agent-tracing not available */
-    }
-  }
-
-  return null;
 }
