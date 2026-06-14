@@ -73,18 +73,18 @@ export const topicKeys = {
 // ---- agent --------------------------------------------------------------
 export const agentKeys = {
   /** Sidebar agent list. */
-  list: def('agent:list', () => ['agent:list']),
+  list: def('agent:list', (isLogin: boolean) => ['agent:list', isLogin]),
 };
 
 // ---- group --------------------------------------------------------------
 export const groupKeys = {
   detail: def('group:detail', (groupId: string) => ['group:detail', groupId]),
-  list: def('group:list', () => ['group:list']),
+  list: def('group:list', (isLogin: boolean) => ['group:list', isLogin]),
 };
 
 // ---- session ------------------------------------------------------------
 export const sessionKeys = {
-  list: def('session:list', () => ['session:list']),
+  list: def('session:list', (isLogin: boolean | undefined) => ['session:list', isLogin]),
   search: def('session:search', (keyword?: string) => ['session:search', keyword]),
 };
 
@@ -97,8 +97,8 @@ export const threadKeys = {
 export const recentKeys = {
   /** Home "all recents" drawer list, keyed by open state. */
   allDrawer: def('recent:allDrawer', (open: boolean) => ['recent:allDrawer', open]),
-  /** Home recents list, keyed by limit. */
-  list: def('recent:list', (limit: number) => ['recent:list', limit]),
+  /** Home recents list, keyed by login + limit. */
+  list: def('recent:list', (isLogin: boolean, limit: number) => ['recent:list', isLogin, limit]),
 };
 
 // ---- task ---------------------------------------------------------------
@@ -110,7 +110,7 @@ export const taskKeys = {
 
 // ---- brief --------------------------------------------------------------
 export const briefKeys = {
-  list: def('brief:list', () => ['brief:list']),
+  list: def('brief:list', (isLogin: boolean) => ['brief:list', isLogin]),
 };
 
 // ---- agent config / available / search ----------------------------------

@@ -38,12 +38,12 @@ export class AgentListActionImpl {
 
   refreshAgentList = async (): Promise<void> => {
     getAgentStoreState().invalidateAvailableAgents();
-    await mutate(agentKeys.list());
+    await mutate(agentKeys.list(true));
   };
 
   useFetchAgentList = (isLogin: boolean | undefined): SWRResponse<SidebarAgentListResponse> => {
     return useClientDataSWRWithSync<SidebarAgentListResponse>(
-      isLogin === true ? agentKeys.list() : null,
+      isLogin === true ? agentKeys.list(isLogin) : null,
       () => homeService.getSidebarAgentList(),
       {
         onData: (data) => {

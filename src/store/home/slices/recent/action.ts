@@ -56,7 +56,7 @@ export class RecentActionImpl {
     limit: number = 10,
   ): SWRResponse<RecentItem[]> => {
     return useClientDataSWRWithSync<RecentItem[]>(
-      isLogin === true ? recentKeys.list(limit) : null,
+      isLogin === true ? recentKeys.list(isLogin, limit) : null,
       async () => recentService.getAll(limit + 1),
       {
         onData: (data) => {

@@ -75,7 +75,7 @@ export class BriefListActionImpl {
 
   useFetchBriefs = (isLogin: boolean | undefined): SWRResponse<BriefItem[]> => {
     return useClientDataSWRWithSync<BriefItem[]>(
-      isLogin === true ? briefKeys.list() : null,
+      isLogin === true ? briefKeys.list(isLogin) : null,
       async () => {
         const result = await briefService.listUnresolved();
         return result.data as BriefItem[];

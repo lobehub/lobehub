@@ -143,7 +143,7 @@ class ChatGroupInternalAction implements ResetableStore {
   };
 
   refreshGroups = async () => {
-    await mutate(groupKeys.list());
+    await mutate(groupKeys.list(true));
   };
 
   toggleGroupSetting = (open: boolean) => {
@@ -218,7 +218,7 @@ class ChatGroupInternalAction implements ResetableStore {
   // This is not used for now, as we are combining group in the session lambda's response
   useFetchGroups = (enabled: boolean, isLogin: boolean) =>
     useClientDataSWRWithSync<ChatGroupItem[]>(
-      enabled ? groupKeys.list() : null,
+      enabled ? groupKeys.list(isLogin) : null,
       async () => chatGroupService.getGroups(),
       {
         fallbackData: [],
