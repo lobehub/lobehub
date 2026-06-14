@@ -452,8 +452,28 @@ export class TopicModel {
     });
   };
 
-  queryAll = async (): Promise<TopicItem[]> => {
-    return this.db.select().from(topics).orderBy(topics.updatedAt).where(and(this.ownership()));
+  /**
+   * Query the current user's topics, optionally filtered by status. Used by the
+   * Fleet view to list actively-running topics across all agents without
+   * pulling the full topic set to the client.
+   */
+  queryTopics = async ({
+    statuses,
+    pageSize = 200,
+  }: { pageSize?: number; statuses?: string[] } = {}): Promise<TopicItem[]> => {
+    return this.db
+      .select()
+      .from(topics)
+      .where(
+        and(
+          this.ownership(),
+          statuses && statuses.length > 0
+            ? inArray(topics.status, statuses as ChatTopicStatus[])
+            : undefined,
+        ),
+      )
+      .orderBy(desc(topics.updatedAt))
+      .limit(pageSize);
   };
 
   queryByKeyword = async (

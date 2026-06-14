@@ -95,10 +95,6 @@ export const topicRouter = router({
       return data.id;
     }),
 
-  getAllTopics: topicProcedure.query(async ({ ctx }) => {
-    return ctx.topicModel.queryAll();
-  }),
-
   // TODO: this procedure should be used with authedProcedure
   getTopics: publicProcedure
     .input(

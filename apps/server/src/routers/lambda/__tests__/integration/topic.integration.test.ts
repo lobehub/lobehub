@@ -767,7 +767,7 @@ describe('Topic Router Integration Tests', () => {
         sessionId: testSessionId,
       });
 
-      const allTopics = await caller.getAllTopics();
+      const allTopics = await caller.queryTopics();
 
       expect(allTopics).toHaveLength(2);
     });

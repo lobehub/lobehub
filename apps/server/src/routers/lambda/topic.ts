@@ -251,9 +251,18 @@ export const topicRouter = router({
       return ctx.topicShareModel.create(input.topicId, input.visibility);
     }),
 
-  getAllTopics: topicProcedure.query(async ({ ctx }) => {
-    return ctx.topicModel.queryAll();
-  }),
+  queryTopics: topicProcedure
+    .input(
+      z
+        .object({
+          pageSize: z.number().max(500).optional(),
+          statuses: z.array(z.string()).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input, ctx }) => {
+      return ctx.topicModel.queryTopics({ pageSize: input?.pageSize, statuses: input?.statuses });
+    }),
 
   getShareInfo: topicProcedure
     .input(z.object({ topicId: z.string() }))

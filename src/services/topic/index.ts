@@ -60,8 +60,8 @@ export class TopicService {
     }) as any;
   };
 
-  getAllTopics = (): Promise<ChatTopic[]> => {
-    return lambdaClient.topic.getAllTopics.query() as any;
+  queryTopics = (params?: { pageSize?: number; statuses?: string[] }): Promise<ChatTopic[]> => {
+    return lambdaClient.topic.queryTopics.query(params) as any;
   };
 
   countTopics = async (params?: {

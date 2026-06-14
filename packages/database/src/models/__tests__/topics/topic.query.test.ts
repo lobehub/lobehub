@@ -1438,18 +1438,28 @@ describe('TopicModel - Query', () => {
     });
   });
 
-  describe('queryAll', () => {
-    it('should return all topics', async () => {
+  describe('queryTopics', () => {
+    it('should return all topics when no status filter is given', async () => {
       await serverDB.insert(topics).values([
         { id: 'topic1', sessionId, userId },
         { id: 'topic2', sessionId, userId },
       ]);
 
-      const result = await topicModel.queryAll();
+      const result = await topicModel.queryTopics();
 
       expect(result).toHaveLength(2);
-      expect(result[0].id).toBe('topic1');
-      expect(result[1].id).toBe('topic2');
+      expect(result.map((t) => t.id).sort()).toEqual(['topic1', 'topic2']);
+    });
+
+    it('should filter by status', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'running1', sessionId, status: 'running', userId },
+        { id: 'done1', sessionId, status: 'completed', userId },
+      ]);
+
+      const result = await topicModel.queryTopics({ statuses: ['running'] });
+
+      expect(result.map((t) => t.id)).toEqual(['running1']);
     });
   });
 
