@@ -89,6 +89,7 @@ const SettingContent = memo<SettingContentProps>(({ initialValues, id }) => {
 
   const handleDelete = () => {
     confirmModal({
+      content: t('updateAiProvider.confirmDeleteDescription'),
       okButtonProps: { danger: true },
       okText: t('delete', { ns: 'common' }),
       onOk: async () => {

@@ -410,8 +410,9 @@ export default {
   'sortModal.success': 'Sort update successful',
   'sortModal.title': 'Custom Order',
   'sortModal.update': 'Update',
-  'updateAiProvider.confirmDelete':
-    'You are about to delete this AI provider. Once deleted, it cannot be retrieved. Are you sure you want to delete?',
+  'updateAiProvider.confirmDelete': 'Delete this AI provider?',
+  'updateAiProvider.confirmDeleteDescription':
+    'Once deleted, this AI provider cannot be recovered.',
   'updateAiProvider.deleteSuccess': 'Deletion successful',
   'updateAiProvider.tooltip': 'Update provider basic configuration',
   'updateAiProvider.updateSuccess': 'Update successful',
