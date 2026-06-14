@@ -352,25 +352,22 @@ export function clearSWRCache(cacheKey = 'lobechat-swr-cache'): void {
 
 /**
  * Central tiering config — the single place that decides where each kind of
- * data is persisted. Keyed by SWR key substring.
+ * data is persisted, keyed by the `domain:` namespace of the SWR key (see the
+ * key registry in `@/libs/swr/keys`). Matching is substring-based; the colon in
+ * `domain:` keeps these from matching unrelated keys.
  */
 export const CACHE_TIERS = {
   /** Large / important business entities → IndexedDB. */
   idb: [
-    'CONVERSATION_FETCH_MESSAGES', // chat messages (Conversation store)
-    'CHAT_STORE_FETCH_MESSAGES', // chat messages (legacy chat store)
-    'SWR_USE_FETCH_TOPIC', // topic lists
-    'fetchAgentList', // sidebar agent list
-    'agent-documents', // agent documents + documents-list
-    'fetchGroupDetail', // group detail
-    'fetchTaskGroupList', // task lists
-    'fetchTaskDetail', // task detail
-    'document/editor', // editor document content
-    'pageDetail', // page detail
-    'pageDocuments', // page document list
-    'page-document-meta', // page metadata
-    'SWR_USE_FETCH_NOTEBOOK_DOCUMENTS', // notebook documents
-    'fetchBriefs', // briefs
+    'message:', // chat messages (conversation + legacy stores)
+    'topic:', // topic lists / agent view / search
+    'agent:', // sidebar agent list + agent documents
+    'group:detail', // group detail (group list stays in localStorage)
+    'task:', // task lists + detail
+    'document:', // editor document content
+    'page:', // page detail / list / meta
+    'notebook:', // notebook documents
+    'brief:', // briefs
   ],
   /** Small, frequently-changing list shells → localStorage (sync first paint). */
   local: [

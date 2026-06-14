@@ -10,13 +10,13 @@ describe('buildLocalDataKey', () => {
   });
 
   it('serializes array/object keys', () => {
-    expect(buildLocalDataKey('u:w', ['CONVERSATION_FETCH_MESSAGES', { topicId: 't1' }])).toBe(
-      'u:w::["CONVERSATION_FETCH_MESSAGES",{"topicId":"t1"}]',
+    expect(buildLocalDataKey('u:w', ['message:list', { topicId: 't1' }])).toBe(
+      'u:w::["message:list",{"topicId":"t1"}]',
     );
   });
 
   it('partitions identical SWR keys by scope', () => {
-    const key = ['CONVERSATION_FETCH_MESSAGES', { topicId: 't1' }];
+    const key = ['message:list', { topicId: 't1' }];
     expect(buildLocalDataKey('userA:personal', key)).not.toBe(
       buildLocalDataKey('userB:personal', key),
     );

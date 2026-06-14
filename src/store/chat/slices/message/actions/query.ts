@@ -4,6 +4,7 @@ import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { messageKeys } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';
 import { type ChatStore } from '@/store/chat/store';
 import { type StoreSetter } from '@/store/types';
@@ -136,7 +137,7 @@ export class MessageQueryActionImpl {
     const shouldFetch = !skipFetch && !!context.agentId && !!context.topicId;
 
     return useClientDataSWRWithSync<UIChatMessage[]>(
-      shouldFetch ? ['CHAT_STORE_FETCH_MESSAGES', context] : null,
+      shouldFetch ? messageKeys.listLegacy(context) : null,
       () => messageService.getMessages(context),
       {
         onData: (data) => {

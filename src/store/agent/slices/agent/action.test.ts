@@ -30,8 +30,8 @@ vi.mock('@/services/agentDocument', () => ({
     listDocuments: vi.fn(),
   },
   agentDocumentSWRKeys: {
-    documents: (agentId: string) => ['agent-documents', agentId] as const,
-    documentsList: (agentId: string) => ['agent-documents-list', agentId] as const,
+    documents: (agentId: string) => ['agent:documents', agentId] as const,
+    documentsList: (agentId: string) => ['agent:documentsList', agentId] as const,
   },
   resolveAgentDocumentsContext: vi.fn(),
 }));

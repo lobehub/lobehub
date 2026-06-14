@@ -11,6 +11,7 @@ import useSWR from 'swr';
 import { message } from '@/components/AntdStaticMethods';
 import { LOADING_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { topicKeys } from '@/libs/swr/keys';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
@@ -37,9 +38,6 @@ import { topicSelectors } from './selectors';
 
 const n = setNamespace('t');
 
-const SWR_USE_FETCH_TOPIC = 'SWR_USE_FETCH_TOPIC';
-const SWR_USE_FETCH_AGENT_TOPICS_VIEW = 'SWR_USE_FETCH_AGENT_TOPICS_VIEW';
-const SWR_USE_SEARCH_TOPIC = 'SWR_USE_SEARCH_TOPIC';
 type CronTopicsGroupWithJobInfo = {
   cronJob: unknown;
   cronJobId: string;
@@ -404,18 +402,14 @@ export class ChatTopicActionImpl {
 
     return useClientDataSWRWithSync<{ items: ChatTopic[]; total: number }>(
       enable && hasValidContainer
-        ? [
-            SWR_USE_FETCH_TOPIC,
-            containerKey,
-            {
-              isInbox,
-              pageSize,
-              ...(effectiveExcludeTriggers ? { excludeTriggers: effectiveExcludeTriggers } : {}),
-              ...(effectiveExcludeStatuses ? { excludeStatuses: effectiveExcludeStatuses } : {}),
-              ...(sortBy ? { sortBy } : {}),
-              ...(withDetails ? { withDetails: true } : {}),
-            },
-          ]
+        ? topicKeys.list(containerKey, {
+            isInbox,
+            pageSize,
+            ...(effectiveExcludeTriggers ? { excludeTriggers: effectiveExcludeTriggers } : {}),
+            ...(effectiveExcludeStatuses ? { excludeStatuses: effectiveExcludeStatuses } : {}),
+            ...(sortBy ? { sortBy } : {}),
+            ...(withDetails ? { withDetails: true } : {}),
+          })
         : null,
       async () => {
         // agentId, groupId, isInbox, pageSize come from the outer scope closure
@@ -545,11 +539,10 @@ export class ChatTopicActionImpl {
 
     return useClientDataSWRWithSync<{ items: ChatTopic[]; total: number }>(
       enable && hasValidAgent
-        ? [
-            SWR_USE_FETCH_AGENT_TOPICS_VIEW,
-            containerKey,
-            { pageSize, ...(withDetails ? { withDetails: true } : {}) },
-          ]
+        ? topicKeys.agentView(containerKey, {
+            pageSize,
+            ...(withDetails ? { withDetails: true } : {}),
+          })
         : null,
       async () => {
         if (!agentId) return { items: [], total: 0 };
@@ -689,8 +682,7 @@ export class ChatTopicActionImpl {
     if (!activeAgentId) return;
     const containerKey = topicMapKey({ agentId: activeAgentId });
     await mutate(
-      (key) =>
-        Array.isArray(key) && key[0] === SWR_USE_FETCH_AGENT_TOPICS_VIEW && key[1] === containerKey,
+      (key) => Array.isArray(key) && key[0] === topicKeys.agentView.root && key[1] === containerKey,
     );
   };
 
@@ -783,7 +775,7 @@ export class ChatTopicActionImpl {
     } = {},
   ): SWRResponse<ChatTopic[]> => {
     return useSWR<ChatTopic[]>(
-      keywords ? [SWR_USE_SEARCH_TOPIC, keywords, agentId, groupId] : null,
+      keywords ? topicKeys.search(keywords, agentId, groupId) : null,
       ([, keywords, agentId, groupId]: [string, string, string | undefined, string | undefined]) =>
         topicService.searchTopics(keywords, agentId, groupId),
       {
@@ -955,16 +947,16 @@ export class ChatTopicActionImpl {
   refreshTopic = async (): Promise<void> => {
     const { activeAgentId, activeGroupId } = this.#get();
     // Use topicMapKey to generate the same key used in useFetchTopics
-    // Key format: [SWR_USE_FETCH_TOPIC, containerKey, { isInbox, pageSize }]
+    // Key format: topicKeys.list(containerKey, { isInbox, pageSize })
     const containerKey = topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
     const agentViewKey = activeAgentId ? topicMapKey({ agentId: activeAgentId }) : null;
     await mutate(
       (key) =>
         Array.isArray(key) &&
-        ((key[0] === SWR_USE_FETCH_TOPIC &&
+        ((key[0] === topicKeys.list.root &&
           typeof key[1] === 'string' &&
           key[1] === containerKey) ||
-          (key[0] === SWR_USE_FETCH_AGENT_TOPICS_VIEW &&
+          (key[0] === topicKeys.agentView.root &&
             agentViewKey !== null &&
             key[1] === agentViewKey)),
     );

@@ -215,13 +215,11 @@ describe('topic action', () => {
       const containerKey = `agent_${activeAgentId}`;
 
       // Should match key with correct containerKey
-      expect(
-        matcherFn(['SWR_USE_FETCH_TOPIC', containerKey, { isInbox: false, pageSize: 20 }]),
-      ).toBe(true);
+      expect(matcherFn(['topic:list', containerKey, { isInbox: false, pageSize: 20 }])).toBe(true);
       // Should not match key with different containerKey
-      expect(
-        matcherFn(['SWR_USE_FETCH_TOPIC', 'agent_other-id', { isInbox: false, pageSize: 20 }]),
-      ).toBe(false);
+      expect(matcherFn(['topic:list', 'agent_other-id', { isInbox: false, pageSize: 20 }])).toBe(
+        false,
+      );
       // Should not match non-array keys
       expect(matcherFn('some-string')).toBe(false);
       // Should not match keys with wrong prefix

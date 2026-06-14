@@ -5,6 +5,7 @@ import { type SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
+import { messageKeys } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';
 import { getChatStoreState } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
@@ -208,7 +209,7 @@ export const dataSlice: StateCreator<
     );
 
     return useClientDataSWRWithSync<UIChatMessage[]>(
-      shouldFetch ? ['CONVERSATION_FETCH_MESSAGES', context] : null,
+      shouldFetch ? messageKeys.list(context) : null,
 
       () => messageService.getMessages(context),
       {

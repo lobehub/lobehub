@@ -5,6 +5,7 @@ import { type StateCreator } from 'zustand/vanilla';
 
 import { type ChatGroupItem } from '@/database/schemas/chatGroup';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { groupKeys } from '@/libs/swr/keys';
 import { chatGroupService } from '@/services/chatGroup';
 import { getAgentStoreState } from '@/store/agent';
 import { type ChatGroupStore } from '@/store/agentGroup/store';
@@ -24,7 +25,6 @@ import { ChatGroupMemberAction } from './slices/member';
 const n = setNamespace('chatGroup');
 
 const FETCH_GROUPS_KEY = 'fetchGroups';
-const FETCH_GROUP_DETAIL_KEY = 'fetchGroupDetail';
 
 /**
  * Convert ChatGroupItem to AgentGroupDetail by adding empty agents array if not present
@@ -141,7 +141,7 @@ class ChatGroupInternalAction implements ResetableStore {
   };
 
   refreshGroupDetail = async (groupId: string) => {
-    await mutate([FETCH_GROUP_DETAIL_KEY, groupId]);
+    await mutate(groupKeys.detail(groupId));
   };
 
   refreshGroups = async () => {
@@ -158,7 +158,7 @@ class ChatGroupInternalAction implements ResetableStore {
 
   useFetchGroupDetail = (enabled: boolean, groupId: string) =>
     useClientDataSWRWithSync<AgentGroupDetail | null>(
-      enabled && groupId ? [FETCH_GROUP_DETAIL_KEY, groupId] : null,
+      enabled && groupId ? groupKeys.detail(groupId) : null,
       async () => {
         const groupDetail = await chatGroupService.getGroupDetail(groupId);
         if (!groupDetail) throw new Error(`Group ${groupId} not found`);

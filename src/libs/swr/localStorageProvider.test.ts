@@ -189,8 +189,9 @@ describe('createCacheProvider — tiering', () => {
     await new Promise((r) => setTimeout(r, 20));
   });
 
-  it('exposes the central tier config', () => {
-    expect(CACHE_TIERS.idb).toContain('CONVERSATION_FETCH_MESSAGES');
+  it('exposes the central tier config keyed by domain prefix', () => {
+    expect(CACHE_TIERS.idb).toContain('message:');
+    expect(CACHE_TIERS.idb).toContain('topic:');
     expect(CACHE_TIERS.local).toContain('fetchRecents');
   });
 });

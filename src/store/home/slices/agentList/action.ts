@@ -3,6 +3,7 @@ import { type SWRResponse } from 'swr';
 
 import { type SidebarAgentItem, type SidebarAgentListResponse } from '@/database/repositories/home';
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
+import { agentKeys } from '@/libs/swr/keys';
 import { homeService } from '@/services/home';
 import { getAgentStoreState } from '@/store/agent';
 import { type HomeStore } from '@/store/home/store';
@@ -13,7 +14,6 @@ import { mapResponseToState } from './initialState';
 
 const n = setNamespace('agentList');
 
-const FETCH_AGENT_LIST_KEY = 'fetchAgentList';
 const SEARCH_AGENTS_KEY = 'searchAgents';
 
 type Setter = StoreSetter<HomeStore>;
@@ -40,12 +40,12 @@ export class AgentListActionImpl {
 
   refreshAgentList = async (): Promise<void> => {
     getAgentStoreState().invalidateAvailableAgents();
-    await mutate([FETCH_AGENT_LIST_KEY, true]);
+    await mutate(agentKeys.list(true));
   };
 
   useFetchAgentList = (isLogin: boolean | undefined): SWRResponse<SidebarAgentListResponse> => {
     return useClientDataSWRWithSync<SidebarAgentListResponse>(
-      isLogin === true ? [FETCH_AGENT_LIST_KEY, isLogin] : null,
+      isLogin === true ? agentKeys.list(isLogin) : null,
       () => homeService.getSidebarAgentList(),
       {
         onData: (data) => {

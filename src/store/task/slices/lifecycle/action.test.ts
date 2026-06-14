@@ -58,7 +58,7 @@ describe('TaskLifecycleSliceAction', () => {
 
       await useTaskStore.getState().runTask('T-1');
 
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
     });
   });
 
@@ -113,7 +113,7 @@ describe('TaskLifecycleSliceAction', () => {
       await useTaskStore.getState().cancelTopic('tpc_1');
 
       expect(taskService.cancelTopic).toHaveBeenCalledWith('tpc_1');
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
     });
 
     it('should not refresh if no activeTaskId', async () => {
@@ -136,7 +136,7 @@ describe('TaskLifecycleSliceAction', () => {
       await useTaskStore.getState().deleteTopic('tpc_1');
 
       expect(taskService.deleteTopic).toHaveBeenCalledWith('tpc_1');
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
     });
   });
 });
