@@ -3,18 +3,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { inboxKeys } from '@/libs/swr/keys';
 
-import { INBOX_UNREAD_COUNT_REFRESH_INTERVAL, useInboxUnreadCount } from './useInboxUnreadCount';
+import {
+  INBOX_UNREAD_COUNT_DEDUPING_INTERVAL,
+  INBOX_UNREAD_COUNT_REFRESH_INTERVAL,
+  useInboxUnreadCount,
+} from './useInboxUnreadCount';
 
 const mocks = vi.hoisted(() => ({
   state: {
     enableBusinessFeatures: true,
     isSignedIn: false,
   },
-  useClientDataSWR: vi.fn(() => ({ data: undefined })),
+  useClientPollingSWR: vi.fn(() => ({ data: undefined })),
 }));
 
 vi.mock('@/libs/swr', () => ({
-  useClientDataSWR: mocks.useClientDataSWR,
+  useClientPollingSWR: mocks.useClientPollingSWR,
 }));
 
 vi.mock('@/services/notification', () => ({
@@ -47,8 +51,8 @@ vi.mock('@/store/user/selectors', () => ({
 beforeEach(() => {
   mocks.state.enableBusinessFeatures = true;
   mocks.state.isSignedIn = false;
-  mocks.useClientDataSWR.mockClear();
-  mocks.useClientDataSWR.mockReturnValue({ data: undefined });
+  mocks.useClientPollingSWR.mockClear();
+  mocks.useClientPollingSWR.mockReturnValue({ data: undefined });
 });
 
 describe('useInboxUnreadCount', () => {
@@ -56,7 +60,8 @@ describe('useInboxUnreadCount', () => {
     const { result } = renderHook(() => useInboxUnreadCount());
 
     expect(result.current.enabled).toBe(false);
-    expect(mocks.useClientDataSWR).toHaveBeenCalledWith(null, expect.any(Function), {
+    expect(mocks.useClientPollingSWR).toHaveBeenCalledWith(null, expect.any(Function), {
+      dedupingInterval: INBOX_UNREAD_COUNT_DEDUPING_INTERVAL,
       refreshInterval: INBOX_UNREAD_COUNT_REFRESH_INTERVAL,
     });
   });
@@ -67,16 +72,21 @@ describe('useInboxUnreadCount', () => {
     const { result } = renderHook(() => useInboxUnreadCount());
 
     expect(result.current.enabled).toBe(true);
-    expect(mocks.useClientDataSWR).toHaveBeenCalledWith(
+    expect(mocks.useClientPollingSWR).toHaveBeenCalledWith(
       inboxKeys.unreadCount(),
       expect.any(Function),
       {
+        dedupingInterval: INBOX_UNREAD_COUNT_DEDUPING_INTERVAL,
         refreshInterval: INBOX_UNREAD_COUNT_REFRESH_INTERVAL,
       },
     );
   });
 
-  it('keeps unread count polling on the same 10 second cadence', () => {
+  it('keeps the 10 second polling timer while deduping repeated requests', () => {
     expect(INBOX_UNREAD_COUNT_REFRESH_INTERVAL).toBe(10_000);
+    expect(INBOX_UNREAD_COUNT_DEDUPING_INTERVAL).toBe(30_000);
+    expect(INBOX_UNREAD_COUNT_DEDUPING_INTERVAL).toBeGreaterThan(
+      INBOX_UNREAD_COUNT_REFRESH_INTERVAL,
+    );
   });
 });
