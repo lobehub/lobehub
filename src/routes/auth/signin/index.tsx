@@ -1,3 +1,1 @@
-import SignIn from '@/features/Auth/SignIn';
-
-export default SignIn;
+export { default } from '@/features/Auth/SignIn';

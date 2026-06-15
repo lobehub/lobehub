@@ -5,7 +5,7 @@ import { Result } from 'antd';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import BrandLoading from '@/components/Loading/BrandTextLoading';
+import LoadingIcon from '../../LoadingIcon';
 
 interface BuiltinConsentProps {
   uid: string;
@@ -23,8 +23,8 @@ const BuiltinConsent = memo<BuiltinConsentProps>(({ uid }) => {
   return (
     <>
       <Result
-        icon={<BrandLoading debugId={'ouidc'} />}
-        status="success"
+        icon={<LoadingIcon size={56} />}
+        status="info"
         title={<Text fontSize={14}>{t('consent.redirecting')}</Text>}
       />
       <form action="/oidc/consent" method="post" ref={formRef} style={{ display: 'none' }}>
