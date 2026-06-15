@@ -68,7 +68,6 @@ import {
   messageTranslates,
   messageTTS,
   threads,
-  topics,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
@@ -2054,19 +2053,19 @@ export class MessageModel {
               { hasMetadata: !!metadataPatch, valueKeys: Object.keys(message) },
             );
 
-            if (updated?.topicId) {
-              // When this write carries token usage (assistant finalize / hetero
+            if (
+              updated?.topicId && // When this write carries token usage (assistant finalize / hetero
               // step), recompute the topic's denormalized usage rollup from its
               // messages. Gated on the *incoming* payload so streaming
               // content-only updates don't trigger needless recomputes.
-              if (usageToWrite) {
-                await runTimedStage(
-                  timing,
-                  'db.message.update.topic.recomputeUsage',
-                  () => recomputeTopicUsage(trx, this.userId, updated.topicId!, this.workspaceId),
-                  { topicCount: 1 },
-                );
-              }
+              usageToWrite
+            ) {
+              await runTimedStage(
+                timing,
+                'db.message.update.topic.recomputeUsage',
+                () => recomputeTopicUsage(trx, this.userId, updated.topicId!, this.workspaceId),
+                { topicCount: 1 },
+              );
             }
           }),
         {
@@ -2370,6 +2369,44 @@ export class MessageModel {
           eq(messages.parentId, assistantMessageId),
           eq(messages.role, 'tool'),
           isNull(messages.threadId),
+          this.ownership(),
+        ),
+      )
+      .orderBy(desc(messages.createdAt))
+      .limit(1);
+
+    return row?.id;
+  };
+
+  /**
+   * Latest main-thread (`threadId IS NULL`) tool message in a topic created on
+   * or after `sinceMessageId`. The hetero persistence handler passes the running
+   * operation's seed assistant as `sinceMessageId`, so the `createdAt` floor
+   * scopes the lookup to that run (a topic runs at most one operation at a time)
+   * and the chain anchor stays correct even when the in-memory current-assistant
+   * pointer has regressed on a cold replica.
+   */
+  getLastMainThreadToolMessageIdSince = async (
+    topicId: string,
+    sinceMessageId: string,
+  ): Promise<string | undefined> => {
+    const [seed] = await this.db
+      .select({ createdAt: messages.createdAt })
+      .from(messages)
+      .where(and(eq(messages.id, sinceMessageId), this.ownership()))
+      .limit(1);
+
+    if (!seed?.createdAt) return undefined;
+
+    const [row] = await this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.topicId, topicId),
+          eq(messages.role, 'tool'),
+          isNull(messages.threadId),
+          gte(messages.createdAt, seed.createdAt),
           this.ownership(),
         ),
       )
