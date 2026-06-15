@@ -1862,13 +1862,11 @@ describe('AgentRuntimeService', () => {
       });
       (service as any).serverDB.query = {
         messagePlugins: {
-          findFirst: vi
-            .fn()
-            .mockResolvedValue({
-              id: 'msg-tc1',
-              state: { onComplete: 'finish', status: 'completed' },
-              toolCallId: 'tc1',
-            }),
+          findFirst: vi.fn().mockResolvedValue({
+            id: 'msg-tc1',
+            state: { onComplete: 'finish', status: 'completed' },
+            toolCallId: 'tc1',
+          }),
         },
       };
       (service as any).messageModel.findById = vi.fn().mockResolvedValue({ content: 'answer' });
@@ -2137,6 +2135,95 @@ describe('AgentRuntimeService', () => {
         service.completeSubAgentBridge({ ...bridgeParams, finalState: childState as any }),
       ).rejects.toThrow('db down');
       expect(resumeSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resolveAsyncToolOnComplete', () => {
+    it('returns finish when ANY pending tool requests finish (not just the first)', async () => {
+      // First pending tool resumes; a later one is a group finish action. The
+      // disposition must scan all pending tools, not only pending[0].
+      (service as any).serverDB.query = {
+        messagePlugins: {
+          findFirst: vi
+            .fn()
+            .mockResolvedValueOnce({ state: { status: 'completed' } })
+            .mockResolvedValueOnce({ state: { onComplete: 'finish', status: 'completed' } }),
+        },
+      };
+
+      const result = await (service as any).resolveAsyncToolOnComplete([
+        { id: 'tc1' },
+        { id: 'tc2' },
+      ]);
+
+      expect(result).toBe('finish');
+    });
+
+    it('returns resume when no pending tool requests finish', async () => {
+      (service as any).serverDB.query = {
+        messagePlugins: {
+          findFirst: vi.fn().mockResolvedValue({ state: { status: 'completed' } }),
+        },
+      };
+
+      const result = await (service as any).resolveAsyncToolOnComplete([
+        { id: 'tc1' },
+        { id: 'tc2' },
+      ]);
+
+      expect(result).toBe('resume');
+    });
+  });
+
+  describe('group member timeout watchdog', () => {
+    const timeoutParams = {
+      anchorMessageId: 'anchor-1',
+      expectedMembers: 1,
+      groupToolMessageId: 'grp-tool-1',
+      memberOperationId: 'member-op-1',
+      mode: 'isolated' as const,
+      onComplete: 'resume' as const,
+      parentOperationId: 'parent-1',
+    };
+
+    it('no-ops when the member already reached a terminal state', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({ status: 'done' });
+      const interruptSpy = vi.spyOn(service, 'interruptOperation');
+      const bridgeSpy = vi.spyOn(service, 'completeGroupActionMember');
+
+      const result = await service.executeStep({
+        groupMemberTimeout: timeoutParams,
+        operationId: 'member-op-1',
+        stepIndex: 0,
+      } as any);
+
+      expect(result.success).toBe(true);
+      expect(result.nextStepScheduled).toBe(false);
+      expect(interruptSpy).not.toHaveBeenCalled();
+      expect(bridgeSpy).not.toHaveBeenCalled();
+    });
+
+    it('interrupts the member and bridges a timeout when it is still running', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({ status: 'running' });
+      const interruptSpy = vi.spyOn(service, 'interruptOperation').mockResolvedValue(true);
+      const bridgeSpy = vi.spyOn(service, 'completeGroupActionMember').mockResolvedValue(true);
+
+      const result = await service.executeStep({
+        groupMemberTimeout: timeoutParams,
+        operationId: 'member-op-1',
+        stepIndex: 0,
+      } as any);
+
+      expect(interruptSpy).toHaveBeenCalledWith('member-op-1');
+      expect(bridgeSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          onComplete: 'resume',
+          operationId: 'member-op-1',
+          parentOperationId: 'parent-1',
+          reason: 'timeout',
+        }),
+      );
+      expect(result.nextStepScheduled).toBe(true);
     });
   });
 });

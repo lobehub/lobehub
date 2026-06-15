@@ -71,6 +71,7 @@ import {
   type ExecGroupMemberResult,
   type GroupActionMemberBridgeParams,
   type GroupActionOnComplete,
+  type GroupMemberTimeoutParams,
   type OperationCreationParams,
   type OperationCreationResult,
   type OperationStatusResult,
@@ -625,11 +626,19 @@ export class AgentRuntimeService {
       rejectAndContinue,
       resumeAsyncTool,
       finishAfterAsyncTool,
+      groupMemberTimeout,
       toolMessageId,
       verifyAsyncToolBarrier,
       asyncToolVerifyAttempt,
       externalRetryCount = 0,
     } = params;
+
+    // Group member timeout watchdog: enforce a member's deadline without claiming
+    // the step lock. No-op if the member already finished; otherwise interrupt it
+    // and bridge a `timeout` completion so the parked supervisor resumes/finishes.
+    if (groupMemberTimeout) {
+      return this.handleGroupMemberTimeout(groupMemberTimeout);
+    }
 
     // Watchdog re-check for a parked async-tool wait: re-run the barrier + CAS
     // without claiming the step lock or executing anything. Idempotent — the
@@ -2002,13 +2011,18 @@ export class AgentRuntimeService {
   private async resolveAsyncToolOnComplete(
     pending: ChatToolPayload[],
   ): Promise<GroupActionOnComplete> {
-    const first = pending[0];
-    if (!first) return 'resume';
-    const plugin = await this.serverDB.query.messagePlugins.findFirst({
-      where: (mp, { eq }) => eq(mp.toolCallId, first.id),
-    });
-    const pluginState = plugin?.state as { onComplete?: string } | null;
-    return pluginState?.onComplete === 'finish' ? 'finish' : 'resume';
+    // A batched turn can park multiple deferred/client tools. If ANY of them is
+    // a group action requesting finish (skipCallSupervisor / delegate), the
+    // orchestration must finish — reading only pending[0] would miss a group
+    // finish call that isn't the first pending tool and wrongly resume.
+    for (const tool of pending) {
+      const plugin = await this.serverDB.query.messagePlugins.findFirst({
+        where: (mp, { eq }) => eq(mp.toolCallId, tool.id),
+      });
+      const pluginState = plugin?.state as { onComplete?: string } | null;
+      if (pluginState?.onComplete === 'finish') return 'finish';
+    }
+    return 'resume';
   }
 
   /**
@@ -2068,7 +2082,7 @@ export class AgentRuntimeService {
       reason,
       threadId,
     } = params;
-    const failed = reason === 'error' || reason === 'interrupted';
+    const failed = reason === 'error' || reason === 'interrupted' || reason === 'timeout';
 
     const finalState =
       params.finalState ?? (await this.coordinator.loadAgentState(operationId)) ?? undefined;
@@ -2149,6 +2163,88 @@ export class AgentRuntimeService {
 
     // 3. Barrier + CAS + resume/finish the parked supervisor op.
     return this.tryResumeParentFromAsyncTool({ parentOperationId }, { scheduleVerifyOnHold: true });
+  }
+
+  /**
+   * Schedule the group-member timeout watchdog. Fired `delayMs` after the member
+   * op is forked; if the member hasn't finished by then, the watchdog interrupts
+   * it and bridges a `timeout` completion so the parked supervisor doesn't wait
+   * forever. No-op when the queue is disabled or the timeout is non-positive.
+   */
+  async scheduleGroupMemberTimeout(
+    params: GroupMemberTimeoutParams,
+    delayMs: number,
+  ): Promise<void> {
+    if (!this.queueService || !(delayMs > 0)) return;
+    try {
+      await this.queueService.scheduleMessage({
+        context: undefined,
+        delay: delayMs,
+        endpoint: `${this.baseURL}/run`,
+        // Keyed on the member op so the /run worker can resolve userId from its
+        // metadata, same trust chain as every other scheduled step.
+        operationId: params.memberOperationId,
+        payload: { groupMemberTimeout: params },
+        priority: 'normal',
+        stepIndex: 0,
+      });
+      log(
+        '[%s] scheduled group-member timeout in %dms (parent %s)',
+        params.memberOperationId,
+        delayMs,
+        params.parentOperationId,
+      );
+    } catch (error) {
+      log(
+        '[%s] failed to schedule group-member timeout (non-fatal): %O',
+        params.memberOperationId,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Enforce a group member's timeout. No-op if the member already reached a
+   * terminal state (its own completion bridge handles that). Otherwise interrupt
+   * the member and bridge a `timeout` completion — backfilling its anchor and
+   * resuming/finishing the parked supervisor via the K=N barrier. The member's
+   * own interrupt bridge may also fire; both are idempotent (anchor rewrite +
+   * CAS-guarded resume).
+   */
+  private async handleGroupMemberTimeout(
+    params: GroupMemberTimeoutParams,
+  ): Promise<AgentExecutionResult> {
+    const state = await this.coordinator.loadAgentState(params.memberOperationId);
+    const status = state?.status as string | undefined;
+    if (!state || status === 'done' || status === 'error' || status === 'interrupted') {
+      log(
+        '[%s] group-member timeout: member already terminal (%s), no-op',
+        params.memberOperationId,
+        status,
+      );
+      return { nextStepScheduled: false, state: {}, success: true };
+    }
+
+    log(
+      '[%s] group-member timeout fired, interrupting + bridging timeout to parent %s',
+      params.memberOperationId,
+      params.parentOperationId,
+    );
+    await this.interruptOperation(params.memberOperationId);
+
+    const resumed = await this.completeGroupActionMember({
+      anchorMessageId: params.anchorMessageId,
+      expectedMembers: params.expectedMembers,
+      finalState: state,
+      groupToolMessageId: params.groupToolMessageId,
+      mode: params.mode,
+      onComplete: params.onComplete,
+      operationId: params.memberOperationId,
+      parentOperationId: params.parentOperationId,
+      reason: 'timeout',
+    });
+
+    return { nextStepScheduled: resumed, state: {}, success: true };
   }
 
   /**

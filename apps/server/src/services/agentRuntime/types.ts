@@ -137,6 +137,14 @@ export interface AgentExecutionParams {
    * `tryResumeParentFromAsyncTool({ onComplete: 'finish' })`.
    */
   finishAfterAsyncTool?: boolean;
+  /**
+   * Watchdog payload to enforce a group member's timeout: when the member op
+   * hasn't reached a terminal state by its deadline, interrupt it and bridge a
+   * `timeout` completion so the parked supervisor resumes/finishes instead of
+   * waiting forever. Scheduled by `scheduleGroupMemberTimeout` after the member
+   * op is forked.
+   */
+  groupMemberTimeout?: GroupMemberTimeoutParams;
   humanInput?: any;
   operationId: string;
   /**
@@ -235,6 +243,24 @@ export interface GroupActionMemberBridgeParams {
   reason: string;
   /** Isolation thread id (isolated mode only). */
   threadId?: string;
+}
+
+/**
+ * Watchdog payload that enforces a group member's timeout. Scheduled after an
+ * isolated member op is forked; when it fires, if the member op hasn't reached a
+ * terminal state it is interrupted and a `timeout` completion is bridged so the
+ * parked supervisor resumes/finishes (satisfying the K=N barrier) instead of
+ * waiting indefinitely.
+ */
+export interface GroupMemberTimeoutParams {
+  anchorMessageId: string;
+  expectedMembers: number;
+  groupToolMessageId: string;
+  /** The forked member operation id whose deadline this enforces. */
+  memberOperationId: string;
+  mode: GroupActionMemberMode;
+  onComplete: GroupActionOnComplete;
+  parentOperationId: string;
 }
 
 /**

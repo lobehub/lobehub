@@ -194,6 +194,14 @@ interface InternalExecAgentParams extends ExecAgentParams {
   disableTools?: boolean;
   /** Discord context for injecting channel/guild info into agent system message */
   discordContext?: any;
+  /**
+   * Inject a user-role message into the LLM context for this turn WITHOUT
+   * persisting it (no DB row, no Agent Signal). Used for ephemeral orchestration
+   * instructions — e.g. a group supervisor's `<speaker>` instruction to a member —
+   * so it drives the member's response without polluting the group conversation.
+   * Requires `suppressUserMessage` (the turn runs off existing history).
+   */
+  ephemeralUserMessage?: string;
   /** Eval context for injecting environment prompts into system message */
   evalContext?: EvalContext;
   /** External files to upload to S3 and attach to the user message */
@@ -670,6 +678,7 @@ export class AiAgentService {
       resume,
       resumeApproval,
       suppressUserMessage,
+      ephemeralUserMessage,
     } = params;
 
     // Validate that either agentId or slug is provided
@@ -2409,7 +2418,7 @@ export class AiAgentService {
     // - videoList: video-capable models render these as video parts
     // - fileList: MessageContentProcessor injects content via filesPrompts() XML
     const userMessage = {
-      content: prompt,
+      content: ephemeralUserMessage ?? prompt,
       fileList: runAttachments.fileList,
       id: userMessageRecord?.id,
       imageList: runAttachments.imageList,
@@ -2417,8 +2426,11 @@ export class AiAgentService {
       videoList: runAttachments.videoList,
     };
 
-    // Combine history messages with user message
-    const allMessages = runFromHistory ? historyMessages : [...historyMessages, userMessage];
+    // Combine history messages with the user message. An ephemeral message is
+    // injected into the LLM context even under runFromHistory (suppressUserMessage)
+    // — it drives this turn but was never persisted (id is undefined).
+    const allMessages =
+      runFromHistory && !ephemeralUserMessage ? historyMessages : [...historyMessages, userMessage];
 
     log('execAgent: prepared evalContext for executor');
 
@@ -2434,7 +2446,10 @@ export class AiAgentService {
         // Pass assistant message ID so agent runtime knows which message to update
         assistantMessageId: assistantMessageRecord.id,
         isFirstMessage: true,
-        message: runFromHistory ? [{ content: '' }] : [{ content: prompt }],
+        message:
+          runFromHistory && !ephemeralUserMessage
+            ? [{ content: '' }]
+            : [{ content: ephemeralUserMessage ?? prompt }],
         // Pass user message ID as parentMessageId for reference
         parentMessageId: parentMessageId ?? userMessageRecord?.id ?? '',
         // Include tools for initial LLM call
@@ -2962,6 +2977,24 @@ export class AiAgentService {
         },
       );
 
+      // Enforce the requested timeout: if the member op is still running when the
+      // deadline passes, the watchdog interrupts it and bridges a `timeout`
+      // completion so the supervisor doesn't stay parked indefinitely.
+      if (result.success && result.operationId && params.timeout && params.timeout > 0) {
+        await this.agentRuntimeService.scheduleGroupMemberTimeout(
+          {
+            anchorMessageId: params.anchorMessageId,
+            expectedMembers: params.expectedMembers,
+            groupToolMessageId: params.groupToolMessageId,
+            memberOperationId: result.operationId,
+            mode: 'isolated',
+            onComplete: params.onComplete,
+            parentOperationId: params.parentOperationId,
+          },
+          params.timeout,
+        );
+      }
+
       return {
         error: result.error,
         operationId: result.operationId,
@@ -3025,7 +3058,7 @@ export class AiAgentService {
       log('execAgentMember: failed to read parent operation trigger: %O', error);
     }
 
-    const prompt = instruction
+    const speakerInstruction = instruction
       ? `<speaker name="Supervisor" />\n${instruction}`
       : 'Please respond to the group conversation based on the current context.';
 
@@ -3038,11 +3071,19 @@ export class AiAgentService {
     // The member runs as a child op of the supervisor and lands its turns in the
     // shared group conversation (no isolation thread). The bridge backfills the
     // member anchor (a short receipt) and resumes/finishes the supervisor.
+    //
+    // The supervisor instruction is injected as an EPHEMERAL user message
+    // (`suppressUserMessage` + `ephemeralUserMessage`): it drives the member's
+    // response but is NOT persisted as a `role: 'user'` row, mirroring the
+    // client orchestration where the supervisor instruction is virtual. Without
+    // this, every server-side speak/broadcast/delegate would leak the
+    // orchestration prompt into the group conversation as a real message.
     const result = await this.execAgent({
       agentId,
       appContext,
       autoStart: true,
       disableTools,
+      ephemeralUserMessage: speakerInstruction,
       hooks: [
         this.createGroupActionMemberBridgeHook({
           anchorMessageId,
@@ -3055,7 +3096,8 @@ export class AiAgentService {
       ],
       parentMessageId: anchorMessageId,
       parentOperationId,
-      prompt,
+      prompt: speakerInstruction,
+      suppressUserMessage: true,
       trigger: inheritedTrigger,
       userInterventionConfig: { approvalMode: 'headless' },
     });
