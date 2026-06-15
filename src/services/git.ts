@@ -14,6 +14,7 @@ import type {
   DeviceGitRenameBranchResult,
   DeviceGitSyncResult,
   DeviceGitWorkingTreeStatus,
+  DeviceGitWorktreeListItem,
 } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
@@ -242,6 +243,19 @@ class GitService {
     return deviceId
       ? lambdaClient.device.listGitRemoteBranches.query({ deviceId, path })
       : electronGitService.listGitRemoteBranches(path);
+  }
+
+  /** Git worktrees attached to the same repository as a working directory. */
+  listGitWorktrees({
+    deviceId,
+    path,
+  }: {
+    deviceId?: string;
+    path: string;
+  }): Promise<DeviceGitWorktreeListItem[]> {
+    return deviceId
+      ? lambdaClient.device.listGitWorktrees.query({ deviceId, path })
+      : electronGitService.listGitWorktrees(path);
   }
 
   /** Revert (discard working-tree changes to) a single file in a working directory. */

@@ -147,6 +147,24 @@ export interface DeviceGitWorkingTreeStatus {
 }
 
 /**
+ * One git worktree attached to a repository, returned by the `listGitWorktrees`
+ * device RPC. Mirrors the desktop `GitWorktreeListItem`.
+ */
+export interface DeviceGitWorktreeListItem {
+  bare?: boolean;
+  branch?: string;
+  current: boolean;
+  detached?: boolean;
+  head?: string;
+  locked?: boolean;
+  lockReason?: string;
+  path: string;
+  prunable?: boolean;
+  pruneReason?: string;
+  status?: DeviceGitWorkingTreeStatus;
+}
+
+/**
  * Commit divergence vs the upstream tracking ref, returned by the
  * `getGitAheadBehind` device RPC. Mirrors the desktop shape.
  */

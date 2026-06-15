@@ -15,6 +15,7 @@ import {
   type GitWorkingTreeFiles,
   type GitWorkingTreePatches,
   type GitWorkingTreeStatus,
+  type GitWorktreeListItem,
 } from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
@@ -50,6 +51,10 @@ class ElectronGitService {
 
   async listGitRemoteBranches(dirPath: string): Promise<GitRemoteBranchListItem[]> {
     return this.ipc.git.listGitRemoteBranches(dirPath);
+  }
+
+  async listGitWorktrees(dirPath: string): Promise<GitWorktreeListItem[]> {
+    return this.ipc.git.listGitWorktrees(dirPath);
   }
 
   async getGitWorkingTreeStatus(dirPath: string): Promise<GitWorkingTreeStatus> {

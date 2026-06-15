@@ -120,6 +120,22 @@ export const deviceRouter = router({
     }),
 
   /**
+   * List the git worktrees attached to the same repository as a directory on a
+   * remote device, via the device's `listGitWorktrees` RPC. Lets the web/remote
+   * worktree picker mirror the local desktop's, populated over IPC.
+   */
+  listGitWorktrees: deviceProcedure
+    .input(z.object({ deviceId: z.string(), path: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const result = await deviceGateway.listGitWorktrees({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+      });
+      return result ?? [];
+    }),
+
+  /**
    * List the local branches of a directory on a remote device, via the device's
    * `listGitBranches` RPC. Lets the web/remote branch switcher populate the same
    * dropdown the local desktop renders over IPC.

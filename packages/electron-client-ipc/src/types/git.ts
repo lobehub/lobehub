@@ -39,6 +39,29 @@ export interface GitWorkingTreeStatus {
   total: number;
 }
 
+export interface GitWorktreeListItem {
+  /** True for bare repositories, which cannot be opened as a normal cwd. */
+  bare?: boolean;
+  /** Branch short name, absent for detached HEAD or bare entries. */
+  branch?: string;
+  /** True when this worktree is the one containing the queried cwd. */
+  current: boolean;
+  /** True when HEAD is detached. */
+  detached?: boolean;
+  /** Full HEAD SHA reported by `git worktree list --porcelain`. */
+  head?: string;
+  /** True when git marks this worktree as locked. */
+  locked?: boolean;
+  lockReason?: string;
+  /** Absolute worktree path. */
+  path: string;
+  /** True when git marks this worktree as prunable. */
+  prunable?: boolean;
+  pruneReason?: string;
+  /** Dirty-file counts for non-bare, non-prunable worktrees. */
+  status?: GitWorkingTreeStatus;
+}
+
 export interface GitWorkingTreeFiles {
   /** Repo-relative paths for untracked + staged-as-added files */
   added: string[];

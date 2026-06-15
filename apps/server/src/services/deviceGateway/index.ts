@@ -23,6 +23,7 @@ import type {
   DeviceGitWorkingTreeFiles,
   DeviceGitWorkingTreePatches,
   DeviceGitWorkingTreeStatus,
+  DeviceGitWorktreeListItem,
   DeviceListProjectSkillsResult,
   DeviceLocalFilePreviewResult,
   DeviceProjectFileIndexResult,
@@ -203,6 +204,13 @@ export class DeviceGateway {
   /** Ahead/behind commit counts for a directory on a remote device. */
   gitAheadBehind(params: { deviceId: string; path: string; userId: string }) {
     return this.invokeGitRead<DeviceGitAheadBehind>('getGitAheadBehind', params, {
+      path: params.path,
+    });
+  }
+
+  /** Git worktrees attached to the same repository as a directory on a remote device. */
+  listGitWorktrees(params: { deviceId: string; path: string; userId: string }) {
+    return this.invokeGitRead<DeviceGitWorktreeListItem[]>('listGitWorktrees', params, {
       path: params.path,
     });
   }
