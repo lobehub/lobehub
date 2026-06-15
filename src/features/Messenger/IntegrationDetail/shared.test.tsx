@@ -2,6 +2,8 @@ import { render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { messengerKeys } from '@/libs/swr/keys';
+
 import { UserAgentConnection } from './shared';
 
 const userState = {
@@ -80,9 +82,9 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('swr', () => ({
-  default: (key: string) => ({
+  default: (key: unknown) => ({
     data:
-      key === 'messenger:bindingScopes'
+      Array.isArray(key) && key[0] === messengerKeys.bindingScopes.root
         ? [{ avatar: 'workspace-avatar', id: 'workspace-1', name: 'love' }]
         : undefined,
     isLoading: false,

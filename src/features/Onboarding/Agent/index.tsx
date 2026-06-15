@@ -19,6 +19,7 @@ import ModeSwitch from '@/features/Onboarding/components/ModeSwitch';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates';
 import { useClientDataSWR, useOnlyFetchOnceSWR } from '@/libs/swr';
+import { onboardingKeys } from '@/libs/swr/keys';
 import OnboardingContainer from '@/routes/onboarding/_layout';
 import { fetchOnboardingAgentTemplates } from '@/services/agentMarketplace';
 import {
@@ -86,7 +87,7 @@ const AgentOnboardingPage = memo(() => {
   }, []);
 
   const { data: historyData, mutate: mutateHistoryTopics } = useClientDataSWR(
-    isDev && onboardingAgentId ? ['agent-onboarding-history-topics', onboardingAgentId] : null,
+    isDev && onboardingAgentId ? onboardingKeys.agentHistoryTopics(onboardingAgentId) : null,
     () =>
       topicService.getTopics({
         agentId: onboardingAgentId,
@@ -95,7 +96,7 @@ const AgentOnboardingPage = memo(() => {
   );
 
   const { data, error, isLoading, mutate } = useOnlyFetchOnceSWR(
-    'agent-onboarding-bootstrap',
+    onboardingKeys.agentBootstrap(),
     () => userService.getOnboardingBootstrapState(),
     {
       onSuccess: async () => {

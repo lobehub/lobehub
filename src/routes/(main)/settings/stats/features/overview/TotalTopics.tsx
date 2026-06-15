@@ -5,6 +5,7 @@ import Statistic from '@/components/Statistic';
 import StatisticCard from '@/components/StatisticCard';
 import TitleWithPercentage from '@/components/StatisticCard/TitleWithPercentage';
 import { useClientDataSWR } from '@/libs/swr';
+import { statsKeys } from '@/libs/swr/keys';
 import { topicService } from '@/services/topic';
 import { formatIntergerNumber } from '@/utils/format';
 import { lastMonth } from '@/utils/time';
@@ -13,7 +14,7 @@ import TotalCard from './ShareButton/TotalCard';
 
 const TotalMessages = memo<{ inShare?: boolean; mobile?: boolean }>(({ inShare }) => {
   const { t } = useTranslation('auth');
-  const { data, isLoading } = useClientDataSWR('stats-topics', async () => ({
+  const { data, isLoading } = useClientDataSWR(statsKeys.topics(), async () => ({
     count: await topicService.countTopics(),
     prevCount: await topicService.countTopics({ endDate: lastMonth().format('YYYY-MM-DD') }),
   }));

@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { ProductLogo } from '@/components/Branding';
+import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
@@ -171,7 +172,7 @@ export const ConfirmCard = memo<ConfirmCardProps>(
     // First-level scope selector — personal plus every workspace the user
     // belongs to. Picking a scope just filters the agent list below; the
     // backend derives the binding's workspace from the chosen agent on confirm.
-    const scopesSWR = useSWR(enableWorkspaceScopes ? 'messenger:bindingScopes' : null, () =>
+    const scopesSWR = useSWR(enableWorkspaceScopes ? messengerKeys.bindingScopes() : null, () =>
       messengerService.listBindingScopes(),
     );
     const [scope, setScope] = useState<string>(PERSONAL_SCOPE);
@@ -188,7 +189,7 @@ export const ConfirmCard = memo<ConfirmCardProps>(
 
     // Scope-aware agent list. The SWR key matches AgentSelect's so the fetch is
     // shared (single request per scope) and stays in sync as the scope changes.
-    const agentsSWR = useSWR(['messenger:agentsForBinding', scopeWorkspaceId], () =>
+    const agentsSWR = useSWR(messengerKeys.agentsForBinding(scopeWorkspaceId), () =>
       messengerService.listAgentsForBinding(scopeWorkspaceId),
     );
 

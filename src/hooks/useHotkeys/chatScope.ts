@@ -4,6 +4,7 @@ import { useHotkeysContext } from 'react-hotkeys-hook';
 
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
 import { useActionSWR } from '@/libs/swr';
+import { topicActionKeys } from '@/libs/swr/keys';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 
@@ -11,7 +12,7 @@ import { useHotkeyById } from './useHotkeyById';
 
 export const useSaveTopicHotkey = () => {
   const openNewTopicOrSaveTopic = useChatStore((s) => s.openNewTopicOrSaveTopic);
-  const { mutate } = useActionSWR('openNewTopicOrSaveTopic', openNewTopicOrSaveTopic);
+  const { mutate } = useActionSWR(topicActionKeys.openNewOrSave(), openNewTopicOrSaveTopic);
   return useHotkeyById(HotkeyEnum.SaveTopic, () => mutate(), { enableOnContentEditable: true });
 };
 

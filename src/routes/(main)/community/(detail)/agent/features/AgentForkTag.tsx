@@ -8,6 +8,7 @@ import useSWR from 'swr';
 import urlJoin from 'url-join';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { forkKeys } from '@/libs/swr/keys';
 import { marketApiService } from '@/services/marketApi';
 
 import { useDetailContext } from './DetailProvider';
@@ -23,7 +24,7 @@ const AgentForkTag = memo(() => {
 
   // Fetch fork source info
   const { data: forkSource } = useSWR(
-    identifier && forkedFromAgentId ? ['fork-source', identifier] : null,
+    identifier && forkedFromAgentId ? forkKeys.source(identifier) : null,
     () => marketApiService.getAgentForkSource(identifier!),
     { revalidateOnFocus: false },
   );

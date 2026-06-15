@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import CodeEditorPane from '@/components/CodeEditorPane';
 import FloatingChatPanel from '@/features/FloatingChatPanel';
 import { useClientDataSWR } from '@/libs/swr';
+import { portalKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
@@ -324,7 +325,7 @@ const DocumentBody = memo(() => {
   const isSkillMarkdown = contentFormat === 'skillMarkdown';
 
   const { data: documentMeta, mutate: mutateDocumentMeta } = useClientDataSWR(
-    documentId ? ['portal-document-header', documentId] : null,
+    documentId ? portalKeys.documentHeader(documentId) : null,
     () => documentService.getDocumentById(documentId!),
   );
   const renderMode = documentMeta

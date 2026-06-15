@@ -8,6 +8,7 @@ import useSWR from 'swr';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { useSession } from '@/libs/better-auth/auth-client';
+import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
 
 import { type MessengerPlatform } from '../constants';
@@ -30,11 +31,11 @@ const MessengerVerifyPage = memo(() => {
   const isSignedIn = !!session?.user;
 
   // Used in the success state to deep-link the user back to the bot.
-  const platformsSWR = useSWR('messenger:availablePlatforms', () =>
+  const platformsSWR = useSWR(messengerKeys.availablePlatforms(), () =>
     messengerService.availablePlatforms(),
   );
 
-  const tokenSWR = useSWR(randomId && isSignedIn ? ['messenger:peek', randomId] : null, async () =>
+  const tokenSWR = useSWR(randomId && isSignedIn ? messengerKeys.peek(randomId) : null, async () =>
     messengerService.peekLinkToken(randomId),
   );
 
@@ -58,7 +59,7 @@ const MessengerVerifyPage = memo(() => {
   const tokenScopeKey =
     tokenStatus === 'active' || tokenStatus === 'consumed' ? (scopedTenantId ?? '') : '__any__';
   const existingLinkSWR = useSWR(
-    isSignedIn && tokenResolved && platform ? ['messenger:myLink', platform, tokenScopeKey] : null,
+    isSignedIn && tokenResolved && platform ? messengerKeys.myLink(platform, tokenScopeKey) : null,
     async () =>
       messengerService.getMyLink(
         platform!,

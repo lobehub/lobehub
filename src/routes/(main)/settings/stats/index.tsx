@@ -10,6 +10,7 @@ import { memo, type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { statsKeys } from '@/libs/swr/keys';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
 import { usageService } from '@/services/usage';
 
@@ -54,7 +55,7 @@ const StatsSetting = memo<StatsSettingProps>(
     const [dateRange, setDateRange] = useState<dayjs.Dayjs>(dayjs(new Date()));
     const [dateStrings, setDateStrings] = useState<string>();
 
-    const { data, isLoading, mutate } = useClientDataSWR('usage-stat', async () =>
+    const { data, isLoading, mutate } = useClientDataSWR(statsKeys.usageStat(), async () =>
       usageService.findAndGroupByDay(dateStrings),
     );
 

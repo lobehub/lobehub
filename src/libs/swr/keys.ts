@@ -80,10 +80,18 @@ export const agentKeys = {
 export const groupKeys = {
   detail: def('group:detail', (groupId: string) => ['group:detail', groupId]),
   list: def('group:list', (isLogin: boolean) => ['group:list', isLogin]),
+  /** Agent picker for the "add member" modal. */
+  queryAgents: def('group:queryAgents', () => ['group:queryAgents']),
+  /** Agent picker for the "create group" modal. */
+  queryAgentsForCreate: def('group:queryAgentsForCreate', () => ['group:queryAgentsForCreate']),
 };
 
 // ---- session ------------------------------------------------------------
 export const sessionKeys = {
+  createSession: def('session:createSession', (groupId: string | undefined) => [
+    'session:createSession',
+    groupId,
+  ]),
   list: def('session:list', (isLogin: boolean | undefined) => ['session:list', isLogin]),
   search: def('session:search', (keyword?: string) => ['session:search', keyword]),
 };
@@ -314,6 +322,26 @@ export const discoverKeys = {
     locale,
     username,
   ]),
+  // -- marketplace detail "related agents" lists (UI) --
+  mcpAgents: def('discover:mcpAgents', (identifier: string, page: number) => [
+    'discover:mcpAgents',
+    identifier,
+    page,
+  ]),
+  skillAgents: def('discover:skillAgents', (identifier: string, page: number) => [
+    'discover:skillAgents',
+    identifier,
+    page,
+  ]),
+  skillStoreMarketSkills: def(
+    'discover:skillStoreMarketSkills',
+    (locale: string, keywords: string, page: number) => [
+      'discover:skillStoreMarketSkills',
+      locale,
+      keywords,
+      page,
+    ],
+  ),
 };
 
 // ---- agent eval ---------------------------------------------------------
@@ -365,6 +393,11 @@ export const deviceKeys = {
     deviceId,
     path,
   ]),
+  gitBranches: def('device:gitBranches', (deviceId: string, path: string) => [
+    'device:gitBranches',
+    deviceId,
+    path,
+  ]),
   gitInfo: def('device:gitInfo', (deviceId: string, path: string, isGithub: boolean) => [
     'device:gitInfo',
     deviceId,
@@ -377,6 +410,7 @@ export const deviceKeys = {
     path,
   ]),
   listDevices: def('device:listDevices', () => ['device:listDevices']),
+  repoType: def('device:repoType', (path: string) => ['device:repoType', path]),
 };
 
 // ---- user memory --------------------------------------------------------
@@ -475,6 +509,157 @@ export const chatToolKeys = {
   interpreterFile: def('chat:interpreterFile', (id: string) => ['chat:interpreterFile', id]),
 };
 
+// =========================================================================
+// UI-layer keys (features / routes / components). Same rule as above: every
+// prefix below is deliberately kept OUT of `CACHE_TIERS` (memory-only). Names
+// avoid colliding with cached prefixes — e.g. share/topicInfo is `share:` not
+// `topic:`, portal header is `portal:` not `document:`.
+// =========================================================================
+
+// ---- stats (settings/stats + user header counts) ------------------------
+export const statsKeys = {
+  countMessages: def('stats:countMessages', () => ['stats:countMessages']),
+  countSessions: def('stats:countSessions', () => ['stats:countSessions']),
+  countTopics: def('stats:countTopics', () => ['stats:countTopics']),
+  heatmaps: def('stats:heatmaps', (type: string) => ['stats:heatmaps', type]),
+  maxTaskDuration: def('stats:maxTaskDuration', () => ['stats:maxTaskDuration']),
+  messages: def('stats:messages', () => ['stats:messages']),
+  rankAgents: def('stats:rankAgents', () => ['stats:rankAgents']),
+  rankModels: def('stats:rankModels', () => ['stats:rankModels']),
+  rankTopics: def('stats:rankTopics', () => ['stats:rankTopics']),
+  sessions: def('stats:sessions', () => ['stats:sessions']),
+  topics: def('stats:topics', () => ['stats:topics']),
+  usageLogs: def('stats:usageLogs', () => ['stats:usageLogs']),
+  usageStat: def('stats:usageStat', () => ['stats:usageStat']),
+  welcome: def('stats:welcome', () => ['stats:welcome']),
+};
+
+// ---- messenger / platform integration -----------------------------------
+export const messengerKeys = {
+  agentsForBinding: def('messenger:agentsForBinding', (workspaceId: string | null | undefined) => [
+    'messenger:agentsForBinding',
+    workspaceId ?? null,
+  ]),
+  availablePlatforms: def('messenger:availablePlatforms', () => ['messenger:availablePlatforms']),
+  bindingScopes: def('messenger:bindingScopes', () => ['messenger:bindingScopes']),
+  listMyInstallations: def('messenger:listMyInstallations', () => [
+    'messenger:listMyInstallations',
+  ]),
+  listMyLinks: def('messenger:listMyLinks', () => ['messenger:listMyLinks']),
+  myLink: def('messenger:myLink', (platform: string, tokenScopeKey: string | undefined) => [
+    'messenger:myLink',
+    platform,
+    tokenScopeKey,
+  ]),
+  peek: def('messenger:peek', (randomId: string) => ['messenger:peek', randomId]),
+};
+
+// ---- verify (deliverable judging) ---------------------------------------
+export const verifyKeys = {
+  instruction: def('verify:instruction', (documentId: string) => [
+    'verify:instruction',
+    documentId,
+  ]),
+  results: def('verify:results', (operationId: string) => ['verify:results', operationId]),
+  rubric: def('verify:rubric', (rubricId: string) => ['verify:rubric', rubricId]),
+  state: def('verify:state', (operationId: string) => ['verify:state', operationId]),
+  tracing: def('verify:tracing', (tracingId: string) => ['verify:tracing', tracingId]),
+};
+
+// ---- inbox / notifications ----------------------------------------------
+export const inboxKeys = {
+  notifications: def(
+    'inbox:notifications',
+    (cursor: string | undefined, unreadOnly: boolean | undefined) => [
+      'inbox:notifications',
+      cursor,
+      unreadOnly,
+    ],
+  ),
+  unreadCount: def('inbox:unreadCount', () => ['inbox:unreadCount']),
+};
+
+// ---- share (shared topic / page) ----------------------------------------
+export const shareKeys = {
+  pageDocument: def('share:pageDocument', (documentId: string) => [
+    'share:pageDocument',
+    documentId,
+  ]),
+  topic: def('share:topic', (id: string) => ['share:topic', id]),
+  topicInfo: def('share:topicInfo', (topicId: string) => ['share:topicInfo', topicId]),
+};
+
+// ---- fork source (community detail) -------------------------------------
+export const forkKeys = {
+  groupSource: def('fork:groupSource', (identifier: string) => ['fork:groupSource', identifier]),
+  source: def('fork:source', (identifier: string) => ['fork:source', identifier]),
+};
+
+// ---- portal -------------------------------------------------------------
+export const portalKeys = {
+  documentHeader: def('portal:documentHeader', (documentId: string) => [
+    'portal:documentHeader',
+    documentId,
+  ]),
+};
+
+// ---- favorite status (marketplace detail headers) -----------------------
+export const favoriteKeys = {
+  status: def('favorite:status', (targetType: string, identifier: string) => [
+    'favorite:status',
+    targetType,
+    identifier,
+  ]),
+};
+
+// ---- changelog ----------------------------------------------------------
+export const changelogKeys = {
+  modalIndex: def('changelog:modalIndex', () => ['changelog:modalIndex']),
+  post: def('changelog:post', (id: string, locale: string) => ['changelog:post', id, locale]),
+};
+
+// ---- agent onboarding ---------------------------------------------------
+export const onboardingKeys = {
+  agentBootstrap: def('onboarding:agentBootstrap', () => ['onboarding:agentBootstrap']),
+  agentHistoryTopics: def('onboarding:agentHistoryTopics', (agentId: string) => [
+    'onboarding:agentHistoryTopics',
+    agentId,
+  ]),
+};
+
+// ---- agent home / profile / signal (kept off the `agent:` idb tier) -----
+export const agentHomeKeys = {
+  topics: def('agentHome:topics', (agentId: string) => ['agentHome:topics', agentId]),
+};
+export const agentProfileKeys = {
+  detail: def('agentProfile:detail', (agentId: string) => ['agentProfile:detail', agentId]),
+};
+export const agentSignalKeys = {
+  receipts: def('agentSignal:receipts', (agentId: string, topicId: string) => [
+    'agentSignal:receipts',
+    agentId,
+    topicId,
+  ]),
+};
+
+// ---- misc UI singletons -------------------------------------------------
+export const ollamaKeys = {
+  downloadModel: def('ollama:downloadModel', (model: string) => ['ollama:downloadModel', model]),
+};
+export const authKeys = {
+  oidcInteraction: def('auth:oidcInteraction', (uid: string) => ['auth:oidcInteraction', uid]),
+};
+export const cronKeys = {
+  topicsWithJobInfo: def('cron:topicsWithJobInfo', (agentId: string | undefined) => [
+    'cron:topicsWithJobInfo',
+    agentId,
+  ]),
+};
+/** Imperative "save / create topic" action (useActionSWR), shared across call sites. */
+export const topicActionKeys = {
+  openNewOrSave: def('topicAction:openNewOrSave', () => ['topicAction:openNewOrSave']),
+};
+
 /**
  * Build a `mutate` matcher that selects every key in a `domain:` namespace.
  *
@@ -492,29 +677,46 @@ export const swrKeys = {
   agent: { ...agentKeys, ...agentConfigKeys },
   agentBot: agentBotKeys,
   agentDocument: agentDocumentSWRKeys,
+  agentHome: agentHomeKeys,
   agentKnowledge: agentKnowledgeKeys,
+  agentProfile: agentProfileKeys,
+  agentSignal: agentSignalKeys,
   aiModel: aiModelKeys,
+  auth: authKeys,
   brief: briefKeys,
+  changelog: changelogKeys,
   chatTool: chatToolKeys,
+  cron: cronKeys,
   device: deviceKeys,
   discover: discoverKeys,
   document: documentSWRKeys,
   eval: evalKeys,
+  favorite: favoriteKeys,
   file: fileKeys,
+  fork: forkKeys,
   global: globalKeys,
   group: groupKeys,
   image: imageKeys,
+  inbox: inboxKeys,
   knowledgeBase: knowledgeBaseKeys,
   message: messageKeys,
+  messenger: messengerKeys,
   notebook: notebookSWRKeys,
+  ollama: ollamaKeys,
+  onboarding: onboardingKeys,
+  portal: portalKeys,
   ragEval: ragEvalKeys,
   recent: recentKeys,
   serverConfig: serverConfigKeys,
   session: sessionKeys,
+  share: shareKeys,
+  stats: statsKeys,
   task: taskKeys,
   thread: threadKeys,
   tool: toolKeys,
   topic: topicKeys,
+  topicAction: topicActionKeys,
   userMemory: userMemoryKeys,
+  verify: verifyKeys,
   video: videoKeys,
 };

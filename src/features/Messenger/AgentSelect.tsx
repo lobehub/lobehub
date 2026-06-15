@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
+import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
 
 interface AgentSelectProps extends Omit<SelectProps<string>, 'options' | 'value' | 'onChange'> {
@@ -28,7 +29,7 @@ const AgentSelect = memo<AgentSelectProps>(
     // Cascading fetch: agents are scoped to the selected `workspaceId` (or
     // personal when null). The scope is part of the SWR key so switching scope
     // refetches the right list.
-    const agentsSWR = useSWR(['messenger:agentsForBinding', workspaceId ?? null], () =>
+    const agentsSWR = useSWR(messengerKeys.agentsForBinding(workspaceId), () =>
       messengerService.listAgentsForBinding(workspaceId),
     );
 

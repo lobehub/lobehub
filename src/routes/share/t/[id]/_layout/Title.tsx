@@ -6,6 +6,7 @@ import { memo, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
+import { shareKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -15,7 +16,7 @@ const Title = memo(() => {
   const dispatchAgentMap = useAgentStore((s) => s.internal_dispatchAgentMap);
 
   const { data } = useSWR(
-    id ? ['shared-topic', id] : null,
+    id ? shareKeys.topic(id) : null,
     () => lambdaClient.share.getSharedTopic.query({ shareId: id! }),
     { revalidateOnFocus: false },
   );

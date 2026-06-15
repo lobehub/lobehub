@@ -10,9 +10,8 @@ import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import SideBarDrawer from '@/features/NavPanel/SideBarDrawer';
 import dynamic from '@/libs/next/dynamic';
 import { mutate } from '@/libs/swr';
+import { inboxKeys } from '@/libs/swr/keys';
 import { notificationService } from '@/services/notification';
-
-import { FETCH_KEY, UNREAD_COUNT_KEY } from './constants';
 
 const Content = dynamic(() => import('./Content'), {
   loading: () => (
@@ -33,8 +32,8 @@ const InboxDrawer = memo<InboxDrawerProps>(({ open, onClose }) => {
   const [unreadOnly, setUnreadOnly] = useState(false);
 
   const refreshList = useCallback(() => {
-    mutate((key: unknown) => Array.isArray(key) && key[0] === FETCH_KEY);
-    mutate(UNREAD_COUNT_KEY);
+    mutate((key: unknown) => Array.isArray(key) && key[0] === inboxKeys.notifications.root);
+    mutate(inboxKeys.unreadCount());
   }, []);
 
   const handleMarkAsRead = useCallback(

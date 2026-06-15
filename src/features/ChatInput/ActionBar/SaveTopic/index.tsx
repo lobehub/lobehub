@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
 import { useActionSWR } from '@/libs/swr';
+import { topicActionKeys } from '@/libs/swr/keys';
 import { useChatStore } from '@/store/chat';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
@@ -23,7 +24,10 @@ const SaveTopic = memo(() => {
 
   const mobile = useIsMobile();
 
-  const { mutate, isValidating } = useActionSWR('openNewTopicOrSaveTopic', openNewTopicOrSaveTopic);
+  const { mutate, isValidating } = useActionSWR(
+    topicActionKeys.openNewOrSave(),
+    openNewTopicOrSaveTopic,
+  );
 
   const [confirmOpened, setConfirmOpened] = useState(false);
 

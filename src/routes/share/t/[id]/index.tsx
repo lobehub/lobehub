@@ -11,6 +11,7 @@ import useSWR from 'swr';
 import NotFound from '@/components/404';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
+import { shareKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 
 import ActionBar from './features/ActionBar';
@@ -35,7 +36,7 @@ const ShareTopicPage = memo(() => {
   const { id } = useParams<{ id: string }>();
 
   const { data, error, isLoading } = useSWR(
-    id ? ['shared-topic', id] : null,
+    id ? shareKeys.topic(id) : null,
     () => lambdaClient.share.getSharedTopic.query({ shareId: id! }),
     { revalidateOnFocus: false },
   );

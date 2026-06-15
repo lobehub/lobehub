@@ -4,6 +4,7 @@ import { Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { cx } from 'antd-style';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { portalKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -16,7 +17,7 @@ const Header = () => {
   const documentId = useChatStore(chatPortalSelectors.portalDocumentId);
 
   const { data: document, isLoading } = useClientDataSWR(
-    documentId ? ['portal-document-header', documentId] : null,
+    documentId ? portalKeys.documentHeader(documentId) : null,
     () => documentService.getDocumentById(documentId!),
   );
 

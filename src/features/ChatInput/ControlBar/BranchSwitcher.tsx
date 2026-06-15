@@ -32,6 +32,7 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { message } from '@/components/AntdStaticMethods';
+import { deviceKeys } from '@/libs/swr/keys';
 import { gitService } from '@/services/git';
 import { useFetchGitWorkingTreeStatus } from '@/store/device';
 
@@ -243,7 +244,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
       error: branchesError,
       mutate: mutateBranches,
     } = useSWR(
-      open ? ['git-branches', deviceId ?? 'local', path] : null,
+      open ? deviceKeys.gitBranches(deviceId ?? 'local', path) : null,
       () => gitService.listGitBranches({ deviceId, path }),
       { revalidateOnFocus: false, shouldRetryOnError: false },
     );

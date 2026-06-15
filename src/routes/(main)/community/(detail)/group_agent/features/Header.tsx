@@ -22,6 +22,7 @@ import useSWR from 'swr';
 import PublishedTime from '@/components/PublishedTime';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { favoriteKeys } from '@/libs/swr/keys';
 import { socialService } from '@/services/social';
 
 import { resolveCommunityProfileLink } from '../../utils/profileLink';
@@ -67,7 +68,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   // TODO: Use 'group_agent' type when social service supports it
   // Fetch favorite status
   const { data: favoriteStatus, mutate: mutateFavorite } = useSWR(
-    identifier && isAuthenticated ? ['favorite-status', 'agent', identifier] : null,
+    identifier && isAuthenticated ? favoriteKeys.status('agent', identifier) : null,
     () => socialService.checkFavoriteStatus('agent-group', identifier!),
     { revalidateOnFocus: false },
   );

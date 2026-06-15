@@ -29,6 +29,7 @@ import useSWR from 'swr';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { usePermission } from '@/hooks/usePermission';
+import { shareKeys } from '@/libs/swr/keys';
 import { topicService } from '@/services/topic';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
@@ -71,7 +72,7 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal, topic
     isLoading,
     mutate,
   } = useSWR(
-    activeTopicId && canShare ? ['topic-share-info', activeTopicId] : null,
+    activeTopicId && canShare ? shareKeys.topicInfo(activeTopicId) : null,
     () => topicService.getShareInfo(activeTopicId!),
     { revalidateOnFocus: false },
   );

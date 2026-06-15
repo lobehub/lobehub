@@ -11,6 +11,7 @@ import AgentItem from '@/features/SkillStore/SkillDetail/AgentItem';
 import { agentListStyles as styles } from '@/features/SkillStore/SkillDetail/style';
 import VirtuosoLoading from '@/features/SkillStore/SkillList/VirtuosoLoading';
 import { useClientDataSWR } from '@/libs/swr';
+import { discoverKeys } from '@/libs/swr/keys';
 import { discoverService } from '@/services/discover';
 import { type DiscoverAssistantItem } from '@/types/discover';
 
@@ -35,7 +36,7 @@ const Agents = memo<AgentsProps>(({ inModal }) => {
 
   // SWR fetch data (lazy loading - only requests when component mounts)
   const { data, isLoading, error } = useClientDataSWR(
-    identifier ? ['mcp-agents', identifier, currentPage] : null,
+    identifier ? discoverKeys.mcpAgents(identifier, currentPage) : null,
     () =>
       discoverService.getAgentsByPlugin({
         page: currentPage,

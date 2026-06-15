@@ -11,7 +11,7 @@ import useSWR from 'swr';
 import { message } from '@/components/AntdStaticMethods';
 import { LOADING_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
-import { topicKeys } from '@/libs/swr/keys';
+import { cronKeys, topicKeys } from '@/libs/swr/keys';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
@@ -265,7 +265,7 @@ export class ChatTopicActionImpl {
     if (!activeAgentId) return;
 
     await mutate(
-      ['cronTopicsWithJobInfo', activeAgentId],
+      cronKeys.topicsWithJobInfo(activeAgentId),
       (groups?: CronTopicsGroupWithJobInfo[]) => {
         if (!Array.isArray(groups)) return groups;
 

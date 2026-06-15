@@ -8,6 +8,7 @@ import urlJoin from 'url-join';
 
 import { CustomMDX } from '@/components/mdx';
 import { OFFICIAL_SITE } from '@/const/url';
+import { changelogKeys } from '@/libs/swr/keys';
 import { lambdaClient } from '@/libs/trpc/client';
 import { type Locales } from '@/locales/resources';
 import { type ChangelogIndexItem } from '@/types/changelog';
@@ -24,7 +25,7 @@ interface PostItemProps extends ChangelogIndexItem {
 }
 
 const PostItem = ({ id, versionRange, locale, showDivider = true }: PostItemProps) => {
-  const { data } = useSWR([`changelog-post-${id}`, locale], async () => {
+  const { data } = useSWR(changelogKeys.post(id, locale), async () => {
     return await lambdaClient.changelog.getPostById.query({ id, locale });
   });
 

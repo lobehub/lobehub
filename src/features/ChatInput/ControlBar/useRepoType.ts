@@ -2,6 +2,7 @@ import { isDesktop } from '@lobechat/const';
 import { useEffect, useMemo } from 'react';
 import useSWR from 'swr';
 
+import { deviceKeys } from '@/libs/swr/keys';
 import { electronGitService } from '@/services/electron/git';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
@@ -45,7 +46,7 @@ export const useRepoType = (path?: string, deviceId?: string): RepoType => {
   const shouldProbe = isDesktop && isLocalTarget && !!path && !cached;
 
   const { data: probed } = useSWR(
-    shouldProbe ? ['detect-repo-type', path] : null,
+    shouldProbe ? deviceKeys.repoType(path!) : null,
     () => electronGitService.detectRepoType(path!),
     {
       dedupingInterval: 60 * 1000,

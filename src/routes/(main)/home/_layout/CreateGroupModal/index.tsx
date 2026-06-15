@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { usePermission } from '@/hooks/usePermission';
+import { groupKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
@@ -56,7 +57,7 @@ const CreateGroupModal = memo<CreateGroupModalProps>(({ id, onCancel, open }) =>
 
   // Fetch all agents
   const { data: allAgents = [], isLoading: isLoadingAgents } = useSWR<AgentItemData[]>(
-    open ? 'queryAgentsForCreateGroup' : null,
+    open ? groupKeys.queryAgentsForCreate() : null,
     () => agentService.queryAgents(),
   );
 

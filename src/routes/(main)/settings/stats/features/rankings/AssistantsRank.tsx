@@ -10,6 +10,7 @@ import { SESSION_CHAT_URL } from '@/const/url';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import Link from '@/libs/router/Link';
 import { useClientDataSWR } from '@/libs/swr';
+import { statsKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
@@ -22,7 +23,7 @@ export const AssistantsRank = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { t } = useTranslation(['auth', 'chat']);
   const navigate = useWorkspaceAwareNavigate();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const { data, isLoading } = useClientDataSWR('rank-agents', async () =>
+  const { data, isLoading } = useClientDataSWR(statsKeys.rankAgents(), async () =>
     agentService.rankAgents(),
   );
 

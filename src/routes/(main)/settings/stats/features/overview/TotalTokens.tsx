@@ -6,6 +6,7 @@ import Statistic from '@/components/Statistic';
 import StatisticCard from '@/components/StatisticCard';
 import TitleWithPercentage from '@/components/StatisticCard/TitleWithPercentage';
 import { useClientDataSWR } from '@/libs/swr';
+import { statsKeys } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';
 import { formatShortenNumber } from '@/utils/format';
 import { lastMonth } from '@/utils/time';
@@ -22,9 +23,8 @@ import TotalCard from './ShareButton/TotalCard';
 const TotalTokens = memo<{ inShare?: boolean }>(({ inShare }) => {
   const { t } = useTranslation('auth');
 
-  const { data, isLoading } = useClientDataSWR(
-    ['stats-heatmaps', HeatmapType.Tokens].join('-'),
-    () => messageService.getTokenHeatmaps(),
+  const { data, isLoading } = useClientDataSWR(statsKeys.heatmaps(HeatmapType.Tokens), () =>
+    messageService.getTokenHeatmaps(),
   );
 
   const { count, prevCount } = useMemo(() => {

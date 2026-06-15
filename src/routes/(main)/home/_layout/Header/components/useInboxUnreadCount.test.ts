@@ -1,7 +1,8 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { UNREAD_COUNT_KEY } from './InboxDrawer/constants';
+import { inboxKeys } from '@/libs/swr/keys';
+
 import { INBOX_UNREAD_COUNT_REFRESH_INTERVAL, useInboxUnreadCount } from './useInboxUnreadCount';
 
 const mocks = vi.hoisted(() => ({
@@ -66,9 +67,13 @@ describe('useInboxUnreadCount', () => {
     const { result } = renderHook(() => useInboxUnreadCount());
 
     expect(result.current.enabled).toBe(true);
-    expect(mocks.useClientDataSWR).toHaveBeenCalledWith(UNREAD_COUNT_KEY, expect.any(Function), {
-      refreshInterval: INBOX_UNREAD_COUNT_REFRESH_INTERVAL,
-    });
+    expect(mocks.useClientDataSWR).toHaveBeenCalledWith(
+      inboxKeys.unreadCount(),
+      expect.any(Function),
+      {
+        refreshInterval: INBOX_UNREAD_COUNT_REFRESH_INTERVAL,
+      },
+    );
   });
 
   it('keeps unread count polling on the same 10 second cadence', () => {

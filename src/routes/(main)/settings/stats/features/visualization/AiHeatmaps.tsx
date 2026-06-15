@@ -7,6 +7,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { statsKeys } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';
 import { formatIntergerNumber, formatShortenNumber } from '@/utils/format';
 
@@ -23,7 +24,7 @@ const AiHeatmaps = memo<
   );
   const isTokens = type === HeatmapType.Tokens;
 
-  const { data, isLoading } = useClientDataSWR(['stats-heatmaps', type].join('-'), async () =>
+  const { data, isLoading } = useClientDataSWR(statsKeys.heatmaps(type), async () =>
     isTokens ? messageService.getTokenHeatmaps() : messageService.getHeatmaps(),
   );
 

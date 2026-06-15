@@ -9,6 +9,7 @@ import { useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
 
 import { type MessengerPlatform, PlatformAvatar } from './constants';
@@ -55,7 +56,7 @@ const MessengerSettings = memo(() => {
   // next-step guidance.
   const [blocked, setBlocked] = useState<BlockedInstall | null>(null);
 
-  const platformsSWR = useSWR('messenger:availablePlatforms', () =>
+  const platformsSWR = useSWR(messengerKeys.availablePlatforms(), () =>
     messengerService.availablePlatforms(),
   );
 

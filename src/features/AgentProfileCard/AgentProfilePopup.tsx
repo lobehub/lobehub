@@ -12,6 +12,7 @@ import useSWR from 'swr';
 
 import ModelSelect from '@/features/ModelSelect';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { agentProfileKeys } from '@/libs/swr/keys';
 import { agentService } from '@/services/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 
@@ -78,7 +79,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(
     const updateMemberAgentConfig = useAgentGroupStore((s) => s.updateMemberAgentConfig);
 
     const { data: fetched, isLoading } = useSWR(
-      open ? ['agentProfile', agentId] : null,
+      open ? agentProfileKeys.detail(agentId) : null,
       () => agentService.getAgentConfigById(agentId) as Promise<FetchedAgent | null>,
       { revalidateOnFocus: false },
     );
