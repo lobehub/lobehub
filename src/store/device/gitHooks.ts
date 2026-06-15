@@ -84,7 +84,7 @@ export const useFetchGitAheadBehind = (deviceId: string | undefined, path?: stri
  */
 export const useFetchGitWorktrees = (deviceId: string | undefined, path?: string) =>
   useClientDataSWR<DeviceGitWorktreeListItem[]>(
-    isEnabled(deviceId, path) ? ['git-worktrees', deviceId ?? 'local', path] : null,
+    isEnabled(deviceId, path) ? deviceKeys.gitWorktrees(deviceId ?? 'local', path) : null,
     () => gitService.listGitWorktrees({ deviceId, path: path! }),
     { focusThrottleInterval: 5 * 1000, revalidateOnFocus: true, shouldRetryOnError: false },
   );

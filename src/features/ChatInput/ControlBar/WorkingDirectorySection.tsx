@@ -44,6 +44,7 @@ const WorkingDirectorySection = memo<WorkingDirectorySectionProps>(({ agentId })
       <WorkingDirectoryPicker agentId={agentId} />
       {effectiveWorkingDirectory && repoType && (
         <GitStatus
+          agentId={agentId}
           deviceId={isLocalDevice ? undefined : targetDeviceId}
           isGithub={repoType === 'github'}
           path={effectiveWorkingDirectory}
