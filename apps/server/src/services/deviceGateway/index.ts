@@ -26,7 +26,11 @@ import type {
   DeviceGitWorktreeListItem,
   DeviceListProjectSkillsResult,
   DeviceLocalFilePreviewResult,
+  DeviceMoveProjectFileItem,
+  DeviceMoveProjectFileResultItem,
   DeviceProjectFileIndexResult,
+  DeviceRenameProjectFileResult,
+  DeviceWriteProjectFileResult,
   ProjectSkillMeta,
   WorkspaceInitResult,
 } from '@lobechat/types';
@@ -681,6 +685,94 @@ export class DeviceGateway {
       log('revertGitFile: error for deviceId=%s — %O', deviceId, error);
       return { error: (error as Error)?.message || 'Revert failed', success: false };
     }
+  }
+
+  /**
+   * Move one or more files/folders within a directory on a remote device, via
+   * the device's `moveLocalFiles` RPC. Powers the Files tree's move in device
+   * mode. Unlike the read RPCs this is a user-initiated mutation, so a missing
+   * gateway / offline device / failed call throws rather than degrading to
+   * `undefined` — the UI surfaces the error instead of silently no-op'ing.
+   */
+  async moveProjectFiles(params: {
+    deviceId: string;
+    items: DeviceMoveProjectFileItem[];
+    timeout?: number;
+    userId: string;
+  }): Promise<DeviceMoveProjectFileResultItem[]> {
+    const { userId, deviceId, items, timeout = 30_000 } = params;
+    const client = this.getClient();
+    if (!client) throw new Error('Device gateway not configured');
+
+    const result = await client.invokeRpc<DeviceMoveProjectFileResultItem[]>(
+      { deviceId, timeout, userId },
+      { method: 'moveLocalFiles', params: { items } },
+    );
+
+    if (!result.success || !result.data) {
+      log('moveProjectFiles: failed for deviceId=%s — %s', deviceId, result.error);
+      throw new Error(result.error || 'Move failed');
+    }
+
+    return result.data;
+  }
+
+  /**
+   * Rename a single file/folder in a directory on a remote device, via the
+   * device's `renameLocalFile` RPC. Like `moveProjectFiles`, a transport failure
+   * throws rather than degrading silently.
+   */
+  async renameProjectFile(params: {
+    deviceId: string;
+    newName: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+  }): Promise<DeviceRenameProjectFileResult> {
+    const { userId, deviceId, path, newName, timeout = 30_000 } = params;
+    const client = this.getClient();
+    if (!client) throw new Error('Device gateway not configured');
+
+    const result = await client.invokeRpc<DeviceRenameProjectFileResult>(
+      { deviceId, timeout, userId },
+      { method: 'renameLocalFile', params: { newName, path } },
+    );
+
+    if (!result.success || !result.data) {
+      log('renameProjectFile: failed for deviceId=%s — %s', deviceId, result.error);
+      throw new Error(result.error || 'Rename failed');
+    }
+
+    return result.data;
+  }
+
+  /**
+   * Save edited content back to a file on a remote device, via the device's
+   * `writeLocalFile` RPC. Powers remote save in the LocalFile editor. Like the
+   * other file mutations, a transport failure throws rather than degrading.
+   */
+  async writeProjectFile(params: {
+    content: string;
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+  }): Promise<DeviceWriteProjectFileResult> {
+    const { userId, deviceId, path, content, timeout = 30_000 } = params;
+    const client = this.getClient();
+    if (!client) throw new Error('Device gateway not configured');
+
+    const result = await client.invokeRpc<DeviceWriteProjectFileResult>(
+      { deviceId, timeout, userId },
+      { method: 'writeLocalFile', params: { content, path } },
+    );
+
+    if (!result.success || !result.data) {
+      log('writeProjectFile: failed for deviceId=%s — %s', deviceId, result.error);
+      throw new Error(result.error || 'Write failed');
+    }
+
+    return result.data;
   }
 
   /**

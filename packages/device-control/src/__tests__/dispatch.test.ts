@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -84,5 +84,48 @@ describe('executeDeviceRpc', () => {
     // Not a git repo → the shared local-file-shell impl returns an empty list.
     const result = await executeDeviceRpc('listGitBranches', { path: root }, makeDeps());
     expect(Array.isArray(result)).toBe(true);
+  });
+
+  it('routes moveLocalFiles to the shared local-file-shell impl', async () => {
+    const oldPath = path.join(root, 'move-src.txt');
+    const newPath = path.join(root, 'move-dst.txt');
+    await writeFile(oldPath, 'hello');
+
+    const result = (await executeDeviceRpc(
+      'moveLocalFiles',
+      { items: [{ newPath, oldPath }] },
+      makeDeps(),
+    )) as { newPath?: string; success: boolean }[];
+
+    expect(result).toHaveLength(1);
+    expect(result[0].success).toBe(true);
+    expect(result[0].newPath).toBe(newPath);
+  });
+
+  it('routes renameLocalFile to the shared local-file-shell impl', async () => {
+    const filePath = path.join(root, 'rename-src.txt');
+    await writeFile(filePath, 'hello');
+
+    const result = (await executeDeviceRpc(
+      'renameLocalFile',
+      { newName: 'rename-dst.txt', path: filePath },
+      makeDeps(),
+    )) as { newPath: string; success: boolean };
+
+    expect(result.success).toBe(true);
+    expect(result.newPath).toBe(path.join(root, 'rename-dst.txt'));
+  });
+
+  it('routes writeLocalFile to the shared local-file-shell impl', async () => {
+    const filePath = path.join(root, 'write-target.txt');
+
+    const result = (await executeDeviceRpc(
+      'writeLocalFile',
+      { content: 'remote edit', path: filePath },
+      makeDeps(),
+    )) as { success: boolean };
+
+    expect(result.success).toBe(true);
+    expect(await readFile(filePath, 'utf8')).toBe('remote edit');
   });
 });

@@ -1,4 +1,4 @@
-import { localFileService } from '@/services/electron/localFileService';
+import { projectFileService } from '@/services/projectFile';
 import { type ChatStore } from '@/store/chat/store';
 import { type StoreSetter } from '@/store/types';
 import { type PortalArtifact } from '@/types/artifact';
@@ -540,11 +540,13 @@ export class ChatPortalActionImpl {
     );
   };
 
-  saveLocalFile = async (filePath: string): Promise<string | undefined> => {
+  saveLocalFile = async (filePath: string, deviceId?: string): Promise<string | undefined> => {
     const { dirtyLocalFileContents } = this.#get();
     const buffer = dirtyLocalFileContents[filePath];
     if (buffer === undefined) return undefined;
-    await localFileService.writeFile({ content: buffer, path: filePath });
+    // deviceId routes the write to the remote device over RPC; local desktop
+    // (no deviceId) goes straight to Electron IPC. The chokepoint hides the split.
+    await projectFileService.writeProjectFile({ content: buffer, deviceId, path: filePath });
     return buffer;
   };
 

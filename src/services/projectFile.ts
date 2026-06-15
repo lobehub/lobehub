@@ -1,6 +1,9 @@
 import type {
   LocalFilePreviewUrlParams,
+  LocalMoveFilesResultItem,
+  MoveLocalFileParams,
   ProjectFileIndexResult,
+  RenameLocalFileResult,
 } from '@lobechat/electron-client-ipc';
 import type { DeviceLocalFilePreview } from '@lobechat/types';
 
@@ -83,6 +86,52 @@ class ProjectFileService {
     }
 
     return localFileService.getLocalFilePreview(params);
+  }
+
+  /**
+   * Move one or more files/folders within a project working directory. Batched:
+   * each item succeeds or fails independently.
+   */
+  async moveProjectFiles({
+    deviceId,
+    items,
+  }: {
+    deviceId?: string;
+    items: MoveLocalFileParams[];
+  }): Promise<LocalMoveFilesResultItem[]> {
+    return deviceId
+      ? lambdaClient.device.moveProjectFiles.mutate({ deviceId, items })
+      : localFileService.moveLocalFiles({ items });
+  }
+
+  /** Rename a single file/folder in a project working directory. */
+  async renameProjectFile({
+    deviceId,
+    newName,
+    path,
+  }: {
+    deviceId?: string;
+    newName: string;
+    path: string;
+  }): Promise<RenameLocalFileResult> {
+    return deviceId
+      ? lambdaClient.device.renameProjectFile.mutate({ deviceId, newName, path })
+      : localFileService.renameLocalFile({ newName, path });
+  }
+
+  /** Save edited content back to a file in a project working directory. */
+  async writeProjectFile({
+    content,
+    deviceId,
+    path,
+  }: {
+    content: string;
+    deviceId?: string;
+    path: string;
+  }): Promise<{ error?: string; success: boolean }> {
+    return deviceId
+      ? lambdaClient.device.writeProjectFile.mutate({ content, deviceId, path })
+      : localFileService.writeFile({ content, path });
   }
 }
 

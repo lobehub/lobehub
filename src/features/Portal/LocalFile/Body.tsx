@@ -188,7 +188,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
       if (readOnly) return;
 
       try {
-        const saved = await saveLocalFile(filePath);
+        const saved = await saveLocalFile(filePath, deviceId);
         if (saved === undefined) return;
         // Update SWR cache BEFORE clearing the buffer, otherwise React will
         // briefly render with buffer cleared but content still stale, causing
@@ -198,7 +198,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
       } catch {
         /* swallow — surfacing handled elsewhere if needed */
       }
-    }, [filePath, onSaved, readOnly, saveLocalFile, setLocalFileBuffer]);
+    }, [deviceId, filePath, onSaved, readOnly, saveLocalFile, setLocalFileBuffer]);
 
     const { body, frontmatter } = useMemo(
       () => (isMarkdown ? parseSkillMarkdownFrontmatter(editingValue) : { body: editingValue }),
@@ -407,7 +407,9 @@ const ActiveFileView = memo<ActiveFileViewProps>(
         deviceId={deviceId}
         ext={ext}
         filePath={filePath}
-        readOnly={!!deviceId}
+        // Remote files are now editable: saveLocalFile routes the write to the
+        // device over RPC (writeProjectFile) just as local files go through IPC.
+        readOnly={false}
         reloading={isValidating}
         workingDirectory={workingDirectory}
         onReload={handleReload}
