@@ -837,14 +837,17 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [removeComposioConnection, togglePlugin],
   );
 
-  // Composio server list items - only show installed or recommended
+  // Composio server list items - show installed, recommended, or any id that
+  // still lingers in the agent's plugins (so an orphaned, never-authorized
+  // entry can be removed even when it isn't a recommended app).
   const composioServerItems = useMemo(
     () =>
       isComposioEnabledInEnv
         ? COMPOSIO_APP_TYPES.filter(
             (type) =>
               installedComposioIds.has(type.identifier) ||
-              recommendedComposioIds.has(type.identifier),
+              recommendedComposioIds.has(type.identifier) ||
+              checkedSet.has(type.identifier),
           ).map((type) => {
             const server = getServerByName(type.identifier);
             const icon = (
@@ -888,36 +891,40 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
               />
             );
 
-            // Server exists but isn't connected yet (pending auth / re-authorize):
-            // keep the Connect/Re-authorize action, but also expose a delete-only
-            // menu (via the "..." button and right-click) so an accidental or
-            // failed authorization can still be removed.
-            if (server) {
+            // Expose a delete-only menu (via the "..." button and right-click)
+            // whenever the entry is removable but not yet connected, while
+            // keeping the Connect/Re-authorize action. This covers two states:
+            //   - a server exists but isn't ACTIVE (pending auth / re-authorize)
+            //   - no server yet, but the id already lingers in the agent's
+            //     plugins (added optimistically, never authorized)
+            // so an accidental or failed authorization can always be cleaned up.
+            const removableId = server?.identifier ?? type.identifier;
+            if (server || checkedSet.has(type.identifier)) {
               return {
                 extra: renderPolicyMenu(
-                  server.identifier,
+                  removableId,
                   {
                     displayName: type.label,
-                    onDelete: () => removeComposioServer(server.identifier),
+                    onDelete: () => removeComposioServer(removableId),
                   },
                   undefined,
                   true,
                 ),
                 icon,
-                key: server.identifier,
+                key: removableId,
                 label: (
                   <span
                     onContextMenu={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      openSkillPolicyMenu(server.identifier);
+                      openSkillPolicyMenu(removableId);
                     }}
                   >
                     {serverItem}
                   </span>
                 ),
                 popoverContent,
-                searchText: `${type.label} ${server.identifier}`,
+                searchText: `${type.label} ${removableId}`,
               } as SkillMenuItem;
             }
 
@@ -941,6 +948,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       removeComposioServer,
       renderPolicyMenu,
       openSkillPolicyMenu,
+      checkedSet,
     ],
   );
 
