@@ -5,11 +5,16 @@ import { memo, useMemo } from 'react';
 
 import { LOADING_FLAT } from '@/const/message';
 import ContentLoading from '@/features/Conversation/Messages/components/ContentLoading';
-import { type AssistantContentBlock } from '@/types/index';
+import type { AssistantContentBlock } from '@/types/index';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import { MessageAggregationContext } from '../../Contexts/MessageAggregationContext';
-import { areWorkflowToolsComplete, getPostToolAnswerSplitIndex } from '../toolDisplayNames';
+import { POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD } from '../constants';
+import {
+  areWorkflowToolsComplete,
+  getPostToolAnswerSplitIndex,
+  scoreBlockContentAsAnswerLike,
+} from '../toolDisplayNames';
 import { CollapsedMessage } from './CollapsedMessage';
 import GroupItem from './GroupItem';
 import type { RenderableAssistantContentBlock } from './types';
@@ -137,6 +142,12 @@ const appendWorkflowBlock = (
   segments.push({ blocks: [block], kind: 'workflow' });
 };
 
+const shouldPromoteMixedBlockContent = (block: AssistantContentBlock): boolean => {
+  if (!hasTools(block) || !hasSubstantiveContent(block)) return false;
+
+  return scoreBlockContentAsAnswerLike(block) >= POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD;
+};
+
 const appendWorkflowRangeBlock = (
   segments: GroupRenderSegment[],
   block: AssistantContentBlock,
@@ -167,18 +178,11 @@ const appendWorkflowRangeBlock = (
     return;
   }
 
-  // A block that carries both tool calls and prose keeps its NATURAL order
-  // (content above the tool). Within one assistant message the model's text
-  // always precedes its tool_use — tool_use ends the turn, so any post-tool
-  // prose lands in a separate, tool-less block. A mixed block's content is
-  // therefore always a preamble, never a post-tool summary.
-  //
-  // In a single-tool turn the block renders inline as-is (content above its
-  // tool). In a multi-tool turn the tools collapse into a WorkflowCollapse that
-  // defaults to folded once complete, so we lift the full preamble into its own
-  // visible answer segment first and leave only the tool(s) in the fold —
-  // otherwise the explanation would be hidden inside the collapsed body.
-  if (collapsesIntoWorkflow && hasTools(block) && hasSubstantiveContent(block)) {
+  // Mixed blocks keep their natural order: assistant prose precedes tool_use.
+  // Short step/status prose belongs with the workflow so adjacent tools can
+  // still fold together; answer-like prose is lifted above the fold so it does
+  // not disappear inside a collapsed WorkflowCollapse.
+  if (collapsesIntoWorkflow && shouldPromoteMixedBlockContent(block)) {
     appendAnswerBlock(
       segments,
       createAnswerRenderBlock(block, {

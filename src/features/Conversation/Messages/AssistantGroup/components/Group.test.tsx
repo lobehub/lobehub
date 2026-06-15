@@ -209,17 +209,17 @@ describe('Group', () => {
     ]);
   });
 
-  it('keeps a mixed block full preamble visible above a folded multi-tool workflow', () => {
-    // The whole preamble (every sentence) stays in a visible answer segment; the
-    // workflow fold holds only the tools. Otherwise the prose past the first
-    // sentence would be hidden inside the collapsed-by-default workflow body.
+  it('keeps answer-like mixed prose visible above a folded multi-tool workflow', () => {
+    const answerLikePreamble =
+      'I found the likely rendering issue and need to verify the grouped workflow behavior.\n\n- The assistant prose should remain above the fold when it explains the result.\n- The tools still belong in the collapsed workflow.\n- Short progress lines should not split the workflow.';
+
     const { container } = render(
       <Group
         id="assistant-1"
         messageIndex={0}
         blocks={[
           blk({
-            content: '我先帮你查一下。接下来我会继续整理结果。',
+            content: answerLikePreamble,
             id: 'block-1',
             tools: [{ apiName: 'search', id: 'tool-1' } as any],
           }),
@@ -238,8 +238,8 @@ describe('Group', () => {
 
     expect(sequence).toEqual(['answer-segment', 'workflow-segment']);
     expect(parseAnswerSegment()).toEqual({
-      content: '我先帮你查一下。接下来我会继续整理结果。',
-      contentOverride: '我先帮你查一下。接下来我会继续整理结果。',
+      content: answerLikePreamble,
+      contentOverride: answerLikePreamble,
       disableMarkdownStreaming: true,
       domId: 'block-1__answer',
       hasError: false,
@@ -260,6 +260,50 @@ describe('Group', () => {
       },
       {
         content: '',
+        disableMarkdownStreaming: false,
+        domId: undefined,
+        hasError: false,
+        toolCount: 1,
+      },
+    ]);
+  });
+
+  it('folds consecutive short mixed single-tool blocks into one workflow segment', () => {
+    const { container } = render(
+      <Group
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'Let me inspect the package scripts.',
+            id: 'block-1',
+            tools: [{ apiName: 'command_execution', id: 'tool-1' } as any],
+          }),
+          blk({
+            content: 'Now let me read the source file.',
+            id: 'block-2',
+            tools: [{ apiName: 'readFile', id: 'tool-2' } as any],
+          }),
+        ]}
+      />,
+    );
+
+    const sequence = Array.from(container.querySelectorAll('[data-testid]')).map((node) =>
+      node.getAttribute('data-testid'),
+    );
+
+    expect(sequence).toEqual(['workflow-segment']);
+    expect(screen.queryByTestId('answer-segment')).not.toBeInTheDocument();
+    expect(parseWorkflowSegment()).toEqual([
+      {
+        content: 'Let me inspect the package scripts.',
+        disableMarkdownStreaming: true,
+        domId: undefined,
+        hasError: false,
+        toolCount: 1,
+      },
+      {
+        content: 'Now let me read the source file.',
         disableMarkdownStreaming: false,
         domId: undefined,
         hasError: false,
