@@ -1853,6 +1853,188 @@ describe('AgentRuntimeService', () => {
       expect(won).toBe(false);
       expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
     });
+
+    it('schedules a finish step when the parked tool requests onComplete=finish (skipCallSupervisor / delegate)', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        pendingToolsCalling: [{ id: 'tc1' }],
+        status: 'waiting_for_async_tool',
+        stepCount: 4,
+      });
+      (service as any).serverDB.query = {
+        messagePlugins: {
+          findFirst: vi
+            .fn()
+            .mockResolvedValue({
+              id: 'msg-tc1',
+              state: { onComplete: 'finish', status: 'completed' },
+              toolCallId: 'tc1',
+            }),
+        },
+      };
+      (service as any).messageModel.findById = vi.fn().mockResolvedValue({ content: 'answer' });
+      vi.spyOn(AgentOperationModel.prototype, 'tryResumeFromAsyncTool').mockResolvedValue(true);
+
+      const won = await service.tryResumeParentFromAsyncTool({ parentOperationId: parentOpId });
+
+      expect(won).toBe(true);
+      expect(mockQueueService.scheduleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ payload: { finishAfterAsyncTool: true }, stepIndex: 4 }),
+      );
+    });
+  });
+
+  describe('completeGroupActionMember', () => {
+    const memberState = {
+      messages: [
+        { content: 'question', role: 'user' },
+        { content: 'final answer', role: 'assistant' },
+      ],
+      metadata: { agentId: 'agent-a' },
+      modelRuntimeConfig: { model: 'gpt-test' },
+      status: 'done',
+      usage: { llm: { tokens: { total: 42 } }, tools: { totalCalls: 2 } },
+    };
+
+    let updateToolMessage: ReturnType<typeof vi.fn>;
+    let resumeSpy: MockInstance<AgentRuntimeService['tryResumeParentFromAsyncTool']>;
+
+    beforeEach(() => {
+      updateToolMessage = vi.fn().mockResolvedValue({ success: true });
+      (service as any).messageModel.updateToolMessage = updateToolMessage;
+      resumeSpy = vi.spyOn(service, 'tryResumeParentFromAsyncTool').mockResolvedValue(true);
+    });
+
+    it('single in-group member: backfills a receipt onto the group tool and resumes', async () => {
+      const won = await service.completeGroupActionMember({
+        anchorMessageId: 'grp-tool-1',
+        expectedMembers: 1,
+        finalState: memberState as any,
+        groupToolMessageId: 'grp-tool-1',
+        mode: 'in_group',
+        onComplete: 'resume',
+        operationId: 'child-1',
+        parentOperationId: 'parent-1',
+        reason: 'done',
+      });
+
+      expect(won).toBe(true);
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'grp-tool-1',
+        expect.objectContaining({
+          content: 'Agent agent-a responded in the group.',
+          pluginState: expect.objectContaining({ status: 'completed' }),
+        }),
+      );
+      expect(resumeSpy).toHaveBeenCalledWith(
+        { parentOperationId: 'parent-1' },
+        { scheduleVerifyOnHold: true },
+      );
+    });
+
+    it('single isolated member: backfills the final answer', async () => {
+      await service.completeGroupActionMember({
+        anchorMessageId: 'grp-tool-1',
+        expectedMembers: 1,
+        finalState: memberState as any,
+        groupToolMessageId: 'grp-tool-1',
+        mode: 'isolated',
+        onComplete: 'resume',
+        operationId: 'child-1',
+        parentOperationId: 'parent-1',
+        reason: 'done',
+      });
+
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'grp-tool-1',
+        expect.objectContaining({ content: 'final answer' }),
+      );
+    });
+
+    it('multi-member: holds (no group-tool backfill, no resume) until the barrier is met', async () => {
+      (service as any).serverDB.query = {
+        messagePlugins: { findFirst: vi.fn() },
+        messages: {
+          findMany: vi
+            .fn()
+            .mockResolvedValue([{ content: 'a note', id: 'anchor-0', role: 'tool' }]),
+        },
+      };
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        status: 'waiting_for_async_tool',
+        stepCount: 1,
+      });
+
+      const won = await service.completeGroupActionMember({
+        anchorMessageId: 'anchor-0',
+        expectedMembers: 2,
+        finalState: memberState as any,
+        groupToolMessageId: 'grp-tool-1',
+        mode: 'in_group',
+        onComplete: 'resume',
+        operationId: 'child-1',
+        parentOperationId: 'parent-1',
+        reason: 'done',
+      });
+
+      expect(won).toBe(false);
+      expect(updateToolMessage).toHaveBeenCalledWith('anchor-0', expect.anything());
+      expect(updateToolMessage).not.toHaveBeenCalledWith('grp-tool-1', expect.anything());
+      expect(resumeSpy).not.toHaveBeenCalled();
+    });
+
+    it('multi-member: last completion backfills the group tool and resumes', async () => {
+      (service as any).serverDB.query = {
+        messagePlugins: { findFirst: vi.fn() },
+        messages: {
+          findMany: vi.fn().mockResolvedValue([
+            { content: 'a', id: 'anchor-0', role: 'tool' },
+            { content: 'b', id: 'anchor-1', role: 'tool' },
+          ]),
+        },
+      };
+
+      const won = await service.completeGroupActionMember({
+        anchorMessageId: 'anchor-1',
+        expectedMembers: 2,
+        finalState: memberState as any,
+        groupToolMessageId: 'grp-tool-1',
+        mode: 'in_group',
+        onComplete: 'resume',
+        operationId: 'child-2',
+        parentOperationId: 'parent-1',
+        reason: 'done',
+      });
+
+      expect(won).toBe(true);
+      expect(updateToolMessage).toHaveBeenCalledWith('anchor-1', expect.anything());
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'grp-tool-1',
+        expect.objectContaining({
+          content: 'All 2 agent members completed.',
+          pluginState: expect.objectContaining({ status: 'completed' }),
+        }),
+      );
+      expect(resumeSpy).toHaveBeenCalled();
+    });
+
+    it('throws when the anchor backfill fails so the webhook redelivers', async () => {
+      updateToolMessage.mockResolvedValue({ success: false });
+
+      await expect(
+        service.completeGroupActionMember({
+          anchorMessageId: 'grp-tool-1',
+          expectedMembers: 1,
+          finalState: memberState as any,
+          groupToolMessageId: 'grp-tool-1',
+          mode: 'in_group',
+          onComplete: 'resume',
+          operationId: 'child-1',
+          parentOperationId: 'parent-1',
+          reason: 'done',
+        }),
+      ).rejects.toThrow(/failed to backfill anchor/);
+      expect(resumeSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe('completeSubAgentBridge', () => {
