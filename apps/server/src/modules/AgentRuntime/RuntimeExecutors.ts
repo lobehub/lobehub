@@ -2621,6 +2621,7 @@ export const createRuntimeExecutors = (
                   payload.parentMessageId,
                 ),
                 documentId: state.metadata?.documentId,
+                editingAgentId: state.metadata?.editingAgentId,
                 execSubAgent: ctx.execSubAgent,
                 executionTimeoutMs: timeoutMs,
                 groupId: state.metadata?.groupId,

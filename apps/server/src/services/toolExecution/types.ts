@@ -122,6 +122,12 @@ export interface ToolExecutionContext {
   /** Current page document ID for page-scoped conversations */
   documentId?: string | null;
   /**
+   * When scope is 'agent_builder', the ID of the agent being edited. Kept
+   * separate from agentId so message ownership and queryUiMessages remain
+   * bound to the builder builtin; only AgentBuilder tool methods read this.
+   */
+  editingAgentId?: string;
+  /**
    * Legacy agent invocation callback forwarded from RuntimeExecutorContext.
    * Kept for tool runtimes that still dispatch through exec_sub_agent style
    * flows; `lobe-agent.callSubAgent` uses the per-call `subAgent` runner below.
