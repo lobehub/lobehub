@@ -139,12 +139,9 @@ const ChatList = memo<ChatListProps>(
       [displayMessageIds.length, defaultWorkflowExpandLevel, receiptsByAnchor],
     );
     const messagesInit = useConversationStore(dataSelectors.messagesInit);
+    // ConversationArea can render store-backed cached messages before SWR has local data.
     const showRefreshingHint =
-      messagesInit &&
-      displayMessageIds.length > 0 &&
-      messagesSWR.isValidating &&
-      !messagesSWR.isLoading &&
-      !isStreaming;
+      messagesInit && displayMessageIds.length > 0 && messagesSWR.isValidating && !isStreaming;
 
     const mergedFooterSlot = useMemo(() => {
       if (!showRefreshingHint && !footerSlot) return;
