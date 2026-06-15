@@ -1,4 +1,8 @@
-import { LocalSystemIdentifier, LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+import {
+  LocalSystemApiName,
+  LocalSystemIdentifier,
+  LocalSystemManifest,
+} from '@lobechat/builtin-tool-local-system';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ToolExecutionContext } from '../../types';
@@ -112,6 +116,62 @@ describe('localSystemRuntime', () => {
         }),
         undefined,
       );
+    });
+  });
+
+  describe('working directory injection', () => {
+    const parseArgs = () => JSON.parse(mockExecuteToolCall.mock.calls[0][1].arguments);
+
+    const buildProxy = (workingDirectory?: string) => {
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+      return localSystemRuntime.factory({
+        activeDeviceId: 'device-1',
+        toolManifestMap: {},
+        userId: 'user-1',
+        workingDirectory,
+      });
+    };
+
+    it('injects cwd into runCommand when the model omits it', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.runCommand]({ command: 'git status' });
+
+      expect(parseArgs()).toEqual({ command: 'git status', cwd: '/Users/me/repo' });
+    });
+
+    it('injects scope into search ops that honor it', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.grepContent]({ pattern: 'TODO' });
+
+      expect(parseArgs()).toEqual({ pattern: 'TODO', scope: '/Users/me/repo' });
+    });
+
+    it('does not override an explicit cwd/scope supplied by the model', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.runCommand]({ command: 'ls', cwd: '/explicit' });
+
+      expect(parseArgs()).toEqual({ command: 'ls', cwd: '/explicit' });
+    });
+
+    it('does not inject into file ops (model passes absolute paths from the prompt)', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.readFile]({ path: '/Users/me/repo/src/index.ts' });
+
+      expect(parseArgs()).toEqual({ path: '/Users/me/repo/src/index.ts' });
+    });
+
+    it('does not inject for command-id ops (getCommandOutput / killCommand)', async () => {
+      const proxy = buildProxy('/Users/me/repo');
+      await proxy[LocalSystemApiName.getCommandOutput]({ shell_id: 'cmd-1' });
+
+      expect(parseArgs()).toEqual({ shell_id: 'cmd-1' });
+    });
+
+    it('leaves args untouched when no working directory is bound', async () => {
+      const proxy = buildProxy(undefined);
+      await proxy[LocalSystemApiName.runCommand]({ command: 'pwd' });
+
+      expect(parseArgs()).toEqual({ command: 'pwd' });
     });
   });
 });

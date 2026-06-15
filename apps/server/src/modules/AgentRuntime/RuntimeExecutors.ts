@@ -2700,6 +2700,10 @@ export const createRuntimeExecutors = (
                 toolResultMaxLength,
                 topicId: ctx.topicId,
                 userId: ctx.userId,
+                // Device-bound cwd folded into deviceSystemInfo at operation
+                // creation; resume-safe via computeDeviceContext (recovers it
+                // from the prior tool message's pluginState.metadata).
+                workingDirectory: state.metadata?.deviceSystemInfo?.workingDirectory,
                 workspaceId: state.metadata?.workspaceId ?? ctx.workspaceId,
               }),
             {

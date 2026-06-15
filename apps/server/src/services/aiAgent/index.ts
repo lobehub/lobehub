@@ -370,7 +370,7 @@ export class AiAgentService {
     activeDeviceId: string | undefined;
     agencyConfig?: LobeAgentAgencyConfig;
     topicId: string;
-  }): Promise<WorkspaceInitResult> {
+  }): Promise<WorkspaceInitResult & { boundCwd?: string }> {
     const empty: WorkspaceInitResult = { instructions: [], skills: [] };
     const { activeDeviceId, agencyConfig, topicId } = params;
     if (!activeDeviceId) return empty;
@@ -381,7 +381,11 @@ export class AiAgentService {
       if (!device) return empty;
 
       // The bound project root we scan — resolved via the shared precedence
-      // helper so it cannot drift from hetero dispatch / topic backfill.
+      // helper so it cannot drift from hetero dispatch / topic backfill. Read
+      // from the persisted `device.defaultCwd` (not a live device query, which
+      // only reports the daemon's process.cwd = `/`); also returned to the
+      // caller so the system prompt's {{workingDirectory}} reflects the same
+      // bound directory the workspace scan used.
       const topic = await this.topicModel.findById(topicId);
       const boundCwd = resolveDeviceWorkingDirectory({
         deviceDefaultCwd: device.defaultCwd,
@@ -396,7 +400,7 @@ export class AiAgentService {
 
       if (isWorkspaceCacheFresh(cached, Date.now()) && cached?.workspace) {
         log('execAgent: reusing cached workspace init for %s', boundCwd);
-        return cached.workspace;
+        return { ...cached.workspace, boundCwd };
       }
 
       const scanned = await deviceGateway.initWorkspace({
@@ -409,9 +413,9 @@ export class AiAgentService {
         // cache rather than dropping the project's skills + instructions.
         if (cached?.workspace) {
           log('execAgent: workspace init scan failed, using stale cache for %s', boundCwd);
-          return cached.workspace;
+          return { ...cached.workspace, boundCwd };
         }
-        return empty;
+        return { ...empty, boundCwd };
       }
 
       // Persist the fresh scan back onto `workingDirs` (update in place or prepend
@@ -420,7 +424,7 @@ export class AiAgentService {
       await deviceModel.update(activeDeviceId, { workingDirs: updated });
       log('execAgent: scanned and cached workspace init for %s', boundCwd);
 
-      return scanned;
+      return { ...scanned, boundCwd };
     } catch (error) {
       log('execAgent: resolveWorkspaceInit failed: %O', error);
       return empty;
@@ -2233,7 +2237,11 @@ export class AiAgentService {
           platform: device?.platform ?? 'unknown',
           userDataPath: systemInfo.userDataPath,
           videosPath: systemInfo.videosPath,
-          workingDirectory: systemInfo.workingDirectory,
+          // `workingDirectory` is intentionally NOT taken from the live device
+          // query — it only reports the daemon's process.cwd() (= `/` for a
+          // Finder/Dock-launched app). The bound directory is resolved from the
+          // persisted device row in resolveWorkspaceInit and written onto
+          // deviceSystemInfo.workingDirectory at the call site below.
         };
       } catch (error) {
         log('execAgent: failed to fetch device system info: %O', error);
@@ -2654,6 +2662,16 @@ export class AiAgentService {
         agencyConfig: agentConfig.agencyConfig ?? undefined,
         topicId,
       });
+
+      // Feed the bound directory (resolved from the persisted device row) into
+      // the local-system tool's {{workingDirectory}} placeholder — the channel
+      // the model uses to know where it is and reach for absolute paths — and,
+      // downstream, the runCommand cwd / search scope (RuntimeExecutors reads
+      // state.metadata.deviceSystemInfo.workingDirectory). Resume-safe via the
+      // existing deviceSystemInfo plumbing (computeDeviceContext).
+      if (workspaceInit.boundCwd) {
+        deviceSystemInfo.workingDirectory = workspaceInit.boundCwd;
+      }
 
       const projectMetas = workspaceInit.skills.map((s) => ({
         description: s.description ?? '',
