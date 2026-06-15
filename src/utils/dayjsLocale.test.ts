@@ -1,3 +1,4 @@
+import dayjs from 'dayjs';
 import { describe, expect, it } from 'vitest';
 
 import { loadDayjsLocaleModule, normalizeDayjsLocale } from './dayjsLocale';
@@ -31,5 +32,20 @@ describe('loadDayjsLocaleModule', () => {
 
   it('should return an eager glob locale module', async () => {
     await expect(loadDayjsLocaleModule(localeModule)).resolves.toBe(localeModule);
+  });
+
+  it('should load and apply a dayjs browser locale module', async () => {
+    const previousLocale = dayjs.locale();
+    const mod = await loadDayjsLocaleModule(
+      () => import('dayjs/locale/zh-cn') as Promise<{ default: ILocale }>,
+    );
+
+    try {
+      dayjs.locale(mod.default);
+
+      expect(dayjs.locale()).toBe('zh-cn');
+    } finally {
+      dayjs.locale(previousLocale);
+    }
   });
 });
