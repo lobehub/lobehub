@@ -2413,7 +2413,7 @@ describe('StreamingExecutor actions', () => {
     });
   });
 
-  // Characterization net for the upcoming unified run-lifecycle refactor (LOBE-10377).
+  // Characterization net for the upcoming unified run-lifecycle refactor — cross-transport regression baseline across client, gateway, and hetero runtimes.
   // These lock the CURRENT client completion behavior across terminal branches so the
   // refactor can't silently drift queue-drain gating, unread marking, afterCompletion
   // timing, or the normalized client.runtime.complete signal status.
@@ -2568,7 +2568,7 @@ describe('StreamingExecutor actions', () => {
     });
 
     // Parked states (run ≠ operation). These lock the CURRENT per-state handling that
-    // the unified run-lifecycle + normalized parked signal (LOBE-10382) will rewrite.
+    // the unified run-lifecycle + normalized parked signal — cross-transport parked / resumed / terminal signal normalization will rewrite.
     const pinStep = (operationId: string, status: AgentState['status']) => {
       vi.spyOn(agentRuntime.AgentRuntime.prototype, 'step').mockResolvedValue({
         events: [],
@@ -2597,7 +2597,7 @@ describe('StreamingExecutor actions', () => {
       pinStep(operationId, 'waiting_for_async_tool');
       await runExecutor(result, operationId);
 
-      // CURRENT BEHAVIOR (suspected gap, locked for LOBE-10382): the completion switch
+      // CURRENT BEHAVIOR (suspected gap, locked as baseline for cross-transport parked/resumed/terminal signal normalization): the completion switch
       // has no `waiting_for_async_tool` case, so the op is never completed (stays
       // 'running') and the queue is not drained.
       expect(result.current.operations[operationId].status).toBe('running');
