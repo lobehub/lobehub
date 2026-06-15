@@ -38,7 +38,12 @@ import {
   ToolResolver,
 } from '@lobechat/context-engine';
 import { parse } from '@lobechat/conversation-flow';
-import { consumeStreamUntilDone } from '@lobechat/model-runtime';
+import {
+  applyModelExtendParams,
+  type ChatStreamPayload,
+  consumeStreamUntilDone,
+  type ModelExtendParams,
+} from '@lobechat/model-runtime';
 import {
   context as otelContext,
   SpanKind,
@@ -67,6 +72,7 @@ import {
 } from '@lobechat/types';
 import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
+import type { ExtendParamsType } from 'model-bank';
 
 import { composioEnv } from '@/config/composio';
 import { type MessageModel, MessageModel as MessageModelClass } from '@/database/models/message';
@@ -873,6 +879,7 @@ export const createRuntimeExecutors = (
       type ContentPart = { text: string; type: 'text' } | { image: string; type: 'image' };
       let shouldReplayAssistantReasoning = false;
       let preserveThinkingForPayload: boolean | undefined;
+      let resolvedExtendParams: ModelExtendParams | undefined;
 
       // Process messages through serverMessagesEngine to inject system role, knowledge, etc.
       // Rebuild params from agentConfig at execution time (capabilities built dynamically)
@@ -888,19 +895,36 @@ export const createRuntimeExecutors = (
             : undefined;
         const preserveThinkingRequested = preserveThinkingConfigured === true;
 
+        const readExtendParams = (
+          card: (typeof builtinModels)[number] | undefined,
+        ): string[] | undefined =>
+          card &&
+          'settings' in card &&
+          card.settings &&
+          typeof card.settings === 'object' &&
+          'extendParams' in card.settings
+            ? (card.settings as { extendParams?: string[] }).extendParams
+            : undefined;
+
         const modelCard = builtinModels.find(
           (item) =>
             item.providerId === provider &&
             (item.id === model || item.config?.deploymentName === model),
         );
-        const modelExtendParams =
-          modelCard &&
-          'settings' in modelCard &&
-          modelCard.settings &&
-          typeof modelCard.settings === 'object' &&
-          'extendParams' in modelCard.settings
-            ? (modelCard.settings as { extendParams?: string[] }).extendParams
-            : undefined;
+
+        let modelExtendParams = readExtendParams(modelCard);
+
+        // Aggregation providers (e.g. `lobehub`) may serve a model without copying
+        // its origin `settings.extendParams`. Fall back to the canonical model card
+        // (matched by id across any provider) so reasoning/thinking params like
+        // `thinkingLevel` still reach the model. Mirrors the client-side
+        // `transformToAiModelList` re-namespacing behavior.
+        if (!modelExtendParams || modelExtendParams.length === 0) {
+          const canonicalCard = builtinModels.find(
+            (item) => item.id === model || item.config?.deploymentName === model,
+          );
+          modelExtendParams = readExtendParams(canonicalCard);
+        }
 
         const modelSupportsPreserveThinkingFromCard =
           Array.isArray(modelExtendParams) && modelExtendParams.includes('preserveThinking');
@@ -915,6 +939,19 @@ export const createRuntimeExecutors = (
           modelSupportsPreserveThinking && typeof preserveThinkingConfigured === 'boolean'
             ? preserveThinkingConfigured
             : undefined;
+
+        // Resolve model extend params (thinkingLevel, reasoning effort, urlContext, …)
+        // from the agent chat config so the server-side agent runtime forwards the same
+        // runtime params the client chat service does. Without this, e.g. Gemini 3 Pro's
+        // `thinkingLevel` never reaches the request and thought summaries come back empty.
+        if (agentConfig.chatConfig) {
+          resolvedExtendParams = applyModelExtendParams({
+            chatConfig: agentConfig.chatConfig,
+            extendParams: modelExtendParams as ExtendParamsType[] | undefined,
+            model,
+          });
+        }
+
         const messagesForContext = shouldReplayAssistantReasoning
           ? (llmPayload.messages as UIChatMessage[])
           : stripAssistantReasoningForReplay(llmPayload.messages as UIChatMessage[]);
@@ -1356,6 +1393,9 @@ export const createRuntimeExecutors = (
         model,
         stream,
         tools,
+        // ModelExtendParams keeps provider-specific effort/thinking values as loose
+        // strings (e.g. hy3's 'no_think'); the runtime payload narrows them, so cast.
+        ...(resolvedExtendParams as Partial<ChatStreamPayload>),
         ...(typeof preserveThinkingForPayload === 'boolean' && {
           preserveThinking: preserveThinkingForPayload,
         }),
