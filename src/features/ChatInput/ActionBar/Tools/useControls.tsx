@@ -809,7 +809,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       isComposioEnabledInEnv
         ? COMPOSIO_APP_TYPES.filter(
             (type) =>
-              installedComposioIds.has(type.identifier) || recommendedComposioIds.has(type.identifier),
+              installedComposioIds.has(type.identifier) ||
+              recommendedComposioIds.has(type.identifier),
           ).map((type) => {
             const server = getServerByName(type.identifier);
             const icon = (
@@ -1232,8 +1233,12 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     });
   }, [lobehubSkillItems, composioServerItems, installedLobehubIds, installedComposioIds]);
 
-  // Distinguish community plugins and custom plugins
-  const communityPlugins = list.filter((item) => item.type !== 'customPlugin');
+  // Distinguish community plugins and custom plugins.
+  // Whitelist `type === 'plugin'` (matching /settings/skill) so connected
+  // integrations (Composio/LobeHub Skill gateway plugins with other sources like
+  // 'self'/'builtin') don't leak in here and duplicate the brand-icon items
+  // already rendered under the LobeHub group.
+  const communityPlugins = list.filter((item) => item.type === 'plugin');
   const customPlugins = list.filter((item) => item.type === 'customPlugin');
 
   // Function to map plugins to list items
