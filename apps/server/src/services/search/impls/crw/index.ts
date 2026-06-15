@@ -101,52 +101,30 @@ export class CrwImpl implements SearchServiceImpl {
 
       log('Parsed fastCRW response: %o', crwResponse);
 
-      // Response returns data as object with web/images/news arrays
-      const webResults = crwResponse.data.web || [];
-      const imageResults = crwResponse.data.images || [];
-      const newsResults = crwResponse.data.news || [];
+      // fastCRW returns a flat `data` array of hits (Firecrawl-compatible shape).
+      const searchResults = crwResponse.data || [];
 
-      // Map web results
-      const mappedWebResults = webResults.map(
-        (result): UniformSearchResult => ({
-          category: 'general',
-          content: result.description || result.markdown || '',
+      const allResults = searchResults.map((result): UniformSearchResult => {
+        const isImage = result.category === 'images';
+        const isNews = result.category === 'news';
+
+        const category = isImage ? 'images' : isNews ? 'news' : 'general';
+        const content = isImage
+          ? result.title || ''
+          : result.description || result.snippet || result.markdown || '';
+        // Image hits use `imageUrl` as the primary link; others use `url`.
+        const url = isImage ? result.imageUrl || result.url : result.url;
+
+        return {
+          category,
+          content,
           engines: ['crw'],
-          parsedUrl: result.url ? new URL(result.url).hostname : '',
-          score: 1,
+          parsedUrl: url ? new URL(url).hostname : '',
+          score: result.score ?? 1,
           title: result.title || '',
-          url: result.url,
-        }),
-      );
-
-      // Map news results
-      const mappedNewsResults = newsResults.map(
-        (result): UniformSearchResult => ({
-          category: 'news',
-          content: result.snippet || result.markdown || '',
-          engines: ['crw'],
-          parsedUrl: result.url ? new URL(result.url).hostname : '',
-          score: 1,
-          title: result.title || '',
-          url: result.url,
-        }),
-      );
-
-      // Map image results
-      const mappedImageResults = imageResults.map(
-        (result): UniformSearchResult => ({
-          category: 'images',
-          content: result.title || '',
-          engines: ['crw'],
-          parsedUrl: result.url ? new URL(result.url).hostname : '',
-          score: 1,
-          title: result.title || '',
-          url: result.imageUrl, // Use imageUrl for images
-        }),
-      );
-
-      // Combine all results
-      const allResults = [...mappedWebResults, ...mappedNewsResults, ...mappedImageResults];
+          url,
+        };
+      });
 
       log('Mapped %d results to SearchResult format', allResults.length);
 

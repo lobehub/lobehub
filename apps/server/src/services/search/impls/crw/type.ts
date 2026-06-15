@@ -36,52 +36,26 @@ interface CrwMetadata {
   title?: string;
 }
 
-// Web search result
-interface CrwWebResult {
-  description: string;
-  html?: string | null;
-  links?: string[];
-  markdown?: string | null;
-  metadata?: CrwMetadata;
-  rawHtml?: string | null;
-  screenshot?: string | null;
-  title: string;
-  url: string;
-}
-
-// Image search result
-interface CrwImageResult {
-  imageHeight: number;
-  imageUrl: string;
-  imageWidth: number;
-  position: number;
-  title: string;
-  url: string;
-}
-
-// News search result
-interface CrwNewsResult {
-  date: string;
+// fastCRW returns search hits as a flat array (Firecrawl-compatible shape:
+// `{ success, data: [...] }`). Each hit carries the fields below; `category`
+// distinguishes web/news/image results.
+interface CrwSearchResult {
+  category?: string;
+  description?: string;
   html?: string | null;
   imageUrl?: string;
-  links?: string[];
   markdown?: string | null;
   metadata?: CrwMetadata;
-  position: number;
-  rawHtml?: string | null;
-  screenshot?: string | null;
-  snippet: string;
-  title: string;
+  position?: number;
+  score?: number;
+  snippet?: string;
+  title?: string;
   url: string;
 }
 
 // Response structure
 export interface CrwResponse {
-  data: {
-    images?: CrwImageResult[];
-    news?: CrwNewsResult[];
-    web?: CrwWebResult[];
-  };
+  data: CrwSearchResult[];
   success: boolean;
   warning?: string | null;
 }
