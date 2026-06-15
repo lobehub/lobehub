@@ -159,7 +159,9 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.sidebarItems(initialState)).toEqual(DEFAULT_SIDEBAR_ITEMS);
     });
 
-    it('should preserve stored order and inject the spacer before the first bottom item', () => {
+    it('should re-anchor the spacer immediately after the accordion block', () => {
+      // Stored order has pages/tasks between the accordion and the first default-bottom item.
+      // The invariant moves them into the bottom group (after the spacer).
       const stored = [
         'agent',
         'recents',
@@ -176,9 +178,9 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.sidebarItems(s)).toEqual([
         'agent',
         'recents',
+        SIDEBAR_SPACER_ID,
         'pages',
         'tasks',
-        SIDEBAR_SPACER_ID,
         'image',
         'community',
         'resource',
@@ -186,7 +188,7 @@ describe('systemStatusSelectors', () => {
       ]);
     });
 
-    it('should respect the stored spacer position', () => {
+    it('should preserve a canonically-positioned spacer', () => {
       const stored = [
         'pages',
         'recents',
@@ -204,23 +206,56 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.sidebarItems(s)).toEqual(stored);
     });
 
-    it('should append missing known keys to the end and keep the spacer anchored', () => {
+    it('should re-anchor the spacer when stored above the accordion', () => {
+      // Simulates the dropdown-menu "move agent down" path that previously left
+      // the spacer floating above the accordion block.
+      const stored = [
+        'tasks',
+        'pages',
+        SIDEBAR_SPACER_ID,
+        'recents',
+        'agent',
+        'image',
+        'community',
+        'resource',
+        'memory',
+      ];
+      const s: GlobalState = merge(initialState, {
+        status: { sidebarItems: stored },
+      });
+      expect(systemStatusSelectors.sidebarItems(s)).toEqual([
+        'tasks',
+        'pages',
+        'recents',
+        'agent',
+        SIDEBAR_SPACER_ID,
+        'image',
+        'community',
+        'resource',
+        'memory',
+      ]);
+    });
+
+    it('should slot missing top-group defaults before the accordion block', () => {
       const s: GlobalState = merge(initialState, {
         status: { sidebarItems: ['agent', 'recents'] },
       });
       const items = systemStatusSelectors.sidebarItems(s);
-      // stored order preserved at the front
-      expect(items.slice(0, 2)).toEqual(['agent', 'recents']);
+      const spacerIdx = items.indexOf(SIDEBAR_SPACER_ID);
       // every known key is present
       expect(items).toContain('pages');
+      expect(items).toContain('tasks');
       expect(items).toContain('community');
       expect(items).toContain('resource');
       expect(items).toContain('memory');
-      // spacer sits directly before the first bottom-class item
-      const firstBottomIdx = items.findIndex((k) =>
-        ['image', 'community', 'resource', 'memory'].includes(k),
-      );
-      expect(items[firstBottomIdx - 1]).toBe(SIDEBAR_SPACER_ID);
+      // accordion block is flush against the spacer, in stored order
+      expect(items[spacerIdx - 2]).toBe('agent');
+      expect(items[spacerIdx - 1]).toBe('recents');
+      // missing top-group defaults slot in just before the accordion
+      expect(items.indexOf('tasks')).toBeLessThan(spacerIdx - 2);
+      expect(items.indexOf('pages')).toBeLessThan(spacerIdx - 2);
+      // missing bottom-group defaults sit after the spacer
+      expect(items.indexOf('image')).toBeGreaterThan(spacerIdx);
     });
 
     it('should migrate legacy `sidebarSectionOrder` accordion order into the default layout', () => {
@@ -287,26 +322,38 @@ describe('systemStatusSelectors', () => {
   });
 
   describe('reorderSidebarItems', () => {
-    const DEFAULT = ['pages', 'recents', 'agent', 'community', 'resource', 'memory'];
+    // Mirrors the shape returned by the sidebarItems selector — spacer is always
+    // present, anchored immediately after the accordion block.
+    const DEFAULT = [
+      'pages',
+      'recents',
+      'agent',
+      SIDEBAR_SPACER_ID,
+      'community',
+      'resource',
+      'memory',
+    ];
 
     it('should move a non-accordion item normally', () => {
-      // move `community` (idx 3) up to idx 0
-      expect(reorderSidebarItems(DEFAULT, 3, 0)).toEqual([
+      // move `community` (idx 4) up to idx 0
+      expect(reorderSidebarItems(DEFAULT, 4, 0)).toEqual([
         'community',
         'pages',
         'recents',
         'agent',
+        SIDEBAR_SPACER_ID,
         'resource',
         'memory',
       ]);
     });
 
-    it('should snap a non-accordion item out when dragged between accordion items (drag down)', () => {
-      // `pages` (idx 0) dragged down to idx 2 (between recents & agent)
-      // after drag-down: push past the accordion block
+    it('should snap a top-group item past the accordion when dragged between accordion items (drag down)', () => {
+      // `pages` (idx 0) dragged down to idx 2 (between recents & agent) →
+      // pushed past the accordion, lands in the bottom group.
       expect(reorderSidebarItems(DEFAULT, 0, 2)).toEqual([
         'recents',
         'agent',
+        SIDEBAR_SPACER_ID,
         'pages',
         'community',
         'resource',
@@ -314,24 +361,27 @@ describe('systemStatusSelectors', () => {
       ]);
     });
 
-    it('should snap a non-accordion item out when dragged between accordion items (drag up)', () => {
-      // `community` (idx 3) dragged up to idx 2 (between recents & agent)
-      // after drag-up: place before the accordion block
-      expect(reorderSidebarItems(DEFAULT, 3, 2)).toEqual([
+    it('should snap a bottom-group item before the accordion when dragged between accordion items (drag up)', () => {
+      // `community` (idx 4) dragged up to idx 2 (between recents & agent) →
+      // lands ahead of the accordion (top group).
+      expect(reorderSidebarItems(DEFAULT, 4, 2)).toEqual([
         'pages',
         'community',
         'recents',
         'agent',
+        SIDEBAR_SPACER_ID,
         'resource',
         'memory',
       ]);
     });
 
     it('should move the whole accordion block when moving `recents` up past the block boundary', () => {
-      // `recents` (idx 1) moveUp → idx 0. Block [recents, agent] slides to top.
+      // `recents` (idx 1) moveUp → idx 0. Block [recents, agent] slides to top,
+      // spacer follows it.
       expect(reorderSidebarItems(DEFAULT, 1, 0)).toEqual([
         'recents',
         'agent',
+        SIDEBAR_SPACER_ID,
         'pages',
         'community',
         'resource',
@@ -339,16 +389,10 @@ describe('systemStatusSelectors', () => {
       ]);
     });
 
-    it('should move the whole accordion block when moving `agent` down past the block boundary', () => {
-      // `agent` (idx 2) moveDown → idx 3. Block slides past community.
-      expect(reorderSidebarItems(DEFAULT, 2, 3)).toEqual([
-        'pages',
-        'community',
-        'recents',
-        'agent',
-        'resource',
-        'memory',
-      ]);
+    it('should snap the accordion back when moving `agent` down past the spacer', () => {
+      // `agent` (idx 2) moveDown → idx 3 (past spacer). Normalization re-anchors
+      // the spacer behind the accordion, making the move a visible no-op.
+      expect(reorderSidebarItems(DEFAULT, 2, 3)).toBe(DEFAULT);
     });
 
     it('should swap recents and agent within the block', () => {
@@ -357,6 +401,7 @@ describe('systemStatusSelectors', () => {
         'pages',
         'agent',
         'recents',
+        SIDEBAR_SPACER_ID,
         'community',
         'resource',
         'memory',
@@ -365,6 +410,26 @@ describe('systemStatusSelectors', () => {
 
     it('should be a no-op when from === to', () => {
       expect(reorderSidebarItems(DEFAULT, 2, 2)).toBe(DEFAULT);
+    });
+
+    it('should keep the spacer behind the accordion after moving a non-accordion item', () => {
+      const items = [
+        'tasks',
+        'pages',
+        'recents',
+        'agent',
+        SIDEBAR_SPACER_ID,
+        'image',
+        'community',
+        'resource',
+        'memory',
+      ];
+      // Move `pages` (idx 1) to the very end. Spacer stays right after `agent`.
+      const next = reorderSidebarItems(items, 1, items.length - 1);
+      const spacerIdx = next.indexOf(SIDEBAR_SPACER_ID);
+      expect(next[spacerIdx - 1]).toBe('agent');
+      expect(next[spacerIdx - 2]).toBe('recents');
+      expect(next.at(-1)).toBe('pages');
     });
   });
 });

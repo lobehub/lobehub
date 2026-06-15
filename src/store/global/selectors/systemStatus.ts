@@ -85,21 +85,68 @@ const DEFAULT_BOTTOM_KEYS = new Set(
   DEFAULT_SIDEBAR_ITEMS.slice(DEFAULT_SIDEBAR_ITEMS.indexOf(SIDEBAR_SPACER_ID) + 1),
 );
 
-/** Insert the spacer sentinel into `order` if missing — anchored before the first
- * default "bottom" item (image/community/...), falling back to the end. */
-const ensureSpacer = (order: string[]): string[] => {
-  if (order.includes(SIDEBAR_SPACER_ID)) return order;
-  const insertAt = order.findIndex((k) => DEFAULT_BOTTOM_KEYS.has(k));
-  if (insertAt === -1) return [...order, SIDEBAR_SPACER_ID];
-  return [...order.slice(0, insertAt), SIDEBAR_SPACER_ID, ...order.slice(insertAt)];
+const arraysEqual = (a: string[], b: string[]): boolean => {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
 };
 
-/** Append any known keys missing from `order` so new items don't disappear on upgrade. */
+// Invariant: spacer always sits immediately after the recents+agent block. Any
+// stored position is ignored — the spacer is re-anchored on every read so legacy
+// states (e.g. from the move-up/down dropdown that used to leave the spacer
+// floating above the accordion) self-heal.
+const normalizeSpacerPosition = (order: string[]): string[] => {
+  const withoutSpacer = order.filter((k) => k !== SIDEBAR_SPACER_ID);
+
+  let insertAt = -1;
+  for (let i = withoutSpacer.length - 1; i >= 0; i--) {
+    if (SIDEBAR_ACCORDION_KEYS.has(withoutSpacer[i])) {
+      insertAt = i + 1;
+      break;
+    }
+  }
+  if (insertAt === -1) {
+    const bottomIdx = withoutSpacer.findIndex((k) => DEFAULT_BOTTOM_KEYS.has(k));
+    insertAt = bottomIdx === -1 ? withoutSpacer.length : bottomIdx;
+  }
+
+  return [...withoutSpacer.slice(0, insertAt), SIDEBAR_SPACER_ID, ...withoutSpacer.slice(insertAt)];
+};
+
+// Backfill missing default keys into their canonical group — top-group defaults
+// slot in just before the accordion (keeping accordion flush with the spacer),
+// bottom-group defaults go after the spacer. Without this split a new top-group
+// default added in a future version would silently appear in the bottom group
+// for existing users.
 const withAllKnownKeys = (order: string[]): string[] => {
   const present = new Set(order);
-  const missing = DEFAULT_SIDEBAR_ITEMS.filter((k) => k !== SIDEBAR_SPACER_ID && !present.has(k));
-  const withMissing = missing.length === 0 ? order : [...order, ...missing];
-  return ensureSpacer(withMissing);
+  const missingTop: string[] = [];
+  const missingBottom: string[] = [];
+  for (const k of DEFAULT_SIDEBAR_ITEMS) {
+    if (k === SIDEBAR_SPACER_ID || present.has(k)) continue;
+    (DEFAULT_BOTTOM_KEYS.has(k) ? missingBottom : missingTop).push(k);
+  }
+
+  const withSpacer = normalizeSpacerPosition(order);
+  if (missingTop.length === 0 && missingBottom.length === 0) return withSpacer;
+
+  const spacerIdx = withSpacer.indexOf(SIDEBAR_SPACER_ID);
+  let accordionStartIdx = spacerIdx;
+  for (let i = 0; i < spacerIdx; i++) {
+    if (SIDEBAR_ACCORDION_KEYS.has(withSpacer[i])) {
+      accordionStartIdx = i;
+      break;
+    }
+  }
+
+  return [
+    ...withSpacer.slice(0, accordionStartIdx),
+    ...missingTop,
+    ...withSpacer.slice(accordionStartIdx, spacerIdx + 1),
+    ...missingBottom,
+    ...withSpacer.slice(spacerIdx + 1),
+  ];
 };
 
 const accordionIndices = (items: string[]): number[] => {
@@ -110,17 +157,7 @@ const accordionIndices = (items: string[]): number[] => {
   return out;
 };
 
-/**
- * Reorder sidebar items while keeping the accordion block (recents + agent) contiguous.
- * - If moving an accordion item across the block boundary, moves the whole block.
- * - If moving a non-accordion item into the middle of the block, snaps it to the side
- *   matching the drag direction.
- */
-export const reorderSidebarItems = (items: string[], from: number, to: number): string[] => {
-  if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) {
-    return items;
-  }
-
+const reorderInner = (items: string[], from: number, to: number): string[] => {
   const key = items[from];
   const accIdx = accordionIndices(items);
 
@@ -166,6 +203,21 @@ export const reorderSidebarItems = (items: string[], from: number, to: number): 
   }
 
   return moved;
+};
+
+/**
+ * Reorder sidebar items while keeping the accordion block (recents + agent) contiguous
+ * and the spacer immediately after the accordion block. Returns the original `items`
+ * reference when the move resolves to a no-op (e.g. dragging the accordion past the
+ * spacer, which the invariant snaps right back), so callers can short-circuit on
+ * reference equality.
+ */
+export const reorderSidebarItems = (items: string[], from: number, to: number): string[] => {
+  if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) {
+    return items;
+  }
+  const normalized = normalizeSpacerPosition(reorderInner(items, from, to));
+  return arraysEqual(normalized, items) ? items : normalized;
 };
 
 const sidebarItems = (s: GlobalState): string[] => {
