@@ -59,16 +59,14 @@ export class MessageQueryActionImpl {
 
     // Priority 1: Use explicit context if provided (preserving scope)
     if (params?.context) {
+      // Spread the whole context so every bucket-key field carries through —
+      // notably `documentId` (page scope: keeps writes in the
+      // `page_<agent>_<documentId>` bucket the editor reads from, instead of
+      // `page_<agent>_new`) and `subAgentId` (group_agent scope's subTopicId).
+      // Only agentId/topicId need a fallback to the active conversation.
       ctx = {
+        ...params.context,
         agentId: params.context.agentId ?? this.#get().activeAgentId,
-        // Preserve groupId from context
-        groupId: params.context.groupId,
-        // Preserve scope from context
-        isNew: params.context.isNew,
-
-        scope: params.context.scope,
-
-        threadId: params.context.threadId,
         topicId:
           params.context.topicId !== undefined ? params.context.topicId : this.#get().activeTopicId,
       };
