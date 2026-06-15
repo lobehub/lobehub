@@ -80,9 +80,7 @@ export class KnowledgeBaseCrudActionImpl {
     );
   };
 
-  useFetchKnowledgeBaseList = (
-    params: { suspense?: boolean } = {},
-  ): SWRResponse<KnowledgeBaseItem[]> => {
+  useFetchKnowledgeBaseList = (): SWRResponse<KnowledgeBaseItem[]> => {
     return useClientDataSWR<KnowledgeBaseItem[]>(
       knowledgeBaseKeys.list(),
       () => knowledgeBaseService.getKnowledgeBaseList(),
@@ -92,7 +90,6 @@ export class KnowledgeBaseCrudActionImpl {
           if (!this.#get().initKnowledgeBaseList)
             this.#set({ initKnowledgeBaseList: true }, false, 'useFetchKnowledgeBaseList/init');
         },
-        suspense: params.suspense,
       },
     );
   };

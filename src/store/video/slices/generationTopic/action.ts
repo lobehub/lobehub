@@ -274,7 +274,6 @@ export class GenerationTopicActionImpl {
           if (isEqual(data, this.#get().generationTopics)) return;
           this.#set({ generationTopics: data }, false, n('useFetchGenerationTopics'));
         },
-        suspense: true,
       },
     );
 }

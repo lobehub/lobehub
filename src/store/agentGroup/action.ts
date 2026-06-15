@@ -250,7 +250,6 @@ class ChatGroupInternalAction implements ResetableStore {
             n('useFetchGroups/onData'),
           );
         },
-        suspense: true,
       },
     );
 }

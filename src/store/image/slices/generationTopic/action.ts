@@ -211,7 +211,6 @@ export class GenerationTopicActionImpl {
       enabled ? imageKeys.generationTopics() : null,
       () => generationTopicService.getAllGenerationTopics('image'),
       {
-        suspense: true,
         onSuccess: (data) => {
           // No need to update if data is the same
           if (isEqual(data, this.#get().generationTopics)) return;

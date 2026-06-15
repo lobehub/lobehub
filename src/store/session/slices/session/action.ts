@@ -261,7 +261,6 @@ export class SessionActionImpl {
             n('useFetchSessions/onSuccess', data),
           );
         },
-        suspense: true,
       },
     );
   };
