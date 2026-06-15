@@ -199,7 +199,6 @@ describe('AiModelAction', () => {
       const mockRemoteModels = [
         {
           displayName: 'Remote Model 1',
-          enabled: true,
           files: true,
           functionCall: true,
           id: 'remote-1',
@@ -208,7 +207,6 @@ describe('AiModelAction', () => {
         },
         {
           displayName: 'Remote Model 2',
-          enabled: false,
           id: 'remote-2',
           imageOutput: true,
           type: 'image',
@@ -249,7 +247,7 @@ describe('AiModelAction', () => {
           vision: false,
         },
         displayName: 'Remote Model 1',
-        enabled: true,
+        enabled: false,
         id: 'remote-1',
         source: 'remote',
         type: 'chat',
@@ -263,6 +261,56 @@ describe('AiModelAction', () => {
         id: 'remote-2',
         source: 'remote',
         type: 'image',
+      });
+    });
+
+    it('should preserve enabled status of existing models when fetching', async () => {
+      const mockRemoteModels = [
+        {
+          displayName: 'Remote Model 1',
+          id: 'remote-1',
+          type: 'chat',
+        },
+      ];
+
+      act(() => {
+        useStore.setState({
+          aiProviderModelList: [
+            {
+              id: 'remote-1',
+              enabled: true,
+              type: 'chat',
+            },
+          ],
+        });
+      });
+
+      const { result } = renderHook(() => useStore());
+      const batchUpdateSpy = vi
+        .spyOn(result.current, 'batchUpdateAiModels')
+        .mockResolvedValue(undefined);
+      const refreshSpy = vi
+        .spyOn(result.current, 'refreshAiModelList')
+        .mockResolvedValue(undefined);
+
+      vi.doMock('@/services/models', () => ({
+        modelsService: {
+          getModels: vi.fn().mockResolvedValue(mockRemoteModels),
+        },
+      }));
+
+      await act(async () => {
+        await result.current.fetchRemoteModelList('test-provider');
+      });
+
+      await waitFor(() => {
+        expect(batchUpdateSpy).toHaveBeenCalled();
+      });
+
+      const batchUpdateArg = batchUpdateSpy.mock.calls[0][0];
+      expect(batchUpdateArg[0]).toMatchObject({
+        id: 'remote-1',
+        enabled: true,
       });
 
       expect(refreshSpy).toHaveBeenCalled();

@@ -63,6 +63,9 @@ export class AiModelActionImpl {
 
     const data = await modelsService.getModels(providerId);
     if (data) {
+      const currentEnabledState = new Map(
+        this.#get().aiProviderModelList.map(({ enabled, id }) => [id, enabled]),
+      );
       await this.#get().batchUpdateAiModels(
         data.map((model) => ({
           ...model,
@@ -75,7 +78,7 @@ export class AiModelActionImpl {
             video: model.video,
             vision: model.vision,
           },
-          enabled: model.enabled || false,
+          enabled: currentEnabledState.get(model.id) ?? false,
           source: 'remote',
           type: model.type || 'chat',
         })),
