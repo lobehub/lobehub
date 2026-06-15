@@ -18,12 +18,16 @@ interface ProjectLevelSkillsProps {
 const ProjectLevelSkills = memo<ProjectLevelSkillsProps>(
   ({ deviceId, hideHeader, workingDirectory }) => {
     const { t } = useTranslation('chat');
-    const { items, onOpenFile, onOpenSkill } = useProjectSkills(workingDirectory, deviceId);
+    const { getRowActions, items, onOpenFile, onOpenSkill } = useProjectSkills(
+      workingDirectory,
+      deviceId,
+    );
 
     if (items.length === 0) return null;
 
     const list = (
       <SkillsList
+        getRowActions={getRowActions}
         items={items}
         onOpenFile={onOpenFile}
         onOpenSkill={onOpenSkill}
