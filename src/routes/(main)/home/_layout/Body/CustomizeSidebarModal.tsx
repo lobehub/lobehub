@@ -26,7 +26,6 @@ import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { t } from 'i18next';
 import { ArrowDownToLine, Eye, EyeOff, GripVertical, PinIcon, RotateCcw } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
@@ -61,6 +60,9 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
 
 export const getAvailableSidebarItems = (isWorkspaceMode: boolean): SidebarItemConfig[] =>
   ALL_SIDEBAR_ITEMS.filter((item) => !(isWorkspaceMode && item.id === 'memory'));
+
+export const getSortableSidebarItemIds = (isWorkspaceMode: boolean): Set<string> =>
+  new Set([...getAvailableSidebarItems(isWorkspaceMode).map((item) => item.id), SIDEBAR_SPACER_ID]);
 
 const ITEM_MAP = new Map(ALL_SIDEBAR_ITEMS.map((item) => [item.id, item]));
 
@@ -333,13 +335,13 @@ const CustomizeSidebarContent = memo(() => {
     s.updateSystemStatus,
   ]);
   const isWorkspaceMode = !!useActiveWorkspaceSlug();
-  const availableItemIds = useMemo(
-    () => new Set(getAvailableSidebarItems(isWorkspaceMode).map((item) => item.id)),
+  const sortableItemIds = useMemo(
+    () => getSortableSidebarItemIds(isWorkspaceMode),
     [isWorkspaceMode],
   );
   const filteredStoreItems = useMemo(
-    () => storeItems.filter((id) => availableItemIds.has(id)),
-    [storeItems, availableItemIds],
+    () => storeItems.filter((id) => sortableItemIds.has(id)),
+    [storeItems, sortableItemIds],
   );
 
   // Local state for drag operations — only persisted on dragEnd
@@ -446,14 +448,14 @@ const CustomizeSidebarContent = memo(() => {
 
       setItems(next);
       updateSystemStatus({
-        sidebarItems: mergeAvailableSidebarItems(storeItems, next, availableItemIds),
+        sidebarItems: mergeAvailableSidebarItems(storeItems, next, sortableItemIds),
       });
     },
     [
-      availableItemIds,
       bindSpacerToAccordion,
       innerItems,
       outerItems,
+      sortableItemIds,
       storeItems,
       updateSystemStatus,
     ],
@@ -496,12 +498,9 @@ const CustomizeSidebarContent = memo(() => {
         </Flexbox>
       </SortableContext>
 
-      {createPortal(
-        <DragOverlay dropAnimation={{ sideEffects: defaultDropAnimationSideEffects({}) }}>
-          {activeId ? <OverlayItem id={activeId} /> : null}
-        </DragOverlay>,
-        document.body,
-      )}
+      <DragOverlay dropAnimation={{ sideEffects: defaultDropAnimationSideEffects({}) }}>
+        {activeId ? <OverlayItem id={activeId} /> : null}
+      </DragOverlay>
     </DndContext>
   );
 });
