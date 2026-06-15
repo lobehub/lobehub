@@ -25,7 +25,7 @@ const AgentBuilderConversation = memo<AgentBuilderConversationProps>(({ agentId 
   // Get agent's model info for vision support check
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
-  const { handleUploadFiles } = useUploadFiles({ model, provider });
+  const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
   const { allowed: canCreate } = usePermission('create_content');
 
   return (

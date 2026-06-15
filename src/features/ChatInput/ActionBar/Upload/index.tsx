@@ -106,7 +106,7 @@ const FileUpload = memo(() => {
           beforeUpload={async (file) => {
             setDropdownOpen(false);
             editor?.focus();
-            await upload([file]);
+            await upload([file], agentId);
 
             return false;
           }}
@@ -148,7 +148,7 @@ const FileUpload = memo(() => {
 
             setDropdownOpen(false);
             editor?.focus();
-            await upload([file]);
+            await upload([file], agentId);
 
             return false;
           }}
@@ -187,7 +187,7 @@ const FileUpload = memo(() => {
 
             setDropdownOpen(false);
             editor?.focus();
-            await upload([file]);
+            await upload([file], agentId);
 
             return false;
           }}

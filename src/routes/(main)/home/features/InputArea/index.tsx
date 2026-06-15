@@ -100,7 +100,7 @@ const InputArea = () => {
   const provider = useAgentStore((s) =>
     agentByIdSelectors.getAgentModelProviderById(resolvedAgentId)(s),
   );
-  const { handleUploadFiles } = useUploadFiles({ model, provider });
+  const { handleUploadFiles } = useUploadFiles({ agentId: resolvedAgentId, model, provider });
 
   // A slot to insert content above the chat input
   // Override some default behavior of the chat input

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isSupportedChatUploadFile } from './uploadGuard';
+import { filterSupportedChatUploadFiles, isSupportedChatUploadFile } from './uploadGuard';
 
 describe('isSupportedChatUploadFile', () => {
   it('accepts supported chat image formats', () => {
@@ -36,5 +36,17 @@ describe('isSupportedChatUploadFile', () => {
     expect(
       isSupportedChatUploadFile(new File(['zip'], 'archive.zip', { type: 'application/zip' })),
     ).toBe(false);
+  });
+});
+
+describe('filterSupportedChatUploadFiles', () => {
+  it('splits supported and unsupported files by default', () => {
+    const png = new File(['image'], 'image.png', { type: 'image/png' });
+    const zip = new File(['zip'], 'archive.zip', { type: 'application/zip' });
+
+    const { supportedFiles, unsupportedFiles } = filterSupportedChatUploadFiles([png, zip]);
+
+    expect(supportedFiles).toEqual([png]);
+    expect(unsupportedFiles).toEqual([zip]);
   });
 });
