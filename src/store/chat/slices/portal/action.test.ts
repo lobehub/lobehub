@@ -408,6 +408,31 @@ describe('chatDockSlice', () => {
       expect(result.current.activeLocalFilePath).toBe('/path/a.ts');
     });
 
+    it('should keep user-approved external preview context when opening a local file', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.openLocalFile({
+          allowExternalFilePreview: true,
+          filePath: '/tmp/worktree-switcher-demo.html',
+          workingDirectory: '/tmp',
+        });
+      });
+
+      expect(result.current.openLocalFiles).toEqual([
+        {
+          allowExternalFilePreview: true,
+          filePath: '/tmp/worktree-switcher-demo.html',
+          id: localFileTabId({
+            filePath: '/tmp/worktree-switcher-demo.html',
+            workingDirectory: '/tmp',
+          }),
+          workingDirectory: '/tmp',
+        },
+      ]);
+      expect(result.current.activeLocalFilePath).toBe('/tmp/worktree-switcher-demo.html');
+    });
+
     it('should keep same file path from different device context as separate tabs', () => {
       const { result } = renderHook(() => useChatStore());
 

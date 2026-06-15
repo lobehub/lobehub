@@ -28,6 +28,7 @@ export interface PortalFile {
 }
 
 export interface OpenLocalFileParams {
+  allowExternalFilePreview?: boolean;
   deviceId?: string;
   filePath: string;
   workingDirectory: string;

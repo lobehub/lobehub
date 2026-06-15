@@ -78,6 +78,8 @@ const Render = memo<MarkdownElementProps<LocalFileLinkProperties>>(({ node }) =>
   const openLocalFile = useChatStore((s) => s.openLocalFile);
   const workingDirectory = useChatStore(topicSelectors.currentTopicWorkingDirectory);
   const parsed = isDesktop ? parseLocalFileHref(linkHref, { workingDirectory }) : null;
+  const allowExternalFilePreview =
+    !!parsed && (!workingDirectory || parsed.workingDirectory !== workingDirectory);
   const label = linkLabel || parsed?.filePath || linkHref || '';
   const iconFileName = parsed ? getFileName(parsed.filePath) : label;
   const title = parsed ? formatLocalFileTitle(parsed) : linkHref;
@@ -91,11 +93,12 @@ const Render = memo<MarkdownElementProps<LocalFileLinkProperties>>(({ node }) =>
 
       event.preventDefault();
       openLocalFile({
+        allowExternalFilePreview,
         filePath: parsed.filePath,
         workingDirectory: parsed.workingDirectory,
       });
     },
-    [openLocalFile, parsed],
+    [allowExternalFilePreview, openLocalFile, parsed],
   );
 
   return (

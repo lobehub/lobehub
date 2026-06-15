@@ -32,6 +32,14 @@ const def = <A extends unknown[]>(
   build: (...args: A) => readonly unknown[],
 ): KeyFactory<A> => Object.assign(build, { root });
 
+interface LocalFilePreviewKeyParams {
+  accept?: 'image';
+  allowExternalFile?: boolean;
+  deviceId?: string;
+  filePath: string;
+  workingDirectory: string;
+}
+
 // ---- message ------------------------------------------------------------
 /**
  * Message cache schema version. Baked into the message list key so a bump
@@ -627,6 +635,40 @@ export const portalKeys = {
   ]),
 };
 
+// ---- local file ---------------------------------------------------------
+export const localFileKeys = {
+  gitWorkingTreeFiles: def(
+    'localFile:gitWorkingTreeFiles',
+    (deviceId: string | undefined, dirPath: string) => [
+      'localFile:gitWorkingTreeFiles',
+      deviceId ?? 'local',
+      dirPath,
+    ],
+  ),
+  preview: def(
+    'localFile:preview',
+    ({
+      accept,
+      allowExternalFile,
+      deviceId,
+      filePath,
+      workingDirectory,
+    }: LocalFilePreviewKeyParams) => [
+      'localFile:preview',
+      deviceId ?? 'local',
+      filePath,
+      workingDirectory,
+      accept ?? 'any',
+      allowExternalFile ? 'external' : 'workspace',
+    ],
+  ),
+  projectIndex: def('localFile:projectIndex', (deviceId: string | undefined, dirPath: string) => [
+    'localFile:projectIndex',
+    deviceId ?? 'local',
+    dirPath,
+  ]),
+};
+
 // ---- favorite status (marketplace detail headers) -----------------------
 export const favoriteKeys = {
   status: def('favorite:status', (targetType: string, identifier: string) => [
@@ -789,6 +831,7 @@ export const swrKeys = {
   imessage: imessageKeys,
   inbox: inboxKeys,
   knowledgeBase: knowledgeBaseKeys,
+  localFile: localFileKeys,
   message: messageKeys,
   messenger: messengerKeys,
   notebook: notebookSWRKeys,

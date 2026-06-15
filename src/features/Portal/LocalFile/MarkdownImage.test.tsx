@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react';
 import type { CSSProperties } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { localFileKeys } from '@/libs/swr/keys';
+
 import MarkdownImage from './MarkdownImage';
 
 const mockImage = vi.hoisted(() => vi.fn());
@@ -115,7 +117,12 @@ describe('MarkdownImage', () => {
 
     expect(screen.getByTestId('lobe-image')).toHaveAttribute('src', 'blob:markdown-image');
     expect(mockUseClientDataSWR).toHaveBeenCalledWith(
-      ['local-markdown-image-preview', 'device-1', '/repo/.records/assets/screenshot.png', '/repo'],
+      localFileKeys.preview({
+        accept: 'image',
+        deviceId: 'device-1',
+        filePath: '/repo/.records/assets/screenshot.png',
+        workingDirectory: '/repo',
+      }),
       expect.any(Function),
       { revalidateOnFocus: false },
     );

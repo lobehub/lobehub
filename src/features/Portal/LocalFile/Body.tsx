@@ -20,6 +20,7 @@ import CodeEditorPane from '@/components/CodeEditorPane';
 import { InlineHtmlPreview, isHtmlFile } from '@/components/HtmlPreview';
 import Loading from '@/components/Loading/CircleLoading';
 import { useClientDataSWR } from '@/libs/swr';
+import { localFileKeys } from '@/libs/swr/keys';
 import { type LocalFilePreview, projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -326,13 +327,14 @@ TextPreviewPane.displayName = 'TextPreviewPane';
 
 interface ActiveFileViewProps {
   activeTopicId?: string | null;
+  allowExternalFilePreview?: boolean;
   deviceId?: string;
   filePath: string;
   workingDirectory: string;
 }
 
 const ActiveFileView = memo<ActiveFileViewProps>(
-  ({ activeTopicId, deviceId, filePath, workingDirectory }) => {
+  ({ activeTopicId, allowExternalFilePreview, deviceId, filePath, workingDirectory }) => {
     const { t } = useTranslation('chat');
 
     const filename = filePath.split('/').at(-1) ?? '';
@@ -344,9 +346,17 @@ const ActiveFileView = memo<ActiveFileViewProps>(
       isValidating,
       mutate,
     } = useClientDataSWR<LocalFilePreview>(
-      enabled ? ['local-file-preview', deviceId ?? 'local', filePath, workingDirectory] : null,
+      enabled
+        ? localFileKeys.preview({
+            allowExternalFile: allowExternalFilePreview,
+            deviceId,
+            filePath,
+            workingDirectory,
+          })
+        : null,
       () =>
         projectFileService.getLocalFilePreview({
+          allowExternalFile: allowExternalFilePreview,
           deviceId,
           path: filePath,
           workingDirectory,
@@ -430,6 +440,7 @@ const Body = memo(() => {
     <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
       <ActiveFileView
         activeTopicId={activeTopicId}
+        allowExternalFilePreview={activeFile.allowExternalFilePreview}
         deviceId={activeFile.deviceId}
         filePath={activeFile.filePath}
         workingDirectory={activeFile.workingDirectory}

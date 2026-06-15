@@ -407,14 +407,23 @@ export class ChatPortalActionImpl {
     this.#get().pushPortalView({ file, type: PortalViewType.FilePreview });
   };
 
-  openLocalFile = ({ deviceId, filePath, workingDirectory }: OpenLocalFileParams): void => {
+  openLocalFile = ({
+    allowExternalFilePreview,
+    deviceId,
+    filePath,
+    workingDirectory,
+  }: OpenLocalFileParams): void => {
     const { activeLocalFileIdsByScope, openLocalFiles } = this.#get();
     const id = createLocalFileTabId({ deviceId, filePath, workingDirectory });
     const scopeKey = createLocalFileScopeKey(workingDirectory);
     const exists = openLocalFiles.some((f) => getLocalFileTabId(f) === id);
-    const nextFile = deviceId
-      ? { deviceId, filePath, id, workingDirectory }
-      : { filePath, id, workingDirectory };
+    const nextFile = {
+      allowExternalFilePreview,
+      ...(deviceId ? { deviceId } : {}),
+      filePath,
+      id,
+      workingDirectory,
+    };
     const nextFiles = exists
       ? openLocalFiles.map((file) => (getLocalFileTabId(file) === id ? nextFile : file))
       : [...openLocalFiles, nextFile];

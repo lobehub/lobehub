@@ -263,6 +263,31 @@ describe('LocalFileProtocolManager', () => {
     expect(url).toBeNull();
   });
 
+  it('mints preview URLs for user-approved external files only', async () => {
+    const manager = new LocalFileProtocolManager();
+
+    const url = await manager.createPreviewUrl({
+      allowExternalFile: true,
+      filePath: '/tmp/worktree-switcher-demo.html',
+      workspaceRoot: '/tmp',
+    });
+    if (!url) throw new Error('Expected external local file preview URL');
+
+    expect(url).toContain('token=');
+
+    const repeatedUrl = await manager.createPreviewUrl({
+      filePath: '/tmp/worktree-switcher-demo.html',
+      workspaceRoot: '/tmp',
+    });
+    expect(repeatedUrl).toContain('token=');
+
+    const neighborUrl = await manager.createPreviewUrl({
+      filePath: '/tmp/other.html',
+      workspaceRoot: '/tmp',
+    });
+    expect(neighborUrl).toBeNull();
+  });
+
   it('can approve a project root derived from an already approved nested scope', async () => {
     const manager = new LocalFileProtocolManager();
     await manager.approveWorkspaceRoot('/Users/alice/project/packages/app');
@@ -324,6 +349,26 @@ describe('LocalFileProtocolManager', () => {
 
     expect(result).toBeNull();
     expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/project/.env');
+  });
+
+  it('does not keep external approval when an image-only external preview rejects text', async () => {
+    const manager = new LocalFileProtocolManager();
+    mockReadFile.mockResolvedValue(Buffer.from('SECRET=value'));
+
+    const result = await manager.readPreviewFile({
+      accept: 'image',
+      allowExternalFile: true,
+      filePath: '/tmp/secret.txt',
+      workspaceRoot: '/tmp',
+    });
+
+    expect(result).toBeNull();
+
+    const repeatedUrl = await manager.createPreviewUrl({
+      filePath: '/tmp/secret.txt',
+      workspaceRoot: '/tmp',
+    });
+    expect(repeatedUrl).toBeNull();
   });
 
   it('does not read preview payloads outside the approved workspace root', async () => {

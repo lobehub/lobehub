@@ -438,12 +438,14 @@ export default class LocalFileCtr extends ControllerModule {
   @IpcMethod()
   async getLocalFilePreviewUrl({
     accept,
+    allowExternalFile,
     path: filePath,
     workingDirectory,
   }: LocalFilePreviewUrlParams): Promise<LocalFilePreviewUrlResult> {
     try {
       const url = await this.app.localFileProtocolManager.createPreviewUrl({
         accept,
+        allowExternalFile,
         filePath,
         workspaceRoot: workingDirectory,
       });
@@ -462,12 +464,14 @@ export default class LocalFileCtr extends ControllerModule {
   @IpcMethod()
   async getLocalFilePreview({
     accept,
+    allowExternalFile,
     path: filePath,
     workingDirectory,
   }: LocalFilePreviewUrlParams): Promise<LocalFilePreviewResult> {
     try {
       const preview = await this.app.localFileProtocolManager.readPreviewFile({
         accept,
+        allowExternalFile,
         filePath,
         workspaceRoot: workingDirectory,
       });

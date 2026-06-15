@@ -143,6 +143,8 @@ const currentLocalFileScopeKey = (s: ChatStoreState): string | undefined => {
 };
 
 const isLocalFileInCurrentScope = (s: ChatStoreState, file: OpenLocalFileEntry): boolean => {
+  if (file.allowExternalFilePreview) return true;
+
   const workingDirectory = currentLocalFileScopeWorkingDirectory(s);
   return workingDirectory ? file.workingDirectory === workingDirectory : true;
 };

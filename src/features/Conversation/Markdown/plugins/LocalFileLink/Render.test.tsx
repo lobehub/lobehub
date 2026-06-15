@@ -112,6 +112,7 @@ describe('LocalFileLink Render', () => {
     expect(screen.getByTestId('file-icon')).toHaveAttribute('data-size', '16');
     expect(useChatStore.getState().openLocalFiles).toEqual([
       {
+        allowExternalFilePreview: false,
         filePath: '/Users/me/project/src/Group.tsx',
         id: createLocalFileTabId({
           filePath: '/Users/me/project/src/Group.tsx',
@@ -121,5 +122,46 @@ describe('LocalFileLink Render', () => {
       },
     ]);
     expect(useChatStore.getState().showPortal).toBe(true);
+  });
+
+  it('marks links outside the current workspace as user-approved external previews', () => {
+    useChatStore.setState({
+      activeAgentId: 'agent-1',
+      activeTopicId: 'topic-1',
+      topicDataMap: {
+        'agent_agent-1': {
+          items: [
+            {
+              id: 'topic-1',
+              metadata: { workingDirectory: '/Users/me/project' },
+            },
+          ],
+          total: 1,
+        },
+      } as any,
+    });
+
+    render(
+      <Render
+        {...createRenderProps({
+          linkHref: '/tmp/worktree-switcher-demo.html',
+          linkLabel: 'worktree-switcher-demo.html',
+        })}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('link', { name: 'worktree-switcher-demo.html' }));
+
+    expect(useChatStore.getState().openLocalFiles).toEqual([
+      {
+        allowExternalFilePreview: true,
+        filePath: '/tmp/worktree-switcher-demo.html',
+        id: createLocalFileTabId({
+          filePath: '/tmp/worktree-switcher-demo.html',
+          workingDirectory: '/tmp',
+        }),
+        workingDirectory: '/tmp',
+      },
+    ]);
   });
 });

@@ -3,6 +3,7 @@ import type { GitWorkingTreeFiles } from '@lobechat/electron-client-ipc';
 import type { GitStatusEntry } from '@pierre/trees';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { localFileKeys } from '@/libs/swr/keys';
 import { gitService } from '@/services/git';
 
 export const buildGitStatusEntries = (files: GitWorkingTreeFiles | undefined): GitStatusEntry[] => {
@@ -26,7 +27,7 @@ export const useGitWorkingTreeFiles = (
   enabled: boolean,
 ) => {
   const active = (!!deviceId || isDesktop) && !!dirPath && enabled;
-  const key = active ? ['git-working-tree-files', deviceId ?? 'local', dirPath] : null;
+  const key = active ? localFileKeys.gitWorkingTreeFiles(deviceId, dirPath!) : null;
 
   return useClientDataSWR<GitWorkingTreeFiles | undefined>(
     key,

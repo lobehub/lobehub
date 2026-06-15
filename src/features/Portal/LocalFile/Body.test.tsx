@@ -2,10 +2,16 @@ import { render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { localFileKeys } from '@/libs/swr/keys';
 import { createLocalFileScopeKey, createLocalFileTabId } from '@/store/chat/slices/portal/helpers';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 
 import Body from './Body';
+
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  isDesktop: true,
+}));
 
 vi.mock('antd-style', () => ({
   createStaticStyles: () => ({
@@ -54,15 +60,16 @@ vi.mock('@/components/Loading/CircleLoading', () => ({
 }));
 
 const mockUseClientDataSWR = vi.hoisted(() => vi.fn());
+const mockProjectFileService = vi.hoisted(() => ({
+  getLocalFilePreview: vi.fn(),
+}));
 
 vi.mock('@/libs/swr', () => ({
   useClientDataSWR: mockUseClientDataSWR,
 }));
 
 vi.mock('@/services/projectFile', () => ({
-  projectFileService: {
-    getLocalFilePreview: vi.fn(),
-  },
+  projectFileService: mockProjectFileService,
 }));
 
 vi.mock('@/utils/skillMarkdown', () => ({
@@ -101,12 +108,19 @@ vi.mock('@/store/chat/selectors', () => {
   const openLocalFiles = (state: Record<PropertyKey, unknown>) => {
     const files =
       (state.openLocalFiles as
-        | Array<{ filePath: string; id?: string; workingDirectory: string }>
+        | Array<{
+            allowExternalFilePreview?: boolean;
+            filePath: string;
+            id?: string;
+            workingDirectory: string;
+          }>
         | undefined) ?? [];
     const workingDirectory = getCurrentWorkingDirectory(state);
 
     return workingDirectory
-      ? files.filter((file) => file.workingDirectory === workingDirectory)
+      ? files.filter(
+          (file) => file.allowExternalFilePreview || file.workingDirectory === workingDirectory,
+        )
       : files;
   };
 
@@ -172,6 +186,8 @@ const createChatState = (activeTopicId: 'topic-a' | 'topic-b') => ({
 describe('LocalFile Body', () => {
   beforeEach(() => {
     mockClearPortalStack.mockClear();
+    mockProjectFileService.getLocalFilePreview.mockClear();
+    mockUseClientDataSWR.mockClear();
     mockUseClientDataSWR.mockReturnValue({
       isLoading: true,
       mutate: vi.fn(),
@@ -195,5 +211,48 @@ describe('LocalFile Body', () => {
 
     expect(screen.getByTestId('loading')).toBeInTheDocument();
     expect(mockClearPortalStack).not.toHaveBeenCalled();
+  });
+
+  it('keeps user-approved external preview tabs visible outside the current project scope', () => {
+    const externalFileId = createLocalFileTabId({
+      filePath: '/tmp/worktree-switcher-demo.html',
+      workingDirectory: '/tmp',
+    });
+    mockChatState.current = {
+      ...createChatState('topic-a'),
+      activeLocalFileId: externalFileId,
+      activeLocalFilePath: '/tmp/worktree-switcher-demo.html',
+      openLocalFiles: [
+        {
+          allowExternalFilePreview: true,
+          filePath: '/tmp/worktree-switcher-demo.html',
+          id: externalFileId,
+          workingDirectory: '/tmp',
+        },
+      ],
+    };
+
+    render(<Body />);
+
+    expect(screen.getByTestId('loading')).toBeInTheDocument();
+    expect(mockClearPortalStack).not.toHaveBeenCalled();
+    expect(mockUseClientDataSWR).toHaveBeenCalledWith(
+      localFileKeys.preview({
+        allowExternalFile: true,
+        filePath: '/tmp/worktree-switcher-demo.html',
+        workingDirectory: '/tmp',
+      }),
+      expect.any(Function),
+      { revalidateOnFocus: false },
+    );
+
+    const fetcher = mockUseClientDataSWR.mock.calls.at(-1)?.[1] as () => Promise<unknown>;
+    void fetcher();
+    expect(mockProjectFileService.getLocalFilePreview).toHaveBeenCalledWith({
+      allowExternalFile: true,
+      deviceId: undefined,
+      path: '/tmp/worktree-switcher-demo.html',
+      workingDirectory: '/tmp',
+    });
   });
 });
