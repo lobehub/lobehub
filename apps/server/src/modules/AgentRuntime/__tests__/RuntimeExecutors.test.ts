@@ -58,6 +58,9 @@ vi.mock('@/server/services/message', () => ({
 // @lobechat/model-runtime resolves to @cloud/business-model-runtime which has
 // cloud-specific dependencies that are unavailable in the test environment
 vi.mock('@lobechat/model-runtime', () => ({
+  // The executor resolves extend params via this helper; an empty result keeps
+  // the runtime payload unchanged, matching this suite's pre-existing behavior.
+  applyModelExtendParams: vi.fn(() => ({})),
   consumeStreamUntilDone: vi.fn().mockResolvedValue(undefined),
   // `llmErrorClassification.ts` reads these at module-load time; an empty
   // spec map is fine here because this suite never exercises the runtime

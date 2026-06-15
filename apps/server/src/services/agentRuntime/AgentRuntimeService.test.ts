@@ -17,6 +17,9 @@ import {
 } from './types';
 
 vi.mock('@lobechat/model-runtime', () => ({
+  // RuntimeExecutors (loaded transitively) resolves extend params via this
+  // helper; an empty result keeps the runtime payload unchanged.
+  applyModelExtendParams: vi.fn(() => ({})),
   getModelPropertyWithFallback: vi.fn(),
   // `llmErrorClassification.ts` reads these at module-load time; an empty
   // spec map is fine here because this suite never exercises the runtime
