@@ -826,7 +826,13 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   const removeComposioServer = useCallback(
     async (identifier: string) => {
       await removeComposioConnection(identifier);
-      await togglePlugin(identifier, false);
+      // Best-effort cleanup: dropping the optimistic plugin id must never break
+      // the delete itself, so swallow any failure here.
+      try {
+        await togglePlugin(identifier, false);
+      } catch (error) {
+        console.error('[Composio] Failed to unpin plugin after delete:', error);
+      }
     },
     [removeComposioConnection, togglePlugin],
   );
