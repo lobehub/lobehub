@@ -13,6 +13,7 @@ import { produce } from 'immer';
 import useSWR, { mutate, type SWRResponse } from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { toolKeys } from '@/libs/swr/keys';
 import { agentSkillService } from '@/services/skill';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -59,7 +60,7 @@ export class AgentSkillsActionImpl {
       n('deleteAgentSkill'),
     );
 
-    await mutate(['fetchAgentSkillDetail', id].join('-'), undefined, { revalidate: false });
+    await mutate(toolKeys.agentSkillDetail(id), undefined, { revalidate: false });
 
     await this.#get().refreshAgentSkills();
   };
@@ -123,7 +124,7 @@ export class AgentSkillsActionImpl {
       );
     }
 
-    await mutate(['fetchAgentSkillDetail', params.id].join('-'), undefined, { revalidate: false });
+    await mutate(toolKeys.agentSkillDetail(params.id), undefined, { revalidate: false });
 
     await this.#get().refreshAgentSkills();
     return result;
@@ -131,7 +132,7 @@ export class AgentSkillsActionImpl {
 
   useFetchAgentSkillDetail = (skillId?: string): SWRResponse<AgentSkillDetailData> =>
     useClientDataSWR<AgentSkillDetailData>(
-      skillId ? ['fetchAgentSkillDetail', skillId].join('-') : null,
+      skillId ? toolKeys.agentSkillDetail(skillId) : null,
       async () => {
         const [detail, resourceTree] = await Promise.all([
           agentSkillService.getById(skillId!),
@@ -155,7 +156,7 @@ export class AgentSkillsActionImpl {
 
   useFetchAgentSkills = (enabled: boolean): SWRResponse<SkillListItem[]> =>
     useSWR<SkillListItem[]>(
-      enabled ? 'fetchAgentSkills' : null,
+      enabled ? toolKeys.agentSkills() : null,
       async () => {
         const { data } = await agentSkillService.list();
         return data;

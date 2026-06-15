@@ -3,6 +3,7 @@ import { produce } from 'immer';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
+import { toolKeys } from '@/libs/swr/keys';
 import { lambdaClient, toolsClient } from '@/libs/trpc/client';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -319,7 +320,7 @@ export class KlavisStoreActionImpl {
 
   useFetchServerTools = (serverName: string | undefined): SWRResponse<KlavisTool[]> => {
     return useSWR<KlavisTool[]>(
-      serverName ? `klavis-server-tools-${serverName}` : null,
+      serverName ? toolKeys.klavisServerTools(serverName) : null,
       async () => {
         const response = await toolsClient.klavis.getTools.query({ serverName: serverName! });
         return (response.tools || []).map((tool: any) => ({
@@ -337,7 +338,7 @@ export class KlavisStoreActionImpl {
 
   useFetchUserKlavisServers = (enabled: boolean): SWRResponse<KlavisServer[]> => {
     return useSWR<KlavisServer[]>(
-      enabled ? 'fetchUserKlavisServers' : null,
+      enabled ? toolKeys.klavisServers() : null,
       async () => {
         const klavisPlugins = await lambdaClient.klavis.getKlavisPlugins.query();
 

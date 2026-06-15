@@ -8,6 +8,7 @@ import {
   useActiveWorkspaceId,
 } from '@/business/client/hooks/useActiveWorkspaceId';
 import { mutate } from '@/libs/swr';
+import { toolKeys } from '@/libs/swr/keys';
 import { userService } from '@/services/user';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -18,8 +19,6 @@ import { type BuiltinToolContext, type BuiltinToolResult } from './types';
 
 const n = setNamespace('builtinTool');
 const log = debug('lobe-store:builtin-tool');
-
-const UNINSTALLED_BUILTIN_TOOLS = 'loadUninstalledBuiltinTools';
 
 /**
  * Minimal view of `settings.tool` covering just the builtin-tool install slots.
@@ -214,7 +213,7 @@ export class BuiltinToolActionImpl {
    * Refresh uninstalled builtin tools from server (active scope)
    */
   refreshUninstalledBuiltinTools = async (): Promise<void> => {
-    await mutate([UNINSTALLED_BUILTIN_TOOLS, getActiveWorkspaceId()]);
+    await mutate(toolKeys.uninstalledBuiltins(getActiveWorkspaceId()));
   };
 
   /**
@@ -228,7 +227,7 @@ export class BuiltinToolActionImpl {
     const workspaceId = useActiveWorkspaceId();
 
     return useSWR<string[]>(
-      enabled ? [UNINSTALLED_BUILTIN_TOOLS, workspaceId] : null,
+      enabled ? toolKeys.uninstalledBuiltins(workspaceId) : null,
       async () => {
         const userState = await userService.getUserState();
         return resolveUninstalledBuiltinTools(userState?.settings?.tool, workspaceId);

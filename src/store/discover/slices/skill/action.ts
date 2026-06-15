@@ -2,6 +2,7 @@ import { type CategoryListQuery } from '@lobehub/market-sdk';
 import { type SWRResponse } from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { discoverKeys } from '@/libs/swr/keys';
 import { discoverService } from '@/services/discover';
 import { type DiscoverStore } from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
@@ -35,28 +36,26 @@ export class SkillActionImpl {
     const locale = globalHelpers.getCurrentLanguage();
 
     return useClientDataSWR(
-      !identifier ? null : ['skill-detail', locale, identifier, version].filter(Boolean).join('-'),
+      !identifier ? null : discoverKeys.skillDetail(locale, identifier, version),
       async () => discoverService.getSkillDetail({ identifier: identifier!, version }),
     );
   };
 
   useFetchSkillList = (params: SkillQueryParams): SWRResponse<SkillListResponse> => {
     const locale = globalHelpers.getCurrentLanguage();
-    return useClientDataSWR(
-      ['skill-list', locale, ...Object.values(params)].filter(Boolean).join('-'),
-      async () =>
-        discoverService.getSkillList({
-          ...params,
-          page: params.page ? Number(params.page) : 1,
-          pageSize: params.pageSize ? Number(params.pageSize) : 21,
-        }),
+    return useClientDataSWR(discoverKeys.skillList(locale, params), async () =>
+      discoverService.getSkillList({
+        ...params,
+        page: params.page ? Number(params.page) : 1,
+        pageSize: params.pageSize ? Number(params.pageSize) : 21,
+      }),
     );
   };
 
   useSkillCategories = (params: CategoryListQuery = {}): SWRResponse<SkillCategoryItem[]> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useClientDataSWR(
-      ['skill-categories', locale, ...Object.values(params)].join('-'),
+      discoverKeys.skillCategories(locale, params),
       async () => discoverService.getSkillCategories(params),
       {
         revalidateOnFocus: false,

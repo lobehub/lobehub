@@ -206,9 +206,114 @@ export const discoverKeys = {
     userId,
     params,
   ]),
+  groupAgentCategories: def('discover:groupAgentCategories', (locale: string, params: unknown) => [
+    'discover:groupAgentCategories',
+    locale,
+    params,
+  ]),
+  groupAgentDetail: def(
+    'discover:groupAgentDetail',
+    (locale: string, identifier: string, version?: string) => [
+      'discover:groupAgentDetail',
+      locale,
+      identifier,
+      version,
+    ],
+  ),
+  groupAgentIdentifiers: def('discover:groupAgentIdentifiers', () => [
+    'discover:groupAgentIdentifiers',
+  ]),
+  groupAgentList: def('discover:groupAgentList', (locale: string, params: unknown) => [
+    'discover:groupAgentList',
+    locale,
+    params,
+  ]),
+  mcpCategories: def('discover:mcpCategories', (locale: string, params: unknown) => [
+    'discover:mcpCategories',
+    locale,
+    params,
+  ]),
+  mcpDetail: def('discover:mcpDetail', (locale: string, identifier: string, version?: string) => [
+    'discover:mcpDetail',
+    locale,
+    identifier,
+    version,
+  ]),
+  mcpList: def('discover:mcpList', (locale: string, params: unknown) => [
+    'discover:mcpList',
+    locale,
+    params,
+  ]),
+  modelCategories: def('discover:modelCategories', (params: unknown) => [
+    'discover:modelCategories',
+    params,
+  ]),
+  modelDetail: def('discover:modelDetail', (locale: string, identifier: string) => [
+    'discover:modelDetail',
+    locale,
+    identifier,
+  ]),
   modelIdentifiers: def('discover:modelIdentifiers', () => ['discover:modelIdentifiers']),
+  modelList: def('discover:modelList', (locale: string, params: unknown) => [
+    'discover:modelList',
+    locale,
+    params,
+  ]),
+  pluginCategories: def('discover:pluginCategories', (locale: string, params: unknown) => [
+    'discover:pluginCategories',
+    locale,
+    params,
+  ]),
+  pluginDetail: def(
+    'discover:pluginDetail',
+    (locale: string, identifier: string, withManifest?: boolean) => [
+      'discover:pluginDetail',
+      locale,
+      identifier,
+      withManifest,
+    ],
+  ),
   pluginIdentifiers: def('discover:pluginIdentifiers', () => ['discover:pluginIdentifiers']),
+  pluginList: def('discover:pluginList', (locale: string, params: unknown) => [
+    'discover:pluginList',
+    locale,
+    params,
+  ]),
+  providerDetail: def('discover:providerDetail', (locale: string, identifier: string) => [
+    'discover:providerDetail',
+    locale,
+    identifier,
+  ]),
   providerIdentifiers: def('discover:providerIdentifiers', () => ['discover:providerIdentifiers']),
+  providerList: def('discover:providerList', (locale: string, params: unknown) => [
+    'discover:providerList',
+    locale,
+    params,
+  ]),
+  skillCategories: def('discover:skillCategories', (locale: string, params: unknown) => [
+    'discover:skillCategories',
+    locale,
+    params,
+  ]),
+  skillDetail: def(
+    'discover:skillDetail',
+    (locale: string, identifier: string, version?: string) => [
+      'discover:skillDetail',
+      locale,
+      identifier,
+      version,
+    ],
+  ),
+  skillList: def('discover:skillList', (locale: string, params: unknown) => [
+    'discover:skillList',
+    locale,
+    params,
+  ]),
+  userProfile: def('discover:userProfile', (locale: string, username: string) => [
+    'discover:userProfile',
+    locale,
+    username,
+  ]),
 };
 
 // ---- agent eval ---------------------------------------------------------
@@ -276,13 +381,73 @@ export const deviceKeys = {
 
 // ---- user memory --------------------------------------------------------
 export const userMemoryKeys = {
+  activities: def('userMemory:activities', (params: unknown) => ['userMemory:activities', params]),
+  contexts: def('userMemory:contexts', (params: unknown) => ['userMemory:contexts', params]),
+  experiences: def('userMemory:experiences', (params: unknown) => [
+    'userMemory:experiences',
+    params,
+  ]),
+  /** Injection identities (distinct from the paginated `identityList`). */
   identities: def('userMemory:identities', () => ['userMemory:identities']),
+  /** Paginated identity list for the memory home views. */
+  identityList: def('userMemory:identityList', (params: unknown) => [
+    'userMemory:identityList',
+    params,
+  ]),
+  memoryDetail: def('userMemory:memoryDetail', (layer: string, id: string) => [
+    'userMemory:memoryDetail',
+    layer,
+    id,
+  ]),
   persona: def('userMemory:persona', () => ['userMemory:persona']),
+  preferences: def('userMemory:preferences', (params: unknown) => [
+    'userMemory:preferences',
+    params,
+  ]),
+  retrieve: def('userMemory:retrieve', (cacheKey: string | undefined) => [
+    'userMemory:retrieve',
+    cacheKey,
+  ]),
   tags: def('userMemory:tags', () => ['userMemory:tags']),
   topicMemories: def('userMemory:topicMemories', (topicId: string) => [
     'userMemory:topicMemories',
     topicId,
   ]),
+};
+
+// ---- tool (skills / plugins / builtin / mcp / klavis stores) -------------
+export const toolKeys = {
+  agentSkillDetail: def('tool:agentSkillDetail', (id: string) => ['tool:agentSkillDetail', id]),
+  agentSkills: def('tool:agentSkills', () => ['tool:agentSkills']),
+  installedPlugins: def('tool:installedPlugins', () => ['tool:installedPlugins']),
+  klavisServerTools: def('tool:klavisServerTools', (serverName: string) => [
+    'tool:klavisServerTools',
+    serverName,
+  ]),
+  klavisServers: def('tool:klavisServers', () => ['tool:klavisServers']),
+  lobehubSkillConnections: def('tool:lobehubSkillConnections', () => [
+    'tool:lobehubSkillConnections',
+  ]),
+  lobehubSkillTools: def('tool:lobehubSkillTools', (provider: string) => [
+    'tool:lobehubSkillTools',
+    provider,
+  ]),
+  mcpPluginList: def('tool:mcpPluginList', (locale: string, params: unknown) => [
+    'tool:mcpPluginList',
+    locale,
+    params,
+  ]),
+  uninstalledBuiltins: def('tool:uninstalledBuiltins', (workspaceId: string | null | undefined) => [
+    'tool:uninstalledBuiltins',
+    workspaceId,
+  ]),
+};
+
+// ---- global -------------------------------------------------------------
+export const globalKeys = {
+  latestVersion: def('global:latestVersion', () => ['global:latestVersion']),
+  serverVersion: def('global:serverVersion', () => ['global:serverVersion']),
+  systemStatus: def('global:systemStatus', () => ['global:systemStatus']),
 };
 
 // ---- agent knowledge (kept off the `agent:` idb tier on purpose) --------
@@ -336,6 +501,7 @@ export const swrKeys = {
   document: documentSWRKeys,
   eval: evalKeys,
   file: fileKeys,
+  global: globalKeys,
   group: groupKeys,
   image: imageKeys,
   knowledgeBase: knowledgeBaseKeys,
@@ -347,6 +513,7 @@ export const swrKeys = {
   session: sessionKeys,
   task: taskKeys,
   thread: threadKeys,
+  tool: toolKeys,
   topic: topicKeys,
   userMemory: userMemoryKeys,
   video: videoKeys,
