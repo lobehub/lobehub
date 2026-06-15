@@ -817,6 +817,20 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
     [allLobehubSkillServers],
   );
 
+  // Remove a Composio connection AND drop its identifier from the agent's
+  // plugins. `ComposioServerItem.handleConnect` optimistically adds the new
+  // server id to `plugins` before OAuth completes, so deleting the connection
+  // alone would leave an orphan id behind — which both keeps the row counted as
+  // pinned and makes a later reconnect's toggle flip the freshly-connected skill
+  // back off. `togglePlugin(id, false)` is a no-op when the id is absent.
+  const removeComposioServer = useCallback(
+    async (identifier: string) => {
+      await removeComposioConnection(identifier);
+      await togglePlugin(identifier, false);
+    },
+    [removeComposioConnection, togglePlugin],
+  );
+
   // Composio server list items - only show installed or recommended
   const composioServerItems = useMemo(
     () =>
@@ -847,7 +861,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
                 badge: <Icon icon={McpIcon} size={12} />,
                 deleteConfig: {
                   displayName: type.label,
-                  onDelete: () => removeComposioConnection(server.identifier),
+                  onDelete: () => removeComposioServer(server.identifier),
                 },
                 extraTag: type.author === 'LobeHub' ? officialTag : undefined,
                 icon,
@@ -878,7 +892,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
                   server.identifier,
                   {
                     displayName: type.label,
-                    onDelete: () => removeComposioConnection(server.identifier),
+                    onDelete: () => removeComposioServer(server.identifier),
                   },
                   undefined,
                   true,
@@ -918,7 +932,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       t,
       createManagedSkillItem,
       getServerByName,
-      removeComposioConnection,
+      removeComposioServer,
       renderPolicyMenu,
       openSkillPolicyMenu,
     ],
