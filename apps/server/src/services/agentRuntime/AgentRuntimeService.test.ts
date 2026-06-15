@@ -1696,7 +1696,7 @@ describe('AgentRuntimeService', () => {
       expect(casSpy).not.toHaveBeenCalled();
     });
 
-    it('arms a one-shot verify when the parent has not parked yet and scheduleVerifyOnHold is set', async () => {
+    it('arms the first verify (attempt 1, 15s) when the parent has not parked yet and scheduleVerifyOnHold is set', async () => {
       // Child completed before the parent's parking step persisted its state.
       mockCoordinator.loadAgentState.mockResolvedValue({
         pendingToolsCalling: [],
@@ -1712,14 +1712,15 @@ describe('AgentRuntimeService', () => {
       expect(won).toBe(false);
       expect(mockQueueService.scheduleMessage).toHaveBeenCalledWith(
         expect.objectContaining({
+          delay: 15_000,
           operationId: parentOpId,
-          payload: { verifyAsyncToolBarrier: true },
+          payload: { asyncToolVerifyAttempt: 1, verifyAsyncToolBarrier: true },
           stepIndex: 2,
         }),
       );
     });
 
-    it('arms a one-shot verify when the barrier is unsatisfied and scheduleVerifyOnHold is set', async () => {
+    it('arms a verify when the barrier is unsatisfied and scheduleVerifyOnHold is set', async () => {
       mockCoordinator.loadAgentState.mockResolvedValue({
         pendingToolsCalling: [{ id: 'tc1' }],
         status: 'waiting_for_async_tool',
@@ -1736,7 +1737,104 @@ describe('AgentRuntimeService', () => {
 
       expect(won).toBe(false);
       expect(mockQueueService.scheduleMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ payload: { verifyAsyncToolBarrier: true } }),
+        expect.objectContaining({
+          payload: { asyncToolVerifyAttempt: 1, verifyAsyncToolBarrier: true },
+        }),
+      );
+    });
+
+    it('re-arms the next verify with exponential backoff while the barrier holds', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        pendingToolsCalling: [{ id: 'tc1' }],
+        status: 'waiting_for_async_tool',
+        stepCount: 1,
+      });
+      (service as any).serverDB.query = {
+        messagePlugins: { findFirst: vi.fn().mockResolvedValue(null) },
+      };
+
+      // A verify handler running as attempt 2 re-arms attempt 3 (60s).
+      await service.tryResumeParentFromAsyncTool(
+        { parentOperationId: parentOpId },
+        { scheduleVerifyOnHold: true, verifyAttempt: 3 },
+      );
+
+      expect(mockQueueService.scheduleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          delay: 60_000,
+          payload: { asyncToolVerifyAttempt: 3, verifyAsyncToolBarrier: true },
+        }),
+      );
+    });
+
+    it('stops re-arming once the bounded attempts are exhausted', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        pendingToolsCalling: [{ id: 'tc1' }],
+        status: 'waiting_for_async_tool',
+        stepCount: 1,
+      });
+      (service as any).serverDB.query = {
+        messagePlugins: { findFirst: vi.fn().mockResolvedValue(null) },
+      };
+
+      const won = await service.tryResumeParentFromAsyncTool(
+        { parentOperationId: parentOpId },
+        { scheduleVerifyOnHold: true, verifyAttempt: 6 },
+      );
+
+      expect(won).toBe(false);
+      expect(mockQueueService.scheduleMessage).not.toHaveBeenCalled();
+    });
+
+    it('trusts a just-backfilled message id without re-reading it (read-your-writes)', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        pendingToolsCalling: [{ id: 'tc1' }],
+        status: 'waiting_for_async_tool',
+        stepCount: 3,
+      });
+      // Plugin row exists (created at park) but its state still reads stale.
+      const findById = vi.fn().mockResolvedValue({ content: '' });
+      (service as any).serverDB.query = {
+        messagePlugins: {
+          findFirst: vi.fn().mockResolvedValue({ id: 'msg-tc1', state: null, toolCallId: 'tc1' }),
+        },
+      };
+      (service as any).messageModel.findById = findById;
+      const casSpy = vi
+        .spyOn(AgentOperationModel.prototype, 'tryResumeFromAsyncTool')
+        .mockResolvedValue(true);
+
+      const won = await service.tryResumeParentFromAsyncTool(
+        { parentOperationId: parentOpId },
+        { knownFulfilledMessageId: 'msg-tc1' },
+      );
+
+      expect(won).toBe(true);
+      expect(casSpy).toHaveBeenCalledWith(parentOpId);
+      // The stale read must be skipped — barrier trusted the local backfill.
+      expect(findById).not.toHaveBeenCalled();
+    });
+
+    it('arms a fallback verify when a parked op has no pending tools', async () => {
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        pendingToolsCalling: [],
+        status: 'waiting_for_async_tool',
+        stepCount: 4,
+      });
+      const casSpy = vi.spyOn(AgentOperationModel.prototype, 'tryResumeFromAsyncTool');
+
+      const won = await service.tryResumeParentFromAsyncTool(
+        { parentOperationId: parentOpId },
+        { scheduleVerifyOnHold: true },
+      );
+
+      expect(won).toBe(false);
+      expect(casSpy).not.toHaveBeenCalled();
+      expect(mockQueueService.scheduleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: { asyncToolVerifyAttempt: 1, verifyAsyncToolBarrier: true },
+          stepIndex: 4,
+        }),
       );
     });
 
@@ -1805,7 +1903,7 @@ describe('AgentRuntimeService', () => {
       });
       expect(resumeSpy).toHaveBeenCalledWith(
         { parentOperationId: 'parent-op-1' },
-        { scheduleVerifyOnHold: true },
+        { knownFulfilledMessageId: 'tool-msg-1', scheduleVerifyOnHold: true },
       );
     });
 

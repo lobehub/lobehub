@@ -20,6 +20,7 @@ import {
   trace as otelTrace,
 } from '@lobechat/observability-otel/api';
 import {
+  asyncToolResumeCounter,
   buildInvokeAgentAttributes,
   buildInvokeAgentResultAttributes,
   invokeAgentSpanName,
@@ -84,12 +85,36 @@ if (process.env.VERCEL) {
 const log = debug('lobe-server:agent-runtime-service');
 
 /**
- * Delay before a one-shot `verifyAsyncToolBarrier` re-check fires after a
+ * Base delay before the first `verifyAsyncToolBarrier` re-check fires after a
  * sub-agent completion found the parent not yet resumable. Long enough for
  * the parent's parking step to finish persisting, short enough that a lost
- * resume is recovered promptly.
+ * resume is recovered promptly. Subsequent attempts back off exponentially —
+ * see {@link asyncToolVerifyDelayMs}.
  */
 const ASYNC_TOOL_VERIFY_DELAY_MS = 15_000;
+
+/**
+ * Maximum number of bounded watchdog re-checks armed per parked parent. The
+ * watchdog re-arms after each unsatisfied check (instead of the old single
+ * shot) so a transient miss — a read-replica lag, a sibling dying between
+ * backfill and resume — is retried rather than leaving the parent stuck in
+ * `waiting_for_async_tool` forever. With exponential backoff from a 15s base,
+ * 5 attempts span ~15s → ~7.75min total before giving up. See LOBE-10385.
+ */
+const ASYNC_TOOL_VERIFY_MAX_ATTEMPTS = 5;
+
+/** Hard ceiling on a single backoff delay so late attempts don't overshoot. */
+const ASYNC_TOOL_VERIFY_MAX_DELAY_MS = 240_000;
+
+/**
+ * Exponential backoff delay for the Nth (1-based) watchdog re-check:
+ * 15s, 30s, 60s, 120s, 240s, capped at {@link ASYNC_TOOL_VERIFY_MAX_DELAY_MS}.
+ */
+const asyncToolVerifyDelayMs = (attempt: number): number =>
+  Math.min(
+    ASYNC_TOOL_VERIFY_DELAY_MS * 2 ** (Math.max(1, attempt) - 1),
+    ASYNC_TOOL_VERIFY_MAX_DELAY_MS,
+  );
 
 /**
  * Format error for storage in message pluginError metadata.
@@ -590,15 +615,28 @@ export class AgentRuntimeService {
       resumeAsyncTool,
       toolMessageId,
       verifyAsyncToolBarrier,
+      asyncToolVerifyAttempt,
       externalRetryCount = 0,
     } = params;
 
     // Watchdog re-check for a parked async-tool wait: re-run the barrier + CAS
     // without claiming the step lock or executing anything. Idempotent — the
     // CAS guarantees at most one real resume regardless of how many checks run.
+    // Opt back into `scheduleVerifyOnHold` with the next attempt so an
+    // unsatisfied barrier re-arms (bounded backoff) instead of giving up after
+    // a single shot — the core LOBE-10385 fix.
     if (verifyAsyncToolBarrier) {
-      log('[%s][%d] Running async-tool barrier verify', operationId, stepIndex);
-      const resumed = await this.tryResumeParentFromAsyncTool({ parentOperationId: operationId });
+      const attempt = asyncToolVerifyAttempt ?? 1;
+      log(
+        '[%s][%d] Running async-tool barrier verify (attempt %d)',
+        operationId,
+        stepIndex,
+        attempt,
+      );
+      const resumed = await this.tryResumeParentFromAsyncTool(
+        { parentOperationId: operationId },
+        { scheduleVerifyOnHold: true, verifyAttempt: attempt + 1 },
+      );
       return {
         nextStepScheduled: resumed,
         state: {},
@@ -1627,12 +1665,30 @@ export class AgentRuntimeService {
    */
   async tryResumeParentFromAsyncTool(
     params: { parentOperationId: string },
-    options?: { scheduleVerifyOnHold?: boolean },
+    options?: {
+      /**
+       * Message id of a tool placeholder the caller just backfilled to a
+       * terminal state. Trusted by the barrier as fulfilled without re-reading
+       * `message_plugins` — closes the read-your-writes gap where the barrier
+       * query hits a read replica that hasn't seen the just-committed write.
+       */
+      knownFulfilledMessageId?: string;
+      scheduleVerifyOnHold?: boolean;
+      /** 1-based watchdog attempt to arm when the parent isn't resumable yet. */
+      verifyAttempt?: number;
+    },
   ): Promise<boolean> {
     const { parentOperationId } = params;
 
     const state = await this.coordinator.loadAgentState(parentOperationId);
-    if (!state) return false;
+    if (!state) {
+      // State expired (Redis TTL) or never persisted — nothing left to resume.
+      // Surface it: a missing state at completion time is how a parent silently
+      // strands. There is no stepCount/status to arm a verify against.
+      log('[%s] async-tool resume: parent state missing/expired, cannot resume', parentOperationId);
+      asyncToolResumeCounter.add(1, { outcome: 'no_state' });
+      return false;
+    }
 
     if (state.status !== 'waiting_for_async_tool') {
       // Not parked (yet). Either the op already resumed/finished — nothing to
@@ -1643,12 +1699,27 @@ export class AgentRuntimeService {
     }
 
     const pending = (state.pendingToolsCalling ?? []) as ChatToolPayload[];
-    if (pending.length === 0) return false;
+    if (pending.length === 0) {
+      // Parked but no pending tools recorded — usually the parked snapshot's
+      // `pendingToolsCalling` hasn't finished persisting yet. Warn, report, and
+      // arm a fallback re-check rather than returning silently (the old bug).
+      log(
+        '[%s] async-tool resume: parked op has no pending tools, arming fallback',
+        parentOperationId,
+      );
+      asyncToolResumeCounter.add(1, { outcome: 'no_pending' });
+      await this.maybeScheduleAsyncToolVerify(parentOperationId, state, options);
+      return false;
+    }
 
     // Barrier: every pending tool must have a fulfilled tool_result message.
-    const allFulfilled = await this.allPendingToolsFulfilled(pending);
+    const allFulfilled = await this.allPendingToolsFulfilled(
+      pending,
+      options?.knownFulfilledMessageId,
+    );
     if (!allFulfilled) {
       log('[%s] async-tool barrier not yet satisfied, holding', parentOperationId);
+      asyncToolResumeCounter.add(1, { outcome: 'barrier_held' });
       await this.maybeScheduleAsyncToolVerify(parentOperationId, state, options);
       return false;
     }
@@ -1659,8 +1730,11 @@ export class AgentRuntimeService {
     );
     if (!won) {
       log('[%s] lost async-tool resume CAS, no-op', parentOperationId);
+      asyncToolResumeCounter.add(1, { outcome: 'lost_cas' });
       return false;
     }
+
+    asyncToolResumeCounter.add(1, { outcome: 'resumed' });
 
     log('[%s] won async-tool resume CAS, scheduling step %d', parentOperationId, state.stepCount);
 
@@ -1682,36 +1756,60 @@ export class AgentRuntimeService {
   }
 
   /**
-   * Arm a one-shot delayed `verifyAsyncToolBarrier` re-check for a parent op
-   * whose resume attempt found it not yet resumable. Skipped for terminal
-   * states (nothing left to resume) and when the caller didn't opt in — the
-   * verify execution itself never re-arms, keeping retries bounded to one
-   * per completion event.
+   * Arm the next bounded `verifyAsyncToolBarrier` re-check for a parent op whose
+   * resume attempt found it not yet resumable. Skipped for terminal states
+   * (nothing left to resume) and when the caller didn't opt in.
+   *
+   * Unlike the original single shot, the watchdog re-arms after each unsatisfied
+   * check: the verify handler re-enters here with `verifyAttempt + 1`, backing
+   * off exponentially up to {@link ASYNC_TOOL_VERIFY_MAX_ATTEMPTS}. A transient
+   * miss (read-replica lag, a sibling dying between backfill and resume) is thus
+   * retried instead of permanently stranding the parent. Once attempts are
+   * exhausted the chain stops and the `verify_exhausted` metric fires so the
+   * orphan is observable. See LOBE-10385.
    */
   private async maybeScheduleAsyncToolVerify(
     parentOperationId: string,
     state: AgentState,
-    options?: { scheduleVerifyOnHold?: boolean },
+    options?: { scheduleVerifyOnHold?: boolean; verifyAttempt?: number },
   ): Promise<void> {
     if (!options?.scheduleVerifyOnHold || !this.queueService) return;
 
     const status = state.status as string;
     if (status === 'done' || status === 'error' || status === 'interrupted') return;
 
+    const attempt = options.verifyAttempt ?? 1;
+    if (attempt > ASYNC_TOOL_VERIFY_MAX_ATTEMPTS) {
+      // Bounded retries spent and the parent is still not resumable — give up
+      // re-arming and report so the stuck wait can be detected, not silently
+      // accumulated.
+      log(
+        '[%s] async-tool barrier verify exhausted after %d attempts, giving up (status: %s)',
+        parentOperationId,
+        ASYNC_TOOL_VERIFY_MAX_ATTEMPTS,
+        status,
+      );
+      asyncToolResumeCounter.add(1, { outcome: 'verify_exhausted' });
+      return;
+    }
+
+    const delay = asyncToolVerifyDelayMs(attempt);
     log(
-      '[%s] scheduling async-tool barrier verify in %dms (status: %s)',
+      '[%s] scheduling async-tool barrier verify attempt %d/%d in %dms (status: %s)',
       parentOperationId,
-      ASYNC_TOOL_VERIFY_DELAY_MS,
+      attempt,
+      ASYNC_TOOL_VERIFY_MAX_ATTEMPTS,
+      delay,
       status,
     );
 
     try {
       await this.queueService.scheduleMessage({
         context: undefined,
-        delay: ASYNC_TOOL_VERIFY_DELAY_MS,
+        delay,
         endpoint: `${this.baseURL}/run`,
         operationId: parentOperationId,
-        payload: { verifyAsyncToolBarrier: true },
+        payload: { asyncToolVerifyAttempt: attempt, verifyAsyncToolBarrier: true },
         priority: 'high',
         stepIndex: state.stepCount,
       });
@@ -1792,21 +1890,39 @@ export class AgentRuntimeService {
       );
     }
 
-    // 2. Barrier + CAS + resume the parent op (infra errors propagate too)
-    return this.tryResumeParentFromAsyncTool({ parentOperationId }, { scheduleVerifyOnHold: true });
+    // 2. Barrier + CAS + resume the parent op (infra errors propagate too).
+    // Pass the just-backfilled message id so the barrier trusts this write
+    // instead of re-reading a possibly-stale replica.
+    return this.tryResumeParentFromAsyncTool(
+      { parentOperationId },
+      { knownFulfilledMessageId: toolMessageId, scheduleVerifyOnHold: true },
+    );
   }
 
   /**
    * Whether every pending tool call has a fulfilled tool_result message — i.e.
    * a tool message exists for its `tool_call_id` with non-empty content or a
    * terminal pluginState. Looks up by `tool_call_id` (plugin id === message id).
+   *
+   * `knownFulfilledMessageId` short-circuits the per-tool content/state read for
+   * a placeholder the caller just backfilled in the same request: its terminal
+   * write is a local fact, so re-reading it (possibly from a lagging read
+   * replica) would only risk a false negative that strands the parent. The
+   * plugin row itself predates the park, so the `tool_call_id → plugin.id`
+   * lookup still resolves; only the freshly written content/state is trusted.
    */
-  private async allPendingToolsFulfilled(pending: ChatToolPayload[]): Promise<boolean> {
+  private async allPendingToolsFulfilled(
+    pending: ChatToolPayload[],
+    knownFulfilledMessageId?: string,
+  ): Promise<boolean> {
     for (const tc of pending) {
       const plugin = await this.serverDB.query.messagePlugins.findFirst({
         where: (mp, { eq }) => eq(mp.toolCallId, tc.id),
       });
       if (!plugin) return false;
+
+      // Trust the caller's own just-committed backfill (read-your-writes).
+      if (knownFulfilledMessageId && plugin.id === knownFulfilledMessageId) continue;
 
       const message = await this.messageModel.findById(plugin.id);
       const pluginState = plugin.state as { status?: string } | null;

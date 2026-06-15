@@ -121,6 +121,12 @@ export type StepCompletionReason =
 
 export interface AgentExecutionParams {
   approvedToolCall?: any;
+  /**
+   * 1-based attempt number carried by a `verifyAsyncToolBarrier` re-check so the
+   * bounded watchdog can back off and stop after a fixed number of tries. Absent
+   * (treated as attempt 1) on the first re-check armed by a completion bridge.
+   */
+  asyncToolVerifyAttempt?: number;
   context?: AgentRuntimeContext;
   externalRetryCount?: number;
   humanInput?: any;
@@ -144,10 +150,13 @@ export interface AgentExecutionParams {
   /**
    * Watchdog re-check for a parked `waiting_for_async_tool` op: re-runs the
    * resume barrier + CAS without claiming the step lock or executing a step.
-   * A no-op when the op already resumed or the barrier is still unsatisfied.
-   * Scheduled one-shot by `tryResumeParentFromAsyncTool` when a sub-agent
-   * completion found the parent not yet resumable (covers the
-   * child-finishes-before-parent-parks race and transient barrier failures).
+   * A no-op when the op already resumed. While the barrier is still unsatisfied
+   * it re-arms the next check with exponential backoff (see
+   * `asyncToolVerifyAttempt`) up to a bounded number of attempts, so a transient
+   * miss is retried rather than permanently stranding the parent. First armed by
+   * `tryResumeParentFromAsyncTool` when a sub-agent completion found the parent
+   * not yet resumable (covers the child-finishes-before-parent-parks race and
+   * transient barrier failures).
    */
   verifyAsyncToolBarrier?: boolean;
 }
@@ -221,6 +230,9 @@ export interface OperationCreationParams {
   deviceAccessPolicy?: { canUseDevice: boolean; reason: DeviceAccessReason };
   /** Device system info for placeholder variable replacement in Local System systemRole */
   deviceSystemInfo?: Record<string, string>;
+  /** Discord context for injecting channel/guild info into agent system message */
+  discordContext?: any;
+  evalContext?: any;
   /**
    * Resolved execution plan for the run (see `resolveExecutionPlan`).
    * Forwarded into `state.metadata.executionPlan` so step-level layers (the
@@ -228,9 +240,6 @@ export interface OperationCreationParams {
    * device capability from raw config.
    */
   executionPlan?: ExecutionPlan;
-  /** Discord context for injecting channel/guild info into agent system message */
-  discordContext?: any;
-  evalContext?: any;
   /**
    * External lifecycle hooks
    * Registered once, auto-adapt to local (in-memory) or production (webhook) mode

@@ -42,6 +42,7 @@ export async function runStep(c: Context): Promise<Response> {
       resumeAsyncTool,
       toolMessageId,
       verifyAsyncToolBarrier,
+      asyncToolVerifyAttempt,
     } = { ...body, ...body.payload };
 
     if (!operationId) {
@@ -74,6 +75,7 @@ export async function runStep(c: Context): Promise<Response> {
 
     const result = await aiAgentService.executeStep({
       approvedToolCall,
+      asyncToolVerifyAttempt,
       context,
       externalRetryCount,
       humanInput,
