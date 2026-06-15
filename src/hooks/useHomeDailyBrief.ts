@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { homeKeys } from '@/libs/swr/keys';
 import { homeService } from '@/services/home';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
-
-const FETCH_HOME_DAILY_BRIEF_KEY = 'fetchHomeDailyBrief';
 
 interface HomeDailyBriefPair {
   hint: string;
@@ -53,9 +52,8 @@ export const useHomeDailyBrief = (): UseHomeDailyBriefResult => {
   // Scope the SWR key by userId so an account switch within the same SPA
   // session (or signing in as a different user after sign-out) refetches
   // and never serves the previous user's cached pairs from this slot.
-  const { data } = useClientDataSWR(
-    isLogin && userId ? [FETCH_HOME_DAILY_BRIEF_KEY, userId] : null,
-    () => homeService.getDailyBrief(),
+  const { data } = useClientDataSWR(isLogin && userId ? homeKeys.dailyBrief(userId) : null, () =>
+    homeService.getDailyBrief(),
   );
 
   // Reset the module-level rotation when the user changes — otherwise the

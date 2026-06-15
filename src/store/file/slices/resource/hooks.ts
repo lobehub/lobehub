@@ -7,14 +7,14 @@ import {
   useActiveWorkspaceId,
 } from '@/business/client/hooks/useActiveWorkspaceId';
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { resourceKeys } from '@/libs/swr/keys';
 import { resourceService } from '@/services/resource';
 import type { ResourceQueryParams } from '@/types/resource';
 
 import { useFileStore } from '../../store';
 import { mergeServerResourcesWithOptimistic } from './utils';
 
-const SWR_KEY_RESOURCES = 'SWR_RESOURCES';
-type ResourceSWRKey = [typeof SWR_KEY_RESOURCES, ResourceQueryParams, string | null];
+type ResourceSWRKey = [string, ResourceQueryParams, string | null];
 
 const isResourceSWRKey = (
   key: unknown,
@@ -23,7 +23,9 @@ const isResourceSWRKey = (
 ) => {
   if (!Array.isArray(key)) return false;
 
-  return key[0] === SWR_KEY_RESOURCES && isEqual(key[1], queryParams) && key[2] === workspaceId;
+  return (
+    key[0] === resourceKeys.list.root && isEqual(key[1], queryParams) && key[2] === workspaceId
+  );
 };
 
 /**
@@ -51,7 +53,7 @@ export const useFetchResources = (params: ResourceQueryParams | null, enable: an
   const workspaceId = useActiveWorkspaceId();
 
   const swr = useClientDataSWR(
-    enable && params ? ([SWR_KEY_RESOURCES, params, workspaceId] satisfies ResourceSWRKey) : null,
+    enable && params ? resourceKeys.list(params, workspaceId) : null,
     async ([, queryParams]: ResourceSWRKey) => {
       const response = await resourceService.queryResources({
         ...queryParams,

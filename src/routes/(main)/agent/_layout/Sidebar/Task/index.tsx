@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useClientDataSWR } from '@/libs/swr';
+import { sidebarKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -20,8 +21,6 @@ const SIDEBAR_GROUPS = [
 ];
 const STATUS_ORDER = SIDEBAR_GROUPS.map((g) => g.key);
 
-const FETCH_SIDEBAR_TASK_GROUPS_KEY = 'fetchSidebarTaskGroups';
-
 interface TaskListProps {
   itemKey: string;
 }
@@ -33,7 +32,7 @@ const TaskList = memo<TaskListProps>(({ itemKey }) => {
 
   const enabled = !isHeterogeneous && !!agentId;
   const { data, isLoading } = useClientDataSWR<{ data: TaskGroupItem[]; success: boolean }>(
-    enabled ? [FETCH_SIDEBAR_TASK_GROUPS_KEY, agentId] : null,
+    enabled ? sidebarKeys.taskGroups(agentId) : null,
     async ([, id]: [string, string]) =>
       taskService.groupList({ assigneeAgentId: id, groups: SIDEBAR_GROUPS }),
     {

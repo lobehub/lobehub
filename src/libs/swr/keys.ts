@@ -131,6 +131,11 @@ export const agentConfigKeys = {
 
 // ---- aiModel ------------------------------------------------------------
 export const aiModelKeys = {
+  disabledModelsPage: def('aiModel:disabledModelsPage', (providerId: string, offset: number) => [
+    'aiModel:disabledModelsPage',
+    providerId,
+    offset,
+  ]),
   list: def('aiModel:list', (provider: string | undefined) => ['aiModel:list', provider]),
 };
 
@@ -398,6 +403,21 @@ export const deviceKeys = {
     deviceId,
     path,
   ]),
+  gitRemoteBranches: def('device:gitRemoteBranches', (deviceId: string, dirPath: string) => [
+    'device:gitRemoteBranches',
+    deviceId,
+    dirPath,
+  ]),
+  gitReviewPatches: def(
+    'device:gitReviewPatches',
+    (deviceId: string, dirPath: string, mode: string, baseRef: string) => [
+      'device:gitReviewPatches',
+      deviceId,
+      dirPath,
+      mode,
+      baseRef,
+    ],
+  ),
   gitInfo: def('device:gitInfo', (deviceId: string, path: string, isGithub: boolean) => [
     'device:gitInfo',
     deviceId,
@@ -416,6 +436,10 @@ export const deviceKeys = {
 // ---- user memory --------------------------------------------------------
 export const userMemoryKeys = {
   activities: def('userMemory:activities', (params: unknown) => ['userMemory:activities', params]),
+  analysisTask: def('userMemory:analysisTask', (taskId?: string) => [
+    'userMemory:analysisTask',
+    taskId,
+  ]),
   contexts: def('userMemory:contexts', (params: unknown) => ['userMemory:contexts', params]),
   experiences: def('userMemory:experiences', (params: unknown) => [
     'userMemory:experiences',
@@ -660,6 +684,67 @@ export const topicActionKeys = {
   openNewOrSave: def('topicAction:openNewOrSave', () => ['topicAction:openNewOrSave']),
 };
 
+// ---- misc remaining domains (memory-only; off CACHE_TIERS) --------------
+export const homeKeys = {
+  dailyBrief: def('home:dailyBrief', (userId: string) => ['home:dailyBrief', userId]),
+};
+export const taskTemplateKeys = {
+  listDailyRecommend: def(
+    'taskTemplate:listDailyRecommend',
+    (interestsKey: string, refreshSeed: unknown, recommendationCount: number) => [
+      'taskTemplate:listDailyRecommend',
+      interestsKey,
+      refreshSeed,
+      recommendationCount,
+    ],
+  ),
+};
+export const resourceKeys = {
+  list: def('resource:list', (params: unknown, workspaceId: string | null) => [
+    'resource:list',
+    params,
+    workspaceId,
+  ]),
+  search: def('resource:search', (params: unknown) => ['resource:search', params]),
+};
+export const providerKeys = {
+  clientConfig: def('provider:clientConfig', (id: string) => ['provider:clientConfig', id]),
+};
+export const recommendationsKeys = {
+  heteroDetections: def('recommendations:heteroDetections', () => [
+    'recommendations:heteroDetections',
+  ]),
+};
+export const openInAppKeys = {
+  detect: def('openInApp:detect', () => ['openInApp:detect']),
+};
+export const gatewayKeys = {
+  reconnect: def('gateway:reconnect', (operationId: string) => ['gateway:reconnect', operationId]),
+};
+export const userKeys = {
+  checkTrace: def('user:checkTrace', () => ['user:checkTrace']),
+  initState: def('user:initState', () => ['user:initState']),
+};
+export const builtinAgentKeys = {
+  init: def('builtinAgent:init', (slug: string) => ['builtinAgent:init', slug]),
+};
+export const imessageKeys = {
+  bridgeStatus: def('imessage:bridgeStatus', () => ['imessage:bridgeStatus']),
+};
+export const sidebarKeys = {
+  taskGroups: def('sidebar:taskGroups', (agentId: string) => ['sidebar:taskGroups', agentId]),
+};
+// Desktop/electron IPC fetches — roots keep their existing `electron:getXxx` value.
+export const electronKeys = {
+  appTrayVisible: def('electron:getAppTrayVisible', () => ['electron:getAppTrayVisible']),
+  desktopHotkeys: def('electron:getDesktopHotkeys', () => ['electron:getDesktopHotkeys']),
+  gatewayDeviceInfo: def('electron:getGatewayDeviceInfo', () => ['electron:getGatewayDeviceInfo']),
+  proxySettings: def('electron:getProxySettings', () => ['electron:getProxySettings']),
+  remoteServerConfig: def('electron:getRemoteServerConfig', () => [
+    'electron:getRemoteServerConfig',
+  ]),
+};
+
 /**
  * Build a `mutate` matcher that selects every key in a `domain:` namespace.
  *
@@ -684,19 +769,24 @@ export const swrKeys = {
   aiModel: aiModelKeys,
   auth: authKeys,
   brief: briefKeys,
+  builtinAgent: builtinAgentKeys,
   changelog: changelogKeys,
   chatTool: chatToolKeys,
   cron: cronKeys,
   device: deviceKeys,
   discover: discoverKeys,
   document: documentSWRKeys,
+  electron: electronKeys,
   eval: evalKeys,
   favorite: favoriteKeys,
   file: fileKeys,
   fork: forkKeys,
+  gateway: gatewayKeys,
   global: globalKeys,
   group: groupKeys,
+  home: homeKeys,
   image: imageKeys,
+  imessage: imessageKeys,
   inbox: inboxKeys,
   knowledgeBase: knowledgeBaseKeys,
   message: messageKeys,
@@ -704,18 +794,25 @@ export const swrKeys = {
   notebook: notebookSWRKeys,
   ollama: ollamaKeys,
   onboarding: onboardingKeys,
+  openInApp: openInAppKeys,
   portal: portalKeys,
+  provider: providerKeys,
   ragEval: ragEvalKeys,
   recent: recentKeys,
+  recommendations: recommendationsKeys,
+  resource: resourceKeys,
   serverConfig: serverConfigKeys,
   session: sessionKeys,
   share: shareKeys,
+  sidebar: sidebarKeys,
   stats: statsKeys,
   task: taskKeys,
+  taskTemplate: taskTemplateKeys,
   thread: threadKeys,
   tool: toolKeys,
   topic: topicKeys,
   topicAction: topicActionKeys,
+  user: userKeys,
   userMemory: userMemoryKeys,
   verify: verifyKeys,
   video: videoKeys,

@@ -1,5 +1,6 @@
 import useSWR from 'swr';
 
+import { gatewayKeys } from '@/libs/swr/keys';
 import { useChatStore } from '@/store/chat';
 import { useServerConfigStore } from '@/store/serverConfig';
 
@@ -32,7 +33,7 @@ export const useGatewayReconnect = (
 
   useSWR(
     runningOperation && topicId && agentGatewayUrl
-      ? ['reconnectGateway', runningOperation.operationId]
+      ? gatewayKeys.reconnect(runningOperation.operationId)
       : null,
     async () => {
       if (!runningOperation || !topicId) return;

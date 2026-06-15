@@ -53,9 +53,9 @@ describe('revalidateResources', () => {
     const [matcher] = vi.mocked(mutate).mock.calls[0] as [(key: unknown) => boolean];
 
     expect(matcher).toEqual(expect.any(Function));
-    expect(matcher(['SWR_RESOURCES', mocks.queryParams, 'workspace-1'])).toBe(true);
-    expect(matcher(['SWR_RESOURCES', mocks.queryParams, 'workspace-2'])).toBe(false);
-    expect(matcher(['SWR_RESOURCES', mocks.queryParams])).toBe(false);
+    expect(matcher(['resource:list', mocks.queryParams, 'workspace-1'])).toBe(true);
+    expect(matcher(['resource:list', mocks.queryParams, 'workspace-2'])).toBe(false);
+    expect(matcher(['resource:list', mocks.queryParams])).toBe(false);
     expect(matcher(['OTHER_KEY', mocks.queryParams, 'workspace-1'])).toBe(false);
     expect(getActiveWorkspaceId).toHaveBeenCalled();
   });
@@ -73,7 +73,7 @@ describe('useFetchResources', () => {
     renderHook(() => useFetchResources(mocks.queryParams));
 
     expect(mocks.useClientDataSWR).toHaveBeenCalledWith(
-      ['SWR_RESOURCES', mocks.queryParams, 'workspace-1'],
+      ['resource:list', mocks.queryParams, 'workspace-1'],
       expect.any(Function),
       expect.any(Object),
     );

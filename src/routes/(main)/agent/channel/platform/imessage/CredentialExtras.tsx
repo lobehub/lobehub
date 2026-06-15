@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
 import { useClientDataSWR } from '@/libs/swr';
+import { imessageKeys } from '@/libs/swr/keys';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { imessageBridgeService } from '@/services/electron/imessageBridge';
 
@@ -65,8 +66,6 @@ type TestStatus = 'idle' | 'success' | 'failed';
 
 const BLUEBUBBLES_ICON_URL = 'https://bluebubbles.app/web/splash/img/light-2x.png';
 
-const BRIDGE_STATUS_KEY = 'imessage-bridge-status';
-
 const getErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
@@ -83,7 +82,7 @@ const CredentialExtras = memo(() => {
   // it through SWR (revalidates on focus + after each mutation) instead of
   // caching a copy that can drift — so there's no manual Refresh to keep in sync.
   const { data: status, mutate } = useClientDataSWR<ImessageBridgeStatus | undefined>(
-    isDesktop ? BRIDGE_STATUS_KEY : null,
+    isDesktop ? imessageKeys.bridgeStatus() : null,
     () => imessageBridgeService.getStatus(),
   );
 

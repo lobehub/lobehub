@@ -5,6 +5,7 @@ import { memo } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { useClientDataSWR } from '@/libs/swr';
+import { providerKeys } from '@/libs/swr/keys';
 import { aiProviderService } from '@/services/aiProvider';
 import { useAiInfraStore } from '@/store/aiInfra';
 
@@ -15,7 +16,7 @@ const ClientMode = memo<{ id: string }>(({ id }) => {
   const useFetchAiProviderItem = useAiInfraStore((s) => s.useFetchAiProviderItem);
   useFetchAiProviderItem(id);
 
-  const { data, isLoading } = useClientDataSWR(`get-client-provider-${id}`, () =>
+  const { data, isLoading } = useClientDataSWR(providerKeys.clientConfig(id), () =>
     aiProviderService.getAiProviderById(id),
   );
 

@@ -4,6 +4,7 @@ import type {
 } from '@lobechat/electron-client-ipc';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { deviceKeys } from '@/libs/swr/keys';
 import { gitService } from '@/services/git';
 
 export type ReviewMode = 'unstaged' | 'branch';
@@ -62,7 +63,7 @@ export const useReviewPatches = (
 ) => {
   const enabled = Boolean(dirPath);
   const key = enabled
-    ? ['git-review-patches', deviceId ?? 'local', dirPath, mode, baseRef ?? '']
+    ? deviceKeys.gitReviewPatches(deviceId ?? 'local', dirPath!, mode, baseRef ?? '')
     : null;
 
   return useClientDataSWR<ReviewPatchesData>(
@@ -90,7 +91,8 @@ export const useGitRemoteBranches = (
   enabled: boolean,
   deviceId?: string,
 ) => {
-  const key = dirPath && enabled ? ['git-remote-branches', deviceId ?? 'local', dirPath] : null;
+  const key =
+    dirPath && enabled ? deviceKeys.gitRemoteBranches(deviceId ?? 'local', dirPath) : null;
   return useClientDataSWR(
     key,
     () => gitService.listGitRemoteBranches({ deviceId, path: dirPath! }),
