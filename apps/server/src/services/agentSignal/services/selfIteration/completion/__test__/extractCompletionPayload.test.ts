@@ -1,4 +1,5 @@
 import { MemoryApiName, MemoryIdentifier } from '@lobechat/builtin-tool-memory';
+import { LayersEnum } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { extractSelfIterationCompletionPayload } from '../extractCompletionPayload';
@@ -57,7 +58,7 @@ describe('extractSelfIterationCompletionPayload', () => {
     expect(result?.artifacts).toHaveLength(1);
   });
 
-  it('synthesizes a writeMemory mutation for a memory-kind run from finalState usage', () => {
+  it('synthesizes a writeMemory mutation with a preference target for a memory-kind run', () => {
     const result = extractSelfIterationCompletionPayload(
       buildState(
         {
@@ -66,6 +67,34 @@ describe('extractSelfIterationCompletionPayload', () => {
           userId: 'user_1',
         },
         {
+          messages: [
+            {
+              id: 'msg_preference',
+              role: 'assistant',
+              tool_calls: [
+                {
+                  function: {
+                    arguments: JSON.stringify({
+                      summary: 'Prefer direct implementation with focused tests.',
+                      title: 'Prefers direct implementation',
+                      withPreference: {
+                        conclusionDirectives: 'Prefer direct implementation with focused tests.',
+                      },
+                    }),
+                    name: `${MemoryIdentifier}____${MemoryApiName.addPreferenceMemory}`,
+                  },
+                  id: 'call_preference',
+                  type: 'function',
+                },
+              ],
+            },
+            {
+              content:
+                'Preference memory "Prefers direct implementation" saved with memoryId: "mem_1" and preferenceId: "pref_1"',
+              role: 'tool',
+              tool_call_id: 'call_preference',
+            },
+          ],
           status: 'finished',
           usage: {
             tools: {
@@ -87,6 +116,48 @@ describe('extractSelfIterationCompletionPayload', () => {
     expect(result?.mutations).toHaveLength(1);
     expect(result?.mutations[0].apiName).toBe('writeMemory');
     expect((result?.mutations[0].data as { status?: string }).status).toBe('applied');
+    expect((result?.mutations[0].data as { resourceId?: string }).resourceId).toBe('pref_1');
+    expect((result?.mutations[0].data as { target?: Record<string, unknown> }).target).toEqual({
+      id: 'pref_1',
+      memoryId: 'mem_1',
+      memoryLayer: LayersEnum.Preference,
+      summary: 'Prefer direct implementation with focused tests.',
+      title: 'Prefers direct implementation',
+      type: 'memory',
+    });
+  });
+
+  it('falls back to the successful memory tool api when finalState lacks tool call details', () => {
+    const result = extractSelfIterationCompletionPayload(
+      buildState(
+        {
+          agentId: 'agent_user_1',
+          agentSignal: { kind: 'memory', sourceId: 'mem-src_fallback' },
+          userId: 'user_1',
+        },
+        {
+          status: 'finished',
+          usage: {
+            tools: {
+              byTool: [
+                {
+                  calls: 1,
+                  errors: 0,
+                  name: `${MemoryIdentifier}/${MemoryApiName.addPreferenceMemory}`,
+                },
+              ],
+            },
+          },
+        },
+      ),
+    );
+
+    expect(result?.mutations).toHaveLength(1);
+    expect((result?.mutations[0].data as { target?: Record<string, unknown> }).target).toEqual({
+      memoryLayer: LayersEnum.Preference,
+      title: 'Memory saved',
+      type: 'memory',
+    });
   });
 
   it('yields no memory mutation when the memory run did not apply a write', () => {
