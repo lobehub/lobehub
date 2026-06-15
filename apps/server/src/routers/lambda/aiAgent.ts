@@ -139,6 +139,8 @@ const ExecAgentSchema = z
       .object({
         defaultTaskAssigneeAgentId: z.string().optional(),
         documentId: z.string().optional().nullable(),
+        /** The agent being edited when scope is 'agent_builder' (not the builder builtin itself). */
+        editingAgentId: z.string().optional(),
         groupId: z.string().optional().nullable(),
         initialTopicMetadata: z
           .object({

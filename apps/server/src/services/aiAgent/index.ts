@@ -2712,7 +2712,13 @@ export class AiAgentService {
           // agent, which rides on the marker. Prefer it so the tool-execution
           // context (state.metadata.agentId) targets the reviewed agent; ordinary
           // runs (no marker) fall back to the resolved executing agent.
-          agentId: appContext?.agentSignal?.agentId ?? resolvedAgentId,
+          // For agent_builder scope the builtin builder runs under resolvedAgentId,
+          // but all tool mutations must target the agent the user is actually editing.
+          // editingAgentId is forwarded by the client's executeGatewayAgent for this scope.
+          agentId:
+            appContext?.scope === 'agent_builder' && appContext?.editingAgentId
+              ? appContext.editingAgentId
+              : (appContext?.agentSignal?.agentId ?? resolvedAgentId),
           // Run-scoped Agent Signal marker for background self-iteration / memory
           // runs — lands in state.metadata.agentSignal so the completion path can
           // project receipts/briefs. Undefined for ordinary chat runs.

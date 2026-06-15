@@ -381,6 +381,13 @@ export class GatewayActionImpl {
           agentDocumentId: context.agentDocumentId,
           defaultTaskAssigneeAgentId: context.defaultTaskAssigneeAgentId,
           documentId: context.documentId,
+          // When AgentBuilder runs, context.agentId is the builtin builder agent.
+          // The actual editing target is chatStore.activeAgentId (kept in sync by
+          // AgentBuilderProvider). Pass it so the server can route tool calls to
+          // the correct agent rather than the builder itself.
+          ...(context.scope === 'agent_builder' && {
+            editingAgentId: this.#get().activeAgentId ?? undefined,
+          }),
           groupId: context.groupId,
           ...(initialTopicMetadata && { initialTopicMetadata }),
           scope: context.scope,

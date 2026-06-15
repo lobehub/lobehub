@@ -63,6 +63,14 @@ export interface ExecAgentAppContext {
   defaultTaskAssigneeAgentId?: string;
   /** Current document ID for page-scoped conversations */
   documentId?: string | null;
+  /**
+   * When scope is 'agent_builder', the ID of the agent being edited (i.e. the
+   * left-sidebar agent the user opened AgentBuilder for). The AgentBuilder
+   * builtin runs under its own `agentId`; this field carries the *target* so
+   * server-side tool executors update the correct agent rather than the builder
+   * itself.
+   */
+  editingAgentId?: string;
   /** Group ID for group chat */
   groupId?: string | null;
   /**
