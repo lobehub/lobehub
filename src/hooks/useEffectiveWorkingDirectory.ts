@@ -11,6 +11,8 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/selectors';
 
 /**
  * The agent's effective working directory under the unified precedence:
@@ -25,7 +27,10 @@ import { useElectronStore } from '@/store/electron';
  */
 export const useEffectiveWorkingDirectory = (agentId?: string): string | undefined => {
   // Self-populate the device store (SWR dedupes by key across all callers).
-  useDeviceStore((s) => s.useFetchDevices)();
+  // Devices live behind an authed lambda procedure, so only fetch once signed in
+  // (desktop always fetches — it relies on the local device's saved cwd).
+  const isLogin = useUserStore(authSelectors.isLogin);
+  useDeviceStore((s) => s.useFetchDevices)(isLogin || isDesktop);
 
   const agencyConfig = useAgentStore((s) =>
     agentId ? agentByIdSelectors.getAgencyConfigById(agentId)(s) : undefined,

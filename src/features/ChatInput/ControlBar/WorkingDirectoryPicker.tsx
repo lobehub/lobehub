@@ -26,6 +26,8 @@ import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useElectronStore } from '@/store/electron';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/selectors';
 
 import { openAddWorkingDirModal } from './AddWorkingDirModal';
 import DirIcon from './DirIcon';
@@ -246,8 +248,10 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   const { t } = useTranslation('device');
   const [open, setOpen] = useState(false);
 
-  // Populate the device store (SWR dedupes across callers).
-  useDeviceStore((s) => s.useFetchDevices)();
+  // Populate the device store (SWR dedupes across callers). Devices sit behind an
+  // authed lambda procedure, so only fetch once signed in (desktop always fetches).
+  const isLogin = useUserStore(authSelectors.isLogin);
+  useDeviceStore((s) => s.useFetchDevices)(isLogin || isDesktop);
   // One-time fold of legacy localStorage recents into device.workingDirs.
   useMigrateDeviceRecents();
 

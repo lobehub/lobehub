@@ -17,6 +17,8 @@ import { useTranslation } from 'react-i18next';
 
 import { lambdaQuery } from '@/libs/trpc/client';
 import { useElectronStore } from '@/store/electron';
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/selectors';
 
 import ConnectDeviceModal from './ConnectDeviceModal';
 import DeviceDetailPanel from './DeviceDetailPanel';
@@ -163,7 +165,11 @@ const ConnectOption = memo<ConnectOptionProps>(({ icon, title, desc, badge, onCl
 
 const DeviceList = memo(() => {
   const { t } = useTranslation('setting');
+  // Devices come from an authed lambda procedure, so only query once signed in
+  // (desktop always queries — it lists the local device's registered cwd).
+  const isLogin = useUserStore(authSelectors.isLogin);
   const { data: devices, isLoading } = lambdaQuery.device.listDevices.useQuery(undefined, {
+    enabled: isLogin || isDesktop,
     staleTime: 30_000,
   });
 
