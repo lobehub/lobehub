@@ -14,6 +14,8 @@ const KNOWN_DIVERGENCES: Record<string, string> = {
   '/desktop-onboarding': '/onboarding',
 };
 
+const WEB_ONLY_PATHS = new Set(['/onboarding', '/onboarding/agent', '/onboarding/classic']);
+
 function extractIndexCount(source: string) {
   return [...source.matchAll(/index:\s*true/g)].length;
 }
@@ -48,7 +50,9 @@ function extractPaths(source: string) {
 }
 
 function normalizePaths(paths: string[]) {
-  return [...new Set(paths.map((path) => KNOWN_DIVERGENCES[path] ?? path))].sort();
+  return [...new Set(paths.map((path) => KNOWN_DIVERGENCES[path] ?? path))]
+    .filter((path) => !WEB_ONLY_PATHS.has(path))
+    .sort();
 }
 
 async function readDesktopRouterSources() {
