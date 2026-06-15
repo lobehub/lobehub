@@ -424,8 +424,9 @@ describe('AiAgentService.execAgent - file upload handling', () => {
       expect(mockCreateOperation).toHaveBeenCalled();
 
       const userMessageCall = mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
-      // files array is empty since upload failed, so should be undefined-ish
-      expect(userMessageCall![0].files).toEqual([]);
+      // all uploads failed → no fileIds, normalized to undefined (no empty
+      // messagesFiles relation attached)
+      expect(userMessageCall![0].files).toBeUndefined();
     });
   });
 
