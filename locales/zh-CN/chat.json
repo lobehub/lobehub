@@ -44,6 +44,7 @@
   "builtinCopilot": "内置 Copilot",
   "chatList.expandMessage": "展开消息",
   "chatList.longMessageDetail": "查看详情",
+  "chatList.refreshing": "正在获取最新消息...",
   "chatMode.agent": "智能",
   "chatMode.agentCap.env": "运行环境",
   "chatMode.agentCap.files": "文件访问",

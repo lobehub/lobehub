@@ -53,6 +53,7 @@ export default {
   'builtinCopilot': 'Built-in Copilot',
   'chatList.expandMessage': 'Expand Message',
   'chatList.longMessageDetail': 'View Details',
+  'chatList.refreshing': 'Fetching latest messages...',
   'clearCurrentMessages': 'Clear current session messages',
   'compressedHistory': 'Compressed History',
   'compression.cancel': 'Uncompress',

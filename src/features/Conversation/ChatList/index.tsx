@@ -1,7 +1,7 @@
 'use client';
 
-import { type ReactNode } from 'react';
-import { memo, useCallback } from 'react';
+import type { ReactNode } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 
 import { useFetchAgentDocuments } from '@/hooks/useFetchAgentDocuments';
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
@@ -19,6 +19,7 @@ import type { WorkflowExpandLevelDefault } from '../Messages/AssistantGroup/comp
 import { MessageActionProvider } from '../Messages/Contexts/MessageActionProvider';
 import { dataSelectors, useConversationStore } from '../store';
 import AgentSignalReceiptList from './components/AgentSignalReceiptList';
+import RefreshingHint from './components/RefreshingHint';
 import VirtualizedList from './components/VirtualizedList';
 import { useAgentSignalReceipts } from './hooks/useAgentSignalReceipts';
 
@@ -92,7 +93,7 @@ const ChatList = memo<ChatListProps>(
     // assistant placeholder.
     const isStreaming = useChatStore(operationSelectors.isAgentRuntimeRunningByContext(context));
     const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
-    useFetchMessages(context, { revalidateOnFocus: !isStreaming, skipFetch });
+    const messagesSWR = useFetchMessages(context, { revalidateOnFocus: !isStreaming, skipFetch });
     const displayMessages = useConversationStore(dataSelectors.displayMessages);
     const displayMessageIds = useConversationStore(dataSelectors.displayMessageIds);
     const latestMessageId = displayMessageIds.at(-1);
@@ -138,6 +139,23 @@ const ChatList = memo<ChatListProps>(
       [displayMessageIds.length, defaultWorkflowExpandLevel, receiptsByAnchor],
     );
     const messagesInit = useConversationStore(dataSelectors.messagesInit);
+    const showRefreshingHint =
+      messagesInit &&
+      displayMessageIds.length > 0 &&
+      messagesSWR.isValidating &&
+      !messagesSWR.isLoading &&
+      !isStreaming;
+
+    const mergedFooterSlot = useMemo(() => {
+      if (!showRefreshingHint && !footerSlot) return;
+
+      return (
+        <>
+          {showRefreshingHint && <RefreshingHint />}
+          {footerSlot}
+        </>
+      );
+    }, [footerSlot, showRefreshingHint]);
 
     // When topicId is null (new conversation), show welcome directly without waiting for fetch
     // because there's no server data to fetch - only local optimistic updates exist
@@ -167,7 +185,7 @@ const ChatList = memo<ChatListProps>(
       <MessageActionProvider withSingletonActionsBar={!disableActionsBar}>
         <VirtualizedList
           dataSource={displayMessageIds}
-          footerSlot={footerSlot}
+          footerSlot={mergedFooterSlot}
           headerSlot={headerSlot}
           itemContent={itemContent ?? defaultItemContent}
         />
