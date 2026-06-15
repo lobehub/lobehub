@@ -47,7 +47,7 @@ const AddColumnButton = memo(() => {
   const handleSelectAgent = useCallback(
     async (agentId: string) => {
       const title = t('defaultTitle', { ns: 'topic' });
-      const topicId = await topicService.createTopic({ agentId, messages: [], title });
+      const topicId = await topicService.createTopic({ messages: [], sessionId: agentId, title });
       const key = fleetColumnKey(agentId, topicId);
       addColumn({ agentId, fallbackTitle: title, key, threadId: null, topicId });
       requestAnimationFrame(() => {
