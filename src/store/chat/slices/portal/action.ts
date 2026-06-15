@@ -3,6 +3,7 @@ import { type ChatStore } from '@/store/chat/store';
 import { type StoreSetter } from '@/store/types';
 import { type PortalArtifact } from '@/types/artifact';
 
+import { topicSelectors } from '../topic/selectors';
 import { createLocalFileScopeKey, createLocalFileTabId, getLocalFileTabId } from './helpers';
 import { type OpenLocalFileParams, type PortalFile, type PortalViewData } from './initialState';
 import { PortalViewType } from './initialState';
@@ -33,10 +34,54 @@ const findLocalFileById = <T extends OpenLocalFileParams & { id?: string }>(
 const getLocalFileEntryScopeKey = (file: OpenLocalFileParams): string =>
   createLocalFileScopeKey(file.workingDirectory);
 
-const getLocalFilesInScope = <T extends OpenLocalFileParams & { id?: string }>(
+const getLocalFilesInEntryScope = <T extends OpenLocalFileParams & { id?: string }>(
   openLocalFiles: T[],
   scopeKey: string,
 ) => openLocalFiles.filter((file) => getLocalFileEntryScopeKey(file) === scopeKey);
+
+const getCurrentLocalFileScopeKey = (state: ChatStore): string | undefined => {
+  const workingDirectory = topicSelectors.currentTopicWorkingDirectory(state);
+
+  return workingDirectory ? createLocalFileScopeKey(workingDirectory) : undefined;
+};
+
+const getLocalFileCloseScope = <T extends OpenLocalFileParams & { id?: string }>({
+  openLocalFiles,
+  state,
+  target,
+}: {
+  openLocalFiles: T[];
+  state: ChatStore;
+  target: T;
+}): { files: T[]; scopeKey: string } => {
+  const currentScopeKey = getCurrentLocalFileScopeKey(state);
+  const targetEntryScopeKey = getLocalFileEntryScopeKey(target);
+  const targetIsVisibleInCurrentScope =
+    !!currentScopeKey &&
+    (target.allowExternalFilePreview || targetEntryScopeKey === currentScopeKey);
+
+  if (!currentScopeKey || !targetIsVisibleInCurrentScope) {
+    return {
+      files: getLocalFilesInEntryScope(openLocalFiles, targetEntryScopeKey),
+      scopeKey: targetEntryScopeKey,
+    };
+  }
+
+  return {
+    files: openLocalFiles.filter(
+      (file) =>
+        file.allowExternalFilePreview || getLocalFileEntryScopeKey(file) === currentScopeKey,
+    ),
+    scopeKey: currentScopeKey,
+  };
+};
+
+const getLocalFileActivationScopeKey = (state: ChatStore, file: OpenLocalFileParams): string => {
+  const entryScopeKey = getLocalFileEntryScopeKey(file);
+  const currentScopeKey = getCurrentLocalFileScopeKey(state);
+
+  return file.allowExternalFilePreview && currentScopeKey ? currentScopeKey : entryScopeKey;
+};
 
 const resolveActiveLocalFile = <T extends OpenLocalFileParams & { id?: string }>(
   openLocalFiles: T[],
@@ -74,16 +119,18 @@ const setActiveLocalFileForScope = (
   return next;
 };
 
-const keepScopedLocalFiles = <T extends OpenLocalFileParams & { id?: string }>(
+const keepCloseScopedLocalFiles = <T extends OpenLocalFileParams & { id?: string }>(
   openLocalFiles: T[],
-  scopeKey: string,
-  scopedFilesToKeep: T[],
+  closeScopeFiles: T[],
+  closeScopeFilesToKeep: T[],
 ) => {
-  const keepIds = new Set(scopedFilesToKeep.map(getLocalFileTabId));
+  const closeScopeIds = new Set(closeScopeFiles.map(getLocalFileTabId));
+  const keepIds = new Set(closeScopeFilesToKeep.map(getLocalFileTabId));
 
-  return openLocalFiles.filter(
-    (file) => getLocalFileEntryScopeKey(file) !== scopeKey || keepIds.has(getLocalFileTabId(file)),
-  );
+  return openLocalFiles.filter((file) => {
+    const id = getLocalFileTabId(file);
+    return !closeScopeIds.has(id) || keepIds.has(id);
+  });
 };
 
 const resolveLegacyActiveAfterClose = ({
@@ -173,8 +220,11 @@ export class ChatPortalActionImpl {
 
     const target = openLocalFiles[idx];
     const targetId = getLocalFileTabId(target);
-    const scopeKey = getLocalFileEntryScopeKey(target);
-    const scopedFiles = getLocalFilesInScope(openLocalFiles, scopeKey);
+    const { files: scopedFiles, scopeKey } = getLocalFileCloseScope({
+      openLocalFiles,
+      state: this.#get(),
+      target,
+    });
     const scopedIdx = findLocalFileIndexById(scopedFiles, targetId);
     const nextFiles = openLocalFiles.filter((_, i) => i !== idx);
     const nextScopedFiles = scopedFiles.filter((_, i) => i !== scopedIdx);
@@ -235,13 +285,16 @@ export class ChatPortalActionImpl {
     if (idx < 0) return;
 
     const target = openLocalFiles[idx];
-    const scopeKey = getLocalFileEntryScopeKey(target);
-    const scopedFiles = getLocalFilesInScope(openLocalFiles, scopeKey);
+    const { files: scopedFiles, scopeKey } = getLocalFileCloseScope({
+      openLocalFiles,
+      state: this.#get(),
+      target,
+    });
     const scopedIdx = findLocalFileIndexById(scopedFiles, getLocalFileTabId(target));
     if (scopedIdx <= 0) return;
 
     const nextScopedFiles = scopedFiles.slice(scopedIdx);
-    const nextFiles = keepScopedLocalFiles(openLocalFiles, scopeKey, nextScopedFiles);
+    const nextFiles = keepCloseScopedLocalFiles(openLocalFiles, scopedFiles, nextScopedFiles);
     const scopedActiveFile = resolveActiveLocalFileInScope(
       scopedFiles,
       scopeKey,
@@ -285,10 +338,14 @@ export class ChatPortalActionImpl {
     const { activeLocalFileIdsByScope, openLocalFiles } = this.#get();
     const target = findLocalFileById(openLocalFiles, id);
     if (!target) return;
-    const scopeKey = getLocalFileEntryScopeKey(target);
+    const { files: scopedFiles, scopeKey } = getLocalFileCloseScope({
+      openLocalFiles,
+      state: this.#get(),
+      target,
+    });
     const targetId = getLocalFileTabId(target);
     const targetFile = { ...target, id: targetId };
-    const nextFiles = keepScopedLocalFiles(openLocalFiles, scopeKey, [targetFile]);
+    const nextFiles = keepCloseScopedLocalFiles(openLocalFiles, scopedFiles, [targetFile]);
 
     this.#set(
       {
@@ -313,13 +370,16 @@ export class ChatPortalActionImpl {
     if (idx < 0) return;
 
     const target = openLocalFiles[idx];
-    const scopeKey = getLocalFileEntryScopeKey(target);
-    const scopedFiles = getLocalFilesInScope(openLocalFiles, scopeKey);
+    const { files: scopedFiles, scopeKey } = getLocalFileCloseScope({
+      openLocalFiles,
+      state: this.#get(),
+      target,
+    });
     const scopedIdx = findLocalFileIndexById(scopedFiles, getLocalFileTabId(target));
     if (scopedIdx < 0 || scopedIdx >= scopedFiles.length - 1) return;
 
     const nextScopedFiles = scopedFiles.slice(0, scopedIdx + 1);
-    const nextFiles = keepScopedLocalFiles(openLocalFiles, scopeKey, nextScopedFiles);
+    const nextFiles = keepCloseScopedLocalFiles(openLocalFiles, scopedFiles, nextScopedFiles);
     const scopedActiveFile = resolveActiveLocalFileInScope(
       scopedFiles,
       scopeKey,
@@ -415,15 +475,15 @@ export class ChatPortalActionImpl {
   }: OpenLocalFileParams): void => {
     const { activeLocalFileIdsByScope, openLocalFiles } = this.#get();
     const id = createLocalFileTabId({ deviceId, filePath, workingDirectory });
-    const scopeKey = createLocalFileScopeKey(workingDirectory);
     const exists = openLocalFiles.some((f) => getLocalFileTabId(f) === id);
     const nextFile = {
-      allowExternalFilePreview,
+      ...(allowExternalFilePreview === undefined ? {} : { allowExternalFilePreview }),
       ...(deviceId ? { deviceId } : {}),
       filePath,
       id,
       workingDirectory,
     };
+    const scopeKey = getLocalFileActivationScopeKey(this.#get(), nextFile);
     const nextFiles = exists
       ? openLocalFiles.map((file) => (getLocalFileTabId(file) === id ? nextFile : file))
       : [...openLocalFiles, nextFile];
@@ -447,7 +507,9 @@ export class ChatPortalActionImpl {
   setActiveLocalFile = (id: string): void => {
     const { activeLocalFileIdsByScope, openLocalFiles } = this.#get();
     const activeFile = findLocalFileById(openLocalFiles, id);
-    const scopeKey = activeFile ? getLocalFileEntryScopeKey(activeFile) : undefined;
+    const scopeKey = activeFile
+      ? getLocalFileActivationScopeKey(this.#get(), activeFile)
+      : undefined;
     this.#set(
       {
         activeLocalFileId: activeFile ? getLocalFileTabId(activeFile) : id,
