@@ -160,4 +160,10 @@ describe('executeDeviceRpc', () => {
     expect(result.success).toBe(true);
     expect(await readFile(filePath, 'utf8')).toBe('remote edit');
   });
+
+  it('routes listGitWorktrees through the shared git dispatcher', async () => {
+    // Not a git repo → the shared local-file-shell impl returns an empty list.
+    const result = await executeDeviceRpc('listGitWorktrees', { path: root }, makeDeps());
+    expect(Array.isArray(result)).toBe(true);
+  });
 });
