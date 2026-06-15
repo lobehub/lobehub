@@ -82,6 +82,7 @@ interface SkillConfigureConfig {
 }
 
 type SkillMenuItem = NonNullable<ItemType> & {
+  extra?: ReactNode;
   popoverContent?: ReactNode;
   searchText?: string;
 };
@@ -478,7 +479,16 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   }, []);
 
   const renderPolicyMenu = useCallback(
-    (id: string, deleteConfig?: SkillDeleteConfig, configureConfig?: SkillConfigureConfig) => {
+    (
+      id: string,
+      deleteConfig?: SkillDeleteConfig,
+      configureConfig?: SkillConfigureConfig,
+      // When true, hide the Pinned/Auto activation options and show only the
+      // configure/delete actions. Used for integrations that exist but aren't
+      // connected yet (pending auth / re-authorize), where activation is
+      // meaningless but the user still needs a way to remove the entry.
+      deleteOnly = false,
+    ) => {
       const mode: SkillPolicyMode = checkedSet.has(id) ? 'pinned' : 'auto';
       const renderCheck = (value: SkillPolicyMode) =>
         mode === value ? (
@@ -513,23 +523,27 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           onClick={(event) => event.stopPropagation()}
           onContextMenu={(event) => event.stopPropagation()}
         >
-          {renderPolicyItem(
-            'pinned',
-            <Icon
-              className={cx(mode === 'pinned' ? styles.iconPinned : styles.iconDefault)}
-              icon={Pin}
-              size={15}
-            />,
+          {!deleteOnly &&
+            renderPolicyItem(
+              'pinned',
+              <Icon
+                className={cx(mode === 'pinned' ? styles.iconPinned : styles.iconDefault)}
+                icon={Pin}
+                size={15}
+              />,
+            )}
+          {!deleteOnly &&
+            renderPolicyItem(
+              'auto',
+              <Icon
+                className={cx(mode === 'auto' ? styles.iconAuto : styles.iconDefault)}
+                icon={Zap}
+                size={15}
+              />,
+            )}
+          {!deleteOnly && (configureConfig || deleteConfig) && (
+            <div className={cx(styles.deleteDivider)} />
           )}
-          {renderPolicyItem(
-            'auto',
-            <Icon
-              className={cx(mode === 'auto' ? styles.iconAuto : styles.iconDefault)}
-              icon={Zap}
-              size={15}
-            />,
-          )}
-          {(configureConfig || deleteConfig) && <div className={cx(styles.deleteDivider)} />}
           {configureConfig && (
             <button
               className={cx(styles.policyItem)}
@@ -844,21 +858,56 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
               });
             }
 
+            const serverItem = (
+              <ComposioServerItem
+                agentId={agentId}
+                appSlug={type.appSlug}
+                identifier={type.identifier}
+                label={type.label}
+                server={server}
+              />
+            );
+
+            // Server exists but isn't connected yet (pending auth / re-authorize):
+            // keep the Connect/Re-authorize action, but also expose a delete-only
+            // menu (via the "..." button and right-click) so an accidental or
+            // failed authorization can still be removed.
+            if (server) {
+              return {
+                extra: renderPolicyMenu(
+                  server.identifier,
+                  {
+                    displayName: type.label,
+                    onDelete: () => removeComposioConnection(server.identifier),
+                  },
+                  undefined,
+                  true,
+                ),
+                icon,
+                key: server.identifier,
+                label: (
+                  <span
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      openSkillPolicyMenu(server.identifier);
+                    }}
+                  >
+                    {serverItem}
+                  </span>
+                ),
+                popoverContent,
+                searchText: `${type.label} ${server.identifier}`,
+              } as SkillMenuItem;
+            }
+
             return {
               icon,
               key: type.identifier,
-              label: (
-                <ComposioServerItem
-                  agentId={agentId}
-                  appSlug={type.appSlug}
-                  identifier={type.identifier}
-                  label={type.label}
-                  server={server}
-                />
-              ),
+              label: serverItem,
               popoverContent,
               searchText: type.label,
-            };
+            } as SkillMenuItem;
           })
         : [],
     [
@@ -870,6 +919,8 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       createManagedSkillItem,
       getServerByName,
       removeComposioConnection,
+      renderPolicyMenu,
+      openSkillPolicyMenu,
     ],
   );
 
@@ -1320,14 +1371,23 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   ];
 
   const normalizedSearchKeyword = searchKeyword.trim().toLowerCase();
+  // Deduplicate by key: the same app can be sourced from more than one list
+  // (e.g. a Composio/LobeHub integration item plus an installed plugin sharing
+  // the same identifier), which would otherwise render the row twice. Keep the
+  // first occurrence so the richer integration item (LobeHub group, listed
+  // first) wins over a generic plugin duplicate.
+  const seenSkillKeys = new Set<string>();
   const allSkillItems = [
     ...lobehubGroupChildren,
     ...communityGroupChildren,
     ...customGroupChildren,
-  ].filter(
-    (item): item is SkillMenuItem =>
-      Boolean(item) && (item as { type?: string }).type !== 'divider',
-  );
+  ].filter((item): item is SkillMenuItem => {
+    if (!item || (item as { type?: string }).type === 'divider') return false;
+    const key = String(item.key);
+    if (seenSkillKeys.has(key)) return false;
+    seenSkillKeys.add(key);
+    return true;
+  });
   const filterBySearch = (items: SkillMenuItem[]) => {
     if (!normalizedSearchKeyword) return items;
 
