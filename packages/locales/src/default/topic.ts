@@ -26,6 +26,7 @@ export default {
   'actions.removeUnstarred': 'Delete Unstarred Topics',
   'defaultTitle': 'Default Topic',
   'displayItems': 'Display Items',
+  'draft': '[Draft]',
   'duplicateLoading': 'Copying Topic...',
   'duplicateSuccess': 'Topic Copied Successfully',
   'failedStatusTip': 'This run hit an error — open it to take a look.',
