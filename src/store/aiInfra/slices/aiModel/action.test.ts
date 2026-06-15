@@ -199,6 +199,7 @@ describe('AiModelAction', () => {
       const mockRemoteModels = [
         {
           displayName: 'Remote Model 1',
+          enabled: true,
           files: true,
           functionCall: true,
           id: 'remote-1',
@@ -207,6 +208,7 @@ describe('AiModelAction', () => {
         },
         {
           displayName: 'Remote Model 2',
+          enabled: false,
           id: 'remote-2',
           imageOutput: true,
           type: 'image',
@@ -247,7 +249,7 @@ describe('AiModelAction', () => {
           vision: false,
         },
         displayName: 'Remote Model 1',
-        enabled: false,
+        enabled: true,
         id: 'remote-1',
         source: 'remote',
         type: 'chat',
@@ -269,6 +271,13 @@ describe('AiModelAction', () => {
         {
           displayName: 'Remote Model 1',
           id: 'remote-1',
+          enabled: true,
+          type: 'chat',
+        },
+        {
+          displayName: 'Remote Model 2',
+          id: 'remote-2',
+          enabled: false,
           type: 'chat',
         },
       ];
@@ -278,6 +287,11 @@ describe('AiModelAction', () => {
           aiProviderModelList: [
             {
               id: 'remote-1',
+              enabled: false,
+              type: 'chat',
+            },
+            {
+              id: 'remote-2',
               enabled: true,
               type: 'chat',
             },
@@ -310,6 +324,10 @@ describe('AiModelAction', () => {
       const batchUpdateArg = batchUpdateSpy.mock.calls[0][0];
       expect(batchUpdateArg[0]).toMatchObject({
         id: 'remote-1',
+        enabled: false,
+      });
+      expect(batchUpdateArg[1]).toMatchObject({
+        id: 'remote-2',
         enabled: true,
       });
 

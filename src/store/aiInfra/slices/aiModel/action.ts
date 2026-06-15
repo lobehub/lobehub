@@ -78,7 +78,7 @@ export class AiModelActionImpl {
             video: model.video,
             vision: model.vision,
           },
-          enabled: currentEnabledState.get(model.id) ?? false,
+          enabled: currentEnabledState.get(model.id) ?? model.enabled ?? false,
           source: 'remote',
           type: model.type || 'chat',
         })),
