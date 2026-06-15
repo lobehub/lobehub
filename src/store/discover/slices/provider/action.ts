@@ -30,7 +30,7 @@ export class ProviderActionImpl {
   }): SWRResponse<DiscoverProviderDetail | undefined> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
-      ['provider-details', locale, params.identifier].filter(Boolean).join('-'),
+      discoverKeys.providerDetail(locale, params.identifier),
       async () => discoverService.getProviderDetail(params),
       {
         revalidateOnFocus: false,
@@ -51,7 +51,7 @@ export class ProviderActionImpl {
   useProviderList = (params: ProviderQueryParams = {}): SWRResponse<ProviderListResponse> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
-      ['provider-list', locale, ...Object.values(params)].filter(Boolean).join('-'),
+      discoverKeys.providerList(locale, params),
       async () =>
         discoverService.getProviderList({
           ...params,

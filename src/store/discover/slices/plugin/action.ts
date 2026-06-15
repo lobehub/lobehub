@@ -28,7 +28,7 @@ export class PluginActionImpl {
   usePluginCategories = (params: CategoryListQuery): SWRResponse<CategoryItem[]> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
-      ['plugin-categories', locale, ...Object.values(params)].filter(Boolean).join('-'),
+      discoverKeys.pluginCategories(locale, params),
       async () => discoverService.getPluginCategories(params),
       {
         revalidateOnFocus: false,
@@ -45,9 +45,7 @@ export class PluginActionImpl {
   }): SWRResponse<DiscoverPluginDetail | undefined> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
-      !identifier
-        ? null
-        : ['plugin-details', locale, identifier, withManifest].filter(Boolean).join('-'),
+      !identifier ? null : discoverKeys.pluginDetail(locale, identifier, withManifest),
       async () => discoverService.getPluginDetail({ identifier: identifier!, withManifest }),
       {
         revalidateOnFocus: false,
@@ -68,7 +66,7 @@ export class PluginActionImpl {
   usePluginList = (params: PluginQueryParams = {}): SWRResponse<PluginListResponse> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
-      ['plugin-list', locale, ...Object.values(params)].filter(Boolean).join('-'),
+      discoverKeys.pluginList(locale, params),
       async () =>
         discoverService.getPluginList({
           ...params,

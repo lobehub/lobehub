@@ -4,6 +4,7 @@ import { type SWRResponse } from 'swr';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { useClientDataSWR } from '@/libs/swr';
+import { toolKeys } from '@/libs/swr/keys';
 import { pluginService } from '@/services/plugin';
 import { type StoreSetter } from '@/store/types';
 import { merge } from '@/utils/merge';
@@ -88,7 +89,7 @@ export class PluginActionImpl {
 
   useFetchInstalledPlugins = (enable: boolean): SWRResponse => {
     return useClientDataSWR(
-      enable ? 'useFetchInstalledPlugins' : null,
+      enable ? toolKeys.installedPlugins() : null,
       () => pluginService.getInstalledPlugins(),
       {
         onSuccess: (data: LobeTool[]) => {

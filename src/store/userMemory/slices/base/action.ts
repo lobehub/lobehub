@@ -21,7 +21,6 @@ import { experienceInitialState } from '../experience/initialState';
 import { identityInitialState } from '../identity/initialState';
 import { preferenceInitialState } from '../preference/initialState';
 
-const SWR_FETCH_USER_MEMORY = 'SWR_FETCH_USER_MEMORY';
 const n = setNamespace('userMemory');
 
 type MemoryContext = Parameters<typeof createMemorySearchParams>[0];
@@ -83,25 +82,31 @@ export class BaseActionImpl {
     );
 
     await Promise.all([
-      mutate((key) => typeof key === 'string' && key.startsWith('memoryDetail-'), undefined, {
+      mutate(
+        (key) => Array.isArray(key) && key[0] === userMemoryKeys.memoryDetail.root,
+        undefined,
+        { revalidate: true },
+      ),
+      mutate((key) => Array.isArray(key) && key[0] === userMemoryKeys.activities.root, undefined, {
         revalidate: true,
       }),
-      mutate((key) => typeof key === 'string' && key.startsWith('useFetchActivities'), undefined, {
+      mutate((key) => Array.isArray(key) && key[0] === userMemoryKeys.contexts.root, undefined, {
         revalidate: true,
       }),
-      mutate((key) => typeof key === 'string' && key.startsWith('useFetchContexts'), undefined, {
+      mutate((key) => Array.isArray(key) && key[0] === userMemoryKeys.experiences.root, undefined, {
         revalidate: true,
       }),
-      mutate((key) => typeof key === 'string' && key.startsWith('useFetchExperiences'), undefined, {
+      mutate(
+        (key) => Array.isArray(key) && key[0] === userMemoryKeys.identityList.root,
+        undefined,
+        {
+          revalidate: true,
+        },
+      ),
+      mutate((key) => Array.isArray(key) && key[0] === userMemoryKeys.preferences.root, undefined, {
         revalidate: true,
       }),
-      mutate((key) => typeof key === 'string' && key.startsWith('useFetchIdentities'), undefined, {
-        revalidate: true,
-      }),
-      mutate((key) => typeof key === 'string' && key.startsWith('useFetchPreferences'), undefined, {
-        revalidate: true,
-      }),
-      mutate((key) => Array.isArray(key) && key[0] === SWR_FETCH_USER_MEMORY, undefined, {
+      mutate((key) => Array.isArray(key) && key[0] === userMemoryKeys.retrieve.root, undefined, {
         revalidate: true,
       }),
       mutate(userMemoryKeys.persona(), null, { revalidate: false }),
@@ -119,7 +124,7 @@ export class BaseActionImpl {
   refreshUserMemory = async (params: RetrieveMemoryParams): Promise<void> => {
     const key = userMemoryCacheKey(params);
 
-    await mutate([SWR_FETCH_USER_MEMORY, key]);
+    await mutate(userMemoryKeys.retrieve(key));
   };
 
   setActiveMemoryContext = (context?: MemoryContext): void => {
@@ -198,7 +203,7 @@ export class BaseActionImpl {
   };
 
   useFetchMemoryDetail = (id: string | null, layer: LayersEnum): SWRResponse<any> => {
-    const swrKey = id ? `memoryDetail-${layer}-${id}` : null;
+    const swrKey = id ? userMemoryKeys.memoryDetail(layer, id) : null;
 
     return useSWR(
       swrKey,
@@ -284,7 +289,7 @@ export class BaseActionImpl {
     const key = resolvedParams ? userMemoryCacheKey(resolvedParams) : undefined;
 
     return useClientDataSWR<RetrieveMemoryResult>(
-      enable && resolvedParams ? [SWR_FETCH_USER_MEMORY, key] : null,
+      enable && resolvedParams ? userMemoryKeys.retrieve(key) : null,
       () => userMemoryService.retrieveMemory(resolvedParams!),
       {
         onSuccess: (result) => {

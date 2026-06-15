@@ -3,6 +3,7 @@ import { produce } from 'immer';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
+import { toolKeys } from '@/libs/swr/keys';
 import { lambdaClient, toolsClient } from '@/libs/trpc/client';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -299,7 +300,7 @@ export class ComposioStoreActionImpl {
 
   useFetchAppTools = (appSlug: string | undefined): SWRResponse<ComposioTool[]> => {
     return useSWR<ComposioTool[]>(
-      appSlug ? `composio-app-tools-${appSlug}` : null,
+      appSlug ? toolKeys.composioAppTools(appSlug) : null,
       async () => {
         const response = await toolsClient.composio.getActions.query({ appSlug: appSlug! });
         return (response.tools || []) as ComposioTool[];
@@ -310,7 +311,7 @@ export class ComposioStoreActionImpl {
 
   useFetchUserComposioConnections = (enabled: boolean): SWRResponse<ComposioServer[]> => {
     return useSWR<ComposioServer[]>(
-      enabled ? 'fetchUserComposioConnections' : null,
+      enabled ? toolKeys.composioConnections() : null,
       async () => {
         const composioPlugins = await lambdaClient.composio.getComposioPlugins.query();
 
