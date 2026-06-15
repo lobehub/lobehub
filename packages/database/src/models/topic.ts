@@ -30,7 +30,7 @@ import {
 } from 'drizzle-orm';
 
 import type { TopicItem } from '../schemas';
-import { agents, messagePlugins, messages, topics } from '../schemas';
+import { agents, messagePlugins, messages, threads, topics } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { sanitizeBm25Query } from '../utils/bm25';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
@@ -110,6 +110,22 @@ interface QueryTopicParams {
 
 export interface ModelTimingContext extends TimingSink {}
 
+/**
+ * Scope used to constrain a keyword search to a single conversation owner.
+ * Mirrors the precedence of {@link TopicModel.query}: groupId > agentId >
+ * containerId (legacy sessionId / groupId).
+ */
+export interface TopicKeywordScope {
+  agentId?: string | null;
+  /**
+   * @deprecated Use agentId or groupId instead. Only consulted when neither
+   * agentId nor groupId is provided (legacy / mobile string-arg callers).
+   * Container ID (sessionId or groupId) to filter topics by.
+   */
+  containerId?: string | null;
+  groupId?: string | null;
+}
+
 export interface ListTopicsForMemoryExtractorCursor {
   createdAt: Date;
   id: string;
@@ -134,10 +150,10 @@ const STATUS_SORT_RANK = sql`CASE ${topics.status}
 
 // Favorites always float to the top; the rest are ordered by the requested
 // strategy. `status` adds the priority bucket before the recency tiebreaker.
-const buildTopicOrderBy = (sortBy?: TopicQuerySortBy): SQL[] =>
+const buildTopicOrderBy = (topicActivityAt: SQL, sortBy?: TopicQuerySortBy): SQL[] =>
   sortBy === 'status'
-    ? [desc(topics.favorite), asc(STATUS_SORT_RANK), desc(topics.updatedAt)]
-    : [desc(topics.favorite), desc(topics.updatedAt)];
+    ? [desc(topics.favorite), asc(STATUS_SORT_RANK), desc(topicActivityAt)]
+    : [desc(topics.favorite), desc(topicActivityAt)];
 
 export class TopicModel {
   private userId: string;
@@ -171,7 +187,6 @@ export class TopicModel {
     triggers,
     withDetails = false,
   }: QueryTopicParams = {}) => {
-    const orderBy = buildTopicOrderBy(sortBy);
     const queryStartedAt = Date.now();
     logTiming(timing, 'db.topic.query:start', {
       current,
@@ -208,6 +223,17 @@ export class TopicModel {
       .select({ value: sql<number>`count(*)::int` })
       .from(messages)
       .where(eq(messages.topicId, topics.id));
+    const latestMessageAtSubquery = this.db
+      .select({ value: messages.updatedAt })
+      .from(messages)
+      .where(and(eq(messages.topicId, topics.id), this.messageOwnership()))
+      .orderBy(desc(messages.updatedAt))
+      .limit(1);
+    const topicActivityAt =
+      sql<Date>`COALESCE((${latestMessageAtSubquery}), ${topics.updatedAt})`.mapWith(
+        topics.updatedAt,
+      );
+    const orderBy = buildTopicOrderBy(topicActivityAt, sortBy);
 
     const detailColumns = withDetails
       ? {
@@ -426,12 +452,41 @@ export class TopicModel {
     });
   };
 
-  queryAll = async (): Promise<TopicItem[]> => {
-    return this.db.select().from(topics).orderBy(topics.updatedAt).where(and(this.ownership()));
+  /**
+   * Query the current user's topics, optionally filtered by status. Used by the
+   * Fleet view to list actively-running topics across all agents without
+   * pulling the full topic set to the client.
+   */
+  queryTopics = async ({
+    statuses,
+    pageSize = 200,
+  }: { pageSize?: number; statuses?: string[] } = {}): Promise<TopicItem[]> => {
+    return this.db
+      .select()
+      .from(topics)
+      .where(
+        and(
+          this.ownership(),
+          statuses && statuses.length > 0
+            ? inArray(topics.status, statuses as ChatTopicStatus[])
+            : undefined,
+        ),
+      )
+      .orderBy(desc(topics.updatedAt))
+      .limit(pageSize);
   };
 
-  queryByKeyword = async (keyword: string, containerId?: string | null): Promise<TopicItem[]> => {
+  queryByKeyword = async (
+    keyword: string,
+    scope?: string | null | TopicKeywordScope,
+  ): Promise<TopicItem[]> => {
     if (!keyword.trim()) return [];
+
+    // Backward compatibility: a bare string / null second argument is treated
+    // as the legacy `containerId` (sessionId or groupId).
+    const scopeOptions: TopicKeywordScope =
+      scope && typeof scope === 'object' ? scope : { containerId: scope ?? null };
+    const scopeCondition = this.matchKeywordScope(scopeOptions);
 
     const bm25Query = sanitizeBm25Query(keyword);
 
@@ -441,13 +496,7 @@ export class TopicModel {
       this.db
         .select()
         .from(topics)
-        .where(
-          and(
-            this.ownership(),
-            this.matchContainer(containerId),
-            sql`${topics.title} @@@ ${bm25Query}`,
-          ),
-        )
+        .where(and(this.ownership(), scopeCondition, sql`${topics.title} @@@ ${bm25Query}`))
         .orderBy(desc(topics.updatedAt)),
       // Query topic IDs matching by message content (BM25)
       this.db
@@ -459,7 +508,7 @@ export class TopicModel {
             this.messageOwnership(),
             sql`${messages.content} @@@ ${bm25Query}`,
             this.ownership(),
-            this.matchContainer(containerId),
+            scopeCondition,
           ),
         )
         .groupBy(messages.topicId),
@@ -556,6 +605,17 @@ export class TopicModel {
    * - For inbox: includes topics with slug='inbox'
    */
   queryRecent = async (limit: number = 12) => {
+    const latestMessageAtSubquery = this.db
+      .select({ value: messages.updatedAt })
+      .from(messages)
+      .where(and(eq(messages.topicId, topics.id), this.messageOwnership()))
+      .orderBy(desc(messages.updatedAt))
+      .limit(1);
+    const topicActivityAt =
+      sql<Date>`COALESCE((${latestMessageAtSubquery}), ${topics.updatedAt})`.mapWith(
+        topics.updatedAt,
+      );
+
     const result = await this.db
       .select({
         agentId: topics.agentId,
@@ -563,7 +623,7 @@ export class TopicModel {
         id: topics.id,
         sessionId: topics.sessionId,
         title: topics.title,
-        updatedAt: topics.updatedAt,
+        updatedAt: topicActivityAt,
       })
       .from(topics)
       .leftJoin(agents, eq(topics.agentId, agents.id))
@@ -580,12 +640,13 @@ export class TopicModel {
           ),
         ),
       )
-      .orderBy(desc(topics.updatedAt))
+      .orderBy(desc(topicActivityAt))
       .limit(limit);
 
     return result.map((item) => ({
       ...item,
       type: item.groupId ? ('group' as const) : ('agent' as const),
+      updatedAt: item.updatedAt instanceof Date ? item.updatedAt : new Date(item.updatedAt),
     }));
   };
 
@@ -861,6 +922,70 @@ export class TopicModel {
   };
 
   /**
+   * Move multiple topics (and all their messages) to another agent.
+   *
+   * Reassigns ownership purely through the `agentId` foreign key (the new data
+   * model). Every child entity of the topic that carries its own `agentId` FK
+   * MUST be updated together — `topics`, `messages`, and `threads`. Topic lists
+   * query by `topics.agentId` and message queries filter by `messages.agentId`,
+   * so updating only the topic would leave the moved conversation showing up
+   * empty under the target agent; and `threads.agentId` is itself a
+   * cascade-on-delete FK, so a thread left pointing at the source agent would
+   * be destroyed if that agent is later deleted.
+   *
+   * `sessionId` is cleared on `topics` and `messages` so the rows fully detach
+   * from the source agent's legacy session and can't leak back through the
+   * sessionId-based legacy query fallback (`threads` has no `sessionId`).
+   *
+   * Topics can only be moved to an agent owned by the same user/workspace. The
+   * target agent is verified with the same ownership predicate before applying
+   * the move — `topics.agentId` / `messages.agentId` are plain FKs to
+   * `agents.id` with cascade-on-delete, so attaching rows to a foreign agent
+   * would both leak them across tenants and risk losing them if that agent is
+   * later deleted.
+   */
+  batchMoveToAgent = async (topicIds: string[], targetAgentId: string) => {
+    if (topicIds.length === 0) return;
+
+    return this.db.transaction(async (tx) => {
+      const [targetAgent] = await tx
+        .select({ id: agents.id })
+        .from(agents)
+        .where(
+          and(
+            eq(agents.id, targetAgentId),
+            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agents),
+          ),
+        )
+        .limit(1);
+
+      if (!targetAgent) {
+        throw new Error(`Target agent ${targetAgentId} not found or not accessible`);
+      }
+
+      await tx
+        .update(topics)
+        .set({ agentId: targetAgentId, sessionId: null, updatedAt: new Date() })
+        .where(and(inArray(topics.id, topicIds), this.ownership()));
+
+      await tx
+        .update(messages)
+        .set({ agentId: targetAgentId, sessionId: null })
+        .where(and(inArray(messages.topicId, topicIds), this.messageOwnership()));
+
+      await tx
+        .update(threads)
+        .set({ agentId: targetAgentId })
+        .where(
+          and(
+            inArray(threads.topicId, topicIds),
+            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, threads),
+          ),
+        );
+    });
+  };
+
+  /**
    * Recompute this topic's denormalized usage/cost rollup from its assistant
    * messages. The canonical aggregation lives in `recomputeTopicUsage`; the
    * live path (MessageModel) calls it inline within its own transaction, while
@@ -946,6 +1071,31 @@ export class TopicModel {
     if (containerId) return or(eq(topics.sessionId, containerId), eq(topics.groupId, containerId));
     // If neither is provided, match topics with no session or group
     return and(isNull(topics.sessionId), isNull(topics.groupId));
+  };
+
+  /**
+   * Build the WHERE condition that scopes a keyword search to a single
+   * conversation owner. Mirrors {@link TopicModel.query}'s precedence and
+   * conditions exactly (groupId > agentId > containerId), so search returns the
+   * same set the topics list shows.
+   *
+   * The agent branch matches `topics.agentId` directly — the new agent system
+   * stamps every topic with an agentId, and the old `matchContainer` path
+   * (sessionId / groupId only) would miss those rows entirely. It deliberately
+   * does NOT fall back to the resolved sessionId: the list has no such fallback
+   * either, so adding one would (a) surface un-migrated rows the list hides and
+   * (b) leak topics owned by another agent that shares the same session mapping.
+   * Legacy rows are backfilled with an agentId by the migration the list query
+   * triggers, after which the agentId match finds them.
+   */
+  private matchKeywordScope = ({
+    agentId,
+    containerId,
+    groupId,
+  }: TopicKeywordScope): SQL | undefined => {
+    if (groupId) return eq(topics.groupId, groupId);
+    if (agentId) return eq(topics.agentId, agentId);
+    return this.matchContainer(containerId);
   };
 
   listTopicsForMemoryExtractor = async (

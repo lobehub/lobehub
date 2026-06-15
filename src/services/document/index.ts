@@ -38,6 +38,7 @@ const serializeHistoryList = <
       isCurrent: boolean;
       saveSource: ListHistoryOutput['items'][number]['saveSource'];
       savedAt: Date | string;
+      userId: string;
     }>;
     nextBeforeSavedAt?: Date | string;
   },
@@ -121,6 +122,8 @@ export interface DocumentHistoryClientSurface {
   saveDocumentHistory: (params: SaveDocumentHistoryInput) => Promise<SaveDocumentHistoryOutput>;
   updateDocument: (params: UpdateDocumentParams) => Promise<UpdateDocumentOutput>;
 }
+
+const autosavedOnceIds = new Set<string>();
 
 export class DocumentService {
   async createDocument(params: CreateDocumentParams): Promise<DocumentItem> {
@@ -211,7 +214,10 @@ export class DocumentService {
   }
 
   async updateDocument(params: UpdateDocumentParams): Promise<UpdateDocumentOutput> {
-    const result = await lambdaClient.document.updateDocument.mutate(params);
+    const isFirstAutosave = params.saveSource === 'autosave' && !autosavedOnceIds.has(params.id);
+    const mutationParams = isFirstAutosave ? { ...params, breakAutosaveWindow: true } : params;
+    const result = await lambdaClient.document.updateDocument.mutate(mutationParams);
+    if (isFirstAutosave) autosavedOnceIds.add(params.id);
 
     return {
       ...result,
@@ -221,6 +227,23 @@ export class DocumentService {
           : result.savedAt
         : undefined,
     };
+  }
+
+  /**
+   * Acquire or refresh the collaborative edit lock for a workspace page.
+   * Doubles as the heartbeat. Personal pages always report as unlocked.
+   */
+  async acquireDocumentLock(id: string) {
+    return lambdaClient.document.acquireDocumentLock.mutate({ id });
+  }
+
+  /** Read-only peek of the current edit lock (does not acquire). */
+  async getDocumentLock(id: string) {
+    return lambdaClient.document.getDocumentLock.query({ id });
+  }
+
+  async releaseDocumentLock(id: string): Promise<void> {
+    await lambdaClient.document.releaseDocumentLock.mutate({ id });
   }
 
   async saveDocumentHistory(params: SaveDocumentHistoryInput): Promise<SaveDocumentHistoryOutput> {

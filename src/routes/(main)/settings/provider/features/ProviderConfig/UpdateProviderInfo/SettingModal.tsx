@@ -1,10 +1,21 @@
+'use client';
+
 import { ProviderIcon } from '@lobehub/icons';
-import { type FormItemProps } from '@lobehub/ui';
-import { Button, Flexbox, FormModal, Icon, Input, Select, TextArea } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { Flexbox, Icon, Input, Text, TextArea } from '@lobehub/ui';
+import {
+  Button,
+  confirmModal,
+  createModal,
+  ModalFooter,
+  type ModalInstance,
+  Select,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
+import { App, Form } from 'antd';
+import { cssVar } from 'antd-style';
+import { t as i18nT } from 'i18next';
 import { BrainIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -14,16 +25,25 @@ import { type AiProviderDetailItem, type UpdateAiProviderParams } from '@/types/
 import { CUSTOM_PROVIDER_SDK_OPTIONS } from '../../customProviderSdkOptions';
 import { isResponsesApiSupportedSdkType, normalizeProviderSettings } from '../../providerSettings';
 
-interface CreateNewProviderProps {
+interface SettingContentProps {
   id: string;
   initialValues: AiProviderDetailItem;
-  onClose?: () => void;
-  open?: boolean;
 }
 
-const CreateNewProvider = memo<CreateNewProviderProps>(({ onClose, open, initialValues, id }) => {
+const SectionTitle = memo<{ children: ReactNode }>(({ children }) => (
+  <Text fontSize={13} type={'secondary'} weight={500}>
+    {children}
+  </Text>
+));
+
+SectionTitle.displayName = 'SectionTitle';
+
+const itemStyle = { marginBottom: 0 };
+
+const SettingContent = memo<SettingContentProps>(({ initialValues, id }) => {
   const { t } = useTranslation(['modelProvider', 'common']);
   const [loading, setLoading] = useState(false);
+  const [form] = Form.useForm<UpdateAiProviderParams>();
   const [updateAiProvider, deleteAiProvider] = useAiInfraStore((s) => [
     s.updateAiProvider,
     s.deleteAiProvider,
@@ -31,6 +51,7 @@ const CreateNewProvider = memo<CreateNewProviderProps>(({ onClose, open, initial
 
   const { message } = App.useApp();
   const navigate = useWorkspaceAwareNavigate();
+  const { close } = useModalContext();
 
   const onFinish = async (values: UpdateAiProviderParams) => {
     setLoading(true);
@@ -59,133 +80,128 @@ const CreateNewProvider = memo<CreateNewProviderProps>(({ onClose, open, initial
       await updateAiProvider(id, finalValues);
       setLoading(false);
       message.success(t('updateAiProvider.updateSuccess'));
-      onClose?.();
+      close();
     } catch (e) {
       console.error(e);
       setLoading(false);
     }
   };
 
-  const basicItems: FormItemProps[] = [
-    {
-      children: initialValues.id,
-      label: t('createNewAiProvider.id.title'),
-      minWidth: 400,
-      rules: [{ message: t('createNewAiProvider.id.required'), required: true }],
-    },
-    {
-      children: (
-        <Input placeholder={t('createNewAiProvider.name.placeholder')} variant={'filled'} />
-      ),
-      label: t('createNewAiProvider.name.title'),
-      minWidth: 400,
-      name: 'name',
-      rules: [{ message: t('createNewAiProvider.name.required'), required: true }],
-    },
-    {
-      children: (
-        <TextArea
-          placeholder={t('createNewAiProvider.description.placeholder')}
-          style={{ minHeight: 80 }}
-          variant={'filled'}
-        />
-      ),
-      label: t('createNewAiProvider.description.title'),
-      minWidth: 400,
-      name: 'description',
-    },
-    {
-      children: <Input allowClear placeholder={'https://logo-url'} variant={'filled'} />,
-      label: t('createNewAiProvider.logo.title'),
-      minWidth: 400,
-      name: 'logo',
-    },
-  ];
-
-  const configItems: FormItemProps[] = [
-    {
-      children: (
-        <Select
-          options={CUSTOM_PROVIDER_SDK_OPTIONS}
-          placeholder={t('createNewAiProvider.sdkType.placeholder')}
-          variant={'filled'}
-          optionRender={({ label, value }) => {
-            // Map 'router' to 'newapi' for displaying the correct icon
-            const iconProvider = value === 'router' ? 'newapi' : (value as string);
-            return (
-              <Flexbox horizontal align={'center'} gap={8}>
-                <ProviderIcon provider={iconProvider} size={18} />
-                {label}
-              </Flexbox>
-            );
-          }}
-        />
-      ),
-      label: t('createNewAiProvider.sdkType.title'),
-      minWidth: 400,
-      name: ['settings', 'sdkType'],
-      rules: [{ message: t('createNewAiProvider.sdkType.required'), required: true }],
-    },
-  ];
+  const handleDelete = () => {
+    confirmModal({
+      content: t('updateAiProvider.confirmDeleteDescription'),
+      okButtonProps: { danger: true },
+      okText: t('delete', { ns: 'common' }),
+      onOk: async () => {
+        await deleteAiProvider(id);
+        navigate('/settings/provider/all');
+        close();
+        message.success(t('updateAiProvider.deleteSuccess'));
+      },
+      title: t('updateAiProvider.confirmDelete'),
+    });
+  };
 
   return (
-    <FormModal
-      initialValues={initialValues}
-      open={open}
-      scrollToFirstError={{ behavior: 'instant', block: 'end', focus: true }}
-      submitText={t('createNewAiProvider.confirm')}
-      footer={
-        <Flexbox horizontal justify={'space-between'}>
-          <Button
-            danger
-            disabled={loading}
-            type={'primary'}
-            onClick={() => {
-              confirmModal({
-                okButtonProps: {
-                  danger: true,
-                },
-                okText: t('delete', { ns: 'common' }),
-                onOk: async () => {
-                  await deleteAiProvider(id);
-                  navigate('/settings/provider/all');
+    <Flexbox>
+      <Form
+        colon={false}
+        form={form}
+        initialValues={initialValues}
+        layout={'vertical'}
+        scrollToFirstError={{ behavior: 'instant', block: 'end', focus: true }}
+        onFinish={onFinish}
+      >
+        <Flexbox gap={16}>
+          <SectionTitle>{t('createNewAiProvider.basicTitle')}</SectionTitle>
 
-                  onClose?.();
-                  message.success(t('updateAiProvider.deleteSuccess'));
-                },
-                title: t('updateAiProvider.confirmDelete'),
-              });
-            }}
+          <Form.Item label={t('createNewAiProvider.id.title')} style={itemStyle}>
+            <Text type={'secondary'}>{initialValues.id}</Text>
+          </Form.Item>
+
+          <Form.Item
+            label={t('createNewAiProvider.name.title')}
+            name={'name'}
+            rules={[{ message: t('createNewAiProvider.name.required'), required: true }]}
+            style={itemStyle}
           >
-            {t('delete', { ns: 'common' })}
-          </Button>
-          <Flexbox horizontal gap={8}>
-            <Button htmlType={'submit'} loading={loading} type={'primary'}>
-              {t('update', { ns: 'common' })}
-            </Button>
-          </Flexbox>
+            <Input placeholder={t('createNewAiProvider.name.placeholder')} variant={'filled'} />
+          </Form.Item>
+
+          <Form.Item
+            label={t('createNewAiProvider.description.title')}
+            name={'description'}
+            style={itemStyle}
+          >
+            <TextArea
+              placeholder={t('createNewAiProvider.description.placeholder')}
+              style={{ minHeight: 72 }}
+              variant={'filled'}
+            />
+          </Form.Item>
+
+          <Form.Item label={t('createNewAiProvider.logo.title')} name={'logo'} style={itemStyle}>
+            <Input allowClear placeholder={'https://logo-url'} variant={'filled'} />
+          </Form.Item>
+
+          <div style={{ marginBlockStart: 8 }}>
+            <SectionTitle>{t('createNewAiProvider.configTitle')}</SectionTitle>
+          </div>
+
+          <Form.Item
+            label={t('createNewAiProvider.sdkType.title')}
+            name={['settings', 'sdkType']}
+            rules={[{ message: t('createNewAiProvider.sdkType.required'), required: true }]}
+            style={itemStyle}
+          >
+            <Select
+              options={CUSTOM_PROVIDER_SDK_OPTIONS}
+              placeholder={t('createNewAiProvider.sdkType.placeholder')}
+              variant={'filled'}
+              optionRender={({ label, value }) => {
+                const iconProvider = value === 'router' ? 'newapi' : (value as string);
+                return (
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    <ProviderIcon provider={iconProvider} size={18} />
+                    {label}
+                  </Flexbox>
+                );
+              }}
+            />
+          </Form.Item>
         </Flexbox>
-      }
-      items={[
-        {
-          children: basicItems,
-          title: t('createNewAiProvider.basicTitle'),
-        },
-        {
-          children: configItems,
-          title: t('createNewAiProvider.configTitle'),
-        },
-      ]}
-      title={
-        <Flexbox horizontal gap={8}>
-          <Icon icon={BrainIcon} />
-          {t('updateCustomAiProvider.title')}
-        </Flexbox>
-      }
-      onCancel={onClose}
-      onFinish={onFinish}
-    />
+      </Form>
+      <ModalFooter
+        style={{
+          borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}`,
+          marginTop: 16,
+          padding: 0,
+        }}
+      >
+        <Button danger disabled={loading} type={'primary'} onClick={handleDelete}>
+          {t('delete', { ns: 'common' })}
+        </Button>
+        <Button loading={loading} type={'primary'} onClick={() => form.submit()}>
+          {t('update', { ns: 'common' })}
+        </Button>
+      </ModalFooter>
+    </Flexbox>
   );
 });
 
-export default CreateNewProvider;
+SettingContent.displayName = 'SettingContent';
+
+export const createSettingModal = (props: SettingContentProps): ModalInstance =>
+  createModal({
+    content: <SettingContent {...props} />,
+    footer: null,
+    maskClosable: true,
+
+    title: (
+      <Flexbox horizontal align={'center'} gap={8}>
+        <Icon icon={BrainIcon} />
+        {i18nT('updateCustomAiProvider.title', { ns: 'modelProvider' })}
+      </Flexbox>
+    ),
+    width: 'min(90vw, 640px)',
+  });

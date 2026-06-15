@@ -250,37 +250,57 @@ export interface ExecGroupAgentResponse {
   userMessageId: string;
 }
 
-// ============ SubAgent Task Execution Types ============
+// ============ SubAgent Execution Types ============
 
 /**
- * Parameters for execSubAgent - execute SubAgent task
+ * Parameters for execSubAgent - execute an agent in an isolated thread
  * Supports both Group mode and Single Agent mode
  *
  * - Group mode: pass groupId, Thread will be associated with the Group
  * - Single Agent mode: omit groupId, Thread will only be associated with the Agent
  */
 export interface ExecSubAgentParams {
-  /** The SubAgent ID to execute the task */
+  /** The agent ID to execute */
   agentId: string;
   /** The Group ID (optional, only for Group mode) */
   groupId?: string;
-  /** Task instruction/prompt for the SubAgent */
+  /** Instruction/prompt for the agent */
   instruction: string;
-  /** The parent message ID (Supervisor's tool call message or task message) */
+  /** The parent message ID that anchors the isolated thread */
   parentMessageId: string;
   /** Parent operation ID for dispatching callAgent hooks */
   parentOperationId?: string;
-  /**
-   * When true, register the completion bridge that backfills the parent's
-   * placeholder tool message with this sub-agent's result and resumes the
-   * parked parent op (`waiting_for_async_tool` → running). Used by the server
-   * `callSubAgent` deferred-tool path; left false for the legacy fire-and-forget
-   * task dispatch.
-   */
-  resumeParentOnComplete?: boolean;
   /** Timeout in milliseconds (optional) */
   timeout?: number;
-  /** Task title (shown in UI, used as thread title) */
+  /** Thread title shown in UI */
+  title?: string;
+  /** The Topic ID */
+  topicId: string;
+}
+
+/**
+ * Parameters for execVirtualSubAgent - execute a `lobe-agent.callSubAgent`
+ * child run.
+ *
+ * Virtual sub-agents are tool-created isolated runs. They are marked with
+ * `appContext.isSubAgent` so the child cannot recursively spawn more
+ * sub-agents, and they install the completion bridge that backfills the
+ * parent's placeholder tool message before resuming the parent operation.
+ */
+export interface ExecVirtualSubAgentParams {
+  /** The agent ID to execute */
+  agentId: string;
+  /** The Group ID inherited from the parent operation, when present */
+  groupId?: string;
+  /** Instruction/prompt for the virtual sub-agent */
+  instruction: string;
+  /** The parent placeholder tool message ID */
+  parentMessageId: string;
+  /** Parent operation ID to bridge and resume on completion */
+  parentOperationId: string;
+  /** Timeout in milliseconds (optional) */
+  timeout?: number;
+  /** Thread title shown in UI */
   title?: string;
   /** The Topic ID */
   topicId: string;
@@ -290,15 +310,15 @@ export interface ExecSubAgentParams {
  * Result from execSubAgent
  */
 export interface ExecSubAgentResult {
-  /** The assistant message ID created for this task */
+  /** The assistant message ID created for this run */
   assistantMessageId: string;
-  /** Error message if task failed to start */
+  /** Error message if execution failed to start */
   error?: string;
   /** Operation ID for tracking execution status */
   operationId: string;
-  /** Whether the task was created successfully */
+  /** Whether the execution was created successfully */
   success: boolean;
-  /** The Thread ID where the task is executed */
+  /** The Thread ID where the execution is isolated */
   threadId: string;
 }
 

@@ -36,6 +36,7 @@ export const compareDocumentHistoryItemsInputSchema = z.object({
 });
 
 export const updateDocumentInputSchema = z.object({
+  breakAutosaveWindow: z.boolean().optional(),
   content: z.string().optional(),
   editorData: z.string().optional(),
   fileType: z.string().optional(),
@@ -58,6 +59,7 @@ export interface DocumentHistoryListItem {
   isCurrent: boolean;
   savedAt: string;
   saveSource: DocumentHistorySaveSource;
+  userId: string;
 }
 
 export interface ListHistoryOutput {
@@ -123,6 +125,7 @@ export interface CompareHistoryItemsInput {
 }
 
 export interface UpdateDocumentInput {
+  breakAutosaveWindow?: boolean;
   content?: string;
   editorData?: string;
   fileType?: string;

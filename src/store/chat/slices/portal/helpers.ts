@@ -1,6 +1,10 @@
 import type { OpenLocalFileParams } from './initialState';
 
 const LOCAL_FILE_TAB_LOCAL_DEVICE = 'local';
+const LOCAL_FILE_GLOBAL_SCOPE = '__global__';
+
+export const createLocalFileScopeKey = (workingDirectory?: string): string =>
+  workingDirectory || LOCAL_FILE_GLOBAL_SCOPE;
 
 export const createLocalFileTabId = ({
   deviceId,

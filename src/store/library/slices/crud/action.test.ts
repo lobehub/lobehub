@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { mutate } from '@/libs/swr';
+import { knowledgeBaseKeys } from '@/libs/swr/keys';
 import { knowledgeBaseService } from '@/services/knowledgeBase';
 import type { CreateKnowledgeBaseParams, KnowledgeBaseItem } from '@/types/knowledgeBase';
 import { withSWR } from '~test-utils';
@@ -153,7 +154,7 @@ describe('KnowledgeBaseCrudAction', () => {
         }),
       ).resolves.not.toThrow();
 
-      expect(mutate).toHaveBeenCalledWith('FETCH_KNOWLEDGE_BASE');
+      expect(mutate).toHaveBeenCalledWith(knowledgeBaseKeys.list());
     });
 
     it('should refresh the active workspace-scoped cache key', async () => {
@@ -164,7 +165,7 @@ describe('KnowledgeBaseCrudAction', () => {
         await result.current.refreshKnowledgeBaseList();
       });
 
-      expect(mutate).toHaveBeenCalledWith(['FETCH_KNOWLEDGE_BASE', 'workspace-1']);
+      expect(mutate).toHaveBeenCalledWith(knowledgeBaseKeys.list('workspace-1'));
       expect(getActiveWorkspaceId).toHaveBeenCalled();
     });
   });

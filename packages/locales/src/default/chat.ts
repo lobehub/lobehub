@@ -208,6 +208,8 @@ export default {
   'inbox.title': 'Lobe AI',
   'input.addAi': 'Add an AI message',
   'input.addUser': 'Add a user message',
+  'input.agentModeUnsupportedModel':
+    'The current model doesn’t support agentic tool calling. Switch to a model with agent capability for the best experience.',
   'input.costEstimate.creditsPerMillionTokens': '{{credits}} credits/M tokens',
   'input.costEstimate.hint': 'Estimated cost: ~{{credits}} credits',
   'input.costEstimate.inputLabel': 'Input',
@@ -290,6 +292,7 @@ export default {
   'messages.modelCard.pricing.writeCacheInputTokens':
     'Cache write {{amount}} credits · ${{amount}}/M',
   'messages.tokenDetails.average': 'Average unit price',
+  'messages.tokenDetails.cacheRate': 'Cache rate',
   'messages.tokenDetails.input': 'Input',
   'messages.tokenDetails.inputAudio': 'Audio Input',
   'messages.tokenDetails.inputCached': 'Cached Input',
@@ -386,6 +389,16 @@ export default {
   'newPlatformAgent': 'Connect Agent',
   'newGroupChat': 'Create Group',
 
+  // Op status tray (floating panel above the chat input during a run)
+  'opStatusTray.status.compressing': 'Compressing context',
+  'opStatusTray.status.generating': 'Generating',
+  'opStatusTray.status.reasoning': 'Thinking',
+  'opStatusTray.status.searching': 'Searching',
+  'opStatusTray.status.toolCalling': 'Calling tools',
+  'opStatusTray.cost': 'cost',
+  'opStatusTray.steps': 'steps',
+  'opStatusTray.tokens': 'tokens',
+
   // Connect agent: per-agent descriptions shown in step 0 of the connect modal
   'platformAgent.create.desc.openclaw': 'Connect to OpenClaw running on one of your devices',
   'platformAgent.create.desc.hermes': 'Connect to Hermes running on one of your devices',
@@ -473,6 +486,7 @@ export default {
   'memory.on.desc': 'Allow AI to actively search and manage your memories during conversation.',
   'memory.on.title': 'Enable Memory Tool',
   'memory.title': 'Memory',
+  'gatewayMode.title': 'Gateway Mode',
   'search.grounding.imageSearchQueries': 'Image Search Keywords',
   'search.grounding.imageTitle': 'Found {{count}} images',
   'chatMode.agent': 'Agent',
@@ -1159,12 +1173,11 @@ export default {
   'workingPanel.review.refresh': 'Refresh',
   'workingPanel.review.revert': 'Discard changes',
   'workingPanel.review.revert.confirm.cancel': 'Cancel',
-  'workingPanel.review.revert.confirm.description':
-    'Working tree changes to {{filePath}} will be permanently discarded. Untracked files are deleted from disk.',
+  'workingPanel.review.revert.confirm.description': "This can't be undone.",
   'workingPanel.review.revert.confirm.ok': 'Discard',
   'workingPanel.review.revert.confirm.title': 'Discard changes to this file?',
   'workingPanel.review.revert.failed': "Couldn't discard changes: {{error}}",
-  'workingPanel.review.revert.success': 'Discarded changes to {{filePath}}',
+  'workingPanel.review.revert.success': 'Discarded changes to {{fileName}}',
   'workingPanel.review.textDiff.disable': 'Disable inline text diff',
   'workingPanel.review.textDiff.enable': 'Enable inline text diff',
   'workingPanel.review.title': 'Review',

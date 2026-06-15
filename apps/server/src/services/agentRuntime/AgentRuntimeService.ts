@@ -25,7 +25,12 @@ import {
   invokeAgentSpanName,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import { type ChatToolPayload, type ExecSubAgentParams, type UIChatMessage } from '@lobechat/types';
+import {
+  type ChatToolPayload,
+  type ExecSubAgentParams,
+  type ExecVirtualSubAgentParams,
+  type UIChatMessage,
+} from '@lobechat/types';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
@@ -56,6 +61,7 @@ import { CompletionLifecycle } from './CompletionLifecycle';
 import { hookDispatcher } from './hooks';
 import { HumanInterventionHandler } from './HumanInterventionHandler';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
+import { createDefaultSnapshotStore } from './snapshotStore';
 import { buildStepPresentation, formatTokenCount } from './stepPresentation';
 import {
   type AgentExecutionParams,
@@ -126,13 +132,17 @@ const toAgentSignalSnapshotEvents = (
  */
 export interface AgentRuntimeDelegate {
   /**
-   * Fork a sub-agent through the full high-level pipeline
+   * Run a legacy agent invocation through the full high-level pipeline
    * (AiAgentService.execSubAgent → execAgent: agent-config resolution, tool
-   * engine, context engineering, createOperation). Returns a deferred result;
-   * the parent op parks (`waiting_for_async_tool`) until the completion bridge
-   * backfills the placeholder and resumes it.
+   * engine, context engineering, createOperation).
    */
   execSubAgent?: (params: ExecSubAgentParams) => Promise<unknown>;
+  /**
+   * Fork a `lobe-agent.callSubAgent` virtual child run. The child is marked as a
+   * sub-agent and owns the completion bridge that backfills the parent tool
+   * placeholder before resuming the parked parent operation.
+   */
+  execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<unknown>;
 }
 
 export interface AgentRuntimeServiceOptions {
@@ -247,7 +257,7 @@ export class AgentRuntimeService {
     this.queueService =
       options?.queueService === null ? null : (options?.queueService ?? new QueueService());
     this.traceRecorder = new OperationTraceRecorder(
-      options?.snapshotStore ?? this.createDefaultSnapshotStore(),
+      options?.snapshotStore ?? createDefaultSnapshotStore(),
     );
     this.agentFactory = options?.agentFactory;
     this.delegate = options?.delegate ?? {};
@@ -1864,10 +1874,7 @@ export class AgentRuntimeService {
           if (!tool || typeof tool !== 'object') continue;
 
           const toolPayload = tool as { id?: unknown; result_msg_id?: unknown };
-          if (
-            typeof toolPayload.id === 'string' &&
-            typeof toolPayload.result_msg_id === 'string'
-          ) {
+          if (typeof toolPayload.id === 'string' && typeof toolPayload.result_msg_id === 'string') {
             toolResultMessageIds.set(toolPayload.id, toolPayload.result_msg_id);
           }
         }
@@ -1944,6 +1951,7 @@ export class AgentRuntimeService {
       userTimezone: metadata?.userTimezone,
       evalContext: metadata?.evalContext,
       execSubAgent: this.delegate.execSubAgent,
+      execVirtualSubAgent: this.delegate.execVirtualSubAgent,
       hookDispatcher,
       loadAgentState: this.coordinator.loadAgentState.bind(this.coordinator),
       messageModel: this.messageModel,
@@ -1965,34 +1973,6 @@ export class AgentRuntimeService {
     });
 
     return { agent, runtime };
-  }
-
-  /**
-   * Create default snapshot store based on environment.
-   * - ENABLE_AGENT_S3_TRACING=1 → S3SnapshotStore
-   * - NODE_ENV=development → FileSnapshotStore
-   * - Otherwise → null (no tracing)
-   */
-  private createDefaultSnapshotStore(): ISnapshotStore | null {
-    if (process.env.ENABLE_AGENT_S3_TRACING === '1') {
-      try {
-        const { S3SnapshotStore } = require('@/server/modules/AgentTracing');
-        return new S3SnapshotStore();
-      } catch {
-        // S3SnapshotStore not available
-      }
-    }
-
-    if (process.env.NODE_ENV === 'development') {
-      try {
-        const { FileSnapshotStore } = require('@lobechat/agent-tracing');
-        return new FileSnapshotStore();
-      } catch {
-        // agent-tracing not available
-      }
-    }
-
-    return null;
   }
 
   /**

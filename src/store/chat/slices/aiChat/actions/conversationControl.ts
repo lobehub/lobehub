@@ -64,7 +64,7 @@ export class ConversationControlActionImpl {
         boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
         executionTarget: agentConfig?.agencyConfig?.executionTarget,
         heterogeneousProvider: agentConfig?.agencyConfig?.heterogeneousProvider,
-        isGatewayMode: this.#get().isGatewayModeEnabled(),
+        isGatewayMode: this.#get().isGatewayModeEnabled(context.agentId),
       }) === 'gateway'
     );
   };

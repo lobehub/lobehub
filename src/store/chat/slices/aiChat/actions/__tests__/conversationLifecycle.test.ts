@@ -1789,4 +1789,207 @@ describe('ConversationLifecycle actions', () => {
       });
     });
   });
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Characterization net for the POST-PERSIST topic-title auto-generation hook.
+  //
+  // After the user message is persisted (client mode), sendMessage fires a
+  // fire-and-forget `summaryTitle()` (conversationLifecycle.ts ~L1004-1024) that
+  // calls `summaryTopicTitle(topicId, messages)` when the gate is met:
+  //   - data.isCreateNewTopic === true  → always summarize the new topic, OR
+  //   - existing topic whose `title` is empty/falsy → summarize it.
+  // These tests lock the PER-PATH WIRING (which path triggers the hook), not the
+  // title generation mechanism itself (that's unit-tested in topic/action.test.ts).
+  // They must keep passing across the upcoming lifecycle refactor.
+  //
+  // NOTE on async: summaryTitle() is dispatched WITHOUT await inside sendMessage.
+  // Because the spy resolves synchronously and `act(async () => await ...)` flushes
+  // the microtask queue, asserting on the spy right after the awaited sendMessage
+  // is reliable here.
+  // ───────────────────────────────────────────────────────────────────────────
+  describe('post-persist title auto-gen characterization (lifecycle refactor regression net)', () => {
+    it('CLIENT new-topic path: summaryTopicTitle IS invoked with the new topicId + persisted messages', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = TEST_IDS.SESSION_ID;
+      const newTopicId = TEST_IDS.NEW_TOPIC_ID;
+
+      const summaryTopicTitleSpy = vi.fn().mockResolvedValue(undefined);
+      act(() => {
+        useChatStore.setState({ summaryTopicTitle: summaryTopicTitleSpy });
+      });
+
+      const persistedMessages = [
+        createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user', topicId: newTopicId }),
+        createMockMessage({
+          id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          parentId: TEST_IDS.USER_MESSAGE_ID,
+          role: 'assistant',
+          topicId: newTopicId,
+        }),
+      ];
+
+      vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+        assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+        isCreateNewTopic: true,
+        messages: persistedMessages,
+        topicId: newTopicId,
+        topics: undefined,
+        userMessageId: TEST_IDS.USER_MESSAGE_ID,
+      } as any);
+
+      await act(async () => {
+        await result.current.sendMessage({
+          context: { agentId, threadId: null, topicId: null },
+          message: TEST_CONTENT.USER_MESSAGE,
+        });
+      });
+
+      // new-topic gate (data.isCreateNewTopic) → summarize the freshly created topic,
+      // passing data.topicId and data.messages straight through.
+      expect(summaryTopicTitleSpy).toHaveBeenCalledTimes(1);
+      expect(summaryTopicTitleSpy).toHaveBeenCalledWith(
+        newTopicId,
+        expect.arrayContaining([
+          expect.objectContaining({ id: TEST_IDS.USER_MESSAGE_ID }),
+          expect.objectContaining({ id: TEST_IDS.ASSISTANT_MESSAGE_ID }),
+        ]),
+      );
+    });
+
+    it('CLIENT existing-topic with EMPTY title: summaryTopicTitle IS invoked', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = TEST_IDS.SESSION_ID;
+      const topicId = TEST_IDS.TOPIC_ID;
+      const key = messageMapKey({ agentId, topicId });
+
+      const summaryTopicTitleSpy = vi.fn().mockResolvedValue(undefined);
+
+      // Seed an existing topic whose title is empty — this is the second gate branch.
+      // currentTopicData() keys on activeAgentId, which resetTestEnvironment set to SESSION_ID.
+      act(() => {
+        useChatStore.setState({
+          summaryTopicTitle: summaryTopicTitleSpy,
+          topicDataMap: {
+            [topicMapKey({ agentId })]: {
+              items: [{ id: topicId, title: '' }],
+              total: 1,
+            },
+          } as any,
+        });
+      });
+
+      const persistedMessages = [
+        createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user', topicId }),
+        createMockMessage({
+          id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          parentId: TEST_IDS.USER_MESSAGE_ID,
+          role: 'assistant',
+          topicId,
+        }),
+      ];
+
+      vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+        assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+        isCreateNewTopic: false,
+        messages: persistedMessages,
+        topicId,
+        topics: undefined,
+        userMessageId: TEST_IDS.USER_MESSAGE_ID,
+      } as any);
+
+      await act(async () => {
+        await result.current.sendMessage({
+          context: { agentId, threadId: null, topicId },
+          message: TEST_CONTENT.USER_MESSAGE,
+        });
+      });
+
+      // empty-title gate → summarize the existing topic.
+      expect(summaryTopicTitleSpy).toHaveBeenCalledTimes(1);
+      // First arg is the existing topic id; messages come from the display selector
+      // for the topic's message key (assistant message id filtered out).
+      expect(summaryTopicTitleSpy.mock.calls[0][0]).toBe(topicId);
+      // sanity: the message key exists so the selector path is real
+      expect(key).toBe(messageMapKey({ agentId, topicId }));
+    });
+
+    it('CLIENT existing-topic that ALREADY has a title: summaryTopicTitle is NOT invoked (gate not met)', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = TEST_IDS.SESSION_ID;
+      const topicId = TEST_IDS.TOPIC_ID;
+
+      const summaryTopicTitleSpy = vi.fn().mockResolvedValue(undefined);
+
+      // Existing topic WITH a non-empty title → neither gate branch fires.
+      act(() => {
+        useChatStore.setState({
+          summaryTopicTitle: summaryTopicTitleSpy,
+          topicDataMap: {
+            [topicMapKey({ agentId })]: {
+              items: [{ id: topicId, title: 'Already has a title' }],
+              total: 1,
+            },
+          } as any,
+        });
+      });
+
+      vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+        assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+        isCreateNewTopic: false,
+        messages: [
+          createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user', topicId }),
+          createMockMessage({ id: TEST_IDS.ASSISTANT_MESSAGE_ID, role: 'assistant', topicId }),
+        ],
+        topics: undefined,
+        userMessageId: TEST_IDS.USER_MESSAGE_ID,
+      } as any);
+
+      await act(async () => {
+        await result.current.sendMessage({
+          context: { agentId, threadId: null, topicId },
+          message: TEST_CONTENT.USER_MESSAGE,
+        });
+      });
+
+      expect(summaryTopicTitleSpy).not.toHaveBeenCalled();
+    });
+
+    it('GATEWAY path: summaryTopicTitle is NOT invoked on the client sendMessage lifecycle (persistence happens inside executeGatewayAgent)', async () => {
+      // OBSERVED behavior: in gateway mode sendMessage delegates to
+      // `executeGatewayAgent` and `return`s early (~conversationLifecycle.ts L738),
+      // BEFORE reaching the post-persist summaryTitle() block (~L1024). Message
+      // creation / persistence — and any title summarization — happen server-side
+      // inside the gateway run, not on this client lifecycle. So the client-side
+      // summaryTopicTitle hook is NOT exercised here. Locking this no-op so the
+      // refactor doesn't accidentally double-fire title generation for gateway runs.
+      const { result } = renderHook(() => useChatStore());
+
+      const summaryTopicTitleSpy = vi.fn().mockResolvedValue(undefined);
+      const executeGatewayAgentSpy = vi.fn().mockResolvedValue({
+        assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+        operationId: 'op-gateway',
+        userMessageId: TEST_IDS.USER_MESSAGE_ID,
+      });
+
+      act(() => {
+        useChatStore.setState({
+          executeGatewayAgent: executeGatewayAgentSpy,
+          isGatewayModeEnabled: () => true,
+          summaryTopicTitle: summaryTopicTitleSpy,
+        });
+      });
+
+      await act(async () => {
+        await result.current.sendMessage({
+          context: createTestContext(),
+          message: TEST_CONTENT.USER_MESSAGE,
+        });
+      });
+
+      // gateway routing was actually taken (precondition for the assertion below)
+      expect(executeGatewayAgentSpy).toHaveBeenCalled();
+      // and the client-side post-persist title hook was NOT reached
+      expect(summaryTopicTitleSpy).not.toHaveBeenCalled();
+    });
+  });
 });

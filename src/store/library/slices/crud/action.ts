@@ -2,13 +2,11 @@ import type { SWRResponse } from 'swr';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { knowledgeBaseKeys } from '@/libs/swr/keys';
 import { knowledgeBaseService } from '@/services/knowledgeBase';
 import type { KnowledgeBaseStore } from '@/store/library/store';
 import type { StoreSetter } from '@/store/types';
 import type { CreateKnowledgeBaseParams, KnowledgeBaseItem } from '@/types/knowledgeBase';
-
-const FETCH_KNOWLEDGE_BASE_LIST_KEY = 'FETCH_KNOWLEDGE_BASE';
-const FETCH_KNOWLEDGE_BASE_ITEM_KEY = 'FETCH_KNOWLEDGE_BASE_ITEM';
 
 type Setter = StoreSetter<KnowledgeBaseStore>;
 export const createCrudSlice = (set: Setter, get: () => KnowledgeBaseStore, _api?: unknown) =>
@@ -46,9 +44,7 @@ export class KnowledgeBaseCrudActionImpl {
 
   refreshKnowledgeBaseList = async (): Promise<void> => {
     const workspaceId = getActiveWorkspaceId();
-    await mutate(
-      workspaceId ? [FETCH_KNOWLEDGE_BASE_LIST_KEY, workspaceId] : FETCH_KNOWLEDGE_BASE_LIST_KEY,
-    );
+    await mutate(knowledgeBaseKeys.list(workspaceId));
   };
 
   removeKnowledgeBase = async (id: string): Promise<void> => {
@@ -66,7 +62,7 @@ export class KnowledgeBaseCrudActionImpl {
 
   useFetchKnowledgeBaseItem = (id: string): SWRResponse<KnowledgeBaseItem | undefined> => {
     return useClientDataSWR<KnowledgeBaseItem | undefined>(
-      [FETCH_KNOWLEDGE_BASE_ITEM_KEY, id],
+      knowledgeBaseKeys.item(id),
       () => knowledgeBaseService.getKnowledgeBaseById(id),
       {
         onSuccess: (item) => {
@@ -88,7 +84,7 @@ export class KnowledgeBaseCrudActionImpl {
     params: { suspense?: boolean } = {},
   ): SWRResponse<KnowledgeBaseItem[]> => {
     return useClientDataSWR<KnowledgeBaseItem[]>(
-      FETCH_KNOWLEDGE_BASE_LIST_KEY,
+      knowledgeBaseKeys.list(),
       () => knowledgeBaseService.getKnowledgeBaseList(),
       {
         fallbackData: [],

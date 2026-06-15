@@ -1,5 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import { type ListProjectSkillsResult, type ProjectSkillItem } from '@lobechat/electron-client-ipc';
+import { type ProjectSkillItem } from '@lobechat/electron-client-ipc';
 import type { IEditor, SlashOptions } from '@lobehub/editor';
 import { SkillsIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
@@ -9,9 +9,11 @@ import { ArchiveIcon, MessageSquarePlusIcon } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useEffectiveWorkingDirectory } from '@/hooks/useEffectiveWorkingDirectory';
-import { useClientDataSWR } from '@/libs/swr';
-import { localFileService } from '@/services/electron/localFileService';
+import { useFetchProjectSkills } from '@/hooks/useFetchProjectSkills';
+import { useAgentStore } from '@/store/agent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useToolStore } from '@/store/tool';
 import { agentDocumentSkillsSelectors } from '@/store/tool/selectors';
@@ -53,11 +55,31 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   // set (and for local-device runs), not just an explicit agent/topic pick.
   const workingDirectory = useEffectiveWorkingDirectory(agentId);
 
-  const projectSkillsEnabled = isDesktop && !!workingDirectory;
-  const { data: projectSkillsData } = useClientDataSWR<ListProjectSkillsResult>(
-    projectSkillsEnabled ? ['project-skills', workingDirectory] : null,
-    () => localFileService.listProjectSkills({ scope: workingDirectory! }),
-    { revalidateOnFocus: false, shouldRetryOnError: false },
+  // Device-bound (remote) runs scan project skills on that device over the
+  // `device.listProjectSkills` RPC; the local desktop reads over Electron IPC.
+  // Mirror the WorkingSidebar exactly: resolve the EFFECTIVE target first, then
+  // treat it as remote only when it lands on `device` with a bound device. The
+  // effective target matters because a hetero agent saved as desktop "This
+  // device" (`local` + boundDeviceId) coerces to `device` when opened on web —
+  // reading the raw stored target would miss that and leave the menu empty even
+  // though the sidebar lists the skills.
+  const agencyConfig = useAgentStore((s) =>
+    agentId ? agentByIdSelectors.getAgencyConfigById(agentId)(s) : undefined,
+  );
+  const isHetero = useAgentStore((s) =>
+    agentId ? agentByIdSelectors.isAgentHeterogeneousById(agentId)(s) : false,
+  );
+  const effectiveTarget = resolveExecutionTarget(agencyConfig, { isDesktop, isHetero });
+  const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
+  const remoteDeviceId = isDeviceMode ? agencyConfig.boundDeviceId : undefined;
+
+  // Local desktop reads over IPC; a bound device reads over RPC. Either path
+  // makes project skills reachable even when this client isn't the desktop app
+  // (previously gated on `isDesktop` alone, so remote/web runs got nothing).
+  const projectSkillsEnabled = (isDesktop || !!remoteDeviceId) && !!workingDirectory;
+  const { data: projectSkillsData } = useFetchProjectSkills(
+    projectSkillsEnabled ? workingDirectory : undefined,
+    remoteDeviceId,
   );
   const projectSkills = projectSkillsData?.skills;
 

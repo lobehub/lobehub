@@ -54,6 +54,21 @@ export interface PreviewFileReadResult {
   realPath: string;
 }
 
+type PreviewFileAccept = 'image';
+
+const normalizeContentType = (contentType: string): string =>
+  contentType.split(';')[0].trim().toLowerCase();
+
+const isAcceptedPreviewContentType = (
+  contentType: string,
+  accept?: PreviewFileAccept,
+): boolean => {
+  if (!accept) return true;
+
+  const normalizedContentType = normalizeContentType(contentType);
+  return accept === 'image' && normalizedContentType.startsWith('image/');
+};
+
 /**
  * Custom `localfile://` protocol for project file previews.
  *
@@ -213,16 +228,26 @@ export class LocalFileProtocolManager {
   }
 
   async createPreviewUrl({
+    accept,
     filePath,
     workspaceRoot,
   }: {
+    accept?: PreviewFileAccept;
     filePath: string;
     workspaceRoot: string;
   }): Promise<string | null> {
     const normalizedFilePath = normalizeAbsolutePath(filePath);
     if (!normalizedFilePath) return null;
 
-    const realFilePath = await this.resolveApprovedPreviewPath({ filePath, workspaceRoot });
+    const realFilePath = accept
+      ? (
+          await this.readPreviewFile({
+            accept,
+            filePath,
+            workspaceRoot,
+          })
+        )?.realPath
+      : await this.resolveApprovedPreviewPath({ filePath, workspaceRoot });
     if (!realFilePath) return null;
 
     this.cleanupExpiredTokens();
@@ -237,9 +262,11 @@ export class LocalFileProtocolManager {
   }
 
   async readPreviewFile({
+    accept,
     filePath,
     workspaceRoot,
   }: {
+    accept?: PreviewFileAccept;
     filePath: string;
     workspaceRoot: string;
   }): Promise<PreviewFileReadResult | null> {
@@ -250,9 +277,12 @@ export class LocalFileProtocolManager {
     if (!fileStat.isFile()) return null;
 
     const buffer = await readFile(realFilePath);
+    const contentType = resolveLocalFileMimeType(realFilePath, buffer);
+    if (!isAcceptedPreviewContentType(contentType, accept)) return null;
+
     return {
       buffer,
-      contentType: resolveLocalFileMimeType(realFilePath, buffer),
+      contentType,
       realPath: realFilePath,
     };
   }

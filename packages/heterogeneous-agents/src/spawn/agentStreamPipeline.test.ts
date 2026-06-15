@@ -84,6 +84,44 @@ describe('AgentStreamPipeline', () => {
     });
   });
 
+  it('passes initial Codex cumulative usage into the adapter for resumed turns', async () => {
+    const pipeline = new AgentStreamPipeline({
+      agentType: 'codex',
+      initialCumulativeUsage: {
+        inputCacheMissTokens: 100,
+        totalInputTokens: 100,
+        totalOutputTokens: 20,
+        totalTokens: 120,
+      },
+      operationId: 'op-codex',
+    });
+
+    const events = await pipeline.push(
+      `${JSON.stringify({
+        type: 'turn.completed',
+        usage: {
+          input_tokens: 180,
+          output_tokens: 45,
+        },
+      })}\n`,
+    );
+
+    expect(events[0]).toMatchObject({
+      data: {
+        phase: 'turn_metadata',
+        provider: 'codex',
+        usage: {
+          inputCacheMissTokens: 80,
+          totalInputTokens: 80,
+          totalOutputTokens: 25,
+          totalTokens: 105,
+        },
+      },
+      operationId: 'op-codex',
+      type: 'step_complete',
+    });
+  });
+
   it('drops non-JSON noise lines instead of throwing', async () => {
     const pipeline = new AgentStreamPipeline({
       agentType: 'claude-code',

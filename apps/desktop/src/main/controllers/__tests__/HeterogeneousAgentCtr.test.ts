@@ -480,6 +480,87 @@ describe('HeterogeneousAgentCtr', () => {
       expect(spawnCalls).toHaveLength(0);
     });
 
+    it('spawns through the detector-resolved absolute path when the bare command is off PATH', async () => {
+      // Codex desktop app case: `codex` is not on PATH, but the preflight
+      // detector finds the CLI bundled inside Codex.app. Spawning the bare
+      // command would ENOENT — spawn must use the resolved absolute path.
+      const resolvedPath = '/Applications/Codex.app/Contents/Resources/codex';
+      const detect = vi.fn().mockResolvedValue({ available: true, path: resolvedPath });
+      const { proc } = createFakeProc();
+      nextFakeProc = proc;
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        toolDetectorManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+      });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
+
+      expect(spawnCalls[0].command).toBe(resolvedPath);
+    });
+
+    it('carries the detector login-shell PATH into the spawn env for `env node` shims', async () => {
+      // `codex` resolved via the login-shell PATH (mise/nvm). Spawning the
+      // absolute shim under the leaner inherited PATH would fail at its
+      // `#!/usr/bin/env node` shebang — the resolved PATH must reach the child.
+      const resolvedPath = '/Users/h/.local/share/mise/shims/codex';
+      const searchPath = '/Users/h/.local/share/mise/shims:/usr/bin:/bin';
+      const detect = vi
+        .fn()
+        .mockResolvedValue({ available: true, path: resolvedPath, resolvedPathEnv: searchPath });
+      const { proc } = createFakeProc();
+      nextFakeProc = proc;
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        toolDetectorManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'codex', command: 'codex' });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
+
+      expect(spawnCalls[0].command).toBe(resolvedPath);
+      expect(spawnCalls[0].options.env.PATH).toBe(searchPath);
+    });
+
+    it('keeps an explicit path-like command for spawn instead of the detector result', async () => {
+      // detectHeterogeneousCliCommand validates the custom path via --version.
+      execFileMock.mockImplementation(
+        (
+          _file: string,
+          _args: string[],
+          optionsOrCallback: unknown,
+          callback?: (error: Error | null, result: { stderr: string; stdout: string }) => void,
+        ) => {
+          const resolvedCallback =
+            typeof optionsOrCallback === 'function' ? optionsOrCallback : callback;
+          (resolvedCallback as any)?.(null, { stderr: '', stdout: 'codex-cli 0.99.0' });
+        },
+      );
+
+      const detect = vi.fn();
+      const { proc } = createFakeProc();
+      nextFakeProc = proc;
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        toolDetectorManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: '/custom/bin/codex',
+      });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
+
+      expect(detect).not.toHaveBeenCalled();
+      expect(spawnCalls[0].command).toBe('/custom/bin/codex');
+    });
+
     it('passes prompt via stdin to codex exec instead of argv', async () => {
       const prompt = '--run a shell-like prompt safely';
       const { cliArgs, command, writes } = await runSendPrompt(prompt);

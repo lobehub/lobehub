@@ -61,6 +61,7 @@ import { chainCompressContext } from '@lobechat/prompts';
 import {
   type ChatToolPayload,
   type ExecSubAgentParams,
+  type ExecVirtualSubAgentParams,
   type MessageToolCall,
   type UIChatMessage,
 } from '@lobechat/types';
@@ -323,7 +324,7 @@ const buildPostProcessUrl = (
 };
 
 /**
- * Build the per-tool-call server sub-agent runner injected into the tool
+ * Build the per-tool-call server virtual sub-agent runner injected into the tool
  * execution context. Closes over the current tool payload + parent message so
  * the `callSubAgent` server tool can fork a child op without re-deriving the
  * message anchor (which it cannot do correctly from its own context).
@@ -331,17 +332,18 @@ const buildPostProcessUrl = (
  * The runner creates the pending placeholder tool message that anchors the
  * isolation thread (so the UI shows a loading state and the completion bridge
  * has a message to backfill), then kicks off the child op asynchronously and
- * returns immediately. Returns `undefined` when sub-agent execution is not
- * available (no `execSubAgent` callback, or missing agent/topic context).
+ * returns immediately. Returns `undefined` when virtual sub-agent execution is
+ * not available (no `execVirtualSubAgent` callback, or missing agent/topic
+ * context).
  */
-const buildServerSubAgentRunner = (
+const buildServerVirtualSubAgentRunner = (
   ctx: RuntimeExecutorContext,
   state: AgentState,
   chatToolPayload: ChatToolPayload,
   parentMessageId: string,
 ): ServerSubAgentRunner | undefined => {
-  const execSubAgent = ctx.execSubAgent;
-  if (!execSubAgent) return undefined;
+  const execVirtualSubAgent = ctx.execVirtualSubAgent;
+  if (!execVirtualSubAgent) return undefined;
 
   const agentId = state.metadata?.agentId;
   const topicId = ctx.topicId ?? state.metadata?.topicId;
@@ -364,16 +366,15 @@ const buildServerSubAgentRunner = (
         topicId,
       });
 
-      // 2. Fork the child op anchored to the placeholder. `resumeParentOnComplete`
-      //    tells execSubAgent to register the completion bridge that
-      //    backfills this tool message and resumes the parent op.
-      const result = (await execSubAgent({
+      // 2. Fork the virtual child op anchored to the placeholder. The virtual
+      //    entry marks the child as `isSubAgent` and registers the completion
+      //    bridge that backfills this tool message and resumes the parent op.
+      const result = (await execVirtualSubAgent({
         agentId: targetAgentId ?? agentId,
         groupId: state.metadata?.groupId ?? undefined,
         instruction,
         parentMessageId: placeholder.id,
         parentOperationId: ctx.operationId,
-        resumeParentOnComplete: true,
         timeout,
         title: description,
         topicId,
@@ -387,7 +388,7 @@ const buildServerSubAgentRunner = (
           await ctx.messageModel.deleteMessage(placeholder.id);
         } catch (error) {
           log(
-            'buildServerSubAgentRunner: failed to clean up placeholder %s: %O',
+            'buildServerVirtualSubAgentRunner: failed to clean up placeholder %s: %O',
             placeholder.id,
             error,
           );
@@ -522,11 +523,17 @@ export interface RuntimeExecutorContext {
   discordContext?: any;
   evalContext?: EvalContext;
   /**
-   * Callback to spawn a sub-agent task server-side.
+   * Callback to run a legacy agent invocation server-side.
    * Injected by AiAgentService so exec_sub_agent / exec_sub_agents executors
-   * can dispatch callAgent-triggered tasks without a circular import.
+   * can dispatch callAgent-triggered runs without a circular import.
    */
   execSubAgent?: (params: ExecSubAgentParams) => Promise<unknown>;
+  /**
+   * Callback to fork a `lobe-agent.callSubAgent` virtual child run. Unlike
+   * execSubAgent, this path installs the async completion bridge and marks the
+   * child operation as a sub-agent.
+   */
+  execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<unknown>;
   hookDispatcher?: HookDispatcher;
   loadAgentState?: (operationId: string) => Promise<AgentState | null>;
   messageModel: MessageModel;
@@ -2475,7 +2482,7 @@ export const createRuntimeExecutors = (
                 scope: state.metadata?.scope,
                 serverDB: ctx.serverDB,
                 skipResultTruncation: true,
-                subAgent: buildServerSubAgentRunner(
+                subAgent: buildServerVirtualSubAgentRunner(
                   ctx,
                   state,
                   chatToolPayload,
@@ -2717,14 +2724,15 @@ export const createRuntimeExecutors = (
 
         log('[%s:%d] Tool execution completed', operationId, stepIndex);
 
-        // When the tool result carries an execSubAgent / execSubAgents state the
-        // GeneralChatAgent needs `stop: true` in the payload to detect it and
-        // emit the matching exec_sub_agent / exec_sub_agents instruction.  Without
-        // this flag the agent falls through to the normal LLM-call path and the
-        // sub-agent is never spawned.
-        const execTaskStateType = executionResult.state?.type as string | undefined;
-        const isExecTaskState =
-          execTaskStateType === 'execSubAgent' || execTaskStateType === 'execSubAgents';
+        // When a legacy callAgent task result carries execSubAgent / execSubAgents
+        // state, the GeneralChatAgent needs `stop: true` in the payload to detect
+        // it and emit the matching exec_sub_agent / exec_sub_agents instruction.
+        // Without this flag the agent falls through to the normal LLM-call path
+        // and the background agent run is never spawned.
+        const legacyAgentInvocationStateType = executionResult.state?.type as string | undefined;
+        const isLegacyAgentInvocationState =
+          legacyAgentInvocationStateType === 'execSubAgent' ||
+          legacyAgentInvocationStateType === 'execSubAgents';
 
         executeToolSpan.setAttributes(
           buildExecuteToolResultAttributes({ attempts: execution.attempts, success: isSuccess }),
@@ -2740,7 +2748,7 @@ export const createRuntimeExecutors = (
               isSuccess,
               // Pass tool message ID as parentMessageId for the next LLM call
               parentMessageId: toolMessageId,
-              ...(isExecTaskState && { stop: true }),
+              ...(isLegacyAgentInvocationState && { stop: true }),
               toolCall: chatToolPayload,
               toolCallId: chatToolPayload.id,
             },
@@ -3047,7 +3055,7 @@ export const createRuntimeExecutors = (
                     scope: state.metadata?.scope,
                     serverDB: ctx.serverDB,
                     skipResultTruncation: true,
-                    subAgent: buildServerSubAgentRunner(
+                    subAgent: buildServerVirtualSubAgentRunner(
                       ctx,
                       state,
                       chatToolPayload,

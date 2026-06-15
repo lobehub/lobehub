@@ -253,6 +253,27 @@ export const documentRouter = router({
       return ctx.documentService.queryDocuments(input);
     }),
 
+  acquireDocumentLock: documentProcedure
+    .use(withScopedPermission('document:update'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.documentService.acquireDocumentLock(input.id);
+    }),
+
+  getDocumentLock: documentProcedure
+    .use(withScopedPermission('document:update'))
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      return ctx.documentService.getDocumentLock(input.id);
+    }),
+
+  releaseDocumentLock: documentProcedure
+    .use(withScopedPermission('document:update'))
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await ctx.documentService.releaseDocumentLock(input.id);
+    }),
+
   updateDocument: documentProcedure
     .use(withScopedPermission('document:update'))
     .input(updateDocumentInputSchema)

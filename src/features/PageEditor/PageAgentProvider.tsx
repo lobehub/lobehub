@@ -4,32 +4,48 @@ import type { ReactNode } from 'react';
 import { memo, useEffect, useMemo, useRef } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
+import type { ConversationContext } from '@/features/Conversation';
 import { ConversationProvider } from '@/features/Conversation';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import type { MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 interface PageAgentProviderProps {
   children: ReactNode;
+  /**
+   * The id of the document currently open in the editor. Injected into the
+   * conversation context as `documentId` so page-scoped tool calls are bound to
+   * this exact document instead of relying on the process-wide
+   * `pageAgentRuntime` singleton, which can only represent one open document and
+   * gets cleared/overwritten when switching tabs.
+   */
+  pageId?: string;
 }
 
-export const PageAgentProvider = memo<PageAgentProviderProps>(({ children }) => {
+export const PageAgentProvider = memo<PageAgentProviderProps>(({ children, pageId }) => {
   const useInitBuiltinAgent = useAgentStore((s) => s.useInitBuiltinAgent);
   const pageAgentId = useAgentStore(builtinAgentSelectors.pageAgentId);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const isActiveAgentHeterogeneous = useAgentStore((s) =>
+    activeAgentId ? agentByIdSelectors.isAgentHeterogeneousById(activeAgentId)(s) : false,
+  );
   const setActiveAgentId = useAgentStore((s) => s.setActiveAgentId);
   const syncedAgentIdRef = useRef<string | undefined>(undefined);
 
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.pageAgent);
 
   // Build conversation context for page agent.
-  // Ignore chat-group ids in page scope and fall back to page agent.
+  // Fall back to the page agent when the global active agent cannot drive a page
+  // copilot: empty, a chat-group id, or a heterogeneous agent (e.g. Claude Code
+  // / Codex). Heterogeneous agents run on external runtimes and must not leak
+  // into the page-scoped conversation when navigating from their tab.
   const selectedAgentId =
-    !activeAgentId || isChatGroupSessionId(activeAgentId) ? pageAgentId : activeAgentId;
+    !activeAgentId || isChatGroupSessionId(activeAgentId) || isActiveAgentHeterogeneous
+      ? pageAgentId
+      : activeAgentId;
 
   useEffect(() => {
     if (!selectedAgentId) return;
@@ -58,13 +74,17 @@ export const PageAgentProvider = memo<PageAgentProviderProps>(({ children }) => 
     }
   }, [selectedAgentId, setActiveAgentId]);
 
-  const context = useMemo<MessageMapKeyInput>(
+  const context = useMemo<ConversationContext>(
     () => ({
       agentId: selectedAgentId,
+      // Bind the conversation to the open document directly so page-scoped tool
+      // calls don't depend on the `pageAgentRuntime` singleton, which can't
+      // represent multiple tabs/documents and is cleared on tab switch.
+      documentId: pageId,
       scope: 'page',
       topicId: activeTopicId, // No topic initially, can be extended later
     }),
-    [selectedAgentId, activeTopicId],
+    [selectedAgentId, activeTopicId, pageId],
   );
 
   // Get messages from ChatStore based on context

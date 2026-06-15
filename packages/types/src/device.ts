@@ -270,6 +270,18 @@ export interface DeviceGitFileRevertResult {
   success: boolean;
 }
 
+/** Result of the `renameGitBranch` device RPC. Mirrors the desktop `GitRenameBranchResult`. */
+export interface DeviceGitRenameBranchResult {
+  error?: string;
+  success: boolean;
+}
+
+/** Result of the `deleteGitBranch` device RPC. Mirrors the desktop `GitDeleteBranchResult`. */
+export interface DeviceGitDeleteBranchResult {
+  error?: string;
+  success: boolean;
+}
+
 /**
  * Repo-relative paths of dirty working-tree files for a directory on a remote
  * device, returned by the `getGitWorkingTreeFiles` device RPC. Powers the Files

@@ -35,6 +35,7 @@
   "QuotaLimitReached": "Lo sentimos, el uso de tokens o el número de solicitudes ha alcanzado el límite de cuota para esta clave. Por favor, aumenta la cuota de la clave o vuelve a intentarlo más tarde.",
   "RateLimitExceeded": "Lo sentimos, el uso de tokens o el número de solicitudes ha alcanzado el límite de velocidad para esta clave. Por favor, vuelve a intentarlo más tarde o aumenta la cuota de la clave.",
   "StateStorePersistError": "Un problema temporal con el almacenamiento del estado de la conversación interrumpió esta operación. Por favor, vuelve a intentarlo; si el problema persiste, contacta al soporte.",
+  "StateStoreReadError": "Esta operación no se pudo reanudar porque el estado de su sesión no estaba disponible. Por favor, vuelva a abrir la conversación para continuar; si el problema persiste, contacte con el soporte.",
   "StreamChunkError": "Error al analizar el fragmento de mensaje de la solicitud de transmisión. Por favor, verifica si la interfaz API actual cumple con las especificaciones estándar, o contacta a tu proveedor de API para obtener ayuda.",
   "UpstreamGatewayError": "El gateway o proxy del proveedor devolvió un error. Por favor, vuelve a intentarlo en breve; si el problema persiste, verifica tu configuración de proxy/punto final.",
   "UpstreamHttpError": "El proveedor devolvió un error HTTP sin más detalles. Por favor, vuelve a intentarlo, o verifica tu solicitud y configuración del modelo.",

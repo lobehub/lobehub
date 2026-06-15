@@ -1,12 +1,15 @@
 import { type LobeToolCustomPlugin } from '@lobechat/types';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 
 import { ConnectorSourceType } from '@/database/schemas';
 import DevModal from '@/features/PluginDevModal';
 import { useToolStore } from '@/store/tool';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 
 interface CustomConnectorModalProps {
+  connectorId?: string;
   onClose: () => void;
+  onEditSuccess?: () => void;
   open: boolean;
 }
 
@@ -63,104 +66,220 @@ const cleanRecord = (record?: Record<string, string>): Record<string, string> | 
 };
 
 /**
- * "Add custom connector" entry. Reuses the rich PluginDevModal MCP form, but
- * persists everything onto the connector subsystem (the single backend for
+ * "Add / Edit custom connector" entry. Reuses the rich PluginDevModal MCP form,
+ * but persists everything onto the connector subsystem (the single backend for
  * custom MCP) instead of the legacy custom-plugin store:
  *
+ * Create mode:
  * - none / bearer / custom headers → create + sync the tool list directly
  * - OAuth → create with the OIDC config, then run the authorize-code popup flow
  *   (the popup is opened synchronously inside DevModal's save handler)
+ *
+ * Edit mode (connectorId provided):
+ * - Pre-fills the form from the existing connector record
+ * - Calls updateConnector instead of createConnector on save
+ * - Clears credentials when the server URL changes
  */
-const CustomConnectorModal = memo<CustomConnectorModalProps>(({ open, onClose }) => {
-  const createConnector = useToolStore((s) => s.createConnector);
-  const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
-  const syncConnectorTools = useToolStore((s) => s.syncConnectorTools);
-  const fetchConnectors = useToolStore((s) => s.fetchConnectors);
+const CustomConnectorModal = memo<CustomConnectorModalProps>(
+  ({ open, onClose, connectorId, onEditSuccess }) => {
+    const createConnector = useToolStore((s) => s.createConnector);
+    const updateConnector = useToolStore((s) => s.updateConnector);
+    const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
+    const syncConnectorTools = useToolStore((s) => s.syncConnectorTools);
+    const fetchConnectors = useToolStore((s) => s.fetchConnectors);
 
-  const handleSave = async (value: LobeToolCustomPlugin, ctx?: { oauthPopup?: Window | null }) => {
-    const mcp = (value.customParams?.mcp ?? {}) as {
-      args?: string[];
-      auth?: { clientId?: string; clientSecret?: string; token?: string; type?: string };
-      command?: string;
-      env?: Record<string, string>;
-      headers?: Record<string, string>;
-      type?: 'http' | 'stdio';
-      url?: string;
-    };
-    const identifier = value.identifier;
-    const isHttp = mcp.type !== 'stdio';
-    const authType = mcp.auth?.type;
+    const connector = useToolStore(
+      connectorId ? connectorSelectors.connectorById(connectorId) : () => undefined,
+    );
 
-    const base = {
-      identifier,
-      mcpConnectionType: (mcp.type ?? 'http') as 'http' | 'stdio',
-      mcpServerUrl: isHttp ? mcp.url?.trim() : undefined,
-      mcpStdioConfig: isHttp
-        ? undefined
-        : { args: mcp.args ?? [], command: (mcp.command ?? '').trim(), env: cleanRecord(mcp.env) },
-      name: identifier,
-      sourceType: ConnectorSourceType.custom,
-    };
+    const isEditMode = Boolean(connectorId);
 
-    // OAuth: create with the OIDC config, then drive the authorize popup that
-    // DevModal already opened synchronously for us.
-    if (isHttp && authType === 'oauth2') {
-      const popup = ctx?.oauthPopup ?? null;
-      if (!popup) throw new Error('OAuth popup was blocked');
+    // Build the pre-fill value for edit mode from the stored connector.
+    const editValue = useMemo((): LobeToolCustomPlugin | undefined => {
+      if (!isEditMode || !connector) return undefined;
 
-      const clientId = mcp.auth?.clientId?.trim();
-      try {
-        const connectorId = await createConnector({
-          ...base,
-          oidcConfig: {
+      const c = connector as typeof connector & {
+        mcpStdioConfig?: { args?: string[]; command?: string; env?: Record<string, string> };
+        oidcConfig?: { clientId?: string; clientSecret?: string; scheme?: string };
+      };
+
+      const oidcConfig = c.oidcConfig;
+      const mcpStdioConfig = c.mcpStdioConfig;
+
+      const credentials = (c as typeof c & {
+        credentials?: { headers?: Record<string, string>; token?: string; type?: string };
+      }).credentials;
+
+      const authType = oidcConfig
+        ? 'oauth2'
+        : credentials?.type === 'bearer'
+          ? 'bearer'
+          : credentials?.type === 'header'
+            ? 'header'
+            : 'none';
+
+      return {
+        customParams: {
+          description: connector.metadata?.description as string | undefined,
+          mcp: {
+            args: mcpStdioConfig?.args,
+            auth: {
+              clientId: oidcConfig?.clientId,
+              token: authType === 'bearer' ? credentials?.token : undefined,
+              type: authType === 'header' ? 'none' : authType,
+            },
+            command: mcpStdioConfig?.command,
+            env: mcpStdioConfig?.env,
+            headers: authType === 'header' ? credentials?.headers : undefined,
+            type: (connector.mcpConnectionType ?? 'http') as 'http' | 'stdio',
+            url: connector.mcpServerUrl ?? undefined,
+          },
+        },
+        identifier: connector.identifier,
+        type: 'customPlugin' as const,
+      };
+    }, [isEditMode, connector]);
+
+    const handleSave = async (value: LobeToolCustomPlugin, ctx?: { oauthPopup?: Window | null }) => {
+      const mcp = (value.customParams?.mcp ?? {}) as {
+        args?: string[];
+        auth?: { clientId?: string; clientSecret?: string; token?: string; type?: string };
+        command?: string;
+        env?: Record<string, string>;
+        headers?: Record<string, string>;
+        type?: 'http' | 'stdio';
+        url?: string;
+      };
+      const identifier = value.identifier;
+      const isHttp = mcp.type !== 'stdio';
+      const authType = mcp.auth?.type;
+
+      // ── Edit mode ─────────────────────────────────────────────────────────
+      if (isEditMode && connectorId) {
+        const newUrl = isHttp ? mcp.url?.trim() : undefined;
+        const urlChanged = newUrl !== (connector?.mcpServerUrl ?? undefined);
+
+        const patch: Record<string, any> = {};
+
+        if (newUrl !== undefined) patch.mcpServerUrl = newUrl;
+
+        if (urlChanged) {
+          // Clear stale credentials whenever the server URL changes.
+          patch.credentials = null;
+        } else if (authType === 'bearer' && mcp.auth?.token?.trim()) {
+          patch.credentials = { token: mcp.auth.token.trim(), type: 'bearer' as const };
+        } else if (authType === 'header') {
+          const headers = cleanRecord(mcp.headers);
+          if (headers) patch.credentials = { headers, type: 'header' as const };
+        } else if (authType === 'none') {
+          patch.credentials = null;
+        }
+
+        if (authType === 'oauth2') {
+          const clientId = mcp.auth?.clientId?.trim();
+          patch.oidcConfig = {
             clientId: clientId || undefined,
             clientSecret: mcp.auth?.clientSecret?.trim() || undefined,
-            // client_id present → pre-registration; absent → dynamic registration.
             scheme: clientId ? 'pre_registration' : 'dcr',
-          },
-        });
-
-        const authorizationUrl = await startConnectorOAuth(connectorId);
-        popup.location.href = authorizationUrl;
-        const result = await waitForOAuthPopup(popup, connectorId);
-        await fetchConnectors();
-        if (result.status !== 'success') {
-          throw new Error(result.error || 'Authorization was not completed');
+          };
         }
-      } catch (e) {
-        // Close the blank/in-flight popup we opened so it isn't left dangling.
-        // On success the OAuth callback page closes it itself.
-        if (!popup.closed) popup.close();
-        throw e;
+
+        await updateConnector(connectorId, patch);
+
+        if (authType === 'oauth2' && isHttp) {
+          const popup = ctx?.oauthPopup ?? null;
+          if (!popup) throw new Error('OAuth popup was blocked');
+          try {
+            const authorizationUrl = await startConnectorOAuth(connectorId);
+            popup.location.href = authorizationUrl;
+            const result = await waitForOAuthPopup(popup, connectorId);
+            await fetchConnectors();
+            if (result.status !== 'success') {
+              throw new Error(result.error || 'Authorization was not completed');
+            }
+          } catch (e) {
+            if (!popup.closed) popup.close();
+            throw e;
+          }
+        }
+
+        onEditSuccess?.();
+        return;
       }
-      return;
-    }
 
-    // None / bearer / custom headers: store credentials and sync the tool list.
-    const credentials =
-      authType === 'bearer' && mcp.auth?.token?.trim()
-        ? ({ token: mcp.auth.token.trim(), type: 'bearer' } as const)
-        : (() => {
-            const headers = cleanRecord(mcp.headers);
-            return headers ? ({ headers, type: 'header' } as const) : undefined;
-          })();
+      // ── Create mode ───────────────────────────────────────────────────────
+      const base = {
+        identifier,
+        mcpConnectionType: (mcp.type ?? 'http') as 'http' | 'stdio',
+        mcpServerUrl: isHttp ? mcp.url?.trim() : undefined,
+        mcpStdioConfig: isHttp
+          ? undefined
+          : { args: mcp.args ?? [], command: (mcp.command ?? '').trim(), env: cleanRecord(mcp.env) },
+        name: identifier,
+        sourceType: ConnectorSourceType.custom,
+      };
 
-    const connectorId = await createConnector({ ...base, credentials });
-    await syncConnectorTools(connectorId);
-  };
+      // OAuth: create with the OIDC config, then drive the authorize popup that
+      // DevModal already opened synchronously for us.
+      if (isHttp && authType === 'oauth2') {
+        const popup = ctx?.oauthPopup ?? null;
+        if (!popup) throw new Error('OAuth popup was blocked');
 
-  return (
-    <DevModal
-      enableOAuth
-      mode={'create'}
-      open={open}
-      onSave={handleSave}
-      onOpenChange={(next) => {
-        if (!next) onClose();
-      }}
-    />
-  );
-});
+        const clientId = mcp.auth?.clientId?.trim();
+        try {
+          const newConnectorId = await createConnector({
+            ...base,
+            oidcConfig: {
+              clientId: clientId || undefined,
+              clientSecret: mcp.auth?.clientSecret?.trim() || undefined,
+              // client_id present → pre-registration; absent → dynamic registration.
+              scheme: clientId ? 'pre_registration' : 'dcr',
+            },
+          });
+
+          const authorizationUrl = await startConnectorOAuth(newConnectorId);
+          popup.location.href = authorizationUrl;
+          const result = await waitForOAuthPopup(popup, newConnectorId);
+          await fetchConnectors();
+          if (result.status !== 'success') {
+            throw new Error(result.error || 'Authorization was not completed');
+          }
+        } catch (e) {
+          // Close the blank/in-flight popup we opened so it isn't left dangling.
+          // On success the OAuth callback page closes it itself.
+          if (!popup.closed) popup.close();
+          throw e;
+        }
+        return;
+      }
+
+      // None / bearer / custom headers: store credentials and sync the tool list.
+      const credentials =
+        authType === 'bearer' && mcp.auth?.token?.trim()
+          ? ({ token: mcp.auth.token.trim(), type: 'bearer' } as const)
+          : (() => {
+              const headers = cleanRecord(mcp.headers);
+              return headers ? ({ headers, type: 'header' } as const) : undefined;
+            })();
+
+      const newConnectorId = await createConnector({ ...base, credentials });
+      await syncConnectorTools(newConnectorId);
+    };
+
+    return (
+      <DevModal
+        enableOAuth
+        mode={isEditMode ? 'edit' : 'create'}
+        open={open}
+        value={editValue}
+        onSave={handleSave}
+        onOpenChange={(next) => {
+          if (!next) onClose();
+        }}
+      />
+    );
+  },
+);
 
 CustomConnectorModal.displayName = 'CustomConnectorModal';
 

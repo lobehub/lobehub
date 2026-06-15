@@ -9,46 +9,6 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     {
       defaultTimeoutMs: 30_000,
       description:
-        'List files and folders in a specified directory. Input should be a path. Output is a JSON array of file/folder names.',
-      humanIntervention: {
-        dynamic: {
-          default: 'never',
-          policy: 'required',
-          type: 'pathScopeAudit',
-        },
-      },
-      name: LocalSystemApiName.listFiles,
-      parameters: {
-        properties: {
-          limit: {
-            default: 100,
-            description: 'Maximum number of items to return (default: 100)',
-            type: 'number',
-          },
-          path: {
-            description: 'The directory path to list',
-            type: 'string',
-          },
-          sortBy: {
-            default: 'modifiedTime',
-            description: 'Field to sort by (default: modifiedTime)',
-            enum: ['name', 'modifiedTime', 'createdTime', 'size'],
-            type: 'string',
-          },
-          sortOrder: {
-            default: 'desc',
-            description: 'Sort order (default: desc)',
-            enum: ['asc', 'desc'],
-            type: 'string',
-          },
-        },
-        required: ['path'],
-        type: 'object',
-      },
-    },
-    {
-      defaultTimeoutMs: 30_000,
-      description:
         'Read the content of a text or document file (txt/md/json/source code/pdf/docx/etc.). Binary files (.bin/.exe/.zip/.b64/encoded blobs) are rejected with a structured error — use runCommand with file/hexdump/strings to inspect those instead. Output is capped at 500K chars total and 8K chars per line; for larger files, use a narrower line range or grepContent.',
       humanIntervention: {
         dynamic: {
@@ -265,7 +225,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
     {
       defaultTimeoutMs: 30_000,
       description:
-        'Start a terminal session to execute a shell command and return console output collected during the wait window (up to 30 seconds by default). If the command exits during that window, the result includes `exit_code`; if it is still running, the result includes `shell_id` for later output retrieval or termination.',
+        'Start a terminal session to execute a shell command and return console output collected during the wait window (up to 30 seconds by default). If the command is still running after the wait window, the result includes `shell_id` for later observation or termination.',
       humanIntervention: 'required',
       name: LocalSystemApiName.runCommand,
       parameters: {

@@ -121,6 +121,7 @@ describe('useTopicItemDropdownMenu', () => {
       'autoRename',
       'rename',
       'duplicate',
+      'moveToAgent',
       'share',
       'delete',
     ]) {

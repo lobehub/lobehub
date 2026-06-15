@@ -35,6 +35,7 @@
   "QuotaLimitReached": "Désolé, l'utilisation des jetons ou le nombre de requêtes a atteint la limite de quota pour cette clé. Veuillez augmenter le quota de la clé ou réessayer plus tard.",
   "RateLimitExceeded": "Désolé, l'utilisation des jetons ou le nombre de requêtes a atteint la limite de débit pour cette clé. Veuillez réessayer plus tard ou augmenter le quota de la clé.",
   "StateStorePersistError": "Un problème temporaire avec le stockage de l'état de la conversation a interrompu cette opération. Veuillez réessayer ; si le problème persiste, contactez le support.",
+  "StateStoreReadError": "Cette opération n'a pas pu être reprise car l'état de la session était indisponible. Veuillez rouvrir la conversation pour continuer ; si le problème persiste, contactez le support.",
   "StreamChunkError": "Erreur lors de l'analyse du fragment de message de la requête en streaming. Veuillez vérifier si l'interface API actuelle est conforme aux spécifications standard ou contactez votre fournisseur d'API pour obtenir de l'aide.",
   "UpstreamGatewayError": "La passerelle ou le proxy en amont a renvoyé une erreur. Veuillez réessayer sous peu ; si le problème persiste, vérifiez la configuration de votre proxy / point de terminaison.",
   "UpstreamHttpError": "Le fournisseur a renvoyé une erreur HTTP sans plus de détails. Veuillez réessayer ou vérifier votre requête et la configuration du modèle.",

@@ -68,7 +68,10 @@ export interface GlobalServerConfig {
    */
   enabledOAuthSSO?: boolean;
   enableEmailVerification?: boolean;
-
+  /**
+   * Whether Gateway mode is available for app-level agent execution.
+   */
+  enableGatewayMode?: boolean;
   enableLobehubSkill?: boolean;
   enableMagicLink?: boolean;
   enableMarketTrustedClient?: boolean;

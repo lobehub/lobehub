@@ -14,6 +14,8 @@ import { type ChatGroupConfig } from '@/database/types/chatGroup';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentGroupService } from '@/server/services/agentGroup';
+import { EditLockService } from '@/server/services/editLock';
+import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { TransferErrorCode } from '@/types/transferError';
 
 /**
@@ -55,6 +57,7 @@ const agentGroupProcedure = wsCompatProcedure.use(serverDatabase).use(async (opt
       agentGroupService: new AgentGroupService(ctx.serverDB, ctx.userId, wsId),
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       chatGroupModel: new ChatGroupModel(ctx.serverDB, ctx.userId, wsId),
+      editLockService: new EditLockService(ctx.userId),
       userModel: new UserModel(ctx.serverDB, ctx.userId),
     },
   });
@@ -402,12 +405,66 @@ export const agentGroupRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Collaborative edit lock: reject writes to a workspace group another
+      // member is actively editing. Inert until a client acquires the lock.
+      if (ctx.workspaceId) {
+        const blockedBy = await ctx.editLockService.getBlockingHolder('chatGroup', input.id);
+        if (blockedBy) {
+          throw new TRPCError({
+            cause: { data: { code: 'DocumentLocked' } },
+            code: 'CONFLICT',
+            message: 'Group is being edited by another user',
+          });
+        }
+      }
+
       return ctx.chatGroupModel.update(input.id, {
         ...input.value,
         config: ctx.agentGroupService.normalizeGroupConfig(
           input.value.config as ChatGroupConfig | null,
         ),
       });
+    }),
+
+  acquireGroupLock: agentGroupProcedureWrite
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.workspaceId) return { expiresAt: null, holderId: null, lockedByOther: false };
+      const prev = await ctx.editLockService.getActiveHolder('chatGroup', input.id);
+      const result = await ctx.editLockService.acquire('chatGroup', input.id);
+      if ((result.holderId ?? null) !== (prev ?? null)) {
+        void publishResourceEvent(
+          { id: input.id, type: 'chatGroup' },
+          { actorId: ctx.userId, data: { holderId: result.holderId }, type: 'lock.changed' },
+        );
+      }
+      return result;
+    }),
+
+  getGroupLock: agentGroupProcedureWrite
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      if (!ctx.workspaceId) return { expiresAt: null, holderId: null, lockedByOther: false };
+      const holder = await ctx.editLockService.getActiveHolder('chatGroup', input.id);
+      return {
+        expiresAt: null,
+        holderId: holder ?? null,
+        lockedByOther: Boolean(holder) && holder !== ctx.userId,
+      };
+    }),
+
+  releaseGroupLock: agentGroupProcedureWrite
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.workspaceId) return;
+      // Only broadcast "unlocked" when we actually released our own lock — if the
+      // lease expired and another member took over, the lock is still held.
+      const released = await ctx.editLockService.release('chatGroup', input.id);
+      if (!released) return;
+      void publishResourceEvent(
+        { id: input.id, type: 'chatGroup' },
+        { actorId: ctx.userId, data: { holderId: null }, type: 'lock.changed' },
+      );
     }),
 });
 

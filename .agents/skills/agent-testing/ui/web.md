@@ -10,22 +10,31 @@ backend-only changes prefer [../cli/index.md](../cli/index.md).
 
 ## Prerequisites
 
+- Complete [Step 0.0](../SKILL.md#00-resolve-the-current-test-environment) (resolve ports) and [Step -1](../SKILL.md#step--1--plan-approval-for-non-trivial-tests) (plan approval) first.
 - Local dev server running — [../references/dev-server.md](../references/dev-server.md)
-- Web auth injected into agent-browser — [../references/auth.md](../references/auth.md):
+- Web auth verified in agent-browser — prefer `setup-auth.sh web-seed`, see [auth decision flow](../references/auth.md#web--decision-flow).
+
+## Option A — agent-browser with seeded auth (recommended)
 
 ```bash
-pbpaste | ./.agents/skills/agent-testing/scripts/setup-auth.sh web # after copying the Cookie header
+./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user
+./.agents/skills/agent-testing/scripts/setup-auth.sh web-seed
 ```
 
-## Option A — agent-browser with injected auth (recommended)
+Then drive the verified session:
 
 ```bash
 SESSION=lobehub-dev
 
-agent-browser --session $SESSION open "http://localhost:3010/"
+agent-browser --session $SESSION open "$SERVER_URL/"
 agent-browser --session $SESSION snapshot -i
 # interact via refs — full command reference: ../references/agent-browser.md
 ```
+
+Use this session as the evidence source. Do not use ordinary Chrome screenshots
+or Chrome Network records as proof for Web tests; ordinary Chrome is only a
+fallback source for copying cookies into agent-browser when the seeded login is
+not available.
 
 ### Watch the API while driving the UI
 

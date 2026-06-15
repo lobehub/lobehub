@@ -36,22 +36,14 @@ export const params = {
     chatCompletion: () => process.env.DEBUG_AKASH_CHAT_COMPLETION === '1',
   },
   models: async ({ client }) => {
-    try {
-      const modelsPage = (await client.models.list()) as any;
-      const rawList: any[] = modelsPage.data || [];
+    const modelsPage = (await client.models.list()) as any;
+    const rawList: any[] = modelsPage.data || [];
 
-      // Remove `created` field from each model item
+    // Remove `created` field from each model item
 
-      const modelList: AkashChatModelCard[] = rawList.map(({ created: _, ...rest }) => rest);
+    const modelList: AkashChatModelCard[] = rawList.map(({ created: _, ...rest }) => rest);
 
-      return await processMultiProviderModelList(modelList, 'akashchat');
-    } catch (error) {
-      console.warn(
-        'Failed to fetch AkashChat models. Please ensure your AkashChat API key is valid:',
-        error,
-      );
-      return [];
-    }
+    return await processMultiProviderModelList(modelList, 'akashchat');
   },
   provider: ModelProvider.AkashChat,
 } satisfies OpenAICompatibleFactoryOptions;

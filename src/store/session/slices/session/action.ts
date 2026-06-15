@@ -8,6 +8,7 @@ import { type PartialDeep } from 'type-fest';
 import { message } from '@/components/AntdStaticMethods';
 import { DEFAULT_AGENT_LOBE_SESSION, INBOX_SESSION_ID } from '@/const/session';
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { sessionKeys } from '@/libs/swr/keys';
 import { chatGroupService } from '@/services/chatGroup';
 import { sessionService } from '@/services/session';
 import { getChatGroupStoreState } from '@/store/agentGroup';
@@ -32,9 +33,6 @@ import { sessionSelectors } from './selectors';
 import { sessionMetaSelectors } from './selectors/meta';
 
 const n = setNamespace('session');
-
-const FETCH_SESSIONS_KEY = 'fetchSessions';
-const SEARCH_SESSIONS_KEY = 'searchSessions';
 
 type Setter = StoreSetter<SessionStore>;
 export const createSessionSlice = (set: Setter, get: () => SessionStore, _api?: unknown) =>
@@ -203,7 +201,7 @@ export class SessionActionImpl {
     isLogin: boolean | undefined,
   ): SWRResponse<ChatSessionList> => {
     return useClientDataSWR<ChatSessionList>(
-      enabled ? [FETCH_SESSIONS_KEY, isLogin] : null,
+      enabled ? sessionKeys.list(isLogin) : null,
       () => sessionService.getGroupedSessions(),
       {
         fallbackData: {
@@ -270,7 +268,7 @@ export class SessionActionImpl {
 
   useSearchSessions = (keyword?: string): SWRResponse<any> => {
     return useSWR<LobeSessions>(
-      [SEARCH_SESSIONS_KEY, keyword],
+      sessionKeys.search(keyword),
       async () => {
         if (!keyword) return [];
 
@@ -320,7 +318,7 @@ export class SessionActionImpl {
   };
 
   refreshSessions = async (): Promise<void> => {
-    await mutate([FETCH_SESSIONS_KEY, true]);
+    await mutate(sessionKeys.list(true));
   };
 }
 

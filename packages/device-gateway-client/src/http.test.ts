@@ -274,6 +274,22 @@ describe('GatewayHttpClient', () => {
       expect(body.toolCall.type).toBe('tool');
     });
 
+    it('should pass optional operationId', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
+        ok: true,
+      });
+
+      await client.executeToolCall(
+        { operationId: 'op-1', userId: 'user-1' },
+        { apiName: 'readFile', arguments: '{}', identifier: 'test' },
+      );
+
+      const init = vi.mocked(fetch).mock.calls[0][1];
+      const body = JSON.parse((init as RequestInit).body as string);
+      expect(body.operationId).toBe('op-1');
+    });
+
     it('should use default gateway timeout plus HTTP caller padding when timeout is absent', async () => {
       mockFetch({
         json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),

@@ -9,7 +9,9 @@ import type {
   DeviceGitAheadBehind,
   DeviceGitBranchListItem,
   DeviceGitCheckoutResult,
+  DeviceGitDeleteBranchResult,
   DeviceGitLinkedPullRequest,
+  DeviceGitRenameBranchResult,
   DeviceGitSyncResult,
   DeviceGitWorkingTreeStatus,
 } from '@lobechat/types';
@@ -62,6 +64,38 @@ class GitService {
     return deviceId
       ? lambdaClient.device.checkoutGitBranch.mutate({ branch, create, deviceId, path })
       : electronGitService.checkoutGitBranch({ branch, create, path });
+  }
+
+  /** Rename a branch in a working directory. */
+  renameGitBranch({
+    deviceId,
+    from,
+    path,
+    to,
+  }: {
+    deviceId?: string;
+    from: string;
+    path: string;
+    to: string;
+  }): Promise<DeviceGitRenameBranchResult> {
+    return deviceId
+      ? lambdaClient.device.renameGitBranch.mutate({ deviceId, from, path, to })
+      : electronGitService.renameGitBranch({ from, path, to });
+  }
+
+  /** Delete a branch in a working directory. */
+  deleteGitBranch({
+    branch,
+    deviceId,
+    path,
+  }: {
+    branch: string;
+    deviceId?: string;
+    path: string;
+  }): Promise<DeviceGitDeleteBranchResult> {
+    return deviceId
+      ? lambdaClient.device.deleteGitBranch.mutate({ branch, deviceId, path })
+      : electronGitService.deleteGitBranch({ branch, path });
   }
 
   /** Pull (`--ff-only`) the current branch of a working directory. */

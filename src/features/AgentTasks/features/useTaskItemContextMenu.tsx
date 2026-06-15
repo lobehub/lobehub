@@ -21,7 +21,9 @@ import {
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransferMenuItem';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
@@ -60,6 +62,7 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
   const { t } = useTranslation(['chat', 'common']);
   const { message } = App.useApp();
   const appOrigin = useAppOrigin();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { allowed: canEditTask } = usePermission('create_content');
 
   const updateTaskStatus = useTaskStore((s) => s.updateTaskStatus);
@@ -133,9 +136,9 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
         } as ContextMenuItem;
       });
 
-      const taskUrl = `${appOrigin}${taskDetailPath(
-        task.identifier,
-        task.assigneeAgentId ?? undefined,
+      const taskUrl = `${appOrigin}${buildWorkspaceAwarePath(
+        taskDetailPath(task.identifier, task.assigneeAgentId ?? undefined),
+        activeWorkspaceSlug,
       )}`;
       const canRunNow = RUN_NOW_STATUSES.has(currentStatus);
 
@@ -295,6 +298,7 @@ export const useTaskContextMenuActions = (): TaskContextMenuActions => {
     message,
     t,
     appOrigin,
+    activeWorkspaceSlug,
     updateTaskStatus,
     updateTask,
     refreshTaskList,

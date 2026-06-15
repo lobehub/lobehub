@@ -1,5 +1,6 @@
-import { Icon, Input } from '@lobehub/ui';
+import { Icon, Input, Tooltip } from '@lobehub/ui';
 import {
+  confirmModal,
   DropdownMenuItem,
   DropdownMenuPopup,
   DropdownMenuPortal,
@@ -13,10 +14,20 @@ import {
   GitBranchIcon,
   GitBranchPlusIcon,
   LoaderIcon,
+  PencilIcon,
   RefreshCwIcon,
   SearchIcon,
+  Trash2Icon,
 } from 'lucide-react';
-import { memo, type ReactElement, useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  memo,
+  type MouseEvent,
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
@@ -25,6 +36,7 @@ import { gitService } from '@/services/git';
 import { useFetchGitWorkingTreeStatus } from '@/store/device';
 
 import { openCreateBranchModal } from './CreateBranchModal';
+import { openRenameBranchModal } from './RenameBranchModal';
 
 const styles = createStaticStyles(({ css }) => ({
   branchLabel: css`
@@ -67,10 +79,51 @@ const styles = createStaticStyles(({ css }) => ({
     font-size: 13px;
     line-height: 1.3;
     color: ${cssVar.colorText};
+
+    /* Swap the checkmark for the row actions while hovering the row. */
+    &:hover .branch-row-actions {
+      display: flex;
+    }
+
+    &:hover .branch-row-check {
+      display: none;
+    }
   `,
   itemCheck: css`
     flex: none;
     color: ${cssVar.colorPrimary};
+  `,
+  rowAction: css`
+    cursor: pointer;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+
+    color: ${cssVar.colorTextTertiary};
+
+    transition: all 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillSecondary};
+    }
+  `,
+  rowActionDanger: css`
+    &:hover {
+      color: ${cssVar.colorError};
+      background: ${cssVar.colorErrorBg};
+    }
+  `,
+  rowActions: css`
+    display: none;
+    flex: none;
+    gap: 2px;
+    align-items: center;
   `,
   itemIcon: css`
     flex: none;
@@ -180,6 +233,7 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
     children,
   }) => {
     const { t } = useTranslation('device');
+    const { t: tCommon } = useTranslation('common');
     const [search, setSearch] = useState('');
     const [busyBranch, setBusyBranch] = useState<string | null>(null);
 
@@ -285,6 +339,56 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
       openCreateBranchModal({ onSubmit: handleCreateBranch });
     }, [handleCreateBranch, onOpenChange]);
 
+    // Rename a branch from a modal. Closes the dropdown first (mirrors create),
+    // then reconciles via onAfterCheckout — a renamed current branch updates the
+    // header label, and the list refetches when the dropdown reopens.
+    const handleRename = useCallback(
+      (event: MouseEvent, branch: string) => {
+        event.stopPropagation();
+        onOpenChange(false);
+        openRenameBranchModal({
+          currentName: branch,
+          onSubmit: async (newName) => {
+            if (newName === branch) return undefined;
+            const result = await gitService.renameGitBranch({
+              deviceId,
+              from: branch,
+              path,
+              to: newName,
+            });
+            onAfterCheckout?.();
+            if (result.success) return undefined;
+            return result.error || t('workingDirectory.renameFailed');
+          },
+        });
+      },
+      [deviceId, onAfterCheckout, onOpenChange, path, t],
+    );
+
+    // Delete a branch behind a destructive confirm. git rejects deleting the
+    // checked-out branch, so the action is hidden for the current branch.
+    const handleDelete = useCallback(
+      (event: MouseEvent, branch: string) => {
+        event.stopPropagation();
+        onOpenChange(false);
+        confirmModal({
+          cancelText: tCommon('cancel'),
+          content: t('workingDirectory.deleteBranchConfirm', { name: branch }),
+          okButtonProps: { danger: true },
+          okText: tCommon('delete'),
+          onOk: async () => {
+            const result = await gitService.deleteGitBranch({ branch, deviceId, path });
+            onAfterCheckout?.();
+            if (!result.success) {
+              message.error(result.error || t('workingDirectory.deleteFailed'));
+            }
+          },
+          title: t('workingDirectory.deleteBranchTitle'),
+        });
+      },
+      [deviceId, onAfterCheckout, onOpenChange, path, t, tCommon],
+    );
+
     return (
       <DropdownMenuRoot open={open} onOpenChange={onOpenChange}>
         <DropdownMenuTrigger>{children}</DropdownMenuTrigger>
@@ -361,8 +465,34 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
                           )}
                         </div>
                         {isCurrent && (
-                          <Icon className={styles.itemCheck} icon={CheckIcon} size={14} />
+                          <Icon
+                            className={cx('branch-row-check', styles.itemCheck)}
+                            icon={CheckIcon}
+                            size={14}
+                          />
                         )}
+                        <div className={cx('branch-row-actions', styles.rowActions)}>
+                          <Tooltip title={t('workingDirectory.renameBranchAction')}>
+                            <div
+                              className={styles.rowAction}
+                              role="button"
+                              onClick={(e) => handleRename(e, branch.name)}
+                            >
+                              <Icon icon={PencilIcon} size={13} />
+                            </div>
+                          </Tooltip>
+                          {!isCurrent && (
+                            <Tooltip title={t('workingDirectory.deleteBranchAction')}>
+                              <div
+                                className={cx(styles.rowAction, styles.rowActionDanger)}
+                                role="button"
+                                onClick={(e) => handleDelete(e, branch.name)}
+                              >
+                                <Icon icon={Trash2Icon} size={13} />
+                              </div>
+                            </Tooltip>
+                          )}
+                        </div>
                       </DropdownMenuItem>
                     );
                   })}

@@ -486,9 +486,9 @@ describe('HeterogeneousPersistenceHandler', () => {
         if (id === 'asst-1') order.push('update-asst');
         return origUpdate(id, patch);
       });
-      h.messageModel.create.mockImplementation(async (input: any) => {
+      h.messageModel.create.mockImplementation(async (input: any, id?: string) => {
         order.push(input.role === 'tool' ? 'create-tool' : 'create-other');
-        return origCreate(input);
+        return origCreate(input, id);
       });
 
       const tool = {
@@ -765,6 +765,91 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(step2Asst).toBeDefined();
       // Chains off the tool row, NOT the previous assistant → wire stays linear.
       expect(step2Asst!.parentId).toBe('tool-row-only');
+    });
+
+    it('chains off the latest tool row when parallel tools are only partially backfilled', async () => {
+      // Regression for main-chain breaks with parallel/multi tool calls:
+      // tool A is visible in assistant.tools[].result_msg_id, while tool B's
+      // row exists but Phase 3 has not backfilled assistant.tools[] yet. The
+      // step anchor must be tool B, not the earlier resolved tool A.
+      const h = createHarness({
+        assistantMessageId: 'asst-init',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const metaState: FakeTopicMetadata = {
+        runningOperation: { assistantMessageId: 'asst-init', operationId: 'op-1' },
+      };
+      h.topicModel.findById.mockImplementation(async (id: string) => {
+        if (id !== 'topic-1') return null;
+        return { agentId: null, id, metadata: { ...metaState } };
+      });
+      h.topicModel.updateMetadata.mockImplementation(async (_id: string, patch: any) => {
+        Object.assign(metaState, patch);
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_start', 1, { newStep: true })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      const step1Asst = [...h.messages.values()].find(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init',
+      )!;
+
+      h.messages.set('tool-a-backfilled', {
+        agentId: null,
+        content: 'tool A result',
+        id: 'tool-a-backfilled',
+        parentId: step1Asst.id,
+        role: 'tool',
+        threadId: null,
+        tool_call_id: 'tc-a',
+        topicId: 'topic-1',
+      });
+      h.messages.set('tool-b-row-only', {
+        agentId: null,
+        content: 'tool B result',
+        id: 'tool-b-row-only',
+        parentId: step1Asst.id,
+        role: 'tool',
+        threadId: null,
+        tool_call_id: 'tc-b',
+        topicId: 'topic-1',
+      });
+      h.messages.set(step1Asst.id, {
+        ...h.messages.get(step1Asst.id)!,
+        tools: [
+          {
+            apiName: 'Read',
+            arguments: '{}',
+            id: 'tc-a',
+            identifier: 'read',
+            result_msg_id: 'tool-a-backfilled',
+            type: 'default',
+          },
+          {
+            apiName: 'Bash',
+            arguments: '{}',
+            id: 'tc-b',
+            identifier: 'bash',
+            type: 'default',
+          },
+        ],
+      });
+
+      await h.handler.ingest({
+        events: [buildEvent('stream_start', 2, { newStep: true })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const step2Asst = [...h.messages.values()].find(
+        (m) => m.role === 'assistant' && m.id !== 'asst-init' && m.id !== step1Asst.id,
+      );
+      expect(step2Asst).toBeDefined();
+      expect(step2Asst!.parentId).toBe('tool-b-row-only');
     });
 
     it('ignores subagent tool rows (threadId set) when resolving the step anchor', async () => {

@@ -163,6 +163,10 @@ class PageAgentExecutor extends BaseExecutor<typeof PageAgentApiName> {
       state.documentEditorData && typeof state.documentEditorData === 'object'
         ? (state.documentEditorData as Record<string, unknown>)
         : undefined;
+    const hasDocumentSnapshot =
+      typeof content === 'string' || typeof title === 'string' || !!editorData;
+
+    if (!hasDocumentSnapshot) return;
 
     // Only push into the live editor when this runtime is bound to the same
     // document the server just wrote. Otherwise the snapshot would overwrite

@@ -1,5 +1,7 @@
 'use client';
 
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   ActionIcon,
   Avatar,
@@ -52,6 +54,10 @@ const TabItem = memo<TabItemProps>(
     const isUnread = useTabUnread(tab);
     const showUnreadDot = !isRunning && isUnread;
 
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+      id,
+    });
+
     const handleClick = useCallback(() => {
       if (!isActive) {
         onActivate(id, tab.url);
@@ -102,10 +108,23 @@ const TabItem = memo<TabItemProps>(
         <Flexbox
           horizontal
           align="center"
-          className={cx(electronStylish.nodrag, styles.tab, isActive && styles.tabActive)}
           data-active={isActive ? 'true' : undefined}
           gap={6}
+          ref={setNodeRef}
+          className={cx(
+            electronStylish.nodrag,
+            styles.tab,
+            isActive && styles.tabActive,
+            isDragging && styles.tabDragging,
+          )}
+          style={{
+            transform: CSS.Translate.toString(transform),
+            transition,
+            zIndex: isDragging ? 1 : undefined,
+          }}
           onClick={handleClick}
+          {...attributes}
+          {...listeners}
         >
           {meta.avatar ? (
             <span className={styles.avatarWrapper}>

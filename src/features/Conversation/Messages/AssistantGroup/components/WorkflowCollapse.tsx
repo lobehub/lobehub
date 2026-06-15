@@ -363,8 +363,8 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
         }
         case 'partial': {
           // Mix of success + failure: show success as the primary state and
-          // surface a small warning badge at the bottom-right so the overall
-          // turn still reads as "done" rather than "broken".
+          // surface a small warning badge slightly inset from the bottom-right
+          // so the overall turn still reads as "done" rather than "broken".
           return (
             <div style={{ flex: 'none', position: 'relative' }}>
               {wrapInBlock(<Icon color={cssVar.colorSuccess} icon={Check} />)}
@@ -373,12 +373,12 @@ const WorkflowCollapse = memo<WorkflowCollapseProps>(
                   alignItems: 'center',
                   background: cssVar.colorBgContainer,
                   borderRadius: '50%',
-                  bottom: 0,
+                  bottom: 2,
                   display: 'flex',
                   height: 10,
                   justifyContent: 'center',
                   position: 'absolute',
-                  right: 0,
+                  right: 2,
                   width: 10,
                 }}
               >

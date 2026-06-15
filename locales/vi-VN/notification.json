@@ -17,6 +17,8 @@
   "storage_overage_cap_reached_title": "Đã đạt giới hạn thanh toán theo mức sử dụng cho lưu trữ",
   "video_generation_completed": "Video \"{{prompt}}\" của bạn đã sẵn sàng.",
   "video_generation_completed_title": "Hoàn tất tạo video",
+  "workspace_member_invited": "{{inviterLabel}} đã mời bạn tham gia không gian làm việc \"{{workspaceName}}\" với vai trò {{role}}.",
+  "workspace_member_invited_title": "Lời mời tham gia {{workspaceName}}",
   "workspace_member_joined": "{{memberLabel}} đã tham gia không gian làm việc \"{{workspaceName}}\" với vai trò {{role}}.",
   "workspace_member_joined_member": "{{memberLabel}} đã tham gia không gian làm việc \"{{workspaceName}}\" với vai trò Thành viên.",
   "workspace_member_joined_member_title": "Thành viên mới đã tham gia {{workspaceName}}",

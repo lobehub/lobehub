@@ -186,6 +186,7 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
       case 'getCommandOutput': {
         return {
           result: {
+            durationMs: raw.duration_ms,
             exitCode: raw.exit_code,
             error: raw.error,
             newOutput: raw.output,

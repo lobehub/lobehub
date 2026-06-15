@@ -4,6 +4,7 @@ import { type SWRResponse } from 'swr';
 
 import { LOADING_FLAT } from '@/const/message';
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { imageKeys } from '@/libs/swr/keys';
 import { type UpdateTopicValue } from '@/server/routers/lambda/generationTopic';
 import { chatService } from '@/services/chat';
 import { generationTopicService } from '@/services/generationTopic';
@@ -18,8 +19,6 @@ import { type ImageStore } from '../../store';
 import { type GenerationTopicDispatch } from './reducer';
 import { generationTopicReducer } from './reducer';
 import { generationTopicSelectors } from './selectors';
-
-const FETCH_GENERATION_TOPICS_KEY = 'fetchGenerationTopics';
 
 const n = setNamespace('generationTopic');
 
@@ -209,7 +208,7 @@ export class GenerationTopicActionImpl {
 
   useFetchGenerationTopics = (enabled: boolean): SWRResponse<ImageGenerationTopic[]> => {
     return useClientDataSWR<ImageGenerationTopic[]>(
-      enabled ? [FETCH_GENERATION_TOPICS_KEY] : null,
+      enabled ? imageKeys.generationTopics() : null,
       () => generationTopicService.getAllGenerationTopics('image'),
       {
         suspense: true,
@@ -223,7 +222,7 @@ export class GenerationTopicActionImpl {
   };
 
   refreshGenerationTopics = async (): Promise<void> => {
-    await mutate([FETCH_GENERATION_TOPICS_KEY]);
+    await mutate(imageKeys.generationTopics());
   };
 
   removeGenerationTopic = async (id: string): Promise<void> => {

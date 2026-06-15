@@ -1,16 +1,29 @@
 /**
- * SWR localStorage Cache Provider
+ * Unified tiered SWR cache provider
  *
- * Provides localStorage persistence for selected SWR requests.
- * Only keys matching the whitelist patterns will be cached to localStorage.
+ * One in-memory Map backs SWR (the cache contract stays synchronous). Behind
+ * it, writes are transparently routed to a persistence *tier* chosen centrally
+ * by the SWR key — consumers never opt in per call:
+ *
+ * - `idb`   → IndexedDB (see `localDataCache.ts`): large / important business
+ *             entities (messages, topics, tasks, documents, agents). Loaded
+ *             asynchronously at boot, stored as independent rows — no 5MB cap.
+ * - `local` → localStorage: small, frequently-changing list shells (recents).
+ *             Loaded synchronously for instant first paint.
+ * - none    → memory only.
+ *
+ * Everything is partitioned by identity scope (`${userId}:${workspaceId}`) so
+ * users / workspaces sharing a browser origin never collide; `reloadScope()`
+ * re-hydrates in place when the scope changes (e.g. once auth resolves).
  *
  * @example
  * ```tsx
- * <SWRConfig value={{ provider: createLocalStorageProvider() }}>
+ * <SWRConfig value={{ provider: swrCacheProvider(getCacheScope) }}>
  *   <App />
  * </SWRConfig>
  * ```
  */
+import { buildLocalDataKey, localDataCache } from './localDataCache';
 
 interface CacheEntry<T = unknown> {
   /** Cached data */
@@ -21,35 +34,43 @@ interface CacheEntry<T = unknown> {
   version: string;
 }
 
-export interface LocalStorageCacheOptions {
-  /** Allowed SWR key patterns (whitelist) */
-  cacheablePatterns?: string[];
-  /** localStorage key name, defaults to 'lobechat-swr-cache' */
-  cacheKey?: string;
-  /** Maximum cache entries, defaults to 50 */
-  maxEntries?: number;
+export type CacheTier = 'idb' | 'local';
+
+export interface CacheProviderOptions {
+  /** Debounce (ms) before flushing writes to either tier, defaults to 2000. */
+  debounceMs?: number;
+  /** Resolver for the active identity scope (`${userId}:${workspaceId}`). */
+  getScope?: () => string;
+  /** SWR key patterns persisted to the IndexedDB tier. */
+  idbPatterns?: string[];
+  /** SWR key patterns persisted to the localStorage tier. */
+  localPatterns?: string[];
+  /** Max localStorage-tier entries, defaults to 50. */
+  maxLocalEntries?: number;
   /** Error callback */
   onError?: (error: Error) => void;
-  /** Cache TTL in milliseconds, defaults to 24 hours */
+  /** Called after a scope's IndexedDB tier finishes hydrating. */
+  onScopeHydrated?: (scope: string) => void;
+  /** Cache TTL in milliseconds, defaults to 24 hours. Applies to both tiers. */
   ttl?: number;
-  /** App version, cache is cleared when version changes */
+  /** App version; entries from another version are ignored on load. */
   version?: string;
 }
 
 /**
- * Default cacheable SWR key patterns
- * Only requests matching these patterns will be persisted
+ * SWR cache provider function with an in-place scope reloader.
  */
-const DEFAULT_CACHEABLE_PATTERNS: string[] = [
-  // Add patterns as needed
-];
+export type ScopedSWRProvider = (() => Map<string, unknown>) & {
+  /**
+   * Flush pending writes, then re-hydrate the in-memory cache from the *current*
+   * scope's namespaces (localStorage synchronously, IndexedDB asynchronously).
+   * No-op until SWR has created the provider's Map.
+   */
+  reloadScope?: () => void;
+};
 
-/**
- * Check if localStorage is available
- */
 const isLocalStorageAvailable = (): boolean => {
   if (typeof window === 'undefined') return false;
-
   try {
     const testKey = '__swr_cache_test__';
     localStorage.setItem(testKey, 'test');
@@ -61,199 +82,284 @@ const isLocalStorageAvailable = (): boolean => {
 };
 
 /**
- * Check if key matches whitelist patterns
- *
- * SWR keys can be:
- * - String: 'fetchSessions'
- * - Serialized array: '["fetchSessions","user-123"]'
- *
- * We check if the key string contains any whitelist pattern
+ * Check whether a (string) SWR key contains any of the patterns. SWR keys are
+ * either a plain string or a serialized array like `'["fetchSessions","u1"]'`.
  */
-const matchesCacheablePattern = (key: string, patterns: string[]): boolean => {
-  if (patterns.length === 0) return false;
-  return patterns.some((pattern) => key.includes(pattern));
-};
+const matchesPattern = (key: string, patterns: string[]): boolean =>
+  patterns.some((pattern) => key.includes(pattern));
 
 /**
- * Create localStorage cache provider
+ * Build the scoped localStorage cache key (localStorage tier namespace).
  *
- * Features:
- * - Whitelist mechanism: only cache specified keys
- * - TTL expiration: auto-cleanup expired data
- * - Version control: auto-cleanup when app version changes
- * - Capacity limit: prevent exceeding localStorage limit
- * - SSR compatible: returns empty Map on server
- * - Error recovery: fallback to memory cache on error
+ * Partitioned per identity scope so different users / workspaces sharing the
+ * same browser origin never read or overwrite each other's cached data.
  */
-export function createLocalStorageProvider(options: LocalStorageCacheOptions = {}) {
+export const getScopedCacheKey = (scope: string) => `lobechat-swr-cache:${scope}`;
+
+/**
+ * Create a unified tiered cache provider.
+ */
+export function createCacheProvider(options: CacheProviderOptions = {}): ScopedSWRProvider {
   const {
-    cacheKey = 'lobechat-swr-cache',
+    debounceMs = 2000,
+    getScope = () => 'default',
+    idbPatterns = [],
+    localPatterns = [],
     ttl = 24 * 60 * 60 * 1000, // 24 hours
-    maxEntries = 50,
+    maxLocalEntries = 50,
     version = '1.0.0',
-    cacheablePatterns = DEFAULT_CACHEABLE_PATTERNS,
     onError = (error) => console.error('[SWR Cache]', error),
+    onScopeHydrated,
   } = options;
 
-  // Return memory cache when SSR or localStorage unavailable
+  // SSR / no storage → plain memory cache, no persistence. Still signal
+  // hydration so the boot gate never blocks.
   if (!isLocalStorageAvailable()) {
-    return () => new Map();
+    return () => {
+      onScopeHydrated?.(getScope());
+      return new Map();
+    };
   }
 
-  return (): Map<string, unknown> => {
-    /**
-     * Load cache from localStorage
-     */
-    const loadCache = (): Map<string, unknown> => {
-      try {
-        const stored = localStorage.getItem(cacheKey);
-        if (!stored) {
-          return new Map();
-        }
+  /** Route a key to its persistence tier (idb wins over local). */
+  const tierOf = (key: string): CacheTier | null => {
+    if (matchesPattern(key, idbPatterns)) return 'idb';
+    if (matchesPattern(key, localPatterns)) return 'local';
+    return null;
+  };
 
-        const entries: [string, CacheEntry][] = JSON.parse(stored);
-        const now = Date.now();
+  let cacheMapInstance: TieredCacheMap | null = null;
 
-        // Filter: expired data, version mismatch
-        const validEntries = entries
-          .filter(([, entry]) => {
-            const isExpired = now - entry.timestamp > ttl;
-            const isValidVersion = entry.version === version;
-            return !isExpired && isValidVersion;
-          })
-          .map(([key, entry]) => [key, entry.data] as [string, unknown]);
+  // --- localStorage tier (synchronous snapshot) ----------------------------
+  let localTimer: ReturnType<typeof setTimeout> | null = null;
 
-        return new Map(validEntries);
-      } catch (error) {
-        onError(error as Error);
-        return new Map();
+  const loadLocal = (): Map<string, unknown> => {
+    try {
+      const stored = localStorage.getItem(getScopedCacheKey(getScope()));
+      if (!stored) return new Map();
+      const entries: [string, CacheEntry][] = JSON.parse(stored);
+      const now = Date.now();
+      return new Map(
+        entries
+          .filter(([, e]) => now - e.timestamp <= ttl && e.version === version)
+          .map(([key, e]) => [key, e.data] as [string, unknown]),
+      );
+    } catch (error) {
+      onError(error as Error);
+      return new Map();
+    }
+  };
+
+  const saveLocal = () => {
+    if (!cacheMapInstance) return;
+    const key = getScopedCacheKey(getScope());
+    try {
+      const entries = Array.from(cacheMapInstance.entries())
+        .filter(([k]) => matchesPattern(k, localPatterns))
+        .slice(-maxLocalEntries)
+        .map(([k, data]) => [k, { data, timestamp: Date.now(), version } as CacheEntry]);
+
+      const serialized = JSON.stringify(entries);
+      const sizeInMB = new Blob([serialized]).size / (1024 * 1024);
+      if (sizeInMB > 4) {
+        // Drop oldest half rather than wiping everything.
+        localStorage.setItem(key, JSON.stringify(entries.slice(-Math.floor(maxLocalEntries / 2))));
+        console.warn(`[SWR Cache] localStorage tier too large (${sizeInMB.toFixed(2)}MB), trimmed`);
+      } else {
+        localStorage.setItem(key, serialized);
       }
-    };
-
-    const initialData = loadCache();
-
-    // Debounced save variables (outside class to avoid initialization order issues)
-    let saveTimer: ReturnType<typeof setTimeout> | null = null;
-    let cacheMapInstance: Map<string, unknown> | null = null;
-
-    const saveCache = () => {
-      if (!cacheMapInstance) return;
-      try {
-        // Only save whitelisted keys
-        const entries = Array.from(cacheMapInstance.entries())
-          .filter(([key]) => matchesCacheablePattern(key, cacheablePatterns))
-          .slice(-maxEntries)
-          .map(([key, data]) => [key, { data, timestamp: Date.now(), version } as CacheEntry]);
-
-        const serialized = JSON.stringify(entries);
-
-        // Check size, cleanup half when exceeding 4MB
-        const sizeInMB = new Blob([serialized]).size / (1024 * 1024);
-        if (sizeInMB > 4) {
-          const reduced = entries.slice(-Math.floor(maxEntries / 2));
-          localStorage.setItem(cacheKey, JSON.stringify(reduced));
-          console.warn(`[SWR Cache] Cache too large (${sizeInMB.toFixed(2)}MB), cleaned up`);
-        } else {
-          localStorage.setItem(cacheKey, serialized);
-        }
-      } catch (error) {
-        if ((error as DOMException).name === 'QuotaExceededError') {
-          // Quota exceeded, clear cache
-          try {
-            localStorage.removeItem(cacheKey);
-          } catch {
-            // ignore
-          }
-          console.error('[SWR Cache] Quota exceeded, cache cleared');
-        } else {
-          onError(error as Error);
-        }
-      }
-    };
-
-    const debouncedSave = () => {
-      if (saveTimer) clearTimeout(saveTimer);
-      saveTimer = setTimeout(saveCache, 2000);
-    };
-
-    // Save immediately on page unload
-    window.addEventListener('beforeunload', () => {
-      if (saveTimer) clearTimeout(saveTimer);
-      saveCache();
-    });
-
-    // Multi-tab sync
-    window.addEventListener('storage', (event) => {
-      if (event.key === cacheKey && event.newValue && cacheMapInstance) {
+    } catch (error) {
+      if ((error as DOMException).name === 'QuotaExceededError') {
         try {
-          const parsedEntries: [string, CacheEntry][] = JSON.parse(event.newValue);
-          // Only update whitelisted keys
-          parsedEntries.forEach(([key, entry]) => {
-            if (matchesCacheablePattern(key, cacheablePatterns)) {
-              cacheMapInstance!.set(key, entry.data);
-            }
-          });
-        } catch (error) {
-          onError(error as Error);
+          localStorage.removeItem(key);
+        } catch {
+          // ignore
         }
-      }
-    });
-
-    /**
-     * Create Map with interception
-     * Only whitelisted keys trigger persistence
-     */
-    class LocalStorageCacheMap extends Map<string, unknown> {
-      private initialized = false;
-
-      constructor(entries?: readonly (readonly [string, unknown])[] | null) {
-        super();
-        // Manually add initial data to avoid triggering set in super()
-        if (entries) {
-          for (const [key, value] of entries) {
-            super.set(key, value);
-          }
-        }
-        this.initialized = true;
-      }
-
-      get(key: string): unknown {
-        return super.get(key);
-      }
-
-      set(key: string, value: unknown): this {
-        super.set(key, value);
-        // Only trigger save after initialization and for whitelisted keys
-        if (this.initialized && matchesCacheablePattern(key, cacheablePatterns)) {
-          debouncedSave();
-        }
-        return this;
-      }
-
-      delete(key: string): boolean {
-        const result = super.delete(key);
-        if (this.initialized && matchesCacheablePattern(key, cacheablePatterns)) {
-          debouncedSave();
-        }
-        return result;
+        console.error('[SWR Cache] Quota exceeded, localStorage tier cleared');
+      } else {
+        onError(error as Error);
       }
     }
-
-    // Create Map instance
-    const cacheMap = new LocalStorageCacheMap(Array.from(initialData.entries()));
-    cacheMapInstance = cacheMap;
-
-    return cacheMap;
   };
+
+  const debouncedSaveLocal = () => {
+    if (localTimer) clearTimeout(localTimer);
+    localTimer = setTimeout(saveLocal, debounceMs);
+  };
+
+  // --- IndexedDB tier (asynchronous, per-key rows) -------------------------
+  let idbTimer: ReturnType<typeof setTimeout> | null = null;
+  const dirtyIdb = new Set<string>();
+  const deletedIdb = new Set<string>();
+
+  const flushIdb = () => {
+    if (!cacheMapInstance) return;
+    const scope = getScope();
+    const writes = [...dirtyIdb];
+    const dels = [...deletedIdb];
+    dirtyIdb.clear();
+    deletedIdb.clear();
+
+    for (const k of dels) void localDataCache.delete(buildLocalDataKey(scope, k));
+    for (const k of writes) {
+      const v = cacheMapInstance.get(k);
+      if (v !== undefined) void localDataCache.set(buildLocalDataKey(scope, k), v, version);
+    }
+  };
+
+  const debouncedFlushIdb = () => {
+    if (idbTimer) clearTimeout(idbTimer);
+    idbTimer = setTimeout(flushIdb, debounceMs);
+  };
+
+  const loadIdb = async () => {
+    const scope = getScope();
+    try {
+      const entries = await localDataCache.entriesByScope(scope);
+      const now = Date.now();
+      const valid = entries.filter(
+        (e) => (e.version === undefined || e.version === version) && now - e.updatedAt <= ttl,
+      );
+      // Map may have changed scope while we awaited; only apply if still current.
+      if (cacheMapInstance && getScope() === scope) {
+        cacheMapInstance.hydrate(valid.map((e) => [e.key, e.data]));
+      }
+    } catch (error) {
+      onError(error as Error);
+    } finally {
+      onScopeHydrated?.(scope);
+    }
+  };
+
+  // --- write routing -------------------------------------------------------
+  const onSet = (key: string) => {
+    const tier = tierOf(key);
+    if (tier === 'local') debouncedSaveLocal();
+    else if (tier === 'idb') {
+      deletedIdb.delete(key);
+      dirtyIdb.add(key);
+      debouncedFlushIdb();
+    }
+  };
+
+  const onDelete = (key: string) => {
+    const tier = tierOf(key);
+    if (tier === 'local') debouncedSaveLocal();
+    else if (tier === 'idb') {
+      dirtyIdb.delete(key);
+      deletedIdb.add(key);
+      debouncedFlushIdb();
+    }
+  };
+
+  /**
+   * Map that routes writes to the correct persistence tier. `hydrate` /
+   * `dropPersisted` mutate the map without triggering persistence.
+   */
+  class TieredCacheMap extends Map<string, unknown> {
+    private live = false;
+
+    set(key: string, value: unknown): this {
+      super.set(key, value);
+      if (this.live) onSet(key);
+      return this;
+    }
+
+    delete(key: string): boolean {
+      const result = super.delete(key);
+      if (this.live) onDelete(key);
+      return result;
+    }
+
+    /** Bulk-load entries without persisting them back. */
+    hydrate(entries: readonly (readonly [string, unknown])[]): void {
+      for (const [key, value] of entries) super.set(key, value);
+      this.live = true;
+    }
+
+    /** Remove all persisted-tier entries from memory without persisting deletes. */
+    dropPersisted(): void {
+      // Snapshot keys first — we mutate the map while iterating.
+      const keys = Array.from(this.keys());
+      for (const key of keys) if (tierOf(key)) super.delete(key);
+    }
+  }
+
+  // Flush both tiers as early as possible. IndexedDB writes are async and can't
+  // be awaited during teardown, so we must not wait for `beforeunload`: by then
+  // the browser is free to kill the page before `flushIdb()`'s writes land.
+  // Instead flush the moment the page is *hidden* (tab switch / minimize / app
+  // background) — the page is still alive there, so the async writes have time
+  // to complete well before any actual unload. `pagehide` is a best-effort
+  // backstop for the desktop close case (and is bfcache-friendly, unlike
+  // `beforeunload`).
+  const flushAll = () => {
+    if (localTimer) {
+      clearTimeout(localTimer);
+      localTimer = null;
+    }
+    if (idbTimer) {
+      clearTimeout(idbTimer);
+      idbTimer = null;
+    }
+    saveLocal();
+    flushIdb();
+  };
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushAll();
+  });
+  window.addEventListener('pagehide', flushAll);
+
+  // Multi-tab sync for the localStorage tier only.
+  window.addEventListener('storage', (event) => {
+    if (event.key === getScopedCacheKey(getScope()) && event.newValue && cacheMapInstance) {
+      try {
+        const parsed: [string, CacheEntry][] = JSON.parse(event.newValue);
+        parsed.forEach(([key, entry]) => {
+          if (matchesPattern(key, localPatterns)) cacheMapInstance!.hydrate([[key, entry.data]]);
+        });
+      } catch (error) {
+        onError(error as Error);
+      }
+    }
+  });
+
+  const provider: ScopedSWRProvider = () => {
+    const map = new TieredCacheMap();
+    cacheMapInstance = map;
+    map.hydrate([...loadLocal().entries()]); // synchronous first paint
+    void loadIdb(); // asynchronous local-first hydration
+    return map;
+  };
+
+  provider.reloadScope = () => {
+    if (!cacheMapInstance) return;
+    // Drop pending writes scheduled for the previous scope.
+    if (localTimer) {
+      clearTimeout(localTimer);
+      localTimer = null;
+    }
+    if (idbTimer) {
+      clearTimeout(idbTimer);
+      idbTimer = null;
+    }
+    dirtyIdb.clear();
+    deletedIdb.clear();
+
+    cacheMapInstance.dropPersisted();
+    cacheMapInstance.hydrate([...loadLocal().entries()]);
+    void loadIdb();
+  };
+
+  return provider;
 }
 
 /**
- * Clear SWR localStorage cache
- * Can be used for manual cleanup or when app version changes
+ * Clear the localStorage cache tier for a scope (or the legacy key).
  */
 export function clearSWRCache(cacheKey = 'lobechat-swr-cache'): void {
   if (typeof window === 'undefined') return;
-
   try {
     localStorage.removeItem(cacheKey);
     console.info('[SWR Cache] Cache cleared');
@@ -263,29 +369,52 @@ export function clearSWRCache(cacheKey = 'lobechat-swr-cache'): void {
 }
 
 /**
- * SWR localStorage cache whitelist
- * Only keys matching these patterns will be persisted to localStorage
+ * Central tiering config — the single place that decides where each kind of
+ * data is persisted, keyed by the `domain:` namespace of the SWR key (see the
+ * key registry in `@/libs/swr/keys`). Matching is substring-based; the colon in
+ * `domain:` keeps these from matching unrelated keys.
  */
-const SWR_CACHEABLE_PATTERNS = [
-  // Home page data
-  'fetchAgentList', // Agent list
-  'fetchGroups', // Group list
-  'fetchRecentTopics', // Recent topics
-  'fetchRecentResources', // Recent resources
-  'fetchRecentPages', // Recent pages
-  'fetchRecents', // Unified recents
-  // Chat page data
-  'SWR_USE_FETCH_TOPIC', // Topic list (cached per agentId/groupId)
-  'fetchGroupDetail', // Group detail (cached per groupId)
-  'CONVERSATION_FETCH_MESSAGES', // Messages (cached per agentId/topicId)
-];
+export const CACHE_TIERS = {
+  /** Large / important business entities → IndexedDB. */
+  idb: [
+    'message:', // chat messages (conversation + legacy stores)
+    'topic:', // topic lists / agent view / search
+    'agent:', // sidebar agent list + agent documents
+    'group:detail', // group detail (group list stays in localStorage)
+    'task:', // task lists + detail
+    'document:', // editor document content
+    'page:', // page detail / list / meta
+    'notebook:', // notebook documents
+    'brief:', // briefs
+  ],
+  /** Small, frequently-changing list shells → localStorage (sync first paint). */
+  local: [
+    'recent:list',
+    'fetchRecentTopics',
+    'fetchRecentResources',
+    'fetchRecentPages',
+    'group:list',
+  ],
+} as const;
 
 /**
- * Export provider factory function for SWRConfig
+ * Provider factory for SWRConfig.
+ *
+ * @param getScope resolver for the current identity scope. Evaluated lazily so
+ *   persistence follows the active user/workspace; call `provider.reloadScope()`
+ *   after the scope changes to re-hydrate in place.
+ * @param onScopeHydrated notified after a scope's IndexedDB tier finishes
+ *   loading (used by the boot hydration gate).
  */
-export const swrCacheProvider = () => {
-  return createLocalStorageProvider({
-    cacheablePatterns: SWR_CACHEABLE_PATTERNS,
+export const swrCacheProvider = (
+  getScope: () => string,
+  onScopeHydrated?: (scope: string) => void,
+): ScopedSWRProvider => {
+  return createCacheProvider({
+    getScope,
+    idbPatterns: [...CACHE_TIERS.idb],
+    localPatterns: [...CACHE_TIERS.local],
+    onScopeHydrated,
     ttl: 12 * 60 * 60 * 1000, // 12 hours
   });
 };

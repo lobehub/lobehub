@@ -22,11 +22,12 @@ const resolveMaxRepairRounds = async (
   db: LobeChatDatabase,
   userId: string,
   plan: VerifyCheckItem[],
+  workspaceId?: string,
 ): Promise<number> => {
   const rubricId = plan.find((i) => i.sourceRubricId)?.sourceRubricId;
   if (!rubricId) return DEFAULT_MAX_REPAIR_ROUNDS;
 
-  const rubric = await new VerifyRubricModel(db, userId).findById(rubricId);
+  const rubric = await new VerifyRubricModel(db, userId, workspaceId).findById(rubricId);
   return rubric?.config?.maxRepairRounds ?? DEFAULT_MAX_REPAIR_ROUNDS;
 };
 
@@ -79,12 +80,13 @@ export const createRepairRunner = (params: {
   provider?: string | null;
   topicId?: string | null;
   userId: string;
+  workspaceId?: string;
 }): RepairSpawner | undefined => {
-  const { agentId, db, maxRepairRounds, model, provider, topicId, userId } = params;
+  const { agentId, db, maxRepairRounds, model, provider, topicId, userId, workspaceId } = params;
   if (!agentId || !topicId) return undefined;
 
   return async ({ instruction, operationId, verifyMessageId }) => {
-    const operationModel = new AgentOperationModel(db, userId);
+    const operationModel = new AgentOperationModel(db, userId, workspaceId);
 
     const round = await countRepairRounds(operationModel, operationId);
     if (round >= maxRepairRounds) {
@@ -98,7 +100,7 @@ export const createRepairRunner = (params: {
     // for the operation title / logs. `verifyMessageId` parents the new turn under
     // the verify card it responds to.
     const { AiAgentService } = await import('@/server/services/aiAgent');
-    const result = await new AiAgentService(db, userId).execAgent({
+    const result = await new AiAgentService(db, userId, { workspaceId }).execAgent({
       agentId,
       appContext: { topicId },
       autoStart: true,
@@ -138,13 +140,16 @@ export const maybeAutoRepair = async (
   db: LobeChatDatabase,
   userId: string,
   operationId: string,
+  workspaceId?: string,
 ): Promise<void> => {
-  const operationModel = new AgentOperationModel(db, userId);
+  const operationModel = new AgentOperationModel(db, userId, workspaceId);
   const state = await operationModel.getVerifyState(operationId);
   const plan = (state?.verifyPlan ?? []) as VerifyCheckItem[];
   if (plan.length === 0) return;
 
-  const results = await new VerifyCheckResultModel(db, userId).listByOperation(operationId);
+  const results = await new VerifyCheckResultModel(db, userId, workspaceId).listByOperation(
+    operationId,
+  );
   const byItem = new Map(results.map((r) => [r.checkItemId, r]));
 
   // Wait until every required check has a terminal result (don't repair early).
@@ -160,13 +165,14 @@ export const maybeAutoRepair = async (
   const spawner = createRepairRunner({
     agentId: op?.agentId,
     db,
-    maxRepairRounds: await resolveMaxRepairRounds(db, userId, plan),
+    maxRepairRounds: await resolveMaxRepairRounds(db, userId, plan, workspaceId),
     model: op?.model,
     provider: op?.provider,
     topicId: op?.topicId,
     userId,
+    workspaceId,
   });
-  await new VerifyRepairService(db, userId).triggerAutoRepair(operationId, spawner);
+  await new VerifyRepairService(db, userId, workspaceId).triggerAutoRepair(operationId, spawner);
 };
 
 const isFailed = (r: VerifyCheckResultItem | undefined): boolean =>
@@ -191,11 +197,11 @@ export class VerifyRepairService {
   private readonly resultModel: VerifyCheckResultModel;
   private readonly statusService: VerifyStatusService;
 
-  constructor(db: LobeChatDatabase, userId: string) {
-    this.messageModel = new MessageModel(db, userId);
-    this.operationModel = new AgentOperationModel(db, userId);
-    this.resultModel = new VerifyCheckResultModel(db, userId);
-    this.statusService = new VerifyStatusService(db, userId);
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.messageModel = new MessageModel(db, userId, workspaceId);
+    this.operationModel = new AgentOperationModel(db, userId, workspaceId);
+    this.resultModel = new VerifyCheckResultModel(db, userId, workspaceId);
+    this.statusService = new VerifyStatusService(db, userId, workspaceId);
   }
 
   /** Collect the auto-repairable failures for a run. */

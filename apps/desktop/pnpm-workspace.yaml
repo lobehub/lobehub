@@ -8,6 +8,7 @@ packages:
   - '../../packages/electron-client-ipc'
   - '../../packages/file-loaders'
   - '../../packages/desktop-bridge'
+  - '../../packages/device-control'
   - '../../packages/device-gateway-client'
   - '../../packages/device-identity'
   - '../../packages/local-file-shell'

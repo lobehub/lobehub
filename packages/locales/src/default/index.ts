@@ -32,6 +32,7 @@ import notification from './notification';
 import oauth from './oauth';
 import onboarding from './onboarding';
 import openInApp from './openInApp';
+import opStatusTray from './opStatusTray';
 import pageShare from './pageShare';
 import plugin from './plugin';
 import portal from './portal';
@@ -84,6 +85,7 @@ const resources = {
   notification,
   oauth,
   onboarding,
+  opStatusTray,
   openInApp,
   pageShare,
   plugin,

@@ -17,6 +17,8 @@
   "storage_overage_cap_reached_title": "Depolama kullanımına göre ödeme sınırına ulaşıldı",
   "video_generation_completed": "\"{{prompt}}\" adlı videonuz hazır.",
   "video_generation_completed_title": "Video oluşturma tamamlandı",
+  "workspace_member_invited": "{{inviterLabel}}, \"{{workspaceName}}\" çalışma alanına {{role}} olarak katılmanız için sizi davet etti.",
+  "workspace_member_invited_title": "{{workspaceName}} çalışma alanına katılma daveti",
   "workspace_member_joined": "{{memberLabel}}, \"{{workspaceName}}\" çalışma alanına {{role}} olarak katıldı.",
   "workspace_member_joined_member": "{{memberLabel}}, \"{{workspaceName}}\" çalışma alanına Üye olarak katıldı.",
   "workspace_member_joined_member_title": "{{workspaceName}} çalışma alanına yeni bir üye katıldı",

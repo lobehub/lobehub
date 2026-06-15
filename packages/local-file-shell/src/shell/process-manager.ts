@@ -7,10 +7,12 @@ const DEFAULT_OBSERVATION_TIMEOUT_MS = 30_000;
 const MAX_OBSERVATION_TIMEOUT_MS = 120_000;
 
 export interface ShellProcess {
+  endedAt?: number;
   exitCode: number | null;
   lastReadStderr: number;
   lastReadStdout: number;
   process: ChildProcess;
+  startedAt?: number;
   stderr: string[];
   stdout: string[];
 }
@@ -25,6 +27,17 @@ export class ShellProcessManager {
   }
 
   register(shellId: string, shellProcess: ShellProcess): void {
+    shellProcess.startedAt ??= Date.now();
+    if (shellProcess.exitCode !== null || shellProcess.process.exitCode !== null) {
+      shellProcess.endedAt ??= Date.now();
+    }
+
+    const markEnded = () => {
+      shellProcess.endedAt ??= Date.now();
+    };
+
+    shellProcess.process.once('exit', markEnded);
+    shellProcess.process.once('error', markEnded);
     this.processes.set(shellId, shellProcess);
   }
 
@@ -81,6 +94,9 @@ export class ShellProcessManager {
     }
 
     exitCode = childProcess.exitCode ?? shellProcess.exitCode;
+    if (exitCode !== null) {
+      shellProcess.endedAt ??= Date.now();
+    }
 
     const newStdout = stdout.slice(lastReadStdout).join('');
     const newStderr = stderr.slice(lastReadStderr).join('');
@@ -98,8 +114,11 @@ export class ShellProcessManager {
 
     shellProcess.lastReadStdout = stdout.length;
     shellProcess.lastReadStderr = stderr.length;
+    const startedAt = shellProcess.startedAt ?? Date.now();
+    const durationMs = Math.max(0, (shellProcess.endedAt ?? Date.now()) - startedAt);
 
     return {
+      duration_ms: durationMs,
       exit_code: exitCode ?? undefined,
       output: truncateOutput(output),
       stderr: truncateOutput(newStderr),

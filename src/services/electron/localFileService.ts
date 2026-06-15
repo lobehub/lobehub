@@ -82,7 +82,10 @@ const normalizeContentType = (contentType: string | null): string =>
 const isTextPreviewMimeType = (mimeType: string): boolean =>
   mimeType.startsWith('text/') || TEXT_PREVIEW_MIME_TYPES.has(mimeType);
 
-const fetchLocalFilePreview = async (url: string): Promise<LocalFilePreview> => {
+const fetchLocalFilePreview = async (
+  url: string,
+  accept?: LocalFilePreviewUrlParams['accept'],
+): Promise<LocalFilePreview> => {
   const response = await fetch(url);
 
   if (!response.ok) {
@@ -93,6 +96,10 @@ const fetchLocalFilePreview = async (url: string): Promise<LocalFilePreview> => 
 
   if (contentType.startsWith('image/')) {
     return { blob: await response.blob(), contentType, type: 'image' };
+  }
+
+  if (accept === 'image') {
+    throw new Error('Unsupported local file preview type');
   }
 
   if (isTextPreviewMimeType(contentType)) {
@@ -176,7 +183,7 @@ class LocalFileService {
       throw new Error(result.error || 'Missing local file preview URL');
     }
 
-    return fetchLocalFilePreview(result.url);
+    return fetchLocalFilePreview(result.url, params.accept);
   }
 
   async prepareSkillDirectory(

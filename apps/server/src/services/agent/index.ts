@@ -174,6 +174,13 @@ export class AgentService {
    * 2. serverDefaultAgentConfig - from environment variable
    * 3. userDefaultAgentConfig - from user settings (defaultAgent.config)
    * 4. agent - actual agent config from database
+   *
+   * Workspace exception: a workspace is a shared resource, so its agents must
+   * NOT inherit any individual member's *personal* default model. Otherwise a
+   * shared agent persisted with an empty model (e.g. the workspace inbox)
+   * resolves to whoever opens it — the creator's personal default leaks in and
+   * the workspace looks "initialized" with their model. For workspace-scoped
+   * reads we skip the user layer and fall back to the system default instead.
    */
   private mergeDefaultConfig(
     agent: any,
@@ -181,12 +188,17 @@ export class AgentService {
   ): LobeAgentConfig | null {
     if (!agent) return null;
 
-    const userDefaultAgentConfig =
-      (defaultAgentConfig as { config?: PartialDeep<LobeAgentConfig> })?.config || {};
-
-    // Merge configs in order: DEFAULT -> server -> user -> agent
+    // Merge configs in order: DEFAULT -> server -> [user] -> agent
     const serverDefaultAgentConfig = getServerDefaultAgentConfig();
     const baseConfig = merge(DEFAULT_AGENT_CONFIG, serverDefaultAgentConfig);
+
+    // Skip the personal default layer for workspace-scoped agents (see above).
+    if (this.workspaceId) {
+      return merge(baseConfig, cleanObject(agent));
+    }
+
+    const userDefaultAgentConfig =
+      (defaultAgentConfig as { config?: PartialDeep<LobeAgentConfig> })?.config || {};
     const withUserConfig = merge(baseConfig, userDefaultAgentConfig);
 
     return merge(withUserConfig, cleanObject(agent));

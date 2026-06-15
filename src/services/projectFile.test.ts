@@ -50,6 +50,7 @@ describe('projectFileService', () => {
     });
 
     expect(mockDeviceClient.getLocalFilePreview.query).toHaveBeenCalledWith({
+      accept: undefined,
       deviceId: 'device-1',
       path: '/repo/index.html',
       workingDirectory: '/repo',
@@ -60,6 +61,56 @@ describe('projectFileService', () => {
       contentType: 'text/html',
       type: 'text',
     });
+  });
+
+  it('forwards image-only preview constraints to remote device RPC', async () => {
+    const { projectFileService } = await import('./projectFile');
+
+    mockDeviceClient.getLocalFilePreview.query.mockResolvedValue({
+      preview: {
+        base64: 'aW1hZ2U=',
+        contentType: 'image/png',
+        type: 'image',
+      },
+      success: true,
+    });
+
+    await projectFileService.getLocalFilePreview({
+      accept: 'image',
+      deviceId: 'device-1',
+      path: '/repo/image.png',
+      workingDirectory: '/repo',
+    });
+
+    expect(mockDeviceClient.getLocalFilePreview.query).toHaveBeenCalledWith({
+      accept: 'image',
+      deviceId: 'device-1',
+      path: '/repo/image.png',
+      workingDirectory: '/repo',
+    });
+    expect(mockLocalFileService.getLocalFilePreview).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-image remote payloads for image-only previews', async () => {
+    const { projectFileService } = await import('./projectFile');
+
+    mockDeviceClient.getLocalFilePreview.query.mockResolvedValue({
+      preview: {
+        content: 'SECRET=value',
+        contentType: 'text/plain',
+        type: 'text',
+      },
+      success: true,
+    });
+
+    await expect(
+      projectFileService.getLocalFilePreview({
+        accept: 'image',
+        deviceId: 'device-1',
+        path: '/repo/.env',
+        workingDirectory: '/repo',
+      }),
+    ).rejects.toThrow('Unsupported local file preview type');
   });
 
   it('delegates desktop local-file preview to localFileService', async () => {

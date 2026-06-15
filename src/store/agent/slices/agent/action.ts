@@ -9,6 +9,7 @@ import type { PartialDeep } from 'type-fest';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { agentConfigKeys } from '@/libs/swr/keys';
 import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT } from '@/services/agent';
 import {
@@ -32,12 +33,6 @@ import type { AgentStore } from '../../store';
 import { setLocalAgentWorkingDirectory } from '../../utils/localAgentWorkingDirectoryStorage';
 import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 
-const FETCH_AGENT_CONFIG_KEY = 'FETCH_AGENT_CONFIG';
-const FETCH_AVAILABLE_AGENTS_KEY = 'FETCH_AVAILABLE_AGENTS';
-const FETCH_AVAILABLE_AGENTS_SWR_KEY = [
-  FETCH_AVAILABLE_AGENTS_KEY,
-  AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT,
-] as const;
 type AgentMetaUpdate = Partial<
   Pick<
     AgentItem,
@@ -291,7 +286,7 @@ export class AgentSliceActionImpl {
   ): SWRResponse<LobeAgentConfig> => {
     const swrKey =
       isLogin === true && agentId && !isChatGroupSessionId(agentId)
-        ? ([FETCH_AGENT_CONFIG_KEY, agentId] as const)
+        ? agentConfigKeys.config(agentId)
         : null;
 
     return useClientDataSWRWithSync<LobeAgentConfig>(
@@ -335,7 +330,9 @@ export class AgentSliceActionImpl {
 
     this.#clearAgentConfigError(id);
 
-    await mutate((key) => Array.isArray(key) && key[0] === FETCH_AGENT_CONFIG_KEY && key[1] === id);
+    await mutate(
+      (key) => Array.isArray(key) && key[0] === agentConfigKeys.config.root && key[1] === id,
+    );
   };
 
   #clearAgentConfigError = (agentId: string) => {
@@ -358,7 +355,7 @@ export class AgentSliceActionImpl {
   ): SWRResponse<LobeAgentConfig> => {
     const swrKey =
       isLogin === true && agentId && !isChatGroupSessionId(agentId)
-        ? ([FETCH_AGENT_CONFIG_KEY, agentId] as const)
+        ? agentConfigKeys.config(agentId)
         : null;
 
     return useClientDataSWRWithSync<LobeAgentConfig>(
@@ -388,7 +385,7 @@ export class AgentSliceActionImpl {
 
   useFetchAvailableAgents = (enabled: boolean): SWRResponse<AvailableAgentItem[]> => {
     return useClientDataSWRWithSync<AvailableAgentItem[]>(
-      enabled ? FETCH_AVAILABLE_AGENTS_SWR_KEY : null,
+      enabled ? agentConfigKeys.available() : null,
       () => agentService.queryAgents({ limit: AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT }),
       {
         onData: (data) => {
@@ -401,7 +398,7 @@ export class AgentSliceActionImpl {
 
   invalidateAvailableAgents = (): void => {
     this.#set({ availableAgents: undefined }, false, 'invalidateAvailableAgents');
-    void mutate(FETCH_AVAILABLE_AGENTS_SWR_KEY);
+    void mutate(agentConfigKeys.available());
   };
 
   ensureAgentDocuments = async (
@@ -509,7 +506,7 @@ export class AgentSliceActionImpl {
   };
 
   internal_refreshAgentConfig = async (id: string): Promise<void> => {
-    await mutate([FETCH_AGENT_CONFIG_KEY, id]);
+    await mutate(agentConfigKeys.config(id));
   };
 
   internal_createAbortController = (key: keyof AgentSliceState): AbortController => {

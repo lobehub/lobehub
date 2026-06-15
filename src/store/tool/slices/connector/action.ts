@@ -50,6 +50,24 @@ export class ConnectorActionImpl {
     await this.fetchConnectors();
   };
 
+  updateConnector = async (
+    id: string,
+    patch: {
+      credentials?: null;
+      isEnabled?: boolean;
+      mcpServerUrl?: string;
+      name?: string;
+      oidcConfig?: {
+        clientId?: string;
+        clientSecret?: string;
+        scheme?: 'pre_registration' | 'dcr' | 'client_id_metadata_document';
+      };
+    },
+  ): Promise<void> => {
+    await lambdaClient.connector.update.mutate({ id, patch: patch as any });
+    await this.fetchConnectors();
+  };
+
   syncConnectorTools = async (id: string): Promise<void> => {
     this.#set(
       (s) => ({ connectorSyncing: { ...s.connectorSyncing, [id]: true } }),

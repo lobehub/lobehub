@@ -29,6 +29,7 @@
   },
   "devDependencies": {
     "@lobechat/agent-gateway-client": "workspace:*",
+    "@lobechat/device-control": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",
     "@lobechat/device-identity": "workspace:*",
     "@lobechat/heterogeneous-agents": "workspace:*",

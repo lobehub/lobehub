@@ -1,4 +1,4 @@
-import { type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
+import type { ChatCompletionErrorPayload } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 import { NextResponse } from 'next/server';
 
@@ -7,6 +7,48 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { createErrorResponse } from '@/utils/errorResponse';
 
 import { resolveValidWorkspaceIdFromRequest } from '../../_utils/workspace';
+
+const getMessageFromError = (error: unknown): string | undefined => {
+  if (error === null || error === undefined) return;
+  if (typeof error === 'string') return error;
+
+  if (error instanceof Error) {
+    if (error.cause instanceof Error && error.cause.message) return error.cause.message;
+    return error.message;
+  }
+
+  if (typeof error !== 'object') return;
+
+  const message = (error as { message?: unknown }).message;
+  return typeof message === 'string' ? message : undefined;
+};
+
+const createModelListErrorResponse = (provider: string, e: unknown) => {
+  let error = e;
+  let errorType: ChatCompletionErrorPayload['errorType'] = ChatErrorType.InternalServerError;
+  let rest: Partial<ChatCompletionErrorPayload> = {};
+
+  if (e && typeof e === 'object') {
+    const {
+      error: errorContent,
+      errorType: payloadErrorType,
+      ...payloadRest
+    } = e as Partial<ChatCompletionErrorPayload>;
+
+    error = errorContent || e;
+    errorType = payloadErrorType || errorType;
+    rest = payloadRest;
+  }
+
+  console.error(`Route: [${provider}] ${errorType}:`, error);
+
+  return createErrorResponse(errorType, {
+    error,
+    ...rest,
+    message: getMessageFromError(error) || getMessageFromError(e) || rest.message,
+    provider,
+  });
+};
 
 export const GET = checkAuth(async (req, { params, userId, serverDB }) => {
   const provider = (await params)!.provider!;
@@ -21,20 +63,6 @@ export const GET = checkAuth(async (req, { params, userId, serverDB }) => {
 
     return NextResponse.json(list);
   } catch (e) {
-    const {
-      errorType = ChatErrorType.InternalServerError,
-      error: errorContent,
-      ...res
-    } = e as ChatCompletionErrorPayload;
-
-    const error = errorContent || e;
-    // track the error at server side
-    console.error(`Route: [${provider}] ${errorType}:`, error);
-
-    // Sanitize error to avoid exposing stack traces to users
-    const sanitizedError =
-      error instanceof Error ? { message: error.message, name: error.name } : error;
-
-    return createErrorResponse(errorType, { error: sanitizedError, ...res, provider });
+    return createModelListErrorResponse(provider, e);
   }
 });

@@ -17,6 +17,8 @@
   "storage_overage_cap_reached_title": "سقف پرداخت به ازای مصرف ذخیره‌سازی رسید",
   "video_generation_completed": "ویدیوی شما با موضوع «{{prompt}}» آماده است.",
   "video_generation_completed_title": "تولید ویدیو تکمیل شد",
+  "workspace_member_invited": "{{inviterLabel}} شما را دعوت کرده است تا به فضای کاری \"{{workspaceName}}\" به عنوان {{role}} بپیوندید.",
+  "workspace_member_invited_title": "دعوت به پیوستن به {{workspaceName}}",
   "workspace_member_joined": "{{memberLabel}} به فضای کاری \"{{workspaceName}}\" به عنوان {{role}} پیوست.",
   "workspace_member_joined_member": "{{memberLabel}} به فضای کاری \"{{workspaceName}}\" به عنوان عضو پیوست.",
   "workspace_member_joined_member_title": "عضو جدید به {{workspaceName}} پیوست",

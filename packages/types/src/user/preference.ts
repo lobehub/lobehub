@@ -47,10 +47,6 @@ export const UserLabSchema = z.object({
    */
   enableAgentDocumentFloatingChatPanel: z.boolean().optional(),
   /**
-   * enable server-side agent execution via Gateway WebSocket
-   */
-  enableGatewayMode: z.boolean().optional(),
-  /**
    * enable multi-agent group chat mode
    */
   enableGroupChat: z.boolean().optional(),

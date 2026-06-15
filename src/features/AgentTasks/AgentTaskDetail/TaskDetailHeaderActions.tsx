@@ -5,8 +5,10 @@ import { CopyIcon, LinkIcon, MoreHorizontal, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransferMenuItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
@@ -19,6 +21,7 @@ const TaskDetailHeaderActions = memo(() => {
   const { message } = App.useApp();
   const navigate = useWorkspaceAwareNavigate();
   const appOrigin = useAppOrigin();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { allowed: canEditTask } = usePermission('create_content');
   const taskId = useTaskStore(taskDetailSelectors.activeTaskId);
   const taskAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
@@ -43,7 +46,10 @@ const TaskDetailHeaderActions = memo(() => {
   const menuItems = useMemo<DropdownItem[]>(() => {
     if (!taskId) return [];
 
-    const taskUrl = `${appOrigin}${taskDetailPath(taskId, taskAgentId ?? undefined)}`;
+    const taskUrl = `${appOrigin}${buildWorkspaceAwarePath(
+      taskDetailPath(taskId, taskAgentId ?? undefined),
+      activeWorkspaceSlug,
+    )}`;
 
     const baseItems: DropdownItem[] = [
       {
@@ -78,7 +84,17 @@ const TaskDetailHeaderActions = memo(() => {
     if (!transferItems || transferItems.length === 0) return baseItems;
 
     return [...baseItems.slice(0, 3), ...transferItems, { type: 'divider' }, ...baseItems.slice(3)];
-  }, [taskId, taskAgentId, appOrigin, t, message, triggerDelete, canEditTask, transferItems]);
+  }, [
+    taskId,
+    taskAgentId,
+    appOrigin,
+    activeWorkspaceSlug,
+    t,
+    message,
+    triggerDelete,
+    canEditTask,
+    transferItems,
+  ]);
 
   if (!taskId) return null;
 

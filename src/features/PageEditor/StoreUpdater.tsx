@@ -6,10 +6,13 @@ import { createStoreUpdater } from 'zustand-utils';
 import { hasMeaningfulEditorContent } from '@/libs/editor/hasMeaningfulEditorContent';
 import { documentHistoryQueueService } from '@/services/documentHistoryQueue';
 import { useDocumentStore } from '@/store/document';
+import { pageSelectors, usePageStore } from '@/store/page';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 
 import { type PublicState } from './store';
 import { usePageEditorStore, useStoreApi } from './store';
+import { useDocumentLock } from './useDocumentLock';
+import { useResourceEvents } from './useResourceEvents';
 
 type PageAgentEditor = NonNullable<Parameters<typeof pageAgentRuntime.setEditor>[0]>;
 
@@ -43,9 +46,20 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     const editor = usePageEditorStore((s) => s.editor);
     const initMeta = usePageEditorStore((s) => s.initMeta);
     const pageAgentEditor = editor as unknown as PageAgentEditor | undefined;
+    // Workspace pages are view-first; resolve once here so the lock + gating read
+    // a single source of truth.
+    const isWorkspacePage = usePageStore((s) =>
+      Boolean(pageSelectors.getDocumentById(pageId)(s)?.workspaceId),
+    );
+
+    // Drive the collaborative edit lock for workspace pages
+    useDocumentLock();
+    // Subscribe to realtime doc/lock events so the page syncs without polling
+    useResourceEvents();
 
     // Update store with props
     useStoreUpdater('documentId', pageId);
+    useStoreUpdater('isWorkspacePage', isWorkspacePage);
     useStoreUpdater('knowledgeBaseId', knowledgeBaseId);
     useStoreUpdater('onDocumentIdChange', onDocumentIdChange);
     useStoreUpdater('onEmojiChange', onEmojiChange);

@@ -236,6 +236,24 @@ describe('subagent reducer', () => {
     expect(state.runs.has('task-1')).toBe(false); // deleted
   });
 
+  it('does NOT re-create the thread when a finalized spawn replays its first event', () => {
+    // Finalize via the parent tool_result, then replay the SAME first chunk a
+    // cold-replica retry / double IPC delivery would resend. `ensureRun` must
+    // treat the already-finalized parent as a stale no-op — no second thread.
+    const { steps, state } = run([
+      textEvent('task-1', 'm1', 'working', { description: 'Map client runtime' }),
+      { data: { content: 'answer', toolCallId: 'task-1' }, type: 'tool_result' }, // finalize
+      // ↓ exact replay of the very first subagent chunk for task-1
+      textEvent('task-1', 'm1', 'working', { description: 'Map client runtime' }),
+    ]);
+
+    // The replay produces NO intents (no createThread, no createMessage).
+    expect(steps[2]).toEqual([]);
+    // Run stays deleted; the parent is remembered as finalized.
+    expect(state.runs.has('task-1')).toBe(false);
+    expect(state.finalizedParents.has('task-1')).toBe(true);
+  });
+
   it('records subagent usage onto the current assistant', () => {
     const usage = { totalTokens: 42 };
     const { steps } = run([

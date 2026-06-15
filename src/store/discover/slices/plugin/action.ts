@@ -8,6 +8,7 @@ import { type CategoryItem, type CategoryListQuery } from '@lobehub/market-sdk';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
+import { discoverKeys } from '@/libs/swr/keys';
 import { discoverService } from '@/services/discover';
 import { type DiscoverStore } from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
@@ -55,9 +56,13 @@ export class PluginActionImpl {
   };
 
   usePluginIdentifiers = (): SWRResponse<IdentifiersResponse> => {
-    return useSWR('plugin-identifiers', async () => discoverService.getPluginIdentifiers(), {
-      revalidateOnFocus: false,
-    });
+    return useSWR(
+      discoverKeys.pluginIdentifiers(),
+      async () => discoverService.getPluginIdentifiers(),
+      {
+        revalidateOnFocus: false,
+      },
+    );
   };
 
   usePluginList = (params: PluginQueryParams = {}): SWRResponse<PluginListResponse> => {

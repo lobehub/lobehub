@@ -13,17 +13,18 @@ flakiness.
 
 ## Prerequisites
 
-| Requirement  | Details                                                                           |
-| ------------ | --------------------------------------------------------------------------------- |
-| Dev server   | `localhost:3010` — see [../references/dev-server.md](../references/dev-server.md) |
+| Requirement  | Details                                                                                                                                        |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dev server   | `localhost:3010` — see [../references/dev-server.md](../references/dev-server.md)                                                              |
 | CLI source   | `apps/cli/` — runs from source, no rebuild; standalone `node_modules` — run `pnpm install` inside `apps/cli/` (root install does not cover it) |
-| CLI dev mode | `LOBEHUB_CLI_HOME=.lobehub-dev` for isolated credentials                          |
-| Auth         | Device Code Flow login — see [../references/auth.md](../references/auth.md)       |
+| CLI dev mode | `LOBEHUB_CLI_HOME=.lobehub-dev` for isolated settings                                                                                          |
+| Auth         | Seeded API key first; Device Code Flow only as fallback — see [../references/auth.md](../references/auth.md)                                   |
 
 All CLI dev commands run from `apps/cli/`. Subsequent examples use `$CLI`:
 
 ```bash
-CLI="LOBEHUB_CLI_HOME=.lobehub-dev bun src/index.ts"
+source ../../.records/env/agent-testing-cli.env
+CLI="bun src/index.ts"
 ```
 
 ## Workflow
@@ -39,14 +40,23 @@ check, start, and restart commands. Server-side code changes require a restart.
 ./.agents/skills/agent-testing/scripts/setup-auth.sh status
 ```
 
-If the CLI is not logged in, **the user must run the login themselves**
-(interactive browser authorization):
+If the CLI is not ready in the seeded local environment:
+
+```bash
+./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user
+source .records/env/agent-testing-cli.env
+./.agents/skills/agent-testing/scripts/setup-auth.sh cli-seed
+```
+
+If the target environment is not seeded, use the interactive fallback:
 
 ```bash
 cd apps/cli && LOBEHUB_CLI_HOME=.lobehub-dev bun src/index.ts login --server http://localhost:3010
 ```
 
-Credentials persist in `apps/cli/.lobehub-dev/`. Details:
+Seeded API-key auth does not store credentials. It writes local settings under
+`$HOME/.lobehub-dev` and requires the generated env file to be sourced before
+CLI commands. Details:
 [../references/auth.md](../references/auth.md).
 
 ### Step 3 — Test with CLI commands
@@ -133,10 +143,10 @@ $CLI provider test <provider-id>
 
 ## Troubleshooting
 
-| Issue                       | Solution                                        |
-| --------------------------- | ----------------------------------------------- |
-| `No authentication found`   | Run `login --server http://localhost:3010`      |
-| `UNAUTHORIZED` on API calls | Token expired; re-run login                     |
-| `ECONNREFUSED`              | Dev server not running — see dev-server.md      |
-| CLI shows old data/behavior | Server needs restart to pick up code changes    |
-| Login opens wrong server    | Must use `--server` flag (env var doesn't work) |
+| Issue                       | Solution                                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `No authentication found`   | Source `.records/env/agent-testing-cli.env`, or run device-code `login --server http://localhost:3010` |
+| `UNAUTHORIZED` on API calls | Re-run `init-dev-env.sh seed-user` and re-source the env file; for device-code fallback, re-run login  |
+| `ECONNREFUSED`              | Dev server not running — see dev-server.md                                                             |
+| CLI shows old data/behavior | Server needs restart to pick up code changes                                                           |
+| Login opens wrong server    | Must use `--server` flag (env var doesn't work)                                                        |

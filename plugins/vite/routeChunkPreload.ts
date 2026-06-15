@@ -557,6 +557,8 @@ export function routeChunkPreload(options: RouteChunkPreloadOptions = {}): Plugi
       order: 'post',
       handler(html, ctx) {
         if (!config || !ctx.bundle) return html;
+        // The auth SPA shares the build but must not preload main-app routes
+        if (ctx.path?.includes('index.auth')) return html;
 
         const outputBundle = ctx.bundle as OutputBundleLike;
         const manifest = createRoutePreloadManifest(outputBundle, config.root, groups);

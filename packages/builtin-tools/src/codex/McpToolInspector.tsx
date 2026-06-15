@@ -20,7 +20,7 @@ import {
   getMcpToolName,
 } from './mcpToolUtils';
 
-const LINEAR_TOOL_NAME_SET = new Set<string>(LINEAR_TOOL_NAMES);
+const LINEAR_TOOL_NAME_SET = new Set<string>([...LINEAR_TOOL_NAMES, 'fetch', 'search']);
 const SharedLinearInspector = LinearInspector as ComponentType<
   BuiltinInspectorProps<Record<string, unknown>>
 >;
@@ -33,17 +33,23 @@ const McpToolInspector = memo<BuiltinInspectorProps<CodexMcpToolArgs, CodexMcpTo
     });
     const server = getMcpServer(args, pluginState) || getMcpServer(partialArgs);
     const tool = getMcpToolName(args, pluginState) || getMcpToolName(partialArgs);
-    const linearApiName = getCodexLinearMcpApiName(tool);
+    const input = getMcpInputRecord(args, pluginState);
+    const partialInput = getMcpInputRecord(partialArgs);
+    const linearApiName = getCodexLinearMcpApiName({
+      input: input || partialInput,
+      server,
+      toolName: tool,
+    });
 
     if (LINEAR_TOOL_NAME_SET.has(linearApiName)) {
       return (
         <SharedLinearInspector
           apiName={linearApiName}
-          args={getMcpInputRecord(args, pluginState) || {}}
+          args={input || {}}
           identifier={'codex'}
           isArgumentsStreaming={isArgumentsStreaming}
           isLoading={isLoading}
-          partialArgs={getMcpInputRecord(partialArgs) || {}}
+          partialArgs={partialInput || {}}
           pluginState={pluginState}
         />
       );

@@ -34,26 +34,30 @@ export class ModelsService {
     });
 
     const runtimeProvider = resolveRuntimeProvider(provider);
-    try {
-      /**
-       * Use browser agent runtime
-       */
-      const enableFetchOnClient = isEnableFetchOnClient(provider);
-      if (enableFetchOnClient) {
-        const agentRuntime = await initializeWithClientStore({
-          provider,
-          runtimeProvider,
-        });
-        return agentRuntime.models();
-      }
-
-      const res = await fetch(API_ENDPOINTS.models(provider), { headers });
-      if (!res.ok) return;
-
-      return res.json();
-    } catch {
-      return;
+    /**
+     * Use browser agent runtime
+     */
+    const enableFetchOnClient = isEnableFetchOnClient(provider);
+    if (enableFetchOnClient) {
+      const agentRuntime = await initializeWithClientStore({
+        provider,
+        runtimeProvider,
+      });
+      return agentRuntime.models();
     }
+
+    const res = await fetch(API_ENDPOINTS.models(provider), { headers });
+    if (!res.ok) {
+      const error = await getMessageError(res);
+      const message =
+        typeof error.body?.message === 'string' && error.body.message
+          ? error.body.message
+          : error.message;
+
+      throw new Error(message, { cause: error });
+    }
+
+    return res.json();
   };
 
   /**

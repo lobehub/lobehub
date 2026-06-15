@@ -77,7 +77,7 @@ describe('ChatGroupCurdSlice', () => {
         await result.current.updateGroup('group-1', { description: 'New description' });
       });
 
-      expect(mutate).toHaveBeenCalledWith(['fetchGroupDetail', 'group-1']);
+      expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
     });
   });
 
@@ -125,7 +125,7 @@ describe('ChatGroupCurdSlice', () => {
         await result.current.updateGroupConfig({ revealDM: true });
       });
 
-      expect(mutate).toHaveBeenCalledWith(['fetchGroupDetail', 'group-1']);
+      expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
     });
   });
 
@@ -171,7 +171,7 @@ describe('ChatGroupCurdSlice', () => {
         await result.current.updateGroupMeta({ title: 'Updated' });
       });
 
-      expect(mutate).toHaveBeenCalledWith(['fetchGroupDetail', 'group-1']);
+      expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
     });
   });
 });

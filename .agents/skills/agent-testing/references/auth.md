@@ -1,37 +1,72 @@
 # Auth Setup for Local Agent Testing
 
-**Auth is the gate for all automated testing.** Prepare and verify it before
-writing any test step. The one-stop entry point is:
+**Auth is the gate for all automated testing.** Complete
+[Step 0.0](../SKILL.md#00-resolve-the-current-test-environment) first so
+`SERVER_URL` and ports are resolved, then verify auth before writing any test
+step.
+
+Initialize helpers first:
 
 ```bash
-SCRIPT=".agents/skills/agent-testing/scripts/setup-auth.sh"
-
-$SCRIPT status        # check server + CLI + web auth readiness
-$SCRIPT cli           # interactive CLI device-code login (must be run by the user)
-pbpaste | $SCRIPT web # inject a copied Cookie header into the agent-browser session
-$SCRIPT web-verify    # live-check that the agent-browser session is authenticated
+SCRIPT="./.agents/skills/agent-testing/scripts/setup-auth.sh"
+TEST_ENV="./.agents/skills/agent-testing/scripts/test-env.sh"
+eval "$($TEST_ENV --exports)"
 ```
 
-`SERVER_URL` defaults to `http://localhost:3010` (this repo's `dev:next` port).
-Override it when testing against another server (e.g. `SERVER_URL=http://localhost:3011`
-in the cloud repo).
+Quick reference after initialization:
+
+| Command                        | Purpose                                            |
+| ------------------------------ | -------------------------------------------------- |
+| `$SCRIPT status`               | Check all surfaces (server + CLI + web + Electron) |
+| `$SCRIPT status --surface web` | Check only the Web surface gate                    |
+| `$SCRIPT cli-seed`             | Configure CLI API-key auth from the seeded key     |
+| `$SCRIPT cli`                  | Interactive CLI device-code login (user must run)  |
+| `$SCRIPT open-chrome`          | Open Chrome at `SERVER_URL` with DevTools          |
+| `$SCRIPT web-seed`             | Sign in the seeded user and inject cookies         |
+| `pbpaste \| $SCRIPT web`       | Inject a copied Cookie header into agent-browser   |
+| `$SCRIPT web-verify`           | Live-check agent-browser session auth              |
+
+Use `localhost` for Web auth; better-auth cookies are stored for `localhost`,
+not `127.0.0.1`.
 
 ## Per-surface overview
 
-| Surface  | Mechanism                                | Persistence                                                       | Human interaction                               |
-| -------- | ---------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------- |
-| CLI      | OIDC Device Code Flow                    | `apps/cli/.lobehub-dev/settings.json`                             | Yes — browser authorization, every token expiry |
-| Web      | better-auth cookie injection             | `~/.lobehub-agent-testing/web-state.json` + agent-browser session | Copy the Cookie header once per token rotation  |
-| Electron | App's own login state                    | Electron user-data dir                                            | Log in once manually in the app                 |
-| Bot      | Native apps (Discord/WeChat/…) logged in | Each app's own session                                            | Once per app                                    |
+| Surface  | Mechanism                                | Persistence                                                       | Human interaction                              |
+| -------- | ---------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------- |
+| CLI      | Seeded API key or OIDC Device Code Flow  | `.records/env/agent-testing-cli.env` + `$HOME/.lobehub-dev`       | No for seed path; yes for device-code fallback |
+| Web      | Seeded better-auth login or cookie copy  | `~/.lobehub-agent-testing/web-state.json` + agent-browser session | No for seed path; copy cookie only as fallback |
+| Electron | App's own login state                    | Electron user-data dir                                            | Log in once manually in the app                |
+| Bot      | Native apps (Discord/WeChat/…) logged in | Each app's own session                                            | Once per app                                   |
 
-## CLI — Device Code Flow
+## CLI — Seeded API key
 
+For the self-contained no-root-`.env` dev environment, seed the baseline user
+and API key once:
+
+```bash
+./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user
+source .records/env/agent-testing-cli.env
+./.agents/skills/agent-testing/scripts/setup-auth.sh cli-seed
+```
+
+The seed step writes `LOBE_API_KEY` for humans and maps it to the CLI's current
+auth variable, `LOBEHUB_CLI_API_KEY`. It also sets `LOBEHUB_SERVER` so CLI
+commands hit the local server without needing a stored device-code token.
+
+Use this for automated CLI verification:
+
+```bash
+cd apps/cli
+source ../../.records/env/agent-testing-cli.env
+bun src/index.ts <command>
+```
+
+## CLI — Device Code Flow fallback
+
+Use device-code login only when testing against a non-seeded environment.
 Credentials are isolated from the user's real CLI config via
-`LOBEHUB_CLI_HOME=.lobehub-dev` (kept inside `apps/cli/`, gitignored).
-
-Login requires interactive browser authorization, so **the user must run it
-themselves** (e.g. via the `!` prefix in Claude Code):
+`LOBEHUB_CLI_HOME=.lobehub-dev`, which the current CLI stores under
+`$HOME/.lobehub-dev`.
 
 ```bash
 cd apps/cli && LOBEHUB_CLI_HOME=.lobehub-dev bun src/index.ts login --server http://localhost:3010
@@ -40,10 +75,30 @@ cd apps/cli && LOBEHUB_CLI_HOME=.lobehub-dev bun src/index.ts login --server htt
 - The `--server` flag is required — an env var does NOT work and login will hit
   the wrong server without it.
 - Check state without logging in: `setup-auth.sh status` (verifies
-  `settings.json` exists and `serverUrl` matches).
+  `LOBEHUB_CLI_API_KEY` when present, otherwise checks the stored server URL).
 - `UNAUTHORIZED` on API calls means the token expired — re-run login.
 
-## Web — better-auth cookie injection (agent-browser)
+## Web — seeded better-auth login
+
+The Web test surface is `agent-browser --session lobehub-dev`. The user's
+ordinary Chrome is only a cookie source; Chrome screenshots, Chrome Network
+records, and Chrome logged-in state do not prove the agent-browser test session
+is authenticated.
+
+For the seeded local dev environment, use the automatic path:
+
+```bash
+./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user
+./.agents/skills/agent-testing/scripts/setup-auth.sh web-seed
+```
+
+`web-seed` posts the seeded email/password to
+`/api/auth/sign-in/email`, stores the returned cookie jar under
+`~/.lobehub-agent-testing/`, converts it to Playwright `storageState`, loads it
+into the `agent-browser` session, and verifies the session does not land on
+`/signin`.
+
+## Web — manual cookie injection fallback
 
 `agent-browser --headed` on macOS often creates the Chromium window off-screen —
 the user can't see or interact with it, so manual login inside the agent-browser
@@ -53,31 +108,19 @@ user's own logged-in Chrome and inject it as a Playwright-style state file.
 Do **not** use this on production URLs — only local dev. Treat the cookie as a
 secret: don't paste it into shared logs, PRs, or commit it anywhere.
 
-### One-key path
+### Web — decision flow
 
-1. Ask the user to copy the Cookie header **from a Network request, NOT
-   `document.cookie`** (`document.cookie` cannot see HttpOnly cookies, which is
-   exactly where better-auth puts its session):
-   - Open the logged-in tab (`http://localhost:<port>/…`) in Chrome.
-   - `Cmd+Option+I` → **Network** tab → refresh → click any same-origin request.
-   - Under **Request Headers**, right-click the `Cookie:` line → **Copy value**.
-2. Inject and verify in one shot:
-
-```bash
-pbpaste | ./.agents/skills/agent-testing/scripts/setup-auth.sh web
-```
-
-The script filters the header down to the better-auth cookies
-(`better-auth.session_token`, `better-auth.state`), builds the Playwright
-`storageState` JSON, loads it into the `agent-browser` session (default name
-`lobehub-dev`), opens `SERVER_URL`, and asserts the URL is not `/signin`.
+1. `$SCRIPT status --surface web` — green? Start testing. Do not ask for a Cookie header.
+2. Not green and using the seeded local env → `$SCRIPT web-seed`.
+3. Still not green or not using the seed env → `$SCRIPT open-chrome` opens Chrome at `SERVER_URL` with DevTools.
+4. User copies the `Cookie:` header from Network tab → any same-origin request → Request Headers → right-click `Cookie:` → **Copy value**. Must be from Network, NOT `document.cookie` (HttpOnly cookies are invisible to `document.cookie`).
+5. `pbpaste | $SCRIPT web` — filters to better-auth cookies (`session_token`, `session_data`, `state`), builds Playwright `storageState`, loads it into the `agent-browser` session (`lobehub-dev`), opens `SERVER_URL`, and asserts the URL is not `/signin`.
 
 ### Using the authenticated session
 
 ```bash
-agent-browser --session lobehub-dev open "http://localhost:3010/"
+agent-browser --session lobehub-dev open "$SERVER_URL/"
 agent-browser --session lobehub-dev snapshot -i | head -20
-# Look for the user's avatar/name in the sidebar, or absence of the signin form.
 ```
 
 ### Notes
@@ -90,12 +133,12 @@ agent-browser --session lobehub-dev snapshot -i | head -20
 
 ### Common failure modes
 
-| Symptom                                       | Cause                                                                     | Fix                                               |
-| --------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------- |
-| Still redirects to `/signin` after injection  | User pasted from `document.cookie` → missed HttpOnly session              | Re-pull from Network request Headers, not console |
-| Script reports `no better-auth cookies found` | Separator wrong, or user pasted URL-decoded value                         | Keep the raw `Cookie:` header as-is               |
-| Login works briefly then expires              | `better-auth.session_token` rotated (user logged out / signed in again)   | Re-copy and re-inject                             |
-| Domain mismatch                               | Cookie domain must be `localhost` literally, no leading dot for local dev | —                                                 |
+| Symptom                                       | Cause                                                                     | Fix                                                                                            |
+| --------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Still redirects to `/signin` after injection  | User pasted from `document.cookie` → missed HttpOnly session              | Re-pull from Network request Headers, not console                                              |
+| Script reports `no better-auth cookies found` | User pasted the wrong value, or the cookie parser regressed               | Keep the raw `Cookie:` header as-is; run `scripts/setup-auth.test.sh` if the input looks valid |
+| Login works briefly then expires              | `better-auth.session_token` rotated (user logged out / signed in again)   | Re-copy and re-inject                                                                          |
+| Domain mismatch                               | Cookie domain must be `localhost` literally, no leading dot for local dev | —                                                                                              |
 
 ## Electron
 

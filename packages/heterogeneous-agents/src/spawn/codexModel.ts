@@ -2,6 +2,9 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { UsageData } from '../types';
+import { toCodexUsageData } from '../utils/codexUsage';
+
 type CodexEnv = Record<string, string | undefined>;
 
 export type CodexInitialModelSource = 'args' | 'config';
@@ -14,6 +17,7 @@ export interface CodexInitialModelResolution {
 
 export interface CodexSessionModelInfo {
   contextWindow?: number;
+  cumulativeUsage?: UsageData | undefined;
   line?: number;
   model?: string;
   provider?: string;
@@ -51,7 +55,7 @@ const parseTomlStringAssignment = (line: string, key: string): string | undefine
   if (!match?.[1]) return;
 
   const value = unquoteTomlString(match[1]);
-  return value ? value : undefined;
+  return value || undefined;
 };
 
 const normalizeProfileName = (raw: string): string => unquoteTomlString(raw.trim());
@@ -73,7 +77,7 @@ export const getCodexHome = (
   homeDir: string = os.homedir(),
 ): string => {
   const configured = env.CODEX_HOME?.trim();
-  return configured ? configured : path.join(homeDir, '.codex');
+  return configured || path.join(homeDir, '.codex');
 };
 
 export const parseCodexModelFromArgs = (args: string[]): string | undefined => {
@@ -265,6 +269,7 @@ export const readCodexSessionModel = async (
   let model: string | undefined;
   let provider: string | undefined;
   let contextWindow: number | undefined;
+  let cumulativeUsage: UsageData | undefined;
   let lineNumber: number | undefined;
 
   const content = await readFile(sourceFile, 'utf8').catch(() => undefined);
@@ -278,6 +283,9 @@ export const readCodexSessionModel = async (
     try {
       const record = JSON.parse(line);
       const payload = record?.payload;
+      const usage = toCodexUsageData(record?.usage) || toCodexUsageData(payload?.usage);
+      if (usage) cumulativeUsage = usage;
+
       const payloadModel =
         getStringValue(payload?.model) ||
         getStringValue(payload?.collaboration_mode?.settings?.model);
@@ -293,7 +301,7 @@ export const readCodexSessionModel = async (
     }
   }
 
-  return model || provider || contextWindow
-    ? { contextWindow, line: lineNumber, model, provider, sourceFile }
+  return model || provider || contextWindow || cumulativeUsage
+    ? { contextWindow, cumulativeUsage, line: lineNumber, model, provider, sourceFile }
     : undefined;
 };

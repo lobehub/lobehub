@@ -254,7 +254,7 @@ export class ConversationLifecycleActionImpl {
       boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
       executionTarget: agentConfig?.agencyConfig?.executionTarget,
       heterogeneousProvider,
-      isGatewayMode: this.#get().isGatewayModeEnabled(),
+      isGatewayMode: this.#get().isGatewayModeEnabled(agentId),
       // Callers that need to pin the runtime (e.g. task topics that were
       // started server-side via runTask) pass `forceRuntime` to override
       // the agent's local/cloud preference.
@@ -1284,7 +1284,7 @@ export class ConversationLifecycleActionImpl {
           boundDeviceId: parentAgentConfig?.agencyConfig?.boundDeviceId,
           heterogeneousProvider: parentAgentConfig?.agencyConfig?.heterogeneousProvider,
           inPortalThread,
-          isGatewayMode: this.#get().isGatewayModeEnabled(),
+          isGatewayMode: this.#get().isGatewayModeEnabled(context.agentId),
           messages: messagesWithInstruction,
           parentOperationId: operationId,
         },

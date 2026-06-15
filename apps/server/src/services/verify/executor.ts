@@ -80,13 +80,13 @@ export class VerifyExecutorService {
   private readonly statusService: VerifyStatusService;
   private readonly documentModel: DocumentModel;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
-    this.operationModel = new AgentOperationModel(db, userId);
-    this.resultModel = new VerifyCheckResultModel(db, userId);
-    this.statusService = new VerifyStatusService(db, userId);
-    this.documentModel = new DocumentModel(db, userId);
+    this.operationModel = new AgentOperationModel(db, userId, workspaceId);
+    this.resultModel = new VerifyCheckResultModel(db, userId, workspaceId);
+    this.statusService = new VerifyStatusService(db, userId, workspaceId);
+    this.documentModel = new DocumentModel(db, userId, workspaceId);
   }
 
   /**

@@ -169,8 +169,8 @@ vi.mock('@/features/ChatInput/InputEditor/ActionTag/skillDragData', () => ({
 
 vi.mock('@/services/agentDocument', () => ({
   agentDocumentSWRKeys: {
-    documents: (agentId: string) => ['agent-documents', agentId],
-    documentsList: (agentId: string) => ['agent-documents-list', agentId],
+    documents: (agentId: string) => ['agent:documents', agentId],
+    documentsList: (agentId: string) => ['agent:documentsList', agentId],
   },
   agentDocumentService: {
     getDocuments: vi.fn(),

@@ -1,8 +1,9 @@
 import type { ChatTopicMetadata, ChatTopicStatus } from '@lobechat/types';
+import { formatElapsedClockTime } from '@lobechat/utils';
 import { Flexbox, Icon, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar, keyframes, useTheme } from 'antd-style';
 import { CheckCircle2, Hand, HashIcon, MessageSquareDashed, TriangleAlert } from 'lucide-react';
-import { memo, Suspense, useCallback, useMemo } from 'react';
+import { memo, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
@@ -72,6 +73,17 @@ const styles = createStaticStyles(({ css }) => ({
 
     animation: ${rippleAnim} 1.8s ease-out infinite;
   `,
+  runningElapsedTime: css`
+    flex: none;
+
+    min-width: 42px;
+
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    color: ${cssVar.colorTextTertiary};
+    text-align: end;
+  `,
 }));
 
 // Module-scoped so a click on any topic cancels a pending click on another.
@@ -89,6 +101,37 @@ const cancelPendingSingleClick = () => {
 // Last non-empty path segment — the folder name. Also yields the repo name for
 // a web github URL (".../owner/repo" → "repo").
 const getDirName = (path: string) => path.split('/').findLast(Boolean) || path;
+
+interface RunningElapsedTimeProps {
+  agentId?: string;
+  topicId: string;
+}
+
+const RunningElapsedTime = memo<RunningElapsedTimeProps>(({ agentId, topicId }) => {
+  const startTime = useChatStore(
+    agentId
+      ? operationSelectors.getAgentRuntimeStartTimeByContext({ agentId, topicId })
+      : () => undefined,
+  );
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!startTime) return;
+
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+
+    return () => clearInterval(timer);
+  }, [startTime]);
+
+  if (!startTime) return null;
+
+  return (
+    <span className={styles.runningElapsedTime}>{formatElapsedClockTime(now - startTime)}</span>
+  );
+});
+
+RunningElapsedTime.displayName = 'RunningElapsedTime';
 
 interface TopicItemProps {
   active?: boolean;
@@ -124,7 +167,10 @@ const TopicItem = memo<TopicItemProps>(
     // Construct href for cmd+click support
     const href = useMemo(() => {
       if (!activeAgentId || !id) return undefined;
-      return buildWorkspaceAwarePath(SESSION_CHAT_TOPIC_URL(activeAgentId, id), activeWorkspaceSlug);
+      return buildWorkspaceAwarePath(
+        SESSION_CHAT_TOPIC_URL(activeAgentId, id),
+        activeWorkspaceSlug,
+      );
     }, [activeAgentId, activeWorkspaceSlug, id]);
 
     const [editing, isLoading] = useChatStore((s) => [
@@ -261,6 +307,7 @@ const TopicItem = memo<TopicItemProps>(
           contextMenuItems={dropdownMenu}
           description={workingDirectoryNode}
           disabled={editing}
+          extra={<RunningElapsedTime agentId={activeAgentId} topicId={id} />}
           href={href}
           title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
           titleColor={cssVar.colorText}

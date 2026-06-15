@@ -60,7 +60,6 @@ const Content = memo<ContentProps>(({ open, searchKeyword }) => {
   }, [isSearching]);
 
   // Only search when there's a keyword (pass undefined to disable SWR)
-  // Note: searchTopics uses sessionId in the service, but agentId in the hook
   useSearchTopics(isSearching ? trimmedKeyword : undefined, {
     agentId: activeAgentId,
     groupId: undefined,

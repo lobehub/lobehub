@@ -119,7 +119,7 @@ describe('aiChatRouter', () => {
     expect(mockCreateUserAndAssistantMessages).toHaveBeenCalledTimes(1);
     expect(mockCreateUserAndAssistantMessages).toHaveBeenCalledWith(
       expect.any(Object),
-      expect.objectContaining({ touchTopicUpdatedAt: false }),
+      expect.not.objectContaining({ touchTopicUpdatedAt: expect.anything() }),
     );
 
     expect(mockGet).toHaveBeenCalledWith(
@@ -161,7 +161,7 @@ describe('aiChatRouter', () => {
     expect(mockCreateMessage).toHaveBeenCalled();
     expect(mockCreateUserAndAssistantMessages).toHaveBeenCalledWith(
       expect.any(Object),
-      expect.objectContaining({ touchTopicUpdatedAt: true }),
+      expect.not.objectContaining({ touchTopicUpdatedAt: expect.anything() }),
     );
     expect(mockGet).toHaveBeenCalledWith(
       expect.objectContaining({

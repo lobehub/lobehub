@@ -17,6 +17,8 @@
   "storage_overage_cap_reached_title": "Достигнут лимит оплаты за превышение хранилища",
   "video_generation_completed": "Ваше видео «{{prompt}}» готово.",
   "video_generation_completed_title": "Создание видео завершено",
+  "workspace_member_invited": "{{inviterLabel}} пригласил вас присоединиться к рабочей области \"{{workspaceName}}\" в качестве {{role}}.",
+  "workspace_member_invited_title": "Приглашение присоединиться к {{workspaceName}}",
   "workspace_member_joined": "{{memberLabel}} присоединился к рабочей области \"{{workspaceName}}\" в роли {{role}}.",
   "workspace_member_joined_member": "{{memberLabel}} присоединился к рабочей области \"{{workspaceName}}\" в роли Участника.",
   "workspace_member_joined_member_title": "Новый участник присоединился к {{workspaceName}}",

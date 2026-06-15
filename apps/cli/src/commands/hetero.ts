@@ -467,6 +467,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
    *   sessionId     — CC session id from `system.init` (undefined on resume failure)
    *   ingestError   — true when a batch could not be flushed after retries
    *   resumeNotFound — true when a resume-not-found error was intercepted
+   *   sawTerminalError — true when a terminal `error` event was pushed to the
+   *                      ingester (CC can relay an API/rate-limit error this way
+   *                      and still exit 0, so the exit code alone is not enough)
+   *   terminalErrorMessage — the message from that terminal `error` event, used
+   *                      as the task-level error detail in the finish payload
    *   stderrContent  — accumulated stderr (only when interceptResumeErrors=true)
    */
   const runOneAgent = async (
@@ -477,9 +482,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
     code: number | null;
     ingestError: boolean;
     resumeNotFound: boolean;
+    sawTerminalError: boolean;
     sessionId: string | undefined;
     signal: NodeJS.Signals | null;
     stderrContent: string;
+    terminalErrorMessage: string | undefined;
   }> => {
     // One raw-dump file pair per spawn attempt (the resume retry is a second
     // attempt). The stdout tee runs inside `spawnAgent` before the adapter.
@@ -549,6 +556,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // into the ingester.  When intercepting resume errors, a matching
     // `error` event is withheld from the ingester and flags a retry instead.
     let resumeNotFound = false;
+    let sawTerminalError = false;
+    let terminalErrorMessage: string | undefined;
     const ingestError = false;
     try {
       for await (const event of handle.events) {
@@ -562,6 +571,16 @@ const exec = async (options: ExecOptions): Promise<void> => {
             if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
             continue;
           }
+        }
+        // A terminal `error` event (e.g. an API/rate-limit error relayed by CC)
+        // must mark the run as failed even when the child exits 0 — track it so
+        // the finish result is not derived from the exit code alone. Capture the
+        // message too, so the finish payload can surface it as the task-level
+        // error detail (CC relays these on stdout, not stderr).
+        if (event.type === 'error') {
+          sawTerminalError = true;
+          const data = event.data as Record<string, unknown> | undefined;
+          terminalErrorMessage = String(data?.message ?? data?.error ?? '') || undefined;
         }
         if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
         serverIngester?.push(event);
@@ -608,9 +627,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
       code,
       ingestError,
       resumeNotFound,
+      sawTerminalError,
       sessionId: handle.sessionId,
       signal,
       stderrContent,
+      terminalErrorMessage,
     };
   };
 
@@ -675,16 +696,23 @@ const exec = async (options: ExecOptions): Promise<void> => {
       result = { ...result, ingestError: true };
     }
 
-    const exitedClean = !result.ingestError && (code === 0 || signal === 'SIGTERM');
+    // CC relays API/rate-limit errors as an in-stream terminal `error` event but
+    // still exits 0, so the exit code alone would report `success`. Treat any
+    // pushed terminal error as a failed run so the topic/task is marked failed.
+    const exitedClean =
+      !result.ingestError && !result.sawTerminalError && (code === 0 || signal === 'SIGTERM');
 
-    // When the run failed, pass stderr as the error detail so the server can
-    // surface a useful message instead of the generic "Agent execution failed"
-    // fallback.  Trim to the last 1 KB — the tail is most informative and
-    // keeps the tRPC payload small.
+    // When the run failed, pass an error detail so the server surfaces a useful
+    // message instead of the generic "Agent execution failed" fallback. Prefer
+    // the in-stream terminal error (CC relays API/rate-limit errors here while
+    // exiting 0, so stderr is empty); otherwise fall back to the stderr tail.
+    // Trim to the last 1 KB — the tail is most informative and keeps the tRPC
+    // payload small.
     const stderrTail = result.stderrContent.trim();
+    const errorDetail = result.terminalErrorMessage || stderrTail;
     const finishError =
-      !exitedClean && stderrTail
-        ? { message: stderrTail.slice(-1024), type: 'AgentRuntimeError' }
+      !exitedClean && errorDetail
+        ? { message: errorDetail.slice(-1024), type: 'AgentRuntimeError' }
         : undefined;
 
     try {

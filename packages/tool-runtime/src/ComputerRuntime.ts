@@ -350,6 +350,7 @@ export abstract class ComputerRuntime {
       const outputSuccess = typeof r.success === 'boolean' ? r.success : result.success;
 
       const state: GetCommandOutputState = {
+        durationMs: r.durationMs ?? r.duration_ms,
         error: r.error,
         exitCode: r.exitCode ?? r.exit_code,
         newOutput: r.newOutput || r.output,
@@ -358,6 +359,7 @@ export abstract class ComputerRuntime {
       };
 
       const content = formatCommandOutput({
+        durationMs: r.durationMs ?? r.duration_ms,
         error: r.error,
         exitCode: r.exitCode ?? r.exit_code,
         output: r.newOutput || r.output,

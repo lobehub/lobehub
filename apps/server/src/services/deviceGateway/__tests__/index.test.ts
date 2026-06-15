@@ -718,7 +718,37 @@ describe('DeviceGateway', () => {
         { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
         {
           method: 'getLocalFilePreview',
-          params: { path: '/proj/App.tsx', workingDirectory: '/proj' },
+          params: { accept: undefined, path: '/proj/App.tsx', workingDirectory: '/proj' },
+        },
+      );
+    });
+
+    it('forwards image-only preview constraints to the device rpc', async () => {
+      configure();
+      const data = {
+        preview: {
+          base64: 'aW1hZ2U=',
+          contentType: 'image/png',
+          type: 'image',
+        },
+        success: true,
+      };
+      mockClient.invokeRpc.mockResolvedValue({ data, success: true });
+
+      const proxy = new DeviceGateway();
+      await proxy.getLocalFilePreview({
+        accept: 'image',
+        deviceId: 'dev-1',
+        path: '/proj/image.png',
+        userId: 'user-1',
+        workingDirectory: '/proj',
+      });
+
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+        { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
+        {
+          method: 'getLocalFilePreview',
+          params: { accept: 'image', path: '/proj/image.png', workingDirectory: '/proj' },
         },
       );
     });

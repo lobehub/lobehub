@@ -9,12 +9,10 @@ import { type SWRResponse } from 'swr';
 
 import { notification } from '@/components/AntdStaticMethods';
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { ragEvalKeys } from '@/libs/swr/keys';
 import { ragEvalService } from '@/services/ragEval';
 import { type KnowledgeBaseStore } from '@/store/library/store';
 import { type StoreSetter } from '@/store/types';
-
-const FETCH_DATASET_LIST_KEY = 'FETCH_DATASET_LIST';
-const FETCH_DATASET_RECORD_KEY = 'FETCH_DATASET_RECORD_KEY';
 
 type Setter = StoreSetter<KnowledgeBaseStore>;
 export const createRagEvalDatasetSlice = (
@@ -67,7 +65,7 @@ export class RAGEvalDatasetActionImpl {
   };
 
   refreshDatasetList = async (): Promise<void> => {
-    await mutate(FETCH_DATASET_LIST_KEY);
+    await mutate(ragEvalKeys.datasetList());
   };
 
   removeDataset = async (id: string): Promise<void> => {
@@ -77,14 +75,14 @@ export class RAGEvalDatasetActionImpl {
 
   useFetchDatasetRecords = (datasetId: string | null): SWRResponse<EvalDatasetRecord[]> => {
     return useClientDataSWR<EvalDatasetRecord[]>(
-      !!datasetId ? [FETCH_DATASET_RECORD_KEY, datasetId] : null,
+      !!datasetId ? ragEvalKeys.datasetRecords(datasetId) : null,
       () => ragEvalService.getDatasetRecords(datasetId!),
     );
   };
 
   useFetchDatasets = (knowledgeBaseId: string): SWRResponse<RAGEvalDataSetItem[]> => {
     return useClientDataSWR<RAGEvalDataSetItem[]>(
-      [FETCH_DATASET_LIST_KEY, knowledgeBaseId],
+      ragEvalKeys.datasetList(knowledgeBaseId),
       () => ragEvalService.getDatasets(knowledgeBaseId),
       {
         fallbackData: [],

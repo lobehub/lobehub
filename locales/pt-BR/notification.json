@@ -17,6 +17,8 @@
   "storage_overage_cap_reached_title": "Limite de pagamento por uso do armazenamento atingido",
   "video_generation_completed": "Seu vídeo \"{{prompt}}\" está pronto.",
   "video_generation_completed_title": "Geração de vídeo concluída",
+  "workspace_member_invited": "{{inviterLabel}} convidou você para ingressar no espaço de trabalho \"{{workspaceName}}\" como {{role}}.",
+  "workspace_member_invited_title": "Convite para ingressar no {{workspaceName}}",
   "workspace_member_joined": "{{memberLabel}} entrou no espaço de trabalho \"{{workspaceName}}\" como {{role}}.",
   "workspace_member_joined_member": "{{memberLabel}} entrou no espaço de trabalho \"{{workspaceName}}\" como Membro.",
   "workspace_member_joined_member_title": "Novo membro entrou em {{workspaceName}}",

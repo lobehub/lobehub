@@ -23,7 +23,7 @@ import type {
   HeteroExecImageRef,
 } from '@lobechat/heterogeneous-agents/protocol';
 import { buildHeteroExecStdinPayload } from '@lobechat/heterogeneous-agents/protocol';
-import type { AgentStreamEvent } from '@lobechat/heterogeneous-agents/spawn';
+import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
 import {
   AgentStreamPipeline,
   buildAgentInput,
@@ -188,6 +188,21 @@ interface AgentSession {
   modelVerificationLastAttemptAt?: number;
   modelVerificationLastAttemptSessionId?: string;
   process?: ChildProcess;
+  /**
+   * Absolute CLI path resolved by spawn preflight detection. Used for spawn()
+   * when the configured command is bare: detection can find the CLI through
+   * the login-shell PATH or a well-known install location (e.g. the Codex.app
+   * bundled CLI) that plain spawn() with the inherited env can't resolve.
+   */
+  resolvedCommandPath?: string;
+  /**
+   * PATH the preflight detector used to resolve `resolvedCommandPath`, set only
+   * when it fell back to the login-shell PATH. Merged into the child PATH at
+   * spawn so a `#!/usr/bin/env node` shim still finds its interpreter — the
+   * shim resolving in preflight doesn't guarantee `node` is on the leaner
+   * inherited PATH (Finder-launched Electron).
+   */
+  resolvedCommandSearchPath?: string;
   resumeSessionId?: string;
   sessionId: string;
   verifiedModel?: string;
@@ -470,11 +485,20 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
             session.agentType === 'claude-code' ? 'claude-code' : 'codex',
             command,
           );
-    const cliMissingError = this.buildCliMissingError(session);
 
-    if (!status || status.available || !cliMissingError) return;
+    if (!status || status.available) {
+      // Spawn through the detector-resolved absolute path when the configured
+      // command is bare — detection may have located the CLI somewhere plain
+      // spawn() can't (login-shell PATH, Codex.app bundled CLI, …).
+      const useResolvedPath = Boolean(status?.path) && !command.includes(path.sep);
+      session.resolvedCommandPath = useResolvedPath ? status!.path : undefined;
+      // Carry the login-shell PATH the detector resolved through, so a
+      // `#!/usr/bin/env node` shim spawned by absolute path still finds `node`.
+      session.resolvedCommandSearchPath = useResolvedPath ? status!.resolvedPathEnv : undefined;
+      return;
+    }
 
-    return cliMissingError;
+    return this.buildCliMissingError(session);
   }
 
   private get shouldTraceCliOutput(): boolean {
@@ -911,6 +935,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     let spawnPlan;
     let traceSession;
     let cwd: string;
+    let initialCumulativeUsage: UsageData | undefined;
     let spawnEnv: NodeJS.ProcessEnv;
     try {
       const driver = getHeterogeneousAgentDriver(session.agentType);
@@ -934,7 +959,12 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       // Forward the user's proxy settings to the CLI. The main-process undici
       // dispatcher doesn't reach child processes — they need env vars.
       const proxyEnv = buildProxyEnv(this.app.storeManager.get('networkProxy'));
-      spawnEnv = { ...buildInheritedSpawnEnv(), ...proxyEnv, ...session.env };
+      const inheritedEnv = buildInheritedSpawnEnv();
+      // When preflight resolved the CLI via the login-shell PATH, spawn with
+      // that PATH (a superset of the inherited one) so a `#!/usr/bin/env node`
+      // shim finds its interpreter. `session.env` still wins if it sets PATH.
+      if (session.resolvedCommandSearchPath) inheritedEnv.PATH = session.resolvedCommandSearchPath;
+      spawnEnv = { ...inheritedEnv, ...proxyEnv, ...session.env };
 
       if (session.agentType === 'codex') {
         const initialModel = await resolveCodexInitialModel({
@@ -944,6 +974,12 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
         if (initialModel?.model) {
           session.model = initialModel.model;
           session.modelSource = initialModel.source;
+        }
+
+        if (session.agentSessionId) {
+          initialCumulativeUsage = (
+            await readCodexSessionModel(session.agentSessionId, { env: spawnEnv })
+          )?.cumulativeUsage;
         }
       }
 
@@ -966,7 +1002,10 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     }
     const useStdin = spawnPlan.stdinPayload !== undefined;
     const cliArgs = spawnPlan.args;
-    const resolvedCliSpawnPlan = await resolveCliSpawnPlan(session.command, cliArgs);
+    const resolvedCliSpawnPlan = await resolveCliSpawnPlan(
+      session.resolvedCommandPath ?? session.command,
+      cliArgs,
+    );
 
     logger.info(
       'Spawning agent:',
@@ -1001,6 +1040,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
         reject,
         resolve,
         session,
+        initialCumulativeUsage,
         spawnEnv,
         traceSession,
         useStdin,
@@ -1070,6 +1110,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
 
   private handleSpawnedAgentProcess({
     cwd,
+    initialCumulativeUsage,
     intervention,
     params,
     proc,
@@ -1088,6 +1129,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     reject: (reason?: unknown) => void;
     resolve: () => void;
     session: AgentSession;
+    initialCumulativeUsage?: UsageData | undefined;
     spawnEnv: NodeJS.ProcessEnv;
     spawnPlan: HeterogeneousAgentBuildPlan;
     traceSession: CliTraceSession | undefined;
@@ -1128,6 +1170,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const pipeline = new AgentStreamPipeline({
       agentType: session.agentType,
       cwd,
+      initialCumulativeUsage,
       initialModel: session.model,
       operationId: params.operationId,
     });

@@ -110,6 +110,8 @@ export interface ChatGroupItem {
   title?: string | null;
   updatedAt: Date;
   userId: string;
+  /** Owning workspace; null for personal (non-workspace) groups. */
+  workspaceId?: string | null;
 }
 
 // Agent item with group role info

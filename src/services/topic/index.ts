@@ -32,6 +32,10 @@ export class TopicService {
     return lambdaClient.topic.cloneTopic.mutate({ id, newTitle });
   };
 
+  batchMoveTopics = (topicIds: string[], targetAgentId: string) => {
+    return lambdaClient.topic.batchMoveTopics.mutate({ targetAgentId, topicIds });
+  };
+
   importTopic = (params: {
     agentId: string;
     data: string;
@@ -56,8 +60,8 @@ export class TopicService {
     }) as any;
   };
 
-  getAllTopics = (): Promise<ChatTopic[]> => {
-    return lambdaClient.topic.getAllTopics.query() as any;
+  queryTopics = (params?: { pageSize?: number; statuses?: string[] }): Promise<ChatTopic[]> => {
+    return lambdaClient.topic.queryTopics.query(params) as any;
   };
 
   countTopics = async (params?: {

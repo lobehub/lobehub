@@ -3,292 +3,205 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clearSWRCache, createLocalStorageProvider } from './localStorageProvider';
+import { localDataCache } from './localDataCache';
+import {
+  CACHE_TIERS,
+  clearSWRCache,
+  createCacheProvider,
+  getScopedCacheKey,
+} from './localStorageProvider';
 
-describe('createLocalStorageProvider', () => {
+/** Poll until `fn` returns truthy (for async IndexedDB tier assertions). */
+const until = async (fn: () => boolean | Promise<boolean>, timeout = 1000): Promise<void> => {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    if (await fn()) return;
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  throw new Error('until: timed out');
+};
+
+/** Build a provider whose async IndexedDB hydration we can await. */
+const buildProvider = (
+  scope: { value: string },
+  extra: Partial<Parameters<typeof createCacheProvider>[0]> = {},
+) => {
+  let resolveHydrated: () => void;
+  const hydrated = new Promise<void>((r) => {
+    resolveHydrated = r;
+  });
+  const provider = createCacheProvider({
+    debounceMs: 5,
+    getScope: () => scope.value,
+    idbPatterns: ['MSGS', 'TOPIC'],
+    localPatterns: ['recents'],
+    onScopeHydrated: () => resolveHydrated(),
+    ...extra,
+  });
+  return { hydrated, provider };
+};
+
+describe('createCacheProvider — tiering', () => {
   beforeEach(() => {
     localStorage.clear();
-    vi.useFakeTimers();
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
+  afterEach(async () => {
     vi.restoreAllMocks();
+    await localDataCache.clearScope('s1');
+    await localDataCache.clearScope('s2');
   });
 
-  describe('basic functionality', () => {
-    it('should return a function that creates a Map', () => {
-      const provider = createLocalStorageProvider();
-      const map = provider();
-
-      expect(map).toBeInstanceOf(Map);
-    });
-
-    it('should store and retrieve values', () => {
-      const provider = createLocalStorageProvider({
-        cacheablePatterns: ['test-key'],
-      });
-      const map = provider();
-
-      map.set('test-key', { value: 'test' });
-
-      expect(map.get('test-key')).toEqual({ value: 'test' });
-    });
-
-    it('should delete values', () => {
-      const provider = createLocalStorageProvider({
-        cacheablePatterns: ['test-key'],
-      });
-      const map = provider();
-
-      map.set('test-key', { value: 'test' });
-      map.delete('test-key');
-
-      expect(map.has('test-key')).toBe(false);
-    });
+  it('getScopedCacheKey namespaces by scope', () => {
+    expect(getScopedCacheKey('u1:personal')).toBe('lobechat-swr-cache:u1:personal');
+    expect(getScopedCacheKey('anon:personal')).not.toBe(getScopedCacheKey('u1:personal'));
   });
 
-  describe('whitelist filtering', () => {
-    it('should only persist keys matching cacheablePatterns', () => {
-      const provider = createLocalStorageProvider({
-        cacheablePatterns: ['fetchSessions', 'fetchAgentList'],
-      });
-      const map = provider();
+  it('routes local-tier keys to scoped localStorage only', async () => {
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope);
+    const map = provider();
 
-      // Set both cacheable and non-cacheable keys
-      map.set('fetchSessions', { sessions: [] });
-      map.set('fetchAgentList', { agents: [] });
-      map.set('fetchMessages', { messages: [] }); // Not in whitelist
+    map.set('recents', { items: [1] });
+    map.set('MSGS:t1', { items: [2] }); // idb tier
+    map.set('random', { x: 1 }); // memory only
 
-      // Trigger save via beforeunload event
-      window.dispatchEvent(new Event('beforeunload'));
+    await until(() => localStorage.getItem(getScopedCacheKey('s1')) !== null);
 
-      const stored = localStorage.getItem('lobechat-swr-cache');
-      expect(stored).not.toBeNull();
-
-      const entries = JSON.parse(stored!);
-      const keys = entries.map(([key]: [string, unknown]) => key);
-
-      expect(keys).toContain('fetchSessions');
-      expect(keys).toContain('fetchAgentList');
-      expect(keys).not.toContain('fetchMessages');
-    });
-
-    it('should match array keys by first element', () => {
-      const provider = createLocalStorageProvider({
-        cacheablePatterns: ['fetchSessions'],
-      });
-      const map = provider();
-
-      // SWR often uses array keys like ['fetchSessions', userId]
-      const arrayKey = JSON.stringify(['fetchSessions', 'user-123']);
-      map.set(arrayKey, { data: 'test' });
-
-      // Trigger save via beforeunload event
-      window.dispatchEvent(new Event('beforeunload'));
-
-      const stored = localStorage.getItem('lobechat-swr-cache');
-      const entries = JSON.parse(stored!);
-
-      expect(entries.length).toBe(1);
-    });
+    const stored = JSON.parse(localStorage.getItem(getScopedCacheKey('s1'))!);
+    const keys = stored.map(([k]: [string]) => k);
+    expect(keys).toContain('recents');
+    expect(keys).not.toContain('MSGS:t1');
+    expect(keys).not.toContain('random');
   });
 
-  describe('TTL expiration', () => {
-    it('should load non-expired entries from localStorage', () => {
-      const now = Date.now();
-      const validEntry = {
-        data: { valid: true },
-        timestamp: now - 1000, // 1 second ago
-        version: '1.0.0',
-      };
+  it('routes idb-tier keys to IndexedDB and reloads them on a fresh provider', async () => {
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope);
+    const map = provider();
 
-      localStorage.setItem(
-        'lobechat-swr-cache',
-        JSON.stringify([['valid-key', validEntry]]),
-      );
+    map.set('MSGS:t1', { items: ['hello'] });
+    await until(async () => (await localDataCache.entriesByScope('s1')).length > 0);
 
-      const provider = createLocalStorageProvider({
-        ttl: 60 * 1000, // 1 minute
-        version: '1.0.0',
-      });
-      const map = provider();
+    // a brand-new provider for the same scope should re-hydrate the idb entry
+    const { hydrated: hydrated2, provider: provider2 } = buildProvider(scope);
+    const map2 = provider2();
+    await hydrated2;
 
-      expect(map.get('valid-key')).toEqual({ valid: true });
-    });
-
-    it('should not load expired entries from localStorage', () => {
-      const now = Date.now();
-      const expiredEntry = {
-        data: { expired: true },
-        timestamp: now - 2 * 60 * 60 * 1000, // 2 hours ago
-        version: '1.0.0',
-      };
-
-      localStorage.setItem(
-        'lobechat-swr-cache',
-        JSON.stringify([['expired-key', expiredEntry]]),
-      );
-
-      const provider = createLocalStorageProvider({
-        ttl: 60 * 60 * 1000, // 1 hour
-        version: '1.0.0',
-      });
-      const map = provider();
-
-      expect(map.has('expired-key')).toBe(false);
-    });
+    expect(map2.get('MSGS:t1')).toEqual({ items: ['hello'] });
   });
 
-  describe('version control', () => {
-    it('should not load entries with different version', () => {
-      const oldVersionEntry = {
-        data: { old: true },
-        timestamp: Date.now(),
-        version: '0.9.0',
-      };
-
-      localStorage.setItem(
-        'lobechat-swr-cache',
-        JSON.stringify([['old-key', oldVersionEntry]]),
-      );
-
-      const provider = createLocalStorageProvider({
-        version: '1.0.0',
-      });
-      const map = provider();
-
-      expect(map.has('old-key')).toBe(false);
+  it('idb tier wins when a key matches both pattern sets', async () => {
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope, {
+      idbPatterns: ['shared'],
+      localPatterns: ['shared'],
     });
+    const map = provider();
+    map.set('shared-key', { v: 1 });
 
-    it('should load entries with matching version', () => {
-      const currentVersionEntry = {
-        data: { current: true },
-        timestamp: Date.now(),
-        version: '1.0.0',
-      };
-
-      localStorage.setItem(
-        'lobechat-swr-cache',
-        JSON.stringify([['current-key', currentVersionEntry]]),
-      );
-
-      const provider = createLocalStorageProvider({
-        version: '1.0.0',
-      });
-      const map = provider();
-
-      expect(map.get('current-key')).toEqual({ current: true });
-    });
+    await until(async () => (await localDataCache.entriesByScope('s1')).length > 0);
+    // not written to the localStorage tier
+    expect(localStorage.getItem(getScopedCacheKey('s1'))).toBeNull();
   });
 
-  describe('capacity limits', () => {
-    it('should respect maxEntries limit', () => {
-      const provider = createLocalStorageProvider({
-        cacheablePatterns: ['item'],
-        maxEntries: 3,
-      });
-      const map = provider();
+  it('does not let two scopes overwrite each other (both tiers)', async () => {
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope);
+    const map = provider();
+    map.set('recents', { owner: 'A' });
+    map.set('MSGS:t1', { owner: 'A' });
+    await until(async () => (await localDataCache.entriesByScope('s1')).length > 0);
+    await until(() => localStorage.getItem(getScopedCacheKey('s1')) !== null);
 
-      // Add more entries than the limit
-      for (let i = 0; i < 5; i++) {
-        map.set(`item-${i}`, { index: i });
-      }
+    // switch scope and write different data
+    scope.value = 's2';
+    provider.reloadScope!();
+    map.set('recents', { owner: 'B' });
+    map.set('MSGS:t1', { owner: 'B' });
+    await until(async () => (await localDataCache.entriesByScope('s2')).length > 0);
+    await until(() => localStorage.getItem(getScopedCacheKey('s2')) !== null);
 
-      vi.advanceTimersByTime(2500);
-
-      const stored = localStorage.getItem('lobechat-swr-cache');
-      const entries = JSON.parse(stored!);
-
-      expect(entries.length).toBeLessThanOrEqual(3);
-    });
+    const a = await localDataCache.entriesByScope('s1');
+    const b = await localDataCache.entriesByScope('s2');
+    expect(a.find((e) => e.key === 'MSGS:t1')?.data).toEqual({ owner: 'A' });
+    expect(b.find((e) => e.key === 'MSGS:t1')?.data).toEqual({ owner: 'B' });
   });
 
-  describe('debounced saving', () => {
-    it('should debounce multiple set operations', () => {
-      const provider = createLocalStorageProvider({
-        cacheablePatterns: ['key'],
-      });
-      const map = provider();
+  it('reloadScope re-hydrates both tiers from the new scope', async () => {
+    // seed s2 with idb + local data via a throwaway provider
+    const seedScope = { value: 's2' };
+    const { provider: seed } = buildProvider(seedScope);
+    const seedMap = seed();
+    seedMap.set('MSGS:tX', { from: 's2' });
+    seedMap.set('recents', { from: 's2' });
+    await until(async () => (await localDataCache.entriesByScope('s2')).length > 0);
+    await until(() => localStorage.getItem(getScopedCacheKey('s2')) !== null);
 
-      // Multiple rapid sets
-      map.set('key-1', { v: 1 });
-      map.set('key-2', { v: 2 });
-      map.set('key-3', { v: 3 });
+    // a provider that starts on s1, then switches to s2
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope);
+    const map = provider();
+    map.set('MSGS:tA', { from: 's1' });
+    map.set('recents', { from: 's1' });
 
-      // Before debounce timeout, nothing should be saved
-      expect(localStorage.getItem('lobechat-swr-cache')).toBeNull();
+    scope.value = 's2';
+    provider.reloadScope!();
 
-      // After debounce timeout
-      vi.advanceTimersByTime(2500);
-
-      expect(localStorage.getItem('lobechat-swr-cache')).not.toBeNull();
-    });
+    // local tier is synchronous on reload
+    expect(map.get('recents')).toEqual({ from: 's2' });
+    // s1's idb entry dropped from memory
+    expect(map.has('MSGS:tA')).toBe(false);
+    // s2's idb entry hydrated asynchronously
+    await until(() => map.get('MSGS:tX') !== undefined);
+    expect(map.get('MSGS:tX')).toEqual({ from: 's2' });
   });
 
-  describe('error handling', () => {
-    it('should handle corrupted localStorage data', () => {
-      localStorage.setItem('lobechat-swr-cache', 'invalid-json');
+  it('drops local-tier entries past TTL / version on load', async () => {
+    const key = getScopedCacheKey('s1');
+    localStorage.setItem(
+      key,
+      JSON.stringify([
+        ['recents', { data: { ok: true }, timestamp: Date.now(), version: '1.0.0' }],
+        ['recents-old', { data: { ok: false }, timestamp: Date.now() - 1e9, version: '1.0.0' }],
+        ['recents-v', { data: { ok: false }, timestamp: Date.now(), version: '0.0.1' }],
+      ]),
+    );
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope, { ttl: 60_000, version: '1.0.0' });
+    const map = provider();
 
-      const onError = vi.fn();
-      const provider = createLocalStorageProvider({ onError });
-      const map = provider();
-
-      expect(map.size).toBe(0);
-      expect(onError).toHaveBeenCalled();
-    });
-
-    it('should handle QuotaExceededError gracefully', () => {
-      const provider = createLocalStorageProvider({
-        cacheablePatterns: ['key'],
-      });
-      const map = provider();
-
-      // Mock localStorage.setItem to throw QuotaExceededError
-      const quotaError = new DOMException('Quota exceeded', 'QuotaExceededError');
-      vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
-        throw quotaError;
-      });
-
-      map.set('key', { data: 'test' });
-      vi.advanceTimersByTime(2500);
-
-      // Should not throw
-      expect(true).toBe(true);
-    });
+    expect(map.get('recents')).toEqual({ ok: true });
+    expect(map.has('recents-old')).toBe(false);
+    expect(map.has('recents-v')).toBe(false);
   });
 
-  describe('SSR compatibility', () => {
-    it('should return empty Map when window is undefined', () => {
-      // This test verifies the SSR check in the implementation
-      // The actual SSR scenario is tested implicitly by the guard clause
-      const provider = createLocalStorageProvider();
-      const map = provider();
-
-      expect(map).toBeInstanceOf(Map);
+  it('handles localStorage QuotaExceededError without throwing', async () => {
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope);
+    const map = provider();
+    vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException('Quota exceeded', 'QuotaExceededError');
     });
+    expect(() => {
+      map.set('recents', { x: 1 });
+    }).not.toThrow();
+    await new Promise((r) => setTimeout(r, 20));
+  });
+
+  it('exposes the central tier config keyed by domain prefix', () => {
+    expect(CACHE_TIERS.idb).toContain('message:');
+    expect(CACHE_TIERS.idb).toContain('topic:');
+    expect(CACHE_TIERS.local).toContain('recent:list');
   });
 });
 
 describe('clearSWRCache', () => {
-  beforeEach(() => {
-    localStorage.clear();
-  });
+  beforeEach(() => localStorage.clear());
 
-  it('should clear the cache from localStorage', () => {
-    localStorage.setItem('lobechat-swr-cache', JSON.stringify([['key', { data: 'test' }]]));
-
+  it('removes the given cache key', () => {
+    localStorage.setItem('lobechat-swr-cache', '[]');
     clearSWRCache();
-
     expect(localStorage.getItem('lobechat-swr-cache')).toBeNull();
-  });
-
-  it('should use custom cache key if provided', () => {
-    const customKey = 'custom-cache-key';
-    localStorage.setItem(customKey, JSON.stringify([['key', { data: 'test' }]]));
-
-    clearSWRCache(customKey);
-
-    expect(localStorage.getItem(customKey)).toBeNull();
   });
 });

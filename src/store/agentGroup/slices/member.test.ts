@@ -63,7 +63,7 @@ describe('ChatGroupMemberSlice', () => {
         await result.current.addAgentsToGroup('group-1', ['agent-1']);
       });
 
-      expect(mutate).toHaveBeenCalledWith(['fetchGroupDetail', 'group-1']);
+      expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
     });
   });
 
@@ -95,7 +95,7 @@ describe('ChatGroupMemberSlice', () => {
         await result.current.removeAgentFromGroup('group-1', 'agent-1');
       });
 
-      expect(mutate).toHaveBeenCalledWith(['fetchGroupDetail', 'group-1']);
+      expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
     });
   });
 
@@ -130,7 +130,7 @@ describe('ChatGroupMemberSlice', () => {
         await result.current.reorderGroupMembers('group-1', ['agent-1', 'agent-2']);
       });
 
-      expect(mutate).toHaveBeenCalledWith(['fetchGroupDetail', 'group-1']);
+      expect(mutate).toHaveBeenCalledWith(['group:detail', 'group-1']);
     });
   });
 });

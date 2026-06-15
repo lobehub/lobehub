@@ -332,4 +332,6 @@ export interface TaskDetailData {
   topicCount?: number;
   userId?: string | null;
   workspace?: TaskDetailWorkspaceNode[];
+  /** Owning workspace; null for personal (non-workspace) tasks. */
+  workspaceId?: string | null;
 }

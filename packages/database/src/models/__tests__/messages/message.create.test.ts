@@ -339,18 +339,15 @@ describe('MessageModel Create Tests', () => {
           (event) => event === 'db.message.createUserAndAssistant.messages.insert:start',
         ),
       ).toHaveLength(1);
-      expect(
-        timingEvents.filter(
-          (event) => event === 'db.message.createUserAndAssistant.topic.touchUpdatedAt:start',
-        ),
-      ).toHaveLength(1);
+      expect(timingEvents.some((event) => event.includes('topic.touchUpdatedAt'))).toBe(false);
     });
 
-    it('should skip topic touch when creating a pair for an already-created topic', async () => {
+    it('should not touch topic updatedAt when creating a pair for an existing topic', async () => {
       await serverDB.insert(topics).values({
         id: 'topic-pair-no-touch',
         sessionId: '1',
         title: 'Topic pair no touch',
+        updatedAt: new Date('2024-01-01T00:00:00Z'),
         userId,
       });
 
@@ -376,9 +373,11 @@ describe('MessageModel Create Tests', () => {
           timing: {
             log: (event) => timingEvents.push(event),
           },
-          touchTopicUpdatedAt: false,
         },
       );
+      const topic = await serverDB.query.topics.findFirst({
+        where: (table, { eq }) => eq(table.id, 'topic-pair-no-touch'),
+      });
 
       expect(result.userMessage.id).toBeDefined();
       expect(result.assistantMessage.parentId).toBe(result.userMessage.id);
@@ -387,11 +386,8 @@ describe('MessageModel Create Tests', () => {
           (event) => event === 'db.message.createUserAndAssistant.messages.insert:start',
         ),
       ).toHaveLength(1);
-      expect(
-        timingEvents.filter(
-          (event) => event === 'db.message.createUserAndAssistant.topic.touchUpdatedAt:start',
-        ),
-      ).toHaveLength(0);
+      expect(timingEvents.some((event) => event.includes('topic.touchUpdatedAt'))).toBe(false);
+      expect(topic?.updatedAt.toISOString()).toBe('2024-01-01T00:00:00.000Z');
     });
 
     describe('create with advanced parameters', () => {

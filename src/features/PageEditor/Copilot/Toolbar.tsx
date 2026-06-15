@@ -75,7 +75,10 @@ const CopilotToolbar = memo(() => {
                   {(topics || []).map((topic) => (
                     <TopicItem
                       active={topic.id === activeTopicId}
+                      agentId={agentId}
+                      fav={topic.favorite}
                       key={topic.id}
+                      status={topic.status}
                       topicId={topic.id}
                       topicTitle={topic.title}
                       onClose={() => setTopicPopoverOpen(false)}

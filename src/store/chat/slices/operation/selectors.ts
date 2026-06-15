@@ -221,6 +221,37 @@ const isAgentRuntimeRunningByContext =
   };
 
 /**
+ * Get the earliest start time for a running agent runtime operation in a
+ * specific context. This anchors visible elapsed-time UI to the top-level
+ * runtime op instead of short-lived sub-operations.
+ */
+const getAgentRuntimeStartTimeByContext =
+  (context: MessageMapKeyInput) =>
+  (s: ChatStoreState): number | undefined => {
+    if (!context.agentId) return undefined;
+
+    const operations = getOperationsByContext(context)(s);
+    let startTime: number | undefined;
+
+    for (const op of operations) {
+      if (
+        op.status !== 'running' ||
+        op.metadata.isAborting ||
+        !AI_RUNTIME_OPERATION_TYPES.includes(op.type)
+      ) {
+        continue;
+      }
+
+      startTime =
+        startTime === undefined
+          ? op.metadata.startTime
+          : Math.min(startTime, op.metadata.startTime);
+    }
+
+    return startTime;
+  };
+
+/**
  * Check if input should show loading state in a specific context
  * Includes sendMessage in addition to AI runtime operations,
  * so the input stays in loading state from the moment user sends until AI finishes
@@ -603,6 +634,7 @@ export const operationSelectors = {
   getDeepestRunningOperationByMessage,
   getOperationById,
   getOperationContextFromMessage,
+  getAgentRuntimeStartTimeByContext,
   getOperationsByContext,
   getOperationsByMessage,
   getOperationsByType,

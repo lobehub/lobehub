@@ -3,37 +3,47 @@ import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import type { NewVerifyCheckResult, VerifyCheckResultItem } from '../schemas/verify';
 import { verifyCheckResults } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export class VerifyCheckResultModel {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
+  private readonly workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
 
-  create = async (params: Omit<NewVerifyCheckResult, 'userId'>) => {
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, verifyCheckResults);
+
+  create = async (params: Omit<NewVerifyCheckResult, 'userId' | 'workspaceId'>) => {
     const [result] = await this.db
       .insert(verifyCheckResults)
-      .values({ ...params, userId: this.userId })
+      .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, params))
       .returning();
 
     return result;
   };
 
   /** Batch-insert the initial `pending` rows when verify execution starts. */
-  createMany = async (rows: Omit<NewVerifyCheckResult, 'userId'>[]) => {
+  createMany = async (rows: Omit<NewVerifyCheckResult, 'userId' | 'workspaceId'>[]) => {
     if (rows.length === 0) return [];
     return this.db
       .insert(verifyCheckResults)
-      .values(rows.map((r) => ({ ...r, userId: this.userId })))
+      .values(
+        rows.map((r) =>
+          buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, r),
+        ),
+      )
       .returning();
   };
 
   findById = async (id: string) => {
     return this.db.query.verifyCheckResults.findFirst({
-      where: and(eq(verifyCheckResults.id, id), eq(verifyCheckResults.userId, this.userId)),
+      where: and(eq(verifyCheckResults.id, id), this.ownership()),
     });
   };
 
@@ -42,12 +52,7 @@ export class VerifyCheckResultModel {
     return this.db
       .select()
       .from(verifyCheckResults)
-      .where(
-        and(
-          eq(verifyCheckResults.operationId, operationId),
-          eq(verifyCheckResults.userId, this.userId),
-        ),
-      )
+      .where(and(eq(verifyCheckResults.operationId, operationId), this.ownership()))
       .orderBy(asc(verifyCheckResults.checkItemIndex));
   };
 
@@ -55,7 +60,7 @@ export class VerifyCheckResultModel {
     return this.db
       .update(verifyCheckResults)
       .set(value)
-      .where(and(eq(verifyCheckResults.id, id), eq(verifyCheckResults.userId, this.userId)));
+      .where(and(eq(verifyCheckResults.id, id), this.ownership()));
   };
 
   /**
@@ -75,7 +80,7 @@ export class VerifyCheckResultModel {
         and(
           eq(verifyCheckResults.operationId, operationId),
           eq(verifyCheckResults.checkItemId, checkItemId),
-          eq(verifyCheckResults.userId, this.userId),
+          this.ownership(),
         ),
       );
   };
@@ -95,7 +100,7 @@ export class VerifyCheckResultModel {
       .where(
         and(
           eq(verifyCheckResults.operationId, operationId),
-          eq(verifyCheckResults.userId, this.userId),
+          this.ownership(),
           inArray(verifyCheckResults.checkItemId, checkItemIds),
           isNull(verifyCheckResults.verifierTracingId),
         ),

@@ -3,11 +3,13 @@
 import { ActionIcon, Flexbox, Tag } from '@lobehub/ui';
 import { Tooltip } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
+import dayjs from 'dayjs';
 import { ArrowLeftRightIcon, RotateCcwIcon } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
 import { useEventCallback } from '@/hooks/useEventCallback';
 import type { DocumentHistorySaveSource } from '@/server/routers/lambda/_schema/documentHistory';
 
@@ -25,6 +27,20 @@ const SOURCE_TAG_COLOR: Record<DocumentHistorySaveSource, TagColor> = {
 };
 
 const styles = createStaticStyles(({ css }) => ({
+  description: css`
+    overflow: hidden;
+
+    font-size: 12px;
+    line-height: 1.2;
+    color: ${cssVar.colorTextTertiary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
+  rowMain: css`
+    overflow: hidden;
+    flex: 1;
+    min-width: 0;
+  `,
   actions: css`
     pointer-events: none;
 
@@ -125,6 +141,7 @@ export const HistoryListItem = memo<HistoryListItemProps>(({ historyId, onCompar
   const { t } = useTranslation(['common', 'file']);
   const item = useHistoryItemsStore(historyItemSelectors.itemById(historyId));
   const isRestoring = useHistoryItemsStore(historyItemSelectors.isRestoring(historyId));
+  const authorInfo = useAuthorInfo(item?.userId);
 
   const handleCompare = useEventCallback(() => {
     onCompare(historyId);
@@ -148,11 +165,17 @@ export const HistoryListItem = memo<HistoryListItemProps>(({ historyId, onCompar
       className={cx(styles.row, item.isCurrent && styles.rowCurrent)}
       onClick={item.isCurrent ? undefined : handleCompare}
     >
-      <Tooltip title={formatHistoryAbsoluteTime(item.savedAt)}>
-        <span className={cx(styles.rowTime, item.isCurrent && styles.rowTimeCurrent)}>
-          {timeLabel}
+      <Flexbox align={'flex-start'} className={styles.rowMain} gap={4}>
+        <Tooltip title={formatHistoryAbsoluteTime(item.savedAt)}>
+          <span className={cx(styles.rowTime, item.isCurrent && styles.rowTimeCurrent)}>
+            {timeLabel}
+          </span>
+        </Tooltip>
+        <span className={styles.description}>
+          {authorInfo?.fullName ? `${authorInfo.fullName} · ` : ''}
+          {dayjs(item.savedAt).fromNow()}
         </span>
-      </Tooltip>
+      </Flexbox>
 
       <div className={styles.rowRight}>
         {item.isCurrent && (

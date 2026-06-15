@@ -2,6 +2,7 @@ import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { recentKeys } from '@/libs/swr/keys';
 import { type RecentItem } from '@/server/routers/lambda/recent';
 import { recentService } from '@/services/recent';
 import { type HomeStore } from '@/store/home/store';
@@ -10,14 +11,11 @@ import { setNamespace } from '@/utils/storeDebug';
 
 const n = setNamespace('recent');
 
-const FETCH_RECENTS_KEY = 'fetchRecents';
 // Mirror the home Daily Brief / task detail polling cadence so users see new
 // items, status transitions (incl. backlog/paused → running which the per-item
 // task.detail poll never caught) without manual refresh. SWR pauses when the
 // tab is backgrounded.
 const RECENTS_REFRESH_INTERVAL = 10_000;
-/** SWR key prefix for `AllRecentsDrawer` (`['allRecents', open]`) */
-export const ALL_RECENTS_DRAWER_SWR_PREFIX = 'allRecents';
 
 type Setter = StoreSetter<HomeStore>;
 export const createRecentSlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>
@@ -48,8 +46,8 @@ export class RecentActionImpl {
 
   refreshRecents = async (): Promise<void> => {
     await Promise.all([
-      mutate((key: unknown) => Array.isArray(key) && key[0] === FETCH_RECENTS_KEY),
-      mutate((key: unknown) => Array.isArray(key) && key[0] === ALL_RECENTS_DRAWER_SWR_PREFIX),
+      mutate((key: unknown) => Array.isArray(key) && key[0] === recentKeys.list.root),
+      mutate((key: unknown) => Array.isArray(key) && key[0] === recentKeys.allDrawer.root),
     ]);
   };
 
@@ -58,7 +56,7 @@ export class RecentActionImpl {
     limit: number = 10,
   ): SWRResponse<RecentItem[]> => {
     return useClientDataSWRWithSync<RecentItem[]>(
-      isLogin === true ? [FETCH_RECENTS_KEY, isLogin, limit] : null,
+      isLogin === true ? recentKeys.list(isLogin, limit) : null,
       async () => recentService.getAll(limit + 1),
       {
         onData: (data) => {

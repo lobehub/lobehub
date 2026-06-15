@@ -119,6 +119,21 @@ describe('LocalFileProtocolManager', () => {
     expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8');
   });
 
+  it('does not mint image-only preview URLs for text files', async () => {
+    const manager = new LocalFileProtocolManager();
+    await manager.approveWorkspaceRoot('/Users/alice/project');
+    mockReadFile.mockResolvedValue(Buffer.from('const value = 1;'));
+
+    const url = await manager.createPreviewUrl({
+      accept: 'image',
+      filePath: '/Users/alice/project/App.tsx',
+      workspaceRoot: '/Users/alice/project',
+    });
+
+    expect(url).toBeNull();
+    expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/project/App.tsx');
+  });
+
   it('decodes percent-encoded characters in the path', async () => {
     const manager = new LocalFileProtocolManager();
     manager.registerHandler();
@@ -294,6 +309,21 @@ describe('LocalFileProtocolManager', () => {
       realPath: '/Users/alice/project/App.tsx',
     });
     expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/project/App.tsx');
+  });
+
+  it('does not return text payloads for image-only preview reads', async () => {
+    const manager = new LocalFileProtocolManager();
+    await manager.approveIndexedProjectRoot('/Users/alice/project');
+    mockReadFile.mockResolvedValue(Buffer.from('SECRET=value'));
+
+    const result = await manager.readPreviewFile({
+      accept: 'image',
+      filePath: '/Users/alice/project/.env',
+      workspaceRoot: '/Users/alice/project',
+    });
+
+    expect(result).toBeNull();
+    expect(mockReadFile).toHaveBeenCalledWith('/Users/alice/project/.env');
   });
 
   it('does not read preview payloads outside the approved workspace root', async () => {

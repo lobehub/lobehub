@@ -1,6 +1,6 @@
 'use client';
 
-import { defineFixtures, single } from './_helpers';
+import { defineFixtures, single, variants } from './_helpers';
 
 const addedFileDiff = `diff --git a/src/routes/(main)/devtools/index.tsx b/src/routes/(main)/devtools/index.tsx
 --- /dev/null
@@ -20,6 +20,21 @@ const modifiedRegistryDiff = `diff --git a/packages/builtin-tools/src/renders.ts
 +  devtools: DevtoolsRenders,
  };
 `;
+
+const linearIssueResult = {
+  description:
+    '## 背景\n\n当前客户端侧有三种 agent runtime 路径，它们都在处理同一类 agent run 生命周期，但生命周期控制点不一致。\n\n## 目标\n\n建立一套共享的 post-complete hooks，让 queue message、topic title、Agent Signal、unread completion 和 notification 都通过同一入口收敛。',
+  id: 'LOBE-10205',
+  links: [
+    {
+      title: 'PR #15766: refactor(chat): unify agent run lifecycle',
+      url: 'https://github.com/lobehub/lobehub/pull/15766',
+    },
+  ],
+  state: { name: 'In Review' },
+  title: '统一三种客户端 Agent Runtime 的 run 生命周期 hooks',
+  url: 'https://linear.app/lobehub/issue/LOBE-10205',
+};
 
 export default defineFixtures({
   identifier: 'codex',
@@ -113,28 +128,58 @@ export default defineFixtures({
         linesDeleted: 0,
       },
     }),
-    mcp_tool_call: single({
-      args: {
-        arguments: {
-          code: "const result = await import('./package.json', { with: { type: 'json' } });\nresult.default.name;",
+    mcp_tool_call: variants([
+      {
+        args: {
+          arguments: {
+            code: "const result = await import('./package.json', { with: { type: 'json' } });\nresult.default.name;",
+          },
+          server: 'node_repl',
+          tool: 'js',
         },
-        server: 'node_repl',
-        tool: 'js',
+        content: '@lobehub/desktop',
+        label: 'Node REPL',
+        pluginState: {
+          arguments: {
+            code: "const result = await import('./package.json', { with: { type: 'json' } });\nresult.default.name;",
+          },
+          result: {
+            content: [{ text: '@lobehub/desktop', type: 'text' }],
+            isError: false,
+          },
+          server: 'node_repl',
+          status: 'completed',
+          tool: 'js',
+        },
       },
-      content: '@lobehub/desktop',
-      pluginState: {
-        arguments: {
-          code: "const result = await import('./package.json', { with: { type: 'json' } });\nresult.default.name;",
+      {
+        args: {
+          arguments: {
+            id: 'LOBE-10205',
+            links: linearIssueResult.links,
+            state: 'In Review',
+          },
+          server: 'mcp__codex_apps__linear',
+          tool: 'linear_save_issue',
         },
-        result: {
-          content: [{ text: '@lobehub/desktop', type: 'text' }],
-          isError: false,
+        content: JSON.stringify(linearIssueResult),
+        label: 'Linear update issue',
+        pluginState: {
+          arguments: {
+            id: 'LOBE-10205',
+            links: linearIssueResult.links,
+            state: 'In Review',
+          },
+          result: {
+            content: [{ text: JSON.stringify(linearIssueResult), type: 'text' }],
+            isError: false,
+          },
+          server: 'mcp__codex_apps__linear',
+          status: 'completed',
+          tool: 'linear_save_issue',
         },
-        server: 'node_repl',
-        status: 'completed',
-        tool: 'js',
       },
-    }),
+    ]),
     todo_list: single({
       args: {
         items: [

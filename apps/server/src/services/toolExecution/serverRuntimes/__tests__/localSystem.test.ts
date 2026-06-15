@@ -64,6 +64,7 @@ describe('localSystemRuntime', () => {
     it('should call deviceGateway.executeToolCall with correct arguments when a proxy function is invoked', async () => {
       const context: ToolExecutionContext = {
         activeDeviceId: 'device-1',
+        operationId: 'op-1',
         toolManifestMap: {},
         userId: 'user-1',
       };
@@ -78,7 +79,7 @@ describe('localSystemRuntime', () => {
       const result = await proxy[apiName](args);
 
       expect(mockExecuteToolCall).toHaveBeenCalledWith(
-        { deviceId: 'device-1', userId: 'user-1' },
+        { deviceId: 'device-1', operationId: 'op-1', userId: 'user-1' },
         {
           apiName,
           arguments: JSON.stringify(args),

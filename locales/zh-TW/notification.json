@@ -17,6 +17,8 @@
   "storage_overage_cap_reached_title": "儲存空間按使用量付費上限已達到",
   "video_generation_completed": "您的影片「{{prompt}}」已完成。",
   "video_generation_completed_title": "影片生成完成",
+  "workspace_member_invited": "{{inviterLabel}} 邀請您以 {{role}} 身份加入工作空間「{{workspaceName}}」。",
+  "workspace_member_invited_title": "加入 {{workspaceName}} 的邀請",
   "workspace_member_joined": "{{memberLabel}} 已加入工作區「{{workspaceName}}」，角色為 {{role}}。",
   "workspace_member_joined_member": "{{memberLabel}} 已加入工作區「{{workspaceName}}」，角色為成員。",
   "workspace_member_joined_member_title": "新成員加入 {{workspaceName}}",

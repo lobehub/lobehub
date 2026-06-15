@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { taskDetailPath, useNavigateToTaskDetail, useTaskDetailPath } from './taskDetailPath';
 
 const mocks = vi.hoisted(() => ({
+  activeWorkspaceSlug: null as string | null,
   navigate: vi.fn(),
   params: {} as { aid?: string },
 }));
@@ -16,10 +17,15 @@ vi.mock('react-router-dom', () => ({
   useParams: () => mocks.params,
 }));
 
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  useActiveWorkspaceSlug: () => mocks.activeWorkspaceSlug,
+}));
+
 describe('taskDetailPath', () => {
   beforeEach(() => {
     mocks.navigate.mockClear();
     mocks.params = {};
+    mocks.activeWorkspaceSlug = null;
   });
 
   it('builds an agent-scoped path when an agent id is provided', () => {
@@ -46,5 +52,15 @@ describe('taskDetailPath', () => {
     result.current('T-2', 'agt_child');
 
     expect(mocks.navigate).toHaveBeenCalledWith('/agent/agt_child/task/T-2');
+  });
+
+  it('prefixes the navigation target with the active workspace slug', () => {
+    mocks.params = { aid: 'agt_current' };
+    mocks.activeWorkspaceSlug = 'lobehub';
+
+    const { result } = renderHook(() => useNavigateToTaskDetail());
+    result.current('T-2', 'agt_child');
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/lobehub/agent/agt_child/task/T-2');
   });
 });

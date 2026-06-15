@@ -35,6 +35,7 @@
   "QuotaLimitReached": "Sorry, het tokengebruik of het aantal verzoeken heeft de quotumlimiet voor deze sleutel bereikt. Verhoog het quotum van de sleutel of probeer het later opnieuw.",
   "RateLimitExceeded": "Sorry, het tokengebruik of het aantal verzoeken heeft de snelheidslimiet voor deze sleutel bereikt. Probeer het later opnieuw of verhoog het quotum van de sleutel.",
   "StateStorePersistError": "Een tijdelijk probleem met de gespreksstatusopslag heeft deze bewerking onderbroken. Probeer het opnieuw; neem contact op met de ondersteuning als het probleem aanhoudt.",
+  "StateStoreReadError": "Deze bewerking kon niet worden hervat omdat de sessiestatus niet beschikbaar was. Open het gesprek opnieuw om verder te gaan; als het probleem aanhoudt, neem dan contact op met de ondersteuning.",
   "StreamChunkError": "Fout bij het parseren van het berichtdeel van het streamingverzoek. Controleer of de huidige API-interface voldoet aan de standaardspecificaties, of neem contact op met uw API-provider voor hulp.",
   "UpstreamGatewayError": "De upstream-gateway of proxy heeft een fout geretourneerd. Probeer het over een tijdje opnieuw; controleer uw proxy-/eindpuntconfiguratie als het probleem aanhoudt.",
   "UpstreamHttpError": "De provider heeft een HTTP-fout geretourneerd zonder verdere details. Probeer het opnieuw, of controleer uw verzoek en modelconfiguratie.",

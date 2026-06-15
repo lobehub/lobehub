@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="shortcut icon" href="/favicon-32x32.ico" />
+    <!--SEO_META-->
+    <style>
+      html body {
+        background: #f8f8f8;
+      }
+      html[data-theme='dark'] body {
+        background-color: #000;
+      }
+    </style>
+    <script>
+      (function () {
+        function supportsImportMaps() {
+          return (
+            typeof HTMLScriptElement !== 'undefined' &&
+            typeof HTMLScriptElement.supports === 'function' &&
+            HTMLScriptElement.supports('importmap')
+          );
+        }
+
+        function supportsCascadeLayers() {
+          var el = document.createElement('div');
+          el.className = '__layer_test__';
+          el.style.position = 'absolute';
+          el.style.left = '-99999px';
+          el.style.top = '-99999px';
+
+          var style = document.createElement('style');
+          style.textContent =
+            '@layer a, b;' +
+            '@layer a { .__layer_test__ { color: rgb(1, 2, 3); } }' +
+            '@layer b { .__layer_test__ { color: rgb(4, 5, 6); } }';
+
+          document.documentElement.append(style);
+          document.documentElement.append(el);
+
+          var color = getComputedStyle(el).color;
+
+          el.remove();
+          style.remove();
+
+          return color === 'rgb(4, 5, 6)';
+        }
+
+        if (!(supportsImportMaps() && supportsCascadeLayers())) {
+          window.location.href = '/not-compatible.html';
+          return;
+        }
+
+        var theme = 'system';
+        try {
+          theme = localStorage.getItem('theme') || 'system';
+        } catch (_) {}
+        var systemTheme =
+          window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+        var resolvedTheme = theme === 'system' ? systemTheme : theme;
+        if (resolvedTheme === 'dark' || resolvedTheme === 'light') {
+          document.documentElement.setAttribute('data-theme', resolvedTheme);
+        }
+
+        var hl = new URLSearchParams(location.search).get('hl');
+        var m = document.cookie.match(/(?:^|;\s*)LOBE_LOCALE=([^;]*)/);
+        var cookie = m ? decodeURIComponent(m[1]) : '';
+        var locale = hl || cookie || navigator.language || 'en-US';
+        if (locale === 'auto') locale = navigator.language || 'en-US';
+        if (hl && !cookie) {
+          document.cookie =
+            'LOBE_LOCALE=' + encodeURIComponent(hl) + ';path=/;max-age=7776000;SameSite=Lax';
+        }
+        document.documentElement.lang = locale;
+        var rtl = ['ar', 'arc', 'dv', 'fa', 'ha', 'he', 'khw', 'ks', 'ku', 'ps', 'ur', 'yi'];
+        document.documentElement.dir =
+          rtl.indexOf(locale.split('-')[0].toLowerCase()) >= 0 ? 'rtl' : 'ltr';
+      })();
+    </script>
+    <script>
+      window.__SERVER_CONFIG__ = undefined; /* SERVER_CONFIG */
+    </script>
+  </head>
+
+  <body>
+    <div id="root" style="height: 100%"></div>
+
+    <!--ANALYTICS_SCRIPTS-->
+    <script type="module" src="/src/spa/entry.auth.tsx"></script>
+  </body>
+</html>

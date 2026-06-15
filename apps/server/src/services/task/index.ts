@@ -706,6 +706,7 @@ export class TaskService {
       activities: activities.length > 0 ? activities : undefined,
       topicCount: topics.length > 0 ? topics.length : undefined,
       workspace: workspaceFolders.length > 0 ? workspaceFolders : undefined,
+      workspaceId: task.workspaceId ?? null,
     };
   }
 

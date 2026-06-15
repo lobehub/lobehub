@@ -17,9 +17,9 @@ export class VerifyStatusService {
   private readonly operationModel: AgentOperationModel;
   private readonly resultModel: VerifyCheckResultModel;
 
-  constructor(db: LobeChatDatabase, userId: string) {
-    this.operationModel = new AgentOperationModel(db, userId);
-    this.resultModel = new VerifyCheckResultModel(db, userId);
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.operationModel = new AgentOperationModel(db, userId, workspaceId);
+    this.resultModel = new VerifyCheckResultModel(db, userId, workspaceId);
   }
 
   /**

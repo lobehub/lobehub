@@ -119,7 +119,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
     } = params;
 
     if (runAsTask) {
-      // Dispatch as a sub-agent using the lobe-agent exec_sub_agent pattern
+      // Dispatch as a legacy async agent invocation.
       // Pre-load target agent config to ensure it exists
       const targetAgentExists = useAgentStore.getState().agentMap[agentId];
       if (!targetAgentExists) {
@@ -141,8 +141,8 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
         }
       }
 
-      // Return special state that will be recognized by AgentRuntime's exec_sub_agent executor
-      // Follows the lobe-agent callSubAgent pattern: stop: true + state.type = 'execSubAgent'
+      // Return special state recognized by AgentRuntime's legacy exec_sub_agent executor.
+      // callAgent keeps this alias until it is redesigned as an explicit agent invocation.
       return {
         content: `🚀 Triggered async task to call agent "${agentId}"${taskTitle ? `: ${taskTitle}` : ''}`,
         state: {
@@ -153,7 +153,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
             targetAgentId: agentId, // Special field for callAgent - indicates target agent
             timeout: timeout || 1_800_000,
           },
-          type: 'execSubAgent', // Same wire-level type as lobe-agent so the runtime reuses its executor
+          type: 'execSubAgent',
         },
         stop: true,
         success: true,

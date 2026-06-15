@@ -1,8 +1,11 @@
 'use client';
 
+import { LINEAR_TOOL_NAMES } from '@lobechat/shared-tool-ui/inspectors';
+import { LinearRender } from '@lobechat/shared-tool-ui/renders';
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox, Highlighter, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
+import type { ComponentType } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,9 +13,12 @@ import type { CodexMcpToolArgs, CodexMcpToolState } from './mcpToolUtils';
 import {
   formatMcpInput,
   formatMcpOutput,
+  getCodexLinearMcpApiName,
   getMcpErrorText,
   getMcpInput,
+  getMcpInputRecord,
   getMcpResultText,
+  getMcpServer,
   getMcpToolName,
 } from './mcpToolUtils';
 
@@ -24,13 +30,42 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+const LINEAR_TOOL_NAME_SET = new Set<string>([...LINEAR_TOOL_NAMES, 'fetch', 'search']);
+const SharedLinearRender = LinearRender as ComponentType<
+  BuiltinRenderProps<Record<string, unknown>, unknown, string>
+>;
+
 const McpToolRender = memo<BuiltinRenderProps<CodexMcpToolArgs, CodexMcpToolState, string>>(
-  ({ args, content, pluginState }) => {
+  ({ args, content, messageId, pluginState, toolCallId }) => {
     const { t } = useTranslation('plugin');
+    const server = getMcpServer(args, pluginState);
     const toolName = getMcpToolName(args, pluginState);
-    const input = formatMcpInput(getMcpInput(args, pluginState), toolName);
-    const output = formatMcpOutput(getMcpResultText(content, pluginState, args), toolName);
+    const inputRecord = getMcpInputRecord(args, pluginState);
+    const resultText = getMcpResultText(content, pluginState, args);
     const error = getMcpErrorText(pluginState, args);
+    const linearApiName = getCodexLinearMcpApiName({
+      input: inputRecord,
+      server,
+      toolName,
+    });
+
+    if (LINEAR_TOOL_NAME_SET.has(linearApiName)) {
+      return (
+        <SharedLinearRender
+          apiName={linearApiName}
+          args={inputRecord || {}}
+          content={resultText}
+          identifier={'codex'}
+          messageId={messageId}
+          pluginError={error}
+          pluginState={pluginState}
+          toolCallId={toolCallId}
+        />
+      );
+    }
+
+    const input = formatMcpInput(getMcpInput(args, pluginState), toolName);
+    const output = formatMcpOutput(resultText, toolName);
 
     if (!input && !output && !error) return null;
 

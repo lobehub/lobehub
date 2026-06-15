@@ -1,11 +1,12 @@
 import { z } from 'zod';
 
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { LlmGenerationTracingModel } from '@/database/models/llmGenerationTracing';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
 import { VerifyRubricModel } from '@/database/models/verifyRubric';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import {
   VerifyExecutorService,
@@ -35,18 +36,19 @@ const checkItemSchema = z.object({
   verifierType: verifierTypeSchema,
 });
 
-const verifyProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
+const verifyProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  const workspaceId = ctx.workspaceId ?? undefined;
   return opts.next({
     ctx: {
-      criterionModel: new VerifyCriterionModel(ctx.serverDB, ctx.userId),
-      executorService: new VerifyExecutorService(ctx.serverDB, ctx.userId),
-      tracingModel: new LlmGenerationTracingModel(ctx.serverDB, ctx.userId),
-      feedbackService: new VerifyFeedbackService(ctx.serverDB, ctx.userId),
-      operationModel: new AgentOperationModel(ctx.serverDB, ctx.userId),
-      planGenerator: new VerifyPlanGeneratorService(ctx.serverDB, ctx.userId),
-      resultModel: new VerifyCheckResultModel(ctx.serverDB, ctx.userId),
-      rubricModel: new VerifyRubricModel(ctx.serverDB, ctx.userId),
+      criterionModel: new VerifyCriterionModel(ctx.serverDB, ctx.userId, workspaceId),
+      executorService: new VerifyExecutorService(ctx.serverDB, ctx.userId, workspaceId),
+      tracingModel: new LlmGenerationTracingModel(ctx.serverDB, ctx.userId, workspaceId),
+      feedbackService: new VerifyFeedbackService(ctx.serverDB, ctx.userId, workspaceId),
+      operationModel: new AgentOperationModel(ctx.serverDB, ctx.userId, workspaceId),
+      planGenerator: new VerifyPlanGeneratorService(ctx.serverDB, ctx.userId, workspaceId),
+      resultModel: new VerifyCheckResultModel(ctx.serverDB, ctx.userId, workspaceId),
+      rubricModel: new VerifyRubricModel(ctx.serverDB, ctx.userId, workspaceId),
     },
   });
 });

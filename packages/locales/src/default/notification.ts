@@ -20,6 +20,9 @@ export default {
   'storage_overage_cap_reached_title': 'Storage pay-as-you-go cap reached',
   'video_generation_completed': 'Your video "{{prompt}}" is ready.',
   'video_generation_completed_title': 'Video generation completed',
+  'workspace_member_invited':
+    '{{inviterLabel}} invited you to join workspace "{{workspaceName}}" as a {{role}}.',
+  'workspace_member_invited_title': 'Invitation to join {{workspaceName}}',
   'workspace_member_joined': '{{memberLabel}} joined workspace "{{workspaceName}}" as a {{role}}.',
   'workspace_member_joined_member':
     '{{memberLabel}} joined workspace "{{workspaceName}}" as a Member.',

@@ -4,6 +4,7 @@ import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
+import { userMemoryKeys } from '@/libs/swr/keys';
 import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
 import { type StoreSetter } from '@/store/types';
 import { type RetrieveMemoryParams, type RetrieveMemoryResult } from '@/types/userMemory';
@@ -103,9 +104,9 @@ export class BaseActionImpl {
       mutate((key) => Array.isArray(key) && key[0] === SWR_FETCH_USER_MEMORY, undefined, {
         revalidate: true,
       }),
-      mutate('useFetchPersona', null, { revalidate: false }),
+      mutate(userMemoryKeys.persona(), null, { revalidate: false }),
       mutate(
-        'useFetchTags',
+        userMemoryKeys.tags(),
         {
           roles: [],
           tags: [],
@@ -346,7 +347,7 @@ export class BaseActionImpl {
 
   useInitIdentities = (isLogin: boolean): SWRResponse<any> => {
     return useClientDataSWRWithSync<IdentityForInjection[]>(
-      isLogin ? 'useInitIdentities' : null,
+      isLogin ? userMemoryKeys.identities() : null,
       // Use dedicated API that filters for self identities only
       () => userMemoryService.queryIdentitiesForInjection({ limit: 25 }),
       {

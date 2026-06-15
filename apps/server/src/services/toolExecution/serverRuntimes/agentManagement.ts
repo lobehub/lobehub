@@ -43,9 +43,9 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
       ): Promise<ToolExecutionResult> => {
         const { agentId, instruction, taskTitle, timeout } = params;
 
-        // Server runtime always uses the task path because there is no
-        // client-side `registerAfterCompletion` callback available to execute
-        // synchronous agent calls.
+        // Server runtime always uses the legacy async invocation path because
+        // there is no client-side `registerAfterCompletion` callback available
+        // to execute synchronous agent calls.
         return {
           content: `🚀 Triggered async task to call agent "${agentId}"${taskTitle ? `: ${taskTitle}` : ''}`,
           state: {

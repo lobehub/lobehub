@@ -2,8 +2,7 @@ import { type ListProjectSkillsResult, type ProjectSkillItem } from '@lobechat/e
 import path from 'pathe';
 import { useMemo } from 'react';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { projectSkillService } from '@/services/projectSkill';
+import { useFetchProjectSkills } from '@/hooks/useFetchProjectSkills';
 import { useChatStore } from '@/store/chat';
 
 import type { SkillListItem } from './SkillsList';
@@ -36,11 +35,7 @@ export const useProjectSkills = (
   const openLocalFile = useChatStore((s) => s.openLocalFile);
   const isRemote = !!deviceId;
 
-  const { data, isLoading } = useClientDataSWR<ListProjectSkillsResult | undefined>(
-    workingDirectory ? ['project-skills', deviceId ?? 'local', workingDirectory] : null,
-    () => projectSkillService.listProjectSkills({ deviceId, scope: workingDirectory! }),
-    { revalidateOnFocus: false, shouldRetryOnError: false },
-  );
+  const { data, isLoading } = useFetchProjectSkills(workingDirectory, deviceId);
 
   // listProjectSkills approves `data.root` for preview. Hand that exact value
   // back to openLocalFile so LocalFileProtocolManager.createPreviewUrl's

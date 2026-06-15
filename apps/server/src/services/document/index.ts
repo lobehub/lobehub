@@ -15,13 +15,16 @@ import { isValidEditorData } from '@/libs/editor/isValidEditorData';
 import { normalizeEditorDataDiffNodes } from '@/libs/editor/normalizeDiffNodes';
 import { type LobeDocument } from '@/types/document';
 
+import { EditLockService } from '../editLock';
 import { FileService } from '../file';
+import { publishResourceEvent } from '../resourceEvents';
 import { DocumentHistoryService } from './history';
 import type {
   CompareDocumentHistoryItemsParams,
   CompareDocumentHistoryItemsResult,
   DocumentHistoryAccessOptions,
   DocumentHistorySaveSource,
+  DocumentLockResult,
   GetDocumentHistoryItemParams,
   ListDocumentHistoryParams,
   ListDocumentHistoryResult,
@@ -50,6 +53,7 @@ export class DocumentService {
   private documentModel: DocumentModel;
   private documentHistoryServiceInstance?: DocumentHistoryService;
   private fileServiceInstance?: FileService;
+  private editLockService: EditLockService;
   private db: LobeChatDatabase;
 
   private workspaceId?: string;
@@ -60,6 +64,7 @@ export class DocumentService {
     this.workspaceId = workspaceId;
     this.fileModel = new FileModel(db, userId, workspaceId);
     this.documentModel = new DocumentModel(db, userId, workspaceId);
+    this.editLockService = new EditLockService(userId);
   }
 
   private get fileService() {
@@ -202,6 +207,63 @@ export class DocumentService {
     return this.documentModel.findById(id);
   }
 
+  /**
+   * Acquire (or refresh) the collaborative edit lock for a workspace document.
+   *
+   * Doubles as the heartbeat: an active editor calls this on an interval to keep
+   * the lease alive, and a locked-out member calls it to take the lock over once
+   * it frees up. Locking only applies in workspace context — personal documents
+   * always report as unlocked.
+   */
+  async acquireDocumentLock(id: string): Promise<DocumentLockResult> {
+    if (!this.workspaceId) return { expiresAt: null, holderId: null, lockedByOther: false };
+
+    const prevHolder = await this.editLockService.getActiveHolder('document', id);
+    const result = await this.editLockService.acquire('document', id);
+
+    // Broadcast only on a holder edge (first claim / takeover). This method also
+    // serves the periodic heartbeat, so a steady-state refresh (same holder)
+    // must not emit an event.
+    if ((result.holderId ?? null) !== (prevHolder ?? null)) {
+      void publishResourceEvent(
+        { id, type: 'document' },
+        { actorId: this.userId, data: { holderId: result.holderId }, type: 'lock.changed' },
+      );
+    }
+
+    return result;
+  }
+
+  /**
+   * Read-only peek of the current edit lock (does not acquire). Lets a client
+   * render a workspace page read-only on open when another member holds it.
+   */
+  async getDocumentLock(id: string): Promise<DocumentLockResult> {
+    if (!this.workspaceId) return { expiresAt: null, holderId: null, lockedByOther: false };
+    const holder = await this.editLockService.getActiveHolder('document', id);
+    return {
+      expiresAt: null,
+      holderId: holder ?? null,
+      lockedByOther: Boolean(holder) && holder !== this.userId,
+    };
+  }
+
+  /**
+   * Release the edit lock if the current user holds it. No-op in personal mode.
+   */
+  async releaseDocumentLock(id: string): Promise<void> {
+    if (!this.workspaceId) return;
+    // Only broadcast "unlocked" when we actually released our own lock — if the
+    // lease had expired and another member took over, the lock is still held and
+    // a bogus holderId:null would wrongly flip their viewers to editable.
+    const released = await this.editLockService.release('document', id);
+    if (!released) return;
+    void publishResourceEvent(
+      { id, type: 'document' },
+      { actorId: this.userId, data: { holderId: null }, type: 'lock.changed' },
+    );
+  }
+
   async listDocumentHistory(
     params: ListDocumentHistoryParams,
     options?: DocumentHistoryAccessOptions,
@@ -234,6 +296,21 @@ export class DocumentService {
     const currentDocument = await this.documentModel.findById(documentId);
     if (!currentDocument) {
       throw new Error(`Document not found: ${documentId}`);
+    }
+
+    // Same collaborative edit-lock guard as updateDocument: don't record a
+    // history snapshot for a workspace document another member is editing, so a
+    // locked-out actor (e.g. a Copilot mutation that will itself be rejected)
+    // can't pollute the version timeline.
+    if (this.workspaceId) {
+      const blockedBy = await this.editLockService.getBlockingHolder('document', documentId);
+      if (blockedBy) {
+        throw new TRPCError({
+          cause: { data: { code: 'DocumentLocked' } },
+          code: 'CONFLICT',
+          message: 'Document is being edited by another user',
+        });
+      }
     }
 
     const normalizedEditorData = normalizeEditorDataDiffNodes(editorData);
@@ -331,7 +408,8 @@ export class DocumentService {
    * Update document
    */
   async updateDocument(id: string, params: UpdateDocumentParams): Promise<UpdateDocumentResult> {
-    return this.db.transaction(async (tx) => {
+    let changed = false;
+    const result = await this.db.transaction(async (tx) => {
       const transactionDb = tx as unknown as LobeChatDatabase;
       const documentModel = new DocumentModel(transactionDb, this.userId, this.workspaceId);
       const fileModel = new FileModel(transactionDb, this.userId, this.workspaceId);
@@ -360,6 +438,26 @@ export class DocumentService {
       const historyAppended =
         nextEditorDataAccepted !== undefined &&
         !isEqual(nextEditorDataAccepted, currentEditorDataAccepted);
+
+      // Collaborative edit lock guard: reject writes to a workspace document that
+      // another member is actively editing, so concurrent edits can't clobber
+      // each other. Only the rich-text BODY is locked — metadata-only saves
+      // (title/emoji) pass through, since the autosave always re-sends the
+      // unchanged body. The lease auto-expires in Redis; when Redis is down this
+      // returns null (fail-open) so the lock can't block saving.
+      const contentChanged =
+        historyAppended ||
+        (params.content !== undefined && params.content !== currentDocument.content);
+      if (this.workspaceId && contentChanged) {
+        const blockedBy = await this.editLockService.getBlockingHolder('document', id);
+        if (blockedBy) {
+          throw new TRPCError({
+            cause: { data: { code: 'DocumentLocked' } },
+            code: 'CONFLICT',
+            message: 'Document is being edited by another user',
+          });
+        }
+      }
 
       const updates: Record<string, unknown> = {};
 
@@ -390,11 +488,15 @@ export class DocumentService {
         updates.parentId = params.parentId;
       }
 
+      // The lock lease is refreshed by the client heartbeat (acquireDocumentLock),
+      // so a save does not need to touch it.
+
       let savedAt: Date | undefined;
 
       if (historyAppended) {
         savedAt = new Date();
         await documentHistoryService.createHistory({
+          breakAutosaveWindow: params.breakAutosaveWindow,
           documentId: id,
           editorData: currentEditorDataAccepted,
           saveSource: params.saveSource ?? 'autosave',
@@ -413,12 +515,25 @@ export class DocumentService {
         await fileModel.update(currentDocument.fileId, fileUpdates);
       }
 
+      changed = Object.keys(updates).length > 0 || historyAppended;
+
       return {
         historyAppended,
         id,
         savedAt,
       };
     });
+
+    // Notify other workspace members that the document changed so their open
+    // editor refreshes immediately (best-effort; the heartbeat is the fallback).
+    if (this.workspaceId && changed) {
+      void publishResourceEvent(
+        { id, type: 'document' },
+        { actorId: this.userId, type: 'doc.updated' },
+      );
+    }
+
+    return result;
   }
 
   /**

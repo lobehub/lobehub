@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CodexAdapter } from './codex';
 
@@ -105,6 +105,130 @@ describe('CodexAdapter', () => {
         "The 'gpt-5.5' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again.",
       stderr: rawMessage,
     });
+  });
+
+  it('classifies Codex usage-limit errors with retry metadata', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 13, 3, 9, 27));
+
+    try {
+      const adapter = new CodexAdapter();
+      const message =
+        "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 3:10 AM.";
+      const expectedResetAt = Math.floor(new Date(2026, 5, 13, 3, 10).getTime() / 1000);
+
+      adapter.adapt({ type: 'turn.started' });
+      const events = adapter.adapt({
+        message,
+        type: 'error',
+      });
+
+      expect(events.map((event) => event.type)).toEqual(['stream_end', 'error']);
+      expect(events[1].data).toMatchObject({
+        agentType: 'codex',
+        clearEchoedContent: true,
+        code: 'rate_limit',
+        docsUrl: 'https://chatgpt.com/codex/settings/usage',
+        message,
+        rateLimitInfo: {
+          resetsAt: expectedResetAt,
+          status: 'rejected',
+        },
+        stderr: message,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('preserves adjacent Codex retry meridiem parsing', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 13, 15, 9, 27));
+
+    try {
+      const adapter = new CodexAdapter();
+      const message =
+        "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 3:10PM.";
+      const expectedResetAt = Math.floor(new Date(2026, 5, 13, 15, 10).getTime() / 1000);
+
+      adapter.adapt({ type: 'turn.started' });
+      const events = adapter.adapt({
+        message,
+        type: 'error',
+      });
+
+      expect(events[1].data).toMatchObject({
+        code: 'rate_limit',
+        rateLimitInfo: {
+          resetsAt: expectedResetAt,
+          status: 'rejected',
+        },
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('parses Codex retry metadata in the timezone stated by the error message', () => {
+    const previousTimezone = process.env.TZ;
+    process.env.TZ = 'Asia/Shanghai';
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-13T03:09:27+08:00'));
+
+    try {
+      const adapter = new CodexAdapter();
+      const message =
+        "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 3:10 AM (UTC).";
+      const expectedResetAt = Math.floor(new Date('2026-06-13T03:10:00Z').getTime() / 1000);
+
+      adapter.adapt({ type: 'turn.started' });
+      const events = adapter.adapt({
+        message,
+        type: 'error',
+      });
+
+      expect(events[1].data).toMatchObject({
+        code: 'rate_limit',
+        rateLimitInfo: {
+          resetsAt: expectedResetAt,
+          status: 'rejected',
+        },
+      });
+    } finally {
+      vi.useRealTimers();
+      if (previousTimezone === undefined) {
+        delete process.env.TZ;
+      } else {
+        process.env.TZ = previousTimezone;
+      }
+    }
+  });
+
+  it('omits Codex retry timestamps when the stated timezone cannot be interpreted', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-13T03:09:27Z'));
+
+    try {
+      const adapter = new CodexAdapter();
+      const message =
+        "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at 3:10 AM (Codex HQ).";
+
+      adapter.adapt({ type: 'turn.started' });
+      const events = adapter.adapt({
+        message,
+        type: 'error',
+      });
+
+      expect(events[1].data).toMatchObject({
+        code: 'rate_limit',
+        rateLimitInfo: {
+          status: 'rejected',
+        },
+      });
+      expect(events[1].data.rateLimitInfo).not.toHaveProperty('resetsAt');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('deduplicates the following turn.failed after a Codex JSONL error event', () => {
@@ -668,8 +792,16 @@ describe('CodexAdapter', () => {
     });
   });
 
-  it('keeps a real collab_tool_call stream fixture readable and drains unfinished attempts', async () => {
-    const adapter = new CodexAdapter();
+  it('keeps a real collab_tool_call stream fixture readable and subtracts resumed usage', async () => {
+    const adapter = new CodexAdapter({
+      initialCumulativeUsage: {
+        inputCachedTokens: 42_000,
+        inputCacheMissTokens: 52_000,
+        totalInputTokens: 94_000,
+        totalOutputTokens: 300,
+        totalTokens: 94_300,
+      },
+    });
     const rawEvents = await loadFixture('collab_tool_call.spawn_wait.jsonl');
 
     const adapted = rawEvents.flatMap((event) => adapter.adapt(event));
@@ -715,6 +847,21 @@ describe('CodexAdapter', () => {
         }),
       ]),
     );
+    expect(
+      adapted.find(
+        (event) => event.type === 'step_complete' && event.data?.phase === 'turn_metadata',
+      ),
+    ).toMatchObject({
+      data: {
+        usage: {
+          inputCachedTokens: 1008,
+          inputCacheMissTokens: 937,
+          totalInputTokens: 1945,
+          totalOutputTokens: 116,
+          totalTokens: 2061,
+        },
+      },
+    });
     expect(flushed).toEqual([]);
   });
 
@@ -889,6 +1036,42 @@ describe('CodexAdapter', () => {
           totalInputTokens: 14,
           totalOutputTokens: 3,
           totalTokens: 17,
+        },
+      },
+      type: 'step_complete',
+    });
+  });
+
+  it('subtracts the previous cumulative Codex usage for resumed turns', () => {
+    const adapter = new CodexAdapter({
+      initialCumulativeUsage: {
+        inputCachedTokens: 4,
+        inputCacheMissTokens: 10,
+        totalInputTokens: 14,
+        totalOutputTokens: 3,
+        totalTokens: 17,
+      },
+    });
+
+    const events = adapter.adapt({
+      type: 'turn.completed',
+      usage: {
+        cached_input_tokens: 9,
+        input_tokens: 25,
+        output_tokens: 11,
+      },
+    });
+
+    expect(events[0]).toMatchObject({
+      data: {
+        phase: 'turn_metadata',
+        provider: 'codex',
+        usage: {
+          inputCachedTokens: 5,
+          inputCacheMissTokens: 15,
+          totalInputTokens: 20,
+          totalOutputTokens: 8,
+          totalTokens: 28,
         },
       },
       type: 'step_complete',

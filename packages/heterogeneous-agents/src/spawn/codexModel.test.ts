@@ -109,4 +109,35 @@ describe('codex model metadata helpers', () => {
       provider: 'openai',
     });
   });
+
+  it('reads the latest cumulative usage from a Codex rollout session file', async () => {
+    const codexHome = await makeTempCodexHome();
+    const sessionDir = path.join(codexHome, 'sessions', '2026', '06', '11');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      path.join(sessionDir, 'rollout-2026-06-11T01-31-27-thread-usage.jsonl'),
+      [
+        JSON.stringify({
+          payload: { usage: { input_tokens: 10, output_tokens: 2 } },
+          type: 'event_msg',
+        }),
+        JSON.stringify({
+          type: 'turn.completed',
+          usage: { cached_input_tokens: 5, input_tokens: 25, output_tokens: 9 },
+        }),
+      ].join('\n'),
+    );
+
+    await expect(
+      readCodexSessionModel('thread-usage', { env: { CODEX_HOME: codexHome } }),
+    ).resolves.toMatchObject({
+      cumulativeUsage: {
+        inputCachedTokens: 5,
+        inputCacheMissTokens: 25,
+        totalInputTokens: 30,
+        totalOutputTokens: 9,
+        totalTokens: 39,
+      },
+    });
+  });
 });

@@ -231,6 +231,57 @@ describe('AgentService', () => {
       // Avatar should not be present for non-builtin agents
       expect((result as any)?.avatar).toBeUndefined();
     });
+
+    it('should NOT inherit the member personal default model for a workspace inbox', async () => {
+      // Workspace inbox is persisted with an empty model/provider.
+      const mockAgent = {
+        id: 'agent-1',
+        slug: 'inbox',
+      };
+      const serverDefaultConfig = { model: 'system-default-model', provider: 'system-provider' };
+
+      const mockAgentModel = {
+        getBuiltinAgent: vi.fn().mockResolvedValue(mockAgent),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (parseAgentConfig as any).mockReturnValue(serverDefaultConfig);
+      // The member opening the workspace inbox has a personal default model.
+      mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValueOnce({
+        config: { model: 'opus-4.6', provider: 'anthropic' },
+      });
+
+      const workspaceService = new AgentService(mockDb, mockUserId, mockWorkspaceId);
+      const result = await workspaceService.getBuiltinAgent('inbox');
+
+      // Should fall back to the system default, NOT the member's personal model.
+      expect(result?.model).toBe('system-default-model');
+      expect(result?.provider).toBe('system-provider');
+    });
+
+    it('should still apply the personal default model for a personal inbox', async () => {
+      const mockAgent = {
+        id: 'agent-1',
+        slug: 'inbox',
+      };
+
+      const mockAgentModel = {
+        getBuiltinAgent: vi.fn().mockResolvedValue(mockAgent),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (parseAgentConfig as any).mockReturnValue({});
+      mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValueOnce({
+        config: { model: 'user-preferred-model', provider: 'user-provider' },
+      });
+
+      // No workspaceId → personal scope keeps the personal default behavior.
+      const newService = new AgentService(mockDb, mockUserId);
+      const result = await newService.getBuiltinAgent('inbox');
+
+      expect(result?.model).toBe('user-preferred-model');
+      expect(result?.provider).toBe('user-provider');
+    });
   });
 
   describe('getAgentConfig', () => {

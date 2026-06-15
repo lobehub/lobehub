@@ -2,6 +2,7 @@ import { type CategoryItem, type CategoryListQuery } from '@lobehub/market-sdk';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
+import { discoverKeys } from '@/libs/swr/keys';
 import { discoverService } from '@/services/discover';
 import { type DiscoverStore } from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
@@ -48,9 +49,13 @@ export class ModelActionImpl {
   };
 
   useModelIdentifiers = (): SWRResponse<IdentifiersResponse> => {
-    return useSWR('model-identifiers', async () => discoverService.getModelIdentifiers(), {
-      revalidateOnFocus: false,
-    });
+    return useSWR(
+      discoverKeys.modelIdentifiers(),
+      async () => discoverService.getModelIdentifiers(),
+      {
+        revalidateOnFocus: false,
+      },
+    );
   };
 
   useModelList = (params: ModelQueryParams = {}): SWRResponse<ModelListResponse> => {

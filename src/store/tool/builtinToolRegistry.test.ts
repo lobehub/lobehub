@@ -1,4 +1,5 @@
 import { WEB_ONBOARDING } from '@lobechat/builtin-agents';
+import { ClaudeCodeIdentifier as ClaudeCodeToolIdentifier } from '@lobechat/builtin-tool-claude-code/client';
 import {
   GroupAgentBuilderApiName,
   GroupAgentBuilderIdentifier,
@@ -12,7 +13,10 @@ import {
   WebOnboardingIdentifier,
   WebOnboardingManifest,
 } from '@lobechat/builtin-tool-web-onboarding';
+import { getBuiltinRenderDisplayControl } from '@lobechat/builtin-tools/displayControls';
 import { builtinToolIdentifiers } from '@lobechat/builtin-tools/identifiers';
+import { getBuiltinInspector } from '@lobechat/builtin-tools/inspectors';
+import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
 import { describe, expect, it } from 'vitest';
 
 describe('builtin tool registry', () => {
@@ -34,6 +38,14 @@ describe('builtin tool registry', () => {
   it('registers group agent builder createGroup inspector', () => {
     expect(builtinToolIdentifiers).toContain(GroupAgentBuilderIdentifier);
     expect(GroupAgentBuilderInspectors[GroupAgentBuilderApiName.createGroup]).toBeDefined();
+  });
+
+  it('registers shared Linear MCP surfaces for Claude Code server variants', () => {
+    const apiName = 'mcp__linear-server__save_issue';
+
+    expect(getBuiltinInspector(ClaudeCodeToolIdentifier, apiName)).toBeDefined();
+    expect(getBuiltinRender(ClaudeCodeToolIdentifier, apiName)).toBeDefined();
+    expect(getBuiltinRenderDisplayControl(ClaudeCodeToolIdentifier, apiName)).toBe('expand');
   });
 
   it('includes user interaction and web onboarding in web onboarding runtime plugins', () => {

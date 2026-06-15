@@ -13,9 +13,13 @@ describe('PageAgentExecutor', () => {
   beforeEach(() => {
     // Create mock runtime with all methods
     mockRuntime = {
+      applyServerSnapshot: vi.fn(),
       editTitle: vi.fn(),
+      getCurrentDocId: vi.fn(() => 'doc-123'),
+      getDebugSnapshot: vi.fn(() => ({})),
       getPageContent: vi.fn(),
       initPage: vi.fn(),
+      isReady: vi.fn(() => true),
       modifyNodes: vi.fn(),
       replaceText: vi.fn(),
     } as unknown as EditorRuntime;
@@ -296,6 +300,42 @@ describe('PageAgentExecutor', () => {
 
       expect(result.success).toBe(false);
       expect(result.error?.message).toContain('Invalid regex');
+    });
+  });
+
+  describe('onAfterCall', () => {
+    it('should ignore read-only getPageContent state without a document snapshot', async () => {
+      await executor.onAfterCall({
+        result: {
+          state: {
+            documentId: 'doc-123',
+            markdown: '# Title\n\nContent',
+            metadata: { title: 'Title' },
+            xml: '<h1 id="1">Title</h1>',
+          },
+          success: true,
+        },
+      } as any);
+
+      expect(mockRuntime.applyServerSnapshot).not.toHaveBeenCalled();
+    });
+
+    it('should apply server snapshots when a mutating tool returns document content', async () => {
+      await executor.onAfterCall({
+        result: {
+          state: {
+            documentContent: '# Updated',
+            documentId: 'doc-123',
+          },
+          success: true,
+        },
+      } as any);
+
+      expect(mockRuntime.applyServerSnapshot).toHaveBeenCalledWith({
+        content: '# Updated',
+        editorData: undefined,
+        title: undefined,
+      });
     });
   });
 

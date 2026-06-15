@@ -14,6 +14,8 @@ import { TopicModel } from '@/database/models/topic';
 import { workspaceMembers } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { EditLockService } from '@/server/services/editLock';
+import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { TaskService } from '@/server/services/task';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 import { TaskRunnerService } from '@/server/services/taskRunner';
@@ -26,6 +28,7 @@ const taskProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => 
     ctx: {
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       briefModel: new BriefModel(ctx.serverDB, ctx.userId, wsId),
+      editLockService: new EditLockService(ctx.userId),
       taskLifecycle: new TaskLifecycleService(ctx.serverDB, ctx.userId, wsId),
       taskModel: new TaskModel(ctx.serverDB, ctx.userId, wsId),
       taskService: new TaskService(ctx.serverDB, ctx.userId, wsId),
@@ -927,6 +930,20 @@ export const taskRouter = router({
       const model = ctx.taskModel;
       await assertAssigneeAgentBelongsToUser(ctx.agentModel, data.assigneeAgentId);
       const resolved = await resolveOrThrow(model, id);
+
+      // Collaborative edit lock: reject writes to a workspace task another member
+      // is actively editing. Inert until a client acquires the lock.
+      if (ctx.workspaceId) {
+        const blockedBy = await ctx.editLockService.getBlockingHolder('task', resolved.id);
+        if (blockedBy) {
+          throw new TRPCError({
+            cause: { data: { code: 'DocumentLocked' } },
+            code: 'CONFLICT',
+            message: 'Task is being edited by another user',
+          });
+        }
+      }
+
       const resolvedParentTaskId =
         parentTaskId === undefined
           ? undefined
@@ -945,6 +962,44 @@ export const taskRouter = router({
         message: 'Failed to update task',
       });
     }
+  }),
+
+  acquireTaskLock: taskProcedureWrite.input(idInput).mutation(async ({ ctx, input }) => {
+    if (!ctx.workspaceId) return { expiresAt: null, holderId: null, lockedByOther: false };
+    const resolved = await resolveOrThrow(ctx.taskModel, input.id);
+    const prev = await ctx.editLockService.getActiveHolder('task', resolved.id);
+    const result = await ctx.editLockService.acquire('task', resolved.id);
+    if ((result.holderId ?? null) !== (prev ?? null)) {
+      void publishResourceEvent(
+        { id: resolved.id, type: 'task' },
+        { actorId: ctx.userId, data: { holderId: result.holderId }, type: 'lock.changed' },
+      );
+    }
+    return result;
+  }),
+
+  getTaskLock: taskProcedureWrite.input(idInput).query(async ({ ctx, input }) => {
+    if (!ctx.workspaceId) return { expiresAt: null, holderId: null, lockedByOther: false };
+    const resolved = await resolveOrThrow(ctx.taskModel, input.id);
+    const holder = await ctx.editLockService.getActiveHolder('task', resolved.id);
+    return {
+      expiresAt: null,
+      holderId: holder ?? null,
+      lockedByOther: Boolean(holder) && holder !== ctx.userId,
+    };
+  }),
+
+  releaseTaskLock: taskProcedureWrite.input(idInput).mutation(async ({ ctx, input }) => {
+    if (!ctx.workspaceId) return;
+    const resolved = await resolveOrThrow(ctx.taskModel, input.id);
+    // Only broadcast "unlocked" when we actually released our own lock — if the
+    // lease expired and another member took over, the lock is still held.
+    const released = await ctx.editLockService.release('task', resolved.id);
+    if (!released) return;
+    void publishResourceEvent(
+      { id: resolved.id, type: 'task' },
+      { actorId: ctx.userId, data: { holderId: null }, type: 'lock.changed' },
+    );
   }),
 
   updateConfig: taskProcedureWrite

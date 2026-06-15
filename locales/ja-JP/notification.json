@@ -17,6 +17,8 @@
   "storage_overage_cap_reached_title": "ストレージ従量課金制上限に達しました",
   "video_generation_completed": "動画「{{prompt}}」の生成が完了しました。",
   "video_generation_completed_title": "動画生成が完了しました",
+  "workspace_member_invited": "{{inviterLabel}} があなたをワークスペース「{{workspaceName}}」に {{role}} として招待しました。",
+  "workspace_member_invited_title": "{{workspaceName}} への参加招待",
   "workspace_member_joined": "{{memberLabel}}が{{role}}としてワークスペース「{{workspaceName}}」に参加しました。",
   "workspace_member_joined_member": "{{memberLabel}}がメンバーとしてワークスペース「{{workspaceName}}」に参加しました。",
   "workspace_member_joined_member_title": "新しいメンバーが{{workspaceName}}に参加しました",

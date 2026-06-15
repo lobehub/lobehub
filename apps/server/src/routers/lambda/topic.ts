@@ -162,6 +162,18 @@ export const topicRouter = router({
       return ctx.topicModel.batchDeleteBySessionId(resolved.sessionId);
     }),
 
+  batchMoveTopics: topicProcedure
+    .use(withScopedPermission('topic:update'))
+    .input(
+      z.object({
+        targetAgentId: z.string(),
+        topicIds: z.array(z.string()),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return ctx.topicModel.batchMoveToAgent(input.topicIds, input.targetAgentId);
+    }),
+
   cloneTopic: topicProcedure
     .use(withScopedPermission('topic:create'))
     .input(z.object({ id: z.string(), newTitle: z.string().optional() }))
@@ -239,9 +251,18 @@ export const topicRouter = router({
       return ctx.topicShareModel.create(input.topicId, input.visibility);
     }),
 
-  getAllTopics: topicProcedure.query(async ({ ctx }) => {
-    return ctx.topicModel.queryAll();
-  }),
+  queryTopics: topicProcedure
+    .input(
+      z
+        .object({
+          pageSize: z.number().max(500).optional(),
+          statuses: z.array(z.string()).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input, ctx }) => {
+      return ctx.topicModel.queryTopics({ pageSize: input?.pageSize, statuses: input?.statuses });
+    }),
 
   getShareInfo: topicProcedure
     .input(z.object({ topicId: z.string() }))
@@ -570,7 +591,17 @@ export const topicRouter = router({
         ctx.workspaceId ?? undefined,
       );
 
-      return ctx.topicModel.queryByKeyword(input.keywords, resolved.sessionId);
+      // Scope the search exactly like the topics list (`query`): by agentId
+      // directly (the new agent system stamps every topic with an agentId).
+      // Passing only the resolved sessionId used to miss every agentId-scoped
+      // topic — the cause of "no topics match" in the per-agent Topics search.
+      // `containerId` is only the fallback for legacy callers that pass no
+      // agentId/groupId.
+      return ctx.topicModel.queryByKeyword(input.keywords, {
+        agentId: input.agentId,
+        containerId: resolved.sessionId,
+        groupId: input.groupId,
+      });
     }),
 
   /**

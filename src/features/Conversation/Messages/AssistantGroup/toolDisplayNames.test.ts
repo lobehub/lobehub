@@ -48,6 +48,11 @@ describe('tool display names', () => {
     expect(summary).not.toContain('Mcp_tool_call');
     expect(summary).not.toContain('Web_search');
   });
+
+  it('uses friendly labels for Linear MCP tool names', () => {
+    expect(getToolDisplayName('mcp__claude_ai_Linear__save_issue')).toBe('Linear · Save issue');
+    expect(getToolDisplayName('mcp__linear-server__get_issue')).toBe('Linear · Get issue');
+  });
 });
 
 describe('shapeProseForWorkflowHeadline', () => {

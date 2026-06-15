@@ -65,6 +65,7 @@ class ProjectFileService {
   }: GetLocalFilePreviewParams): Promise<LocalFilePreview> {
     if (deviceId) {
       const result = await lambdaClient.device.getLocalFilePreview.query({
+        accept: params.accept,
         deviceId,
         path: params.path,
         workingDirectory: params.workingDirectory,
@@ -72,6 +73,10 @@ class ProjectFileService {
 
       if (!result.success || !result.preview) {
         throw new Error(result.error || 'Missing local file preview');
+      }
+
+      if (params.accept === 'image' && result.preview.type !== 'image') {
+        throw new Error('Unsupported local file preview type');
       }
 
       return deserializeLocalFilePreview(result.preview);

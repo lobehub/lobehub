@@ -1,6 +1,7 @@
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
+import { discoverKeys } from '@/libs/swr/keys';
 import { discoverService } from '@/services/discover';
 import { type DiscoverStore } from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
@@ -38,9 +39,13 @@ export class ProviderActionImpl {
   };
 
   useProviderIdentifiers = (): SWRResponse<IdentifiersResponse> => {
-    return useSWR('provider-identifiers', async () => discoverService.getProviderIdentifiers(), {
-      revalidateOnFocus: false,
-    });
+    return useSWR(
+      discoverKeys.providerIdentifiers(),
+      async () => discoverService.getProviderIdentifiers(),
+      {
+        revalidateOnFocus: false,
+      },
+    );
   };
 
   useProviderList = (params: ProviderQueryParams = {}): SWRResponse<ProviderListResponse> => {

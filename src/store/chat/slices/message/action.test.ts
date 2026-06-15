@@ -736,32 +736,30 @@ describe('chatMessage actions', () => {
       // 在每个测试用例开始前恢复到实际的 SWR 实现
       vi.resetAllMocks();
     });
-    it('should refresh messages by calling mutate for both session and group types', async () => {
+    it('should refresh messages by invalidating message:list for the active agent+topic', async () => {
       useChatStore.setState({ refreshMessages: realRefreshMessages });
 
       const { result } = renderHook(() => useChatStore());
       const activeAgentId = useChatStore.getState().activeAgentId;
       const activeTopicId = useChatStore.getState().activeTopicId;
 
-      // 在这里，我们不需要再次模拟 mutate，因为它已经在顶部被模拟了
       await act(async () => {
         await result.current.refreshMessages();
       });
 
-      // 确保 mutate 调用了正确的参数（session 和 group 两次）
-      expect(mutate).toHaveBeenCalledWith([
-        'SWR_USE_FETCH_MESSAGES',
-        activeAgentId,
-        activeTopicId,
-        'session',
-      ]);
-      expect(mutate).toHaveBeenCalledWith([
-        'SWR_USE_FETCH_MESSAGES',
-        activeAgentId,
-        activeTopicId,
-        'group',
-      ]);
-      expect(mutate).toHaveBeenCalledTimes(2);
+      // refreshMessages now mutates with a single matcher targeting the
+      // accurate `message:list` key for this agent+topic.
+      expect(mutate).toHaveBeenCalledTimes(1);
+      const matcher = (mutate as any).mock.calls[0][0];
+      expect(typeof matcher).toBe('function');
+      expect(matcher(['message:list', { agentId: activeAgentId, topicId: activeTopicId }, 1])).toBe(
+        true,
+      );
+      // other domains / other topics are not matched
+      expect(matcher(['topic:list', 'container', {}])).toBe(false);
+      expect(matcher(['message:list', { agentId: activeAgentId, topicId: 'other' }, 1])).toBe(
+        false,
+      );
     });
     it('should handle errors during refreshing messages', async () => {
       useChatStore.setState({ refreshMessages: realRefreshMessages });

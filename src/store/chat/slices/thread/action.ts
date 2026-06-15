@@ -11,6 +11,7 @@ import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { threadKeys } from '@/libs/swr/keys';
 import { chatService } from '@/services/chat';
 import { threadService } from '@/services/thread';
 import { threadSelectors } from '@/store/chat/selectors';
@@ -28,7 +29,6 @@ import { threadReducer } from './reducer';
 import { genParentMessages } from './selectors';
 
 const n = setNamespace('thd');
-const SWR_USE_FETCH_THREADS = 'SWR_USE_FETCH_THREADS';
 
 type Setter = StoreSetter<ChatStore>;
 export const chatThreadMessage = (set: Setter, get: () => ChatStore, _api?: unknown) =>
@@ -153,7 +153,7 @@ export class ChatThreadActionImpl {
 
   useFetchThreads = (enable: boolean, topicId?: string): SWRResponse<ThreadItem[]> => {
     return useClientDataSWR<ThreadItem[]>(
-      enable && !!topicId ? [SWR_USE_FETCH_THREADS, topicId] : null,
+      enable && !!topicId ? threadKeys.list(topicId) : null,
       async ([, topicId]: [string, string]) => threadService.getThreads(topicId),
       {
         onSuccess: (threads) => {
@@ -176,7 +176,7 @@ export class ChatThreadActionImpl {
     const topicId = this.#get().activeTopicId;
     if (!topicId) return;
 
-    return mutate([SWR_USE_FETCH_THREADS, topicId]);
+    return mutate(threadKeys.list(topicId));
   };
 
   removeThread = async (id: string): Promise<void> => {

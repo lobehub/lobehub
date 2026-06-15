@@ -17,6 +17,8 @@
   "storage_overage_cap_reached_title": "Speicher-Limit für nutzungsbasierte Abrechnung erreicht",
   "video_generation_completed": "Ihr Video „{{prompt}}“ ist fertig.",
   "video_generation_completed_title": "Videoerstellung abgeschlossen",
+  "workspace_member_invited": "{{inviterLabel}} hat Sie eingeladen, dem Arbeitsbereich \"{{workspaceName}}\" als {{role}} beizutreten.",
+  "workspace_member_invited_title": "Einladung zum Beitritt zu {{workspaceName}}",
   "workspace_member_joined": "{{memberLabel}} ist dem Arbeitsbereich \"{{workspaceName}}\" als {{role}} beigetreten.",
   "workspace_member_joined_member": "{{memberLabel}} ist dem Arbeitsbereich \"{{workspaceName}}\" als Mitglied beigetreten.",
   "workspace_member_joined_member_title": "Neues Mitglied ist {{workspaceName}} beigetreten",

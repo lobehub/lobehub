@@ -13,6 +13,7 @@ import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton
 
 import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
 import { usePageEditorStore } from '../store';
+import { usePageEditable } from '../usePageEditable';
 import Breadcrumb from './Breadcrumb';
 import { useMenu } from './useMenu';
 
@@ -27,6 +28,8 @@ const Header = memo(() => {
   ]);
   const { expand: showPageAgentPanel, toggle: togglePageAgentPanel } = usePageAgentPanelControl();
   const { menuItems } = useMenu();
+  // Page Agent edits the page — only offer it in edit mode.
+  const editable = usePageEditable();
 
   return (
     <NavHeader
@@ -65,12 +68,14 @@ const Header = memo(() => {
           >
             <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
           </DropdownMenu>
-          <ToggleRightPanelButton
-            hideWhenExpanded
-            expand={showPageAgentPanel}
-            showActive={false}
-            onToggle={() => togglePageAgentPanel()}
-          />
+          {editable && (
+            <ToggleRightPanelButton
+              hideWhenExpanded
+              expand={showPageAgentPanel}
+              showActive={false}
+              onToggle={() => togglePageAgentPanel()}
+            />
+          )}
         </>
       }
     />

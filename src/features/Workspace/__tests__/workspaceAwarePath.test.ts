@@ -41,6 +41,10 @@ describe('buildWorkspaceAwarePath', () => {
     expect(buildWorkspaceAwarePath('/me/profile', 'acme')).toBe('/me/profile');
     expect(buildWorkspaceAwarePath('/share/t/foo', 'acme')).toBe('/share/t/foo');
     expect(buildWorkspaceAwarePath('/devtools', 'acme')).toBe('/devtools');
+    // Workspace invite acceptance is a standalone root-level page (no
+    // `/:workspaceSlug` mirror), so notifications linking to it must not be
+    // prefixed while the recipient sits inside another workspace.
+    expect(buildWorkspaceAwarePath('/invite/tok-123', 'acme')).toBe('/invite/tok-123');
   });
 
   it('prefixes settings sub-paths that have a workspace mirror', () => {

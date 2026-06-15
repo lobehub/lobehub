@@ -132,6 +132,14 @@ describe('formatErrorForState', () => {
       expect(result.countAsFailure).toBeUndefined();
       expect(result.numericId).toBeUndefined();
     });
+
+    it('classifies a raw Drizzle "Failed query" Error via its message instead of a bare 500', () => {
+      const result = formatErrorForState(new Error('Failed query: rollback\nparams: '));
+
+      expect(result.type).toBe(AgentRuntimeErrorType.DatabasePersistError);
+      expect(result.numericId).toBe(7004);
+      expect(result.attribution).toBe('harness');
+    });
   });
 
   describe('ProviderBizError refinement', () => {

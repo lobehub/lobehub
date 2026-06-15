@@ -2,7 +2,11 @@
  * useClientDataSWR with automatic Zustand store sync
  *
  * Solves the problem of SWR cached data not being immediately synced to Zustand store.
- * When SWR returns data from localStorage cache, it will automatically sync to store via onData callback.
+ * When SWR returns data from the persisted cache, it will automatically sync to store via onData callback.
+ *
+ * Persistence (localStorage vs IndexedDB) is handled transparently by the
+ * tier-aware SWR cache provider (see `localStorageProvider.ts`) based on the
+ * SWR key — consumers never need to opt in per call.
  */
 
 import { useEffect, useRef } from 'react';

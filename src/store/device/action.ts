@@ -2,13 +2,12 @@ import type { DeviceListItem, WorkingDirEntry } from '@lobechat/types';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { deviceKeys } from '@/libs/swr/keys';
 import { deviceService } from '@/services/device';
 import { type StoreSetter } from '@/store/types';
 
 import { nextWorkingDirs, removeWorkingDir, WORKING_DIRS_MAX } from './deviceCwd';
 import { type DeviceStore } from './store';
-
-const FETCH_DEVICES_KEY = 'device:listDevices';
 
 type Setter = StoreSetter<DeviceStore>;
 
@@ -65,7 +64,7 @@ export class DeviceActionImpl {
       });
     } finally {
       // Re-fetch the truth (self-corrects a failed optimistic write).
-      await mutate(FETCH_DEVICES_KEY);
+      await mutate(deviceKeys.listDevices());
     }
   };
 
@@ -102,7 +101,7 @@ export class DeviceActionImpl {
     try {
       await deviceService.updateDevice({ deviceId, workingDirs: merged });
     } finally {
-      await mutate(FETCH_DEVICES_KEY);
+      await mutate(deviceKeys.listDevices());
     }
   };
 
@@ -125,13 +124,13 @@ export class DeviceActionImpl {
     try {
       await deviceService.updateDevice({ deviceId, workingDirs: updated });
     } finally {
-      await mutate(FETCH_DEVICES_KEY);
+      await mutate(deviceKeys.listDevices());
     }
   };
 
   useFetchDevices = (enabled = true): SWRResponse<DeviceListItem[]> =>
     useClientDataSWR<DeviceListItem[]>(
-      enabled ? FETCH_DEVICES_KEY : null,
+      enabled ? deviceKeys.listDevices() : null,
       () => deviceService.listDevices(),
       {
         fallbackData: [],

@@ -17,7 +17,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
  * tree, this gives true SWR isolation per workspace without per-feature
  * registration.
  */
-const augmentKey = (key: unknown, workspaceId: string | null | undefined): unknown => {
+export const augmentKey = (key: unknown, workspaceId: string | null | undefined): unknown => {
   if (workspaceId == null) return key;
   if (key == null || key === false) return key;
   if (Array.isArray(key)) return [...key, workspaceId];

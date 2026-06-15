@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@lobechat/tool-runtime": "workspace:*",
+    "@lobechat/utils": "workspace:*",
     "anser": "^2.3.5"
   },
   "devDependencies": {

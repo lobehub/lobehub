@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   profileState: {
     editor: undefined as { getDocument: (format: string) => string | undefined } | undefined,
+    lockState: { holderId: null as string | null, lockedByOther: false, pending: false },
   },
   versionReviewStatus: {
     isUnderReview: false,
@@ -197,6 +198,11 @@ vi.mock('@/store/home', () => ({
 }));
 
 vi.mock('../store', () => ({
+  selectors: {
+    lockHolderId: (s: typeof mocks.profileState) => s.lockState.holderId,
+    lockPending: (s: typeof mocks.profileState) => s.lockState.pending,
+    lockedByOther: (s: typeof mocks.profileState) => s.lockState.lockedByOther,
+  },
   useProfileStore: (selector: (state: typeof mocks.profileState) => unknown) =>
     selector(mocks.profileState),
 }));

@@ -15,7 +15,15 @@ const mocks = vi.hoisted(() => ({
   ),
 }));
 
-const mockGlobalConfigDependencies = (enableBusinessFeatures: boolean) => {
+interface MockGlobalConfigOptions {
+  agentGatewayUrl?: string;
+  enableAgentGateway?: boolean;
+}
+
+const mockGlobalConfigDependencies = (
+  enableBusinessFeatures: boolean,
+  options: MockGlobalConfigOptions = {},
+) => {
   vi.doMock('@lobechat/business-const', () => ({
     ENABLE_BUSINESS_FEATURES: enableBusinessFeatures,
   }));
@@ -29,7 +37,12 @@ const mockGlobalConfigDependencies = (enableBusinessFeatures: boolean) => {
   }));
 
   vi.doMock('@/envs/app', () => ({
-    appEnv: {},
+    appEnv: {
+      ...(options.agentGatewayUrl ? { AGENT_GATEWAY_URL: options.agentGatewayUrl } : {}),
+      ...(options.enableAgentGateway === undefined
+        ? {}
+        : { ENABLE_AGENT_GATEWAY: options.enableAgentGateway }),
+    },
     getAppConfig: vi.fn(() => ({
       DEFAULT_AGENT_CONFIG: '',
     })),
@@ -113,6 +126,18 @@ const loadCapturedProviderConfig = async (enableBusinessFeatures: boolean) => {
   >;
 };
 
+const loadServerConfig = async (
+  enableBusinessFeatures: boolean,
+  options?: MockGlobalConfigOptions,
+) => {
+  vi.resetModules();
+  mocks.genServerAiProvidersConfig.mockClear();
+  mockGlobalConfigDependencies(enableBusinessFeatures, options);
+
+  const { getServerGlobalConfig } = await import('./index');
+  return getServerGlobalConfig();
+};
+
 describe('getServerGlobalConfig', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -138,5 +163,37 @@ describe('getServerGlobalConfig', () => {
     expect(providerConfig[ModelProvider.LobeHub]).toBeUndefined();
     expect(providerConfig[ModelProvider.OpenAI]).toBeUndefined();
     expect(providerConfig[ModelProvider.DeepSeek].enabled).toBe(true);
+  });
+
+  it('should enable gateway mode for business builds', async () => {
+    await expect(loadServerConfig(true)).resolves.toMatchObject({
+      enableGatewayMode: true,
+    });
+  });
+
+  it('should enable gateway mode for self-hosted builds only when explicitly enabled with a gateway url', async () => {
+    await expect(
+      loadServerConfig(false, {
+        agentGatewayUrl: 'https://gateway.test.com',
+        enableAgentGateway: true,
+      }),
+    ).resolves.toMatchObject({
+      agentGatewayUrl: 'https://gateway.test.com',
+      enableGatewayMode: true,
+    });
+
+    await expect(
+      loadServerConfig(false, {
+        agentGatewayUrl: 'https://gateway.test.com',
+        enableAgentGateway: false,
+      }),
+    ).resolves.toMatchObject({
+      agentGatewayUrl: 'https://gateway.test.com',
+      enableGatewayMode: false,
+    });
+
+    await expect(loadServerConfig(false, { enableAgentGateway: true })).resolves.toMatchObject({
+      enableGatewayMode: false,
+    });
   });
 });

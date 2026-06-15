@@ -17,6 +17,8 @@ import { workspaceMembers } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentService } from '@/server/services/agent';
+import { EditLockService } from '@/server/services/editLock';
+import { publishResourceEvent } from '@/server/services/resourceEvents';
 import { TransferErrorCode } from '@/types/transferError';
 
 const agentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -28,6 +30,7 @@ const agentProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
       agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       agentService: new AgentService(ctx.serverDB, ctx.userId, wsId),
       chatGroupModel: new ChatGroupModel(ctx.serverDB, ctx.userId, wsId),
+      editLockService: new EditLockService(ctx.userId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId, wsId),
       knowledgeBaseModel: new KnowledgeBaseModel(ctx.serverDB, ctx.userId, wsId),
       sessionModel: new SessionModel(ctx.serverDB, ctx.userId, wsId),
@@ -440,6 +443,19 @@ export const agentRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Collaborative edit lock: reject writes to a workspace agent another
+      // member is actively editing. Inert until a client acquires the lock.
+      if (ctx.workspaceId) {
+        const blockedBy = await ctx.editLockService.getBlockingHolder('agent', input.agentId);
+        if (blockedBy) {
+          throw new TRPCError({
+            cause: { data: { code: 'DocumentLocked' } },
+            code: 'CONFLICT',
+            message: 'Agent is being edited by another user',
+          });
+        }
+      }
+
       // Use AgentService to update and return the updated agent data
       return ctx.agentService.updateAgentConfig(input.agentId, input.value);
     }),
@@ -457,5 +473,49 @@ export const agentRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       return ctx.agentModel.update(input.id, { pinned: input.pinned });
+    }),
+
+  acquireAgentLock: agentProcedure
+    .use(withScopedPermission('agent:update'))
+    .input(z.object({ agentId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.workspaceId) return { expiresAt: null, holderId: null, lockedByOther: false };
+      const prev = await ctx.editLockService.getActiveHolder('agent', input.agentId);
+      const result = await ctx.editLockService.acquire('agent', input.agentId);
+      if ((result.holderId ?? null) !== (prev ?? null)) {
+        void publishResourceEvent(
+          { id: input.agentId, type: 'agent' },
+          { actorId: ctx.userId, data: { holderId: result.holderId }, type: 'lock.changed' },
+        );
+      }
+      return result;
+    }),
+
+  getAgentLock: agentProcedure
+    .use(withScopedPermission('agent:update'))
+    .input(z.object({ agentId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      if (!ctx.workspaceId) return { expiresAt: null, holderId: null, lockedByOther: false };
+      const holder = await ctx.editLockService.getActiveHolder('agent', input.agentId);
+      return {
+        expiresAt: null,
+        holderId: holder ?? null,
+        lockedByOther: Boolean(holder) && holder !== ctx.userId,
+      };
+    }),
+
+  releaseAgentLock: agentProcedure
+    .use(withScopedPermission('agent:update'))
+    .input(z.object({ agentId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.workspaceId) return;
+      // Only broadcast "unlocked" when we actually released our own lock — if the
+      // lease expired and another member took over, the lock is still held.
+      const released = await ctx.editLockService.release('agent', input.agentId);
+      if (!released) return;
+      void publishResourceEvent(
+        { id: input.agentId, type: 'agent' },
+        { actorId: ctx.userId, data: { holderId: null }, type: 'lock.changed' },
+      );
     }),
 });

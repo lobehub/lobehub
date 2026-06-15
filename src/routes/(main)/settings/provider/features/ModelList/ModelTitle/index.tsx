@@ -127,10 +127,22 @@ const ModelTitle = memo<ModelFetcherProps>(
                         setFetchRemoteModelsLoading(true);
                         try {
                           await fetchRemoteModelList(provider);
-                        } catch (e) {
-                          console.error(e);
+                        } catch (error) {
+                          console.error(error);
+
+                          const errorMessage =
+                            error instanceof Error
+                              ? error.message
+                              : t('providerModels.list.fetcher.errorFallback');
+
+                          message.error(
+                            t('providerModels.list.fetcher.error', {
+                              message: errorMessage,
+                            }),
+                          );
+                        } finally {
+                          setFetchRemoteModelsLoading(false);
                         }
-                        setFetchRemoteModelsLoading(false);
                       }}
                     >
                       {fetchRemoteModelsLoading

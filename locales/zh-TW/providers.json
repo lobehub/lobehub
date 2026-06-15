@@ -4,6 +4,7 @@
   "ai360.description": "360 AI 是來自 360 的模型與服務平台，提供 NLP 模型如 360GPT2 Pro、360GPT Pro 與 360GPT Turbo，結合大規模參數與多模態能力，支援文本生成、語意理解、對話與程式碼處理，並具備彈性定價以滿足多元需求。",
   "aihubmix.description": "AiHubMix 透過統一的 API 提供多種 AI 模型的存取。",
   "akashchat.description": "Akash 是一個無需許可的雲端資源市場，與傳統雲端供應商相比，其定價具有競爭力。",
+  "antgroup.description": "螞蟻靈是螞蟻集團人工通用智能（AGI）計劃的核心基礎模型系列，致力於構建並開放尖端的基礎模型能力。我們相信，智能的發展必須朝向開放、共享和可擴展性邁進——從小而實用的步驟開始，推動AGI的穩步演進和實際應用。",
   "anthropic.description": "Anthropic 開發先進語言模型，如 Claude 3.5 Sonnet、Claude 3 Sonnet、Claude 3 Opus 與 Claude 3 Haiku，兼顧智慧、速度與成本，適用於企業與即時應用場景。",
   "azure.description": "Azure 提供先進的 AI 模型，包括 GPT-3.5 與 GPT-4 系列，支援多樣資料類型與複雜任務，並強調安全、可靠與永續的 AI 發展。",
   "azureai.description": "Azure 提供先進的 AI 模型，包括 GPT-3.5 與 GPT-4 系列，支援多樣資料類型與複雜任務，並強調安全、可靠與永續的 AI 發展。",
