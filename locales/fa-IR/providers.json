@@ -67,6 +67,7 @@
   "taichu.description": "مدل چندوجهی نسل جدید از CASIA و مؤسسه هوش مصنوعی ووهان که از پرسش و پاسخ چندمرحله‌ای، نگارش، تولید تصویر، درک سه‌بعدی و تحلیل سیگنال با شناخت و خلاقیت قوی پشتیبانی می‌کند.",
   "tencentcloud.description": "موتور دانش LLM Atomic Power خدمات پرسش و پاسخ دانش‌محور را برای شرکت‌ها و توسعه‌دهندگان فراهم می‌کند، با خدمات ماژولار مانند تجزیه اسناد، تقسیم‌بندی، جاسازی و بازنویسی چندمرحله‌ای برای ساخت راهکارهای سفارشی هوش مصنوعی.",
   "togetherai.description": "Together AI عملکرد پیشرو را با مدل‌های نوآورانه، سفارشی‌سازی گسترده، مقیاس‌پذیری سریع و استقرار ساده برای نیازهای سازمانی ارائه می‌دهد.",
+  "tokenmix.description": "TokenMix is an OpenAI-compatible API gateway that provides unified access to many large language models — including DeepSeek, Qwen, Kimi, GLM, and MiniMax — through a single endpoint and one API key, with pay-as-you-go pricing.",
   "upstage.description": "Upstage مدل‌های هوش مصنوعی برای نیازهای تجاری از جمله Solar LLM و Document AI توسعه می‌دهد و APIهای گفتگویی با پشتیبانی از فراخوانی توابع، ترجمه، جاسازی و کاربردهای خاص حوزه ارائه می‌دهد.",
   "v0.description": "v0 یک دستیار برنامه‌نویسی جفت است که ایده‌های زبان طبیعی را به کد و رابط کاربری برای پروژه شما تبدیل می‌کند.",
   "vercelaigateway.description": "Vercel AI Gateway یک API یکپارچه برای بیش از 100 مدل از OpenAI، Anthropic، Google و دیگران ارائه می‌دهد، با قابلیت بودجه‌بندی، پایش مصرف، توازن بار و بازیابی از خطا.",

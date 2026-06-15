@@ -67,6 +67,7 @@
   "taichu.description": "CASIA ve Wuhan Yapay Zeka Enstitüsü tarafından geliştirilen yeni nesil çok modlu modeldir. Çok turlu soru-cevap, yazım, görsel üretim, 3D anlama ve sinyal analizi gibi görevlerde güçlü bilişsel ve yaratıcı yetenekler sunar.",
   "tencentcloud.description": "LLM Bilgi Motoru Atom Gücü, belgeleri ayrıştırma, parçalara ayırma, gömme ve çok turlu yeniden yazma gibi modüler hizmetlerle kurumsal ve geliştiricilere özel yapay zeka çözümleri oluşturma imkanı sunar.",
   "togetherai.description": "Together AI, yenilikçi modeller, geniş özelleştirme seçenekleri, hızlı ölçeklenebilirlik ve kolay dağıtım ile kurumsal ihtiyaçlara yönelik üstün performans sunar.",
+  "tokenmix.description": "TokenMix is an OpenAI-compatible API gateway that provides unified access to many large language models — including DeepSeek, Qwen, Kimi, GLM, and MiniMax — through a single endpoint and one API key, with pay-as-you-go pricing.",
   "upstage.description": "Upstage, Solar LLM ve Belge AI gibi iş odaklı yapay zeka modelleri geliştirir. Sohbet API’leri işlev çağrısı, çeviri, gömme ve alanlara özel kullanım senaryolarını destekler.",
   "v0.description": "v0, doğal dildeki fikirleri projeniz için koda ve kullanıcı arayüzüne dönüştüren bir eş programlama asistanıdır.",
   "vercelaigateway.description": "Vercel AI Gateway, OpenAI, Anthropic, Google ve daha fazlasından 100’den fazla modele birleşik bir API sunar. Bütçeleme, kullanım izleme, yük dengeleme ve hata toleransı özellikleri içerir.",

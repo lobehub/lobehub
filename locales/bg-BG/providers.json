@@ -67,6 +67,7 @@
   "taichu.description": "Модел от ново поколение от CASIA и Института по AI в Ухан, поддържащ многократни въпроси и отговори, писане, генериране на изображения, 3D разбиране и анализ на сигнали с по-силна когниция и креативност.",
   "tencentcloud.description": "LLM Knowledge Engine Atomic Power предоставя цялостни решения за въпроси и отговори за предприятия и разработчици, с модулни услуги като анализ на документи, сегментиране, вграждания и многократна пренаписка за изграждане на персонализирани AI решения.",
   "togetherai.description": "Together AI предлага водеща производителност с иновативни модели, широка персонализация, бързо мащабиране и лесно внедряване за нуждите на предприятията.",
+  "tokenmix.description": "TokenMix is an OpenAI-compatible API gateway that provides unified access to many large language models — including DeepSeek, Qwen, Kimi, GLM, and MiniMax — through a single endpoint and one API key, with pay-as-you-go pricing.",
   "upstage.description": "Upstage създава AI модели за бизнес нужди, включително Solar LLM и Document AI, с чат API, които поддържат извикване на функции, превод, вграждания и специфични за домейна приложения.",
   "v0.description": "v0 е асистент за съвместно програмиране, който превръща идеи на естествен език в код и потребителски интерфейс за вашия проект.",
   "vercelaigateway.description": "Vercel AI Gateway предоставя единен API за над 100 модела от OpenAI, Anthropic, Google и други, с бюджетиране, мониторинг на използването, балансиране на натоварването и резервиране.",

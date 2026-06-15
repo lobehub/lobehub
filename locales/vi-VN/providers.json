@@ -67,6 +67,7 @@
   "taichu.description": "Mô hình đa phương thức thế hệ mới từ CASIA và Viện AI Vũ Hán, hỗ trợ hỏi đáp nhiều lượt, viết, tạo hình ảnh, hiểu 3D và phân tích tín hiệu với nhận thức và sáng tạo vượt trội.",
   "tencentcloud.description": "LLM Knowledge Engine Atomic Power cung cấp hỏi đáp tri thức đầu-cuối cho doanh nghiệp và nhà phát triển, với các dịch vụ mô-đun như phân tích tài liệu, chia đoạn, nhúng và viết lại nhiều lượt để xây dựng giải pháp AI tùy chỉnh.",
   "togetherai.description": "Together AI mang lại hiệu suất hàng đầu với các mô hình sáng tạo, tùy chỉnh rộng, mở rộng nhanh và triển khai đơn giản cho nhu cầu doanh nghiệp.",
+  "tokenmix.description": "TokenMix is an OpenAI-compatible API gateway that provides unified access to many large language models — including DeepSeek, Qwen, Kimi, GLM, and MiniMax — through a single endpoint and one API key, with pay-as-you-go pricing.",
   "upstage.description": "Upstage xây dựng các mô hình AI cho nhu cầu doanh nghiệp, bao gồm Solar LLM và Document AI, với API trò chuyện hỗ trợ gọi hàm, dịch thuật, nhúng và các trường hợp sử dụng chuyên biệt.",
   "v0.description": "v0 là trợ lý lập trình đôi biến ý tưởng ngôn ngữ tự nhiên thành mã và giao diện người dùng cho dự án của bạn.",
   "vercelaigateway.description": "Vercel AI Gateway cung cấp API thống nhất cho hơn 100 mô hình từ OpenAI, Anthropic, Google và nhiều hơn nữa, với quản lý ngân sách, giám sát sử dụng, cân bằng tải và chuyển đổi dự phòng.",

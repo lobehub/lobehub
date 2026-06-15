@@ -67,6 +67,7 @@
   "taichu.description": "Taichu는 CASIA와 우한 인공지능연구원이 공동 개발한 차세대 멀티모달 모델로, 다중 회차 QA, 작문, 이미지 생성, 3D 이해, 신호 분석 등에서 뛰어난 인지력과 창의성을 발휘합니다.",
   "tencentcloud.description": "LLM 지식 엔진 Atomic Power는 문서 파싱, 청킹, 임베딩, 다중 회차 재작성 등 모듈형 서비스를 통해 기업과 개발자를 위한 맞춤형 AI 솔루션을 제공합니다.",
   "togetherai.description": "Together AI는 혁신적인 모델, 폭넓은 커스터마이징, 빠른 확장성, 간편한 배포를 통해 기업의 요구에 맞는 최고의 성능을 제공합니다.",
+  "tokenmix.description": "TokenMix is an OpenAI-compatible API gateway that provides unified access to many large language models — including DeepSeek, Qwen, Kimi, GLM, and MiniMax — through a single endpoint and one API key, with pay-as-you-go pricing.",
   "upstage.description": "Upstage는 Solar LLM, Document AI 등 비즈니스 요구에 맞춘 AI 모델을 개발하며, 함수 호출, 번역, 임베딩, 도메인 특화 사용 사례를 지원하는 대화형 API를 제공합니다.",
   "v0.description": "v0는 자연어 아이디어를 코드와 UI로 전환해주는 페어 프로그래밍 도우미입니다.",
   "vercelaigateway.description": "Vercel AI Gateway는 OpenAI, Anthropic, Google 등 100개 이상의 모델에 대한 통합 API를 제공하며, 예산 관리, 사용량 모니터링, 로드 밸런싱, 장애 조치 기능을 지원합니다.",

@@ -70,6 +70,7 @@ import StreamLakeProvider from './streamlake';
 import TaichuProvider from './taichu';
 import TencentcloudProvider from './tencentcloud';
 import TogetherAIProvider from './togetherai';
+import TokenMixProvider from './tokenmix';
 import UpstageProvider from './upstage';
 import V0Provider from './v0';
 import VercelAIGatewayProvider from './vercelaigateway';
@@ -106,6 +107,7 @@ export const LOBE_DEFAULT_MODEL_LIST: ChatModelCard[] = [
   XinferenceProvider.chatModels,
   OpenRouterProvider.chatModels,
   TogetherAIProvider.chatModels,
+  TokenMixProvider.chatModels,
   FireworksAIProvider.chatModels,
   PerplexityProvider.chatModels,
   AnthropicProvider.chatModels,
@@ -174,6 +176,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   Ai302Provider,
   NvidiaProvider,
   TogetherAIProvider,
+  TokenMixProvider,
   FireworksAIProvider,
   GroqProvider,
   PerplexityProvider,
@@ -305,6 +308,7 @@ export { default as StreamLakeProviderCard } from './streamlake';
 export { default as TaichuProviderCard } from './taichu';
 export { default as TencentCloudProviderCard } from './tencentcloud';
 export { default as TogetherAIProviderCard } from './togetherai';
+export { default as TokenMixProviderCard } from './tokenmix';
 export { default as UpstageProviderCard } from './upstage';
 export { default as V0ProviderCard } from './v0';
 export { default as VercelAIGatewayProviderCard } from './vercelaigateway';

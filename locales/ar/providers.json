@@ -67,6 +67,7 @@
   "taichu.description": "Taichu هو نموذج متعدد الوسائط من الجيل التالي من CASIA ومعهد ووهان للذكاء الاصطناعي، يدعم الأسئلة والأجوبة متعددة الجولات، والكتابة، وتوليد الصور، وفهم الأبعاد الثلاثية، وتحليل الإشارات بقدرات إدراكية وإبداعية متقدمة.",
   "tencentcloud.description": "توفر Tencent Cloud محرك معرفة قائم على النماذج اللغوية الكبيرة يقدم إجابات معرفية شاملة للمؤسسات والمطورين، مع خدمات معيارية مثل تحليل المستندات، والتقسيم، والتضمين، وإعادة الصياغة متعددة الجولات لبناء حلول ذكاء اصطناعي مخصصة.",
   "togetherai.description": "توفر Together AI أداءً رائدًا من خلال نماذج مبتكرة، وتخصيص واسع، وتوسع سريع، ونشر بسيط لتلبية احتياجات المؤسسات.",
+  "tokenmix.description": "TokenMix is an OpenAI-compatible API gateway that provides unified access to many large language models — including DeepSeek, Qwen, Kimi, GLM, and MiniMax — through a single endpoint and one API key, with pay-as-you-go pricing.",
   "upstage.description": "تقوم Upstage ببناء نماذج ذكاء اصطناعي لتلبية احتياجات الأعمال، بما في ذلك Solar LLM وDocument AI، مع واجهات دردشة تدعم استدعاء الوظائف، والترجمة، والتضمين، وحالات الاستخدام المتخصصة.",
   "v0.description": "v0 هو مساعد برمجة ثنائي يحول الأفكار المكتوبة بلغة طبيعية إلى كود وواجهة مستخدم لمشروعك.",
   "vercelaigateway.description": "يوفر Vercel AI Gateway واجهة برمجة تطبيقات موحدة لأكثر من 100 نموذج من OpenAI وAnthropic وGoogle وغيرها، مع ميزات الميزانية، ومراقبة الاستخدام، وموازنة التحميل، والتجاوز التلقائي.",

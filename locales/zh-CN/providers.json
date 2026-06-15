@@ -67,6 +67,7 @@
   "taichu.description": "太初是中科院自动化所与武汉人工智能研究院联合研发的新一代多模态模型，支持多轮问答、写作、图像生成、3D 理解与信号分析，具备更强的认知与创造力。",
   "tencentcloud.description": "腾讯云大模型知识引擎原子能力为企业与开发者提供端到端知识问答服务，支持文档解析、切分、向量化、多轮重写等模块化服务，助力构建定制 AI 方案。",
   "togetherai.description": "Together AI 提供领先性能的创新模型，支持广泛定制、快速扩展与简便部署，满足企业需求。",
+  "tokenmix.description": "TokenMix is an OpenAI-compatible API gateway that provides unified access to many large language models — including DeepSeek, Qwen, Kimi, GLM, and MiniMax — through a single endpoint and one API key, with pay-as-you-go pricing.",
   "upstage.description": "Upstage 构建面向商业需求的 AI 模型，包括 Solar LLM 与文档 AI，其聊天 API 支持函数调用、翻译、向量化与行业场景应用。",
   "v0.description": "v0 是一款配对编程助手，可将自然语言想法转化为项目中的代码与界面。",
   "vercelaigateway.description": "Vercel AI Gateway 提供统一 API，支持 100 多个模型（包括 OpenAI、Anthropic、Google 等），具备预算控制、使用监控、负载均衡与故障转移功能。",

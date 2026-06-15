@@ -74,6 +74,7 @@
     "./taichu": "./src/aiModels/taichu.ts",
     "./tencentcloud": "./src/aiModels/tencentcloud.ts",
     "./togetherai": "./src/aiModels/togetherai.ts",
+    "./tokenmix": "./src/aiModels/tokenmix.ts",
     "./upstage": "./src/aiModels/upstage.ts",
     "./v0": "./src/aiModels/v0.ts",
     "./vercelaigateway": "./src/aiModels/vercelaigateway.ts",

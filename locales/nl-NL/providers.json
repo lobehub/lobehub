@@ -67,6 +67,7 @@
   "taichu.description": "Een next-gen multimodaal model van CASIA en het Wuhan Institute of AI, met ondersteuning voor meerstaps Q&A, schrijven, beeldgeneratie, 3D-begrip en signaalanalyse, met verbeterde cognitie en creativiteit.",
   "tencentcloud.description": "LLM Knowledge Engine Atomic Power biedt end-to-end kennis-Q&A voor bedrijven en ontwikkelaars, met modulaire diensten zoals documentanalyse, chunking, embeddings en meerstaps herschrijving voor het samenstellen van aangepaste AI-oplossingen.",
   "togetherai.description": "Together AI levert toonaangevende prestaties met innovatieve modellen, brede aanpasbaarheid, snelle schaalbaarheid en eenvoudige implementatie voor zakelijke behoeften.",
+  "tokenmix.description": "TokenMix is an OpenAI-compatible API gateway that provides unified access to many large language models — including DeepSeek, Qwen, Kimi, GLM, and MiniMax — through a single endpoint and one API key, with pay-as-you-go pricing.",
   "upstage.description": "Upstage ontwikkelt AI-modellen voor zakelijke toepassingen, waaronder Solar LLM en Document AI, met chat-API’s die functie-aanroepen, vertaling, embeddings en domeinspecifieke toepassingen ondersteunen.",
   "v0.description": "v0 is een pair-programming assistent die ideeën in natuurlijke taal omzet in code en UI voor je project.",
   "vercelaigateway.description": "Vercel AI Gateway biedt een uniforme API voor 100+ modellen van OpenAI, Anthropic, Google en meer, met budgetbeheer, gebruiksmonitoring, load balancing en failover.",
