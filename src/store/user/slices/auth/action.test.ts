@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { mutate } from '@/libs/swr';
+import { userKeys } from '@/libs/swr/keys';
 import { useUserStore } from '@/store/user';
 
 vi.mock('zustand/traditional');
@@ -44,7 +45,7 @@ describe('createAuthSlice', () => {
         await result.current.refreshUserState();
       });
 
-      expect(mutate).toHaveBeenCalledWith('initUserState');
+      expect(mutate).toHaveBeenCalledWith(userKeys.initState());
     });
   });
 
