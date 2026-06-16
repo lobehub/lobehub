@@ -226,6 +226,11 @@ export default {
   'providerModels.config.oauth.polling': 'Waiting for authorization...',
   'providerModels.config.oauth.retry': 'Retry',
   'providerModels.config.oauth.serviceNote': 'Service provided by {{name}}',
+  'providerModels.config.authMethod.desc': 'Choose how to send the API key to the provider',
+  'providerModels.config.authMethod.options.apiKey': 'API Key (x-api-key)',
+  'providerModels.config.authMethod.options.authToken': 'Bearer Token (Authorization)',
+  'providerModels.config.authMethod.placeholder': 'Select authentication method',
+  'providerModels.config.authMethod.title': 'Authentication Method',
   'providerModels.config.oauth.title': 'OAuth Authorization',
   'providerModels.config.responsesApi.desc':
     "Uses OpenAI's next-generation request format specification to unlock advanced features like chain-of-thought (supported by OpenAI models only)",

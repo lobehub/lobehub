@@ -10,6 +10,7 @@ import {
   Flexbox,
   Form,
   Icon,
+  Select,
   Skeleton,
   stopPropagation,
   Tooltip,
@@ -146,6 +147,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
       authType,
       proxyUrl,
       showApiKey = true,
+      sdkType,
       defaultShowBrowserRequest,
       disableBrowserRequest,
       showChecker = true,
@@ -400,8 +402,36 @@ const ProviderConfig = memo<ProviderConfigProps>(
     const showResponsesApiSwitch =
       !!supportResponsesApi || (isCustom && isResponsesApiSupportedSdkType(settings?.sdkType));
 
+    const authMethodItem: FormItemProps | undefined =
+      sdkType === 'anthropic'
+        ? {
+            children: isLoading ? (
+              <SkeletonInput />
+            ) : (
+              <Select
+                allowClear={false}
+                options={[
+                  {
+                    label: t('providerModels.config.authMethod.options.apiKey'),
+                    value: 'apiKey',
+                  },
+                  {
+                    label: t('providerModels.config.authMethod.options.authToken'),
+                    value: 'authToken',
+                  },
+                ]}
+                placeholder={t('providerModels.config.authMethod.placeholder')}
+              />
+            ),
+            desc: t('providerModels.config.authMethod.desc'),
+            label: t('providerModels.config.authMethod.title'),
+            name: [KeyVaultsConfigKey, 'authMethod'],
+          }
+        : undefined;
+
     const configItems = [
       ...apiKeyItem,
+      authMethodItem,
       endpointItem,
       showResponsesApiSwitch
         ? {
