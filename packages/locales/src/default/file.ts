@@ -109,10 +109,19 @@ export default {
   'pageEditor.editedAt': 'Last edited on {{time}}',
   'pageEditor.editedBy': 'Last edited by {{name}}',
   'pageEditor.editMode.checking': 'Checking edit availability…',
+  'pageEditor.editMode.draftRestoreCancel': 'Discard',
+  'pageEditor.editMode.draftRestoreContent':
+    'Found unsaved local changes from your last session. Restore them?',
+  'pageEditor.editMode.draftRestoreOk': 'Restore',
+  'pageEditor.editMode.draftRestoreTitle': 'Restore Unsaved Draft',
   'pageEditor.editMode.lockedByOther': '{{name}} is editing this document',
   'pageEditor.editMode.lockedBySomeone': 'Someone else is editing this document',
   'pageEditor.editMode.lockedDescription':
     'The page is read-only while they edit. Your changes won’t be saved until they’re done.',
+  'pageEditor.editMode.lockLostDescription':
+    'Recent edits haven’t synced yet. They’ll resume saving once the connection recovers.',
+  'pageEditor.editMode.lockLostTitle': 'Edit lock temporarily lost',
+  'pageEditor.editMode.lockUnstable': 'Reconnecting edit lock…',
   'pageEditor.editorPlaceholder': 'Press "/" for AI and commands.',
   'pageEditor.empty.createNewDocument': 'Create New Page',
   'pageEditor.empty.importNotion': 'Import from Notion',

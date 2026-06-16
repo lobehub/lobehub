@@ -47,6 +47,7 @@ export const useDocumentLock = () => {
   const isLockedByOther = usePageLockedByOther();
   const setLockState = usePageEditorStore((s) => s.setLockState);
   const setLockPending = usePageEditorStore((s) => s.setLockPending);
+  const setLockHealth = usePageEditorStore((s) => s.setLockHealth);
   const setLockOwnerId = usePageEditorStore((s) => s.setLockOwnerId);
   const lockExpiresAt = usePageEditorStore((s) => s.lockExpiresAt);
   const isDirty = useDocumentStore((s) =>
@@ -102,6 +103,24 @@ export const useDocumentLock = () => {
   useEffect(() => {
     setLockPending(lock.pending);
   }, [lock.pending, setLockPending]);
+
+  useEffect(() => {
+    setLockHealth(lock.health);
+  }, [lock.health, setLockHealth]);
+
+  // After recovering from a lost lease, refresh the document so we don't paint
+  // over edits another member made while we were disconnected. The existing
+  // isLockedByOther bridge above only fires when the holder transitions through
+  // a different user — recovering from `lost` after a pure network blip never
+  // touches holderId, so it needs its own trigger.
+  const prevHealthRef = useRef(lock.health);
+  useEffect(() => {
+    const recovered = prevHealthRef.current === 'lost' && lock.health === 'healthy';
+    prevHealthRef.current = lock.health;
+    if (recovered && documentId) {
+      void mutate(documentSWRKeys.editor(documentId));
+    }
+  }, [lock.health, documentId]);
 
   // Re-hydrate content whenever the lock flips — on open if already held, or when
   // another member takes/releases it (events land in the store via the bridge or

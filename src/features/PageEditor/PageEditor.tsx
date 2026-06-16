@@ -20,6 +20,7 @@ import { StyleSheet } from '@/utils/styles';
 import EditorCanvas from './EditorCanvas';
 import Header from './Header';
 import LockedAlert from './LockedAlert';
+import LockStatusBanner from './LockStatusBanner';
 import { PageAgentProvider } from './PageAgentProvider';
 import { PageEditorProvider } from './PageEditorProvider';
 import RightPanel from './RightPanel';
@@ -282,6 +283,9 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>(({ header, fullWidthHeader 
           <Flexbox className={overrideStyles.editorContent} flex={1} style={editorContentStyle}>
             <TitleSection />
             <PageMetaBar />
+            {/* Surfaces local heartbeat health (unstable/lost) for the holder.
+                Suppressed when LockedAlert is showing — see LockStatusBanner. */}
+            <LockStatusBanner />
             {/* Prominent in-body notice when another member holds the lock; the
                 compact status badge lives in the Header (EditingIndicator). */}
             <LockedAlert />

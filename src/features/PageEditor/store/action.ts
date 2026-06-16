@@ -4,6 +4,7 @@ import debug from 'debug';
 import { debounce } from 'es-toolkit/compat';
 import { type StateCreator } from 'zustand';
 
+import { type EditLockHealth } from '@/features/EditLock';
 import { useDocumentStore } from '@/store/document';
 import { getElectronStoreState } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
@@ -26,6 +27,11 @@ export interface Action {
   initMeta: (title?: string, emoji?: string) => void;
   performMetaSave: () => Promise<void>;
   setEmoji: (emoji: string | undefined) => void;
+  /**
+   * Mirror the lock health from {@link useEditLock} into the store so banners and
+   * draft persistence can observe deviations without re-deriving the state.
+   */
+  setLockHealth: (health: EditLockHealth) => void;
   setLockOwnerId: (ownerId: string | undefined) => void;
   /** True while the lock state is still being resolved (editor read-only meanwhile). */
   setLockPending: (pending: boolean) => void;
@@ -191,6 +197,10 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         if (isDirty) {
           triggerDebouncedMetaSave();
         }
+      },
+
+      setLockHealth: (health) => {
+        if (get().lockHealth !== health) set({ lockHealth: health });
       },
 
       setLockPending: (pending) => {

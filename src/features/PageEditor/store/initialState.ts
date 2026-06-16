@@ -1,5 +1,7 @@
 import { type IEditor } from '@lobehub/editor';
 
+import { type EditLockHealth } from '@/features/EditLock';
+
 export type MetaSaveStatus = 'idle' | 'saving' | 'saved';
 export type RightPanelMode = 'copilot' | 'history';
 
@@ -29,6 +31,11 @@ export interface State extends PublicState {
   lastSavedTitle?: string;
   /** Lease expiry of the current lock holder, if known. */
   lockExpiresAt?: Date | string | null;
+  /**
+   * Lock health from this session's editor perspective. Drives the lost-lock
+   * banner; viewers ignore it. See {@link EditLockHealth}.
+   */
+  lockHealth?: EditLockHealth;
   /** User id of the member currently holding the collaborative edit lock. */
   lockHolderId?: string | null;
   /**
@@ -53,6 +60,7 @@ export const initialState: State = {
   isMetaDirty: false,
   isWorkspacePage: false,
   lockExpiresAt: null,
+  lockHealth: 'healthy',
   lockHolderId: null,
   lockHolderOwnerId: null,
   lockOwnerId: undefined,
