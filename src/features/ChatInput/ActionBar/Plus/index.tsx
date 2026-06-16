@@ -82,29 +82,6 @@ const activeLabel = css`
   }
 `;
 
-const optionLabel = css`
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-
-  width: 100%;
-  min-width: 220px;
-
-  .title {
-    line-height: 1.25;
-  }
-
-  .desc {
-    margin-block-start: 3px;
-
-    font-size: 12px;
-    line-height: 1.35;
-    color: ${cssVar.colorTextDescription};
-    white-space: normal;
-  }
-`;
-
 const searchOptionRow = css`
   display: flex;
   gap: 10px;
@@ -164,6 +141,58 @@ const countChip = css`
   color: ${cssVar.colorTextSecondary};
 
   background: ${cssVar.colorFillSecondary};
+`;
+
+const gatewayModeLabel = css`
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+
+  .title {
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+`;
+
+const betaTag = css`
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+
+  height: 18px;
+  padding-block: 0;
+  padding-inline: 6px;
+  border: 1px solid color-mix(in srgb, ${cssVar.colorInfo} 35%, transparent);
+  border-radius: 6px;
+
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  color: ${cssVar.colorInfo};
+
+  background: ${cssVar.colorInfoBg};
+`;
+
+const gatewayModeInfoCard = css`
+  width: 260px;
+  padding: 12px;
+
+  .title {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .desc {
+    margin-block-start: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: ${cssVar.colorTextSecondary};
+  }
 `;
 
 const activeIcon = (icon: IconProps['icon'], active?: boolean): IconProps['icon'] =>
@@ -378,16 +407,6 @@ const PlusAction = memo(() => {
         label
       );
 
-    const renderOption = (title: string, description: string, active: boolean) => (
-      <div className={cx(optionLabel)}>
-        <div>
-          <div className="title">{title}</div>
-          {description && <div className="desc">{description}</div>}
-        </div>
-        {active && <Icon icon={CheckIcon} size={14} />}
-      </div>
-    );
-
     const renderSearchOption = (
       icon: ReactNode,
       title: string,
@@ -413,6 +432,20 @@ const PlusAction = memo(() => {
       ) : (
         label
       );
+
+    const renderGatewayModeLabel = () => (
+      <span className={cx(gatewayModeLabel)}>
+        <span className="title">{t('gatewayMode.title')}</span>
+        <span className={cx(betaTag)}>{t('gatewayMode.beta')}</span>
+      </span>
+    );
+
+    const gatewayModeInfo = (
+      <div className={cx(gatewayModeInfoCard)}>
+        <div className="title">{t('gatewayMode.title')}</div>
+        <div className="desc">{t('gatewayMode.desc')}</div>
+      </div>
+    );
 
     const skillMenuItems = stripPopoverContent(skillItems as ActionDropdownMenuItems);
 
@@ -559,9 +592,11 @@ const PlusAction = memo(() => {
         ? [
             {
               checked: isGatewayModeEnabled,
-              icon: activeIcon(Cloud, isGatewayModeEnabled),
+              icon: Cloud,
               key: 'gateway-mode',
-              label: t('gatewayMode.title'),
+              label: (
+                <PopoverLabel label={renderGatewayModeLabel()} popoverContent={gatewayModeInfo} />
+              ),
               onCheckedChange: handleToggleGatewayMode,
               type: 'switch',
             } as ActionDropdownMenuItems[number],
@@ -619,7 +654,6 @@ const PlusAction = memo(() => {
     enableFC,
     enableGatewayMode,
     enableKnowledgeBase,
-    defaultDisableGatewayMode,
     handleSelectSearch,
     handleToggleGatewayMode,
     handleToggleMemory,

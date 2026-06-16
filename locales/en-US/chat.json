@@ -165,6 +165,8 @@
   "extendParams.urlContext.title": "Extract Webpage Link Content",
   "followUpPlaceholder": "Follow up.",
   "followUpPlaceholderHeterogeneous": "Follow up.",
+  "gatewayMode.beta": "Beta",
+  "gatewayMode.desc": "Run agents in the cloud through Gateway. Tasks keep running even if you close this page.",
   "gatewayMode.title": "Gateway Mode",
   "group.desc": "Move a task forward with multiple Agents in one shared space.",
   "group.memberTooltip": "There are {{count}} members in the group",
