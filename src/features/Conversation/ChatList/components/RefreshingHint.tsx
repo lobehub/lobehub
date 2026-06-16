@@ -12,7 +12,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     pointer-events: none;
 
     min-height: 16px;
-    padding-block: 8px 16px;
+    padding-block: 0 24px;
 
     font-size: 12px;
     line-height: 16px;
