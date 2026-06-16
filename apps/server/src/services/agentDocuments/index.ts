@@ -71,18 +71,13 @@ type ProjectableAgentDocument = Pick<
   'content' | 'editorData' | 'fileType' | 'templateId'
 >;
 
-/**
- * Hide the auto-created `.tool-results/` archive (root folder + its children)
- * from user-facing document lists. Applied by default everywhere, including
- * `listDocuments` / `listDocumentsForTopic`. The tool runtime that lets agents
- * discover archived entries opts back in via `includeArchivedToolResults`.
- */
-const excludeArchivedToolResults = <
+/** Collect ids of root `.tool-results` archive folders present in a doc list. */
+const collectArchiveFolderIds = <
   T extends Pick<AgentDocument, 'documentId' | 'parentId' | 'filename' | 'fileType'>,
 >(
   docs: T[],
-): T[] => {
-  const archiveFolderIds = new Set(
+): Set<string> =>
+  new Set(
     docs
       .filter(
         (d) =>
@@ -92,6 +87,24 @@ const excludeArchivedToolResults = <
       )
       .map((d) => d.documentId),
   );
+
+/**
+ * Hide the auto-created `.tool-results/` archive (root folder + its children)
+ * from user-facing document lists. Applied by default everywhere, including
+ * `listDocuments` / `listDocumentsForTopic`. The tool runtime that lets agents
+ * discover archived entries opts back in via `includeArchivedToolResults`.
+ *
+ * `archiveFolderIds` lets callers whose list may not contain the folder row
+ * supply the ids explicitly — the topic path only sees the archived file
+ * (which is topic-associated), never the folder, so it can't be derived from
+ * the list alone.
+ */
+const excludeArchivedToolResults = <
+  T extends Pick<AgentDocument, 'documentId' | 'parentId' | 'filename' | 'fileType'>,
+>(
+  docs: T[],
+  archiveFolderIds: Set<string> = collectArchiveFolderIds(docs),
+): T[] => {
   if (archiveFolderIds.size === 0) return docs;
   return docs.filter(
     (d) =>
@@ -642,7 +655,22 @@ export class AgentDocumentsService {
       .map((topicDoc) => docsByDocumentId.get(topicDoc.id))
       .filter((doc): doc is AgentDocumentListItem => Boolean(doc));
 
-    return options?.includeArchivedToolResults ? ordered : excludeArchivedToolResults(ordered);
+    if (options?.includeArchivedToolResults) return ordered;
+
+    // The `.tool-results` folder is never topic-associated (only the archived
+    // file is), so it isn't in `ordered`. Look it up directly so the archived
+    // file can be filtered out by its parent id.
+    const archiveFolder = await this.agentDocumentModel.findByParentAndFilename(
+      agentId,
+      null,
+      TOOL_RESULTS_DIR_NAME,
+    );
+    const archiveFolderIds =
+      archiveFolder?.fileType === DOCUMENT_FOLDER_TYPE
+        ? new Set([archiveFolder.documentId])
+        : new Set<string>();
+
+    return excludeArchivedToolResults(ordered, archiveFolderIds);
   }
 
   async getDocumentByFilename(agentId: string, filename: string) {

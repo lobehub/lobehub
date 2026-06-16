@@ -96,6 +96,7 @@ describe('AgentDocumentsService', () => {
     findContextByAgent: vi.fn(),
     findByDocumentIds: vi.fn(),
     findByFilename: vi.fn(),
+    findByParentAndFilename: vi.fn(),
     findSkillDocsByAgent: vi.fn(),
     hasByAgent: vi.fn(),
     listByAgent: vi.fn(),
@@ -455,6 +456,64 @@ describe('AgentDocumentsService', () => {
         sourceType: 'web',
       });
       expect(mockModel.findByDocumentIds).not.toHaveBeenCalled();
+    });
+
+    it('should hide an archived tool result whose `.tool-results` folder is not topic-associated', async () => {
+      // The archive folder is created by mkdir but only the archived file gets
+      // associated with the topic, so the folder never appears in the list.
+      mockTopicDocumentModel.findByTopicId.mockResolvedValue([
+        { id: 'archive-child', title: 'dump' },
+      ]);
+      mockModel.listByDocumentIds.mockResolvedValue([
+        {
+          documentId: 'archive-child',
+          filename: 'topic_call.txt',
+          id: 'agent-doc-archive-child',
+          parentId: 'archive-root',
+          title: 'dump',
+        },
+      ]);
+      mockModel.findByParentAndFilename.mockResolvedValue({
+        documentId: 'archive-root',
+        fileType: 'custom/folder',
+        filename: '.tool-results',
+        id: 'agent-doc-archive-root',
+        parentId: null,
+      });
+
+      const service = new AgentDocumentsService(db, userId);
+      const result = await service.listDocumentsForTopic('agent-1', 'topic-1');
+
+      expect(mockModel.findByParentAndFilename).toHaveBeenCalledWith(
+        'agent-1',
+        null,
+        '.tool-results',
+      );
+      expect(result).toEqual([]);
+    });
+
+    it('should keep the archived tool result when includeArchivedToolResults is set', async () => {
+      mockTopicDocumentModel.findByTopicId.mockResolvedValue([
+        { id: 'archive-child', title: 'dump' },
+      ]);
+      mockModel.listByDocumentIds.mockResolvedValue([
+        {
+          documentId: 'archive-child',
+          filename: 'topic_call.txt',
+          id: 'agent-doc-archive-child',
+          parentId: 'archive-root',
+          title: 'dump',
+        },
+      ]);
+
+      const service = new AgentDocumentsService(db, userId);
+      const result = await service.listDocumentsForTopic('agent-1', 'topic-1', undefined, {
+        includeArchivedToolResults: true,
+      });
+
+      expect(result.map((d) => d.documentId)).toEqual(['archive-child']);
+      // No folder lookup needed when archives are included.
+      expect(mockModel.findByParentAndFilename).not.toHaveBeenCalled();
     });
   });
 
