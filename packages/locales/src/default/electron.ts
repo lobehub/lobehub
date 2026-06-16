@@ -36,6 +36,8 @@ export default {
   'fleet.allShown': 'All running tasks are shown',
   'fleet.backToHome': 'Back to home',
   'fleet.closeColumn': 'Close column',
+  'fleet.closeIdleColumns': 'Close idle columns',
+  'fleet.closeIdleColumnsCount': 'Close {{count}} idle columns',
   'fleet.collapseReply': 'Collapse',
   'fleet.dragHint': 'Drag to reorder',
   'fleet.empty': 'No tasks open',

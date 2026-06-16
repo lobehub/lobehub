@@ -47,6 +47,12 @@ interface FleetState {
   /** Keys the user explicitly pinned — a deliberate "keep this column" marker. */
   pinnedKeys: string[];
   removeColumn: (key: string) => void;
+  /**
+   * Close a batch of columns at once (e.g. "close all idle columns"). Mirrors
+   * removeColumn for each key in a single update so the board doesn't reflow
+   * once per column.
+   */
+  removeColumns: (keys: string[]) => void;
   /** Reorder columns to match the given key order (from single-row drag). */
   reorderColumns: (orderedKeys: string[]) => void;
   /**
@@ -119,6 +125,21 @@ export const useFleetStore = create<FleetState>()(
               ? s.dismissedKeys
               : [...s.dismissedKeys, key],
             pinnedKeys: s.pinnedKeys.filter((k) => k !== key),
+            rowByKey,
+          };
+        }),
+      removeColumns: (keys) =>
+        set((s) => {
+          if (keys.length === 0) return {};
+          const remove = new Set(keys);
+          const rowByKey = { ...s.rowByKey };
+          for (const key of remove) delete rowByKey[key];
+          const dismissedKeys = [...s.dismissedKeys];
+          for (const key of remove) if (!dismissedKeys.includes(key)) dismissedKeys.push(key);
+          return {
+            columns: s.columns.filter((c) => !remove.has(c.key)),
+            dismissedKeys,
+            pinnedKeys: s.pinnedKeys.filter((k) => !remove.has(k)),
             rowByKey,
           };
         }),

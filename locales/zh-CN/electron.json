@@ -3,6 +3,8 @@
   "fleet.allShown": "所有运行中的任务都已展示",
   "fleet.backToHome": "返回首页",
   "fleet.closeColumn": "关闭此列",
+  "fleet.closeIdleColumns": "关闭空闲看板",
+  "fleet.closeIdleColumnsCount": "关闭 {{count}} 个空闲看板",
   "fleet.collapseReply": "收起",
   "fleet.createTask": "创建任务",
   "fleet.dragHint": "拖动以调整位置",

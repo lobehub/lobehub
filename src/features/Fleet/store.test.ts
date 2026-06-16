@@ -37,6 +37,25 @@ describe('fleet store', () => {
     expect(useFleetStore.getState().dismissedKeys).toEqual(['a']);
   });
 
+  it('removeColumns drops every given key in one update and dismisses them', () => {
+    useFleetStore.setState({
+      columns: [col('a'), col('b'), col('c')],
+      pinnedKeys: ['b'],
+      rowByKey: { a: 0, b: 0, c: 0 },
+    });
+    useFleetStore.getState().removeColumns(['a', 'c']);
+    const s = useFleetStore.getState();
+    expect(s.columns.map((c) => c.key)).toEqual(['b']);
+    expect(s.dismissedKeys).toEqual(['a', 'c']);
+    expect(s.rowByKey).toEqual({ b: 0 });
+  });
+
+  it('removeColumns is a no-op for an empty list', () => {
+    useFleetStore.setState({ columns: [col('a')] });
+    useFleetStore.getState().removeColumns([]);
+    expect(useFleetStore.getState().columns.map((c) => c.key)).toEqual(['a']);
+  });
+
   it('addColumn clears a prior dismissal so a re-pinned column sticks', () => {
     useFleetStore.setState({ columns: [], dismissedKeys: ['a'] });
     useFleetStore.getState().addColumn(col('a'));
