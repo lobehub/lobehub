@@ -312,10 +312,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     staleTime: 30_000,
   });
 
-  // The current machine's own gateway deviceId (desktop only). On desktop this
-  // machine is already represented by the dedicated local "This device" option
-  // (which runs over local IPC), so we hide its duplicate entry from the remote
-  // device list below to avoid offering the same machine twice.
+  // The current machine's own gateway deviceId (desktop only), used to badge the
+  // matching device row with a "This device" tag and show the local-process
+  // description instead of the generic online/offline status.
   useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
   const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
@@ -360,9 +359,11 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   const boundDevice =
     executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
-  // Drop this machine's own entry on desktop — it's already covered by the
-  // dedicated local "This device" option (currentDeviceId is undefined on web,
-  // so nothing is filtered there).
+  // On desktop, this machine appears both as the dedicated local "This device"
+  // row (which we relabel with its real device name + tag below) and as a
+  // regular entry in the device list — drop the duplicate from the list.
+  // currentDeviceId is undefined on web, so nothing is filtered there.
+  const currentDevice = devices?.find((d) => d.deviceId === currentDeviceId);
   const remoteDevices = (devices ?? []).filter((d) => d.deviceId !== currentDeviceId);
   const hasNoDevices = remoteDevices.length === 0;
   // On web with no device, the prominent download card below replaces the small
@@ -379,7 +380,11 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     chipIcon = <Icon icon={SparklesIcon} size={14} />;
     chipLabel = t('heteroAgent.executionTarget.auto');
   } else if (executionTarget === 'local') {
-    chipIcon = <Icon icon={LaptopIcon} size={14} />;
+    chipIcon = currentDevice ? (
+      getDeviceIcon(currentDevice.platform)
+    ) : (
+      <Icon icon={LaptopIcon} size={14} />
+    );
     chipLabel = t('heteroAgent.executionTarget.local');
   } else if (executionTarget === 'device') {
     chipIcon = getDeviceIcon(boundDevice?.platform);
@@ -460,8 +465,19 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         <OptionRow
           active={isActive('local')}
           desc={t('heteroAgent.executionTarget.localDesc')}
-          icon={<Icon icon={LaptopIcon} size={14} />}
-          label={t('heteroAgent.executionTarget.local')}
+          tag={t('heteroAgent.executionTarget.local')}
+          icon={
+            currentDevice ? (
+              getDeviceIcon(currentDevice.platform)
+            ) : (
+              <Icon icon={LaptopIcon} size={14} />
+            )
+          }
+          label={
+            currentDevice?.friendlyName ||
+            currentDevice?.hostname ||
+            t('heteroAgent.executionTarget.local')
+          }
           onClick={() => void handleSelect('local')}
         />
       ) : null}
