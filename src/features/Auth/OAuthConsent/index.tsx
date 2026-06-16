@@ -5,8 +5,8 @@ import { memo } from 'react';
 import { useParams } from 'react-router-dom';
 
 import NotFound from '@/components/404';
+import BrandTextLoading from '@/components/Loading/BrandTextLoading';
 
-import LoadingIcon from '../LoadingIcon';
 import OAuthGuard from '../OAuthGuard';
 import ClientError from './ClientError';
 import Consent from './Consent';
@@ -61,17 +61,13 @@ const renderError = (error: unknown): ReactNode => {
   );
 };
 
-const InteractionLoading = memo(() => <LoadingIcon label="Loading" size={48} />);
-
-InteractionLoading.displayName = 'OAuthInteractionLoading';
-
 const InteractionContent = memo(() => {
   const { uid } = useParams<{ uid: string }>();
   const { data, error, isLoading } = useInteractionDetails(uid);
 
   if (!uid) return <NotFound />;
   if (error) return renderError(error);
-  if (isLoading || !data) return <InteractionLoading />;
+  if (isLoading || !data) return <BrandTextLoading debugId={'Auth > OAuthConsent'} />;
 
   if (data.prompt === 'login') return <Login clientMetadata={data.clientMetadata} uid={data.uid} />;
 
