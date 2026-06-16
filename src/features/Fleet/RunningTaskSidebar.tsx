@@ -1,10 +1,10 @@
 'use client';
 
 import { formatElapsedClockTime } from '@lobechat/utils';
-import { Avatar, Button, Flexbox, Skeleton, Tag, Text } from '@lobehub/ui';
+import { ActionIcon, Avatar, Button, Flexbox, Skeleton, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
-import { PlusIcon } from 'lucide-react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { ListXIcon, PlusIcon } from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import RingLoadingIcon from '@/components/RingLoading';
@@ -156,6 +156,45 @@ const SidebarTaskSkeleton = memo(() => (
 
 SidebarTaskSkeleton.displayName = 'FleetSidebarTaskSkeleton';
 
+interface CloseIdleColumnsButtonProps {
+  statusByColumnKey: Record<string, ChatTopicStatus | undefined>;
+}
+
+/**
+ * Board-level action: close every open column that isn't actively running in one
+ * click. Idle is derived from the board's own columns (store) against the live
+ * running set, so columns whose task finished/paused get cleared while running
+ * ones stay. Disabled when there's nothing idle to close.
+ */
+const CloseIdleColumnsButton = memo<CloseIdleColumnsButtonProps>(({ statusByColumnKey }) => {
+  const { t } = useTranslation('electron');
+  const boardColumns = useFleetStore((s) => s.columns);
+  const removeColumns = useFleetStore((s) => s.removeColumns);
+
+  const idleKeys = useMemo(
+    () => boardColumns.filter((c) => statusByColumnKey[c.key] !== 'running').map((c) => c.key),
+    [boardColumns, statusByColumnKey],
+  );
+
+  if (boardColumns.length === 0) return null;
+
+  return (
+    <ActionIcon
+      disabled={idleKeys.length === 0}
+      icon={ListXIcon}
+      size={'small'}
+      title={
+        idleKeys.length > 0
+          ? t('fleet.closeIdleColumnsCount', { count: idleKeys.length })
+          : t('fleet.closeIdleColumns')
+      }
+      onClick={() => removeColumns(idleKeys)}
+    />
+  );
+});
+
+CloseIdleColumnsButton.displayName = 'FleetCloseIdleColumnsButton';
+
 interface RunningTaskSidebarProps {
   columns: FleetColumn[];
   isLoading?: boolean;
@@ -177,10 +216,14 @@ const RunningTaskSidebar = memo<RunningTaskSidebarProps>(
     const handleActivate = useCallback(
       (column: FleetColumn) => {
         addColumn(column);
+        // Double rAF so the query runs after React paints the (re-)added column —
+        // a single frame can fire before the commit and find nothing to scroll to.
         requestAnimationFrame(() => {
-          document
-            .querySelector(`[data-fleet-col="${CSS.escape(column.key)}"]`)
-            ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'end' });
+          requestAnimationFrame(() => {
+            document
+              .querySelector(`[data-fleet-col="${CSS.escape(column.key)}"]`)
+              ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'end' });
+          });
         });
       },
       [addColumn],
@@ -193,12 +236,17 @@ const RunningTaskSidebar = memo<RunningTaskSidebarProps>(
     const header = (
       <SideBarHeaderLayout
         backTo={'/'}
-        right={<RowsSwitcher />}
         showTogglePanelButton={false}
         left={
           <Flexbox horizontal align={'center'} gap={8}>
             {t('fleet.runningBoard')}
             {columns.length > 0 && <Tag style={{ margin: 0 }}>{columns.length}</Tag>}
+          </Flexbox>
+        }
+        right={
+          <Flexbox horizontal align={'center'} gap={4}>
+            <CloseIdleColumnsButton statusByColumnKey={statusByColumnKey} />
+            <RowsSwitcher />
           </Flexbox>
         }
       />

@@ -44,6 +44,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   containerSeamless: css`
     border: none;
+
+    /* keep a hairline divider on top so the tray still reads as separated from
+       the conversation above, even without the full card chrome */
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 0;
     background: transparent;
   `,

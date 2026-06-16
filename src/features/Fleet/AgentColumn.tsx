@@ -21,7 +21,13 @@ import { useTranslation } from 'react-i18next';
 
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import StatusDot from '@/features/AgentTopicManager/StatusDot';
-import { ChatInput, ChatList, ConversationProvider } from '@/features/Conversation';
+import {
+  ChatInput,
+  ChatList,
+  ConversationProvider,
+  conversationSelectors,
+  useConversationStore,
+} from '@/features/Conversation';
 import OpStatusTray from '@/features/Conversation/ChatInput/OpStatusTray';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
@@ -92,6 +98,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-inline: 8px 6px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
+  list: css`
+    /* Owns the flexible space so the seamless tray + reply bar below keep their
+       natural height instead of being squeezed (and clipped) by the list. */
+    position: relative;
+    flex: 1;
+    min-height: 0;
+  `,
   replyBar: css`
     flex: none;
     padding-block: 8px;
@@ -114,6 +127,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     /* opaque chip so the conversation behind never bleeds through the button */
     background: ${cssVar.colorBgContainer};
+
+    /* lifted above the floating status tray (translateY set inline) so it never
+       overlaps and cuts into the tray's top border */
+    transition: transform 0.2s ${cssVar.motionEaseInOut};
 
     button {
       pointer-events: auto;
@@ -188,6 +205,34 @@ const WorkingDirRow = memo<{ workingDirectory: string }>(({ workingDirectory }) 
 });
 
 WorkingDirRow.displayName = 'FleetWorkingDirRow';
+
+/**
+ * Expanded reply input. The running-op status tray is owned by ChatInput's own
+ * floating overlay (so it carries proper card chrome + top border), so we don't
+ * render a second tray here. The collapse button is lifted above that overlay by
+ * its measured height, keeping it clear of the tray's top edge.
+ */
+const ReplyPanel = memo<{ onCollapse: () => void }>(({ onCollapse }) => {
+  const { t } = useTranslation('electron');
+  const overlayHeight = useConversationStore(conversationSelectors.chatInputOverlayHeight);
+
+  return (
+    <Flexbox className={styles.replyOpen}>
+      <Flexbox
+        horizontal
+        className={styles.replyClose}
+        style={{ transform: overlayHeight ? `translateY(-${overlayHeight}px)` : undefined }}
+      >
+        <Button icon={ChevronDownIcon} size={'small'} type={'text'} onClick={onCollapse}>
+          {t('fleet.collapseReply')}
+        </Button>
+      </Flexbox>
+      <ChatInput isConfigLoading={false} />
+    </Flexbox>
+  );
+});
+
+ReplyPanel.displayName = 'FleetReplyPanel';
 
 /**
  * Lightweight drag visual rendered into the DragOverlay portal — the column
@@ -372,22 +417,14 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
             replaceMessages(next, { context: ctx });
           }}
         >
-          <ChatList disableActionsBar />
-          <OpStatusTray seamless={!replyOpen} />
+          <Flexbox className={styles.list}>
+            <ChatList disableActionsBar />
+          </Flexbox>
+          {/* Collapsed: render a seamless inline tray (no ChatInput is mounted to
+              host one). Expanded: ChatInput owns the tray via its own overlay. */}
+          {!replyOpen && <OpStatusTray seamless />}
           {messages === undefined ? null : replyOpen ? (
-            <Flexbox className={styles.replyOpen}>
-              <Flexbox horizontal className={styles.replyClose}>
-                <Button
-                  icon={ChevronDownIcon}
-                  size={'small'}
-                  type={'text'}
-                  onClick={() => setReplyOpen(false)}
-                >
-                  {t('fleet.collapseReply')}
-                </Button>
-              </Flexbox>
-              <ChatInput isConfigLoading={false} />
-            </Flexbox>
+            <ReplyPanel onCollapse={() => setReplyOpen(false)} />
           ) : (
             <Flexbox className={styles.replyBar}>
               <Button

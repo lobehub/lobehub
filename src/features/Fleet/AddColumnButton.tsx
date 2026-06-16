@@ -7,7 +7,8 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AssigneeAgentSelector from '@/features/AgentTasks/features/AssigneeAgentSelector';
-import { topicService } from '@/services/topic';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 
 import { useFleetStore } from './store';
 import { fleetColumnKey } from './types';
@@ -43,27 +44,42 @@ interface AddColumnButtonProps {
 
 /**
  * Trailing "+" at the end of a band. Opens an agent picker; selecting an agent
- * creates a fresh topic for it and opens it as a new column ready to receive
- * messages. In multi-band mode each band carries its own, adding into that row.
+ * opens that agent's main conversation (its existing default topic) as a column.
+ * Re-selecting an already-open agent just focuses/scrolls to its column instead
+ * of spawning a duplicate (the column key dedupes on `agentId::default`).
+ * In multi-band mode each band carries its own, adding into that row.
  */
 const AddColumnButton = memo<AddColumnButtonProps>(({ insertAfterKey, row }) => {
   const { t } = useTranslation(['electron', 'topic']);
   const addColumn = useFleetStore((s) => s.addColumn);
 
   const handleSelectAgent = useCallback(
-    async (agentId: string) => {
-      const title = t('defaultTitle', { ns: 'topic' });
-      const topicId = await topicService.createTopic({ messages: [], sessionId: agentId, title });
-      const key = fleetColumnKey(agentId, topicId);
+    (agentId: string) => {
+      // Open the agent's main conversation (topicId: null) — "pick an agent" here
+      // means "show me this agent", not "mint an empty throwaway topic". Opening
+      // the default topic is instant (no server round-trip that could silently
+      // fail) and matches what clicking the agent elsewhere in the app does.
+      const meta = agentSelectors.getAgentMetaById(agentId)(useAgentStore.getState());
+      const key = fleetColumnKey(agentId, null);
       addColumn(
-        { agentId, fallbackTitle: title, key, threadId: null, topicId },
+        {
+          agentId,
+          fallbackTitle: meta?.title || t('defaultTitle', { ns: 'topic' }),
+          key,
+          threadId: null,
+          topicId: null,
+        },
         insertAfterKey,
         row,
       );
+      // Scroll after the column commits to the DOM. Double rAF so the query runs
+      // post-render (a single frame can fire before React paints the new column).
       requestAnimationFrame(() => {
-        document
-          .querySelector(`[data-fleet-col="${CSS.escape(key)}"]`)
-          ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'end' });
+        requestAnimationFrame(() => {
+          document
+            .querySelector(`[data-fleet-col="${CSS.escape(key)}"]`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'end' });
+        });
       });
     },
     [addColumn, insertAfterKey, row, t],
