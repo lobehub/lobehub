@@ -156,8 +156,13 @@ export class ContextTreeBuilder {
       return;
     }
 
-    // Priority 6: Branch (multiple children)
-    if (idNode.children.length > 1) {
+    // Priority 6: Branch — multiple NON-TOOL children (LOBE-10445 invariant 2).
+    // Tool children are inline data of their assistant (handled by Priority 4),
+    // never branch candidates.
+    const nonToolChildren = idNode.children.filter(
+      (child) => this.messageMap.get(child.id)?.role !== 'tool',
+    );
+    if (nonToolChildren.length > 1) {
       // Add current message node
       const messageNode = this.createMessageNode(message);
       contextTree.push(messageNode);
@@ -201,13 +206,13 @@ export class ContextTreeBuilder {
   private isAssistantGroupNode(message: Message, idNode: IdNode): boolean {
     if (message.role !== 'assistant') return false;
 
-    return (
-      idNode.children.length > 0 &&
-      idNode.children.every((child) => {
-        const childMsg = this.messageMap.get(child.id);
-        return childMsg?.role === 'tool';
-      })
-    );
+    // Role-aware (LOBE-10445): an assistant heads a group when it has ANY tool
+    // child — not only when ALL children are tools. In the assistant-anchored
+    // form the next step's assistant is a sibling of the tool results, so a
+    // group head legitimately has a mix of tool + assistant children. (In the
+    // old tool-anchored form a tool-using assistant only ever had tool children,
+    // so this stays a no-op for legacy data.)
+    return idNode.children.some((child) => this.messageMap.get(child.id)?.role === 'tool');
   }
 
   /**

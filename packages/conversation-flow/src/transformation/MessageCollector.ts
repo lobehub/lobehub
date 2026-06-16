@@ -132,59 +132,66 @@ export class MessageCollector {
     const toolMessages = this.collectToolMessages(currentAssistant, allMessages);
     allToolMessages.push(...toolMessages);
 
-    // Find next assistant after tools
-    for (const toolMsg of toolMessages) {
-      // Stop if tool message has agentCouncil mode - its children belong to AgentCouncil
-      if ((toolMsg.metadata as any)?.agentCouncil === true) {
-        continue;
-      }
+    // Find the next step's assistant. Role-aware dual-form walk (LOBE-10445):
+    // the continuation may hang off this assistant directly (assistant-anchored
+    // / new form) OR off one of its tool results (tool-anchored / old form).
+    const continuation = this.findFlatChainContinuation(
+      currentAssistant,
+      toolMessages,
+      allMessages,
+      processedIds,
+      groupAgentId,
+    );
+    if (!continuation) return;
 
-      const nextMessages = allMessages.filter((m) => m.parentId === toolMsg.id);
-
-      // Stop if there are task children - they should be handled separately, not part of AssistantGroup
-      // This ensures that messages after a task are not merged into the AssistantGroup before the task
-      const taskChildren = nextMessages.filter((m) => m.role === 'task');
-      if (taskChildren.length > 0) {
-        continue;
-      }
-
-      for (const nextMsg of nextMessages) {
-        // Skip an already-collected follower: a duplicated tool_call_id can make
-        // collectToolMessages surface an earlier turn's tool result first, and
-        // returning after that no-op recursion would drop this assistant's real
-        // continuation under a later tool.
-        if (processedIds.has(nextMsg.id)) continue;
-        // Only continue if the next assistant has the SAME agentId
-        // Different agentId means it's a different agent responding (e.g., via speak tool)
-        const isSameAgent = nextMsg.agentId === groupAgentId;
-        // Skip signal-tagged toolless callbacks () — they're a
-        // side-channel under the same parent tool and get collected
-        // separately by `collectFlatSignalCallbacks`.
-        if (getMessageSignal(nextMsg)) continue;
-
-        if (
-          nextMsg.role === 'assistant' &&
-          nextMsg.tools &&
-          nextMsg.tools.length > 0 &&
-          isSameAgent
-        ) {
-          // Continue the chain only for same agent
-          this.collectAssistantChain(
-            nextMsg,
-            allMessages,
-            assistantChain,
-            allToolMessages,
-            processedIds,
-          );
-          return;
-        } else if (nextMsg.role === 'assistant' && isSameAgent) {
-          // Final assistant without tools (same agent)
-          assistantChain.push(nextMsg);
-          return;
-        }
-        // If different agentId, don't add to chain - let it be processed separately
-      }
+    if (continuation.tools && continuation.tools.length > 0) {
+      // Continue the chain (recursion marks it processed at the top)
+      this.collectAssistantChain(
+        continuation,
+        allMessages,
+        assistantChain,
+        allToolMessages,
+        processedIds,
+      );
+    } else {
+      // Final assistant without tools — caller marks the whole chain processed
+      assistantChain.push(continuation);
     }
+  }
+
+  /**
+   * Find the next assistant in a tool-using step's chain (flat variant).
+   *
+   * Dual-form aware: candidates are gathered from BOTH the assistant's own
+   * non-tool children (new assistant-anchored form, where the next assistant is
+   * a sibling of the tool results) AND each tool result's children (old
+   * tool-anchored form). Tools hosting an AgentCouncil or async tasks are NOT
+   * linear continuations, so their children are skipped. The earliest
+   * same-agent, non-signal assistant continuation wins.
+   */
+  private findFlatChainContinuation(
+    currentAssistant: Message,
+    toolMessages: Message[],
+    allMessages: Message[],
+    processedIds: Set<string>,
+    groupAgentId: string | undefined,
+  ): Message | undefined {
+    // The assistant's own children (new form) plus its tools' children (old form)
+    const candidateParentIds = new Set<string>([currentAssistant.id]);
+    for (const toolMsg of toolMessages) {
+      // A tool hosting an AgentCouncil broadcast — its children are council members
+      if ((toolMsg.metadata as any)?.agentCouncil === true) continue;
+      const toolChildren = allMessages.filter((m) => m.parentId === toolMsg.id);
+      // A tool that spawned async tasks is a fan-out, not a linear continuation
+      if (toolChildren.some((m) => m.role === 'task')) continue;
+      candidateParentIds.add(toolMsg.id);
+    }
+
+    return allMessages
+      .filter((m) => m.parentId != null && candidateParentIds.has(m.parentId))
+      .filter((m) => m.role !== 'tool' && !processedIds.has(m.id))
+      .filter((m) => m.role === 'assistant' && m.agentId === groupAgentId && !getMessageSignal(m))
+      .sort((a, b) => a.createdAt - b.createdAt)[0];
   }
 
   /**
@@ -296,41 +303,53 @@ export class MessageCollector {
     }
     children.push(messageNode);
 
-    // Find next assistant message after tools
+    // Find the next step's assistant (dual-form aware, see findChainContinuationNode)
+    const nextNode = this.findChainContinuationNode(idNode, agentId);
+    if (nextNode) {
+      const nextMsg = this.messageMap.get(nextNode.id)!;
+      this.collectAssistantGroupMessages(nextMsg, nextNode, children, agentId);
+    }
+  }
+
+  /**
+   * Find the IdNode of the next assistant in a tool-using step's chain
+   * (contextTree variant of {@link findFlatChainContinuation}).
+   *
+   * Candidates: the assistant's own non-tool children (new assistant-anchored
+   * form) plus each tool result's children (old tool-anchored form). Tools
+   * hosting an AgentCouncil or async tasks are skipped (not linear
+   * continuations). Signal-tagged toolless siblings (Monitor callbacks etc.)
+   * are skipped so the main chain walks the real follower. The earliest
+   * same-agent assistant wins.
+   */
+  private findChainContinuationNode(idNode: IdNode, groupAgentId?: string): IdNode | undefined {
+    const candidates: IdNode[] = [];
+
+    // (a) the assistant's own non-tool children (new form)
+    for (const child of idNode.children) {
+      if (this.messageMap.get(child.id)?.role === 'tool') continue;
+      candidates.push(child);
+    }
+
+    // (b) each eligible tool result's children (old form)
     for (const toolNode of idNode.children) {
       const toolMsg = this.messageMap.get(toolNode.id);
       if (toolMsg?.role !== 'tool') continue;
-
-      // Stop if tool message has agentCouncil mode - its children belong to AgentCouncil
-      if ((toolMsg.metadata as any)?.agentCouncil === true) {
-        continue;
-      }
-
-      // Stop if there are ANY task children - they should be processed separately, not part of AssistantGroup
-      // This ensures that messages after a task are not merged into the AssistantGroup before the task
-      const taskChildren = toolNode.children.filter((child) => {
-        const childMsg = this.messageMap.get(child.id);
-        return childMsg?.role === 'task';
-      });
-      if (taskChildren.length > 0) {
-        continue;
-      }
-
-      // Find the next main-chain assistant under this tool. Signal-tagged
-      // toolless siblings (Monitor callbacks etc., ) share the
-      // same parent tool but live on a side-channel — skip them here so
-      // the main chain still walks the real follower. The signal blocks
-      // are emitted separately by `collectSignalCallbacks`.
-      for (const nextChild of toolNode.children) {
-        const nextMsg = this.messageMap.get(nextChild.id);
-        if (nextMsg?.role !== 'assistant') continue;
-        if (nextMsg.agentId !== agentId) continue;
-        if (getMessageSignal(nextMsg)) continue; // skip signal callbacks
-        // Recursively collect this assistant and its descendants (same agent only)
-        this.collectAssistantGroupMessages(nextMsg, nextChild, children, agentId);
-        return; // Only follow one path
-      }
+      if ((toolMsg.metadata as any)?.agentCouncil === true) continue;
+      const hasTaskChild = toolNode.children.some(
+        (child) => this.messageMap.get(child.id)?.role === 'task',
+      );
+      if (hasTaskChild) continue;
+      candidates.push(...toolNode.children);
     }
+
+    return candidates
+      .map((node) => ({ msg: this.messageMap.get(node.id), node }))
+      .filter(
+        (c) =>
+          c.msg?.role === 'assistant' && c.msg.agentId === groupAgentId && !getMessageSignal(c.msg),
+      )
+      .sort((a, b) => a.msg!.createdAt - b.msg!.createdAt)[0]?.node;
   }
 
   /**
@@ -503,51 +522,21 @@ export class MessageCollector {
    * Only follows messages from the SAME agent (matching agentId)
    */
   findLastNodeInAssistantGroup(idNode: IdNode, groupAgentId?: string): IdNode | null {
-    // Check if has tool children
-    const toolChildren = idNode.children.filter((child) => {
-      const childMsg = this.messageMap.get(child.id);
-      return childMsg?.role === 'tool';
-    });
+    // Walk the chain to its next step (dual-form aware, see findChainContinuationNode)
+    const nextNode = this.findChainContinuationNode(idNode, groupAgentId);
+    if (nextNode) {
+      return this.findLastNodeInAssistantGroup(nextNode, groupAgentId);
+    }
 
+    // No further same-agent assistant. If this step still owns tool results
+    // (e.g. the last tool hosts an AgentCouncil / tasks), return the last tool
+    // node so findNextAfterTools can inspect it; otherwise this node is the tail.
+    const toolChildren = idNode.children.filter(
+      (child) => this.messageMap.get(child.id)?.role === 'tool',
+    );
     if (toolChildren.length === 0) {
       return idNode;
     }
-
-    // Check if any tool has an assistant child with the same agentId
-    for (const toolNode of toolChildren) {
-      const toolMsg = this.messageMap.get(toolNode.id);
-
-      // Stop if tool message has agentCouncil mode - its children belong to AgentCouncil
-      if ((toolMsg?.metadata as any)?.agentCouncil === true) {
-        continue;
-      }
-
-      // Stop if there are ANY task children - they should be processed separately, not part of AssistantGroup
-      // This ensures that messages after a task are not merged into the AssistantGroup before the task
-      const taskNodes = toolNode.children.filter((child) => {
-        const childMsg = this.messageMap.get(child.id);
-        return childMsg?.role === 'task';
-      });
-      if (taskNodes.length > 0) {
-        continue;
-      }
-
-      // Pick the next main-chain assistant under this tool. Mirror the
-      // skip rule used by `collectAssistantGroupMessages`: signal-tagged
-      // toolless siblings (Monitor callbacks etc., ) share the
-      // parent tool but live on a side-channel — if they appear before
-      // the real follower, blindly taking children[0] would end the
-      // walk on a callback node and truncate the AssistantGroup tail.
-      for (const nextChild of toolNode.children) {
-        const nextMsg = this.messageMap.get(nextChild.id);
-        if (nextMsg?.role !== 'assistant') continue;
-        if (nextMsg.agentId !== groupAgentId) continue;
-        if (getMessageSignal(nextMsg)) continue;
-        return this.findLastNodeInAssistantGroup(nextChild, groupAgentId);
-      }
-    }
-
-    // No more assistant messages from the same agent, return the last tool node
     return toolChildren.at(-1) ?? null;
   }
 }
