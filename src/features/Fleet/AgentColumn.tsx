@@ -283,13 +283,15 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
           <OpStatusTray />
           {messages === undefined ? null : replyOpen ? (
             <Flexbox>
-              <Flexbox horizontal className={styles.replyClose} justify={'flex-end'}>
-                <ActionIcon
+              <Flexbox horizontal align={'center'} className={styles.replyClose} justify={'center'}>
+                <Button
                   icon={ChevronDownIcon}
                   size={'small'}
-                  title={t('fleet.collapseReply')}
+                  type={'text'}
                   onClick={() => setReplyOpen(false)}
-                />
+                >
+                  {t('fleet.collapseReply')}
+                </Button>
               </Flexbox>
               <ChatInput skipScrollMarginWithList isConfigLoading={false} />
             </Flexbox>
