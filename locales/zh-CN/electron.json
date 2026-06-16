@@ -9,7 +9,7 @@
   "fleet.noRunningTasks": "暂无运行中的任务",
   "fleet.openInChat": "在对话中打开",
   "fleet.reply": "回复",
-  "fleet.runningTasks": "运行中的任务",
+  "fleet.runningBoard": "运行看板",
   "fleet.status.idle": "空闲",
   "fleet.status.paused": "已暂停",
   "fleet.status.running": "运行中",

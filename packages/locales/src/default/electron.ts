@@ -40,7 +40,7 @@ export default {
   'fleet.emptyDesc': 'Pick a running task on the left, or use + to add a column.',
   'fleet.noRunningTasks': 'No running tasks',
   'fleet.openInChat': 'Open in chat',
-  'fleet.runningTasks': 'Running Tasks',
+  'fleet.runningBoard': 'Running Board',
   'fleet.status.idle': 'Idle',
   'fleet.status.paused': 'Paused',
   'fleet.status.running': 'Running',

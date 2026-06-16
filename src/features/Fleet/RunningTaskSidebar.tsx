@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
+import { Avatar, Button, Flexbox, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { PlusIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
@@ -18,10 +18,6 @@ import { useFleetStore } from './store';
 import { type FleetColumn } from './types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  count: css`
-    font-size: 13px;
-    color: ${cssVar.colorTextTertiary};
-  `,
   empty: css`
     padding-block: 24px;
     padding-inline: 16px;
@@ -120,17 +116,11 @@ const RunningTaskSidebar = memo<RunningTaskSidebarProps>(({ columns, statusByCol
   const header = (
     <SideBarHeaderLayout
       backTo={'/'}
-      left={t('fleet.runningTasks')}
       showTogglePanelButton={false}
-      right={
-        <Flexbox horizontal align={'center'} gap={6}>
-          <ActionIcon
-            icon={PlusIcon}
-            size={'small'}
-            title={t('fleet.createTask')}
-            onClick={handleCreateTask}
-          />
-          <span className={styles.count}>{columns.length}</span>
+      left={
+        <Flexbox horizontal align={'center'} gap={8}>
+          {t('fleet.runningBoard')}
+          {columns.length > 0 && <Tag style={{ margin: 0 }}>{columns.length}</Tag>}
         </Flexbox>
       }
     />
@@ -152,9 +142,17 @@ const RunningTaskSidebar = memo<RunningTaskSidebarProps>(({ columns, statusByCol
       </Flexbox>
     );
 
+  const footer = (
+    <Flexbox paddingBlock={'4px 8px'} paddingInline={8}>
+      <Button block icon={PlusIcon} onClick={handleCreateTask}>
+        {t('fleet.createTask')}
+      </Button>
+    </Flexbox>
+  );
+
   return (
     <NavPanelPortal navKey={'fleet'}>
-      <SideBarLayout body={body} header={header} />
+      <SideBarLayout body={body} footer={footer} header={header} />
     </NavPanelPortal>
   );
 });
