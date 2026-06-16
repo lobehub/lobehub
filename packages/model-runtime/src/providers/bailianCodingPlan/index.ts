@@ -9,7 +9,7 @@ export const LobeBailianCodingPlanAI = createOpenAICompatibleRuntime({
   baseURL: 'https://coding.dashscope.aliyuncs.com/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      const { model, presence_penalty, temperature, thinking, top_p, ...rest } = payload;
+      const { model, presence_penalty, temperature, thinking, top_p, messages, ...rest } = payload;
 
       const resolvedParams = resolveParameters(
         { presence_penalty, temperature, top_p },
@@ -21,15 +21,30 @@ export const LobeBailianCodingPlanAI = createOpenAICompatibleRuntime({
         },
       );
 
+      // Transform reasoning to reasoning_content for preserve_thinking to work
+      // When preserve_thinking is enabled, API expects reasoning_content in assistant messages
+      const processedMessages = messages?.map((message: any) => {
+        if (message.role === 'assistant' && message.reasoning?.content) {
+          const { reasoning, ...restMessage } = message;
+          return {
+            ...restMessage,
+            reasoning_content: reasoning.content,
+          };
+        }
+        return message;
+      });
+
       return {
         ...rest,
         ...(thinking?.type === 'enabled' &&
           thinking?.budget_tokens !== 0 && {
             enable_thinking: true,
+            preserve_thinking: true,
             thinking_budget: thinking?.budget_tokens || undefined,
           }),
         frequency_penalty: undefined,
         model,
+        messages: processedMessages,
         presence_penalty: resolvedParams.presence_penalty,
         stream: true,
         temperature: resolvedParams.temperature,
