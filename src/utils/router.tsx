@@ -17,6 +17,7 @@ import ErrorCapture from '@/components/Error';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { useIsDark } from '@/hooks/useIsDark';
 import SPAGlobalProvider from '@/layout/SPAGlobalProvider';
+import AppLayer from '@/spa/AppLayer';
 import { useGlobalStore } from '@/store/global';
 import { createNavigationRef } from '@/store/global/initialState';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
@@ -143,7 +144,9 @@ const RouterRoot = memo(() => (
   <SPAGlobalProvider>
     <BusinessGlobalProvider>
       <NavigatorRegistrar />
-      <Outlet />
+      <AppLayer>
+        <Outlet />
+      </AppLayer>
     </BusinessGlobalProvider>
   </SPAGlobalProvider>
 ));

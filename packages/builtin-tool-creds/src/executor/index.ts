@@ -3,12 +3,7 @@ import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
 import debug from 'debug';
 
-import { lambdaClient, toolsClient } from '@/libs/trpc/client';
-import { getToolStoreState, useToolStore } from '@/store/tool';
-import { composioStoreSelectors } from '@/store/tool/selectors';
-import { ComposioServerStatus } from '@/store/tool/slices/composioStore/types';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
+import type { toolsClient as toolsClientType } from '@/libs/trpc/client';
 
 import { CredsIdentifier } from '../manifest';
 import type {
@@ -47,6 +42,16 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
           success: false,
         };
       }
+
+      const [
+        { getToolStoreState, useToolStore },
+        { composioStoreSelectors },
+        { ComposioServerStatus },
+      ] = await Promise.all([
+        import('@/store/tool'),
+        import('@/store/tool/selectors'),
+        import('@/store/tool/slices/composioStore/types'),
+      ]);
 
       // Check if already connected via store
       const toolState = getToolStoreState();
@@ -155,6 +160,8 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
         };
       }
 
+      const { toolsClient } = await import('@/libs/trpc/client');
+
       // Check if already connected
       const statusResponse = await toolsClient.market.connectGetStatus.query({ provider });
       if (statusResponse.connected) {
@@ -180,7 +187,7 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
       });
 
       // Open OAuth popup and wait for result
-      const result = await this.openOAuthPopupAndWait(response.authorizeUrl, provider);
+      const result = await this.openOAuthPopupAndWait(response.authorizeUrl, provider, toolsClient);
 
       if (result.success) {
         return {
@@ -221,6 +228,7 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
   private openOAuthPopupAndWait = (
     authorizeUrl: string,
     provider: string,
+    toolsClient: typeof toolsClientType,
   ): Promise<{ cancelled?: boolean; success: boolean }> => {
     return new Promise((resolve) => {
       // Open popup window
@@ -309,6 +317,12 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
           success: false,
         };
       }
+
+      const [{ lambdaClient }, { useUserStore }, { userProfileSelectors }] = await Promise.all([
+        import('@/libs/trpc/client'),
+        import('@/store/user'),
+        import('@/store/user/slices/auth/selectors'),
+      ]);
 
       // Get userId from user store (like cloud-sandbox does)
       const userId = userProfileSelectors.userId(useUserStore.getState());
@@ -421,6 +435,8 @@ class CredsExecutor extends BaseExecutor<typeof CredsApiName> {
       }
 
       log('[CredsExecutor] saveCreds - key:', params.key, 'name:', name);
+
+      const { lambdaClient } = await import('@/libs/trpc/client');
 
       await lambdaClient.market.creds.createKV.mutate({
         description: params.description,

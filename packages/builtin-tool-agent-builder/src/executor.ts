@@ -4,14 +4,9 @@
  * Handles all agent builder tool calls for configuring and customizing agents.
  * Delegates to AgentManagerRuntime for actual implementation.
  */
-import { AgentManagerRuntime } from '@lobechat/agent-manager-runtime';
+import type { AgentManagerRuntime } from '@lobechat/agent-manager-runtime';
 import type { BuiltinToolContext, BuiltinToolResult, ToolAfterCallContext } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
-
-import { getAgentStoreState } from '@/store/agent';
-import { getChatStoreState } from '@/store/chat';
-import { agentService } from '@/services/agent';
-import { discoverService } from '@/services/discover';
 
 import type {
   GetAvailableModelsParams,
@@ -29,10 +24,27 @@ const WRITE_APIS = new Set<string>([
   AgentBuilderApiName.installPlugin,
 ]);
 
-const runtime = new AgentManagerRuntime({
-  agentService,
-  discoverService,
-});
+let runtime: AgentManagerRuntime | undefined;
+let runtimePromise: Promise<AgentManagerRuntime> | undefined;
+
+const getRuntime = async () => {
+  if (runtime) return runtime;
+
+  runtimePromise ??= Promise.all([
+    import('@lobechat/agent-manager-runtime'),
+    import('@/services/agent'),
+    import('@/services/discover'),
+  ]).then(([{ AgentManagerRuntime }, { agentService }, { discoverService }]) => {
+    runtime = new AgentManagerRuntime({
+      agentService,
+      discoverService,
+    });
+
+    return runtime;
+  });
+
+  return runtimePromise;
+};
 
 class AgentBuilderExecutor extends BaseExecutor<typeof AgentBuilderApiName> {
   readonly identifier = AgentBuilderIdentifier;
@@ -41,11 +53,11 @@ class AgentBuilderExecutor extends BaseExecutor<typeof AgentBuilderApiName> {
   // ==================== Read Operations ====================
 
   getAvailableModels = async (params: GetAvailableModelsParams): Promise<BuiltinToolResult> => {
-    return runtime.getAvailableModels(params);
+    return (await getRuntime()).getAvailableModels(params);
   };
 
   searchMarketTools = async (params: SearchMarketToolsParams): Promise<BuiltinToolResult> => {
-    return runtime.searchMarketTools(params);
+    return (await getRuntime()).searchMarketTools(params);
   };
 
   // ==================== Write Operations ====================
@@ -64,7 +76,7 @@ class AgentBuilderExecutor extends BaseExecutor<typeof AgentBuilderApiName> {
       };
     }
 
-    return runtime.updateAgentConfig(agentId, params);
+    return (await getRuntime()).updateAgentConfig(agentId, params);
   };
 
   updatePrompt = async (
@@ -81,7 +93,7 @@ class AgentBuilderExecutor extends BaseExecutor<typeof AgentBuilderApiName> {
       };
     }
 
-    return runtime.updatePrompt(agentId, {
+    return (await getRuntime()).updatePrompt(agentId, {
       streaming: true,
       ...params,
     });
@@ -101,7 +113,7 @@ class AgentBuilderExecutor extends BaseExecutor<typeof AgentBuilderApiName> {
       };
     }
 
-    return runtime.installPlugin(agentId, params);
+    return (await getRuntime()).installPlugin(agentId, params);
   };
 
   // ==================== Hooks ====================
@@ -113,6 +125,11 @@ class AgentBuilderExecutor extends BaseExecutor<typeof AgentBuilderApiName> {
     // being edited. After a successful write the server has already updated the
     // DB, so we re-fetch the config here to update the Zustand store and
     // re-render the left-sidebar without requiring a page reload.
+    const [{ getChatStoreState }, { getAgentStoreState }] = await Promise.all([
+      import('@/store/chat'),
+      import('@/store/agent'),
+    ]);
+
     const editingAgentId = getChatStoreState().activeAgentId;
     if (!editingAgentId) return;
 

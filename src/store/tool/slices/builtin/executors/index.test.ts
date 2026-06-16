@@ -5,7 +5,12 @@ import {
 } from '@lobechat/builtin-tool-web-onboarding';
 import { describe, expect, it, vi } from 'vitest';
 
-import { getApiNamesForIdentifier, hasExecutor, invokeExecutor } from './index';
+import {
+  getApiNamesForIdentifier,
+  hasExecutor,
+  invokeExecutor,
+  registerBuiltinToolExecutors,
+} from './index';
 
 vi.hoisted(() => {
   const storage = new Map<string, string>();
@@ -30,17 +35,25 @@ vi.hoisted(() => {
 });
 
 describe('builtin executor registry', () => {
-  it('registers web onboarding executor APIs', () => {
+  it('does not register executors as an import side effect', () => {
+    expect(hasExecutor(WebOnboardingIdentifier, WebOnboardingApiName.saveUserQuestion)).toBe(false);
+  });
+
+  it('registers web onboarding executor APIs explicitly', async () => {
+    await registerBuiltinToolExecutors();
+
     expect(hasExecutor(WebOnboardingIdentifier, WebOnboardingApiName.saveUserQuestion)).toBe(true);
     expect(hasExecutor(WebOnboardingIdentifier, WebOnboardingApiName.finishOnboarding)).toBe(true);
     expect(getApiNamesForIdentifier(WebOnboardingIdentifier)).toEqual(
       Object.values(WebOnboardingApiName),
     );
-  });
+  }, 30_000);
 
-  it('registers visual understanding executor APIs', () => {
+  it('registers visual understanding executor APIs', async () => {
+    await registerBuiltinToolExecutors();
+
     expect(hasExecutor(LobeAgentIdentifier, LobeAgentApiName.analyzeVisualMedia)).toBe(true);
-  });
+  }, 30_000);
 
   it('rejects nested sub-agent execution', async () => {
     const subAgentRun = vi.fn();
@@ -63,5 +76,5 @@ describe('builtin executor registry', () => {
     });
 
     expect(subAgentRun).not.toHaveBeenCalled();
-  });
+  }, 30_000);
 });

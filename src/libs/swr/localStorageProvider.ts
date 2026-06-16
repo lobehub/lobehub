@@ -62,11 +62,16 @@ export interface CacheProviderOptions {
  */
 export type ScopedSWRProvider = (() => Map<string, unknown>) & {
   /**
+   * Ensure the provider's Map exists and hydrate the current scope's IndexedDB
+   * tier. This is used by the SPA bootstrap while React mounts the root tree.
+   */
+  hydrateScope?: () => Promise<void>;
+  /**
    * Flush pending writes, then re-hydrate the in-memory cache from the *current*
    * scope's namespaces (localStorage synchronously, IndexedDB asynchronously).
    * No-op until SWR has created the provider's Map.
    */
-  reloadScope?: () => void;
+  reloadScope?: () => Promise<void>;
 };
 
 const isLocalStorageAvailable = (): boolean => {
@@ -113,12 +118,18 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
   } = options;
 
   // SSR / no storage → plain memory cache, no persistence. Still signal
-  // hydration so the boot gate never blocks.
+  // hydration so boot initialization never blocks.
   if (!isLocalStorageAvailable()) {
-    return () => {
+    const memoryProvider = (() => {
       onScopeHydrated?.(getScope());
       return new Map();
+    }) as ScopedSWRProvider;
+    memoryProvider.hydrateScope = async () => {
+      onScopeHydrated?.(getScope());
     };
+    memoryProvider.reloadScope = memoryProvider.hydrateScope;
+
+    return memoryProvider;
   }
 
   /** Route a key to its persistence tier (idb wins over local). */
@@ -129,6 +140,9 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
   };
 
   let cacheMapInstance: TieredCacheMap | null = null;
+  let hydratedScope: string | null = null;
+  let hydrationEpoch = 0;
+  let pendingHydration: { promise: Promise<void>; scope: string } | null = null;
 
   // --- localStorage tier (synchronous snapshot) ----------------------------
   let localTimer: ReturnType<typeof setTimeout> | null = null;
@@ -212,8 +226,7 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
     idbTimer = setTimeout(flushIdb, debounceMs);
   };
 
-  const loadIdb = async () => {
-    const scope = getScope();
+  const loadIdb = async (scope: string, epoch: number) => {
     try {
       const entries = await localDataCache.entriesByScope(scope);
       const now = Date.now();
@@ -221,13 +234,17 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
         (e) => (e.version === undefined || e.version === version) && now - e.updatedAt <= ttl,
       );
       // Map may have changed scope while we awaited; only apply if still current.
-      if (cacheMapInstance && getScope() === scope) {
+      if (cacheMapInstance && getScope() === scope && hydrationEpoch === epoch) {
         cacheMapInstance.hydrate(valid.map((e) => [e.key, e.data]));
+        hydratedScope = scope;
       }
     } catch (error) {
       onError(error as Error);
     } finally {
       onScopeHydrated?.(scope);
+      if (pendingHydration?.scope === scope && hydrationEpoch === epoch) {
+        pendingHydration = null;
+      }
     }
   };
 
@@ -325,16 +342,45 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
     }
   });
 
-  const provider: ScopedSWRProvider = () => {
+  const ensureMap = (): TieredCacheMap => {
+    if (cacheMapInstance) return cacheMapInstance;
+
     const map = new TieredCacheMap();
     cacheMapInstance = map;
     map.hydrate([...loadLocal().entries()]); // synchronous first paint
-    void loadIdb(); // asynchronous local-first hydration
     return map;
   };
 
-  provider.reloadScope = () => {
-    if (!cacheMapInstance) return;
+  const hydrateScope = async (): Promise<void> => {
+    const scope = getScope();
+    ensureMap();
+    if (hydratedScope === scope) return;
+    if (pendingHydration?.scope === scope) return pendingHydration.promise;
+
+    const epoch = ++hydrationEpoch;
+    const promise = loadIdb(scope, epoch);
+    pendingHydration = { promise, scope };
+    return promise;
+  };
+
+  const provider: ScopedSWRProvider = () => {
+    const map = ensureMap();
+    void hydrateScope();
+    return map;
+  };
+
+  provider.hydrateScope = hydrateScope;
+
+  provider.reloadScope = async () => {
+    if (!cacheMapInstance) {
+      await hydrateScope();
+      return;
+    }
+
+    hydrationEpoch += 1;
+    hydratedScope = null;
+    pendingHydration = null;
+
     // Drop pending writes scheduled for the previous scope.
     if (localTimer) {
       clearTimeout(localTimer);
@@ -349,7 +395,7 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
 
     cacheMapInstance.dropPersisted();
     cacheMapInstance.hydrate([...loadLocal().entries()]);
-    void loadIdb();
+    await hydrateScope();
   };
 
   return provider;
@@ -403,8 +449,7 @@ export const CACHE_TIERS = {
  * @param getScope resolver for the current identity scope. Evaluated lazily so
  *   persistence follows the active user/workspace; call `provider.reloadScope()`
  *   after the scope changes to re-hydrate in place.
- * @param onScopeHydrated notified after a scope's IndexedDB tier finishes
- *   loading (used by the boot hydration gate).
+ * @param onScopeHydrated notified after a scope's IndexedDB tier finishes loading.
  */
 export const swrCacheProvider = (
   getScope: () => string,

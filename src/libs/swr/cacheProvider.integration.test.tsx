@@ -62,12 +62,10 @@ describe('local-first cache chain (SWR + tiered provider + IndexedDB)', () => {
     r1.unmount();
 
     // --- session 2 ("reload"): fresh provider hydrates IndexedDB ------------
-    // Model the boot gate: create the cache and await IndexedDB hydration
-    // *before* the consuming component mounts, then hand SWR that hydrated map.
-    const { hydrated: hydrated2, provider: p2 } = makeProvider();
-    const hydratedMap = p2();
-    await hydrated2;
-    const stableProvider = (() => hydratedMap) as typeof p2;
+    // Model SPA bootstrap: hydrate the app-level provider before the consuming
+    // React tree mounts. SWR then receives the already-hydrated provider Map.
+    const { provider: p2 } = makeProvider();
+    await p2.hydrateScope?.();
 
     // a slow network so the local snapshot must win the first paint
     let resolveSlow: (v: unknown) => void;
@@ -75,7 +73,7 @@ describe('local-first cache chain (SWR + tiered provider + IndexedDB)', () => {
       resolveSlow = r;
     });
     const fetcher2 = () => slow;
-    const r2 = renderHook(() => useSWR(key, fetcher2), { wrapper: wrapper(stableProvider) });
+    const r2 = renderHook(() => useSWR(key, fetcher2), { wrapper: wrapper(p2) });
 
     // local-first: data is available synchronously from the hydrated cache,
     // before the slow fetch resolves

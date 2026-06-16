@@ -7,7 +7,10 @@ import BootErrorBoundary from '@/components/BootErrorBoundary';
 import NextThemeProvider from '@/layout/GlobalProvider/NextThemeProvider';
 import { createAppRouter } from '@/utils/router';
 
+import { startAppInitialization } from './initialize/bootstrap';
 import { desktopRoutes } from './router/desktopRouter.config';
+
+startAppInitialization();
 
 const debugProxyBase = '/_dangerous_local_dev_proxy';
 const basename =
