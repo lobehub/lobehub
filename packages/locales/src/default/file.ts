@@ -111,6 +111,8 @@ export default {
   'pageEditor.editMode.checking': 'Checking edit availability…',
   'pageEditor.editMode.lockedByOther': '{{name}} is editing this document',
   'pageEditor.editMode.lockedBySomeone': 'Someone else is editing this document',
+  'pageEditor.editMode.lockedDescription':
+    'The page is read-only while they edit. Your changes won’t be saved until they’re done.',
   'pageEditor.editorPlaceholder': 'Press "/" for AI and commands.',
   'pageEditor.empty.createNewDocument': 'Create New Page',
   'pageEditor.empty.importNotion': 'Import from Notion',

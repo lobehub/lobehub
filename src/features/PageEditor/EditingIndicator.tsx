@@ -3,7 +3,7 @@
 import { Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Loader2Icon, PencilIcon } from 'lucide-react';
-import { memo } from 'react';
+import { type CSSProperties, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';
@@ -11,18 +11,25 @@ import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 
 import { usePageEditorStore } from './store';
+import { usePageLockedByOther } from './usePageLockedByOther';
+
+const labelStyle: CSSProperties = { color: 'inherit', fontSize: 12, maxWidth: 160 };
 
 /**
- * Edit-lock status line at the top of the page body: a "checking…" hint while
- * the lock resolves (page read-only meanwhile), then "someone else is editing"
- * if another member holds it. Renders nothing once the page is confirmed free —
- * a personal page then looks exactly the same (no edit-mode controls).
+ * Compact edit-lock status for the page Header (top-right): a "checking…" hint
+ * while the lock resolves, then "someone else is editing" once another member
+ * holds it. Stays anchored in the header so the status is always visible as the
+ * user scrolls the body. The body Alert ({@link LockedAlert}) carries the
+ * prominent explanation; this is the persistent at-a-glance badge.
+ *
+ * Renders nothing once the page is confirmed free — a personal page then looks
+ * exactly the same (no edit-mode controls).
  */
 const EditingIndicator = memo(() => {
   const { t } = useTranslation('file');
   const documentId = usePageEditorStore((s) => s.documentId);
   const isWorkspacePage = usePageEditorStore((s) => s.isWorkspacePage);
-  const isLockedByOther = usePageEditorStore((s) => s.isLockedByOther);
+  const isLockedByOther = usePageLockedByOther();
   const isLockPending = usePageEditorStore((s) => s.isLockPending);
   const lockHolderId = usePageEditorStore((s) => s.lockHolderId);
   // Our own save was just rejected by the lock — treat as locked even if the
@@ -42,7 +49,7 @@ const EditingIndicator = memo(() => {
     return (
       <Flexbox horizontal align={'center'} gap={4} style={{ color: cssVar.colorTextTertiary }}>
         <Icon spin icon={Loader2Icon} size={14} />
-        <Text ellipsis style={{ color: 'inherit', fontSize: 12, maxWidth: 240 }}>
+        <Text ellipsis style={labelStyle}>
           {t('pageEditor.editMode.checking')}
         </Text>
       </Flexbox>
@@ -57,7 +64,7 @@ const EditingIndicator = memo(() => {
     <Tooltip title={label}>
       <Flexbox horizontal align={'center'} gap={4} style={{ color: cssVar.colorTextTertiary }}>
         <Icon icon={PencilIcon} size={14} />
-        <Text ellipsis style={{ color: 'inherit', fontSize: 12, maxWidth: 240 }}>
+        <Text ellipsis style={labelStyle}>
           {label}
         </Text>
       </Flexbox>

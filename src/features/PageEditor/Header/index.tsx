@@ -11,9 +11,9 @@ import { AutoSaveHint } from '@/features/EditorCanvas';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 
+import EditingIndicator from '../EditingIndicator';
 import { usePageAgentPanelControl } from '../RightPanel/OverrideContext';
 import { usePageEditorStore } from '../store';
-import { usePageEditable } from '../usePageEditable';
 import Breadcrumb from './Breadcrumb';
 import { useMenu } from './useMenu';
 
@@ -28,8 +28,6 @@ const Header = memo(() => {
   ]);
   const { expand: showPageAgentPanel, toggle: togglePageAgentPanel } = usePageAgentPanelControl();
   const { menuItems } = useMenu();
-  // Page Agent edits the page — only offer it in edit mode.
-  const editable = usePageEditable();
 
   return (
     <NavHeader
@@ -54,6 +52,7 @@ const Header = memo(() => {
       }
       right={
         <>
+          <EditingIndicator />
           {documentId && <ShareButton documentId={documentId} />}
           {/* Three-dot menu */}
           <DropdownMenu
@@ -68,14 +67,14 @@ const Header = memo(() => {
           >
             <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
           </DropdownMenu>
-          {editable && (
-            <ToggleRightPanelButton
-              hideWhenExpanded
-              expand={showPageAgentPanel}
-              showActive={false}
-              onToggle={() => togglePageAgentPanel()}
-            />
-          )}
+          {/* Always available — the Page Agent panel is a read/ask surface too,
+              so it must not be gated on edit permission or the edit lock. */}
+          <ToggleRightPanelButton
+            hideWhenExpanded
+            expand={showPageAgentPanel}
+            showActive={false}
+            onToggle={() => togglePageAgentPanel()}
+          />
         </>
       }
     />

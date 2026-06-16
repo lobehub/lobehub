@@ -28,7 +28,12 @@ export interface Action {
   setEmoji: (emoji: string | undefined) => void;
   /** True while the lock state is still being resolved (editor read-only meanwhile). */
   setLockPending: (pending: boolean) => void;
-  setLockState: (lock: { holderId: string | null; lockedByOther: boolean }) => void;
+  /**
+   * Record who holds the edit lock. `holderId` is the single source of truth;
+   * "locked by other" is derived against the current user via
+   * {@link usePageLockedByOther}, never stored separately.
+   */
+  setLockState: (holderId: string | null) => void;
   setRightPanelMode: (mode: RightPanelMode) => void;
   setTitle: (title: string) => void;
   triggerDebouncedMetaSave: () => void;
@@ -187,10 +192,9 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         if (get().isLockPending !== pending) set({ isLockPending: pending });
       },
 
-      setLockState: ({ holderId, lockedByOther }) => {
-        const { isLockedByOther, lockHolderId } = get();
-        if (isLockedByOther === lockedByOther && lockHolderId === holderId) return;
-        set({ isLockedByOther: lockedByOther, lockHolderId: holderId });
+      setLockState: (holderId) => {
+        if (get().lockHolderId === holderId) return;
+        set({ lockHolderId: holderId });
       },
 
       setRightPanelMode: (rightPanelMode) => {

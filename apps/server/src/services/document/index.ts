@@ -277,16 +277,30 @@ export class DocumentService {
    * this never blocks a write.
    */
   async runWithDocumentLock<T>(id: string, fn: () => Promise<T>): Promise<T> {
-    if (!this.workspaceId) return fn();
+    if (!this.workspaceId) {
+      // TEMP DIAGNOSTIC (LOBE-10470): distinguishes "no-op because workspaceId is
+      // missing at runtime" from "lock actually evaluated". Remove once verified.
+      log('runWithDocumentLock skip: no workspaceId (id=%s userId=%s)', id, this.userId);
+      return fn();
+    }
 
     // Did this user already hold the lease before we acquired it? An open editor
     // refreshes the lock via its heartbeat, so the same user can already own it.
     // In that case we must NOT release afterwards, or we'd flip their live editor
     // to read-only mid-session — only release a lease we freshly claimed here.
-    const heldBeforeByMe =
-      (await this.editLockService.getActiveHolder('document', id)) === this.userId;
+    const holderBefore = await this.editLockService.getActiveHolder('document', id);
+    const heldBeforeByMe = holderBefore === this.userId;
 
     const lock = await this.acquireDocumentLock(id);
+    // TEMP DIAGNOSTIC (LOBE-10470): one reproduction reveals workspaceId/holder/acquire.
+    log(
+      'runWithDocumentLock: id=%s userId=%s ws=%s holderBefore=%s acquired=%o',
+      id,
+      this.userId,
+      this.workspaceId,
+      holderBefore,
+      lock,
+    );
     if (lock.lockedByOther) {
       throw new TRPCError({
         cause: { data: { code: 'DocumentLocked' } },

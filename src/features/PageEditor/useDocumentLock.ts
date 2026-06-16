@@ -11,6 +11,7 @@ import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 
 import { usePageEditorStore } from './store';
+import { usePageLockedByOther } from './usePageLockedByOther';
 
 // Stable lock RPC binding for the document resource.
 const documentLockClient: EditLockClient = {
@@ -34,7 +35,7 @@ export const useDocumentLock = () => {
   const { allowed: canEdit } = usePermission('edit_own_content');
   const documentId = usePageEditorStore((s) => s.documentId);
   const isWorkspacePage = usePageEditorStore((s) => s.isWorkspacePage);
-  const isLockedByOther = usePageEditorStore((s) => s.isLockedByOther);
+  const isLockedByOther = usePageLockedByOther();
   const setLockState = usePageEditorStore((s) => s.setLockState);
   const setLockPending = usePageEditorStore((s) => s.setLockPending);
   const isDirty = useDocumentStore((s) =>
@@ -59,8 +60,8 @@ export const useDocumentLock = () => {
   // Bridge lock state into the page store. A peek failure / non-workspace page
   // resolves to "free" (pending false), so the editor is never stranded.
   useEffect(() => {
-    setLockState({ holderId: lock.holderId, lockedByOther: lock.lockedByOther });
-  }, [lock.holderId, lock.lockedByOther, setLockState]);
+    setLockState(lock.holderId);
+  }, [lock.holderId, setLockState]);
 
   useEffect(() => {
     setLockPending(lock.pending);

@@ -5,6 +5,7 @@ import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 
 import { usePageEditorStore } from './store';
+import { usePageLockedByOther } from './usePageLockedByOther';
 
 /**
  * Whether the current user can type into the page right now.
@@ -18,7 +19,7 @@ export const usePageEditable = (): boolean => {
   const { allowed: hasEditPermission } = usePermission('edit_own_content');
   const documentId = usePageEditorStore((s) => s.documentId);
   const isWorkspacePage = usePageEditorStore((s) => s.isWorkspacePage);
-  const isLockedByOther = usePageEditorStore((s) => s.isLockedByOther);
+  const isLockedByOther = usePageLockedByOther();
   // Read-only until the lock resolves, so the user can't start typing on a page
   // that turns out to be locked and get bounced mid-edit. Only workspace pages
   // lock — personal pages are always immediately editable (no lock, no pending).

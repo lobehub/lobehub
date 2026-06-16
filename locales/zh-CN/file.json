@@ -97,6 +97,7 @@
   "pageEditor.editMode.checking": "正在检查可编辑状态…",
   "pageEditor.editMode.lockedByOther": "{{name}} 正在编辑此文档",
   "pageEditor.editMode.lockedBySomeone": "其他人正在编辑此文档",
+  "pageEditor.editMode.lockedDescription": "对方编辑期间本页为只读，你的改动在对方完成前不会被保存。",
   "pageEditor.editedAt": "最后编辑于 {{time}}",
   "pageEditor.editedBy": "最后编辑者 {{name}}",
   "pageEditor.editorPlaceholder": "按 \"/\" 使用 AI 和命令",

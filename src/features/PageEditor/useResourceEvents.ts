@@ -76,11 +76,9 @@ export const useResourceEvents = () => {
               // version when the local editor isn't dirty.
               void mutate(documentSWRKeys.editor(documentId));
             } else if (parsed.type === 'lock.changed') {
-              const holderId = parsed.data?.holderId ?? null;
-              setLockState({
-                holderId,
-                lockedByOther: Boolean(holderId) && holderId !== myUserId,
-              });
+              // Store the holder verbatim; "locked by other" is derived against
+              // the current user at read time (usePageLockedByOther).
+              setLockState(parsed.data?.holderId ?? null);
             }
           },
           onopen: async (res) => {
