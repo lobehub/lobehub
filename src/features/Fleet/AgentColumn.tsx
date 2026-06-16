@@ -271,8 +271,8 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
         >
           <ChatList disableActionsBar />
           <OpStatusTray />
-          {replyOpen ? (
-            <ChatInput skipScrollMarginWithList isConfigLoading={messages === undefined} />
+          {messages === undefined ? null : replyOpen ? (
+            <ChatInput skipScrollMarginWithList isConfigLoading={false} />
           ) : (
             <Flexbox className={styles.replyBar}>
               <Button

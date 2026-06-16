@@ -6,11 +6,12 @@ import { memo, useCallback, useMemo } from 'react';
 import { useFetchAgentDocuments } from '@/hooks/useFetchAgentDocuments';
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
 import { useFetchNotebookDocuments } from '@/hooks/useFetchNotebookDocuments';
+import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
-import { settingsSelectors } from '@/store/user/selectors';
+import { authSelectors, settingsSelectors } from '@/store/user/selectors';
 
 import WideScreenContainer from '../../WideScreenContainer';
 import SkeletonList from '../components/SkeletonList';
@@ -109,6 +110,18 @@ const ChatList = memo<ChatListProps>(
       pollingSignal: latestMessageId,
       topicId: canShowAgentSignalReceipts ? context.topicId : undefined,
     });
+
+    // Ensure this conversation's agent config (meta) is loaded into the agent
+    // store, so message author titles resolve via useAgentMeta instead of
+    // falling back to "Untitled Agent". Route-level layouts already init the
+    // active agent, but secondary mounts never do — each Fleet column shows a
+    // different agent, and the share page mounts an arbitrary author's agent;
+    // without this they render "未命名助理".
+    // Idempotent: SWR dedupes against any route-level init by the same key,
+    // and is gated on isLogin (no fetch for anonymous share viewers).
+    const isLogin = useUserStore(authSelectors.isLogin);
+    const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
+    useFetchAgentConfig(isLogin, context.agentId);
 
     // Fetch conversation context data when a conversation is visible (skip for share pages)
     useFetchAgentDocuments(isSharePage ? undefined : activeAgentId);
