@@ -140,6 +140,10 @@ export default {
   'credits.topUp.unitPrice': 'Unit Price',
   'credits.topUp.unitPriceFormat': '${{price}} / 1M {{creditLabel}}',
   'credits.topUp.unitPriceSuffix': '/ 1M {{creditLabel}}',
+  'credits.topUp.bestValue.cta': 'View Ultimate annual',
+  'credits.topUp.bestValue.savings': 'Save ${{savings}} on this purchase',
+  'credits.topUp.bestValue.title':
+    '{{plan}} annual unlocks the lowest top-up rate: ${{price}} / 1M {{creditLabel}}',
   'credits.topUp.upgradePrefix': 'Upgrade to',
   'credits.topUp.upgradeSuffix': 'to save ${{savings}}',
   'credits.topUp.validityInfo': '{{months}} months validity',
@@ -478,21 +482,19 @@ export default {
   'referral.rules.expiry':
     'Credit validity: Available referral credits will be cleared after 100 days of user inactivity',
   'referral.rules.missedCode':
-    'Missed invite code: You can <0>backfill</0> within 7 days of registration. After backfilling, you still need to perform a valid action and complete a payment to receive rewards',
+    'Missed invite code: You can <0>backfill</0> within 7 days of registration. If you have already made a real payment and pass verification, rewards are processed after binding; otherwise they are processed after your first real payment',
   'referral.rules.priority':
     'Credit consumption priority: Free credits → Subscription credits → Referral credits → Top-up credits',
   'referral.rules.registration':
     'Registration method: Invited users register via referral link or enter referral code on registration page',
   'referral.rules.reward': 'Reward: Referrer and invitee each receive {{reward}}M credits',
   'referral.rules.rewardDelay':
-    'Reward processing: Credits will be distributed within 1 hour after the invitee completes a payment and passes verification',
+    'Reward processing: Credits are granted after the invitee completes a real payment and passes verification',
   'referral.rules.title': 'Program Rules',
   'referral.rules.validInvitation':
-    'Valid invitation: Invitee registers with your referral code, performs one valid action, and completes a payment (subscription or credit top-up)',
+    'Valid invitation: Invitee registers with your referral code and completes a real payment (subscription or personal credit top-up)',
   'referral.rules.antiAbuse':
     'If fraudulent activity is detected (e.g., mass registration of disposable email accounts), the associated accounts will be permanently banned',
-  'referral.rules.validOperation':
-    'Valid action criteria: Send one message on Chat page, or generate one image on image page',
   'referral.stats.availableBalance': 'Available Balance',
   'referral.stats.description': 'View your referral statistics',
   'referral.stats.title': 'Referral Overview',

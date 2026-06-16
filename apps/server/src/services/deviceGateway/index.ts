@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { type DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import {
   type DeviceMessageApiResult,
@@ -26,7 +28,11 @@ import type {
   DeviceGitWorktreeListItem,
   DeviceListProjectSkillsResult,
   DeviceLocalFilePreviewResult,
+  DeviceMoveProjectFileItem,
+  DeviceMoveProjectFileResultItem,
   DeviceProjectFileIndexResult,
+  DeviceRenameProjectFileResult,
+  DeviceWriteProjectFileResult,
   ProjectSkillMeta,
   WorkspaceInitResult,
 } from '@lobechat/types';
@@ -35,6 +41,42 @@ import debug from 'debug';
 import { gatewayEnv } from '@/envs/gateway';
 
 const log = debug('lobe-server:device-gateway');
+
+/**
+ * Is `target` the same as, or nested inside, `root`?
+ *
+ * The device's working directory may be a POSIX path (`/Users/…`) or a Windows
+ * path (`C:\…`) while this check runs on the cloud server (POSIX). We pick the
+ * path flavour from the root's shape so a Windows device path is still resolved
+ * with Windows semantics rather than being mangled by `path.posix`.
+ */
+const isPathWithinRoot = (root: string, target: string): boolean => {
+  const p = /^[A-Z]:[/\\]/i.test(root) ? path.win32 : path.posix;
+  if (!p.isAbsolute(root) || !p.isAbsolute(target)) return false;
+  const relative = p.relative(p.resolve(root), p.resolve(target));
+  return relative === '' || (!relative.startsWith('..') && !p.isAbsolute(relative));
+};
+
+/**
+ * Guard the web/remote file mutations (move / rename / write) against escaping
+ * the project root. These routes accept absolute paths straight from an
+ * untrusted browser session, so before forwarding them to a device we confirm
+ * every path stays inside the workspace the UI is operating in — otherwise a
+ * caller could bypass the Files tree and mutate arbitrary locations on the
+ * device. Mirrors the read path's `workspaceRoot` containment check.
+ */
+const assertPathsWithinWorkspace = (
+  workspaceRoot: string,
+  candidates: Array<string | undefined>,
+): void => {
+  if (!workspaceRoot) throw new Error('A workspace root is required for file mutations');
+
+  for (const candidate of candidates) {
+    if (!candidate || !isPathWithinRoot(workspaceRoot, candidate)) {
+      throw new Error(`Path is outside the approved workspace: ${candidate ?? '(empty)'}`);
+    }
+  }
+};
 
 export type { DeviceAttachment, DeviceStatusResult, DeviceSystemInfo };
 
@@ -681,6 +723,108 @@ export class DeviceGateway {
       log('revertGitFile: error for deviceId=%s — %O', deviceId, error);
       return { error: (error as Error)?.message || 'Revert failed', success: false };
     }
+  }
+
+  /**
+   * Move one or more files/folders within a directory on a remote device, via
+   * the device's `moveLocalFiles` RPC. Powers the Files tree's move in device
+   * mode. Unlike the read RPCs this is a user-initiated mutation, so a missing
+   * gateway / offline device / failed call throws rather than degrading to
+   * `undefined` — the UI surfaces the error instead of silently no-op'ing.
+   */
+  async moveProjectFiles(params: {
+    deviceId: string;
+    items: DeviceMoveProjectFileItem[];
+    timeout?: number;
+    userId: string;
+    workingDirectory: string;
+  }): Promise<DeviceMoveProjectFileResultItem[]> {
+    const { userId, deviceId, items, workingDirectory, timeout = 30_000 } = params;
+    const client = this.getClient();
+    if (!client) throw new Error('Device gateway not configured');
+
+    assertPathsWithinWorkspace(
+      workingDirectory,
+      items.flatMap((item) => [item.oldPath, item.newPath]),
+    );
+
+    const result = await client.invokeRpc<DeviceMoveProjectFileResultItem[]>(
+      { deviceId, timeout, userId },
+      { method: 'moveLocalFiles', params: { items } },
+    );
+
+    if (!result.success || !result.data) {
+      log('moveProjectFiles: failed for deviceId=%s — %s', deviceId, result.error);
+      throw new Error(result.error || 'Move failed');
+    }
+
+    return result.data;
+  }
+
+  /**
+   * Rename a single file/folder in a directory on a remote device, via the
+   * device's `renameLocalFile` RPC. Like `moveProjectFiles`, a transport failure
+   * throws rather than degrading silently.
+   */
+  async renameProjectFile(params: {
+    deviceId: string;
+    newName: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+    workingDirectory: string;
+  }): Promise<DeviceRenameProjectFileResult> {
+    const { userId, deviceId, path, newName, workingDirectory, timeout = 30_000 } = params;
+    const client = this.getClient();
+    if (!client) throw new Error('Device gateway not configured');
+
+    // The rename stays in the same directory (the device rejects separators in
+    // `newName`), so containing the source path also contains the target.
+    assertPathsWithinWorkspace(workingDirectory, [path]);
+
+    const result = await client.invokeRpc<DeviceRenameProjectFileResult>(
+      { deviceId, timeout, userId },
+      { method: 'renameLocalFile', params: { newName, path } },
+    );
+
+    if (!result.success || !result.data) {
+      log('renameProjectFile: failed for deviceId=%s — %s', deviceId, result.error);
+      throw new Error(result.error || 'Rename failed');
+    }
+
+    return result.data;
+  }
+
+  /**
+   * Save edited content back to a file on a remote device, via the device's
+   * `writeLocalFile` RPC. Powers remote save in the LocalFile editor. Like the
+   * other file mutations, a transport failure throws rather than degrading.
+   */
+  async writeProjectFile(params: {
+    content: string;
+    deviceId: string;
+    path: string;
+    timeout?: number;
+    userId: string;
+    workingDirectory: string;
+  }): Promise<DeviceWriteProjectFileResult> {
+    const { userId, deviceId, path, content, workingDirectory, timeout = 30_000 } = params;
+    const client = this.getClient();
+    if (!client) throw new Error('Device gateway not configured');
+
+    assertPathsWithinWorkspace(workingDirectory, [path]);
+
+    const result = await client.invokeRpc<DeviceWriteProjectFileResult>(
+      { deviceId, timeout, userId },
+      { method: 'writeLocalFile', params: { content, path } },
+    );
+
+    if (!result.success || !result.data) {
+      log('writeProjectFile: failed for deviceId=%s — %s', deviceId, result.error);
+      throw new Error(result.error || 'Write failed');
+    }
+
+    return result.data;
   }
 
   /**

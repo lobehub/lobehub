@@ -18,12 +18,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     display: flex;
     flex: none;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
 
     width: 52px;
     height: 100%;
-    padding-block-start: 12px;
 
     color: ${cssVar.colorTextTertiary};
 
@@ -35,12 +34,19 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+interface AddColumnButtonProps {
+  /** Splice the new column right after this key (a band's "+" adds to its row). */
+  insertAfterKey?: string;
+  /** Band index to drop the new column into (a band's "+" passes its own row). */
+  row?: number;
+}
+
 /**
- * Trailing "+" at the right edge of the board. Opens an agent picker; selecting
- * an agent creates a fresh topic for it and opens it as a new column ready to
- * receive messages.
+ * Trailing "+" at the end of a band. Opens an agent picker; selecting an agent
+ * creates a fresh topic for it and opens it as a new column ready to receive
+ * messages. In multi-band mode each band carries its own, adding into that row.
  */
-const AddColumnButton = memo(() => {
+const AddColumnButton = memo<AddColumnButtonProps>(({ insertAfterKey, row }) => {
   const { t } = useTranslation(['electron', 'topic']);
   const addColumn = useFleetStore((s) => s.addColumn);
 
@@ -49,14 +55,18 @@ const AddColumnButton = memo(() => {
       const title = t('defaultTitle', { ns: 'topic' });
       const topicId = await topicService.createTopic({ messages: [], sessionId: agentId, title });
       const key = fleetColumnKey(agentId, topicId);
-      addColumn({ agentId, fallbackTitle: title, key, threadId: null, topicId });
+      addColumn(
+        { agentId, fallbackTitle: title, key, threadId: null, topicId },
+        insertAfterKey,
+        row,
+      );
       requestAnimationFrame(() => {
         document
           .querySelector(`[data-fleet-col="${CSS.escape(key)}"]`)
           ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'end' });
       });
     },
-    [addColumn, t],
+    [addColumn, insertAfterKey, row, t],
   );
 
   return (

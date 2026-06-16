@@ -195,80 +195,95 @@ const withEditor = async (
     throw new Error('documentId is required');
   }
 
-  const snapshot = await loadSnapshot(documentModel, documentId);
-  const env = buildEnv(snapshot, documentId);
   const exportEditorData = options.exportEditorData !== false;
   const persist = options.persist !== false;
   const invariantCheck = options.invariantCheck !== false;
 
-  try {
-    const beforeHash = exportEditorData
-      ? hashEditorData(env.headless.export().editorData)
-      : undefined;
+  // Acquire the collaborative edit lock around the entire read-modify-write so
+  // the agent reads, mutates and persists atomically: serialized against other
+  // workspace members and rejected (CONFLICT) when someone else is actively
+  // editing, instead of silently clobbering their work. Read-only invocations
+  // (persist: false) never write, so they skip the lock.
+  const run = async (): Promise<HandlerOutput> => {
+    const snapshot = await loadSnapshot(documentModel, documentId);
+    const env = buildEnv(snapshot, documentId);
 
-    const handlerResult = await handler(env);
+    try {
+      const beforeHash = exportEditorData
+        ? hashEditorData(env.headless.export().editorData)
+        : undefined;
 
-    const exported = exportEditorData ? env.headless.export() : undefined;
-    const afterHash = exported ? hashEditorData(exported.editorData) : undefined;
-    const titleChanged = env.getTitle() !== snapshot.title;
-    const editorChanged = exportEditorData && beforeHash !== undefined && beforeHash !== afterHash;
+      const handlerResult = await handler(env);
 
-    const invariantViolation = invariantCheck
-      ? detectInvariantViolation(apiName, {
-          editorChanged,
-          handlerReportedChange: detectHandlerReportedChange(apiName, handlerResult.state),
-          titleChanged,
-        })
-      : undefined;
+      const exported = exportEditorData ? env.headless.export() : undefined;
+      const afterHash = exported ? hashEditorData(exported.editorData) : undefined;
+      const titleChanged = env.getTitle() !== snapshot.title;
+      const editorChanged =
+        exportEditorData && beforeHash !== undefined && beforeHash !== afterHash;
 
-    if (invariantViolation) {
-      console.warn(
-        `[PageAgentServerRuntime] invariant violation in ${apiName}:`,
-        invariantViolation,
-        { documentId, operationId: ctx.operationId, toolCallId: ctx.toolCallId },
-      );
+      const invariantViolation = invariantCheck
+        ? detectInvariantViolation(apiName, {
+            editorChanged,
+            handlerReportedChange: detectHandlerReportedChange(apiName, handlerResult.state),
+            titleChanged,
+          })
+        : undefined;
+
+      if (invariantViolation) {
+        console.warn(
+          `[PageAgentServerRuntime] invariant violation in ${apiName}:`,
+          invariantViolation,
+          { documentId, operationId: ctx.operationId, toolCallId: ctx.toolCallId },
+        );
+      }
+
+      const patch: {
+        content?: string;
+        editorData?: Record<string, unknown>;
+        title?: string;
+      } = {};
+      if (exported) {
+        patch.content = exported.markdown;
+        patch.editorData = exported.editorData as unknown as Record<string, unknown>;
+      }
+      if (titleChanged) {
+        patch.title = env.getTitle();
+      }
+
+      if (persist && Object.keys(patch).length > 0) {
+        await documentService.updateDocument(documentId, {
+          content: patch.content,
+          editorData: patch.editorData,
+          saveSource: 'llm_call',
+          title: patch.title,
+        });
+      }
+
+      return {
+        content: handlerResult.content,
+        state: {
+          ...handlerResult.state,
+          documentContent: patch.content,
+          documentEditorData: patch.editorData,
+          documentTitle: env.getTitle(),
+          ...(invariantViolation ? { invariantViolation } : {}),
+        },
+      };
+    } finally {
+      env.headless.destroy();
     }
+  };
 
-    const patch: {
-      content?: string;
-      editorData?: Record<string, unknown>;
-      title?: string;
-    } = {};
-    if (exported) {
-      patch.content = exported.markdown;
-      patch.editorData = exported.editorData as unknown as Record<string, unknown>;
-    }
-    if (titleChanged) {
-      patch.title = env.getTitle();
-    }
-
-    if (persist && Object.keys(patch).length > 0) {
-      await documentService.updateDocument(documentId, {
-        content: patch.content,
-        editorData: patch.editorData,
-        saveSource: 'llm_call',
-        title: patch.title,
-      });
-    }
-
-    return {
-      content: handlerResult.content,
-      state: {
-        ...handlerResult.state,
-        documentContent: patch.content,
-        documentEditorData: patch.editorData,
-        documentTitle: env.getTitle(),
-        ...(invariantViolation ? { invariantViolation } : {}),
-      },
-    };
-  } finally {
-    env.headless.destroy();
-  }
+  return persist ? documentService.runWithDocumentLock(documentId, run) : run();
 };
 
-const buildService = (db: LobeChatDatabase, userId: string): PageAgentRuntimeService => {
-  const documentModel = new DocumentModel(db, userId);
-  const documentService = new DocumentService(db, userId);
+const buildService = (
+  db: LobeChatDatabase,
+  userId: string,
+  workspaceId?: string,
+): PageAgentRuntimeService => {
+  const documentModel = new DocumentModel(db, userId, workspaceId);
+  const documentService = new DocumentService(db, userId, workspaceId);
   const serviceCtx: PageAgentServiceContext = { documentModel, documentService };
 
   return {
@@ -393,7 +408,9 @@ export const pageAgentRuntime: ServerRuntimeRegistration = {
     if (!context.userId || !context.serverDB) {
       throw new Error('userId and serverDB are required for Page Agent execution');
     }
-    return new PageAgentExecutionRuntime(buildService(context.serverDB, context.userId));
+    return new PageAgentExecutionRuntime(
+      buildService(context.serverDB, context.userId, context.workspaceId),
+    );
   },
   identifier: PageAgentIdentifier,
 };

@@ -1,4 +1,4 @@
-import { localFileService } from '@/services/electron/localFileService';
+import { projectFileService } from '@/services/projectFile';
 import { type ChatStore } from '@/store/chat/store';
 import { type StoreSetter } from '@/store/types';
 import { type PortalArtifact } from '@/types/artifact';
@@ -248,12 +248,12 @@ export class ChatPortalActionImpl {
       openLocalFiles,
     });
 
+    // Edit buffers are keyed by tab identity, so each tab owns its buffer — drop
+    // this tab's unsaved content (the close was confirmed) without touching the
+    // buffer of any other tab that happens to share the same absolute path.
     let nextDirty = dirtyLocalFileContents;
-    const shouldClearDirty =
-      !target.deviceId &&
-      !nextFiles.some((file) => !file.deviceId && file.filePath === target.filePath);
-    if (shouldClearDirty && target.filePath in dirtyLocalFileContents) {
-      const { [target.filePath]: _, ...rest } = dirtyLocalFileContents;
+    if (targetId in dirtyLocalFileContents) {
+      const { [targetId]: _, ...rest } = dirtyLocalFileContents;
       nextDirty = rest;
     }
 
@@ -523,28 +523,47 @@ export class ChatPortalActionImpl {
     );
   };
 
-  setLocalFileBuffer = (filePath: string, content: string | undefined): void => {
+  setLocalFileBuffer = (tabId: string, content: string | undefined): void => {
     const { dirtyLocalFileContents } = this.#get();
     if (content === undefined) {
-      if (!(filePath in dirtyLocalFileContents)) return;
+      if (!(tabId in dirtyLocalFileContents)) return;
 
-      const { [filePath]: _, ...rest } = dirtyLocalFileContents;
+      const { [tabId]: _, ...rest } = dirtyLocalFileContents;
       this.#set({ dirtyLocalFileContents: rest }, false, 'setLocalFileBuffer/clear');
       return;
     }
-    if (dirtyLocalFileContents[filePath] === content) return;
+    if (dirtyLocalFileContents[tabId] === content) return;
     this.#set(
-      { dirtyLocalFileContents: { ...dirtyLocalFileContents, [filePath]: content } },
+      { dirtyLocalFileContents: { ...dirtyLocalFileContents, [tabId]: content } },
       false,
       'setLocalFileBuffer',
     );
   };
 
-  saveLocalFile = async (filePath: string): Promise<string | undefined> => {
+  saveLocalFile = async ({
+    deviceId,
+    filePath,
+    workingDirectory,
+  }: OpenLocalFileParams): Promise<string | undefined> => {
     const { dirtyLocalFileContents } = this.#get();
-    const buffer = dirtyLocalFileContents[filePath];
+    // Edit buffers are scoped by tab identity (device + working directory +
+    // path), so the same absolute path opened on two devices/workspaces keeps
+    // independent unsaved content.
+    const tabId = createLocalFileTabId({ deviceId, filePath, workingDirectory });
+    const buffer = dirtyLocalFileContents[tabId];
     if (buffer === undefined) return undefined;
-    await localFileService.writeFile({ content: buffer, path: filePath });
+    // deviceId routes the write to the remote device over RPC; local desktop
+    // (no deviceId) goes straight to Electron IPC. The chokepoint hides the split.
+    const result = await projectFileService.writeProjectFile({
+      content: buffer,
+      deviceId,
+      path: filePath,
+      workingDirectory,
+    });
+    // The remote RPC / local IPC report fs failures (permission denied, etc.) as
+    // `{ success: false }` rather than rejecting — treat that as a failed save so
+    // the caller keeps the buffer dirty instead of marking it clean.
+    if (!result.success) throw new Error(result.error || 'Failed to save file');
     return buffer;
   };
 

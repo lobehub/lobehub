@@ -111,7 +111,7 @@ First check the repo root for `.env`:
 Do not start the standalone e2e server as the product under test.
 
 Use `scripts/init-dev-env.sh`. It follows the e2e setup pattern — Postgres,
-migrations, auth/key-vault/S3 test env, seed user — but it is owned by this
+Redis, migrations, auth/key-vault/S3 test env, seed user — but it is owned by this
 skill and starts the repo's dev server (`pnpm run dev:next` / `bun run dev`),
 not `e2e/scripts/setup.ts --start`. The script hard-blocks when root `.env`
 exists, so it cannot accidentally override a user's local config. When `.env`
@@ -132,19 +132,19 @@ fi
 Bootstrap flow when no `.env` exists:
 
 ```bash
-# From repo root. Managed DB flow requires Docker Desktop.
+# From repo root. Managed Postgres/Redis flow requires Docker Desktop.
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh setup-db
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev
 ```
 
 If using an existing Postgres instead of the managed Docker DB, set
-`DATABASE_URL` and skip `setup-db`:
+`DATABASE_URL` and `REDIS_URL`, then skip `setup-db`:
 
 ```bash
-DATABASE_URL=postgresql://... ./.agents/skills/agent-testing/scripts/init-dev-env.sh migrate
-DATABASE_URL=postgresql://... ./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user
-DATABASE_URL=postgresql://... ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev
+DATABASE_URL=postgresql://... REDIS_URL=redis://... ./.agents/skills/agent-testing/scripts/init-dev-env.sh migrate
+DATABASE_URL=postgresql://... REDIS_URL=redis://... ./.agents/skills/agent-testing/scripts/init-dev-env.sh seed-user
+DATABASE_URL=postgresql://... REDIS_URL=redis://... ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev
 ```
 
 For backend-only checks, `dev-next` is available, but Web smoke needs the
@@ -170,6 +170,9 @@ Default script env:
 - `APP_URL=http://localhost:3010`
 - `DATABASE_URL=postgresql://postgres:postgres@localhost:5433/postgres`
 - `DATABASE_DRIVER=node`
+- `AGENT_RUNTIME_MODE=queue` so backend-only agent runtime checks use the
+  same queued execution path as production
+- `REDIS_URL=redis://localhost:6380` for queue-mode agent runtime state
 - `FEATURE_FLAGS=-agent_self_iteration` so local smoke does not require QStash
 - Local QStash defaults (`QSTASH_URL`, `QSTASH_TOKEN`, signing keys) are exported;
   run `init-dev-env.sh qstash` in a separate terminal when the path under test
@@ -177,6 +180,7 @@ Default script env:
 - `KEY_VAULTS_SECRET`, `AUTH_SECRET`, auth verification off
 - S3 mock vars
 - Managed DB container: `lobehub-agent-testing-postgres`
+- Managed Redis container: `lobehub-agent-testing-redis`
 
 `seed-user` creates `agent-testing@lobehub.com` / `TestPassword123!` with
 onboarding already completed, plus a local API key in

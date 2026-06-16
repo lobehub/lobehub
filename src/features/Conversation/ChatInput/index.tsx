@@ -125,6 +125,13 @@ export interface ChatInputProps {
    */
   disableQueue?: boolean;
   /**
+   * Externally force the send action off, regardless of input content. Grays
+   * out the send button and gates handleSend so Enter can't send either. Used
+   * by host surfaces that are temporarily read-only (e.g. the Page Agent when
+   * another member holds the page edit lock).
+   */
+  disableSend?: boolean;
+  /**
    * Extra action items to append to the ActionBar
    */
   extraActionItems?: ChatInputActionsProps['items'];
@@ -192,6 +199,7 @@ const ChatInput = memo<ChatInputProps>(
     allowExpand,
     disableFollowUpVariant,
     disableQueue,
+    disableSend,
     feature,
     leftActions = [],
     leftContent,
@@ -291,7 +299,9 @@ const ChatInput = memo<ChatInputProps>(
     });
     // Input stays enabled during agent execution — messages are queued.
     // When disableQueue is set (e.g. onboarding), block sending while loading.
-    const disabled = isInputEmpty || isUploadingFiles || (!!disableQueue && isInputLoading);
+    // disableSend hard-blocks regardless of content (host surface is read-only).
+    const disabled =
+      isInputEmpty || isUploadingFiles || (!!disableQueue && isInputLoading) || !!disableSend;
     const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
     const businessCostEstimateAlert = useBusinessChatInputCostEstimateAlert();
     const businessSendAreaPrefix = getBusinessChatInputSendAreaPrefix(sendAreaPrefix);
@@ -299,6 +309,10 @@ const ChatInput = memo<ChatInputProps>(
     // Send handler - gets message, clears editor immediately, then sends
     const handleSend: SendButtonHandler = useCallback(
       async ({ clearContent, getMarkdownContent, getEditorData }) => {
+        // Host surface is read-only (e.g. page locked) — block Enter too, not
+        // just the grayed-out button.
+        if (disableSend) return;
+
         // Get instant values from stores at trigger time
         const fileStore = useFileStore.getState();
         const currentFileList = fileChatSelectors.chatUploadFileList(fileStore);
@@ -335,7 +349,7 @@ const ChatInput = memo<ChatInputProps>(
         // Fire and forget - send with captured message
         await sendMessage({ editorData, files: currentFileList, message, pageSelections });
       },
-      [sendMessage, disableQueue, isInputLoading],
+      [sendMessage, disableQueue, disableSend, isInputLoading],
     );
 
     const sendButtonProps: SendButtonProps = {

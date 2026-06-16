@@ -18,20 +18,68 @@ export interface EditLockResult {
   holderId: string | null;
   /** True when another user holds the lock (caller is locked out). */
   lockedByOther: boolean;
+  /** The edit-session id currently holding the lock, or null for legacy/unlocked. */
+  ownerId: string | null;
 }
 
-const UNLOCKED: EditLockResult = { expiresAt: null, holderId: null, lockedByOther: false };
+export interface ActiveEditLock {
+  expiresAt: Date | null;
+  ownerId: string | null;
+  userId: string;
+}
+
+const UNLOCKED: EditLockResult = {
+  expiresAt: null,
+  holderId: null,
+  lockedByOther: false,
+  ownerId: null,
+};
 
 const lockKey = (type: EditLockResourceType, id: string) => `editlock:${type}:${id}`;
 
 // Release only if the caller still holds the lock (compare-and-delete), so a
-// stale releaser can't drop a lease another member has since taken over.
+// stale releaser can't drop a lease another member has since taken over. The
+// ownerId is broadcast on lock.changed, so it can't be used as a capability on
+// its own — we also bind to the caller's userId (ARGV[2]) so a stranger who
+// learned the ownerId from a broadcast cannot release another member's lock.
 const RELEASE_SCRIPT = `
-if redis.call('get', KEYS[1]) == ARGV[1] then
+local raw = redis.call('get', KEYS[1])
+if not raw then
+  return 0
+end
+if raw == ARGV[2] then
+  return redis.call('del', KEYS[1])
+end
+local ok, decoded = pcall(cjson.decode, raw)
+if ok and decoded["userId"] == ARGV[2] and decoded["ownerId"] == ARGV[1] then
   return redis.call('del', KEYS[1])
 end
 return 0
 `;
+
+const parseStoredLock = (raw: string): ActiveEditLock => {
+  try {
+    const parsed = JSON.parse(raw) as {
+      expiresAt?: unknown;
+      ownerId?: unknown;
+      userId?: unknown;
+    };
+    if (typeof parsed.userId === 'string') {
+      const expiresAt = typeof parsed.expiresAt === 'string' ? new Date(parsed.expiresAt) : null;
+
+      return {
+        expiresAt: expiresAt && !Number.isNaN(expiresAt.getTime()) ? expiresAt : null,
+        ownerId: typeof parsed.ownerId === 'string' ? parsed.ownerId : null,
+        userId: parsed.userId,
+      };
+    }
+  } catch {
+    // Existing deployments may still have raw user-id values in Redis. Treat
+    // them as legacy locks so rolling deploys do not temporarily unlock pages.
+  }
+
+  return { expiresAt: null, ownerId: null, userId: raw };
+};
 
 /**
  * Redis-backed collaborative edit lock, keyed by (resourceType, resourceId).
@@ -73,28 +121,49 @@ export class EditLockService {
    * Acquire the lock when it is free (or already mine), refreshing the lease;
    * otherwise report whoever currently holds it. Doubles as the heartbeat.
    */
-  async acquire(type: EditLockResourceType, id: string): Promise<EditLockResult> {
+  async acquire(
+    type: EditLockResourceType,
+    id: string,
+    ownerId = this.userId,
+  ): Promise<EditLockResult> {
     const redis = this.redis;
     if (!redis) return UNLOCKED;
     const key = lockKey(type, id);
 
     try {
+      const nextLock = this.serialize(ownerId);
       // Claim only when the key is absent (NX). The TTL gives automatic expiry, so
       // a hard-closed tab frees the lock without any cleanup job.
-      const claimed = await redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS, 'NX');
-      if (claimed) return this.held();
+      const claimed = await redis.set(key, nextLock, 'EX', EDIT_LOCK_TTL_SECONDS, 'NX');
+      if (claimed) return this.held(ownerId);
 
-      const holder = await redis.get(key);
-      if (holder === this.userId) {
-        // Already mine — refresh the lease (heartbeat).
-        await redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS);
-        return this.held();
+      const raw = await redis.get(key);
+      if (raw) {
+        const holder = parseStoredLock(raw);
+        // Owner-only matches are unsafe: ownerId is fanned out on lock.changed,
+        // so a workspace member could echo a stranger's ownerId back to steal
+        // the lock. Bind ownership to the calling userId. When the same user
+        // shows up with a different ownerId (refresh, crashed tab, HMR), the
+        // old session is almost certainly a ghost — silently take over with
+        // the new owner rather than telling the user they're editing in
+        // another tab. Two truly concurrent tabs will keep flipping the owner
+        // on their own heartbeats — that's CRDT territory, not ours to police.
+        if (holder.userId === this.userId) {
+          await redis.set(key, nextLock, 'EX', EDIT_LOCK_TTL_SECONDS);
+          return this.held(ownerId);
+        }
+
+        return {
+          expiresAt: holder.expiresAt,
+          holderId: holder.userId,
+          lockedByOther: true,
+          ownerId: holder.ownerId,
+        };
       }
-      if (holder) return { expiresAt: null, holderId: holder, lockedByOther: true };
 
       // Freed between the NX and the GET — try once more.
-      const reclaimed = await redis.set(key, this.userId, 'EX', EDIT_LOCK_TTL_SECONDS, 'NX');
-      return reclaimed ? this.held() : UNLOCKED;
+      const reclaimed = await redis.set(key, nextLock, 'EX', EDIT_LOCK_TTL_SECONDS, 'NX');
+      return reclaimed ? this.held(ownerId) : UNLOCKED;
     } catch (error) {
       // Fail-open: a Redis outage (configured but unreachable) must never block
       // editing — report unlocked rather than surfacing the command rejection.
@@ -105,11 +174,16 @@ export class EditLockService {
 
   /** Current holder of the lock, or undefined when unlocked / Redis is down. */
   async getActiveHolder(type: EditLockResourceType, id: string): Promise<string | undefined> {
+    return (await this.getActiveLock(type, id))?.userId;
+  }
+
+  /** Current lock payload, or undefined when unlocked / Redis is down. */
+  async getActiveLock(type: EditLockResourceType, id: string): Promise<ActiveEditLock | undefined> {
     const redis = this.redis;
     if (!redis) return undefined;
     try {
       const holder = await redis.get(lockKey(type, id));
-      return holder ?? undefined;
+      return holder ? parseStoredLock(holder) : undefined;
     } catch (error) {
       // Fail-open: a Redis outage must not turn the write guards into 500s.
       log('getActiveHolder failed for %s:%s %O', type, id, error);
@@ -121,9 +195,49 @@ export class EditLockService {
    * The holder when someone *other* than the caller holds the lock, else null.
    * Used by write guards; returns null when Redis is down (fail-open).
    */
-  async getBlockingHolder(type: EditLockResourceType, id: string): Promise<string | null> {
-    const holder = await this.getActiveHolder(type, id);
-    return holder && holder !== this.userId ? holder : null;
+  async getBlockingHolder(
+    type: EditLockResourceType,
+    id: string,
+    ownerId?: string,
+  ): Promise<string | null> {
+    const holder = await this.getActiveLock(type, id);
+    if (!holder) return null;
+    // ownerId is broadcast on lock.changed; it can't authorize on its own.
+    // Bind to userId first, then keep the stale-tab guard (same user, different
+    // active ownerId still blocks so a ghost tab can't save over a newer one).
+    if (holder.userId !== this.userId) return holder.userId;
+    if (holder.ownerId && holder.ownerId !== ownerId) return holder.userId;
+
+    return null;
+  }
+
+  /**
+   * Validate a content write against the current lease. When a caller provides
+   * an owner id, the active Redis lock must still belong to that owner; otherwise
+   * a stale tab whose lease expired could save over a newer editor. Without an
+   * owner id, this preserves the advisory-lock behavior: writes are allowed only
+   * when no modern owner-scoped lock is active (legacy same-user locks remain
+   * compatible during rolling deploys).
+   */
+  async canWrite(type: EditLockResourceType, id: string, ownerId?: string): Promise<boolean> {
+    const redis = this.redis;
+    if (!redis) return true;
+    try {
+      const raw = await redis.get(lockKey(type, id));
+      if (!raw) return !ownerId;
+
+      const holder = parseStoredLock(raw);
+      // ownerId is broadcast on lock.changed; matching it alone isn't proof of
+      // ownership. Bind the write to the calling userId before honoring the
+      // owner-scoped match.
+      if (holder.userId !== this.userId) return false;
+      if (holder.ownerId) return holder.ownerId === ownerId;
+
+      return true;
+    } catch (error) {
+      log('canWrite failed for %s:%s %O', type, id, error);
+      return true;
+    }
   }
 
   /**
@@ -132,10 +246,16 @@ export class EditLockService {
    * the lease had already expired or another member has since taken it over, so
    * callers can avoid broadcasting a bogus "unlocked" event.
    */
-  async release(type: EditLockResourceType, id: string): Promise<boolean> {
+  async release(type: EditLockResourceType, id: string, ownerId = this.userId): Promise<boolean> {
     if (!this.redis) return false;
     try {
-      const deleted = await this.redis.eval(RELEASE_SCRIPT, 1, lockKey(type, id), this.userId);
+      const deleted = await this.redis.eval(
+        RELEASE_SCRIPT,
+        1,
+        lockKey(type, id),
+        ownerId,
+        this.userId,
+      );
       return deleted === 1;
     } catch (error) {
       log('release failed for %s:%s %O', type, id, error);
@@ -143,11 +263,20 @@ export class EditLockService {
     }
   }
 
-  private held(): EditLockResult {
+  private held(ownerId: string): EditLockResult {
     return {
       expiresAt: new Date(Date.now() + EDIT_LOCK_TTL_SECONDS * 1000),
       holderId: this.userId,
       lockedByOther: false,
+      ownerId,
     };
+  }
+
+  private serialize(ownerId: string): string {
+    return JSON.stringify({
+      expiresAt: new Date(Date.now() + EDIT_LOCK_TTL_SECONDS * 1000).toISOString(),
+      ownerId,
+      userId: this.userId,
+    });
   }
 }

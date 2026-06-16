@@ -1,3 +1,1 @@
-import MarketAuthCallback from '@/features/Auth/MarketAuthCallback';
-
-export default MarketAuthCallback;
+export { default } from '@/features/Auth/MarketAuthCallback';

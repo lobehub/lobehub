@@ -890,7 +890,7 @@
   "skillStore.wantMore.feedback.title": "[Skill Request] Summarize the skill you need in one sentence",
   "skillStore.wantMore.reachedEnd": "You've reached the end. Can't find what you need?",
   "startConversation": "Start Conversation",
-  "storage.actions.copyAgentGroups.button": "Copy To",
+  "storage.actions.copyAgentGroups.button": "Copy to...",
   "storage.actions.copyAgentGroups.desc": "Copy agent groups and their member agents into another workspace or personal account.",
   "storage.actions.copyAgentGroups.title": "Agent Groups Copy",
   "storage.actions.copyLobeAI.button": "Copy to...",

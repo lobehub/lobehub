@@ -231,12 +231,20 @@ export const createServerAgentToolsEngine = (
     // Only auto-enable in bot conversations; otherwise let user's plugin selection take effect
     ...(isBotConversation && { [MessageManifest.identifier]: true }),
     // Remote-device proxy: shown only for device-capable targets when the
-    // server has a proxy but no specific device is auto-activated yet (user
-    // must pick). External bot senders never reach it: the plan degrades
-    // denied targets to `none` (→ not deviceCapable) and the physical
-    // manifest walls drop it for `canUseDevice=false` turns.
+    // server has a proxy, no specific device is auto-activated yet, AND the
+    // user has NOT explicitly selected a device. Once a device is explicitly
+    // selected (`boundDeviceId`), the run is locked to it: we never expose the
+    // activate-device tool, so the model can never switch to another machine —
+    // not even when the selected device is offline (the run stays unrouted
+    // until that device comes back, rather than silently hopping elsewhere).
+    // External bot senders never reach it: the plan degrades denied targets to
+    // `none` (→ not deviceCapable) and the physical manifest walls drop it for
+    // `canUseDevice=false` turns.
     [RemoteDeviceManifest.identifier]:
-      deviceCapable && hasDeviceProxy && !deviceContext?.autoActivated,
+      deviceCapable &&
+      hasDeviceProxy &&
+      !deviceContext?.autoActivated &&
+      !deviceContext?.boundDeviceId,
     [AgentDocumentsManifest.identifier]: hasAgentDocuments,
     [WebBrowsingManifest.identifier]: isSearchEnabled,
   };

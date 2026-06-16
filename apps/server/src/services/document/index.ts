@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { CUSTOM_DOCUMENT_FILE_TYPE, CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { type DocumentItem } from '@lobechat/database/schemas';
@@ -216,18 +218,34 @@ export class DocumentService {
    * always report as unlocked.
    */
   async acquireDocumentLock(id: string): Promise<DocumentLockResult> {
-    if (!this.workspaceId) return { expiresAt: null, holderId: null, lockedByOther: false };
+    return this.acquireDocumentLockWithOwner(id, this.userId);
+  }
 
-    const prevHolder = await this.editLockService.getActiveHolder('document', id);
-    const result = await this.editLockService.acquire('document', id);
+  async acquireDocumentLockWithOwner(id: string, ownerId: string): Promise<DocumentLockResult> {
+    if (!this.workspaceId)
+      return { expiresAt: null, holderId: null, lockedByOther: false, ownerId: null };
+
+    const prevHolder = await this.editLockService.getActiveLock('document', id);
+    const result = await this.editLockService.acquire('document', id, ownerId);
 
     // Broadcast only on a holder edge (first claim / takeover). This method also
     // serves the periodic heartbeat, so a steady-state refresh (same holder)
     // must not emit an event.
-    if ((result.holderId ?? null) !== (prevHolder ?? null)) {
+    if (
+      (result.holderId ?? null) !== (prevHolder?.userId ?? null) ||
+      (result.ownerId ?? null) !== (prevHolder?.ownerId ?? null)
+    ) {
       void publishResourceEvent(
         { id, type: 'document' },
-        { actorId: this.userId, data: { holderId: result.holderId }, type: 'lock.changed' },
+        {
+          actorId: this.userId,
+          data: {
+            expiresAt: result.expiresAt?.toISOString() ?? null,
+            holderId: result.holderId,
+            ownerId: result.ownerId,
+          },
+          type: 'lock.changed',
+        },
       );
     }
 
@@ -238,13 +256,20 @@ export class DocumentService {
    * Read-only peek of the current edit lock (does not acquire). Lets a client
    * render a workspace page read-only on open when another member holds it.
    */
-  async getDocumentLock(id: string): Promise<DocumentLockResult> {
-    if (!this.workspaceId) return { expiresAt: null, holderId: null, lockedByOther: false };
-    const holder = await this.editLockService.getActiveHolder('document', id);
+  async getDocumentLock(id: string, ownerId?: string): Promise<DocumentLockResult> {
+    if (!this.workspaceId)
+      return { expiresAt: null, holderId: null, lockedByOther: false, ownerId: null };
+    const holder = await this.editLockService.getActiveLock('document', id);
+    const lockedByOther = holder
+      ? holder.ownerId
+        ? holder.ownerId !== ownerId
+        : holder.userId !== this.userId
+      : false;
     return {
-      expiresAt: null,
-      holderId: holder ?? null,
-      lockedByOther: Boolean(holder) && holder !== this.userId,
+      expiresAt: holder?.expiresAt ?? null,
+      holderId: holder?.userId ?? null,
+      lockedByOther,
+      ownerId: holder?.ownerId ?? null,
     };
   }
 
@@ -252,16 +277,85 @@ export class DocumentService {
    * Release the edit lock if the current user holds it. No-op in personal mode.
    */
   async releaseDocumentLock(id: string): Promise<void> {
+    return this.releaseDocumentLockWithOwner(id, this.userId);
+  }
+
+  async releaseDocumentLockWithOwner(id: string, ownerId: string): Promise<void> {
     if (!this.workspaceId) return;
     // Only broadcast "unlocked" when we actually released our own lock — if the
     // lease had expired and another member took over, the lock is still held and
     // a bogus holderId:null would wrongly flip their viewers to editable.
-    const released = await this.editLockService.release('document', id);
+    const released = await this.editLockService.release('document', id, ownerId);
     if (!released) return;
     void publishResourceEvent(
       { id, type: 'document' },
-      { actorId: this.userId, data: { holderId: null }, type: 'lock.changed' },
+      {
+        actorId: this.userId,
+        data: { expiresAt: null, holderId: null, ownerId: null },
+        type: 'lock.changed',
+      },
     );
+  }
+
+  /**
+   * Run a server-initiated read-modify-write (e.g. a Page Agent tool) under the
+   * collaborative edit lock. Acquiring the lock up front — rather than only
+   * checking it at persist time like {@link updateDocument} — serializes agent
+   * writes against other workspace members and rejects when someone else is
+   * actively editing, so an agent can no longer silently clobber a human's
+   * in-progress edits or another concurrent agent write.
+   *
+   * No-op in personal mode (no workspace → no collaboration → no lock). When
+   * Redis is down the underlying lock degrades to "unlocked" (fail-open), so
+   * this never blocks a write.
+   */
+  async runWithDocumentLock<T>(id: string, fn: () => Promise<T>): Promise<T> {
+    if (!this.workspaceId) {
+      // TEMP DIAGNOSTIC (LOBE-10470): distinguishes "no-op because workspaceId is
+      // missing at runtime" from "lock actually evaluated". Remove once verified.
+      log('runWithDocumentLock skip: no workspaceId (id=%s userId=%s)', id, this.userId);
+      return fn();
+    }
+
+    // If this user's live editor already holds the lease, ride along on the
+    // same ownerId so the acquire below is a pure heartbeat. Stealing the lock
+    // with a fresh `server:UUID` would silently rewrite the lease's ownerId,
+    // demote the user's saves through the owner-scoped write guard, and on the
+    // finally release leave a window where another member could grab the free
+    // lock. When we're truly claiming a lock, mint a server-scoped owner id
+    // we can identify in release.
+    const holderBefore = await this.editLockService.getActiveLock('document', id);
+    const heldBeforeByUser = holderBefore?.userId === this.userId;
+    const ownerId =
+      heldBeforeByUser && holderBefore?.ownerId ? holderBefore.ownerId : `server:${randomUUID()}`;
+
+    const lock = await this.acquireDocumentLockWithOwner(id, ownerId);
+    // TEMP DIAGNOSTIC (LOBE-10470): one reproduction reveals workspaceId/holder/acquire.
+    log(
+      'runWithDocumentLock: id=%s userId=%s ws=%s holderBefore=%s acquired=%o',
+      id,
+      this.userId,
+      this.workspaceId,
+      holderBefore?.userId,
+      lock,
+    );
+    if (lock.lockedByOther) {
+      throw new TRPCError({
+        cause: { data: { code: 'DocumentLocked' } },
+        code: 'CONFLICT',
+        message: 'Document is being edited by another user',
+      });
+    }
+
+    try {
+      return await fn();
+    } finally {
+      // Only release a lease we freshly claimed. When the same user already
+      // held it, leave their session alive — releasing would briefly flip
+      // their editor to read-only and let another member grab the lock in
+      // the gap before the next client heartbeat.
+      if (!heldBeforeByUser) await this.releaseDocumentLockWithOwner(id, ownerId);
+    }
   }
 
   async listDocumentHistory(
@@ -292,6 +386,7 @@ export class DocumentService {
     documentId: string,
     editorData: Record<string, any>,
     saveSource: DocumentHistorySaveSource,
+    lockOwnerId?: string,
   ): Promise<SaveDocumentHistoryResult> {
     const currentDocument = await this.documentModel.findById(documentId);
     if (!currentDocument) {
@@ -301,10 +396,12 @@ export class DocumentService {
     // Same collaborative edit-lock guard as updateDocument: don't record a
     // history snapshot for a workspace document another member is editing, so a
     // locked-out actor (e.g. a Copilot mutation that will itself be rejected)
-    // can't pollute the version timeline.
+    // can't pollute the version timeline. The lock holder forwards its
+    // `lockOwnerId` so it can still snapshot its own page (e.g. the pre-mutation
+    // snapshot a Copilot edit takes) without being blocked by its own lease.
     if (this.workspaceId) {
-      const blockedBy = await this.editLockService.getBlockingHolder('document', documentId);
-      if (blockedBy) {
+      const canWrite = await this.editLockService.canWrite('document', documentId, lockOwnerId);
+      if (!canWrite) {
         throw new TRPCError({
           cause: { data: { code: 'DocumentLocked' } },
           code: 'CONFLICT',
@@ -449,8 +546,8 @@ export class DocumentService {
         historyAppended ||
         (params.content !== undefined && params.content !== currentDocument.content);
       if (this.workspaceId && contentChanged) {
-        const blockedBy = await this.editLockService.getBlockingHolder('document', id);
-        if (blockedBy) {
+        const canWrite = await this.editLockService.canWrite('document', id, params.lockOwnerId);
+        if (!canWrite) {
           throw new TRPCError({
             cause: { data: { code: 'DocumentLocked' } },
             code: 'CONFLICT',

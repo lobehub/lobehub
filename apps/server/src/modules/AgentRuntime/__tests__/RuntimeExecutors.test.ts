@@ -128,6 +128,7 @@ describe('RuntimeExecutors', () => {
 
     mockMessageModel = {
       create: vi.fn().mockResolvedValue({ id: 'msg-123' }),
+      deleteMessage: vi.fn().mockResolvedValue({ success: true }),
       // call_llm does a parent existence preflight; return a truthy row by
       // default so existing tests don't have to stub it.
       findById: vi.fn().mockResolvedValue({ id: 'msg-existing' }),
@@ -4853,10 +4854,9 @@ describe('RuntimeExecutors', () => {
       ...overrides,
     });
 
-    it('call_tool sets stop:true in tool_result payload when tool returns execSubAgent state', async () => {
-      // Simulate agentManagement.callAgent returning execSubAgent state
+    it('call_tool preserves stop:true for legacy execSubAgent state', async () => {
       mockToolExecutionService.executeTool.mockResolvedValue({
-        content: '🚀 Triggered async task to call agent "target-agent"',
+        content: 'Legacy async task result',
         executionTime: 10,
         state: {
           parentMessageId: 'tool-msg-id',
@@ -4897,13 +4897,112 @@ describe('RuntimeExecutors', () => {
       expect((result.nextContext?.payload as any).stop).toBe(true);
     });
 
-    it('exec_sub_agent executor creates task message and calls execSubAgent callback', async () => {
-      const mockExecSubAgentTask = vi
+    it('call_tool lets server callAgent run as a deferred tool via the subAgent runner', async () => {
+      const mockExecVirtualSubAgent = vi
         .fn()
         .mockResolvedValue({ success: true, operationId: 'child-op', threadId: 'thread-child' });
       const ctxWithCallback = {
         ...ctx,
-        execSubAgent: mockExecSubAgentTask,
+        execVirtualSubAgent: mockExecVirtualSubAgent,
+        topicId: 'topic-123',
+      };
+
+      mockMessageModel.create.mockResolvedValueOnce({ id: 'tool-msg-id' });
+      mockToolExecutionService.executeTool.mockImplementation(
+        async (_payload: any, context: any) => {
+          const subAgent = await context.subAgent.run({
+            agentId: 'target-agent-id',
+            description: 'Call agent target-agent',
+            instruction: 'Do something useful',
+            timeout: 1_800_000,
+          });
+
+          return {
+            content: '',
+            deferred: true,
+            executionTime: 10,
+            state: {
+              status: 'pending',
+              subOperationId: subAgent.subOperationId,
+              targetAgentId: 'target-agent-id',
+              threadId: subAgent.threadId,
+            },
+            success: subAgent.started,
+          };
+        },
+      );
+
+      const executors = createRuntimeExecutors(ctxWithCallback);
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-id',
+          toolCalling: {
+            apiName: 'callAgent',
+            arguments: JSON.stringify({
+              agentId: 'target-agent-id',
+              instruction: 'Do something useful',
+              runAsTask: true,
+            }),
+            id: 'tool-call-1',
+            identifier: 'lobe-agent-management',
+            type: 'default' as const,
+          },
+        },
+        type: 'call_tool' as const,
+      };
+
+      const result = await executors.call_tool!(instruction, state);
+
+      expect(mockMessageModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'parent-agent-id',
+          plugin: expect.objectContaining({
+            apiName: 'callAgent',
+            identifier: 'lobe-agent-management',
+          }),
+          pluginState: { status: 'pending' },
+          parentId: 'assistant-msg-id',
+          role: 'tool',
+          tool_call_id: 'tool-call-1',
+          topicId: 'topic-123',
+        }),
+      );
+      expect(mockExecVirtualSubAgent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'target-agent-id',
+          instruction: 'Do something useful',
+          parentMessageId: 'tool-msg-id',
+          parentOperationId: 'op-123',
+          title: 'Call agent target-agent',
+          topicId: 'topic-123',
+        }),
+      );
+      expect(result.newState.status).toBe('waiting_for_async_tool');
+      expect(result.newState.pendingToolsCalling).toEqual([
+        expect.objectContaining({
+          apiName: 'callAgent',
+          id: 'tool-call-1',
+          identifier: 'lobe-agent-management',
+        }),
+      ]);
+      expect(result.events).toEqual([
+        expect.objectContaining({
+          canResume: true,
+          reason: 'async_tool',
+          type: 'interrupted',
+        }),
+      ]);
+      expect(result.nextContext).toBeUndefined();
+    });
+
+    it('exec_sub_agent executor creates task message and calls execSubAgent callback', async () => {
+      const mockExecSubAgent = vi
+        .fn()
+        .mockResolvedValue({ success: true, operationId: 'child-op', threadId: 'thread-child' });
+      const ctxWithCallback = {
+        ...ctx,
+        execSubAgent: mockExecSubAgent,
         topicId: 'topic-123',
       };
 
@@ -4929,6 +5028,9 @@ describe('RuntimeExecutors', () => {
       expect(mockMessageModel.create).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'parent-agent-id',
+          metadata: expect.objectContaining({
+            targetAgentId: 'target-agent-id',
+          }),
           role: 'task',
           parentId: 'tool-msg-id',
           topicId: 'topic-123',
@@ -4936,7 +5038,7 @@ describe('RuntimeExecutors', () => {
       );
 
       // execSubAgent callback fired with targetAgentId
-      expect(mockExecSubAgentTask).toHaveBeenCalledWith(
+      expect(mockExecSubAgent).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'target-agent-id',
           instruction: 'Do something useful',
@@ -4950,10 +5052,10 @@ describe('RuntimeExecutors', () => {
     });
 
     it('exec_sub_agent blocks nested dispatch when current state is already a sub-agent', async () => {
-      const mockExecSubAgentTask = vi.fn();
+      const mockExecSubAgent = vi.fn();
       const ctxWithCallback = {
         ...ctx,
-        execSubAgentTask: mockExecSubAgentTask,
+        execSubAgent: mockExecSubAgent,
         topicId: 'topic-123',
       };
 
@@ -4986,7 +5088,7 @@ describe('RuntimeExecutors', () => {
         success: false,
       });
       expect(mockMessageModel.create).not.toHaveBeenCalled();
-      expect(mockExecSubAgentTask).not.toHaveBeenCalled();
+      expect(mockExecSubAgent).not.toHaveBeenCalled();
     });
 
     it('exec_sub_agent gracefully skips dispatch when execSubAgent not injected', async () => {

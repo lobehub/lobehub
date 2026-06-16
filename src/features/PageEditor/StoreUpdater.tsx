@@ -12,6 +12,7 @@ import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-pag
 import { type PublicState } from './store';
 import { usePageEditorStore, useStoreApi } from './store';
 import { useDocumentLock } from './useDocumentLock';
+import { usePageDraft } from './usePageDraft';
 import { useResourceEvents } from './useResourceEvents';
 
 type PageAgentEditor = NonNullable<Parameters<typeof pageAgentRuntime.setEditor>[0]>;
@@ -56,6 +57,9 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     useDocumentLock();
     // Subscribe to realtime doc/lock events so the page syncs without polling
     useResourceEvents();
+    // Snapshot unsaved content to sessionStorage while the lock is degraded so
+    // an accidental refresh during a network blip doesn't blow away typing.
+    usePageDraft();
 
     // Update store with props
     useStoreUpdater('documentId', pageId);
@@ -103,6 +107,11 @@ const StoreUpdater = memo<StoreUpdaterProps>(
         documentHistoryQueueService.enqueueEditorSnapshot({
           documentId: pageId,
           editor,
+          // Forward the page lock owner so the holder's pre-mutation snapshot
+          // isn't rejected by its own lease (see saveDocumentHistory guard).
+          lockOwnerId: pageId
+            ? useDocumentStore.getState().documents[pageId]?.lockOwnerId
+            : undefined,
         });
       });
       pageAgentRuntime.setAfterMutateHandler(async () => {

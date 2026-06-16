@@ -8,6 +8,7 @@ const log = debug('page:editor:history-queue');
 interface QueueItem {
   documentId: string;
   editorData: string;
+  lockOwnerId?: string;
   saveSource: 'llm_call';
 }
 
@@ -18,6 +19,8 @@ interface EditorSnapshotSource {
 interface EnqueueEditorSnapshotParams {
   documentId?: string;
   editor?: EditorSnapshotSource;
+  /** Edit-session id of the page lock holder, so the snapshot passes the write guard. */
+  lockOwnerId?: string;
   saveSource?: 'llm_call';
 }
 
@@ -33,6 +36,7 @@ class DocumentHistoryQueueService {
   enqueueEditorSnapshot = ({
     documentId,
     editor,
+    lockOwnerId,
     saveSource = 'llm_call',
   }: EnqueueEditorSnapshotParams) => {
     if (!documentId || !editor) return false;
@@ -44,6 +48,7 @@ class DocumentHistoryQueueService {
       this.enqueue({
         documentId,
         editorData: JSON.stringify(editorData),
+        lockOwnerId,
         saveSource,
       });
 
@@ -68,6 +73,7 @@ class DocumentHistoryQueueService {
         await documentService.saveDocumentHistory({
           documentId: item.documentId,
           editorData: item.editorData,
+          lockOwnerId: item.lockOwnerId,
           saveSource: item.saveSource,
         });
       } catch (error) {

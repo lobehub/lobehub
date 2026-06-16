@@ -225,22 +225,15 @@ const LinearRender = memo<BuiltinRenderProps<Record<string, unknown>, unknown, u
       () => buildLinearRenderModel({ apiName, args, content, pluginError }),
       [apiName, args, content, pluginError],
     );
-    const hasRequest = hasItems(model.requestFields) || hasItems(model.requestLinks);
     const hasResult =
       hasItems(model.resultEntities) || Boolean(model.resultText) || Boolean(model.rawResultJson);
 
-    if (!hasRequest && !hasResult && !model.errorText) return null;
+    // Request args are intentionally not rendered here — the Inspector already
+    // surfaces the tool inputs, so duplicating them in the render is redundant.
+    if (!hasResult && !model.errorText) return null;
 
     return (
       <Flexbox className={styles.container} gap={12}>
-        {hasRequest && (
-          <Section title={model.actionLabel || 'Request'}>
-            <Block gap={8} padding={10} variant={'outlined'} width={'100%'}>
-              <FieldGrid fields={model.requestFields} />
-              <LinkList links={model.requestLinks} />
-            </Block>
-          </Section>
-        )}
         {hasItems(model.resultEntities) && (
           <Section title={'Result'}>
             <Flexbox gap={8}>

@@ -22,14 +22,16 @@ const FleetView = memo(() => {
   useFetchAgentList();
 
   const { columns, isInit, statusByColumnKey } = useRunningTopics();
-  const seedColumns = useFleetStore((s) => s.seedColumns);
+  const syncRunningColumns = useFleetStore((s) => s.syncRunningColumns);
 
-  // Default: show all currently-running topics, one column each. Seeds once
-  // per app load (the store re-seeds on reload since columns aren't persisted).
+  // Reconcile the live running set into the board whenever it changes (initial
+  // load, focus refetch, a topic starting/stopping). The store appends only —
+  // new running topics pop in, columns you've pinned or closed are untouched,
+  // and a column you closed while it's still running won't immediately re-add.
   useEffect(() => {
-    if (isInit) seedColumns(columns);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isInit]);
+    if (!isInit) return;
+    syncRunningColumns(columns);
+  }, [isInit, columns, syncRunningColumns]);
 
   return (
     <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>

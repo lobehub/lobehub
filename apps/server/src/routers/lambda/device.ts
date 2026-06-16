@@ -385,6 +385,73 @@ export const deviceRouter = router({
     ),
 
   /**
+   * Move files/folders within a directory on a remote device, via the device's
+   * `moveLocalFiles` RPC. Powers the Files tree's drag-to-move in device mode.
+   */
+  moveProjectFiles: deviceProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        items: z.array(z.object({ newPath: z.string(), oldPath: z.string() })),
+        workingDirectory: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      deviceGateway.moveProjectFiles({
+        deviceId: input.deviceId,
+        items: input.items,
+        userId: ctx.userId,
+        workingDirectory: input.workingDirectory,
+      }),
+    ),
+
+  /**
+   * Rename a single file/folder in a directory on a remote device, via the
+   * device's `renameLocalFile` RPC.
+   */
+  renameProjectFile: deviceProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        newName: z.string(),
+        path: z.string(),
+        workingDirectory: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      deviceGateway.renameProjectFile({
+        deviceId: input.deviceId,
+        newName: input.newName,
+        path: input.path,
+        userId: ctx.userId,
+        workingDirectory: input.workingDirectory,
+      }),
+    ),
+
+  /**
+   * Save edited content back to a file on a remote device, via the device's
+   * `writeLocalFile` RPC. Powers remote save in the LocalFile editor.
+   */
+  writeProjectFile: deviceProcedure
+    .input(
+      z.object({
+        content: z.string(),
+        deviceId: z.string(),
+        path: z.string(),
+        workingDirectory: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      deviceGateway.writeProjectFile({
+        content: input.content,
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        workingDirectory: input.workingDirectory,
+      }),
+    ),
+
+  /**
    * Check whether a path exists on a remote device and is a directory, via the
    * device's `statPath` RPC. Lets a web client validate a manually-entered
    * working directory before binding it. Returns `null` when the device is

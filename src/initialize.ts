@@ -35,6 +35,6 @@ if (typeof window !== 'undefined') {
 
 if (__DEV__) {
   void import('react-scan').then(({ scan }) => {
-    scan({ enabled: true });
+    scan({ enabled: false, showToolbar: true });
   });
 }

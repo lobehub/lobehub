@@ -186,15 +186,17 @@ const currentLocalFile = (s: ChatStoreState): OpenLocalFileEntry | undefined => 
 const localFilePath = (s: ChatStoreState) => currentLocalFile(s)?.filePath;
 const localFileWorkingDirectory = (s: ChatStoreState) => currentLocalFile(s)?.workingDirectory;
 
+// Edit buffers are keyed by tab identity (device + working directory + path),
+// so callers pass the tab id rather than a bare file path.
 const localFileBuffer =
-  (filePath: string | undefined) =>
+  (tabId: string | undefined) =>
   (s: ChatStoreState): string | undefined =>
-    filePath ? s.dirtyLocalFileContents[filePath] : undefined;
+    tabId ? s.dirtyLocalFileContents[tabId] : undefined;
 
 const isLocalFileDirty =
-  (filePath: string | undefined) =>
+  (tabId: string | undefined) =>
   (s: ChatStoreState): boolean =>
-    !!filePath && filePath in s.dirtyLocalFileContents;
+    !!tabId && tabId in s.dirtyLocalFileContents;
 
 const dirtyLocalFileContents = (s: ChatStoreState): Record<string, string> =>
   s.dirtyLocalFileContents;

@@ -15,7 +15,6 @@ const INITIAL_RECONNECT_DELAY = 1000; // 1s
 const MAX_RECONNECT_DELAY = 30_000; // 30s
 const MAX_MISSED_HEARTBEATS = 3;
 const RESUME_FLUSH_DELAY = 500; // 500ms debounce after last resume event
-const RESUME_TIMEOUT = 3000; // 3s: if no events after resume request, session is already done
 
 // ─── Typed Event Emitter (browser-compatible, no node:events) ───
 
@@ -235,24 +234,29 @@ export class AgentStreamClient extends TypedEmitter {
           // Enter resume mode only for explicit reconnect scenarios (page reload).
           // Buffer all events until resume replay completes, then deduplicate and emit.
           // This is NOT enabled for normal first-connect to avoid delaying live streaming.
+          //
+          // The replay is terminated by an authoritative `resume_complete` (the
+          // DO's stored status, which survives hibernation) — that message is
+          // what exits resume mode and decides completion. We deliberately do
+          // NOT arm a timeout to guess completion from silence: an empty replay
+          // no longer means "finished" (the DO may simply have hibernated its
+          // event buffer), and guessing was exactly the LOBE-10443 multi-device
+          // false-cancel bug. If `resume_complete` never arrives (e.g. a
+          // rolled-back DO that predates LOBE-10443), we just keep waiting — a
+          // safe, recoverable state, with heartbeat loss still forcing reconnect
+          // — instead of cancelling a live run.
           if (this.resumeOnConnect && !this.lastEventId) {
             this.resumeMode = true;
             this.resumeBuffer = [];
-
-            // Safety timeout: if no events arrive after resume, the session has already
-            // completed and the DO has nothing to replay. Exit resume mode and signal completion.
-            this.resumeFlushTimer = setTimeout(() => {
-              if (this.resumeMode && this.resumeBuffer.length === 0) {
-                this.resumeMode = false;
-                this.sessionEnded = true;
-                this.emit('session_complete');
-                this.disconnect();
-              }
-            }, RESUME_TIMEOUT);
           }
 
-          // Request all buffered events (covers events pushed before WS connected)
-          this.sendMessage({ lastEventId: this.lastEventId, type: 'resume' });
+          // Request all buffered events (covers events pushed before WS connected).
+          // `wantStatus` opts into the authoritative `resume_complete` reply
+          // (LOBE-10443): this client knows how to consume it, so a current
+          // gateway will hand back the real session status. Legacy gateways
+          // ignore the flag and just replay — we then rely on live events, never
+          // guessing completion from silence.
+          this.sendMessage({ lastEventId: this.lastEventId, type: 'resume', wantStatus: true });
           this.emit('connected');
           break;
         }
@@ -300,6 +304,37 @@ export class AgentStreamClient extends TypedEmitter {
             this.sessionEnded = true;
             this.disconnect();
           }
+          break;
+        }
+
+        case 'resume_complete': {
+          // Authoritative status from the DO, sent right after resume replay
+          // (LOBE-10443) — this is the definitive end-of-replay marker, so
+          // cancel the pending debounce flush and act on it immediately.
+          if (this.resumeFlushTimer) {
+            clearTimeout(this.resumeFlushTimer);
+            this.resumeFlushTimer = null;
+          }
+
+          // Emit any events buffered during resume, in order, before deciding.
+          if (this.resumeMode) {
+            this.flushResumeBuffer();
+          }
+
+          const terminal =
+            message.status === 'completed' ||
+            message.status === 'error' ||
+            message.status === 'interrupted';
+
+          if (terminal) {
+            this.sessionEnded = true;
+            this.emit('session_complete');
+            this.disconnect();
+          }
+          // Non-terminal (running / waiting_input / waiting_confirmation): the
+          // run is alive. Stay connected and keep streaming live events — do NOT
+          // fire session_complete. This is the core fix: a fresh subscriber on a
+          // hibernated DO no longer false-completes and clears runningOperation.
           break;
         }
 

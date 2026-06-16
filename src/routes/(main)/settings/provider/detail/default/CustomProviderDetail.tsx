@@ -12,7 +12,7 @@ import { useAiInfraStore } from '@/store/aiInfra';
 import ModelList from '../../features/ModelList';
 import ProviderConfig from '../../features/ProviderConfig';
 
-const ClientMode = memo<{ id: string }>(({ id }) => {
+const CustomProviderDetail = memo<{ id: string }>(({ id }) => {
   const useFetchAiProviderItem = useAiInfraStore((s) => s.useFetchAiProviderItem);
   useFetchAiProviderItem(id);
 
@@ -20,7 +20,7 @@ const ClientMode = memo<{ id: string }>(({ id }) => {
     aiProviderService.getAiProviderById(id),
   );
 
-  if (isLoading || !data || !data.id) return <Loading debugId="Provider > ClientMode" />;
+  if (isLoading || !data || !data.id) return <Loading debugId="Provider > CustomProviderDetail" />;
 
   return (
     <Flexbox gap={24} paddingBlock={8}>
@@ -30,4 +30,4 @@ const ClientMode = memo<{ id: string }>(({ id }) => {
   );
 });
 
-export default ClientMode;
+export default CustomProviderDetail;

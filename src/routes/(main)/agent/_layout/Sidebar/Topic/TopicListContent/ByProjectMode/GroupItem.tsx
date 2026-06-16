@@ -1,5 +1,5 @@
 import { AccordionItem, ActionIcon, Center, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, keyframes } from 'antd-style';
 import {
   FolderClosedIcon,
   FolderOpenIcon,
@@ -18,6 +18,7 @@ import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { operationSelectors } from '@/store/chat/selectors';
 
 import TopicItem from '../../List/Item';
 import { type GroupItemComponentProps } from '../GroupedAccordion';
@@ -28,6 +29,17 @@ import {
 } from './statusCounts';
 
 const PROJECT_GROUP_PREFIX = 'project:';
+
+const rippleAnim = keyframes`
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(3);
+    opacity: 0;
+  }
+`;
 
 const styles = createStaticStyles(({ css }) => ({
   statusBadge: css`
@@ -56,6 +68,40 @@ const styles = createStaticStyles(({ css }) => ({
   statusBadgeWaiting: css`
     color: ${cssVar.colorInfo};
     background: color-mix(in srgb, ${cssVar.colorInfo} 14%, transparent);
+  `,
+  unreadDot: css`
+    position: relative;
+    z-index: 1;
+
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+
+    background: ${cssVar.colorInfo};
+  `,
+  unreadRipple: css`
+    position: absolute;
+    inset: 0;
+
+    width: 6px;
+    height: 6px;
+    margin: auto;
+    border: 1px solid ${cssVar.colorInfo};
+    border-radius: 50%;
+
+    background: transparent;
+
+    animation: ${rippleAnim} 1.8s ease-out infinite;
+  `,
+  unreadWrapper: css`
+    position: relative;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 14px;
+    height: 18px;
   `,
   addTopicAction: css`
     pointer-events: none;
@@ -138,6 +184,22 @@ const CollapsedStatusBadges = memo<{ counts: ProjectTopicStatusCounts }>(({ coun
 
 CollapsedStatusBadges.displayName = 'CollapsedProjectStatusBadges';
 
+const CollapsedUnreadDot = memo<{ count: number }>(({ count }) => {
+  const { t } = useTranslation('topic');
+  const label = t('projectStatus.unread', { count });
+
+  return (
+    <Tooltip title={label}>
+      <span aria-label={label} className={styles.unreadWrapper} role="status">
+        <span className={styles.unreadRipple} />
+        <span className={styles.unreadDot} />
+      </span>
+    </Tooltip>
+  );
+});
+
+CollapsedUnreadDot.displayName = 'CollapsedProjectUnreadDot';
+
 const GroupItem = memo<GroupItemComponentProps>(
   ({ group, activeTopicId, activeThreadId, expanded }) => {
     const { t } = useTranslation('topic');
@@ -179,14 +241,21 @@ const GroupItem = memo<GroupItemComponentProps>(
       () => getProjectTopicStatusCounts(children, new Set(loadingTopicIds)),
       [children, loadingTopicIds],
     );
+    const childTopicIds = useMemo(() => children.map((topic) => topic.id), [children]);
+    const unreadCount = useChatStore(
+      operationSelectors.unreadCompletedCountForTopics(childTopicIds),
+    );
     const hasCollapsedStatus = !expanded && hasProjectTopicStatusCounts(statusCounts);
+    const hasCollapsedUnread = !expanded && unreadCount > 0;
+    const hasCollapsedIndicators = hasCollapsedStatus || hasCollapsedUnread;
     const ProjectFolderIcon = expanded ? FolderOpenIcon : FolderClosedIcon;
     const action =
-      canAddTopic || hasCollapsedStatus ? (
+      canAddTopic || hasCollapsedIndicators ? (
         <Flexbox horizontal align={'center'} gap={4}>
           {hasCollapsedStatus && <CollapsedStatusBadges counts={statusCounts} />}
+          {hasCollapsedUnread && <CollapsedUnreadDot count={unreadCount} />}
           {canAddTopic && (
-            <span className={hasCollapsedStatus ? styles.addTopicAction : undefined}>
+            <span className={hasCollapsedIndicators ? styles.addTopicAction : undefined}>
               <ActionIcon
                 icon={PlusIcon}
                 size={'small'}
@@ -205,7 +274,7 @@ const GroupItem = memo<GroupItemComponentProps>(
     return (
       <AccordionItem
         action={action}
-        alwaysShowAction={hasCollapsedStatus}
+        alwaysShowAction={hasCollapsedIndicators}
         itemKey={id}
         paddingBlock={4}
         paddingInline={4}

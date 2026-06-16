@@ -5,12 +5,15 @@ import { CSS } from '@dnd-kit/utilities';
 import { ActionIcon, Avatar, Button, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
+  ChevronDownIcon,
   FolderIcon,
   GitBranchIcon,
   GripVertical,
   MessageCirclePlus,
   MessageSquareIcon,
   MoreHorizontalIcon,
+  MoveIcon,
+  PinIcon,
   XIcon,
 } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -49,14 +52,25 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     height: 100%;
     border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
-  dragging: css`
-    z-index: 2;
+  dragPreview: css`
+    cursor: grabbing;
 
-    /* opaque while dragging so it doesn't show columns underneath */
+    overflow: hidden;
+
+    width: 100%;
+    height: 100%;
+    border-radius: 8px;
+
     background: ${cssVar.colorBgContainer};
     box-shadow:
       inset 0 0 0 1px ${cssVar.colorBorder},
       ${cssVar.boxShadowSecondary};
+  `,
+  dragPreviewBody: css`
+    flex: 1;
+    padding: 16px;
+    color: ${cssVar.colorTextQuaternary};
+    text-align: center;
   `,
   grip: css`
     cursor: grab;
@@ -83,6 +97,31 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 8px;
     padding-inline: 12px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  replyClose: css`
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 11;
+    inset-block-end: 100%;
+    inset-inline-start: 12px;
+
+    /* sit just above the input's top edge */
+    overflow: hidden;
+
+    margin-block-end: 4px;
+    border-radius: ${cssVar.borderRadius};
+
+    /* opaque chip so the conversation behind never bleeds through the button */
+    background: ${cssVar.colorBgContainer};
+
+    button {
+      pointer-events: auto;
+    }
+  `,
+  replyOpen: css`
+    position: relative;
+    flex: none;
   `,
   resize: css`
     cursor: col-resize;
@@ -150,6 +189,57 @@ const WorkingDirRow = memo<{ workingDirectory: string }>(({ workingDirectory }) 
 
 WorkingDirRow.displayName = 'FleetWorkingDirRow';
 
+/**
+ * Lightweight drag visual rendered into the DragOverlay portal — the column
+ * header on a lifted card with a centered "moving" hint instead of the live
+ * conversation, so dragging stays cheap and isn't clipped by a band's overflow.
+ */
+export const ColumnDragPreview = memo<{
+  column: FleetColumn;
+  status: ChatTopicStatus | undefined;
+}>(({ column, status }) => {
+  const { t } = useTranslation('electron');
+  const meta = useAgentDisplayMeta(column.agentId);
+
+  return (
+    <Flexbox className={styles.dragPreview}>
+      <Flexbox className={styles.header} gap={4}>
+        <Flexbox horizontal align={'center'} gap={6}>
+          <span className={styles.grip}>
+            <GripVertical size={16} />
+          </span>
+          <Text ellipsis style={{ flex: 1, fontWeight: 600 }}>
+            {column.fallbackTitle}
+          </Text>
+        </Flexbox>
+        <Flexbox horizontal align={'center'} gap={6} paddingInline={'22px 0'}>
+          <Avatar
+            emojiScaleWithBackground
+            avatar={meta?.avatar}
+            background={meta?.backgroundColor}
+            shape={'square'}
+            size={16}
+          />
+          <Text ellipsis fontSize={12} style={{ flex: 1 }} type={'secondary'}>
+            {meta?.title}
+          </Text>
+          <StatusDot status={status} />
+        </Flexbox>
+        {column.workingDirectory ? (
+          <WorkingDirRow workingDirectory={column.workingDirectory} />
+        ) : null}
+      </Flexbox>
+      {/* Centered hint so the lifted card reads as a column being moved, not loading */}
+      <Flexbox align={'center'} className={styles.dragPreviewBody} gap={8} justify={'center'}>
+        <Icon icon={MoveIcon} size={22} />
+        <Text style={{ color: cssVar.colorTextTertiary, fontSize: 13 }}>{t('fleet.dragHint')}</Text>
+      </Flexbox>
+    </Flexbox>
+  );
+});
+
+ColumnDragPreview.displayName = 'FleetColumnDragPreview';
+
 interface AgentColumnProps {
   column: FleetColumn;
   status: ChatTopicStatus | undefined;
@@ -164,6 +254,8 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
   const storedWidth = useFleetStore((s) => s.widths[column.key]);
   const setWidth = useFleetStore((s) => s.setWidth);
   const removeColumn = useFleetStore((s) => s.removeColumn);
+  const togglePin = useFleetStore((s) => s.togglePin);
+  const isPinned = useFleetStore((s) => s.pinnedKeys.includes(column.key));
   const [dragWidth, setDragWidth] = useState<number | null>(null);
   const [replyOpen, setReplyOpen] = useState(false);
   const width = dragWidth ?? storedWidth ?? DEFAULT_COLUMN_WIDTH;
@@ -199,12 +291,16 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
 
   return (
     <Flexbox
-      className={cx(styles.column, isDragging && styles.dragging)}
+      className={styles.column}
       data-fleet-col={column.key}
       ref={setNodeRef}
       style={{
+        // While dragging, the source becomes an invisible gap slot — the moving
+        // visual is the portaled DragOverlay (ColumnDragPreview), so it escapes
+        // each band's overflow clipping and any z-index stacking.
         flex: `0 0 ${width}px`,
-        transform: CSS.Translate.toString(transform),
+        opacity: isDragging ? 0 : undefined,
+        transform: isDragging ? undefined : CSS.Translate.toString(transform),
         transition,
         width,
       }}
@@ -219,6 +315,13 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
             {column.fallbackTitle}
           </Text>
           <Flexbox horizontal align={'center'} gap={2} style={{ flex: 'none' }}>
+            <ActionIcon
+              active={isPinned}
+              icon={PinIcon}
+              size={'small'}
+              title={isPinned ? t('fleet.unpin') : t('fleet.pin')}
+              onClick={() => togglePin(column.key)}
+            />
             <DropdownMenu
               placement={'bottomRight'}
               items={[
@@ -251,7 +354,7 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
           <Text ellipsis fontSize={12} style={{ flex: 1 }} type={'secondary'}>
             {meta?.title}
           </Text>
-          <StatusDot status={status ?? 'running'} />
+          <StatusDot status={status} />
         </Flexbox>
         {column.workingDirectory ? (
           <WorkingDirRow workingDirectory={column.workingDirectory} />
@@ -271,8 +374,20 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
         >
           <ChatList disableActionsBar />
           <OpStatusTray />
-          {replyOpen ? (
-            <ChatInput skipScrollMarginWithList isConfigLoading={messages === undefined} />
+          {messages === undefined ? null : replyOpen ? (
+            <Flexbox className={styles.replyOpen}>
+              <Flexbox horizontal className={styles.replyClose}>
+                <Button
+                  icon={ChevronDownIcon}
+                  size={'small'}
+                  type={'text'}
+                  onClick={() => setReplyOpen(false)}
+                >
+                  {t('fleet.collapseReply')}
+                </Button>
+              </Flexbox>
+              <ChatInput isConfigLoading={false} />
+            </Flexbox>
           ) : (
             <Flexbox className={styles.replyBar}>
               <Button

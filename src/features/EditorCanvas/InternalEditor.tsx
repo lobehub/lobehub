@@ -152,8 +152,10 @@ const InternalEditor = memo<InternalEditorProps>(
         ? [...extraPlugins, ...STATIC_PLUGINS, imagePlugin, filePlugin]
         : [...STATIC_PLUGINS, imagePlugin, filePlugin];
 
-      // Add toolbar if enabled
-      if (floatingToolbar) {
+      // Add toolbar only when the editor is actually editable — a locked /
+      // read-only page must not surface the floating formatting toolbar on
+      // text selection (its buttons would dispatch commands that never save).
+      if (floatingToolbar && editable && !disabled) {
         return [
           ...basePlugins,
           Editor.withProps(ReactToolbarPlugin, {
@@ -172,6 +174,8 @@ const InternalEditor = memo<InternalEditorProps>(
       return basePlugins;
     }, [
       customPlugins,
+      disabled,
+      editable,
       editor,
       editorState,
       extraPlugins,

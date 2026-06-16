@@ -1,3 +1,1 @@
-import DeviceConfirmPage from '@/features/Auth/OAuthDevice/DeviceConfirmPage';
-
-export default DeviceConfirmPage;
+export { default } from '@/features/Auth/OAuthDevice/DeviceConfirmPage';

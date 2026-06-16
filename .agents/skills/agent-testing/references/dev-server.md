@@ -48,14 +48,15 @@ curl -s -o /dev/null -w '%{http_code}' "$SERVER_URL/"
 ```bash
 # Start backend only.
 # With root .env: use the existing local config.
-pnpm run dev:next
+# Agent runtime queue mode is required to mirror production async execution.
+AGENT_RUNTIME_MODE=queue pnpm run dev:next
 
 # Without root .env: use the self-contained agent-testing env.
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev-next
 
 # Full-stack SPA + backend. Required for Web smoke.
 # With root .env:
-bun run dev
+AGENT_RUNTIME_MODE=queue bun run dev
 
 # Without root .env:
 ./.agents/skills/agent-testing/scripts/init-dev-env.sh dev
@@ -91,6 +92,8 @@ in doubt.
 | `ECONNREFUSED`            | Server not running — start it                                                                 |
 | `EADDRINUSE` on the port  | Already running — `lsof -ti:<port> \| xargs kill` first                                       |
 | Stale data / old behavior | Server needs a restart to pick up code changes                                                |
+| Agent call runs inline    | Set `AGENT_RUNTIME_MODE=queue`, make sure `REDIS_URL` is configured, then restart the server  |
+| Queue mode needs Redis    | Run `init-dev-env.sh setup-db`, or provide `REDIS_URL=redis://...` for an existing Redis      |
 | QStash workflow failures  | Start `init-dev-env.sh qstash` and make sure dev server inherited the script's `QSTASH_*` env |
 
 Marketplace/community endpoints are not part of the local agent-testing auth

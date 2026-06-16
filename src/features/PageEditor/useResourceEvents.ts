@@ -4,6 +4,7 @@ import { fetchEventSource } from '@lobechat/utils/client';
 import { useEffect } from 'react';
 
 import { mutate } from '@/libs/swr';
+import { documentService } from '@/services/document';
 import { documentSWRKeys } from '@/services/document/swrKeys';
 import { pageSelectors, usePageStore } from '@/store/page';
 import { useUserStore } from '@/store/user';
@@ -32,6 +33,7 @@ const buildHeaders = async (): Promise<Record<string, string>> => {
 export const useResourceEvents = () => {
   const documentId = usePageEditorStore((s) => s.documentId);
   const setLockState = usePageEditorStore((s) => s.setLockState);
+  const lockOwnerId = usePageEditorStore((s) => s.lockOwnerId);
   const workspaceId = usePageStore(
     (s) => pageSelectors.getDocumentById(documentId)(s)?.workspaceId,
   );
@@ -62,7 +64,15 @@ export const useResourceEvents = () => {
           },
           onmessage: (ev) => {
             if (!ev.data) return;
-            let parsed: { actorId?: string; data?: { holderId?: string | null }; type?: string };
+            let parsed: {
+              actorId?: string;
+              data?: {
+                expiresAt?: string | null;
+                holderId?: string | null;
+                ownerId?: string | null;
+              };
+              type?: string;
+            };
             try {
               parsed = JSON.parse(ev.data);
             } catch {
@@ -76,15 +86,33 @@ export const useResourceEvents = () => {
               // version when the local editor isn't dirty.
               void mutate(documentSWRKeys.editor(documentId));
             } else if (parsed.type === 'lock.changed') {
-              const holderId = parsed.data?.holderId ?? null;
-              setLockState({
-                holderId,
-                lockedByOther: Boolean(holderId) && holderId !== myUserId,
-              });
+              // Store the holder verbatim; "locked by other" is derived against
+              // the current user/session at read time (usePageLockedByOther).
+              setLockState(
+                parsed.data?.holderId ?? null,
+                parsed.data?.expiresAt ?? null,
+                parsed.data?.ownerId ?? null,
+              );
             }
           },
           onopen: async (res) => {
-            if (res.ok && res.headers.get('content-type')?.includes('text/event-stream')) return;
+            if (res.ok && res.headers.get('content-type')?.includes('text/event-stream')) {
+              // Force a fresh peek every time the SSE channel (re)opens. Events
+              // dropped during the connect gap — including the holder's
+              // `release` broadcast — would otherwise leave the viewer stuck on
+              // a stale "X is editing this document" until lease expiry.
+              documentService
+                .getDocumentLock(documentId, lockOwnerId)
+                .then((lock) => {
+                  if (cancelled) return;
+                  setLockState(lock.holderId, lock.expiresAt, lock.ownerId);
+                })
+                .catch(() => {
+                  // Resync is best-effort; the regular lock heartbeat tick will
+                  // retry naturally — no need to surface the error.
+                });
+              return;
+            }
             const error: Error & { fatal?: boolean } = new Error(`SSE failed: ${res.status}`);
             error.fatal = res.status >= 400 && res.status < 500;
             throw error;
@@ -102,5 +130,5 @@ export const useResourceEvents = () => {
       cancelled = true;
       ac.abort();
     };
-  }, [enabled, documentId, workspaceId, myUserId, setLockState]);
+  }, [enabled, documentId, workspaceId, myUserId, setLockState, lockOwnerId]);
 };

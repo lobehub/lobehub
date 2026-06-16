@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { fleetKeys } from '@/libs/swr/keys';
 import { topicService } from '@/services/topic';
 import { type ChatTopic, type ChatTopicStatus } from '@/types/topic';
 
@@ -32,8 +33,13 @@ const toColumn = (topic: RunningTopic): FleetColumn | null => {
  * (sidebar / column badge).
  */
 export const useRunningTopics = () => {
-  const { data, isLoading } = useClientDataSWR('fleet-running-topics', () =>
-    topicService.queryTopics({ statuses: RUNNING_STATUSES }),
+  const { data, isLoading } = useClientDataSWR(
+    fleetKeys.runningTopics(),
+    () => topicService.queryTopics({ statuses: RUNNING_STATUSES }),
+    // The board is a live overview — refetch on focus almost immediately
+    // (default throttle is 5min) so newly-running topics show up the instant
+    // the user looks at it.
+    { focusThrottleInterval: 1000 },
   );
 
   const running = useMemo(() => (data ?? []) as RunningTopic[], [data]);

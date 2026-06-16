@@ -13,6 +13,7 @@ import { aiProviderRouter } from '../lambda/aiProvider';
 import { briefRouter } from '../lambda/brief';
 import { chunkRouter } from '../lambda/chunk';
 import { configRouter } from '../lambda/config';
+import { deviceRouter } from '../lambda/device';
 import { documentRouter } from '../lambda/document';
 import { fileRouter } from '../lambda/file';
 import { homeRouter } from '../lambda/home';
@@ -36,6 +37,7 @@ export const mobileRouter = router({
   aiProvider: aiProviderRouter,
   chunk: chunkRouter,
   config: configRouter,
+  device: deviceRouter,
   document: documentRouter,
   file: fileRouter,
   healthcheck: publicProcedure.query(() => "i'm live!"),

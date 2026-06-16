@@ -890,7 +890,7 @@
   "skillStore.wantMore.feedback.title": "[技能申请] 请用一句话概括您需要的技能",
   "skillStore.wantMore.reachedEnd": "已经到底了，未找到所需技能？",
   "startConversation": "开始对话",
-  "storage.actions.copyAgentGroups.button": "复制到",
+  "storage.actions.copyAgentGroups.button": "复制到...",
   "storage.actions.copyAgentGroups.desc": "将代理组及其成员代理复制到另一个工作区或个人账户。",
   "storage.actions.copyAgentGroups.title": "代理组复制",
   "storage.actions.copyLobeAI.button": "复制到...",

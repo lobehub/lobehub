@@ -10,10 +10,13 @@ import {
   getLinkedPullRequest,
   listGitBranches,
   listGitRemoteBranches,
+  moveLocalFiles,
   pullGitBranch,
   pushGitBranch,
   renameGitBranch,
+  renameLocalFile,
   revertGitFile,
+  writeLocalFile,
 } from '@lobechat/local-file-shell';
 
 import type {
@@ -37,6 +40,9 @@ export const DEVICE_RPC_METHODS = [
   'statPath',
   'getProjectFileIndex',
   'getLocalFilePreview',
+  'moveLocalFiles',
+  'renameLocalFile',
+  'writeLocalFile',
   'getGitBranch',
   'getLinkedPullRequest',
   'getGitWorkingTreeStatus',
@@ -91,6 +97,18 @@ export const executeDeviceRpc = async (
 
     case 'getLocalFilePreview': {
       return deps.getLocalFilePreview(params as LocalFilePreviewUrlParams);
+    }
+
+    case 'moveLocalFiles': {
+      return moveLocalFiles(params as { items: { newPath: string; oldPath: string }[] });
+    }
+
+    case 'renameLocalFile': {
+      return renameLocalFile(params as { newName: string; path: string });
+    }
+
+    case 'writeLocalFile': {
+      return writeLocalFile(params as { content: string; path: string });
     }
 
     case 'getGitBranch': {
