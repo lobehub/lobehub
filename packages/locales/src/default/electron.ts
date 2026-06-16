@@ -15,6 +15,7 @@ export default {
   'navigation.memoryContexts': 'Memory - Contexts',
   'navigation.memoryExperiences': 'Memory - Experiences',
   'navigation.memoryIdentities': 'Memory - Identities',
+  'navigation.document': 'Document',
   'navigation.memoryPreferences': 'Memory - Preferences',
   'navigation.noPages': 'No pages yet',
   'navigation.observation': 'Observation Mode',

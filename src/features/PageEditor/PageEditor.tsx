@@ -115,15 +115,30 @@ interface PageEditorProps {
   onSave?: () => void;
   onTitleChange?: (title: string) => void;
   pageId?: string;
+  /**
+   * Render the built-in right panel (page copilot / history). Defaults to true.
+   * Set false when an outer layout supplies its own right panel (e.g. the
+   * agent-document route keeps the agent working sidebar instead).
+   */
+  rightPanel?: boolean;
+  /**
+   * Whether PageEditor should sync its page-copilot agent into the global
+   * agent/chat stores. Defaults to true for normal Pages. Set false when the
+   * editor is embedded under an existing agent layout that must preserve its
+   * own active agent and topic state.
+   */
+  syncPageAgentActiveState?: boolean;
   title?: string;
 }
 
 interface PageEditorCanvasProps {
   fullWidthHeader?: boolean;
   header?: PageEditorHeader;
+  rightPanel?: boolean;
 }
 
-const PageEditorCanvas = memo<PageEditorCanvasProps>(({ header, fullWidthHeader }) => {
+const PageEditorCanvas = memo<PageEditorCanvasProps>(({ header, fullWidthHeader, rightPanel }) => {
+  const showRightPanel = rightPanel !== false;
   const editable = usePageEditable();
   const editor = usePageEditorStore((s) => s.editor);
   const documentId = usePageEditorStore((s) => s.documentId);
@@ -303,7 +318,7 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>(({ header, fullWidthHeader 
         {headerSlot}
         <Flexbox horizontal flex={1} style={{ minHeight: 0 }} width={'100%'}>
           {editorPane}
-          <RightPanel />
+          {showRightPanel && <RightPanel />}
         </Flexbox>
       </Flexbox>
     );
@@ -317,7 +332,7 @@ const PageEditorCanvas = memo<PageEditorCanvasProps>(({ header, fullWidthHeader 
       width={'100%'}
     >
       {editorPane}
-      <RightPanel />
+      {showRightPanel && <RightPanel />}
     </Flexbox>
   );
 });
@@ -339,12 +354,14 @@ export const PageEditor: FC<PageEditorProps> = ({
   onBack,
   title,
   emoji,
+  rightPanel,
+  syncPageAgentActiveState,
 }) => {
   const { allowed: canEdit } = usePermission('edit_own_content');
   const deletePage = usePageStore((s) => s.deletePage);
 
   return (
-    <PageAgentProvider pageId={pageId}>
+    <PageAgentProvider pageId={pageId} syncActiveAgent={syncPageAgentActiveState}>
       <EditorProvider>
         <PageEditorProvider
           emoji={emoji}
@@ -374,7 +391,11 @@ export const PageEditor: FC<PageEditorProps> = ({
             onTitleChange?.(nextTitle);
           }}
         >
-          <PageEditorCanvas fullWidthHeader={fullWidthHeader} header={header} />
+          <PageEditorCanvas
+            fullWidthHeader={fullWidthHeader}
+            header={header}
+            rightPanel={rightPanel}
+          />
         </PageEditorProvider>
       </EditorProvider>
     </PageAgentProvider>

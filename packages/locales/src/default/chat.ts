@@ -28,6 +28,9 @@ export default {
     "Hi, I’m **{{name}}**. One sentence is enough—you're in control.",
   'agentDefaultMessageWithoutEdit':
     "Hi, I’m **{{name}}**. One sentence is enough—you're in control.",
+  'agentDocument.backToChat': 'Back to chat',
+  'agentDocument.linkCopied': 'Link copied',
+  'agentDocument.openAsPage': 'Open as full page',
   'agentProfile.files_one': '{{count}} file',
   'agentProfile.files_other': '{{count}} files',
   'agentProfile.knowledgeBases_one': '{{count}} knowledge base',

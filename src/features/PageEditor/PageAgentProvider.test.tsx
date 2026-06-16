@@ -185,6 +185,33 @@ describe('PageAgentProvider', () => {
     expect(context.agentId).toBe('page-agent');
   });
 
+  it('can avoid syncing the page agent into global agent state', async () => {
+    agentState.activeAgentId = 'claude-code';
+    agentState.heterogeneousAgentIds = ['claude-code'];
+    chatState.activeAgentId = 'claude-code';
+    chatState.activeTopicId = 'topic-1';
+
+    render(
+      <PageAgentProvider pageId="doc-1" syncActiveAgent={false}>
+        <div>child</div>
+      </PageAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(conversationProviderSpy).toHaveBeenCalled();
+    });
+
+    const { context } = conversationProviderSpy.mock.calls.at(-1)![0];
+    expect(context.agentId).toBe('page-agent');
+    expect(context.documentId).toBe('doc-1');
+    expect(context.topicId).toBeNull();
+    expect(agentState.activeAgentId).toBe('claude-code');
+    expect(agentState.setActiveAgentId).not.toHaveBeenCalled();
+    expect(chatState.activeAgentId).toBe('claude-code');
+    expect(chatState.activeTopicId).toBe('topic-1');
+    expect(chatState.switchTopic).not.toHaveBeenCalled();
+  });
+
   it('injects the open document id into the conversation context', async () => {
     render(
       <PageAgentProvider pageId="doc-1">
