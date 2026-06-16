@@ -1,12 +1,13 @@
 import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
 import type { MenuProps } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { Trash2Icon } from 'lucide-react';
+import { Maximize2Icon, Trash2Icon } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { KeyedMutator } from 'swr';
 
+import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
 import type {
   ExplorerTreeCanDropCtx,
   ExplorerTreeHandle,
@@ -18,7 +19,7 @@ import {
   getExplorerTreeStyleVars,
   HIDE_POINTER_FOCUS_RING_CSS,
 } from '@/features/ExplorerTree';
-import { useChatStore } from '@/store/chat';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
 import { useDocumentTreeOps } from './hooks/useDocumentTreeOps';
@@ -71,7 +72,7 @@ interface Props {
 
 const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   const { t } = useTranslation(['chat', 'common']);
-  const openDocument = useChatStore((s) => s.openDocument);
+  const navigate = useWorkspaceAwareNavigate();
   const treeRef = useRef<ExplorerTreeHandle | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -160,9 +161,9 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
     (node: ExplorerTreeNode<AgentDocumentItem>) => {
       const doc = node.data;
       if (!doc || node.isFolder) return;
-      openDocument(doc.documentId, doc.id);
+      navigate(buildAgentDocumentPath(agentId, doc.documentId));
     },
-    [openDocument],
+    [agentId, navigate],
   );
 
   const handleCommitRename = useCallback(
@@ -248,6 +249,17 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
         });
       }
 
+      // A document file (not a folder, skill, or multi-select) can be expanded
+      // into the full-page document route — the standalone view agent links open.
+      if (!isFolder && !isSkill && !isMulti && node.data?.documentId) {
+        items.push({
+          icon: <Maximize2Icon size={14} />,
+          key: 'open-as-page',
+          label: t('agentDocument.openAsPage'),
+          onClick: () => navigate(buildAgentDocumentPath(agentId, node.data!.documentId)),
+        });
+      }
+
       items.push({
         danger: true,
         icon: <Trash2Icon size={14} />,
@@ -260,7 +272,16 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
 
       return items;
     },
-    [handleCreateDocument, handleCreateFolder, isRecoverableSkillBundle, ops, startInlineRename, t],
+    [
+      agentId,
+      handleCreateDocument,
+      handleCreateFolder,
+      isRecoverableSkillBundle,
+      navigate,
+      ops,
+      startInlineRename,
+      t,
+    ],
   );
 
   return (

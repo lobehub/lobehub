@@ -6,6 +6,7 @@ import {
 } from '@lobechat/const';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
+import type * as ReactRouterDom from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import AgentDocumentsGroup from './AgentDocumentsGroup';
@@ -14,7 +15,9 @@ const useClientDataSWR = vi.fn();
 const modalConfirm = vi.hoisted(() => vi.fn());
 const messageError = vi.hoisted(() => vi.fn());
 const messageSuccess = vi.hoisted(() => vi.fn());
+const navigateMock = vi.hoisted(() => vi.fn());
 const removeDocumentMock = vi.hoisted(() => vi.fn());
+const useParamsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@lobehub/ui/base-ui', () => ({
   confirmModal: modalConfirm,
@@ -91,6 +94,10 @@ vi.mock('@/features/AgentDocumentsExplorer', () => ({
   DocumentExplorerTree: ({ data }: { data: unknown[] }) => (
     <div data-doc-count={data.length} data-testid="document-explorer-tree" />
   ),
+}));
+
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => navigateMock,
 }));
 
 vi.mock('@/features/SkillsList', () => {
@@ -183,19 +190,13 @@ vi.mock('@/store/agent', () => ({
     selector({ activeAgentId: 'agent-1', agentMap: {} }),
 }));
 
-const openDocument = vi.fn();
-const closeDocument = vi.fn();
-
-vi.mock('@/store/chat', () => ({
-  useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ closeDocument, openDocument, portalStack: [] }),
-}));
-
-vi.mock('@/store/chat/selectors', () => ({
-  chatPortalSelectors: {
-    portalDocumentId: () => null,
-  },
-}));
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof ReactRouterDom>('react-router-dom');
+  return {
+    ...actual,
+    useParams: useParamsMock,
+  };
+});
 
 const skillBundleRow = {
   category: AGENT_DOCUMENT_SKILL_CATEGORY,
@@ -272,13 +273,13 @@ const webDocRow = {
 describe('AgentDocumentsGroup', () => {
   beforeEach(() => {
     useClientDataSWR.mockReset();
-    closeDocument.mockReset();
     modalConfirm.mockReset();
     messageError.mockReset();
     messageSuccess.mockReset();
-    openDocument.mockReset();
+    navigateMock.mockReset();
     removeDocumentMock.mockReset();
     removeDocumentMock.mockResolvedValue({ deleted: true, id: 'doc-1' });
+    useParamsMock.mockReturnValue({});
   });
 
   it('defaults to the Skills tab and renders skill bundles via SkillsList', () => {
@@ -312,7 +313,7 @@ describe('AgentDocumentsGroup', () => {
     render(<AgentDocumentsGroup />);
 
     fireEvent.click(screen.getByText('YouTube Comment Retrieval Workflow'));
-    expect(openDocument).toHaveBeenCalledWith('skill-index-doc', 'skill-index-row');
+    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-1/docs/skill-index-doc');
   });
 
   it('falls back to the bundle id when opening an orphan skill bundle', () => {
@@ -326,7 +327,7 @@ describe('AgentDocumentsGroup', () => {
     render(<AgentDocumentsGroup />);
 
     fireEvent.click(screen.getByText('YouTube Comment Retrieval Workflow'));
-    expect(openDocument).toHaveBeenCalledWith('skill-bundle-doc', 'skill-bundle-row');
+    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-1/docs/skill-bundle-doc');
   });
 
   it('opens a child file by relative path through onOpenFile', () => {
@@ -340,7 +341,7 @@ describe('AgentDocumentsGroup', () => {
     render(<AgentDocumentsGroup />);
 
     fireEvent.click(screen.getByTestId('skill-skill-bundle-doc-open-skill-md'));
-    expect(openDocument).toHaveBeenCalledWith('skill-index-doc', 'skill-index-row');
+    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-1/docs/skill-index-doc');
   });
 
   it('renders the document tree when switching to the Documents tab', () => {
@@ -362,6 +363,55 @@ describe('AgentDocumentsGroup', () => {
     expect(tree).toHaveAttribute('data-doc-count', '1');
   });
 
+  it('defaults to Documents first in document mode and keeps Skills as the second tab', () => {
+    useParamsMock.mockReturnValue({ docId: 'doc-content-1' });
+    useClientDataSWR.mockReturnValue({
+      data: [skillBundleRow, skillIndexRow, fileDocRow, webDocRow],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup />);
+
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Documents',
+      'Skills',
+    ]);
+    expect(screen.queryByText('Web')).not.toBeInTheDocument();
+
+    const tree = screen.getByTestId('document-explorer-tree');
+    expect(tree).toBeInTheDocument();
+    expect(tree).toHaveAttribute('data-doc-count', '1');
+    expect(screen.queryByTestId('skills-list')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Skills'));
+    expect(screen.getByTestId('skills-list')).toBeInTheDocument();
+  });
+
+  it('resets to Documents when entering document mode', () => {
+    useClientDataSWR.mockReturnValue({
+      data: [fileDocRow, webDocRow],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    const { rerender } = render(<AgentDocumentsGroup />);
+    fireEvent.click(screen.getByText('Web'));
+    expect(screen.getByText('Example')).toBeInTheDocument();
+
+    useParamsMock.mockReturnValue({ docId: 'doc-content-1' });
+    rerender(<AgentDocumentsGroup style={{ minHeight: 0 }} />);
+
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Documents',
+      'Skills',
+    ]);
+    expect(screen.getByTestId('document-explorer-tree')).toBeInTheDocument();
+    expect(screen.queryByText('Example')).not.toBeInTheDocument();
+  });
+
   it('renders web items as cards in the Web tab and supports deletion', async () => {
     const mutate = vi.fn().mockResolvedValue(undefined);
     useClientDataSWR.mockReturnValue({
@@ -378,7 +428,8 @@ describe('AgentDocumentsGroup', () => {
     expect(screen.queryByText('Brief')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Example'));
-    expect(openDocument).toHaveBeenCalledWith('doc-content-2', 'doc-2');
+    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-1/docs/doc-content-2');
+    navigateMock.mockClear();
 
     fireEvent.click(screen.getByLabelText('delete'));
     const [firstConfirmCall] = modalConfirm.mock.calls;
@@ -391,6 +442,7 @@ describe('AgentDocumentsGroup', () => {
       id: 'doc-2',
     });
     expect(mutate).toHaveBeenCalled();
+    expect(navigateMock).not.toHaveBeenCalled();
     expect(messageSuccess).toHaveBeenCalledWith('workingPanel.resources.deleteSuccess');
   });
 
