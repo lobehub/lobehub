@@ -863,6 +863,89 @@ describe('DocumentService', () => {
     });
   });
 
+  describe('runWithDocumentLock', () => {
+    it('runs the callback without touching the lock for personal documents', async () => {
+      const acquireSpy = vi.spyOn(EditLockService.prototype, 'acquire');
+      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release');
+      const fn = vi.fn().mockResolvedValue('ok');
+
+      const result = await service.runWithDocumentLock('doc-1', fn);
+
+      expect(result).toBe('ok');
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(acquireSpy).not.toHaveBeenCalled();
+      expect(releaseSpy).not.toHaveBeenCalled();
+    });
+
+    it('acquires a free lock, runs the callback, then releases it', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'getActiveHolder').mockResolvedValue(undefined);
+      vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+        expiresAt: new Date(),
+        holderId: userId,
+        lockedByOther: false,
+      });
+      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release').mockResolvedValue(true);
+      const fn = vi.fn().mockResolvedValue('written');
+
+      const result = await wsService.runWithDocumentLock('doc-1', fn);
+
+      expect(result).toBe('written');
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(releaseSpy).toHaveBeenCalledWith('document', 'doc-1');
+    });
+
+    it('does NOT release a lease the same user already held (live editor heartbeat)', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'getActiveHolder').mockResolvedValue(userId);
+      vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+        expiresAt: new Date(),
+        holderId: userId,
+        lockedByOther: false,
+      });
+      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release');
+      const fn = vi.fn().mockResolvedValue('written');
+
+      await wsService.runWithDocumentLock('doc-1', fn);
+
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(releaseSpy).not.toHaveBeenCalled();
+    });
+
+    it('rejects with CONFLICT and skips the callback when another member holds the lock', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'getActiveHolder').mockResolvedValue('other-user');
+      vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+        expiresAt: new Date(),
+        holderId: 'other-user',
+        lockedByOther: true,
+      });
+      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release');
+      const fn = vi.fn();
+
+      await expect(wsService.runWithDocumentLock('doc-1', fn)).rejects.toMatchObject({
+        code: 'CONFLICT',
+      });
+      expect(fn).not.toHaveBeenCalled();
+      expect(releaseSpy).not.toHaveBeenCalled();
+    });
+
+    it('still releases a freshly-claimed lock when the callback throws', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'getActiveHolder').mockResolvedValue(undefined);
+      vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+        expiresAt: new Date(),
+        holderId: userId,
+        lockedByOther: false,
+      });
+      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release').mockResolvedValue(true);
+      const fn = vi.fn().mockRejectedValue(new Error('boom'));
+
+      await expect(wsService.runWithDocumentLock('doc-1', fn)).rejects.toThrow('boom');
+      expect(releaseSpy).toHaveBeenCalledWith('document', 'doc-1');
+    });
+  });
+
   describe('document edit lock', () => {
     it('reports unlocked for personal documents without touching the lock service', async () => {
       const acquireSpy = vi.spyOn(EditLockService.prototype, 'acquire');

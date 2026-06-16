@@ -17,3 +17,9 @@ packages:
   - './stubs/business-const'
   - './stubs/types'
   - '.'
+allowBuilds:
+  electron: set this to true or false
+  electron-winstaller: set this to true or false
+  esbuild: set this to true or false
+  get-windows: set this to true or false
+  node-mac-permissions: set this to true or false

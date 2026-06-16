@@ -21,7 +21,6 @@ import {
 import Conversation from '../Copilot/Conversation';
 import HistoryPanel from '../History';
 import { selectors, usePageEditorStore } from '../store';
-import { usePageEditable } from '../usePageEditable';
 import { usePageAgentPanelControl } from './OverrideContext';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -108,27 +107,18 @@ PageEditorRightPanelContent.displayName = 'PageEditorRightPanelContent';
 const PageEditorRightPanel = memo(() => {
   const { expand, toggle } = usePageAgentPanelControl();
   const rightPanelMode = usePageEditorStore(selectors.rightPanelMode);
-  const editable = usePageEditable();
   const { allowed: hasEditPermission } = usePermission('edit_own_content');
-  const isWorkspacePage = usePageEditorStore((s) => s.isWorkspacePage);
-  const isLockPending = usePageEditorStore((s) => s.isLockPending);
-  const isLockedByOther = usePageEditorStore((s) => s.isLockedByOther);
   const [width, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.pageAgentPanelWidth(s),
     s.updateSystemStatus,
   ]);
 
-  // While the first lock peek is still resolving, `usePageEditable` is
-  // conservatively false (the editor must not let you type before we know the
-  // page is free). For the panel that would mean collapse-then-expand on every
-  // workspace page open — a visible flicker. So stay optimistic here: an
-  // edit-permission holder keeps the copilot visible while the lock resolves,
-  // and it only collapses if the page turns out to be locked by another member.
-  const lockResolving = hasEditPermission && isWorkspacePage && isLockPending && !isLockedByOther;
-
-  // The Page Agent (copilot) edits the document, so hide it in read-only mode.
-  // History stays available. Re-entering edit mode restores the saved preference.
-  const effectiveExpand = expand && (rightPanelMode === 'history' || editable || lockResolving);
+  // The Page Agent (copilot) stays available even while another member holds the
+  // edit lock: a conflicting write is now rejected server-side (CONFLICT) rather
+  // than clobbering their edits, so there's no reason to hide it on a locked /
+  // read-only page. We only hide it from members without edit permission (a
+  // document-editing agent is useless to them); History stays available.
+  const effectiveExpand = expand && (rightPanelMode === 'history' || hasEditPermission);
 
   return (
     <RightPanel

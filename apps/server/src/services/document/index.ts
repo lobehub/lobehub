@@ -264,6 +264,44 @@ export class DocumentService {
     );
   }
 
+  /**
+   * Run a server-initiated read-modify-write (e.g. a Page Agent tool) under the
+   * collaborative edit lock. Acquiring the lock up front — rather than only
+   * checking it at persist time like {@link updateDocument} — serializes agent
+   * writes against other workspace members and rejects when someone else is
+   * actively editing, so an agent can no longer silently clobber a human's
+   * in-progress edits or another concurrent agent write.
+   *
+   * No-op in personal mode (no workspace → no collaboration → no lock). When
+   * Redis is down the underlying lock degrades to "unlocked" (fail-open), so
+   * this never blocks a write.
+   */
+  async runWithDocumentLock<T>(id: string, fn: () => Promise<T>): Promise<T> {
+    if (!this.workspaceId) return fn();
+
+    // Did this user already hold the lease before we acquired it? An open editor
+    // refreshes the lock via its heartbeat, so the same user can already own it.
+    // In that case we must NOT release afterwards, or we'd flip their live editor
+    // to read-only mid-session — only release a lease we freshly claimed here.
+    const heldBeforeByMe =
+      (await this.editLockService.getActiveHolder('document', id)) === this.userId;
+
+    const lock = await this.acquireDocumentLock(id);
+    if (lock.lockedByOther) {
+      throw new TRPCError({
+        cause: { data: { code: 'DocumentLocked' } },
+        code: 'CONFLICT',
+        message: 'Document is being edited by another user',
+      });
+    }
+
+    try {
+      return await fn();
+    } finally {
+      if (!heldBeforeByMe) await this.releaseDocumentLock(id);
+    }
+  }
+
   async listDocumentHistory(
     params: ListDocumentHistoryParams,
     options?: DocumentHistoryAccessOptions,
