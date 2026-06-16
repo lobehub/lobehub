@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  isKimiAlwaysPreserveThinkingModel,
   isKimiNativeThinkingModel,
   isKimiPreserveThinkingModel,
   isKimiThinkingToggleModel,
@@ -78,6 +79,19 @@ describe('isKimiNativeThinkingModel', () => {
   it('should return false for switchable Kimi K2 models', () => {
     expect(isKimiNativeThinkingModel('kimi-k2.5')).toBe(false);
     expect(isKimiNativeThinkingModel('kimi-k2.6')).toBe(false);
+  });
+});
+
+describe('isKimiAlwaysPreserveThinkingModel', () => {
+  it('should return true for Kimi K2.7+ code models', () => {
+    expect(isKimiAlwaysPreserveThinkingModel('kimi-k2.7-code')).toBe(true);
+    expect(isKimiAlwaysPreserveThinkingModel('kimi-k2.7-code-highspeed')).toBe(true);
+    expect(isKimiAlwaysPreserveThinkingModel('kimi-k2.8-code-preview')).toBe(true);
+  });
+
+  it('should return false for switchable and non-code Kimi models', () => {
+    expect(isKimiAlwaysPreserveThinkingModel('kimi-k2.6')).toBe(false);
+    expect(isKimiAlwaysPreserveThinkingModel('kimi-k2-thinking')).toBe(false);
   });
 });
 

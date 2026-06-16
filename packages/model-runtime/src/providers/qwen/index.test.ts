@@ -31,6 +31,22 @@ beforeEach(() => {
 });
 
 describe('LobeQwenAI - custom features', () => {
+  describe('prompt_cache_key', () => {
+    it('should not inject Moonshot prompt_cache_key for Kimi model ids', async () => {
+      await instance.chat(
+        {
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.6',
+        },
+        { user: 'user-abc' },
+      );
+
+      const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
+
+      expect(calledPayload.prompt_cache_key).toBeUndefined();
+    });
+  });
+
   describe('thinking payload mapping', () => {
     it('should forward enable_thinking and reasoning_effort for deepseek-v4 models', async () => {
       await instance.chat({

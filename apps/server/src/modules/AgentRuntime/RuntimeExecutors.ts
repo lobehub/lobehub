@@ -42,6 +42,7 @@ import {
   applyModelExtendParams,
   type ChatStreamPayload,
   consumeStreamUntilDone,
+  isKimiAlwaysPreserveThinkingModel,
   type ModelExtendParams,
 } from '@lobechat/model-runtime';
 import {
@@ -928,17 +929,22 @@ export const createRuntimeExecutors = (
 
         const modelSupportsPreserveThinkingFromCard =
           Array.isArray(modelExtendParams) && modelExtendParams.includes('preserveThinking');
+        // Kimi K2.7+ Code has preserved thinking always active and cannot opt out.
+        const modelForcesPreserveThinking =
+          provider === 'moonshot' && isKimiAlwaysPreserveThinkingModel(model);
         const providerSupportsPreserveThinkingFallback =
-          provider === 'qwen' ||
-          provider === 'zhipu' ||
-          provider === 'moonshot';
+          provider === 'qwen' || provider === 'zhipu' || provider === 'moonshot';
         const modelSupportsPreserveThinking =
+          modelForcesPreserveThinking ||
           modelSupportsPreserveThinkingFromCard ||
           (!modelCard && providerSupportsPreserveThinkingFallback);
 
-        shouldReplayAssistantReasoning = preserveThinkingRequested && modelSupportsPreserveThinking;
-        preserveThinkingForPayload =
-          modelSupportsPreserveThinking && typeof preserveThinkingConfigured === 'boolean'
+        shouldReplayAssistantReasoning =
+          (modelForcesPreserveThinking || preserveThinkingRequested) &&
+          modelSupportsPreserveThinking;
+        preserveThinkingForPayload = modelForcesPreserveThinking
+          ? true
+          : modelSupportsPreserveThinking && typeof preserveThinkingConfigured === 'boolean'
             ? preserveThinkingConfigured
             : undefined;
 

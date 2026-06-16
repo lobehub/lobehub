@@ -85,4 +85,5 @@ export {
   type ModelExtendParams,
   resolveDefaultThinkingLevelForModel,
 } from './utils/modelExtendParams';
+export { isKimiAlwaysPreserveThinkingModel } from './utils/kimiModelId';
 export { parseDataUri } from './utils/uriParser';

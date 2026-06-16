@@ -161,14 +161,14 @@ const buildMoonshotAnthropicPayload = async (
   const thinkingParam =
     isNativeThinking || payload.thinking?.type !== 'disabled'
       ? {
-        budget_tokens: resolvedThinkingBudget,
-        type: 'enabled' as const,
-        // Only inject keep:'all' for kimi-k2.6; kimi-k2.5 does not support it and
-        // kimi-k2.7-code always has Preserved Thinking active (no need to pass the param)
-        ...(payload.preserveThinking && isKimiPreserveThinkingModel(payload.model)
-          ? { keep: 'all' as const }
-          : {}),
-      }
+          budget_tokens: resolvedThinkingBudget,
+          type: 'enabled' as const,
+          // Only inject keep:'all' for kimi-k2.6; kimi-k2.5 does not support it and
+          // kimi-k2.7-code always has Preserved Thinking active (no need to pass the param)
+          ...(payload.preserveThinking && isKimiPreserveThinkingModel(payload.model)
+            ? { keep: 'all' as const }
+            : {}),
+        }
       : ({ type: 'disabled' } as const);
 
   return {
@@ -196,13 +196,13 @@ const buildMoonshotOpenAIPayload = (
     const thinkingParam =
       isNativeThinking || thinking?.type !== 'disabled'
         ? {
-          type: 'enabled',
-          // Only inject keep:'all' for kimi-k2.6; kimi-k2.5 does not support it and
-          // kimi-k2.7-code always has Preserved Thinking active (no need to pass the param)
-          ...(payload.preserveThinking && isKimiPreserveThinkingModel(model)
-            ? { keep: 'all' }
-            : {}),
-        }
+            type: 'enabled',
+            // Only inject keep:'all' for kimi-k2.6; kimi-k2.5 does not support it and
+            // kimi-k2.7-code always has Preserved Thinking active (no need to pass the param)
+            ...(payload.preserveThinking && isKimiPreserveThinkingModel(model)
+              ? { keep: 'all' }
+              : {}),
+          }
         : { type: 'disabled' };
 
     return {
@@ -274,6 +274,9 @@ export const LobeMoonshotOpenAI = createOpenAICompatibleRuntime({
   debug: {
     chatCompletion: () => process.env.DEBUG_MOONSHOT_CHAT_COMPLETION === '1',
   },
+  // Kimi models support prompt_cache_key for multi-turn session cache optimization.
+  // Docs: https://platform.kimi.com/docs/api/chat#body-one-of-0-prompt-cache-key
+  promptCacheKeyModels: [/^kimi-/],
   provider: ModelProvider.Moonshot,
 });
 
