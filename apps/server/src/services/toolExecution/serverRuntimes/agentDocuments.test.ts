@@ -26,7 +26,10 @@ describe('agentDocumentsRuntime', () => {
       });
       const result = await runtime.listDocuments({}, { agentId: 'agent-1' });
 
-      expect(listDocuments).toHaveBeenCalledWith('agent-1', 'all');
+      // The agent runtime opts into seeing the archived `.tool-results`.
+      expect(listDocuments).toHaveBeenCalledWith('agent-1', 'all', {
+        includeArchivedToolResults: true,
+      });
       expect(result).toEqual({
         content: JSON.stringify([
           { filename: 'rules.md', id: 'doc-1', title: 'Rules' },
