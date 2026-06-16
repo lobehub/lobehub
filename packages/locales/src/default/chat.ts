@@ -189,6 +189,9 @@ export default {
     'Use an online device automatically, picking one when several are available',
   'heteroAgent.executionTarget.infoTooltip':
     'Pick a device and the agent uses it as its runtime environment — reading and writing files and operating the computer. Cloud sandbox is provided by LobeHub Marketplace.',
+  'heteroAgent.executionTarget.gateway': 'Gateway',
+  'heteroAgent.executionTarget.gatewayDesc':
+    'Run through the device gateway so other clients can follow progress',
   'heteroAgent.executionTarget.loading': 'Loading devices…',
   'heteroAgent.executionTarget.local': 'This device',
   'heteroAgent.executionTarget.localDesc': 'Run as a local process on this desktop app',

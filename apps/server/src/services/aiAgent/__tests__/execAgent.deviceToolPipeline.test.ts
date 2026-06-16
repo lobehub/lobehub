@@ -215,7 +215,9 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
         { deviceId: 'dev-1', deviceName: 'My PC', platform: 'win32' },
       ]);
 
-      mockGetAgentConfig.mockResolvedValue(createBaseAgentConfig());
+      mockGetAgentConfig.mockResolvedValue(
+        createBaseAgentConfig({ agencyConfig: { executionTarget: 'auto' } }),
+      );
 
       await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 

@@ -359,13 +359,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
 
   const boundDevice =
     executionTarget === 'device' ? devices?.find((d) => d.deviceId === boundDeviceId) : undefined;
-  // On desktop, this machine appears both as the dedicated local "This device"
-  // row (which we relabel with its real device name + tag below) and as a
-  // regular entry in the device list — drop the duplicate from the list.
-  // currentDeviceId is undefined on web, so nothing is filtered there.
   const currentDevice = devices?.find((d) => d.deviceId === currentDeviceId);
-  const remoteDevices = (devices ?? []).filter((d) => d.deviceId !== currentDeviceId);
-  const hasNoDevices = remoteDevices.length === 0;
+  const deviceRows = devices ?? [];
+  const hasNoDevices = deviceRows.length === 0;
   // On web with no device, the prominent download card below replaces the small
   // header link — avoid showing the same CTA twice.
   const showWebDownloadCard = !isDesktop && hasNoDevices && !isLoading;
@@ -399,6 +395,17 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
     return executionTarget === target;
   };
 
+  const renderDeviceStatus = (d: NonNullable<typeof devices>[number]) => (
+    <>
+      <span className={d.online ? styles.dotOnline : styles.dotOffline} />
+      <span>
+        {d.online
+          ? t('heteroAgent.executionTarget.online')
+          : t('heteroAgent.executionTarget.offline')}
+      </span>
+    </>
+  );
+
   const renderDeviceRow = (d: NonNullable<typeof devices>[number]) => (
     <OptionRow
       active={isActive('device', d.deviceId)}
@@ -406,15 +413,11 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
       icon={getDeviceIcon(d.platform)}
       key={d.deviceId}
       label={d.friendlyName || d.hostname || d.deviceId}
+      tag={d.deviceId === currentDeviceId ? t('heteroAgent.executionTarget.gateway') : undefined}
       desc={
-        <>
-          <span className={d.online ? styles.dotOnline : styles.dotOffline} />
-          <span>
-            {d.online
-              ? t('heteroAgent.executionTarget.online')
-              : t('heteroAgent.executionTarget.offline')}
-          </span>
-        </>
+        d.deviceId === currentDeviceId
+          ? t('heteroAgent.executionTarget.gatewayDesc')
+          : renderDeviceStatus(d)
       }
       onClick={() => void handleSelect('device', d.deviceId)}
     />
@@ -488,7 +491,7 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
         label={t('heteroAgent.executionTarget.sandbox')}
         onClick={() => void handleSelect('sandbox')}
       />
-      {remoteDevices.map((d) => renderDeviceRow(d))}
+      {deviceRows.map((d) => renderDeviceRow(d))}
       {hasNoDevices && isLoading ? (
         <div className={styles.empty}>{t('heteroAgent.executionTarget.loading')}</div>
       ) : null}
