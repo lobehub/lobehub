@@ -73,7 +73,10 @@ export class DeviceModel {
 
   query = async (): Promise<DeviceItem[]> => {
     return this.db.query.devices.findMany({
-      orderBy: [desc(devices.lastSeenAt)],
+      // `lastSeenAt` is written from a JS `new Date()` (ms precision), so two
+      // rapid registers can tie on it and leave the order undefined. Break ties
+      // by `createdAt` (DB-side now(), µs precision) for a stable ordering.
+      orderBy: [desc(devices.lastSeenAt), desc(devices.createdAt)],
       where: eq(devices.userId, this.userId),
     });
   };
