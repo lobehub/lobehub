@@ -6,14 +6,11 @@ import { type FleetColumn } from './types';
 interface FleetState {
   /** Append a column to the right; no-op if its key is already open. */
   addColumn: (column: FleetColumn) => void;
-  /** Ordered list of open columns. Ephemeral — re-seeded from running tasks per load. */
+  /** Ordered list of open columns. Ephemeral — synced from running tasks on each view open. */
   columns: FleetColumn[];
   removeColumn: (key: string) => void;
   /** Reorder columns to match the given key order (from drag-and-drop). */
   reorderColumns: (orderedKeys: string[]) => void;
-  /** Seed the default column set once per app load. No-op after the first seed. */
-  seedColumns: (columns: FleetColumn[]) => void;
-  seeded: boolean;
   setWidth: (key: string, width: number) => void;
   /** Per-column widths, persisted so each column remembers its size. */
   widths: Record<string, number>;
@@ -39,11 +36,6 @@ export const useFleetStore = create<FleetState>()(
           for (const c of s.columns) if (!seen.has(c.key)) next.push(c);
           return { columns: next };
         }),
-      seedColumns: (columns) => {
-        if (get().seeded) return;
-        set({ columns, seeded: true });
-      },
-      seeded: false,
       setWidth: (key, width) => set((s) => ({ widths: { ...s.widths, [key]: width } })),
       widths: {},
     }),

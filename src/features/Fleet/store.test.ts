@@ -12,22 +12,11 @@ const col = (key: string): FleetColumn => ({
 });
 
 beforeEach(() => {
-  useFleetStore.setState({ columns: [], seeded: false, widths: {} });
+  useFleetStore.setState({ columns: [], widths: {} });
   localStorage.clear();
 });
 
 describe('fleet store', () => {
-  it('seedColumns seeds once, then no-ops', () => {
-    const { seedColumns } = useFleetStore.getState();
-    seedColumns([col('a'), col('b')]);
-    expect(useFleetStore.getState().columns.map((c) => c.key)).toEqual(['a', 'b']);
-    expect(useFleetStore.getState().seeded).toBe(true);
-
-    // second seed is ignored — user customisations within a session win
-    seedColumns([col('c')]);
-    expect(useFleetStore.getState().columns.map((c) => c.key)).toEqual(['a', 'b']);
-  });
-
   it('addColumn appends and dedupes by key', () => {
     const s = useFleetStore.getState();
     s.addColumn(col('a'));
