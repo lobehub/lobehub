@@ -68,6 +68,15 @@ const LOCK_REFRESH_SAFETY_MS = 8000;
  * that one Redis hiccup never escalates to a visible "lost" banner.
  */
 const LOCK_RETRY_BACKOFF_MS = 500;
+/**
+ * Slow safety-net peek interval when the caller has opted out of fast viewer
+ * polling (i.e. surfaces with realtime SSE pushes). The SSE channel is still
+ * the primary signal; this tick only exists to catch events lost during a
+ * reconnect window or because the holder's `release` request was aborted by
+ * navigation. Long enough not to add meaningful QPS, short enough that a
+ * stranded viewer recovers in under a minute.
+ */
+const VIEWER_FALLBACK_POLL_MS = 60_000;
 
 const nextRefreshDelay = (expiresAt: EditLockState['expiresAt']) => {
   if (!expiresAt) return DOCUMENT_LOCK_HEARTBEAT_MS;
@@ -150,11 +159,15 @@ export const useEditLock = ({
         });
     };
     tick();
-    // Surfaces with a realtime push channel only need the single peek-on-open.
-    const timer = pollWhileViewing ? setInterval(tick, DOCUMENT_LOCK_HEARTBEAT_MS) : undefined;
+    // Surfaces with a realtime push channel still need a low-frequency safety
+    // net: SSE may drop events on reconnect, and the holder's release request
+    // can be aborted by navigation — without this poll, a viewer could be
+    // stranded on a stale holder until the lease expires (up to 30 s).
+    const interval = pollWhileViewing ? DOCUMENT_LOCK_HEARTBEAT_MS : VIEWER_FALLBACK_POLL_MS;
+    const timer = setInterval(tick, interval);
     return () => {
       cancelled = true;
-      if (timer) clearInterval(timer);
+      clearInterval(timer);
     };
   }, [active, resourceId, editIntent, client, ownerId, pollWhileViewing]);
 
@@ -229,10 +242,24 @@ export const useEditLock = ({
       }
       tick();
     };
+    // Fire a best-effort release on `pagehide`. React's effect cleanup runs on
+    // unmount but the navigation often aborts the in-flight release request, so
+    // the lease lingers until expiry — which is exactly what triggers the
+    // "Lin is editing this document" self-conflict on a refresh. Releasing here
+    // (before the unload commits) gives the request a much better chance to
+    // reach the server. `pagehide` is also fired by the bfcache path that
+    // `unmount` misses.
+    let released = false;
+    const releaseOnce = () => {
+      if (released || cancelled) return;
+      released = true;
+      client.release(resourceId, ownerId).catch(() => {});
+    };
     const supportsWindow = typeof window !== 'undefined';
     if (supportsWindow) {
       window.addEventListener('online', refresh);
       window.addEventListener('focus', refresh);
+      window.addEventListener('pagehide', releaseOnce);
     }
 
     return () => {
@@ -241,10 +268,14 @@ export const useEditLock = ({
       if (supportsWindow) {
         window.removeEventListener('online', refresh);
         window.removeEventListener('focus', refresh);
+        window.removeEventListener('pagehide', releaseOnce);
       }
       setState(UNLOCKED);
       setHealth('healthy');
-      client.release(resourceId, ownerId).catch(() => {});
+      if (!released) {
+        released = true;
+        client.release(resourceId, ownerId).catch(() => {});
+      }
     };
   }, [engaged, resourceId, client, ownerId]);
 

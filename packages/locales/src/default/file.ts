@@ -115,6 +115,9 @@ export default {
   'pageEditor.editMode.draftRestoreOk': 'Restore',
   'pageEditor.editMode.draftRestoreTitle': 'Restore Unsaved Draft',
   'pageEditor.editMode.lockedByOther': '{{name}} is editing this document',
+  'pageEditor.editMode.lockedBySelf': 'You’re editing this document in another tab',
+  'pageEditor.editMode.lockedBySelfDescription':
+    'Saves will resume after the other session closes or its lock expires (~30s).',
   'pageEditor.editMode.lockedBySomeone': 'Someone else is editing this document',
   'pageEditor.editMode.lockedDescription':
     'The page is read-only while they edit. Your changes won’t be saved until they’re done.',

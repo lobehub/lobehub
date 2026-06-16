@@ -103,6 +103,8 @@
   "pageEditor.editMode.lockLostTitle": "编辑权暂时丢失",
   "pageEditor.editMode.lockUnstable": "正在恢复编辑权…",
   "pageEditor.editMode.lockedByOther": "{{name}} 正在编辑此文档",
+  "pageEditor.editMode.lockedBySelf": "你正在另一个标签页编辑此文档",
+  "pageEditor.editMode.lockedBySelfDescription": "等另一处会话关闭、或锁自动过期（约 30 秒后）将自动恢复保存。",
   "pageEditor.editMode.lockedBySomeone": "其他人正在编辑此文档",
   "pageEditor.editMode.lockedDescription": "对方编辑期间本页为只读，你的改动在对方完成前不会被保存。",
   "pageEditor.editedAt": "最后编辑于 {{time}}",

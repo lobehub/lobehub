@@ -12,6 +12,7 @@ import { editorSelectors } from '@/store/document/slices/editor';
 
 import { usePageEditorStore } from './store';
 import { usePageLockedByOther } from './usePageLockedByOther';
+import { usePageLockedBySelf } from './usePageLockedBySelf';
 
 const labelStyle: CSSProperties = { color: 'inherit', fontSize: 12, maxWidth: 160 };
 
@@ -30,6 +31,7 @@ const EditingIndicator = memo(() => {
   const documentId = usePageEditorStore((s) => s.documentId);
   const isWorkspacePage = usePageEditorStore((s) => s.isWorkspacePage);
   const isLockedByOther = usePageLockedByOther();
+  const isLockedBySelf = usePageLockedBySelf();
   const isLockPending = usePageEditorStore((s) => s.isLockPending);
   const lockHolderId = usePageEditorStore((s) => s.lockHolderId);
   // Our own save was just rejected by the lock — treat as locked even if the
@@ -41,9 +43,9 @@ const EditingIndicator = memo(() => {
 
   if (!isWorkspacePage) return null;
 
-  const lockedByOther = isLockedByOther || saveBlockedByLock;
+  const locked = isLockedByOther || isLockedBySelf || saveBlockedByLock;
 
-  if (!lockedByOther) {
+  if (!locked) {
     if (!isLockPending) return null;
 
     return (
@@ -56,9 +58,13 @@ const EditingIndicator = memo(() => {
     );
   }
 
-  const label = holder?.fullName
-    ? t('pageEditor.editMode.lockedByOther', { name: holder.fullName })
-    : t('pageEditor.editMode.lockedBySomeone');
+  // Same user, different session — show the self-aware label instead of the
+  // collaborator-blocked one (which uses the user's own name and reads wrong).
+  const label = isLockedBySelf
+    ? t('pageEditor.editMode.lockedBySelf')
+    : holder?.fullName
+      ? t('pageEditor.editMode.lockedByOther', { name: holder.fullName })
+      : t('pageEditor.editMode.lockedBySomeone');
 
   return (
     <Tooltip title={label}>

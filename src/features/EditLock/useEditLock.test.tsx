@@ -154,4 +154,52 @@ describe('useEditLock — health state machine', () => {
     unmount();
     expect(client.release).toHaveBeenCalledWith('doc-1', undefined);
   });
+
+  it('viewers fall back to a slow safety-net poll even when pollWhileViewing is false', async () => {
+    renderHook(() =>
+      useEditLock({
+        client,
+        enabled: true,
+        isDirty: false,
+        pollWhileViewing: false,
+        resourceId: 'doc-1',
+      }),
+    );
+    await flushMicrotasks();
+    expect(client.peek).toHaveBeenCalledTimes(1);
+
+    // Fast poll (10s) should NOT fire — the caller explicitly opted out.
+    await act(async () => {
+      vi.advanceTimersByTime(15_000);
+      await Promise.resolve();
+    });
+    await flushMicrotasks();
+    expect(client.peek).toHaveBeenCalledTimes(1);
+
+    // 60s safety-net peek fires so a viewer stranded by missed SSE recovers.
+    await act(async () => {
+      vi.advanceTimersByTime(50_000);
+      await Promise.resolve();
+    });
+    await flushMicrotasks();
+    expect(client.peek).toHaveBeenCalledTimes(2);
+  });
+
+  it('releases on pagehide so a refresh does not strand the lease', async () => {
+    const { unmount } = renderHook(() =>
+      useEditLock({ client, enabled: true, isDirty: true, resourceId: 'doc-1' }),
+    );
+    await flushMicrotasks();
+    expect(client.release).not.toHaveBeenCalled();
+
+    await act(async () => {
+      window.dispatchEvent(new Event('pagehide'));
+      await Promise.resolve();
+    });
+    expect(client.release).toHaveBeenCalledTimes(1);
+
+    // Unmount cleanup should not double-release after pagehide already fired.
+    unmount();
+    expect(client.release).toHaveBeenCalledTimes(1);
+  });
 });

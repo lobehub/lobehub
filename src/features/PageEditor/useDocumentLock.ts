@@ -149,8 +149,13 @@ export const useDocumentLock = () => {
     useDocumentStore.getState().clearSaveBlockedByLock(documentId);
   }, [documentId, lock.pending, isLockedByOther, saveBlockedByLock]);
 
+  // Lease-expiry re-peek: schedule a single confirmation peek at the lease's
+  // expected expiry time. Runs for *any* known holder (us or someone else), so
+  // a holder whose heartbeat silently stopped (or whose release was lost in
+  // flight) doesn't strand viewers — and our own session can verify it still
+  // owns the lock instead of trusting a stale lockExpiresAt.
   useEffect(() => {
-    if (!workspacePage || !documentId || !ownerId || !isLockedByOther || !lockExpiresAt) return;
+    if (!workspacePage || !documentId || !ownerId || !lockExpiresAt) return;
 
     const expiresAtTime =
       lockExpiresAt instanceof Date ? lockExpiresAt.getTime() : new Date(lockExpiresAt).getTime();
@@ -167,5 +172,5 @@ export const useDocumentLock = () => {
     }, delay);
 
     return () => clearTimeout(timer);
-  }, [documentId, isLockedByOther, lockExpiresAt, ownerId, setLockState, workspacePage]);
+  }, [documentId, lockExpiresAt, ownerId, setLockState, workspacePage]);
 };
