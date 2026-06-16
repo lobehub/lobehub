@@ -6,12 +6,10 @@ import SkeletonList, { SkeletonItem } from '@/features/NavPanel/components/Skele
 
 interface SidebarLayoutProps {
   body?: ReactNode;
-  /** Optional pinned area below the scrollable body (e.g. a primary action). */
-  footer?: ReactNode;
   header?: ReactNode;
 }
 
-const SideBarLayout = memo<SidebarLayoutProps>(({ header, body, footer }) => {
+const SideBarLayout = memo<SidebarLayoutProps>(({ header, body }) => {
   return (
     <Flexbox gap={1} style={{ height: '100%', overflow: 'hidden' }}>
       <Suspense fallback={<SkeletonItem height={44} style={{ marginTop: 8 }} />}>{header}</Suspense>
@@ -20,7 +18,6 @@ const SideBarLayout = memo<SidebarLayoutProps>(({ header, body, footer }) => {
           <Suspense fallback={<SkeletonList paddingBlock={8} />}>{body}</Suspense>
         </TooltipGroup>
       </ScrollShadow>
-      {footer}
     </Flexbox>
   );
 });

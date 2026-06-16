@@ -90,8 +90,8 @@ interface RunningTaskSidebarProps {
  * Fleet's left navigation. Portals into the global NavPanel so the running-topic
  * list *replaces* the standard nav rail while the Fleet view is active. The
  * top bar (`SideBarHeaderLayout`) carries the back-to-home action and open-column
- * count; the body lists the running topics and a pinned footer holds the
- * "create task" action. Clicking an item opens (or re-opens) its column.
+ * count; the body leads with a "create task" action above the running-topic
+ * list. Clicking an item opens (or re-opens) its column.
  */
 const RunningTaskSidebar = memo<RunningTaskSidebarProps>(({ columns, statusByColumnKey }) => {
   const { t } = useTranslation('electron');
@@ -126,33 +126,29 @@ const RunningTaskSidebar = memo<RunningTaskSidebarProps>(({ columns, statusByCol
     />
   );
 
-  const body =
-    columns.length === 0 ? (
-      <div className={styles.empty}>{t('fleet.noRunningTasks')}</div>
-    ) : (
-      <Flexbox gap={2} paddingBlock={'4px 12px'} paddingInline={8}>
-        {columns.map((column) => (
+  const body = (
+    <Flexbox gap={2} paddingBlock={'8px 12px'} paddingInline={8}>
+      <Button block icon={PlusIcon} onClick={handleCreateTask}>
+        {t('fleet.createTask')}
+      </Button>
+      {columns.length === 0 ? (
+        <div className={styles.empty}>{t('fleet.noRunningTasks')}</div>
+      ) : (
+        columns.map((column) => (
           <SidebarTaskItem
             column={column}
             key={column.key}
             status={statusByColumnKey[column.key]}
             onActivate={handleActivate}
           />
-        ))}
-      </Flexbox>
-    );
-
-  const footer = (
-    <Flexbox paddingBlock={'4px 8px'} paddingInline={8}>
-      <Button block icon={PlusIcon} onClick={handleCreateTask}>
-        {t('fleet.createTask')}
-      </Button>
+        ))
+      )}
     </Flexbox>
   );
 
   return (
     <NavPanelPortal navKey={'fleet'}>
-      <SideBarLayout body={body} footer={footer} header={header} />
+      <SideBarLayout body={body} header={header} />
     </NavPanelPortal>
   );
 });
