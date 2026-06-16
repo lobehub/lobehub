@@ -59,19 +59,28 @@ export const sharedMainAreaChildren: RouteObject[] = [
                 handle: { meta: agentRouteMeta },
                 path: ':topicId',
               },
+            ],
+            element: dynamicLayout(
+              () => import('@/routes/(main)/agent/(chat)/_layout'),
+              'Desktop > Chat > ChatLayout',
+            ),
+          },
+          {
+            children: [
               {
                 element: dynamicElement(
                   () => import('@/routes/(main)/agent/docs/[docId]'),
                   'Desktop > Chat > Document',
                 ),
                 handle: { meta: agentDocumentRouteMeta },
-                path: 'docs/:docId',
+                path: ':docId',
               },
             ],
             element: dynamicLayout(
-              () => import('@/routes/(main)/agent/(chat)/_layout'),
-              'Desktop > Chat > ChatLayout',
+              () => import('@/routes/(main)/agent/docs/_layout'),
+              'Desktop > Chat > DocumentLayout',
             ),
+            path: 'docs',
           },
           {
             element: dynamicElement(

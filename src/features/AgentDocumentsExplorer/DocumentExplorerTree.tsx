@@ -67,10 +67,11 @@ interface Props {
   agentId: string;
   data: AgentDocumentItem[];
   mutate: KeyedMutator<AgentDocumentItem[]>;
+  onOpenDocument?: (documentId: string, agentDocumentId?: string) => void;
   style?: CSSProperties;
 }
 
-const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
+const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocument, style }) => {
   const { t } = useTranslation(['chat', 'common']);
   const navigate = useWorkspaceAwareNavigate();
   const treeRef = useRef<ExplorerTreeHandle | null>(null);
@@ -161,9 +162,13 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
     (node: ExplorerTreeNode<AgentDocumentItem>) => {
       const doc = node.data;
       if (!doc || node.isFolder) return;
+      if (onOpenDocument) {
+        onOpenDocument(doc.documentId, doc.id);
+        return;
+      }
       navigate(buildAgentDocumentPath(agentId, doc.documentId));
     },
-    [agentId, navigate],
+    [agentId, navigate, onOpenDocument],
   );
 
   const handleCommitRename = useCallback(

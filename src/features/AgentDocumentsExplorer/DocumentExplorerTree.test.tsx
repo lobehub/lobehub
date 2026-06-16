@@ -19,6 +19,7 @@ const messageError = vi.hoisted(() => vi.fn());
 const messageSuccess = vi.hoisted(() => vi.fn());
 const messageWarning = vi.hoisted(() => vi.fn());
 const modalConfirm = vi.hoisted(() => vi.fn());
+const openDocumentMock = vi.hoisted(() => vi.fn());
 const removeDocumentMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@lobehub/ui', () => ({
@@ -181,6 +182,7 @@ describe('DocumentExplorerTree', () => {
     messageWarning.mockReset();
     modalConfirm.mockReset();
     navigateMock.mockReset();
+    openDocumentMock.mockReset();
     removeDocumentMock.mockReset();
     removeDocumentMock.mockResolvedValue({ deleted: true, id: 'skill-bundle-row' });
   });
@@ -270,6 +272,33 @@ describe('DocumentExplorerTree', () => {
 
     fireEvent.click(screen.getByTestId('tree-node-button-skill-index-row'));
     expect(navigateMock).toHaveBeenCalledWith('/agent/agent-1/docs/skill-index-doc');
+  });
+
+  it('delegates document opening to the caller when provided', () => {
+    const data = [
+      createDocument({
+        documentId: 'doc-content-1',
+        id: 'agent-doc-row-1',
+        title: 'Brief',
+      }),
+    ];
+
+    render(
+      <DocumentExplorerTree
+        agentId="agent-1"
+        data={data}
+        mutate={vi.fn()}
+        onOpenDocument={openDocumentMock}
+      />,
+      {
+        wrapper: MemoryRouter,
+      },
+    );
+
+    fireEvent.click(screen.getByTestId('tree-node-button-agent-doc-row-1'));
+
+    expect(openDocumentMock).toHaveBeenCalledWith('doc-content-1', 'agent-doc-row-1');
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it('shows delete recovery action for a managed skill bundle without SKILL.md', async () => {

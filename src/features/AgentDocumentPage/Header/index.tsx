@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Avatar, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { DropdownMenu } from '@lobehub/ui/base-ui';
 import { cssVar, cx } from 'antd-style';
 import { MoreHorizontal } from 'lucide-react';
@@ -45,20 +45,13 @@ const Header = memo<HeaderProps>(
       <NavHeader
         left={
           <Flexbox horizontal align={'center'} gap={4} style={{ minWidth: 0 }}>
-            {/* Breadcrumb: agent → document. The agent chip returns to chat. */}
+            {/* Breadcrumb: agent → document. The agent label returns to chat. */}
             <Flexbox
               horizontal
               align={'center'}
-              gap={6}
               style={{ cursor: 'pointer', flexShrink: 0 }}
               onClick={onBack}
             >
-              <Avatar
-                avatar={meta.avatar}
-                background={meta.backgroundColor}
-                shape={'square'}
-                size={22}
-              />
               <Text style={{ color: cssVar.colorTextSecondary }}>
                 {meta.title || t('untitledAgent', { ns: 'chat' })}
               </Text>

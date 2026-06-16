@@ -18,8 +18,8 @@ interface AgentDocumentPageProps {
  * Standalone document view at `/agent/:aid/docs/:docId`. Reuses the shared
  * `PageEditor` (big title, Ask AI / slash items, width control, autosave) — an
  * agent document is a row in the same `documents` table as a page — but swaps in
- * an agent breadcrumb header and drops the page copilot panel so the agent's
- * working sidebar (provided by the chat layout) keeps the right side.
+ * an agent breadcrumb header and drops the page copilot panel so the outer
+ * document layout owns the page-mode right panel.
  */
 const AgentDocumentPage = memo<AgentDocumentPageProps>(({ documentId }) => {
   const { aid } = useParams<{ aid: string }>();

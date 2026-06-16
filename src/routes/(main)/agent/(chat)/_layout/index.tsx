@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 
 import ChatHeader from '@/routes/(main)/agent/features/Conversation/Header';
 import AgentWorkingSidebar from '@/routes/(main)/agent/features/Conversation/WorkingSidebar';
@@ -14,10 +14,6 @@ import HeaderSlot from './HeaderSlot';
 
 const ChatLayout = memo(() => {
   const showChatHeader = useGlobalStore(systemStatusSelectors.showChatHeader);
-  // The document sub-route renders its own breadcrumb header — suppress the
-  // conversation header there so they don't stack.
-  const isDocumentRoute = /\/agent\/[^/]+\/docs\//.test(useLocation().pathname);
-  const showHeader = showChatHeader && !isDocumentRoute;
 
   return (
     <HeaderSlot.Provider>
@@ -29,7 +25,7 @@ const ChatLayout = memo(() => {
         width={'100%'}
       >
         <Flexbox flex={1} style={{ minHeight: 0, minWidth: 0 }}>
-          {showHeader && <ChatHeader />}
+          {showChatHeader && <ChatHeader />}
           <Flexbox flex={1} style={{ minHeight: 0, position: 'relative' }}>
             <Outlet />
           </Flexbox>

@@ -34,6 +34,7 @@ import { useClientDataSWR } from '@/libs/swr';
 import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocument';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
 import { standardizeIdentifier } from '@/utils/identifier';
 
 import ProjectLevelSkills from './ProjectLevelSkills';
@@ -42,6 +43,7 @@ import UserLevelSkills, { useUserSkills } from './UserLevelSkills';
 dayjs.extend(relativeTime);
 
 type ResourceFilter = 'skills' | 'documents' | 'web';
+type DocumentOpenMode = 'portal' | 'route';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -123,7 +125,7 @@ interface DocumentItemProps {
   hideDelete?: boolean;
   mutate: () => Promise<unknown>;
   onCurrentDeleted?: () => void;
-  onOpenDocument: (documentId: string) => void;
+  onOpenDocument: (documentId: string, agentDocumentId?: string) => void;
 }
 
 const DocumentItem = memo<DocumentItemProps>(
@@ -155,7 +157,7 @@ const DocumentItem = memo<DocumentItemProps>(
 
     const handleOpen = () => {
       if (!document.documentId) return;
-      onOpenDocument(document.documentId);
+      onOpenDocument(document.documentId, document.id);
     };
 
     const handleDelete = (e: MouseEvent) => {
@@ -269,21 +271,35 @@ const buildSkillBundleViews = (data: AgentDocumentListItem[]): SkillBundleView[]
 };
 
 interface AgentDocumentsGroupProps {
+  activeFilter?: ResourceFilter;
   /** Bound remote device id (device mode); skills are then scanned over RPC. */
   deviceId?: string;
+  openMode?: DocumentOpenMode;
+  showFilterTabs?: boolean;
+  showLocalProjectSkills?: boolean;
   style?: CSSProperties;
   workingDirectory?: string;
 }
 
 const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
-  ({ deviceId, style, workingDirectory }) => {
+  ({
+    activeFilter: controlledFilter,
+    deviceId,
+    openMode,
+    showFilterTabs = true,
+    showLocalProjectSkills = false,
+    style,
+    workingDirectory,
+  }) => {
     const { t } = useTranslation('chat');
     const { t: tCommon } = useTranslation('common');
     const { message } = App.useApp();
     const agentId = useAgentStore((s) => s.activeAgentId);
     const { docId } = useParams<{ docId?: string }>();
     const navigate = useWorkspaceAwareNavigate();
+    const openDocument = useChatStore((s) => s.openDocument);
     const isDocumentMode = !!docId;
+    const resolvedOpenMode = openMode ?? (isDocumentMode ? 'route' : 'portal');
     const isLocalEnabled = useAgentStore((s) =>
       agentId ? chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(s) : false,
     );
@@ -292,16 +308,19 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
     );
     const activeDocumentIdentifier = docId ? standardizeIdentifier(docId) : undefined;
     const filterOptions = isDocumentMode ? DOCUMENT_MODE_FILTER_OPTIONS : FILTER_OPTIONS;
-    const activeFilter = filterOptions.some((option) => option.value === filter)
-      ? filter
+    const resolvedFilter = controlledFilter ?? filter;
+    const activeFilter = filterOptions.some((option) => option.value === resolvedFilter)
+      ? resolvedFilter
       : filterOptions[0].value;
 
     useEffect(() => {
+      if (controlledFilter) return;
       setFilter(isDocumentMode ? 'documents' : 'skills');
-    }, [isDocumentMode]);
+    }, [controlledFilter, isDocumentMode]);
 
     // Local desktop reads skills over IPC; a bound device reads over RPC.
-    const showProjectSkills = (isLocalEnabled || !!deviceId) && !!workingDirectory;
+    const showProjectSkills =
+      (showLocalProjectSkills || isLocalEnabled || !!deviceId) && !!workingDirectory;
 
     // Mirror what each child component reads so the parent can decide the
     // section layout (flat when a single source has items, sectioned otherwise).
@@ -363,8 +382,15 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
       );
     }
 
-    const openAgentDocument = (documentId: string) => {
+    const openAgentDocument = (documentId: string, agentDocumentId?: string) => {
       if (!agentId) return;
+      if (resolvedOpenMode === 'portal') {
+        openDocument(
+          documentId,
+          agentDocumentId ?? data.find((doc) => doc.documentId === documentId)?.id,
+        );
+        return;
+      }
       navigate(buildAgentDocumentPath(agentId, documentId));
     };
 
@@ -548,6 +574,7 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
           data={documentsData}
           mutate={mutate}
           style={{ height: '100%' }}
+          onOpenDocument={openAgentDocument}
         />
       </Flexbox>
     );
@@ -579,22 +606,24 @@ const AgentDocumentsGroup = memo<AgentDocumentsGroupProps>(
 
     return (
       <Flexbox gap={12} style={style}>
-        <Flexbox horizontal gap={4} role={'tablist'}>
-          {filterOptions.map((option) => {
-            const active = activeFilter === option.value;
-            return (
-              <div
-                aria-selected={active}
-                className={cx(styles.pillTab, active && styles.pillActive)}
-                key={option.value}
-                role={'tab'}
-                onClick={() => setFilter(option.value)}
-              >
-                {t(option.labelKey)}
-              </div>
-            );
-          })}
-        </Flexbox>
+        {showFilterTabs && (
+          <Flexbox horizontal gap={4} role={'tablist'}>
+            {filterOptions.map((option) => {
+              const active = activeFilter === option.value;
+              return (
+                <div
+                  aria-selected={active}
+                  className={cx(styles.pillTab, active && styles.pillActive)}
+                  key={option.value}
+                  role={'tab'}
+                  onClick={() => setFilter(option.value)}
+                >
+                  {t(option.labelKey)}
+                </div>
+              );
+            })}
+          </Flexbox>
+        )}
         {activeFilter === 'skills' && renderSkills()}
         {activeFilter === 'documents' && renderDocuments()}
         {activeFilter === 'web' && renderWeb()}

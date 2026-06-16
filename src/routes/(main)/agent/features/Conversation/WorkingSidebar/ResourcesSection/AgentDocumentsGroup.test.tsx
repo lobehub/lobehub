@@ -16,6 +16,7 @@ const modalConfirm = vi.hoisted(() => vi.fn());
 const messageError = vi.hoisted(() => vi.fn());
 const messageSuccess = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
+const openDocumentMock = vi.hoisted(() => vi.fn());
 const removeDocumentMock = vi.hoisted(() => vi.fn());
 const useParamsMock = vi.hoisted(() => vi.fn());
 
@@ -91,8 +92,24 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@/features/AgentDocumentsExplorer', () => ({
-  DocumentExplorerTree: ({ data }: { data: unknown[] }) => (
-    <div data-doc-count={data.length} data-testid="document-explorer-tree" />
+  DocumentExplorerTree: ({
+    data,
+    onOpenDocument,
+  }: {
+    data: { documentId: string; id: string; title?: string }[];
+    onOpenDocument?: (documentId: string, agentDocumentId?: string) => void;
+  }) => (
+    <div data-doc-count={data.length} data-testid="document-explorer-tree">
+      {data.map((doc) => (
+        <button
+          data-testid={`tree-open-${doc.id}`}
+          key={doc.id}
+          onClick={() => onOpenDocument?.(doc.documentId, doc.id)}
+        >
+          {doc.title}
+        </button>
+      ))}
+    </div>
   ),
 }));
 
@@ -190,6 +207,11 @@ vi.mock('@/store/agent', () => ({
     selector({ activeAgentId: 'agent-1', agentMap: {} }),
 }));
 
+vi.mock('@/store/chat', () => ({
+  useChatStore: (selector: (state: { openDocument: typeof openDocumentMock }) => unknown) =>
+    selector({ openDocument: openDocumentMock }),
+}));
+
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof ReactRouterDom>('react-router-dom');
   return {
@@ -277,6 +299,7 @@ describe('AgentDocumentsGroup', () => {
     messageError.mockReset();
     messageSuccess.mockReset();
     navigateMock.mockReset();
+    openDocumentMock.mockReset();
     removeDocumentMock.mockReset();
     removeDocumentMock.mockResolvedValue({ deleted: true, id: 'doc-1' });
     useParamsMock.mockReturnValue({});
@@ -302,7 +325,7 @@ describe('AgentDocumentsGroup', () => {
     expect(screen.queryByText('Example')).not.toBeInTheDocument();
   });
 
-  it('opens the SKILL.md document when clicking a skill bundle row', () => {
+  it('opens the SKILL.md document in the portal when clicking a skill bundle row', () => {
     useClientDataSWR.mockReturnValue({
       data: [skillBundleRow, skillIndexRow],
       error: undefined,
@@ -313,7 +336,8 @@ describe('AgentDocumentsGroup', () => {
     render(<AgentDocumentsGroup />);
 
     fireEvent.click(screen.getByText('YouTube Comment Retrieval Workflow'));
-    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-1/docs/skill-index-doc');
+    expect(openDocumentMock).toHaveBeenCalledWith('skill-index-doc', 'skill-index-row');
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it('falls back to the bundle id when opening an orphan skill bundle', () => {
@@ -327,7 +351,8 @@ describe('AgentDocumentsGroup', () => {
     render(<AgentDocumentsGroup />);
 
     fireEvent.click(screen.getByText('YouTube Comment Retrieval Workflow'));
-    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-1/docs/skill-bundle-doc');
+    expect(openDocumentMock).toHaveBeenCalledWith('skill-bundle-doc', 'skill-bundle-row');
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it('opens a child file by relative path through onOpenFile', () => {
@@ -341,7 +366,24 @@ describe('AgentDocumentsGroup', () => {
     render(<AgentDocumentsGroup />);
 
     fireEvent.click(screen.getByTestId('skill-skill-bundle-doc-open-skill-md'));
+    expect(openDocumentMock).toHaveBeenCalledWith('skill-index-doc', 'skill-index-row');
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('routes directly when opening a skill from document mode', () => {
+    useParamsMock.mockReturnValue({ docId: 'doc-content-1' });
+    useClientDataSWR.mockReturnValue({
+      data: [skillBundleRow, skillIndexRow],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup activeFilter="skills" />);
+
+    fireEvent.click(screen.getByText('YouTube Comment Retrieval Workflow'));
     expect(navigateMock).toHaveBeenCalledWith('/agent/agent-1/docs/skill-index-doc');
+    expect(openDocumentMock).not.toHaveBeenCalled();
   });
 
   it('renders the document tree when switching to the Documents tab', () => {
@@ -361,6 +403,40 @@ describe('AgentDocumentsGroup', () => {
     // Skill bundle, skill index, and web items are filtered out before reaching
     // the tree — only the file-backed document survives.
     expect(tree).toHaveAttribute('data-doc-count', '1');
+  });
+
+  it('opens document tree files in the portal by default', () => {
+    useClientDataSWR.mockReturnValue({
+      data: [skillBundleRow, skillIndexRow, fileDocRow, webDocRow],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup />);
+
+    fireEvent.click(screen.getByText('Documents'));
+    fireEvent.click(screen.getByTestId('tree-open-doc-1'));
+
+    expect(openDocumentMock).toHaveBeenCalledWith('doc-content-1', 'doc-1');
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('routes document tree files directly in document mode', () => {
+    useParamsMock.mockReturnValue({ docId: 'doc-content-1' });
+    useClientDataSWR.mockReturnValue({
+      data: [skillBundleRow, skillIndexRow, fileDocRow, webDocRow],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup />);
+
+    fireEvent.click(screen.getByTestId('tree-open-doc-1'));
+
+    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-1/docs/doc-content-1');
+    expect(openDocumentMock).not.toHaveBeenCalled();
   });
 
   it('defaults to Documents first in document mode and keeps Skills as the second tab', () => {
@@ -387,6 +463,30 @@ describe('AgentDocumentsGroup', () => {
 
     fireEvent.click(screen.getByText('Skills'));
     expect(screen.getByTestId('skills-list')).toBeInTheDocument();
+  });
+
+  it('can be controlled by an outer page-mode tab bar', () => {
+    useParamsMock.mockReturnValue({ docId: 'doc-content-1' });
+    useClientDataSWR.mockReturnValue({
+      data: [skillBundleRow, skillIndexRow, fileDocRow, webDocRow],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    const { rerender } = render(
+      <AgentDocumentsGroup activeFilter="skills" showFilterTabs={false} />,
+    );
+
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.getByTestId('skills-list')).toBeInTheDocument();
+    expect(screen.queryByTestId('document-explorer-tree')).not.toBeInTheDocument();
+
+    rerender(<AgentDocumentsGroup activeFilter="documents" showFilterTabs={false} />);
+
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.getByTestId('document-explorer-tree')).toBeInTheDocument();
+    expect(screen.queryByTestId('skills-list')).not.toBeInTheDocument();
   });
 
   it('resets to Documents when entering document mode', () => {
@@ -428,8 +528,9 @@ describe('AgentDocumentsGroup', () => {
     expect(screen.queryByText('Brief')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Example'));
-    expect(navigateMock).toHaveBeenCalledWith('/agent/agent-1/docs/doc-content-2');
-    navigateMock.mockClear();
+    expect(openDocumentMock).toHaveBeenCalledWith('doc-content-2', 'doc-2');
+    expect(navigateMock).not.toHaveBeenCalled();
+    openDocumentMock.mockClear();
 
     fireEvent.click(screen.getByLabelText('delete'));
     const [firstConfirmCall] = modalConfirm.mock.calls;
@@ -443,6 +544,7 @@ describe('AgentDocumentsGroup', () => {
     });
     expect(mutate).toHaveBeenCalled();
     expect(navigateMock).not.toHaveBeenCalled();
+    expect(openDocumentMock).not.toHaveBeenCalled();
     expect(messageSuccess).toHaveBeenCalledWith('workingPanel.resources.deleteSuccess');
   });
 
