@@ -72,7 +72,7 @@ const SidebarTaskItem = memo<SidebarTaskItemProps>(({ column, status, onActivate
           <Text ellipsis fontSize={12} style={{ flex: 1 }} type={'secondary'}>
             {meta?.title}
           </Text>
-          <StatusDot status={status ?? 'running'} />
+          <StatusDot status={status} />
         </Flexbox>
       </Flexbox>
     </Flexbox>
@@ -128,7 +128,7 @@ const RunningTaskSidebar = memo<RunningTaskSidebarProps>(({ columns, statusByCol
 
   const body = (
     <Flexbox gap={2} paddingBlock={'8px 12px'} paddingInline={8}>
-      <Button block icon={PlusIcon} onClick={handleCreateTask}>
+      <Button block icon={PlusIcon} size={'small'} onClick={handleCreateTask}>
         {t('fleet.createTask')}
       </Button>
       {columns.length === 0 ? (
