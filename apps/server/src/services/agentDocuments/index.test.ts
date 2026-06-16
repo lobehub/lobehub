@@ -98,6 +98,8 @@ describe('AgentDocumentsService', () => {
     findByFilename: vi.fn(),
     findSkillDocsByAgent: vi.fn(),
     hasByAgent: vi.fn(),
+    listByAgent: vi.fn(),
+    listByDocumentIds: vi.fn(),
     rename: vi.fn(),
     update: vi.fn(),
     upsert: vi.fn(),
@@ -282,21 +284,19 @@ describe('AgentDocumentsService', () => {
 
   describe('listDocuments', () => {
     it('should return a list of documents with documentId, filename, id, and title', async () => {
-      mockModel.findByAgent.mockResolvedValue([
+      mockModel.listByAgent.mockResolvedValue([
         {
-          content: 'c1',
           documentId: 'documents-1',
           filename: 'a.md',
           id: 'doc-1',
-          policy: null,
+          loadPosition: undefined,
           title: 'A',
         },
         {
-          content: 'c2',
           documentId: 'documents-2',
           filename: 'b.md',
           id: 'doc-2',
-          policy: null,
+          loadPosition: undefined,
           title: 'B',
         },
       ]);
@@ -304,7 +304,8 @@ describe('AgentDocumentsService', () => {
       const service = new AgentDocumentsService(db, userId);
       const result = await service.listDocuments('agent-1');
 
-      expect(mockModel.findByAgent).toHaveBeenCalledWith('agent-1');
+      expect(mockModel.listByAgent).toHaveBeenCalledWith('agent-1');
+      expect(mockModel.findByAgent).not.toHaveBeenCalled();
       expect(result).toEqual([
         {
           documentId: 'documents-1',
@@ -322,6 +323,16 @@ describe('AgentDocumentsService', () => {
         },
       ]);
     });
+
+    it('should pass sourceType filtering to the model', async () => {
+      mockModel.listByAgent.mockResolvedValue([]);
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.listDocuments('agent-1', 'web');
+
+      expect(mockModel.listByAgent).toHaveBeenCalledWith('agent-1', { sourceType: 'web' });
+      expect(mockModel.findByAgent).not.toHaveBeenCalled();
+    });
   });
 
   describe('listDocumentsForTopic', () => {
@@ -330,19 +341,19 @@ describe('AgentDocumentsService', () => {
         { id: 'documents-2', title: 'B' },
         { id: 'documents-1', title: 'A' },
       ]);
-      mockModel.findByDocumentIds.mockResolvedValue([
+      mockModel.listByDocumentIds.mockResolvedValue([
         {
           documentId: 'documents-1',
           filename: 'a.md',
           id: 'agent-doc-1',
-          policy: null,
+          loadPosition: undefined,
           title: 'A',
         },
         {
           documentId: 'documents-2',
           filename: 'b.md',
           id: 'agent-doc-2',
-          policy: null,
+          loadPosition: undefined,
           title: 'B',
         },
       ]);
@@ -351,10 +362,11 @@ describe('AgentDocumentsService', () => {
       const result = await service.listDocumentsForTopic('agent-1', 'topic-1');
 
       expect(mockTopicDocumentModel.findByTopicId).toHaveBeenCalledWith('topic-1');
-      expect(mockModel.findByDocumentIds).toHaveBeenCalledWith('agent-1', [
+      expect(mockModel.listByDocumentIds).toHaveBeenCalledWith('agent-1', [
         'documents-2',
         'documents-1',
       ]);
+      expect(mockModel.findByDocumentIds).not.toHaveBeenCalled();
       expect(result).toEqual([
         {
           documentId: 'documents-2',
@@ -371,6 +383,19 @@ describe('AgentDocumentsService', () => {
           title: 'A',
         },
       ]);
+    });
+
+    it('should pass sourceType filtering to the topic document summary query', async () => {
+      mockTopicDocumentModel.findByTopicId.mockResolvedValue([{ id: 'documents-1' }]);
+      mockModel.listByDocumentIds.mockResolvedValue([]);
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.listDocumentsForTopic('agent-1', 'topic-1', 'web');
+
+      expect(mockModel.listByDocumentIds).toHaveBeenCalledWith('agent-1', ['documents-1'], {
+        sourceType: 'web',
+      });
+      expect(mockModel.findByDocumentIds).not.toHaveBeenCalled();
     });
   });
 

@@ -13,6 +13,8 @@ import type {
   AgentDocument,
   AgentDocumentContextPayload,
   AgentDocumentContextRow,
+  AgentDocumentListItem,
+  AgentDocumentListSourceType,
   AgentDocumentWithRules,
   ToolUpdateLoadRule,
 } from '@/database/models/agentDocuments';
@@ -611,54 +613,27 @@ export class AgentDocumentsService {
     }
   }
 
-  async listDocuments(agentId: string, sourceType?: 'all' | 'file' | 'web') {
-    const docs = await this.agentDocumentModel.findByAgent(agentId);
-    const filtered =
-      sourceType && sourceType !== 'all' ? docs.filter((d) => d.sourceType === sourceType) : docs;
-    return filtered.map((d) => ({
-      ...deriveAgentDocumentFields(d),
-      description: d.description,
-      documentId: d.documentId,
-      fileType: d.fileType,
-      filename: d.filename,
-      id: d.id,
-      loadPosition: d.policy?.context?.position,
-      parentId: d.parentId,
-      sourceType: d.sourceType,
-      templateId: d.templateId,
-      title: d.title,
-      updatedAt: d.updatedAt,
-    }));
+  async listDocuments(agentId: string, sourceType?: AgentDocumentListSourceType) {
+    if (!sourceType) return this.agentDocumentModel.listByAgent(agentId);
+
+    return this.agentDocumentModel.listByAgent(agentId, { sourceType });
   }
 
   async listDocumentsForTopic(
     agentId: string,
     topicId: string,
-    sourceType?: 'all' | 'file' | 'web',
+    sourceType?: AgentDocumentListSourceType,
   ) {
     const topicDocs = await this.topicDocumentModel.findByTopicId(topicId);
     const documentIds = topicDocs.map((doc) => doc.id);
-    const docs = await this.agentDocumentModel.findByDocumentIds(agentId, documentIds);
+    const docs = sourceType
+      ? await this.agentDocumentModel.listByDocumentIds(agentId, documentIds, { sourceType })
+      : await this.agentDocumentModel.listByDocumentIds(agentId, documentIds);
     const docsByDocumentId = new Map(docs.map((doc) => [doc.documentId, doc]));
 
     return topicDocs
       .map((topicDoc) => docsByDocumentId.get(topicDoc.id))
-      .filter((doc): doc is AgentDocumentWithRules => Boolean(doc))
-      .filter((doc) => !sourceType || sourceType === 'all' || doc.sourceType === sourceType)
-      .map((doc) => ({
-        ...deriveAgentDocumentFields(doc),
-        description: doc.description,
-        documentId: doc.documentId,
-        fileType: doc.fileType,
-        filename: doc.filename,
-        id: doc.id,
-        loadPosition: doc.policy?.context?.position,
-        parentId: doc.parentId,
-        sourceType: doc.sourceType,
-        templateId: doc.templateId,
-        title: doc.title,
-        updatedAt: doc.updatedAt,
-      }));
+      .filter((doc): doc is AgentDocumentListItem => Boolean(doc));
   }
 
   async getDocumentByFilename(agentId: string, filename: string) {
