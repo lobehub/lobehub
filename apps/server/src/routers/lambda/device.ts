@@ -890,7 +890,13 @@ export const deviceRouter = router({
         deviceId: z.string(),
         friendlyName: z.string().max(100).nullish(),
         workingDirs: z
-          .array(z.object({ path: z.string(), repoType: z.enum(['git', 'github']).optional() }))
+          .array(
+            z.object({
+              git: z.object({ activeWorktree: z.string().optional() }).optional(),
+              path: z.string(),
+              repoType: z.enum(['git', 'github']).optional(),
+            }),
+          )
           .max(20)
           .optional(),
       }),

@@ -1,6 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { memo } from 'react';
 
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
@@ -35,8 +36,14 @@ const WorkingDirectorySection = memo<WorkingDirectorySectionProps>(({ agentId })
   // Local machine probes the filesystem for repoType; a remote device's repoType
   // comes from the cached `workingDirs` entry (we can't probe a remote fs here).
   const localRepoType = useRepoType(isLocalDevice ? effectiveWorkingDirectory : undefined);
-  const remoteDirs = useDeviceStore(deviceSelectors.getDeviceWorkingDirs(targetDeviceId));
-  const remoteRepoType = remoteDirs.find((d) => d.path === effectiveWorkingDirectory)?.repoType;
+  const deviceDirs = useDeviceStore(deviceSelectors.getDeviceWorkingDirs(targetDeviceId));
+  const currentEntry = deviceDirs.find(
+    (d) =>
+      d.path === effectiveWorkingDirectory ||
+      getWorkingDirEffectivePath(d) === effectiveWorkingDirectory,
+  );
+  const sourceWorkingDirectory = currentEntry?.path ?? effectiveWorkingDirectory;
+  const remoteRepoType = currentEntry?.repoType;
   const repoType = isLocalDevice ? localRepoType : remoteRepoType;
 
   return (
@@ -48,6 +55,7 @@ const WorkingDirectorySection = memo<WorkingDirectorySectionProps>(({ agentId })
           deviceId={isLocalDevice ? undefined : targetDeviceId}
           isGithub={repoType === 'github'}
           path={effectiveWorkingDirectory}
+          sourcePath={sourceWorkingDirectory}
         />
       )}
     </>

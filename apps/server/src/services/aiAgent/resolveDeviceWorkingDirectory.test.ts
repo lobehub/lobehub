@@ -36,6 +36,18 @@ describe('resolveDeviceWorkingDirectory', () => {
     ).toBe('/per-device');
   });
 
+  it('uses the active worktree from the per-device source entry as the effective cwd', () => {
+    expect(
+      resolveDeviceWorkingDirectory({
+        deviceDefaultCwd: '/default',
+        deviceId: 'device-1',
+        workingDirByDevice: {
+          'device-1': { git: { activeWorktree: '/repo-fix' }, path: '/repo', repoType: 'git' },
+        },
+      }),
+    ).toBe('/repo-fix');
+  });
+
   it('only matches the per-device pick for the dispatched device', () => {
     expect(
       resolveDeviceWorkingDirectory({

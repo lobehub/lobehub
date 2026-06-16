@@ -257,11 +257,12 @@ interface WorktreeSwitcherProps {
   deviceId?: string;
   isGithub: boolean;
   path: string;
+  sourcePath: string;
   worktrees: DeviceGitWorktreeListItem[];
 }
 
 const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
-  ({ agentId, currentBranch, detached, isGithub, path, worktrees }) => {
+  ({ agentId, currentBranch, detached, isGithub, path, sourcePath, worktrees }) => {
     const { t } = useTranslation('device');
     const [open, setOpen] = useState(false);
     const { commit } = useCommitWorkingDirectory(agentId);
@@ -288,13 +289,14 @@ const WorktreeSwitcher = memo<WorktreeSwitcherProps>(
         }
 
         const entry: WorkingDirEntry = {
-          path: worktree.path,
+          ...(worktree.path === sourcePath ? {} : { git: { activeWorktree: worktree.path } }),
+          path: sourcePath,
           repoType: isGithub ? 'github' : 'git',
         };
         await commit(entry);
         setOpen(false);
       },
-      [commit, isGithub],
+      [commit, isGithub, sourcePath],
     );
 
     const triggerTitle = detached

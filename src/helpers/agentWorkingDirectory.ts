@@ -1,4 +1,5 @@
 import type { LobeAgentAgencyConfig } from '@lobechat/types';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
 
 /**
  * The device a run targets: an explicitly bound remote device, this machine,
@@ -46,7 +47,7 @@ export const resolveAgentWorkingDirectory = (params: {
   } = params;
   const targetDeviceId = resolveTargetDeviceId(agencyConfig, currentDeviceId);
   const agentChoice = targetDeviceId
-    ? agencyConfig?.workingDirByDevice?.[targetDeviceId]
+    ? getWorkingDirEffectivePath(agencyConfig?.workingDirByDevice?.[targetDeviceId])
     : undefined;
   return (
     topicWorkingDirectory ||

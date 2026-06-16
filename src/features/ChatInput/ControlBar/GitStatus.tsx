@@ -153,9 +153,10 @@ interface GitStatusProps {
   deviceId?: string;
   isGithub: boolean;
   path: string;
+  sourcePath?: string;
 }
 
-const GitStatus = memo<GitStatusProps>(({ agentId, path, isGithub, deviceId }) => {
+const GitStatus = memo<GitStatusProps>(({ agentId, path, sourcePath, isGithub, deviceId }) => {
   const { t } = useTranslation('device');
   // Transport (Electron IPC vs device RPC) is decided inside the service; the
   // component just reads, identically for local and remote.
@@ -305,6 +306,7 @@ const GitStatus = memo<GitStatusProps>(({ agentId, path, isGithub, deviceId }) =
       deviceId={deviceId}
       isGithub={isGithub}
       path={path}
+      sourcePath={sourcePath ?? path}
       worktrees={worktrees}
     />
   ) : detached ? (

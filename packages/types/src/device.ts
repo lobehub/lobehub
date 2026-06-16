@@ -52,14 +52,46 @@ export interface WorkspaceInitResult {
 }
 
 /**
- * A working directory a device has used. Structured (rather than a bare path
- * string) so metadata such as the detected repo type survives — a remote client
- * viewing this device can't re-probe its filesystem, so whatever isn't captured
- * here at the source is lost. Mirrors the client-local `RecentDirEntry` shape.
+ * A working directory source a device has used. Structured (rather than a bare
+ * path string) so metadata such as the detected repo type and active git
+ * worktree survives — a remote client viewing this device can't re-probe its
+ * filesystem, so whatever isn't captured here at the source is lost. Mirrors
+ * the client-local `RecentDirEntry` shape.
  */
-export interface WorkingDirEntry {
+export type WorkingDirRepoType = 'git' | 'github';
+
+export interface WorkingDirGitState {
+  /**
+   * Active checkout selected under this git source. When absent, the source
+   * path itself is the effective working directory.
+   */
+  activeWorktree?: string;
+}
+
+export interface WorkingDirConfig {
+  git?: WorkingDirGitState;
   path: string;
-  repoType?: 'git' | 'github';
+  repoType?: WorkingDirRepoType;
+}
+
+export type WorkingDirConfigValue = string | WorkingDirConfig;
+
+export const getWorkingDirSourcePath = (
+  entry?: WorkingDirConfigValue | null,
+): string | undefined => {
+  if (!entry) return undefined;
+  return typeof entry === 'string' ? entry : entry.path;
+};
+
+export const getWorkingDirEffectivePath = (
+  entry?: WorkingDirConfigValue | null,
+): string | undefined => {
+  if (!entry) return undefined;
+  if (typeof entry === 'string') return entry;
+  return entry.git?.activeWorktree || entry.path;
+};
+
+export interface WorkingDirEntry extends WorkingDirConfig {
   /**
    * Cached "workspace init" scan of this directory (AGENTS.md + project skills).
    * Populated server-side at run start via `deviceGateway.initWorkspace` and

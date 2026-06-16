@@ -51,6 +51,7 @@ describe('WorktreeSwitcher', () => {
         agentId="agent-1"
         currentBranch="feat/current"
         path="/repo"
+        sourcePath="/repo"
         worktrees={[
           {
             branch: 'feat/current',
@@ -70,6 +71,40 @@ describe('WorktreeSwitcher', () => {
 
     fireEvent.click(screen.getByText('/repo-canary'));
 
-    expect(commitMock).toHaveBeenCalledWith({ path: '/repo-canary', repoType: 'github' });
+    expect(commitMock).toHaveBeenCalledWith({
+      git: { activeWorktree: '/repo-canary' },
+      path: '/repo',
+      repoType: 'github',
+    });
+  });
+
+  it('clears the active worktree when selecting the source worktree', () => {
+    render(
+      <WorktreeSwitcher
+        agentId="agent-1"
+        currentBranch="feat/current"
+        isGithub={false}
+        path="/repo-canary"
+        sourcePath="/repo"
+        worktrees={[
+          {
+            branch: 'feat/current',
+            current: false,
+            path: '/repo',
+            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+          },
+          {
+            branch: 'canary',
+            current: true,
+            path: '/repo-canary',
+            status: { added: 0, clean: true, deleted: 0, modified: 0, total: 0 },
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('/repo'));
+
+    expect(commitMock).toHaveBeenCalledWith({ path: '/repo', repoType: 'git' });
   });
 });
