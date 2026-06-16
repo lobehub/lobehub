@@ -60,7 +60,7 @@ const MODEL_ENABLE_ADAPTIVE_THINKING_DEFAULTS: Partial<Record<string, boolean>> 
  * Without this fallback, an old `thinking: 'enabled'` or `thinking: 'disabled'`
  * setting would be treated as unset by models that now expose the `enableReasoning` switch.
  */
-const resolveEnableReasoningValue = (chatConfig: LobeAgentChatConfig): boolean | undefined => {
+export const resolveEnableReasoningValue = (chatConfig: LobeAgentChatConfig): boolean | undefined => {
   if (Object.hasOwn(chatConfig, 'enableReasoning')) return chatConfig.enableReasoning;
 
   if (chatConfig.thinking === 'enabled') return true;
@@ -69,7 +69,7 @@ const resolveEnableReasoningValue = (chatConfig: LobeAgentChatConfig): boolean |
   return undefined;
 };
 
-const resolveThinkingLevelDefault = (
+export const resolveThinkingLevelDefault = (
   model: string,
   extendParam: ThinkingLevelExtendParam,
 ): ThinkingLevelValue => {
@@ -79,7 +79,7 @@ const resolveThinkingLevelDefault = (
   );
 };
 
-const isThinkingLevelExtendParam = (
+export const isThinkingLevelExtendParam = (
   extendParam: ExtendParamsType,
 ): extendParam is ThinkingLevelExtendParam => extendParam in DEFAULT_THINKING_LEVEL_BY_EXTEND_PARAM;
 

@@ -87,9 +87,12 @@ export { getModelPricing } from './utils/getModelPricing';
 export {
   applyModelExtendParams,
   type ApplyModelExtendParamsContext,
+  isThinkingLevelExtendParam,
   type ModelExtendParams,
   resolveDefaultEnableAdaptiveThinkingForModel,
   resolveDefaultThinkingLevelForModel,
+  resolveEnableReasoningValue,
+  resolveThinkingLevelDefault,
 } from './utils/modelExtendParams';
 export { isDeepSeekThinkingEligibleModel, isDeepSeekV4FamilyModel } from './utils/modelParse';
 export {
