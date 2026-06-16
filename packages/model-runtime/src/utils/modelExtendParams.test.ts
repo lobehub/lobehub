@@ -25,7 +25,7 @@ describe('applyModelExtendParams', () => {
     ).toEqual({});
   });
 
-  // LOBE-10442: Gemini 3 Pro via the agent path billed reasoning tokens but
+  // Gemini 3 Pro via the agent path (provider=lobehub) billed reasoning tokens but
   // returned empty thinking summaries because thinkingLevel never reached the
   // request. With the model's extendParams present, thinkingLevel must default
   // to 'high' even when the chat config does not set thinkingLevel3.

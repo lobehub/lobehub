@@ -23,7 +23,7 @@ export const tracer = trace.getTracer('@lobechat/agent-runtime', '0.0.1');
  *
  * Lets orphaned `waiting_for_async_tool` parents be detected via the
  * `barrier_held` / `no_pending` / `verify_exhausted` series instead of
- * accumulating silently. See LOBE-10385.
+ * accumulating silently. For details see: async sub-agent suspend/resume stability hardening — bounded watchdog retry with exponential backoff.
  */
 export const asyncToolResumeCounter = meter.createCounter('agent_runtime_async_tool_resume_total', {
   description: 'Count of async sub-agent parent resume attempts grouped by outcome.',

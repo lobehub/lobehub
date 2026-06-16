@@ -22,7 +22,7 @@ import type { AgentRunLifecycle, RunCompleteEvent, RunCompleteResult, RunScope }
  * `client.runtime.complete` signal status. Relocated verbatim from
  * `streamingExecutor` — kept identical for behavior preservation.
  *
- * NOTE (LOBE-10382): `waiting_for_human` is encoded as `cancelled` and
+ * NOTE: `waiting_for_human` is encoded as `cancelled` (a parked state mis-encoded as terminal) and
  * `waiting_for_async_tool` falls through to `undefined`. Both are parked, not
  * terminal — this mis-encoding is locked by characterization tests and fixed
  * when the parked/resumed signal is unified.
@@ -88,10 +88,10 @@ const NOOP = async () => {};
 /**
  * Assemble the store/UI run-lifecycle hooks for a single run.
  *
- * Phase 1 (LOBE-10378, behavior-preserving): the implementations are the CLIENT
+ * Phase 1 (behavior-preserving): the implementations are the CLIENT
  * completion effects relocated verbatim from `streamingExecutor`, so wiring the
  * client executor to these hooks keeps the characterization net green. The
- * gateway/hetero adapters are wired in LOBE-10379, where the currently-missing
+ * gateway/hetero adapters are wired in the follow-up transport unification, where the currently-missing
  * effects (title / notification / queue on gateway) are folded in.
  */
 export const buildRunLifecycle = (

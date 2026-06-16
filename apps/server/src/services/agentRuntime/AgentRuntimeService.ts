@@ -104,7 +104,7 @@ const ASYNC_TOOL_VERIFY_DELAY_MS = 15_000;
  * shot) so a transient miss — a read-replica lag, a sibling dying between
  * backfill and resume — is retried rather than leaving the parent stuck in
  * `waiting_for_async_tool` forever. With exponential backoff from a 15s base,
- * 5 attempts span ~15s → ~7.75min total before giving up. See LOBE-10385.
+ * 5 attempts span ~15s → ~7.75min total before giving up. For details see: async sub-agent suspend/resume stability hardening — bounded watchdog retry with exponential backoff instead of single-shot verification.
  */
 const ASYNC_TOOL_VERIFY_MAX_ATTEMPTS = 5;
 
@@ -645,7 +645,7 @@ export class AgentRuntimeService {
     // CAS guarantees at most one real resume regardless of how many checks run.
     // Opt back into `scheduleVerifyOnHold` with the next attempt so an
     // unsatisfied barrier re-arms (bounded backoff) instead of giving up after
-    // a single shot — the core LOBE-10385 fix.
+    // a single shot — bounded watchdog retry ensures transient misses are recovered.
     if (verifyAsyncToolBarrier) {
       const attempt = asyncToolVerifyAttempt ?? 1;
       log(
@@ -1832,7 +1832,7 @@ export class AgentRuntimeService {
    * miss (read-replica lag, a sibling dying between backfill and resume) is thus
    * retried instead of permanently stranding the parent. Once attempts are
    * exhausted the chain stops and the `verify_exhausted` metric fires so the
-   * orphan is observable. See LOBE-10385.
+   * orphan is observable. For details see: async sub-agent suspend/resume stability hardening — bounded watchdog retry with exponential backoff.
    */
   private async maybeScheduleAsyncToolVerify(
     parentOperationId: string,
