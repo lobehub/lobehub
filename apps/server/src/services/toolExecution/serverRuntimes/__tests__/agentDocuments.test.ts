@@ -226,6 +226,31 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     });
   });
 
+  it('includes a document URL when a URL builder is configured', async () => {
+    const stub = makeStub();
+    stub.createDocument.mockResolvedValue({
+      documentId: 'docs_document-row-id',
+      filename: 'daily-brief',
+      id: 'agent-doc-assoc-id',
+      title: 'Daily Brief',
+    });
+
+    const runtime = new AgentDocumentsExecutionRuntime(stub, {
+      getDocumentUrl: ({ agentId, documentId }) =>
+        `https://app.example.com/agent/${agentId}/docs/${documentId}`,
+    });
+    const result = await runtime.createDocument(
+      { content: 'body', title: 'Daily Brief' },
+      { agentId: 'agent-1' },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.content).toContain(
+      'https://app.example.com/agent/agent-1/docs/docs_document-row-id',
+    );
+    expect(result.content).toContain('Use id agent-doc-assoc-id for further edits');
+  });
+
   it('refuses to run without agentId', async () => {
     const stub = makeStub();
     const runtime = new AgentDocumentsExecutionRuntime(stub);

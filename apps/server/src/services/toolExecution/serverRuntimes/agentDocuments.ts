@@ -1,14 +1,26 @@
 import type { DocumentLoadRule } from '@lobechat/agent-templates';
-import { AgentDocumentsIdentifier } from '@lobechat/builtin-tool-agent-documents';
+import {
+  AgentDocumentsIdentifier,
+  buildAgentDocumentUrl,
+} from '@lobechat/builtin-tool-agent-documents';
 import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-documents/executionRuntime';
 import { eq } from 'drizzle-orm';
 
 import { TaskModel } from '@/database/models/task';
 import { tasks } from '@/database/schemas';
+import { appEnv } from '@/envs/app';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocuments/toolOutcome';
 
 import { type ServerRuntimeRegistration } from './types';
+
+const getAgentDocumentAppUrl = (): string | undefined => {
+  try {
+    return appEnv.APP_URL;
+  } catch {
+    return process.env.APP_URL;
+  }
+};
 
 export const agentDocumentsRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
@@ -109,142 +121,148 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
       return doc;
     };
 
-    return new AgentDocumentsExecutionRuntime({
-      copyDocument: async ({ agentId, id, newTitle }) =>
-        pinToTask(
-          await withDocumentOutcome(
-            {
-              agentId,
-              apiName: 'copyDocument',
-              getAgentDocumentId: (result) => result?.id,
-              relation: 'created',
-              summary: 'Agent documents copied a document.',
-              toolAction: 'copy',
-            },
-            () => service.copyDocumentById(id, newTitle, agentId),
-          ),
-        ),
-      createDocument: async ({ agentId, content, hintIsSkill, title }) =>
-        pinToTask(
-          await withDocumentOutcome(
-            {
-              agentId,
-              apiName: 'createDocument',
-              getAgentDocumentId: (result) => result?.id,
-              hintIsSkill,
-              relation: 'created',
-              summary: 'Agent documents created a document.',
-              toolAction: 'create',
-            },
-            () => service.createDocument(agentId, title, content, { hintIsSkill }),
-          ),
-        ),
-      createTopicDocument: async ({ agentId, content, hintIsSkill, title, topicId }) =>
-        pinToTask(
-          await withDocumentOutcome(
-            {
-              agentId,
-              apiName: 'createTopicDocument',
-              getAgentDocumentId: (result) => result?.id,
-              hintIsSkill,
-              relation: 'created',
-              summary: 'Agent documents created a topic document.',
-              toolAction: 'create',
-            },
-            () => service.createForTopic(agentId, title, content, topicId, { hintIsSkill }),
-          ),
-        ),
-      listDocuments: async ({ agentId, sourceType }) => {
-        // Agents discover archived tool results via this path (see
-        // `excludeArchivedToolResults`), so keep the `.tool-results` archive visible.
-        const docs = await service.listDocuments(agentId, sourceType, {
-          includeArchivedToolResults: true,
-        });
-        return docs.map((d) => ({
-          documentId: d.documentId,
-          filename: d.filename,
-          id: d.id,
-          title: d.title,
-        }));
-      },
-      listTopicDocuments: async ({ agentId, sourceType, topicId }) => {
-        const docs = await service.listDocumentsForTopic(agentId, topicId, sourceType, {
-          includeArchivedToolResults: true,
-        });
-        return docs.map((d) => ({
-          documentId: d.documentId,
-          filename: d.filename,
-          id: d.id,
-          title: d.title,
-        }));
-      },
-      modifyNodes: ({ agentId, id, operations }) =>
-        withDocumentOutcome(
-          {
-            agentId,
-            apiName: 'modifyNodes',
-            getAgentDocumentId: () => id,
-            relation: 'updated',
-            summary: 'Agent documents modified document nodes.',
-            toolAction: 'edit',
-          },
-          () => service.modifyDocumentNodesById(id, operations, agentId),
-        ),
-      readDocument: ({ agentId, id }) => service.getDocumentSnapshotById(id, agentId),
-      removeDocument: ({ agentId, id }) =>
-        withDocumentOutcome(
-          {
-            agentId,
-            apiName: 'removeDocument',
-            getAgentDocumentId: () => id,
-            relation: 'removed',
-            summary: 'Agent documents removed a document.',
-            toolAction: 'remove',
-          },
-          () => service.removeDocumentById(id, agentId),
-        ),
-      renameDocument: ({ agentId, id, newTitle }) =>
-        withDocumentOutcome(
-          {
-            agentId,
-            apiName: 'renameDocument',
-            getAgentDocumentId: () => id,
-            relation: 'updated',
-            summary: 'Agent documents renamed a document.',
-            toolAction: 'rename',
-          },
-          () => service.renameDocumentById(id, newTitle, agentId),
-        ),
-      replaceDocumentContent: ({ agentId, content, id }) =>
-        withDocumentOutcome(
-          {
-            agentId,
-            apiName: 'replaceDocumentContent',
-            getAgentDocumentId: () => id,
-            relation: 'updated',
-            summary: 'Agent documents replaced document content.',
-            toolAction: 'replace',
-          },
-          () => service.replaceDocumentContentById(id, content, agentId),
-        ),
-      updateLoadRule: ({ agentId, id, rule }) =>
-        withDocumentOutcome(
-          {
-            agentId,
-            apiName: 'updateLoadRule',
-            getAgentDocumentId: () => id,
-            relation: 'updated',
-            summary: 'Agent documents updated a load rule.',
-            toolAction: 'update',
-          },
-          () =>
-            service.updateLoadRuleById(
-              id,
-              { ...rule, rule: rule.rule as DocumentLoadRule | undefined },
-              agentId,
+    return new AgentDocumentsExecutionRuntime(
+      {
+        copyDocument: async ({ agentId, id, newTitle }) =>
+          pinToTask(
+            await withDocumentOutcome(
+              {
+                agentId,
+                apiName: 'copyDocument',
+                getAgentDocumentId: (result) => result?.id,
+                relation: 'created',
+                summary: 'Agent documents copied a document.',
+                toolAction: 'copy',
+              },
+              () => service.copyDocumentById(id, newTitle, agentId),
             ),
-        ),
-    });
+          ),
+        createDocument: async ({ agentId, content, hintIsSkill, title }) =>
+          pinToTask(
+            await withDocumentOutcome(
+              {
+                agentId,
+                apiName: 'createDocument',
+                getAgentDocumentId: (result) => result?.id,
+                hintIsSkill,
+                relation: 'created',
+                summary: 'Agent documents created a document.',
+                toolAction: 'create',
+              },
+              () => service.createDocument(agentId, title, content, { hintIsSkill }),
+            ),
+          ),
+        createTopicDocument: async ({ agentId, content, hintIsSkill, title, topicId }) =>
+          pinToTask(
+            await withDocumentOutcome(
+              {
+                agentId,
+                apiName: 'createTopicDocument',
+                getAgentDocumentId: (result) => result?.id,
+                hintIsSkill,
+                relation: 'created',
+                summary: 'Agent documents created a topic document.',
+                toolAction: 'create',
+              },
+              () => service.createForTopic(agentId, title, content, topicId, { hintIsSkill }),
+            ),
+          ),
+        listDocuments: async ({ agentId, sourceType }) => {
+          // Agents discover archived tool results via this path (see
+          // `excludeArchivedToolResults`), so keep the `.tool-results` archive visible.
+          const docs = await service.listDocuments(agentId, sourceType, {
+            includeArchivedToolResults: true,
+          });
+          return docs.map((d) => ({
+            documentId: d.documentId,
+            filename: d.filename,
+            id: d.id,
+            title: d.title,
+          }));
+        },
+        listTopicDocuments: async ({ agentId, sourceType, topicId }) => {
+          const docs = await service.listDocumentsForTopic(agentId, topicId, sourceType, {
+            includeArchivedToolResults: true,
+          });
+          return docs.map((d) => ({
+            documentId: d.documentId,
+            filename: d.filename,
+            id: d.id,
+            title: d.title,
+          }));
+        },
+        modifyNodes: ({ agentId, id, operations }) =>
+          withDocumentOutcome(
+            {
+              agentId,
+              apiName: 'modifyNodes',
+              getAgentDocumentId: () => id,
+              relation: 'updated',
+              summary: 'Agent documents modified document nodes.',
+              toolAction: 'edit',
+            },
+            () => service.modifyDocumentNodesById(id, operations, agentId),
+          ),
+        readDocument: ({ agentId, id }) => service.getDocumentSnapshotById(id, agentId),
+        removeDocument: ({ agentId, id }) =>
+          withDocumentOutcome(
+            {
+              agentId,
+              apiName: 'removeDocument',
+              getAgentDocumentId: () => id,
+              relation: 'removed',
+              summary: 'Agent documents removed a document.',
+              toolAction: 'remove',
+            },
+            () => service.removeDocumentById(id, agentId),
+          ),
+        renameDocument: ({ agentId, id, newTitle }) =>
+          withDocumentOutcome(
+            {
+              agentId,
+              apiName: 'renameDocument',
+              getAgentDocumentId: () => id,
+              relation: 'updated',
+              summary: 'Agent documents renamed a document.',
+              toolAction: 'rename',
+            },
+            () => service.renameDocumentById(id, newTitle, agentId),
+          ),
+        replaceDocumentContent: ({ agentId, content, id }) =>
+          withDocumentOutcome(
+            {
+              agentId,
+              apiName: 'replaceDocumentContent',
+              getAgentDocumentId: () => id,
+              relation: 'updated',
+              summary: 'Agent documents replaced document content.',
+              toolAction: 'replace',
+            },
+            () => service.replaceDocumentContentById(id, content, agentId),
+          ),
+        updateLoadRule: ({ agentId, id, rule }) =>
+          withDocumentOutcome(
+            {
+              agentId,
+              apiName: 'updateLoadRule',
+              getAgentDocumentId: () => id,
+              relation: 'updated',
+              summary: 'Agent documents updated a load rule.',
+              toolAction: 'update',
+            },
+            () =>
+              service.updateLoadRuleById(
+                id,
+                { ...rule, rule: rule.rule as DocumentLoadRule | undefined },
+                agentId,
+              ),
+          ),
+      },
+      {
+        getDocumentUrl: ({ agentId, documentId }) =>
+          buildAgentDocumentUrl(getAgentDocumentAppUrl(), agentId, documentId),
+      },
+    );
   },
   identifier: AgentDocumentsIdentifier,
 };

@@ -130,8 +130,20 @@ export interface AgentDocumentsRuntimeService {
   ) => Promise<AgentDocumentRecord | undefined>;
 }
 
+export interface AgentDocumentsRuntimeOptions {
+  /**
+   * Build a shareable URL that opens a document in the standalone document
+   * route. When provided and it returns a URL, the create result surfaces the
+   * link so the agent can relay it to the user (e.g. in an IM channel).
+   */
+  getDocumentUrl?: (params: { agentId: string; documentId: string }) => string | undefined;
+}
+
 export class AgentDocumentsExecutionRuntime {
-  constructor(private service: AgentDocumentsRuntimeService) {}
+  constructor(
+    private service: AgentDocumentsRuntimeService,
+    private options: AgentDocumentsRuntimeOptions = {},
+  ) {}
 
   private resolveAgentId(context?: AgentDocumentOperationContext) {
     if (!context?.agentId) return;
@@ -282,8 +294,18 @@ export class AgentDocumentsExecutionRuntime {
         : await this.service.createDocument({ ...args, ...toolTriggerInput, agentId });
     if (!created) return { content: 'Failed to create agent document.', success: false };
 
+    const title = created.title || args.title;
+    // The document route is keyed by the `documents` id; the URL lets the agent
+    // hand the user a clickable link. `created.id` (the agentDocuments row id)
+    // is kept separately because subsequent edit/read/remove calls key off it.
+    const url = created.documentId
+      ? this.options.getDocumentUrl?.({ agentId, documentId: created.documentId })
+      : undefined;
+
     return {
-      content: `Created document "${created.title || args.title}" (${created.id}).`,
+      content: url
+        ? `Created document "${title}" (${url}). Use id ${created.id} for further edits.`
+        : `Created document "${title}" (${created.id}).`,
       state: { agentDocumentId: created.id, documentId: created.documentId },
       success: true,
     };
