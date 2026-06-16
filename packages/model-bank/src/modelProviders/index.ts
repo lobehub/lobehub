@@ -169,6 +169,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   GithubProvider,
   GithubCopilotProvider,
   NewAPIProvider,
+  ChinaLLMProvider,
   BflProvider,
   NovitaProvider,
   PPIOProvider,
