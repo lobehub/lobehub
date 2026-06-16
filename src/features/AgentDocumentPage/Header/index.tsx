@@ -60,15 +60,6 @@ const Header = memo<HeaderProps>(
             <Text className={cx(oneLineEllipsis)} style={{ minWidth: 0 }} weight={500}>
               {title || t('pageEditor.titlePlaceholder')}
             </Text>
-            {/* ⋯ sits next to the title (not pushed to the far edge). */}
-            <DropdownMenu
-              iconSpaceMode={'group'}
-              items={menuItems}
-              placement={'bottomLeft'}
-              popupProps={{ style: { minWidth: 200 } }}
-            >
-              <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
-            </DropdownMenu>
           </Flexbox>
         }
         right={
@@ -76,6 +67,14 @@ const Header = memo<HeaderProps>(
             {documentId && <AutoSaveHint documentId={documentId} />}
             {documentId && <ShareButton documentId={documentId} />}
             <ToggleRightPanelButton hideWhenExpanded />
+            <DropdownMenu
+              iconSpaceMode={'group'}
+              items={menuItems}
+              placement={'bottomRight'}
+              popupProps={{ style: { minWidth: 200 } }}
+            >
+              <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
+            </DropdownMenu>
           </Flexbox>
         }
       />
