@@ -211,6 +211,12 @@ export interface SystemStatus {
   showAgentBuilderPanel?: boolean;
   showCommandMenu?: boolean;
   showFilePanel?: boolean;
+  /**
+   * Collapse state of the nav panel while the Fleet (Observation Mode) view is active.
+   * Persisted independently from `showLeftPanel` so collapsing the running-task list
+   * does not carry over to / from the standard chat nav rail (and vice versa).
+   */
+  showFleetPanel?: boolean;
   showHotkeyHelper?: boolean;
   showImagePanel?: boolean;
   showImageTopicPanel?: boolean;
@@ -370,6 +376,7 @@ export const INITIAL_STATUS = {
   },
   showCommandMenu: false,
   showFilePanel: true,
+  showFleetPanel: true,
   showHotkeyHelper: false,
   showImagePanel: true,
   showImageTopicPanel: true,

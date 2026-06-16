@@ -6,6 +6,7 @@ import { memo, useEffect } from 'react';
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 
 import ColumnsBoard from './ColumnsBoard';
+import FleetPanelCollapseSync from './FleetPanelCollapseSync';
 import RunningTaskSidebar from './RunningTaskSidebar';
 import { useFleetStore } from './store';
 import { useRunningTopics } from './useRunningTopics';
@@ -35,6 +36,7 @@ const FleetView = memo(() => {
 
   return (
     <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
+      <FleetPanelCollapseSync />
       <RunningTaskSidebar
         columns={columns}
         isLoading={!isInit}

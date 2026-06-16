@@ -7,8 +7,6 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AssigneeAgentSelector from '@/features/AgentTasks/features/AssigneeAgentSelector';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
 
 import { useFleetStore } from './store';
 import { fleetColumnKey } from './types';
@@ -55,16 +53,15 @@ const AddColumnButton = memo<AddColumnButtonProps>(({ insertAfterKey, row }) => 
 
   const handleSelectAgent = useCallback(
     (agentId: string) => {
-      // Open the agent's main conversation (topicId: null) — "pick an agent" here
-      // means "show me this agent", not "mint an empty throwaway topic". Opening
-      // the default topic is instant (no server round-trip that could silently
-      // fail) and matches what clicking the agent elsewhere in the app does.
-      const meta = agentSelectors.getAgentMetaById(agentId)(useAgentStore.getState());
+      // Open the agent's main conversation (topicId: null) as a fresh chat —
+      // "pick an agent" here means "start a new conversation with this agent",
+      // not "mint an empty throwaway topic". Instant (no server round-trip that
+      // could silently fail) and dedupes so re-picking just focuses the column.
       const key = fleetColumnKey(agentId, null);
       addColumn(
         {
           agentId,
-          fallbackTitle: meta?.title || t('defaultTitle', { ns: 'topic' }),
+          fallbackTitle: t('defaultTitle', { ns: 'topic' }),
           key,
           threadId: null,
           topicId: null,
