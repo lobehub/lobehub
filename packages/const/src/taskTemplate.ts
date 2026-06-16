@@ -4,6 +4,28 @@ export const TASK_TEMPLATE_ICONS = ['github'] as const;
 
 export type TaskTemplateIcon = (typeof TASK_TEMPLATE_ICONS)[number];
 
+export const TASK_TEMPLATE_CATEGORIES = [
+  'content-creation',
+  'engineering',
+  'design',
+  'learning-research',
+  'business',
+  'marketing',
+  'product',
+  'sales-customer',
+  'operations',
+  'hr',
+  'finance-legal',
+  'creator',
+  'investing',
+  'parenting',
+  'health',
+  'hobbies',
+  'personal-life',
+] as const;
+
+export type TaskTemplateCategory = (typeof TASK_TEMPLATE_CATEGORIES)[number];
+
 export type TaskTemplateConnectorSource = 'composio' | 'lobehub';
 
 export interface TaskTemplateConnectorReference {
@@ -16,25 +38,6 @@ export interface TaskTemplateConnector extends TaskTemplateConnectorReference {
   /** Whether this connector must be authorized before the task can be created. */
   required: boolean;
 }
-
-export type TaskTemplateCategory =
-  | 'content-creation'
-  | 'engineering'
-  | 'design'
-  | 'learning-research'
-  | 'business'
-  | 'marketing'
-  | 'product'
-  | 'sales-customer'
-  | 'operations'
-  | 'hr'
-  | 'finance-legal'
-  | 'creator'
-  | 'investing'
-  | 'parenting'
-  | 'health'
-  | 'hobbies'
-  | 'personal-life';
 
 export interface TaskTemplate {
   category: TaskTemplateCategory;

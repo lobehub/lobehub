@@ -109,4 +109,19 @@ describe('TaskTemplateService.listDailyRecommend', () => {
 
     expect(result).toEqual([]);
   });
+
+  it('drops malformed Market recommendation items', async () => {
+    mockGetTaskTemplateRecommendations.mockResolvedValue({
+      items: [
+        template,
+        { ...template, description: undefined },
+        { ...template, connectors: [{ identifier: 'github', source: 'lobehub' }] },
+      ],
+    });
+    const service = new TaskTemplateService('user-1');
+
+    const result = await service.listDailyRecommend(['coding']);
+
+    expect(result).toEqual([template]);
+  });
 });
