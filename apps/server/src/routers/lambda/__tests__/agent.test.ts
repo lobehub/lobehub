@@ -393,6 +393,7 @@ describe('agentRouter', () => {
           expiresAt: new Date(),
           holderId: userId,
           lockedByOther: false,
+          ownerId: null,
         });
 
         const caller = agentRouter.createCaller(wsCtx());
@@ -410,6 +411,7 @@ describe('agentRouter', () => {
           expiresAt: new Date(),
           holderId: userId,
           lockedByOther: false,
+          ownerId: null,
         });
 
         const caller = agentRouter.createCaller(wsCtx());
