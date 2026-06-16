@@ -372,12 +372,16 @@ export const agentDocumentRouter = router({
     .input(
       z.object({
         agentId: z.string(),
+        // Reveal the auto-created `.tool-results` archive. Off by default so
+        // user-facing lists stay clean; the agent document-listing tool opts in.
+        includeArchivedToolResults: z.boolean().optional().default(false),
         scope: z.enum(['agent', 'currentTopic']).optional().default('agent'),
         sourceType: z.enum(['all', 'file', 'web']).optional().default('all'),
         topicId: z.string().optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
+      const { includeArchivedToolResults } = input;
       if (input.scope === 'currentTopic') {
         if (!input.topicId) throw new Error('topicId is required to list current topic documents');
 
@@ -385,10 +389,13 @@ export const agentDocumentRouter = router({
           input.agentId,
           input.topicId,
           input.sourceType,
+          { includeArchivedToolResults },
         );
       }
 
-      return ctx.agentDocumentService.listDocuments(input.agentId, input.sourceType);
+      return ctx.agentDocumentService.listDocuments(input.agentId, input.sourceType, {
+        includeArchivedToolResults,
+      });
     }),
 
   /**

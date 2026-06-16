@@ -73,9 +73,9 @@ type ProjectableAgentDocument = Pick<
 
 /**
  * Hide the auto-created `.tool-results/` archive (root folder + its children)
- * from user-facing document lists. Agents still discover archived entries via
- * the tool-oriented `listDocuments` / `listDocumentsForTopic` paths, which hit
- * the model directly.
+ * from user-facing document lists. Applied by default everywhere, including
+ * `listDocuments` / `listDocumentsForTopic`. The tool runtime that lets agents
+ * discover archived entries opts back in via `includeArchivedToolResults`.
  */
 const excludeArchivedToolResults = <
   T extends Pick<AgentDocument, 'documentId' | 'parentId' | 'filename' | 'fileType'>,
@@ -613,16 +613,23 @@ export class AgentDocumentsService {
     }
   }
 
-  async listDocuments(agentId: string, sourceType?: AgentDocumentListSourceType) {
-    if (!sourceType) return this.agentDocumentModel.listByAgent(agentId);
+  async listDocuments(
+    agentId: string,
+    sourceType?: AgentDocumentListSourceType,
+    options?: { includeArchivedToolResults?: boolean },
+  ) {
+    const docs = sourceType
+      ? await this.agentDocumentModel.listByAgent(agentId, { sourceType })
+      : await this.agentDocumentModel.listByAgent(agentId);
 
-    return this.agentDocumentModel.listByAgent(agentId, { sourceType });
+    return options?.includeArchivedToolResults ? docs : excludeArchivedToolResults(docs);
   }
 
   async listDocumentsForTopic(
     agentId: string,
     topicId: string,
     sourceType?: AgentDocumentListSourceType,
+    options?: { includeArchivedToolResults?: boolean },
   ) {
     const topicDocs = await this.topicDocumentModel.findByTopicId(topicId);
     const documentIds = topicDocs.map((doc) => doc.id);
@@ -631,9 +638,11 @@ export class AgentDocumentsService {
       : await this.agentDocumentModel.listByDocumentIds(agentId, documentIds);
     const docsByDocumentId = new Map(docs.map((doc) => [doc.documentId, doc]));
 
-    return topicDocs
+    const ordered = topicDocs
       .map((topicDoc) => docsByDocumentId.get(topicDoc.id))
       .filter((doc): doc is AgentDocumentListItem => Boolean(doc));
+
+    return options?.includeArchivedToolResults ? ordered : excludeArchivedToolResults(ordered);
   }
 
   async getDocumentByFilename(agentId: string, filename: string) {

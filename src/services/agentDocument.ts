@@ -58,6 +58,7 @@ class AgentDocumentService {
 
   listDocuments = async (params: {
     agentId: string;
+    includeArchivedToolResults?: boolean;
     scope?: 'agent' | 'currentTopic';
     sourceType?: 'all' | 'file' | 'web';
     topicId?: string;

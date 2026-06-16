@@ -333,6 +333,65 @@ describe('AgentDocumentsService', () => {
       expect(mockModel.listByAgent).toHaveBeenCalledWith('agent-1', { sourceType: 'web' });
       expect(mockModel.findByAgent).not.toHaveBeenCalled();
     });
+
+    it('should hide the .tool-results archive folder and its children by default', async () => {
+      mockModel.listByAgent.mockResolvedValue([
+        {
+          documentId: 'archive-root',
+          fileType: 'custom/folder',
+          filename: '.tool-results',
+          id: 'doc-archive',
+          parentId: null,
+          title: '.tool-results',
+        },
+        {
+          documentId: 'archive-child',
+          filename: 'dump.md',
+          id: 'doc-child',
+          parentId: 'archive-root',
+          title: 'dump',
+        },
+        {
+          documentId: 'documents-1',
+          filename: 'a.md',
+          id: 'doc-1',
+          parentId: null,
+          title: 'A',
+        },
+      ]);
+
+      const service = new AgentDocumentsService(db, userId);
+      const result = await service.listDocuments('agent-1');
+
+      expect(result.map((d) => d.documentId)).toEqual(['documents-1']);
+    });
+
+    it('should include the .tool-results archive when includeArchivedToolResults is set', async () => {
+      mockModel.listByAgent.mockResolvedValue([
+        {
+          documentId: 'archive-root',
+          fileType: 'custom/folder',
+          filename: '.tool-results',
+          id: 'doc-archive',
+          parentId: null,
+          title: '.tool-results',
+        },
+        {
+          documentId: 'documents-1',
+          filename: 'a.md',
+          id: 'doc-1',
+          parentId: null,
+          title: 'A',
+        },
+      ]);
+
+      const service = new AgentDocumentsService(db, userId);
+      const result = await service.listDocuments('agent-1', undefined, {
+        includeArchivedToolResults: true,
+      });
+
+      expect(result.map((d) => d.documentId)).toEqual(['archive-root', 'documents-1']);
+    });
   });
 
   describe('listDocumentsForTopic', () => {

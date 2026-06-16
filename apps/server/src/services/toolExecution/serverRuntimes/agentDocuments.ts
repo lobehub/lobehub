@@ -155,7 +155,11 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           ),
         ),
       listDocuments: async ({ agentId, sourceType }) => {
-        const docs = await service.listDocuments(agentId, sourceType);
+        // Agents discover archived tool results via this path (see
+        // `excludeArchivedToolResults`), so keep the `.tool-results` archive visible.
+        const docs = await service.listDocuments(agentId, sourceType, {
+          includeArchivedToolResults: true,
+        });
         return docs.map((d) => ({
           documentId: d.documentId,
           filename: d.filename,
@@ -164,7 +168,9 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
         }));
       },
       listTopicDocuments: async ({ agentId, sourceType, topicId }) => {
-        const docs = await service.listDocumentsForTopic(agentId, topicId, sourceType);
+        const docs = await service.listDocumentsForTopic(agentId, topicId, sourceType, {
+          includeArchivedToolResults: true,
+        });
         return docs.map((d) => ({
           documentId: d.documentId,
           filename: d.filename,

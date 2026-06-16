@@ -27,7 +27,13 @@ const runtime = new AgentDocumentsExecutionRuntime({
       trigger,
     }),
   listDocuments: async ({ agentId, sourceType }) => {
-    const docs = await agentDocumentService.listDocuments({ agentId, sourceType });
+    // The agent listing tool surfaces archived `.tool-results` so the model can
+    // discover them; user-facing lists keep the default (filtered) behavior.
+    const docs = await agentDocumentService.listDocuments({
+      agentId,
+      includeArchivedToolResults: true,
+      sourceType,
+    });
     return docs.map((d) => ({
       documentId: d.documentId,
       filename: d.filename,
@@ -38,6 +44,7 @@ const runtime = new AgentDocumentsExecutionRuntime({
   listTopicDocuments: async ({ agentId, sourceType, topicId }) => {
     const docs = await agentDocumentService.listDocuments({
       agentId,
+      includeArchivedToolResults: true,
       scope: 'currentTopic',
       sourceType,
       topicId,
