@@ -184,6 +184,9 @@ export default {
   'heteroAgent.cloudRepo.notSet': 'No repo selected',
   'heteroAgent.cloudRepo.noRepos': 'No repositories configured. Add them in agent settings.',
   'heteroAgent.cloudRepo.multiSelected': '{{count}} repos selected',
+  'heteroAgent.executionTarget.auto': 'Auto',
+  'heteroAgent.executionTarget.autoDesc':
+    'Use an online device automatically, picking one when several are available',
   'heteroAgent.executionTarget.infoTooltip':
     'Pick a device and the agent uses it as its runtime environment — reading and writing files and operating the computer. Cloud sandbox is provided by LobeHub Marketplace.',
   'heteroAgent.executionTarget.loading': 'Loading devices…',

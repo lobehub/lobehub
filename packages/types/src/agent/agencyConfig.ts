@@ -37,15 +37,19 @@ export interface HeterogeneousProviderConfig {
 }
 
 /**
- * Where a hetero agent runs.
+ * Where an agent runs.
  * - `none`    : no execution environment — plain chat, no built-in run tools
+ * - `auto`    : auto-pick a device — when exactly one is online it is activated
+ *               automatically; with several online the model selects one via the
+ *               remote-device tool. The ONLY mode that touches a device the user
+ *               did not explicitly select. Opt-in: never a silent default.
  * - `local`   : in-process spawn on the user's Electron desktop (desktop only)
  * - `device`  : dispatched to an `lh connect` device identified by `boundDeviceId`
  * - `sandbox` : server-spawned cloud sandbox
  *
  * Remote hetero agents (`openclaw` | `hermes`) are always `device`.
  */
-export type DeviceExecutionTarget = 'device' | 'local' | 'none' | 'sandbox';
+export type DeviceExecutionTarget = 'auto' | 'device' | 'local' | 'none' | 'sandbox';
 
 /**
  * Agent agency configuration.

@@ -229,6 +229,8 @@
   "heteroAgent.cloudRepo.noRepos": "未配置仓库，请在助理设置中添加。",
   "heteroAgent.cloudRepo.notSet": "未选择仓库",
   "heteroAgent.cloudRepo.sectionTitle": "代码仓库",
+  "heteroAgent.executionTarget.auto": "自动",
+  "heteroAgent.executionTarget.autoDesc": "自动使用在线设备，有多台时择一使用",
   "heteroAgent.executionTarget.downloadDesktop": "下载桌面端",
   "heteroAgent.executionTarget.downloadDesktopDesc": "让 Agent 直接连接你的电脑",
   "heteroAgent.executionTarget.downloadDesktopTitle": "下载桌面端",

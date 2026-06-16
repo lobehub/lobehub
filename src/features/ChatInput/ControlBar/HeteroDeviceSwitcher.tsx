@@ -17,6 +17,7 @@ import {
   MonitorDownIcon,
   MonitorIcon,
   MonitorOffIcon,
+  SparklesIcon,
 } from 'lucide-react';
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -374,6 +375,9 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   if (executionTarget === 'none') {
     chipIcon = <Icon icon={MonitorOffIcon} size={14} />;
     chipLabel = t('heteroAgent.executionTarget.none');
+  } else if (executionTarget === 'auto') {
+    chipIcon = <Icon icon={SparklesIcon} size={14} />;
+    chipLabel = t('heteroAgent.executionTarget.auto');
   } else if (executionTarget === 'local') {
     chipIcon = <Icon icon={LaptopIcon} size={14} />;
     chipLabel = t('heteroAgent.executionTarget.local');
@@ -441,6 +445,15 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
           icon={<Icon icon={MonitorOffIcon} size={14} />}
           label={t('heteroAgent.executionTarget.none')}
           onClick={() => void handleSelect('none')}
+        />
+      )}
+      {isHetero ? null : (
+        <OptionRow
+          active={isActive('auto')}
+          desc={t('heteroAgent.executionTarget.autoDesc')}
+          icon={<Icon icon={SparklesIcon} size={14} />}
+          label={t('heteroAgent.executionTarget.auto')}
+          onClick={() => void handleSelect('auto')}
         />
       )}
       {isDesktop ? (

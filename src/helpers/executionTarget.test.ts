@@ -184,27 +184,27 @@ describe('resolveExecutionPlan', () => {
       ).toEqual({ kind: 'device-unrouted', reason: 'bound-device-offline', target: 'device' });
     });
 
-    it('auto-activates only when exactly one device is online and nothing is bound', () => {
+    it('NEVER auto-activates a `local` target with nothing bound (no silent grab)', () => {
       const local = cfg({ executionTarget: 'local' });
+      // a single online device used to be auto-activated for `local`; now only
+      // `auto` does that — `local` stays unrouted until a device is bound.
       expect(
         resolveExecutionPlan({ agencyConfig: local, isDesktop: true, onlineDeviceIds: ONLINE_A }),
-      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'local' });
+      ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' });
       expect(
         resolveExecutionPlan({ agencyConfig: local, isDesktop: true, onlineDeviceIds: ONLINE_AB }),
-      ).toEqual({ kind: 'device-unrouted', reason: 'ambiguous-online-devices', target: 'local' });
-      expect(
-        resolveExecutionPlan({ agencyConfig: local, isDesktop: true, onlineDeviceIds: [] }),
-      ).toEqual({ kind: 'device-unrouted', reason: 'no-online-device', target: 'local' });
+      ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' });
     });
 
-    it('treats the desktop default (unset target) as device-capable', () => {
+    it('treats the desktop default (unset target) as `local` but never auto-grabs a device', () => {
+      // unset → `local` on desktop; device-capable but unrouted until bound.
       expect(
         resolveExecutionPlan({
           agencyConfig: undefined,
           isDesktop: true,
           onlineDeviceIds: ONLINE_A,
         }),
-      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'local' });
+      ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' });
     });
 
     it('resolves the unset web target to none', () => {
@@ -215,6 +215,58 @@ describe('resolveExecutionPlan', () => {
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ kind: 'none', target: 'none' });
+    });
+  });
+
+  describe('auto — the only mode that auto-activates an unbound device', () => {
+    const auto = cfg({ executionTarget: 'auto' });
+
+    it('activates the single online device', () => {
+      expect(
+        resolveExecutionPlan({ agencyConfig: auto, isDesktop: true, onlineDeviceIds: ONLINE_A }),
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'auto' });
+    });
+
+    it('stays unrouted (model picks) when several devices are online', () => {
+      expect(
+        resolveExecutionPlan({ agencyConfig: auto, isDesktop: true, onlineDeviceIds: ONLINE_AB }),
+      ).toEqual({ kind: 'device-unrouted', reason: 'ambiguous-online-devices', target: 'auto' });
+    });
+
+    it('stays unrouted when no device is online', () => {
+      expect(
+        resolveExecutionPlan({ agencyConfig: auto, isDesktop: true, onlineDeviceIds: [] }),
+      ).toEqual({ kind: 'device-unrouted', reason: 'no-online-device', target: 'auto' });
+    });
+
+    it('works on web too (auto can pick a remote device)', () => {
+      expect(
+        resolveExecutionPlan({ agencyConfig: auto, isDesktop: false, onlineDeviceIds: ONLINE_A }),
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'auto' });
+    });
+
+    it('ignores a stale stored boundDeviceId (auto is not an explicit selection)', () => {
+      // a leftover binding from a previous `device` selection must not pin the
+      // run — auto picks fresh from the online set.
+      const staleBound = cfg({ boundDeviceId: 'device-a', executionTarget: 'auto' });
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: staleBound,
+          isDesktop: true,
+          onlineDeviceIds: ONLINE_AB,
+        }),
+      ).toEqual({ kind: 'device-unrouted', reason: 'ambiguous-online-devices', target: 'auto' });
+    });
+
+    it('still honours an explicit requestedDeviceId over auto-pick', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: auto,
+          isDesktop: true,
+          onlineDeviceIds: ONLINE_AB,
+          requestedDeviceId: 'device-b',
+        }),
+      ).toEqual({ deviceId: 'device-b', kind: 'device', target: 'auto' });
     });
   });
 
@@ -300,15 +352,17 @@ describe('resolveExecutionPlan', () => {
 
     it('does not degrade agent mode (toolMode wins over enableAgentMode)', () => {
       // explicit toolMode='agent' must keep device routing even if
-      // enableAgentMode is somehow false
+      // enableAgentMode is somehow false. Uses `auto` so a single online device
+      // is still activated — proving the device track survives agent mode (only
+      // `auto` auto-activates; `local`'s no-grab behaviour is covered above).
       expect(
         resolveExecutionPlan({
-          agencyConfig: cfg({ executionTarget: 'local' }),
+          agencyConfig: cfg({ executionTarget: 'auto' }),
           chatConfig: { enableAgentMode: false, toolMode: 'agent' },
           isDesktop: true,
           onlineDeviceIds: ONLINE_A,
         }),
-      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'local' });
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'auto' });
     });
 
     it('ignores chat mode for hetero agents (they always need a runtime)', () => {

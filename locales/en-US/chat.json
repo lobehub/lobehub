@@ -229,6 +229,8 @@
   "heteroAgent.cloudRepo.noRepos": "No repositories configured. Add them in agent settings.",
   "heteroAgent.cloudRepo.notSet": "No repo selected",
   "heteroAgent.cloudRepo.sectionTitle": "Repositories",
+  "heteroAgent.executionTarget.auto": "Auto",
+  "heteroAgent.executionTarget.autoDesc": "Use an online device automatically, picking one when several are available",
   "heteroAgent.executionTarget.downloadDesktop": "Get Desktop App",
   "heteroAgent.executionTarget.downloadDesktopDesc": "Run agents with access to your computer",
   "heteroAgent.executionTarget.downloadDesktopTitle": "Get the desktop app",

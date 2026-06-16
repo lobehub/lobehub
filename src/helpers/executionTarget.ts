@@ -38,6 +38,8 @@ export interface ResolveExecutionTargetOptions {
  * `agencyConfig.executionTarget` drives both desktop and web.
  *
  * - `none`    → no execution environment (plain chat)
+ * - `auto`    → auto-pick a device (opt-in; the only mode that activates a
+ *               device the user did not explicitly select)
  * - `local`   → this machine (in-process; desktop only)
  * - `sandbox` → server cloud sandbox
  * - `device`  → remote device (dispatched to `boundDeviceId`)
@@ -71,10 +73,10 @@ export const resolveExecutionTarget = (
 
 /**
  * Derive the `runtimeMode` tool gate from the unified execution target:
- * `local` → local-system tools, `sandbox` → cloud sandbox, `device` → gateway
- * routing, `none` → no run tools (plain chat). `device`/`none` both gate to
- * `'none'` — device tools are routed via `resolveExecutionPlan`, not via
- * runtimeMode.
+ * `local` → local-system tools, `sandbox` → cloud sandbox, `device`/`auto` →
+ * gateway routing, `none` → no run tools (plain chat). `device`/`auto`/`none`
+ * all gate to `'none'` — device tools are routed via `resolveExecutionPlan`,
+ * not via runtimeMode.
  */
 export const executionTargetToRuntimeMode = (target: DeviceExecutionTarget): RuntimeEnvMode => {
   switch (target) {
@@ -101,13 +103,16 @@ export const resolveRuntimeMode = (
   executionTargetToRuntimeMode(resolveExecutionTarget(agencyConfig, { isDesktop }));
 
 export type ExecutionPlanUnroutedReason =
-  /** no bound device and more than one device online — the user must bind explicitly */
+  /** `auto` mode with more than one device online — the model must pick one */
   | 'ambiguous-online-devices'
   /** an explicitly bound device exists but is offline — never silently fall back */
   | 'bound-device-offline'
-  /** target is `device` but nothing is bound */
+  /**
+   * device-capable target (`auto` / `local` / `device`) but no device selected —
+   * nothing bound/requested, and not the `auto` single-online-device case
+   */
   | 'no-bound-device'
-  /** no device online at all */
+  /** `auto` mode but no device online at all */
   | 'no-online-device';
 
 /**
@@ -179,15 +184,17 @@ export interface ResolveExecutionPlanParams {
  * rule about which device (if any) a run touches lives here:
  *
  * 1. `requestedDeviceId` forces device routing; otherwise the resolved
- *    `executionTarget` decides (`local` routes to a device too — the local
- *    machine is just a device).
+ *    `executionTarget` decides (`auto` / `local` route to a device too — the
+ *    local machine is just a device).
  * 2. `none` / `sandbox` NEVER route to a device — no auto-activation, no
  *    step-level re-injection, no exceptions.
  * 3. `canUseDevice === false` degrades any device-capable target to `none`
  *    (sandbox stays available — it never touches the user's machines).
  * 4. With online info: a bound device is used only if online (an offline
- *    binding stays unrouted rather than guessing another machine); unbound
- *    runs auto-activate only when EXACTLY ONE device is online.
+ *    binding stays unrouted rather than guessing another machine). An UNBOUND
+ *    run auto-activates ONLY in the opt-in `auto` mode (single device → use it;
+ *    several → stay unrouted so the model picks one). `local` / `device` never
+ *    silently grab a device — they stay unrouted until one is bound/requested.
  */
 export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): ExecutionPlan => {
   const {
@@ -208,7 +215,8 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
   if (resolveToolMode(chatConfig) === 'chat' && !isHetero) return { kind: 'none', target: 'none' };
 
   const target = resolveExecutionTarget(agencyConfig, { isDesktop, isHetero });
-  const wantsDevice = !!requestedDeviceId || target === 'device' || target === 'local';
+  const wantsDevice =
+    !!requestedDeviceId || target === 'device' || target === 'local' || target === 'auto';
 
   if (!wantsDevice || !canUseDevice) {
     if (target === 'sandbox') return { kind: 'sandbox', target: 'sandbox' };
@@ -221,9 +229,15 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
     return { kind: 'none', target: 'none' };
   }
 
-  const boundDeviceId = requestedDeviceId || agencyConfig?.boundDeviceId;
-  // requestedDeviceId may force device routing over a non-device stored target
-  const effectiveTarget = target === 'local' ? 'local' : 'device';
+  // In `auto` mode a stored `boundDeviceId` is NOT an explicit selection (that
+  // is what `device` mode is for) — ignore it so `auto` always picks fresh and
+  // a stale binding left over from a previous `device` selection can't pin the
+  // run. An explicit `requestedDeviceId` still wins everywhere.
+  const boundDeviceId =
+    requestedDeviceId || (target === 'auto' ? undefined : agencyConfig?.boundDeviceId);
+  // requestedDeviceId may force device routing over a non-device stored target;
+  // keep `auto` / `local` distinct, everything else collapses to `device`.
+  const effectiveTarget = target === 'local' ? 'local' : target === 'auto' ? 'auto' : 'device';
 
   // No online info: trust the binding (the gateway errors on dispatch if the
   // device is offline). No auto-activation without visibility.
@@ -238,13 +252,22 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
       : { kind: 'device-unrouted', reason: 'bound-device-offline', target: effectiveTarget };
   }
 
-  if (onlineDeviceIds.length === 1) {
-    return { deviceId: onlineDeviceIds[0], kind: 'device', target: effectiveTarget };
+  // Unbound. Auto-activation — picking a device the user never selected — is
+  // exclusive to the opt-in `auto` mode: one online device is used directly;
+  // with several, stay unrouted so the model selects one via the remote-device
+  // tool.
+  if (target === 'auto') {
+    if (onlineDeviceIds.length === 1) {
+      return { deviceId: onlineDeviceIds[0], kind: 'device', target: effectiveTarget };
+    }
+    return {
+      kind: 'device-unrouted',
+      reason: onlineDeviceIds.length === 0 ? 'no-online-device' : 'ambiguous-online-devices',
+      target: effectiveTarget,
+    };
   }
 
-  return {
-    kind: 'device-unrouted',
-    reason: onlineDeviceIds.length === 0 ? 'no-online-device' : 'ambiguous-online-devices',
-    target: effectiveTarget,
-  };
+  // `local` / `device` with nothing bound: never auto-grab a device — stay
+  // unrouted until the user binds/requests one (or switches to `auto`).
+  return { kind: 'device-unrouted', reason: 'no-bound-device', target: effectiveTarget };
 };
