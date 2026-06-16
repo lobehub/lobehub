@@ -250,8 +250,13 @@ export class AgentStreamClient extends TypedEmitter {
             this.resumeBuffer = [];
           }
 
-          // Request all buffered events (covers events pushed before WS connected)
-          this.sendMessage({ lastEventId: this.lastEventId, type: 'resume' });
+          // Request all buffered events (covers events pushed before WS connected).
+          // `wantStatus` opts into the authoritative `resume_complete` reply
+          // (LOBE-10443): this client knows how to consume it, so a current
+          // gateway will hand back the real session status. Legacy gateways
+          // ignore the flag and just replay — we then rely on live events, never
+          // guessing completion from silence.
+          this.sendMessage({ lastEventId: this.lastEventId, type: 'resume', wantStatus: true });
           this.emit('connected');
           break;
         }

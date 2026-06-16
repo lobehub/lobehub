@@ -162,6 +162,12 @@ export interface AuthMessage {
 export interface ResumeMessage {
   lastEventId: string;
   type: 'resume';
+  /**
+   * Opt into the authoritative `resume_complete` reply (LOBE-10443). Set by
+   * this client so a current gateway hands back the stored session status;
+   * legacy gateways ignore it and replay only.
+   */
+  wantStatus?: boolean;
 }
 
 export interface HeartbeatMessage {

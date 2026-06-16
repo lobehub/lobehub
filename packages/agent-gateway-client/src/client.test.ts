@@ -159,7 +159,7 @@ describe('AgentStreamClient', () => {
 
       // First message is auth, second is resume
       expect(ws.sent).toHaveLength(2);
-      expect(JSON.parse(ws.sent[1])).toEqual({ lastEventId: '', type: 'resume' });
+      expect(JSON.parse(ws.sent[1])).toEqual({ lastEventId: '', type: 'resume', wantStatus: true });
     });
 
     it('should not connect if already connected', async () => {
@@ -267,7 +267,7 @@ describe('AgentStreamClient', () => {
 
       // Resume should use the tracked lastEventId
       const resumeMsg = JSON.parse(ws2.sent[1]);
-      expect(resumeMsg).toEqual({ lastEventId: 'evt-5', type: 'resume' });
+      expect(resumeMsg).toEqual({ lastEventId: 'evt-5', type: 'resume', wantStatus: true });
     });
 
     it('should disconnect on agent_runtime_end', async () => {
