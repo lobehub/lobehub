@@ -26,14 +26,19 @@ export interface Action {
   initMeta: (title?: string, emoji?: string) => void;
   performMetaSave: () => Promise<void>;
   setEmoji: (emoji: string | undefined) => void;
+  setLockOwnerId: (ownerId: string | undefined) => void;
   /** True while the lock state is still being resolved (editor read-only meanwhile). */
   setLockPending: (pending: boolean) => void;
   /**
-   * Record who holds the edit lock. `holderId` is the single source of truth;
-   * "locked by other" is derived against the current user via
-   * {@link usePageLockedByOther}, never stored separately.
+   * Record who holds the edit lock. `holderId` (+ `holderOwnerId`) is the single
+   * source of truth; "locked by other" is derived against the current user/session
+   * via {@link usePageLockedByOther}, never stored separately.
    */
-  setLockState: (holderId: string | null) => void;
+  setLockState: (
+    holderId: string | null,
+    expiresAt?: Date | string | null,
+    holderOwnerId?: string | null,
+  ) => void;
   setRightPanelMode: (mode: RightPanelMode) => void;
   setTitle: (title: string) => void;
   triggerDebouncedMetaSave: () => void;
@@ -192,9 +197,18 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
         if (get().isLockPending !== pending) set({ isLockPending: pending });
       },
 
-      setLockState: (holderId) => {
-        if (get().lockHolderId === holderId) return;
-        set({ lockHolderId: holderId });
+      setLockOwnerId: (ownerId) => {
+        if (get().lockOwnerId !== ownerId) set({ lockOwnerId: ownerId });
+      },
+
+      setLockState: (holderId, expiresAt = null, holderOwnerId = null) => {
+        if (
+          get().lockHolderId === holderId &&
+          get().lockExpiresAt === expiresAt &&
+          get().lockHolderOwnerId === holderOwnerId
+        )
+          return;
+        set({ lockExpiresAt: expiresAt, lockHolderId: holderId, lockHolderOwnerId: holderOwnerId });
       },
 
       setRightPanelMode: (rightPanelMode) => {

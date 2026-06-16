@@ -327,6 +327,7 @@ export class EditorActionImpl {
         content: currentContent,
         editorData: JSON.stringify(currentEditorData),
         id,
+        lockOwnerId: doc.lockOwnerId,
         metadata: metadata?.emoji ? { emoji: metadata.emoji } : undefined,
         restoreFromHistoryId: options?.restoreFromHistoryId,
         saveSource: options?.saveSource,
@@ -366,6 +367,22 @@ export class EditorActionImpl {
 
   setEditorState = (editorState: LobehubEditorState | undefined): void => {
     this.#set({ editorState }, false, n('setEditorState'));
+  };
+
+  /**
+   * Clear the "save rejected by another member's lock" flag.
+   *
+   * `saveBlockedByLock` is set on a CONFLICT save and otherwise only cleared by a
+   * *successful* save — but a blocked editor is read-only, so it can never reach
+   * that success path on its own. Once the lock is no longer held by someone else
+   * (we hold it, or it's free), the block is stale and must be dropped, or the
+   * user stays stuck read-only behind a banner naming the current holder (which
+   * may now be themselves). Called by the lock driver on that transition.
+   */
+  clearSaveBlockedByLock = (id: string): void => {
+    const { documents, internal_dispatchDocument } = this.#get();
+    if (!documents[id]?.saveBlockedByLock) return;
+    internal_dispatchDocument({ id, type: 'updateDocument', value: { saveBlockedByLock: false } });
   };
 }
 

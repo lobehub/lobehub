@@ -41,6 +41,29 @@ describe('DocumentHistoryQueueService', () => {
       });
     });
 
+    it('should forward the lock owner so the holder snapshot passes the write guard', async () => {
+      vi.mocked(documentService.saveDocumentHistory).mockResolvedValue({
+        savedAt: new Date().toISOString(),
+      });
+      const editor = {
+        getDocument: vi.fn(() => ({ root: true })),
+      };
+
+      documentHistoryQueueService.enqueueEditorSnapshot({
+        documentId: 'doc-1',
+        editor,
+        lockOwnerId: 'page-owner-1',
+      });
+      await Promise.resolve();
+
+      expect(documentService.saveDocumentHistory).toHaveBeenCalledWith({
+        documentId: 'doc-1',
+        editorData: JSON.stringify({ root: true }),
+        lockOwnerId: 'page-owner-1',
+        saveSource: 'llm_call',
+      });
+    });
+
     it('should save the origin content when the editor snapshot contains diff nodes', async () => {
       vi.mocked(documentService.saveDocumentHistory).mockResolvedValue({
         savedAt: new Date().toISOString(),

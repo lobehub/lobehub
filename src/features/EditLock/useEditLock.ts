@@ -5,8 +5,10 @@ import { useEffect, useRef, useState } from 'react';
 import { DOCUMENT_LOCK_HEARTBEAT_MS } from '@/const/documentLock';
 
 export interface EditLockState {
+  expiresAt?: Date | string | null;
   holderId: string | null;
   lockedByOther: boolean;
+  ownerId?: string | null;
 }
 
 export interface EditLockResult extends EditLockState {
@@ -21,9 +23,9 @@ export interface EditLockResult extends EditLockState {
 
 /** Per-resource lock RPCs (bind these to the resource's trpc procedures). */
 export interface EditLockClient {
-  acquire: (id: string) => Promise<EditLockState>;
-  peek: (id: string) => Promise<EditLockState>;
-  release: (id: string) => Promise<void>;
+  acquire: (id: string, ownerId?: string) => Promise<EditLockState>;
+  peek: (id: string, ownerId?: string) => Promise<EditLockState>;
+  release: (id: string, ownerId?: string) => Promise<void>;
 }
 
 interface UseEditLockOptions {
@@ -32,6 +34,7 @@ interface UseEditLockOptions {
   enabled: boolean;
   /** First real edit; latches edit-intent so the lock is acquired implicitly. */
   isDirty: boolean;
+  ownerId?: string;
   /**
    * Re-peek the lock on an interval while viewing (not editing) to notice another
    * member starting/stopping. Defaults to true. Set false for surfaces that get
@@ -42,6 +45,17 @@ interface UseEditLockOptions {
 }
 
 const UNLOCKED: EditLockState = { holderId: null, lockedByOther: false };
+const LOCK_REFRESH_SAFETY_MS = 8000;
+
+const nextRefreshDelay = (expiresAt: EditLockState['expiresAt']) => {
+  if (!expiresAt) return DOCUMENT_LOCK_HEARTBEAT_MS;
+
+  const expiresAtTime =
+    expiresAt instanceof Date ? expiresAt.getTime() : new Date(expiresAt).getTime();
+  if (Number.isNaN(expiresAtTime)) return DOCUMENT_LOCK_HEARTBEAT_MS;
+
+  return Math.max(1000, expiresAtTime - Date.now() - LOCK_REFRESH_SAFETY_MS);
+};
 
 /**
  * Generic, self-contained collaborative edit lock for any editable resource.
@@ -58,6 +72,7 @@ export const useEditLock = ({
   client,
   enabled,
   isDirty,
+  ownerId,
   pollWhileViewing = true,
   resourceId,
 }: UseEditLockOptions): EditLockResult => {
@@ -91,7 +106,7 @@ export const useEditLock = ({
     let cancelled = false;
     const tick = () => {
       client
-        .peek(resourceId)
+        .peek(resourceId, ownerId)
         .then((s) => {
           if (cancelled) return;
           setState(s);
@@ -109,33 +124,37 @@ export const useEditLock = ({
       cancelled = true;
       if (timer) clearInterval(timer);
     };
-  }, [active, resourceId, editIntent, client, pollWhileViewing]);
+  }, [active, resourceId, editIntent, client, ownerId, pollWhileViewing]);
 
   // Editor: acquire/refresh the lock while editing; release on unmount.
   useEffect(() => {
     if (!engaged || !resourceId) return;
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
     const tick = () => {
       client
-        .acquire(resourceId)
+        .acquire(resourceId, ownerId)
         .then((s) => {
           if (cancelled) return;
           setState(s);
           setResolved(true);
+          timer = setTimeout(tick, nextRefreshDelay(s.expiresAt));
         })
         .catch(() => {
-          if (!cancelled) setResolved(true);
+          if (cancelled) return;
+          setResolved(true);
+          timer = setTimeout(tick, DOCUMENT_LOCK_HEARTBEAT_MS);
         });
     };
     tick();
-    const timer = setInterval(tick, DOCUMENT_LOCK_HEARTBEAT_MS);
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      if (timer) clearTimeout(timer);
       setState(UNLOCKED);
-      client.release(resourceId).catch(() => {});
+      client.release(resourceId, ownerId).catch(() => {});
     };
-  }, [engaged, resourceId, client]);
+  }, [engaged, resourceId, client, ownerId]);
 
   return { ...state, pending: active && !resolved };
 };

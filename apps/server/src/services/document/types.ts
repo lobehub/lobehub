@@ -59,6 +59,7 @@ export interface UpdateDocumentParams {
   content?: string;
   editorData?: Record<string, any>;
   fileType?: string;
+  lockOwnerId?: string;
   metadata?: Record<string, any>;
   parentId?: string | null;
   restoreFromHistoryId?: string;
@@ -83,4 +84,6 @@ export interface DocumentLockResult {
   holderId: string | null;
   /** True when another active user holds the lock (caller is locked out). */
   lockedByOther: boolean;
+  /** The edit-session id currently holding the lock, or null when unlocked / legacy. */
+  ownerId: string | null;
 }

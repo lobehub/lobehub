@@ -103,6 +103,11 @@ const StoreUpdater = memo<StoreUpdaterProps>(
         documentHistoryQueueService.enqueueEditorSnapshot({
           documentId: pageId,
           editor,
+          // Forward the page lock owner so the holder's pre-mutation snapshot
+          // isn't rejected by its own lease (see saveDocumentHistory guard).
+          lockOwnerId: pageId
+            ? useDocumentStore.getState().documents[pageId]?.lockOwnerId
+            : undefined,
         });
       });
       pageAgentRuntime.setAfterMutateHandler(async () => {

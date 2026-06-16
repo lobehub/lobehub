@@ -27,8 +27,18 @@ export interface State extends PublicState {
   isWorkspacePage?: boolean;
   lastSavedEmoji?: string;
   lastSavedTitle?: string;
+  /** Lease expiry of the current lock holder, if known. */
+  lockExpiresAt?: Date | string | null;
   /** User id of the member currently holding the collaborative edit lock. */
   lockHolderId?: string | null;
+  /**
+   * Edit-session id of the member currently holding the lock, when known. Lets
+   * us detect "locked by another session of the same user" (e.g. a second tab),
+   * which a userId-only comparison can't see.
+   */
+  lockHolderOwnerId?: string | null;
+  /** Edit-session id for this open page instance. */
+  lockOwnerId?: string;
   metaSaveStatus?: MetaSaveStatus;
   rightPanelMode: RightPanelMode;
 }
@@ -42,7 +52,10 @@ export const initialState: State = {
   isLockPending: true,
   isMetaDirty: false,
   isWorkspacePage: false,
+  lockExpiresAt: null,
   lockHolderId: null,
+  lockHolderOwnerId: null,
+  lockOwnerId: undefined,
   metaSaveStatus: 'idle',
   rightPanelMode: 'copilot',
   title: undefined,

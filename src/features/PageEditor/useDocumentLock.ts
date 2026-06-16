@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import { type EditLockClient, useEditLock } from '@/features/EditLock';
 import { usePermission } from '@/hooks/usePermission';
@@ -15,9 +15,18 @@ import { usePageLockedByOther } from './usePageLockedByOther';
 
 // Stable lock RPC binding for the document resource.
 const documentLockClient: EditLockClient = {
-  acquire: (id) => documentService.acquireDocumentLock(id),
-  peek: (id) => documentService.getDocumentLock(id),
-  release: (id) => documentService.releaseDocumentLock(id),
+  acquire: (id, ownerId) => documentService.acquireDocumentLock(id, ownerId),
+  peek: (id, ownerId) => documentService.getDocumentLock(id, ownerId),
+  release: (id, ownerId) => documentService.releaseDocumentLock(id, ownerId),
+};
+
+const createLockOwnerId = (documentId: string) => {
+  const randomId =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  return `page:${documentId}:${randomId}`;
 };
 
 /**
@@ -38,6 +47,8 @@ export const useDocumentLock = () => {
   const isLockedByOther = usePageLockedByOther();
   const setLockState = usePageEditorStore((s) => s.setLockState);
   const setLockPending = usePageEditorStore((s) => s.setLockPending);
+  const setLockOwnerId = usePageEditorStore((s) => s.setLockOwnerId);
+  const lockExpiresAt = usePageEditorStore((s) => s.lockExpiresAt);
   const isDirty = useDocumentStore((s) =>
     documentId ? editorSelectors.isDirty(documentId)(s) : false,
   );
@@ -46,6 +57,30 @@ export const useDocumentLock = () => {
   );
 
   const workspacePage = Boolean(documentId && canEdit && isWorkspacePage);
+  const ownerId = useMemo(
+    () => (documentId ? createLockOwnerId(documentId) : undefined),
+    [documentId],
+  );
+
+  useEffect(() => {
+    setLockOwnerId(workspacePage ? ownerId : undefined);
+    if (!documentId) return;
+
+    useDocumentStore.getState().internal_dispatchDocument({
+      id: documentId,
+      type: 'updateDocument',
+      value: { lockOwnerId: workspacePage ? ownerId : undefined },
+    });
+
+    return () => {
+      setLockOwnerId(undefined);
+      useDocumentStore.getState().internal_dispatchDocument({
+        id: documentId,
+        type: 'updateDocument',
+        value: { lockOwnerId: undefined },
+      });
+    };
+  }, [documentId, ownerId, setLockOwnerId, workspacePage]);
 
   // Shared lock lifecycle. Pages receive realtime lock pushes via SSE, so the
   // viewer poll is off — the single peek-on-open plus those pushes keep it live.
@@ -53,6 +88,7 @@ export const useDocumentLock = () => {
     client: documentLockClient,
     enabled: workspacePage,
     isDirty,
+    ownerId,
     pollWhileViewing: false,
     resourceId: documentId,
   });
@@ -60,8 +96,8 @@ export const useDocumentLock = () => {
   // Bridge lock state into the page store. A peek failure / non-workspace page
   // resolves to "free" (pending false), so the editor is never stranded.
   useEffect(() => {
-    setLockState(lock.holderId);
-  }, [lock.holderId, setLockState]);
+    setLockState(lock.holderId, lock.expiresAt, lock.ownerId);
+  }, [lock.expiresAt, lock.holderId, lock.ownerId, setLockState]);
 
   useEffect(() => {
     setLockPending(lock.pending);
@@ -83,4 +119,34 @@ export const useDocumentLock = () => {
       void mutate(documentSWRKeys.editor(documentId));
     }
   }, [workspacePage, documentId, isLockedByOther, saveBlockedByLock]);
+
+  // Recovery: once the lock has resolved and is no longer held by another member
+  // (we hold it, or it's free), drop any stale save-block from an earlier
+  // CONFLICT. Without this the editor stays read-only behind a banner that names
+  // the *current* holder — possibly the user themselves — since the only other
+  // path that clears the flag is a successful save the read-only editor can't reach.
+  useEffect(() => {
+    if (!documentId || lock.pending || isLockedByOther || !saveBlockedByLock) return;
+    useDocumentStore.getState().clearSaveBlockedByLock(documentId);
+  }, [documentId, lock.pending, isLockedByOther, saveBlockedByLock]);
+
+  useEffect(() => {
+    if (!workspacePage || !documentId || !ownerId || !isLockedByOther || !lockExpiresAt) return;
+
+    const expiresAtTime =
+      lockExpiresAt instanceof Date ? lockExpiresAt.getTime() : new Date(lockExpiresAt).getTime();
+    if (Number.isNaN(expiresAtTime)) return;
+
+    const delay = Math.max(1000, expiresAtTime - Date.now() + 500);
+    const timer = setTimeout(() => {
+      documentService
+        .getDocumentLock(documentId, ownerId)
+        .then((nextLock) => setLockState(nextLock.holderId, nextLock.expiresAt, nextLock.ownerId))
+        .catch((error) => {
+          console.error('[PageEditor] Failed to refresh expired document lock:', error);
+        });
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [documentId, isLockedByOther, lockExpiresAt, ownerId, setLockState, workspacePage]);
 };

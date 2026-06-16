@@ -62,7 +62,15 @@ export const useResourceEvents = () => {
           },
           onmessage: (ev) => {
             if (!ev.data) return;
-            let parsed: { actorId?: string; data?: { holderId?: string | null }; type?: string };
+            let parsed: {
+              actorId?: string;
+              data?: {
+                expiresAt?: string | null;
+                holderId?: string | null;
+                ownerId?: string | null;
+              };
+              type?: string;
+            };
             try {
               parsed = JSON.parse(ev.data);
             } catch {
@@ -77,8 +85,12 @@ export const useResourceEvents = () => {
               void mutate(documentSWRKeys.editor(documentId));
             } else if (parsed.type === 'lock.changed') {
               // Store the holder verbatim; "locked by other" is derived against
-              // the current user at read time (usePageLockedByOther).
-              setLockState(parsed.data?.holderId ?? null);
+              // the current user/session at read time (usePageLockedByOther).
+              setLockState(
+                parsed.data?.holderId ?? null,
+                parsed.data?.expiresAt ?? null,
+                parsed.data?.ownerId ?? null,
+              );
             }
           },
           onopen: async (res) => {
