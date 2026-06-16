@@ -89,9 +89,9 @@ interface RunningTaskSidebarProps {
 /**
  * Fleet's left navigation. Portals into the global NavPanel so the running-topic
  * list *replaces* the standard nav rail while the Fleet view is active. The
- * top bar (`SideBarHeaderLayout`) carries the back-to-home action; the body
- * offers a "create task" entry plus the running-topic list. Clicking an item
- * opens (or re-opens) its column on the board.
+ * top bar (`SideBarHeaderLayout`) carries the back-to-home action and open-column
+ * count; the body lists the running topics and a pinned footer holds the
+ * "create task" action. Clicking an item opens (or re-opens) its column.
  */
 const RunningTaskSidebar = memo<RunningTaskSidebarProps>(({ columns, statusByColumnKey }) => {
   const { t } = useTranslation('electron');
