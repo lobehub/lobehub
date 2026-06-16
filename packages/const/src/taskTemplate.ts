@@ -4,12 +4,17 @@ export const TASK_TEMPLATE_ICONS = ['github'] as const;
 
 export type TaskTemplateIcon = (typeof TASK_TEMPLATE_ICONS)[number];
 
-export type TaskTemplateSkillSource = 'composio' | 'lobehub';
+export type TaskTemplateConnectorSource = 'composio' | 'lobehub';
 
-export interface TaskTemplateSkillRequirement {
+export interface TaskTemplateConnectorReference {
   /** Short identifier from `LOBEHUB_SKILL_PROVIDERS[i].id` or `COMPOSIO_APP_TYPES[i].identifier`. */
-  provider: string;
-  source: TaskTemplateSkillSource;
+  identifier: string;
+  source: TaskTemplateConnectorSource;
+}
+
+export interface TaskTemplateConnector extends TaskTemplateConnectorReference {
+  /** Whether this connector must be authorized before the task can be created. */
+  required: boolean;
 }
 
 export type TaskTemplateCategory =
@@ -33,17 +38,15 @@ export type TaskTemplateCategory =
 
 export interface TaskTemplate {
   category: TaskTemplateCategory;
+  connectors: TaskTemplateConnector[];
   cronPattern: string;
   description: string;
   /** Optional icon identifier; consumers resolve it to a component. */
   icon?: TaskTemplateIcon;
   id: number;
+  identifier: string;
   instruction: string;
   interests: InterestAreaKey[];
-  /** Skills that enrich the brief but are not required to run it. */
-  optionalSkills?: TaskTemplateSkillRequirement[];
-  /** Skill dependencies. The `source` field routes the connection flow. */
-  requiresSkills?: TaskTemplateSkillRequirement[];
   title: string;
 }
 

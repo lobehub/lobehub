@@ -136,7 +136,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
             {visibleAuthSpecs.map((spec) => (
               <SkillAuthRow
                 disabled={disabled}
-                key={`${spec.source}:${spec.provider}`}
+                key={`${spec.source}:${spec.identifier}`}
                 spec={spec}
                 onError={handleConnectError}
               />

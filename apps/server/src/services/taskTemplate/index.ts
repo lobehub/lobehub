@@ -1,43 +1,37 @@
-import type { TaskTemplate, TaskTemplateSkillSource } from '@lobechat/const';
-import { TASK_TEMPLATE_RECOMMEND_COUNT } from '@lobechat/const';
+import type { TaskTemplate, TaskTemplateConnectorReference } from '@lobechat/const';
+import {
+  COMPOSIO_APP_TYPES,
+  LOBEHUB_SKILL_PROVIDERS,
+  TASK_TEMPLATE_RECOMMEND_COUNT,
+} from '@lobechat/const';
 
 import { composioEnv } from '@/config/composio';
 import { appEnv } from '@/envs/app';
 import { MarketService } from '@/server/services/market';
 
-export const ENABLED_SKILL_SOURCES: ReadonlySet<TaskTemplateSkillSource> = (() => {
-  const sources = new Set<TaskTemplateSkillSource>();
-  if (composioEnv.COMPOSIO_API_KEY) sources.add('composio');
-  if (appEnv.MARKET_TRUSTED_CLIENT_ID && appEnv.MARKET_TRUSTED_CLIENT_SECRET) {
-    sources.add('lobehub');
+export const ENABLED_TASK_TEMPLATE_CONNECTORS: TaskTemplateConnectorReference[] = (() => {
+  const connectors: TaskTemplateConnectorReference[] = [];
+
+  if (composioEnv.COMPOSIO_API_KEY) {
+    connectors.push(
+      ...COMPOSIO_APP_TYPES.map((app) => ({
+        identifier: app.identifier,
+        source: 'composio' as const,
+      })),
+    );
   }
-  return sources;
+
+  if (appEnv.MARKET_TRUSTED_CLIENT_ID && appEnv.MARKET_TRUSTED_CLIENT_SECRET) {
+    connectors.push(
+      ...LOBEHUB_SKILL_PROVIDERS.map((provider) => ({
+        identifier: provider.id,
+        source: 'lobehub' as const,
+      })),
+    );
+  }
+
+  return connectors;
 })();
-
-interface TaskTemplateRecommendationInput {
-  count?: number;
-  enabledSkillSources?: TaskTemplateSkillSource[];
-  excludeIds?: number[];
-  interestKeys: string[];
-  locale?: string;
-  refreshSeed?: string;
-}
-
-interface TaskTemplateRecommendationResponse {
-  items: TaskTemplate[];
-}
-
-interface MarketTaskTemplatesClient {
-  getTaskTemplateRecommendations: (
-    input: TaskTemplateRecommendationInput,
-  ) => Promise<TaskTemplateRecommendationResponse>;
-}
-
-interface MarketSDKWithTaskTemplates {
-  taskTemplates?: MarketTaskTemplatesClient;
-}
-
-let hasLoggedMissingTaskTemplateSDK = false;
 
 export class TaskTemplateService {
   private marketService: MarketService;
@@ -50,29 +44,16 @@ export class TaskTemplateService {
     interestKeys: string[],
     options: {
       count?: number;
-      enabledSkillSources?: ReadonlySet<TaskTemplateSkillSource>;
+      enabledConnectors?: readonly TaskTemplateConnectorReference[];
       excludeIds?: number[];
       locale?: string;
       refreshSeed?: string;
     } = {},
   ): Promise<TaskTemplate[]> {
-    const taskTemplatesClient = (this.marketService.market as unknown as MarketSDKWithTaskTemplates)
-      .taskTemplates;
-
-    if (!taskTemplatesClient?.getTaskTemplateRecommendations) {
-      if (!hasLoggedMissingTaskTemplateSDK) {
-        console.error('[taskTemplate:listDailyRecommend] Market taskTemplates SDK is unavailable');
-        hasLoggedMissingTaskTemplateSDK = true;
-      }
-      return [];
-    }
-
     try {
-      const result = await taskTemplatesClient.getTaskTemplateRecommendations({
+      const result = await this.marketService.market.taskTemplates.getTaskTemplateRecommendations({
         count: options.count ?? TASK_TEMPLATE_RECOMMEND_COUNT,
-        enabledSkillSources: options.enabledSkillSources
-          ? [...options.enabledSkillSources]
-          : undefined,
+        enabledConnectors: options.enabledConnectors ? [...options.enabledConnectors] : undefined,
         excludeIds: options.excludeIds,
         interestKeys,
         locale: options.locale,

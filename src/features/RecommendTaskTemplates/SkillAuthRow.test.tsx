@@ -32,7 +32,11 @@ describe('SkillAuthRow', () => {
 
   it('disables provider connection when template actions are disabled', () => {
     render(
-      <SkillAuthRow disabled spec={{ provider: 'gmail', source: 'composio' }} onError={vi.fn()} />,
+      <SkillAuthRow
+        disabled
+        spec={{ identifier: 'gmail', source: 'composio' }}
+        onError={vi.fn()}
+      />,
     );
 
     const connectButton = screen.getByRole('button', { name: 'action.connect.short' });

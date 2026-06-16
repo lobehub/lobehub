@@ -6,7 +6,7 @@ import { TaskTemplateService } from './index';
 
 const { mockGetTaskTemplateRecommendations, mockMarket } = vi.hoisted(() => {
   const market: {
-    taskTemplates?: {
+    taskTemplates: {
       getTaskTemplateRecommendations: ReturnType<typeof vi.fn>;
     };
   } = {
@@ -38,9 +38,11 @@ vi.mock('@/envs/app', () => ({
 
 const template = {
   category: 'engineering',
+  connectors: [],
   cronPattern: '0 9 * * *',
   description: 'Description',
   id: 101,
+  identifier: 'daily-engineering',
   instruction: 'Instruction',
   interests: ['coding'],
   title: 'Title',
@@ -68,7 +70,10 @@ describe('TaskTemplateService.listDailyRecommend', () => {
 
     await service.listDailyRecommend(['coding'], {
       count: 10,
-      enabledSkillSources: new Set(['lobehub', 'composio']),
+      enabledConnectors: [
+        { identifier: 'github', source: 'lobehub' },
+        { identifier: 'gmail', source: 'composio' },
+      ],
       excludeIds: [101],
       locale: 'zh-CN',
       refreshSeed: 'refresh-1',
@@ -76,21 +81,15 @@ describe('TaskTemplateService.listDailyRecommend', () => {
 
     expect(mockGetTaskTemplateRecommendations).toHaveBeenCalledWith({
       count: 10,
-      enabledSkillSources: ['lobehub', 'composio'],
+      enabledConnectors: [
+        { identifier: 'github', source: 'lobehub' },
+        { identifier: 'gmail', source: 'composio' },
+      ],
       excludeIds: [101],
       interestKeys: ['coding'],
       locale: 'zh-CN',
       refreshSeed: 'refresh-1',
     });
-  });
-
-  it('returns an empty list when the SDK has not exposed taskTemplates yet', async () => {
-    mockMarket.taskTemplates = undefined;
-    const service = new TaskTemplateService('user-1');
-
-    const result = await service.listDailyRecommend(['coding']);
-
-    expect(result).toEqual([]);
   });
 
   it('returns an empty list when Market recommendations fail', async () => {

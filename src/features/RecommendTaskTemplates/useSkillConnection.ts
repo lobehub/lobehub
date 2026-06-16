@@ -1,4 +1,4 @@
-import type { TaskTemplateSkillRequirement } from '@lobechat/const';
+import type { TaskTemplateConnectorReference } from '@lobechat/const';
 import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -33,7 +33,7 @@ export class SkillConnectionPopupBlockedError extends Error {
   }
 }
 
-type ConnectTarget = Pick<SkillProviderMeta, 'provider' | 'source'>;
+type ConnectTarget = Pick<SkillProviderMeta, 'identifier' | 'source'>;
 
 export interface UseSkillConnectionResult {
   connect: () => Promise<void>;
@@ -54,14 +54,14 @@ export const useIsSkillConnected = () => {
   const composioServers = useToolStore(composioStoreSelectors.getServers);
 
   return useCallback(
-    (spec: TaskTemplateSkillRequirement): boolean => {
+    (spec: TaskTemplateConnectorReference): boolean => {
       if (spec.source === 'lobehub') {
         return lobehubServers.some(
-          (s) => s.identifier === spec.provider && s.status === LobehubSkillStatus.CONNECTED,
+          (s) => s.identifier === spec.identifier && s.status === LobehubSkillStatus.CONNECTED,
         );
       }
       return composioServers.some(
-        (s) => s.identifier === spec.provider && s.status === ComposioServerStatus.ACTIVE,
+        (s) => s.identifier === spec.identifier && s.status === ComposioServerStatus.ACTIVE,
       );
     },
     [lobehubServers, composioServers],
@@ -69,7 +69,7 @@ export const useIsSkillConnected = () => {
 };
 
 export const useSkillConnection = (
-  specs: TaskTemplateSkillRequirement[] | undefined,
+  specs: TaskTemplateConnectorReference[] | undefined,
 ): UseSkillConnectionResult => {
   const getLobehubAuth = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
   const checkLobehubStatus = useToolStore((s) => s.checkLobehubSkillStatus);
@@ -132,9 +132,9 @@ export const useSkillConnection = (
       pollIntervalRef.current = setInterval(async () => {
         try {
           if (target.source === 'lobehub') {
-            await checkLobehubStatus(target.provider);
+            await checkLobehubStatus(target.identifier);
           } else {
-            await refreshComposioConnectionStatus(target.provider);
+            await refreshComposioConnectionStatus(target.identifier);
           }
         } catch {
           // Polling failure is expected until auth completes — suppress noise.
@@ -175,9 +175,9 @@ export const useSkillConnection = (
           // to 15s for fallback polling to release isWaitingAuth.
           try {
             if (target.source === 'lobehub') {
-              await checkLobehubStatus(target.provider);
+              await checkLobehubStatus(target.identifier);
             } else {
-              await refreshComposioConnectionStatus(target.provider);
+              await refreshComposioConnectionStatus(target.identifier);
             }
           } catch {
             // Status check failure isn't actionable; release waiting state regardless.
@@ -251,20 +251,20 @@ export const useSkillConnection = (
       if (next.source === 'lobehub') {
         // Skip redirectUri on desktop (app:// protocol) since the system browser can't navigate to it
         const redirectUri = window.location.protocol.startsWith('http')
-          ? `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(next.provider)}`
+          ? `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(next.identifier)}`
           : undefined;
-        const { authorizeUrl } = await getLobehubAuth(next.provider, { redirectUri });
+        const { authorizeUrl } = await getLobehubAuth(next.identifier, { redirectUri });
         openOAuthWindow(authorizeUrl, next);
         return;
       }
 
       const userId = useUserStore.getState().user?.id;
       if (!userId) throw new Error('Sign-in required');
-      const composioType = COMPOSIO_APP_TYPES.find((t) => t.identifier === next.provider);
-      if (!composioType) throw new Error(`Unknown Composio provider: ${next.provider}`);
+      const composioType = COMPOSIO_APP_TYPES.find((t) => t.identifier === next.identifier);
+      if (!composioType) throw new Error(`Unknown Composio connector: ${next.identifier}`);
       const newServer = await createComposioConnection({
         appSlug: composioType.appSlug,
-        identifier: next.provider,
+        identifier: next.identifier,
         label: composioType.label,
       });
       if (!newServer) throw new Error('Failed to create Composio server');

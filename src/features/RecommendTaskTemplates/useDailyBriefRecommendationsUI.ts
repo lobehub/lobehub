@@ -1,4 +1,4 @@
-import type { TaskTemplate, TaskTemplateSkillSource } from '@lobechat/const';
+import type { TaskTemplate, TaskTemplateConnectorSource } from '@lobechat/const';
 import { TASK_TEMPLATE_RECOMMEND_COUNT } from '@lobechat/const';
 import { createNanoId } from '@lobechat/utils';
 import { useSessionStorageState } from 'ahooks';
@@ -109,10 +109,9 @@ export function useDailyBriefRecommendationsUI(
 
   const templates = useMemo(() => data?.data ?? [], [data]);
   const requiredSources = useMemo(() => {
-    const sources = new Set<TaskTemplateSkillSource>();
+    const sources = new Set<TaskTemplateConnectorSource>();
     for (const tmpl of templates) {
-      for (const s of tmpl.requiresSkills ?? []) sources.add(s.source);
-      for (const s of tmpl.optionalSkills ?? []) sources.add(s.source);
+      for (const connector of tmpl.connectors) sources.add(connector.source);
     }
     return sources;
   }, [templates]);

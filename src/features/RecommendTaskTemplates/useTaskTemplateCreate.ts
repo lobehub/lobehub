@@ -1,6 +1,6 @@
 import type { TaskTemplate } from '@lobechat/const';
 import { App } from 'antd';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
@@ -44,7 +44,11 @@ export const useTaskTemplateCreate = ({
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const createTask = useTaskStore((s) => s.createTask);
   const navigate = useWorkspaceAwareNavigate();
-  const requiredConnection = useSkillConnection(template.requiresSkills);
+  const requiredConnectors = useMemo(
+    () => template.connectors.filter((connector) => connector.required),
+    [template.connectors],
+  );
+  const requiredConnection = useSkillConnection(requiredConnectors);
 
   const handleCreate = useCallback(async () => {
     if (!canCreateTask) return;
