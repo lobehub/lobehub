@@ -373,7 +373,7 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
           }}
         >
           <ChatList disableActionsBar />
-          <OpStatusTray />
+          <OpStatusTray seamless={!replyOpen} />
           {messages === undefined ? null : replyOpen ? (
             <Flexbox className={styles.replyOpen}>
               <Flexbox horizontal className={styles.replyClose}>
