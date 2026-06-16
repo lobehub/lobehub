@@ -24,6 +24,7 @@ import { localFileKeys } from '@/libs/swr/keys';
 import { type LocalFilePreview, projectFileService } from '@/services/projectFile';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+import { createLocalFileTabId } from '@/store/chat/slices/portal/helpers';
 import {
   parseSkillMarkdownFrontmatter,
   parseSkillMarkdownFrontmatterFields,
@@ -165,7 +166,13 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
       [contentType, filePath],
     );
     const canRender = isMarkdown || isHtml;
-    const buffer = useChatStore(chatPortalSelectors.localFileBuffer(filePath));
+    // Edit buffers are scoped by tab identity (device + working directory + path)
+    // so the same path opened on two devices/workspaces keeps independent edits.
+    const tabId = useMemo(
+      () => createLocalFileTabId({ deviceId, filePath, workingDirectory }),
+      [deviceId, filePath, workingDirectory],
+    );
+    const buffer = useChatStore(chatPortalSelectors.localFileBuffer(tabId));
     const setLocalFileBuffer = useChatStore((s) => s.setLocalFileBuffer);
     const saveLocalFile = useChatStore((s) => s.saveLocalFile);
 
@@ -176,29 +183,38 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
         if (readOnly) return;
 
         if (next === content) {
-          setLocalFileBuffer(filePath, undefined);
+          setLocalFileBuffer(tabId, undefined);
         } else {
-          setLocalFileBuffer(filePath, next);
+          setLocalFileBuffer(tabId, next);
         }
       },
-      [content, filePath, readOnly, setLocalFileBuffer],
+      [content, tabId, readOnly, setLocalFileBuffer],
     );
 
     const handleSave = useCallback(async () => {
       if (readOnly) return;
 
       try {
-        const saved = await saveLocalFile(filePath, deviceId);
+        const saved = await saveLocalFile({ deviceId, filePath, workingDirectory });
         if (saved === undefined) return;
         // Update SWR cache BEFORE clearing the buffer, otherwise React will
         // briefly render with buffer cleared but content still stale, causing
         // CodeMirror to setValue and reset the cursor.
         onSaved?.(saved);
-        setLocalFileBuffer(filePath, undefined);
+        setLocalFileBuffer(tabId, undefined);
       } catch {
         /* swallow — surfacing handled elsewhere if needed */
       }
-    }, [deviceId, filePath, onSaved, readOnly, saveLocalFile, setLocalFileBuffer]);
+    }, [
+      deviceId,
+      filePath,
+      onSaved,
+      readOnly,
+      saveLocalFile,
+      setLocalFileBuffer,
+      tabId,
+      workingDirectory,
+    ]);
 
     const { body, frontmatter } = useMemo(
       () => (isMarkdown ? parseSkillMarkdownFrontmatter(editingValue) : { body: editingValue }),

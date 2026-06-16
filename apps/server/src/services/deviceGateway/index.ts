@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { type DeviceAttachment } from '@lobechat/builtin-tool-remote-device';
 import {
   type DeviceMessageApiResult,
@@ -39,6 +41,42 @@ import debug from 'debug';
 import { gatewayEnv } from '@/envs/gateway';
 
 const log = debug('lobe-server:device-gateway');
+
+/**
+ * Is `target` the same as, or nested inside, `root`?
+ *
+ * The device's working directory may be a POSIX path (`/Users/…`) or a Windows
+ * path (`C:\…`) while this check runs on the cloud server (POSIX). We pick the
+ * path flavour from the root's shape so a Windows device path is still resolved
+ * with Windows semantics rather than being mangled by `path.posix`.
+ */
+const isPathWithinRoot = (root: string, target: string): boolean => {
+  const p = /^[A-Z]:[/\\]/i.test(root) ? path.win32 : path.posix;
+  if (!p.isAbsolute(root) || !p.isAbsolute(target)) return false;
+  const relative = p.relative(p.resolve(root), p.resolve(target));
+  return relative === '' || (!relative.startsWith('..') && !p.isAbsolute(relative));
+};
+
+/**
+ * Guard the web/remote file mutations (move / rename / write) against escaping
+ * the project root. These routes accept absolute paths straight from an
+ * untrusted browser session, so before forwarding them to a device we confirm
+ * every path stays inside the workspace the UI is operating in — otherwise a
+ * caller could bypass the Files tree and mutate arbitrary locations on the
+ * device. Mirrors the read path's `workspaceRoot` containment check.
+ */
+const assertPathsWithinWorkspace = (
+  workspaceRoot: string,
+  candidates: Array<string | undefined>,
+): void => {
+  if (!workspaceRoot) throw new Error('A workspace root is required for file mutations');
+
+  for (const candidate of candidates) {
+    if (!candidate || !isPathWithinRoot(workspaceRoot, candidate)) {
+      throw new Error(`Path is outside the approved workspace: ${candidate ?? '(empty)'}`);
+    }
+  }
+};
 
 export type { DeviceAttachment, DeviceStatusResult, DeviceSystemInfo };
 
@@ -699,10 +737,16 @@ export class DeviceGateway {
     items: DeviceMoveProjectFileItem[];
     timeout?: number;
     userId: string;
+    workingDirectory: string;
   }): Promise<DeviceMoveProjectFileResultItem[]> {
-    const { userId, deviceId, items, timeout = 30_000 } = params;
+    const { userId, deviceId, items, workingDirectory, timeout = 30_000 } = params;
     const client = this.getClient();
     if (!client) throw new Error('Device gateway not configured');
+
+    assertPathsWithinWorkspace(
+      workingDirectory,
+      items.flatMap((item) => [item.oldPath, item.newPath]),
+    );
 
     const result = await client.invokeRpc<DeviceMoveProjectFileResultItem[]>(
       { deviceId, timeout, userId },
@@ -728,10 +772,15 @@ export class DeviceGateway {
     path: string;
     timeout?: number;
     userId: string;
+    workingDirectory: string;
   }): Promise<DeviceRenameProjectFileResult> {
-    const { userId, deviceId, path, newName, timeout = 30_000 } = params;
+    const { userId, deviceId, path, newName, workingDirectory, timeout = 30_000 } = params;
     const client = this.getClient();
     if (!client) throw new Error('Device gateway not configured');
+
+    // The rename stays in the same directory (the device rejects separators in
+    // `newName`), so containing the source path also contains the target.
+    assertPathsWithinWorkspace(workingDirectory, [path]);
 
     const result = await client.invokeRpc<DeviceRenameProjectFileResult>(
       { deviceId, timeout, userId },
@@ -757,10 +806,13 @@ export class DeviceGateway {
     path: string;
     timeout?: number;
     userId: string;
+    workingDirectory: string;
   }): Promise<DeviceWriteProjectFileResult> {
-    const { userId, deviceId, path, content, timeout = 30_000 } = params;
+    const { userId, deviceId, path, content, workingDirectory, timeout = 30_000 } = params;
     const client = this.getClient();
     if (!client) throw new Error('Device gateway not configured');
+
+    assertPathsWithinWorkspace(workingDirectory, [path]);
 
     const result = await client.invokeRpc<DeviceWriteProjectFileResult>(
       { deviceId, timeout, userId },

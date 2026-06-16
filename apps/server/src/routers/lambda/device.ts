@@ -393,6 +393,7 @@ export const deviceRouter = router({
       z.object({
         deviceId: z.string(),
         items: z.array(z.object({ newPath: z.string(), oldPath: z.string() })),
+        workingDirectory: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) =>
@@ -400,6 +401,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         items: input.items,
         userId: ctx.userId,
+        workingDirectory: input.workingDirectory,
       }),
     ),
 
@@ -408,13 +410,21 @@ export const deviceRouter = router({
    * device's `renameLocalFile` RPC.
    */
   renameProjectFile: deviceProcedure
-    .input(z.object({ deviceId: z.string(), newName: z.string(), path: z.string() }))
+    .input(
+      z.object({
+        deviceId: z.string(),
+        newName: z.string(),
+        path: z.string(),
+        workingDirectory: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) =>
       deviceGateway.renameProjectFile({
         deviceId: input.deviceId,
         newName: input.newName,
         path: input.path,
         userId: ctx.userId,
+        workingDirectory: input.workingDirectory,
       }),
     ),
 
@@ -423,13 +433,21 @@ export const deviceRouter = router({
    * `writeLocalFile` RPC. Powers remote save in the LocalFile editor.
    */
   writeProjectFile: deviceProcedure
-    .input(z.object({ content: z.string(), deviceId: z.string(), path: z.string() }))
+    .input(
+      z.object({
+        content: z.string(),
+        deviceId: z.string(),
+        path: z.string(),
+        workingDirectory: z.string(),
+      }),
+    )
     .mutation(async ({ ctx, input }) =>
       deviceGateway.writeProjectFile({
         content: input.content,
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workingDirectory: input.workingDirectory,
       }),
     ),
 

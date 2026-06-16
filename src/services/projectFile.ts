@@ -95,12 +95,14 @@ class ProjectFileService {
   async moveProjectFiles({
     deviceId,
     items,
+    workingDirectory,
   }: {
     deviceId?: string;
     items: MoveLocalFileParams[];
+    workingDirectory: string;
   }): Promise<LocalMoveFilesResultItem[]> {
     return deviceId
-      ? lambdaClient.device.moveProjectFiles.mutate({ deviceId, items })
+      ? lambdaClient.device.moveProjectFiles.mutate({ deviceId, items, workingDirectory })
       : localFileService.moveLocalFiles({ items });
   }
 
@@ -109,28 +111,37 @@ class ProjectFileService {
     deviceId,
     newName,
     path,
+    workingDirectory,
   }: {
     deviceId?: string;
     newName: string;
     path: string;
+    workingDirectory: string;
   }): Promise<RenameLocalFileResult> {
     return deviceId
-      ? lambdaClient.device.renameProjectFile.mutate({ deviceId, newName, path })
+      ? lambdaClient.device.renameProjectFile.mutate({ deviceId, newName, path, workingDirectory })
       : localFileService.renameLocalFile({ newName, path });
   }
 
-  /** Save edited content back to a file in a project working directory. */
+  /**
+   * Save edited content back to a file in a project working directory. The
+   * remote RPC and local IPC both report fs failures (permission denied, etc.)
+   * as `{ success: false, error }` — callers must inspect `success` before
+   * treating the save as complete.
+   */
   async writeProjectFile({
     content,
     deviceId,
     path,
+    workingDirectory,
   }: {
     content: string;
     deviceId?: string;
     path: string;
+    workingDirectory: string;
   }): Promise<{ error?: string; success: boolean }> {
     return deviceId
-      ? lambdaClient.device.writeProjectFile.mutate({ content, deviceId, path })
+      ? lambdaClient.device.writeProjectFile.mutate({ content, deviceId, path, workingDirectory })
       : localFileService.writeFile({ content, path });
   }
 }
