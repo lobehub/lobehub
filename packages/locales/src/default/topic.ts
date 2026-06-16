@@ -158,6 +158,7 @@ export default {
   'management.status.archived': 'Archived',
   'management.status.completed': 'Completed',
   'management.status.failed': 'Failed',
+  'management.status.idle': 'Idle',
   'management.status.paused': 'Paused',
   'management.status.running': 'Running',
   'management.status.waitingForHuman': 'Awaiting input',

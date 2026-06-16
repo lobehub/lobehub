@@ -128,7 +128,7 @@ const RunningTaskSidebar = memo<RunningTaskSidebarProps>(({ columns, statusByCol
 
   const body = (
     <Flexbox gap={2} paddingBlock={'8px 12px'} paddingInline={8}>
-      <Button block icon={PlusIcon} size={'small'} onClick={handleCreateTask}>
+      <Button block icon={PlusIcon} onClick={handleCreateTask}>
         {t('fleet.createTask')}
       </Button>
       {columns.length === 0 ? (

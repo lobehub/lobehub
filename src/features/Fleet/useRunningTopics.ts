@@ -6,6 +6,9 @@ import { type ChatTopic, type ChatTopicStatus } from '@/types/topic';
 
 import { type FleetColumn, fleetColumnKey } from './types';
 
+// SWR cache key for the Fleet board's running-topic query.
+const SWR_USE_FETCH_FLEET_RUNNING_TOPICS = 'fleet-running-topics';
+
 // Topic statuses considered "actively running" for the Fleet board.
 const RUNNING_STATUSES: ChatTopicStatus[] = ['running'];
 
@@ -32,8 +35,13 @@ const toColumn = (topic: RunningTopic): FleetColumn | null => {
  * (sidebar / column badge).
  */
 export const useRunningTopics = () => {
-  const { data, isLoading } = useClientDataSWR('fleet-running-topics', () =>
-    topicService.queryTopics({ statuses: RUNNING_STATUSES }),
+  const { data, isLoading } = useClientDataSWR(
+    SWR_USE_FETCH_FLEET_RUNNING_TOPICS,
+    () => topicService.queryTopics({ statuses: RUNNING_STATUSES }),
+    // The board is a live overview — refetch on focus almost immediately
+    // (default throttle is 5min) so newly-running topics show up the instant
+    // the user looks at it.
+    { focusThrottleInterval: 1000 },
   );
 
   const running = useMemo(() => (data ?? []) as RunningTopic[], [data]);

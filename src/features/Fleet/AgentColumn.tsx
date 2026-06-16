@@ -5,6 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { ActionIcon, Avatar, Button, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
+  ChevronDownIcon,
   FolderIcon,
   GitBranchIcon,
   GripVertical,
@@ -53,6 +54,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     z-index: 2;
 
     /* opaque while dragging so it doesn't show columns underneath */
+    overflow: hidden;
+
+    border-radius: 8px;
+
     background: ${cssVar.colorBgContainer};
     box-shadow:
       inset 0 0 0 1px ${cssVar.colorBorder},
@@ -83,6 +88,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 8px;
     padding-inline: 12px;
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
+  `,
+  replyClose: css`
+    flex: none;
+    padding-block: 4px 0;
+    padding-inline: 12px;
   `,
   resize: css`
     cursor: col-resize;
@@ -251,7 +261,7 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
           <Text ellipsis fontSize={12} style={{ flex: 1 }} type={'secondary'}>
             {meta?.title}
           </Text>
-          <StatusDot status={status ?? 'running'} />
+          <StatusDot status={status} />
         </Flexbox>
         {column.workingDirectory ? (
           <WorkingDirRow workingDirectory={column.workingDirectory} />
@@ -272,7 +282,17 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
           <ChatList disableActionsBar />
           <OpStatusTray />
           {messages === undefined ? null : replyOpen ? (
-            <ChatInput skipScrollMarginWithList isConfigLoading={false} />
+            <Flexbox>
+              <Flexbox horizontal className={styles.replyClose} justify={'flex-end'}>
+                <ActionIcon
+                  icon={ChevronDownIcon}
+                  size={'small'}
+                  title={t('fleet.collapseReply')}
+                  onClick={() => setReplyOpen(false)}
+                />
+              </Flexbox>
+              <ChatInput skipScrollMarginWithList isConfigLoading={false} />
+            </Flexbox>
           ) : (
             <Flexbox className={styles.replyBar}>
               <Button

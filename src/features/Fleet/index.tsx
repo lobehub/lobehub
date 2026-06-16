@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { memo, useEffect, useRef } from 'react';
+import { memo, useEffect } from 'react';
 
 import { useFetchAgentList } from '@/hooks/useFetchAgentList';
 
@@ -22,23 +22,16 @@ const FleetView = memo(() => {
   useFetchAgentList();
 
   const { columns, isInit, statusByColumnKey } = useRunningTopics();
-  const addColumn = useFleetStore((s) => s.addColumn);
+  const syncRunningColumns = useFleetStore((s) => s.syncRunningColumns);
 
-  // Desktop tabs are in-SPA navigations, so opening this tab remounts the view.
-  // On each open we sync the board to the live running set: every running topic
-  // gets a column (addColumn is idempotent, so manually-added and reordered
-  // columns are preserved). We auto-sync each key at most once per mount, so a
-  // column you close mid-session stays closed, while a topic that *starts*
-  // running while you watch still pops in.
-  const syncedKeys = useRef<Set<string>>(new Set());
+  // Reconcile the live running set into the board whenever it changes (initial
+  // load, focus refetch, a topic starting/stopping). The store appends only —
+  // new running topics pop in, columns you've pinned or closed are untouched,
+  // and a column you closed while it's still running won't immediately re-add.
   useEffect(() => {
     if (!isInit) return;
-    for (const column of columns) {
-      if (syncedKeys.current.has(column.key)) continue;
-      syncedKeys.current.add(column.key);
-      addColumn(column);
-    }
-  }, [isInit, columns, addColumn]);
+    syncRunningColumns(columns);
+  }, [isInit, columns, syncRunningColumns]);
 
   return (
     <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>

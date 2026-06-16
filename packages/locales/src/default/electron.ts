@@ -36,6 +36,7 @@ export default {
   'fleet.allShown': 'All running tasks are shown',
   'fleet.backToHome': 'Back to home',
   'fleet.closeColumn': 'Close column',
+  'fleet.collapseReply': 'Collapse',
   'fleet.empty': 'No tasks open',
   'fleet.emptyDesc': 'Pick a running task on the left, or use + to add a column.',
   'fleet.noRunningTasks': 'No running tasks',

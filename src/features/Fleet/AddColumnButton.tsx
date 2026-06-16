@@ -18,12 +18,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     display: flex;
     flex: none;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
 
     width: 52px;
     height: 100%;
-    padding-block-start: 12px;
 
     color: ${cssVar.colorTextTertiary};
 

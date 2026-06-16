@@ -143,6 +143,7 @@
   "management.status.archived": "已归档",
   "management.status.completed": "已完成",
   "management.status.failed": "已失败",
+  "management.status.idle": "空闲中",
   "management.status.paused": "已暂停",
   "management.status.running": "运行中",
   "management.status.waitingForHuman": "等待响应",

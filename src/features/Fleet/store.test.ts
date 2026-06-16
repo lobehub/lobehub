@@ -12,7 +12,7 @@ const col = (key: string): FleetColumn => ({
 });
 
 beforeEach(() => {
-  useFleetStore.setState({ columns: [], widths: {} });
+  useFleetStore.setState({ columns: [], dismissedKeys: [], widths: {} });
   localStorage.clear();
 });
 
@@ -29,6 +29,50 @@ describe('fleet store', () => {
     useFleetStore.setState({ columns: [col('a'), col('b'), col('c')] });
     useFleetStore.getState().removeColumn('b');
     expect(useFleetStore.getState().columns.map((c) => c.key)).toEqual(['a', 'c']);
+  });
+
+  it('removeColumn marks the key dismissed so it is not auto re-added', () => {
+    useFleetStore.setState({ columns: [col('a')] });
+    useFleetStore.getState().removeColumn('a');
+    expect(useFleetStore.getState().dismissedKeys).toEqual(['a']);
+  });
+
+  it('addColumn clears a prior dismissal so a re-pinned column sticks', () => {
+    useFleetStore.setState({ columns: [], dismissedKeys: ['a'] });
+    useFleetStore.getState().addColumn(col('a'));
+    expect(useFleetStore.getState().columns.map((c) => c.key)).toEqual(['a']);
+    expect(useFleetStore.getState().dismissedKeys).toEqual([]);
+  });
+
+  describe('syncRunningColumns', () => {
+    it('appends newly-running columns the board does not have yet', () => {
+      useFleetStore.setState({ columns: [col('a')] });
+      useFleetStore.getState().syncRunningColumns([col('a'), col('b')]);
+      expect(useFleetStore.getState().columns.map((c) => c.key)).toEqual(['a', 'b']);
+    });
+
+    it('never reorders or removes existing columns (manual pins preserved)', () => {
+      useFleetStore.setState({ columns: [col('manual'), col('a')] });
+      // 'manual' is not in the running set, 'b' is new.
+      useFleetStore.getState().syncRunningColumns([col('a'), col('b')]);
+      expect(useFleetStore.getState().columns.map((c) => c.key)).toEqual(['manual', 'a', 'b']);
+    });
+
+    it('does not re-add a column the user closed while it is still running', () => {
+      useFleetStore.setState({ columns: [col('a')] });
+      useFleetStore.getState().removeColumn('a'); // close while running
+      useFleetStore.getState().syncRunningColumns([col('a')]); // still running
+      expect(useFleetStore.getState().columns).toEqual([]);
+      expect(useFleetStore.getState().dismissedKeys).toEqual(['a']);
+    });
+
+    it('clears dismissal once the topic stops, so a fresh run re-surfaces it', () => {
+      useFleetStore.setState({ columns: [], dismissedKeys: ['a'] });
+      useFleetStore.getState().syncRunningColumns([]); // 'a' no longer running
+      expect(useFleetStore.getState().dismissedKeys).toEqual([]);
+      useFleetStore.getState().syncRunningColumns([col('a')]); // runs again
+      expect(useFleetStore.getState().columns.map((c) => c.key)).toEqual(['a']);
+    });
   });
 
   it('reorderColumns applies the given key order (drag-and-drop result)', () => {
