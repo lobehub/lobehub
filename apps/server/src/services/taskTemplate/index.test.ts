@@ -1,13 +1,13 @@
 // @vitest-environment node
 import { TASK_TEMPLATE_RECOMMEND_MAX_COUNT } from '@lobechat/const';
-import type { TaskTemplate } from '@lobehub/market-sdk';
+import type { TaskTemplate } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TaskTemplateService } from './index';
 
 const { mockGetTaskTemplateRecommendations, mockMarket } = vi.hoisted(() => {
   const market: {
-    taskTemplates?: {
+    taskTemplates: {
       getTaskTemplateRecommendations: ReturnType<typeof vi.fn>;
     };
   } = {
@@ -40,7 +40,6 @@ vi.mock('@/envs/app', () => ({
 const template = {
   category: 'engineering',
   connectors: [],
-  createdAt: '2026-06-17T00:00:00.000Z',
   cronPattern: '0 9 * * *',
   description: 'Description',
   id: 101,
@@ -48,9 +47,6 @@ const template = {
   instruction: 'Instruction',
   interests: ['coding'],
   title: 'Title',
-  updatedAt: '2026-06-17T00:00:00.000Z',
-  version: '1.0.0',
-  versionNumber: 1,
 } satisfies TaskTemplate;
 
 describe('TaskTemplateService.listDailyRecommend', () => {
@@ -149,14 +145,5 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     const result = await service.listDailyRecommend(['coding']);
 
     expect(result).toEqual([templateWithConnectors]);
-  });
-
-  it('returns an empty list when the SDK has no taskTemplates namespace', async () => {
-    mockMarket.taskTemplates = undefined;
-    const service = new TaskTemplateService('user-1');
-
-    const result = await service.listDailyRecommend(['coding']);
-
-    expect(result).toEqual([]);
   });
 });

@@ -1,10 +1,10 @@
+import type { TaskTemplate, TaskTemplateConnectorReference } from '@lobechat/const';
 import {
   COMPOSIO_APP_TYPES,
   LOBEHUB_SKILL_PROVIDERS,
   TASK_TEMPLATE_RECOMMEND_COUNT,
   TASK_TEMPLATE_RECOMMEND_MAX_COUNT,
 } from '@lobechat/const';
-import type { TaskTemplate, TaskTemplateConnectorReference } from '@lobehub/market-sdk';
 
 import { composioEnv } from '@/config/composio';
 import { appEnv } from '@/envs/app';
