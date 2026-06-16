@@ -1,6 +1,7 @@
 import { type LobeToolCustomPlugin } from '@lobechat/types';
-import { memo, useMemo } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
+import type { ConnectorCredentials, OIDCConfig } from '@/database/schemas';
 import { ConnectorSourceType } from '@/database/schemas';
 import DevModal from '@/features/PluginDevModal';
 import { useToolStore } from '@/store/tool';
@@ -84,6 +85,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
   ({ open, onClose, connectorId, onEditSuccess }) => {
     const createConnector = useToolStore((s) => s.createConnector);
     const updateConnector = useToolStore((s) => s.updateConnector);
+    const getConnectorForEdit = useToolStore((s) => s.getConnectorForEdit);
     const startConnectorOAuth = useToolStore((s) => s.startConnectorOAuth);
     const syncConnectorTools = useToolStore((s) => s.syncConnectorTools);
     const fetchConnectors = useToolStore((s) => s.fetchConnectors);
@@ -94,21 +96,50 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
     const isEditMode = Boolean(connectorId);
 
-    // Build the pre-fill value for edit mode from the stored connector.
+    // Full connector data (with decrypted credentials) fetched for the edit form.
+    // null = not yet loaded; object = loaded (credentials may still be null if none set).
+    type EditFetchedData = {
+      credentials: Exclude<ConnectorCredentials, { type: 'oauth2' }> | null;
+      oidcConfig: Omit<OIDCConfig, 'clientSecret'> | null | undefined;
+    };
+    const [editFetchedData, setEditFetchedData] = useState<EditFetchedData | null>(null);
+    const editFetchController = useRef<AbortController | null>(null);
+
+    useEffect(() => {
+      if (!open || !connectorId) {
+        setEditFetchedData(null);
+        return;
+      }
+      // Cancel any in-flight fetch from a previous open
+      editFetchController.current?.abort();
+      const controller = new AbortController();
+      editFetchController.current = controller;
+
+      setEditFetchedData(null);
+      getConnectorForEdit(connectorId).then((data) => {
+        if (controller.signal.aborted) return;
+        setEditFetchedData({
+          credentials: (data?.credentials ?? null) as EditFetchedData['credentials'],
+          oidcConfig: (data?.oidcConfig ?? null) as EditFetchedData['oidcConfig'],
+        });
+      });
+
+      return () => {
+        controller.abort();
+      };
+    }, [open, connectorId]);
+
+    // Build the pre-fill value for edit mode once the credentials fetch completes.
+    // Returns undefined while loading so DevModal defers seeding the form.
     const editValue = useMemo((): LobeToolCustomPlugin | undefined => {
-      if (!isEditMode || !connector) return undefined;
+      if (!isEditMode || !connector || editFetchedData === null) return undefined;
 
       const c = connector as typeof connector & {
         mcpStdioConfig?: { args?: string[]; command?: string; env?: Record<string, string> };
-        oidcConfig?: { clientId?: string; clientSecret?: string; scheme?: string };
       };
-
-      const oidcConfig = c.oidcConfig;
       const mcpStdioConfig = c.mcpStdioConfig;
 
-      const credentials = (c as typeof c & {
-        credentials?: { headers?: Record<string, string>; token?: string; type?: string };
-      }).credentials;
+      const { credentials, oidcConfig } = editFetchedData;
 
       const authType = oidcConfig
         ? 'oauth2'
@@ -125,12 +156,15 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
             args: mcpStdioConfig?.args,
             auth: {
               clientId: oidcConfig?.clientId,
-              token: authType === 'bearer' ? credentials?.token : undefined,
+              token: authType === 'bearer' ? (credentials as { token: string })?.token : undefined,
               type: authType === 'header' ? 'none' : authType,
             },
             command: mcpStdioConfig?.command,
             env: mcpStdioConfig?.env,
-            headers: authType === 'header' ? credentials?.headers : undefined,
+            headers:
+              authType === 'header'
+                ? (credentials as { headers: Record<string, string> })?.headers
+                : undefined,
             type: (connector.mcpConnectionType ?? 'http') as 'http' | 'stdio',
             url: connector.mcpServerUrl ?? undefined,
           },
@@ -138,7 +172,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         identifier: connector.identifier,
         type: 'customPlugin' as const,
       };
-    }, [isEditMode, connector]);
+    }, [isEditMode, connector, editFetchedData]);
 
     const handleSave = async (value: LobeToolCustomPlugin, ctx?: { oauthPopup?: Window | null }) => {
       const mcp = (value.customParams?.mcp ?? {}) as {
@@ -168,11 +202,16 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
           patch.credentials = null;
         } else if (authType === 'bearer' && mcp.auth?.token?.trim()) {
           patch.credentials = { token: mcp.auth.token.trim(), type: 'bearer' as const };
-        } else if (authType === 'header') {
+        } else if (authType !== 'oauth2') {
+          // Auth radio 'none' covers both "no auth" and "header auth" (headers live in
+          // the Advanced section, not the auth radio). Mirror the create-mode logic:
+          // any filled headers → header credentials; empty → clear credentials.
           const headers = cleanRecord(mcp.headers);
-          if (headers) patch.credentials = { headers, type: 'header' as const };
-        } else if (authType === 'none') {
-          patch.credentials = null;
+          if (headers) {
+            patch.credentials = { headers, type: 'header' as const };
+          } else {
+            patch.credentials = null;
+          }
         }
 
         if (authType === 'oauth2') {

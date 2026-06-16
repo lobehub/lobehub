@@ -116,6 +116,33 @@ export const connectorRouter = router({
   }),
 
   /**
+   * Return the connector record with decrypted user-set credentials so the
+   * edit form can pre-fill accurately. Only the connector owner can call this
+   * (enforced by connectorProcedure ownership check).
+   *
+   * Machine-managed secrets are intentionally excluded:
+   * - OAuth access/refresh tokens (type 'oauth2') → stripped, returned as null
+   * - oidcConfig.clientSecret (DCR-registered secret)  → stripped
+   * User-set credentials (bearer token, custom headers) are returned as-is so
+   * the edit form can display them.
+   */
+  getForEdit: connectorProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ input, ctx }) => {
+      const connector = await ctx.connectorModel.findById(input.id);
+      if (!connector)
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+
+      const { oidcConfig, credentials, ...rest } = connector;
+      const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
+      // OAuth tokens are machine-managed — don't return them; the UI only needs
+      // to know an OAuth flow is configured (reflected via oidcConfig presence).
+      const safeCredentials = credentials?.type === 'oauth2' ? null : credentials;
+
+      return { ...rest, credentials: safeCredentials, oidcConfig: safeOidcConfig };
+    }),
+
+  /**
    * The exact redirect URI the server will send to the OAuth/DCR endpoints.
    * The Add modal must display THIS value (not a client-derived origin) so the
    * URI the user registers matches the one used at authorize time.
