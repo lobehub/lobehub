@@ -38,17 +38,20 @@ const UNLOCKED: EditLockResult = {
 const lockKey = (type: EditLockResourceType, id: string) => `editlock:${type}:${id}`;
 
 // Release only if the caller still holds the lock (compare-and-delete), so a
-// stale releaser can't drop a lease another member has since taken over.
+// stale releaser can't drop a lease another member has since taken over. The
+// ownerId is broadcast on lock.changed, so it can't be used as a capability on
+// its own — we also bind to the caller's userId (ARGV[2]) so a stranger who
+// learned the ownerId from a broadcast cannot release another member's lock.
 const RELEASE_SCRIPT = `
 local raw = redis.call('get', KEYS[1])
 if not raw then
   return 0
 end
-if raw == ARGV[1] then
+if raw == ARGV[2] then
   return redis.call('del', KEYS[1])
 end
 local ok, decoded = pcall(cjson.decode, raw)
-if ok and decoded["ownerId"] == ARGV[1] then
+if ok and decoded["userId"] == ARGV[2] and decoded["ownerId"] == ARGV[1] then
   return redis.call('del', KEYS[1])
 end
 return 0
@@ -137,22 +140,15 @@ export class EditLockService {
       const raw = await redis.get(key);
       if (raw) {
         const holder = parseStoredLock(raw);
-        if (holder.ownerId === ownerId || (!holder.ownerId && holder.userId === this.userId)) {
-          // Already mine — refresh the lease (heartbeat). Legacy same-user locks
-          // are upgraded to owner-scoped payloads on the first refresh.
-          await redis.set(key, nextLock, 'EX', EDIT_LOCK_TTL_SECONDS);
-          return this.held(ownerId);
-        }
-
+        // Owner-only matches are unsafe: ownerId is fanned out on lock.changed,
+        // so a workspace member could echo a stranger's ownerId back to steal
+        // the lock. Bind ownership to the calling userId. When the same user
+        // shows up with a different ownerId (refresh, crashed tab, HMR), the
+        // old session is almost certainly a ghost — silently take over with
+        // the new owner rather than telling the user they're editing in
+        // another tab. Two truly concurrent tabs will keep flipping the owner
+        // on their own heartbeats — that's CRDT territory, not ours to police.
         if (holder.userId === this.userId) {
-          // Same user, different active ownerId. The old session is almost
-          // always stale — a refresh / navigate-away whose `release` never
-          // reached the server, a crashed tab whose lease will linger ~30s,
-          // an HMR remount during dev. Silently take over with the new owner
-          // so the user isn't told "you're editing in another tab" about a
-          // ghost session. Two truly concurrent tabs will keep flipping the
-          // owner on their own heartbeats — that's an edge case our lock
-          // doesn't try to police (CRDT territory).
           await redis.set(key, nextLock, 'EX', EDIT_LOCK_TTL_SECONDS);
           return this.held(ownerId);
         }
@@ -206,10 +202,13 @@ export class EditLockService {
   ): Promise<string | null> {
     const holder = await this.getActiveLock(type, id);
     if (!holder) return null;
-    if (holder.ownerId && holder.ownerId === ownerId) return null;
-    if (!holder.ownerId && holder.userId === this.userId) return null;
+    // ownerId is broadcast on lock.changed; it can't authorize on its own.
+    // Bind to userId first, then keep the stale-tab guard (same user, different
+    // active ownerId still blocks so a ghost tab can't save over a newer one).
+    if (holder.userId !== this.userId) return holder.userId;
+    if (holder.ownerId && holder.ownerId !== ownerId) return holder.userId;
 
-    return holder.userId;
+    return null;
   }
 
   /**
@@ -228,9 +227,13 @@ export class EditLockService {
       if (!raw) return !ownerId;
 
       const holder = parseStoredLock(raw);
+      // ownerId is broadcast on lock.changed; matching it alone isn't proof of
+      // ownership. Bind the write to the calling userId before honoring the
+      // owner-scoped match.
+      if (holder.userId !== this.userId) return false;
       if (holder.ownerId) return holder.ownerId === ownerId;
 
-      return holder.userId === this.userId;
+      return true;
     } catch (error) {
       log('canWrite failed for %s:%s %O', type, id, error);
       return true;
@@ -246,7 +249,13 @@ export class EditLockService {
   async release(type: EditLockResourceType, id: string, ownerId = this.userId): Promise<boolean> {
     if (!this.redis) return false;
     try {
-      const deleted = await this.redis.eval(RELEASE_SCRIPT, 1, lockKey(type, id), ownerId);
+      const deleted = await this.redis.eval(
+        RELEASE_SCRIPT,
+        1,
+        lockKey(type, id),
+        ownerId,
+        this.userId,
+      );
       return deleted === 1;
     } catch (error) {
       log('release failed for %s:%s %O', type, id, error);

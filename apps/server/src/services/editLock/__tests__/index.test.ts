@@ -5,23 +5,28 @@ import { EditLockService } from '../index';
 /**
  * Minimal in-memory fake of the ioredis calls EditLockService uses:
  * `set(k, v, 'EX', ttl[, 'NX'])`, `get(k)`, and the compare-and-delete `eval`.
+ * The eval mirrors RELEASE_SCRIPT: legacy raw payloads delete when ARGV[2]
+ * (userId) matches; JSON payloads require both userId and ownerId to match.
  */
 const makeFakeRedis = () => {
   const store = new Map<string, string>();
   return {
-    eval: vi.fn(async (_script: string, _numKeys: number, key: string, arg: string) => {
-      const raw = store.get(key);
-      if (!raw) return 0;
-      let matches = raw === arg;
-      try {
-        matches = matches || JSON.parse(raw).ownerId === arg;
-      } catch {}
-      if (matches) {
-        store.delete(key);
-        return 1;
-      }
-      return 0;
-    }),
+    eval: vi.fn(
+      async (_script: string, _numKeys: number, key: string, ownerArg: string, userArg: string) => {
+        const raw = store.get(key);
+        if (!raw) return 0;
+        let matches = raw === userArg;
+        try {
+          const parsed = JSON.parse(raw);
+          matches = matches || (parsed.userId === userArg && parsed.ownerId === ownerArg);
+        } catch {}
+        if (matches) {
+          store.delete(key);
+          return 1;
+        }
+        return 0;
+      },
+    ),
     get: vi.fn(async (key: string) => store.get(key) ?? null),
     set: vi.fn(async (key: string, value: string, ...args: unknown[]) => {
       if (args.includes('NX') && store.has(key)) return null;
@@ -108,6 +113,28 @@ describe('EditLockService', () => {
     );
   });
 
+  it('refuses to refresh when a stranger replays the broadcast ownerId', async () => {
+    // The ownerId is broadcast on `lock.changed`, so another workspace member can
+    // learn it from a subscription. They must not be able to echo it back to
+    // refresh or take over the lock — only the original holder's userId may.
+    const redis = makeFakeRedis();
+    await new EditLockService('user-1', redis as any).acquire('document', 'doc-1', 'owner-1');
+
+    const result = await new EditLockService('user-2', redis as any).acquire(
+      'document',
+      'doc-1',
+      'owner-1',
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({ holderId: 'user-1', lockedByOther: true, ownerId: 'owner-1' }),
+    );
+    // The persisted lock must still belong to user-1.
+    expect(JSON.parse(redis.store.get('editlock:document:doc-1')!)).toEqual(
+      expect.objectContaining({ ownerId: 'owner-1', userId: 'user-1' }),
+    );
+  });
+
   it('getActiveHolder reports the current holder, or undefined when free', async () => {
     const redis = makeFakeRedis();
     expect(
@@ -158,6 +185,14 @@ describe('EditLockService', () => {
         'owner-2',
       ),
     ).toBe('user-1');
+    // Stranger replaying the broadcast ownerId must still be blocked.
+    expect(
+      await new EditLockService('user-2', redis as any).getBlockingHolder(
+        'document',
+        'doc-1',
+        'owner-1',
+      ),
+    ).toBe('user-1');
   });
 
   it('only releases the lock for the current owner', async () => {
@@ -179,6 +214,18 @@ describe('EditLockService', () => {
     expect(redis.store.has('editlock:document:doc-1')).toBe(false);
   });
 
+  it('refuses to release when a stranger replays the broadcast ownerId', async () => {
+    const redis = makeFakeRedis();
+    await new EditLockService('user-1', redis as any).acquire('document', 'doc-1', 'owner-1');
+
+    expect(
+      await new EditLockService('user-2', redis as any).release('document', 'doc-1', 'owner-1'),
+    ).toBe(false);
+    expect(JSON.parse(redis.store.get('editlock:document:doc-1')!)).toEqual(
+      expect.objectContaining({ ownerId: 'owner-1', userId: 'user-1' }),
+    );
+  });
+
   it('requires a matching owner id for owner-scoped writes', async () => {
     const redis = makeFakeRedis();
     const svc = new EditLockService('user-1', redis as any);
@@ -190,6 +237,14 @@ describe('EditLockService', () => {
     redis.store.delete('editlock:document:doc-1');
     await expect(svc.canWrite('document', 'doc-1', 'owner-1')).resolves.toBe(false);
     await expect(svc.canWrite('document', 'doc-1')).resolves.toBe(true);
+  });
+
+  it('refuses canWrite when a stranger replays the broadcast ownerId', async () => {
+    const redis = makeFakeRedis();
+    await new EditLockService('user-1', redis as any).acquire('document', 'doc-1', 'owner-1');
+
+    const stranger = new EditLockService('user-2', redis as any);
+    await expect(stranger.canWrite('document', 'doc-1', 'owner-1')).resolves.toBe(false);
   });
 
   it('degrades to unlocked / no-op when Redis is unavailable', async () => {
