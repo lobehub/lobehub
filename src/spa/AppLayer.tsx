@@ -3,7 +3,10 @@
 import { memo, type PropsWithChildren, useLayoutEffect, useRef } from 'react';
 
 import { useAppReady } from './atoms/app';
-import { removeLoadingScreen } from './lib/app';
+
+const removeLoadingScreen = () => {
+  document.querySelector('#loading-screen')?.remove();
+};
 
 const AppLayer = memo<PropsWithChildren>(({ children }) => {
   const appReady = useAppReady();
