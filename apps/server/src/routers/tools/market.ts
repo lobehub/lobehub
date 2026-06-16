@@ -23,7 +23,7 @@ import { createSandboxService } from '@/server/services/sandbox';
 import { scheduleToolCallReport } from './_helpers';
 import {
   isMarketConnectionsTimeoutError,
-  listMarketConnectionsWithTimeout,
+  listOptionalMarketConnectionsWithTimeout,
   MARKET_CONNECTIONS_REQUEST_TIMEOUT_MS,
 } from './_helpers/marketConnections';
 
@@ -540,7 +540,7 @@ export const marketRouter = router({
     log('connectListConnections');
 
     try {
-      const response = await listMarketConnectionsWithTimeout(ctx.marketSDK.connect);
+      const response = await listOptionalMarketConnectionsWithTimeout(ctx.marketSDK.connect);
       // Debug logging
       log('connectListConnections raw response: %O', response);
       log('connectListConnections connections: %O', response.connections);

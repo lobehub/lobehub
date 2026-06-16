@@ -38,7 +38,7 @@ vi.mock('@/server/services/file', () => ({
   })),
 }));
 
-let mockResponsesCreate: ReturnType<typeof vi.spyOn>;
+let mockResponsesCreate: any;
 let serverDB: LobeChatDatabase;
 let userId: string;
 let parentAgentId: string;
