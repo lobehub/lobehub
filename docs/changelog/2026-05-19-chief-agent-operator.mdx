@@ -1,8 +1,8 @@
 ---
-title: Introducing CAO — Your Chief Agent Operator
+title: 'Introducing CAO: Your Chief Agent Operator'
 description: >-
-  Meet CAO: agents that review their own work, recruit teammates when they need
-  help, and only stop to ask you when it really matters.
+  CAO is an agent that reviews its own work, brings in sub-agents when it needs
+  help, and only stops to ask you when a decision matters.
 tags:
   - CAO
   - Agent Teams
@@ -10,31 +10,27 @@ tags:
   - Models
 ---
 
-# Introducing CAO — Your Chief Agent Operator
+# Introducing CAO: Your Chief Agent Operator
 
-## Meet CAO
+## Features
 
-CAO (Chief Agent Operator) turns short back-and-forth chats into agents that just keep going. Instead of waiting for you to say "ok, next step", your agent now checks its own work, decides what to do next, and gets on with it. When something genuinely needs your call, it pauses, tells you what it tried, and asks a clear question — no more guessing in the dark.
+- **CAO (Chief Agent Operator).** Your agent can now keep going on its own. It reviews its own work, decides the next step, and continues without waiting for you to say "next." When a decision genuinely needs you, it pauses, tells you what it tried, and asks a clear question. For larger tasks, it can put together a small team of sub-agents and hand off parts of the work while the main agent stays in charge of the plan. You can open any sub-agent's conversation to see its progress. [Learn more about CAO →](https://x.com/lobehub/status/2056371816265097337?s=20)
+- **Project skills in the working sidebar**, with a built-in Markdown preview.
+- **Per-suggestion models.** Pick a different model for each kind of follow-up suggestion.
+- **New model:** Baidu Ernie 5.1.
 
-CAO can also bring in help. If a task gets big, your agent can put together a small team of sub-agents and hand pieces off to them. You can peek into any of their conversations to see what they're up to, while your main agent stays in charge of the overall plan.
+## Improvements
 
-[Learn more about CAO →](https://x.com/lobehub/status/2056371816265097337?s=20)
-
-## What else is new
-
-- Recurring tasks are more reliable, with a cap on how many times a task can run and protection against schedules that fire too often
-- A cleaner Agent Documents view — easier to find what you put there, and no more clutter from old web crawls
-- Project skills now show up in the working sidebar, with a built-in markdown preview
-- You can pick a different model for each kind of follow-up suggestion
-- New model: Baidu Ernie 5.1
-- DeepSeek pricing is back to official rates
-
-## Improvements and fixes
-
-- Desktop no longer signs you out from background token refreshes, and remembers which page you were on after an app update.
-- Chat input actions show as icon + label, and only the latest reply animates as it streams.
+- Chat input actions show as icon and label, and only the latest reply animates while streaming.
 - Cleaner tab bar styling, and task schedule labels no longer wrap awkwardly.
-- Local-file search handles hidden files starting with `.`, and grep parameters now flow through correctly.
-- Documents fail clearly when they aren't supported, instead of producing confusing errors.
-- Gemini tool calls handle thinking signatures and enums correctly, and per-tool timeouts now stick.
-- Task pages keep the right agent context; memory updates stay out of your main thread.
+- Recurring tasks are more reliable, with a run-count cap and protection against schedules that fire too often.
+- A cleaner Agent Documents view: easier to find what you saved, without old web-crawl clutter.
+- DeepSeek is priced at official rates again.
+
+## Fixes
+
+- Desktop no longer signs you out during background token refreshes, and it remembers which page you were on after an update.
+- Local-file search handles hidden files that start with `.`, and grep parameters pass through correctly.
+- Unsupported documents now fail with a clear message instead of a confusing error.
+- Gemini tool calls handle thinking signatures and enums correctly, and per-tool timeouts now hold.
+- Task pages keep the right agent context, and memory updates stay out of your main thread.

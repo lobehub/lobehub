@@ -12,30 +12,26 @@ tags:
 
 # Browser Pairing & Live Run Status
 
-Pairing a device no longer needs the desktop app — you can now register a browser tab as a device with a quick code exchange, then point any conversation at it and browse its files and Git from inside chat. While a run is in flight, a new status tray shows elapsed time, tokens, and cost right above the chat input. And there's a fresh batch of models to try, led by Claude Fable 5.
+## Features
 
-## Pair a device from your browser
+- **Pair a device from your browser.** The Devices page adds a "Via Browser" option: generate a pairing code, exchange it, and the current browser tab becomes a device an agent can run on, with no desktop app required.
+- **Browse a connected device from chat.** Approved local files open in read-only preview tabs, including HTML rendered inline, even when a file sits outside the current workspace. Agents can list a device's Git worktrees, the branch switcher gained rename and delete actions, and project skills from the device appear in the working sidebar.
+- **Live run status.** A status tray sits above the chat input while an agent works, showing elapsed time, total tokens, and cost for the current run, along with the cache hit rate.
+- **New models.** Claude Fable 5 joins the Anthropic lineup, with new providers AntGroup, SenseNova (6.7 Flash Lite and U1 Fast), and updated Longcat models that fetch their list live. Model cards now show each model's knowledge cutoff, and the model tab bar stays visible.
 
-Connecting a device no longer requires the desktop app. The Devices page adds a **Via Browser** option: generate a pairing code, exchange it, and your current browser tab becomes a device an agent can run on. The empty state and device list were tidied up to match.
-
-Once a device is connected, you can look around it from inside chat. Approved local files open in read-only preview tabs — including HTML, which now renders inline — even when a file sits outside the current workspace. Agents can list a device's Git worktrees, the branch switcher gained rename and delete actions, and project skills on the device show up directly in the sidebar.
-
-## Watch each run as it happens
-
-A status tray now appears just above the chat input whenever an agent is working. It shows elapsed time ticking by the second, along with the total tokens and cost accumulated since the operation began — so a long, multi-step run is no longer a black box. Token usage also reports the prompt-cache hit rate, making it clearer when caching is saving you money.
-
-## New models and a clearer model picker
-
-Claude **Fable 5** joins the Anthropic lineup, along with several new providers and models: **AntGroup**, **SenseNova** (6.7 Flash Lite and U1 Fast), and refreshed **Longcat** models that can fetch their model list live. Model cards now show each model's **knowledge cutoff**, and the model tab bar stays visible so switching takes one less click.
-
-## Improvements and fixes
+## Improvements
 
 - Move many conversations to another agent at once, see status indicators in the topic sidebar, and reach more actions from the topic selector.
-- Refreshed topic sharing, with a new share page and a quick-share popover.
+- Refreshed topic sharing, with a new share page and a one-click share popover.
 - Add your own custom OAuth MCP connector during setup, and edit or uninstall connectors from their detail panel.
-- GitHub, Linear, and external links now render as rich chips in Markdown.
+- GitHub, Linear, and external links render as link cards in Markdown.
 - The page editor groups autosave history into 10-minute versions, and pages, agents, groups, and tasks lock while someone else is editing them.
-- Manage skills — view, rename, and delete — right from the working sidebar.
-- Desktop: open a new Home tab from the "+" button, drag to reorder tabs, and double-click the tray icon to open the main window; cloud desktop builds are back.
+- View, rename, and delete skills from the working sidebar.
+- Desktop: open a new Home tab from the "+" button, drag to reorder tabs, and double-click the tray icon to open the main window. Cloud desktop builds are back.
 - New signups now land directly in onboarding.
-- More reliable runs for Codex and other external-CLI agents, better DeepSeek structured output, and clearer errors when a model list fails to load.
+
+## Fixes
+
+- More reliable runs on Codex and Claude Code.
+- Better structured output on DeepSeek.
+- Clearer errors when a model list fails to load.

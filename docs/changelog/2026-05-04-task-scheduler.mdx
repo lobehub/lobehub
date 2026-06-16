@@ -13,24 +13,26 @@ tags:
 
 # Delegate Claude Code and Codex
 
-Now you can control coding agents in LobeHub. Simply click `Create Agent` and choose your coding agent. This feature is only available on desktop app.
-
 ![](/blog/assets71fe5959cbc6f0a89243d7262f48fafc.webp)
 
 ## Features
 
-- Agent-specific topic grouping: switch the topic list to group by agent, with a friendlier empty state
-- Review tab: a new tab that aggregates bulk git diffs across a tree, \~9× faster on large repos
-- Local file mention snapshots: drag a file into chat and a snapshot is captured for the model to reason over
-- Visual understanding tool: a new built-in tool for image analysis and visual reasoning
-- Line bot support: connect a Line channel as an agent endpoint
-- New models: `grok-4.3`, DeepSeek Anthropic runtime, plus `gpt-image-2` and Grok 4.20 in the model library
+- **Delegate Claude Code and Codex.** Control coding agents inside LobeHub: click Create Agent and choose your coding agent. Desktop only.
+- **Group topics by agent.** Switch the topic list to group by agent, with a friendlier empty state.
+- **Review tab.** A new tab that gathers bulk Git diffs across a tree, about 9× faster on large repos.
+- **Local file snapshots.** Drag a file into chat and a snapshot is captured for the model to read.
+- **Visual understanding tool.** A built-in tool for image analysis and visual reasoning.
+- **Line bot support.** Connect a Line channel as an agent endpoint.
+- **New models.** `grok-4.3`, the DeepSeek Anthropic runtime, plus `gpt-image-2` and Grok 4.20 in the model library.
 
-## Improvements and fixes
+## Improvements
 
-- DeepSeek now shows pricing in the model card and respects model defaults.
-- Document modal shows a skeleton while the title loads and surfaces the document update time in space.
-- Agent documents can be exposed as a virtual file system with fs-compatible output.
-- Sessions are revoked after a password reset, and tRPC pagination now enforces a max limit.
-- Skill OAuth no longer breaks the desktop app by skipping `redirectUri` on Electron.
-- CAPTCHA retries during sign-in are handled cleanly instead of failing the flow.
+- DeepSeek shows pricing in the model card and respects model defaults.
+- The document modal shows a skeleton while the title loads, and surfaces the document's update time in the space.
+- Agent documents can be exposed as a file system for tools to read.
+
+## Fixes
+
+- Sessions are revoked after a password reset, and list pagination now enforces a maximum page size.
+- Skill OAuth no longer breaks the desktop app.
+- CAPTCHA retries during sign-in are handled cleanly instead of failing.
