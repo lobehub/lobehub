@@ -541,7 +541,7 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
   );
   const [, refreshFormValues] = useState(0);
 
-  const enableContextCompression = form.getFieldValue(['chatConfig', 'enableContextCompression']);
+  const compressionValue = form.getFieldValue(['chatConfig', 'compression']) ?? 'standard';
   const enableMaxTokens = form.getFieldValue(['chatConfig', 'enableMaxTokens']);
   const enableHistoryCount = form.getFieldValue(['chatConfig', 'enableHistoryCount']);
   const historyCountValue = form.getFieldValue(['chatConfig', 'historyCount']);
@@ -745,12 +745,18 @@ const Controls = memo<ControlsProps>(({ setUpdating, updating, variant = 'popove
               title={t('settingModel.params.panel.contextCompression')}
               tooltip={t('settingModel.enableContextCompression.desc')}
               action={
-                <Switch
-                  checked={Boolean(enableContextCompression)}
-                  disabled={!canCreate}
+                <Select
                   size={'small'}
-                  onChange={(checked) => {
-                    handleFieldChange(['chatConfig', 'enableContextCompression'], checked);
+                  style={{ width: 110 }}
+                  options={[
+                    { label: t('settingModel.compression.options.off'), value: 'off' },
+                    { label: t('settingModel.compression.options.standard'), value: 'standard' },
+                    { label: t('settingModel.compression.options.smart'), value: 'smart' },
+                  ]}
+                  value={compressionValue ?? 'standard'}
+                  disabled={!canCreate}
+                  onChange={(value) => {
+                    handleFieldChange(['chatConfig', 'compression'], value);
                   }}
                 />
               }

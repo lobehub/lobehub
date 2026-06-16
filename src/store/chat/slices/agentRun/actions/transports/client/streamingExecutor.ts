@@ -570,11 +570,19 @@ export class StreamingExecutorActionImpl {
       provider!,
     )(getAiInfraStoreState());
 
+    // Derive compression config from agent settings with upstream backward compatibility.
+    // enableContextCompression is the master toggle (upstream compat, default: true).
+    // compression is the mode selector: 'standard' (50%), 'smart' (70% + 32k protection).
+    // Only enable smart threshold when compression mode is 'smart'.
+    const compressionMode = agentConfigData.chatConfig?.compression;
+    const smartThreshold = compressionMode === 'smart' ? true : undefined;
+
     const agent = new GeneralChatAgent({
       agentConfig: { maxSteps: 1000 },
       compressionConfig: {
-        enabled: agentConfigData.chatConfig?.enableContextCompression ?? true, // Default to enabled
+        enabled: agentConfigData.chatConfig?.enableContextCompression ?? true,
         maxWindowToken: contextWindowTokens ?? undefined,
+        smartThreshold,
       },
       dynamicInterventionAudits,
       operationId: `${messageKey}/${params.parentMessageId}`,

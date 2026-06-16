@@ -90,7 +90,14 @@ export interface GeneralAgentConfig {
     enabled?: boolean;
     /** Model's max context window token count (default: 128k) */
     maxWindowToken?: number;
-    /** Threshold ratio for triggering compression (default: 0.5) */
+    /**
+     * Enable smart threshold strategy:
+     * - Uses 70% threshold ratio (instead of default 50%)
+     * - Applies 20k minimum buffer protection for small context models
+     * - Disables compression for models with ≤32k context
+     */
+    smartThreshold?: boolean;
+    /** Threshold ratio for triggering compression (default: 0.5, or 0.7 when smartThreshold is on) */
     thresholdRatio?: number;
   };
   /**
