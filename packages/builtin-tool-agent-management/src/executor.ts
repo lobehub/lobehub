@@ -5,13 +5,22 @@
  * deleting, searching, and calling AI agents.
  * Delegates to AgentManagerRuntime for actual implementation.
  */
-import type { AgentManagerRuntime } from '@lobechat/agent-manager-runtime';
+import { AgentManagerRuntime } from '@lobechat/agent-manager-runtime';
 import {
   BaseExecutor,
   type BuiltinToolContext,
   type BuiltinToolResult,
   type ConversationContext,
 } from '@lobechat/types';
+
+import { agentService } from '@/services/agent';
+import { discoverService } from '@/services/discover';
+import { getAgentStoreState, useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
+import { dispatchNonHeteroSubAgent } from '@/store/chat/slices/aiChat/actions/nonHeteroSubAgentDispatcher';
+import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import {
   AgentManagementApiName,
@@ -28,27 +37,10 @@ import {
   type UpdatePromptParams,
 } from './types';
 
-let runtime: AgentManagerRuntime | undefined;
-let runtimePromise: Promise<AgentManagerRuntime> | undefined;
-
-const getRuntime = async () => {
-  if (runtime) return runtime;
-
-  runtimePromise ??= Promise.all([
-    import('@lobechat/agent-manager-runtime'),
-    import('@/services/agent'),
-    import('@/services/discover'),
-  ]).then(([{ AgentManagerRuntime }, { agentService }, { discoverService }]) => {
-    runtime = new AgentManagerRuntime({
-      agentService,
-      discoverService,
-    });
-
-    return runtime;
-  });
-
-  return runtimePromise;
-};
+const runtime = new AgentManagerRuntime({
+  agentService,
+  discoverService,
+});
 
 class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName> {
   readonly identifier = AgentManagementIdentifier;
@@ -57,7 +49,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
   // ==================== Agent CRUD ====================
 
   createAgent = async (params: CreateAgentParams): Promise<BuiltinToolResult> => {
-    return (await getRuntime()).createAgent(params);
+    return runtime.createAgent(params);
   };
 
   updateAgent = async (params: UpdateAgentParams): Promise<BuiltinToolResult> => {
@@ -79,27 +71,27 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
         /* ignore */
       }
     }
-    return (await getRuntime()).updateAgentConfig(agentId, { config, meta });
+    return runtime.updateAgentConfig(agentId, { config, meta });
   };
 
   deleteAgent = async (params: DeleteAgentParams): Promise<BuiltinToolResult> => {
-    return (await getRuntime()).deleteAgent(params.agentId);
+    return runtime.deleteAgent(params.agentId);
   };
 
   getAgentDetail = async (params: GetAgentDetailParams): Promise<BuiltinToolResult> => {
-    return (await getRuntime()).getAgentDetail(params.agentId);
+    return runtime.getAgentDetail(params.agentId);
   };
 
   duplicateAgent = async (params: DuplicateAgentParams): Promise<BuiltinToolResult> => {
-    return (await getRuntime()).duplicateAgent(params.agentId, params.newTitle);
+    return runtime.duplicateAgent(params.agentId, params.newTitle);
   };
 
   updatePrompt = async (params: UpdatePromptParams): Promise<BuiltinToolResult> => {
-    return (await getRuntime()).updatePrompt(params.agentId, { prompt: params.prompt });
+    return runtime.updatePrompt(params.agentId, { prompt: params.prompt });
   };
 
   installPlugin = async (params: InstallPluginParams): Promise<BuiltinToolResult> => {
-    return (await getRuntime()).installPlugin(params.agentId, {
+    return runtime.installPlugin(params.agentId, {
       identifier: params.identifier,
       source: params.source,
     });
@@ -108,7 +100,7 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
   // ==================== Search ====================
 
   searchAgent = async (params: SearchAgentParams): Promise<BuiltinToolResult> => {
-    return (await getRuntime()).searchAgents(params);
+    return runtime.searchAgents(params);
   };
 
   // ==================== Execution ====================
@@ -125,23 +117,6 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
       timeout,
       skipCallSupervisor = false,
     } = params;
-    const [
-      { agentService },
-      { getAgentStoreState, useAgentStore },
-      { agentSelectors },
-      { useChatStore },
-      { dispatchNonHeteroSubAgent },
-      { dbMessageSelectors },
-      { messageMapKey },
-    ] = await Promise.all([
-      import('@/services/agent'),
-      import('@/store/agent'),
-      import('@/store/agent/selectors'),
-      import('@/store/chat'),
-      import('@/store/chat/slices/aiChat/actions/nonHeteroSubAgentDispatcher'),
-      import('@/store/chat/slices/message/selectors'),
-      import('@/store/chat/utils/messageMapKey'),
-    ]);
 
     if (runAsTask) {
       // Dispatch as a legacy async agent invocation.

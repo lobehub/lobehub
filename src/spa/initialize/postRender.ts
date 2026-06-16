@@ -1,3 +1,7 @@
+import { registerBuiltinToolExecutors } from '@/store/tool/slices/builtin/executors';
+
+import { startConnectorInitialization } from './connectors';
+
 type RequestIdleCallback = (callback: () => void, options?: { timeout?: number }) => number;
 
 let postRenderStarted = false;
@@ -31,25 +35,16 @@ const scheduleAfterFirstPaint = (task: () => void) => {
   runWhenIdle();
 };
 
-const runConnectorInitialization = async () => {
-  const { startConnectorInitialization } = await import('./connectors');
-  startConnectorInitialization();
-};
-
-const runBuiltinToolExecutorRegistration = async () => {
-  const { registerBuiltinToolExecutors } = await import('@/store/tool/slices/builtin/executors');
-  await registerBuiltinToolExecutors();
-};
-
 export const startPostRenderInitialization = () => {
   if (postRenderStarted) return;
   postRenderStarted = true;
 
   scheduleAfterFirstPaint(() => {
-    void Promise.all([runBuiltinToolExecutorRegistration(), runConnectorInitialization()]).catch(
-      (error) => {
-        console.error('[SPA Initialize] post-render initialization failed', error);
-      },
-    );
+    try {
+      registerBuiltinToolExecutors();
+      startConnectorInitialization();
+    } catch (error) {
+      console.error('[SPA Initialize] post-render initialization failed', error);
+    }
   });
 };
