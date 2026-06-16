@@ -1,4 +1,5 @@
 import type { ContextNode, IdNode, Message, MessageNode, SignalCallbacksNode } from '../types';
+import { BranchResolver } from './BranchResolver';
 
 /**
  * Persisted external-signal lineage on `message.metadata.signal` —
@@ -55,6 +56,8 @@ export class MessageCollector {
   constructor(
     private messageMap: Map<string, Message>,
     private childrenMap: Map<string | null, string[]>,
+    // BranchResolver is stateless; default keeps existing 2-arg call sites working.
+    private branchResolver: BranchResolver = new BranchResolver(),
   ) {}
 
   /**
@@ -165,9 +168,18 @@ export class MessageCollector {
    * Dual-form aware: candidates are gathered from BOTH the assistant's own
    * non-tool children (new assistant-anchored form, where the next assistant is
    * a sibling of the tool results) AND each tool result's children (old
-   * tool-anchored form). Tools hosting an AgentCouncil or async tasks are NOT
-   * linear continuations, so their children are skipped. The earliest
-   * same-agent, non-signal assistant continuation wins.
+   * tool-anchored form).
+   *
+   * Two guards keep the assistant-anchored candidate honest:
+   * - **Fan-out guard**: if any tool hosts an AgentCouncil or spawned async
+   *   tasks, the chain does NOT continue linearly through this step — neither
+   *   through that tool's children nor through an assistant-anchored follow-up
+   *   (a post-task summary whose `parentId === currentAssistant.id`). Those are
+   *   emitted by the council/tasks flow AFTER the group, so the assistant seed
+   *   is dropped and the chain ends here.
+   * - **Branch resolution**: when >1 non-tool same-agent continuations share a
+   *   parent (e.g. a regenerated continuation), pick the active one via
+   *   `activeBranchIndex` instead of blindly taking the earliest.
    */
   private findFlatChainContinuation(
     currentAssistant: Message,
@@ -176,22 +188,61 @@ export class MessageCollector {
     processedIds: Set<string>,
     groupAgentId: string | undefined,
   ): Message | undefined {
-    // The assistant's own children (new form) plus its tools' children (old form)
-    const candidateParentIds = new Set<string>([currentAssistant.id]);
+    const candidateParentIds = new Set<string>();
+    let hasFanOutTool = false;
     for (const toolMsg of toolMessages) {
-      // A tool hosting an AgentCouncil broadcast — its children are council members
-      if ((toolMsg.metadata as any)?.agentCouncil === true) continue;
+      const isCouncil = (toolMsg.metadata as any)?.agentCouncil === true;
       const toolChildren = allMessages.filter((m) => m.parentId === toolMsg.id);
-      // A tool that spawned async tasks is a fan-out, not a linear continuation
-      if (toolChildren.some((m) => m.role === 'task')) continue;
+      const hasTaskChild = toolChildren.some((m) => m.role === 'task');
+      if (isCouncil || hasTaskChild) {
+        hasFanOutTool = true;
+        continue;
+      }
       candidateParentIds.add(toolMsg.id);
     }
+    // Assistant-anchored continuation only counts when this step did not fan out.
+    if (!hasFanOutTool) candidateParentIds.add(currentAssistant.id);
 
-    return allMessages
+    const candidates = allMessages
       .filter((m) => m.parentId != null && candidateParentIds.has(m.parentId))
       .filter((m) => m.role !== 'tool' && !processedIds.has(m.id))
       .filter((m) => m.role === 'assistant' && m.agentId === groupAgentId && !getMessageSignal(m))
-      .sort((a, b) => a.createdAt - b.createdAt)[0];
+      .sort((a, b) => a.createdAt - b.createdAt);
+
+    const activeId = this.resolveActiveContinuationId(candidates);
+    return activeId ? candidates.find((m) => m.id === activeId) : undefined;
+  }
+
+  /**
+   * Pick the active continuation among same-step candidates (sorted by
+   * createdAt). One candidate ⇒ a linear continuation. >1 non-tool siblings
+   * under a single parent ⇒ a branch (e.g. a regenerated continuation), so
+   * consult the parent's `activeBranchIndex` via BranchResolver instead of
+   * blindly taking the earliest — otherwise the inactive branch is silently
+   * chosen and the active one dropped. Returns undefined when there is no
+   * continuation, or the active branch is an optimistic not-yet-created one.
+   */
+  private resolveActiveContinuationId(sortedCandidates: Message[]): string | undefined {
+    if (sortedCandidates.length === 0) return undefined;
+    const earliest = sortedCandidates[0];
+    const parentId = earliest.parentId;
+    if (parentId == null) return earliest.id;
+
+    // Branch siblings share one parent; only those under the earliest
+    // candidate's parent participate in this branch decision. Use childrenMap
+    // (creation) order so it lines up with how activeBranchIndex is assigned.
+    const eligibleIds = new Set(sortedCandidates.map((m) => m.id));
+    const siblingIds = (this.childrenMap.get(parentId) ?? []).filter((id) => eligibleIds.has(id));
+    if (siblingIds.length <= 1) return earliest.id;
+
+    const parentMsg = this.messageMap.get(parentId);
+    if (!parentMsg) return earliest.id;
+
+    return this.branchResolver.getActiveBranchIdFromMetadata(
+      parentMsg,
+      siblingIds,
+      this.childrenMap,
+    );
   }
 
   /**
@@ -313,43 +364,51 @@ export class MessageCollector {
 
   /**
    * Find the IdNode of the next assistant in a tool-using step's chain
-   * (contextTree variant of {@link findFlatChainContinuation}).
-   *
-   * Candidates: the assistant's own non-tool children (new assistant-anchored
-   * form) plus each tool result's children (old tool-anchored form). Tools
-   * hosting an AgentCouncil or async tasks are skipped (not linear
-   * continuations). Signal-tagged toolless siblings (Monitor callbacks etc.)
-   * are skipped so the main chain walks the real follower. The earliest
-   * same-agent assistant wins.
+   * (contextTree variant of {@link findFlatChainContinuation}). Same fan-out
+   * guard (AgentCouncil / async tasks end the chain — including any
+   * assistant-anchored post-task summary) and branch resolution (>1 non-tool
+   * siblings under one parent ⇒ pick the active branch) as the flat variant.
+   * Signal-tagged toolless siblings (Monitor callbacks etc.) are skipped so the
+   * main chain walks the real follower.
    */
   private findChainContinuationNode(idNode: IdNode, groupAgentId?: string): IdNode | undefined {
-    const candidates: IdNode[] = [];
+    const candidateNodes: IdNode[] = [];
+    let hasFanOutTool = false;
 
-    // (a) the assistant's own non-tool children (new form)
-    for (const child of idNode.children) {
-      if (this.messageMap.get(child.id)?.role === 'tool') continue;
-      candidates.push(child);
-    }
-
-    // (b) each eligible tool result's children (old form)
+    // (b) each tool result's children (old form); detect fan-out tools
     for (const toolNode of idNode.children) {
       const toolMsg = this.messageMap.get(toolNode.id);
       if (toolMsg?.role !== 'tool') continue;
-      if ((toolMsg.metadata as any)?.agentCouncil === true) continue;
+      const isCouncil = (toolMsg.metadata as any)?.agentCouncil === true;
       const hasTaskChild = toolNode.children.some(
         (child) => this.messageMap.get(child.id)?.role === 'task',
       );
-      if (hasTaskChild) continue;
-      candidates.push(...toolNode.children);
+      if (isCouncil || hasTaskChild) {
+        hasFanOutTool = true;
+        continue;
+      }
+      candidateNodes.push(...toolNode.children);
     }
 
-    return candidates
+    // (a) the assistant's own non-tool children (new form) — only when the step
+    // did not fan out (otherwise they are post-fan-out summaries, not inline)
+    if (!hasFanOutTool) {
+      for (const child of idNode.children) {
+        if (this.messageMap.get(child.id)?.role === 'tool') continue;
+        candidateNodes.push(child);
+      }
+    }
+
+    const eligible = candidateNodes
       .map((node) => ({ msg: this.messageMap.get(node.id), node }))
       .filter(
         (c) =>
           c.msg?.role === 'assistant' && c.msg.agentId === groupAgentId && !getMessageSignal(c.msg),
       )
-      .sort((a, b) => a.msg!.createdAt - b.msg!.createdAt)[0]?.node;
+      .sort((a, b) => a.msg!.createdAt - b.msg!.createdAt);
+
+    const activeId = this.resolveActiveContinuationId(eligible.map((c) => c.msg!));
+    return activeId ? eligible.find((c) => c.node.id === activeId)?.node : undefined;
   }
 
   /**

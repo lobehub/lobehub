@@ -299,4 +299,157 @@ describe('dual-form message chain (LOBE-10445)', () => {
     // active branch is a-y (index 1); a-x's tool result must NOT appear as a peer entry
     expect(ids).toEqual(['u1', 'a-y']);
   });
+
+  // A regenerated continuation in the new form: the tool-using assistant a1 has
+  // its tool result PLUS two non-tool assistant children (a2a, a2b). These are a
+  // branch, so the active one must be chosen via activeBranchIndex — not the
+  // earliest — and the inactive one must not leak into the merged group chain.
+  const regenContinuation = (activeBranchIndex: number): Message[] => [
+    { content: 'q', createdAt: 0, id: 'u1', role: 'user', updatedAt: 0 },
+    {
+      agentId: 'agent-a',
+      content: 'step1',
+      createdAt: 1,
+      id: 'a1',
+      metadata: { activeBranchIndex },
+      parentId: 'u1',
+      role: 'assistant',
+      tools: [
+        {
+          apiName: 'x',
+          arguments: '{}',
+          id: 'tc1',
+          identifier: 'x',
+          result_msg_id: 'a1__tc1',
+          type: 'default',
+        },
+      ],
+      updatedAt: 0,
+    },
+    {
+      content: 'r',
+      createdAt: 2,
+      id: 'a1__tc1',
+      parentId: 'a1',
+      role: 'tool',
+      tool_call_id: 'tc1',
+      updatedAt: 0,
+    },
+    // two regenerated continuations, both children of a1 (siblings of the tool)
+    {
+      agentId: 'agent-a',
+      content: 'cont A',
+      createdAt: 3,
+      id: 'a2a',
+      parentId: 'a1',
+      role: 'assistant',
+      updatedAt: 0,
+    },
+    {
+      agentId: 'agent-a',
+      content: 'cont B',
+      createdAt: 4,
+      id: 'a2b',
+      parentId: 'a1',
+      role: 'assistant',
+      updatedAt: 0,
+    },
+  ];
+
+  it('⑥ assistant-anchored regenerated continuation follows activeBranchIndex', () => {
+    // activeBranchIndex 1 → a2b is the active continuation merged into the group
+    const r1 = parse(regenContinuation(1));
+    expect(shape(r1.flatList)).toEqual([
+      { childIds: undefined, id: 'u1', role: 'user' },
+      {
+        childIds: [
+          { id: 'a1', tools: ['a1__tc1'] },
+          { id: 'a2b', tools: [] },
+        ],
+        id: 'a1',
+        role: 'assistantGroup',
+      },
+    ]);
+    expect(r1.flatList.map((m) => m.id)).not.toContain('a2a');
+
+    // activeBranchIndex 0 → the OTHER branch (a2a) is active; not blindly earliest-by-rule
+    const r0 = parse(regenContinuation(0));
+    expect((r0.flatList[1] as any).children.map((c: any) => c.id)).toEqual(['a1', 'a2a']);
+    expect(r0.flatList.map((m) => m.id)).not.toContain('a2b');
+  });
+
+  it('⑦ async-task summary with assistant-anchored parent stays out of the group', () => {
+    // a1 spawns async tasks under its tool; the follow-up summary uses the NEW
+    // assistant-anchored parent (summary.parentId === a1). It must render after
+    // the tasks aggregation (group → tasks → summary), NOT inside the group.
+    const msgs: Message[] = [
+      { content: 'q', createdAt: 0, id: 'u1', role: 'user', updatedAt: 0 },
+      {
+        agentId: 'agent-a',
+        content: 'spawning',
+        createdAt: 1,
+        id: 'a1',
+        parentId: 'u1',
+        role: 'assistant',
+        tools: [
+          {
+            apiName: 'dispatch',
+            arguments: '{}',
+            id: 'tc1',
+            identifier: 'x',
+            result_msg_id: 'a1__tc1',
+            type: 'default',
+          },
+        ],
+        updatedAt: 0,
+      },
+      {
+        content: 'r',
+        createdAt: 2,
+        id: 'a1__tc1',
+        parentId: 'a1',
+        role: 'tool',
+        tool_call_id: 'tc1',
+        updatedAt: 0,
+      },
+      {
+        agentId: 'agent-a',
+        content: 'task 1',
+        createdAt: 3,
+        id: 'task-1',
+        parentId: 'a1__tc1',
+        role: 'task',
+        updatedAt: 0,
+      },
+      {
+        agentId: 'agent-a',
+        content: 'task 2',
+        createdAt: 4,
+        id: 'task-2',
+        parentId: 'a1__tc1',
+        role: 'task',
+        updatedAt: 0,
+      },
+      // assistant-anchored post-task summary
+      {
+        agentId: 'agent-a',
+        content: 'summary',
+        createdAt: 5,
+        id: 'summary',
+        parentId: 'a1',
+        role: 'assistant',
+        updatedAt: 0,
+      },
+    ];
+    const result = parse(msgs);
+    const rows = result.flatList.map((m) => ({ id: m.id, role: m.role }));
+    expect(rows).toEqual([
+      { id: 'u1', role: 'user' },
+      { id: 'a1', role: 'assistantGroup' },
+      { id: result.flatList[2].id, role: 'tasks' },
+      { id: 'summary', role: 'assistant' },
+    ]);
+    // the group must contain ONLY a1 — the summary must not be folded inside it
+    expect((result.flatList[1] as any).children.map((c: any) => c.id)).toEqual(['a1']);
+  });
 });
