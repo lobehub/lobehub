@@ -4,6 +4,15 @@
   "community": [
     {
       "image": "/blog/assets65dddd1748c3de8646c8ad56abf53390.webp",
+      "id": "2026-06-15-browser-pairing",
+      "date": "2026-06-15",
+      "versionRange": [
+        "2.2.3",
+        "2.2.4"
+      ]
+    },
+    {
+      "image": "/blog/assets65dddd1748c3de8646c8ad56abf53390.webp",
       "id": "2026-06-08-connectors",
       "date": "2026-06-08",
       "versionRange": [
