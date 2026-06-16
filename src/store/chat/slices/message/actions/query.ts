@@ -6,6 +6,7 @@ import { type SWRResponse } from 'swr';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { messageKeys } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { type ChatStore } from '@/store/chat/store';
 import { type StoreSetter } from '@/store/types';
 
@@ -111,6 +112,49 @@ export class MessageQueryActionImpl {
       },
       false,
       params?.action ?? 'replaceMessages',
+    );
+
+    this.#writeThroughMessageCache(ctx, messagesKey, reconciled, params?.action);
+  };
+
+  /**
+   * Write the settled in-memory messages back into the `message:list` SWR cache
+   * (and, transitively, the persisted IndexedDB tier) for this exact bucket.
+   *
+   * Why: message mutations otherwise only touch the in-memory store, so the SWR
+   * cache stays stale until a network refetch. Because the Conversation store is
+   * recreated on every topic/session switch and re-hydrates from this cache, a
+   * stale cache is what forces a refetch on every switch. Keeping the cache in
+   * sync here lets a switch-back hydrate from a FRESH cache.
+   *
+   * Skipped in two cases:
+   * - `useFetchMessages` onData — SWR already holds that exact value, so
+   *   re-writing it would double the IndexedDB persist on every fetch.
+   * - while the context is streaming — `internal_dispatchMessage` bridges every
+   *   token here via `onMessagesChange`, and a write-through per token would
+   *   thrash. `agent_runtime_end` clears the running flag *before* its final
+   *   `replaceMessages`, so the settled snapshot still writes through.
+   */
+  #writeThroughMessageCache = (
+    ctx: MessageMapKeyInput,
+    messagesKey: string,
+    messages: UIChatMessage[],
+    action?: string,
+  ): void => {
+    if (action === 'useFetchMessages') return;
+    if (operationSelectors.isAgentRuntimeRunningByContext(ctx)(this.#get())) return;
+
+    // Match every `message:list` entry whose context resolves to the same bucket
+    // (any page-size / version / workspace-augmented variant). `revalidate: false`
+    // seeds the cache without firing a network request.
+    void mutate(
+      (key) => {
+        if (!Array.isArray(key) || key[0] !== messageKeys.list.root) return false;
+        const keyCtx = key[1] as ConversationContext | undefined;
+        return !!keyCtx && messageMapKey(keyCtx) === messagesKey;
+      },
+      messages,
+      { revalidate: false },
     );
   };
 
