@@ -2,18 +2,73 @@ import type {
   DesktopNotificationResult,
   ShowDesktopNotificationParams,
 } from '@lobechat/electron-client-ipc';
-import { app, Notification } from 'electron';
+import type { NativeImage } from 'electron';
+import { app, nativeImage, Notification } from 'electron';
 import * as electronIs from 'electron-is';
 
 import { getIpcContext } from '@/utils/ipc';
 import { createLogger } from '@/utils/logger';
+import { netFetch } from '@/utils/net-fetch';
 
 import { ControllerModule, IpcMethod } from './index';
 
 const logger = createLogger('controllers:NotificationCtr');
 
+/** Avatars are small thumbnails; downscale to keep the cache and payload light. */
+const NOTIFICATION_ICON_SIZE = 64;
+/** Don't let a slow avatar host hold up the notification. */
+const NOTIFICATION_ICON_FETCH_TIMEOUT = 3000;
+
 export default class NotificationCtr extends ControllerModule {
   static override readonly groupName = 'notification';
+
+  /** Resolved avatars keyed by source URL/dataURL so we fetch each agent once. */
+  private iconCache = new Map<string, NativeImage>();
+
+  /**
+   * Resolve a notification icon source (http(s) URL or data URL) into a
+   * `NativeImage`. Network fetches are time-boxed and every failure mode
+   * (timeout, non-200, empty image) resolves to `undefined` so a missing or
+   * slow avatar never blocks or breaks the notification itself.
+   */
+  private async resolveNotificationIcon(source?: string): Promise<NativeImage | undefined> {
+    if (!source) return undefined;
+
+    const cached = this.iconCache.get(source);
+    if (cached) return cached;
+
+    try {
+      let image: NativeImage | undefined;
+
+      if (source.startsWith('data:')) {
+        image = nativeImage.createFromDataURL(source);
+      } else if (/^https?:\/\//.test(source)) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), NOTIFICATION_ICON_FETCH_TIMEOUT);
+        try {
+          const response = await netFetch(source, { signal: controller.signal });
+          if (response.ok) {
+            const buffer = Buffer.from(await response.arrayBuffer());
+            image = nativeImage.createFromBuffer(buffer);
+          }
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+
+      if (!image || image.isEmpty()) return undefined;
+
+      const resized = image.resize({
+        height: NOTIFICATION_ICON_SIZE,
+        width: NOTIFICATION_ICON_SIZE,
+      });
+      this.iconCache.set(source, resized);
+      return resized;
+    } catch (error) {
+      logger.debug('Failed to resolve notification icon, sending without it:', error);
+      return undefined;
+    }
+  }
 
   @IpcMethod()
   async getNotificationPermissionStatus(): Promise<string> {
@@ -130,10 +185,15 @@ export default class NotificationCtr extends ControllerModule {
 
       logger.info('Showing desktop notification:', params.title);
 
+      // Best-effort avatar; never blocks or fails the notification if it can't load.
+      // Only suspend when an icon is actually requested so the common path stays sync.
+      const icon = params.icon ? await this.resolveNotificationIcon(params.icon) : undefined;
+
       const notification = new Notification({
         body: params.body,
         // Add more configuration to ensure notifications display properly
         hasReply: false,
+        ...(icon ? { icon } : {}),
         silent: params.silent || false,
         timeoutType: 'default',
         title: params.title,

@@ -19,6 +19,8 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
+const { netFetchMock } = vi.hoisted(() => ({ netFetchMock: vi.fn() }));
+
 // Mock electron
 vi.mock('electron', () => {
   const mockNotificationInstance = {
@@ -27,6 +29,10 @@ vi.mock('electron', () => {
   };
   const MockNotification = vi.fn(() => mockNotificationInstance) as any;
   MockNotification.isSupported = vi.fn(() => true);
+
+  // A resized NativeImage stub; `resize` returns itself so callers get a stable ref.
+  const mockResizedImage: any = { isEmpty: () => false };
+  mockResizedImage.resize = vi.fn(() => mockResizedImage);
 
   return {
     ipcMain: {
@@ -39,8 +45,15 @@ vi.mock('electron', () => {
       },
       setAppUserModelId: vi.fn(),
     },
+    nativeImage: {
+      createFromBuffer: vi.fn(() => mockResizedImage),
+      createFromDataURL: vi.fn(() => mockResizedImage),
+    },
   };
 });
+
+// net-fetch is used for remote (http) avatar resolution
+vi.mock('@/utils/net-fetch', () => ({ netFetch: netFetchMock }));
 
 // Mock electron-is
 vi.mock('electron-is', () => ({
@@ -362,6 +375,95 @@ describe('NotificationCtr', () => {
       expect(result).toEqual({
         error: 'Unknown error',
         success: false,
+      });
+    });
+
+    describe('icon (avatar)', () => {
+      const httpResponse = (ok: boolean) => ({
+        arrayBuffer: async () => new ArrayBuffer(8),
+        ok,
+      });
+
+      beforeEach(() => {
+        mockBrowserWindow.isVisible.mockReturnValue(false);
+      });
+
+      it('converts a data URL avatar into a NativeImage icon', async () => {
+        const { Notification, nativeImage } = await import('electron');
+        vi.mocked(Notification.isSupported).mockReturnValue(true);
+
+        const promise = controller.showDesktopNotification({
+          ...params,
+          icon: 'data:image/png;base64,AAAA',
+        });
+        await vi.advanceTimersByTimeAsync(100);
+        await promise;
+
+        expect(nativeImage.createFromDataURL).toHaveBeenCalledWith('data:image/png;base64,AAAA');
+        expect(Notification).toHaveBeenCalledWith(
+          expect.objectContaining({ icon: expect.anything() }),
+        );
+      });
+
+      it('fetches a remote avatar and caches it across notifications', async () => {
+        const { Notification, nativeImage } = await import('electron');
+        vi.mocked(Notification.isSupported).mockReturnValue(true);
+        netFetchMock.mockResolvedValue(httpResponse(true));
+
+        const first = controller.showDesktopNotification({
+          ...params,
+          icon: 'https://cdn.example.com/a.png',
+        });
+        await vi.advanceTimersByTimeAsync(100);
+        await first;
+
+        const second = controller.showDesktopNotification({
+          ...params,
+          icon: 'https://cdn.example.com/a.png',
+        });
+        await vi.advanceTimersByTimeAsync(100);
+        await second;
+
+        // Fetched + decoded only once; the second call hits the cache.
+        expect(netFetchMock).toHaveBeenCalledTimes(1);
+        expect(nativeImage.createFromBuffer).toHaveBeenCalledTimes(1);
+        expect(Notification).toHaveBeenLastCalledWith(
+          expect.objectContaining({ icon: expect.anything() }),
+        );
+      });
+
+      it('sends the notification without an icon when the remote fetch fails', async () => {
+        const { Notification } = await import('electron');
+        vi.mocked(Notification.isSupported).mockReturnValue(true);
+        netFetchMock.mockRejectedValue(new Error('network down'));
+
+        const promise = controller.showDesktopNotification({
+          ...params,
+          icon: 'https://cdn.example.com/broken.png',
+        });
+        await vi.advanceTimersByTimeAsync(100);
+        const result = await promise;
+
+        expect(result).toEqual({ success: true });
+        const lastCall = vi.mocked(Notification).mock.calls.at(-1)?.[0] as Record<string, unknown>;
+        expect(lastCall.icon).toBeUndefined();
+      });
+
+      it('ignores a non-200 remote avatar response', async () => {
+        const { Notification, nativeImage } = await import('electron');
+        vi.mocked(Notification.isSupported).mockReturnValue(true);
+        netFetchMock.mockResolvedValue(httpResponse(false));
+
+        const promise = controller.showDesktopNotification({
+          ...params,
+          icon: 'https://cdn.example.com/404.png',
+        });
+        await vi.advanceTimersByTimeAsync(100);
+        await promise;
+
+        expect(nativeImage.createFromBuffer).not.toHaveBeenCalled();
+        const lastCall = vi.mocked(Notification).mock.calls.at(-1)?.[0] as Record<string, unknown>;
+        expect(lastCall.icon).toBeUndefined();
       });
     });
   });
