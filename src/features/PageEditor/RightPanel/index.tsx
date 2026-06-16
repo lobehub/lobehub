@@ -7,6 +7,7 @@ import { type ReactNode } from 'react';
 import { memo, useMemo, useRef } from 'react';
 
 import RightPanel from '@/features/RightPanel';
+import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
@@ -108,14 +109,26 @@ const PageEditorRightPanel = memo(() => {
   const { expand, toggle } = usePageAgentPanelControl();
   const rightPanelMode = usePageEditorStore(selectors.rightPanelMode);
   const editable = usePageEditable();
+  const { allowed: hasEditPermission } = usePermission('edit_own_content');
+  const isWorkspacePage = usePageEditorStore((s) => s.isWorkspacePage);
+  const isLockPending = usePageEditorStore((s) => s.isLockPending);
+  const isLockedByOther = usePageEditorStore((s) => s.isLockedByOther);
   const [width, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.pageAgentPanelWidth(s),
     s.updateSystemStatus,
   ]);
 
+  // While the first lock peek is still resolving, `usePageEditable` is
+  // conservatively false (the editor must not let you type before we know the
+  // page is free). For the panel that would mean collapse-then-expand on every
+  // workspace page open — a visible flicker. So stay optimistic here: an
+  // edit-permission holder keeps the copilot visible while the lock resolves,
+  // and it only collapses if the page turns out to be locked by another member.
+  const lockResolving = hasEditPermission && isWorkspacePage && isLockPending && !isLockedByOther;
+
   // The Page Agent (copilot) edits the document, so hide it in read-only mode.
   // History stays available. Re-entering edit mode restores the saved preference.
-  const effectiveExpand = expand && (rightPanelMode === 'history' || editable);
+  const effectiveExpand = expand && (rightPanelMode === 'history' || editable || lockResolving);
 
   return (
     <RightPanel
