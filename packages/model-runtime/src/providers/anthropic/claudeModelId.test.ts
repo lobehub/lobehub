@@ -55,10 +55,10 @@ describe('parseClaudeModelId', () => {
   });
 
   it('should not treat release dates as minor versions', () => {
-    expect(parseClaudeModelId('claude-opus-4-20260616')).toEqual({
+    expect(parseClaudeModelId('claude-opus-4-20250514')).toEqual({
       family: 'opus',
       majorVersion: 4,
-      normalizedModelId: 'claude-opus-4-20260616',
+      normalizedModelId: 'claude-opus-4-20250514',
       source: 'anthropic',
     });
   });
@@ -79,7 +79,7 @@ describe('parseClaudeModelId', () => {
 
 describe('isContextCachingModel', () => {
   it('should return true for current Claude context-caching families', () => {
-    expect(isContextCachingModel('claude-opus-4-7')).toBe(true);
+    expect(isContextCachingModel('claude-opus-4-20250514')).toBe(true);
     expect(isContextCachingModel('claude-sonnet-4-5-20250929')).toBe(true);
     expect(isContextCachingModel('claude-haiku-4-5-20251001')).toBe(true);
     expect(isContextCachingModel('claude-3-7-sonnet-20250219')).toBe(true);
@@ -100,7 +100,7 @@ describe('isContextCachingModel', () => {
 
 describe('isThinkingWithToolClaudeModel', () => {
   it('should return true for current Claude thinking-with-tools families', () => {
-    expect(isThinkingWithToolClaudeModel('claude-opus-4-7')).toBe(true);
+    expect(isThinkingWithToolClaudeModel('claude-opus-4-20250514')).toBe(true);
     expect(isThinkingWithToolClaudeModel('claude-haiku-4-5-20251001')).toBe(true);
     expect(isThinkingWithToolClaudeModel('claude-3-7-sonnet-20250219')).toBe(true);
   });
