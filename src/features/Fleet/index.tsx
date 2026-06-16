@@ -35,7 +35,11 @@ const FleetView = memo(() => {
 
   return (
     <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }} width={'100%'}>
-      <RunningTaskSidebar columns={columns} statusByColumnKey={statusByColumnKey} />
+      <RunningTaskSidebar
+        columns={columns}
+        isLoading={!isInit}
+        statusByColumnKey={statusByColumnKey}
+      />
       <ColumnsBoard statusByColumnKey={statusByColumnKey} />
     </Flexbox>
   );
