@@ -492,8 +492,8 @@ export default {
   'memory.title': 'Memory',
   'gatewayMode.beta': 'Beta',
   'gatewayMode.desc':
-    'Run agents in the cloud through Gateway. Tasks keep running even if you close this page.',
-  'gatewayMode.title': 'Gateway Mode',
+    "Run agents in the cloud through LobeHub's Agent Gateway. Tasks keep running even after you close the page.",
+  'gatewayMode.title': 'Agent Gateway Mode',
   'search.grounding.imageSearchQueries': 'Image Search Keywords',
   'search.grounding.imageTitle': 'Found {{count}} images',
   'chatMode.agent': 'Agent',

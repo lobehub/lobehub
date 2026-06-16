@@ -2,7 +2,7 @@
 
 import { validateVideoFileSize } from '@lobechat/utils/client';
 import type { IconProps } from '@lobehub/ui';
-import { Icon, Popover } from '@lobehub/ui';
+import { Icon, Popover, Tag } from '@lobehub/ui';
 import { GlobeOffIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { Upload } from 'antd';
 import { css, cssVar, cx } from 'antd-style';
@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
+import { useIsDark } from '@/hooks/useIsDark';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
 import { useAgentStore } from '@/store/agent';
@@ -157,29 +158,24 @@ const gatewayModeLabel = css`
   }
 `;
 
-const betaTag = css`
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-
-  height: 18px;
-  padding-block: 0;
-  padding-inline: 6px;
-  border: 1px solid color-mix(in srgb, ${cssVar.colorInfo} 35%, transparent);
-  border-radius: 6px;
-
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 16px;
-  color: ${cssVar.colorInfo};
-
-  background: ${cssVar.colorInfoBg};
-`;
-
 const gatewayModeInfoCard = css`
-  width: 260px;
-  padding: 12px;
+  overflow: hidden;
+  width: 280px;
+  border-radius: 8px;
+
+  .cover {
+    display: block;
+
+    width: 100%;
+    height: 148px;
+
+    object-fit: cover;
+    background: ${cssVar.colorFillTertiary};
+  }
+
+  .body {
+    padding: 12px;
+  }
 
   .title {
     font-size: 14px;
@@ -208,9 +204,13 @@ const CLOSE_TOOL_DETAIL_POPOVER_EVENT = 'lobe-chat-tool-detail-popover-close';
 interface PopoverLabelProps {
   label: ReactNode;
   popoverContent: ReactNode;
+  // Distance from the label cell's right edge. Switch-type rows reserve a
+  // trailing toggle, so bump this to push the popover clear of the toggle and
+  // out to the right of the whole menu instead of overlapping it.
+  sideOffset?: number;
 }
 
-const PopoverLabel = memo<PopoverLabelProps>(({ label, popoverContent }) => {
+const PopoverLabel = memo<PopoverLabelProps>(({ label, popoverContent, sideOffset = 10 }) => {
   const [open, setOpen] = useState(false);
   const suppressUntilRef = useRef(0);
 
@@ -237,7 +237,7 @@ const PopoverLabel = memo<PopoverLabelProps>(({ label, popoverContent }) => {
       mouseEnterDelay={0.25}
       open={open}
       placement={'rightTop'}
-      positionerProps={{ sideOffset: 10 }}
+      positionerProps={{ sideOffset }}
       styles={{ content: { padding: 0 } }}
       onOpenChange={handleOpenChange}
     >
@@ -287,6 +287,7 @@ const PlusAction = memo(() => {
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
   const { t: tSetting } = useTranslation('setting');
+  const isDark = useIsDark();
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -436,14 +437,23 @@ const PlusAction = memo(() => {
     const renderGatewayModeLabel = () => (
       <span className={cx(gatewayModeLabel)}>
         <span className="title">{t('gatewayMode.title')}</span>
-        <span className={cx(betaTag)}>{t('gatewayMode.beta')}</span>
+        <Tag color={'info'} size={'small'} variant={'filled'}>
+          {t('gatewayMode.beta')}
+        </Tag>
       </span>
     );
 
     const gatewayModeInfo = (
       <div className={cx(gatewayModeInfoCard)}>
-        <div className="title">{t('gatewayMode.title')}</div>
-        <div className="desc">{t('gatewayMode.desc')}</div>
+        <img
+          alt=""
+          className="cover"
+          src={isDark ? '/images/agent_gateway_dark.webp' : '/images/agent_gateway_light.webp'}
+        />
+        <div className="body">
+          <div className="title">{t('gatewayMode.title')}</div>
+          <div className="desc">{t('gatewayMode.desc')}</div>
+        </div>
       </div>
     );
 
@@ -595,7 +605,12 @@ const PlusAction = memo(() => {
               icon: Cloud,
               key: 'gateway-mode',
               label: (
-                <PopoverLabel label={renderGatewayModeLabel()} popoverContent={gatewayModeInfo} />
+                <PopoverLabel
+                  label={renderGatewayModeLabel()}
+                  popoverContent={gatewayModeInfo}
+                  // Clear the trailing toggle so the card sits to the right of the whole menu.
+                  sideOffset={64}
+                />
               ),
               onCheckedChange: handleToggleGatewayMode,
               type: 'switch',
@@ -659,6 +674,7 @@ const PlusAction = memo(() => {
     handleToggleMemory,
     handleToggleParams,
     isAgentModeEnabled,
+    isDark,
     isGatewayModeEnabled,
     isMemoryEnabled,
     isParamsPanelActive,
