@@ -10,7 +10,7 @@ const OllamaCloud: ModelProviderCard = {
   name: 'Ollama Cloud',
   settings: {
     disableBrowserRequest: true, // CORS error
-    sdkType: 'openai',
+    sdkType: 'ollama',
     showModelFetcher: true,
   },
   url: 'https://ollama.com/cloud',
