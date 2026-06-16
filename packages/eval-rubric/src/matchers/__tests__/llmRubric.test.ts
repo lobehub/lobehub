@@ -107,7 +107,7 @@ describe('matchLLMRubric', () => {
       undefined,
       rubric({
         criteria: 'test',
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         provider: 'anthropic',
       }),
       context,
@@ -115,7 +115,7 @@ describe('matchLLMRubric', () => {
 
     expect(mockGenerateObject).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         provider: 'anthropic',
       }),
     );

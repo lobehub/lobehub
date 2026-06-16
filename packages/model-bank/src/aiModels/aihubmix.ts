@@ -1176,43 +1176,6 @@ const aihubmixChatModels: AIChatModelCard[] = [
       structuredOutput: true,
       vision: true,
     },
-    contextWindowTokens: 200_000,
-    description:
-      'Claude Opus 4 is Anthropic’s most powerful model for highly complex tasks, excelling in performance, intelligence, fluency, and comprehension.',
-    displayName: 'Claude Opus 4',
-    family: 'claude-opus',
-    generation: 'claude-4',
-    id: 'claude-opus-4-20250514',
-    knowledgeCutoff: '2025-01',
-    maxOutput: 32_000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 16.8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 84, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '5m': 20.625 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2025-05-23',
-    settings: {
-      extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      structuredOutput: true,
-      vision: true,
-    },
     contextWindowTokens: 1_000_000,
     description: 'Claude Sonnet 4.6 is Anthropic’s best combination of speed and intelligence.',
     displayName: 'Claude Sonnet 4.6',
@@ -1279,42 +1242,6 @@ const aihubmixChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-09-29',
-    settings: {
-      extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 200_000,
-    description:
-      'Claude Sonnet 4 can produce near-instant responses or extended step-by-step reasoning that users can see. API users can finely control how long the model thinks.',
-    displayName: 'Claude Sonnet 4',
-    family: 'claude-sonnet',
-    generation: 'claude-4',
-    id: 'claude-sonnet-4-20250514',
-    knowledgeCutoff: '2025-01',
-    maxOutput: 64_000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 3.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput_cacheRead', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        {
-          lookup: { prices: { '5m': 4.125 }, pricingParams: ['ttl'] },
-          name: 'textInput_cacheWrite',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2025-05-23',
     settings: {
       extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
       searchImpl: 'params',

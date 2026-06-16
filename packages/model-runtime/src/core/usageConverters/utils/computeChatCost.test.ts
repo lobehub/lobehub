@@ -979,7 +979,7 @@ describe('computeChatPricing', () => {
 
     it('handles simple request without thinking for Claude Sonnet 4', () => {
       const pricing = anthropicChatModels.find(
-        (model: { id: string }) => model.id === 'claude-sonnet-4-20250514',
+        (model: { id: string }) => model.id === 'claude-sonnet-4-6',
       )?.pricing;
       expect(pricing).toBeDefined();
 
@@ -1014,7 +1014,7 @@ describe('computeChatPricing', () => {
 
     it('handles request with cache read and write for Claude Sonnet 4', () => {
       const pricing = anthropicChatModels.find(
-        (model: { id: string }) => model.id === 'claude-sonnet-4-20250514',
+        (model: { id: string }) => model.id === 'claude-sonnet-4-6',
       )?.pricing;
       expect(pricing).toBeDefined();
 
@@ -1062,7 +1062,7 @@ describe('computeChatPricing', () => {
 
     it('handles complex scenario with all cache types for Claude Sonnet 4 Latest', () => {
       const pricing = anthropicChatModels.find(
-        (model: { id: string }) => model.id === 'claude-sonnet-4-20250514',
+        (model: { id: string }) => model.id === 'claude-sonnet-4-6',
       )?.pricing;
       expect(pricing).toBeDefined();
 

@@ -251,7 +251,7 @@ describe('LobeBedrockAI', () => {
             } as any,
             { content: 'Continue', role: 'user' },
           ],
-          model: 'anthropic.claude-sonnet-4-20250514-v1:0',
+          model: 'anthropic.claude-sonnet-4-5-20250929-v1:0',
         });
 
         const commandInput = (InvokeModelWithResponseStreamCommand as unknown as Mock).mock
@@ -295,7 +295,7 @@ describe('LobeBedrockAI', () => {
             } as any,
             { content: 'Continue', role: 'user' },
           ],
-          model: 'anthropic.claude-sonnet-4-20250514-v1:0',
+          model: 'anthropic.claude-sonnet-4-5-20250929-v1:0',
         });
 
         const commandInput = (InvokeModelWithResponseStreamCommand as unknown as Mock).mock
@@ -626,7 +626,7 @@ describe('LobeBedrockAI', () => {
           // Act
           await instance.chat({
             messages: [{ content: 'Hello', role: 'user' }],
-            model: 'anthropic.claude-sonnet-4-20250514-v1:0',
+            model: 'anthropic.claude-sonnet-4-5-20250929-v1:0',
             top_p: 0.9,
           });
 
@@ -651,7 +651,7 @@ describe('LobeBedrockAI', () => {
               top_p: 0.9, // temperature omitted since not provided
             }),
             contentType: 'application/json',
-            modelId: 'anthropic.claude-sonnet-4-20250514-v1:0',
+            modelId: 'anthropic.claude-sonnet-4-5-20250929-v1:0',
           });
         });
 
