@@ -71,11 +71,33 @@ describe('EditLockService', () => {
     expect(result.lockedByOther).toBe(false);
   });
 
-  it('treats the same user in another edit session as blocked', async () => {
+  it('lets the same user take over their own ghost lock from another session', async () => {
+    // A refresh / navigate-away whose release never reached the server leaves a
+    // stale ownerId in Redis. The new session should silently take over rather
+    // than report "you're editing this in another tab" — the old session is
+    // almost certainly gone.
     const redis = makeFakeRedis();
     await new EditLockService('user-1', redis as any).acquire('document', 'doc-1', 'owner-1');
 
     const result = await new EditLockService('user-1', redis as any).acquire(
+      'document',
+      'doc-1',
+      'owner-2',
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({ holderId: 'user-1', lockedByOther: false, ownerId: 'owner-2' }),
+    );
+    expect(JSON.parse(redis.store.get('editlock:document:doc-1')!)).toEqual(
+      expect.objectContaining({ ownerId: 'owner-2', userId: 'user-1' }),
+    );
+  });
+
+  it('still treats a different user with a different owner as blocked (takeover is user-scoped)', async () => {
+    const redis = makeFakeRedis();
+    await new EditLockService('user-1', redis as any).acquire('document', 'doc-1', 'owner-1');
+
+    const result = await new EditLockService('user-2', redis as any).acquire(
       'document',
       'doc-1',
       'owner-2',

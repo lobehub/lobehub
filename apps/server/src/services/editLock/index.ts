@@ -144,6 +144,19 @@ export class EditLockService {
           return this.held(ownerId);
         }
 
+        if (holder.userId === this.userId) {
+          // Same user, different active ownerId. The old session is almost
+          // always stale — a refresh / navigate-away whose `release` never
+          // reached the server, a crashed tab whose lease will linger ~30s,
+          // an HMR remount during dev. Silently take over with the new owner
+          // so the user isn't told "you're editing in another tab" about a
+          // ghost session. Two truly concurrent tabs will keep flipping the
+          // owner on their own heartbeats — that's an edge case our lock
+          // doesn't try to police (CRDT territory).
+          await redis.set(key, nextLock, 'EX', EDIT_LOCK_TTL_SECONDS);
+          return this.held(ownerId);
+        }
+
         return {
           expiresAt: holder.expiresAt,
           holderId: holder.userId,

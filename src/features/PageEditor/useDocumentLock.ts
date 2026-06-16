@@ -139,15 +139,20 @@ export const useDocumentLock = () => {
     }
   }, [workspacePage, documentId, isLockedByOther, saveBlockedByLock]);
 
-  // Recovery: once the lock has resolved and is no longer held by another member
-  // (we hold it, or it's free), drop any stale save-block from an earlier
-  // CONFLICT. Without this the editor stays read-only behind a banner that names
-  // the *current* holder — possibly the user themselves — since the only other
-  // path that clears the flag is a successful save the read-only editor can't reach.
+  // Recovery: once the lock has resolved and the server confirms we can write
+  // again, drop any stale save-block from an earlier CONFLICT. Without this the
+  // editor stays read-only behind a banner that names the *current* holder
+  // — possibly the user themselves — since the only other path that clears the
+  // flag is a successful save the read-only editor can't reach.
+  //
+  // Uses `lock.lockedByOther` (the server's ownerId-aware verdict) rather than
+  // `usePageLockedByOther` (a userId-only comparison): the latter is `false`
+  // during a self-conflict, which would clear `saveBlockedByLock` between
+  // CONFLICT'd saves and create a one-render flash of the lockedBySelf banner.
   useEffect(() => {
-    if (!documentId || lock.pending || isLockedByOther || !saveBlockedByLock) return;
+    if (!documentId || lock.pending || lock.lockedByOther || !saveBlockedByLock) return;
     useDocumentStore.getState().clearSaveBlockedByLock(documentId);
-  }, [documentId, lock.pending, isLockedByOther, saveBlockedByLock]);
+  }, [documentId, lock.pending, lock.lockedByOther, saveBlockedByLock]);
 
   // Lease-expiry re-peek: schedule a single confirmation peek at the lease's
   // expected expiry time. Runs for *any* known holder (us or someone else), so
