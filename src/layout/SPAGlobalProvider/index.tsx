@@ -3,7 +3,7 @@
 import { TooltipGroup } from '@lobehub/ui';
 import { StyleProvider } from 'antd-style';
 import { domMax, LazyMotion } from 'motion/react';
-import { lazy, memo, type PropsWithChildren, Suspense, useLayoutEffect } from 'react';
+import { lazy, memo, type PropsWithChildren, Suspense } from 'react';
 
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
 import { DragUploadProvider } from '@/components/DragUploadZone/DragUploadProvider';
@@ -35,10 +35,10 @@ const ContextMenuHost = lazy(() =>
 );
 
 const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
-  useLayoutEffect(() => {
-    document.getElementById('loading-screen')?.remove();
-  }, []);
-
+  // The static HTML #loading-screen is removed by CacheHydrationGate once the
+  // SWR cache has hydrated, so the boot stays one continuous loading screen
+  // (static loader → app) instead of flashing the loader away before the app
+  // and its local-first data are ready.
   const serverConfig: SPAServerConfig | undefined = window.__SERVER_CONFIG__;
 
   const locale = document.documentElement.lang || 'en-US';
