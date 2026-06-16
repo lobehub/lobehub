@@ -47,16 +47,7 @@ const ai302ChatModels: AIChatModelCard[] = [
     knowledgeCutoff: '2024-08',
     type: 'chat',
   },
-  {
-    contextWindowTokens: 200_000,
-    displayName: 'claude-3-7-sonnet-20250219',
-    enabled: true,
-    family: 'claude-sonnet',
-    generation: 'claude-3.7',
-    id: 'claude-3-7-sonnet-20250219',
-    knowledgeCutoff: '2024-10',
-    type: 'chat',
-  },
+
   {
     contextWindowTokens: 200_000,
     displayName: 'claude-3-7-sonnet-latest',
