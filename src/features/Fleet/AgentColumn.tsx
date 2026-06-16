@@ -12,6 +12,7 @@ import {
   MessageCirclePlus,
   MessageSquareIcon,
   MoreHorizontalIcon,
+  MoveIcon,
   PinIcon,
   XIcon,
 } from 'lucide-react';
@@ -51,18 +52,25 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     height: 100%;
     border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
-  dragging: css`
-    z-index: 2;
+  dragPreview: css`
+    cursor: grabbing;
 
-    /* opaque while dragging so it doesn't show columns underneath */
     overflow: hidden;
 
+    width: 100%;
+    height: 100%;
     border-radius: 8px;
 
     background: ${cssVar.colorBgContainer};
     box-shadow:
       inset 0 0 0 1px ${cssVar.colorBorder},
       ${cssVar.boxShadowSecondary};
+  `,
+  dragPreviewBody: css`
+    flex: 1;
+    padding: 16px;
+    color: ${cssVar.colorTextQuaternary};
+    text-align: center;
   `,
   grip: css`
     cursor: grab;
@@ -181,6 +189,57 @@ const WorkingDirRow = memo<{ workingDirectory: string }>(({ workingDirectory }) 
 
 WorkingDirRow.displayName = 'FleetWorkingDirRow';
 
+/**
+ * Lightweight drag visual rendered into the DragOverlay portal — the column
+ * header on a lifted card with a centered "moving" hint instead of the live
+ * conversation, so dragging stays cheap and isn't clipped by a band's overflow.
+ */
+export const ColumnDragPreview = memo<{
+  column: FleetColumn;
+  status: ChatTopicStatus | undefined;
+}>(({ column, status }) => {
+  const { t } = useTranslation('electron');
+  const meta = useAgentDisplayMeta(column.agentId);
+
+  return (
+    <Flexbox className={styles.dragPreview}>
+      <Flexbox className={styles.header} gap={4}>
+        <Flexbox horizontal align={'center'} gap={6}>
+          <span className={styles.grip}>
+            <GripVertical size={16} />
+          </span>
+          <Text ellipsis style={{ flex: 1, fontWeight: 600 }}>
+            {column.fallbackTitle}
+          </Text>
+        </Flexbox>
+        <Flexbox horizontal align={'center'} gap={6} paddingInline={'22px 0'}>
+          <Avatar
+            emojiScaleWithBackground
+            avatar={meta?.avatar}
+            background={meta?.backgroundColor}
+            shape={'square'}
+            size={16}
+          />
+          <Text ellipsis fontSize={12} style={{ flex: 1 }} type={'secondary'}>
+            {meta?.title}
+          </Text>
+          <StatusDot status={status} />
+        </Flexbox>
+        {column.workingDirectory ? (
+          <WorkingDirRow workingDirectory={column.workingDirectory} />
+        ) : null}
+      </Flexbox>
+      {/* Centered hint so the lifted card reads as a column being moved, not loading */}
+      <Flexbox align={'center'} className={styles.dragPreviewBody} gap={8} justify={'center'}>
+        <Icon icon={MoveIcon} size={22} />
+        <Text style={{ color: cssVar.colorTextTertiary, fontSize: 13 }}>{t('fleet.dragHint')}</Text>
+      </Flexbox>
+    </Flexbox>
+  );
+});
+
+ColumnDragPreview.displayName = 'FleetColumnDragPreview';
+
 interface AgentColumnProps {
   column: FleetColumn;
   status: ChatTopicStatus | undefined;
@@ -232,12 +291,16 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
 
   return (
     <Flexbox
-      className={cx(styles.column, isDragging && styles.dragging)}
+      className={styles.column}
       data-fleet-col={column.key}
       ref={setNodeRef}
       style={{
+        // While dragging, the source becomes an invisible gap slot — the moving
+        // visual is the portaled DragOverlay (ColumnDragPreview), so it escapes
+        // each band's overflow clipping and any z-index stacking.
         flex: `0 0 ${width}px`,
-        transform: CSS.Translate.toString(transform),
+        opacity: isDragging ? 0 : undefined,
+        transform: isDragging ? undefined : CSS.Translate.toString(transform),
         transition,
         width,
       }}

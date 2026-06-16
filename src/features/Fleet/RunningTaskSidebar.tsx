@@ -134,7 +134,7 @@ const SidebarTaskItem = memo<SidebarTaskItemProps>(({ column, status, onActivate
           <Text ellipsis fontSize={12} style={{ flex: 1 }} type={'secondary'}>
             {meta?.title}
           </Text>
-          <RunningStatus startedAt={startedAt} status={status} />
+          <RunningStatus agentId={column.agentId} status={status} topicId={column.topicId} />
         </Flexbox>
       </Flexbox>
     </Flexbox>
@@ -145,7 +145,6 @@ SidebarTaskItem.displayName = 'FleetSidebarTaskItem';
 
 interface RunningTaskSidebarProps {
   columns: FleetColumn[];
-  startedAtByColumnKey: Record<string, number>;
   statusByColumnKey: Record<string, ChatTopicStatus | undefined>;
 }
 
@@ -156,69 +155,66 @@ interface RunningTaskSidebarProps {
  * count; the body leads with a "create task" action above the running-topic
  * list. Clicking an item opens (or re-opens) its column.
  */
-const RunningTaskSidebar = memo<RunningTaskSidebarProps>(
-  ({ columns, startedAtByColumnKey, statusByColumnKey }) => {
-    const { t } = useTranslation('electron');
-    const addColumn = useFleetStore((s) => s.addColumn);
+const RunningTaskSidebar = memo<RunningTaskSidebarProps>(({ columns, statusByColumnKey }) => {
+  const { t } = useTranslation('electron');
+  const addColumn = useFleetStore((s) => s.addColumn);
 
-    const handleActivate = useCallback(
-      (column: FleetColumn) => {
-        addColumn(column);
-        requestAnimationFrame(() => {
-          document
-            .querySelector(`[data-fleet-col="${CSS.escape(column.key)}"]`)
-            ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'end' });
-        });
-      },
-      [addColumn],
-    );
+  const handleActivate = useCallback(
+    (column: FleetColumn) => {
+      addColumn(column);
+      requestAnimationFrame(() => {
+        document
+          .querySelector(`[data-fleet-col="${CSS.escape(column.key)}"]`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'end' });
+      });
+    },
+    [addColumn],
+  );
 
-    const handleCreateTask = useCallback(() => {
-      createTaskModal({ showInlineToggle: false });
-    }, []);
+  const handleCreateTask = useCallback(() => {
+    createTaskModal({ showInlineToggle: false });
+  }, []);
 
-    const header = (
-      <SideBarHeaderLayout
-        backTo={'/'}
-        right={<RowsSwitcher />}
-        showTogglePanelButton={false}
-        left={
-          <Flexbox horizontal align={'center'} gap={8}>
-            {t('fleet.runningBoard')}
-            {columns.length > 0 && <Tag style={{ margin: 0 }}>{columns.length}</Tag>}
-          </Flexbox>
-        }
-      />
-    );
+  const header = (
+    <SideBarHeaderLayout
+      backTo={'/'}
+      right={<RowsSwitcher />}
+      showTogglePanelButton={false}
+      left={
+        <Flexbox horizontal align={'center'} gap={8}>
+          {t('fleet.runningBoard')}
+          {columns.length > 0 && <Tag style={{ margin: 0 }}>{columns.length}</Tag>}
+        </Flexbox>
+      }
+    />
+  );
 
-    const body = (
-      <Flexbox gap={2} paddingBlock={'8px 12px'} paddingInline={8}>
-        <Button block icon={PlusIcon} onClick={handleCreateTask}>
-          {t('fleet.createTask')}
-        </Button>
-        {columns.length === 0 ? (
-          <div className={styles.empty}>{t('fleet.noRunningTasks')}</div>
-        ) : (
-          columns.map((column) => (
-            <SidebarTaskItem
-              column={column}
-              key={column.key}
-              startedAt={startedAtByColumnKey[column.key]}
-              status={statusByColumnKey[column.key]}
-              onActivate={handleActivate}
-            />
-          ))
-        )}
-      </Flexbox>
-    );
+  const body = (
+    <Flexbox gap={2} paddingBlock={'8px 12px'} paddingInline={8}>
+      <Button block icon={PlusIcon} onClick={handleCreateTask}>
+        {t('fleet.createTask')}
+      </Button>
+      {columns.length === 0 ? (
+        <div className={styles.empty}>{t('fleet.noRunningTasks')}</div>
+      ) : (
+        columns.map((column) => (
+          <SidebarTaskItem
+            column={column}
+            key={column.key}
+            status={statusByColumnKey[column.key]}
+            onActivate={handleActivate}
+          />
+        ))
+      )}
+    </Flexbox>
+  );
 
-    return (
-      <NavPanelPortal navKey={'fleet'}>
-        <SideBarLayout body={body} header={header} />
-      </NavPanelPortal>
-    );
-  },
-);
+  return (
+    <NavPanelPortal navKey={'fleet'}>
+      <SideBarLayout body={body} header={header} />
+    </NavPanelPortal>
+  );
+});
 
 RunningTaskSidebar.displayName = 'FleetRunningTaskSidebar';
 

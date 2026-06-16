@@ -19,7 +19,7 @@ export interface FleetColumn {
 }
 
 /** Number of horizontal bands the board stacks columns into (vertical tiers). */
-export type FleetRows = 1 | 2 | 3;
+export type FleetRows = 1 | 2;
 
 /** Stable, content-derived key so a given agent+topic always maps to one column. */
 export const fleetColumnKey = (agentId: string, topicId: string | null | undefined) =>

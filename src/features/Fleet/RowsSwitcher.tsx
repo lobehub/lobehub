@@ -1,7 +1,7 @@
 'use client';
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { RectangleHorizontalIcon, Rows2Icon, Rows3Icon } from 'lucide-react';
+import { RectangleHorizontalIcon, Rows2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,7 +11,6 @@ import { type FleetRows } from './types';
 const OPTIONS: { icon: typeof Rows2Icon; titleKey: string; value: FleetRows }[] = [
   { icon: RectangleHorizontalIcon, titleKey: 'fleet.rows.one', value: 1 },
   { icon: Rows2Icon, titleKey: 'fleet.rows.two', value: 2 },
-  { icon: Rows3Icon, titleKey: 'fleet.rows.three', value: 3 },
 ];
 
 /**

@@ -1,8 +1,11 @@
 'use client';
 
 import {
+  closestCenter,
   DndContext,
   type DragEndEvent,
+  DragOverlay,
+  type DragStartEvent,
   type Modifier,
   PointerSensor,
   useSensor,
@@ -17,13 +20,13 @@ import {
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { LayersIcon } from 'lucide-react';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type ChatTopicStatus } from '@/types/topic';
 
 import AddColumnButton from './AddColumnButton';
-import AgentColumn from './AgentColumn';
+import AgentColumn, { ColumnDragPreview } from './AgentColumn';
 import { useFleetStore } from './store';
 import { type FleetColumn } from './types';
 
@@ -61,20 +64,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 // Multi-band mode must allow vertical movement so a column can cross bands.
 const restrictToHorizontalAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 });
 
-/**
- * Split the ordered columns into `rows` near-equal contiguous bands. The first
- * `remainder` bands carry one extra column so no band sits empty (e.g. 4 cols
- * into 3 rows → 2/1/1, never 2/2/0).
- */
-const splitIntoBands = (columns: FleetColumn[], rows: number): FleetColumn[][] => {
-  const base = Math.floor(columns.length / rows);
-  const remainder = columns.length % rows;
-  const bands: FleetColumn[][] = [];
-  let cursor = 0;
-  for (let band = 0; band < rows; band += 1) {
-    const size = base + (band < remainder ? 1 : 0);
-    bands.push(columns.slice(cursor, cursor + size));
-    cursor += size;
+/** Group columns into `rows` bands by their persisted per-column row assignment. */
+const groupIntoBands = (
+  columns: FleetColumn[],
+  rows: number,
+  rowByKey: Record<string, number>,
+): FleetColumn[][] => {
+  const bands: FleetColumn[][] = Array.from({ length: rows }, () => []);
+  for (const column of columns) {
+    const row = Math.min(rows - 1, Math.max(0, rowByKey[column.key] ?? 0));
+    bands[row].push(column);
   }
   return bands;
 };
@@ -87,40 +86,60 @@ const ColumnsBoard = memo<ColumnsBoardProps>(({ statusByColumnKey }) => {
   const { t } = useTranslation('electron');
   const columns = useFleetStore((s) => s.columns);
   const rows = useFleetStore((s) => s.rows);
-  const reorderColumns = useFleetStore((s) => s.reorderColumns);
+  const rowByKey = useFleetStore((s) => s.rowByKey);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      if (!over || active.id === over.id) return;
-      const keys = useFleetStore.getState().columns.map((c) => c.key);
-      const from = keys.indexOf(active.id as string);
-      const to = keys.indexOf(over.id as string);
-      if (from < 0 || to < 0) return;
-      reorderColumns(arrayMove(keys, from, to));
-    },
-    [reorderColumns],
-  );
+  const [activeKey, setActiveKey] = useState<string | null>(null);
 
-  // Bands are a presentation slice over the single flat `columns` order, so drag
-  // reorder (and cross-band moves) stay a plain reorder of that flat list.
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveKey(event.active.id as string);
+  }, []);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    setActiveKey(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const activeId = active.id as string;
+    const overId = over.id as string;
+    const state = useFleetStore.getState();
+    // Multi-row: assign the dragged column to the dropped-on column's band and
+    // splice it at that slot. Only this column moves, so other bands never
+    // reflow — a cross-row drag inserts in place instead of wrapping the board.
+    if (state.rows > 1) {
+      state.moveColumn(activeId, overId, state.rowByKey[overId] ?? 0);
+      return;
+    }
+    const keys = state.columns.map((c) => c.key);
+    const from = keys.indexOf(activeId);
+    const to = keys.indexOf(overId);
+    if (from < 0 || to < 0) return;
+    state.reorderColumns(arrayMove(keys, from, to));
+  }, []);
+
+  const handleDragCancel = useCallback(() => setActiveKey(null), []);
+
+  const activeColumn = activeKey ? columns.find((c) => c.key === activeKey) : null;
+
   const isMultiBand = rows > 1 && columns.length > 0;
+
+  const bands = useMemo(
+    () => (isMultiBand ? groupIntoBands(columns, rows, rowByKey) : null),
+    [isMultiBand, columns, rows, rowByKey],
+  );
 
   const renderColumn = (column: FleetColumn) => (
     <AgentColumn column={column} key={column.key} status={statusByColumnKey[column.key]} />
   );
 
   let content: React.ReactNode;
-  if (isMultiBand) {
-    const bands = splitIntoBands(columns, rows);
+  if (bands) {
     content = (
       <div className={styles.boardVertical}>
         {bands.map((band, bandIndex) => (
           <div className={styles.band} key={`band-${bandIndex}`}>
             {band.map(renderColumn)}
-            {bandIndex === bands.length - 1 ? <AddColumnButton /> : null}
+            <AddColumnButton insertAfterKey={band.at(-1)?.key} row={bandIndex} />
           </div>
         ))}
       </div>
@@ -149,9 +168,12 @@ const ColumnsBoard = memo<ColumnsBoardProps>(({ statusByColumnKey }) => {
 
   return (
     <DndContext
+      collisionDetection={isMultiBand ? closestCenter : undefined}
       modifiers={isMultiBand ? undefined : [restrictToHorizontalAxis]}
       sensors={sensors}
+      onDragCancel={handleDragCancel}
       onDragEnd={handleDragEnd}
+      onDragStart={handleDragStart}
     >
       <SortableContext
         items={columns.map((c) => c.key)}
@@ -159,6 +181,11 @@ const ColumnsBoard = memo<ColumnsBoardProps>(({ statusByColumnKey }) => {
       >
         {content}
       </SortableContext>
+      <DragOverlay>
+        {activeColumn ? (
+          <ColumnDragPreview column={activeColumn} status={statusByColumnKey[activeColumn.key]} />
+        ) : null}
+      </DragOverlay>
     </DndContext>
   );
 });
