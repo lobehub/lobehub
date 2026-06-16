@@ -71,6 +71,8 @@ export default {
   'projectStatus.failed_other': '{{count}} failed topics',
   'projectStatus.loading_one': '{{count}} loading topic',
   'projectStatus.loading_other': '{{count}} loading topics',
+  'projectStatus.unread_one': '{{count}} topic with unread reply',
+  'projectStatus.unread_other': '{{count}} topics with unread replies',
   'projectStatus.waitingForHuman_one': '{{count}} topic awaiting input',
   'projectStatus.waitingForHuman_other': '{{count}} topics awaiting input',
   'management.actions.newChat': 'New chat',

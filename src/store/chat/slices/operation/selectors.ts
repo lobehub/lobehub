@@ -588,6 +588,21 @@ const isTopicUnreadCompleted =
     return false;
   };
 
+/**
+ * Number of topics with unread completed generation among the given topic ids.
+ * Used to surface an aggregated unread indicator on a collapsed topic group.
+ */
+const unreadCompletedCountForTopics =
+  (topicIds: string[]) =>
+  (s: ChatStoreState): number => {
+    const sets = Object.values(s.unreadCompletedTopicsByAgent);
+    let count = 0;
+    for (const topicId of topicIds) {
+      if (sets.some((set) => set.has(topicId))) count += 1;
+    }
+    return count;
+  };
+
 // ━━━ Message Queue Selectors ━━━
 
 /**
@@ -670,6 +685,7 @@ export const operationSelectors = {
   isRegenerating,
   isSendingMessage,
   isTopicUnreadCompleted,
+  unreadCompletedCountForTopics,
 
   // Message Queue
   getQueuedMessages,
