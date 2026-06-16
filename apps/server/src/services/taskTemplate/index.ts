@@ -5,6 +5,8 @@ import type {
 } from '@lobechat/const';
 import {
   COMPOSIO_APP_TYPES,
+  getComposioAppByIdentifier,
+  getLobehubSkillProviderById,
   isInterestAreaKey,
   LOBEHUB_SKILL_PROVIDERS,
   TASK_TEMPLATE_CATEGORIES,
@@ -52,12 +54,17 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isTaskTemplateConnector = (value: unknown): value is TaskTemplateConnector => {
   if (!isRecord(value)) return false;
+  if (
+    typeof value.identifier !== 'string' ||
+    (value.source !== 'composio' && value.source !== 'lobehub') ||
+    typeof value.required !== 'boolean'
+  ) {
+    return false;
+  }
 
-  return (
-    typeof value.identifier === 'string' &&
-    (value.source === 'composio' || value.source === 'lobehub') &&
-    typeof value.required === 'boolean'
-  );
+  return value.source === 'lobehub'
+    ? !!getLobehubSkillProviderById(value.identifier)
+    : !!getComposioAppByIdentifier(value.identifier);
 };
 
 const isTaskTemplate = (value: unknown): value is TaskTemplate => {

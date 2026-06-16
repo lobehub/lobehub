@@ -161,4 +161,35 @@ describe('TaskTemplateService.listDailyRecommend', () => {
 
     expect(result).toEqual([template]);
   });
+
+  it('drops Market recommendation items with unknown connector identifiers', async () => {
+    const validWithConnectors = {
+      ...template,
+      connectors: [
+        { identifier: 'github', required: true, source: 'lobehub' },
+        { identifier: 'gmail', required: false, source: 'composio' },
+      ],
+      id: 102,
+    } satisfies TaskTemplate;
+    mockGetTaskTemplateRecommendations.mockResolvedValue({
+      items: [
+        validWithConnectors,
+        {
+          ...template,
+          connectors: [{ identifier: 'unknown-required', required: true, source: 'lobehub' }],
+          id: 103,
+        },
+        {
+          ...template,
+          connectors: [{ identifier: 'unknown-optional', required: false, source: 'composio' }],
+          id: 104,
+        },
+      ],
+    });
+    const service = new TaskTemplateService('user-1');
+
+    const result = await service.listDailyRecommend(['coding']);
+
+    expect(result).toEqual([validWithConnectors]);
+  });
 });
