@@ -317,13 +317,17 @@ export class DocumentService {
       return fn();
     }
 
-    // Did this user already hold the lease before we acquired it? An open editor
-    // refreshes the lock via its heartbeat, so the same user can already own it.
-    // In that case we must NOT release afterwards, or we'd flip their live editor
-    // to read-only mid-session — only release a lease we freshly claimed here.
-    const ownerId = `server:${randomUUID()}`;
+    // If this user's live editor already holds the lease, ride along on the
+    // same ownerId so the acquire below is a pure heartbeat. Stealing the lock
+    // with a fresh `server:UUID` would silently rewrite the lease's ownerId,
+    // demote the user's saves through the owner-scoped write guard, and on the
+    // finally release leave a window where another member could grab the free
+    // lock. When we're truly claiming a lock, mint a server-scoped owner id
+    // we can identify in release.
     const holderBefore = await this.editLockService.getActiveLock('document', id);
-    const heldBeforeByOwner = holderBefore?.ownerId === ownerId;
+    const heldBeforeByUser = holderBefore?.userId === this.userId;
+    const ownerId =
+      heldBeforeByUser && holderBefore?.ownerId ? holderBefore.ownerId : `server:${randomUUID()}`;
 
     const lock = await this.acquireDocumentLockWithOwner(id, ownerId);
     // TEMP DIAGNOSTIC (LOBE-10470): one reproduction reveals workspaceId/holder/acquire.
@@ -346,7 +350,11 @@ export class DocumentService {
     try {
       return await fn();
     } finally {
-      if (!heldBeforeByOwner) await this.releaseDocumentLockWithOwner(id, ownerId);
+      // Only release a lease we freshly claimed. When the same user already
+      // held it, leave their session alive — releasing would briefly flip
+      // their editor to read-only and let another member grab the lock in
+      // the gap before the next client heartbeat.
+      if (!heldBeforeByUser) await this.releaseDocumentLockWithOwner(id, ownerId);
     }
   }
 

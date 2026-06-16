@@ -978,6 +978,34 @@ describe('DocumentService', () => {
         expect.stringMatching(/^server:/),
       );
     });
+
+    it('rides along on the user existing lease and skips release', async () => {
+      // The user's live editor already holds the lock. The server run must
+      // refresh under the user's ownerId — not mint a fresh one and release
+      // afterwards — or the editor's next save would be rejected by the
+      // owner-scoped guard, and another collaborator could grab the gap.
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'getActiveLock').mockResolvedValue({
+        expiresAt: new Date(),
+        ownerId: 'user-tab-A',
+        userId,
+      });
+      const acquireSpy = vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+        expiresAt: new Date(),
+        holderId: userId,
+        lockedByOther: false,
+        ownerId: 'user-tab-A',
+      });
+      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release');
+      const fn = vi.fn().mockResolvedValue('written');
+
+      const result = await wsService.runWithDocumentLock('doc-1', fn);
+
+      expect(result).toBe('written');
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(acquireSpy).toHaveBeenCalledWith('document', 'doc-1', 'user-tab-A');
+      expect(releaseSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe('document edit lock', () => {
