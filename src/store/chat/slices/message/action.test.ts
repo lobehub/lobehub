@@ -1284,6 +1284,38 @@ describe('chatMessage actions', () => {
 
       expect(mutate).not.toHaveBeenCalled();
     });
+
+    it('still seeds the cache when the store-set is a no-op (optimistic echo)', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const context = { agentId: 'wt-noop', topicId: 'wt-noop-topic' };
+      const messages = [{ id: 'm-noop', role: 'user', content: 'hi' }] as any;
+      const key = messageMapKey(context);
+
+      // An optimistic dispatch already applied this exact state to the in-memory
+      // store, but never touched the SWR cache.
+      act(() => {
+        useChatStore.setState({ dbMessagesMap: { [key]: messages } });
+      });
+
+      (mutate as Mock).mockClear();
+
+      await act(async () => {
+        result.current.replaceMessages(messages, {
+          action: 'optimisticUpdateMessageContent',
+          context,
+        });
+      });
+
+      // store-set is a no-op (messagesMap bucket never populated)...
+      expect(result.current.messagesMap[key]).toBeUndefined();
+      // ...but the cache is still seeded so a later switch-back is not stale
+      expect(mutate).toHaveBeenCalledTimes(1);
+      const [matcher, dataArg, options] = (mutate as Mock).mock.calls[0];
+      expect(options).toEqual({ revalidate: false });
+      expect(dataArg).toEqual(messages);
+      expect(matcher(['message:list', context, 1])).toBe(true);
+    });
   });
 
   describe('Public API with context parameter', () => {
