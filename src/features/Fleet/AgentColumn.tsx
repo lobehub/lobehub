@@ -12,6 +12,7 @@ import {
   MessageCirclePlus,
   MessageSquareIcon,
   MoreHorizontalIcon,
+  PinIcon,
   XIcon,
 } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -90,9 +91,29 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   replyClose: css`
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 11;
+    inset-block-end: 100%;
+    inset-inline-start: 12px;
+
+    /* sit just above the input's top edge */
+    overflow: hidden;
+
+    margin-block-end: 4px;
+    border-radius: ${cssVar.borderRadius};
+
+    /* opaque chip so the conversation behind never bleeds through the button */
+    background: ${cssVar.colorBgContainer};
+
+    button {
+      pointer-events: auto;
+    }
+  `,
+  replyOpen: css`
+    position: relative;
     flex: none;
-    padding-block: 4px 0;
-    padding-inline: 12px;
   `,
   resize: css`
     cursor: col-resize;
@@ -174,6 +195,8 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
   const storedWidth = useFleetStore((s) => s.widths[column.key]);
   const setWidth = useFleetStore((s) => s.setWidth);
   const removeColumn = useFleetStore((s) => s.removeColumn);
+  const togglePin = useFleetStore((s) => s.togglePin);
+  const isPinned = useFleetStore((s) => s.pinnedKeys.includes(column.key));
   const [dragWidth, setDragWidth] = useState<number | null>(null);
   const [replyOpen, setReplyOpen] = useState(false);
   const width = dragWidth ?? storedWidth ?? DEFAULT_COLUMN_WIDTH;
@@ -229,6 +252,13 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
             {column.fallbackTitle}
           </Text>
           <Flexbox horizontal align={'center'} gap={2} style={{ flex: 'none' }}>
+            <ActionIcon
+              active={isPinned}
+              icon={PinIcon}
+              size={'small'}
+              title={isPinned ? t('fleet.unpin') : t('fleet.pin')}
+              onClick={() => togglePin(column.key)}
+            />
             <DropdownMenu
               placement={'bottomRight'}
               items={[
@@ -282,8 +312,8 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
           <ChatList disableActionsBar />
           <OpStatusTray />
           {messages === undefined ? null : replyOpen ? (
-            <Flexbox>
-              <Flexbox horizontal align={'center'} className={styles.replyClose} justify={'center'}>
+            <Flexbox className={styles.replyOpen}>
+              <Flexbox horizontal className={styles.replyClose}>
                 <Button
                   icon={ChevronDownIcon}
                   size={'small'}
@@ -293,7 +323,7 @@ const AgentColumn = memo<AgentColumnProps>(({ column, status }) => {
                   {t('fleet.collapseReply')}
                 </Button>
               </Flexbox>
-              <ChatInput skipScrollMarginWithList isConfigLoading={false} />
+              <ChatInput isConfigLoading={false} />
             </Flexbox>
           ) : (
             <Flexbox className={styles.replyBar}>

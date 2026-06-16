@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import { type FleetColumn } from './types';
+import { type FleetColumn, type FleetRows } from './types';
 
 interface FleetState {
   /**
@@ -19,9 +19,18 @@ interface FleetState {
    * topic is still running; cleared once it stops (see syncRunningColumns).
    */
   dismissedKeys: string[];
+  /** Keys the user explicitly pinned — a deliberate "keep this column" marker. */
+  pinnedKeys: string[];
   removeColumn: (key: string) => void;
   /** Reorder columns to match the given key order (from drag-and-drop). */
   reorderColumns: (orderedKeys: string[]) => void;
+  /**
+   * How many horizontal bands (rows) the board is split into. 1 = the classic
+   * single-row layout; 2/3 stack columns into vertical tiers, each an
+   * independently horizontal-scrolling band that splits the height evenly.
+   */
+  rows: FleetRows;
+  setRows: (rows: FleetRows) => void;
   setWidth: (key: string, width: number) => void;
   /**
    * Reconcile the live running set into the board: append any running topic
@@ -29,6 +38,8 @@ interface FleetState {
    * or reorders existing columns, so manual pins and ordering are preserved.
    */
   syncRunningColumns: (running: FleetColumn[]) => void;
+  /** Toggle a column's pinned state. */
+  togglePin: (key: string) => void;
   /** Per-column widths, persisted so each column remembers its size. */
   widths: Record<string, number>;
 }
@@ -44,12 +55,14 @@ export const useFleetStore = create<FleetState>()(
         }),
       columns: [],
       dismissedKeys: [],
+      pinnedKeys: [],
       removeColumn: (key) =>
         set((s) => ({
           columns: s.columns.filter((c) => c.key !== key),
           dismissedKeys: s.dismissedKeys.includes(key)
             ? s.dismissedKeys
             : [...s.dismissedKeys, key],
+          pinnedKeys: s.pinnedKeys.filter((k) => k !== key),
         })),
       reorderColumns: (orderedKeys) =>
         set((s) => {
@@ -62,7 +75,15 @@ export const useFleetStore = create<FleetState>()(
           for (const c of s.columns) if (!seen.has(c.key)) next.push(c);
           return { columns: next };
         }),
+      rows: 1,
+      setRows: (rows) => set({ rows }),
       setWidth: (key, width) => set((s) => ({ widths: { ...s.widths, [key]: width } })),
+      togglePin: (key) =>
+        set((s) => ({
+          pinnedKeys: s.pinnedKeys.includes(key)
+            ? s.pinnedKeys.filter((k) => k !== key)
+            : [...s.pinnedKeys, key],
+        })),
       syncRunningColumns: (running) =>
         set((s) => {
           const runningKeys = new Set(running.map((c) => c.key));
@@ -88,6 +109,8 @@ export const useFleetStore = create<FleetState>()(
       partialize: (s) => ({
         columns: s.columns,
         dismissedKeys: s.dismissedKeys,
+        pinnedKeys: s.pinnedKeys,
+        rows: s.rows,
         widths: s.widths,
       }),
     },
