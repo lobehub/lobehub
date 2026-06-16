@@ -5,11 +5,11 @@ import { memo } from 'react';
 import { useParams } from 'react-router-dom';
 
 import NotFound from '@/components/404';
-import BrandTextLoading from '@/components/Loading/BrandTextLoading';
 
 import OAuthGuard from '../OAuthGuard';
 import ClientError from './ClientError';
 import Consent from './Consent';
+import InteractionDetailsSkeleton from './InteractionDetailsSkeleton';
 import Login from './Login';
 import { InteractionDetailsError, useInteractionDetails } from './useInteractionDetails';
 
@@ -67,7 +67,7 @@ const InteractionContent = memo(() => {
 
   if (!uid) return <NotFound />;
   if (error) return renderError(error);
-  if (isLoading || !data) return <BrandTextLoading debugId={'Auth > OAuthConsent'} />;
+  if (isLoading || !data) return <InteractionDetailsSkeleton />;
 
   if (data.prompt === 'login') return <Login clientMetadata={data.clientMetadata} uid={data.uid} />;
 
