@@ -647,6 +647,88 @@ describe('Skill Router Integration Tests', () => {
     });
   });
 
+  describe('convertDocumentToSkill', () => {
+    it('should migrate an existing document into a managed skill in place', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      const doc = await caller.createDocument({
+        agentId,
+        content: '# Weekly Report\n\nSummarize the week.',
+        title: 'Weekly Report',
+      });
+
+      const sourceAgentDocumentId = doc!.id;
+
+      const skill = await caller.convertDocumentToSkill({
+        agentId,
+        description: 'Generate the weekly report.',
+        name: 'weekly-report',
+        sourceAgentDocumentId,
+        title: 'Weekly Report',
+      });
+
+      expect(skill.name).toBe('weekly-report');
+      expect(skill.content).toContain('name: weekly-report');
+      expect(skill.content).toContain('description: Generate the weekly report.');
+      expect(skill.content).toContain('Summarize the week.');
+
+      // The original document row is reused as the SKILL.md index (id preserved).
+      expect(skill.index.agentDocumentId).toBe(sourceAgentDocumentId);
+
+      const indexRow = await new AgentDocumentModel(serverDB, userId).findById(
+        sourceAgentDocumentId,
+      );
+      expect(indexRow?.fileType).toBe(SKILL_INDEX_FILE_TYPE);
+      expect(indexRow?.filename).toBe(SKILL_INDEX_FILENAME);
+      expect(indexRow?.templateId).toBe(AGENT_SKILL_TEMPLATE_ID);
+
+      // A bundle parent was created to hold the index.
+      const bundleRow = await new AgentDocumentModel(serverDB, userId).findById(
+        skill.bundle.agentDocumentId,
+      );
+      expect(bundleRow?.fileType).toBe(SKILL_BUNDLE_FILE_TYPE);
+      expect(bundleRow?.filename).toBe('weekly-report');
+      expect(indexRow?.parentId).toBe(bundleRow?.documentId);
+    });
+
+    it('should surface NOT_FOUND when the source document does not exist', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      await expect(
+        caller.convertDocumentToSkill({
+          agentId,
+          description: 'desc',
+          name: 'missing-doc',
+          sourceAgentDocumentId: '00000000-0000-0000-0000-000000000000',
+          title: 'Missing',
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('should surface BAD_REQUEST for an invalid skill name', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      const doc = await caller.createDocument({
+        agentId,
+        content: '# Doc\n\nBody.',
+        title: 'Doc',
+      });
+
+      await expect(
+        caller.convertDocumentToSkill({
+          agentId,
+          description: 'desc',
+          name: 'Bad Name',
+          sourceAgentDocumentId: doc!.id,
+          title: 'Doc',
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+  });
+
   describe('listResources', () => {
     it('should return empty array for skill without resources', async () => {
       const caller = agentSkillsRouter.createCaller(createTestContext(userId));

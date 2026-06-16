@@ -220,6 +220,19 @@ class AgentDocumentService {
     return result;
   };
 
+  convertDocumentToSkill = async (params: {
+    agentId: string;
+    description: string;
+    name: string;
+    sourceAgentDocumentId: string;
+    title: string;
+  }) => {
+    const result = await lambdaClient.agentDocument.convertDocumentToSkill.mutate(params);
+    await revalidateAgentDocuments(params.agentId);
+
+    return result;
+  };
+
   createFolder = async (params: { agentId: string; path: string; recursive?: boolean }) => {
     const result = await lambdaClient.agentDocument.mkdirDocumentByPath.mutate(params);
     await revalidateAgentDocuments(params.agentId);

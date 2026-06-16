@@ -1150,6 +1150,7 @@ export default {
   'workingPanel.resources.renameEmpty': 'Title cannot be empty',
   'workingPanel.resources.renameError': 'Failed to rename document',
   'workingPanel.resources.renameSuccess': 'Document renamed',
+  'workingPanel.resources.tree.convertToSkill': 'Convert to skill',
   'workingPanel.resources.tree.createError': 'Failed to create',
   'workingPanel.resources.tree.deleteSelected': 'Delete selected ({{count}})',
   'workingPanel.resources.tree.moveError': 'Failed to move',
@@ -1177,6 +1178,16 @@ export default {
   'workingPanel.skills.actions.delete': 'Delete',
   'workingPanel.skills.actions.rename': 'Rename',
   'workingPanel.skills.actions.view': 'View',
+  'workingPanel.skills.convert.action': 'Convert',
+  'workingPanel.skills.convert.descriptionLabel': 'Description',
+  'workingPanel.skills.convert.descriptionPlaceholder':
+    'Describe when this skill should be used, so the agent knows when to load it.',
+  'workingPanel.skills.convert.nameHint': 'Lowercase letters, digits, and hyphens only.',
+  'workingPanel.skills.convert.nameInvalid':
+    'Use lowercase letters, digits, and hyphens only (e.g. weekly-report).',
+  'workingPanel.skills.convert.nameLabel': 'Skill name',
+  'workingPanel.skills.convert.namePlaceholder': 'e.g. weekly-report',
+  'workingPanel.skills.convert.title': 'Convert document to skill',
   'workingPanel.skills.delete.agentConfirm':
     'Remove the skill “{{name}}” from this agent? This cannot be undone.',
   'workingPanel.skills.delete.error': 'Failed to delete skill',

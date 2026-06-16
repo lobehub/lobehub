@@ -4,6 +4,7 @@ import {
   DocumentLoadRule,
 } from '@lobechat/agent-templates';
 import { TRPCError } from '@trpc/server';
+import matter from 'gray-matter';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -19,6 +20,7 @@ import { emitAgentDocumentToolOutcomeSafely } from '@/server/services/agentDocum
 import { AgentDocumentVfsService } from '@/server/services/agentDocumentVfs';
 import { AgentDocumentVfsError } from '@/server/services/agentDocumentVfs/errors';
 import { getUnifiedSkillNamespaceRootPath } from '@/server/services/agentDocumentVfs/mounts/skills/path';
+import { SkillManagementDocumentService } from '@/server/services/skillManagement';
 
 const MAX_METADATA_BYTES = 16 * 1024;
 const MAX_RULE_REGEXP_LENGTH = 512;
@@ -160,6 +162,7 @@ const agentDocumentProcedure = wsCompatProcedure.use(serverDatabase).use(async (
       agentDocumentModel: new AgentDocumentModel(ctx.serverDB, ctx.userId, wsId),
       agentDocumentService: new AgentDocumentsService(ctx.serverDB, ctx.userId, wsId),
       agentDocumentVfsService: new AgentDocumentVfsService(ctx.serverDB, ctx.userId, wsId),
+      skillManagementService: new SkillManagementDocumentService(ctx.serverDB, ctx.userId, wsId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
       topicDocumentModel: new TopicDocumentModel(ctx.serverDB, ctx.userId, wsId),
     },
@@ -208,6 +211,35 @@ const emitCreateDocumentToolOutcome = async (input: {
     topicId: input.topicId ?? toolContext.topicId,
     userId: input.userId,
   });
+};
+
+/**
+ * Strips a leading YAML frontmatter block from Markdown so it can be re-fed as
+ * `bodyMarkdown` to the skill-management service (which renders its own
+ * frontmatter and rejects bodies that already contain one).
+ */
+const stripLeadingFrontmatter = (content: string): string => {
+  try {
+    const parsed = matter(content);
+    return parsed.matter ? parsed.content.trimStart() : content;
+  } catch {
+    return content;
+  }
+};
+
+const convertSkillErrorToTRPC = (error: unknown): never => {
+  if (error instanceof TRPCError) throw error;
+
+  if (error instanceof Error) {
+    if (/already exists/i.test(error.message)) {
+      throw new TRPCError({ cause: error, code: 'CONFLICT', message: error.message });
+    }
+    if (/invalid skill name|required|frontmatter/i.test(error.message)) {
+      throw new TRPCError({ cause: error, code: 'BAD_REQUEST', message: error.message });
+    }
+  }
+
+  throw error;
 };
 
 export const agentDocumentRouter = router({
@@ -576,6 +608,57 @@ export const agentDocumentRouter = router({
         );
       } catch (error) {
         handleAgentDocumentVfsError(error);
+      }
+    }),
+
+  /**
+   * Converts an existing agent document into a managed skill (direct migration).
+   *
+   * The source document row is reused as the skill's `SKILL.md` index (its
+   * `documents.id` / `agent_documents.id` are preserved), and a new
+   * `skills/bundle` parent is created to hold it. After this call the original
+   * document no longer appears at its previous location in the tree.
+   */
+  convertDocumentToSkill: agentDocumentProcedureWrite
+    .input(
+      z.object({
+        agentId: z.string(),
+        description: z.string().trim().min(1),
+        name: z.string().trim().min(1),
+        sourceAgentDocumentId: z.string(),
+        title: z.string().trim().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const source = await ctx.agentDocumentService.getDocumentById(
+        input.sourceAgentDocumentId,
+        input.agentId,
+      );
+
+      if (!source) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Source document not found' });
+      }
+
+      const bodyMarkdown = stripLeadingFrontmatter(source.content ?? '').trim();
+
+      if (!bodyMarkdown) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Cannot convert an empty document into a skill',
+        });
+      }
+
+      try {
+        return await ctx.skillManagementService.createSkill({
+          agentId: input.agentId,
+          bodyMarkdown,
+          description: input.description,
+          name: input.name,
+          sourceAgentDocumentId: input.sourceAgentDocumentId,
+          title: input.title,
+        });
+      } catch (error) {
+        return convertSkillErrorToTRPC(error);
       }
     }),
 

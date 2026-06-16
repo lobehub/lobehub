@@ -21,7 +21,10 @@ import {
   HIDE_POINTER_FOCUS_RING_CSS,
 } from '@/features/ExplorerTree';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { agentDocumentService } from '@/services/agentDocument';
+import { useChatStore } from '@/store/chat';
 
+import { openConvertToSkillModal, slugifySkillName } from './ConvertToSkillModal';
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
 import { useDocumentTreeOps } from './hooks/useDocumentTreeOps';
 import type { AgentDocumentItem } from './types';
@@ -178,6 +181,32 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
     [focusNewRowForRename, ops],
   );
 
+  const handleConvertToSkill = useCallback(
+    (doc: AgentDocumentItem) => {
+      const fallbackTitle = doc.title || doc.filename || '';
+      openConvertToSkillModal({
+        defaultDescription: doc.description ?? '',
+        defaultName: slugifySkillName(fallbackTitle),
+        onSubmit: async ({ name, description }) => {
+          try {
+            await agentDocumentService.convertDocumentToSkill({
+              agentId,
+              description,
+              name,
+              sourceAgentDocumentId: doc.id,
+              title: fallbackTitle || name,
+            });
+            await mutate();
+            return undefined;
+          } catch (error) {
+            return error instanceof Error ? error.message : String(error);
+          }
+        },
+      });
+    },
+    [agentId, mutate],
+  );
+
   const handleNodeClick = useCallback(
     (node: ExplorerTreeNode<AgentDocumentItem>) => {
       const doc = node.data;
@@ -285,6 +314,18 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
         });
       }
 
+      // Only plain agent documents (not folders, web sources, or existing
+      // skills) can be migrated into a managed skill.
+      const isConvertibleToSkill =
+        !isFolder && !isSkill && node.data?.category === AGENT_DOCUMENT_CATEGORY;
+      if (isConvertibleToSkill && !isMulti) {
+        items.push({
+          key: 'convert-to-skill',
+          label: t('workingPanel.resources.tree.convertToSkill'),
+          onClick: () => handleConvertToSkill(node.data!),
+        });
+      }
+
       items.push({
         danger: true,
         icon: <Trash2Icon size={14} />,
@@ -299,6 +340,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
     },
     [
       agentId,
+      handleConvertToSkill,
       handleCreateDocument,
       handleCreateFolder,
       isRecoverableSkillBundle,
