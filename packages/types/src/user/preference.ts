@@ -85,6 +85,12 @@ export interface UserPreference {
    */
   lab?: UserLab;
   /**
+   * Last active workspace id. Used on cloud to land the user back in the
+   * workspace they last used when they open `/` — `null` means personal
+   * context. Stored as id (not slug) so workspace renames don't invalidate it.
+   */
+  lastWorkspaceId?: string | null;
+  /**
    * @deprecated Use settings.general.telemetry instead
    */
   telemetry?: boolean | null;
@@ -155,6 +161,7 @@ export const UserPreferenceSchema = z
     guide: UserGuideSchema.optional(),
     hideSyncAlert: z.boolean().optional(),
     lab: UserLabSchema.optional(),
+    lastWorkspaceId: z.string().nullable().optional(),
     telemetry: z.boolean().nullable(),
     topicGroupMode: z.enum(['byTime', 'byProject', 'flat', 'byStatus']).optional(),
     topicIncludeCompleted: z.boolean().optional(),
