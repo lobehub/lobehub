@@ -1262,11 +1262,11 @@ export default {
 
   'user.noForkedAgents': 'No forked Agents yet',
 
-  'user.noPlugins': "This user hasn't published any Plugins yet",
+  'user.noPlugins': "This user hasn't published any Skills yet",
 
   'user.noSkills': "This user hasn't published any Skills yet",
 
-  'user.plugins': 'Plugins',
+  'user.plugins': 'Skills',
 
   'user.publishedAgents': 'Created Agents',
 

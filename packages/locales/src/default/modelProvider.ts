@@ -98,7 +98,7 @@ export default {
   'createNewAiProvider.description.placeholder': 'Provider description (optional)',
   'createNewAiProvider.description.title': 'Provider Description',
   'createNewAiProvider.id.desc':
-    'Unique identifier for the service provider, which cannot be modified after creation',
+    'Unique identifier for the provider, which cannot be modified after creation',
   'createNewAiProvider.id.duplicate': 'Provider ID already exists',
   'createNewAiProvider.id.format':
     'Can only contain numbers, lowercase letters, hyphens (-), and underscores (_) ',

@@ -25,8 +25,8 @@
   "agentDocument.openAsPage": "Open as full page",
   "agentProfile.files_one": "{{count}} file",
   "agentProfile.files_other": "{{count}} files",
-  "agentProfile.knowledgeBases_one": "{{count}} knowledge base",
-  "agentProfile.knowledgeBases_other": "{{count}} knowledge bases",
+  "agentProfile.knowledgeBases_one": "{{count}} library",
+  "agentProfile.knowledgeBases_other": "{{count}} libraries",
   "agentProfile.skills_one": "{{count}} skill",
   "agentProfile.skills_other": "{{count}} skills",
   "agentSignal.receipts.agentSignalLabel": "Agent Signal",
@@ -986,7 +986,7 @@
   "workflow.toolDisplayName.saveUserQuestion": "Recorded info",
   "workflow.toolDisplayName.search": "Searched the web",
   "workflow.toolDisplayName.searchAgent": "Searched agents",
-  "workflow.toolDisplayName.searchKnowledgeBase": "Searched knowledge base",
+  "workflow.toolDisplayName.searchKnowledgeBase": "Searched library",
   "workflow.toolDisplayName.searchLocalFiles": "Searched files",
   "workflow.toolDisplayName.searchSkill": "Searched skills",
   "workflow.toolDisplayName.searchUserMemory": "Searched memory",
@@ -1125,5 +1125,5 @@
   "workingPanel.space": "Space",
   "workingPanel.title": "Working Panel",
   "you": "You",
-  "zenMode": "Zen Mode"
+  "zenMode": "Focus Mode"
 }
