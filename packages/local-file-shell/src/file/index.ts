@@ -1,3 +1,4 @@
+export { type ContainmentResult, ensurePathWithin, resolveWithinRoot } from './containPath';
 export { editLocalFile } from './edit';
 export { expandTilde } from './expandTilde';
 export { globLocalFiles } from './glob';

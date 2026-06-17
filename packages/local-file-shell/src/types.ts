@@ -85,6 +85,12 @@ export interface ReadFileParams {
   fullContent?: boolean;
   loc?: [number, number];
   path: string;
+  /**
+   * Optional root the read must stay within. When set, `path` is rejected if it
+   * resolves (after symlink resolution) outside this directory. When omitted, no
+   * containment is enforced — preserving the historical, unscoped behavior.
+   */
+  workingDirectory?: string;
 }
 
 export interface ReadFileResult {
@@ -107,6 +113,12 @@ export interface ReadFileResult {
 export interface WriteFileParams {
   content: string;
   path: string;
+  /**
+   * Optional root the write must stay within. When set, `path` is rejected if it
+   * resolves (after symlink resolution) outside this directory. When omitted, no
+   * containment is enforced — preserving the historical, unscoped behavior.
+   */
+  workingDirectory?: string;
 }
 
 export interface WriteFileResult {
@@ -119,6 +131,13 @@ export interface EditFileParams {
   new_string: string;
   old_string: string;
   replace_all?: boolean;
+  /**
+   * Optional root the edit must stay within. When set, `file_path` is rejected
+   * if it resolves (after symlink resolution) outside this directory. When
+   * omitted, no containment is enforced — preserving the historical, unscoped
+   * behavior.
+   */
+  workingDirectory?: string;
 }
 
 export interface EditFileResult {

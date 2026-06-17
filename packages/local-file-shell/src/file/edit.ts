@@ -3,6 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { createPatch } from 'diff';
 
 import type { EditFileParams, EditFileResult } from '../types';
+import { ensurePathWithin, resolveWithinRoot } from './containPath';
 import { expandTilde } from './expandTilde';
 
 export async function editLocalFile({
@@ -10,8 +11,15 @@ export async function editLocalFile({
   old_string,
   new_string,
   replace_all = false,
+  workingDirectory,
 }: EditFileParams): Promise<EditFileResult> {
-  const filePath = expandTilde(rawPath) ?? rawPath;
+  const filePath = resolveWithinRoot(expandTilde(rawPath) ?? rawPath, workingDirectory);
+
+  const containment = await ensurePathWithin(filePath, workingDirectory);
+  if (!containment.allowed) {
+    return { error: containment.reason, replacements: 0, success: false };
+  }
+
   try {
     const content = await readFile(filePath, 'utf8');
 
