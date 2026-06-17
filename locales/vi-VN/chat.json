@@ -20,6 +20,9 @@
   "agentDefaultMessage": "Chào bạn, tôi là **{{name}}**. Một câu là đủ.\n\nMuốn tôi phù hợp hơn với quy trình làm việc của bạn? Truy cập [Cài đặt Tác nhân]({{url}}) và điền Hồ sơ Tác nhân (bạn có thể chỉnh sửa bất cứ lúc nào).",
   "agentDefaultMessageWithSystemRole": "Chào bạn, tôi là **{{name}}**. Một câu là đủ—bạn là người kiểm soát.",
   "agentDefaultMessageWithoutEdit": "Chào bạn, tôi là **{{name}}**. Một câu là đủ—bạn là người kiểm soát.",
+  "agentDocument.backToChat": "Quay lại trò chuyện",
+  "agentDocument.linkCopied": "Liên kết đã được sao chép",
+  "agentDocument.openAsPage": "Mở dưới dạng trang đầy đủ",
   "agentProfile.files_one": "{{count}} tệp",
   "agentProfile.files_other": "{{count}} tệp",
   "agentProfile.knowledgeBases_one": "{{count}} cơ sở tri thức",
@@ -165,7 +168,9 @@
   "extendParams.urlContext.title": "Trích xuất nội dung liên kết web",
   "followUpPlaceholder": "Theo dõi. Dùng @ để giao nhiệm vụ cho tác vụ khác.",
   "followUpPlaceholderHeterogeneous": "Tiếp tục.",
-  "gatewayMode.title": "Chế độ Gateway",
+  "gatewayMode.beta": "Beta",
+  "gatewayMode.cardTitle": "Chế độ Cổng Đại lý",
+  "gatewayMode.desc": "Chạy các đại lý trên đám mây thông qua Cổng Đại lý của LobeHub. Nhiệm vụ vẫn tiếp tục chạy ngay cả khi bạn đóng trang.",
   "group.desc": "Thực hiện nhiệm vụ với nhiều Tác nhân trong một không gian chung.",
   "group.memberTooltip": "Có {{count}} thành viên trong nhóm",
   "group.orchestratorThinking": "Điều phối viên đang suy nghĩ...",
@@ -877,6 +882,7 @@
   "toolAuth.authorize": "Ủy quyền",
   "toolAuth.authorizing": "Đang ủy quyền...",
   "toolAuth.hint": "Nếu không có ủy quyền hoặc cấu hình, kỹ năng có thể không hoạt động. Điều này có thể giới hạn tác nhân hoặc gây lỗi.",
+  "toolAuth.remove": "Xóa",
   "toolAuth.signIn": "Đăng nhập",
   "toolAuth.title": "Ủy quyền kỹ năng cho tác nhân này",
   "topic.checkOpenNewTopic": "Bắt đầu chủ đề mới?",
@@ -1118,6 +1124,5 @@
   "workingPanel.skills.title": "Kỹ năng",
   "workingPanel.space": "Khoảng trống",
   "workingPanel.title": "Working Panel",
-  "you": "Bạn",
-  "zenMode": "Chế độ tập trung"
+  "you": "Bạn"
 }

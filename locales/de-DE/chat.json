@@ -20,6 +20,9 @@
   "agentDefaultMessage": "Hallo, ich bin **{{name}}**. Ein Satz genügt.\n\nMöchten Sie, dass ich besser zu Ihrem Arbeitsablauf passe? Gehen Sie zu [Agenteneinstellungen]({{url}}) und füllen Sie das Agentenprofil aus (Sie können es jederzeit bearbeiten).",
   "agentDefaultMessageWithSystemRole": "Hallo, ich bin **{{name}}**. Ein Satz genügt – Sie haben die Kontrolle.",
   "agentDefaultMessageWithoutEdit": "Hallo, ich bin **{{name}}**. Ein Satz genügt – Sie haben die Kontrolle.",
+  "agentDocument.backToChat": "Zurück zum Chat",
+  "agentDocument.linkCopied": "Link kopiert",
+  "agentDocument.openAsPage": "Als vollständige Seite öffnen",
   "agentProfile.files_one": "{{count}} Datei",
   "agentProfile.files_other": "{{count}} Dateien",
   "agentProfile.knowledgeBases_one": "{{count}} Wissensbasis",
@@ -165,7 +168,9 @@
   "extendParams.urlContext.title": "Webseiteninhalte extrahieren",
   "followUpPlaceholder": "Folgen Sie nach. @, um Aufgaben anderen Agenten zuzuweisen.",
   "followUpPlaceholderHeterogeneous": "Weiter ausführen.",
-  "gatewayMode.title": "Gateway-Modus",
+  "gatewayMode.beta": "Beta",
+  "gatewayMode.cardTitle": "Agent-Gateway-Modus",
+  "gatewayMode.desc": "Führen Sie Agenten in der Cloud über LobeHubs Agent-Gateway aus. Aufgaben laufen weiter, auch nachdem Sie die Seite geschlossen haben.",
   "group.desc": "Bringen Sie eine Aufgabe mit mehreren Agenten in einem gemeinsamen Raum voran.",
   "group.memberTooltip": "Es gibt {{count}} Mitglieder in der Gruppe",
   "group.orchestratorThinking": "Orchestrator denkt nach...",
@@ -877,6 +882,7 @@
   "toolAuth.authorize": "Autorisieren",
   "toolAuth.authorizing": "Autorisierung läuft...",
   "toolAuth.hint": "Ohne Autorisierung oder Konfiguration funktionieren Skills möglicherweise nicht. Dies kann den Agenten einschränken oder zu Fehlern führen.",
+  "toolAuth.remove": "Entfernen",
   "toolAuth.signIn": "Anmelden",
   "toolAuth.title": "Skills für diesen Agenten autorisieren",
   "topic.checkOpenNewTopic": "Neues Thema starten?",
@@ -1118,6 +1124,5 @@
   "workingPanel.skills.title": "Fähigkeiten",
   "workingPanel.space": "Leerzeichen",
   "workingPanel.title": "Working Panel",
-  "you": "Du",
-  "zenMode": "Zen-Modus"
+  "you": "Du"
 }

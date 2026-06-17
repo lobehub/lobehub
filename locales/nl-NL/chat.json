@@ -20,6 +20,9 @@
   "agentDefaultMessage": "Hoi, ik ben **{{name}}**. Eén zin is genoeg.\n\nWil je dat ik beter aansluit op jouw workflow? Ga naar [Agentinstellingen]({{url}}) en vul het Agentprofiel in (je kunt dit altijd aanpassen).",
   "agentDefaultMessageWithSystemRole": "Hoi, ik ben **{{name}}**. Eén zin is genoeg—jij hebt de controle.",
   "agentDefaultMessageWithoutEdit": "Hoi, ik ben **{{name}}**. Eén zin is genoeg—jij hebt de controle.",
+  "agentDocument.backToChat": "Terug naar chat",
+  "agentDocument.linkCopied": "Link gekopieerd",
+  "agentDocument.openAsPage": "Openen als volledige pagina",
   "agentProfile.files_one": "{{count}} bestand",
   "agentProfile.files_other": "{{count}} bestanden",
   "agentProfile.knowledgeBases_one": "{{count}} kennisbank",
@@ -165,7 +168,9 @@
   "extendParams.urlContext.title": "Webpagina-inhoud ophalen",
   "followUpPlaceholder": "Vervolgen. @ om taken toe te wijzen aan andere agenten.",
   "followUpPlaceholderHeterogeneous": "Vervolgbericht.",
-  "gatewayMode.title": "Gateway-modus",
+  "gatewayMode.beta": "Bèta",
+  "gatewayMode.cardTitle": "Agent Gateway-modus",
+  "gatewayMode.desc": "Voer agents uit in de cloud via LobeHub's Agent Gateway. Taken blijven doorgaan, zelfs nadat u de pagina hebt gesloten.",
   "group.desc": "Werk samen met meerdere Agents in één gedeelde ruimte.",
   "group.memberTooltip": "Er zijn {{count}} leden in de groep",
   "group.orchestratorThinking": "Orchestrator is aan het denken...",
@@ -877,6 +882,7 @@
   "toolAuth.authorize": "Autoriseren",
   "toolAuth.authorizing": "Bezig met autoriseren...",
   "toolAuth.hint": "Zonder autorisatie of configuratie werken Skills mogelijk niet. Dit kan de agent beperken of fouten veroorzaken.",
+  "toolAuth.remove": "Verwijderen",
   "toolAuth.signIn": "Inloggen",
   "toolAuth.title": "Autoriseer Skills voor deze agent",
   "topic.checkOpenNewTopic": "Nieuw onderwerp starten?",
@@ -1118,6 +1124,5 @@
   "workingPanel.skills.title": "Vaardigheden",
   "workingPanel.space": "Ruimte",
   "workingPanel.title": "Working Panel",
-  "you": "Jij",
-  "zenMode": "Zen-modus"
+  "you": "Jij"
 }

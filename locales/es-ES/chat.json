@@ -20,6 +20,9 @@
   "agentDefaultMessage": "Hola, soy **{{name}}**. Una frase es suficiente.\n\n¿Quieres que me adapte mejor a tu flujo de trabajo? Ve a [Configuración del Agente]({{url}}) y completa el Perfil del Agente (puedes editarlo en cualquier momento).",
   "agentDefaultMessageWithSystemRole": "Hola, soy **{{name}}**. Una frase es suficiente—tú tienes el control.",
   "agentDefaultMessageWithoutEdit": "Hola, soy **{{name}}**. Una frase es suficiente—tú tienes el control.",
+  "agentDocument.backToChat": "Volver al chat",
+  "agentDocument.linkCopied": "Enlace copiado",
+  "agentDocument.openAsPage": "Abrir como página completa",
   "agentProfile.files_one": "{{count}} archivo",
   "agentProfile.files_other": "{{count}} archivos",
   "agentProfile.knowledgeBases_one": "{{count}} base de conocimiento",
@@ -165,7 +168,9 @@
   "extendParams.urlContext.title": "Extraer contenido de enlaces web",
   "followUpPlaceholder": "Seguimiento. Usa @ para asignar tareas a otros agentes.",
   "followUpPlaceholderHeterogeneous": "Continuar.",
-  "gatewayMode.title": "Modo Gateway",
+  "gatewayMode.beta": "Beta",
+  "gatewayMode.cardTitle": "Modo de Puerta de Enlace del Agente",
+  "gatewayMode.desc": "Ejecuta agentes en la nube a través de la Puerta de Enlace de Agentes de LobeHub. Las tareas continúan ejecutándose incluso después de cerrar la página.",
   "group.desc": "Avanza una tarea con múltiples Agentes en un espacio compartido.",
   "group.memberTooltip": "Hay {{count}} miembros en el grupo",
   "group.orchestratorThinking": "El Orquestador está pensando...",
@@ -877,6 +882,7 @@
   "toolAuth.authorize": "Autorizar",
   "toolAuth.authorizing": "Autorizando...",
   "toolAuth.hint": "Sin autorización o configuración, las habilidades pueden no funcionar. Esto puede limitar al agente o causar errores.",
+  "toolAuth.remove": "Eliminar",
   "toolAuth.signIn": "Iniciar sesión",
   "toolAuth.title": "Autorizar habilidades para este agente",
   "topic.checkOpenNewTopic": "¿Iniciar un nuevo tema?",
@@ -1118,6 +1124,5 @@
   "workingPanel.skills.title": "Habilidades",
   "workingPanel.space": "Espacio",
   "workingPanel.title": "Working Panel",
-  "you": "Tú",
-  "zenMode": "Modo Zen"
+  "you": "Tú"
 }

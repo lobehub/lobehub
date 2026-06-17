@@ -20,6 +20,9 @@
   "agentDefaultMessage": "안녕하세요, 저는 **{{name}}**입니다. 한 문장으로 시작하세요.\n\n더 당신의 업무 방식에 맞추려면: [도우미 설정]({{url}})에서 도우미 프로필을 보완하세요(언제든 변경 가능)",
   "agentDefaultMessageWithSystemRole": "안녕하세요, 저는 **{{name}}**입니다. 한 문장으로 시작하세요—결정은 당신에게 있습니다",
   "agentDefaultMessageWithoutEdit": "안녕하세요, 저는 **{{name}}**입니다. 한 문장으로 시작하세요—결정은 당신에게 있습니다",
+  "agentDocument.backToChat": "채팅으로 돌아가기",
+  "agentDocument.linkCopied": "링크가 복사되었습니다",
+  "agentDocument.openAsPage": "전체 페이지로 열기",
   "agentProfile.files_one": "{{count}}개 파일",
   "agentProfile.files_other": "{{count}}개 파일",
   "agentProfile.knowledgeBases_one": "{{count}}개 지식 베이스",
@@ -165,7 +168,9 @@
   "extendParams.urlContext.title": "웹 링크 컨텐츠 추출",
   "followUpPlaceholder": "후속 작업. 다른 에이전트에게 작업을 할당하려면 @를 사용하세요.",
   "followUpPlaceholderHeterogeneous": "후속 메시지를 입력하세요.",
-  "gatewayMode.title": "게이트웨이 모드",
+  "gatewayMode.beta": "베타",
+  "gatewayMode.cardTitle": "에이전트 게이트웨이 모드",
+  "gatewayMode.desc": "LobeHub의 에이전트 게이트웨이를 통해 클라우드에서 에이전트를 실행하세요. 페이지를 닫아도 작업이 계속 실행됩니다.",
   "group.desc": "동일한 대화 공간에서 여러 도우미가 함께 작업을 추진합니다",
   "group.memberTooltip": "그룹에 {{count}}명의 구성원이 있습니다",
   "group.orchestratorThinking": "호스트가 생각 중…",
@@ -877,6 +882,7 @@
   "toolAuth.authorize": "승인",
   "toolAuth.authorizing": "승인 중…",
   "toolAuth.hint": "승인 또는 설정을 하지 않으면 이 기능들을 정상적으로 사용할 수 없어 도우미 기능 누락이나 오류가 발생할 수 있습니다",
+  "toolAuth.remove": "제거",
   "toolAuth.signIn": "로그인",
   "toolAuth.title": "도우미의 기능 승인을 완료하세요",
   "topic.checkOpenNewTopic": "새 주제를 열겠습니까?",
@@ -1118,6 +1124,5 @@
   "workingPanel.skills.title": "스킬",
   "workingPanel.space": "공간",
   "workingPanel.title": "Working Panel",
-  "you": "당신",
-  "zenMode": "집중 모드"
+  "you": "당신"
 }

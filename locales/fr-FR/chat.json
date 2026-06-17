@@ -20,6 +20,9 @@
   "agentDefaultMessage": "Bonjour, je suis **{{name}}**. Une phrase suffit.\n\nVous souhaitez que je m’adapte mieux à votre flux de travail ? Allez dans [Paramètres de l’agent]({{url}}) et complétez le profil de l’agent (modifiable à tout moment).",
   "agentDefaultMessageWithSystemRole": "Bonjour, je suis **{{name}}**. Une phrase suffit — vous avez le contrôle.",
   "agentDefaultMessageWithoutEdit": "Bonjour, je suis **{{name}}**. Une phrase suffit — vous avez le contrôle.",
+  "agentDocument.backToChat": "Retour au chat",
+  "agentDocument.linkCopied": "Lien copié",
+  "agentDocument.openAsPage": "Ouvrir en pleine page",
   "agentProfile.files_one": "{{count}} fichier",
   "agentProfile.files_other": "{{count}} fichiers",
   "agentProfile.knowledgeBases_one": "{{count}} base de connaissances",
@@ -165,7 +168,9 @@
   "extendParams.urlContext.title": "Extraire le contenu des liens web",
   "followUpPlaceholder": "Donner suite. @ pour attribuer des tâches à d’autres agents.",
   "followUpPlaceholderHeterogeneous": "Poursuivre.",
-  "gatewayMode.title": "Mode Passerelle",
+  "gatewayMode.beta": "Bêta",
+  "gatewayMode.cardTitle": "Mode Passerelle Agent",
+  "gatewayMode.desc": "Exécutez des agents dans le cloud via la Passerelle Agent de LobeHub. Les tâches continuent de s'exécuter même après la fermeture de la page.",
   "group.desc": "Faites avancer une tâche avec plusieurs agents dans un espace partagé.",
   "group.memberTooltip": "Il y a {{count}} membres dans le groupe",
   "group.orchestratorThinking": "L’orchestrateur réfléchit...",
@@ -877,6 +882,7 @@
   "toolAuth.authorize": "Autoriser",
   "toolAuth.authorizing": "Autorisation en cours...",
   "toolAuth.hint": "Sans autorisation ou configuration, les compétences peuvent ne pas fonctionner. Cela peut limiter l'agent ou provoquer des erreurs.",
+  "toolAuth.remove": "Supprimer",
   "toolAuth.signIn": "Se connecter",
   "toolAuth.title": "Autoriser les compétences pour cet agent",
   "topic.checkOpenNewTopic": "Commencer un nouveau sujet ?",
@@ -1118,6 +1124,5 @@
   "workingPanel.skills.title": "Compétences",
   "workingPanel.space": "Espace",
   "workingPanel.title": "Working Panel",
-  "you": "Vous",
-  "zenMode": "Mode Zen"
+  "you": "Vous"
 }

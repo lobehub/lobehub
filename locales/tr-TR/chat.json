@@ -20,6 +20,9 @@
   "agentDefaultMessage": "Merhaba, ben **{{name}}**. Bir cümle yeterli.\n\nİş akışına daha iyi uyum sağlamamı ister misin? [Ajan Ayarları]({{url}}) bölümüne gidip Ajan Profilini doldur (istediğin zaman düzenleyebilirsin).",
   "agentDefaultMessageWithSystemRole": "Merhaba, ben **{{name}}**. Bir cümle yeterli—kontrol sende.",
   "agentDefaultMessageWithoutEdit": "Merhaba, ben **{{name}}**. Bir cümle yeterli—kontrol sende.",
+  "agentDocument.backToChat": "Sohbete geri dön",
+  "agentDocument.linkCopied": "Bağlantı kopyalandı",
+  "agentDocument.openAsPage": "Tam sayfa olarak aç",
   "agentProfile.files_one": "{{count}} dosya",
   "agentProfile.files_other": "{{count}} dosya",
   "agentProfile.knowledgeBases_one": "{{count}} bilgi tabanı",
@@ -165,7 +168,9 @@
   "extendParams.urlContext.title": "Web Sayfası Bağlantı İçeriğini Çıkar",
   "followUpPlaceholder": "Takip edin. Diğer ajanlara görev atamak için @ kullanın.",
   "followUpPlaceholderHeterogeneous": "Devam edin.",
-  "gatewayMode.title": "Ağ Geçidi Modu",
+  "gatewayMode.beta": "Beta",
+  "gatewayMode.cardTitle": "Aracı Geçit Modu",
+  "gatewayMode.desc": "LobeHub'un Aracı Geçidi üzerinden bulutta aracılar çalıştırın. Sayfayı kapattıktan sonra bile görevler çalışmaya devam eder.",
   "group.desc": "Birden fazla Ajanla ortak bir alanda görevleri ilerletin.",
   "group.memberTooltip": "Grupta {{count}} üye var",
   "group.orchestratorThinking": "Yönlendirici düşünüyor...",
@@ -877,6 +882,7 @@
   "toolAuth.authorize": "Yetkilendir",
   "toolAuth.authorizing": "Yetkilendiriliyor...",
   "toolAuth.hint": "Yetkilendirme veya yapılandırma olmadan, Yetenekler çalışmayabilir. Bu, Ajan'ı sınırlayabilir veya hatalara neden olabilir.",
+  "toolAuth.remove": "Kaldır",
   "toolAuth.signIn": "Giriş Yap",
   "toolAuth.title": "Bu Ajan için Yetenekleri Yetkilendir",
   "topic.checkOpenNewTopic": "Yeni bir konu başlatılsın mı?",
@@ -1118,6 +1124,5 @@
   "workingPanel.skills.title": "Beceriler",
   "workingPanel.space": "Boşluk",
   "workingPanel.title": "Working Panel",
-  "you": "Sen",
-  "zenMode": "Zen Modu"
+  "you": "Sen"
 }

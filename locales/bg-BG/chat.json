@@ -20,6 +20,9 @@
   "agentDefaultMessage": "Здравей, аз съм **{{name}}**. Едно изречение е достатъчно.\n\nИскате да се адаптирам по-добре към вашия работен процес? Отидете в [Настройки на Агента]({{url}}) и попълнете Профила на Агента (можете да го редактирате по всяко време).",
   "agentDefaultMessageWithSystemRole": "Здравей, аз съм **{{name}}**. Едно изречение е достатъчно — вие контролирате.",
   "agentDefaultMessageWithoutEdit": "Здравей, аз съм **{{name}}**. Едно изречение е достатъчно — вие контролирате.",
+  "agentDocument.backToChat": "Обратно към чата",
+  "agentDocument.linkCopied": "Връзката е копирана",
+  "agentDocument.openAsPage": "Отвори като цяла страница",
   "agentProfile.files_one": "{{count}} файл",
   "agentProfile.files_other": "{{count}} файла",
   "agentProfile.knowledgeBases_one": "{{count}} база знания",
@@ -165,7 +168,9 @@
   "extendParams.urlContext.title": "Извличане на съдържание от уеб връзки",
   "followUpPlaceholder": "Последващо действие. Използвайте @, за да възлагате задачи на други агенти.",
   "followUpPlaceholderHeterogeneous": "Последващ въпрос.",
-  "gatewayMode.title": "Режим на шлюз",
+  "gatewayMode.beta": "Бета",
+  "gatewayMode.cardTitle": "Режим на шлюза за агенти",
+  "gatewayMode.desc": "Стартирайте агенти в облака чрез шлюза за агенти на LobeHub. Задачите продължават да се изпълняват дори след като затворите страницата.",
   "group.desc": "Придвижете задача напред с няколко Агента в едно споделено пространство.",
   "group.memberTooltip": "Групата има {{count}} член(а)",
   "group.orchestratorThinking": "Оркестраторът мисли...",
@@ -877,6 +882,7 @@
   "toolAuth.authorize": "Упълномощи",
   "toolAuth.authorizing": "Упълномощаване...",
   "toolAuth.hint": "Без упълномощаване или конфигурация, уменията може да не работят. Това може да ограничи агента или да доведе до грешки.",
+  "toolAuth.remove": "Премахни",
   "toolAuth.signIn": "Вход",
   "toolAuth.title": "Упълномощи уменията за този агент",
   "topic.checkOpenNewTopic": "Да започнем нова тема?",
@@ -1118,6 +1124,5 @@
   "workingPanel.skills.title": "Умения",
   "workingPanel.space": "Пространство",
   "workingPanel.title": "Working Panel",
-  "you": "Вие",
-  "zenMode": "Режим Зен"
+  "you": "Вие"
 }

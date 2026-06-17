@@ -20,6 +20,9 @@
   "agentDefaultMessage": "こんにちは、私は **{{name}}** です。一文から始めましょう。\n\nよりあなたの働き方に合わせるには：[アシスタント設定]({{url}}) でアシスタントプロフィールを補完してください（いつでも変更可能）",
   "agentDefaultMessageWithSystemRole": "こんにちは、私は **{{name}}** です。一文から始めましょう—判断はあなたにあります",
   "agentDefaultMessageWithoutEdit": "こんにちは、私は **{{name}}** です。一文から始めましょう—判断はあなたにあります",
+  "agentDocument.backToChat": "チャットに戻る",
+  "agentDocument.linkCopied": "リンクがコピーされました",
+  "agentDocument.openAsPage": "全画面で開く",
   "agentProfile.files_one": "{{count}} 件のファイル",
   "agentProfile.files_other": "{{count}} 件のファイル",
   "agentProfile.knowledgeBases_one": "{{count}} 件のナレッジベース",
@@ -165,7 +168,9 @@
   "extendParams.urlContext.title": "ウェブリンクコンテンツの抽出",
   "followUpPlaceholder": "フォローアップ。@で他のエージェントにタスクを割り当てできます。",
   "followUpPlaceholderHeterogeneous": "フォローアップ。",
-  "gatewayMode.title": "ゲートウェイモード",
+  "gatewayMode.beta": "ベータ版",
+  "gatewayMode.cardTitle": "エージェントゲートウェイモード",
+  "gatewayMode.desc": "LobeHubのエージェントゲートウェイを通じてクラウドでエージェントを実行します。ページを閉じた後もタスクは実行され続けます。",
   "group.desc": "同一の対話空間で、複数のアシスタントが一緒にタスクを推進します",
   "group.memberTooltip": "グループに {{count}} 名のメンバーがいます",
   "group.orchestratorThinking": "ホストが思考中…",
@@ -877,6 +882,7 @@
   "toolAuth.authorize": "承認",
   "toolAuth.authorizing": "承認中…",
   "toolAuth.hint": "未承認または未設定の場合、関連スキルは使用できません。これによりアシスタントの機能が制限されたりエラーが発生したりする可能性があります",
+  "toolAuth.remove": "削除",
   "toolAuth.signIn": "ログイン",
   "toolAuth.title": "アシスタントのスキル承認を完了してください",
   "topic.checkOpenNewTopic": "新しいトピックを開きますか？",
@@ -1118,6 +1124,5 @@
   "workingPanel.skills.title": "スキル",
   "workingPanel.space": "スペース",
   "workingPanel.title": "Working Panel",
-  "you": "あなた",
-  "zenMode": "集中モード"
+  "you": "あなた"
 }

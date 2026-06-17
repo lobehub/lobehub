@@ -20,6 +20,9 @@
   "agentDefaultMessage": "سلام، من **{{name}}** هستم. یک جمله کافی است.\n\nمی‌خواهی بهتر با جریان کاری‌ات هماهنگ شوم؟ به [تنظیمات عامل]({{url}}) برو و نمایه عامل را پر کن (هر زمان می‌توانی ویرایشش کنی).",
   "agentDefaultMessageWithSystemRole": "سلام، من **{{name}}** هستم. یک جمله کافی است—کنترل با توست.",
   "agentDefaultMessageWithoutEdit": "سلام، من **{{name}}** هستم. یک جمله کافی است—کنترل با توست.",
+  "agentDocument.backToChat": "بازگشت به چت",
+  "agentDocument.linkCopied": "لینک کپی شد",
+  "agentDocument.openAsPage": "باز کردن به صورت صفحه کامل",
   "agentProfile.files_one": "{{count}} فایل",
   "agentProfile.files_other": "{{count}} فایل",
   "agentProfile.knowledgeBases_one": "{{count}} پایگاه‌دانش",
@@ -165,7 +168,9 @@
   "extendParams.urlContext.title": "استخراج محتوای پیوند وب",
   "followUpPlaceholder": "پیگیری. برای واگذاری وظیفه به عامل‌های دیگر از @ استفاده کنید.",
   "followUpPlaceholderHeterogeneous": "پیگیری.",
-  "gatewayMode.title": "حالت دروازه",
+  "gatewayMode.beta": "بتا",
+  "gatewayMode.cardTitle": "حالت دروازه نماینده",
+  "gatewayMode.desc": "اجرای نمایندگان در فضای ابری از طریق دروازه نماینده LobeHub. وظایف حتی پس از بستن صفحه ادامه می‌یابند.",
   "group.desc": "با چند عامل در یک فضای مشترک، یک وظیفه را پیش ببرید.",
   "group.memberTooltip": "{{count}} عضو در گروه وجود دارد",
   "group.orchestratorThinking": "هماهنگ‌کننده در حال تفکر است...",
@@ -877,6 +882,7 @@
   "toolAuth.authorize": "مجازسازی",
   "toolAuth.authorizing": "در حال مجازسازی...",
   "toolAuth.hint": "بدون مجازسازی یا پیکربندی، مهارت‌ها ممکن است کار نکنند. این می‌تواند باعث محدودیت یا خطا شود.",
+  "toolAuth.remove": "حذف",
   "toolAuth.signIn": "ورود",
   "toolAuth.title": "مجازسازی مهارت‌ها برای این نماینده",
   "topic.checkOpenNewTopic": "موضوع جدیدی آغاز شود؟",
@@ -1118,6 +1124,5 @@
   "workingPanel.skills.title": "مهارت‌ها",
   "workingPanel.space": "فضا",
   "workingPanel.title": "Working Panel",
-  "you": "شما",
-  "zenMode": "حالت تمرکز"
+  "you": "شما"
 }

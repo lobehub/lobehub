@@ -20,6 +20,9 @@
   "agentDefaultMessage": "مرحبًا، أنا **{{name}}**. جملة واحدة تكفي.\n\nهل ترغب في أن أتناسب مع سير عملك بشكل أفضل؟ انتقل إلى [إعدادات الوكيل]({{url}}) واملأ ملف تعريف الوكيل (يمكنك تعديله في أي وقت).",
   "agentDefaultMessageWithSystemRole": "مرحبًا، أنا **{{name}}**. جملة واحدة تكفي — أنت المتحكم.",
   "agentDefaultMessageWithoutEdit": "مرحبًا، أنا **{{name}}**. جملة واحدة تكفي — أنت المتحكم.",
+  "agentDocument.backToChat": "العودة إلى الدردشة",
+  "agentDocument.linkCopied": "تم نسخ الرابط",
+  "agentDocument.openAsPage": "افتح كصفحة كاملة",
   "agentProfile.files_one": "{{count}} ملف",
   "agentProfile.files_other": "{{count}} ملفات",
   "agentProfile.knowledgeBases_one": "{{count}} قاعدة معرفة",
@@ -165,7 +168,9 @@
   "extendParams.urlContext.title": "استخراج محتوى رابط الويب",
   "followUpPlaceholder": "متابعة. @ لإسناد مهام لوكلاء آخرين.",
   "followUpPlaceholderHeterogeneous": "تابع.",
-  "gatewayMode.title": "وضع البوابة",
+  "gatewayMode.beta": "تجريبي",
+  "gatewayMode.cardTitle": "وضع بوابة الوكيل",
+  "gatewayMode.desc": "قم بتشغيل الوكلاء في السحابة من خلال بوابة الوكلاء الخاصة بـ LobeHub. تستمر المهام في العمل حتى بعد إغلاق الصفحة.",
   "group.desc": "ادفع المهمة للأمام مع عدة وكلاء في مساحة مشتركة واحدة.",
   "group.memberTooltip": "يوجد {{count}} عضو في المجموعة",
   "group.orchestratorThinking": "المنسق يفكر...",
@@ -877,6 +882,7 @@
   "toolAuth.authorize": "تفويض",
   "toolAuth.authorizing": "جارٍ التفويض...",
   "toolAuth.hint": "بدون التفويض أو الإعداد، قد لا تعمل المهارات. قد يؤدي ذلك إلى تقييد الوكيل أو حدوث أخطاء.",
+  "toolAuth.remove": "إزالة",
   "toolAuth.signIn": "تسجيل الدخول",
   "toolAuth.title": "تفويض المهارات لهذا الوكيل",
   "topic.checkOpenNewTopic": "هل تريد بدء موضوع جديد؟",
@@ -1118,6 +1124,5 @@
   "workingPanel.skills.title": "المهارات",
   "workingPanel.space": "مسافة",
   "workingPanel.title": "Working Panel",
-  "you": "أنت",
-  "zenMode": "وضع التركيز"
+  "you": "أنت"
 }

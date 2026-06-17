@@ -20,6 +20,9 @@
   "agentDefaultMessage": "你好，我是 **{{name}}**，你可以立即與我開始對話，也可以前往 [助手設定]({{url}}) 完善我的資訊。",
   "agentDefaultMessageWithSystemRole": "你好，我是 **{{name}}**，有什麼我可以幫忙的嗎？",
   "agentDefaultMessageWithoutEdit": "你好，我是 **{{name}}**，有什麼我可以幫忙的嗎？",
+  "agentDocument.backToChat": "返回聊天",
+  "agentDocument.linkCopied": "連結已複製",
+  "agentDocument.openAsPage": "以完整頁面開啟",
   "agentProfile.files_one": "{{count}} 個檔案",
   "agentProfile.files_other": "{{count}} 個檔案",
   "agentProfile.knowledgeBases_one": "{{count}} 個知識庫",
@@ -165,7 +168,9 @@
   "extendParams.urlContext.title": "擷取網頁連結內容",
   "followUpPlaceholder": "後續動作。使用 @ 指派任務給其他代理。",
   "followUpPlaceholderHeterogeneous": "繼續追問。",
-  "gatewayMode.title": "閘道模式",
+  "gatewayMode.beta": "測試版",
+  "gatewayMode.cardTitle": "代理閘道模式",
+  "gatewayMode.desc": "通過 LobeHub 的代理閘道在雲端運行代理。即使您關閉頁面，任務仍會繼續運行。",
   "group.desc": "與多位 AI 助手在共用的對話空間中協作。",
   "group.memberTooltip": "群組內有 {{count}} 位成員",
   "group.orchestratorThinking": "主持人正在思考中...",
@@ -877,6 +882,7 @@
   "toolAuth.authorize": "授權",
   "toolAuth.authorizing": "授權中...",
   "toolAuth.hint": "若未授權或設定，這些工具將無法正常使用，可能導致助手功能缺失或發生錯誤。",
+  "toolAuth.remove": "移除",
   "toolAuth.signIn": "登入",
   "toolAuth.title": "請為助手完成工具的授權",
   "topic.checkOpenNewTopic": "是否開啟新主題?",
@@ -1118,6 +1124,5 @@
   "workingPanel.skills.title": "技能",
   "workingPanel.space": "空間",
   "workingPanel.title": "Working Panel",
-  "you": "你",
-  "zenMode": "專注模式"
+  "you": "你"
 }

@@ -20,6 +20,9 @@
   "agentDefaultMessage": "Привет, я **{{name}}**. Одного предложения достаточно.\n\nХотите, чтобы я лучше соответствовал вашему рабочему процессу? Перейдите в [Настройки агента]({{url}}) и заполните профиль агента (вы можете изменить его в любое время).",
   "agentDefaultMessageWithSystemRole": "Привет, я **{{name}}**. Одного предложения достаточно — вы управляете процессом.",
   "agentDefaultMessageWithoutEdit": "Привет, я **{{name}}**. Одного предложения достаточно — вы управляете процессом.",
+  "agentDocument.backToChat": "Вернуться в чат",
+  "agentDocument.linkCopied": "Ссылка скопирована",
+  "agentDocument.openAsPage": "Открыть на всю страницу",
   "agentProfile.files_one": "{{count}} файл",
   "agentProfile.files_other": "{{count}} файлов",
   "agentProfile.knowledgeBases_one": "{{count}} база знаний",
@@ -165,7 +168,9 @@
   "extendParams.urlContext.title": "Извлекать содержимое веб-ссылок",
   "followUpPlaceholder": "Продолжение. Используйте @, чтобы назначать задачи другим агентам.",
   "followUpPlaceholderHeterogeneous": "Продолжить.",
-  "gatewayMode.title": "Режим шлюза",
+  "gatewayMode.beta": "Бета",
+  "gatewayMode.cardTitle": "Режим шлюза агента",
+  "gatewayMode.desc": "Запускайте агентов в облаке через шлюз агентов LobeHub. Задачи продолжают выполняться даже после закрытия страницы.",
   "group.desc": "Продвигайте задачу с помощью нескольких агентов в общем пространстве.",
   "group.memberTooltip": "В группе {{count}} участников",
   "group.orchestratorThinking": "Оркестратор обдумывает...",
@@ -877,6 +882,7 @@
   "toolAuth.authorize": "Авторизовать",
   "toolAuth.authorizing": "Авторизация...",
   "toolAuth.hint": "Без авторизации или настройки навыки могут не работать. Это может ограничить агента или вызвать ошибки.",
+  "toolAuth.remove": "Удалить",
   "toolAuth.signIn": "Войти",
   "toolAuth.title": "Авторизация навыков для этого агента",
   "topic.checkOpenNewTopic": "Начать новую тему?",
@@ -1118,6 +1124,5 @@
   "workingPanel.skills.title": "Навыки",
   "workingPanel.space": "Пространство",
   "workingPanel.title": "Working Panel",
-  "you": "Вы",
-  "zenMode": "Режим дзен"
+  "you": "Вы"
 }

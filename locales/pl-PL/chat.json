@@ -20,6 +20,9 @@
   "agentDefaultMessage": "Cześć, jestem **{{name}}**. Jedno zdanie wystarczy.\n\nChcesz, żebym lepiej dopasował się do Twojego stylu pracy? Przejdź do [Ustawień Agenta]({{url}}) i uzupełnij Profil Agenta (możesz go edytować w każdej chwili).",
   "agentDefaultMessageWithSystemRole": "Cześć, jestem **{{name}}**. Jedno zdanie wystarczy — to Ty masz kontrolę.",
   "agentDefaultMessageWithoutEdit": "Cześć, jestem **{{name}}**. Jedno zdanie wystarczy — to Ty masz kontrolę.",
+  "agentDocument.backToChat": "Powrót do czatu",
+  "agentDocument.linkCopied": "Link skopiowany",
+  "agentDocument.openAsPage": "Otwórz jako pełną stronę",
   "agentProfile.files_one": "{{count}} plik",
   "agentProfile.files_other": "{{count}} pliki",
   "agentProfile.knowledgeBases_one": "{{count}} baza wiedzy",
@@ -165,7 +168,9 @@
   "extendParams.urlContext.title": "Wyodrębnij treść linku",
   "followUpPlaceholder": "Kontynuuj. Użyj @, aby przypisać zadania innym agentom.",
   "followUpPlaceholderHeterogeneous": "Kontynuuj.",
-  "gatewayMode.title": "Tryb bramy",
+  "gatewayMode.beta": "Beta",
+  "gatewayMode.cardTitle": "Tryb bramy agenta",
+  "gatewayMode.desc": "Uruchamiaj agentów w chmurze za pomocą bramy agenta LobeHub. Zadania będą kontynuowane nawet po zamknięciu strony.",
   "group.desc": "Pracuj nad zadaniem z wieloma Agentami w jednej wspólnej przestrzeni.",
   "group.memberTooltip": "Grupa zawiera {{count}} członków",
   "group.orchestratorThinking": "Orkiestrator myśli...",
@@ -877,6 +882,7 @@
   "toolAuth.authorize": "Autoryzuj",
   "toolAuth.authorizing": "Autoryzowanie...",
   "toolAuth.hint": "Bez autoryzacji lub konfiguracji umiejętności mogą nie działać. Może to ograniczyć agenta lub powodować błędy.",
+  "toolAuth.remove": "Usuń",
   "toolAuth.signIn": "Zaloguj się",
   "toolAuth.title": "Autoryzuj umiejętności dla tego agenta",
   "topic.checkOpenNewTopic": "Rozpocząć nowy temat?",
@@ -1118,6 +1124,5 @@
   "workingPanel.skills.title": "Umiejętności",
   "workingPanel.space": "Przestrzeń",
   "workingPanel.title": "Working Panel",
-  "you": "Ty",
-  "zenMode": "Tryb Zen"
+  "you": "Ty"
 }
