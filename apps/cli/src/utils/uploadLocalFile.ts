@@ -72,20 +72,32 @@ export const uploadLocalFile = async (
   const ext = path.extname(fileName).toLowerCase().slice(1);
   const fileType = detectMimeType(fileName);
 
-  // 1. Get a pre-signed upload URL
   const date = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
-  const pathname = ext ? `files/${date}/${hash}.${ext}` : `files/${date}/${hash}`;
-  const presigned = await client.upload.createS3PreSignedUrl.mutate({ pathname });
 
-  // 2. Upload the file bytes to S3
-  const presignedUrl = typeof presigned === 'string' ? presigned : (presigned as any).url;
-  const uploadRes = await fetch(presignedUrl, {
-    body: fileBuffer,
-    headers: { 'Content-Type': fileType },
-    method: 'PUT',
-  });
-  if (!uploadRes.ok) {
-    throw new Error(`Upload failed: ${uploadRes.status} ${uploadRes.statusText}`);
+  // 1. Dedup: if the same bytes are already stored (and the object still
+  // exists), skip the S3 upload entirely and reuse the existing url.
+  const existing = (await client.file.checkFileHash.mutate({ hash })) as {
+    isExist?: boolean;
+    url?: string;
+  };
+
+  let pathname: string;
+  if (existing?.isExist && existing.url) {
+    pathname = existing.url;
+  } else {
+    // 2. Get a pre-signed upload URL and PUT the bytes to S3
+    pathname = ext ? `files/${date}/${hash}.${ext}` : `files/${date}/${hash}`;
+    const presigned = await client.upload.createS3PreSignedUrl.mutate({ pathname });
+
+    const presignedUrl = typeof presigned === 'string' ? presigned : (presigned as any).url;
+    const uploadRes = await fetch(presignedUrl, {
+      body: fileBuffer,
+      headers: { 'Content-Type': fileType },
+      method: 'PUT',
+    });
+    if (!uploadRes.ok) {
+      throw new Error(`Upload failed: ${uploadRes.status} ${uploadRes.statusText}`);
+    }
   }
 
   // 3. Create the file record

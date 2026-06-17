@@ -222,6 +222,7 @@ describe('file command', () => {
       const fetchSpy = vi
         .spyOn(globalThis, 'fetch')
         .mockResolvedValue({ ok: true, status: 200, statusText: 'OK' } as Response);
+      mockTrpcClient.file.checkFileHash.mutate.mockResolvedValue({ isExist: false });
       mockTrpcClient.upload.createS3PreSignedUrl.mutate.mockResolvedValue('https://s3/presigned');
       mockTrpcClient.file.createFile.mutate.mockResolvedValue({
         id: 'f-local',
@@ -258,6 +259,7 @@ describe('file command', () => {
       const fetchSpy = vi
         .spyOn(globalThis, 'fetch')
         .mockResolvedValue({ ok: true, status: 200, statusText: 'OK' } as Response);
+      mockTrpcClient.file.checkFileHash.mutate.mockResolvedValue({ isExist: false });
       mockTrpcClient.upload.createS3PreSignedUrl.mutate.mockResolvedValue('https://s3/presigned');
       mockTrpcClient.file.createFile.mutate.mockResolvedValue({ id: 'f-json' });
 
@@ -267,6 +269,34 @@ describe('file command', () => {
 
         expect(mockTrpcClient.file.createFile.mutate).toHaveBeenCalledWith(
           expect.objectContaining({ fileType: 'application/json' }),
+        );
+      } finally {
+        fetchSpy.mockRestore();
+        fs.rmSync(tmpFile, { force: true });
+      }
+    });
+
+    it('should skip the S3 upload when the local file hash already exists', async () => {
+      const tmpFile = path.join(os.tmpdir(), `lh-upload-dedup-${process.pid}.txt`);
+      fs.writeFileSync(tmpFile, 'dedup me');
+
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+      mockTrpcClient.file.checkFileHash.mutate.mockResolvedValue({
+        isExist: true,
+        url: 'files/2024-01-01/existing.txt',
+      });
+      mockTrpcClient.file.createFile.mutate.mockResolvedValue({ id: 'f-dedup' });
+
+      try {
+        const program = createProgram();
+        await program.parseAsync(['node', 'test', 'file', 'upload', tmpFile]);
+
+        // No pre-sign and no S3 PUT should happen
+        expect(mockTrpcClient.upload.createS3PreSignedUrl.mutate).not.toHaveBeenCalled();
+        expect(fetchSpy).not.toHaveBeenCalled();
+        // The record reuses the existing url
+        expect(mockTrpcClient.file.createFile.mutate).toHaveBeenCalledWith(
+          expect.objectContaining({ url: 'files/2024-01-01/existing.txt' }),
         );
       } finally {
         fetchSpy.mockRestore();
