@@ -220,7 +220,9 @@ describe('agentDocumentsRuntime auto-pin to task', () => {
       { agentId: 'agent-1' },
     );
 
-    expect(result.content).toBe('Created document "Daily Brief" (agent-doc-assoc-id).');
+    expect(result.content).toBe(
+      'Created document "Daily Brief" (internal id: agent-doc-assoc-id).',
+    );
   });
 });
 
