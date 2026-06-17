@@ -3689,6 +3689,49 @@ describe('OpenAIStream', () => {
     ]);
   });
 
+  it('should handle finish_reason with text and usage', async () => {
+    const mockOpenAIStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          id: 'finish-text-usage',
+          choices: [
+            {
+              index: 0,
+              delta: { content: 'done' },
+              finish_reason: 'stop',
+            },
+          ],
+          usage: {
+            prompt_tokens: 10,
+            completion_tokens: 20,
+            total_tokens: 30,
+          },
+        });
+
+        controller.close();
+      },
+    });
+
+    const protocolStream = OpenAIStream(mockOpenAIStream);
+
+    const decoder = new TextDecoder();
+    const chunks = [];
+
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks).toEqual([
+      'id: finish-text-usage\n',
+      'event: text\n',
+      'data: "done"\n\n',
+      'id: finish-text-usage\n',
+      'event: usage\n',
+      `data: {"inputTextTokens":10,"outputTextTokens":20,"totalInputTokens":10,"totalOutputTokens":20,"totalTokens":30}\n\n`,
+    ]);
+  });
+
   it('should handle mistral AI Magistral thinking blocks in content array', async () => {
     const mockOpenAIStream = new ReadableStream({
       start(controller) {

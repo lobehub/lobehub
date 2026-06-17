@@ -276,9 +276,21 @@ const transformOpenAIStream = (
 
     // Handle finish reason
     if (item.finish_reason) {
-      if (chunk.usage) {
+      const usageChunk: StreamProtocolChunk | undefined = chunk.usage
+        ? { data: convertOpenAIUsage(chunk.usage, payload), id: chunk.id, type: 'usage' }
+        : undefined;
+      const appendUsageChunk = (
+        protocolChunk: StreamProtocolChunk | StreamProtocolChunk[],
+      ): StreamProtocolChunk | StreamProtocolChunk[] => {
+        if (!usageChunk) return protocolChunk;
+
         delete streamContext.usageMissingDiagnostics;
-      } else {
+        return Array.isArray(protocolChunk)
+          ? [...protocolChunk, usageChunk]
+          : [protocolChunk, usageChunk];
+      };
+
+      if (!usageChunk) {
         streamContext.usageMissingDiagnostics = {
           apiMode: 'chat_completions',
           chunkIndex: streamContext.chunkIndex,
@@ -299,7 +311,7 @@ const transformOpenAIStream = (
         // MiniMax built-in search returns citation sources in the first tool stream content, needs to be ignored
         // {"id":"0483748a25071c611e2f48d2982fbe96","choices":[{"finish_reason":"stop","index":0,"delta":{"content":"[{\"no\":1,\"url\":\"https://www.xiaohongshu.com/discovery/item/66d8de3c000000001f01e752\",\"title\":\"郑钦文为国而战，没有理由不坚持🏅\",\"content\":\"·2024年08月03日\\n中国队选手郑钦文夺得巴黎奥运会网球女单比赛金牌（巴黎奥运第16金）\\n#巴黎奥运会[话题]# #郑钦文[话题]# #人物素材积累[话题]# #作文素材积累[话题]# #申论素材[话题]#\",\"web_icon\":\"https://www.xiaohongshu.com/favicon.ico\"}]","role":"tool","tool_call_id":"call_function_6696730535"}}],"created":1748255114,"model":"abab6.5s-chat","object":"chat.completion.chunk","usage":{"total_tokens":0,"total_characters":0},"input_sensitive":false,"output_sensitive":false,"input_sensitive_type":0,"output_sensitive_type":0,"output_sensitive_int":0}
         if (typeof item.delta?.role === 'string' && item.delta.role === 'tool') {
-          return { data: null, id: chunk.id, type: 'text' };
+          return appendUsageChunk({ data: null, id: chunk.id, type: 'text' });
         }
 
         const text = item.delta.content as string;
@@ -314,10 +326,10 @@ const transformOpenAIStream = (
               type: 'base64_image' as const,
             })),
           );
-          return arr;
+          return appendUsageChunk(arr);
         }
 
-        return { data: text, id: chunk.id, type: 'text' };
+        return appendUsageChunk({ data: text, id: chunk.id, type: 'text' });
       }
 
       // OpenAI Search Preview model returns citation sources
@@ -325,7 +337,7 @@ const transformOpenAIStream = (
       if ((item as any).delta?.annotations && (item as any).delta.annotations.length > 0) {
         const citations = (item as any).delta.annotations;
 
-        return [
+        return appendUsageChunk([
           {
             data: {
               citations: filterValidCitations(
@@ -341,7 +353,7 @@ const transformOpenAIStream = (
             id: chunk.id,
             type: 'grounding',
           },
-        ];
+        ]);
       }
 
       // MiniMax built-in search returns 4 objects in the message array of the last stream, with the last one being annotations
@@ -349,7 +361,7 @@ const transformOpenAIStream = (
       if ((item as any).messages && (item as any).messages.length > 0) {
         const citations = (item as any).messages.at(-1).annotations;
 
-        return [
+        return appendUsageChunk([
           {
             data: {
               citations: filterValidCitations(
@@ -365,13 +377,12 @@ const transformOpenAIStream = (
             id: chunk.id,
             type: 'grounding',
           },
-        ];
+        ]);
       }
 
-      if (chunk.usage) {
+      if (usageChunk) {
         delete streamContext.usageMissingDiagnostics;
-        const usage = chunk.usage;
-        return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
+        return usageChunk;
       }
 
       // xAI Live Search feature returns citation sources
