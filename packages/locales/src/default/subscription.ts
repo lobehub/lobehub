@@ -167,11 +167,6 @@ export default {
   'limitation.expired.desc':
     'Your {{plan}} credits expired on {{expiredAt}}. Upgrade your plan now to get credits.',
   'limitation.expired.title': 'Credits Expired',
-  'limitation.fableCampaign.desc':
-    'Claude Fable 5 is a high-cost model. The campaign trial credits have been used up. Upgrade your plan to keep using Fable.',
-  'limitation.fableCampaign.title': 'Fable Trial Credits Used Up',
-  'limitation.fableCampaign.upgrade': 'Upgrade Plan',
-  'limitation.fableCampaign.upgradeToPlan': 'Upgrade to {{plan}}',
   'limitation.insufficientBudget.approximateDesc':
     'This request may need more credits. Top up credits or upgrade your plan.',
   'limitation.insufficientBudget.available': 'Available Credits',
@@ -390,7 +385,6 @@ export default {
   'plans.workspace.solo': 'Solo (1 member)',
   'plans.target': 'Target Plan',
   'plans.unlimited': 'Unlimited',
-  'promoBanner.fableYearly': 'Annual subscribers get {{percent}}% usage off for a limited time',
   'qa.desc':
     'If your question is not answered, check <1>Product Documentation</1> for more FAQs, or contact us.',
   'qa.detail': 'View Details',

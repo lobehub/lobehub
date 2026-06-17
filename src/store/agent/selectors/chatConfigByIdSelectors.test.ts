@@ -59,12 +59,12 @@ describe('chatConfigByIdSelectors', () => {
       expect(chatConfigByIdSelectors.getChatConfigById('non-existent')(state)).toEqual({});
     });
 
-    it('should return stored fable chat config without model-specific overrides', () => {
+    it('should return stored chat config without model-specific overrides', () => {
       const state = createState({
         agentMap: {
           'agent-1': {
             chatConfig: { enableAgentMode: true, historyCount: 10 },
-            model: 'claude-fable-5',
+            model: 'claude-opus-4-8',
             provider: 'lobehub',
           },
         },

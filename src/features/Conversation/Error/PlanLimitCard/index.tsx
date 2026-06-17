@@ -11,7 +11,6 @@ import { ErrorActionContainer, FormAction } from '../style';
 import {
   getBudgetContextFromErrorBody,
   getNextUpgradePlan,
-  isFableCampaignLimitContext,
   isKnownPlan,
   type PlanLimitPricingBasis,
 } from './budget';
@@ -94,39 +93,22 @@ const PlanLimitCard = memo<PlanLimitCardProps>(({ errorBody, errorType, onRetry 
   const { t } = useTranslation('subscription');
 
   const context = getBudgetContextFromErrorBody(errorBody);
-  const isFableCampaign = isFableCampaignLimitContext(context);
   const isInsufficientBudget = errorType === ChatErrorType.InsufficientBudgetForModel;
 
   const planAtError = isKnownPlan(context?.planAtError) ? context.planAtError : Plans.Free;
 
   const getPlanTitle = (plan: Plans) => t(PLAN_TITLE_KEYS[plan]);
 
-  let title: string;
-  let description: string;
-  let upgradeLabel: string;
-
-  if (isFableCampaign) {
-    // Hobby has no credit allowance to restore, so skip the plan recommendation
-    const targetPlan = context?.planAtError === Plans.Hobby ? undefined : Plans.Starter;
-
-    title = t('limitation.fableCampaign.title');
-    description = t('limitation.fableCampaign.desc');
-    upgradeLabel = targetPlan
-      ? t('limitation.fableCampaign.upgradeToPlan', { plan: getPlanTitle(targetPlan) })
-      : t('limitation.fableCampaign.upgrade');
-  } else {
-    const nextPlan = getNextUpgradePlan(planAtError);
-
-    title = isInsufficientBudget
-      ? t('limitation.insufficientBudget.title')
-      : t('limitation.limited.title');
-    description = isInsufficientBudget
-      ? t(getBudgetDescriptionKey(context?.pricingBasis))
-      : t('limitation.limited.desc', { plan: getPlanTitle(planAtError) });
-    upgradeLabel = nextPlan
-      ? t('limitation.limited.upgradeToPlan', { plan: getPlanTitle(nextPlan) })
-      : t('limitation.limited.upgrade');
-  }
+  const nextPlan = getNextUpgradePlan(planAtError);
+  const title = isInsufficientBudget
+    ? t('limitation.insufficientBudget.title')
+    : t('limitation.limited.title');
+  const description = isInsufficientBudget
+    ? t(getBudgetDescriptionKey(context?.pricingBasis))
+    : t('limitation.limited.desc', { plan: getPlanTitle(planAtError) });
+  const upgradeLabel = nextPlan
+    ? t('limitation.limited.upgradeToPlan', { plan: getPlanTitle(nextPlan) })
+    : t('limitation.limited.upgrade');
 
   const facts = (
     [

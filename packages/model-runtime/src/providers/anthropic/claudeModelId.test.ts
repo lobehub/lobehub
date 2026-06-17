@@ -64,13 +64,6 @@ describe('parseClaudeModelId', () => {
   });
 
   it('should parse Claude 5 family ids', () => {
-    expect(parseClaudeModelId('claude-fable-5')).toEqual({
-      family: 'fable',
-      majorVersion: 5,
-      normalizedModelId: 'claude-fable-5',
-      source: 'anthropic',
-    });
-
     expect(parseClaudeModelId('claude-mythos-5-preview')).toEqual({
       family: 'mythos',
       majorVersion: 5,
@@ -94,7 +87,6 @@ describe('isContextCachingModel', () => {
   });
 
   it('should return true for Claude 5 ids', () => {
-    expect(isContextCachingModel('claude-fable-5')).toBe(true);
     expect(isContextCachingModel('claude-mythos-5-preview')).toBe(true);
     expect(isContextCachingModel('anthropic/claude-5-mythos')).toBe(true);
     expect(isContextCachingModel('us.anthropic.claude-mythos-5-v1:0')).toBe(true);
@@ -114,7 +106,6 @@ describe('isThinkingWithToolClaudeModel', () => {
   });
 
   it('should return true for Claude 5 ids', () => {
-    expect(isThinkingWithToolClaudeModel('claude-fable-5')).toBe(true);
     expect(isThinkingWithToolClaudeModel('claude-mythos-5-preview')).toBe(true);
     expect(isThinkingWithToolClaudeModel('anthropic/claude-5-mythos')).toBe(true);
     expect(isThinkingWithToolClaudeModel('us.anthropic.claude-mythos-5-v1:0')).toBe(true);
@@ -166,7 +157,6 @@ describe('hasTemperatureTopPConflict', () => {
 
   describe('Claude 5 models', () => {
     it('should return true for Claude 5 ids across providers', () => {
-      expect(hasTemperatureTopPConflict('claude-fable-5')).toBe(true);
       expect(hasTemperatureTopPConflict('claude-mythos-5-preview')).toBe(true);
       expect(hasTemperatureTopPConflict('anthropic/claude-5-mythos')).toBe(true);
       expect(hasTemperatureTopPConflict('us.anthropic.claude-mythos-5-v1:0')).toBe(true);
@@ -221,7 +211,6 @@ describe('shouldOmitSamplingParams', () => {
   });
 
   it('should return true for Claude 5 ids', () => {
-    expect(shouldOmitSamplingParams('claude-fable-5')).toBe(true);
     expect(shouldOmitSamplingParams('claude-mythos-5-preview')).toBe(true);
     expect(shouldOmitSamplingParams('anthropic/claude-5-mythos')).toBe(true);
     expect(shouldOmitSamplingParams('us.anthropic.claude-mythos-5-v1:0')).toBe(true);
@@ -236,7 +225,6 @@ describe('shouldDropUnsupportedClaudeAssistantPrefill', () => {
   });
 
   it('should return true for Claude 5 API and Bedrock ids', () => {
-    expect(shouldDropUnsupportedClaudeAssistantPrefill('claude-fable-5')).toBe(true);
     expect(shouldDropUnsupportedClaudeAssistantPrefill('claude-mythos-5-preview')).toBe(true);
     expect(shouldDropUnsupportedClaudeAssistantPrefill('us.anthropic.claude-mythos-5-v1:0')).toBe(
       true,

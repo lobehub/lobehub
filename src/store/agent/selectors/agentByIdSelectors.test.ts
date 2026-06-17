@@ -80,12 +80,12 @@ describe('agentByIdSelectors', () => {
       expect(agentByIdSelectors.getAgentEnableModeById('agent-1')(state)).toBe(true);
     });
 
-    it('should keep fable in agent mode when agent mode is enabled', () => {
+    it('should keep the agent in agent mode when agent mode is enabled', () => {
       const state = createState({
         agentMap: {
           'agent-1': {
             chatConfig: { enableAgentMode: true },
-            model: 'claude-fable-5',
+            model: 'claude-opus-4-8',
             provider: 'lobehub',
           },
         },
