@@ -13,6 +13,8 @@ import type { Stream } from 'openai/streaming';
 import { LobeOpenAI } from '../../providers/openai';
 import { LobeVertexAI } from '../../providers/vertexai';
 import type {
+  ASROptions,
+  ASRPayload,
   ChatCompletionErrorPayload,
   ChatMethodOptions,
   ChatStreamCallbacks,
@@ -769,6 +771,12 @@ export const createRouterRuntime = ({
     async textToSpeech(payload: TextToSpeechPayload, options?: EmbeddingsOptions) {
       return this.runWithFallback(payload.model, (runtime) =>
         runtime.textToSpeech!(payload, options),
+      );
+    }
+
+    async transcribe(payload: ASRPayload, options?: ASROptions) {
+      return this.runWithFallback(payload.model, (runtime) =>
+        runtime.transcribe!(payload, options),
       );
     }
   };

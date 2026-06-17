@@ -3511,4 +3511,76 @@ describe('LobeOpenAICompatibleFactory', () => {
       ]);
     });
   });
+
+  describe('transcribe', () => {
+    it('should transcribe audio and return the text', async () => {
+      const transcribeMock = vi
+        .spyOn(instance['client'].audio.transcriptions, 'create')
+        .mockResolvedValue({ text: 'hello world' } as any);
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.mp3', { type: 'audio/mpeg' });
+
+      const result = await instance.transcribe!({ file, model: 'whisper-1' });
+
+      expect(result).toEqual({ text: 'hello world' });
+      expect(transcribeMock).toHaveBeenCalledWith(
+        expect.objectContaining({ file, model: 'whisper-1' }),
+        expect.anything(),
+      );
+    });
+
+    it('should forward language, prompt and responseFormat to the provider', async () => {
+      const transcribeMock = vi
+        .spyOn(instance['client'].audio.transcriptions, 'create')
+        .mockResolvedValue({ text: '你好' } as any);
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.m4a', { type: 'audio/mp4' });
+
+      await instance.transcribe!(
+        {
+          file,
+          language: 'zh',
+          model: 'whisper-1',
+          prompt: 'hint',
+          responseFormat: 'verbose_json',
+        },
+        { signal: new AbortController().signal },
+      );
+
+      expect(transcribeMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          file,
+          language: 'zh',
+          model: 'whisper-1',
+          prompt: 'hint',
+          response_format: 'verbose_json',
+        }),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
+    });
+
+    it('should wrap a bare Blob into a File using fileName', async () => {
+      const transcribeMock = vi
+        .spyOn(instance['client'].audio.transcriptions, 'create')
+        .mockResolvedValue({ text: 'ok' } as any);
+
+      const blob = new Blob([new Uint8Array([1, 2, 3])], { type: 'audio/wav' });
+
+      await instance.transcribe!({ file: blob, fileName: 'remote.wav', model: 'whisper-1' });
+
+      const passedFile = (transcribeMock.mock.calls[0][0] as any).file as File;
+      expect(passedFile).toBeInstanceOf(File);
+      expect(passedFile.name).toBe('remote.wav');
+    });
+
+    it('should throw an error when transcription fails', async () => {
+      vi.spyOn(instance['client'].audio.transcriptions, 'create').mockRejectedValue(
+        new Error('boom'),
+      );
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.mp3', { type: 'audio/mpeg' });
+
+      await expect(instance.transcribe!({ file, model: 'whisper-1' })).rejects.toBeDefined();
+    });
+  });
 });

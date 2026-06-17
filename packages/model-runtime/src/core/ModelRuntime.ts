@@ -7,6 +7,8 @@ import type { LobeCloudflareParams } from '../providers/cloudflare';
 import { LobeOpenAI } from '../providers/openai';
 import { providerRuntimeMap } from '../runtimeMap';
 import type {
+  ASROptions,
+  ASRPayload,
   ChatCompletionErrorPayload,
   ChatMethodOptions,
   ChatStreamPayload,
@@ -448,6 +450,10 @@ export class ModelRuntime {
   }
   async textToSpeech(payload: TextToSpeechPayload, options?: EmbeddingsOptions) {
     return this._runtime.textToSpeech?.(payload, options);
+  }
+
+  async transcribe(payload: ASRPayload, options?: ASROptions) {
+    return this._runtime.transcribe?.(payload, options);
   }
 
   async pullModel(params: PullModelParams, options?: ModelRequestOptions) {

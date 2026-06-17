@@ -1,9 +1,10 @@
-import { createReadStream, existsSync } from 'node:fs';
+import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { Command } from 'commander';
 
-import { getAuthInfo } from '../../api/http';
+import { getTrpcClient } from '../../api/client';
 import { log } from '../../utils/logger';
 
 export function registerAsrCommand(parent: Command) {
@@ -13,6 +14,7 @@ export function registerAsrCommand(parent: Command) {
       'Convert speech to text (automatic speech recognition). Accepts a local path or a URL',
     )
     .option('--model <model>', 'STT model', 'whisper-1')
+    .option('--provider <provider>', 'AI provider', 'openai')
     .option('--language <lang>', 'Language code (e.g. en, zh)')
     .option('--json', 'Output raw JSON')
     .action(
@@ -22,6 +24,7 @@ export function registerAsrCommand(parent: Command) {
           json?: boolean;
           language?: string;
           model: string;
+          provider: string;
         },
       ) => {
         const isUrl = audioFile.startsWith('http://') || audioFile.startsWith('https://');
@@ -32,18 +35,13 @@ export function registerAsrCommand(parent: Command) {
           return;
         }
 
-        const { serverUrl, headers } = await getAuthInfo();
-
-        const sttOptions: Record<string, any> = { model: options.model };
-        if (options.language) sttOptions.language = options.language;
-
-        let fileBuffer: Blob;
+        let bytes: Uint8Array;
         let fileName: string;
         try {
           if (isUrl) {
-            ({ blob: fileBuffer, name: fileName } = await fetchAudioFromUrl(audioFile));
+            ({ bytes, name: fileName } = await fetchAudioFromUrl(audioFile));
           } else {
-            fileBuffer = await readFileAsBlob(audioFile);
+            bytes = await readFile(audioFile);
             fileName = path.basename(audioFile);
           }
         } catch (error) {
@@ -52,55 +50,37 @@ export function registerAsrCommand(parent: Command) {
           return;
         }
 
-        const formData = new FormData();
-        formData.append('speech', fileBuffer, fileName);
-        formData.append('options', JSON.stringify(sttOptions));
+        try {
+          const client = await getTrpcClient();
+          const result = await client.asr.transcribe.mutate({
+            audioBase64: Buffer.from(bytes).toString('base64'),
+            fileName,
+            language: options.language,
+            model: options.model,
+            provider: options.provider,
+          });
 
-        // Remove Content-Type for multipart/form-data (let fetch set it with boundary)
-        const { 'Content-Type': _, ...formHeaders } = headers;
-
-        const res = await fetch(`${serverUrl}/webapi/stt/openai`, {
-          body: formData,
-          headers: formHeaders,
-          method: 'POST',
-        });
-
-        if (!res.ok) {
-          const errText = await res.text();
-          log.error(`ASR failed: ${res.status} ${errText}`);
+          if (options.json) {
+            console.log(JSON.stringify(result, null, 2));
+          } else {
+            process.stdout.write(result.text);
+            process.stdout.write('\n');
+          }
+        } catch (error) {
+          log.error(`ASR failed: ${error instanceof Error ? error.message : String(error)}`);
           process.exit(1);
-          return;
-        }
-
-        const result = await res.json();
-
-        if (options.json) {
-          console.log(JSON.stringify(result, null, 2));
-        } else {
-          const text = (result as any).text || JSON.stringify(result);
-          process.stdout.write(text);
-          process.stdout.write('\n');
         }
       },
     );
 }
 
-async function readFileAsBlob(filePath: string): Promise<Blob> {
-  const chunks: Uint8Array[] = [];
-  const stream = createReadStream(filePath);
-  for await (const chunk of stream) {
-    chunks.push(chunk as Uint8Array);
-  }
-  return new Blob(chunks);
-}
-
-async function fetchAudioFromUrl(url: string): Promise<{ blob: Blob; name: string }> {
+async function fetchAudioFromUrl(url: string): Promise<{ bytes: Uint8Array; name: string }> {
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Failed to download audio: ${res.status} ${res.statusText}`);
   }
 
-  const blob = await res.blob();
+  const bytes = new Uint8Array(await res.arrayBuffer());
 
   // Derive a file name from the URL path, falling back to a generic name.
   const pathname = (() => {
@@ -112,5 +92,5 @@ async function fetchAudioFromUrl(url: string): Promise<{ blob: Blob; name: strin
   })();
   const name = path.basename(pathname) || 'audio';
 
-  return { blob, name };
+  return { bytes, name };
 }

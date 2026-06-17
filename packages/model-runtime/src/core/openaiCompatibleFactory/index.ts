@@ -11,6 +11,9 @@ import type { Stream } from 'openai/streaming';
 import { isGPT5ProResponsesModel, responsesAPIModels } from '../../const/models';
 import { ErrorClassifier } from '../../errors';
 import type {
+  ASROptions,
+  ASRPayload,
+  ASRResponse,
   ChatCompletionErrorPayload,
   ChatCompletionTool,
   ChatMethodOptions,
@@ -1107,6 +1110,39 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         const buffer = await mp3.arrayBuffer();
         log('generated audio with size: %d bytes', buffer.byteLength);
         return buffer;
+      } catch (error) {
+        throw this.handleError(error);
+      }
+    }
+
+    async transcribe(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse> {
+      const log = debug(`${this.logPrefix}:transcribe`);
+      const { file, fileName, model, language, prompt, responseFormat, temperature } = payload;
+      log('transcribe called with model: %s, audio size: %d bytes', model, file?.size || 0);
+
+      try {
+        // The OpenAI SDK only accepts `File` uploads; wrap bare blobs so the
+        // provider can infer the audio format from the file extension.
+        const uploadFile =
+          file instanceof File ? file : new File([file], fileName || 'audio', { type: file.type });
+
+        const transcription = await this.client.audio.transcriptions.create(
+          {
+            file: uploadFile,
+            language,
+            model,
+            prompt,
+            response_format: responseFormat,
+            temperature,
+          },
+          { headers: options?.headers, signal: options?.signal },
+        );
+
+        const text =
+          typeof transcription === 'string' ? transcription : ((transcription as any).text ?? '');
+        log('transcription completed, text length: %d', text.length);
+
+        return { text };
       } catch (error) {
         throw this.handleError(error);
       }

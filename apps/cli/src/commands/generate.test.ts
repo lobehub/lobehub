@@ -6,6 +6,9 @@ import { registerGenerateCommand } from './generate';
 
 const { mockTrpcClient } = vi.hoisted(() => ({
   mockTrpcClient: {
+    asr: {
+      transcribe: { mutate: vi.fn() },
+    },
     generation: {
       deleteGeneration: { mutate: vi.fn() },
       getGenerationStatus: { query: vi.fn() },
@@ -371,19 +374,12 @@ describe('generate command', () => {
     });
 
     it('should download and transcribe an audio URL', async () => {
-      const fetchMock = vi
-        .fn()
-        // first call: download the remote audio
-        .mockResolvedValueOnce({
-          blob: vi.fn().mockResolvedValue(new Blob(['audio-bytes'])),
-          ok: true,
-        })
-        // second call: STT endpoint
-        .mockResolvedValueOnce({
-          json: vi.fn().mockResolvedValue({ text: 'hello world' }),
-          ok: true,
-        });
+      const fetchMock = vi.fn().mockResolvedValue({
+        arrayBuffer: vi.fn().mockResolvedValue(new TextEncoder().encode('audio-bytes').buffer),
+        ok: true,
+      });
       vi.stubGlobal('fetch', fetchMock);
+      mockTrpcClient.asr.transcribe.mutate.mockResolvedValue({ text: 'hello world' });
 
       const program = createProgram();
       await program.parseAsync([
@@ -394,11 +390,14 @@ describe('generate command', () => {
         'https://example.com/audio/sample.mp3',
       ]);
 
-      expect(fetchMock).toHaveBeenNthCalledWith(1, 'https://example.com/audio/sample.mp3');
-      expect(fetchMock).toHaveBeenNthCalledWith(
-        2,
-        'https://app.lobehub.com/webapi/stt/openai',
-        expect.objectContaining({ method: 'POST' }),
+      expect(fetchMock).toHaveBeenCalledWith('https://example.com/audio/sample.mp3');
+      expect(mockTrpcClient.asr.transcribe.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          audioBase64: Buffer.from('audio-bytes').toString('base64'),
+          fileName: 'sample.mp3',
+          model: 'whisper-1',
+          provider: 'openai',
+        }),
       );
       expect(stdoutSpy).toHaveBeenCalledWith('hello world');
       expect(exitSpy).not.toHaveBeenCalled();
