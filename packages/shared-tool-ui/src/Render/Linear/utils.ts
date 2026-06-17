@@ -1,7 +1,7 @@
 import { isRecord } from '@lobechat/utils/object';
 import { safeParseJSON } from '@lobechat/utils/safeParseJSON';
 
-import { parseToolName, staticLabelFor } from '../../Inspector/Linear/labels';
+import { type ParsedTool, parseToolName, staticLabelFor } from '../../Inspector/Linear/labels';
 
 const PRIORITY_LABEL: Record<number, string> = {
   0: 'None',
@@ -129,6 +129,23 @@ const readDisplayString = (value: unknown, key?: string): string | undefined => 
   }
 };
 
+const DATE_FIELD_KEYS = new Set([
+  'createdAt',
+  'updatedAt',
+  'completedAt',
+  'startedAt',
+  'canceledAt',
+  'archivedAt',
+  'dueDate',
+]);
+
+// Linear timestamps arrive as ISO strings (`2026-06-16T02:14:32.612Z`); trim to
+// a compact `YYYY-MM-DD HH:mm` so the field grid stays readable.
+const formatIsoDate = (value: string): string => {
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/u.exec(value);
+  return match ? `${match[1]} ${match[2]}` : value;
+};
+
 const pickField = (record: Record<PropertyKey, unknown>, key: string): LinearField | undefined => {
   const value = readDisplayString(record[key], key);
   if (!value) return;
@@ -136,7 +153,7 @@ const pickField = (record: Record<PropertyKey, unknown>, key: string): LinearFie
   return {
     key,
     label: key === 'id' ? 'ID' : key === 'url' ? 'URL' : toLabel(key),
-    value,
+    value: DATE_FIELD_KEYS.has(key) ? formatIsoDate(value) : value,
   };
 };
 
@@ -232,7 +249,7 @@ const buildEntity = (record: Record<PropertyKey, unknown>): LinearEntity | undef
     readDisplayString(record.body) ||
     readDisplayString(record.content);
   const fields = collectFields(record, ENTITY_FIELD_KEYS).filter(
-    (field) => field.key !== 'state' || field.value !== state,
+    (field) => !((field.key === 'state' || field.key === 'status') && field.value === state),
   );
   const links = getLinearLinks(record.links);
 
@@ -250,13 +267,25 @@ const buildEntity = (record: Record<PropertyKey, unknown>): LinearEntity | undef
   };
 };
 
-const extractResultRecords = (value: unknown): Record<PropertyKey, unknown>[] => {
+const extractResultRecords = (
+  value: unknown,
+  verb?: ParsedTool['verb'],
+): Record<PropertyKey, unknown>[] => {
   if (Array.isArray(value)) return value.filter(isRecord);
   if (!isRecord(value)) return [];
 
-  for (const key of RESULT_ARRAY_KEYS) {
-    const nested = value[key];
-    if (Array.isArray(nested)) return nested.filter(isRecord);
+  // Only `list_*` endpoints carry their payload in a nested collection
+  // (`{ issues: [...] }`, `{ nodes: [...] }`). Single-entity endpoints like
+  // `get_issue` return the entity directly — and that entity often embeds its
+  // own sub-collections (`documents: []`, `attachments: []`) whose keys overlap
+  // RESULT_ARRAY_KEYS. Matching those would wrongly drop the whole entity (e.g.
+  // an empty `documents: []` yielding zero records → raw JSON fallback), so we
+  // scan nested arrays for list endpoints only.
+  if (verb === 'list') {
+    for (const key of RESULT_ARRAY_KEYS) {
+      const nested = value[key];
+      if (Array.isArray(nested)) return nested.filter(isRecord);
+    }
   }
 
   return [value];
@@ -287,7 +316,7 @@ export const buildLinearRenderModel = ({
 }): LinearRenderModel => {
   const parsedTool = parseToolName(apiName || '');
   const result = parseResultContent(content);
-  const resultEntities = extractResultRecords(result)
+  const resultEntities = extractResultRecords(result, parsedTool.verb)
     .map(buildEntity)
     .filter((entity): entity is LinearEntity => Boolean(entity));
   const resultText = typeof result === 'string' ? result : undefined;
