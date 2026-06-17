@@ -124,11 +124,12 @@ describe('LobeAzureOpenAI', () => {
           mockProdStream,
           expect.objectContaining({
             inputStartAt: expect.any(Number),
-            payload: {
+            payload: expect.objectContaining({
+              apiMode: 'responses',
               model: 'gpt-5.4',
               pricing: mockPricing,
               provider: 'lobehub',
-            },
+            }),
           }),
         );
       });
@@ -171,11 +172,12 @@ describe('LobeAzureOpenAI', () => {
         expect(streamsModule.OpenAIResponsesStream).toHaveBeenCalledWith(
           mockProdStream,
           expect.objectContaining({
-            payload: {
+            payload: expect.objectContaining({
+              apiMode: 'responses',
               model: 'gpt-5.4',
               pricing: mockPricing,
               provider: 'lobehub',
-            },
+            }),
           }),
         );
       });
@@ -231,11 +233,13 @@ describe('LobeAzureOpenAI', () => {
           mockProdStream,
           expect.objectContaining({
             inputStartAt: expect.any(Number),
-            payload: {
+            payload: expect.objectContaining({
+              apiMode: 'chat_completions',
+              includeUsageRequested: true,
               model: 'o3',
               pricing: mockPricing,
               provider: 'lobehub',
-            },
+            }),
           }),
         );
       });
