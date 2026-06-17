@@ -1,10 +1,10 @@
 import type { ModelProviderCard } from '@/types/llm';
 
-import { default as empiriolabsModels } from '../aiModels/empiriolabs';
+import { empiriolabsChatModelList } from '../aiModels/empiriolabs';
 
 // ref: https://empiriolabs.ai/models
 const EmpirioLabs: ModelProviderCard = {
-  chatModels: empiriolabsModels,
+  chatModels: empiriolabsChatModelList,
   checkModel: 'gemma-4-26b-a4b',
   description:
     'EmpirioLabs AI hosts open, proprietary, and custom models (Qwen, DeepSeek, GLM, Kimi, MiniMax, Gemma, and more) behind one OpenAI-compatible API with pay-as-you-go pricing.',
