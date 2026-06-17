@@ -2217,4 +2217,48 @@ describe('AgentModel', () => {
       expect(result).toHaveLength(1);
     });
   });
+
+  describe('listMessengerBindableAgents', () => {
+    it('should keep the inbox, exclude other virtual agents, pin inbox first, and fallback its meta', async () => {
+      await serverDB.insert(agents).values([
+        // Inbox is the oldest, yet must be pinned to the top.
+        {
+          avatar: null,
+          id: 'mb-inbox',
+          slug: INBOX_SESSION_ID,
+          title: null,
+          updatedAt: new Date('2023-01-01'),
+          userId,
+          virtual: true,
+        },
+        {
+          id: 'mb-normal',
+          title: 'Normal',
+          updatedAt: new Date('2024-01-01'),
+          userId,
+        },
+        { id: 'mb-virtual', title: 'Virtual', userId, virtual: true },
+      ]);
+
+      const result = await agentModel.listMessengerBindableAgents();
+
+      expect(result.map((r) => r.id)).toEqual(['mb-inbox', 'mb-normal']);
+      expect(result[0]).toMatchObject({
+        avatar: DEFAULT_INBOX_AVATAR,
+        id: 'mb-inbox',
+        title: DEFAULT_INBOX_TITLE,
+      });
+    });
+
+    it('should only list the current user agents', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'mb-mine', title: 'Mine', userId },
+        { id: 'mb-theirs', title: 'Theirs', userId: userId2 },
+      ]);
+
+      const result = await agentModel.listMessengerBindableAgents();
+
+      expect(result.map((r) => r.id)).toEqual(['mb-mine']);
+    });
+  });
 });

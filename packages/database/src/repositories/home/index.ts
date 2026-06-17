@@ -4,19 +4,13 @@ import {
   type SidebarGroup,
 } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { and, desc, eq, inArray, not, sql } from 'drizzle-orm';
+import { and, desc, eq, not, sql } from 'drizzle-orm';
 
-import {
-  agents,
-  agentsToSessions,
-  chatGroups,
-  chatGroupsAgents,
-  sessionGroups,
-  sessions,
-} from '../../schemas';
+import { ChatGroupModel } from '../../models/chatGroup';
+import { agents, agentsToSessions, chatGroups, sessionGroups, sessions } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { sanitizeBm25Query } from '../../utils/bm25';
-import { normalizeInboxAgentAvatar, normalizeInboxAgentMeta } from '../../utils/inboxAgent';
+import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 // Re-export types for backward compatibility
@@ -325,28 +319,22 @@ export class HomeRepository {
 
     if (chatGroupIds.length === 0) return memberAvatarsMap;
 
-    const memberAvatars = await this.db
-      .select({
-        avatar: agents.avatar,
-        backgroundColor: agents.backgroundColor,
-        chatGroupId: chatGroupsAgents.chatGroupId,
-        slug: agents.slug,
-      })
-      .from(chatGroupsAgents)
-      .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
-      .where(inArray(chatGroupsAgents.chatGroupId, chatGroupIds))
-      .orderBy(chatGroupsAgents.order);
+    const metasMap = await new ChatGroupModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).getMemberAvatarsByGroupIds(chatGroupIds);
 
-    for (const member of memberAvatars) {
-      const existing = memberAvatarsMap.get(member.chatGroupId) || [];
-      const avatar = normalizeInboxAgentAvatar(member.avatar, { slug: member.slug });
-      if (avatar) {
-        existing.push({
-          avatar,
-          background: member.backgroundColor ?? undefined,
-        });
-      }
-      memberAvatarsMap.set(member.chatGroupId, existing);
+    for (const [chatGroupId, members] of metasMap) {
+      memberAvatarsMap.set(
+        chatGroupId,
+        members
+          .filter((member) => member.avatar)
+          .map((member) => ({
+            avatar: member.avatar as string,
+            background: member.backgroundColor ?? undefined,
+          })),
+      );
     }
 
     return memberAvatarsMap;

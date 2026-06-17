@@ -215,6 +215,47 @@ export class AgentModel {
   };
 
   /**
+   * List agents bindable by the System Bot messenger picker: real agents plus
+   * the inbox (other virtual agents excluded), ordered by `updatedAt DESC` with
+   * the inbox pinned to the top. Inbox meta falls back to the LobeAI defaults.
+   */
+  listMessengerBindableAgents = async (): Promise<
+    Array<{
+      avatar: string | null;
+      backgroundColor: string | null;
+      id: string;
+      slug: string | null;
+      title: string | null;
+    }>
+  > => {
+    const rows = await this.db
+      .select({
+        avatar: agents.avatar,
+        backgroundColor: agents.backgroundColor,
+        id: agents.id,
+        slug: agents.slug,
+        title: agents.title,
+      })
+      .from(agents)
+      .where(and(this.ownership(), or(ne(agents.virtual, true), eq(agents.slug, INBOX_SESSION_ID))))
+      .orderBy(desc(agents.updatedAt));
+
+    const normalized = rows
+      .filter((row) => row.id)
+      .map(({ slug, ...row }) => ({ ...normalizeInboxAgentMeta(row, { slug }), slug }));
+
+    // Pin the inbox agent to the top regardless of updatedAt — it's the
+    // implicit "default" agent and should always be the first option.
+    const inboxIdx = normalized.findIndex((row) => row.slug === INBOX_SESSION_ID);
+    if (inboxIdx > 0) {
+      const [inbox] = normalized.splice(inboxIdx, 1);
+      normalized.unshift(inbox);
+    }
+
+    return normalized;
+  };
+
+  /**
    * Get agent config by ID or slug (single query with OR condition)
    */
   getAgentConfig = async (idOrSlug: string) => {

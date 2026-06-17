@@ -1,5 +1,4 @@
 import { createIoRedisState } from '@chat-adapter/state-ioredis';
-import { INBOX_SESSION_ID } from '@lobechat/const';
 import {
   Chat,
   ConsoleLogger,
@@ -8,16 +7,14 @@ import {
   type SlashCommandEvent,
 } from 'chat';
 import debug from 'debug';
-import { and, desc, eq, ne, or } from 'drizzle-orm';
 
 import type { MessengerPlatform } from '@/config/messenger';
 import { getServerDB } from '@/database/core/db-adaptor';
+import { AgentModel } from '@/database/models/agent';
 import { MessengerAccountLinkModel } from '@/database/models/messengerAccountLink';
 import { WorkspaceModel } from '@/database/models/workspace';
 import type { MessengerAccountLinkItem } from '@/database/schemas';
-import { agents } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 import { getAgentRuntimeRedisClient } from '@/server/modules/AgentRuntime/redis';
 import { AiAgentService } from '@/server/services/aiAgent';
@@ -1511,33 +1508,19 @@ export class MessengerRouter {
     userId: string,
     workspaceId?: string | null,
   ): Promise<AgentSummary[]> {
-    const rows = await serverDB
-      .select({ id: agents.id, slug: agents.slug, title: agents.title })
-      .from(agents)
-      .where(
-        and(
-          buildWorkspaceWhere({ userId, workspaceId: workspaceId ?? undefined }, agents),
-          or(ne(agents.virtual, true), eq(agents.slug, INBOX_SESSION_ID)),
-        ),
-      )
-      .orderBy(desc(agents.updatedAt));
+    // The virtual-or-inbox filter, the inbox title fallback, and the inbox
+    // pinning all live in the model; here we only apply the generic
+    // "Custom Agent" fallback for real agents without a title.
+    const rows = await new AgentModel(
+      serverDB,
+      userId,
+      workspaceId ?? undefined,
+    ).listMessengerBindableAgents();
 
-    const mapped = rows
-      .filter((row) => row.id)
-      .map((row) => ({
-        id: row.id,
-        slug: row.slug,
-        title:
-          (row.title && row.title.trim()) ||
-          (row.slug === INBOX_SESSION_ID ? 'LobeAI' : 'Custom Agent'),
-      }));
-
-    const inboxIdx = mapped.findIndex((row) => row.slug === INBOX_SESSION_ID);
-    if (inboxIdx > 0) {
-      const [inbox] = mapped.splice(inboxIdx, 1);
-      mapped.unshift(inbox);
-    }
-    return mapped.map(({ slug: _slug, ...rest }) => rest);
+    return rows.map((row) => ({
+      id: row.id,
+      title: (row.title && row.title.trim()) || 'Custom Agent',
+    }));
   }
 
   private async dispatchToAgent(
