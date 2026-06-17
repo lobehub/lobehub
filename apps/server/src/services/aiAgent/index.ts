@@ -27,6 +27,7 @@ import type { LobeChatDatabase } from '@lobechat/database';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { buildTaskManagerDefaultsPrompt } from '@lobechat/prompts';
 import type {
+  ChatAudioItem,
   ChatFileItem,
   ChatTopicBotContext,
   ChatVideoItem,
@@ -476,6 +477,7 @@ export class AiAgentService {
     files?: InternalExecAgentParams['files'];
     throwIfAborted: (stage: string) => Promise<void>;
   }): Promise<{
+    audioList?: ChatAudioItem[];
     fileIds?: string[];
     fileList?: ChatFileItem[];
     imageList?: Array<{ alt: string; id: string; url: string }>;
@@ -486,13 +488,15 @@ export class AiAgentService {
     let fileIds: string[] | undefined;
     let imageList: Array<{ alt: string; id: string; url: string }> | undefined;
     let videoList: ChatVideoItem[] | undefined;
+    let audioList: ChatAudioItem[] | undefined;
     let fileList: ChatFileItem[] | undefined;
 
-    // Upload raw bot/IM files to S3 and classify them (image / video / document).
+    // Upload raw bot/IM files to S3 and classify them (image / video / audio / document).
     if (files && files.length > 0) {
       fileIds = [];
       imageList = [];
       videoList = [];
+      audioList = [];
       fileList = [];
       const fileService = new FileService(this.db, this.userId, this.workspaceId);
       const documentService = new DocumentService(this.db, this.userId, this.workspaceId);
@@ -522,7 +526,16 @@ export class AiAgentService {
             continue;
           }
 
-          // Non-image / non-video: parse file content into the documents table so
+          if (result.isAudio) {
+            audioList.push({
+              alt: file.name || 'audio',
+              id: result.fileId,
+              url: result.resolvedUrl,
+            });
+            continue;
+          }
+
+          // Non-image / non-video / non-audio: parse file content into the documents table so
           // the MessageContentProcessor can inject it via filesPrompts(). Mirrors
           // what the web upload path does, ensuring bot-uploaded PDFs / text /
           // JSON / .skill files are actually visible to the LLM (instead of
@@ -559,15 +572,17 @@ export class AiAgentService {
 
       if (fileIds.length > 0) {
         log(
-          'execAgent: uploaded %d files to S3 (%d images, %d videos, %d documents)',
+          'execAgent: uploaded %d files to S3 (%d images, %d videos, %d audios, %d documents)',
           fileIds.length,
           imageList.length,
           videoList.length,
+          audioList.length,
           fileList.length,
         );
       }
       if (imageList.length === 0) imageList = undefined;
       if (videoList.length === 0) videoList = undefined;
+      if (audioList.length === 0) audioList = undefined;
       if (fileList.length === 0) fileList = undefined;
     }
 
@@ -597,6 +612,9 @@ export class AiAgentService {
           if (resolved.videoList.length > 0) {
             videoList = [...(videoList ?? []), ...resolved.videoList];
           }
+          if (resolved.audioList.length > 0) {
+            audioList = [...(audioList ?? []), ...resolved.audioList];
+          }
           if (resolved.fileList.length > 0) {
             fileList = [...(fileList ?? []), ...resolved.fileList];
           }
@@ -614,7 +632,7 @@ export class AiAgentService {
     // an empty messagesFiles relation.
     if (fileIds && fileIds.length === 0) fileIds = undefined;
 
-    return { fileIds, fileList, imageList, videoList, warnings };
+    return { audioList, fileIds, fileList, imageList, videoList, warnings };
   }
 
   /**
@@ -2424,8 +2442,10 @@ export class AiAgentService {
     // row created above).
     // - imageList: vision models render these as image_url parts
     // - videoList: video-capable models render these as video parts
+    // - audioList: audio-capable models render these as audio parts
     // - fileList: MessageContentProcessor injects content via filesPrompts() XML
     const userMessage = {
+      audioList: runAttachments.audioList,
       content: ephemeralUserMessage ?? prompt,
       fileList: runAttachments.fileList,
       id: userMessageRecord?.id,

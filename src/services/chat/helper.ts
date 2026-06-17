@@ -22,6 +22,10 @@ export const isCanUseVideo = (model: string, provider: string): boolean => {
   return getModelAbilities(model, provider)?.video || false;
 };
 
+export const isCanUseAudio = (model: string, provider: string): boolean => {
+  return getModelAbilities(model, provider)?.audio || false;
+};
+
 /**
  * TODO: we need to update this function to auto find deploymentName with provider setting config
  */

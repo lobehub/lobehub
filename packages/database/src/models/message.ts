@@ -1,6 +1,7 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { parse } from '@lobechat/conversation-flow';
 import type {
+  ChatAudioItem,
   ChatFileItem,
   ChatImageItem,
   ChatToolPayload,
@@ -476,8 +477,12 @@ export class MessageModel {
 
     const imageList = relatedFileList.filter((i) => (i.fileType || '').startsWith('image'));
     const videoList = relatedFileList.filter((i) => (i.fileType || '').startsWith('video'));
+    const audioList = relatedFileList.filter((i) => (i.fileType || '').startsWith('audio'));
     const fileList = relatedFileList.filter(
-      (i) => !(i.fileType || '').startsWith('image') && !(i.fileType || '').startsWith('video'),
+      (i) =>
+        !(i.fileType || '').startsWith('image') &&
+        !(i.fileType || '').startsWith('video') &&
+        !(i.fileType || '').startsWith('audio'),
     );
 
     const threadMap = this.createThreadMap(threadData);
@@ -544,6 +549,10 @@ export class MessageModel {
                 .filter((relation) => relation.messageId === item.id)
 
                 .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+              audioList: audioList
+                .filter((relation) => relation.messageId === item.id)
+
+                .map<ChatAudioItem>(({ id, url, name }) => ({ alt: name!, id, url })),
             } as unknown as UIChatMessage;
           },
         ),
@@ -1013,8 +1022,12 @@ export class MessageModel {
 
     const imageList = relatedFileList.filter((i) => (i.fileType || '').startsWith('image'));
     const videoList = relatedFileList.filter((i) => (i.fileType || '').startsWith('video'));
+    const audioList = relatedFileList.filter((i) => (i.fileType || '').startsWith('audio'));
     const fileList = relatedFileList.filter(
-      (i) => !(i.fileType || '').startsWith('image') && !(i.fileType || '').startsWith('video'),
+      (i) =>
+        !(i.fileType || '').startsWith('image') &&
+        !(i.fileType || '').startsWith('video') &&
+        !(i.fileType || '').startsWith('audio'),
     );
 
     // 4. Build thread map
@@ -1091,6 +1104,9 @@ export class MessageModel {
           videoList: videoList
             .filter((relation) => relation.messageId === item.id)
             .map<ChatVideoItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+          audioList: audioList
+            .filter((relation) => relation.messageId === item.id)
+            .map<ChatAudioItem>(({ id, url, name }) => ({ alt: name!, id, url })),
         } as unknown as UIChatMessage;
       },
     );

@@ -33,6 +33,7 @@ export interface AttachmentSource {
 
 export interface IngestResult {
   fileId: string;
+  isAudio: boolean;
   isImage: boolean;
   isVideo: boolean;
   key: string;
@@ -149,12 +150,17 @@ export async function ingestAttachment(
   // MessageContentProcessor can pass the video to vision/video-capable models.
   const isVideo = !isImage && mimeType.startsWith('video/');
 
+  // Audio is passed through untouched; audio-capable models (e.g. Gemini) receive
+  // it as an inline/file media part instead of being parsed into document text.
+  const isAudio = !isImage && !isVideo && mimeType.startsWith('audio/');
+
   log(
-    'ingestAttachment: classified name=%s, finalMimeType=%s, isImage=%s, isVideo=%s, bufferSize=%d',
+    'ingestAttachment: classified name=%s, finalMimeType=%s, isImage=%s, isVideo=%s, isAudio=%s, bufferSize=%d',
     source.name,
     mimeType,
     isImage,
     isVideo,
+    isAudio,
     buffer.length,
   );
 
@@ -164,9 +170,11 @@ export async function ingestAttachment(
   const pathname = `files/${userId}/${nanoid()}/${source.name || `file.${ext}`}`;
   const { fileId, key } = await fileService.uploadFromBuffer(buffer, mimeType, pathname);
 
-  // 5. Resolve access URL for images and videos.
+  // 5. Resolve access URL for images, videos and audio.
   const resolvedUrl =
-    isImage || isVideo ? await fileService.getFileAccessUrl({ id: fileId, url: key }) : '';
+    isImage || isVideo || isAudio
+      ? await fileService.getFileAccessUrl({ id: fileId, url: key })
+      : '';
 
   log(
     'ingestAttachment: uploaded fileId=%s, key=%s, resolvedUrl=%s',
@@ -175,5 +183,5 @@ export async function ingestAttachment(
     resolvedUrl ? 'set' : '(empty)',
   );
 
-  return { fileId, isImage, isVideo, key, resolvedUrl };
+  return { fileId, isAudio, isImage, isVideo, key, resolvedUrl };
 }

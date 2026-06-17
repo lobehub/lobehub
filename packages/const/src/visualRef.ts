@@ -1,4 +1,4 @@
-export type VisualFileType = 'image' | 'video';
+export type VisualFileType = 'audio' | 'image' | 'video';
 
 interface CreateVisualFileRefOptions {
   index: number;

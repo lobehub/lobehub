@@ -1,6 +1,7 @@
 // cspell:ignore tokenx
 import { filesPrompts } from '@lobechat/prompts';
 import type {
+  ChatAudioItem,
   ChatFileItem,
   ChatImageItem,
   ChatVideoItem,
@@ -54,11 +55,13 @@ const countPromptTextTokens = (content: string) => {
 };
 
 const countFileContextTokens = ({
+  audioList,
   fileList,
   imageList,
   messageId,
   videoList,
 }: {
+  audioList?: ChatAudioItem[];
   fileList?: ChatFileItem[];
   imageList?: ChatImageItem[];
   messageId: string;
@@ -66,6 +69,7 @@ const countFileContextTokens = ({
 }) => {
   const prompt = filesPrompts({
     addUrl: false,
+    audioList,
     fileList,
     imageList,
     messageId,
@@ -89,10 +93,18 @@ export const estimateSentMessageAttachmentTokenBuckets = (
     const fileList = message.fileList ?? [];
     const imageList = message.imageList ?? [];
     const videoList = message.videoList ?? [];
+    const audioList = message.audioList ?? [];
 
-    if (fileList.length === 0 && imageList.length === 0 && videoList.length === 0) continue;
+    if (
+      fileList.length === 0 &&
+      imageList.length === 0 &&
+      videoList.length === 0 &&
+      audioList.length === 0
+    )
+      continue;
 
     textTokens += countFileContextTokens({
+      audioList,
       fileList,
       imageList,
       messageId: message.id,
@@ -152,6 +164,7 @@ export const estimatePendingUploadTokenBuckets = (
   const fileList: ChatFileItem[] = [];
   const imageList: ChatImageItem[] = [];
   const videoList: ChatVideoItem[] = [];
+  const audioList: ChatAudioItem[] = [];
   let pendingTextFallbackTokens = 0;
 
   for (const item of files) {
@@ -169,6 +182,15 @@ export const estimatePendingUploadTokenBuckets = (
 
     if (type.startsWith('video')) {
       videoList.push({
+        alt: item.file.name || item.id,
+        id: item.id,
+        url,
+      });
+      continue;
+    }
+
+    if (type.startsWith('audio')) {
+      audioList.push({
         alt: item.file.name || item.id,
         id: item.id,
         url,
@@ -195,6 +217,7 @@ export const estimatePendingUploadTokenBuckets = (
     imageTokens: canUseVision ? imageList.length * VISUAL_INPUT_TOKEN_ESTIMATE : 0,
     textTokens:
       countFileContextTokens({
+        audioList,
         fileList,
         imageList,
         messageId: ESTIMATE_INPUT_MESSAGE_ID,

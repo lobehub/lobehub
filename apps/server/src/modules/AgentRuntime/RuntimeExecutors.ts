@@ -1249,6 +1249,12 @@ export const createRuntimeExecutors = (
           },
           userTimezone: ctx.userTimezone,
           capabilities: {
+            isCanUseAudio: (m: string, p: string) => {
+              const info =
+                builtinModels.find((item) => item.id === m && item.providerId === p) ??
+                builtinModels.find((item) => item.id === m);
+              return info?.abilities?.audio ?? false;
+            },
             isCanUseFC: (m: string, p: string) => {
               const info = builtinModels.find((item) => item.id === m && item.providerId === p);
               return info?.abilities?.functionCall ?? true;

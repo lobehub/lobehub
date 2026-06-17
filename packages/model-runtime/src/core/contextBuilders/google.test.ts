@@ -383,6 +383,94 @@ describe('google contextBuilders', () => {
       expect(imageToBase64Spy).not.toHaveBeenCalled();
     });
 
+    it('should handle base64 audio', async () => {
+      const base64Audio = 'data:audio/mp3;base64,mockAudioBase64Data';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: 'mockAudioBase64Data',
+        mimeType: 'audio/mp3',
+        type: 'base64',
+      });
+
+      const content: UserMessageContentPart = {
+        audio_url: { url: base64Audio },
+        type: 'audio_url',
+      };
+
+      const result = await buildGooglePart(content);
+
+      expect(result).toEqual({
+        inlineData: {
+          data: 'mockAudioBase64Data',
+          mimeType: 'audio/mp3',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
+    it('should default mimeType to audio/mp3 when base64 audio has no mime', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: 'mockAudioBase64Data',
+        mimeType: null,
+        type: 'base64',
+      });
+
+      const content: UserMessageContentPart = {
+        audio_url: { url: 'data:;base64,mockAudioBase64Data' },
+        type: 'audio_url',
+      };
+
+      const result = await buildGooglePart(content);
+
+      expect(result).toEqual({
+        inlineData: {
+          data: 'mockAudioBase64Data',
+          mimeType: 'audio/mp3',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
+    it('should use fileData for external URL audio on gemini-3+', async () => {
+      const audioUrl = 'https://example.com/audio.mp3';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
+      vi.mocked(validateExternalUrl).mockResolvedValueOnce({
+        contentLength: 1024,
+        contentType: 'audio/mpeg',
+        isValid: true,
+      });
+
+      const imageToBase64Spy = vi
+        .spyOn(imageToBase64Module, 'imageUrlToBase64')
+        .mockResolvedValueOnce({
+          base64: 'mockAudioBase64Data',
+          mimeType: 'audio/mpeg',
+        });
+
+      const content: UserMessageContentPart = {
+        audio_url: { url: audioUrl },
+        type: 'audio_url',
+      };
+
+      const result = await buildGooglePart(content, { model: 'gemini-3-flash-preview' });
+
+      expect(result).toEqual({
+        fileData: {
+          fileUri: audioUrl,
+          mimeType: 'audio/mpeg',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+      expect(imageToBase64Spy).not.toHaveBeenCalled();
+    });
+
     it('should return undefined for unsupported SVG image (base64)', async () => {
       const svgBase64 =
         'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==';
