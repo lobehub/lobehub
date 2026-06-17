@@ -74,8 +74,8 @@ export const useWorkspaceUrlSync = (): void => {
   const activeId = useActiveWorkspaceId();
   const isLoading = useIsWorkspaceLoading();
   // URL is a passive source, not an explicit user intent — use the silent
-  // variant so refreshing or following a `/{slug}` link doesn't overwrite
-  // the user's remembered last-visited workspace.
+  // variant so refreshing or following a `/{slug}` link is not treated as
+  // a user-driven switch.
   const { switchWorkspace, switchToPersonal } = useSilentSwitchWorkspace();
 
   // `useLayoutEffect` (not `useEffect`) so the workspace switch is scheduled

@@ -6,9 +6,10 @@ export interface SwitchWorkspaceActions {
 const noop = async (): Promise<void> => {};
 
 /**
- * User-intent workspace switch. Cloud overrides this to also persist the
- * target as the user's "last visited" so the next tab / fresh session lands
- * here. Open-source stub is a no-op.
+ * Workspace switch invoked from imperative call sites that represent an
+ * explicit user choice (e.g. switcher click, wizard landing, accept-invite,
+ * post-leave redirect). Implementations may attach side effects appropriate
+ * to the user-intent semantics.
  */
 export const useSwitchWorkspace = (): SwitchWorkspaceActions => ({
   switchToPersonal: noop,
@@ -16,10 +17,10 @@ export const useSwitchWorkspace = (): SwitchWorkspaceActions => ({
 });
 
 /**
- * System-driven workspace switch — does NOT record "last visited". Used by
- * URL sync and other passive reconciliation sources where the active
- * workspace is being aligned with external state rather than chosen by the
- * user. Open-source stub is a no-op.
+ * Workspace switch invoked from passive reconciliation sources (e.g. URL
+ * sync) where the active workspace is being aligned with external state
+ * rather than chosen by the user. Implementations must not attach
+ * user-intent side effects.
  */
 export const useSilentSwitchWorkspace = (): SwitchWorkspaceActions => ({
   switchToPersonal: noop,
