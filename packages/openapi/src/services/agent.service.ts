@@ -5,7 +5,6 @@ import type { NewAgent } from '@/database/schemas';
 import { agents, agentsToSessions } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator, randomSlug } from '@/database/utils/idGenerator';
-import { normalizeInboxAgentMeta } from '@/database/utils/inboxAgent';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
@@ -62,7 +61,9 @@ export class AgentService extends BaseService {
       this.log('info', `found ${agentsList.length} agents`);
 
       return {
-        agents: agentsList.map((agent) => normalizeInboxAgentMeta(agent, { slug: agent.slug })),
+        // The inbox agent is `virtual=true` and excluded by the filter above, so
+        // there is no inbox meta to normalize here — this surface lists real agents.
+        agents: agentsList,
         total: totalResult[0]?.count ?? 0,
       };
     } catch (error) {
@@ -186,7 +187,7 @@ export class AgentService extends BaseService {
           id: updatedAgent.id,
           slug: updatedAgent.slug,
         });
-        return normalizeInboxAgentMeta(updatedAgent, { slug: updatedAgent.slug });
+        return updatedAgent;
       });
     } catch (error) {
       this.handleServiceError(error, 'update agent');
