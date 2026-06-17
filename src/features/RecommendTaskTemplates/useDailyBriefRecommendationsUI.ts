@@ -60,6 +60,40 @@ export const resolveDailyBriefRecommendationRequest = ({
   };
 };
 
+interface ResolveDailyBriefRecommendationDisplayModeParams {
+  canFetchRecommendations: boolean;
+  hasRecommendationKey: boolean;
+  hasTemplates: boolean;
+  isInit: boolean;
+  isLoading: boolean;
+  isValidating: boolean;
+  isWaitingForInterestsFetch: boolean;
+}
+
+export const resolveDailyBriefRecommendationDisplayMode = ({
+  canFetchRecommendations,
+  hasRecommendationKey,
+  hasTemplates,
+  isInit,
+  isLoading,
+  isValidating,
+  isWaitingForInterestsFetch,
+}: ResolveDailyBriefRecommendationDisplayModeParams): DailyBriefRecommendationsUIState['mode'] => {
+  if (!hasRecommendationKey) return 'hidden';
+  if (hasTemplates) return 'cards';
+  if (
+    !isInit ||
+    isLoading ||
+    isValidating ||
+    !canFetchRecommendations ||
+    isWaitingForInterestsFetch
+  ) {
+    return 'skeleton';
+  }
+
+  return 'hidden';
+};
+
 export function useDailyBriefRecommendationsUI(
   options: UseDailyBriefRecommendationsUIOptions = {},
 ): DailyBriefRecommendationsUIState {
@@ -99,13 +133,17 @@ export function useDailyBriefRecommendationsUI(
         })
     : null;
 
-  const { data, isLoading, mutate } = useSWR(recommendationRequest.key, recommendationFetcher, {
-    keepPreviousData: true,
-    revalidateIfStale: canFetchRecommendations,
-    revalidateOnFocus: false,
-    revalidateOnMount: canFetchRecommendations,
-    revalidateOnReconnect: false,
-  });
+  const { data, isLoading, isValidating, mutate } = useSWR(
+    recommendationRequest.key,
+    recommendationFetcher,
+    {
+      keepPreviousData: true,
+      revalidateIfStale: canFetchRecommendations,
+      revalidateOnFocus: false,
+      revalidateOnMount: canFetchRecommendations,
+      revalidateOnReconnect: false,
+    },
+  );
   const waitedForInterestsRef = useRef(false);
 
   useEffect(() => {
@@ -175,19 +213,17 @@ export function useDailyBriefRecommendationsUI(
   useFetchUserComposioConnections(requiredSources.has('composio'));
   useFetchLobehubSkillConnections(requiredSources.has('lobehub'));
 
-  if (!recommendationRequest.key) return { mode: 'hidden' };
-  if (templates.length === 0) {
-    if (
-      !isInit ||
-      isLoading ||
-      !canFetchRecommendations ||
-      (interestKeys !== null && waitedForInterestsRef.current)
-    ) {
-      return { mode: 'skeleton', skeletonCount: recommendationCount };
-    }
-
-    return { mode: 'hidden' };
-  }
+  const displayMode = resolveDailyBriefRecommendationDisplayMode({
+    canFetchRecommendations,
+    hasRecommendationKey: Boolean(recommendationRequest.key),
+    hasTemplates: templates.length > 0,
+    isInit,
+    isLoading,
+    isValidating,
+    isWaitingForInterestsFetch: interestKeys !== null && waitedForInterestsRef.current,
+  });
+  if (displayMode === 'hidden') return { mode: 'hidden' };
+  if (displayMode === 'skeleton') return { mode: 'skeleton', skeletonCount: recommendationCount };
 
   return {
     mode: 'cards',

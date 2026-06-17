@@ -5,7 +5,10 @@ import { describe, expect, it } from 'vitest';
 
 import { taskTemplateKeys } from '@/libs/swr/keys';
 
-import { resolveDailyBriefRecommendationRequest } from './useDailyBriefRecommendationsUI';
+import {
+  resolveDailyBriefRecommendationDisplayMode,
+  resolveDailyBriefRecommendationRequest,
+} from './useDailyBriefRecommendationsUI';
 
 describe('resolveDailyBriefRecommendationRequest', () => {
   it('keeps the cache key available while interests are still initializing', () => {
@@ -79,5 +82,63 @@ describe('resolveDailyBriefRecommendationRequest', () => {
         refreshSeed: '',
       }),
     ).toEqual({ key: null, shouldFetch: false });
+  });
+});
+
+describe('resolveDailyBriefRecommendationDisplayMode', () => {
+  it('keeps cached cards visible while interests are still initializing', () => {
+    expect(
+      resolveDailyBriefRecommendationDisplayMode({
+        canFetchRecommendations: false,
+        hasRecommendationKey: true,
+        hasTemplates: true,
+        isInit: false,
+        isLoading: false,
+        isValidating: false,
+        isWaitingForInterestsFetch: false,
+      }),
+    ).toBe('cards');
+  });
+
+  it('keeps skeleton visible while the first ready-interest fetch is pending', () => {
+    expect(
+      resolveDailyBriefRecommendationDisplayMode({
+        canFetchRecommendations: true,
+        hasRecommendationKey: true,
+        hasTemplates: false,
+        isInit: true,
+        isLoading: false,
+        isValidating: true,
+        isWaitingForInterestsFetch: false,
+      }),
+    ).toBe('skeleton');
+  });
+
+  it('keeps skeleton visible before the first ready-interest fetch starts', () => {
+    expect(
+      resolveDailyBriefRecommendationDisplayMode({
+        canFetchRecommendations: true,
+        hasRecommendationKey: true,
+        hasTemplates: false,
+        isInit: true,
+        isLoading: false,
+        isValidating: false,
+        isWaitingForInterestsFetch: true,
+      }),
+    ).toBe('skeleton');
+  });
+
+  it('hides an initialized empty recommendation result only when idle', () => {
+    expect(
+      resolveDailyBriefRecommendationDisplayMode({
+        canFetchRecommendations: true,
+        hasRecommendationKey: true,
+        hasTemplates: false,
+        isInit: true,
+        isLoading: false,
+        isValidating: false,
+        isWaitingForInterestsFetch: false,
+      }),
+    ).toBe('hidden');
   });
 });

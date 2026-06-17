@@ -62,7 +62,10 @@ export class CommonActionImpl {
       this.#set({ user: { ...previousUser, interests } }, false, n('updateInterests/optimistic'));
     }
     await userService.updateInterests(interests);
-    await Promise.all([mutate(isTaskTemplateRecommendationKey), this.#get().refreshUserState()]);
+    void mutate(isTaskTemplateRecommendationKey).catch((error) => {
+      console.error('[taskTemplate:recommendationCache:invalidate]', error);
+    });
+    await this.#get().refreshUserState();
   };
 
   updateKeyVaultConfig = async (provider: string, config: any): Promise<void> => {
