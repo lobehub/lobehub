@@ -177,26 +177,38 @@ const LinkList = memo<{ links: LinearLink[] }>(({ links }) => {
 LinkList.displayName = 'LinearRenderLinkList';
 
 const EntityCard = memo<{ entity: LinearEntity }>(({ entity }) => {
-  const title = entity.title || entity.id || 'Linear item';
+  // Comments / attachments have no human-readable title — only a UUID `id`.
+  // Never promote that UUID into the card title; keep the id as a secondary tag
+  // (linked when a url exists) and let the description carry the card.
+  const { title, id, url } = entity;
 
   return (
     <Block gap={10} padding={10} variant={'outlined'} width={'100%'}>
       <div className={styles.entityHeader}>
         <Flexbox gap={4} style={{ minWidth: 0 }}>
-          {entity.url ? (
-            <a className={styles.titleLink} href={entity.url} rel={'noreferrer'} target={'_blank'}>
+          {title &&
+            (url ? (
+              <a className={styles.titleLink} href={url} rel={'noreferrer'} target={'_blank'}>
+                <Text ellipsis={{ rows: 2 }} weight={600}>
+                  {title}
+                </Text>
+                <Icon icon={ExternalLink} size={12} />
+              </a>
+            ) : (
               <Text ellipsis={{ rows: 2 }} weight={600}>
                 {title}
               </Text>
-              <Icon icon={ExternalLink} size={12} />
-            </a>
-          ) : (
-            <Text ellipsis={{ rows: 2 }} weight={600}>
-              {title}
-            </Text>
-          )}
+            ))}
           <Flexbox horizontal gap={4} wrap={'wrap'}>
-            {entity.id && <Tag size={'small'}>{entity.id}</Tag>}
+            {id &&
+              (url && !title ? (
+                <a className={styles.titleLink} href={url} rel={'noreferrer'} target={'_blank'}>
+                  <Tag size={'small'}>{id}</Tag>
+                  <Icon icon={ExternalLink} size={12} />
+                </a>
+              ) : (
+                <Tag size={'small'}>{id}</Tag>
+              ))}
             {entity.state && (
               <Tag size={'small'} variant={'outlined'}>
                 {entity.state}

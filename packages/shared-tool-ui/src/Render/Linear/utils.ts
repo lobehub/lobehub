@@ -139,10 +139,12 @@ const DATE_FIELD_KEYS = new Set([
   'dueDate',
 ]);
 
-// Linear timestamps arrive as ISO strings (`2026-06-16T02:14:32.612Z`); trim to
-// a compact `YYYY-MM-DD HH:mm` so the field grid stays readable.
+// Linear timestamps arrive as ISO strings (`2026-06-16T02:14:32.612Z`); show the
+// concrete date + time as `YYYY-MM-DD HH:mm:ss` (dropping the millisecond / `Z`
+// noise) instead of the raw ISO string. Date-only values (e.g. `dueDate`) are
+// left untouched.
 const formatIsoDate = (value: string): string => {
-  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/u.exec(value);
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}(?::\d{2})?)/u.exec(value);
   return match ? `${match[1]} ${match[2]}` : value;
 };
 

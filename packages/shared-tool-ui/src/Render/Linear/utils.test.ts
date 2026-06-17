@@ -94,13 +94,38 @@ describe('buildLinearRenderModel', () => {
     });
     // `status` is surfaced via the state tag, so it should not duplicate as a field.
     expect(entity.fields.find((field) => field.key === 'status')).toBeUndefined();
-    // ISO timestamps are trimmed to a compact form.
+    // ISO timestamps render as a concrete date + time.
     expect(entity.fields).toContainEqual({
       key: 'createdAt',
       label: 'Created At',
-      value: '2024-01-02 03:04',
+      value: '2024-01-02 03:04:05',
     });
     expect(entity.fields).toContainEqual({ key: 'priority', label: 'Priority', value: 'Medium' });
+  });
+
+  it('keeps a comment entity titleless (UUID id stays a tag, not the title) with dated fields', () => {
+    const model = buildLinearRenderModel({
+      apiName: 'mcp__claude_ai_Linear__create_comment',
+      args: { issueId: 'TEST-456' },
+      content: JSON.stringify({
+        body: '## Mock comment body',
+        createdAt: '2024-01-02T03:04:05.080Z',
+        id: 'ff0dabda-eb1f-4dfe-b525-09114c0d6bd0',
+        updatedAt: '2024-01-02T03:04:05.038Z',
+      }),
+    });
+
+    expect(model.resultEntities).toHaveLength(1);
+    const [entity] = model.resultEntities;
+    // No human title — the render must not promote the UUID id to the title.
+    expect(entity.title).toBeUndefined();
+    expect(entity.id).toBe('ff0dabda-eb1f-4dfe-b525-09114c0d6bd0');
+    expect(entity.description).toBe('## Mock comment body');
+    expect(entity.fields).toContainEqual({
+      key: 'createdAt',
+      label: 'Created At',
+      value: '2024-01-02 03:04:05',
+    });
   });
 
   it('still unwraps list_* payloads from their nested collection', () => {
