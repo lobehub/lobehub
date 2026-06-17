@@ -31,8 +31,13 @@ const QueryProvider = ({ children }: PropsWithChildren) => {
     if (lastScope.current === scope) return;
 
     lastScope.current = scope;
-    cacheHydration.reset(scope);
-    void provider.reloadScope?.();
+    cacheHydration.markPending(scope);
+    const reloadScope = provider.reloadScope;
+    if (!reloadScope) return;
+
+    void reloadScope().catch((error) => {
+      console.error('[SWR Cache] failed to reload scope', error);
+    });
   }, [scope, provider]);
 
   return (
