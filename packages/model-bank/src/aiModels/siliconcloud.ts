@@ -10,6 +10,33 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Kimi K2.7 Code is an agentic model designed for code tasks from Moonshot AI. Built on Kimi K2.6, it shows significant improvements in real-world long-horizon coding tasks, enhancing end-to-end task completion capabilities in complex software engineering workflows while reducing thinking token usage by about 30% compared to Kimi K2.6.',
+    displayName: 'Kimi-K2.7-Code',
+    family: 'kimi',
+    generation: 'kimi-k2.7',
+    id: 'moonshotai/Kimi-K2.7-Code',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 1.3, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 6.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 27, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2026-06-12',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
     },
     contextWindowTokens: 1_048_576,
     description:
