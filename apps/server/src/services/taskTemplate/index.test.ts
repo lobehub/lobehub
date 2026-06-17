@@ -82,7 +82,10 @@ describe('TaskTemplateService.listDailyRecommend', () => {
 
     expect(mockGetTaskTemplateRecommendations).toHaveBeenCalledWith({
       count: 10,
-      enabledSkillSources: ['lobehub', 'klavis'],
+      enabledConnectors: [
+        { identifier: 'github', source: 'lobehub' },
+        { identifier: 'gmail', source: 'composio' },
+      ],
       excludeIds: [101],
       interestKeys: ['coding'],
       locale: 'zh-CN',
@@ -123,6 +126,8 @@ describe('TaskTemplateService.listDailyRecommend', () => {
       items: [
         template,
         { ...template, description: undefined },
+        { ...template, cronPattern: '0 */6 * * *' },
+        { ...template, cronPattern: '0 9 * * 1,3' },
         { ...template, connectors: [{ identifier: 'github', source: 'lobehub' }] },
       ],
     });
