@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { TASK_TEMPLATE_RECOMMEND_MAX_COUNT } from '@lobechat/const';
 import type { TaskTemplate } from '@lobechat/const';
+import { TASK_TEMPLATE_RECOMMEND_MAX_COUNT } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TaskTemplateService } from './index';
