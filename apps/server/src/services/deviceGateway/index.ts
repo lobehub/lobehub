@@ -50,7 +50,7 @@ const log = debug('lobe-server:device-gateway');
  * path flavour from the root's shape so a Windows device path is still resolved
  * with Windows semantics rather than being mangled by `path.posix`.
  */
-const isPathWithinRoot = (root: string, target: string): boolean => {
+export const isPathWithinRoot = (root: string, target: string): boolean => {
   const p = /^[A-Z]:[/\\]/i.test(root) ? path.win32 : path.posix;
   if (!p.isAbsolute(root) || !p.isAbsolute(target)) return false;
   const relative = p.relative(p.resolve(root), p.resolve(target));
