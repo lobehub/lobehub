@@ -51,6 +51,37 @@ const TASK_TEMPLATE_CATEGORY_SET = new Set<string>(TASK_TEMPLATE_CATEGORIES);
 const TASK_TEMPLATE_ICON_SET = new Set<string>(TASK_TEMPLATE_ICONS);
 const MARKET_SKILL_SOURCE_SET = new Set<string>(['klavis', 'lobehub']);
 
+const isTaskTemplateCategory = (value: unknown): value is TaskTemplate['category'] =>
+  typeof value === 'string' && TASK_TEMPLATE_CATEGORY_SET.has(value);
+
+const isTaskTemplateIcon = (value: unknown): value is TaskTemplate['icon'] =>
+  typeof value === 'string' && TASK_TEMPLATE_ICON_SET.has(value);
+
+const isTaskTemplateInterest = (value: unknown): value is TaskTemplate['interests'][number] =>
+  typeof value === 'string' && isInterestAreaKey(value);
+
+const isTaskTemplateInterests = (value: unknown): value is TaskTemplate['interests'] =>
+  Array.isArray(value) && value.every(isTaskTemplateInterest);
+
+const isCronNumber = (value: string, max: number) => {
+  if (!/^\d+$/.test(value)) return false;
+  const parsed = Number.parseInt(value, 10);
+  return parsed >= 0 && parsed <= max;
+};
+
+const isSupportedTaskTemplateCronPattern = (value: unknown): value is string => {
+  if (typeof value !== 'string') return false;
+
+  const parts = value.trim().split(/\s+/);
+  if (parts.length !== 5) return false;
+
+  const [minute, hour, dayOfMonth, month, weekday] = parts;
+  if (!isCronNumber(minute, 59) || !isCronNumber(hour, 23)) return false;
+  if (dayOfMonth !== '*' || month !== '*') return false;
+
+  return weekday === '*' || isCronNumber(weekday, 6);
+};
+
 type MarketTaskTemplateSkillSource = 'klavis' | 'lobehub';
 
 interface MarketTaskTemplateSkillDependency {
@@ -150,7 +181,6 @@ const normalizeTaskTemplate = (value: unknown): TaskTemplate | undefined => {
   if (!isRecord(value)) return;
 
   const template = value as MarketTaskTemplateItem;
-  const interests = value.interests;
   const connectors = normalizeTaskTemplateConnectors(template.connectors);
   if (template.connectors !== undefined && !connectors) return;
 
@@ -163,33 +193,29 @@ const normalizeTaskTemplate = (value: unknown): TaskTemplate | undefined => {
 
   if (!requiredConnectors || !optionalConnectors) return;
 
-  const isValid =
-    typeof value.category === 'string' &&
-    TASK_TEMPLATE_CATEGORY_SET.has(value.category) &&
-    typeof value.cronPattern === 'string' &&
-    typeof value.description === 'string' &&
-    (value.icon === undefined ||
-      (typeof value.icon === 'string' && TASK_TEMPLATE_ICON_SET.has(value.icon))) &&
-    Number.isInteger(value.id) &&
-    typeof value.identifier === 'string' &&
-    typeof value.instruction === 'string' &&
-    Array.isArray(interests) &&
-    interests.every((interest) => typeof interest === 'string' && isInterestAreaKey(interest)) &&
-    typeof value.title === 'string';
+  if (!isTaskTemplateCategory(template.category)) return;
+  if (!isSupportedTaskTemplateCronPattern(template.cronPattern)) return;
+  if (typeof template.description !== 'string') return;
 
-  if (!isValid) return;
+  const icon = template.icon;
+  if (icon !== undefined && !isTaskTemplateIcon(icon)) return;
+  if (typeof template.id !== 'number' || !Number.isInteger(template.id)) return;
+  if (typeof template.identifier !== 'string') return;
+  if (typeof template.instruction !== 'string') return;
+  if (!isTaskTemplateInterests(template.interests)) return;
+  if (typeof template.title !== 'string') return;
 
   return {
-    category: value.category,
+    category: template.category,
     connectors: [...requiredConnectors, ...optionalConnectors],
-    cronPattern: value.cronPattern,
-    description: value.description,
-    icon: value.icon as TaskTemplate['icon'],
-    id: value.id,
-    identifier: value.identifier,
-    instruction: value.instruction,
-    interests: value.interests as TaskTemplate['interests'],
-    title: value.title,
+    cronPattern: template.cronPattern,
+    description: template.description,
+    icon,
+    id: template.id,
+    identifier: template.identifier,
+    instruction: template.instruction,
+    interests: template.interests,
+    title: template.title,
   };
 };
 

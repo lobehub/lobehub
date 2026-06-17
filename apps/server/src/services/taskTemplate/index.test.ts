@@ -153,6 +153,8 @@ describe('TaskTemplateService.listDailyRecommend', () => {
       items: [
         template,
         { ...template, description: undefined },
+        { ...template, cronPattern: '0 */6 * * *' },
+        { ...template, cronPattern: '0 9 * * 1,3' },
         { ...template, connectors: [{ identifier: 'github', source: 'lobehub' }] },
       ],
     });
