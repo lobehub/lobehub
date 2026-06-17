@@ -13,8 +13,8 @@ import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime';
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { ChatStreamPayload } from '../../types';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
-import { isKimiNativeThinkingModel, isKimiThinkingToggleModel } from '../../utils/kimiModelId';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
+import { isKimiNativeThinkingModel, isKimiThinkingToggleModel } from './kimiModelId';
 
 export interface MoonshotModelCard {
   context_length?: number;

@@ -6,6 +6,7 @@ import debug from 'debug';
 import type { Pricing } from 'model-bank';
 
 import { ErrorClassifier } from '../../errors';
+import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../providers/anthropic/claudeModelId';
 import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,
@@ -16,7 +17,6 @@ import type {
 } from '../../types';
 import type { ILobeAgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeErrorType } from '../../types/error';
-import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../utils/claudeModelId';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';

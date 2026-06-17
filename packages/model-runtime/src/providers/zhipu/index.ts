@@ -8,10 +8,10 @@ import { resolveParameters } from '../../core/parameterResolver';
 import { OpenAIStream } from '../../core/streams/openai';
 import { convertIterableToStream } from '../../core/streams/protocol';
 import { getModelMaxOutputs } from '../../utils/getModelMaxOutputs';
-import { isToolStreamSupportedGLMModel } from '../../utils/glmModelId';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { createZhipuImage } from './createImage';
 import { createZhipuVideo } from './createVideo';
+import { isToolStreamSupportedGLMModel } from './glmModelId';
 
 export interface ZhipuModelCard {
   description: string;
