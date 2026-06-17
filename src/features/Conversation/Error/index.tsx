@@ -308,7 +308,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(({ error: alertError, data, onRe
       break;
     }
 
-    case 'QuotaLimitReached':
+    case AgentRuntimeErrorType.QuotaLimitReached:
     case AgentRuntimeErrorType.RateLimitExceeded: {
       if (enableBusinessFeatures) return <QuotaLimitError id={data.id} />;
       break;
