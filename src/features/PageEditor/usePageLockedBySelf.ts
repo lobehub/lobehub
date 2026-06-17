@@ -19,7 +19,7 @@ import { usePageLockedByOther } from './usePageLockedByOther';
  * `{their own name} is editing this document` (which reads like another person
  * has taken the page) and instead show a self-aware message.
  *
- * Forward-compatible with the LOBE-10480 session-aware refactor: once
+ * Forward-compatible with the session-aware (session-scoped lease-backed) lock refactor: once
  * `usePageLockedByOther` returns true for a different-session-same-user holder,
  * this hook will pick that up automatically — for now it relies primarily on
  * the `saveBlockedByLock` signal that CONFLICT save responses set.

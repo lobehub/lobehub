@@ -156,7 +156,7 @@ export class ContextTreeBuilder {
       return;
     }
 
-    // Priority 6: Branch — multiple NON-TOOL children (LOBE-10445 invariant 2).
+    // Priority 6: Branch — multiple NON-TOOL children (dual-form reader invariant: tool children are inline data, not branch candidates).
     // Tool children are inline data of their assistant (handled by Priority 4),
     // never branch candidates.
     const nonToolChildren = idNode.children.filter(
@@ -206,7 +206,7 @@ export class ContextTreeBuilder {
   private isAssistantGroupNode(message: Message, idNode: IdNode): boolean {
     if (message.role !== 'assistant') return false;
 
-    // Role-aware (LOBE-10445): an assistant heads a group when it has ANY tool
+    // Role-aware (dual-form reader): an assistant heads a group when it has ANY tool
     // child — not only when ALL children are tools. In the assistant-anchored
     // form the next step's assistant is a sibling of the tool results, so a
     // group head legitimately has a mix of tool + assistant children. (In the

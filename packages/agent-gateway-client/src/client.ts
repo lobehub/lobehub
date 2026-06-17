@@ -240,9 +240,9 @@ export class AgentStreamClient extends TypedEmitter {
           // what exits resume mode and decides completion. We deliberately do
           // NOT arm a timeout to guess completion from silence: an empty replay
           // no longer means "finished" (the DO may simply have hibernated its
-          // event buffer), and guessing was exactly the LOBE-10443 multi-device
+          // event buffer), and guessing was exactly the multi-device
           // false-cancel bug. If `resume_complete` never arrives (e.g. a
-          // rolled-back DO that predates LOBE-10443), we just keep waiting — a
+          // rolled-back DO that predates the authoritative resume_complete fix), we just keep waiting — a
           // safe, recoverable state, with heartbeat loss still forcing reconnect
           // — instead of cancelling a live run.
           if (this.resumeOnConnect && !this.lastEventId) {
@@ -252,7 +252,7 @@ export class AgentStreamClient extends TypedEmitter {
 
           // Request all buffered events (covers events pushed before WS connected).
           // `wantStatus` opts into the authoritative `resume_complete` reply
-          // (LOBE-10443): this client knows how to consume it, so a current
+          // this client knows how to consume it, so a current
           // gateway will hand back the real session status. Legacy gateways
           // ignore the flag and just replay — we then rely on live events, never
           // guessing completion from silence.
@@ -309,7 +309,7 @@ export class AgentStreamClient extends TypedEmitter {
 
         case 'resume_complete': {
           // Authoritative status from the DO, sent right after resume replay
-          // (LOBE-10443) — this is the definitive end-of-replay marker, so
+          // — this is the definitive end-of-replay marker, so
           // cancel the pending debounce flush and act on it immediately.
           if (this.resumeFlushTimer) {
             clearTimeout(this.resumeFlushTimer);

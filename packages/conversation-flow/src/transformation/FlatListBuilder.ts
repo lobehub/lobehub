@@ -290,7 +290,7 @@ export class FlatListBuilder {
 
       // Priority 3a: Compare mode from user message metadata
       const childMessages = this.childrenMap.get(message.id) ?? [];
-      // Non-tool children only are branch candidates (LOBE-10445 invariant 2):
+      // Non-tool children only are branch candidates (dual-form reader invariant: tool children are inline, not branches):
       // a tool child is inline data of its assistant, never a sibling branch.
       const nonToolChildMessages = childMessages.filter(
         (childId) => this.messageMap.get(childId)?.role !== 'tool',

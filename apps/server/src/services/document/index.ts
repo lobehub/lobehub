@@ -311,8 +311,8 @@ export class DocumentService {
    */
   async runWithDocumentLock<T>(id: string, fn: () => Promise<T>): Promise<T> {
     if (!this.workspaceId) {
-      // TEMP DIAGNOSTIC (LOBE-10470): distinguishes "no-op because workspaceId is
-      // missing at runtime" from "lock actually evaluated". Remove once verified.
+      // Diagnostic: distinguishes "no-op because workspaceId is
+      // missing at runtime" from "lock actually evaluated".
       log('runWithDocumentLock skip: no workspaceId (id=%s userId=%s)', id, this.userId);
       return fn();
     }
@@ -330,7 +330,7 @@ export class DocumentService {
       heldBeforeByUser && holderBefore?.ownerId ? holderBefore.ownerId : `server:${randomUUID()}`;
 
     const lock = await this.acquireDocumentLockWithOwner(id, ownerId);
-    // TEMP DIAGNOSTIC (LOBE-10470): one reproduction reveals workspaceId/holder/acquire.
+    // Diagnostic: surfaces workspaceId/holder/acquire for debugging lock issues.
     log(
       'runWithDocumentLock: id=%s userId=%s ws=%s holderBefore=%s acquired=%o',
       id,

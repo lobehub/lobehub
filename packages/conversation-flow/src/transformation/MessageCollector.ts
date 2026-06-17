@@ -135,7 +135,7 @@ export class MessageCollector {
     const toolMessages = this.collectToolMessages(currentAssistant, allMessages);
     allToolMessages.push(...toolMessages);
 
-    // Find the next step's assistant. Role-aware dual-form walk (LOBE-10445):
+    // Find the next step's assistant. Role-aware dual-form walk:
     // the continuation may hang off this assistant directly (assistant-anchored
     // / new form) OR off one of its tool results (tool-anchored / old form).
     const continuation = this.findFlatChainContinuation(

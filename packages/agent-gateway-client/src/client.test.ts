@@ -319,7 +319,7 @@ describe('AgentStreamClient', () => {
     });
   });
 
-  // Regression guard for LOBE-10443: a fresh subscriber (no lastEventId) on a
+  // Regression guard: a fresh subscriber (no lastEventId) on a
   // hibernated DO replays zero events. The client must NOT guess "completed"
   // from silence (the old 3s timeout did, which cleared the shared
   // runningOperation and cancelled the run on every device). Completion is now
