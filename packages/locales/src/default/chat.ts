@@ -1224,5 +1224,4 @@ export default {
   'workingPanel.documents.unsaved': 'Unsaved changes',
   'workingPanel.title': 'Working Panel',
   'you': 'You',
-  'zenMode': 'Focus Mode',
 };

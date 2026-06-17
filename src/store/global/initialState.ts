@@ -286,7 +286,6 @@ export interface SystemStatus {
    * can switch the panel to "review" when revealing the right panel.
    */
   workingSidebarTab?: WorkingSidebarTab;
-  zenMode?: boolean;
 }
 
 export interface GlobalNavigationRef {
@@ -395,7 +394,6 @@ export const INITIAL_STATUS = {
   videoPanelWidth: 320,
   videoTopicViewMode: 'grid' as const,
   videoTopicPanelWidth: 80,
-  zenMode: false,
 } satisfies SystemStatus;
 
 export const initialState: GlobalState = {

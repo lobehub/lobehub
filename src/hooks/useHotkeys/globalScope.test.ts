@@ -11,7 +11,7 @@ import {
 } from './globalScope';
 
 interface MockGlobalState {
-  status: { zenMode: boolean };
+  status: Record<string, never>;
   toggleAgentBuilderPanel: () => void;
   toggleRightPanel: () => void;
   toggleTaskAgentPanel: () => void;
@@ -44,7 +44,7 @@ vi.mock('@/hooks/usePinnedAgentState', () => ({
 vi.mock('@/store/global', () => ({
   useGlobalStore: (selector: (state: MockGlobalState) => unknown) =>
     selector({
-      status: { zenMode: false },
+      status: {},
       toggleAgentBuilderPanel: mocks.toggleAgentBuilderPanel,
       toggleRightPanel: mocks.toggleRightPanel,
       toggleTaskAgentPanel: mocks.toggleTaskAgentPanel,

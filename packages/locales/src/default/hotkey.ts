@@ -40,7 +40,4 @@ export default {
   'toggleLeftPanel.title': 'Toggle Left Panel',
   'toggleRightPanel.desc': 'Show or hide the right panel',
   'toggleRightPanel.title': 'Toggle Right Panel',
-  'toggleZenMode.desc':
-    'In focus mode, only display the current conversation and hide other UI elements',
-  'toggleZenMode.title': 'Toggle Focus Mode',
 };

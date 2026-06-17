@@ -23,7 +23,7 @@ import { useGlobalStore } from '@/store/global';
 const FleetPanelCollapseSync = memo(() => {
   useEffect(() => {
     const store = useGlobalStore;
-    // Raw flag (not the zenMode-masked selector) — we persist the user's intent.
+    // Persist the user's raw left-panel intent.
     const savedShowLeftPanel = !!store.getState().status.showLeftPanel;
 
     // Fleet defaults to expanded the first time it's opened.
