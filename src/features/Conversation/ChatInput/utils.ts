@@ -1,4 +1,23 @@
-import { type PlaceholderVariant } from '@/features/ChatInput/InputEditor/Placeholder';
+import type { UIChatMessage } from '@lobechat/types';
+
+import type { PlaceholderVariant } from '@/features/ChatInput/InputEditor/Placeholder';
+import { chatHelpers } from '@/store/chat/helpers';
+
+export const toChatInputMessages = (messages: UIChatMessage[]) =>
+  messages
+    .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'tool')
+    .map((m) => ({
+      content: typeof m.content === 'string' ? m.content : '',
+      role: m.role as 'user' | 'assistant' | 'system',
+    }));
+
+export const getContextWindowMessages = (
+  messages: UIChatMessage[],
+  options: {
+    enableHistoryCount?: boolean;
+    historyCount?: number;
+  },
+) => toChatInputMessages(chatHelpers.getSlicedMessages(messages, options));
 
 export interface ConversationChatInputUiState {
   placeholderVariant: PlaceholderVariant;
