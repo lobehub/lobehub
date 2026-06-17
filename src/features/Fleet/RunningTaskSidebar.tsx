@@ -18,6 +18,7 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { type ChatTopicStatus } from '@/types/topic';
 
+import { getIdleColumnKeys } from './idleColumns';
 import RowsSwitcher from './RowsSwitcher';
 import { useFleetStore } from './store';
 import { type FleetColumn } from './types';
@@ -157,6 +158,7 @@ const SidebarTaskSkeleton = memo(() => (
 SidebarTaskSkeleton.displayName = 'FleetSidebarTaskSkeleton';
 
 interface CloseIdleColumnsButtonProps {
+  isStatusLoading?: boolean;
   statusByColumnKey: Record<string, ChatTopicStatus | undefined>;
 }
 
@@ -164,34 +166,42 @@ interface CloseIdleColumnsButtonProps {
  * Board-level action: close every open column that isn't actively running in one
  * click. Idle is derived from the board's own columns (store) against the live
  * running set, so columns whose task finished/paused get cleared while running
- * ones stay. Disabled when there's nothing idle to close.
+ * ones stay. Disabled while the running-status query loads because an empty
+ * status map would otherwise make every persisted column look idle.
  */
-const CloseIdleColumnsButton = memo<CloseIdleColumnsButtonProps>(({ statusByColumnKey }) => {
-  const { t } = useTranslation('electron');
-  const boardColumns = useFleetStore((s) => s.columns);
-  const removeColumns = useFleetStore((s) => s.removeColumns);
+const CloseIdleColumnsButton = memo<CloseIdleColumnsButtonProps>(
+  ({ isStatusLoading, statusByColumnKey }) => {
+    const { t } = useTranslation('electron');
+    const boardColumns = useFleetStore((s) => s.columns);
+    const removeColumns = useFleetStore((s) => s.removeColumns);
 
-  const idleKeys = useMemo(
-    () => boardColumns.filter((c) => statusByColumnKey[c.key] !== 'running').map((c) => c.key),
-    [boardColumns, statusByColumnKey],
-  );
+    const idleKeys = useMemo(
+      () =>
+        getIdleColumnKeys({
+          columns: boardColumns,
+          isStatusLoading,
+          statusByColumnKey,
+        }),
+      [boardColumns, isStatusLoading, statusByColumnKey],
+    );
 
-  if (boardColumns.length === 0) return null;
+    if (boardColumns.length === 0) return null;
 
-  return (
-    <ActionIcon
-      disabled={idleKeys.length === 0}
-      icon={ListXIcon}
-      size={'small'}
-      title={
-        idleKeys.length > 0
-          ? t('fleet.closeIdleColumnsCount', { count: idleKeys.length })
-          : t('fleet.closeIdleColumns')
-      }
-      onClick={() => removeColumns(idleKeys)}
-    />
-  );
-});
+    return (
+      <ActionIcon
+        disabled={idleKeys.length === 0}
+        icon={ListXIcon}
+        size={'small'}
+        title={
+          idleKeys.length > 0
+            ? t('fleet.closeIdleColumnsCount', { count: idleKeys.length })
+            : t('fleet.closeIdleColumns')
+        }
+        onClick={() => removeColumns(idleKeys)}
+      />
+    );
+  },
+);
 
 CloseIdleColumnsButton.displayName = 'FleetCloseIdleColumnsButton';
 
@@ -245,7 +255,10 @@ const RunningTaskSidebar = memo<RunningTaskSidebarProps>(
         }
         right={
           <Flexbox horizontal align={'center'} gap={4}>
-            <CloseIdleColumnsButton statusByColumnKey={statusByColumnKey} />
+            <CloseIdleColumnsButton
+              isStatusLoading={isLoading}
+              statusByColumnKey={statusByColumnKey}
+            />
             <RowsSwitcher />
           </Flexbox>
         }

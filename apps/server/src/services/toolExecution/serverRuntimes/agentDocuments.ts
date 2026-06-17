@@ -7,6 +7,7 @@ import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-doc
 import { eq } from 'drizzle-orm';
 
 import { TaskModel } from '@/database/models/task';
+import { WorkspaceModel } from '@/database/models/workspace';
 import { tasks } from '@/database/schemas';
 import { appEnv } from '@/envs/app';
 import { AgentDocumentsService } from '@/server/services/agentDocuments';
@@ -32,6 +33,7 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
     const userId = context.userId;
     const service = new AgentDocumentsService(db, userId, context.workspaceId);
     const { taskId } = context;
+    let workspaceSlugPromise: Promise<string | undefined> | undefined;
     const emitDocumentOutcome = async (input: {
       agentId?: string;
       agentDocumentId?: string;
@@ -119,6 +121,20 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
         await taskModel.pinDocument(taskId, doc.documentId, 'agent');
       }
       return doc;
+    };
+
+    const resolveWorkspaceSlugForUrl = async (): Promise<string | undefined> => {
+      if (!context.workspaceId) return undefined;
+
+      workspaceSlugPromise ??= new WorkspaceModel(db, userId)
+        .findById(context.workspaceId)
+        .then((workspace) => workspace?.slug)
+        .catch((error) => {
+          console.error('[agentDocumentsRuntime] Failed to resolve workspace slug:', error);
+          return undefined;
+        });
+
+      return workspaceSlugPromise;
     };
 
     return new AgentDocumentsExecutionRuntime(
@@ -259,8 +275,14 @@ export const agentDocumentsRuntime: ServerRuntimeRegistration = {
           ),
       },
       {
-        getDocumentUrl: ({ agentId, documentId }) =>
-          buildAgentDocumentUrl(getAgentDocumentAppUrl(), agentId, documentId),
+        getDocumentUrl: async ({ agentId, documentId }) => {
+          const workspaceSlug = await resolveWorkspaceSlugForUrl();
+          if (context.workspaceId && !workspaceSlug) return undefined;
+
+          return buildAgentDocumentUrl(getAgentDocumentAppUrl(), agentId, documentId, {
+            workspaceSlug,
+          });
+        },
       },
     );
   },

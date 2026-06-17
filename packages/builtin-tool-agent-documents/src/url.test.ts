@@ -21,8 +21,23 @@ describe('buildAgentDocumentUrl', () => {
     );
   });
 
+  it('trims multiple trailing slashes from the origin without a regexp', () => {
+    expect(buildAgentDocumentUrl('https://app.lobehub.com///', 'agt_x', 'docs_y')).toBe(
+      'https://app.lobehub.com/agent/agt_x/docs/y',
+    );
+  });
+
+  it('prefixes the standalone route with a workspace slug when provided', () => {
+    expect(
+      buildAgentDocumentUrl('https://app.lobehub.com', 'agt_x', 'docs_y', {
+        workspaceSlug: 'lobe-team',
+      }),
+    ).toBe('https://app.lobehub.com/lobe-team/agent/agt_x/docs/y');
+  });
+
   it('returns undefined when no origin is available', () => {
     expect(buildAgentDocumentUrl(undefined, 'agt_x', 'docs_y')).toBeUndefined();
     expect(buildAgentDocumentUrl('', 'agt_x', 'docs_y')).toBeUndefined();
+    expect(buildAgentDocumentUrl('/', 'agt_x', 'docs_y')).toBeUndefined();
   });
 });

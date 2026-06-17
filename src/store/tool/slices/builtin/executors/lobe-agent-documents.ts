@@ -4,6 +4,7 @@ import { AgentDocumentsExecutionRuntime } from '@lobechat/builtin-tool-agent-doc
 import { AgentDocumentsExecutor } from '@lobechat/builtin-tool-agent-documents/executor';
 import { isDesktop } from '@lobechat/const';
 
+import { getActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
@@ -101,7 +102,9 @@ const runtime = new AgentDocumentsExecutionRuntime(
   },
   {
     getDocumentUrl: ({ agentId, documentId }) =>
-      buildAgentDocumentUrl(getAppOrigin(), agentId, documentId),
+      buildAgentDocumentUrl(getAppOrigin(), agentId, documentId, {
+        workspaceSlug: getActiveWorkspaceSlug(),
+      }),
   },
 );
 

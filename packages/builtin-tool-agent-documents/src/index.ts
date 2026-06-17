@@ -24,4 +24,4 @@ export {
   type UpdateLoadRuleArgs,
   type UpdateLoadRuleState,
 } from './types';
-export { buildAgentDocumentUrl } from './url';
+export { buildAgentDocumentUrl, type BuildAgentDocumentUrlOptions } from './url';

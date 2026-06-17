@@ -11,6 +11,7 @@ import { Download, Link2, Maximize2, Trash2 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useGlobalStore } from '@/store/global';
@@ -43,6 +44,7 @@ export const useMenu = ({
   const { lg = true } = useResponsive();
   const editor = useEditor();
   const appOrigin = useAppOrigin();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
 
   const [wideScreen, toggleWideScreen] = useGlobalStore((s) => [
     systemStatusSelectors.wideScreen(s),
@@ -51,7 +53,9 @@ export const useMenu = ({
 
   const menuItems = useMemo<DropdownItem[]>(() => {
     const handleCopyLink = async () => {
-      const url = buildAgentDocumentUrl(appOrigin, agentId, documentId);
+      const url = buildAgentDocumentUrl(appOrigin, agentId, documentId, {
+        workspaceSlug: activeWorkspaceSlug,
+      });
       if (!url) return;
       await navigator.clipboard.writeText(url);
       message.success(t('agentDocument.linkCopied', { ns: 'chat' }));
@@ -167,6 +171,7 @@ export const useMenu = ({
 
     return items;
   }, [
+    activeWorkspaceSlug,
     agentDocumentId,
     agentId,
     appOrigin,

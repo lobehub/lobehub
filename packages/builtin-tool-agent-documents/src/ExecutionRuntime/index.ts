@@ -70,6 +70,8 @@ interface AgentDocumentToolTriggerInput {
 const CURRENT_PAGE_DOCUMENT_WRITE_ERROR_CODE = 'CURRENT_PAGE_DOCUMENT_WRITE_FORBIDDEN';
 const CURRENT_PAGE_DOCUMENT_WRITE_ERROR_TYPE = 'CurrentPageDocumentWriteForbidden';
 
+type MaybePromise<T> = T | Promise<T>;
+
 export interface AgentDocumentsRuntimeService {
   copyDocument: (
     params: CopyDocumentArgs & {
@@ -136,7 +138,10 @@ export interface AgentDocumentsRuntimeOptions {
    * route. When provided and it returns a URL, the create result surfaces the
    * link so the agent can relay it to the user (e.g. in an IM channel).
    */
-  getDocumentUrl?: (params: { agentId: string; documentId: string }) => string | undefined;
+  getDocumentUrl?: (params: {
+    agentId: string;
+    documentId: string;
+  }) => MaybePromise<string | undefined>;
 }
 
 export class AgentDocumentsExecutionRuntime {
@@ -299,7 +304,7 @@ export class AgentDocumentsExecutionRuntime {
     // hand the user a clickable link. `created.id` (the agentDocuments row id)
     // is kept separately because subsequent edit/read/remove calls key off it.
     const url = created.documentId
-      ? this.options.getDocumentUrl?.({ agentId, documentId: created.documentId })
+      ? await this.options.getDocumentUrl?.({ agentId, documentId: created.documentId })
       : undefined;
 
     return {
