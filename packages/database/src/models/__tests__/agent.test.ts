@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { INBOX_SESSION_ID } from '@lobechat/const';
+import { DEFAULT_INBOX_AVATAR, DEFAULT_INBOX_TITLE, INBOX_SESSION_ID } from '@lobechat/const';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -1185,6 +1185,8 @@ describe('AgentModel', () => {
         expect(result).toBeDefined();
         expect(result?.id).toBe(agent.id);
         expect(result?.slug).toBe(INBOX_SESSION_ID);
+        expect(result?.title).toBe(DEFAULT_INBOX_TITLE);
+        expect(result?.avatar).toBe(DEFAULT_INBOX_AVATAR);
       });
 
       it('should find inbox from legacy session and update agent slug', async () => {
@@ -1747,6 +1749,25 @@ describe('AgentModel', () => {
       expect(result.some((a: { title: string | null }) => a.title === 'Null Virtual Agent')).toBe(
         true,
       );
+    });
+
+    it('should fallback inbox agent meta by slug', async () => {
+      await serverDB.insert(agents).values({
+        avatar: null,
+        id: 'inbox-agent-query',
+        slug: INBOX_SESSION_ID,
+        title: null,
+        userId,
+        virtual: null as unknown as boolean,
+      });
+
+      const result = await agentModel.queryAgents();
+      const inbox = result.find((agent) => agent.id === 'inbox-agent-query');
+
+      expect(inbox).toMatchObject({
+        avatar: DEFAULT_INBOX_AVATAR,
+        title: DEFAULT_INBOX_TITLE,
+      });
     });
 
     it('should filter by keyword in title and description', async () => {

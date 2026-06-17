@@ -1,5 +1,5 @@
 import { getAgentPersistConfig } from '@lobechat/builtin-agents';
-import { DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
+import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { AgentRankItem } from '@lobechat/types';
 import { and, count, desc, eq, gt, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
@@ -24,6 +24,7 @@ import {
   topics,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { normalizeInboxAgentMeta } from '../utils/inboxAgent';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export class AgentModel {
@@ -43,12 +44,13 @@ export class AgentModel {
    * the recents filter: real agents plus the inbox, excluding other virtual agents.
    */
   rank = async (limit: number = 10): Promise<AgentRankItem[]> => {
-    return this.db
+    const rows = await this.db
       .select({
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         count: count(topics.id).as('count'),
         id: agents.id,
+        slug: agents.slug,
         title: agents.title,
       })
       .from(agents)
@@ -58,6 +60,8 @@ export class AgentModel {
       .having(({ count }) => gt(count, 0))
       .orderBy(desc(sql`count`))
       .limit(limit);
+
+    return rows.map(({ slug, ...row }) => normalizeInboxAgentMeta(row, { slug }));
   };
 
   /**
@@ -158,12 +162,13 @@ export class AgentModel {
     const { keyword, limit = 9999, offset = 0 } = params ?? {};
     const searchCondition = this.buildQueryAgentsWhere(keyword);
 
-    return this.db
+    const rows = await this.db
       .select({
         avatar: agents.avatar,
         backgroundColor: agents.backgroundColor,
         description: agents.description,
         id: agents.id,
+        slug: agents.slug,
         title: agents.title,
       })
       .from(agents)
@@ -171,6 +176,8 @@ export class AgentModel {
       .orderBy(desc(agents.updatedAt))
       .limit(limit)
       .offset(offset);
+
+    return rows.map(({ slug, ...row }) => normalizeInboxAgentMeta(row, { slug }));
   };
 
   /**
@@ -204,11 +211,7 @@ export class AgentModel {
       .from(agents)
       .where(and(this.ownership(), inArray(agents.id, ids)));
 
-    return rows.map(({ slug, ...row }) => ({
-      ...row,
-      avatar: row.avatar || (slug === INBOX_SESSION_ID ? DEFAULT_INBOX_AVATAR : null),
-      title: row.title || (slug === INBOX_SESSION_ID ? 'Lobe AI' : null),
-    }));
+    return rows.map(({ slug, ...row }) => normalizeInboxAgentMeta(row, { slug }));
   };
 
   /**
@@ -235,6 +238,7 @@ export class AgentModel {
    */
   private enrichAgentWithKnowledge = async (agent: AgentItem) => {
     const knowledge = await this.getAgentAssignedKnowledge(agent.id);
+    const normalizedAgent = normalizeInboxAgentMeta(agent, { slug: agent.slug });
 
     // Fetch document content for enabled files
     const enabledFileIds = knowledge.files
@@ -256,7 +260,7 @@ export class AgentModel {
       }));
     }
 
-    return { ...agent, ...knowledge, files };
+    return { ...normalizedAgent, ...knowledge, files };
   };
 
   getAgentAssignedKnowledge = async (id: string) => {
@@ -672,7 +676,7 @@ export class AgentModel {
       where: and(eq(agents.slug, slug), this.ownership()),
     });
 
-    if (existing) return existing;
+    if (existing) return normalizeInboxAgentMeta(existing, { slug: existing.slug });
 
     // For inbox agent, it has special compatibility handling:
     // Historical inbox was stored as session with slug='inbox' and linked agent via agentsToSessions
@@ -696,7 +700,7 @@ export class AgentModel {
           .where(eq(agents.id, result[0].agent.id))
           .returning();
 
-        return updatedAgent;
+        return normalizeInboxAgentMeta(updatedAgent, { slug: updatedAgent.slug });
       }
     }
 
@@ -733,13 +737,13 @@ export class AgentModel {
       .onConflictDoNothing()
       .returning();
 
-    if (result[0]) return result[0];
+    if (result[0]) return normalizeInboxAgentMeta(result[0], { slug: result[0].slug });
 
-    return (
-      (await this.db.query.agents.findFirst({
-        where: and(eq(agents.slug, slug), this.ownership()),
-      })) ?? null
-    );
+    const agent = await this.db.query.agents.findFirst({
+      where: and(eq(agents.slug, slug), this.ownership()),
+    });
+
+    return agent ? normalizeInboxAgentMeta(agent, { slug: agent.slug }) : null;
   };
 
   /**

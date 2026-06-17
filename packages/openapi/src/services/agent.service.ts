@@ -5,6 +5,7 @@ import type { NewAgent } from '@/database/schemas';
 import { agents, agentsToSessions } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator, randomSlug } from '@/database/utils/idGenerator';
+import { normalizeInboxAgentMeta } from '@/database/utils/inboxAgent';
 
 import { BaseService } from '../common/base.service';
 import { processPaginationConditions } from '../helpers/pagination';
@@ -61,7 +62,7 @@ export class AgentService extends BaseService {
       this.log('info', `found ${agentsList.length} agents`);
 
       return {
-        agents: agentsList,
+        agents: agentsList.map((agent) => normalizeInboxAgentMeta(agent, { slug: agent.slug })),
         total: totalResult[0]?.count ?? 0,
       };
     } catch (error) {
@@ -99,7 +100,10 @@ export class AgentService extends BaseService {
 
         // Insert into database
         const [createdAgent] = await tx.insert(agents).values(newAgentData).returning();
-        this.log('info', 'agent created successfully', { id: createdAgent.id, slug: createdAgent.slug });
+        this.log('info', 'agent created successfully', {
+          id: createdAgent.id,
+          slug: createdAgent.slug,
+        });
 
         return createdAgent;
       });
@@ -123,7 +127,9 @@ export class AgentService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || 'No permission to update this agent');
+        throw this.createAuthorizationError(
+          permissionResult.message || 'No permission to update this agent',
+        );
       }
 
       return await this.db.transaction(async (tx) => {
@@ -176,8 +182,11 @@ export class AgentService extends BaseService {
           .where(and(...whereConditions))
           .returning();
 
-        this.log('info', 'agent updated successfully', { id: updatedAgent.id, slug: updatedAgent.slug });
-        return updatedAgent;
+        this.log('info', 'agent updated successfully', {
+          id: updatedAgent.id,
+          slug: updatedAgent.slug,
+        });
+        return normalizeInboxAgentMeta(updatedAgent, { slug: updatedAgent.slug });
       });
     } catch (error) {
       this.handleServiceError(error, 'update agent');
@@ -201,7 +210,9 @@ export class AgentService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || 'No permission to delete this agent');
+        throw this.createAuthorizationError(
+          permissionResult.message || 'No permission to delete this agent',
+        );
       }
 
       // Check if the Agent to be deleted exists
@@ -220,7 +231,9 @@ export class AgentService extends BaseService {
         });
 
         if (!migrateTarget) {
-          throw this.createBusinessError(`Migration target agent ID ${request.migrateSessionTo} not found`);
+          throw this.createBusinessError(
+            `Migration target agent ID ${request.migrateSessionTo} not found`,
+          );
         }
 
         // Migrate session associations to the target Agent
@@ -262,7 +275,9 @@ export class AgentService extends BaseService {
       });
 
       if (!permissionResult.isPermitted) {
-        throw this.createAuthorizationError(permissionResult.message || 'No permission to access this agent');
+        throw this.createAuthorizationError(
+          permissionResult.message || 'No permission to access this agent',
+        );
       }
 
       if (!this.userId) {

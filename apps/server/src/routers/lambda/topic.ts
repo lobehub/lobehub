@@ -17,6 +17,7 @@ import { TopicShareModel } from '@/database/models/topicShare';
 import { AgentMigrationRepo } from '@/database/repositories/agentMigration';
 import { TopicImporterRepo } from '@/database/repositories/topicImporter';
 import { agents, chatGroups, chatGroupsAgents } from '@/database/schemas';
+import { normalizeInboxAgentAvatar, normalizeInboxAgentMeta } from '@/database/utils/inboxAgent';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type BatchTaskResult } from '@/types/service';
@@ -448,7 +449,13 @@ export const topicRouter = router({
       // Batch query agent info
       const agentInfoMap = new Map<
         string,
-        { avatar: string | null; backgroundColor: string | null; id: string; title: string | null }
+        {
+          avatar: string | null;
+          backgroundColor: string | null;
+          id: string;
+          slug: string | null;
+          title: string | null;
+        }
       >();
 
       if (allAgentIds.length > 0) {
@@ -457,6 +464,7 @@ export const topicRouter = router({
             avatar: agents.avatar,
             backgroundColor: agents.backgroundColor,
             id: agents.id,
+            slug: agents.slug,
             title: agents.title,
           })
           .from(agents)
@@ -486,6 +494,7 @@ export const topicRouter = router({
           .select({
             agentAvatar: agents.avatar,
             agentBackgroundColor: agents.backgroundColor,
+            agentSlug: agents.slug,
             chatGroupId: chatGroupsAgents.chatGroupId,
             order: chatGroupsAgents.order,
           })
@@ -498,7 +507,7 @@ export const topicRouter = router({
         for (const member of groupMembersRaw) {
           const members = groupMembersMap.get(member.chatGroupId) || [];
           members.push({
-            avatar: member.agentAvatar,
+            avatar: normalizeInboxAgentAvatar(member.agentAvatar, { slug: member.agentSlug }),
             backgroundColor: member.agentBackgroundColor,
           });
           groupMembersMap.set(member.chatGroupId, members);
@@ -548,7 +557,19 @@ export const topicRouter = router({
 
         // Always return agent with id if agentId exists (even if avatar/title are null)
         // Frontend needs agent.id to generate links
-        const validAgent = agentInfo ? cleanObject(agentInfo) : null;
+        const validAgent = agentInfo
+          ? cleanObject(
+              normalizeInboxAgentMeta(
+                {
+                  avatar: agentInfo.avatar,
+                  backgroundColor: agentInfo.backgroundColor,
+                  id: agentInfo.id,
+                  title: agentInfo.title,
+                },
+                { slug: agentInfo.slug },
+              ),
+            )
+          : null;
 
         return {
           agent: validAgent,
