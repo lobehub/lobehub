@@ -1,15 +1,25 @@
-import type { UIChatMessage } from '@lobechat/types';
+import type { OpenAIChatMessage, UIChatMessage } from '@lobechat/types';
 
 import type { PlaceholderVariant } from '@/features/ChatInput/InputEditor/Placeholder';
 import { chatHelpers } from '@/store/chat/helpers';
 
-export const toChatInputMessages = (messages: UIChatMessage[]) =>
-  messages
-    .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'tool')
-    .map((m) => ({
-      content: typeof m.content === 'string' ? m.content : '',
-      role: m.role as 'user' | 'assistant' | 'system',
-    }));
+type SupportedChatInputRole = Extract<OpenAIChatMessage['role'], 'assistant' | 'tool' | 'user'>;
+
+interface ChatInputMessage {
+  content: string;
+  role: SupportedChatInputRole;
+}
+
+const isSupportedChatInputMessage = (
+  message: UIChatMessage,
+): message is UIChatMessage & { role: SupportedChatInputRole } =>
+  message.role === 'user' || message.role === 'assistant' || message.role === 'tool';
+
+export const toChatInputMessages = (messages: UIChatMessage[]): ChatInputMessage[] =>
+  messages.filter(isSupportedChatInputMessage).map((m) => ({
+    content: typeof m.content === 'string' ? m.content : '',
+    role: m.role,
+  }));
 
 export const getContextWindowMessages = (
   messages: UIChatMessage[],

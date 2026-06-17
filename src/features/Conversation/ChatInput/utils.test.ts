@@ -1,7 +1,11 @@
 import type { UIChatMessage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { getContextWindowMessages, getConversationChatInputUiState } from './utils';
+import {
+  getContextWindowMessages,
+  getConversationChatInputUiState,
+  toChatInputMessages,
+} from './utils';
 
 const tokenMessages = [
   { content: 'old user', id: 'msg-1', role: 'user' },
@@ -9,6 +13,48 @@ const tokenMessages = [
   { content: 'latest tool', id: 'msg-3', role: 'tool' },
   { content: 'latest user', id: 'msg-4', role: 'user' },
 ] as UIChatMessage[];
+
+describe('toChatInputMessages', () => {
+  it('preserves user, assistant, and tool messages with their real roles', () => {
+    expect(toChatInputMessages(tokenMessages).map((message) => message.role)).toEqual([
+      'user',
+      'assistant',
+      'tool',
+      'user',
+    ]);
+  });
+
+  it('filters out unsupported roles (e.g. system or custom roles)', () => {
+    const mixedMessages = [
+      { content: 'system message', id: 'msg-0', role: 'system' },
+      { content: 'user message', id: 'msg-1', role: 'user' },
+      { content: 'assistant message', id: 'msg-2', role: 'assistant' },
+      { content: 'tool message', id: 'msg-3', role: 'tool' },
+    ] as any[];
+
+    expect(toChatInputMessages(mixedMessages)).toEqual([
+      { content: 'user message', role: 'user' },
+      { content: 'assistant message', role: 'assistant' },
+      { content: 'tool message', role: 'tool' },
+    ]);
+  });
+
+  it('coerces non-string content to an empty string', () => {
+    const invalidContentMessages = [
+      { content: undefined, id: 'msg-1', role: 'user' },
+      { content: null, id: 'msg-2', role: 'assistant' },
+      { content: ['array content'], id: 'msg-3', role: 'tool' },
+      { content: { text: 'object content' }, id: 'msg-4', role: 'user' },
+    ] as any[];
+
+    expect(toChatInputMessages(invalidContentMessages)).toEqual([
+      { content: '', role: 'user' },
+      { content: '', role: 'assistant' },
+      { content: '', role: 'tool' },
+      { content: '', role: 'user' },
+    ]);
+  });
+});
 
 describe('getContextWindowMessages', () => {
   it('uses the full conversation when history count is disabled', () => {

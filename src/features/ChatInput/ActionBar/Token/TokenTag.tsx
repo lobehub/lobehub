@@ -4,7 +4,7 @@ import { Center, Flexbox, Tooltip } from '@lobehub/ui';
 import { TokenTag } from '@lobehub/ui/chat';
 import { cssVar } from 'antd-style';
 import numeral from 'numeral';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
@@ -101,37 +101,39 @@ const Token = memo(() => {
   const canUseTool = useModelSupportToolUse(model, provider);
   const pluginIds = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
 
-  const toolsString = useToolStore(() => {
-    if (!toolContextRefreshKey) return '';
+  const toolsString = useToolStore(
+    useCallback(() => {
+      const toolsEngine = createAgentToolsEngine({ model, provider });
 
-    const toolsEngine = createAgentToolsEngine({ model, provider });
+      const { tools, enabledManifests } = toolsEngine.generateToolsDetailed({
+        excludeDefaultToolIds: getToolExcludeDefaultToolIds(skillActivateMode),
+        model,
+        provider,
+        toolIds: pluginIds,
+      });
+      const schemaNumber = tools?.map((i) => JSON.stringify(i)).join('') || '';
 
-    const { tools, enabledManifests } = toolsEngine.generateToolsDetailed({
-      excludeDefaultToolIds: getToolExcludeDefaultToolIds(skillActivateMode),
-      model,
-      provider,
-      toolIds: pluginIds,
-    });
-    const schemaNumber = tools?.map((i) => JSON.stringify(i)).join('') || '';
-
-    // Generate plugin system roles from enabledManifests
-    const toolsSystemRole =
-      enabledManifests.length > 0
-        ? pluginPrompts({
-            tools: enabledManifests.map((manifest) => ({
-              apis: manifest.api.map((api) => ({
-                desc: api.description,
-                name: toolNameResolver.generate(manifest.identifier, api.name, manifest.type),
+      // Generate plugin system roles from enabledManifests
+      const toolsSystemRole =
+        enabledManifests.length > 0
+          ? pluginPrompts({
+              tools: enabledManifests.map((manifest) => ({
+                apis: manifest.api.map((api) => ({
+                  desc: api.description,
+                  name: toolNameResolver.generate(manifest.identifier, api.name, manifest.type),
+                })),
+                identifier: manifest.identifier,
+                name: pluginHelpers.getPluginTitle(manifest.meta) || manifest.identifier,
+                systemRole: manifest.systemRole,
               })),
-              identifier: manifest.identifier,
-              name: pluginHelpers.getPluginTitle(manifest.meta) || manifest.identifier,
-              systemRole: manifest.systemRole,
-            })),
-          })
-        : '';
+            })
+          : '';
 
-    return toolsSystemRole + schemaNumber;
-  });
+      return toolsSystemRole + schemaNumber;
+      // toolContextRefreshKey tracks implicit createAgentToolsEngine inputs from other stores.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [model, pluginIds, provider, skillActivateMode, toolContextRefreshKey]),
+  );
 
   const toolsToken = useTokenCount(canUseTool ? toolsString : '');
 
