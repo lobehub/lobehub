@@ -257,6 +257,7 @@
   "providerModels.item.modelConfig.files.title": "支持文件上传",
   "providerModels.item.modelConfig.functionCall.extra": "此配置将仅开启模型使用技能的能力，进而可以为模型添加技能。但是否支持真正使用技能完全取决于模型本身，请自行测试的可用性",
   "providerModels.item.modelConfig.functionCall.title": "支持技能使用",
+  "providerModels.item.modelConfig.id.duplicate": "该模型 ID 已存在，请换一个模型 ID。",
   "providerModels.item.modelConfig.id.extra": "创建后不可修改，调用 AI 时将作为模型 id 使用",
   "providerModels.item.modelConfig.id.placeholder": "请输入模型 id，例如 gpt-4o 或 claude-3.5-sonnet",
   "providerModels.item.modelConfig.id.title": "模型 ID",

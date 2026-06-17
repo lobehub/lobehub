@@ -1,8 +1,8 @@
 import { Input } from '@lobehub/ui';
 import { Select } from '@lobehub/ui/base-ui';
-import { type FormInstance } from 'antd';
+import type { FormInstance } from 'antd';
 import { Checkbox, Form } from 'antd';
-import { type AiModelType } from 'model-bank';
+import type { AiModelType } from 'model-bank';
 import { memo, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,9 +11,11 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { type ChatModelCard } from '@/types/llm';
 
 import ExtendParamsSelect from './ExtendParamsSelect';
+import { hasDuplicateModelId } from './utils';
 
 interface ModelConfigFormProps {
   disabled?: boolean;
+  existingModelIds?: string[];
   idEditable?: boolean;
   initialValues?: ChatModelCard;
   onFormInstanceReady: (instance: FormInstance) => void;
@@ -22,7 +24,14 @@ interface ModelConfigFormProps {
 }
 
 const ModelConfigForm = memo<ModelConfigFormProps>(
-  ({ showDeployName, idEditable = true, onFormInstanceReady, initialValues, disabled }) => {
+  ({
+    showDeployName,
+    idEditable = true,
+    onFormInstanceReady,
+    initialValues,
+    disabled,
+    existingModelIds = [],
+  }) => {
     const { t } = useTranslation('modelProvider');
 
     const [formInstance] = Form.useForm();
@@ -79,7 +88,16 @@ const ModelConfigForm = memo<ModelConfigFormProps>(
             extra={t('providerModels.item.modelConfig.id.extra')}
             label={t('providerModels.item.modelConfig.id.title')}
             name={'id'}
-            rules={[{ required: true }]}
+            rules={[
+              { required: true },
+              {
+                validator: async (_, value?: string) => {
+                  if (hasDuplicateModelId(value, existingModelIds)) {
+                    throw new Error(t('providerModels.item.modelConfig.id.duplicate'));
+                  }
+                },
+              },
+            ]}
           >
             <Input
               disabled={disabled || !idEditable}
