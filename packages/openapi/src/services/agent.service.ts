@@ -61,8 +61,6 @@ export class AgentService extends BaseService {
       this.log('info', `found ${agentsList.length} agents`);
 
       return {
-        // The inbox agent is `virtual=true` and excluded by the filter above, so
-        // there is no inbox meta to normalize here — this surface lists real agents.
         agents: agentsList,
         total: totalResult[0]?.count ?? 0,
       };

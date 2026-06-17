@@ -2246,8 +2246,27 @@ describe('AgentModel', () => {
       expect(result[0]).toMatchObject({
         avatar: DEFAULT_INBOX_AVATAR,
         id: 'mb-inbox',
+        isInbox: true,
         title: DEFAULT_INBOX_TITLE,
       });
+      expect(result[1]).toMatchObject({ id: 'mb-normal', isInbox: false, title: 'Normal' });
+    });
+
+    it('should fall back a blank non-inbox title to options.fallbackTitle (null by default)', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'mb-blank', title: null, userId },
+        { id: 'mb-named', title: 'Named', userId },
+      ]);
+
+      const withoutFallback = await agentModel.listMessengerBindableAgents();
+      expect(withoutFallback.find((r) => r.id === 'mb-blank')?.title).toBeNull();
+
+      const withFallback = await agentModel.listMessengerBindableAgents({
+        fallbackTitle: 'Custom Agent',
+      });
+      expect(withFallback.find((r) => r.id === 'mb-blank')?.title).toBe('Custom Agent');
+      // A real title is never overridden by the fallback.
+      expect(withFallback.find((r) => r.id === 'mb-named')?.title).toBe('Named');
     });
 
     it('should only list the current user agents', async () => {

@@ -217,17 +217,26 @@ export class AgentModel {
   /**
    * List agents bindable by the System Bot messenger picker: real agents plus
    * the inbox (other virtual agents excluded), ordered by `updatedAt DESC` with
-   * the inbox pinned to the top. Inbox meta falls back to the LobeAI defaults.
+   * the inbox pinned to the top.
+   *
+   * Title fallback is fully owned here: the inbox resolves to the LobeAI
+   * default, and any other agent with a blank title resolves to
+   * `options.fallbackTitle` (default `null`, so a caller that omits it can let
+   * the client supply its own i18n default).
    */
-  listMessengerBindableAgents = async (): Promise<
+  listMessengerBindableAgents = async (options?: {
+    fallbackTitle?: string | null;
+  }): Promise<
     Array<{
       avatar: string | null;
       backgroundColor: string | null;
       id: string;
-      slug: string | null;
+      isInbox: boolean;
       title: string | null;
     }>
   > => {
+    const fallbackTitle = options?.fallbackTitle ?? null;
+
     const rows = await this.db
       .select({
         avatar: agents.avatar,
@@ -242,11 +251,22 @@ export class AgentModel {
 
     const normalized = rows
       .filter((row) => row.id)
-      .map(({ slug, ...row }) => ({ ...normalizeInboxAgentMeta(row, { slug }), slug }));
+      .map(({ slug, ...row }) => {
+        const meta = normalizeInboxAgentMeta(row, { slug });
+        return {
+          avatar: meta.avatar,
+          backgroundColor: meta.backgroundColor,
+          id: meta.id,
+          isInbox: slug === INBOX_SESSION_ID,
+          // The inbox title is already resolved by normalizeInboxAgentMeta; any
+          // other blank title falls back to the caller-provided default.
+          title: meta.title?.trim() || fallbackTitle,
+        };
+      });
 
     // Pin the inbox agent to the top regardless of updatedAt — it's the
     // implicit "default" agent and should always be the first option.
-    const inboxIdx = normalized.findIndex((row) => row.slug === INBOX_SESSION_ID);
+    const inboxIdx = normalized.findIndex((row) => row.isInbox);
     if (inboxIdx > 0) {
       const [inbox] = normalized.splice(inboxIdx, 1);
       normalized.unshift(inbox);

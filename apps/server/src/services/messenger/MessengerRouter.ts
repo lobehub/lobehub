@@ -1508,19 +1508,17 @@ export class MessengerRouter {
     userId: string,
     workspaceId?: string | null,
   ): Promise<AgentSummary[]> {
-    // The virtual-or-inbox filter, the inbox title fallback, and the inbox
-    // pinning all live in the model; here we only apply the generic
-    // "Custom Agent" fallback for real agents without a title.
+    // The filter, ordering, pinning, and title fallback all live in the model.
+    // This text-only channel has no client-side i18n default, so it asks the
+    // model to fill blank titles with a generic "Custom Agent" label.
     const rows = await new AgentModel(
       serverDB,
       userId,
       workspaceId ?? undefined,
-    ).listMessengerBindableAgents();
+    ).listMessengerBindableAgents({ fallbackTitle: 'Custom Agent' });
 
-    return rows.map((row) => ({
-      id: row.id,
-      title: (row.title && row.title.trim()) || 'Custom Agent',
-    }));
+    // `fallbackTitle` guarantees a non-null title for every row.
+    return rows.map((row) => ({ id: row.id, title: row.title! }));
   }
 
   private async dispatchToAgent(

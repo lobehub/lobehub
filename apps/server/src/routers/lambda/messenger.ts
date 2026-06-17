@@ -1,4 +1,3 @@
-import { INBOX_SESSION_ID } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -460,17 +459,10 @@ export const messengerRouter = router({
         }
       }
 
-      // The inbox meta fallback, the virtual-or-inbox filter, and the inbox
-      // pinning all live in the model — the router only shapes the response.
-      const rows = await ctx.getAgentModel(workspaceId).listMessengerBindableAgents();
-
-      return rows.map(({ slug, ...rest }) => ({
-        avatar: rest.avatar,
-        backgroundColor: rest.backgroundColor,
-        id: rest.id,
-        isInbox: slug === INBOX_SESSION_ID,
-        title: rest.title,
-      }));
+      // Inbox meta fallback, the virtual-or-inbox filter, inbox pinning, and the
+      // `isInbox` flag all live in the model. Blank non-inbox titles stay null
+      // here so the web picker can apply its own i18n default.
+      return ctx.getAgentModel(workspaceId).listMessengerBindableAgents();
     }),
 
   /**
