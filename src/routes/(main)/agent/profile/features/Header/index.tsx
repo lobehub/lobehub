@@ -1,11 +1,10 @@
 import { isDesktop } from '@lobechat/const';
 import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
-import { ShapesUploadIcon } from '@lobehub/ui/icons';
 import isEqual from 'fast-deep-equal';
 import type { TFunction } from 'i18next';
 import { BotMessageSquareIcon, Download, MoreHorizontal, Settings2Icon, Trash } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentTransferMenuItem } from '@/business/client/hooks/useAgentTransferMenuItem';
@@ -15,10 +14,7 @@ import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useCommunityPublishGuard } from '@/hooks/useCommunityPublishGuard';
 import { usePermission } from '@/hooks/usePermission';
-import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
-import { resolveMarketAuthError } from '@/layout/AuthProvider/MarketAuth/errors';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -28,18 +24,11 @@ import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
 import { selectors as profileSelectors, useProfileStore } from '../store';
 import AgentForkTag from './AgentForkTag';
-import ForkConfirmModal from './AgentPublishButton/ForkConfirmModal';
-import PublishResultModal from './AgentPublishButton/PublishResultModal';
-import { type OriginalAgentInfo, useMarketPublish } from './AgentPublishButton/useMarketPublish';
 import AgentStatusTag from './AgentStatusTag';
-import AgentVersionReviewTag, { useVersionReviewStatus } from './AgentVersionReviewTag';
+import AgentVersionReviewTag from './AgentVersionReviewTag';
 import AutoSaveHint from './AutoSaveHint';
-import { openPublishConfirmModal } from './PublishConfirmModal';
 
-type HeaderTranslation = TFunction<
-  readonly ['setting', 'marketAuth', 'chat', 'file', 'common'],
-  undefined
->;
+type HeaderTranslation = TFunction<readonly ['setting', 'chat', 'file', 'common'], undefined>;
 
 const buildAgentProfileMarkdown = (params: {
   description?: string;
@@ -91,7 +80,7 @@ const buildAgentProfileMarkdown = (params: {
 };
 
 const Header = memo(() => {
-  const { t } = useTranslation(['setting', 'marketAuth', 'chat', 'file', 'common']);
+  const { t } = useTranslation(['setting', 'chat', 'file', 'common']);
   const navigate = useWorkspaceAwareNavigate();
 
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
@@ -99,7 +88,6 @@ const Header = memo(() => {
   const systemRole = useAgentStore(agentSelectors.currentAgentSystemRole);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
-  const canPublishToCommunity = useAgentStore(agentSelectors.canCurrentAgentPublishToCommunity);
   const [showAgentBuilderPanel, toggleAgentBuilderPanel, isStatusInit] = useGlobalStore((s) => [
     systemStatusSelectors.showAgentBuilderPanel(s),
     s.toggleAgentBuilderPanel,
@@ -110,99 +98,6 @@ const Header = memo(() => {
   const lockedByOther = useProfileStore(profileSelectors.lockedByOther);
   const lockPending = useProfileStore(profileSelectors.lockPending);
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const { isAuthenticated, isLoading: isAuthLoading, signIn } = useMarketAuth();
-  const { isUnderReview } = useVersionReviewStatus();
-  const ensureCommunityPublishAllowed = useCommunityPublishGuard();
-
-  const action = meta?.marketIdentifier ? 'upload' : 'submit';
-
-  const [showResultModal, setShowResultModal] = useState(false);
-  const [publishedIdentifier, setPublishedIdentifier] = useState<string>();
-  const [showForkModal, setShowForkModal] = useState(false);
-  const [originalAgentInfo, setOriginalAgentInfo] = useState<OriginalAgentInfo | null>(null);
-
-  const handlePublishSuccess = useCallback((identifier: string) => {
-    setPublishedIdentifier(identifier);
-    setShowResultModal(true);
-  }, []);
-
-  const { checkOwnership, isPublishing, publish } = useMarketPublish({
-    action,
-    onSuccess: handlePublishSuccess,
-  });
-
-  const doPublish = useCallback(async () => {
-    const { needsForkConfirm, originalAgent } = await checkOwnership();
-    if (needsForkConfirm && originalAgent) {
-      setOriginalAgentInfo(originalAgent);
-      setShowForkModal(true);
-      return;
-    }
-    await publish();
-  }, [checkOwnership, publish]);
-
-  const handlePublishClick = useCallback(async () => {
-    if (!canEdit) return;
-    if (!ensureCommunityPublishAllowed()) return;
-    if (isUnderReview) {
-      message.warning({
-        content: t('marketPublish.validation.underReview', {
-          defaultValue:
-            'Your new version is currently under review. Please wait for approval before publishing a new version.',
-          ns: 'setting',
-        }),
-      });
-      return;
-    }
-
-    if (!meta?.title || meta.title.trim() === '') {
-      message.error({ content: t('marketPublish.validation.emptyName', { ns: 'setting' }) });
-      return;
-    }
-
-    if (!systemRole || systemRole.trim() === '') {
-      message.error({
-        content: t('marketPublish.validation.emptySystemRole', { ns: 'setting' }),
-      });
-      return;
-    }
-
-    openPublishConfirmModal(async () => {
-      if (!isAuthenticated) {
-        try {
-          await signIn('publish');
-          await doPublish();
-        } catch (error) {
-          console.error(`[MarketPublishButton][${action}] Authorization failed:`, error);
-          const normalizedError = resolveMarketAuthError(error);
-          message.error({
-            content: t(`errors.${normalizedError.code}`, { ns: 'marketAuth' }),
-            key: 'market-auth',
-          });
-        }
-        return;
-      }
-      await doPublish();
-    });
-  }, [
-    action,
-    canEdit,
-    doPublish,
-    ensureCommunityPublishAllowed,
-    isAuthenticated,
-    isUnderReview,
-    meta?.title,
-    signIn,
-    systemRole,
-    t,
-  ]);
-
-  const handleForkConfirm = useCallback(async () => {
-    if (!canEdit) return;
-    setShowForkModal(false);
-    setOriginalAgentInfo(null);
-    await publish();
-  }, [canEdit, publish]);
 
   const handleDelete = useCallback(() => {
     if (!canEdit || !activeAgentId) return;
@@ -276,17 +171,6 @@ const Header = memo(() => {
         onClick: () => useAgentStore.setState({ showAgentSetting: true }),
       },
       { type: 'divider' as const },
-      ...(canPublishToCommunity
-        ? [
-            {
-              icon: <Icon icon={ShapesUploadIcon} />,
-              key: 'publish',
-              label: t('publishToCommunity', { ns: 'setting' }),
-              onClick: handlePublishClick,
-            },
-            { type: 'divider' as const },
-          ]
-        : []),
       {
         children: [
           {
@@ -313,64 +197,34 @@ const Header = memo(() => {
         onClick: handleDelete,
       },
     ].filter(Boolean);
-  }, [
-    canEdit,
-    canPublishToCommunity,
-    handlePublishClick,
-    handleExportMarkdown,
-    handleDelete,
-    t,
-    importMenuItem,
-    transferMenuItems,
-  ]);
+  }, [canEdit, handleExportMarkdown, handleDelete, t, importMenuItem, transferMenuItems]);
 
   return (
-    <>
-      <NavHeader
-        left={
-          <Flexbox horizontal align={'center'} gap={8}>
-            <AutoSaveHint />
-            <AgentStatusTag />
-            <AgentVersionReviewTag />
-            <AgentForkTag />
-          </Flexbox>
-        }
-        right={
-          <Flexbox horizontal align={'center'} gap={4}>
-            <DropdownMenu items={menuItems}>
-              <ActionIcon
-                icon={MoreHorizontal}
-                loading={canPublishToCommunity && (isPublishing || isAuthLoading)}
-                size={DESKTOP_HEADER_ICON_SMALL_SIZE}
-              />
-            </DropdownMenu>
-            {!isHeterogeneous && isStatusInit && !lockedByOther && !lockPending && (
-              <ToggleRightPanelButton
-                expand={showAgentBuilderPanel}
-                icon={BotMessageSquareIcon}
-                showActive={true}
-                onToggle={() => toggleAgentBuilderPanel()}
-              />
-            )}
-          </Flexbox>
-        }
-      />
-      <ForkConfirmModal
-        loading={isPublishing}
-        open={showForkModal}
-        originalAgent={originalAgentInfo}
-        onConfirm={handleForkConfirm}
-        onCancel={() => {
-          setShowForkModal(false);
-          setOriginalAgentInfo(null);
-        }}
-      />
-      <PublishResultModal
-        identifier={publishedIdentifier}
-        open={showResultModal}
-        onCancel={() => setShowResultModal(false)}
-      />
-    </>
+    <NavHeader
+      left={
+        <Flexbox horizontal align={'center'} gap={8}>
+          <AutoSaveHint />
+          <AgentStatusTag />
+          <AgentVersionReviewTag />
+          <AgentForkTag />
+        </Flexbox>
+      }
+      right={
+        <Flexbox horizontal align={'center'} gap={4}>
+          <DropdownMenu items={menuItems}>
+            <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SMALL_SIZE} />
+          </DropdownMenu>
+          {!isHeterogeneous && isStatusInit && !lockedByOther && !lockPending && (
+            <ToggleRightPanelButton
+              expand={showAgentBuilderPanel}
+              icon={BotMessageSquareIcon}
+              showActive={true}
+              onToggle={() => toggleAgentBuilderPanel()}
+            />
+          )}
+        </Flexbox>
+      }
+    />
   );
 });
 

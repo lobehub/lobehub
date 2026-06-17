@@ -20,7 +20,6 @@ import { useGroupProfileStore } from '@/store/groupProfile';
 
 import AgentSettings from '../AgentSettings';
 import AutoSaveHint from '../Header/AutoSaveHint';
-import GroupPublishButton from '../Header/GroupPublishButton';
 import GroupForkTag from './GroupForkTag';
 import GroupHeader from './GroupHeader';
 import GroupStatusTag from './GroupStatusTag';
@@ -148,7 +147,6 @@ const GroupProfile = memo(() => {
           >
             {t('startConversation')}
           </Button>
-          <GroupPublishButton />
           {!!transferMenuItems?.length && (
             <DropdownMenu items={transferMenuItems}>
               <ActionIcon

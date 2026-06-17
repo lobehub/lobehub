@@ -7,7 +7,6 @@ import Header from './index';
 const mocks = vi.hoisted(() => ({
   agentState: {
     activeAgentId: 'agent-1',
-    canCurrentAgentPublishToCommunity: true,
     config: {
       model: 'gpt-4o',
       plugins: ['lobe-web-browsing'],
@@ -29,23 +28,10 @@ const mocks = vi.hoisted(() => ({
   homeState: {
     removeAgent: vi.fn(),
   },
-  marketAuth: {
-    status: 'ACTIVE',
-    isLoading: false,
-    signIn: vi.fn(),
-  },
-  marketPublish: {
-    checkOwnership: vi.fn(),
-    isPublishing: false,
-    publish: vi.fn(),
-  },
   navigate: vi.fn(),
   profileState: {
     editor: undefined as { getDocument: (format: string) => string | undefined } | undefined,
     lockState: { holderId: null as string | null, lockedByOther: false, pending: false },
-  },
-  versionReviewStatus: {
-    isUnderReview: false,
   },
 }));
 
@@ -90,10 +76,6 @@ vi.mock('@lobehub/ui', () => ({
   ),
   Flexbox: ({ children }: PropsWithChildren) => <div>{children}</div>,
   Icon: () => <span />,
-}));
-
-vi.mock('@lobehub/ui/icons', () => ({
-  ShapesUploadIcon: () => null,
 }));
 
 vi.mock('@lobehub/ui/base-ui', () => ({
@@ -156,14 +138,6 @@ vi.mock('@/features/RightPanel/ToggleRightPanelButton', () => ({
   default: () => <button type="button">agentBuilder</button>,
 }));
 
-vi.mock('@/layout/AuthProvider/MarketAuth', () => ({
-  useMarketAuth: () => mocks.marketAuth,
-}));
-
-vi.mock('@/layout/AuthProvider/MarketAuth/errors', () => ({
-  resolveMarketAuthError: () => ({ code: 'unknown' }),
-}));
-
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: typeof mocks.agentState) => unknown) =>
     selector(mocks.agentState),
@@ -171,8 +145,6 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
-    canCurrentAgentPublishToCommunity: (state: typeof mocks.agentState) =>
-      state.canCurrentAgentPublishToCommunity,
     currentAgentConfig: (state: typeof mocks.agentState) => state.config,
     currentAgentMeta: (state: typeof mocks.agentState) => state.meta,
     currentAgentSystemRole: (state: typeof mocks.agentState) => state.systemRole,
@@ -211,18 +183,6 @@ vi.mock('./AgentForkTag', () => ({
   default: () => null,
 }));
 
-vi.mock('./AgentPublishButton/ForkConfirmModal', () => ({
-  default: () => null,
-}));
-
-vi.mock('./AgentPublishButton/PublishResultModal', () => ({
-  default: () => null,
-}));
-
-vi.mock('./AgentPublishButton/useMarketPublish', () => ({
-  useMarketPublish: () => mocks.marketPublish,
-}));
-
 vi.mock('./AgentStatusTag', () => ({
   default: () => null,
 }));
@@ -233,7 +193,6 @@ vi.mock('./AutoSaveHint', () => ({
 
 vi.mock('./AgentVersionReviewTag', () => ({
   default: () => null,
-  useVersionReviewStatus: () => mocks.versionReviewStatus,
 }));
 
 describe('Agent profile Header', () => {
@@ -241,15 +200,8 @@ describe('Agent profile Header', () => {
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:agent-profile');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
-    mocks.agentState.canCurrentAgentPublishToCommunity = true;
     mocks.agentState.isCurrentAgentHeterogeneous = false;
     mocks.profileState.editor = undefined;
-  });
-
-  it('should show the community publish action for normal agents', () => {
-    render(<Header />);
-
-    expect(screen.getByRole('button', { name: 'publishToCommunity' })).toBeInTheDocument();
   });
 
   it('should show the markdown export action', () => {
@@ -292,14 +244,5 @@ describe('Agent profile Header', () => {
     expect(exportedMarkdown).toContain('# Test Agent');
     expect(exportedMarkdown).not.toContain('You are helpful.');
     expect(exportedMarkdown).not.toContain('settingAgent.prompt.title');
-  });
-
-  it('should hide the community publish action for heterogeneous and platform agents', () => {
-    mocks.agentState.canCurrentAgentPublishToCommunity = false;
-    mocks.agentState.isCurrentAgentHeterogeneous = true;
-
-    render(<Header />);
-
-    expect(screen.queryByRole('button', { name: 'publishToCommunity' })).not.toBeInTheDocument();
   });
 });
