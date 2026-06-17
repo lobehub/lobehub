@@ -1,6 +1,7 @@
 'use client';
 
 import { ActionIcon, Avatar, Block, Text } from '@lobehub/ui';
+import isEqual from 'fast-deep-equal';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import { type PropsWithChildren } from 'react';
 import React, { memo } from 'react';
@@ -9,21 +10,21 @@ import { useTranslation } from 'react-i18next';
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { SkeletonItem } from '@/features/NavPanel/components/SkeletonList';
+import { useRouteAgentId } from '@/hooks/useRouteAgentId';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 
 import SwitchPanel from './SwitchPanel';
 
 const Agent = memo<PropsWithChildren>(() => {
   const { t } = useTranslation(['chat', 'common']);
 
-  const [isLoading, isInbox, title, avatar, backgroundColor] = useAgentStore((s) => [
-    agentSelectors.isAgentConfigLoading(s),
-    builtinAgentSelectors.isInboxAgent(s),
-    agentSelectors.currentAgentTitle(s),
-    agentSelectors.currentAgentAvatar(s),
-    agentSelectors.currentAgentBackgroundColor(s),
-  ]);
+  const agentId = useRouteAgentId();
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const isInbox = !!inboxAgentId && agentId === inboxAgentId;
+  const isLoading = useAgentStore(agentByIdSelectors.isAgentConfigLoadingById(agentId));
+  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
+  const { avatar, backgroundColor, title } = meta;
 
   const displayTitle = isInbox
     ? title || 'Lobe AI'

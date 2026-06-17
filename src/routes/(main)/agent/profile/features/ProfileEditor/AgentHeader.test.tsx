@@ -57,8 +57,15 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
-    currentAgentMeta: (s: any) => s.meta,
+    getAgentMetaById: () => (s: any) => s.meta,
   },
+  builtinAgentSelectors: {
+    inboxAgentId: (s: any) => s.inboxId,
+  },
+}));
+
+vi.mock('react-router-dom', () => ({
+  useParams: () => ({ aid: 'agent-1' }),
 }));
 
 vi.mock('@/store/file', () => ({

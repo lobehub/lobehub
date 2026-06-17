@@ -10,8 +10,9 @@ import { useTranslation } from 'react-i18next';
 
 import ModelSelect from '@/features/ModelSelect';
 import { usePermission } from '@/hooks/usePermission';
+import { useRouteAgentId } from '@/hooks/useRouteAgentId';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 
 import AgentSettings from '../AgentSettings';
 import EditorCanvas from '../EditorCanvas';
@@ -24,9 +25,10 @@ import RemoteAgentConfigCard from './RemoteAgentConfigCard';
 const ProfileEditor = memo(() => {
   const { t } = useTranslation('setting');
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
+  const agentId = useRouteAgentId();
+  const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
   const updateConfig = useAgentStore((s) => s.updateAgentConfig);
-  const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+  const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
   const heterogeneousProvider = config.agencyConfig?.heterogeneousProvider;
 
   const updateHeterogeneousCommand = async (command: string) => {

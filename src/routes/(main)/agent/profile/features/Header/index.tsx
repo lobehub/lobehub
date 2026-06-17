@@ -17,10 +17,11 @@ import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useCommunityPublishGuard } from '@/hooks/useCommunityPublishGuard';
 import { usePermission } from '@/hooks/usePermission';
+import { useRouteAgentId } from '@/hooks/useRouteAgentId';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { resolveMarketAuthError } from '@/layout/AuthProvider/MarketAuth/errors';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useHomeStore } from '@/store/home';
@@ -94,11 +95,11 @@ const Header = memo(() => {
   const { t } = useTranslation(['setting', 'marketAuth', 'chat', 'file', 'common']);
   const navigate = useWorkspaceAwareNavigate();
 
-  const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
-  const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
-  const systemRole = useAgentStore(agentSelectors.currentAgentSystemRole);
-  const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+  const agentId = useRouteAgentId();
+  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
+  const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
+  const systemRole = useAgentStore(agentByIdSelectors.getAgentSystemRoleById(agentId));
+  const isHeterogeneous = useAgentStore(agentByIdSelectors.isAgentHeterogeneousById(agentId));
   const canPublishToCommunity = useAgentStore(agentSelectors.canCurrentAgentPublishToCommunity);
   const [showAgentBuilderPanel, toggleAgentBuilderPanel, isStatusInit] = useGlobalStore((s) => [
     systemStatusSelectors.showAgentBuilderPanel(s),
@@ -205,17 +206,17 @@ const Header = memo(() => {
   }, [canEdit, publish]);
 
   const handleDelete = useCallback(() => {
-    if (!canEdit || !activeAgentId) return;
+    if (!canEdit || !agentId) return;
     confirmModal({
       okButtonProps: { danger: true },
       onOk: async () => {
-        await removeAgent(activeAgentId);
+        await removeAgent(agentId);
         message.success(t('confirmRemoveSessionSuccess', { ns: 'chat' }));
         navigate('/');
       },
       title: t('confirmRemoveSessionItemAlert', { ns: 'chat' }),
     });
-  }, [activeAgentId, canEdit, navigate, removeAgent, t]);
+  }, [agentId, canEdit, navigate, removeAgent, t]);
 
   const handleExportMarkdown = useCallback(async () => {
     try {
@@ -262,8 +263,8 @@ const Header = memo(() => {
     }
   }, [config.model, config.plugins, config.provider, editor, meta, systemRole, t]);
 
-  const importMenuItem = useBusinessAgentImportMenuItem(activeAgentId ?? undefined);
-  const transferMenuItems = useAgentTransferMenuItem(activeAgentId ?? undefined);
+  const importMenuItem = useBusinessAgentImportMenuItem(agentId || undefined);
+  const transferMenuItems = useAgentTransferMenuItem(agentId || undefined);
 
   const menuItems = useMemo(() => {
     const businessTransferMenuItems = transferMenuItems ?? [];

@@ -20,7 +20,7 @@ import { usePathname } from '@/libs/router/navigation';
 import { useActionSWR } from '@/libs/swr';
 import { topicActionKeys } from '@/libs/swr/keys';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
@@ -41,7 +41,7 @@ const Nav = memo(() => {
   const { isAgentEditable } = useServerConfigStore(featureFlagsSelectors);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
   const heterogeneousProviderType = useAgentStore(
-    agentSelectors.currentAgentHeterogeneousProviderType,
+    (s) => agentByIdSelectors.getAgencyConfigById(agentId ?? '')(s)?.heterogeneousProvider?.type,
   );
   const hideProfile = !isAgentEditable;
   // Claude Code agents can use message channels; other hetero providers (e.g. codex) still hide it.

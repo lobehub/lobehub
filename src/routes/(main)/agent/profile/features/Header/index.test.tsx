@@ -50,6 +50,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@lobechat/const', () => ({
+  INBOX_SESSION_ID: 'inbox',
   isDesktop: false,
 }));
 
@@ -129,6 +130,7 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mocks.navigate,
+  useParams: () => ({ aid: 'agent-1' }),
 }));
 
 vi.mock('@/components/AntdStaticMethods', () => ({
@@ -170,14 +172,19 @@ vi.mock('@/store/agent', () => ({
 }));
 
 vi.mock('@/store/agent/selectors', () => ({
+  agentByIdSelectors: {
+    getAgentSystemRoleById: () => (state: typeof mocks.agentState) => state.systemRole,
+    isAgentHeterogeneousById: () => (state: typeof mocks.agentState) =>
+      state.isCurrentAgentHeterogeneous,
+  },
   agentSelectors: {
     canCurrentAgentPublishToCommunity: (state: typeof mocks.agentState) =>
       state.canCurrentAgentPublishToCommunity,
-    currentAgentConfig: (state: typeof mocks.agentState) => state.config,
-    currentAgentMeta: (state: typeof mocks.agentState) => state.meta,
-    currentAgentSystemRole: (state: typeof mocks.agentState) => state.systemRole,
-    isCurrentAgentHeterogeneous: (state: typeof mocks.agentState) =>
-      state.isCurrentAgentHeterogeneous,
+    getAgentConfigById: () => (state: typeof mocks.agentState) => state.config,
+    getAgentMetaById: () => (state: typeof mocks.agentState) => state.meta,
+  },
+  builtinAgentSelectors: {
+    inboxAgentId: () => undefined,
   },
 }));
 

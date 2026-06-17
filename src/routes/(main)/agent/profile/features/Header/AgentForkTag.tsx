@@ -6,6 +6,7 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useRouteAgentId } from '@/hooks/useRouteAgentId';
 import { marketApiService } from '@/services/marketApi';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -21,7 +22,8 @@ const AgentForkTag = memo(() => {
   const [forkSource, setForkSource] = useState<AgentForkSourceResponse['source']>(null);
   const [loading, setLoading] = useState(false);
 
-  const meta = useAgentStore(agentSelectors.currentAgentMeta);
+  const agentId = useRouteAgentId();
+  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
   const marketIdentifier = meta?.marketIdentifier;
 
   useEffect(() => {

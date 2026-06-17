@@ -4,6 +4,7 @@ import { Tag } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useRouteAgentId } from '@/hooks/useRouteAgentId';
 import { marketApiService } from '@/services/marketApi';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -26,7 +27,8 @@ const AgentVersionReviewTag = memo(() => {
   const [versions, setVersions] = useState<AgentVersion[] | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const meta = useAgentStore(agentSelectors.currentAgentMeta);
+  const agentId = useRouteAgentId();
+  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
   const marketIdentifier = meta?.marketIdentifier;
 
   useEffect(() => {
@@ -79,7 +81,8 @@ export const useVersionReviewStatus = () => {
   const [isUnderReview, setIsUnderReview] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const meta = useAgentStore(agentSelectors.currentAgentMeta);
+  const agentId = useRouteAgentId();
+  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId));
   const marketIdentifier = meta?.marketIdentifier;
 
   useEffect(() => {

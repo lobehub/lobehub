@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { createChatInputRichPlugins } from '@/features/ChatInput/InputEditor/plugins';
 import { EditingIndicator } from '@/features/EditLock';
 import { usePermission } from '@/hooks/usePermission';
+import { useRouteAgentId } from '@/hooks/useRouteAgentId';
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -24,7 +25,8 @@ const EditorCanvas = memo(() => {
   const { allowed: canEdit } = usePermission('edit_own_content');
   const [editorInit, setEditorInit] = useState(false);
   const [contentInit, setContentInit] = useState(false);
-  const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
+  const agentId = useRouteAgentId();
+  const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
   const editorData = config?.editorData;
   const systemRole = config?.systemRole;
   const updateConfig = useAgentStore((s) => s.updateAgentConfig);

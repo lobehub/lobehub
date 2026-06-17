@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import EmojiPicker from '@/components/EmojiPicker';
 import BackgroundSwatches from '@/features/AgentSetting/AgentMeta/BackgroundSwatches';
 import { usePermission } from '@/hooks/usePermission';
+import { useRouteAgentId } from '@/hooks/useRouteAgentId';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useFileStore } from '@/store/file';
@@ -25,8 +26,9 @@ const AgentHeader = memo(() => {
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
   const { allowed: canEdit } = usePermission('edit_own_content');
 
-  // Get current meta from store
-  const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
+  // Get the routed agent's meta from store
+  const agentId = useRouteAgentId();
+  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
   const updateMeta = useAgentStore((s) => s.updateAgentMeta);
 
   // File upload

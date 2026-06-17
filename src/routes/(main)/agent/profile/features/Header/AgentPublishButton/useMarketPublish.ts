@@ -4,11 +4,16 @@ import { useTranslation } from 'react-i18next';
 
 import { useHasActiveWorkspace } from '@/business/client/hooks/useHasActiveWorkspace';
 import { message } from '@/components/AntdStaticMethods';
+import { useRouteAgentId } from '@/hooks/useRouteAgentId';
 import { useTokenCount } from '@/hooks/useTokenCount';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { lambdaClient } from '@/libs/trpc/client';
 import { useAgentStore } from '@/store/agent';
-import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
+import {
+  agentByIdSelectors,
+  agentSelectors,
+  chatConfigByIdSelectors,
+} from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
@@ -45,17 +50,18 @@ export const useMarketPublish = ({ action, onSuccess }: UseMarketPublishOptions)
   const { isAuthenticated } = useMarketAuth();
 
   // Agent data from store
-  const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
+  const agentId = useRouteAgentId();
+  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
   const updateAgentMeta = useAgentStore((s) => s.updateAgentMeta);
-  const systemRole = useAgentStore(agentSelectors.currentAgentSystemRole);
-  const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
+  const systemRole = useAgentStore(agentByIdSelectors.getAgentSystemRoleById(agentId));
+  const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
   const editorData = config?.editorData;
   const language = useGlobalStore(globalGeneralSelectors.currentLanguage);
-  const agentConfig = useAgentStore(agentSelectors.currentAgentConfig);
-  const chatConfig = useAgentStore(agentChatConfigSelectors.currentChatConfig);
-  const plugins = useAgentStore(agentSelectors.currentAgentPlugins);
-  const model = useAgentStore(agentSelectors.currentAgentModel);
-  const provider = useAgentStore(agentSelectors.currentAgentModelProvider);
+  const agentConfig = useAgentStore(agentSelectors.getAgentConfigById(agentId));
+  const chatConfig = useAgentStore(chatConfigByIdSelectors.getChatConfigById(agentId));
+  const plugins = useAgentStore(agentByIdSelectors.getAgentPluginsById(agentId));
+  const model = useAgentStore(agentByIdSelectors.getAgentModelById(agentId));
+  const provider = useAgentStore(agentByIdSelectors.getAgentModelProviderById(agentId));
   const tokenUsage = useTokenCount(systemRole);
   const hasActiveWorkspace = useHasActiveWorkspace();
 

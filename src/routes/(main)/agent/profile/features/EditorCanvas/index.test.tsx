@@ -57,8 +57,15 @@ vi.mock('@/store/agent', () => ({
 
 vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
-    currentAgentConfig: (s: any) => s.config,
+    getAgentConfigById: () => (s: any) => s.config,
   },
+  builtinAgentSelectors: {
+    inboxAgentId: (s: any) => s.inboxId,
+  },
+}));
+
+vi.mock('react-router-dom', () => ({
+  useParams: () => ({ aid: 'agent-1' }),
 }));
 
 vi.mock('../ProfileEditor/MentionList', () => ({

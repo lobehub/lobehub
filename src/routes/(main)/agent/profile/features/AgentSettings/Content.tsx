@@ -7,12 +7,12 @@ import isEqual from 'fast-deep-equal';
 import { ActivityIcon, MessageSquareHeartIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { shallow } from 'zustand/shallow';
 
 import Menu from '@/components/Menu';
 import { DEFAULT_AVATAR, DEFAULT_INBOX_AVATAR } from '@/const/meta';
 import { AgentSettings as Settings } from '@/features/AgentSetting';
 import { usePermission } from '@/hooks/usePermission';
+import { useRouteAgentId } from '@/hooks/useRouteAgentId';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { ChatSettingsTabs } from '@/store/global/initialState';
@@ -22,12 +22,11 @@ const Content = memo(() => {
   const { t } = useTranslation('setting');
   const theme = useTheme();
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const [agentId, isInbox] = useAgentStore(
-    (s) => [s.activeAgentId, builtinAgentSelectors.isInboxAgent(s)],
-    shallow,
-  );
-  const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
-  const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
+  const agentId = useRouteAgentId();
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const isInbox = !!inboxAgentId && agentId === inboxAgentId;
+  const config = useAgentStore(agentSelectors.getAgentConfigById(agentId), isEqual);
+  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
   const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
   const [tab, setTab] = useState(ChatSettingsTabs.Opening);
 

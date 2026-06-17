@@ -7,10 +7,11 @@ import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
 import { usePermission } from '@/hooks/usePermission';
+import { useRouteAgentId } from '@/hooks/useRouteAgentId';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { resolveMarketAuthError } from '@/layout/AuthProvider/MarketAuth/errors';
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 
 import { useVersionReviewStatus } from '../AgentVersionReviewTag';
 import ForkConfirmModal from './ForkConfirmModal';
@@ -36,8 +37,9 @@ const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess
   const { isUnderReview, loading: reviewStatusLoading } = useVersionReviewStatus();
 
   // Agent data for validation
-  const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
-  const systemRole = useAgentStore(agentSelectors.currentAgentSystemRole);
+  const agentId = useRouteAgentId();
+  const meta = useAgentStore(agentSelectors.getAgentMetaById(agentId), isEqual);
+  const systemRole = useAgentStore(agentByIdSelectors.getAgentSystemRoleById(agentId));
 
   // Fork confirmation modal state
   const [showForkModal, setShowForkModal] = useState(false);

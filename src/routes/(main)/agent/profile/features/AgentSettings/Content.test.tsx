@@ -70,12 +70,16 @@ vi.mock('@/store/agent', () => {
 
 vi.mock('@/store/agent/selectors', () => ({
   agentSelectors: {
-    currentAgentConfig: (state: typeof mocks.agentState) => state.config,
-    currentAgentMeta: (state: typeof mocks.agentState) => state.meta,
+    getAgentConfigById: () => (state: typeof mocks.agentState) => state.config,
+    getAgentMetaById: () => (state: typeof mocks.agentState) => state.meta,
   },
   builtinAgentSelectors: {
-    isInboxAgent: (state: typeof mocks.agentState) => state.isInbox,
+    inboxAgentId: () => 'inbox-agent',
   },
+}));
+
+vi.mock('react-router-dom', () => ({
+  useParams: () => ({ aid: mocks.agentState.isInbox ? 'inbox-agent' : 'other-agent' }),
 }));
 
 vi.mock('@/store/serverConfig', () => ({
