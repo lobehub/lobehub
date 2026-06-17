@@ -122,6 +122,12 @@ const messengerProcedure = authedProcedure.use(serverDatabase).use(async (opts) 
       // userId), and per-agent authorization happens in-handler via
       // `resolveAuthorizedAgentScope`.
       messengerLinkModel: new MessengerAccountLinkModel(ctx.serverDB, ctx.userId),
+      // The bindable-agents scope is request-driven — the cascading scope
+      // picker passes the workspace via input, not the ambient header — so
+      // expose a workspace-parameterized AgentModel factory rather than a
+      // single pre-scoped instance.
+      getAgentModel: (workspaceId?: string | null) =>
+        new AgentModel(ctx.serverDB, ctx.userId, workspaceId ?? undefined),
     },
   });
 });
@@ -456,11 +462,7 @@ export const messengerRouter = router({
 
       // The inbox meta fallback, the virtual-or-inbox filter, and the inbox
       // pinning all live in the model — the router only shapes the response.
-      const rows = await new AgentModel(
-        serverDB,
-        userId,
-        workspaceId ?? undefined,
-      ).listMessengerBindableAgents();
+      const rows = await ctx.getAgentModel(workspaceId).listMessengerBindableAgents();
 
       return rows.map(({ slug, ...rest }) => ({
         avatar: rest.avatar,

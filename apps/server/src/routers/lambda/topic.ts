@@ -37,7 +37,9 @@ const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
   return opts.next({
     ctx: {
       agentMigrationRepo: new AgentMigrationRepo(ctx.serverDB, ctx.userId, wsId),
+      agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       agentOperationModel: new AgentOperationModel(ctx.serverDB, ctx.userId, wsId),
+      chatGroupModel: new ChatGroupModel(ctx.serverDB, ctx.userId, wsId),
       topicImporterRepo: new TopicImporterRepo(ctx.serverDB, ctx.userId, wsId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
       topicShareModel: new TopicShareModel(ctx.serverDB, ctx.userId, wsId),
@@ -447,13 +449,6 @@ export const topicRouter = router({
       // Collect all agentIds to fetch agent info
       const allAgentIds = [...new Set(topicAgentIdMap.values())];
 
-      const agentModel = new AgentModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
-      const chatGroupModel = new ChatGroupModel(
-        ctx.serverDB,
-        ctx.userId,
-        ctx.workspaceId ?? undefined,
-      );
-
       // Batch query agent info (already normalized for the inbox agent)
       const agentInfoMap = new Map<
         string,
@@ -461,7 +456,7 @@ export const topicRouter = router({
       >();
 
       if (allAgentIds.length > 0) {
-        const agentInfos = await agentModel.getAgentAvatarsByIds(allAgentIds);
+        const agentInfos = await ctx.agentModel.getAgentAvatarsByIds(allAgentIds);
 
         for (const agent of agentInfos) {
           agentInfoMap.set(agent.id, agent);
@@ -484,7 +479,7 @@ export const topicRouter = router({
 
         // Query group member avatars (already normalized for the inbox agent)
         const groupMembersMap: Map<string, RecentTopicGroupMember[]> =
-          await chatGroupModel.getMemberAvatarsByGroupIds(allGroupIds);
+          await ctx.chatGroupModel.getMemberAvatarsByGroupIds(allGroupIds);
 
         // Build group info map
         for (const group of chatGroupInfos) {
