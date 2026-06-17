@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 
 import CodeEditorPane from '@/components/CodeEditorPane';
 import FloatingChatPanel from '@/features/FloatingChatPanel';
+import WideScreenContainer from '@/features/WideScreenContainer';
 import { useClientDataSWR } from '@/libs/swr';
 import { portalKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
