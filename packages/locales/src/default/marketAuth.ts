@@ -40,7 +40,8 @@ export default {
   'errors.authorizationFailed': 'Authorization failed, please try again.',
   'errors.browserOnly': 'The authorization process can only be initiated in a browser.',
   'errors.codeConsumed': 'The authorization code has already been used. Please try again.',
-  'errors.codeVerifierMissing': 'Invalid authorization session. Please restart the login process.',
+  'errors.codeVerifierMissing':
+    'Invalid authorization session. Please restart the sign-in process.',
   'errors.general': 'An error occurred during authorization. Please try again.',
   'errors.handoffFailed': 'Failed to retrieve authorization result. Please try again.',
   'errors.handoffTimeout':
@@ -50,7 +51,7 @@ export default {
   'errors.openPopupFailed':
     "Failed to open authorization popup. Please check your browser's popup blocker settings.",
   'errors.popupClosed': 'The authorization window was closed before completion.',
-  'errors.sessionExpired': 'Authorization session has expired. Please log in again.',
+  'errors.sessionExpired': 'Authorization session has expired. Please sign in again.',
   'errors.stateMismatch': 'Authorization state mismatch. Please try again.',
   'errors.stateMissing': 'Authorization state not found. Please try again.',
   'messages.authorizationFailed':

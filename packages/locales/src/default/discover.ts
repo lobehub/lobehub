@@ -1139,7 +1139,7 @@ export default {
 
   'user.login': 'Become a Creator',
 
-  'user.logout': 'Logout',
+  'user.logout': 'Sign out',
 
   'user.openWorkspacePublicProfile': 'Open Public Link',
 

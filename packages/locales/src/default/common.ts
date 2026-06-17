@@ -454,7 +454,7 @@ export default {
   'new': 'New',
   'pro': 'Pro',
   'noContent': 'No content',
-  'oauth': 'SSO Login',
+  'oauth': 'SSO Sign-in',
   'officialSite': 'Official Website',
   'ok': 'OK',
   'or': 'or',
