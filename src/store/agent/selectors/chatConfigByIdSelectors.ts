@@ -81,6 +81,21 @@ const getSkillActivateModeById =
   (s: AgentStoreState): 'auto' | 'manual' =>
     getChatConfigById(agentId)(s).skillActivateMode ?? 'auto';
 
+/**
+ * Resolve the agent's tool mode — explicit `toolMode` wins; otherwise derive
+ * from `enableAgentMode` (undefined = agent). Mirrors the server tools engine
+ * so client and server agree on chat mode.
+ */
+const getToolModeById =
+  (agentId: string) =>
+  (s: AgentStoreState): 'agent' | 'chat' | 'custom' => {
+    const chatConfig = getChatConfigById(agentId)(s);
+    return chatConfig.toolMode ?? (chatConfig.enableAgentMode === false ? 'chat' : 'agent');
+  };
+
+const isChatModeById = (agentId: string) => (s: AgentStoreState) =>
+  getToolModeById(agentId)(s) === 'chat';
+
 export const chatConfigByIdSelectors = {
   getChatConfigById,
   getEnableHistoryCountById,
@@ -92,7 +107,9 @@ export const chatConfigByIdSelectors = {
   getSearchFCModelById,
   getSearchModeById,
   getSkillActivateModeById,
+  getToolModeById,
   getUseModelBuiltinSearchById,
+  isChatModeById,
   isEnableSearchById,
   isLocalSystemEnabledById,
   isMemoryToolEnabledById,

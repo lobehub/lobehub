@@ -129,6 +129,17 @@ export interface ResolveExecutionPlanParams {
    * Defaults to `true` (first-party callers).
    */
   canUseDevice?: boolean;
+  /**
+   * `true` when the run is in chat mode (`chatConfig.toolMode === 'chat'`, or
+   * `enableAgentMode === false`). Chat mode means "no execution environment" —
+   * plain chat. It is orthogonal to `executionTarget`: the UI toggle only
+   * writes `enableAgentMode` and never touches the target, so a stored/default
+   * `local` target would otherwise still resolve a device and `buildStepToolDelta`
+   * would re-inject local-system. Force the whole plan to `none` here so the
+   * single device decision honours chat mode at the source. Ignored for hetero
+   * agents (they always need a runtime). Defaults to `false`.
+   */
+  isChatMode?: boolean;
   isDesktop: boolean;
   isHetero?: boolean;
   /**
@@ -165,11 +176,19 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
   const {
     agencyConfig,
     canUseDevice = true,
+    isChatMode = false,
     isDesktop,
     isHetero,
     onlineDeviceIds,
     requestedDeviceId,
   } = params;
+
+  // Chat mode = no execution environment (plain chat). It's orthogonal to the
+  // execution target, so collapse the whole plan to `none` here — this is the
+  // single point that stops a default/stored `local` target from resolving a
+  // device and letting `buildStepToolDelta` re-inject local-system. Hetero
+  // agents always need a runtime, so they never take this path.
+  if (isChatMode && !isHetero) return { kind: 'none', target: 'none' };
 
   const target = resolveExecutionTarget(agencyConfig, { isDesktop, isHetero });
   const wantsDevice = !!requestedDeviceId || target === 'device' || target === 'local';
