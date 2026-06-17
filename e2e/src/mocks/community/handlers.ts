@@ -92,8 +92,9 @@ const parseRequestInput = (request: Request, url: URL): unknown => {
 
 const getProcedureInputs = (request: Request, url: URL, count: number): unknown[] => {
   const rawInput = parseRequestInput(request, url);
+  const isBatch = url.searchParams.get('batch') === '1' || count > 1;
 
-  if (count > 1 && isRecord(rawInput)) {
+  if (isBatch && isRecord(rawInput)) {
     return Array.from({ length: count }, (_, index) => unwrapTrpcInput(rawInput[String(index)]));
   }
 
