@@ -391,6 +391,8 @@ describe('LobeZhipuAI - custom features', () => {
         ['glm-5', true, true],
         ['glm-5.1', true, true],
         ['glm-5.2', true, true],
+        ['glm-5.3', true, true],
+        ['glm-6', true, true],
         ['glm-4.5', true, undefined],
         ['glm-5-turbo', true, undefined],
         ['glm-4', true, undefined],

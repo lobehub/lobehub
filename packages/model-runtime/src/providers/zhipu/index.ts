@@ -8,6 +8,7 @@ import { resolveParameters } from '../../core/parameterResolver';
 import { OpenAIStream } from '../../core/streams/openai';
 import { convertIterableToStream } from '../../core/streams/protocol';
 import { getModelMaxOutputs } from '../../utils/getModelMaxOutputs';
+import { isToolStreamSupportedGLMModel } from '../../utils/glmModelId';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { createZhipuImage } from './createImage';
 import { createZhipuVideo } from './createVideo';
@@ -17,9 +18,6 @@ export interface ZhipuModelCard {
   modelCode: string;
   modelName: string;
 }
-
-const isToolStreamSupportedModel = (model: string) =>
-  /^glm-(?:4\.(?:6|7)|5(?:\.\d+)?)$/.test(model);
 
 export const params = {
   baseURL: 'https://open.bigmodel.cn/api/paas/v4',
@@ -115,7 +113,7 @@ export const params = {
         model,
         stream,
         thinking: resolvedThinking,
-        tool_stream: stream && isToolStreamSupportedModel(model) ? true : undefined,
+        tool_stream: stream && isToolStreamSupportedGLMModel(model) ? true : undefined,
         tools: zhipuTools,
       } as any;
     },
