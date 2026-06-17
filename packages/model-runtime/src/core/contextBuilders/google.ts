@@ -362,17 +362,26 @@ export const sanitizeGeminiSchema = (schema: any): any => {
   const isObjectType = (t: unknown): boolean =>
     typeof t === 'string' ? t === 'object' : Array.isArray(t) && t.includes('object');
 
-  // Strip enum from non-STRING types and empty enums
-  // Gemini proto: "enum: only allowed for STRING type"
-  if (
-    sanitized.enum !== undefined &&
-    (!isStringType(sanitized.type) || !Array.isArray(sanitized.enum) || sanitized.enum.length === 0)
-  ) {
-    console.warn(
-      '[google] sanitizeGeminiSchema stripped enum — not allowed for non-STRING type or empty',
-      { type: sanitized.type, enumLength: sanitized.enum?.length },
-    );
-    delete sanitized.enum;
+  // Sanitize enum for Gemini proto compliance:
+  // - enum is only allowed on STRING type fields
+  // - enum members must be non-empty strings. Gemini's schema proto only accepts
+  //   STRING enum members, so a `null`/non-string sentinel gets coerced to "" and
+  //   rejected with "enum[i]: cannot be empty". Filter such members out first.
+  if (sanitized.enum !== undefined) {
+    if (Array.isArray(sanitized.enum)) {
+      sanitized.enum = sanitized.enum.filter((v: unknown) => typeof v === 'string' && v !== '');
+    }
+    if (
+      !isStringType(sanitized.type) ||
+      !Array.isArray(sanitized.enum) ||
+      sanitized.enum.length === 0
+    ) {
+      console.warn(
+        '[google] sanitizeGeminiSchema stripped enum — not allowed for non-STRING type, empty, or no valid string members',
+        { type: sanitized.type, enumLength: sanitized.enum?.length },
+      );
+      delete sanitized.enum;
+    }
   }
 
   // Strip required from non-OBJECT types and empty required arrays

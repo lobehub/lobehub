@@ -1434,7 +1434,7 @@ describe('google contextBuilders', () => {
       expect(result.parametersJsonSchema).toEqual(tool.function.parameters);
     });
 
-    it('should pass through nullable types without sanitization', () => {
+    it('should keep nullable type but strip null/empty members from enum (Gemini proto)', () => {
       const tool: ChatCompletionTool = {
         function: {
           description: 'A tool with nullable enum',
@@ -1442,7 +1442,7 @@ describe('google contextBuilders', () => {
           parameters: {
             properties: {
               status: {
-                enum: ['active', 'inactive', null],
+                enum: ['active', 'inactive', null, ''],
                 type: ['string', 'null'],
               },
             },
@@ -1454,8 +1454,53 @@ describe('google contextBuilders', () => {
 
       const result = buildGoogleTool(tool);
 
-      // nullable types and null enum values should be passed through as-is
-      expect(result.parametersJsonSchema).toEqual(tool.function.parameters);
+      // Gemini proto only accepts non-empty STRING enum members; null/'' get coerced
+      // to '' and rejected with "enum[i]: cannot be empty", so they must be filtered.
+      // The nullable `type` is preserved to keep the field optional.
+      expect(result.parametersJsonSchema).toEqual({
+        properties: {
+          status: {
+            enum: ['active', 'inactive'],
+            type: ['string', 'null'],
+          },
+        },
+        type: 'object',
+      });
+    });
+
+    // Regression for LOBE-10456: the memory tool's `memoryType` enum carried a
+    // trailing `null` sentinel (`[...MEMORY_TYPES, null]`), which Gemini rejected
+    // with `enum[10]: cannot be empty`. The sanitizer must drop the null member.
+    it('should strip the null sentinel from a memory-style nullable enum', () => {
+      const memoryTypes = ['fact', 'event', 'people', 'preference'];
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'updateIdentityMemory-style tool',
+          name: 'updateIdentityMemory',
+          parameters: {
+            properties: {
+              set: {
+                properties: {
+                  memoryType: {
+                    description: 'Memory type, use null for omitting the field',
+                    enum: [...memoryTypes, null],
+                    type: ['string', 'null'],
+                  },
+                },
+                type: 'object',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool) as any;
+
+      expect(result.parametersJsonSchema.properties.set.properties.memoryType.enum).toEqual(
+        memoryTypes,
+      );
     });
 
     it('should pass through const values without conversion', () => {
