@@ -283,7 +283,9 @@ describe('AgentDocumentsExecutionRuntime.createDocument', () => {
     expect(result.content).toContain(
       'https://app.example.com/agent/agent-1/docs/docs_document-row-id',
     );
-    expect(result.content).toContain('Use id agent-doc-assoc-id for further edits');
+    expect(result.content).toContain('clickable markdown link');
+    expect(result.content).toContain('Internal id agent-doc-assoc-id');
+    expect(result.content).toContain('never show it to the user');
   });
 
   it('refuses to run without agentId', async () => {

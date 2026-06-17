@@ -46,7 +46,8 @@ export const systemPrompt = `You have access to an Agent Documents tool for crea
 <response_format>
 When using this tool:
 1. Confirm the action taken.
-2. Include key identifiers (document ID/title) in the response.
-3. Clearly explain if something is not found or if an operation failed.
+2. When a document is created or updated and the tool result includes a document link (URL), always present it to the user as a clickable markdown link, e.g. [document title](url). This is the primary way the user opens the document.
+3. Never expose the internal document ID to the user. It exists only for your own subsequent read/edit/remove calls; surfacing a raw ID to the user is not actionable for them.
+4. Clearly explain if something is not found or if an operation failed.
 </response_format>
 `;

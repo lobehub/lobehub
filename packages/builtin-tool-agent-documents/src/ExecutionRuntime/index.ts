@@ -309,7 +309,7 @@ export class AgentDocumentsExecutionRuntime {
 
     return {
       content: url
-        ? `Created document "${title}" (${url}). Use id ${created.id} for further edits.`
+        ? `Created document "${title}". Share this link with the user as a clickable markdown link: ${url}. (Internal id ${created.id} — for your own further edit/read/remove calls only; never show it to the user.)`
         : `Created document "${title}" (${created.id}).`,
       state: { agentDocumentId: created.id, documentId: created.documentId },
       success: true,
