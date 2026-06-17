@@ -158,6 +158,7 @@ const transformOpenAIStream = (
     // maybe need another structure to add support for multiple choices
     if (!Array.isArray(chunk.choices) || chunk.choices.length === 0) {
       if (chunk.usage) {
+        delete streamContext.usageMissingDiagnostics;
         const usage = chunk.usage;
         return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
       }
@@ -275,6 +276,23 @@ const transformOpenAIStream = (
 
     // Handle finish reason
     if (item.finish_reason) {
+      if (chunk.usage) {
+        delete streamContext.usageMissingDiagnostics;
+      } else {
+        streamContext.usageMissingDiagnostics = {
+          apiMode: 'chat_completions',
+          chunkIndex: streamContext.chunkIndex,
+          finishReason: item.finish_reason,
+          hasUsageMetadata: false,
+          includeUsageRequested: payload?.includeUsageRequested,
+          model: payload?.model,
+          provider: payload?.provider,
+          responseId: chunk.id,
+          source: 'openai_chat_completions',
+          terminalEventType: 'chat.completion.chunk',
+        };
+      }
+
       // one-api's streaming interface can have both finish_reason and content
       //  {"id":"demo","model":"deepl-en","choices":[{"index":0,"delta":{"role":"assistant","content":"Introduce yourself."},"finish_reason":"stop"}]}
       if (typeof item.delta?.content === 'string' && !!item.delta.content) {
@@ -351,6 +369,7 @@ const transformOpenAIStream = (
       }
 
       if (chunk.usage) {
+        delete streamContext.usageMissingDiagnostics;
         const usage = chunk.usage;
         return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
       }
@@ -472,6 +491,7 @@ const transformOpenAIStream = (
       if (typeof content === 'string') {
         // If content is an empty string but chunk has usage, prioritize returning usage (e.g., Gemini image-preview eventually returns usage in a separate chunk)
         if (content === '' && chunk.usage) {
+          delete streamContext.usageMissingDiagnostics;
           const usage = chunk.usage;
           return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
         }
@@ -588,6 +608,7 @@ const transformOpenAIStream = (
 
     // In litellm responses, there are cases where delta is empty but usage exists
     if (chunk.usage) {
+      delete streamContext.usageMissingDiagnostics;
       const usage = chunk.usage;
       return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
     }
@@ -665,6 +686,6 @@ export const OpenAIStream = (
         }),
       )
       .pipeThrough(createSSEProtocolTransformer((c) => c, streamStack))
-      .pipeThrough(createCallbacksTransformer(callbacks))
+      .pipeThrough(createCallbacksTransformer(callbacks, { streamStack }))
   );
 };

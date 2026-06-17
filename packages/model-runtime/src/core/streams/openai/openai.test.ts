@@ -79,6 +79,57 @@ describe('OpenAIStream', () => {
     expect(onCompletionMock).toHaveBeenCalledTimes(1);
   });
 
+  it('should expose missing usage diagnostics when terminal chunk has no usage', async () => {
+    const mockOpenAIStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          choices: [
+            {
+              delta: {},
+              finish_reason: 'stop',
+              index: 0,
+            },
+          ],
+          id: 'chatcmpl_missing_usage',
+        });
+        controller.close();
+      },
+    });
+    const onFinal = vi.fn();
+
+    const protocolStream = OpenAIStream(mockOpenAIStream, {
+      callbacks: { onFinal },
+      payload: {
+        apiMode: 'chat_completions',
+        includeUsageRequested: true,
+        model: 'gpt-5.4-mini',
+        provider: 'openai',
+      },
+    });
+
+    const decoder = new TextDecoder();
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      decoder.decode(chunk, { stream: true });
+    }
+
+    expect(onFinal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        usageMissingDiagnostics: expect.objectContaining({
+          apiMode: 'chat_completions',
+          finishReason: 'stop',
+          hasUsageMetadata: false,
+          includeUsageRequested: true,
+          model: 'gpt-5.4-mini',
+          provider: 'openai',
+          responseId: 'chatcmpl_missing_usage',
+          source: 'openai_chat_completions',
+          terminalEventType: 'chat.completion.chunk',
+        }),
+      }),
+    );
+  });
+
   it('should handle empty stream', async () => {
     const mockStream = new ReadableStream({
       start(controller) {

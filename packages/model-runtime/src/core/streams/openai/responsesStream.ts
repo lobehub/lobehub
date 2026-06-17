@@ -158,12 +158,25 @@ const transformOpenAIStream = (
 
       case 'response.completed': {
         if (chunk.response.usage) {
+          delete streamContext.usageMissingDiagnostics;
           return {
             data: convertOpenAIResponseUsage(chunk.response.usage, payload),
             id: chunk.response.id,
             type: 'usage',
           };
         }
+
+        streamContext.usageMissingDiagnostics = {
+          apiMode: 'responses',
+          hasUsageMetadata: false,
+          includeUsageRequested: payload?.includeUsageRequested,
+          model: payload?.model,
+          provider: payload?.provider,
+          responseId: chunk.response.id,
+          source: 'openai_responses',
+          terminalEventType: chunk.type,
+          terminalStatus: chunk.response.status,
+        };
 
         return { data: chunk, id: streamContext.id, type: 'data' };
       }
@@ -227,6 +240,6 @@ export const OpenAIResponsesStream = (
         }),
       )
       .pipeThrough(createSSEProtocolTransformer((c) => c, streamStack))
-      .pipeThrough(createCallbacksTransformer(callbacks))
+      .pipeThrough(createCallbacksTransformer(callbacks, { streamStack }))
   );
 };

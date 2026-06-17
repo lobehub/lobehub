@@ -972,6 +972,58 @@ describe('createCallbacksTransformer', () => {
     expect(onFinal).toHaveBeenCalledWith(expect.objectContaining({ finishReason: undefined }));
   });
 
+  it('should include usageMissingDiagnostics on final data when no usage is received', async () => {
+    const onFinal = vi.fn();
+    const streamStack = {
+      id: 'chat_1',
+      usageMissingDiagnostics: {
+        finishReason: 'stop',
+        hasUsageMetadata: false,
+        includeUsageRequested: true,
+        model: 'gpt-5.4-mini',
+        provider: 'openai',
+        source: 'openai_chat_completions' as const,
+        terminalEventType: 'chat.completion.chunk',
+      },
+    };
+    const transformer = createCallbacksTransformer({ onFinal }, { streamStack });
+
+    const chunks = ['event: stop\n', `data: ${JSON.stringify('stop')}\n\n`];
+
+    await processChunks(transformer, chunks);
+
+    expect(onFinal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        usage: undefined,
+        usageMissingDiagnostics: streamStack.usageMissingDiagnostics,
+      }),
+    );
+  });
+
+  it('should omit usageMissingDiagnostics when usage is received', async () => {
+    const onFinal = vi.fn();
+    const streamStack = {
+      id: 'chat_1',
+      usageMissingDiagnostics: {
+        finishReason: 'stop',
+        hasUsageMetadata: false,
+        source: 'openai_chat_completions' as const,
+        terminalEventType: 'chat.completion.chunk',
+      },
+    };
+    const transformer = createCallbacksTransformer({ onFinal }, { streamStack });
+
+    const chunks = ['event: usage\n', `data: ${JSON.stringify({ totalTokens: 10 })}\n\n`];
+
+    await processChunks(transformer, chunks);
+
+    expect(onFinal).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        usageMissingDiagnostics: expect.anything(),
+      }),
+    );
+  });
+
   it('should handle speed chunks and include in final data', async () => {
     const onFinal = vi.fn();
     const transformer = createCallbacksTransformer({ onFinal });

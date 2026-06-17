@@ -535,6 +535,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         const streamOptions = {
           callbacks: options?.callback,
           payload: {
+            apiMode: 'messages',
             model: payload.model,
             pricing,
             pricingOptions,

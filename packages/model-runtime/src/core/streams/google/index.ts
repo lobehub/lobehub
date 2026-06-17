@@ -112,12 +112,22 @@ const transformGoogleGenerativeAIStream = (
 
   const usageChunks: StreamProtocolChunk[] = [];
   if (candidate?.finishReason && usageMetadata) {
+    delete context.usageMissingDiagnostics;
     usageChunks.push({ data: candidate.finishReason, id: context?.id, type: 'stop' });
 
     const convertedUsage = convertGoogleAIUsage(usageMetadata, payload?.pricing);
     if (convertedUsage) {
       usageChunks.push({ data: convertedUsage, id: context?.id, type: 'usage' });
     }
+  } else if (candidate?.finishReason) {
+    context.usageMissingDiagnostics = {
+      finishReason: candidate.finishReason,
+      hasUsageMetadata: false,
+      model: payload?.model,
+      provider: payload?.provider,
+      source: 'google_generative_ai',
+      terminalEventType: 'GenerateContentResponse.candidates.finishReason',
+    };
   }
 
   // Parse function calls from candidate.content.parts
@@ -408,5 +418,5 @@ export const GoogleGenerativeAIStream = (
     .pipeThrough(
       createSSEProtocolTransformer((c) => c, streamStack, { requireTerminalEvent: true }),
     )
-    .pipeThrough(createCallbacksTransformer(callbacks));
+    .pipeThrough(createCallbacksTransformer(callbacks, { streamStack }));
 };
