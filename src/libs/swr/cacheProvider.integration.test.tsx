@@ -6,7 +6,8 @@
  *   synchronous local-first read before the network resolves.
  */
 import { renderHook, waitFor } from '@testing-library/react';
-import { createElement, type PropsWithChildren } from 'react';
+import type { PropsWithChildren } from 'react';
+import { createElement } from 'react';
 import useSWR, { type Cache, SWRConfig } from 'swr';
 import { afterEach, describe, expect, it } from 'vitest';
 

@@ -10,14 +10,30 @@ import type { DayjsLocaleGlobEntry } from '@/utils/dayjsLocale';
 import { loadDayjsLocaleModule, normalizeDayjsLocale } from '@/utils/dayjsLocale';
 import { getAntdLocale } from '@/utils/locale';
 
-const dayjsLocaleLoaders = import.meta.glob<{ default: ILocale }>(
-  '/node_modules/dayjs/locale/{ar,bg,de,en,es,fa,fr,it,ja,ko,nl,pl,pt-br,ru,tr,vi,zh-cn,zh-tw}.js',
-) as Record<string, DayjsLocaleGlobEntry>;
+const dayjsLocaleLoaders: Record<string, DayjsLocaleGlobEntry> = {
+  'ar': () => import('dayjs/locale/ar'),
+  'bg': () => import('dayjs/locale/bg'),
+  'de': () => import('dayjs/locale/de'),
+  'en': () => import('dayjs/locale/en'),
+  'es': () => import('dayjs/locale/es'),
+  'fa': () => import('dayjs/locale/fa'),
+  'fr': () => import('dayjs/locale/fr'),
+  'it': () => import('dayjs/locale/it'),
+  'ja': () => import('dayjs/locale/ja'),
+  'ko': () => import('dayjs/locale/ko'),
+  'nl': () => import('dayjs/locale/nl'),
+  'pl': () => import('dayjs/locale/pl'),
+  'pt-br': () => import('dayjs/locale/pt-br'),
+  'ru': () => import('dayjs/locale/ru'),
+  'tr': () => import('dayjs/locale/tr'),
+  'vi': () => import('dayjs/locale/vi'),
+  'zh-cn': () => import('dayjs/locale/zh-cn'),
+  'zh-tw': () => import('dayjs/locale/zh-tw'),
+};
 
 const updateDayjs = async (lang: string) => {
   const locale = normalizeDayjsLocale(lang);
-  const key = `/node_modules/dayjs/locale/${locale}.js`;
-  const loader = dayjsLocaleLoaders[key] ?? dayjsLocaleLoaders['/node_modules/dayjs/locale/en.js'];
+  const loader = dayjsLocaleLoaders[locale] ?? dayjsLocaleLoaders.en;
 
   try {
     const mod = await loadDayjsLocaleModule(loader);
@@ -26,9 +42,7 @@ const updateDayjs = async (lang: string) => {
   } catch (error) {
     console.error('error', error);
     console.error(`dayjs locale for ${lang} not found, fallback to en`);
-    const fallback = await loadDayjsLocaleModule(
-      dayjsLocaleLoaders['/node_modules/dayjs/locale/en.js']!,
-    );
+    const fallback = await loadDayjsLocaleModule(dayjsLocaleLoaders.en!);
     dayjs.locale(fallback.default);
   }
 };
