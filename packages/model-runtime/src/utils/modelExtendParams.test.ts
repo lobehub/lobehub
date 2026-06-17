@@ -86,6 +86,23 @@ describe('applyModelExtendParams', () => {
 
     expect(result.reasoning_effort).toBe('max');
   });
+
+  it('preserves thinking budget when deepseekV4ReasoningEffort is set', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({
+        deepseekV4ReasoningEffort: 'high',
+        reasoningBudgetToken: 2048,
+      }),
+      extendParams: ['deepseekV4ReasoningEffort', 'reasoningBudgetToken'],
+      model: 'deepseek-v4-pro',
+    });
+
+    expect(result.reasoning_effort).toBe('high');
+    expect(result.thinking).toEqual({
+      budget_tokens: 2048,
+      type: 'enabled',
+    });
+  });
 });
 
 describe('resolveDefaultThinkingLevelForModel', () => {

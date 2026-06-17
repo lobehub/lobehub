@@ -5,13 +5,56 @@ const ollamaCloudModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
+    },
+    contextWindowTokens: 1_000_000,
+    description: 'GLM-5.2 is Z.ai’s flagship model for the era of long-horizon tasks.',
+    displayName: 'GLM-5.2',
+    enabled: true,
+    family: 'glm',
+    generation: 'glm-5.2',
+    id: 'glm-5.2',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      "Kimi K2.7 Code is Moonshot AI's coding-focused agentic model built upon Kimi K2.6, with substantial improvements on real-world long-horizon coding tasks and roughly 30% lower thinking-token usage.",
+    displayName: 'Kimi K2.7 Code',
+    enabled: true,
+    family: 'kimi',
+    generation: 'kimi-k2.7',
+    id: 'kimi-k2.7-code',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      vision: true,
+    },
+    contextWindowTokens: 512_000,
+    description: 'MiniMax M3: Coding & Agentic Frontier. 1M context window. Native Multimodality.',
+    displayName: 'MiniMax M3',
+    family: 'minimax',
+    generation: 'minimax-m3',
+    id: 'minimax-m3',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
       vision: true,
     },
     contextWindowTokens: 262_144,
     description:
       'Kimi K2.6 is an open-source, native multimodal agentic model that advances practical capabilities in long-horizon coding, coding-driven design, proactive autonomous execution, and swarm-based task orchestration.',
     displayName: 'Kimi K2.6',
-    enabled: true,
     family: 'kimi',
     generation: 'kimi-k2.6',
     id: 'kimi-k2.6',
@@ -26,7 +69,6 @@ const ollamaCloudModels: AIChatModelCard[] = [
     description:
       'GLM-5.1 is our next-generation flagship model for agentic engineering, with significantly stronger coding capabilities than its predecessor. It achieves state-of-the-art performance on SWE-Bench Pro and leads GLM-5 by a wide margin.',
     displayName: 'GLM-5.1',
-    enabled: true,
     family: 'glm',
     generation: 'glm-5.1',
     id: 'glm-5.1',
@@ -55,7 +97,6 @@ const ollamaCloudModels: AIChatModelCard[] = [
     description:
       'MiniMax M2.7 is an efficient large language model built specifically for coding and agent workflows.',
     displayName: 'MiniMax M2.7',
-    enabled: true,
     family: 'minimax',
     generation: 'minimax-m2.7',
     id: 'minimax-m2.7',

@@ -241,11 +241,13 @@ export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): Mode
       if (deepseekV4ReasoningEffort === 'none') {
         delete extendParams.reasoning_effort;
         extendParams.thinking = {
+          ...extendParams.thinking,
           type: 'disabled',
         };
       } else {
         extendParams.reasoning_effort = deepseekV4ReasoningEffort;
         extendParams.thinking = {
+          ...extendParams.thinking,
           type: 'enabled',
         };
       }
