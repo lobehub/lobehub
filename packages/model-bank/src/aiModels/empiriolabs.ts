@@ -1,5 +1,5 @@
 import type { ModelParamsSchema } from '../standard-parameters';
-import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIImageModelCard, AIVideoModelCard } from '../types/aiModel';
 
 // https://empiriolabs.ai/models
 const empiriolabsChatModels: AIChatModelCard[] = [
@@ -322,9 +322,293 @@ const empiriolabsImageModels: AIImageModelCard[] = [
   },
 ];
 
+// Video models are served through the async /v1/videos/generations endpoint
+// (submit returns a job id, the result is polled at /v1/jobs/{id}). The
+// EmpirioLabs runtime provider supplies createVideo + handlePollVideoStatus.
+// Each card exposes only the parameters that map to a field the worker reads,
+// and the runtime forwards them as the camelCase keys the provider translates.
+const empiriolabsVideoModels: AIVideoModelCard[] = [
+  {
+    description:
+      'Multimodal video model supporting text-to-video, image-to-video, video editing, and reference-to-video, with high-fidelity output from text, image, or video inputs.',
+    displayName: 'Wan 2.7',
+    enabled: true,
+    id: 'wan-2-7',
+    organization: 'Alibaba',
+    parameters: {
+      aspectRatio: { default: '16:9', enum: ['16:9', '9:16', '1:1', '4:3', '3:4'] },
+      duration: { default: 5, max: 15, min: 2 },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      promptExtend: { default: true },
+      resolution: { default: '1080p', enum: ['720p', '1080p'] },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Multi-shot video model with text-to-video, image-to-video, and reference-to-video, native audio, and a flash speed tier for faster, lower-cost clips.',
+    displayName: 'Wan 2.6',
+    enabled: true,
+    id: 'wan-2-6',
+    organization: 'Alibaba',
+    parameters: {
+      aspectRatio: { default: '16:9', enum: ['16:9', '9:16', '1:1', '4:3', '3:4'] },
+      duration: { default: 5, max: 15, min: 5 },
+      generateAudio: { default: true },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      promptExtend: { default: true },
+      resolution: { default: '1080p', enum: ['720p', '1080p'] },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.138, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Seedance 2.0 Pro generates cinematic text-to-video and image-to-video up to 1080p with native audio, reference frames, and editing modes.',
+    displayName: 'Seedance 2.0 Pro',
+    enabled: true,
+    id: 'seedance-2-0-pro',
+    organization: 'ByteDance',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
+      },
+      duration: { default: 5, max: 15, min: 4 },
+      endImageUrl: { default: null },
+      generateAudio: { default: true },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      resolution: { default: '720p', enum: ['480p', '720p', '1080p'] },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.3, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Seedance 2.0 Fast generates text-to-video and image-to-video up to 720p with native audio, optimized for quicker, lower-cost generation.',
+    displayName: 'Seedance 2.0 Fast',
+    enabled: true,
+    id: 'seedance-2-0-fast',
+    organization: 'ByteDance',
+    parameters: {
+      aspectRatio: {
+        default: '16:9',
+        enum: ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'],
+      },
+      duration: { default: 5, max: 15, min: 4 },
+      endImageUrl: { default: null },
+      generateAudio: { default: true },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      resolution: { default: '720p', enum: ['480p', '720p'] },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.26, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Kling O3 produces high-quality text-to-video and image-to-video with standard, pro, and 4K tiers, optional sound, and start and end frame control.',
+    displayName: 'Kling O3',
+    enabled: true,
+    id: 'kling-o3',
+    organization: 'Kuaishou',
+    parameters: {
+      aspectRatio: { default: '16:9', enum: ['16:9', '1:1', '9:16'] },
+      duration: { default: 5, max: 15, min: 3 },
+      endImageUrl: { default: null },
+      imageUrl: { default: null },
+      imageUrls: { default: [], maxCount: 4 },
+      prompt: { default: '' },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.224, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Hunyuan Video 1.5 generates text-to-video and image-to-video up to 1080p with adjustable steps and guidance for detailed, controllable motion.',
+    displayName: 'Hunyuan Video 1.5',
+    enabled: true,
+    id: 'hunyuan-video-1-5',
+    organization: 'Tencent',
+    parameters: {
+      aspectRatio: { default: '16:9', enum: ['16:9', '9:16', '1:1', '4:3', '3:4'] },
+      duration: { default: 5, max: 10, min: 1 },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      resolution: { default: '480p', enum: ['480p', '720p', '1080p'] },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.061, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Pixverse v5.6 creates text-to-video and image-to-video up to 1080p with optional audio, start and end frames, and multiple stylistic presets.',
+    displayName: 'Pixverse v5.6',
+    enabled: true,
+    id: 'pixverse-v5-6',
+    organization: 'PixVerse',
+    parameters: {
+      aspectRatio: { default: '16:9', enum: ['16:9', '4:3', '1:1', '3:4', '9:16'] },
+      duration: { default: 5, enum: [5, 8, 10], max: 10, min: 5 },
+      endImageUrl: { default: null },
+      generateAudio: { default: true },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      resolution: { default: '1080p', enum: ['360p', '540p', '720p', '1080p'] },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 1.5, strategy: 'fixed', unit: 'video' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Pixverse v5 creates text-to-video and image-to-video up to 1080p with transitions and start and end frame control.',
+    displayName: 'Pixverse v5',
+    enabled: true,
+    id: 'pixverse-v5',
+    organization: 'PixVerse',
+    parameters: {
+      aspectRatio: { default: '16:9', enum: ['16:9', '4:3', '1:1', '3:4', '9:16'] },
+      duration: { default: 5, enum: [5, 8], max: 8, min: 5 },
+      endImageUrl: { default: null },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      resolution: { default: '720p', enum: ['360p', '540p', '720p', '1080p'] },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.6, strategy: 'fixed', unit: 'video' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'MOSS Video and Audio generates synchronized video and audio from text or an image, with fast and quality modes and adjustable guidance.',
+    displayName: 'MOSS Video and Audio',
+    enabled: true,
+    id: 'moss-video-and-audio',
+    organization: 'OpenMOSS',
+    parameters: {
+      duration: { default: 8, max: 8, min: 2 },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      resolution: { default: '720p', enum: ['360p', '720p'] },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 2.82, strategy: 'fixed', unit: 'video' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'HappyHorse 1.0 generates faithful text-to-video, image-to-video, and reference-to-video with smooth, detailed motion and editing support.',
+    displayName: 'HappyHorse 1.0',
+    enabled: true,
+    id: 'happyhorse-1-0',
+    organization: 'Alibaba',
+    parameters: {
+      aspectRatio: { default: '16:9', enum: ['16:9', '9:16', '1:1', '4:3', '3:4'] },
+      duration: { default: 5, max: 15, min: 3 },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      resolution: { default: '1080p', enum: ['720p', '1080p'] },
+      seed: { default: null },
+      watermark: { default: false },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.15, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'SVI 2.0 Pro generates multi-scene video from text or an image, with fast and quality modes and configurable resolution and duration.',
+    displayName: 'SVI 2.0 Pro',
+    enabled: true,
+    id: 'svi-2-0-pro',
+    organization: 'VITA-EPFL',
+    parameters: {
+      duration: { default: 18, max: 121.5, min: 18 },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      size: {
+        default: '832x480',
+        enum: ['832x480', '480x832', '720x1280', '1280x720'],
+      },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.17, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Grok Imagine Video 1.5 is an image-to-video model that animates a source image with a prompt, producing 480p or 720p clips.',
+    displayName: 'Grok Imagine Video 1.5',
+    enabled: true,
+    id: 'grok-imagine-video-1-5',
+    organization: 'xAI',
+    parameters: {
+      aspectRatio: { default: '16:9', enum: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'] },
+      duration: { default: 10, max: 15, min: 1 },
+      imageUrl: { default: null },
+      prompt: { default: '' },
+      resolution: { default: '720p', enum: ['480p', '720p'] },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.168, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+  {
+    description:
+      'Amazon Nova Reel 1.1 generates text-to-video clips with multi-shot support for longer, narrative sequences.',
+    displayName: 'Amazon Nova Reel 1.1',
+    enabled: true,
+    id: 'amazon-nova-reel-1-1',
+    organization: 'Amazon',
+    parameters: {
+      duration: { default: 6, max: 120, min: 6 },
+      prompt: { default: '' },
+      seed: { default: null },
+    },
+    pricing: {
+      units: [{ name: 'videoGeneration', rate: 0.14, strategy: 'fixed', unit: 'second' }],
+    },
+    type: 'video',
+  },
+];
+
 export const empiriolabsChatModelList = empiriolabsChatModels;
 export const empiriolabsImageModelList = empiriolabsImageModels;
+export const empiriolabsVideoModelList = empiriolabsVideoModels;
 
-export const allModels = [...empiriolabsChatModels, ...empiriolabsImageModels];
+export const allModels = [
+  ...empiriolabsChatModels,
+  ...empiriolabsImageModels,
+  ...empiriolabsVideoModels,
+];
 
 export default allModels;
