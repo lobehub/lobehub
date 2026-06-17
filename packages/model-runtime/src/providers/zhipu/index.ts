@@ -18,6 +18,9 @@ export interface ZhipuModelCard {
   modelName: string;
 }
 
+const isToolStreamSupportedModel = (model: string) =>
+  /^glm-(?:4\.(?:6|7)|5(?:\.\d+)?)$/.test(model);
+
 export const params = {
   baseURL: 'https://open.bigmodel.cn/api/paas/v4',
   chatCompletion: {
@@ -112,7 +115,7 @@ export const params = {
         model,
         stream,
         thinking: resolvedThinking,
-        tool_stream: stream && /^glm-(?:4\.(?:6|7)|5(?:\.1)?)$/.test(model) ? true : undefined,
+        tool_stream: stream && isToolStreamSupportedModel(model) ? true : undefined,
         tools: zhipuTools,
       } as any;
     },

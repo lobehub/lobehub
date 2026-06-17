@@ -76,6 +76,16 @@ describe('applyModelExtendParams', () => {
       }).reasoning_effort,
     ).toBe('high');
   });
+
+  it('resolves GLM-5.2 reasoning effort', () => {
+    const result = applyModelExtendParams({
+      chatConfig: chatConfig({ glm5_2ReasoningEffort: 'max' }),
+      extendParams: ['glm5_2ReasoningEffort'],
+      model: 'glm-5.2',
+    });
+
+    expect(result.reasoning_effort).toBe('max');
+  });
 });
 
 describe('resolveDefaultThinkingLevelForModel', () => {

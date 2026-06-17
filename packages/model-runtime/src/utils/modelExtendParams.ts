@@ -209,6 +209,10 @@ export const applyModelExtendParams = (ctx: ApplyModelExtendParamsContext): Mode
     extendParams.reasoning_effort = chatConfig.gpt5_2ProReasoningEffort;
   }
 
+  if (modelExtendParams.includes('glm5_2ReasoningEffort') && chatConfig.glm5_2ReasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.glm5_2ReasoningEffort;
+  }
+
   if (modelExtendParams.includes('grok4_20ReasoningEffort') && chatConfig.grok4_20ReasoningEffort) {
     extendParams.reasoning_effort = chatConfig.grok4_20ReasoningEffort;
   }

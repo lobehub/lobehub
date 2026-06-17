@@ -390,20 +390,38 @@ describe('LobeZhipuAI - custom features', () => {
         ['glm-4.7', true, true],
         ['glm-5', true, true],
         ['glm-5.1', true, true],
+        ['glm-5.2', true, true],
         ['glm-4.5', true, undefined],
         ['glm-5-turbo', true, undefined],
         ['glm-4', true, undefined],
+        ['glm-5.2', false, undefined],
         ['glm-5.1', false, undefined],
-      ] as const)('model=%s stream=%s → tool_stream=%s', async (model, stream, expected) => {
-        await instance.chat({
+      ] as const)('model=%s stream=%s → tool_stream=%s', (model, stream, expected) => {
+        const payload = params.chatCompletion.handlePayload({
+          max_tokens: 4096,
           messages: [{ content: 'Hello', role: 'user' }],
           model,
           stream,
           temperature: 0.5,
         });
 
-        const callArgs = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-        expect(callArgs.tool_stream).toBe(expected);
+        expect(payload.tool_stream).toBe(expected);
+      });
+    });
+
+    describe('GLM-5.2 optional params', () => {
+      it('should forward reasoning_effort with thinking enabled', () => {
+        const payload = params.chatCompletion.handlePayload({
+          max_tokens: 4096,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-5.2',
+          reasoning_effort: 'max',
+          temperature: 1,
+          thinking: { type: 'enabled' },
+        });
+
+        expect(payload.reasoning_effort).toBe('max');
+        expect(payload.thinking).toEqual({ type: 'enabled' });
       });
     });
 
