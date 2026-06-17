@@ -51,6 +51,7 @@ import { LobeOpenCodeCodingPlanAI } from './providers/opencodeCodingPlan';
 import { LobeOpenCodeZenAI } from './providers/opencodeZen';
 import { LobeOpenRouterAI } from './providers/openrouter';
 import { LobePerplexityAI } from './providers/perplexity';
+import { LobePinstripesAI } from './providers/pinstripes';
 import { LobePPIOAI } from './providers/ppio';
 import { LobeQiniuAI } from './providers/qiniu';
 import { LobeQwenAI } from './providers/qwen';
@@ -134,6 +135,7 @@ export const providerRuntimeMap = {
   openai: LobeOpenAI,
   openrouter: LobeOpenRouterAI,
   perplexity: LobePerplexityAI,
+  pinstripes: LobePinstripesAI,
   ppio: LobePPIOAI,
   qiniu: LobeQiniuAI,
   qwen: LobeQwenAI,

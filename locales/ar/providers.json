@@ -52,6 +52,7 @@
   "opencodezen.description": "يوفّر OpenCode Zen وصولًا إلى مجموعة من النماذج المختارة من OpenAI وAnthropic وMoonshot وMiniMax وZhipu وQwen وغيرها من خلال مفتاح API واحد.",
   "openrouter.description": "يوفر OpenRouter الوصول إلى العديد من النماذج المتقدمة من OpenAI وAnthropic وLLaMA وغيرها، مما يتيح للمستخدمين اختيار النموذج والسعر الأنسب لحالتهم.",
   "perplexity.description": "تقدم Perplexity نماذج دردشة متقدمة، بما في ذلك إصدارات Llama 3.1، للاستخدام عبر الإنترنت وغير المتصل ولمهام معالجة اللغة الطبيعية المعقدة.",
+  "pinstripes.description": "Pinstripes is an OpenAI-compatible inference API offering high-quality models at competitive prices, including DeepSeek, GLM, Qwen, and MiniMax variants.",
   "ppio.description": "توفر PPIO واجهات برمجة تطبيقات موثوقة وفعالة من حيث التكلفة للنماذج المفتوحة، بما في ذلك DeepSeek وLlama وQwen وغيرها من النماذج الرائدة.",
   "qiniu.description": "توفر Qiniu خدمات استدلال ذكاء اصطناعي في الوقت الحقيقي وعلى دفعات، موثوقة وسهلة الاستخدام وفعالة من حيث التكلفة.",
   "qwen.description": "Qwen هو نموذج لغوي كبير من Alibaba Cloud يتميز بفهم وتوليد قوي، ويغطي الأسئلة والأجوبة، والكتابة، والتعبير عن الرأي، والبرمجة في مجالات متعددة.",

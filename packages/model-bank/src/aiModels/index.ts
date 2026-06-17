@@ -53,6 +53,7 @@ import { default as opencodecodingplan } from './opencodeCodingPlan';
 import { default as opencodezen } from './opencodeZen';
 import { default as openrouter } from './openrouter';
 import { default as perplexity } from './perplexity';
+import { default as pinstripes } from './pinstripes';
 import { default as ppio } from './ppio';
 import { default as qiniu } from './qiniu';
 import { default as qwen } from './qwen';
@@ -161,6 +162,7 @@ const staticModelMap: ModelsMap = {
   opencodezen,
   openrouter,
   perplexity,
+  pinstripes,
   ppio,
   qiniu,
   qwen,
@@ -275,6 +277,7 @@ export { default as opencodecodingplan } from './opencodeCodingPlan';
 export { default as opencodezen } from './opencodeZen';
 export { default as openrouter } from './openrouter';
 export { default as perplexity } from './perplexity';
+export { default as pinstripes } from './pinstripes';
 export { default as ppio } from './ppio';
 export { default as qiniu } from './qiniu';
 export { default as qwen } from './qwen';
