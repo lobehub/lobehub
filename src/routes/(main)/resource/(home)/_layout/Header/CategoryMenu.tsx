@@ -4,8 +4,9 @@ import { Flexbox } from '@lobehub/ui';
 import { FileText, ImageIcon, LayoutPanelTopIcon, Mic2, SquarePlay } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 
+import { useBusinessResourceCategories } from '@/business/client/features/ResourceCategories';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { FilesTabs } from '@/types/files';
@@ -16,6 +17,8 @@ const CategoryMenu = memo(() => {
   const { t } = useTranslation('file');
   const [activeKey, setMode] = useResourceManagerStore((s) => [s.category, s.setMode]);
   const navigate = useWorkspaceAwareNavigate();
+  const businessCategories = useBusinessResourceCategories();
+  const location = useLocation();
 
   const items = useMemo(
     () => [
@@ -49,25 +52,35 @@ const CategoryMenu = memo(() => {
         title: t('tab.videos'),
         url: '/resource?category=videos',
       },
+      ...businessCategories.map((category) => ({
+        icon: category.icon,
+        key: category.key,
+        title: t(category.titleKey),
+        url: category.url,
+      })),
     ],
-    [t],
+    [t, businessCategories],
   );
 
   return (
     <Flexbox gap={1} paddingInline={4}>
-      {items.map((item) => (
-        <Link
-          key={item.key}
-          to={item.url}
-          onClick={(e) => {
-            e.preventDefault();
-            setMode('explorer');
-            navigate(item.url, { replace: true });
-          }}
-        >
-          <NavItem active={activeKey === item.key} icon={item.icon} title={item.title} />
-        </Link>
-      ))}
+      {items.map((item) => {
+        const isBusinessRoute = item.url.startsWith('/resource/');
+        const isActive = isBusinessRoute ? location.pathname === item.url : activeKey === item.key;
+        return (
+          <Link
+            key={item.key}
+            to={item.url}
+            onClick={(e) => {
+              e.preventDefault();
+              setMode('explorer');
+              navigate(item.url, { replace: true });
+            }}
+          >
+            <NavItem active={isActive} icon={item.icon} title={item.title} />
+          </Link>
+        );
+      })}
     </Flexbox>
   );
 });

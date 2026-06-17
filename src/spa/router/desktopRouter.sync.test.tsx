@@ -186,6 +186,15 @@ describe('desktopRouter config sync', () => {
     ).toEqual([]);
   });
 
+  it('both configs import and spread BusinessResourceRoutes into /resource children', async () => {
+    const [asyncSource, syncSource] = await readDesktopRouterSources();
+
+    expect(asyncSource).toContain('BusinessResourceRoutes');
+    expect(syncSource).toContain('BusinessResourceRoutes');
+    expect(asyncSource).toContain('...BusinessResourceRoutes');
+    expect(syncSource).toContain('...BusinessResourceRoutes');
+  });
+
   it('task list and detail desktop routes share one workspace layout', async () => {
     const [asyncSource, syncSource] = await readDesktopRouterSources();
 
