@@ -1,7 +1,7 @@
 export default {
   'navigation.chat': 'Chat',
   'navigation.discover': 'Discover',
-  'navigation.discoverAssistants': 'Discover Assistants',
+  'navigation.discoverAssistants': 'Discover Agents',
   'navigation.discoverMcp': 'Discover MCP',
   'navigation.discoverModels': 'Discover Models',
   'navigation.discoverProviders': 'Discover Providers',

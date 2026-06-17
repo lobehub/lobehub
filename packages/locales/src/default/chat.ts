@@ -57,7 +57,7 @@ export default {
   'chatList.expandMessage': 'Expand Message',
   'chatList.longMessageDetail': 'View Details',
   'chatList.refreshing': 'Fetching latest messages...',
-  'clearCurrentMessages': 'Clear current session messages',
+  'clearCurrentMessages': 'Clear current conversation messages',
   'compressedHistory': 'Compressed History',
   'compression.cancel': 'Uncompress',
   'compression.cancelConfirm':
@@ -65,7 +65,7 @@ export default {
   'compression.history': 'History',
   'compression.summary': 'Summary',
   'confirmClearCurrentMessages':
-    'You are about to clear the current session messages. Once cleared, they cannot be retrieved. Please confirm your action.',
+    'You are about to clear the current conversation messages. Once cleared, they cannot be retrieved. Please confirm your action.',
   'confirmRemoveChatGroupItemAlert':
     'This Group will be deleted. Group-specific assistants will also be deleted, while external assistants will not be affected.',
   'confirmRemoveGroupItemAlert':
@@ -980,7 +980,7 @@ export default {
   'topic.openNewTopic': 'Open New Topic',
   'topic.defaultTitle': 'Untitled Topic',
   'topic.recent': 'Recent Topics',
-  'topic.saveCurrentMessages': 'Save current session as topic',
+  'topic.saveCurrentMessages': 'Save current conversation as topic',
   'topic.viewAll': 'View All Topics',
   'translate.action': 'Translate',
   'translate.clear': 'Clear Translation',

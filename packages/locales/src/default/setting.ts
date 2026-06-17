@@ -413,7 +413,7 @@ export default {
   'danger.clear.confirm': "Clear all chat data? This can't be undone.",
   'danger.clear.desc':
     'Delete all data, including agents, files, messages, and skills. Your account will NOT be deleted.',
-  'danger.clear.success': 'All session messages have been cleared',
+  'danger.clear.success': 'All conversation messages have been cleared',
   'danger.clear.title': 'Wipe Data',
   'danger.reset.action': 'Reset Now',
   'danger.reset.confirm': 'Reset all settings?',
@@ -436,9 +436,9 @@ export default {
   'header.global': 'Global Settings',
   'header.group': 'Group Settings',
   'header.groupDesc': 'Manage group and chat preferences',
-  'header.session': 'Session Settings',
-  'header.sessionDesc': 'Agent Profile and session preferences',
-  'header.sessionWithName': 'Session Settings · {{name}}',
+  'header.session': 'Agent Settings',
+  'header.sessionDesc': 'Agent Profile and chat preferences',
+  'header.sessionWithName': 'Agent Settings · {{name}}',
   'header.title': 'Settings',
   'hotkey.clearBinding': 'Clear binding',
   'hotkey.conflicts': 'Conflicts with existing hotkeys',
@@ -504,7 +504,7 @@ export default {
   'llm.fetcher.noLatestTime': 'No list available yet',
   'llm.helpDoc': 'Configuration Guide',
   'llm.modelList.desc':
-    'Select the models to display in the session. The selected models will be displayed in the model list.',
+    'Select the models to display in conversations. The selected models will be displayed in the model list.',
   'llm.modelList.placeholder': 'Please select a model from the list',
   'llm.modelList.title': 'Model List',
   'llm.modelList.total': '{{count}} models available in total',
@@ -1610,8 +1610,7 @@ When I am ___, I need ___
     'All agents, skills, and their configurations',
   'workspace.general.delete.confirm.warning.items.billing':
     'Subscription, budget settings, and auto top-up',
-  'workspace.general.delete.confirm.warning.items.conversations':
-    'All sessions, messages, topics, and tasks',
+  'workspace.general.delete.confirm.warning.items.conversations': 'All messages, topics, and tasks',
   'workspace.general.delete.confirm.warning.items.files':
     'Uploaded files, generations, and knowledge base data',
   'workspace.general.delete.confirm.warning.items.members':
@@ -1622,7 +1621,7 @@ When I am ___, I need ___
     'This cannot be undone. Spend and top-up history will be retained for audit only.',
   'workspace.general.delete.cta': 'Delete Workspace',
   'workspace.general.delete.description':
-    'Permanently delete this workspace and everything inside it — agents, sessions, messages, files, members, and invitations. This action cannot be reversed.',
+    'Permanently delete this workspace and everything inside it — agents, messages, files, members, and invitations. This action cannot be reversed.',
   'workspace.general.delete.failed': 'Failed to delete workspace',
   'workspace.general.delete.hint':
     'Cancel any active subscription before deletion. Billing history is kept for audit.',
