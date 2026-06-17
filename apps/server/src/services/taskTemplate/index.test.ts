@@ -152,10 +152,31 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     mockGetTaskTemplateRecommendations.mockResolvedValue({
       items: [
         template,
+        null,
+        [],
+        { ...template, category: 'unknown-category' },
+        { ...template, connectors: 'invalid-connectors' },
         { ...template, description: undefined },
+        { ...template, icon: 'unknown-icon' },
+        { ...template, id: 101.5 },
+        { ...template, id: '101' },
+        { ...template, identifier: 101 },
+        { ...template, instruction: 101 },
+        { ...template, interests: 'coding' },
+        { ...template, interests: ['unknown-interest'] },
+        { ...template, title: 101 },
+        { ...template, cronPattern: 0 },
+        { ...template, cronPattern: '0 9 * *' },
         { ...template, cronPattern: '0 */6 * * *' },
+        { ...template, cronPattern: '60 9 * * *' },
+        { ...template, cronPattern: '0 24 * * *' },
+        { ...template, cronPattern: '0 9 1 * *' },
+        { ...template, cronPattern: '0 9 * 1 *' },
         { ...template, cronPattern: '0 9 * * 1,3' },
+        { ...template, cronPattern: '0 9 * * 7' },
+        { ...template, connectors: [{ identifier: 101, required: true, source: 'lobehub' }] },
         { ...template, connectors: [{ identifier: 'github', source: 'lobehub' }] },
+        { ...template, connectors: [{ identifier: 'github', required: true, source: 'unknown' }] },
       ],
     });
     const service = new TaskTemplateService('user-1');
@@ -163,6 +184,26 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     const result = await service.listDailyRecommend(['coding']);
 
     expect(result).toEqual([template]);
+  });
+
+  it('keeps valid optional template icons from Market recommendation items', async () => {
+    const templateWithIcon = { ...template, icon: 'github', id: 102 } satisfies TaskTemplate;
+    mockGetTaskTemplateRecommendations.mockResolvedValue({ items: [templateWithIcon] });
+    const service = new TaskTemplateService('user-1');
+
+    const result = await service.listDailyRecommend(['coding']);
+
+    expect(result).toEqual([templateWithIcon]);
+  });
+
+  it('defaults missing Market skill dependencies to an empty connector list', async () => {
+    const marketTemplate = { ...template, connectors: undefined, id: 102 };
+    mockGetTaskTemplateRecommendations.mockResolvedValue({ items: [marketTemplate] });
+    const service = new TaskTemplateService('user-1');
+
+    const result = await service.listDailyRecommend(['coding']);
+
+    expect(result).toEqual([{ ...template, connectors: [], id: 102 }]);
   });
 
   it('normalizes Market skill dependencies into task template connectors', async () => {
@@ -219,5 +260,44 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     const result = await service.listDailyRecommend(['coding']);
 
     expect(result).toEqual([validWithConnectors]);
+  });
+
+  it('drops Market recommendation items with malformed skill dependencies', async () => {
+    mockGetTaskTemplateRecommendations.mockResolvedValue({
+      items: [
+        template,
+        { ...template, connectors: undefined, id: 102, requiresSkills: 'invalid-skills' },
+        { ...template, connectors: undefined, id: 103, optionalSkills: [null] },
+        {
+          ...template,
+          connectors: undefined,
+          id: 104,
+          requiresSkills: [{ skillProvider: 101, skillSource: 'lobehub' }],
+        },
+        {
+          ...template,
+          connectors: undefined,
+          id: 105,
+          requiresSkills: [{ skillProvider: 'github', skillSource: 101 }],
+        },
+        {
+          ...template,
+          connectors: undefined,
+          id: 106,
+          requiresSkills: [{ skillProvider: 'github', skillSource: 'unknown-source' }],
+        },
+        {
+          ...template,
+          connectors: undefined,
+          id: 107,
+          optionalSkills: [{ skillProvider: 'unknown-provider', skillSource: 'klavis' }],
+        },
+      ],
+    });
+    const service = new TaskTemplateService('user-1');
+
+    const result = await service.listDailyRecommend(['coding']);
+
+    expect(result).toEqual([template]);
   });
 });
