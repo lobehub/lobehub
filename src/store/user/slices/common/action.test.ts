@@ -2,12 +2,15 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_PREFERENCE } from '@/const/user';
+import { taskTemplateKeys, userKeys } from '@/libs/swr/keys';
 import { userService } from '@/services/user';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { type GlobalServerConfig } from '@/types/serverConfig';
 import { type UserInitializationState, type UserPreference } from '@/types/user';
 import { withSWR } from '~test-utils';
+
+import { isTaskTemplateRecommendationKey } from './action';
 
 vi.mock('zustand/traditional');
 
@@ -24,6 +27,15 @@ afterEach(() => {
 });
 
 describe('createCommonSlice', () => {
+  describe('isTaskTemplateRecommendationKey', () => {
+    it('matches every daily recommendation cache variant', () => {
+      expect(
+        isTaskTemplateRecommendationKey(taskTemplateKeys.listDailyRecommend('seed', 3, 'zh-CN')),
+      ).toBe(true);
+      expect(isTaskTemplateRecommendationKey(userKeys.initState())).toBe(false);
+    });
+  });
+
   describe('updateAvatar', () => {
     it('should update avatar', async () => {
       const { result } = renderHook(() => useUserStore());
