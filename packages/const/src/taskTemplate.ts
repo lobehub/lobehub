@@ -67,3 +67,5 @@ export const TASK_TEMPLATE_PERSONAL_ONLY_CATEGORIES: TaskTemplateCategory[] = [
 ];
 
 export const TASK_TEMPLATE_RECOMMEND_COUNT = 3;
+
+export const TASK_TEMPLATE_RECOMMEND_MAX_COUNT = 10;

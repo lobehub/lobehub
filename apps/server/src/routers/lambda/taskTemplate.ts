@@ -1,3 +1,4 @@
+import { TASK_TEMPLATE_RECOMMEND_MAX_COUNT } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -8,7 +9,7 @@ import {
 } from '@/server/services/taskTemplate';
 
 const listDailyRecommendSchema = z.object({
-  count: z.number().int().min(1).optional(),
+  count: z.number().int().min(1).max(TASK_TEMPLATE_RECOMMEND_MAX_COUNT).optional(),
   interestKeys: z.array(z.string().max(64)).max(32),
   locale: z.string().max(32).optional(),
   refreshSeed: z.string().min(1).max(32).optional(),

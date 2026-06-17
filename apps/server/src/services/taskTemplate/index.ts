@@ -13,6 +13,7 @@ import {
   TASK_TEMPLATE_CATEGORIES,
   TASK_TEMPLATE_ICONS,
   TASK_TEMPLATE_RECOMMEND_COUNT,
+  TASK_TEMPLATE_RECOMMEND_MAX_COUNT,
 } from '@lobechat/const';
 
 import { composioEnv } from '@/config/composio';
@@ -46,6 +47,9 @@ export const ENABLED_TASK_TEMPLATE_CONNECTORS: TaskTemplateConnectorReference[] 
 const TASK_TEMPLATE_CATEGORY_SET = new Set<string>(TASK_TEMPLATE_CATEGORIES);
 const TASK_TEMPLATE_ICON_SET = new Set<string>(TASK_TEMPLATE_ICONS);
 const MARKET_SKILL_SOURCE_SET = new Set<string>(['klavis', 'lobehub']);
+
+const clampRecommendationCount = (count?: number) =>
+  Math.min(Math.max(1, count ?? TASK_TEMPLATE_RECOMMEND_COUNT), TASK_TEMPLATE_RECOMMEND_MAX_COUNT);
 
 type MarketTaskTemplateSkillSource = 'klavis' | 'lobehub';
 
@@ -224,7 +228,7 @@ export class TaskTemplateService {
   ): Promise<TaskTemplate[]> {
     try {
       const result = await this.marketService.market.taskTemplates.getTaskTemplateRecommendations({
-        count: options.count ?? TASK_TEMPLATE_RECOMMEND_COUNT,
+        count: clampRecommendationCount(options.count),
         enabledSkillSources: getEnabledSkillSources(options.enabledConnectors),
         excludeIds: options.excludeIds,
         interestKeys,

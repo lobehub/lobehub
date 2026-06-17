@@ -1,5 +1,6 @@
 // @vitest-environment node
 import type { TaskTemplate } from '@lobechat/const';
+import { TASK_TEMPLATE_RECOMMEND_MAX_COUNT } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TaskTemplateService } from './index';
@@ -87,6 +88,16 @@ describe('TaskTemplateService.listDailyRecommend', () => {
       locale: 'zh-CN',
       refreshSeed: 'refresh-1',
     });
+  });
+
+  it('clamps oversized recommendation counts before calling Market', async () => {
+    const service = new TaskTemplateService('user-1');
+
+    await service.listDailyRecommend(['coding'], { count: 25 });
+
+    expect(mockGetTaskTemplateRecommendations).toHaveBeenCalledWith(
+      expect.objectContaining({ count: TASK_TEMPLATE_RECOMMEND_MAX_COUNT }),
+    );
   });
 
   it('returns an empty list when Market recommendations fail', async () => {
