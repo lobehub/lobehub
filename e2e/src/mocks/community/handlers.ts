@@ -108,8 +108,10 @@ const getProcedures = (url: URL): string[] => {
   if (markerIndex === -1) return [];
 
   const procedureSegment = pathname.slice(markerIndex + marker.length);
-  return procedureSegment.split(',').filter((procedure) => procedure.startsWith('market.'));
+  return procedureSegment.split(',').filter(Boolean);
 };
+
+const isMarketProcedure = (procedure: string): boolean => procedure.startsWith('market.');
 
 const matchesText = (value: string | undefined, query: string) =>
   value?.toLowerCase().includes(query.toLowerCase()) ?? false;
@@ -291,8 +293,12 @@ const getMockResponse = (procedure: string, input: unknown): unknown => {
       return SUCCESS_RESPONSE;
     }
 
+    case 'plugin.getPlugins': {
+      return [];
+    }
+
     default: {
-      console.log(`   ⚠️ Unhandled mocked market endpoint: ${procedure}`);
+      console.log(`   ⚠️ Unhandled mocked lambda endpoint: ${procedure}`);
       return SUCCESS_RESPONSE;
     }
   }
@@ -303,7 +309,18 @@ const marketHandler: MockHandler = {
     const request = route.request();
     const url = new URL(request.url());
     const procedures = getProcedures(url);
+
+    if (!procedures.some(isMarketProcedure)) {
+      await route.continue();
+      return;
+    }
+
     const inputs = getProcedureInputs(request, url, procedures.length);
+
+    // Keep tRPC batch positions intact. Community pages can batch mocked
+    // market.* calls with normal app calls, such as plugin.getPlugins on the MCP
+    // detail page; returning only market responses would make the batch client
+    // read the wrong result for subsequent procedures.
     const responses = procedures.map((procedure, index) =>
       getMockResponse(procedure, inputs[index]),
     );
@@ -318,7 +335,7 @@ const marketHandler: MockHandler = {
       status: 200,
     });
   },
-  pattern: '**/trpc/lambda/market.**',
+  pattern: '**/trpc/lambda/**',
 };
 
 // ============================================
