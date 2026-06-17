@@ -203,9 +203,13 @@ export class EditLockService {
     const holder = await this.getActiveLock(type, id);
     if (!holder) return null;
     // ownerId is broadcast on lock.changed; it can't authorize on its own.
-    // Bind to userId first, then keep the stale-tab guard (same user, different
-    // active ownerId still blocks so a ghost tab can't save over a newer one).
+    // Bind to userId first. When callers pass an ownerId, also keep the
+    // stale-tab guard (same user, different active ownerId blocks so a ghost tab
+    // can't save over a newer one). Callers without owner-scoped writes only
+    // need to reject other members; otherwise they would block their own generic
+    // metadata updates while holding the edit lock.
     if (holder.userId !== this.userId) return holder.userId;
+    if (!ownerId) return null;
     if (holder.ownerId && holder.ownerId !== ownerId) return holder.userId;
 
     return null;

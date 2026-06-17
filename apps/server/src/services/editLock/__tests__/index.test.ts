@@ -172,6 +172,9 @@ describe('EditLockService', () => {
       await new EditLockService('user-2', redis as any).getBlockingHolder('document', 'doc-1'),
     ).toBe('user-1');
     expect(
+      await new EditLockService('user-1', redis as any).getBlockingHolder('document', 'doc-1'),
+    ).toBeNull();
+    expect(
       await new EditLockService('user-1', redis as any).getBlockingHolder(
         'document',
         'doc-1',
