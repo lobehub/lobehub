@@ -324,7 +324,7 @@ export default {
   'providerModels.item.modelConfig.files.title': 'File Upload Support',
   'providerModels.item.modelConfig.functionCall.extra':
     "This configuration will only enable the model's ability to use tools, allowing for the addition of tool-type skills. However, whether the model can truly use the tools depends entirely on the model itself; please test for usability on your own.",
-  'providerModels.item.modelConfig.functionCall.title': 'Support for Tool Usage',
+  'providerModels.item.modelConfig.functionCall.title': 'Support for Tool Calling',
   'providerModels.item.modelConfig.id.duplicate':
     'A model with this ID already exists. Use a different model ID.',
   'providerModels.item.modelConfig.id.extra':

@@ -232,9 +232,9 @@ export default {
 
   'cmdk.search.assistants': 'Agents',
 
-  'cmdk.search.chatGroup': 'Agent Team',
+  'cmdk.search.chatGroup': 'Group',
 
-  'cmdk.search.chatGroups': 'Agent Teams',
+  'cmdk.search.chatGroups': 'Groups',
 
   'cmdk.search.communityAgent': 'Community Agent',
 

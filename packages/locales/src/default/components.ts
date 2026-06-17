@@ -118,7 +118,7 @@ export default {
   'LocalFile.action.showInFolder': 'Show in Folder',
   'MaxTokenSlider.unlimited': 'Unlimited',
   'ModelSelect.featureTag.custom':
-    'Custom model, by default, supports both function calls and visual recognition. Please verify the availability of the above capabilities based on actual situations.',
+    'Custom model, by default, supports both tool calls and visual recognition. Please verify the availability of the above capabilities based on actual situations.',
   'ModelSelect.featureTag.file': 'This model supports file upload for reading and recognition.',
   'ModelSelect.featureTag.functionCall': 'This model supports tool calls.',
   'ModelSelect.featureTag.imageOutput': 'This model supports image generation.',

@@ -414,7 +414,7 @@ export default {
   'danger.clear.desc':
     'Delete all data, including agents, files, messages, and skills. Your account will NOT be deleted.',
   'danger.clear.success': 'All conversation messages have been cleared',
-  'danger.clear.title': 'Wipe Data',
+  'danger.clear.title': 'Clear Data',
   'danger.reset.action': 'Reset Now',
   'danger.reset.confirm': 'Reset all settings?',
   'danger.reset.currentVersion': 'Current Version',
@@ -794,14 +794,14 @@ export default {
   'settingGroup.scene.options.productive': 'Productive',
   'settingGroup.scene.title': 'Group scenario',
   'settingGroup.submit': 'Update Group',
-  'settingGroup.systemPrompt.placeholder': 'Please enter the host system prompt',
-  'settingGroup.systemPrompt.title': 'Host System Prompt',
+  'settingGroup.systemPrompt.placeholder': 'Please enter the Orchestrator system prompt',
+  'settingGroup.systemPrompt.title': 'Orchestrator System Prompt',
   'settingGroup.title': 'Group Information',
   'settingGroupChat.allowDM.desc':
     'When turned off, you can still send direct messages to the agent',
   'settingGroupChat.allowDM.title': 'Allow Direct Messages from Agent',
   'settingGroupChat.enableSupervisor.desc':
-    'Enable the moderator feature to manage Group conversations',
+    'Enable the Orchestrator feature to manage Group conversations',
   'settingGroupChat.enableSupervisor.title': 'Enable Orchestrator',
   'settingGroupChat.maxResponseInRow.desc':
     'Select how many consecutive messages a member can reply with. Set to 0 to disable this limit.',
@@ -825,9 +825,10 @@ export default {
   'settingGroupChat.revealDM.title': 'Show Private Messages',
   'settingGroupChat.submit': 'Update Settings',
   'settingGroupChat.systemPrompt.desc':
-    'Custom system prompt for the group chat host. This may affect the default host behavior.',
-  'settingGroupChat.systemPrompt.placeholder': 'Please enter a custom host system prompt...',
-  'settingGroupChat.systemPrompt.title': 'Host System Prompt',
+    'Custom system prompt for the group chat Orchestrator. This may affect the default Orchestrator behavior.',
+  'settingGroupChat.systemPrompt.placeholder':
+    'Please enter a custom Orchestrator system prompt...',
+  'settingGroupChat.systemPrompt.title': 'Orchestrator System Prompt',
   'settingGroupChat.title': 'Chat Settings',
   'settingGroupMembers.addToGroup': 'Add to Group',
   'settingGroupMembers.availableAgents': 'Available Agents',
@@ -2189,7 +2190,7 @@ When I am ___, I need ___
   'workspaceSetting.storage.comingSoon': 'Workspace-scoped data import & export is coming soon.',
   'workspaceSetting.storage.danger.clear.desc':
     'Delete all data in this workspace, including agents, files, messages, and skills. The workspace itself will NOT be deleted.',
-  'workspaceSetting.storage.danger.clear.title': 'Wipe Workspace Data',
+  'workspaceSetting.storage.danger.clear.title': 'Clear Workspace Data',
   'workspaceSetting.storage.danger.reset.desc':
     'Restore all workspace settings to defaults. Workspace data will not be deleted.',
   'workspaceSetting.storage.danger.reset.title': 'Reset Workspace Settings',
