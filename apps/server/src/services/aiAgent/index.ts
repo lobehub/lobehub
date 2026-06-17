@@ -1902,15 +1902,13 @@ export class AiAgentService {
       // Chat mode is orthogonal to `executionTarget` (the UI toggle only writes
       // `enableAgentMode`), so a default/stored `local` target would otherwise
       // resolve a device and `buildStepToolDelta` would re-inject local-system.
-      // Pass `isChatMode` so the plan degrades to `none` — same canonical
-      // derivation the tools engine uses (`toolMode` wins; else `enableAgentMode`).
-      const toolMode =
-        agentConfig.chatConfig?.toolMode ??
-        (agentConfig.chatConfig?.enableAgentMode === false ? 'chat' : 'agent');
+      // Pass `chatConfig` so the plan degrades to `none` in chat mode — the
+      // chat-mode derivation lives in `resolveExecutionPlan` (`resolveToolMode`),
+      // the same source of truth the tools engine uses.
       executionPlan = resolveExecutionPlan({
         agencyConfig: agentConfig.agencyConfig,
         canUseDevice,
-        isChatMode: toolMode === 'chat',
+        chatConfig: agentConfig.chatConfig ?? undefined,
         isDesktop: gatewayConfigured,
         onlineDeviceIds: onlineDevices.map((device) => device.deviceId),
         requestedDeviceId,

@@ -258,21 +258,24 @@ describe('resolveExecutionPlan', () => {
     });
   });
 
-  describe('isChatMode — no execution environment, even on a local target', () => {
+  describe('chat mode — no execution environment, even on a local target', () => {
     it('degrades every device-capable target to none despite an online device', () => {
       // regression: chat mode only removes local-system from the rule-layer
       // whitelist; the device track resolved an `activeDeviceId` from the
       // default/stored `local` target and `buildStepToolDelta` re-injected
       // local-system. The plan now honours chat mode at the source.
       for (const executionTarget of ['local', 'device'] as const) {
-        expect(
-          resolveExecutionPlan({
-            agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget }),
-            isChatMode: true,
-            isDesktop: true,
-            onlineDeviceIds: ONLINE_A,
-          }),
-        ).toEqual({ kind: 'none', target: 'none' });
+        // both ways of expressing chat mode degrade the plan
+        for (const chatConfig of [{ enableAgentMode: false }, { toolMode: 'chat' as const }]) {
+          expect(
+            resolveExecutionPlan({
+              agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget }),
+              chatConfig,
+              isDesktop: true,
+              onlineDeviceIds: ONLINE_A,
+            }),
+          ).toEqual({ kind: 'none', target: 'none' });
+        }
       }
     });
 
@@ -280,7 +283,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: undefined,
-          isChatMode: true,
+          chatConfig: { enableAgentMode: false },
           isDesktop: true,
           onlineDeviceIds: ONLINE_A,
         }),
@@ -288,18 +291,31 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'sandbox' }),
-          isChatMode: true,
+          chatConfig: { enableAgentMode: false },
           isDesktop: true,
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ kind: 'none', target: 'none' });
     });
 
+    it('does not degrade agent mode (toolMode wins over enableAgentMode)', () => {
+      // explicit toolMode='agent' must keep device routing even if
+      // enableAgentMode is somehow false
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'local' }),
+          chatConfig: { enableAgentMode: false, toolMode: 'agent' },
+          isDesktop: true,
+          onlineDeviceIds: ONLINE_A,
+        }),
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'local' });
+    });
+
     it('ignores chat mode for hetero agents (they always need a runtime)', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'device' }),
-          isChatMode: true,
+          chatConfig: { enableAgentMode: false },
           isDesktop: false,
           isHetero: true,
           onlineDeviceIds: ONLINE_A,

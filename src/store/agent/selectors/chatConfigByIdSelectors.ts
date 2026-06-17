@@ -5,7 +5,7 @@ import {
 } from '@lobechat/const';
 import { type LobeAgentChatConfig, type RuntimeEnvMode } from '@lobechat/types';
 
-import { resolveRuntimeMode } from '@/helpers/executionTarget';
+import { resolveRuntimeMode, resolveToolMode } from '@/helpers/executionTarget';
 import { type AgentStoreState } from '@/store/agent/initialState';
 
 import { agentSelectors } from './selectors';
@@ -82,16 +82,13 @@ const getSkillActivateModeById =
     getChatConfigById(agentId)(s).skillActivateMode ?? 'auto';
 
 /**
- * Resolve the agent's tool mode — explicit `toolMode` wins; otherwise derive
- * from `enableAgentMode` (undefined = agent). Mirrors the server tools engine
- * so client and server agree on chat mode.
+ * Resolve the agent's tool mode via the shared `resolveToolMode` helper, so
+ * client and server agree on what counts as chat mode.
  */
 const getToolModeById =
   (agentId: string) =>
-  (s: AgentStoreState): 'agent' | 'chat' | 'custom' => {
-    const chatConfig = getChatConfigById(agentId)(s);
-    return chatConfig.toolMode ?? (chatConfig.enableAgentMode === false ? 'chat' : 'agent');
-  };
+  (s: AgentStoreState): 'agent' | 'chat' | 'custom' =>
+    resolveToolMode(getChatConfigById(agentId)(s));
 
 const isChatModeById = (agentId: string) => (s: AgentStoreState) =>
   getToolModeById(agentId)(s) === 'chat';

@@ -1,4 +1,22 @@
-import type { DeviceExecutionTarget, LobeAgentAgencyConfig, RuntimeEnvMode } from '@lobechat/types';
+import type {
+  DeviceExecutionTarget,
+  LobeAgentAgencyConfig,
+  LobeAgentChatConfig,
+  RuntimeEnvMode,
+} from '@lobechat/types';
+
+/**
+ * The agent's tool mode — explicit `chatConfig.toolMode` wins; otherwise derive
+ * from `enableAgentMode` (undefined = agent). `chat` = no execution
+ * environment (plain chat); `custom` = toolset is exactly the agent's plugins.
+ *
+ * Single source of truth so client (selectors), server tools engine, and
+ * `resolveExecutionPlan` all agree on what counts as chat mode.
+ */
+export const resolveToolMode = (
+  chatConfig: LobeAgentChatConfig | undefined,
+): 'agent' | 'chat' | 'custom' =>
+  chatConfig?.toolMode ?? (chatConfig?.enableAgentMode === false ? 'chat' : 'agent');
 
 export interface ResolveExecutionTargetOptions {
   /**
@@ -130,16 +148,15 @@ export interface ResolveExecutionPlanParams {
    */
   canUseDevice?: boolean;
   /**
-   * `true` when the run is in chat mode (`chatConfig.toolMode === 'chat'`, or
-   * `enableAgentMode === false`). Chat mode means "no execution environment" —
-   * plain chat. It is orthogonal to `executionTarget`: the UI toggle only
-   * writes `enableAgentMode` and never touches the target, so a stored/default
-   * `local` target would otherwise still resolve a device and `buildStepToolDelta`
-   * would re-inject local-system. Force the whole plan to `none` here so the
-   * single device decision honours chat mode at the source. Ignored for hetero
-   * agents (they always need a runtime). Defaults to `false`.
+   * The agent's chat config. Chat mode (`resolveToolMode` → `chat`) means "no
+   * execution environment" — plain chat. It is orthogonal to `executionTarget`:
+   * the UI toggle only writes `enableAgentMode` and never touches the target, so
+   * a stored/default `local` target would otherwise still resolve a device and
+   * `buildStepToolDelta` would re-inject local-system. The plan honours chat
+   * mode at the source (degraded to `none`) — except for hetero agents, which
+   * always need a runtime.
    */
-  isChatMode?: boolean;
+  chatConfig?: LobeAgentChatConfig;
   isDesktop: boolean;
   isHetero?: boolean;
   /**
@@ -176,7 +193,7 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
   const {
     agencyConfig,
     canUseDevice = true,
-    isChatMode = false,
+    chatConfig,
     isDesktop,
     isHetero,
     onlineDeviceIds,
@@ -188,7 +205,7 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
   // single point that stops a default/stored `local` target from resolving a
   // device and letting `buildStepToolDelta` re-inject local-system. Hetero
   // agents always need a runtime, so they never take this path.
-  if (isChatMode && !isHetero) return { kind: 'none', target: 'none' };
+  if (resolveToolMode(chatConfig) === 'chat' && !isHetero) return { kind: 'none', target: 'none' };
 
   const target = resolveExecutionTarget(agencyConfig, { isDesktop, isHetero });
   const wantsDevice = !!requestedDeviceId || target === 'device' || target === 'local';
