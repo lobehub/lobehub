@@ -81,10 +81,7 @@ describe('TaskTemplateService.listDailyRecommend', () => {
 
     expect(mockGetTaskTemplateRecommendations).toHaveBeenCalledWith({
       count: 10,
-      enabledConnectors: [
-        { identifier: 'github', source: 'lobehub' },
-        { identifier: 'gmail', source: 'composio' },
-      ],
+      enabledSkillSources: ['lobehub', 'klavis'],
       excludeIds: [101],
       interestKeys: ['coding'],
       locale: 'zh-CN',
@@ -123,6 +120,31 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     const result = await service.listDailyRecommend(['coding']);
 
     expect(result).toEqual([template]);
+  });
+
+  it('normalizes Market skill dependencies into task template connectors', async () => {
+    const marketTemplate = {
+      ...template,
+      connectors: undefined,
+      id: 102,
+      optionalSkills: [{ skillProvider: 'gmail', skillSource: 'klavis' }],
+      requiresSkills: [{ skillProvider: 'github', skillSource: 'lobehub' }],
+    };
+    mockGetTaskTemplateRecommendations.mockResolvedValue({ items: [marketTemplate] });
+    const service = new TaskTemplateService('user-1');
+
+    const result = await service.listDailyRecommend(['coding']);
+
+    expect(result).toEqual([
+      {
+        ...template,
+        connectors: [
+          { identifier: 'github', required: true, source: 'lobehub' },
+          { identifier: 'gmail', required: false, source: 'composio' },
+        ],
+        id: 102,
+      },
+    ]);
   });
 
   it('drops Market recommendation items with unknown connector identifiers', async () => {
