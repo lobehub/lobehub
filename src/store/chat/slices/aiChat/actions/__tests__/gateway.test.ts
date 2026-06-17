@@ -51,8 +51,9 @@ vi.mock('@/store/user/selectors', () => ({
 // device resolution, no electron IPC).
 const mockEnv = vi.hoisted(() => ({ isDesktop: false }));
 const mockGateway = vi.hoisted(() => ({ getDeviceInfo: vi.fn() }));
-// Effective runtime mode === 'local' (what isLocalSystemEnabledById returns).
-const mockRuntime = vi.hoisted(() => ({ isLocal: false }));
+// Effective runtime mode === 'local' (what isLocalSystemEnabledById returns)
+// and chat mode (what isChatModeById returns).
+const mockRuntime = vi.hoisted(() => ({ isChatMode: false, isLocal: false }));
 const mockAgentStore = vi.hoisted(() => ({
   state: { activeAgentId: undefined, agentMap: {} } as any,
 }));
@@ -78,6 +79,7 @@ vi.mock('@/store/agent/selectors', () => ({
   chatConfigByIdSelectors: {
     getChatConfigById: (agentId: string) => (state: any) =>
       state.agentMap?.[agentId]?.chatConfig ?? {},
+    isChatModeById: () => () => mockRuntime.isChatMode,
     isLocalSystemEnabledById: () => () => mockRuntime.isLocal,
   },
 }));
@@ -884,6 +886,7 @@ describe('GatewayActionImpl', () => {
       afterEach(() => {
         mockEnv.isDesktop = false;
         mockRuntime.isLocal = false;
+        mockRuntime.isChatMode = false;
         mockGateway.getDeviceInfo.mockReset();
       });
 
@@ -914,6 +917,23 @@ describe('GatewayActionImpl', () => {
       it('does not resolve a deviceId when a non-local runtime mode is selected', async () => {
         mockEnv.isDesktop = true;
         mockRuntime.isLocal = false;
+
+        await send();
+
+        expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+          expect.objectContaining({ deviceId: undefined }),
+          expect.anything(),
+        );
+      });
+
+      // Regression guard (chat mode → no execution environment): chat mode must
+      // not resolve this machine's deviceId even on a local target, otherwise
+      // the server presets activeDeviceId and re-injects lobe-local-system.
+      it('does not resolve a deviceId in chat mode, even when local mode is set', async () => {
+        mockEnv.isDesktop = true;
+        mockRuntime.isLocal = true;
+        mockRuntime.isChatMode = true;
 
         await send();
 
