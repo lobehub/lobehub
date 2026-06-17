@@ -3374,6 +3374,52 @@ describe('OpenAIStream', () => {
     ]);
   });
 
+  it('should filter out empty url_citation annotations (OpenRouter built-in search)', async () => {
+    // OpenRouter's built-in web search may emit empty citation objects like `{}`,
+    // which previously crashed rendering (`new URL(undefined)`) and message persistence.
+    // See https://github.com/lobehub/lobehub/issues/15043
+    const mockOpenAIStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          id: 'openrouter-search',
+          choices: [
+            {
+              index: 0,
+              delta: {
+                annotations: [
+                  { type: 'url_citation', url_citation: {} },
+                  {
+                    type: 'url_citation',
+                    url_citation: { url: 'https://example.com', title: 'Example' },
+                  },
+                ],
+              },
+              finish_reason: 'stop',
+            },
+          ],
+        });
+
+        controller.close();
+      },
+    });
+
+    const protocolStream = OpenAIStream(mockOpenAIStream);
+
+    const decoder = new TextDecoder();
+    const chunks = [];
+
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks).toEqual([
+      'id: openrouter-search\n',
+      'event: grounding\n',
+      `data: {"citations":[{"title":"Example","url":"https://example.com"}]}\n\n`,
+    ]);
+  });
+
   it('should handle XiaomiMiMo annotations', async () => {
     const mockOpenAIStream = new ReadableStream({
       start(controller) {

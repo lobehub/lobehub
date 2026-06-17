@@ -40,6 +40,15 @@ const hasThoughtSignature = (
   return 'thoughtSignature' in toolCall && typeof toolCall.thoughtSignature === 'string';
 };
 
+/**
+ * Drop citations without a valid url. Some providers (e.g. OpenRouter's built-in
+ * web search) emit empty citation objects like `{}`, which would otherwise break
+ * downstream rendering (`new URL(undefined)`) and message persistence (Zod requires
+ * `url` to be a string). See https://github.com/lobehub/lobehub/issues/15043
+ */
+const filterValidCitations = (citations: ChatCitationItem[]): ChatCitationItem[] =>
+  citations.filter((citation) => !!citation?.url);
+
 // Process markdown base64 images: extract URLs and clean text in one pass
 const processMarkdownBase64Images = (text: string): { cleanedText: string; urls: string[] } => {
   if (!text) return { cleanedText: text, urls: [] };
@@ -301,12 +310,14 @@ const transformOpenAIStream = (
         return [
           {
             data: {
-              citations: citations.map(
-                (item: any) =>
-                  ({
-                    title: item.url_citation.title,
-                    url: item.url_citation.url,
-                  }) as ChatCitationItem,
+              citations: filterValidCitations(
+                citations.map(
+                  (item: any) =>
+                    ({
+                      title: item.url_citation?.title,
+                      url: item.url_citation?.url,
+                    }) as ChatCitationItem,
+                ),
               ),
             },
             id: chunk.id,
@@ -323,12 +334,14 @@ const transformOpenAIStream = (
         return [
           {
             data: {
-              citations: citations.map(
-                (item: any) =>
-                  ({
-                    title: item.url,
-                    url: item.url,
-                  }) as ChatCitationItem,
+              citations: filterValidCitations(
+                citations.map(
+                  (item: any) =>
+                    ({
+                      title: item.url,
+                      url: item.url,
+                    }) as ChatCitationItem,
+                ),
               ),
             },
             id: chunk.id,
@@ -350,12 +363,14 @@ const transformOpenAIStream = (
         return [
           {
             data: {
-              citations: citations.map(
-                (item: any) =>
-                  ({
-                    title: item,
-                    url: item,
-                  }) as ChatCitationItem,
+              citations: filterValidCitations(
+                citations.map(
+                  (item: any) =>
+                    ({
+                      title: item,
+                      url: item,
+                    }) as ChatCitationItem,
+                ),
               ),
             },
             id: chunk.id,
@@ -380,12 +395,14 @@ const transformOpenAIStream = (
       return [
         {
           data: {
-            citations: citations.map(
-              (item: any) =>
-                ({
-                  title: item.title,
-                  url: item.url,
-                }) as ChatCitationItem,
+            citations: filterValidCitations(
+              citations.map(
+                (item: any) =>
+                  ({
+                    title: item.title,
+                    url: item.url,
+                  }) as ChatCitationItem,
+              ),
             ),
           },
           id: chunk.id,
@@ -517,12 +534,13 @@ const transformOpenAIStream = (
             const baseChunks: StreamProtocolChunk[] = [
               {
                 data: {
-                  citations: (citations as any[])
-                    .map((item) => ({
+                  // Zhipu built-in search tool sometimes returns empty link causing crashes
+                  citations: filterValidCitations(
+                    (citations as any[]).map((item) => ({
                       title: typeof item === 'string' ? item : item.title,
                       url: typeof item === 'string' ? item : item.url || item.link,
-                    }))
-                    .filter((c) => c.title && c.url), // Zhipu built-in search tool sometimes returns empty link causing crashes
+                    })),
+                  ),
                 },
                 id: chunk.id,
                 type: 'grounding',
