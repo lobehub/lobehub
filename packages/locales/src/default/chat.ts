@@ -491,9 +491,9 @@ export default {
   'memory.on.title': 'Enable Memory Tool',
   'memory.title': 'Memory',
   'gatewayMode.beta': 'Beta',
+  'gatewayMode.cardTitle': 'Agent Gateway Mode',
   'gatewayMode.desc':
     "Run agents in the cloud through LobeHub's Agent Gateway. Tasks keep running even after you close the page.",
-  'gatewayMode.title': 'Agent Gateway Mode',
   'search.grounding.imageSearchQueries': 'Image Search Keywords',
   'search.grounding.imageTitle': 'Found {{count}} images',
   'chatMode.agent': 'Agent',
