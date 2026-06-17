@@ -369,6 +369,59 @@ describe('generate command', () => {
       expect(log.error).toHaveBeenCalledWith(expect.stringContaining('not found'));
       expect(exitSpy).toHaveBeenCalledWith(1);
     });
+
+    it('should download and transcribe an audio URL', async () => {
+      const fetchMock = vi
+        .fn()
+        // first call: download the remote audio
+        .mockResolvedValueOnce({
+          blob: vi.fn().mockResolvedValue(new Blob(['audio-bytes'])),
+          ok: true,
+        })
+        // second call: STT endpoint
+        .mockResolvedValueOnce({
+          json: vi.fn().mockResolvedValue({ text: 'hello world' }),
+          ok: true,
+        });
+      vi.stubGlobal('fetch', fetchMock);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'generate',
+        'asr',
+        'https://example.com/audio/sample.mp3',
+      ]);
+
+      expect(fetchMock).toHaveBeenNthCalledWith(1, 'https://example.com/audio/sample.mp3');
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        'https://app.lobehub.com/webapi/stt/openai',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(stdoutSpy).toHaveBeenCalledWith('hello world');
+      expect(exitSpy).not.toHaveBeenCalled();
+    });
+
+    it('should exit when audio URL download fails', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({ ok: false, status: 404, statusText: 'Not Found' }),
+      );
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'generate',
+        'asr',
+        'https://example.com/missing.mp3',
+      ]);
+
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Failed to download audio'));
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
   });
 
   describe('delete', () => {

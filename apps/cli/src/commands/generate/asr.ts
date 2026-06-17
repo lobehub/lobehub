@@ -9,7 +9,9 @@ import { log } from '../../utils/logger';
 export function registerAsrCommand(parent: Command) {
   parent
     .command('asr <audio-file>')
-    .description('Convert speech to text (automatic speech recognition)')
+    .description(
+      'Convert speech to text (automatic speech recognition). Accepts a local path or a URL',
+    )
     .option('--model <model>', 'STT model', 'whisper-1')
     .option('--language <lang>', 'Language code (e.g. en, zh)')
     .option('--json', 'Output raw JSON')
@@ -22,7 +24,9 @@ export function registerAsrCommand(parent: Command) {
           model: string;
         },
       ) => {
-        if (!existsSync(audioFile)) {
+        const isUrl = audioFile.startsWith('http://') || audioFile.startsWith('https://');
+
+        if (!isUrl && !existsSync(audioFile)) {
           log.error(`File not found: ${audioFile}`);
           process.exit(1);
           return;
@@ -33,9 +37,23 @@ export function registerAsrCommand(parent: Command) {
         const sttOptions: Record<string, any> = { model: options.model };
         if (options.language) sttOptions.language = options.language;
 
+        let fileBuffer: Blob;
+        let fileName: string;
+        try {
+          if (isUrl) {
+            ({ blob: fileBuffer, name: fileName } = await fetchAudioFromUrl(audioFile));
+          } else {
+            fileBuffer = await readFileAsBlob(audioFile);
+            fileName = path.basename(audioFile);
+          }
+        } catch (error) {
+          log.error(error instanceof Error ? error.message : String(error));
+          process.exit(1);
+          return;
+        }
+
         const formData = new FormData();
-        const fileBuffer = await readFileAsBlob(audioFile);
-        formData.append('speech', fileBuffer, path.basename(audioFile));
+        formData.append('speech', fileBuffer, fileName);
         formData.append('options', JSON.stringify(sttOptions));
 
         // Remove Content-Type for multipart/form-data (let fetch set it with boundary)
@@ -74,4 +92,25 @@ async function readFileAsBlob(filePath: string): Promise<Blob> {
     chunks.push(chunk as Uint8Array);
   }
   return new Blob(chunks);
+}
+
+async function fetchAudioFromUrl(url: string): Promise<{ blob: Blob; name: string }> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to download audio: ${res.status} ${res.statusText}`);
+  }
+
+  const blob = await res.blob();
+
+  // Derive a file name from the URL path, falling back to a generic name.
+  const pathname = (() => {
+    try {
+      return new URL(url).pathname;
+    } catch {
+      return '';
+    }
+  })();
+  const name = path.basename(pathname) || 'audio';
+
+  return { blob, name };
 }
