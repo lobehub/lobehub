@@ -1455,6 +1455,148 @@ describe('anthropicHelpers', () => {
         },
       ]);
     });
+
+    it('should normalize null properties to empty object', () => {
+      const tools: OpenAI.ChatCompletionTool[] = [
+        {
+          type: 'function',
+          function: {
+            name: 'search',
+            description: 'Searches the web',
+            parameters: {
+              type: 'object',
+              properties: null as any,
+            },
+          },
+        },
+      ];
+
+      const result = buildAnthropicTools(tools);
+
+      expect(result).toEqual([
+        {
+          name: 'search',
+          description: 'Searches the web',
+          input_schema: {
+            type: 'object',
+            properties: {},
+            required: [],
+          },
+        },
+      ]);
+    });
+
+    it('should normalize undefined properties to empty object', () => {
+      const tools: OpenAI.ChatCompletionTool[] = [
+        {
+          type: 'function',
+          function: {
+            name: 'crawl',
+            description: 'Crawls a page',
+            parameters: {
+              type: 'object',
+            },
+          },
+        },
+      ];
+
+      const result = buildAnthropicTools(tools);
+
+      expect(result).toEqual([
+        {
+          name: 'crawl',
+          description: 'Crawls a page',
+          input_schema: {
+            type: 'object',
+            properties: {},
+            required: [],
+          },
+        },
+      ]);
+    });
+
+    it('should normalize non-array required to empty array', () => {
+      const tools: OpenAI.ChatCompletionTool[] = [
+        {
+          type: 'function',
+          function: {
+            name: 'search',
+            description: 'Searches',
+            parameters: {
+              type: 'object',
+              properties: { q: { type: 'string' } },
+              required: null as any,
+            },
+          },
+        },
+      ];
+
+      const result = buildAnthropicTools(tools);
+
+      expect(result).toEqual([
+        {
+          name: 'search',
+          description: 'Searches',
+          input_schema: {
+            type: 'object',
+            properties: { q: { type: 'string' } },
+            required: [],
+          },
+        },
+      ]);
+    });
+
+    it('should passthrough non-object parameter type unchanged', () => {
+      const tools: OpenAI.ChatCompletionTool[] = [
+        {
+          type: 'function',
+          function: {
+            name: 'noop',
+            description: 'No-op',
+            parameters: { type: 'string' } as any,
+          },
+        },
+      ];
+
+      const result = buildAnthropicTools(tools);
+
+      expect(result).toEqual([
+        {
+          name: 'noop',
+          description: 'No-op',
+          input_schema: { type: 'string' },
+        },
+      ]);
+    });
+
+    it('should passthrough null/undefined parameters unchanged', () => {
+      const tools: OpenAI.ChatCompletionTool[] = [
+        {
+          type: 'function',
+          function: {
+            name: 'noop',
+            description: 'No-op',
+            parameters: undefined as any,
+          },
+        },
+      ];
+
+      const result = buildAnthropicTools(tools);
+
+      expect(result).toEqual([
+        {
+          name: 'noop',
+          description: 'No-op',
+          input_schema: undefined,
+        },
+      ]);
+    });
+
+    it('should return undefined when tools is falsy', () => {
+      expect(buildAnthropicTools(undefined)).toBeUndefined();
+      expect(buildAnthropicTools(null as any)).toBeUndefined();
+    });
+
     it('should enable cache control', () => {
       const tools: OpenAI.ChatCompletionTool[] = [
         {
@@ -1489,6 +1631,32 @@ describe('anthropicHelpers', () => {
           cache_control: { type: 'ephemeral' },
         },
       ]);
+    });
+
+    it('should only apply cache_control to last tool', () => {
+      const tools: OpenAI.ChatCompletionTool[] = [
+        {
+          type: 'function',
+          function: {
+            name: 'tool_a',
+            description: 'Tool A',
+            parameters: { type: 'object', properties: {} },
+          },
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'tool_b',
+            description: 'Tool B',
+            parameters: { type: 'object', properties: {} },
+          },
+        },
+      ];
+
+      const result = buildAnthropicTools(tools, { enabledContextCaching: true });
+
+      expect(result![0].cache_control).toBeUndefined();
+      expect(result![1].cache_control).toEqual({ type: 'ephemeral' });
     });
   });
 });
