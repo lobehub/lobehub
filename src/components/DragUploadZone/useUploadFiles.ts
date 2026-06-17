@@ -21,7 +21,10 @@ interface UseUploadFilesOptions {
 export const useUploadFiles = (options: UseUploadFilesOptions) => {
   const { agentId, model = '', provider = '' } = options;
 
-  const { canUploadImage, canUploadVideo } = useVisualMediaUploadAbility(model, provider);
+  const { canUploadImage, canUploadVideo, canUploadAudio } = useVisualMediaUploadAbility(
+    model,
+    provider,
+  );
   const uploadFiles = useFileStore((s) => s.uploadChatFiles);
   const { allowed: canUpload } = usePermission('create_content');
 
@@ -29,10 +32,11 @@ export const useUploadFiles = (options: UseUploadFilesOptions) => {
     async (files: File[]) => {
       if (!canUpload) return;
 
-      // Filter out visual files if the model cannot receive them directly or via fallback.
+      // Filter out media files if the model cannot receive them directly or via fallback.
       const filteredFiles = files.filter((file) => {
         if (file.type.startsWith('image')) return canUploadImage;
         if (file.type.startsWith('video')) return canUploadVideo;
+        if (file.type.startsWith('audio')) return canUploadAudio;
         return true;
       });
 
@@ -40,8 +44,8 @@ export const useUploadFiles = (options: UseUploadFilesOptions) => {
         uploadFiles(filteredFiles, agentId);
       }
     },
-    [agentId, canUpload, canUploadImage, canUploadVideo, uploadFiles],
+    [agentId, canUpload, canUploadImage, canUploadVideo, canUploadAudio, uploadFiles],
   );
 
-  return { canUploadImage, canUploadVideo, handleUploadFiles };
+  return { canUploadImage, canUploadVideo, canUploadAudio, handleUploadFiles };
 };

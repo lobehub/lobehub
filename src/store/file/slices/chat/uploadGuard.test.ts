@@ -37,6 +37,17 @@ describe('isSupportedChatUploadFile', () => {
       isSupportedChatUploadFile(new File(['zip'], 'archive.zip', { type: 'application/zip' })),
     ).toBe(false);
   });
+
+  it('accepts audio formats (model-level gating happens in the upload UI)', () => {
+    expect(isSupportedChatUploadFile(new File(['a'], 'voice.mp3', { type: 'audio/mpeg' }))).toBe(
+      true,
+    );
+    // .m4a often reports a non-audio or empty mime — fall back to the extension.
+    expect(isSupportedChatUploadFile(new File(['a'], 'voice.m4a', { type: '' }))).toBe(true);
+    expect(isSupportedChatUploadFile(new File(['a'], 'voice.wav', { type: 'audio/wav' }))).toBe(
+      true,
+    );
+  });
 });
 
 describe('filterSupportedChatUploadFiles', () => {
