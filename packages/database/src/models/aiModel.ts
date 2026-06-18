@@ -5,7 +5,7 @@ import type {
   EnabledAiModel,
   ToggleAiModelEnableParams,
 } from 'model-bank';
-import { AiModelSourceEnum } from 'model-bank';
+import { AiModelSourceEnum, normalizeAiModelType } from 'model-bank';
 
 import type { AiModelSelectItem, NewAiModelItem } from '../schemas';
 import { aiModels } from '../schemas';
@@ -30,10 +30,16 @@ export class AiModelModel {
     return releasedAt.length > 10 ? releasedAt.slice(0, 10) : releasedAt;
   }
 
-  private normalizeAiModelValues<T extends { releasedAt?: string | null }>(values: T): T {
+  private normalizeAiModelValues<T extends { releasedAt?: string | null; type?: string | null }>(
+    values: T,
+  ): T {
     return {
       ...values,
       releasedAt: this.normalizeReleasedAt(values.releasedAt),
+      // Heal the legacy `stt` value on write (lazy migration): any natural
+      // create/update persists the standard `asr`. `undefined` is left as-is so
+      // partial updates don't clobber the column (drizzle skips undefined).
+      type: normalizeAiModelType(values.type),
     };
   }
 
@@ -174,14 +180,14 @@ export class AiModelModel {
       userId: this.userId,
     } as typeof aiModels.$inferInsert;
 
-    if (value.type) insertValues.type = value.type;
+    if (value.type) insertValues.type = normalizeAiModelType(value.type);
 
     const updateValues: Partial<typeof aiModels.$inferInsert> = {
       enabled: value.enabled,
       updatedAt: now,
     };
 
-    if (value.type) updateValues.type = value.type;
+    if (value.type) updateValues.type = normalizeAiModelType(value.type);
 
     return this.db
       .insert(aiModels)
@@ -204,6 +210,7 @@ export class AiModelModel {
       id,
       providerId,
       releasedAt: this.normalizeReleasedAt(model.releasedAt),
+      type: normalizeAiModelType(model.type),
       updatedAt: new Date(),
       userId: this.userId,
     }));

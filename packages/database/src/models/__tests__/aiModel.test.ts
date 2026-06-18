@@ -69,6 +69,23 @@ describe('AiModelModel', () => {
         releasedAt: '2025-01-01',
       });
     });
+
+    it('should heal the legacy `stt` type to `asr` on write', async () => {
+      // The model type was renamed `stt` → `asr`. A deprecated `stt` input
+      // (e.g. from the OpenAPI back-compat path) must be persisted as `asr`,
+      // so writes lazily migrate the value without a bulk DB migration.
+      const result = await aiProviderModel.create({
+        id: 'my-transcribe',
+        providerId: 'openai',
+        type: 'stt' as NewAiModelItem['type'],
+      });
+      expect(result.type).toBe('asr');
+
+      const persisted = await serverDB.query.aiModels.findFirst({
+        where: eq(aiModels.id, 'my-transcribe'),
+      });
+      expect(persisted!.type).toBe('asr');
+    });
   });
   describe('delete', () => {
     it('should delete a ai provider by id', async () => {
