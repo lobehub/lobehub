@@ -208,6 +208,37 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     expect(result).toEqual([optionalComposioTemplate, requiredLobehubTemplate]);
   });
 
+  it('filters required LobeHub connector templates when trusted client auth is unavailable', async () => {
+    mockAppEnv.MARKET_TRUSTED_CLIENT_ID = undefined;
+    mockAppEnv.MARKET_TRUSTED_CLIENT_SECRET = undefined;
+    const requiredLobehubTemplate = {
+      ...template,
+      connectors: [{ identifier: 'github', required: true, source: 'lobehub' }],
+      id: 102,
+    } satisfies TaskTemplate;
+    const optionalLobehubTemplate = {
+      ...template,
+      connectors: [{ identifier: 'github', required: false, source: 'lobehub' }],
+      id: 103,
+    } satisfies TaskTemplate;
+    const requiredComposioTemplate = {
+      ...template,
+      connectors: [{ identifier: 'gmail', required: true, source: 'composio' }],
+      id: 104,
+    } satisfies TaskTemplate;
+    mockGetTaskTemplateRecommendations.mockResolvedValue({
+      items: [requiredLobehubTemplate, optionalLobehubTemplate, requiredComposioTemplate],
+    });
+    const service = new TaskTemplateService('user-1');
+
+    const result = await service.listDailyRecommend(['coding'], { count: 2 });
+
+    expect(mockGetTaskTemplateRecommendations).toHaveBeenCalledWith(
+      expect.objectContaining({ count: TASK_TEMPLATE_RECOMMEND_MAX_COUNT }),
+    );
+    expect(result).toEqual([optionalLobehubTemplate, requiredComposioTemplate]);
+  });
+
   it('throws when Market recommendation items are malformed', async () => {
     mockGetTaskTemplateRecommendations.mockResolvedValue({
       items: [

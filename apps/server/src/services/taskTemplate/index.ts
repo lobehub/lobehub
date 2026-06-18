@@ -113,18 +113,18 @@ const parseTaskTemplateRecommendations = (value: unknown): TaskTemplate[] => {
 
 const isRequiredConnectorAvailable = (
   connector: TaskTemplateConnector,
-  options: { composioAvailable: boolean },
+  options: { composioAvailable: boolean; lobehubSkillAvailable: boolean },
 ) => {
   if (!connector.required) return true;
 
   if (connector.source === 'composio') return options.composioAvailable;
 
-  return true;
+  return options.lobehubSkillAvailable;
 };
 
 const filterAvailableTaskTemplates = (
   templates: TaskTemplate[],
-  options: { composioAvailable: boolean; count: number },
+  options: { composioAvailable: boolean; count: number; lobehubSkillAvailable: boolean },
 ) =>
   templates
     .filter((template) =>
@@ -151,13 +151,16 @@ export class TaskTemplateService {
     try {
       const count = clampRecommendationCount(options.count);
       const composioAvailable = isComposioClientAvailable();
+      const trustedClientEnabled = isTrustedClientEnabled();
+      const lobehubSkillAvailable = trustedClientEnabled;
       const result = await this.marketService.market.taskTemplates.getTaskTemplateRecommendations({
-        count: composioAvailable ? count : TASK_TEMPLATE_RECOMMEND_MAX_COUNT,
+        count:
+          composioAvailable && lobehubSkillAvailable ? count : TASK_TEMPLATE_RECOMMEND_MAX_COUNT,
         excludeIds: options.excludeIds,
         interestKeys,
         locale: options.locale,
         refreshSeed: options.refreshSeed,
-        ...(isTrustedClientEnabled()
+        ...(trustedClientEnabled
           ? {}
           : { seedKey: createTaskTemplateRecommendationSeedKey(this.userId) }),
       });
@@ -165,6 +168,7 @@ export class TaskTemplateService {
       return filterAvailableTaskTemplates(parseTaskTemplateRecommendations(result), {
         composioAvailable,
         count,
+        lobehubSkillAvailable,
       });
     } catch (error) {
       console.error('[taskTemplate:listDailyRecommend] Market recommendations failed', error);
