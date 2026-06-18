@@ -1,6 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import { type AgentContextDocument } from '@lobechat/context-engine';
-import { isChatGroupSessionId } from '@lobechat/types';
+import { isChatGroupSessionId, pruneWorkingDirByDeviceDeletes } from '@lobechat/types';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
 import isEqual from 'fast-deep-equal';
 import { produce } from 'immer';
@@ -445,6 +445,9 @@ export class AgentSliceActionImpl {
         draft[id] = config;
       } else {
         draft[id] = merge(draft[id], config);
+        // merge() can't drop keys; honor `undefined` as a per-device delete so
+        // clearing a working directory takes effect optimistically.
+        pruneWorkingDirByDeviceDeletes(draft[id].agencyConfig, config.agencyConfig);
       }
     });
 

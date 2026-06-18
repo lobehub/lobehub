@@ -1,6 +1,7 @@
 import { getAgentPersistConfig } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { AgentRankItem } from '@lobechat/types';
+import { pruneWorkingDirByDeviceDeletes } from '@lobechat/types';
 import { and, count, desc, eq, gt, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
@@ -640,6 +641,10 @@ export class AgentModel {
 
     // Apply the processed parameters
     mergedValue.params = Object.keys(updatedParams).length > 0 ? updatedParams : undefined;
+
+    // agencyConfig.workingDirByDevice: a per-device entry is cleared by sending
+    // `undefined`, which merge() skips — prune those keys so the delete persists.
+    pruneWorkingDirByDeviceDeletes(mergedValue.agencyConfig, data.agencyConfig);
 
     // Final cleanup: ensure no undefined or null values enter the database
     if (mergedValue.params) {

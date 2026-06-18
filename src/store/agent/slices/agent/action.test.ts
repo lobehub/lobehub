@@ -291,6 +291,31 @@ describe('AgentSlice Actions', () => {
       // Should be the same reference if no change
       expect(result.current.agentMap).toBe(prevAgentMap);
     });
+
+    it('should drop a workingDirByDevice entry when patched with undefined', () => {
+      const { result } = renderHook(() => useAgentStore());
+
+      act(() => {
+        result.current.internal_dispatchAgentMap('agent-1', {
+          agencyConfig: {
+            executionTarget: 'local',
+            workingDirByDevice: { 'device-a': '/a', 'device-b': '/b' },
+          },
+        });
+      });
+
+      act(() => {
+        // merge() alone would re-add device-a; the prune step honors the delete
+        result.current.internal_dispatchAgentMap('agent-1', {
+          agencyConfig: { workingDirByDevice: { 'device-a': undefined } },
+        } as any);
+      });
+
+      expect(result.current.agentMap['agent-1']?.agencyConfig).toEqual({
+        executionTarget: 'local',
+        workingDirByDevice: { 'device-b': '/b' },
+      });
+    });
   });
 
   describe('internal_createAbortController', () => {

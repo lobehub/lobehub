@@ -2138,6 +2138,56 @@ describe('AgentModel', () => {
       expect((result?.params as any)?.temperature).toBeNull();
       expect((result?.params as any)?.topP).toBe(0.5);
     });
+
+    it('should delete a workingDirByDevice entry when value is undefined', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          userId,
+          title: 'Cwd Agent',
+          agencyConfig: {
+            executionTarget: 'local',
+            workingDirByDevice: { 'device-a': '/a', 'device-b': '/b' },
+          },
+        } as NewAgent)
+        .returning();
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: { workingDirByDevice: { 'device-a': undefined } } as any,
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      // device-a cleared; device-b and sibling fields preserved
+      expect((result?.agencyConfig as any)?.workingDirByDevice).toEqual({ 'device-b': '/b' });
+      expect((result?.agencyConfig as any)?.executionTarget).toBe('local');
+    });
+
+    it('should still upsert a workingDirByDevice entry when value is a path', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          userId,
+          title: 'Cwd Agent',
+          agencyConfig: { workingDirByDevice: { 'device-a': '/a' } },
+        } as NewAgent)
+        .returning();
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: { workingDirByDevice: { 'device-a': '/a', 'device-b': '/b' } } as any,
+      });
+
+      const result = await serverDB.query.agents.findFirst({
+        where: eq(agents.id, agent.id),
+      });
+
+      expect((result?.agencyConfig as any)?.workingDirByDevice).toEqual({
+        'device-a': '/a',
+        'device-b': '/b',
+      });
+    });
   });
 
   describe('rank', () => {

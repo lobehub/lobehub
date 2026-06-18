@@ -51,9 +51,13 @@ export const useCommitWorkingDirectory = (agentId: string) => {
       } else {
         if (targetDeviceId) {
           const prev = agencyConfig?.workingDirByDevice ?? {};
-          const nextMap = { ...prev };
-          if (newPath) nextMap[targetDeviceId] = newPath;
-          else delete nextMap[targetDeviceId];
+          // Clearing sends `undefined` rather than dropping the key: deep-merge
+          // (client store + server persist) can't remove a key, so the delete is
+          // carried as an explicit `undefined` and pruned after each merge.
+          const nextMap: Record<string, string | undefined> = {
+            ...prev,
+            [targetDeviceId]: newPath || undefined,
+          };
           await updateAgentConfigById(agentId, {
             agencyConfig: { ...agencyConfig, workingDirByDevice: nextMap },
           });

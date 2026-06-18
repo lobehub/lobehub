@@ -92,3 +92,28 @@ export interface LobeAgentAgencyConfig {
    */
   workingDirByDevice?: Record<string, string>;
 }
+
+/**
+ * Apply "undefined means delete" semantics to a `workingDirByDevice` patch.
+ *
+ * Deep-merge (used by both the client optimistic store and the server persist
+ * path) can only add/overwrite keys — it silently skips `undefined` sources, so
+ * it can never *remove* a per-device entry. To clear a device's cwd the patch
+ * carries `{ [deviceId]: undefined }`; this prunes those keys from the merged
+ * map after the merge has run.
+ *
+ * Mutates `merged` in place (safe on an immer draft) and is a no-op when the
+ * patch touches no device entries.
+ */
+export const pruneWorkingDirByDeviceDeletes = (
+  merged: { workingDirByDevice?: Record<string, string | undefined> } | null | undefined,
+  patch: { workingDirByDevice?: Record<string, string | undefined> } | null | undefined,
+): void => {
+  const incoming = patch?.workingDirByDevice;
+  const target = merged?.workingDirByDevice;
+  if (!incoming || !target) return;
+
+  for (const key of Object.keys(incoming)) {
+    if (incoming[key] === undefined) delete target[key];
+  }
+};
