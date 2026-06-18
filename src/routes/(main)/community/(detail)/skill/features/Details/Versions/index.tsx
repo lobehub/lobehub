@@ -4,7 +4,7 @@ import { Block, Flexbox, Tag } from '@lobehub/ui';
 import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 import InlineTable from '@/components/InlineTable';
 import PublishedTime from '@/components/PublishedTime';

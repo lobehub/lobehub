@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   toggleAgentBuilderPanel: vi.fn(),
 }));
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useNavigate: () => mocks.navigate,
 }));
 

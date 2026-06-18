@@ -7,7 +7,7 @@ import { cx } from 'antd-style';
 import { type FC } from 'react';
 import { Suspense } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
-import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router';
 
 import WorkspaceContextSlot from '@/business/client/WorkspaceContextSlot';
 import Loading from '@/components/Loading/BrandTextLoading';

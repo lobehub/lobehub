@@ -3,7 +3,7 @@
 import { Flexbox, Segmented, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 
 import ApiList from './ApiList';
 import { LIFECYCLE_MODE_LABEL, LIFECYCLE_MODES, type LifecycleMode } from './lifecycleMode';

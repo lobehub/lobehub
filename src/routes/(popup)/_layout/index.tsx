@@ -5,7 +5,7 @@ import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
-import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router';
 
 import { isDesktop } from '@/const/version';
 import ProtocolUrlHandler from '@/features/ProtocolUrlHandler';

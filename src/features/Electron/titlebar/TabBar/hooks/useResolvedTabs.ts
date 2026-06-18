@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type RouteObject } from 'react-router-dom';
+import { type RouteObject } from 'react-router';
 
 import { desktopRoutes } from '@/spa/router/desktopRouter.config';
 import { type DynamicRouteMeta, type ResolvedRouteMeta } from '@/spa/router/routeMeta';

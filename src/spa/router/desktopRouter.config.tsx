@@ -9,7 +9,7 @@ import {
   Settings,
   ShapesIcon,
 } from 'lucide-react';
-import { type RouteObject } from 'react-router-dom';
+import { type RouteObject } from 'react-router';
 
 import {
   BusinessDesktopRoutesWithMainLayout,

@@ -22,7 +22,7 @@ vi.hoisted(() => {
 
 const navigate = vi.fn();
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useNavigate: () => navigate,
 }));
 

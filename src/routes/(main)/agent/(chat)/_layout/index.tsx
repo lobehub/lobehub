@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router';
 
 import ChatHeader from '@/routes/(main)/agent/features/Conversation/Header';
 import AgentWorkingSidebar from '@/routes/(main)/agent/features/Conversation/WorkingSidebar';

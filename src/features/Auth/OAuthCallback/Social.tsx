@@ -4,7 +4,7 @@ import { FluentEmoji, Text } from '@lobehub/ui';
 import { Result } from 'antd';
 import React, { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 type CallbackStatus = 'error' | 'success';
 

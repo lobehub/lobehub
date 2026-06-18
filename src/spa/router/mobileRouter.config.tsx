@@ -1,6 +1,6 @@
 'use client';
 
-import type { RouteObject } from 'react-router-dom';
+import type { RouteObject } from 'react-router';
 
 import {
   BusinessMobileRoutesWithMainLayout,

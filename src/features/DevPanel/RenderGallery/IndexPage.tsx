@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { Navigate } from 'react-router-dom';
+import { Navigate } from 'react-router';
 
 import { toToolsetPath, useDevtoolsEntries } from './useDevtoolsEntries';
 

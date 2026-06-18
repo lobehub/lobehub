@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => ({
   useHotkeyById: vi.fn(),
 }));
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useLocation: () => ({ pathname: mocks.pathname }),
 }));
 

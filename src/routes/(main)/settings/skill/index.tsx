@@ -7,7 +7,7 @@ import isEqual from 'fast-deep-equal';
 import { FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 import { CustomConnectorModal } from '@/features/Connectors';
 import NavHeader from '@/features/NavHeader';

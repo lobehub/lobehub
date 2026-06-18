@@ -1,6 +1,6 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { HotkeyEnum } from '@lobechat/const/hotkeys';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 
 import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';
 import { usePinnedAgentState } from '@/hooks/usePinnedAgentState';

@@ -5,12 +5,7 @@
  * so that existing consumer code does not need to change.
  */
 
-import {
-  useLocation,
-  useNavigate,
-  useParams,
-  useSearchParams,
-} from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 
 // ---------------------------------------------------------------------------
 // useRouter — compat wrapper around useNavigate

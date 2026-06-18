@@ -4,7 +4,7 @@ import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { ArrowLeft } from 'lucide-react';
 import { memo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 import urlJoin from 'url-join';
 
 import NavHeader from '@/features/NavHeader';

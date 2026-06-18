@@ -4,7 +4,7 @@ import { isDesktop } from '@lobechat/const';
 import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useRef } from 'react';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { useOnboardingAgentTemplates } from '@/hooks/useOnboardingAgentTemplates';

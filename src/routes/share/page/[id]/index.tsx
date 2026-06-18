@@ -2,7 +2,7 @@
 
 import { Center } from '@lobehub/ui';
 import { memo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import useSWR from 'swr';
 
 import PublishedShell from '@/business/client/features/PageShare/PublishedShell';

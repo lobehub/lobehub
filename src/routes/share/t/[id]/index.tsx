@@ -5,7 +5,7 @@ import { TRPCClientError } from '@trpc/client';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import useSWR from 'swr';
 
 import NotFound from '@/components/404';

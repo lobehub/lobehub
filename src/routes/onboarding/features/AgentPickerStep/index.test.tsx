@@ -49,7 +49,7 @@ let searchParams = new URLSearchParams();
 
 vi.mock('swr', () => ({ default: () => swrReturn }));
 
-vi.mock('react-router-dom', () => ({
+vi.mock('react-router', () => ({
   useNavigate: () => navigate,
   useSearchParams: () => [searchParams],
 }));

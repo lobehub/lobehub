@@ -4,14 +4,8 @@ import { ConfigProvider, ThemeProvider } from '@lobehub/ui';
 import * as m from 'motion/react-m';
 import { type ComponentType, type ReactElement } from 'react';
 import { lazy, memo, Suspense, useLayoutEffect } from 'react';
-import type { RouteObject } from 'react-router-dom';
-import {
-  createBrowserRouter,
-  Navigate,
-  Outlet,
-  useNavigate,
-  useRouteError,
-} from 'react-router-dom';
+import type { RouteObject } from 'react-router';
+import { createBrowserRouter, Navigate, Outlet, useNavigate, useRouteError } from 'react-router';
 
 import BusinessGlobalProvider from '@/business/client/BusinessGlobalProvider';
 import ErrorCapture from '@/components/Error';

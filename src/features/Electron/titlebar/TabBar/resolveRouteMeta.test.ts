@@ -1,5 +1,5 @@
 import { MessageSquare } from 'lucide-react';
-import { type RouteObject } from 'react-router-dom';
+import { type RouteObject } from 'react-router';
 import { describe, expect, it } from 'vitest';
 
 import { type RouteMeta } from '@/spa/router/routeMeta';

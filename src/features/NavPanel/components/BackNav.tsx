@@ -4,7 +4,7 @@ import { ChevronLeftIcon } from 'lucide-react';
 import { type MouseEvent, type PropsWithChildren, type ReactNode, useCallback } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';

@@ -4,7 +4,7 @@
 import { Block, Button, Flexbox, FluentEmoji, Text } from '@lobehub/ui';
 import { Result } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 const FailedPage = () => {
   const { t } = useTranslation('oauth');

@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react';
 import { type ReactNode } from 'react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as useActiveWorkspaceIdModule from '@/business/client/hooks/useActiveWorkspaceId';
