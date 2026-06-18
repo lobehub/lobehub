@@ -537,7 +537,7 @@ export default {
   'search.searchModel.desc':
     'The current model does not support function calls, so it needs to be paired with a model that does support function calls for online searching.',
   'search.searchModel.title': 'Search helper model',
-  'search.title': 'Web search',
+  'search.title': 'Web Search',
   'searchAgentPlaceholder': 'Search agents...',
   'searchAgents': 'Search agents...',
   'selectedAgents': 'Selected agents',
