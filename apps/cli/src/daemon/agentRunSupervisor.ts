@@ -1,7 +1,5 @@
 import type { ChildProcess } from 'node:child_process';
 
-export type AgentRunCancelSignal = 'SIGINT' | 'SIGKILL' | 'SIGTERM';
-
 export interface AgentRunEntry {
   agentType: string;
   child: ChildProcess;
@@ -11,26 +9,6 @@ export interface AgentRunEntry {
   topicId: string;
 }
 
-export interface RegisterAgentRunParams {
-  agentType: string;
-  child: ChildProcess;
-  operationId: string;
-  topicId: string;
-}
-
-export interface CancelAgentRunParams {
-  operationId: string;
-  signal?: AgentRunCancelSignal;
-}
-
-export interface CancelAgentRunResult {
-  message?: string;
-  operationId: string;
-  pid?: number;
-  signal?: AgentRunCancelSignal;
-  success: boolean;
-}
-
 const runs = new Map<string, AgentRunEntry>();
 
 export function registerAgentRun({
@@ -38,7 +16,12 @@ export function registerAgentRun({
   child,
   operationId,
   topicId,
-}: RegisterAgentRunParams): AgentRunEntry {
+}: {
+  agentType: string;
+  child: ChildProcess;
+  operationId: string;
+  topicId: string;
+}): AgentRunEntry {
   const entry: AgentRunEntry = {
     agentType,
     child,
@@ -72,7 +55,16 @@ export function listAgentRuns(): AgentRunEntry[] {
 export async function cancelAgentRun({
   operationId,
   signal = 'SIGINT',
-}: CancelAgentRunParams): Promise<CancelAgentRunResult> {
+}: {
+  operationId: string;
+  signal?: 'SIGINT' | 'SIGKILL' | 'SIGTERM';
+}): Promise<{
+  message?: string;
+  operationId: string;
+  pid?: number;
+  signal?: 'SIGINT' | 'SIGKILL' | 'SIGTERM';
+  success: boolean;
+}> {
   const entry = runs.get(operationId);
 
   if (!entry) {
