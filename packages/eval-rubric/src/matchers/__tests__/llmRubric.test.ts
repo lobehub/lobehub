@@ -106,6 +106,69 @@ describe('matchLLMRubric', () => {
     expect(result.reason).toBe('LLM judge failed: API timeout');
   });
 
+  it('should treat a valid score of 0 as a real score (not "no score")', async () => {
+    mockGenerateObject.mockResolvedValue({ reason: 'Completely fails', score: 0 });
+
+    const result = await matchLLMRubric({
+      actual: 'garbage',
+      context,
+      rubric: rubric({ criteria: 'test' }),
+    });
+
+    expect(result.score).toBe(0);
+    expect(result.passed).toBe(false);
+    expect(result.reason).toBe('Completely fails');
+    expect(mockGenerateObject).toHaveBeenCalledTimes(1);
+  });
+
+  it('should retry when the judge returns no score, then succeed', async () => {
+    mockGenerateObject
+      .mockResolvedValueOnce({ reason: 'malformed' } as any)
+      .mockResolvedValueOnce({ reason: 'recovered', score: 0.8 });
+
+    const result = await matchLLMRubric({
+      actual: 'x',
+      context,
+      rubric: rubric({ criteria: 'test' }),
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(0.8);
+    expect(result.reason).toBe('recovered');
+    expect(mockGenerateObject).toHaveBeenCalledTimes(2);
+  });
+
+  it('should retry on a thrown error, then succeed', async () => {
+    mockGenerateObject
+      .mockRejectedValueOnce(new Error('rate limited'))
+      .mockResolvedValueOnce({ reason: 'ok', score: 1 });
+
+    const result = await matchLLMRubric({
+      actual: 'x',
+      context,
+      rubric: rubric({ criteria: 'test' }),
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1);
+    expect(mockGenerateObject).toHaveBeenCalledTimes(2);
+  });
+
+  it('should give up after judgeMaxAttempts and report the last failure', async () => {
+    mockGenerateObject.mockResolvedValue({ reason: 'still malformed' } as any);
+
+    const result = await matchLLMRubric({
+      actual: 'x',
+      context: { ...context, judgeMaxAttempts: 2 },
+      rubric: rubric({ criteria: 'test' }),
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.score).toBe(0);
+    expect(result.reason).toBe('LLM judge did not return a score');
+    expect(mockGenerateObject).toHaveBeenCalledTimes(2);
+  });
+
   it('should use rubric config model/provider over context judgeModel', async () => {
     mockGenerateObject.mockResolvedValue({ reason: 'ok', score: 1 });
 
