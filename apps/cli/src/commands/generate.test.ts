@@ -1,3 +1,7 @@
+import { rm as fsRm, writeFile as fsWriteFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -37,6 +41,15 @@ const { getAuthInfo: mockGetAuthInfo } = vi.hoisted(() => ({
 const { writeFileSync: mockWriteFileSync } = vi.hoisted(() => ({
   writeFileSync: vi.fn(),
 }));
+
+const { uploadLocalFile: mockUploadLocalFile } = vi.hoisted(() => ({
+  uploadLocalFile: vi.fn(),
+}));
+
+vi.mock('../utils/uploadLocalFile', async (importOriginal) => {
+  const actual: Record<string, unknown> = await importOriginal();
+  return { ...actual, uploadLocalFile: mockUploadLocalFile };
+});
 
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
 vi.mock('../api/http', () => ({ getAuthInfo: mockGetAuthInfo }));
@@ -373,9 +386,35 @@ describe('generate command', () => {
       expect(exitSpy).toHaveBeenCalledWith(1);
     });
 
+    it('should upload large local audio and transcribe by fileId', async () => {
+      // Real >3MB temp file so existsSync/statSync (unmocked) see it as large.
+      const bigPath = path.join(os.tmpdir(), `lh-asr-test-${process.pid}-${Date.now()}.mp3`);
+      await fsWriteFile(bigPath, Buffer.alloc(4 * 1024 * 1024));
+      mockUploadLocalFile.mockResolvedValue({ id: 'file_999' });
+      mockTrpcClient.asr.transcribe.mutate.mockResolvedValue({ text: 'big result' });
+
+      try {
+        const program = createProgram();
+        await program.parseAsync(['node', 'test', 'generate', 'asr', bigPath]);
+
+        expect(mockUploadLocalFile).toHaveBeenCalledWith(expect.anything(), bigPath);
+        expect(mockTrpcClient.asr.transcribe.mutate).toHaveBeenCalledWith(
+          expect.objectContaining({ fileId: 'file_999', model: 'whisper-1', provider: 'openai' }),
+        );
+        // never inlines bytes for the large file
+        expect(mockTrpcClient.asr.transcribe.mutate.mock.calls[0][0]).not.toHaveProperty(
+          'audioBase64',
+        );
+        expect(stdoutSpy).toHaveBeenCalledWith('big result');
+      } finally {
+        await fsRm(bigPath, { force: true });
+      }
+    });
+
     it('should download and transcribe an audio URL', async () => {
       const fetchMock = vi.fn().mockResolvedValue({
         arrayBuffer: vi.fn().mockResolvedValue(new TextEncoder().encode('audio-bytes').buffer),
+        headers: new Headers(),
         ok: true,
       });
       vi.stubGlobal('fetch', fetchMock);
@@ -401,6 +440,55 @@ describe('generate command', () => {
       );
       expect(stdoutSpy).toHaveBeenCalledWith('hello world');
       expect(exitSpy).not.toHaveBeenCalled();
+    });
+
+    it('should derive an extension and mime type from Content-Type when the URL has none', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          arrayBuffer: vi.fn().mockResolvedValue(new TextEncoder().encode('audio-bytes').buffer),
+          headers: new Headers({ 'content-type': 'audio/mpeg; charset=binary' }),
+          ok: true,
+        }),
+      );
+      mockTrpcClient.asr.transcribe.mutate.mockResolvedValue({ text: 'ok' });
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'generate', 'asr', 'https://example.com/download']);
+
+      expect(mockTrpcClient.asr.transcribe.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileName: 'download.mp3',
+          mimeType: 'audio/mpeg',
+        }),
+      );
+    });
+
+    it('should prefer the filename from Content-Disposition', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          arrayBuffer: vi.fn().mockResolvedValue(new TextEncoder().encode('audio-bytes').buffer),
+          headers: new Headers({
+            'content-disposition': 'attachment; filename="recording.wav"',
+          }),
+          ok: true,
+        }),
+      );
+      mockTrpcClient.asr.transcribe.mutate.mockResolvedValue({ text: 'ok' });
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'generate',
+        'asr',
+        'https://example.com/files/abc123?sig=xyz',
+      ]);
+
+      expect(mockTrpcClient.asr.transcribe.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({ fileName: 'recording.wav' }),
+      );
     });
 
     it('should exit when audio URL download fails', async () => {
