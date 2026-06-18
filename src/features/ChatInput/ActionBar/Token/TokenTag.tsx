@@ -192,7 +192,7 @@ const Token = memo(() => {
         mode={'used'}
         value={totalToken}
         size={{
-          blockSize: 32,
+          blockSize: 28,
           size: 18,
         }}
         text={{

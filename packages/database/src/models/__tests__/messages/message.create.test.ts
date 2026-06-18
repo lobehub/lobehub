@@ -94,6 +94,33 @@ describe('MessageModel Create Tests', () => {
       expect(result.userId).toBe(userId);
     });
 
+    it('promotes metadata.usage into the dedicated usage column on create', async () => {
+      const usage = { cost: 0.004, totalInputTokens: 70, totalOutputTokens: 30, totalTokens: 100 };
+      const result = await messageModel.create({
+        content: 'answer',
+        metadata: { usage } as any,
+        role: 'assistant',
+        sessionId: '1',
+      });
+
+      expect(result.usage).toEqual(usage);
+      // metadata.usage stays written for backward-compatible reads
+      expect((result.metadata as any).usage).toEqual(usage);
+    });
+
+    it('prefers a top-level usage over metadata.usage on create', async () => {
+      const topLevel = { cost: 0.01, totalTokens: 200 };
+      const result = await messageModel.create({
+        content: 'answer',
+        metadata: { usage: { cost: 0.004, totalTokens: 100 } } as any,
+        role: 'assistant',
+        sessionId: '1',
+        usage: topLevel as any,
+      });
+
+      expect(result.usage).toEqual(topLevel);
+    });
+
     it('should generate message ID automatically', async () => {
       // Call createMessage method
       await messageModel.create({
@@ -105,7 +132,7 @@ describe('MessageModel Create Tests', () => {
       // Assert result
       const result = await serverDB.select().from(messages).where(eq(messages.userId, userId));
       expect(result[0].id).toBeDefined();
-      expect(result[0].id).toHaveLength(18);
+      expect(result[0].id).toHaveLength(22);
     });
 
     it('should create a tool message and insert into messagePlugins table', async () => {
@@ -312,18 +339,15 @@ describe('MessageModel Create Tests', () => {
           (event) => event === 'db.message.createUserAndAssistant.messages.insert:start',
         ),
       ).toHaveLength(1);
-      expect(
-        timingEvents.filter(
-          (event) => event === 'db.message.createUserAndAssistant.topic.touchUpdatedAt:start',
-        ),
-      ).toHaveLength(1);
+      expect(timingEvents.some((event) => event.includes('topic.touchUpdatedAt'))).toBe(false);
     });
 
-    it('should skip topic touch when creating a pair for an already-created topic', async () => {
+    it('should not touch topic updatedAt when creating a pair for an existing topic', async () => {
       await serverDB.insert(topics).values({
         id: 'topic-pair-no-touch',
         sessionId: '1',
         title: 'Topic pair no touch',
+        updatedAt: new Date('2024-01-01T00:00:00Z'),
         userId,
       });
 
@@ -349,9 +373,11 @@ describe('MessageModel Create Tests', () => {
           timing: {
             log: (event) => timingEvents.push(event),
           },
-          touchTopicUpdatedAt: false,
         },
       );
+      const topic = await serverDB.query.topics.findFirst({
+        where: (table, { eq }) => eq(table.id, 'topic-pair-no-touch'),
+      });
 
       expect(result.userMessage.id).toBeDefined();
       expect(result.assistantMessage.parentId).toBe(result.userMessage.id);
@@ -360,11 +386,8 @@ describe('MessageModel Create Tests', () => {
           (event) => event === 'db.message.createUserAndAssistant.messages.insert:start',
         ),
       ).toHaveLength(1);
-      expect(
-        timingEvents.filter(
-          (event) => event === 'db.message.createUserAndAssistant.topic.touchUpdatedAt:start',
-        ),
-      ).toHaveLength(0);
+      expect(timingEvents.some((event) => event.includes('topic.touchUpdatedAt'))).toBe(false);
+      expect(topic?.updatedAt.toISOString()).toBe('2024-01-01T00:00:00.000Z');
     });
 
     describe('create with advanced parameters', () => {

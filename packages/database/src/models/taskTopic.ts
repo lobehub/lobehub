@@ -5,17 +5,23 @@ import type { TaskTopicItem } from '../schemas/task';
 import { tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import type { LobeChatDatabase } from '../type';
+import { buildWorkspaceWhere } from '../utils/workspace';
 
 const TERMINAL_TOPIC_STATUSES = new Set(['canceled', 'completed', 'failed', 'timeout']);
 
 export class TaskTopicModel {
   private readonly userId: string;
   private readonly db: LobeChatDatabase;
+  private readonly workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, taskTopics);
 
   /**
    * Mirror a terminal taskTopic transition onto the underlying topic record:
@@ -29,7 +35,12 @@ export class TaskTopicModel {
     await this.db
       .update(topics)
       .set(setClause)
-      .where(and(eq(topics.id, topicId), eq(topics.userId, this.userId)));
+      .where(
+        and(
+          eq(topics.id, topicId),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+        ),
+      );
   }
 
   async add(
@@ -45,6 +56,7 @@ export class TaskTopicModel {
         taskId,
         topicId,
         userId: this.userId,
+        workspaceId: this.workspaceId ?? null,
       })
       .onConflictDoNothing();
   }
@@ -53,13 +65,7 @@ export class TaskTopicModel {
     await this.db
       .update(taskTopics)
       .set({ status })
-      .where(
-        and(
-          eq(taskTopics.taskId, taskId),
-          eq(taskTopics.topicId, topicId),
-          eq(taskTopics.userId, this.userId),
-        ),
-      );
+      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.topicId, topicId), this.ownership()));
 
     if (TERMINAL_TOPIC_STATUSES.has(status)) {
       await this.markTopicEnded(topicId, status);
@@ -79,7 +85,7 @@ export class TaskTopicModel {
           eq(taskTopics.taskId, taskId),
           eq(taskTopics.topicId, topicId),
           eq(taskTopics.status, 'running'),
-          eq(taskTopics.userId, this.userId),
+          this.ownership(),
         ),
       )
       .returning();
@@ -93,26 +99,14 @@ export class TaskTopicModel {
     await this.db
       .update(taskTopics)
       .set({ operationId })
-      .where(
-        and(
-          eq(taskTopics.taskId, taskId),
-          eq(taskTopics.topicId, topicId),
-          eq(taskTopics.userId, this.userId),
-        ),
-      );
+      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.topicId, topicId), this.ownership()));
   }
 
   async updateHandoff(taskId: string, topicId: string, handoff: TaskTopicHandoff): Promise<void> {
     await this.db
       .update(taskTopics)
       .set({ handoff })
-      .where(
-        and(
-          eq(taskTopics.taskId, taskId),
-          eq(taskTopics.topicId, topicId),
-          eq(taskTopics.userId, this.userId),
-        ),
-      );
+      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.topicId, topicId), this.ownership()));
   }
 
   /**
@@ -131,13 +125,7 @@ export class TaskTopicModel {
       .set({
         handoff: sql`jsonb_set(COALESCE(${taskTopics.handoff}, '{}'::jsonb), '{briefDecision}', ${JSON.stringify(decision)}::jsonb)`,
       })
-      .where(
-        and(
-          eq(taskTopics.taskId, taskId),
-          eq(taskTopics.topicId, topicId),
-          eq(taskTopics.userId, this.userId),
-        ),
-      );
+      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.topicId, topicId), this.ownership()));
   }
 
   async updateReview(
@@ -159,26 +147,14 @@ export class TaskTopicModel {
         reviewScores: review.scores,
         reviewedAt: new Date(),
       })
-      .where(
-        and(
-          eq(taskTopics.taskId, taskId),
-          eq(taskTopics.topicId, topicId),
-          eq(taskTopics.userId, this.userId),
-        ),
-      );
+      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.topicId, topicId), this.ownership()));
   }
 
   async timeoutRunning(taskId: string): Promise<number> {
     const result = await this.db
       .update(taskTopics)
       .set({ status: 'timeout' })
-      .where(
-        and(
-          eq(taskTopics.taskId, taskId),
-          eq(taskTopics.status, 'running'),
-          eq(taskTopics.userId, this.userId),
-        ),
-      )
+      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.status, 'running'), this.ownership()))
       .returning({ topicId: taskTopics.topicId });
 
     await Promise.all(
@@ -195,13 +171,13 @@ export class TaskTopicModel {
     const result = await this.db
       .select()
       .from(taskTopics)
-      .where(and(eq(taskTopics.topicId, topicId), eq(taskTopics.userId, this.userId)))
+      .where(and(eq(taskTopics.topicId, topicId), this.ownership()))
       .limit(1);
     return result[0] || null;
   }
 
   async countByTask(taskId: string, options?: { since?: Date }): Promise<number> {
-    const conditions = [eq(taskTopics.taskId, taskId), eq(taskTopics.userId, this.userId)];
+    const conditions = [eq(taskTopics.taskId, taskId), this.ownership()];
     if (options?.since) conditions.push(gte(taskTopics.createdAt, options.since));
 
     const rows = await this.db
@@ -215,7 +191,7 @@ export class TaskTopicModel {
     return this.db
       .select()
       .from(taskTopics)
-      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.userId, this.userId)))
+      .where(and(eq(taskTopics.taskId, taskId), this.ownership()))
       .orderBy(desc(taskTopics.seq));
   }
 
@@ -239,7 +215,7 @@ export class TaskTopicModel {
       })
       .from(taskTopics)
       .innerJoin(topics, eq(taskTopics.topicId, topics.id))
-      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.userId, this.userId)))
+      .where(and(eq(taskTopics.taskId, taskId), this.ownership()))
       .orderBy(desc(taskTopics.seq));
   }
 
@@ -258,7 +234,7 @@ export class TaskTopicModel {
       })
       .from(taskTopics)
       .leftJoin(topics, eq(taskTopics.topicId, topics.id))
-      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.userId, this.userId)))
+      .where(and(eq(taskTopics.taskId, taskId), this.ownership()))
       .orderBy(desc(taskTopics.seq))
       .limit(limit);
   }
@@ -266,13 +242,7 @@ export class TaskTopicModel {
   async remove(taskId: string, topicId: string): Promise<boolean> {
     const result = await this.db
       .delete(taskTopics)
-      .where(
-        and(
-          eq(taskTopics.taskId, taskId),
-          eq(taskTopics.topicId, topicId),
-          eq(taskTopics.userId, this.userId),
-        ),
-      )
+      .where(and(eq(taskTopics.taskId, taskId), eq(taskTopics.topicId, topicId), this.ownership()))
       .returning();
 
     if (result.length > 0) {

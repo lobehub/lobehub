@@ -7,10 +7,12 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FormAction } from '@/features/Conversation/Error/style';
+import { usePermission } from '@/hooks/usePermission';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 const BedrockForm = memo<{ description: string }>(({ description }) => {
   const { t } = useTranslation('modelProvider');
+  const { allowed: canManageProvider } = usePermission('manage_provider_key');
   const [showRegion, setShow] = useState(false);
   const [showSessionToken, setShowSessionToken] = useState(false);
 
@@ -26,38 +28,50 @@ const BedrockForm = memo<{ description: string }>(({ description }) => {
     >
       <InputPassword
         autoComplete={'new-password'}
+        disabled={!canManageProvider}
         placeholder={'Aws Access Key Id'}
         value={accessKeyId}
         variant={'filled'}
         onChange={(e) => {
+          if (!canManageProvider) return;
+
           setConfig(ModelProvider.Bedrock, { keyVaults: { accessKeyId: e.target.value } });
         }}
       />
       <InputPassword
         autoComplete={'new-password'}
+        disabled={!canManageProvider}
         placeholder={'Aws Secret Access Key'}
         value={secretAccessKey}
         variant={'filled'}
         onChange={(e) => {
+          if (!canManageProvider) return;
+
           setConfig(ModelProvider.Bedrock, { keyVaults: { secretAccessKey: e.target.value } });
         }}
       />
       {showSessionToken ? (
         <InputPassword
           autoComplete={'new-password'}
+          disabled={!canManageProvider}
           placeholder={'Aws Session Token'}
           value={sessionToken}
           variant={'filled'}
           onChange={(e) => {
+            if (!canManageProvider) return;
+
             setConfig(ModelProvider.Bedrock, { keyVaults: { sessionToken: e.target.value } });
           }}
         />
       ) : (
         <Button
           block
+          disabled={!canManageProvider}
           icon={ShieldPlus}
           type={'text'}
           onClick={() => {
+            if (!canManageProvider) return;
+
             setShowSessionToken(true);
           }}
         >
@@ -66,6 +80,7 @@ const BedrockForm = memo<{ description: string }>(({ description }) => {
       )}
       {showRegion ? (
         <Select
+          disabled={!canManageProvider}
           placeholder={'https://api.openai.com/v1'}
           style={{ width: '100%' }}
           value={region}
@@ -74,15 +89,20 @@ const BedrockForm = memo<{ description: string }>(({ description }) => {
             value: i,
           }))}
           onChange={(region) => {
+            if (!canManageProvider) return;
+
             setConfig('bedrock', { keyVaults: { region } });
           }}
         />
       ) : (
         <Button
           block
+          disabled={!canManageProvider}
           icon={<Icon icon={Network} />}
           type={'text'}
           onClick={() => {
+            if (!canManageProvider) return;
+
             setShow(true);
           }}
         >

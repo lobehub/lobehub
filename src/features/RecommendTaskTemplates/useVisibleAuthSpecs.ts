@@ -1,4 +1,4 @@
-import type { TaskTemplate, TaskTemplateSkillRequirement } from '@lobechat/const';
+import type { TaskTemplate, TaskTemplateConnector } from '@lobechat/const';
 import { useMemo } from 'react';
 
 import { getMainIconProvider } from './resolveTemplateIcon';
@@ -17,7 +17,7 @@ interface UseVisibleAuthSpecsOptions {
 export const useVisibleAuthSpecs = (
   template: TaskTemplate,
   { hideMainIconProvider = false }: UseVisibleAuthSpecsOptions = {},
-): TaskTemplateSkillRequirement[] => {
+): TaskTemplateConnector[] => {
   const isSkillConnected = useIsSkillConnected();
   const mainIconProvider = useMemo(
     () => (hideMainIconProvider ? getMainIconProvider(template) : undefined),
@@ -25,17 +25,16 @@ export const useVisibleAuthSpecs = (
   );
 
   return useMemo(() => {
-    const all = [...(template.requiresSkills ?? []), ...(template.optionalSkills ?? [])];
-    return all.filter((spec) => {
+    return template.connectors.filter((spec) => {
       if (isSkillConnected(spec)) return false;
       if (
         mainIconProvider &&
-        mainIconProvider.provider === spec.provider &&
+        mainIconProvider.identifier === spec.identifier &&
         mainIconProvider.source === spec.source
       ) {
         return false;
       }
       return true;
     });
-  }, [template.requiresSkills, template.optionalSkills, isSkillConnected, mainIconProvider]);
+  }, [template.connectors, isSkillConnected, mainIconProvider]);
 };

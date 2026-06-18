@@ -138,6 +138,15 @@ export const AgentRuntimeErrorType = {
    */
   StateStorePersistError: 'StateStorePersistError',
   /**
+   * A state-store (Redis / Upstash) READ failed: either a blocking read
+   * (XREAD / BLPOP, consuming the agent event stream or waiting on a tool
+   * result) was aborted because the caller disconnected ("ERR caller gone"), or
+   * the operation's agent state could not be loaded ("Agent state not found for
+   * operation …"). System-side read failure, kept distinct from the write-side
+   * StateStorePersistError; counts as a failure.
+   */
+  StateStoreReadError: 'StateStoreReadError',
+  /**
    * A context-engine pipeline processor threw while building the prompt
    * context ("Processor [<name>] execution failed"). Harness-side bug in the
    * context assembly stage — the `PipelineError` thrown by

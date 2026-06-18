@@ -13,6 +13,7 @@
   "actions.expand.on": "Développer",
   "actions.typobar.off": "Masquer la barre de mise en forme",
   "actions.typobar.on": "Afficher la barre de mise en forme",
+  "actions.typobar.title": "Outil de mise en forme",
   "autoSave.latest": "Dernière version chargée",
   "autoSave.saved": "Enregistré",
   "autoSave.saving": "Enregistrement automatique...",

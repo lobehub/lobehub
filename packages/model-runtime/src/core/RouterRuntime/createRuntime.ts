@@ -108,6 +108,17 @@ export interface RouteAttemptResult {
   userId?: string;
 }
 
+interface RouteAttemptMetadata {
+  apiType: string;
+  channelId?: string;
+  durationMs: number;
+  optionIndex: number;
+  providerId: string;
+  routerId?: string;
+  success: boolean;
+  totalOptions: number;
+}
+
 export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any> {
   apiKey?: string;
   chatCompletion?: {
@@ -190,6 +201,15 @@ export const createRouterRuntime = ({
     private _routers: Routers;
     private _params: any;
     private _id: string;
+
+    private attachRouteAttemptMetadata(
+      metadata: Record<string, unknown> | undefined,
+      routeAttempt: RouteAttemptMetadata,
+    ) {
+      if (!metadata || this._id !== 'lobehub') return;
+
+      metadata.routeAttempt = routeAttempt;
+    }
 
     constructor(options: ClientOptions & Record<string, any> = {}) {
       const startedAt = Date.now();
@@ -521,6 +541,17 @@ export const createRouterRuntime = ({
             .catch((e) => {
               log('onRouteAttempt callback error: %O', e);
             });
+
+          this.attachRouteAttemptMetadata(metadata, {
+            apiType: resolvedApiType,
+            channelId,
+            durationMs: Date.now() - startTime,
+            optionIndex: index,
+            providerId: id,
+            routerId: matchedRouter.id,
+            success: true,
+            totalOptions,
+          });
 
           return result;
         } catch (error) {

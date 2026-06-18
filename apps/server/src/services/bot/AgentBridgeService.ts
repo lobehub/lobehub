@@ -1,0 +1,1624 @@
+import type { ChatTopicBotContext, ExecAgentResult } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
+import type { Message, SentMessage, Thread } from 'chat';
+import debug from 'debug';
+
+import type { MessengerPlatform } from '@/config/messenger';
+import { AgentBotProviderModel } from '@/database/models/agentBotProvider';
+import { TopicModel } from '@/database/models/topic';
+import { UserModel } from '@/database/models/user';
+import type { LobeChatDatabase } from '@/database/type';
+import { createAbortError, isAbortError } from '@/server/services/agentRuntime/abort';
+import { AiAgentService } from '@/server/services/aiAgent';
+import { GatewayService } from '@/server/services/gateway';
+import { getMessageGatewayClient } from '@/server/services/gateway/MessageGatewayClient';
+import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
+import { SystemAgentService } from '@/server/services/systemAgent';
+
+import { formatPrompt as formatPromptUtil } from './formatPrompt';
+import type { BotReplyLocale, PlatformClient } from './platforms';
+import {
+  getBotReplyLocale,
+  getStepReactionEmoji,
+  platformRegistry,
+  RECEIVED_REACTION_EMOJI,
+  THINKING_REACTION_EMOJI,
+} from './platforms';
+import { clearReactionState, saveReactionState } from './reactionState';
+import {
+  renderAgentError,
+  renderError,
+  renderErrorWithDetails,
+  renderFinalReply,
+  renderStart,
+  renderStepProgress,
+  renderStopped,
+  splitMessage,
+} from './replyTemplate';
+
+const log = debug('lobe-server:bot:agent-bridge');
+
+/**
+ * Convert hook-event JSON-safe attachments (`{ data?: base64, fetchUrl? }`)
+ * into chat-sdk `Attachment` shape (`{ data?: Buffer, url? }`) so they can
+ * ride along `thread.post({ markdown, attachments })` in local mode. Returns
+ * `undefined` when there are no attachments to send.
+ */
+function hookEventAttachmentsToChatSdk(
+  attachments:
+    | Array<{
+        data?: string;
+        fetchUrl?: string;
+        mimeType?: string;
+        name?: string;
+        type: 'image' | 'file' | 'video' | 'audio';
+      }>
+    | undefined,
+):
+  | Array<{
+      data?: Buffer;
+      mimeType?: string;
+      name?: string;
+      type: 'image' | 'file' | 'video' | 'audio';
+      url?: string;
+    }>
+  | undefined {
+  if (!attachments?.length) return undefined;
+  const out = [];
+  for (const att of attachments) {
+    if (att.fetchUrl) {
+      out.push({
+        mimeType: att.mimeType,
+        name: att.name,
+        type: att.type,
+        url: att.fetchUrl,
+      });
+    } else if (att.data) {
+      out.push({
+        data: Buffer.from(att.data, 'base64'),
+        mimeType: att.mimeType,
+        name: att.name,
+        type: att.type,
+      });
+    }
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+const EXECUTION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+
+// If the last activity in a bot topic is older than this threshold,
+// create a new topic instead of continuing in the stale one.
+const TOPIC_STALE_THRESHOLD = 4 * 60 * 60 * 1000; // 4 hours
+
+// PostgreSQL error code for foreign key constraint violations.
+// See: https://www.postgresql.org/docs/current/errcodes-appendix.html
+const PG_FOREIGN_KEY_VIOLATION = '23503';
+
+/**
+ * Extract a human-readable error message from agent runtime error objects.
+ * Handles various shapes: string, { message }, { errorType, error: { stack } }, etc.
+ */
+function extractErrorMessage(err: unknown): string {
+  if (!err) return 'Agent execution failed';
+  if (typeof err === 'string') return err;
+
+  const e = err as Record<string, any>;
+
+  // { message: '...' }
+  if (typeof e.message === 'string') return e.message;
+
+  // { errorType: 'ProviderBizError', error: { stack: 'Error: ...\n  at ...' } }
+  if (e.error?.stack) {
+    const firstLine = String(e.error.stack).split('\n')[0];
+    const prefix = e.errorType ? `[${e.errorType}] ` : '';
+    return `${prefix}${firstLine}`;
+  }
+
+  // { body: { message: '...' } }
+  if (typeof e.body?.message === 'string') return e.body.message;
+
+  return JSON.stringify(err);
+}
+
+/**
+ * Fire-and-forget wrapper for non-essential side effects (reactions, typing
+ * indicators, subscribe, etc.). These are UX niceties — a transient platform
+ * network error must NEVER abort the main message flow, because the abort
+ * would skip the cleanup of `activeThreads` and freeze the thread.
+ */
+async function safeSideEffect(fn: () => Promise<unknown>, label: string): Promise<void> {
+  try {
+    await fn();
+  } catch (error) {
+    log('safeSideEffect [%s] failed: %O', label, error);
+  }
+}
+
+interface DiscordChannelContext {
+  channel: { id: string; name?: string; topic?: string; type?: number };
+  guild: { id: string };
+  thread?: { id: string; name?: string };
+}
+
+interface ThreadState {
+  channelContext?: DiscordChannelContext;
+  topicId?: string;
+}
+
+interface BridgeHandlerOpts {
+  agentId: string;
+  botContext?: ChatTopicBotContext;
+  charLimit?: number;
+  client?: PlatformClient;
+  displayToolCalls?: boolean;
+  /**
+   * Locale for system-generated reply text (errors, stopped notice, etc.).
+   * Picked per platform — see `getBotReplyLocale`. When omitted we fall back
+   * to inferring from `botContext.platform`, then to English.
+   */
+  replyLocale?: BotReplyLocale;
+}
+
+/** Snapshot of the emoji currently applied to a given user message. */
+interface ActiveReaction {
+  applicationId?: string;
+  emoji: string;
+  platform?: string;
+  reactionThreadId: string;
+  userMessageId: string;
+}
+
+/**
+ * Platform-agnostic bridge between Chat SDK events and Agent Runtime.
+ *
+ * Each instance is bound to a specific (serverDB, userId) pair,
+ * following the same pattern as other server services (AiAgentService, UserModel, etc.).
+ *
+ * Provides real-time feedback via emoji reactions and editable progress messages.
+ */
+export class AgentBridgeService {
+  private readonly db: LobeChatDatabase;
+  private readonly userId: string;
+  private readonly workspaceId?: string;
+
+  private timezone: string | undefined;
+  private timezoneLoaded = false;
+
+  /**
+   * Tracks threads that have an active agent execution in progress.
+   * In queue mode the Chat SDK lock is released before the agent finishes,
+   * so we need our own guard to prevent duplicate executions on the same thread.
+   */
+  private static activeThreads = new Set<string>();
+
+  /**
+   * Maps platform thread ID → operationId for active executions.
+   * Used by /stop to interrupt a running agent via AiAgentService.interruptTask.
+   */
+  private static activeOperations = new Map<string, string>();
+
+  /**
+   * Abort controllers for startup work before execAgent returns an operationId.
+   * Allows /stop to cancel topic/tool/message preparation in the current process.
+   */
+  private static startupControllers = new Map<string, AbortController>();
+
+  /**
+   * Threads where the user requested /stop before we had an operationId.
+   * Once the operationId becomes available we immediately interrupt it.
+   */
+  private static pendingStopThreads = new Set<string>();
+
+  /**
+   * Per-thread snapshot of the emoji currently attached to the user message.
+   * Used by the in-memory execution path so that consecutive step callbacks
+   * can remove the previous emoji before adding a new one. Queue mode relies
+   * on Redis (`reactionState`) for the same purpose since callbacks land in a
+   * different process.
+   */
+  private static activeReactions = new Map<string, ActiveReaction>();
+
+  /**
+   * Check if a thread currently has an active agent execution.
+   */
+  static isThreadActive(threadId: string): boolean {
+    return AgentBridgeService.activeThreads.has(threadId);
+  }
+
+  /**
+   * Get the operationId for an active execution on the given thread.
+   */
+  static getActiveOperationId(threadId: string): string | undefined {
+    return AgentBridgeService.activeOperations.get(threadId);
+  }
+
+  /**
+   * Remove a thread from the active set, e.g. when /stop cancels execution.
+   */
+  static clearActiveThread(threadId: string): void {
+    AgentBridgeService.activeThreads.delete(threadId);
+    AgentBridgeService.activeOperations.delete(threadId);
+    AgentBridgeService.pendingStopThreads.delete(threadId);
+    AgentBridgeService.startupControllers.delete(threadId);
+    AgentBridgeService.activeReactions.delete(threadId);
+  }
+
+  /**
+   * Apply (or swap to) the given emoji on a user message. Tracks the current
+   * emoji in an in-process map so the next call can remove it before adding
+   * the new one — the user only ever sees one bot reaction at a time.
+   *
+   * When `botContext` is provided (queue mode hand-off), the new state is
+   * also mirrored to Redis so the webhook callback service — which runs in a
+   * different process — can pick up swapping from here.
+   *
+   * All platform API calls are fire-and-forget via `safeSideEffect`: a
+   * transient reaction error must never abort the main message flow.
+   */
+  private async setReaction(
+    thread: Thread<ThreadState>,
+    message: Message,
+    client: PlatformClient | undefined,
+    nextEmoji: string,
+    botContext?: ChatTopicBotContext,
+  ): Promise<void> {
+    const reactionThreadId = client?.resolveReactionThreadId?.(thread.id, message.id) ?? thread.id;
+    const current = AgentBridgeService.activeReactions.get(thread.id);
+    if (current && current.emoji === nextEmoji && current.userMessageId === message.id) {
+      return;
+    }
+    const prevEmoji = current?.userMessageId === message.id ? current.emoji : null;
+    const messenger = client?.getMessenger(reactionThreadId);
+    await safeSideEffect(
+      () => messenger?.replaceReaction?.(message.id, prevEmoji, nextEmoji) ?? Promise.resolve(),
+      'replace reaction',
+    );
+    AgentBridgeService.activeReactions.set(thread.id, {
+      applicationId: botContext?.applicationId,
+      emoji: nextEmoji,
+      platform: botContext?.platform,
+      reactionThreadId,
+      userMessageId: message.id,
+    });
+
+    if (botContext?.platform && botContext?.applicationId && message.id) {
+      await saveReactionState(botContext.platform, botContext.applicationId, message.id, {
+        emoji: nextEmoji,
+        reactionThreadId,
+      });
+    }
+  }
+
+  /**
+   * Remove whatever emoji is currently stored for this thread and drop the
+   * tracking entry. Safe to call even when no reaction was set.
+   */
+  private async clearReaction(thread: Thread<ThreadState>, client?: PlatformClient): Promise<void> {
+    const current = AgentBridgeService.activeReactions.get(thread.id);
+    if (!current) return;
+    AgentBridgeService.activeReactions.delete(thread.id);
+    const messenger = client?.getMessenger(current.reactionThreadId);
+    await safeSideEffect(
+      () =>
+        messenger?.replaceReaction?.(current.userMessageId, current.emoji, null) ??
+        Promise.resolve(),
+      'clear reaction',
+    );
+    if (current.platform && current.applicationId) {
+      await clearReactionState(current.platform, current.applicationId, current.userMessageId);
+    }
+  }
+
+  /**
+   * Mark a thread as waiting for interruption once its operationId is known.
+   */
+  static requestStop(threadId: string): void {
+    AgentBridgeService.pendingStopThreads.add(threadId);
+    const controller = AgentBridgeService.startupControllers.get(threadId);
+    if (controller && !controller.signal.aborted) {
+      controller.abort(createAbortError('Execution stopped before startup.'));
+    }
+  }
+
+  /**
+   * Consume a pending stop request for a thread.
+   */
+  static consumeStopRequest(threadId: string): boolean {
+    const hasPendingStop = AgentBridgeService.pendingStopThreads.has(threadId);
+    if (hasPendingStop) {
+      AgentBridgeService.pendingStopThreads.delete(threadId);
+    }
+    return hasPendingStop;
+  }
+
+  /**
+   * Run startup work under a per-thread AbortSignal so /stop can cancel it
+   * before an operationId exists.
+   */
+  private static async runWithStartupSignal<T>(
+    threadId: string,
+    task: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    const controller = new AbortController();
+    AgentBridgeService.startupControllers.set(threadId, controller);
+
+    try {
+      return await task(controller.signal);
+    } finally {
+      if (AgentBridgeService.startupControllers.get(threadId) === controller) {
+        AgentBridgeService.startupControllers.delete(threadId);
+      }
+    }
+  }
+
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    this.db = db;
+    this.userId = userId;
+    this.workspaceId = workspaceId;
+  }
+
+  private async interruptTrackedOperation(threadId: string, operationId: string): Promise<void> {
+    const aiAgentService = new AiAgentService(this.db, this.userId, {
+      workspaceId: this.workspaceId,
+    });
+    const result = await aiAgentService.interruptTask({ operationId });
+    if (!result.success) {
+      throw new Error(`Failed to interrupt operation ${operationId}`);
+    }
+    AgentBridgeService.clearActiveThread(threadId);
+    log('interruptTrackedOperation: thread=%s, operationId=%s', threadId, operationId);
+  }
+
+  private async finishStartupFailure(params: {
+    client?: PlatformClient;
+    error?: unknown;
+    operationId?: string;
+    progressMessage?: SentMessage;
+    replyLocale?: BotReplyLocale;
+    stopped?: boolean;
+    thread: Thread<ThreadState>;
+    userMessage: Message;
+  }): Promise<void> {
+    const {
+      client,
+      error,
+      operationId,
+      progressMessage,
+      replyLocale,
+      stopped,
+      thread,
+      userMessage,
+    } = params;
+    const errorMessage =
+      error instanceof Error ? error.message : error ? String(error) : 'Agent execution failed';
+
+    log(
+      'finishStartupFailure: thread=%s, operationId=%s, stopped=%s, error=%s',
+      thread.id,
+      operationId,
+      stopped,
+      errorMessage,
+    );
+
+    AgentBridgeService.clearActiveThread(thread.id);
+
+    const errorContent = {
+      markdown: stopped
+        ? renderStopped(errorMessage, replyLocale)
+        : renderError(operationId, replyLocale),
+    };
+
+    if (progressMessage) {
+      try {
+        await progressMessage.edit(errorContent);
+      } catch (editError) {
+        log('finishStartupFailure: failed to edit progress message: %O', editError);
+      }
+    } else {
+      // No placeholder message (e.g. gateway typing mode) — post a new message
+      // so the user still sees the error instead of a silently frozen typing indicator.
+      try {
+        await thread.post(errorContent);
+      } catch (postError) {
+        log('finishStartupFailure: failed to post error message: %O', postError);
+      }
+    }
+
+    await this.clearReaction(thread, client);
+    void userMessage;
+  }
+
+  /**
+   * Resolve the locale to use for system-generated reply text. Prefers the
+   * caller-provided value (passed in by BotMessageRouter), falls back to a
+   * platform-derived default so legacy callers still get the right copy.
+   */
+  private resolveReplyLocale(opts: BridgeHandlerOpts): BotReplyLocale {
+    return opts.replyLocale ?? getBotReplyLocale(opts.botContext?.platform);
+  }
+
+  /**
+   * Handle a new @mention — start a fresh conversation.
+   */
+  async handleMention(
+    thread: Thread<ThreadState>,
+    message: Message,
+    opts: BridgeHandlerOpts,
+  ): Promise<void> {
+    const { agentId, botContext, charLimit, displayToolCalls } = opts;
+    const replyLocale = this.resolveReplyLocale(opts);
+
+    log(
+      'handleMention: agentId=%s, user=%s, text=%s, attachments=%d',
+      agentId,
+      this.userId,
+      message.text.slice(0, 80),
+      ((message as any).attachments as unknown[] | undefined)?.length ?? 0,
+    );
+
+    // Skip if there's already an active execution for this thread
+    if (AgentBridgeService.activeThreads.has(thread.id)) {
+      log('handleMention: skipping, thread=%s already has an active execution', thread.id);
+      return;
+    }
+
+    const { client } = opts;
+    const queueMode = isQueueAgentRuntimeEnabled();
+    let queueHandoffSucceeded = false;
+
+    // Mark the thread as active and run the rest inside a try/finally so the
+    // active flag is ALWAYS released even if a side-effect call (subscribe /
+    // startTyping / addReaction) throws on a transient platform network error.
+    AgentBridgeService.activeThreads.add(thread.id);
+
+    try {
+      // Immediate feedback: mark as received + show typing. Both are
+      // non-essential UX niceties; a transient platform network error here
+      // (e.g. ECONNRESET to api.telegram.org) must NOT abort the main flow.
+      await this.setReaction(thread, message, client, RECEIVED_REACTION_EMOJI, botContext);
+
+      // Auto-subscribe to thread (platforms can opt out, e.g. Discord top-level channels)
+      const subscribe = client?.shouldSubscribe?.(thread.id) ?? true;
+      if (subscribe) {
+        await safeSideEffect(() => thread.subscribe(), 'subscribe');
+      }
+
+      await safeSideEffect(() => thread.startTyping(), 'startTyping');
+
+      // Fetch channel context for Discord context injection
+      const channelContext = await this.fetchChannelContext(thread);
+
+      // Transition from "received" to "thinking" right before we hand off to
+      // the agent runtime. The first afterStep hook fires only after the
+      // first LLM call completes (often 5-10s), so without this swap the
+      // user would see 👀 for the entire duration of the first LLM call.
+      await this.setReaction(thread, message, client, THINKING_REACTION_EMOJI, botContext);
+
+      try {
+        // executeWithCallback handles progress message (post + edit at each step)
+        // The final reply is edited into the progress message by onComplete
+        const { topicId } = await this.executeWithCallback(thread, message, {
+          agentId,
+          botContext,
+          channelContext,
+          charLimit,
+          client,
+          displayToolCalls,
+          replyLocale,
+          trigger: RequestTrigger.Bot,
+        });
+        queueHandoffSucceeded = queueMode;
+
+        // Persist topic mapping and channel context in thread state for follow-up messages
+        // Skip if the platform opted out of auto-subscribe (no subscribe = no follow-up)
+        if (topicId && subscribe) {
+          await thread.setState({ channelContext, topicId });
+          log('handleMention: stored topicId=%s in thread=%s state', topicId, thread.id);
+        }
+      } catch (error) {
+        const operationId = AgentBridgeService.activeOperations.get(thread.id);
+        log('handleMention error: operationId=%s, %O', operationId, error);
+        try {
+          await thread.post({ markdown: renderError(operationId, replyLocale) });
+        } catch (postError) {
+          log('handleMention: failed to post error message: %O', postError);
+        }
+      }
+    } finally {
+      AgentBridgeService.activeThreads.delete(thread.id);
+      // In queue mode, the callback owns cleanup only after webhook handoff succeeds.
+      // If setup fails before that point, clean up locally to avoid leaked reactions.
+      if (!queueMode || !queueHandoffSucceeded) {
+        await this.clearReaction(thread, client);
+      }
+    }
+  }
+
+  /**
+   * Handle a follow-up message inside a subscribed thread — multi-turn conversation.
+   */
+  async handleSubscribedMessage(
+    thread: Thread<ThreadState>,
+    message: Message,
+    opts: BridgeHandlerOpts,
+  ): Promise<void> {
+    const { agentId, botContext, charLimit, displayToolCalls } = opts;
+    const replyLocale = this.resolveReplyLocale(opts);
+    const threadState = await thread.state;
+    const topicId = threadState?.topicId;
+
+    log(
+      'handleSubscribedMessage: agentId=%s, thread=%s, topicId=%s, attachments=%d',
+      agentId,
+      thread.id,
+      topicId,
+      ((message as any).attachments as unknown[] | undefined)?.length ?? 0,
+    );
+
+    if (!topicId) {
+      log('handleSubscribedMessage: no topicId in thread state, treating as new mention');
+      return this.handleMention(thread, message, opts);
+    }
+
+    // Skip if there's already an active execution for this thread.
+    // This must run before the stale-topic check to prevent a race where
+    // a concurrent message clears topicId (stale reset) and then no-ops
+    // in handleMention because the thread is active — dropping the message
+    // but leaving state cleared so the next message starts a fresh topic.
+    if (AgentBridgeService.activeThreads.has(thread.id)) {
+      log(
+        'handleSubscribedMessage: skipping, thread=%s already has an active execution',
+        thread.id,
+      );
+      return;
+    }
+
+    // Check if the topic is stale (no activity for 4+ hours).
+    // If so, clear the cached topicId and start a fresh conversation.
+    // Wrapped in try/catch so transient DB errors fall through to the
+    // existing topicId rather than rejecting before the guarded section.
+    try {
+      const topicModel = new TopicModel(this.db, this.userId, this.workspaceId);
+      const existingTopic = await topicModel.findById(topicId);
+      if (existingTopic) {
+        const elapsed = Date.now() - new Date(existingTopic.updatedAt).getTime();
+        if (elapsed > TOPIC_STALE_THRESHOLD) {
+          log(
+            'handleSubscribedMessage: topic=%s is stale (%.1fh since last activity), creating new topic',
+            topicId,
+            elapsed / (60 * 60 * 1000),
+          );
+          await thread.setState({ ...threadState, topicId: undefined });
+          return this.handleMention(thread, message, opts);
+        }
+      }
+    } catch (error) {
+      log(
+        'handleSubscribedMessage: stale-topic lookup failed, continuing with existing topicId=%s: %O',
+        topicId,
+        error,
+      );
+    }
+
+    // Read cached channel context from thread state
+    const channelContext = threadState?.channelContext;
+
+    const queueMode = isQueueAgentRuntimeEnabled();
+    let queueHandoffSucceeded = false;
+
+    // Mark the thread as active and run the rest inside a try/finally so the
+    // active flag is ALWAYS released. Earlier this `add` happened outside the
+    // try block, and a network error from `thread.startTyping()` would escape
+    // before we entered the try — leaving the thread permanently locked
+    // ("already has an active execution") until process restart.
+    AgentBridgeService.activeThreads.add(thread.id);
+
+    try {
+      // Immediate feedback: mark as received + show typing. Both are
+      // non-essential UX niceties; a transient platform network error here
+      // (e.g. ECONNRESET to api.telegram.org) must NOT abort the main flow.
+      await this.setReaction(thread, message, opts.client, RECEIVED_REACTION_EMOJI, botContext);
+      await safeSideEffect(() => thread.startTyping(), 'startTyping');
+
+      // Transition from "received" to "thinking" right before we hand off to
+      // the agent runtime. The first afterStep hook fires only after the
+      // first LLM call completes (often 5-10s), so without this swap the
+      // user would see 👀 for the entire duration of the first LLM call.
+      await this.setReaction(thread, message, opts.client, THINKING_REACTION_EMOJI, botContext);
+
+      try {
+        // executeWithCallback handles progress message (post + edit at each step)
+        await this.executeWithCallback(thread, message, {
+          agentId,
+          botContext,
+          channelContext,
+          charLimit,
+          client: opts.client,
+          displayToolCalls,
+          replyLocale,
+          topicId,
+          trigger: RequestTrigger.Bot,
+        });
+        queueHandoffSucceeded = queueMode;
+      } catch (error) {
+        // If the cached topicId references a deleted topic (FK violation),
+        // clear thread state and retry as a fresh mention instead of surfacing the DB error.
+        const cause = (error as any)?.cause;
+        const isFKViolation =
+          cause?.code === PG_FOREIGN_KEY_VIOLATION && cause?.constraint?.includes('topic_id');
+        const errMsg = error instanceof Error ? error.message : String(error);
+        if (isFKViolation) {
+          log(
+            'handleSubscribedMessage: stale topicId=%s, resetting and retrying as new mention',
+            topicId,
+          );
+          AgentBridgeService.activeThreads.delete(thread.id);
+          await thread.setState({ ...threadState, topicId: undefined });
+          return this.handleMention(thread, message, opts);
+        }
+
+        const operationId = AgentBridgeService.activeOperations.get(thread.id);
+        log('handleSubscribedMessage error: operationId=%s, %O', operationId, error);
+        try {
+          await thread.post({
+            markdown: renderErrorWithDetails(errMsg, replyLocale, operationId),
+          });
+        } catch (postError) {
+          log('handleSubscribedMessage: failed to post error message: %O', postError);
+        }
+      }
+    } finally {
+      AgentBridgeService.activeThreads.delete(thread.id);
+      // In queue mode, the callback owns cleanup only after webhook handoff succeeds.
+      if (!queueMode || !queueHandoffSucceeded) {
+        await this.clearReaction(thread, opts.client);
+      }
+    }
+  }
+
+  /**
+   * Execute agent with unified hooks — auto-adapts to local or queue mode.
+   *
+   * Local mode: hooks run in-process, Promise resolves when agent completes.
+   * Queue mode: hooks deliver via webhooks, returns immediately after startup.
+   */
+  private async executeWithCallback(
+    thread: Thread<ThreadState>,
+    userMessage: Message,
+    opts: {
+      agentId: string;
+      botContext?: ChatTopicBotContext;
+      channelContext?: DiscordChannelContext;
+      charLimit?: number;
+      client?: PlatformClient;
+      displayToolCalls?: boolean;
+      replyLocale: BotReplyLocale;
+      topicId?: string;
+      trigger?: string;
+    },
+  ): Promise<{ reply: string; topicId: string }> {
+    // Resolve bot platform context from platform registry
+    const platformDef = opts.botContext?.platform
+      ? platformRegistry.getPlatform(opts.botContext.platform)
+      : undefined;
+    const botPlatformContext:
+      | { platformName: string; supportsMarkdown: boolean; warnings?: string[] }
+      | undefined = platformDef
+      ? {
+          platformName: platformDef.name,
+          supportsMarkdown: platformDef.supportsMarkdown !== false,
+        }
+      : undefined;
+    // Whether we can edit a previously-posted message in place. When false
+    // (QQ/WeChat today), the chat-adapter falls editMessage back to postMessage,
+    // so each step/completion edit surfaces as a NEW message — leaving the
+    // placeholder stranded and the final reply duplicated. We still post an ack
+    // so the user gets immediate feedback, but skip tracking it as
+    // `progressMessage` so downstream hooks post the final reply fresh instead
+    // of editing the placeholder.
+    const supportsMessageEdit = platformDef?.supportsMessageEdit !== false;
+
+    const {
+      agentId,
+      botContext,
+      channelContext,
+      charLimit,
+      client,
+      displayToolCalls,
+      replyLocale,
+      topicId,
+      trigger,
+    } = opts;
+
+    const queueMode = isQueueAgentRuntimeEnabled();
+    const aiAgentService = new AiAgentService(this.db, this.userId, {
+      workspaceId: this.workspaceId,
+    });
+    const timezone = await this.loadTimezone();
+
+    // When the message-gateway is configured AND the platform supports typing
+    // indicators, skip the ack/progress message and rely on the gateway's
+    // alarm-based typing indicator throughout AI generation.
+    // Posting an ack message cancels platform-level typing (e.g. Discord), and the
+    // gateway typing makes ack redundant as user feedback.
+    // For platforms without typing support (no triggerTyping on messenger), the
+    // gateway typing is invisible, so we still send an ack message as user feedback.
+    const gwClient = getMessageGatewayClient();
+    const platformSupportsTyping =
+      client && botContext?.platformThreadId
+        ? !!client.getMessenger(botContext.platformThreadId).triggerTyping
+        : true;
+    const useGatewayTyping = gwClient.isEnabled && platformSupportsTyping;
+
+    let progressMessage: SentMessage | undefined;
+    let gatewayConnectionId: string | undefined;
+    if (useGatewayTyping) {
+      log('executeWithWebhooks: using gateway typing, skipping ack message');
+
+      // Platform typing (best-effort, must not block AI generation)
+      await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
+
+      // Start gateway typing immediately so the alarm keeps it alive through
+      // the entire AI generation (platform typing expires after ~10s).
+      if (botContext?.platformThreadId && botContext?.applicationId) {
+        const platform = botContext.platformThreadId.split(':')[0];
+        try {
+          if (botContext.messengerInstallationKey) {
+            // Messenger run: shard typing by `(platform, lobeUserId)` so each
+            // user gets their own DO. Solves both the cross-conversation
+            // TypingState overwrite bug (single shared DO) and the 200K-MAU
+            // single-DO hot-spot. The connectionId is registered lazily and
+            // cached per-process — see GatewayService.ensureUserMessengerConnected.
+            const gateway = new GatewayService();
+            const connectionId = await gateway.ensureUserMessengerConnected({
+              installationKey: botContext.messengerInstallationKey,
+              platform: platform as MessengerPlatform,
+              userId: this.userId,
+            });
+            if (connectionId) {
+              gatewayConnectionId = connectionId;
+              gwClient.startTyping(connectionId, botContext.platformThreadId!).catch((err) => {
+                log('executeWithWebhooks: messenger gateway startTyping failed: %O', err);
+              });
+            }
+          } else {
+            // Per-agent bot provider: typing keyed by the provider row id —
+            // legacy path for `agent_bot_providers`-backed bots.
+            const row = await AgentBotProviderModel.findByPlatformAndAppId(
+              this.db,
+              platform,
+              botContext.applicationId,
+            );
+            if (row?.id) {
+              gatewayConnectionId = row.id;
+              gwClient.startTyping(row.id, botContext.platformThreadId!).catch((err) => {
+                log('executeWithWebhooks: gateway startTyping failed: %O', err);
+              });
+            }
+          }
+        } catch (err) {
+          log('executeWithWebhooks: gateway provider lookup failed: %O', err);
+        }
+      }
+    } else if (!supportsMessageEdit) {
+      // Edit-incapable platform (QQ today): the user still wants immediate
+      // feedback that we received their message, but every "edit" the
+      // adapter performs surfaces as a NEW message. So fire-and-forget the
+      // ack here without tracking it as `progressMessage` — afterStep/onComplete
+      // will see `progressMessage === undefined` and correctly post the final
+      // reply as its own message instead of editing.
+      await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
+      await safeSideEffect(
+        () => thread.post(renderStart(userMessage.text, { lng: replyLocale, timezone })),
+        'post ack (no-edit platform)',
+      );
+    } else {
+      await safeSideEffect(() => thread.startTyping(), 'startTyping (executeWithWebhooks)');
+      try {
+        progressMessage = await thread.post(
+          renderStart(userMessage.text, { lng: replyLocale, timezone }),
+        );
+      } catch (error) {
+        log('executeWithWebhooks: failed to post initial placeholder message: %O', error);
+      }
+    }
+
+    const { files, warnings: fileWarnings } = await this.resolveFiles(userMessage, client);
+    const prompt = this.formatPrompt(userMessage, client);
+
+    // Attach file warnings to botPlatformContext for injection via context engine
+    if (fileWarnings?.length && botPlatformContext) {
+      botPlatformContext.warnings = fileWarnings;
+    }
+
+    // Build webhook config for production mode
+    const callbackUrl = '/api/agent/webhooks/bot-callback';
+    const webhookBody = {
+      applicationId: botContext?.applicationId,
+      // Forward the messenger discriminator (set by MessengerRouter for runs
+      // originated by the shared Messenger bot). The callback uses this — not
+      // the synthetic applicationId shape — to decide which credential source
+      // to read from.
+      messengerInstallationKey: botContext?.messengerInstallationKey,
+      platformThreadId: botContext?.platformThreadId,
+      progressMessageId: progressMessage?.id,
+      // Pass thread name only if it's user-set.
+      // Bot-generated threads use "Thread <locale date>" (e.g. "Thread 4/9/2026, 6:00:00 PM"),
+      // which always starts with "Thread " followed by a digit.
+      threadName:
+        channelContext?.thread?.name && /^Thread \d/.test(channelContext.thread.name)
+          ? undefined
+          : channelContext?.thread?.name,
+      // Forward the lobe userId so messenger callbacks can rebuild the same
+      // per-user gateway connectionId (`messenger:<platform>[:<tenant>]:user-<userId>`)
+      // that we used to start typing here. Without it, `BotCallbackService`
+      // falls back to `connectionId: ''` and `stopGatewayTyping` becomes a
+      // no-op — leaving the typing indicator to expire on the gateway's 60s
+      // alarm timeout instead of stopping at completion.
+      userId: this.userId,
+      userMessageId: userMessage.id,
+      workspaceId: this.workspaceId,
+    };
+
+    log(
+      'executeWithCallback: agentId=%s, queueMode=%s, prompt=%s, files=%d',
+      agentId,
+      queueMode,
+      prompt.slice(0, 100),
+      files?.length ?? 0,
+    );
+
+    // In queue mode, return immediately after startup — hooks handle the rest via webhooks
+    if (queueMode) {
+      return this.executeWithHooksQueueMode(thread, userMessage, aiAgentService, {
+        agentId,
+        botContext,
+        botPlatformContext,
+        callbackUrl,
+        channelContext,
+        client,
+        files,
+        progressMessage,
+        prompt,
+        replyLocale,
+        topicId,
+        trigger,
+        webhookBody,
+      });
+    }
+
+    // In local mode, wrap in a Promise — hook handlers resolve/reject it in-process
+    return this.executeWithHooksLocalMode(thread, aiAgentService, {
+      agentId,
+      botContext,
+      botPlatformContext,
+      callbackUrl,
+      charLimit,
+      channelContext,
+      client,
+      displayToolCalls,
+      files,
+      gatewayConnectionId,
+      progressMessage,
+      prompt,
+      replyLocale,
+      topicId,
+      trigger,
+      userMessage,
+      webhookBody,
+    });
+  }
+
+  /**
+   * Queue mode: register hooks with webhook config, start agent, return immediately.
+   */
+  private async executeWithHooksQueueMode(
+    thread: Thread<ThreadState>,
+    userMessage: Message,
+    aiAgentService: AiAgentService,
+    opts: {
+      agentId: string;
+      botContext?: ChatTopicBotContext;
+      botPlatformContext?: { platformName: string; supportsMarkdown: boolean };
+      callbackUrl: string;
+      channelContext?: DiscordChannelContext;
+      client?: PlatformClient;
+      files?: any;
+      progressMessage?: SentMessage;
+      prompt: string;
+      replyLocale: BotReplyLocale;
+      topicId?: string;
+      trigger?: string;
+      webhookBody: Record<string, unknown>;
+    },
+  ): Promise<{ reply: string; topicId: string }> {
+    const {
+      agentId,
+      botContext,
+      botPlatformContext,
+      callbackUrl,
+      channelContext,
+      client,
+      files,
+      progressMessage,
+      prompt,
+      replyLocale,
+      topicId,
+      trigger,
+      webhookBody,
+    } = opts;
+
+    let result: ExecAgentResult;
+    try {
+      result = await AgentBridgeService.runWithStartupSignal(thread.id, (signal) =>
+        aiAgentService.execAgent({
+          agentId,
+          appContext: topicId ? { topicId } : undefined,
+          autoStart: true,
+          botContext,
+          botPlatformContext,
+          discordContext: channelContext
+            ? {
+                channel: channelContext.channel,
+                guild: channelContext.guild,
+                thread: channelContext.thread,
+              }
+            : undefined,
+          files,
+          hooks: [
+            {
+              handler: async () => {
+                /* local handler not used in queue mode */
+              },
+              id: 'bot-step-progress',
+              type: 'afterStep',
+              webhook: {
+                body: { ...webhookBody, type: 'step' },
+                delivery: 'qstash',
+                url: callbackUrl,
+              },
+            },
+            {
+              handler: async () => {
+                /* local handler not used in queue mode */
+              },
+              id: 'bot-completion',
+              type: 'onComplete',
+              webhook: {
+                body: { ...webhookBody, type: 'completion', userPrompt: prompt },
+                delivery: 'qstash',
+                url: callbackUrl,
+              },
+            },
+          ],
+          prompt,
+          signal,
+          title: '',
+          trigger,
+          userInterventionConfig: { approvalMode: 'headless' },
+        }),
+      );
+    } catch (error) {
+      log('executeWithCallback[queue]: execAgent failed: %O', error);
+
+      const errMsg = error instanceof Error ? error.message : String(error);
+      if (errMsg.includes('Failed query') && errMsg.includes('topic_id')) {
+        throw error;
+      }
+
+      await this.finishStartupFailure({
+        client,
+        error,
+        progressMessage,
+        replyLocale,
+        stopped: isAbortError(error),
+        thread,
+        userMessage,
+      });
+      return { reply: '', topicId: topicId ?? '' };
+    }
+
+    if (!result.success) {
+      await this.finishStartupFailure({
+        client,
+        error: result.error,
+        operationId: result.operationId,
+        progressMessage,
+        replyLocale,
+        thread,
+        userMessage,
+      });
+      return { reply: '', topicId: result.topicId };
+    }
+
+    log(
+      'executeWithCallback[queue]: operationId=%s, topicId=%s (returning immediately)',
+      result.operationId,
+      result.topicId,
+    );
+
+    if (result.operationId) {
+      AgentBridgeService.activeOperations.set(thread.id, result.operationId);
+
+      if (AgentBridgeService.consumeStopRequest(thread.id)) {
+        try {
+          await this.interruptTrackedOperation(thread.id, result.operationId);
+        } catch (error) {
+          log(
+            'executeWithCallback[queue]: deferred stop failed for thread=%s: %O',
+            thread.id,
+            error,
+          );
+        }
+      }
+    }
+
+    return { reply: '', topicId: result.topicId };
+  }
+
+  /**
+   * Local mode: register hooks with in-process handlers, wait for completion via Promise.
+   */
+  private async executeWithHooksLocalMode(
+    thread: Thread<ThreadState>,
+    aiAgentService: AiAgentService,
+    opts: {
+      agentId: string;
+      botContext?: ChatTopicBotContext;
+      botPlatformContext?: { platformName: string; supportsMarkdown: boolean };
+      callbackUrl: string;
+      charLimit?: number;
+      channelContext?: DiscordChannelContext;
+      client?: PlatformClient;
+      displayToolCalls?: boolean;
+      files?: any;
+      gatewayConnectionId?: string;
+      progressMessage?: SentMessage;
+      prompt: string;
+      replyLocale: BotReplyLocale;
+      topicId?: string;
+      trigger?: string;
+      userMessage?: Message;
+      webhookBody: Record<string, unknown>;
+    },
+  ): Promise<{ reply: string; topicId: string }> {
+    const {
+      agentId,
+      botContext,
+      botPlatformContext,
+      callbackUrl,
+      charLimit,
+      channelContext,
+      client,
+      displayToolCalls,
+      files,
+      gatewayConnectionId,
+      prompt,
+      replyLocale,
+      topicId,
+      trigger,
+      userMessage,
+      webhookBody,
+    } = opts;
+
+    let { progressMessage } = opts;
+    let operationStartTime = 0;
+    // Tracks the last markdown body written to `progressMessage` so we can
+    // skip redundant edits. Telegram rejects edits with identical content
+    // ("message is not modified"), and the final reply often matches the
+    // last streamed progress frame.
+    let lastProgressText: string | undefined;
+
+    const stopGatewayTyping = () => {
+      if (gatewayConnectionId && botContext?.platformThreadId) {
+        const gwClient = getMessageGatewayClient();
+        gwClient.stopTyping(gatewayConnectionId, botContext.platformThreadId).catch((err) => {
+          log('executeWithCallback[local]: gateway stopTyping failed: %O', err);
+        });
+      }
+    };
+
+    return new Promise<{ reply: string; topicId: string }>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        stopGatewayTyping();
+        reject(new Error(`Agent execution timed out`));
+      }, EXECUTION_TIMEOUT);
+
+      let resolvedTopicId = topicId ?? '';
+
+      const getElapsedMs = () => (operationStartTime > 0 ? Date.now() - operationStartTime : 0);
+
+      AgentBridgeService.runWithStartupSignal(thread.id, (signal) =>
+        aiAgentService.execAgent({
+          agentId,
+          appContext: topicId ? { topicId } : undefined,
+          autoStart: true,
+          botContext,
+          botPlatformContext,
+          discordContext: channelContext
+            ? {
+                channel: channelContext.channel,
+                guild: channelContext.guild,
+                thread: channelContext.thread,
+              }
+            : undefined,
+          files,
+          hooks: [
+            {
+              handler: async (event) => {
+                if (event.shouldContinue && userMessage) {
+                  const desiredEmoji = getStepReactionEmoji(event.stepType, event.toolsCalling);
+                  await this.setReaction(thread, userMessage, client, desiredEmoji, botContext);
+                }
+
+                if (!event.shouldContinue || !progressMessage || displayToolCalls !== true) return;
+
+                const msgBody = renderStepProgress(
+                  {
+                    content: event.content,
+                    elapsedMs: event.elapsedMs ?? getElapsedMs(),
+                    executionTimeMs: event.executionTimeMs ?? 0,
+                    lastContent: event.lastLLMContent,
+                    lastToolsCalling: event.lastToolsCalling,
+                    reasoning: event.reasoning,
+                    stepType: (event.stepType as 'call_llm' | 'call_tool') ?? 'call_llm',
+                    thinking: event.thinking ?? false,
+                    toolsCalling: event.toolsCalling,
+                    toolsResult: event.toolsResult,
+                    totalCost: event.totalCost ?? 0,
+                    totalInputTokens: event.totalInputTokens ?? 0,
+                    totalOutputTokens: event.totalOutputTokens ?? 0,
+                    totalSteps: event.totalSteps ?? 0,
+                    totalTokens: event.totalTokens ?? 0,
+                    totalToolCalls: event.totalToolCalls ?? 0,
+                  },
+                  replyLocale,
+                );
+
+                const stats = {
+                  elapsedMs: event.elapsedMs ?? getElapsedMs(),
+                  totalCost: event.totalCost ?? 0,
+                  totalTokens: event.totalTokens ?? 0,
+                };
+                // Local mode goes through the Chat SDK adapter, which only
+                // applies the platform's markdown parse_mode when the message
+                // is `{ markdown }`. Pre-converting via `formatMarkdown` (HTML
+                // for Telegram, mrkdwn for Slack, …) would land in a plain
+                // string branch and render literal `**` / `<b>`. `formatReply`
+                // only appends a plain stats line, so it composes cleanly with
+                // the markdown body.
+                const progressBody = client?.formatReply?.(msgBody, stats) ?? msgBody;
+
+                if (progressBody === lastProgressText) return;
+
+                try {
+                  progressMessage = await progressMessage.edit({ markdown: progressBody });
+                  lastProgressText = progressBody;
+                } catch (error) {
+                  log('executeWithCallback[local]: failed to edit progress message: %O', error);
+                }
+              },
+              id: 'bot-step-progress',
+              type: 'afterStep' as const,
+              webhook: {
+                body: { ...webhookBody, type: 'step' },
+                delivery: 'qstash' as const,
+                url: callbackUrl,
+              },
+            },
+            {
+              handler: async (event) => {
+                clearTimeout(timeout);
+                stopGatewayTyping();
+
+                const reason = event.reason;
+                log('onComplete: reason=%s', reason);
+
+                if (reason === 'error') {
+                  const errorMsg = event.errorMessage || 'Agent execution failed';
+                  log(
+                    'onComplete: agent run failed, operationId=%s, errorType=%s, errorMessage=%s',
+                    event.operationId,
+                    event.errorType,
+                    errorMsg,
+                  );
+                  try {
+                    const errorBody = renderAgentError(
+                      event.errorType,
+                      errorMsg,
+                      event.operationId,
+                      replyLocale,
+                    );
+                    // Wrap in `{ markdown }` so the Chat SDK adapter sets the
+                    // platform's markdown parse_mode (e.g. Telegram `Markdown`,
+                    // Slack `mrkdwn`) and converts the body. Plain strings are
+                    // sent without parse_mode and would render literal `**`.
+                    if (progressMessage) {
+                      await progressMessage.edit({ markdown: errorBody });
+                    } else {
+                      await thread.post({ markdown: errorBody });
+                    }
+                  } catch {
+                    // ignore send failure
+                  }
+                  // Resolve (not reject) — the friendly error has already been
+                  // posted to the user. Rejecting would bubble up to the outer
+                  // try/catch in handleMention and cause a duplicate generic
+                  // "Agent Execution Failed" message on top of the friendly one.
+                  resolve({ reply: '', topicId: resolvedTopicId });
+                  return;
+                }
+
+                if (reason === 'interrupted') {
+                  if (progressMessage) {
+                    try {
+                      await progressMessage.edit({
+                        markdown: renderStopped(undefined, replyLocale),
+                      });
+                    } catch {
+                      // ignore edit failure
+                    }
+                  }
+                  resolve({ reply: '', topicId: resolvedTopicId });
+                  return;
+                }
+
+                try {
+                  const lastAssistantContent = event.lastAssistantContent;
+                  // Convert hook-event attachments (JSON-safe) to chat-sdk
+                  // Attachment shape. Only the *last* chunk carries
+                  // attachments so a multi-chunk reply doesn't repeat the
+                  // image/file once per chunk.
+                  const lastChunkAttachments = hookEventAttachmentsToChatSdk(
+                    event.attachments as any,
+                  );
+                  const hasText = !!lastAssistantContent;
+                  const hasAttachments = !!lastChunkAttachments?.length;
+
+                  if (hasText || hasAttachments) {
+                    let chunks: string[];
+                    if (hasText) {
+                      const replyBody = renderFinalReply(lastAssistantContent!);
+                      const replyStats = {
+                        elapsedMs: event.duration ?? getElapsedMs(),
+                        llmCalls: event.llmCalls ?? 0,
+                        toolCalls: event.toolCalls ?? 0,
+                        totalCost: event.cost ?? 0,
+                        totalTokens: event.totalTokens ?? 0,
+                      };
+                      // See progress-handler note above: keep the body as
+                      // markdown and let the Chat SDK adapter render it with the
+                      // platform's parse_mode. `formatReply` only appends a
+                      // plain-text stats line.
+                      const finalText = client?.formatReply?.(replyBody, replyStats) ?? replyBody;
+                      chunks = splitMessage(finalText, charLimit);
+                      if (chunks.length === 0) chunks = [''];
+                    } else {
+                      // Attachment-only reply — drive one empty chunk so the
+                      // attachments still get posted via buildPostable.
+                      chunks = [''];
+                    }
+
+                    const lastIdx = chunks.length - 1;
+                    const buildPostable = (chunk: string, idx: number) =>
+                      idx === lastIdx && hasAttachments
+                        ? { attachments: lastChunkAttachments!, markdown: chunk }
+                        : { markdown: chunk };
+
+                    try {
+                      if (progressMessage) {
+                        if (chunks[0] !== lastProgressText) {
+                          await progressMessage.edit(buildPostable(chunks[0], 0));
+                          lastProgressText = chunks[0];
+                        }
+                        for (let i = 1; i < chunks.length; i++) {
+                          await thread.post(buildPostable(chunks[i], i));
+                        }
+                      } else {
+                        for (let i = 0; i < chunks.length; i++) {
+                          await thread.post(buildPostable(chunks[i], i));
+                        }
+                      }
+                    } catch (error) {
+                      log('executeWithCallback[local]: failed to send final message: %O', error);
+                    }
+
+                    log(
+                      'executeWithCallback[local]: got response (%d chars, %d chunks, %d attachments)',
+                      lastAssistantContent?.length ?? 0,
+                      chunks.length,
+                      lastChunkAttachments?.length ?? 0,
+                    );
+                    resolve({ reply: lastAssistantContent ?? '', topicId: resolvedTopicId });
+
+                    // Fire-and-forget: summarize topic title in DB. Only when
+                    // we have text to summarize on — image-only replies skip
+                    // title generation (the prompt itself still drives it on
+                    // the next round).
+                    if (resolvedTopicId && prompt && lastAssistantContent) {
+                      const topicModel = new TopicModel(this.db, this.userId, this.workspaceId);
+                      topicModel
+                        .findById(resolvedTopicId)
+                        .then(async (topic) => {
+                          if (topic?.title) return;
+
+                          const systemAgent = new SystemAgentService(
+                            this.db,
+                            this.userId,
+                            this.workspaceId,
+                          );
+                          const title = await systemAgent.generateTopicTitle({
+                            lastAssistantContent,
+                            userPrompt: prompt,
+                          });
+                          if (!title) return;
+
+                          await topicModel.update(resolvedTopicId, { title });
+                        })
+                        .catch((error) => {
+                          log(
+                            'executeWithCallback[local]: topic title summarization failed: %O',
+                            error,
+                          );
+                        });
+                    }
+
+                    return;
+                  }
+
+                  reject(new Error('Agent completed but no response content found'));
+                } catch (error) {
+                  reject(error);
+                }
+              },
+              id: 'bot-completion',
+              type: 'onComplete' as const,
+              webhook: {
+                body: { ...webhookBody, type: 'completion', userPrompt: prompt },
+                delivery: 'qstash' as const,
+                url: callbackUrl,
+              },
+            },
+          ],
+          prompt,
+          signal,
+          title: '',
+          trigger,
+          userInterventionConfig: { approvalMode: 'headless' },
+        }),
+      )
+        .then(async (result) => {
+          resolvedTopicId = result.topicId;
+          operationStartTime = new Date(result.createdAt).getTime();
+
+          if (!result.success) {
+            clearTimeout(timeout);
+
+            log(
+              'executeWithCallback[local]: startup failed, operationId=%s, error=%s',
+              result.operationId,
+              result.error,
+            );
+
+            if (progressMessage) {
+              try {
+                await progressMessage.edit({
+                  markdown: renderError(result.operationId, replyLocale),
+                });
+              } catch (error) {
+                log('executeWithCallback[local]: failed to edit startup error: %O', error);
+              }
+            }
+
+            resolve({ reply: '', topicId: result.topicId });
+            return;
+          }
+
+          if (result.operationId) {
+            AgentBridgeService.activeOperations.set(thread.id, result.operationId);
+
+            if (AgentBridgeService.consumeStopRequest(thread.id)) {
+              try {
+                await this.interruptTrackedOperation(thread.id, result.operationId);
+              } catch (error) {
+                log(
+                  'executeWithCallback[local]: deferred stop failed for thread=%s: %O',
+                  thread.id,
+                  error,
+                );
+              }
+            }
+          }
+
+          log(
+            'executeWithCallback[local]: operationId=%s, topicId=%s',
+            result.operationId,
+            result.topicId,
+          );
+        })
+        .catch(async (error) => {
+          clearTimeout(timeout);
+
+          if (isAbortError(error)) {
+            if (progressMessage) {
+              try {
+                await progressMessage.edit({
+                  markdown: renderStopped(error.message, replyLocale),
+                });
+              } catch (editError) {
+                log('executeWithCallback[local]: failed to edit stopped message: %O', editError);
+              }
+            }
+
+            resolve({ reply: '', topicId: topicId ?? '' });
+            return;
+          }
+
+          log('executeWithCallback[local]: startup error: %s', extractErrorMessage(error));
+
+          // Stale topic_id FK violation: propagate so handleSubscribedMessage can
+          // clear thread state and retry as a fresh mention. Queue mode does the
+          // same bailout in executeWithHooksQueueMode.
+          const errMsg = error instanceof Error ? error.message : String(error);
+          if (errMsg.includes('Failed query') && errMsg.includes('topic_id')) {
+            stopGatewayTyping();
+            reject(error);
+            return;
+          }
+
+          // If execAgent rejected after the operation was registered (e.g. an
+          // error inside the resolved-then path), the operationId may already
+          // have been stashed in activeOperations — surface it so the failure
+          // is traceable instead of opaque.
+          const fallbackOperationId = AgentBridgeService.activeOperations.get(thread.id);
+
+          if (progressMessage) {
+            try {
+              await progressMessage.edit({
+                markdown: renderError(fallbackOperationId, replyLocale),
+              });
+            } catch (editError) {
+              log('executeWithCallback[local]: failed to edit startup error: %O', editError);
+            }
+          }
+
+          resolve({ reply: '', topicId: topicId ?? '' });
+        });
+    });
+  }
+
+  /**
+   * Fetch channel context from the Chat SDK adapter.
+   * Uses fetchThread to get channel name, and decodeThreadId to extract guild/channel IDs.
+   */
+  private async fetchChannelContext(
+    thread: Thread<ThreadState>,
+  ): Promise<DiscordChannelContext | undefined> {
+    try {
+      // Decode thread ID to get guild and channel IDs
+      // Discord format: "discord:guildId:channelId[:threadId]"
+      const decoded = thread.adapter.decodeThreadId(thread.id) as {
+        channelId?: string;
+        guildId?: string;
+        threadId?: string;
+      };
+
+      if (!decoded?.guildId || !decoded?.channelId) {
+        log('fetchChannelContext: could not decode guildId/channelId from thread %s', thread.id);
+        return undefined;
+      }
+
+      // Fetch parent channel info
+      const channelInfo = await thread.adapter.fetchThread(thread.id);
+      const raw = channelInfo.metadata?.raw as { topic?: string; type?: number } | undefined;
+
+      const context: DiscordChannelContext = {
+        channel: {
+          id: decoded.channelId,
+          name: channelInfo.channelName,
+          topic: raw?.topic,
+          type: raw?.type,
+        },
+        guild: { id: decoded.guildId },
+      };
+
+      // When in a Discord thread, also fetch thread info.
+      // Discord threads are channels, so we can fetch via /channels/{threadId}
+      // by constructing a synthetic composite ID with threadId as the channelId slot.
+      if (decoded.threadId) {
+        try {
+          const syntheticId = `discord:${decoded.guildId}:${decoded.threadId}`;
+          const threadInfoResult = await thread.adapter.fetchThread(syntheticId);
+          context.thread = {
+            id: decoded.threadId,
+            name: threadInfoResult.channelName,
+          };
+          log(
+            'fetchChannelContext: thread=%s (%s)',
+            decoded.threadId,
+            threadInfoResult.channelName,
+          );
+        } catch (threadError) {
+          log('fetchChannelContext: failed to fetch thread info: %O', threadError);
+          // Still include thread ID even if name fetch fails
+          context.thread = { id: decoded.threadId };
+        }
+      }
+
+      log(
+        'fetchChannelContext: guild=%s, channel=%s (%s), thread=%s',
+        decoded.guildId,
+        decoded.channelId,
+        channelInfo.channelName,
+        context.thread?.name ?? 'none',
+      );
+
+      return context;
+    } catch (error) {
+      log('fetchChannelContext: failed to fetch channel context: %O', error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Resolve attachments on an inbound message into `AttachmentSource[]` by
+   * delegating to the platform client's own `extractFiles`. Each platform
+   * owns its own attachment quirks (auth, file_id paths, mime/name
+   * inference, quoted-msg handling, post-Redis refetch); the bridge stays
+   * platform-agnostic.
+   *
+   * Returns undefined when no client is provided or the client returns no
+   * attachments. (The legacy bridge fallback `extractFiles` was deleted
+   * once all 6 platforms migrated to per-client extraction — see Step 2
+   * of the per-platform extractFiles refactor.)
+   */
+  private async resolveFiles(
+    message: Message,
+    client?: PlatformClient,
+  ): Promise<{
+    files?: Array<{
+      buffer?: Buffer;
+      mimeType?: string;
+      name?: string;
+      size?: number;
+      url?: string;
+    }>;
+    warnings?: string[];
+  }> {
+    const result = await client?.extractFiles?.(message);
+    if (!result) return {};
+    if (Array.isArray(result)) return { files: result };
+    return { files: result.files, warnings: result.warnings };
+  }
+
+  /**
+   * Format user message into agent prompt.
+   * Delegates to the standalone formatPrompt utility.
+   */
+  private formatPrompt(message: Message, client?: PlatformClient): string {
+    return formatPromptUtil(message as any, {
+      sanitizeUserInput: client?.sanitizeUserInput?.bind(client),
+    });
+  }
+
+  /**
+   * Lazily load and cache user timezone from settings.
+   */
+  private async loadTimezone(): Promise<string | undefined> {
+    if (this.timezoneLoaded) return this.timezone;
+
+    try {
+      const userModel = new UserModel(this.db, this.userId);
+      const settings = await userModel.getUserSettings();
+      this.timezone = (settings?.general as Record<string, unknown>)?.timezone as
+        | string
+        | undefined;
+    } catch {
+      // Fall back to server time if settings can't be loaded
+    }
+
+    this.timezoneLoaded = true;
+    return this.timezone;
+  }
+}

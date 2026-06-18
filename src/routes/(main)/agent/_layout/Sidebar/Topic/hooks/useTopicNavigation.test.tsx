@@ -16,6 +16,10 @@ const chatStoreStateMock = vi.hoisted(() => ({
   activeTopicId: undefined as string | undefined,
   switchTopic: undefined as unknown,
 }));
+const workspaceStoreStateMock = vi.hoisted(() => ({
+  activeWorkspaceId: null as string | null,
+  workspaces: [{ id: 'workspace-1', slug: 'team' }],
+}));
 
 vi.mock('@/features/TopicPopupGuard/useTopicPopupsRegistry', () => ({
   useFocusTopicPopup: () => focusTopicPopupMock,
@@ -43,6 +47,13 @@ vi.mock('@/store/global', () => ({
     }),
 }));
 
+vi.mock('@/business/client/hooks/useActiveWorkspaceSlug', () => ({
+  useActiveWorkspaceSlug: () =>
+    workspaceStoreStateMock.workspaces.find(
+      (workspace) => workspace.id === workspaceStoreStateMock.activeWorkspaceId,
+    )?.slug ?? null,
+}));
+
 describe('useTopicNavigation', () => {
   beforeEach(() => {
     pathnameMock.mockReset();
@@ -53,6 +64,7 @@ describe('useTopicNavigation', () => {
     chatStoreStateMock.activeAgentId = 'agent-1';
     chatStoreStateMock.activeTopicId = undefined;
     chatStoreStateMock.switchTopic = switchTopicMock;
+    workspaceStoreStateMock.activeWorkspaceId = null;
   });
 
   it('focuses the popup and still navigates back to the chat route when the topic is detached', async () => {
@@ -119,5 +131,23 @@ describe('useTopicNavigation', () => {
 
     expect(pushMock).toHaveBeenCalledWith('/agent/agent-1/topic-click');
     expect(switchTopicMock).not.toHaveBeenCalled();
+  });
+
+  it('routes back to chat from a workspace-prefixed profile sub-route', async () => {
+    workspaceStoreStateMock.activeWorkspaceId = 'workspace-1';
+    pathnameMock.mockReturnValue('/team/agent/agent-1/profile');
+    focusTopicPopupMock.mockResolvedValue(false);
+
+    const { result } = renderHook(() => useTopicNavigation());
+
+    expect(result.current.isInAgentSubRoute).toBe(true);
+
+    await act(async () => {
+      await result.current.navigateToTopic('topic-workspace');
+    });
+
+    expect(pushMock).toHaveBeenCalledWith('/agent/agent-1/topic-workspace');
+    expect(switchTopicMock).not.toHaveBeenCalled();
+    expect(toggleMobileTopicMock).toHaveBeenCalledWith(false);
   });
 });

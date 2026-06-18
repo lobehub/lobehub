@@ -4,7 +4,8 @@ import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 
 import { LOADING_FLAT } from '@/const/message';
-import { type AssistantContentBlock } from '@/types/index';
+import ContentLoading from '@/features/Conversation/Messages/components/ContentLoading';
+import type { AssistantContentBlock } from '@/types/index';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import { MessageAggregationContext } from '../../Contexts/MessageAggregationContext';
@@ -12,7 +13,7 @@ import { POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD } from '../constants';
 import {
   areWorkflowToolsComplete,
   getPostToolAnswerSplitIndex,
-  scorePostToolBlockAsFinalAnswer,
+  scoreBlockContentAsAnswerLike,
 } from '../toolDisplayNames';
 import { CollapsedMessage } from './CollapsedMessage';
 import GroupItem from './GroupItem';
@@ -57,11 +58,6 @@ interface PartitionedBlocks {
   segments: GroupRenderSegment[];
 }
 
-interface LeadingSentenceSplit {
-  lead: string;
-  remainder: string;
-}
-
 const ANSWER_DOM_ID_SUFFIX = '__answer';
 const WORKFLOW_DOM_ID_SUFFIX = '__workflow';
 
@@ -85,55 +81,6 @@ const hasSubstantiveContent = (block: AssistantContentBlock): boolean => {
 
 const hasReasoningContent = (block: AssistantContentBlock): boolean => {
   return !!block.reasoning?.content?.trim();
-};
-
-const isSentenceBoundary = (content: string, index: number): boolean => {
-  const char = content[index];
-  if (!char) return false;
-  if (char === '。' || char === '！' || char === '？' || char === '!' || char === '?') return true;
-  if (char !== '.') return false;
-
-  const prev = content[index - 1] ?? '';
-  const next = content[index + 1] ?? '';
-  if (/[a-z\d]/i.test(prev) && /[a-z\d]/i.test(next)) return false;
-  if (/\d/.test(prev) && /\d/.test(next)) return false;
-
-  return true;
-};
-
-const extractLeadingSentenceSplit = (block: AssistantContentBlock): LeadingSentenceSplit | null => {
-  const content = block.content ?? '';
-  const trimmed = content.trim();
-
-  if (!trimmed || trimmed === LOADING_FLAT) return null;
-
-  let splitIndex = -1;
-
-  for (let i = 0; i < content.length; i++) {
-    if (!isSentenceBoundary(content, i)) continue;
-    splitIndex = i + 1;
-    break;
-  }
-
-  if (splitIndex === -1) {
-    const paragraphBreak = content.search(/\n\s*\n/);
-    if (paragraphBreak >= 0) splitIndex = paragraphBreak;
-  }
-
-  if (splitIndex === -1) {
-    const firstLineBreak = content.indexOf('\n');
-    if (firstLineBreak >= 0) splitIndex = firstLineBreak;
-  }
-
-  if (splitIndex === -1) return null;
-
-  const lead = content.slice(0, splitIndex).trim();
-  const remainder = content.slice(splitIndex).trimStart();
-
-  if (!lead) return null;
-  if (!remainder && !hasTools(block) && !hasReasoningContent(block) && !block.error) return null;
-
-  return { lead, remainder };
 };
 
 const isTrailingReasoningCandidate = (block: AssistantContentBlock): boolean => {
@@ -198,16 +145,13 @@ const appendWorkflowBlock = (
 const shouldPromoteMixedBlockContent = (block: AssistantContentBlock): boolean => {
   if (!hasTools(block) || !hasSubstantiveContent(block)) return false;
 
-  return (
-    scorePostToolBlockAsFinalAnswer({ ...block, tools: undefined }) >=
-    POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD
-  );
+  return scoreBlockContentAsAnswerLike(block) >= POST_TOOL_FINAL_ANSWER_SCORE_THRESHOLD;
 };
 
 const appendWorkflowRangeBlock = (
   segments: GroupRenderSegment[],
   block: AssistantContentBlock,
-  allowLeadingSentencePromotion = false,
+  collapsesIntoWorkflow = false,
 ) => {
   if (block.error) {
     if (hasTools(block)) {
@@ -234,51 +178,30 @@ const appendWorkflowRangeBlock = (
     return;
   }
 
-  if (!shouldPromoteMixedBlockContent(block)) {
-    const leadingSentenceSplit =
-      allowLeadingSentencePromotion && segments.length === 0 && hasTools(block)
-        ? extractLeadingSentenceSplit(block)
-        : null;
-
-    if (leadingSentenceSplit) {
-      appendAnswerBlock(
-        segments,
-        createAnswerRenderBlock(block, {
-          content: leadingSentenceSplit.lead,
-          error: undefined,
-          imageList: undefined,
-          reasoning: undefined,
-          tools: undefined,
-        }),
-      );
-      appendWorkflowBlock(
-        segments,
-        createWorkflowRenderBlock(block, {
-          content: leadingSentenceSplit.remainder,
-        }),
-      );
-      return;
-    }
-
-    appendWorkflowBlock(segments, block);
+  // Mixed blocks keep their natural order: assistant prose precedes tool_use.
+  // Short step/status prose belongs with the workflow so adjacent tools can
+  // still fold together; answer-like prose is lifted above the fold so it does
+  // not disappear inside a collapsed WorkflowCollapse.
+  if (collapsesIntoWorkflow && shouldPromoteMixedBlockContent(block)) {
+    appendAnswerBlock(
+      segments,
+      createAnswerRenderBlock(block, {
+        error: undefined,
+        tools: undefined,
+      }),
+    );
+    appendWorkflowBlock(
+      segments,
+      createWorkflowRenderBlock(block, {
+        content: '',
+        imageList: undefined,
+        reasoning: undefined,
+      }),
+    );
     return;
   }
 
-  appendAnswerBlock(
-    segments,
-    createAnswerRenderBlock(block, {
-      error: undefined,
-      reasoning: undefined,
-      tools: undefined,
-    }),
-  );
-  appendWorkflowBlock(
-    segments,
-    createWorkflowRenderBlock(block, {
-      content: '',
-      imageList: undefined,
-    }),
-  );
+  appendWorkflowBlock(segments, block);
 };
 
 const appendPostToolBlocks = (
@@ -412,6 +335,29 @@ const shouldInlineWorkflowSegment = (blocks: RenderableAssistantContentBlock[]):
   return toolCount === 1;
 };
 
+/**
+ * A workflow segment is only the "active" step while it is the last thing in the
+ * group. Once any later segment has real content below it (e.g. an errored
+ * tool block whose error text renders as a trailing answer segment), the tools
+ * are settled and the collapse should read as done rather than keep showing its
+ * streaming "working" header. Empty trailing blocks (an answer not streamed yet)
+ * don't count. `postToolTailPromoted` already covers the promoted-final-answer
+ * path at the group level; this catches the remaining segment-ordering cases.
+ */
+const hasRenderedContentAfter = (segments: GroupRenderSegment[], index: number): boolean =>
+  segments
+    .slice(index + 1)
+    .some((seg) => (seg.kind === 'workflow' ? seg.blocks.length > 0 : !isEmptyBlock(seg.block)));
+
+/**
+ * A pending intervention still needs the user's confirmation, so the collapse
+ * must keep its streaming "awaiting confirmation" chrome even when a later
+ * segment has already rendered below it. `areWorkflowToolsComplete` ignores
+ * pending tools, so the completion shortcut must not be applied here.
+ */
+const hasPendingIntervention = (blocks: RenderableAssistantContentBlock[]): boolean =>
+  blocks.some((block) => block.tools?.some((tool) => tool.intervention?.status === 'pending'));
+
 const Group = memo<GroupChildrenProps>(
   ({
     blocks,
@@ -435,6 +381,20 @@ const Group = memo<GroupChildrenProps>(
     );
 
     const workflowChromeComplete = !isGenerating || postToolTailPromoted;
+
+    // When the turn ends on an inline single-tool segment whose tool already
+    // settled but the run is still generating (waiting on the next step), the
+    // inline path renders no working chrome — unlike WorkflowCollapse, which has
+    // its own streaming header. Without this the user sees a blank gap below the
+    // finished tool. Render the same "running" indicator used at turn start to
+    // fill it. Multi-tool segments keep their own chrome; a tool still executing
+    // is covered by its own loading placeholder (areWorkflowToolsComplete=false).
+    const lastSegment = segments.at(-1);
+    const showTailRunningIndicator =
+      isGenerating &&
+      lastSegment?.kind === 'workflow' &&
+      shouldInlineWorkflowSegment(lastSegment.blocks) &&
+      areWorkflowToolsComplete(lastSegment.blocks.flatMap((block) => block.tools ?? []));
 
     if (isCollapsed) {
       return (
@@ -477,10 +437,14 @@ const Group = memo<GroupChildrenProps>(
                   defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
                   disableEditing={disableEditing}
                   key={segment.blocks[0]?.renderKey ?? `${id}.workflow.${index}`}
-                  workflowChromeComplete={workflowChromeComplete}
                   blocks={segment.blocks.map((block) =>
                     withMarkdownStreamingState(block, lastBlockId),
                   )}
+                  workflowChromeComplete={
+                    workflowChromeComplete ||
+                    (hasRenderedContentAfter(segments, index) &&
+                      !hasPendingIntervention(segment.blocks))
+                  }
                 />
               );
             }
@@ -499,6 +463,7 @@ const Group = memo<GroupChildrenProps>(
               />
             );
           })}
+          {showTailRunningIndicator && <ContentLoading id={id} />}
         </Flexbox>
       </MessageAggregationContext>
     );

@@ -1,6 +1,47 @@
 import type { TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
 
+export type AgentSignalOperationKind =
+  | 'memory'
+  | 'nightly-review'
+  | 'self-feedback-intent'
+  | 'self-reflection'
+  | 'skill';
+
+/**
+ * Run-scoped Agent Signal marker stamped onto a background agent operation at
+ * dispatch. It travels on `appContext.agentSignal`, lands in
+ * `state.metadata.agentSignal`, and is read back on the completion path to
+ * project receipts / briefs (the `agent.execution.completed` payload itself only
+ * carries `agentId/operationId/topicId`). Runtime parsing/validation helpers live
+ * server-side in `operationMarker.ts`.
+ */
+export interface AgentSignalOperationMarker {
+  /**
+   * The reviewed user agent a resulting receipt should be attributed to. Needed
+   * when the run executes under a builtin self-iteration slug (whose resolved
+   * operation agentId is the builtin agent, not the user's agent); the
+   * completion projector prefers this over the run's agentId.
+   */
+  agentId?: string;
+  /** Assistant message a resulting receipt should anchor to. */
+  anchorMessageId?: string;
+  /** Discriminator the completion handler dispatches on. */
+  kind: AgentSignalOperationKind;
+  /** Local review date (YYYY-MM-DD) for nightly review brief/receipt writes. */
+  localDate?: string;
+  /** Review window end (ISO) — lets tools re-derive the evidence digest. */
+  reviewWindowEnd?: string;
+  /** Review window start (ISO). */
+  reviewWindowStart?: string;
+  /** Stable producer source id of the originating signal. */
+  sourceId?: string;
+  /** Topic the run is scoped to. */
+  topicId?: string;
+  /** User message that initiated the originating feedback. */
+  triggerMessageId?: string;
+}
+
 /**
  * Application context for message storage
  */
@@ -13,10 +54,23 @@ export interface ExecAgentAppContext {
    * for downstream tool calls.
    */
   agentDocumentId?: string | null;
+  /**
+   * Run-scoped Agent Signal marker for background self-iteration / memory runs.
+   * Forwarded into the operation so the completion path can project receipts.
+   */
+  agentSignal?: AgentSignalOperationMarker;
   /** Optional default assignee candidate for task manager prompts */
   defaultTaskAssigneeAgentId?: string;
   /** Current document ID for page-scoped conversations */
   documentId?: string | null;
+  /**
+   * When scope is 'agent_builder', the ID of the agent being edited (i.e. the
+   * left-sidebar agent the user opened AgentBuilder for). The AgentBuilder
+   * builtin runs under its own `agentId`; this field carries the *target* so
+   * server-side tool executors update the correct agent rather than the builder
+   * itself.
+   */
+  editingAgentId?: string;
   /** Group ID for group chat */
   groupId?: string | null;
   /**
@@ -27,6 +81,11 @@ export interface ExecAgentAppContext {
     repos?: string[];
     workingDirectory?: string;
   };
+  /**
+   * Whether this operation is an isolated sub-agent execution. Used to disable
+   * recursive sub-agent dispatch.
+   */
+  isSubAgent?: boolean;
   /** Scope identifier */
   scope?: string | null;
   /** Session ID */
@@ -45,22 +104,6 @@ export interface ExecAgentAppContext {
   threadId?: string | null;
   /** Topic ID */
   topicId?: string | null;
-}
-
-/**
- * A project-level skill discovered on the device filesystem
- * (`.agents/skills` / `.claude/skills`) by the client at request time.
- * Only frontmatter + the absolute SKILL.md path are carried; the SKILL.md
- * body and directory tree are loaded on demand at activation time via the
- * readFile / listFiles tools.
- */
-export interface ProjectSkillMeta {
-  /** Skill description from SKILL.md frontmatter. */
-  description?: string;
-  /** Skill name from frontmatter (falls back to the directory name). */
-  name: string;
-  /** Absolute path to the skill's SKILL.md on the device filesystem. */
-  path: string;
 }
 
 /**
@@ -96,13 +139,6 @@ export interface ExecAgentParams {
    * sub-tree back to its root.
    */
   parentOperationId?: string;
-  /**
-   * Project-level skills discovered on the device filesystem
-   * (`.agents/skills` / `.claude/skills`) at request time. Surfaced in the
-   * `<available_skills>` list and loaded on demand via the readFile tool.
-   * Only applied when a device is active for this run.
-   */
-  projectSkills?: ProjectSkillMeta[];
   /** The user input/prompt */
   prompt: string;
   /** Override the agent's default provider */
@@ -222,59 +258,87 @@ export interface ExecGroupAgentResponse {
   userMessageId: string;
 }
 
-// ============ SubAgent Task Execution Types ============
+// ============ SubAgent Execution Types ============
 
 /**
- * Parameters for execSubAgentTask - execute SubAgent task
+ * Parameters for execSubAgent - execute an agent in an isolated thread
  * Supports both Group mode and Single Agent mode
  *
  * - Group mode: pass groupId, Thread will be associated with the Group
  * - Single Agent mode: omit groupId, Thread will only be associated with the Agent
  */
-export interface ExecSubAgentTaskParams {
-  /** The SubAgent ID to execute the task */
+export interface ExecSubAgentParams {
+  /** The agent ID to execute */
   agentId: string;
   /** The Group ID (optional, only for Group mode) */
   groupId?: string;
-  /** Task instruction/prompt for the SubAgent */
+  /** Instruction/prompt for the agent */
   instruction: string;
-  /** The parent message ID (Supervisor's tool call message or task message) */
+  /** The parent message ID that anchors the isolated thread */
   parentMessageId: string;
   /** Parent operation ID for dispatching callAgent hooks */
   parentOperationId?: string;
   /** Timeout in milliseconds (optional) */
   timeout?: number;
-  /** Task title (shown in UI, used as thread title) */
+  /** Thread title shown in UI */
   title?: string;
   /** The Topic ID */
   topicId: string;
 }
 
 /**
- * Result from execSubAgentTask
+ * Parameters for execVirtualSubAgent - execute a `lobe-agent.callSubAgent`
+ * child run.
+ *
+ * Virtual sub-agents are tool-created isolated runs. They are marked with
+ * `appContext.isSubAgent` so the child cannot recursively spawn more
+ * sub-agents, and they install the completion bridge that backfills the
+ * parent's placeholder tool message before resuming the parent operation.
  */
-export interface ExecSubAgentTaskResult {
-  /** The assistant message ID created for this task */
+export interface ExecVirtualSubAgentParams {
+  /** The agent ID to execute */
+  agentId: string;
+  /** The Group ID inherited from the parent operation, when present */
+  groupId?: string;
+  /** Instruction/prompt for the virtual sub-agent */
+  instruction: string;
+  /** The parent placeholder tool message ID */
+  parentMessageId: string;
+  /** Parent operation ID to bridge and resume on completion */
+  parentOperationId: string;
+  /** Timeout in milliseconds (optional) */
+  timeout?: number;
+  /** Thread title shown in UI */
+  title?: string;
+  /** The Topic ID */
+  topicId: string;
+}
+
+/**
+ * Result from execSubAgent
+ */
+export interface ExecSubAgentResult {
+  /** The assistant message ID created for this run */
   assistantMessageId: string;
-  /** Error message if task failed to start */
+  /** Error message if execution failed to start */
   error?: string;
   /** Operation ID for tracking execution status */
   operationId: string;
-  /** Whether the task was created successfully */
+  /** Whether the execution was created successfully */
   success: boolean;
-  /** The Thread ID where the task is executed */
+  /** The Thread ID where the execution is isolated */
   threadId: string;
 }
 
 /**
- * @deprecated Use ExecSubAgentTaskParams instead
+ * @deprecated Use ExecSubAgentParams instead
  */
-export type ExecGroupSubAgentTaskParams = ExecSubAgentTaskParams;
+export type ExecGroupSubAgentTaskParams = ExecSubAgentParams;
 
 /**
- * @deprecated Use ExecSubAgentTaskResult instead
+ * @deprecated Use ExecSubAgentResult instead
  */
-export type ExecGroupSubAgentTaskResult = ExecSubAgentTaskResult;
+export type ExecGroupSubAgentTaskResult = ExecSubAgentResult;
 
 /**
  * Current activity for real-time progress display

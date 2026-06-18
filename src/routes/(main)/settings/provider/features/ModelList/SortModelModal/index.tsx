@@ -5,6 +5,7 @@ import { type AiProviderModelListItem } from 'model-bank';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useAiInfraStore } from '@/store/aiInfra';
 
 import ListItem from './ListItem';
@@ -29,6 +30,7 @@ interface SortModelModalProps {
 }
 const SortModelModal = memo<SortModelModalProps>(({ open, onCancel, defaultItems }) => {
   const { t } = useTranslation('modelProvider');
+  const { allowed: canManageProvider } = usePermission('manage_provider_key');
   const [providerId, updateAiModelsSort] = useAiInfraStore((s) => [
     s.activeAiProvider,
     s.updateAiModelsSort,
@@ -58,19 +60,23 @@ const SortModelModal = memo<SortModelModalProps>(({ open, onCancel, defaultItems
               id={item.id}
               justify={'space-between'}
             >
-              <ListItem {...item} />
+              <ListItem {...item} disabled={!canManageProvider} />
             </SortableList.Item>
           )}
           onChange={async (items: AiProviderModelListItem[]) => {
+            if (!canManageProvider) return;
+
             setItems(items);
           }}
         />
         <Button
           block
+          disabled={!canManageProvider}
           loading={loading}
           style={{ bottom: 0, position: 'sticky' }}
           type={'primary'}
           onClick={async () => {
+            if (!canManageProvider) return;
             if (!providerId) return;
 
             const sortMap = items.map((item, index) => ({

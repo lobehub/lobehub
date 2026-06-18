@@ -14,6 +14,7 @@ import { getPlatformIcon } from '../const';
 
 interface HeaderProps {
   currentConfig?: { enabled: boolean };
+  disabled?: boolean;
   enabledValue?: boolean;
   onRefreshStatus?: () => void;
   onToggleEnable: (enabled: boolean) => void;
@@ -35,6 +36,7 @@ const Header = memo<HeaderProps>(
   ({
     platformDef,
     currentConfig,
+    disabled,
     enabledValue,
     onRefreshStatus,
     onToggleEnable,
@@ -97,6 +99,7 @@ const Header = memo<HeaderProps>(
           )}
           {onRefreshStatus && currentConfig?.enabled && (
             <ActionIcon
+              disabled={disabled}
               icon={RefreshCw}
               loading={refreshingStatus}
               size={'small'}
@@ -129,6 +132,7 @@ const Header = memo<HeaderProps>(
               </span>
               <Switch
                 checked={effectiveEnabled}
+                disabled={disabled}
                 loading={toggleLoading}
                 onChange={onToggleEnable}
               />

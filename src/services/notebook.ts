@@ -1,8 +1,9 @@
 import { type DocumentType } from '@lobechat/builtin-tool-notebook';
+import type { AGENT_PLAN_FILE_TYPE } from '@lobechat/const';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
-type ExtendedDocumentType = DocumentType | 'agent/plan';
+type ExtendedDocumentType = DocumentType | typeof AGENT_PLAN_FILE_TYPE;
 
 interface CreateDocumentParams {
   content: string;

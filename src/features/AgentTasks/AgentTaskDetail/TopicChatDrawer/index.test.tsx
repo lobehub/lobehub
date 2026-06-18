@@ -15,6 +15,10 @@ const mocks = vi.hoisted(() => ({
     dbMessagesMap: {} as Record<string, unknown[]>,
     replaceMessages: vi.fn(),
   },
+  permission: {
+    allowed: true,
+    reason: 'requires member',
+  },
   serverConfigState: {
     serverConfig: {
       enableBusinessFeatures: false,
@@ -49,10 +53,38 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@lobehub/ui', () => ({
-  ActionIcon: ({ onClick }: { onClick?: () => void }) => <button onClick={onClick} />,
+  ActionIcon: ({
+    disabled,
+    onClick,
+    title,
+  }: {
+    disabled?: boolean;
+    onClick?: () => void;
+    title?: string;
+  }) => (
+    <button disabled={disabled} title={title} onClick={onClick}>
+      {title}
+    </button>
+  ),
   copyToClipboard: vi.fn(),
-  Drawer: ({ children, open }: { children?: ReactNode; open?: boolean }) =>
-    open ? <div data-testid="topic-drawer">{children}</div> : null,
+  Drawer: ({
+    children,
+    extra,
+    open,
+    title,
+  }: {
+    children?: ReactNode;
+    extra?: ReactNode;
+    open?: boolean;
+    title?: ReactNode;
+  }) =>
+    open ? (
+      <div data-testid="topic-drawer">
+        {title}
+        {extra}
+        {children}
+      </div>
+    ) : null,
   DropdownMenu: ({ children }: { children?: ReactNode }) => <>{children}</>,
   Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   Freeze: ({ children }: { children?: ReactNode; frozen?: boolean }) => <>{children}</>,
@@ -102,6 +134,10 @@ vi.mock('@/hooks/useOperationState', () => ({
   useOperationState: () => undefined,
 }));
 
+vi.mock('@/hooks/usePermission', () => ({
+  usePermission: () => ({ allowed: mocks.permission.allowed, reason: mocks.permission.reason }),
+}));
+
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: typeof mocks.agentState) => unknown) =>
     selector(mocks.agentState),
@@ -142,11 +178,22 @@ describe('TopicChatDrawer', () => {
     mocks.chatState.replaceMessages.mockClear();
     mocks.taskState.closeTopicDrawer.mockClear();
     mocks.taskState.activeTopicDrawerTopicId = 'topic-1';
+    mocks.permission.allowed = true;
+    mocks.serverConfigState.serverConfig.enableBusinessFeatures = false;
   });
 
   it('hydrates the task assignee agent config for drawer messages', () => {
     render(<TopicChatDrawer />);
 
     expect(mocks.agentState.useHydrateAgentConfig).toHaveBeenCalledWith(true, 'agt_assignee');
+  });
+
+  it('disables topic sharing for workspace viewers', () => {
+    mocks.permission.allowed = false;
+    mocks.serverConfigState.serverConfig.enableBusinessFeatures = true;
+
+    const { getByTitle } = render(<TopicChatDrawer />);
+
+    expect(getByTitle('requires member')).toBeDisabled();
   });
 });

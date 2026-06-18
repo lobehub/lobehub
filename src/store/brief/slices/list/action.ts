@@ -2,6 +2,7 @@ import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
+import { briefKeys } from '@/libs/swr/keys';
 import { briefService } from '@/services/brief';
 import { taskService } from '@/services/task';
 import { type BriefStore } from '@/store/brief/store';
@@ -10,8 +11,6 @@ import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 const n = setNamespace('briefList');
-
-const FETCH_BRIEFS_KEY = 'fetchBriefs';
 
 type Setter = StoreSetter<BriefStore>;
 
@@ -76,7 +75,7 @@ export class BriefListActionImpl {
 
   useFetchBriefs = (isLogin: boolean | undefined): SWRResponse<BriefItem[]> => {
     return useClientDataSWRWithSync<BriefItem[]>(
-      isLogin === true ? [FETCH_BRIEFS_KEY, isLogin] : null,
+      isLogin === true ? briefKeys.list(isLogin) : null,
       async () => {
         const result = await briefService.listUnresolved();
         return result.data as BriefItem[];

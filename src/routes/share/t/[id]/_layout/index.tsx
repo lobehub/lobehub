@@ -1,11 +1,10 @@
 'use client';
 
-import { Alert, Center, Flexbox } from '@lobehub/ui';
+import { Center, Flexbox } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import NextLink from 'next/link';
 import { type PropsWithChildren } from 'react';
 import { memo, Suspense } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Link, Outlet } from 'react-router-dom';
 
 import { ProductLogo } from '@/components/Branding';
@@ -17,11 +16,11 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import SharePortal from '../features/Portal';
+import HeaderMenu from './HeaderMenu';
 import { styles } from './style';
 import Title from './Title';
 
 const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
-  const { t } = useTranslation('chat');
   const isDarkMode = useIsDark();
   const isLogin = useUserStore(authSelectors.isLogin);
 
@@ -68,7 +67,9 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
               <Title />
             </Suspense>
           </Center>
-          <Flexbox horizontal align="center" flex={1} gap={12} justify={'flex-end'} />
+          <Flexbox horizontal align="center" flex={1} gap={12} justify={'flex-end'}>
+            <HeaderMenu />
+          </Flexbox>
         </Flexbox>
         <Flexbox horizontal className={styles.content} style={{ overflow: 'hidden' }}>
           <Flexbox flex={1} style={{ overflow: 'hidden' }}>
@@ -78,9 +79,6 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
           </Flexbox>
           <SharePortal />
         </Flexbox>
-        <Center padding={8} style={{ opacity: 0.25 }}>
-          <Alert title={t('sharePageDisclaimer')} type={'secondary'} variant={'borderless'} />
-        </Center>
       </Flexbox>
     </Flexbox>
   );

@@ -94,6 +94,28 @@ describe('matchErrorPattern', () => {
     ).toBe(AgentRuntimeErrorType.StateStorePersistError);
   });
 
+  it('classifies the Upstash readonly-upgrade write rejection as StateStorePersistError', () => {
+    expect(
+      matchErrorPattern({
+        message: 'READONLY Writes are temporarily rejected due to server upgrade',
+      })?.code,
+    ).toBe(AgentRuntimeErrorType.StateStorePersistError);
+  });
+
+  it('classifies a caller-gone blocking-read abort as StateStoreReadError', () => {
+    expect(matchErrorPattern({ message: 'ERR caller gone' })?.code).toBe(
+      AgentRuntimeErrorType.StateStoreReadError,
+    );
+  });
+
+  it('classifies a missing-agent-state read as StateStoreReadError', () => {
+    expect(
+      matchErrorPattern({
+        message: 'Agent state not found for operation op_1781276404066_agt_x_tpc_y_z',
+      })?.code,
+    ).toBe(AgentRuntimeErrorType.StateStoreReadError);
+  });
+
   it('classifies harness JS runtime crashes as AgentRuntimeError', () => {
     for (const message of [
       'e.trim is not a function',

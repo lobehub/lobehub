@@ -5,6 +5,12 @@ import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { testProvider } from '../../providerTestUtils';
 import { LobeOpenRouterAI, params } from './index';
 
+const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: loadModelsMock,
+}));
+
 const provider = 'openrouter';
 const defaultBaseURL = 'https://openrouter.ai/api/v1';
 
@@ -1347,29 +1353,24 @@ describe('LobeOpenRouterAI - custom features', () => {
       expect(models).toEqual([]);
     });
 
-    it('should return empty array when fetch fails', async () => {
+    it('should throw when fetch fails', async () => {
       vi.stubGlobal(
         'fetch',
         vi.fn().mockResolvedValue({
           ok: false,
+          status: 401,
         }),
       );
 
-      const models = await params.models();
-
-      expect(models).toEqual([]);
+      await expect(params.models()).rejects.toThrow(
+        'OpenRouter models API request failed with status 401',
+      );
     });
 
-    it('should return empty array when fetch throws error', async () => {
+    it('should throw when fetch throws error', async () => {
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
 
-      const models = await params.models();
-
-      expect(models).toEqual([]);
-      expect(console.error).toHaveBeenCalledWith(
-        'Failed to fetch OpenRouter frontend models:',
-        expect.any(Error),
-      );
+      await expect(params.models()).rejects.toThrow('Network error');
     });
 
     it('should handle models with missing optional fields', async () => {

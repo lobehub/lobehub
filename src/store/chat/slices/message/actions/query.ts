@@ -4,14 +4,14 @@ import isEqual from 'fast-deep-equal';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { messageKeys } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';
 import { type ChatStore } from '@/store/chat/store';
 import { type StoreSetter } from '@/store/types';
 
 import { type MessageMapKeyInput } from '../../../utils/messageMapKey';
 import { messageMapKey } from '../../../utils/messageMapKey';
-
-const SWR_USE_FETCH_MESSAGES = 'SWR_USE_FETCH_MESSAGES';
+import { reconcileAssistantToolLinks } from '../utils/reconcileTools';
 
 /**
  * Data query and synchronization actions
@@ -35,9 +35,14 @@ export class MessageQueryActionImpl {
   refreshMessages = async (context?: Partial<ConversationContext>): Promise<void> => {
     const agentId = context?.agentId ?? this.#get().activeAgentId;
     const topicId = context?.topicId !== undefined ? context.topicId : this.#get().activeTopicId;
-    // TODO: Support threadId refresh when needed
-    await mutate([SWR_USE_FETCH_MESSAGES, agentId, topicId, 'session']);
-    await mutate([SWR_USE_FETCH_MESSAGES, agentId, topicId, 'group']);
+    // Invalidate every `message:list` entry for this agent+topic (any scope /
+    // thread / page-size variant). The key shape is
+    // `[message:list, ConversationContext, version]`, so match on key[1].
+    await mutate((key) => {
+      if (!Array.isArray(key) || key[0] !== messageKeys.list.root) return false;
+      const ctx = key[1] as ConversationContext | undefined;
+      return !!ctx && ctx.agentId === agentId && ctx.topicId === topicId;
+    });
   };
 
   replaceMessages = (
@@ -54,16 +59,14 @@ export class MessageQueryActionImpl {
 
     // Priority 1: Use explicit context if provided (preserving scope)
     if (params?.context) {
+      // Spread the whole context so every bucket-key field carries through —
+      // notably `documentId` (page scope: keeps writes in the
+      // `page_<agent>_<documentId>` bucket the editor reads from, instead of
+      // `page_<agent>_new`) and `subAgentId` (group_agent scope's subTopicId).
+      // Only agentId/topicId need a fallback to the active conversation.
       ctx = {
+        ...params.context,
         agentId: params.context.agentId ?? this.#get().activeAgentId,
-        // Preserve groupId from context
-        groupId: params.context.groupId,
-        // Preserve scope from context
-        isNew: params.context.isNew,
-
-        scope: params.context.scope,
-
-        threadId: params.context.threadId,
         topicId:
           params.context.topicId !== undefined ? params.context.topicId : this.#get().activeTopicId,
       };
@@ -84,13 +87,20 @@ export class MessageQueryActionImpl {
 
     const messagesKey = messageMapKey(ctx);
 
+    // Re-link any tool row whose parent assistant lost its tools[] entry before
+    // it lands in the raw bucket — a stale / out-of-order snapshot can drop the
+    // link while the tool row survives, which would orphan the tool bubble (see
+    // reconcileAssistantToolLinks). Keeps dbMessagesMap (SoT) consistent for
+    // optimistic updates, not just the parsed display.
+    const reconciled = reconcileAssistantToolLinks(messages);
+
     // Get raw messages from dbMessagesMap and apply reducer
-    const nextDbMap = { ...this.#get().dbMessagesMap, [messagesKey]: messages };
+    const nextDbMap = { ...this.#get().dbMessagesMap, [messagesKey]: reconciled };
 
     if (isEqual(nextDbMap, this.#get().dbMessagesMap)) return;
 
     // Parse messages using conversation-flow
-    const { flatList } = parse(messages);
+    const { flatList } = parse(reconciled);
 
     this.#set(
       {
@@ -128,7 +138,7 @@ export class MessageQueryActionImpl {
     const shouldFetch = !skipFetch && !!context.agentId && !!context.topicId;
 
     return useClientDataSWRWithSync<UIChatMessage[]>(
-      shouldFetch ? ['CHAT_STORE_FETCH_MESSAGES', context] : null,
+      shouldFetch ? messageKeys.list(context) : null,
       () => messageService.getMessages(context),
       {
         onData: (data) => {

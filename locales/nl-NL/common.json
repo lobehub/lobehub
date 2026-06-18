@@ -480,6 +480,9 @@
   "userPanel.setting": "Instellingen",
   "userPanel.upgradePlan": "Abonnement upgraden",
   "userPanel.usages": "Gebruiksstatistieken",
+  "userPanel.workspaceCredits": "Werkruimtecredits",
+  "userPanel.workspaceSetting": "Werkruimte-instellingen",
+  "userPanel.workspaceUsages": "Werkruimtegebruik",
   "version": "Versie",
   "zoom": "Zoom"
 }

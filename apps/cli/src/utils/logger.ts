@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import pc from 'picocolors';
 
 let verbose = false;
@@ -41,18 +40,20 @@ export const log = {
     console.log(`${timestamp()} ${pc.bold('[STATUS]')} ${color(status)}`);
   },
 
-  toolCall: (apiName: string, requestId: string, args?: string) => {
+  toolCall: (apiName: string, requestId: string, args?: string, operationId?: string) => {
     console.log(
-      `${timestamp()} ${pc.magenta('[TOOL]')} ${pc.bold(apiName)} ${pc.dim(`(${requestId})`)}`,
+      `${timestamp()} ${pc.magenta('[TOOL]')} ${pc.bold(apiName)}${operationId ? ` ${pc.dim(`op=${operationId}`)}` : ''} ${pc.dim(`(${requestId})`)}`,
     );
     if (args && verbose) {
       console.log(`  ${pc.dim(args)}`);
     }
   },
 
-  toolResult: (requestId: string, success: boolean, content?: string) => {
+  toolResult: (requestId: string, success: boolean, content?: string, operationId?: string) => {
     const icon = success ? pc.green('OK') : pc.red('FAIL');
-    console.log(`${timestamp()} ${pc.magenta('[RESULT]')} ${icon} ${pc.dim(`(${requestId})`)}`);
+    console.log(
+      `${timestamp()} ${pc.magenta('[RESULT]')} ${icon}${operationId ? ` ${pc.dim(`op=${operationId}`)}` : ''} ${pc.dim(`(${requestId})`)}`,
+    );
     if (content && verbose) {
       const preview = content.length > 200 ? content.slice(0, 200) + '...' : content;
       console.log(`  ${pc.dim(preview)}`);

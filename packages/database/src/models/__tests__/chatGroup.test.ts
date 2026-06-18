@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { CHAT_GROUP_SESSION_ID_PREFIX } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -7,11 +8,18 @@ import type { LobeChatDatabase } from '@/database/type';
 
 import { getTestDB } from '../../core/getTestDB';
 import type { NewChatGroup } from '../../schemas';
-import { agents as agentsTable, chatGroups, chatGroupsAgents, users } from '../../schemas';
+import {
+  agents as agentsTable,
+  chatGroups,
+  chatGroupsAgents,
+  users,
+  workspaces,
+} from '../../schemas';
 import { ChatGroupModel } from '../chatGroup';
 
 const userId = 'test-user';
 const otherUserId = 'other-user';
+const workspaceId = 'chat-group-workspace';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -26,11 +34,18 @@ type RelationAgent = {
 const toRelationAgents = (agents: unknown): RelationAgent[] => agents as RelationAgent[];
 
 const chatGroupModel = new ChatGroupModel(serverDB, userId);
+const workspaceChatGroupModel = new ChatGroupModel(serverDB, otherUserId, workspaceId);
 
 beforeEach(async () => {
   await serverDB.delete(users);
   // Create test users
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
+  await serverDB.insert(workspaces).values({
+    id: workspaceId,
+    name: 'Chat Group Workspace',
+    primaryOwnerId: userId,
+    slug: workspaceId,
+  });
 });
 
 afterEach(async () => {
@@ -982,6 +997,61 @@ describe('ChatGroupModel', () => {
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('user-group');
       expect(result[0].userId).toBe(userId);
+    });
+
+    it('should return workspace groups for members even when rows were created by another user', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(chatGroups).values({
+          id: 'workspace-group',
+          title: 'Workspace Group',
+          userId,
+          workspaceId,
+        });
+        await trx.insert(agentsTable).values({
+          id: 'workspace-agent',
+          title: 'Workspace Agent',
+          userId,
+          workspaceId,
+        });
+        await trx.insert(chatGroupsAgents).values({
+          agentId: 'workspace-agent',
+          chatGroupId: 'workspace-group',
+          userId,
+          workspaceId,
+        });
+      });
+
+      const result = await workspaceChatGroupModel.getGroupsWithAgents(['workspace-agent']);
+
+      expect(result).toEqual([expect.objectContaining({ id: 'workspace-group', workspaceId })]);
+    });
+  });
+
+  describe('getMemberAvatarsByGroupIds', () => {
+    it('should group member avatars by chatGroupId in member order with inbox fallback', async () => {
+      await serverDB.insert(agentsTable).values([
+        { avatar: '/custom.png', id: 'member-custom', slug: 'custom', userId },
+        { avatar: null, id: 'member-inbox', slug: INBOX_SESSION_ID, userId },
+      ]);
+      await serverDB.insert(chatGroups).values({ id: 'group-avatars', title: 'G', userId });
+      await serverDB.insert(chatGroupsAgents).values([
+        { agentId: 'member-inbox', chatGroupId: 'group-avatars', order: 1, userId },
+        { agentId: 'member-custom', chatGroupId: 'group-avatars', order: 0, userId },
+      ]);
+
+      const result = await chatGroupModel.getMemberAvatarsByGroupIds(['group-avatars']);
+
+      // Ordered by `order`: custom (0) before inbox (1); inbox avatar falls back.
+      expect(result.get('group-avatars')).toEqual([
+        { avatar: '/custom.png', backgroundColor: null },
+        { avatar: DEFAULT_INBOX_AVATAR, backgroundColor: null },
+      ]);
+    });
+
+    it('should return an empty map for no group ids', async () => {
+      const result = await chatGroupModel.getMemberAvatarsByGroupIds([]);
+
+      expect(result.size).toBe(0);
     });
   });
 });

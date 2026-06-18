@@ -5,6 +5,7 @@ import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { useCreateNewModal } from '@/features/LibraryModal';
+import { usePermission } from '@/hooks/usePermission';
 import { useCurrentFolderId } from '@/routes/(main)/resource/features/hooks/useCurrentFolderId';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { useFileStore } from '@/store/file';
@@ -70,6 +71,15 @@ const EmptyPlaceholder = () => {
   const currentFolderId = useCurrentFolderId();
 
   const { open } = useCreateNewModal();
+  const { allowed: canCreate } = usePermission('create_content');
+
+  if (!canCreate) {
+    return (
+      <Center height={'100%'} style={{ paddingBottom: 100 }} width={'100%'}>
+        <Text as={'h4'}>{t('FileManager.emptyStatus.title')}</Text>
+      </Center>
+    );
+  }
 
   return (
     <Center gap={24} height={'100%'} style={{ paddingBottom: 100 }} width={'100%'}>

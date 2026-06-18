@@ -158,8 +158,8 @@ describe('MessageModel Statistics Tests', () => {
       // @ts-ignore - accessing private method for testing
       const id2 = model.genId();
 
-      expect(id1).toHaveLength(18);
-      expect(id2).toHaveLength(18);
+      expect(id1).toHaveLength(22);
+      expect(id2).toHaveLength(22);
       expect(id1).not.toBe(id2);
       expect(id1).toMatch(/^msg_/);
       expect(id2).toMatch(/^msg_/);
@@ -585,6 +585,41 @@ describe('MessageModel Statistics Tests', () => {
       const todayData = result.find((item) => item.date === todayDate);
       expect(todayData?.count).toBe(0);
       expect(todayData?.level).toBe(0);
+
+      vi.useRealTimers();
+    });
+
+    it('prefers the usage column and falls back to metadata.usage', async () => {
+      vi.useFakeTimers();
+      const fixedDate = new Date('2023-04-07T13:00:00Z');
+      vi.setSystemTime(fixedDate);
+
+      const today = dayjs(fixedDate);
+      const dayKey = today.subtract(2, 'day').format('YYYY-MM-DD');
+
+      await serverDB.insert(messages).values([
+        // dedicated column wins over metadata.usage → contributes 100, not 9999
+        {
+          id: 'h1',
+          userId,
+          role: 'assistant',
+          usage: { totalTokens: 100 } as any,
+          metadata: { usage: { totalTokens: 9999 } },
+          createdAt: today.subtract(2, 'day').toDate(),
+        },
+        // legacy row: only metadata.usage → falls back, contributes 50
+        {
+          id: 'h2',
+          userId,
+          role: 'assistant',
+          metadata: { usage: { totalTokens: 50 } },
+          createdAt: today.subtract(2, 'day').toDate(),
+        },
+      ]);
+
+      const result = await messageModel.getTokenHeatmaps();
+      const day = result.find((item) => item.date === dayKey);
+      expect(day?.count).toBe(150);
 
       vi.useRealTimers();
     });

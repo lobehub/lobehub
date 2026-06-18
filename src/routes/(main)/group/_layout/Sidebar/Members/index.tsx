@@ -7,6 +7,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useInitGroupConfig } from '@/hooks/useInitGroupConfig';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
@@ -18,6 +19,7 @@ interface MembersProps {
 
 const Members = memo<MembersProps>(({ itemKey }) => {
   const { t } = useTranslation('chat');
+  const { allowed: canEdit, reason } = usePermission('edit_own_content');
   const [addModalOpen, setAddModalOpen] = useState(false);
 
   const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
@@ -28,6 +30,8 @@ const Members = memo<MembersProps>(({ itemKey }) => {
 
   const handleAddMember = (e: MouseEvent) => {
     e.stopPropagation();
+    if (!canEdit) return;
+
     setAddModalOpen(true);
   };
 
@@ -40,9 +44,10 @@ const Members = memo<MembersProps>(({ itemKey }) => {
         <>
           {isRevalidating && <ActionIcon loading icon={Loader2Icon} size={'small'} />}
           <ActionIcon
+            disabled={!canEdit}
             icon={UserPlus}
             size={'small'}
-            title={t('groupSidebar.members.addMember')}
+            title={canEdit ? t('groupSidebar.members.addMember') : reason}
             onClick={handleAddMember}
           />
         </>

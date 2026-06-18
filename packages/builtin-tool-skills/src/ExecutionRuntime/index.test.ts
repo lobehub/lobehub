@@ -204,9 +204,9 @@ describe('SkillsExecutionRuntime', () => {
       expect(result.success).toBe(true);
       expect(result.content).toContain('Run the deploy steps.');
       // The hint points at the skill's directory and instructs the model to
-      // call `local-system.listFiles` itself rather than pre-enumerating here.
+      // call `local-system.globFiles` itself rather than pre-enumerating here.
       expect(result.content).toContain('/repo/.agents/skills/deploy');
-      expect(result.content).toContain('listFiles');
+      expect(result.content).toContain('globFiles');
       expect(result.state).toMatchObject({ name: 'deploy', source: 'project' });
     });
 

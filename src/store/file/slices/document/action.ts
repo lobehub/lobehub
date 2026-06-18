@@ -1,3 +1,8 @@
+import {
+  CUSTOM_DOCUMENT_FILE_TYPE,
+  CUSTOM_FOLDER_FILE_TYPE,
+  DERIVED_DOCUMENT_SOURCE_TYPE,
+} from '@lobechat/const';
 import { createNanoId } from '@lobechat/utils';
 import { type SWRResponse } from 'swr';
 
@@ -17,8 +22,8 @@ import { type DocumentQueryFilter } from './initialState';
 const n = setNamespace('document');
 
 const ALLOWED_DOCUMENT_SOURCE_TYPES = new Set(['editor', 'file', 'api']);
-const ALLOWED_DOCUMENT_FILE_TYPES = new Set(['custom/document', 'application/pdf']);
-const EDITOR_DOCUMENT_FILE_TYPE = 'custom/document';
+const ALLOWED_DOCUMENT_FILE_TYPES = new Set([CUSTOM_DOCUMENT_FILE_TYPE, 'application/pdf']);
+const EDITOR_DOCUMENT_FILE_TYPE = CUSTOM_DOCUMENT_FILE_TYPE;
 
 interface ResourceDocumentSnapshot {
   content?: string | null;
@@ -171,7 +176,7 @@ export class DocumentActionImpl {
       parentId: document.parentId !== undefined ? document.parentId : (fallback?.parentId ?? null),
       size: document.totalCharCount ?? fallback?.size ?? document.content?.length ?? 0,
       slug: document.slug !== undefined ? document.slug : fallback?.slug,
-      sourceType: 'document',
+      sourceType: DERIVED_DOCUMENT_SOURCE_TYPE,
       title:
         document.title !== undefined
           ? (document.title ?? undefined)
@@ -266,7 +271,7 @@ export class DocumentActionImpl {
     const folder = await documentService.createDocument({
       content: '',
       editorData: '{}',
-      fileType: 'custom/folder',
+      fileType: CUSTOM_FOLDER_FILE_TYPE,
       knowledgeBaseId,
       metadata: {
         createdAt: now,

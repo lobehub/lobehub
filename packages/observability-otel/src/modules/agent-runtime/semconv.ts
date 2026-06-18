@@ -83,7 +83,7 @@ export const ATTR_LOBEHUB_TOOL_SUCCESS = 'lobehub.tool.success' as const;
 /** Attempts taken to execute a tool (1 for first-try success). */
 export const ATTR_LOBEHUB_TOOL_ATTEMPTS = 'lobehub.tool.attempts' as const;
 
-/** Internal LobeHub tool source (`builtin` / `client` / `mcp` / `klavis` / `lobehubSkill`). */
+/** Internal LobeHub tool source (`builtin` / `client` / `mcp` / `composio` / `lobehubSkill`). */
 export const ATTR_LOBEHUB_TOOL_SOURCE = 'lobehub.tool.source' as const;
 
 /** Context engineering metadata. */

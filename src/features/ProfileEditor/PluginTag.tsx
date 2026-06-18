@@ -1,7 +1,7 @@
 'use client';
 
-import { type KlavisServerType, type LobehubSkillProviderType } from '@lobechat/const';
-import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import { type ComposioAppType, type LobehubSkillProviderType } from '@lobechat/const';
+import { COMPOSIO_APP_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { Avatar, Icon, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -16,16 +16,16 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 import { useToolStore } from '@/store/tool';
 import {
   builtinToolSelectors,
-  klavisStoreSelectors,
+  composioStoreSelectors,
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { type LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
 
 /**
- * Klavis server icon component
+ * Composio server icon component
  */
-const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
+const ComposioIcon = memo<Pick<ComposioAppType, 'icon' | 'label'>>(({ icon, label }) => {
   if (typeof icon === 'string') {
     return <img alt={label} height={16} src={icon} style={{ flexShrink: 0 }} width={16} />;
   }
@@ -77,6 +77,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 export interface PluginTagProps {
+  disabled?: boolean;
   onRemove: (e: React.MouseEvent) => void;
   pluginId: string | { enabled: boolean; identifier: string; settings: Record<string, any> };
   /**
@@ -92,7 +93,7 @@ export interface PluginTagProps {
 }
 
 const PluginTag = memo<PluginTagProps>(
-  ({ pluginId, onRemove, showDesktopOnlyLabel = false, useAllMetaList = false }) => {
+  ({ pluginId, onRemove, disabled, showDesktopOnlyLabel = false, useAllMetaList = false }) => {
     const isDarkMode = useIsDark();
     const { t } = useTranslation('setting');
 
@@ -106,9 +107,9 @@ const PluginTag = memo<PluginTagProps>(
     );
     const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
 
-    // Klavis-related state
-    const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
-    const isKlavisEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableKlavis);
+    // Composio-related state
+    const allComposioServers = useToolStore(composioStoreSelectors.getServers, isEqual);
+    const isComposioEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableComposio);
 
     // LobeHub Skill-related state
     const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
@@ -117,21 +118,21 @@ const PluginTag = memo<PluginTagProps>(
     // Check if plugin is installed
     const isInstalled = useToolStore(pluginSelectors.isPluginInstalled(identifier));
 
-    // Try to find in local lists first (including Klavis and LobehubSkill)
+    // Try to find in local lists first (including Composio and LobehubSkill)
     const localMeta = useMemo(() => {
-      // Check if it's a Klavis server type
-      if (isKlavisEnabledInEnv) {
-        const klavisType = KLAVIS_SERVER_TYPES.find((type) => type.identifier === identifier);
-        if (klavisType) {
-          // Check if this Klavis server is connected
-          const connectedServer = allKlavisServers.find((s) => s.identifier === identifier);
+      // Check if it's a Composio server type
+      if (isComposioEnabledInEnv) {
+        const composioType = COMPOSIO_APP_TYPES.find((type) => type.identifier === identifier);
+        if (composioType) {
+          // Check if this Composio server is connected
+          const connectedServer = allComposioServers.find((s) => s.identifier === identifier);
           return {
             availableInWeb: true,
-            icon: klavisType.icon,
+            icon: composioType.icon,
             isInstalled: !!connectedServer,
-            label: klavisType.label,
-            title: klavisType.label,
-            type: 'klavis' as const,
+            label: composioType.label,
+            title: composioType.label,
+            type: 'composio' as const,
           };
         }
       }
@@ -185,8 +186,8 @@ const PluginTag = memo<PluginTagProps>(
       identifier,
       builtinList,
       installedPluginList,
-      isKlavisEnabledInEnv,
-      allKlavisServers,
+      isComposioEnabledInEnv,
+      allComposioServers,
       isLobehubSkillEnabled,
       allLobehubSkillServers,
     ]);
@@ -223,9 +224,9 @@ const PluginTag = memo<PluginTagProps>(
         return <AlertCircle className={styles.warningIcon} size={14} />;
       }
 
-      // Klavis type has icon property
-      if (meta.type === 'klavis' && 'icon' in meta && 'label' in meta) {
-        return <KlavisIcon icon={meta.icon} label={meta.label} />;
+      // Composio type has icon property
+      if (meta.type === 'composio' && 'icon' in meta && 'label' in meta) {
+        return <ComposioIcon icon={meta.icon} label={meta.label} />;
       }
 
       // LobeHub Skill type has icon property
@@ -264,8 +265,8 @@ const PluginTag = memo<PluginTagProps>(
 
     return (
       <Tag
-        closable
         className={styles.tag}
+        closable={!disabled}
         closeIcon={<X size={12} />}
         color={showErrorState ? 'error' : undefined}
         icon={renderIcon()}
@@ -275,7 +276,11 @@ const PluginTag = memo<PluginTagProps>(
             ? t('tools.notInstalledWarning', { defaultValue: 'This tool is not installed' })
             : undefined
         }
-        onClose={onRemove}
+        onClose={(e) => {
+          if (disabled) return;
+
+          onRemove(e);
+        }}
       >
         {getDisplayText()}
       </Tag>

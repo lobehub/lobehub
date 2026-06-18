@@ -1,0 +1,308 @@
+import { isRecord } from '@lobechat/utils/object';
+import { safeParseJSON } from '@lobechat/utils/safeParseJSON';
+
+import { parseToolName, staticLabelFor } from '../../Inspector/Linear/labels';
+
+const PRIORITY_LABEL: Record<number, string> = {
+  0: 'None',
+  1: 'Urgent',
+  2: 'High',
+  3: 'Medium',
+  4: 'Low',
+};
+
+const ENTITY_ID_PREFIX = /^(issue|project|document|initiative|milestone|team|user|cycle):(.+)$/iu;
+const FIELD_KEYS = [
+  'id',
+  'title',
+  'name',
+  'state',
+  'status',
+  'team',
+  'project',
+  'assignee',
+  'cycle',
+  'milestone',
+  'priority',
+  'parentId',
+  'query',
+  'url',
+] as const;
+const ENTITY_FIELD_KEYS = [
+  'state',
+  'status',
+  'team',
+  'project',
+  'assignee',
+  'cycle',
+  'milestone',
+  'priority',
+  'parentId',
+  'createdAt',
+  'updatedAt',
+] as const;
+const RESULT_ARRAY_KEYS = [
+  'issues',
+  'items',
+  'nodes',
+  'results',
+  'documents',
+  'projects',
+  'comments',
+  'users',
+  'teams',
+] as const;
+
+export interface LinearField {
+  key: string;
+  label: string;
+  value: string;
+}
+
+export interface LinearLink {
+  title: string;
+  url: string;
+}
+
+export interface LinearEntity {
+  description?: string;
+  fields: LinearField[];
+  id?: string;
+  links: LinearLink[];
+  state?: string;
+  title?: string;
+  url?: string;
+}
+
+export interface LinearRenderModel {
+  actionLabel: string;
+  errorText?: string;
+  rawResultJson?: string;
+  requestFields: LinearField[];
+  requestLinks: LinearLink[];
+  resultEntities: LinearEntity[];
+  resultText?: string;
+}
+
+const toLabel = (key: string) =>
+  key
+    .replaceAll(/([A-Z])/g, ' $1')
+    .replace(/^./u, (char) => char.toUpperCase())
+    .trim();
+
+const normalizeId = (value: string) => value.replace(ENTITY_ID_PREFIX, '$2');
+
+const trimString = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const stringifyUnknown = (value: unknown): string => {
+  if (typeof value === 'string') return value.trim();
+  if (value === undefined || value === null) return '';
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+};
+
+const readDisplayString = (value: unknown, key?: string): string | undefined => {
+  const stringValue = trimString(value);
+  if (stringValue) return key === 'id' ? normalizeId(stringValue) : stringValue;
+
+  if (typeof value === 'number') {
+    if (key === 'priority') return PRIORITY_LABEL[value] ?? String(value);
+    return String(value);
+  }
+
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+
+  if (isRecord(value)) {
+    for (const candidate of ['name', 'title', 'displayName', 'identifier', 'id']) {
+      const nested = readDisplayString(value[candidate], candidate);
+      if (nested) return nested;
+    }
+  }
+};
+
+const pickField = (record: Record<PropertyKey, unknown>, key: string): LinearField | undefined => {
+  const value = readDisplayString(record[key], key);
+  if (!value) return;
+
+  return {
+    key,
+    label: key === 'id' ? 'ID' : key === 'url' ? 'URL' : toLabel(key),
+    value,
+  };
+};
+
+const collectFields = (
+  record: Record<PropertyKey, unknown>,
+  keys: readonly string[],
+): LinearField[] =>
+  keys.map((key) => pickField(record, key)).filter((field): field is LinearField => Boolean(field));
+
+export const getLinearRequestFields = (args: unknown): LinearField[] => {
+  if (!isRecord(args)) return [];
+
+  return collectFields(args, FIELD_KEYS);
+};
+
+const getTextFromContentItem = (item: unknown): string => {
+  if (typeof item === 'string') return item;
+  if (!isRecord(item)) return stringifyUnknown(item);
+
+  return trimString(item.text) || trimString(item.content) || stringifyUnknown(item);
+};
+
+const parseJsonString = (value: string): unknown => safeParseJSON(value);
+
+const parseContentText = (value: unknown): unknown => {
+  if (typeof value !== 'string') return value;
+
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  return parseJsonString(trimmed) ?? trimmed;
+};
+
+const unwrapResultEnvelope = (value: unknown): unknown => {
+  if (!isRecord(value)) return value;
+
+  if ('Ok' in value) return value.Ok;
+  if ('Err' in value) return value.Err;
+  if ('ok' in value) return value.ok;
+  if ('error' in value && Object.keys(value).length === 1) return value.error;
+
+  return value;
+};
+
+const parseResultContent = (content: unknown): unknown => {
+  const parsed = unwrapResultEnvelope(parseContentText(content));
+
+  if (Array.isArray(parsed)) {
+    const joined = parsed.map(getTextFromContentItem).filter(Boolean).join('\n\n');
+    return parseContentText(joined) ?? parsed;
+  }
+
+  if (isRecord(parsed) && Array.isArray(parsed.content)) {
+    const joined = parsed.content.map(getTextFromContentItem).filter(Boolean).join('\n\n');
+    return parseContentText(joined) ?? parsed;
+  }
+
+  return parsed;
+};
+
+const extractUrl = (record: Record<PropertyKey, unknown>) =>
+  readDisplayString(record.url, 'url') || readDisplayString(record.webUrl, 'url');
+
+export const getLinearLinks = (value: unknown): LinearLink[] => {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (!isRecord(item)) return;
+
+      const url = extractUrl(item);
+      if (!url) return;
+
+      return {
+        title: readDisplayString(item.title) || readDisplayString(item.name) || url,
+        url,
+      };
+    })
+    .filter((link): link is LinearLink => Boolean(link));
+};
+
+const buildEntity = (record: Record<PropertyKey, unknown>): LinearEntity | undefined => {
+  const id = readDisplayString(record.id, 'id') || readDisplayString(record.identifier, 'id');
+  const title =
+    readDisplayString(record.title) ||
+    readDisplayString(record.name) ||
+    readDisplayString(record.subject);
+  const url = extractUrl(record);
+  const state =
+    readDisplayString(record.state, 'state') || readDisplayString(record.status, 'status');
+  const description =
+    readDisplayString(record.description) ||
+    readDisplayString(record.body) ||
+    readDisplayString(record.content);
+  const fields = collectFields(record, ENTITY_FIELD_KEYS).filter(
+    (field) => field.key !== 'state' || field.value !== state,
+  );
+  const links = getLinearLinks(record.links);
+
+  if (!id && !title && !url && !state && !description && fields.length === 0 && links.length === 0)
+    return;
+
+  return {
+    description,
+    fields,
+    id,
+    links,
+    state,
+    title,
+    url,
+  };
+};
+
+const extractResultRecords = (value: unknown): Record<PropertyKey, unknown>[] => {
+  if (Array.isArray(value)) return value.filter(isRecord);
+  if (!isRecord(value)) return [];
+
+  for (const key of RESULT_ARRAY_KEYS) {
+    const nested = value[key];
+    if (Array.isArray(nested)) return nested.filter(isRecord);
+  }
+
+  return [value];
+};
+
+const getErrorText = (error: unknown): string | undefined => {
+  if (!error) return;
+  if (typeof error === 'string') return error.trim() || undefined;
+  if (isRecord(error)) {
+    return (
+      readDisplayString(error.message) || readDisplayString(error.error) || stringifyUnknown(error)
+    );
+  }
+
+  return stringifyUnknown(error);
+};
+
+export const buildLinearRenderModel = ({
+  apiName,
+  args,
+  content,
+  pluginError,
+}: {
+  apiName?: string;
+  args: unknown;
+  content: unknown;
+  pluginError?: unknown;
+}): LinearRenderModel => {
+  const parsedTool = parseToolName(apiName || '');
+  const result = parseResultContent(content);
+  const resultEntities = extractResultRecords(result)
+    .map(buildEntity)
+    .filter((entity): entity is LinearEntity => Boolean(entity));
+  const resultText = typeof result === 'string' ? result : undefined;
+  const rawResultJson =
+    result !== undefined && typeof result !== 'string' && resultEntities.length === 0
+      ? stringifyUnknown(result)
+      : undefined;
+
+  return {
+    actionLabel: staticLabelFor(parsedTool),
+    errorText: getErrorText(pluginError),
+    requestFields: getLinearRequestFields(args),
+    requestLinks: isRecord(args) ? getLinearLinks(args.links) : [],
+    resultEntities,
+    resultText,
+    rawResultJson,
+  };
+};

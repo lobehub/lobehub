@@ -1,7 +1,7 @@
 import { type HeterogeneousAgentClientConfig } from '@lobechat/heterogeneous-agents/client';
 import { useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
 
@@ -18,7 +18,7 @@ export interface CreateHeteroAgentOptions {
 export const useCreateHeteroAgent = () => {
   const storeCreateAgent = useAgentStore((s) => s.createAgent);
   const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   return useCallback(
     async (definition: HeterogeneousAgentClientConfig, options?: CreateHeteroAgentOptions) => {

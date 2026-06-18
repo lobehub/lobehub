@@ -13,9 +13,9 @@ import {
 } from 'lucide-react';
 import qs from 'query-string';
 import { memo } from 'react';
-import { Link } from 'react-router-dom';
 
 import PublishedTime from '@/components/PublishedTime';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useSkillCategoryItem } from '@/hooks/useSkillCategory';
 
 import { useDetailContext } from './DetailProvider';
@@ -89,7 +89,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile }) => {
   );
 
   const cateButton = cate ? (
-    <Link
+    <WorkspaceLink
       to={qs.stringifyUrl({
         query: { category: cate.key },
         url: '/community/skill',
@@ -98,7 +98,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile }) => {
       <Button icon={<Icon icon={cate.icon} />} size={'middle'} variant={'outlined'}>
         {cate.label}
       </Button>
-    </Link>
+    </WorkspaceLink>
   ) : null;
 
   return (

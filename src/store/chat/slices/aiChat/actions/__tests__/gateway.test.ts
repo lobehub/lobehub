@@ -1,7 +1,8 @@
 import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { RequestTrigger } from '@lobechat/types';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as ConstVersion from '@/const/version';
 import { aiAgentService } from '@/services/aiAgent';
 
 import type { GatewayConnection } from '../gateway';
@@ -27,9 +28,59 @@ vi.mock('@/services/topic', () => ({
   },
 }));
 
+const mockUserDefaultConfig = vi.hoisted(() => ({
+  disableGatewayMode: undefined as boolean | undefined,
+}));
+
 vi.mock('@/store/user', () => ({
   useUserStore: {
-    getState: vi.fn(() => ({ preference: { lab: {} } })),
+    getState: vi.fn(() => ({})),
+  },
+}));
+
+vi.mock('@/store/user/selectors', () => ({
+  settingsSelectors: {
+    defaultAgentConfig: () => ({
+      chatConfig: { disableGatewayMode: mockUserDefaultConfig.disableGatewayMode },
+    }),
+  },
+}));
+
+// ─── Local-device activation (本机) test seams ───
+// Controlled per-test; default off so the rest of the suite runs as web (no
+// device resolution, no electron IPC).
+const mockEnv = vi.hoisted(() => ({ isDesktop: false }));
+const mockGateway = vi.hoisted(() => ({ getDeviceInfo: vi.fn() }));
+// Effective runtime mode === 'local' (what isLocalSystemEnabledById returns)
+// and chat mode (what isChatModeById returns).
+const mockRuntime = vi.hoisted(() => ({ isChatMode: false, isLocal: false }));
+const mockAgentStore = vi.hoisted(() => ({
+  state: { activeAgentId: undefined, agentMap: {} } as any,
+}));
+
+vi.mock('@/const/version', async (importOriginal) => {
+  const actual = await importOriginal<typeof ConstVersion>();
+  return {
+    ...actual,
+    get isDesktop() {
+      return mockEnv.isDesktop;
+    },
+  };
+});
+
+vi.mock('@/services/electron/gatewayConnection', () => ({
+  gatewayConnectionService: { getDeviceInfo: mockGateway.getDeviceInfo },
+}));
+
+vi.mock('@/store/agent', () => ({ getAgentStoreState: () => mockAgentStore.state }));
+
+vi.mock('@/store/agent/selectors', () => ({
+  agentSelectors: { currentAgentWorkingDirectory: () => () => undefined },
+  chatConfigByIdSelectors: {
+    getChatConfigById: (agentId: string) => (state: any) =>
+      state.agentMap?.[agentId]?.chatConfig ?? {},
+    isChatModeById: () => () => mockRuntime.isChatMode,
+    isLocalSystemEnabledById: () => () => mockRuntime.isLocal,
   },
 }));
 
@@ -86,8 +137,69 @@ function createTestAction() {
 }
 
 describe('GatewayActionImpl', () => {
+  beforeEach(() => {
+    mockAgentStore.state = { activeAgentId: undefined, agentMap: {} };
+    mockUserDefaultConfig.disableGatewayMode = undefined;
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
+    delete (globalThis as any).window;
+  });
+
+  describe('isGatewayModeEnabled', () => {
+    const setServerConfig = (serverConfig: Record<string, unknown>) => {
+      (globalThis as any).window = {
+        global_serverConfigStore: {
+          getState: () => ({ serverConfig }),
+        },
+      };
+    };
+
+    it('returns true when backend enables Gateway mode and the agent does not disable it', () => {
+      const { action } = createTestAction();
+      setServerConfig({
+        agentGatewayUrl: 'https://gateway.test.com',
+        enableGatewayMode: true,
+      });
+
+      expect(action.isGatewayModeEnabled('agent-1')).toBe(true);
+    });
+
+    it('returns false when the current agent disables Gateway mode', () => {
+      const { action } = createTestAction();
+      setServerConfig({
+        agentGatewayUrl: 'https://gateway.test.com',
+        enableGatewayMode: true,
+      });
+      mockAgentStore.state = {
+        activeAgentId: 'agent-1',
+        agentMap: { 'agent-1': { chatConfig: { disableGatewayMode: true } } },
+      };
+
+      expect(action.isGatewayModeEnabled('agent-1')).toBe(false);
+    });
+
+    it('falls back to the app-level default agent config', () => {
+      const { action } = createTestAction();
+      setServerConfig({
+        agentGatewayUrl: 'https://gateway.test.com',
+        enableGatewayMode: true,
+      });
+      mockUserDefaultConfig.disableGatewayMode = true;
+
+      expect(action.isGatewayModeEnabled('agent-1')).toBe(false);
+    });
+
+    it('returns false when the backend does not enable Gateway mode', () => {
+      const { action } = createTestAction();
+      setServerConfig({
+        agentGatewayUrl: 'https://gateway.test.com',
+        enableGatewayMode: false,
+      });
+
+      expect(action.isGatewayModeEnabled('agent-1')).toBe(false);
+    });
   });
 
   describe('connectToGateway', () => {
@@ -748,6 +860,191 @@ describe('GatewayActionImpl', () => {
         operationId: 'server-op-xyz',
         topicId: 'topic-1',
       });
+    });
+
+    // When the desktop runs against 本机 (effective runtime mode 'local'), the
+    // client must forward this machine's own gateway deviceId so the server can
+    // preset activeDeviceId and inject lobe-local-system into the first LLM
+    // payload — skipping the activateDevice round-trip. It must NOT do so for a
+    // cloud/none run, otherwise that run would be wrongly routed to the device.
+    describe('local device activation (本机)', () => {
+      const successResult = {
+        agentId: 'agent-1',
+        assistantMessageId: 'ast-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        message: 'ok',
+        operationId: 'server-op-1',
+        status: 'created' as const,
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'test-token',
+        topicId: 'topic-1',
+        userMessageId: 'usr-1',
+      };
+
+      afterEach(() => {
+        mockEnv.isDesktop = false;
+        mockRuntime.isLocal = false;
+        mockRuntime.isChatMode = false;
+        mockGateway.getDeviceInfo.mockReset();
+      });
+
+      const send = async () => {
+        const { action } = createExecuteTestAction();
+        vi.mocked(aiAgentService.execAgentTask).mockResolvedValue(successResult);
+        await action.executeGatewayAgent({
+          context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: 'topic-1' },
+          message: 'list files in cwd',
+        });
+      };
+
+      it('forwards this desktop deviceId when local execution is selected', async () => {
+        mockEnv.isDesktop = true;
+        mockRuntime.isLocal = true;
+        mockGateway.getDeviceInfo.mockResolvedValue({ deviceId: 'device-local-1' });
+
+        await send();
+
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+          expect.objectContaining({ deviceId: 'device-local-1' }),
+          expect.anything(),
+        );
+      });
+
+      // Regression guard: an explicit sandbox/none/device target must not
+      // preset this machine's deviceId — only a `local` target does.
+      it('does not resolve a deviceId when a non-local runtime mode is selected', async () => {
+        mockEnv.isDesktop = true;
+        mockRuntime.isLocal = false;
+
+        await send();
+
+        expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+          expect.objectContaining({ deviceId: undefined }),
+          expect.anything(),
+        );
+      });
+
+      // Regression guard (chat mode → no execution environment): chat mode must
+      // not resolve this machine's deviceId even on a local target, otherwise
+      // the server presets activeDeviceId and re-injects lobe-local-system.
+      it('does not resolve a deviceId in chat mode, even when local mode is set', async () => {
+        mockEnv.isDesktop = true;
+        mockRuntime.isLocal = true;
+        mockRuntime.isChatMode = true;
+
+        await send();
+
+        expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+          expect.objectContaining({ deviceId: undefined }),
+          expect.anything(),
+        );
+      });
+
+      it('never resolves a deviceId off desktop, even when local mode is set', async () => {
+        mockEnv.isDesktop = false;
+        mockRuntime.isLocal = true;
+
+        await send();
+
+        expect(mockGateway.getDeviceInfo).not.toHaveBeenCalled();
+        expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
+          expect.objectContaining({ deviceId: undefined }),
+          expect.anything(),
+        );
+      });
+    });
+  });
+
+  describe('reconnectToGatewayOperation', () => {
+    function createReconnectTestAction(assistantMessage: any) {
+      const startOperation = vi.fn(() => ({ operationId: 'gw-op-reconnect' }));
+      const mockClient = createMockClient();
+      const state: Record<string, any> = {
+        activeAgentId: 'agent-1',
+        gatewayConnections: {},
+        messagesMap: { 'agent-1_topic-1': assistantMessage ? [assistantMessage] : [] },
+        // getTopicById reads here; an empty map yields no running op so the
+        // reconnect guards fall through to startOperation.
+        topicDataMap: {},
+      };
+      const set = vi.fn((updater: any) => {
+        if (typeof updater === 'function') Object.assign(state, updater(state));
+        else Object.assign(state, updater);
+      });
+      const get = vi.fn(() => ({
+        ...state,
+        associateMessageWithOperation: vi.fn(),
+        connectToGateway: vi.fn(),
+        internal_updateTopicLoading: vi.fn(),
+        onOperationCancel: vi.fn(),
+        startOperation,
+      })) as any;
+
+      (globalThis as any).window = {
+        global_serverConfigStore: {
+          getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+        },
+      };
+
+      vi.mocked(aiAgentService.refreshGatewayToken).mockResolvedValue({
+        token: 'fresh-token',
+      } as any);
+
+      const action = new GatewayActionImpl(set as any, get, undefined);
+      action.createClient = vi.fn(() => mockClient);
+
+      return { action, startOperation };
+    }
+
+    afterEach(() => {
+      delete (globalThis as any).window;
+    });
+
+    // After a DB rehydrate (e.g. quit + relaunch), `createdAt` can arrive as an
+    // ISO string instead of epoch ms. Anchoring startTime to it raw makes
+    // `Date.now() - startTime` evaluate to NaN, which the elapsed-time label
+    // renders as "NaN:NaN". The reconnect path must normalize it to a number.
+    it('normalizes an ISO-string createdAt into an epoch-ms startTime', async () => {
+      const createdAtMs = 1_700_000_000_000;
+      const { action, startOperation } = createReconnectTestAction({
+        createdAt: new Date(createdAtMs).toISOString(),
+        id: 'ast-1',
+      });
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      expect(startOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ startTime: createdAtMs }),
+        }),
+      );
+    });
+
+    it('omits startTime when createdAt is not a parseable date', async () => {
+      const { action, startOperation } = createReconnectTestAction({
+        createdAt: 'not-a-date',
+        id: 'ast-1',
+      });
+
+      await action.reconnectToGatewayOperation({
+        assistantMessageId: 'ast-1',
+        operationId: 'server-op-1',
+        topicId: 'topic-1',
+      });
+
+      expect(startOperation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.not.objectContaining({ startTime: expect.anything() }),
+        }),
+      );
     });
   });
 });

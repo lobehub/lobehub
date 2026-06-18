@@ -1,3 +1,4 @@
+import { useModelSupportAudio } from '@/hooks/useModelSupportAudio';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useModelSupportVideo } from '@/hooks/useModelSupportVideo';
 import { useModelSupportVision } from '@/hooks/useModelSupportVision';
@@ -7,6 +8,7 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 export const useVisualMediaUploadAbility = (model: string, provider: string) => {
   const supportVision = useModelSupportVision(model, provider);
   const supportVideo = useModelSupportVideo(model, provider);
+  const supportAudio = useModelSupportAudio(model, provider);
   const supportToolUse = useModelSupportToolUse(model, provider);
   const enableVisualUnderstanding = useServerConfigStore(
     serverConfigSelectors.enableVisualUnderstanding,
@@ -24,6 +26,7 @@ export const useVisualMediaUploadAbility = (model: string, provider: string) => 
   const canUseVisualUnderstanding = enableVisualUnderstanding && supportToolUse;
 
   return {
+    canUploadAudio: supportAudio,
     canUploadImage: supportVision || (canUseVisualUnderstanding && fallbackSupportVision),
     canUploadVideo: supportVideo || (canUseVisualUnderstanding && fallbackSupportVideo),
   };

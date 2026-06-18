@@ -13,7 +13,8 @@ import { BotIcon, CheckCircle2, MonitorSmartphone, RefreshCw, XCircle } from 'lu
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
+import { lambdaQuery } from '@/libs/trpc/client';
+import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -114,7 +115,7 @@ const RemoteAgentConfigCard = memo<RemoteAgentConfigCardProps>(
         setCheckingCapability(true);
         setCapabilityResult(undefined);
         try {
-          const result = await lambdaClient.device.checkCapability.query({
+          const result = await deviceService.checkCapability({
             deviceId,
             platform: provider.type as RemoteHeterogeneousAgentType,
           });

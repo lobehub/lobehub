@@ -1,6 +1,7 @@
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
+import { discoverKeys } from '@/libs/swr/keys';
 import { discoverService } from '@/services/discover';
 import { type DiscoverStore } from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
@@ -21,7 +22,7 @@ export class UserActionImpl {
   useUserProfile = (params: { username: string }): SWRResponse<DiscoverUserProfile | undefined> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
-      params.username ? ['user-profile', locale, params.username].join('-') : null,
+      params.username ? discoverKeys.userProfile(locale, params.username) : null,
       async () => discoverService.getUserInfo({ username: params.username }),
       {
         revalidateOnFocus: false,

@@ -18,13 +18,20 @@ import {
 } from '@lobechat/electron-client-ipc';
 import type { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { AskUserMcpServer } from '@lobechat/heterogeneous-agents/askUser';
-import type { AgentContentBlock } from '@lobechat/heterogeneous-agents/spawn';
+import type {
+  AgentContentBlock,
+  HeteroExecImageRef,
+} from '@lobechat/heterogeneous-agents/protocol';
+import { buildHeteroExecStdinPayload } from '@lobechat/heterogeneous-agents/protocol';
+import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
 import {
   AgentStreamPipeline,
   buildAgentInput,
   materializeImageToPath,
   normalizeImage,
+  readCodexSessionModel,
   resolveCliSpawnPlan,
+  resolveCodexInitialModel,
 } from '@lobechat/heterogeneous-agents/spawn';
 import { app as electronApp, BrowserWindow } from 'electron';
 
@@ -41,6 +48,33 @@ import { createLogger } from '@/utils/logger';
 import { ControllerModule, IpcMethod } from './index';
 
 const logger = createLogger('controllers:HeterogeneousAgentCtr');
+
+// Anthropic auth env vars that must NOT be inherited from the desktop process
+// when spawning a local CLI agent. A developer with `ANTHROPIC_API_KEY` (or an
+// auth token / base url) exported in their shell would otherwise have it
+// forwarded to `claude`, which then switches from its own subscription login to
+// that key — an expired / wrong key surfaces as a baffling "Invalid API key"
+// and the run exits non-zero. Agents that genuinely want an API key still set
+// it through `session.env`, which is spread AFTER the inherited env below and
+// therefore wins.
+const STRIPPED_INHERITED_ENV_KEYS = [
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_BASE_URL',
+] as const;
+
+/**
+ * Inherited `process.env` with the Anthropic auth vars removed. Keep this pure
+ * and exported so the "never leak host Anthropic creds into the CLI" invariant
+ * can be unit-tested directly.
+ */
+export const buildInheritedSpawnEnv = (
+  sourceEnv: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv => {
+  const env = { ...sourceEnv };
+  for (const key of STRIPPED_INHERITED_ENV_KEYS) delete env[key];
+  return env;
+};
 const CODEX_RESUME_THREAD_NOT_FOUND_PATTERNS = [
   /no conversation found/i,
   /thread .*not found/i,
@@ -149,9 +183,33 @@ interface AgentSession {
   command: string;
   cwd?: string;
   env?: Record<string, string>;
+  model?: string;
+  modelSource?: string;
+  modelVerificationLastAttemptAt?: number;
+  modelVerificationLastAttemptSessionId?: string;
   process?: ChildProcess;
+  /**
+   * Absolute CLI path resolved by spawn preflight detection. Used for spawn()
+   * when the configured command is bare: detection can find the CLI through
+   * the login-shell PATH or a well-known install location (e.g. the Codex.app
+   * bundled CLI) that plain spawn() with the inherited env can't resolve.
+   */
+  resolvedCommandPath?: string;
+  /**
+   * PATH the preflight detector used to resolve `resolvedCommandPath`, set only
+   * when it fell back to the login-shell PATH. Merged into the child PATH at
+   * spawn so a `#!/usr/bin/env node` shim still finds its interpreter — the
+   * shim resolving in preflight doesn't guarantee `node` is on the leaner
+   * inherited PATH (Finder-launched Electron).
+   */
+  resolvedCommandSearchPath?: string;
   resumeSessionId?: string;
   sessionId: string;
+  verifiedModel?: string;
+  verifiedModelContextWindow?: number;
+  verifiedModelProvider?: string;
+  verifiedModelSessionId?: string;
+  verifiedModelSourceFile?: string;
 }
 
 type SessionErrorPayload = HeterogeneousAgentSessionError | string;
@@ -427,11 +485,20 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
             session.agentType === 'claude-code' ? 'claude-code' : 'codex',
             command,
           );
-    const cliMissingError = this.buildCliMissingError(session);
 
-    if (!status || status.available || !cliMissingError) return;
+    if (!status || status.available) {
+      // Spawn through the detector-resolved absolute path when the configured
+      // command is bare — detection may have located the CLI somewhere plain
+      // spawn() can't (login-shell PATH, Codex.app bundled CLI, …).
+      const useResolvedPath = Boolean(status?.path) && !command.includes(path.sep);
+      session.resolvedCommandPath = useResolvedPath ? status!.path : undefined;
+      // Carry the login-shell PATH the detector resolved through, so a
+      // `#!/usr/bin/env node` shim spawned by absolute path still finds `node`.
+      session.resolvedCommandSearchPath = useResolvedPath ? status!.resolvedPathEnv : undefined;
+      return;
+    }
 
-    return cliMissingError;
+    return this.buildCliMissingError(session);
   }
 
   private get shouldTraceCliOutput(): boolean {
@@ -554,12 +621,19 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
             createdAt: createdAt.toISOString(),
             cwd,
             envKeys: session.env ? Object.keys(session.env).sort() : [],
+            model: session.model,
+            modelSource: session.modelSource,
             resumeSessionId: session.resumeSessionId,
             sessionId: session.sessionId,
             stdinBytes: stdinPayload === undefined ? 0 : Buffer.byteLength(stdinPayload),
             stdinFile: stdinPayload === undefined ? undefined : 'stdin.txt',
             stderrFile: 'stderr.log',
             stdoutFile: 'stdout.jsonl',
+            verifiedModel: session.verifiedModel,
+            verifiedModelContextWindow: session.verifiedModelContextWindow,
+            verifiedModelProvider: session.verifiedModelProvider,
+            verifiedModelSessionId: session.verifiedModelSessionId,
+            verifiedModelSourceFile: session.verifiedModelSourceFile,
           },
           null,
           2,
@@ -861,6 +935,8 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     let spawnPlan;
     let traceSession;
     let cwd: string;
+    let initialCumulativeUsage: UsageData | undefined;
+    let spawnEnv: NodeJS.ProcessEnv;
     try {
       const driver = getHeterogeneousAgentDriver(session.agentType);
       spawnPlan = await driver.buildSpawnPlan({
@@ -879,6 +955,34 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       // Fall back to the user's Desktop so the process never inherits
       // the Electron parent's cwd (which is `/` when launched from Finder).
       cwd = session.cwd || electronApp.getPath('desktop');
+
+      // Forward the user's proxy settings to the CLI. The main-process undici
+      // dispatcher doesn't reach child processes — they need env vars.
+      const proxyEnv = buildProxyEnv(this.app.storeManager.get('networkProxy'));
+      const inheritedEnv = buildInheritedSpawnEnv();
+      // When preflight resolved the CLI via the login-shell PATH, spawn with
+      // that PATH (a superset of the inherited one) so a `#!/usr/bin/env node`
+      // shim finds its interpreter. `session.env` still wins if it sets PATH.
+      if (session.resolvedCommandSearchPath) inheritedEnv.PATH = session.resolvedCommandSearchPath;
+      spawnEnv = { ...inheritedEnv, ...proxyEnv, ...session.env };
+
+      if (session.agentType === 'codex') {
+        const initialModel = await resolveCodexInitialModel({
+          args: spawnPlan.args,
+          env: spawnEnv,
+        });
+        if (initialModel?.model) {
+          session.model = initialModel.model;
+          session.modelSource = initialModel.source;
+        }
+
+        if (session.agentSessionId) {
+          initialCumulativeUsage = (
+            await readCodexSessionModel(session.agentSessionId, { env: spawnEnv })
+          )?.cumulativeUsage;
+        }
+      }
+
       traceSession = await this.createCliTraceSession({
         cliArgs: spawnPlan.args,
         cwd,
@@ -898,7 +1002,10 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     }
     const useStdin = spawnPlan.stdinPayload !== undefined;
     const cliArgs = spawnPlan.args;
-    const resolvedCliSpawnPlan = await resolveCliSpawnPlan(session.command, cliArgs);
+    const resolvedCliSpawnPlan = await resolveCliSpawnPlan(
+      session.resolvedCommandPath ?? session.command,
+      cliArgs,
+    );
 
     logger.info(
       'Spawning agent:',
@@ -913,26 +1020,28 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     // the claude binary can leave bash/grep/etc. tool children running and
     // the CLI hung waiting on them. Windows has different semantics — use
     // taskkill /T /F there; no detached flag needed.
-    // Forward the user's proxy settings to the CLI. The main-process undici
-    // dispatcher doesn't reach child processes — they need env vars.
-    const proxyEnv = buildProxyEnv(this.app.storeManager.get('networkProxy'));
-
     const spawnOptions = {
       cwd,
       detached: process.platform !== 'win32',
-      env: { ...process.env, ...proxyEnv, ...session.env },
+      // Strip host Anthropic creds from the inherited env so a developer's
+      // shell `ANTHROPIC_API_KEY` can't hijack the CLI's own auth. `session.env`
+      // is spread last, so an agent that explicitly configures a key still wins.
+      env: spawnEnv,
       stdio: [useStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'] as ['pipe' | 'ignore', 'pipe', 'pipe'],
     };
 
     return new Promise<void>((resolve, reject) => {
       const proc = spawn(resolvedCliSpawnPlan.command, resolvedCliSpawnPlan.args, spawnOptions);
       this.handleSpawnedAgentProcess({
+        cwd,
         intervention,
         params,
         proc,
         reject,
         resolve,
         session,
+        initialCumulativeUsage,
+        spawnEnv,
         traceSession,
         useStdin,
         spawnPlan,
@@ -940,23 +1049,88 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     });
   }
 
+  private async verifyCodexSessionModel({
+    env,
+    pipeline,
+    session,
+    traceSession,
+  }: {
+    env: NodeJS.ProcessEnv;
+    pipeline: AgentStreamPipeline;
+    session: AgentSession;
+    traceSession: CliTraceSession | undefined;
+  }): Promise<AgentStreamEvent[]> {
+    if (
+      session.agentType !== 'codex' ||
+      !pipeline.sessionId ||
+      session.verifiedModelSessionId === pipeline.sessionId
+    ) {
+      return [];
+    }
+
+    const now = Date.now();
+    if (
+      session.modelVerificationLastAttemptSessionId === pipeline.sessionId &&
+      session.modelVerificationLastAttemptAt &&
+      now - session.modelVerificationLastAttemptAt < 1000
+    ) {
+      return [];
+    }
+    session.modelVerificationLastAttemptSessionId = pipeline.sessionId;
+    session.modelVerificationLastAttemptAt = now;
+
+    const sessionModel = await readCodexSessionModel(pipeline.sessionId, { env });
+    if (!sessionModel?.model) return [];
+
+    const previousModel = session.model;
+    session.verifiedModel = sessionModel.model;
+    session.verifiedModelContextWindow = sessionModel.contextWindow;
+    session.verifiedModelProvider = sessionModel.provider;
+    session.verifiedModelSessionId = pipeline.sessionId;
+    session.verifiedModelSourceFile = sessionModel.sourceFile;
+
+    void this.writeCliTraceJson(traceSession, 'model.json', {
+      initialModel: previousModel,
+      initialModelSource: session.modelSource,
+      sessionId: pipeline.sessionId,
+      verifiedAt: new Date().toISOString(),
+      verifiedContextWindow: sessionModel.contextWindow,
+      verifiedLine: sessionModel.line,
+      verifiedModel: sessionModel.model,
+      verifiedModelProvider: sessionModel.provider,
+      verifiedSourceFile: sessionModel.sourceFile,
+    });
+
+    if (previousModel === sessionModel.model) return [];
+
+    session.model = sessionModel.model;
+    session.modelSource = 'codex-session';
+    return pipeline.configureSession({ model: sessionModel.model });
+  }
+
   private handleSpawnedAgentProcess({
+    cwd,
+    initialCumulativeUsage,
     intervention,
     params,
     proc,
     reject,
     resolve,
     session,
+    spawnEnv,
     spawnPlan,
     traceSession,
     useStdin,
   }: {
+    cwd: string;
     intervention?: Awaited<ReturnType<HeterogeneousAgentCtr['setupInterventionForOp']>>;
     params: SendPromptParams;
     proc: ChildProcess;
     reject: (reason?: unknown) => void;
     resolve: () => void;
     session: AgentSession;
+    initialCumulativeUsage?: UsageData | undefined;
+    spawnEnv: NodeJS.ProcessEnv;
     spawnPlan: HeterogeneousAgentBuildPlan;
     traceSession: CliTraceSession | undefined;
     useStdin: boolean;
@@ -991,10 +1165,13 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     // toStreamEvent all run inside the shared pipeline, so renderer + future
     // server `heteroIngest` see the same `AgentStreamEvent` wire shape with
     // no per-consumer adapter. The pipeline auto-wires the Codex
-    // file-change line-stat tracker when `agentType === 'codex'`, so this
+    // file-change diff/stat tracker when `agentType === 'codex'`, so this
     // controller stays agent-agnostic.
     const pipeline = new AgentStreamPipeline({
       agentType: session.agentType,
+      cwd,
+      initialCumulativeUsage,
+      initialModel: session.model,
       operationId: params.operationId,
     });
     let stdoutBroadcastQueue: Promise<void> = Promise.resolve();
@@ -1009,6 +1186,14 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
           if (pipeline.sessionId && pipeline.sessionId !== session.agentSessionId) {
             session.agentSessionId = pipeline.sessionId;
           }
+          events.push(
+            ...(await this.verifyCodexSessionModel({
+              env: spawnEnv,
+              pipeline,
+              session,
+              traceSession,
+            })),
+          );
           for (const event of events) {
             this.broadcast('heteroAgentEvent', {
               event,
@@ -1287,6 +1472,8 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
   spawnLhHeteroExec(params: {
     agentType: string;
     cwd?: string;
+    /** Image attachments (signed URLs) appended as image content blocks. */
+    imageList?: HeteroExecImageRef[];
     jwt: string;
     operationId: string;
     prompt: string;
@@ -1298,6 +1485,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
     const {
       agentType,
       cwd,
+      imageList,
       jwt,
       operationId,
       prompt,
@@ -1307,6 +1495,14 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       topicId,
     } = params;
     const workDir = cwd ?? process.cwd();
+
+    // When CLI tracing is enabled (dev builds, or the Help-menu toggle in
+    // packaged builds), have `lh hetero exec` persist the agent process's RAW
+    // stream-json (pre-adapter) on this device. The remote-device path
+    // otherwise leaves no local record — the CLI consumes stdout internally and
+    // only POSTs adapted events to the server — so without this there's nothing
+    // to inspect when a remote run misbehaves.
+    const rawDumpDir = this.shouldTraceCliOutput ? this.resolveTraceRootDir(workDir) : undefined;
 
     const args = [
       'hetero',
@@ -1324,6 +1520,7 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       '--cwd',
       workDir,
       ...(resumeSessionId ? ['--resume', resumeSessionId] : []),
+      ...(rawDumpDir ? ['--raw-dump', rawDumpDir] : []),
     ];
 
     const env = {
@@ -1341,16 +1538,11 @@ export default class HeterogeneousAgentCtr extends ControllerModule {
       stdio: ['pipe', 'inherit', 'inherit'],
     });
 
-    // When systemContext is provided, send a content-block array so CC sees the
-    // context block first, then the user's actual message — mirrors
-    // spawnHeteroSandbox. lh handles JSON arrays via coerceJsonPrompt, so no lh
-    // changes are required.
-    const stdinPayload = systemContext
-      ? JSON.stringify([
-          { text: systemContext, type: 'text' },
-          { text: prompt, type: 'text' },
-        ])
-      : JSON.stringify(prompt);
+    // systemContext / image attachments turn the payload into a content-block
+    // array so CC sees the context block first, then the user's message, then
+    // the images — mirrors spawnHeteroSandbox. lh handles both shapes via
+    // coerceJsonPrompt, so no lh changes are required.
+    const stdinPayload = buildHeteroExecStdinPayload({ imageList, prompt, systemContext });
     child.stdin.write(stdinPayload);
     child.stdin.end();
 

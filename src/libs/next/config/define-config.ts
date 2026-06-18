@@ -2,6 +2,8 @@ import { codeInspectorPlugin } from 'code-inspector-plugin';
 import { type NextConfig } from 'next';
 import { type Header, type Redirect } from 'next/dist/lib/load-custom-routes';
 
+const LANDING_SITEMAP_URL = 'https://lobehub.com/sitemap.xml';
+
 interface CustomNextConfig {
   experimental?: NextConfig['experimental'];
   headers?: Header[];
@@ -269,25 +271,26 @@ export function defineConfig(config: CustomNextConfig) {
     }),
     reactStrictMode: true,
     redirects: async () => [
+      // Sitemap generation lives on the landing site; keep legacy app sitemap URLs crawlable.
       {
-        destination: '/sitemap-index.xml',
+        destination: LANDING_SITEMAP_URL,
         permanent: true,
         source: '/sitemap.xml',
       },
       {
-        destination: '/sitemap-index.xml',
+        destination: LANDING_SITEMAP_URL,
         permanent: true,
         source: '/sitemap-0.xml',
       },
       {
-        destination: '/sitemap/plugins-1.xml',
+        destination: LANDING_SITEMAP_URL,
         permanent: true,
-        source: '/sitemap/plugins.xml',
+        source: '/sitemap-index.xml',
       },
       {
-        destination: '/sitemap/assistants-1.xml',
+        destination: LANDING_SITEMAP_URL,
         permanent: true,
-        source: '/sitemap/assistants.xml',
+        source: '/sitemap/:path*',
       },
       {
         destination: '/manifest.webmanifest',
@@ -363,7 +366,7 @@ export function defineConfig(config: CustomNextConfig) {
       'oidc-provider',
     ],
 
-    transpilePackages: ['mermaid', 'better-auth-harmony'],
+    transpilePackages: ['mermaid'],
     turbopack: {
       rules: {
         ...(isTest

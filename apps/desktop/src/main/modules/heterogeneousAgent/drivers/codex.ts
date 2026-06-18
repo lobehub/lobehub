@@ -1,12 +1,10 @@
-import type { HeterogeneousAgentBuildPlanParams, HeterogeneousAgentDriver } from '../types';
+import {
+  CODEX_DEFAULT_EXECUTION_ARGS,
+  CODEX_EXECUTION_MODE_FLAGS,
+  CODEX_REQUIRED_ARGS,
+} from '@lobechat/heterogeneous-agents/spawn';
 
-const CODEX_REQUIRED_ARGS = ['--json', '--skip-git-repo-check'] as const;
-const CODEX_AUTO_EXECUTION_FLAGS = [
-  '--full-auto',
-  '--dangerously-bypass-approvals-and-sandbox',
-  '--sandbox',
-  '-s',
-] as const;
+import type { HeterogeneousAgentBuildPlanParams, HeterogeneousAgentDriver } from '../types';
 
 const hasAnyFlag = (args: string[], flags: readonly string[]) =>
   args.some((arg) => flags.includes(arg as (typeof flags)[number]));
@@ -18,9 +16,11 @@ const buildCodexOptionArgs = async ({
 }: Pick<HeterogeneousAgentBuildPlanParams, 'args' | 'helpers' | 'imageList'>) => {
   const imagePaths = await helpers.resolveCliImagePaths(imageList);
   const imageArgs = imagePaths.flatMap((filePath) => ['--image', filePath]);
-  const autoExecutionArgs = hasAnyFlag(args, CODEX_AUTO_EXECUTION_FLAGS) ? [] : ['--full-auto'];
+  const executionModeArgs = hasAnyFlag(args, CODEX_EXECUTION_MODE_FLAGS)
+    ? []
+    : [...CODEX_DEFAULT_EXECUTION_ARGS];
 
-  return [...CODEX_REQUIRED_ARGS, ...autoExecutionArgs, ...args, ...imageArgs];
+  return [...CODEX_REQUIRED_ARGS, ...executionModeArgs, ...args, ...imageArgs];
 };
 
 export const codexDriver: HeterogeneousAgentDriver = {

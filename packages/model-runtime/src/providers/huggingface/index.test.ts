@@ -5,6 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { LobeHuggingFaceAI, params } from './index';
 
+const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: loadModelsMock,
+}));
+
 describe('LobeHuggingFaceAI', () => {
   let instance: any;
 
@@ -355,6 +361,7 @@ describe('LobeHuggingFaceAI', () => {
   describe('Models Fetching', () => {
     beforeEach(() => {
       vi.restoreAllMocks();
+      loadModelsMock.mockResolvedValue([]);
     });
 
     it('should fetch and process models from HuggingFace API', async () => {
@@ -676,8 +683,7 @@ describe('LobeHuggingFaceAI', () => {
     it('should handle API errors gracefully', async () => {
       global.fetch = vi.fn().mockRejectedValue(new Error('API Error'));
 
-      const result = await params.models!();
-      expect(result).toEqual([]);
+      await expect(params.models!()).rejects.toThrow('API Error');
     });
 
     it('should handle invalid JSON response', async () => {
@@ -688,8 +694,7 @@ describe('LobeHuggingFaceAI', () => {
         },
       } as unknown as Response);
 
-      const result = await params.models!();
-      expect(result).toEqual([]);
+      await expect(params.models!()).rejects.toThrow('Invalid JSON');
     });
 
     it('should preserve contextWindowTokens from provider info', async () => {

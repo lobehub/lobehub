@@ -1,33 +1,33 @@
 import type {
   LobehubSkillProviderType,
-  TaskTemplateSkillRequirement,
-  TaskTemplateSkillSource,
+  TaskTemplateConnectorReference,
+  TaskTemplateConnectorSource,
 } from '@lobechat/const';
-import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
+import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 
 export interface SkillProviderMeta {
   icon: LobehubSkillProviderType['icon'];
+  identifier: string;
   label: string;
-  provider: string;
-  source: TaskTemplateSkillSource;
+  source: TaskTemplateConnectorSource;
 }
 
 export const getProviderMeta = (
-  spec: TaskTemplateSkillRequirement,
+  spec: TaskTemplateConnectorReference,
 ): SkillProviderMeta | undefined => {
   if (spec.source === 'lobehub') {
-    const p = getLobehubSkillProviderById(spec.provider);
+    const p = getLobehubSkillProviderById(spec.identifier);
     if (!p) return undefined;
-    return { icon: p.icon, label: p.label, provider: spec.provider, source: 'lobehub' };
+    return { icon: p.icon, identifier: spec.identifier, label: p.label, source: 'lobehub' };
   }
-  const p = getKlavisServerByServerIdentifier(spec.provider);
+  const p = getComposioAppByIdentifier(spec.identifier);
   if (!p) return undefined;
-  return { icon: p.icon, label: p.label, provider: spec.provider, source: 'klavis' };
+  return { icon: p.icon, identifier: spec.identifier, label: p.label, source: 'composio' };
 };
 
 export const findNextUnconnectedSpec = (
-  specs: TaskTemplateSkillRequirement[] | undefined,
-  isConnected: (spec: TaskTemplateSkillRequirement) => boolean,
+  specs: TaskTemplateConnectorReference[] | undefined,
+  isConnected: (spec: TaskTemplateConnectorReference) => boolean,
 ): SkillProviderMeta | undefined => {
   if (!specs || specs.length === 0) return undefined;
   for (const spec of specs) {

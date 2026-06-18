@@ -11,20 +11,26 @@ import type { GenerationTopicItem } from '../schemas/generation';
 import { generationTopics } from '../schemas/generation';
 import type { LobeChatDatabase } from '../type';
 import type { GenerationTopicType } from '../types/generation';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export class GenerationTopicModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
   private fileService: FileService;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
     this.fileService = new FileService(db, userId);
   }
 
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, generationTopics);
+
   queryAll = async (type?: GenerationTopicType) => {
-    const conditions = [eq(generationTopics.userId, this.userId)];
+    const conditions = [this.ownership()];
     if (type) {
       conditions.push(eq(generationTopics.type, type));
     }
@@ -51,11 +57,15 @@ export class GenerationTopicModel {
   create = async (title: string, type?: GenerationTopicType) => {
     const [newGenerationTopic] = await this.db
       .insert(generationTopics)
-      .values({
-        title,
-        type: type ?? 'image',
-        userId: this.userId,
-      })
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          {
+            title,
+            type: type ?? 'image',
+          },
+        ),
+      )
       .returning();
 
     return newGenerationTopic;
@@ -68,7 +78,7 @@ export class GenerationTopicModel {
     const [updatedTopic] = await this.db
       .update(generationTopics)
       .set({ ...data, updatedAt: new Date() })
-      .where(and(eq(generationTopics.id, id), eq(generationTopics.userId, this.userId)))
+      .where(and(eq(generationTopics.id, id), this.ownership()))
       .returning();
 
     return updatedTopic;
@@ -90,7 +100,7 @@ export class GenerationTopicModel {
   ): Promise<{ deletedTopic: GenerationTopicItem; filesToDelete: string[] } | undefined> => {
     // 1. First, get the topic with all its batches and generations to collect file URLs
     const topicWithBatches = await this.db.query.generationTopics.findFirst({
-      where: and(eq(generationTopics.id, id), eq(generationTopics.userId, this.userId)),
+      where: and(eq(generationTopics.id, id), this.ownership()),
       with: {
         batches: {
           with: {
@@ -134,7 +144,7 @@ export class GenerationTopicModel {
     // 3. Delete the topic record (this will cascade delete all batches and generations)
     const [deletedTopic] = await this.db
       .delete(generationTopics)
-      .where(and(eq(generationTopics.id, id), eq(generationTopics.userId, this.userId)))
+      .where(and(eq(generationTopics.id, id), this.ownership()))
       .returning();
 
     return {

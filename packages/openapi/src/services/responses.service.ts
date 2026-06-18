@@ -291,7 +291,9 @@ export class ResponsesService extends BaseService {
       // model field is used as agentId
       const additionalPluginIds = this.extractHostedToolIds(params.tools);
       const functionTools = this.extractFunctionTools(params.tools);
-      const aiAgentService = new AiAgentService(this.db, this.userId);
+      const aiAgentService = new AiAgentService(this.db, this.userId, {
+        workspaceId: this.workspaceId,
+      });
       const execResult = await aiAgentService.execAgent({
         additionalPluginIds: additionalPluginIds.length > 0 ? additionalPluginIds : undefined,
         agentId: model,
@@ -314,6 +316,7 @@ export class ResponsesService extends BaseService {
       // 2. Execute synchronously to completion
       const agentRuntimeService = new AgentRuntimeService(this.db, this.userId, {
         queueService: null,
+        workspaceId: this.workspaceId,
       });
       const finalState = await agentRuntimeService.executeSync(execResult.operationId);
 
@@ -322,7 +325,7 @@ export class ResponsesService extends BaseService {
       const usage = this.extractUsage(finalState);
 
       const isClientToolInterrupt =
-        finalState.status === 'interrupted' &&
+        finalState.status === 'waiting_for_async_tool' &&
         finalState.interruption?.reason === 'client_tool_execution';
 
       return this.buildResponseObject({
@@ -390,7 +393,9 @@ export class ResponsesService extends BaseService {
       // model field is used as agentId
       const additionalPluginIds = this.extractHostedToolIds(params.tools);
       const functionTools = this.extractFunctionTools(params.tools);
-      const aiAgentService = new AiAgentService(this.db, this.userId);
+      const aiAgentService = new AiAgentService(this.db, this.userId, {
+        workspaceId: this.workspaceId,
+      });
       const execResult = await aiAgentService.execAgent({
         additionalPluginIds: additionalPluginIds.length > 0 ? additionalPluginIds : undefined,
         agentId: model,
@@ -434,6 +439,7 @@ export class ResponsesService extends BaseService {
       const agentRuntimeService = new AgentRuntimeService(this.db, this.userId, {
         queueService: null,
         streamEventManager,
+        workspaceId: this.workspaceId,
       });
 
       // 3. Setup async event queue to bridge push events → pull-based generator
@@ -753,7 +759,7 @@ export class ResponsesService extends BaseService {
 
       // Determine if agent was interrupted for client tool execution
       const isClientToolInterrupt =
-        finalState?.status === 'interrupted' &&
+        finalState?.status === 'waiting_for_async_tool' &&
         finalState?.interruption?.reason === 'client_tool_execution';
 
       if (isClientToolInterrupt) {

@@ -1,13 +1,15 @@
 'use client';
 
-import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
-import { type FormInstance } from 'antd';
+import type { ModalInstance } from '@lobehub/ui/base-ui';
+import { createModal } from '@lobehub/ui/base-ui';
+import type { FormInstance } from 'antd';
 import { t } from 'i18next';
 
 import CreateNewModelContent from './Content';
 import CreateNewModelFooter from './Footer';
 
 interface CreateNewModelModalOptions {
+  existingModelIds?: string[];
   showDeployName?: boolean;
 }
 
@@ -19,6 +21,7 @@ export const createCreateNewModelModal = (
   return createModal({
     content: (
       <CreateNewModelContent
+        existingModelIds={options.existingModelIds}
         showDeployName={options.showDeployName}
         onFormReady={(instance) => {
           formRef.current = instance;

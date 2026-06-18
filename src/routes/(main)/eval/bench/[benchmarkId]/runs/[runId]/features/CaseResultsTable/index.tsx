@@ -10,7 +10,8 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { Footprints, Play, RotateCcw } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 import { getResumeTarget } from '../resumeTarget';
 
@@ -235,12 +236,12 @@ const CaseResultsTable = memo<CaseResultsTableProps>(
           dataIndex: ['testCase', 'content', 'input'],
           key: 'input',
           render: (text: string, record: any) => (
-            <Link
+            <WorkspaceLink
               className={styles.caseLink}
               to={`/eval/bench/${benchmarkId}/runs/${runId}/cases/${record.testCaseId}`}
             >
               {text}
-            </Link>
+            </WorkspaceLink>
           ),
           title: t('table.columns.input'),
         },

@@ -2,8 +2,8 @@ import type { TaskStatus } from '@lobechat/types';
 import { Block, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useTaskStore } from '@/store/task';
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
@@ -47,7 +47,7 @@ const AgentTaskItem = memo<TaskItemProps>(({ task, variant = 'default' }) => {
   const taskDetail = useTaskStore((s) => s.taskDetailMap[task.identifier]);
   const { items: contextMenuItems, onContextMenu: handleContextMenuOpen } =
     useTaskItemContextMenu(task);
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   const time = formatTaskItemDate(task.updatedAt || task.createdAt, {
     formatOtherYear: t('time.formatOtherYear'),

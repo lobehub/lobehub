@@ -20,7 +20,8 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
-import { lambdaClient, lambdaQuery } from '@/libs/trpc/client';
+import { lambdaQuery } from '@/libs/trpc/client';
+import { deviceService } from '@/services/device';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
 
@@ -187,7 +188,7 @@ const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
         setCheckingCapability(true);
         setCapabilityResult(undefined);
         try {
-          const result = await lambdaClient.device.checkCapability.query({
+          const result = await deviceService.checkCapability({
             deviceId: dId,
             platform,
           });
@@ -206,7 +207,7 @@ const CreatePlatformAgentModal = memo<CreatePlatformAgentModalProps>(
         setFetchingProfile(true);
         setAgentProfile(null);
         try {
-          const profile = await lambdaClient.device.getAgentProfile.query({
+          const profile = await deviceService.getAgentProfile({
             deviceId: dId,
             platform,
           });

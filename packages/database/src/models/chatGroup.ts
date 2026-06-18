@@ -6,22 +6,61 @@ import type {
   NewChatGroup,
   NewChatGroupAgent,
 } from '../schemas';
-import { chatGroups, chatGroupsAgents } from '../schemas';
+import { agents, chatGroups, chatGroupsAgents } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { normalizeInboxAgentAvatar } from '../utils/inboxAgent';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 export class ChatGroupModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, chatGroups);
+
+  /**
+   * Get member avatar metas (avatar + backgroundColor) grouped by chatGroupId,
+   * ordered by member order. Inbox members fall back to the default avatar.
+   */
+  getMemberAvatarsByGroupIds = async (
+    groupIds: string[],
+  ): Promise<Map<string, Array<{ avatar: string | null; backgroundColor: string | null }>>> => {
+    const map = new Map<string, Array<{ avatar: string | null; backgroundColor: string | null }>>();
+    if (groupIds.length === 0) return map;
+
+    const rows = await this.db
+      .select({
+        avatar: agents.avatar,
+        backgroundColor: agents.backgroundColor,
+        chatGroupId: chatGroupsAgents.chatGroupId,
+        slug: agents.slug,
+      })
+      .from(chatGroupsAgents)
+      .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
+      .where(inArray(chatGroupsAgents.chatGroupId, groupIds))
+      .orderBy(chatGroupsAgents.order);
+
+    for (const { avatar, backgroundColor, chatGroupId, slug } of rows) {
+      const list = map.get(chatGroupId) ?? [];
+      list.push({ avatar: normalizeInboxAgentAvatar(avatar, { slug }), backgroundColor });
+      map.set(chatGroupId, list);
+    }
+
+    return map;
+  };
+
   // ******* Query Methods ******* //
 
   async findById(id: string): Promise<ChatGroupItem | undefined> {
     const item = await this.db.query.chatGroups.findFirst({
-      where: and(eq(chatGroups.id, id), eq(chatGroups.userId, this.userId)),
+      where: and(eq(chatGroups.id, id), this.ownership()),
     });
 
     return item;
@@ -30,7 +69,7 @@ export class ChatGroupModel {
   async query(): Promise<ChatGroupItem[]> {
     return this.db.query.chatGroups.findMany({
       orderBy: [desc(chatGroups.updatedAt)],
-      where: eq(chatGroups.userId, this.userId),
+      where: this.ownership(),
     });
   }
 
@@ -44,7 +83,7 @@ export class ChatGroupModel {
       columns: { id: true },
       orderBy: [desc(chatGroups.updatedAt)],
       where: and(
-        eq(chatGroups.userId, this.userId),
+        this.ownership(),
         sql`${chatGroups.config}->>'forkedFromIdentifier' = ${forkedFromIdentifier}`,
       ),
     });
@@ -58,7 +97,7 @@ export class ChatGroupModel {
     const groupIds = groups.map((g) => g.id);
 
     const groupAgents = await this.db.query.chatGroupsAgents.findMany({
-      where: inArray(chatGroupsAgents.chatGroupId, groupIds),
+      where: and(inArray(chatGroupsAgents.chatGroupId, groupIds), this.agentsOwnership()),
       with: { agent: true },
     });
 
@@ -87,7 +126,7 @@ export class ChatGroupModel {
 
     const agents = await this.db.query.chatGroupsAgents.findMany({
       orderBy: [chatGroupsAgents.order],
-      where: eq(chatGroupsAgents.chatGroupId, groupId),
+      where: and(eq(chatGroupsAgents.chatGroupId, groupId), this.agentsOwnership()),
     });
 
     return { agents, group };
@@ -98,7 +137,12 @@ export class ChatGroupModel {
   async create(params: Omit<NewChatGroup, 'userId'>): Promise<ChatGroupItem> {
     const [result] = await this.db
       .insert(chatGroups)
-      .values({ ...params, userId: this.userId })
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          { ...params },
+        ),
+      )
       .returning();
 
     return result;
@@ -119,6 +163,7 @@ export class ChatGroupModel {
       chatGroupId: group.id,
       order: index,
       userId: this.userId,
+      workspaceId: this.workspaceId ?? null,
     }));
 
     const agents = await this.db.insert(chatGroupsAgents).values(agentParams).returning();
@@ -132,7 +177,7 @@ export class ChatGroupModel {
     const [result] = await this.db
       .update(chatGroups)
       .set(value)
-      .where(and(eq(chatGroups.id, id), eq(chatGroups.userId, this.userId)))
+      .where(and(eq(chatGroups.id, id), this.ownership()))
       .returning();
 
     if (!result) {
@@ -153,6 +198,7 @@ export class ChatGroupModel {
       order: options?.order || 0,
       role: options?.role || 'assistant',
       userId: this.userId,
+      workspaceId: this.workspaceId ?? null,
     };
 
     const [result] = await this.db.insert(chatGroupsAgents).values(params).returning();
@@ -189,6 +235,7 @@ export class ChatGroupModel {
       chatGroupId: groupId,
       enabled: true,
       userId: this.userId,
+      workspaceId: this.workspaceId ?? null,
     }));
 
     const added = await this.db.insert(chatGroupsAgents).values(newAgents).returning();
@@ -196,10 +243,19 @@ export class ChatGroupModel {
     return { added, existing: existingIds };
   }
 
+  private agentsOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, chatGroupsAgents);
+
   async removeAgentFromGroup(groupId: string, agentId: string): Promise<void> {
     await this.db
       .delete(chatGroupsAgents)
-      .where(and(eq(chatGroupsAgents.chatGroupId, groupId), eq(chatGroupsAgents.agentId, agentId)));
+      .where(
+        and(
+          eq(chatGroupsAgents.chatGroupId, groupId),
+          eq(chatGroupsAgents.agentId, agentId),
+          this.agentsOwnership(),
+        ),
+      );
   }
 
   /**
@@ -212,7 +268,11 @@ export class ChatGroupModel {
     await this.db
       .delete(chatGroupsAgents)
       .where(
-        and(eq(chatGroupsAgents.chatGroupId, groupId), inArray(chatGroupsAgents.agentId, agentIds)),
+        and(
+          eq(chatGroupsAgents.chatGroupId, groupId),
+          inArray(chatGroupsAgents.agentId, agentIds),
+          this.agentsOwnership(),
+        ),
       );
   }
 
@@ -224,7 +284,13 @@ export class ChatGroupModel {
     const [result] = await this.db
       .update(chatGroupsAgents)
       .set({ ...updates, updatedAt: new Date() })
-      .where(and(eq(chatGroupsAgents.chatGroupId, groupId), eq(chatGroupsAgents.agentId, agentId)))
+      .where(
+        and(
+          eq(chatGroupsAgents.chatGroupId, groupId),
+          eq(chatGroupsAgents.agentId, agentId),
+          this.agentsOwnership(),
+        ),
+      )
       .returning();
 
     return result;
@@ -236,7 +302,7 @@ export class ChatGroupModel {
     // Agents are automatically deleted due to CASCADE constraint
     const [result] = await this.db
       .delete(chatGroups)
-      .where(and(eq(chatGroups.id, id), eq(chatGroups.userId, this.userId)))
+      .where(and(eq(chatGroups.id, id), this.ownership()))
       .returning();
 
     if (!result) {
@@ -247,7 +313,7 @@ export class ChatGroupModel {
   }
 
   async deleteAll(): Promise<void> {
-    await this.db.delete(chatGroups).where(eq(chatGroups.userId, this.userId));
+    await this.db.delete(chatGroups).where(this.ownership());
   }
 
   // ******* Agent Query Methods ******* //
@@ -255,14 +321,18 @@ export class ChatGroupModel {
   async getGroupAgents(groupId: string): Promise<ChatGroupAgentItem[]> {
     return this.db.query.chatGroupsAgents.findMany({
       orderBy: [chatGroupsAgents.order],
-      where: eq(chatGroupsAgents.chatGroupId, groupId),
+      where: and(eq(chatGroupsAgents.chatGroupId, groupId), this.agentsOwnership()),
     });
   }
 
   async getEnabledGroupAgents(groupId: string): Promise<ChatGroupAgentItem[]> {
     return this.db.query.chatGroupsAgents.findMany({
       orderBy: [chatGroupsAgents.order],
-      where: and(eq(chatGroupsAgents.chatGroupId, groupId), eq(chatGroupsAgents.enabled, true)),
+      where: and(
+        eq(chatGroupsAgents.chatGroupId, groupId),
+        eq(chatGroupsAgents.enabled, true),
+        this.agentsOwnership(),
+      ),
     });
   }
 
@@ -275,9 +345,7 @@ export class ChatGroupModel {
     const groupIds = await this.db
       .selectDistinct({ chatGroupId: chatGroupsAgents.chatGroupId })
       .from(chatGroupsAgents)
-      .where(
-        and(eq(chatGroupsAgents.userId, this.userId), inArray(chatGroupsAgents.agentId, agentIds)),
-      );
+      .where(and(this.agentsOwnership(), inArray(chatGroupsAgents.agentId, agentIds)));
 
     if (groupIds.length === 0) return [];
 
@@ -288,7 +356,7 @@ export class ChatGroupModel {
           chatGroups.id,
           groupIds.map((g) => g.chatGroupId),
         ),
-        eq(chatGroups.userId, this.userId),
+        this.ownership(),
       ),
     });
   }

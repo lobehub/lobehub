@@ -5,10 +5,13 @@ import { type PublicState, type State } from './initialState';
 import { initialState } from './initialState';
 
 export interface Action {
+  clearInputCompletionError: () => void;
+  dismissInputCompletionError: () => void;
   getJSONState: () => Record<string, any> | undefined;
   getMarkdownContent: () => string;
   handleSendButton: () => void;
   handleStop: () => void;
+  pauseInputCompletion: (error: State['inputCompletionError']) => void;
   setDocument: (type: string, content: any, options?: Record<string, unknown>) => void;
   setExpand: (expend: boolean) => void;
   setJSONState: (content: any) => void;
@@ -25,6 +28,14 @@ type CreateStore = (
 export const store: CreateStore = (publicState) => (set, get) => ({
   ...initialState,
   ...publicState,
+
+  clearInputCompletionError: () => {
+    set({ inputCompletionError: undefined, inputCompletionErrorDismissed: false });
+  },
+
+  dismissInputCompletionError: () => {
+    set({ inputCompletionError: undefined, inputCompletionErrorDismissed: false });
+  },
 
   getJSONState: () => {
     return get().editor?.getDocument('json') as Record<string, any> | undefined;
@@ -61,6 +72,10 @@ export const store: CreateStore = (publicState) => (set, get) => ({
     if (!get().editor) return;
 
     get().sendButtonProps?.onStop?.({ editor: get().editor! });
+  },
+
+  pauseInputCompletion: (inputCompletionError) => {
+    set({ inputCompletionError, inputCompletionErrorDismissed: false });
   },
 
   setDocument: (type, content, options) => {

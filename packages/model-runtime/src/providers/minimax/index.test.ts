@@ -268,7 +268,62 @@ describe('LobeMinimaxAI - handlePayload', () => {
     ]);
     // Temperature <= 0 is dropped because MiniMax rejects it.
     expect(result.temperature).toBeUndefined();
-    // Reasoning split is always enabled.
+    // Non-M3 MiniMax models keep the existing friendly reasoning format.
+    expect(result.reasoning_split).toBe(true);
+  });
+
+  it('enables Interleaved Thinking friendly format for MiniMax-M3', () => {
+    const result = handlePayload({
+      messages: [{ content: 'hi', role: 'user' }],
+      model: 'MiniMax-M3',
+      max_tokens: 4096,
+      n: 2,
+      temperature: 0,
+      thinking: { budget_tokens: 1024, type: 'enabled' },
+      top_p: 1.5,
+    } as any);
+
+    expect(result.max_completion_tokens).toBe(4096);
+    expect(result.max_tokens).toBeUndefined();
+    expect(result.reasoning_split).toBe(true);
+    expect(result.preserveThinking).toBeUndefined();
+    expect(result.temperature).toBe(0);
+    expect(result.thinking).toEqual({ type: 'adaptive' });
+    expect(result.top_p).toBe(1);
+  });
+
+  it('maps disabled enableReasoning payload to MiniMax-M3 thinking disabled', () => {
+    const result = handlePayload({
+      messages: [{ content: 'hi', role: 'user' }],
+      model: 'MiniMax-M3',
+      thinking: { budget_tokens: 0, type: 'disabled' },
+    } as any);
+
+    expect(result.thinking).toEqual({ type: 'disabled' });
+  });
+
+  it('passes through MiniMax-M3 multimodal user content', () => {
+    const content = [
+      { text: 'describe this media', type: 'text' },
+      { image_url: { url: 'https://example.com/image.png' }, type: 'image_url' },
+      { type: 'video_url', video_url: { url: 'https://example.com/video.mp4' } },
+    ];
+
+    const result = handlePayload({
+      messages: [{ content, role: 'user' }],
+      model: 'MiniMax-M3',
+    } as any);
+
+    expect(result.messages[0].content).toBe(content);
+  });
+
+  it('keeps reasoning_split enabled for non-M3 MiniMax models', () => {
+    const result = handlePayload({
+      messages: [{ content: 'hi', role: 'user' }],
+      model: 'MiniMax-M2.7',
+      preserveThinking: false,
+    } as any);
+
     expect(result.reasoning_split).toBe(true);
   });
 });

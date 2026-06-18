@@ -40,6 +40,15 @@ const hasThoughtSignature = (
   return 'thoughtSignature' in toolCall && typeof toolCall.thoughtSignature === 'string';
 };
 
+/**
+ * Drop citations without a valid url. Some providers (e.g. OpenRouter's built-in
+ * web search) emit empty citation objects like `{}`, which would otherwise break
+ * downstream rendering (`new URL(undefined)`) and message persistence (Zod requires
+ * `url` to be a string). See https://github.com/lobehub/lobehub/issues/15043
+ */
+const filterValidCitations = (citations: ChatCitationItem[]): ChatCitationItem[] =>
+  citations.filter((citation) => !!citation?.url);
+
 // Process markdown base64 images: extract URLs and clean text in one pass
 const processMarkdownBase64Images = (text: string): { cleanedText: string; urls: string[] } => {
   if (!text) return { cleanedText: text, urls: [] };
@@ -149,6 +158,7 @@ const transformOpenAIStream = (
     // maybe need another structure to add support for multiple choices
     if (!Array.isArray(chunk.choices) || chunk.choices.length === 0) {
       if (chunk.usage) {
+        delete streamContext.usageMissingDiagnostics;
         const usage = chunk.usage;
         return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
       }
@@ -266,13 +276,42 @@ const transformOpenAIStream = (
 
     // Handle finish reason
     if (item.finish_reason) {
+      const usageChunk: StreamProtocolChunk | undefined = chunk.usage
+        ? { data: convertOpenAIUsage(chunk.usage, payload), id: chunk.id, type: 'usage' }
+        : undefined;
+      const appendUsageChunk = (
+        protocolChunk: StreamProtocolChunk | StreamProtocolChunk[],
+      ): StreamProtocolChunk | StreamProtocolChunk[] => {
+        if (!usageChunk) return protocolChunk;
+
+        delete streamContext.usageMissingDiagnostics;
+        return Array.isArray(protocolChunk)
+          ? [...protocolChunk, usageChunk]
+          : [protocolChunk, usageChunk];
+      };
+
+      if (!usageChunk) {
+        streamContext.usageMissingDiagnostics = {
+          apiMode: 'chat_completions',
+          chunkIndex: streamContext.chunkIndex,
+          finishReason: item.finish_reason,
+          hasUsageMetadata: false,
+          includeUsageRequested: payload?.includeUsageRequested,
+          model: payload?.model,
+          provider: payload?.provider,
+          responseId: chunk.id,
+          source: 'openai_chat_completions',
+          terminalEventType: 'chat.completion.chunk',
+        };
+      }
+
       // one-api's streaming interface can have both finish_reason and content
       //  {"id":"demo","model":"deepl-en","choices":[{"index":0,"delta":{"role":"assistant","content":"Introduce yourself."},"finish_reason":"stop"}]}
       if (typeof item.delta?.content === 'string' && !!item.delta.content) {
         // MiniMax built-in search returns citation sources in the first tool stream content, needs to be ignored
         // {"id":"0483748a25071c611e2f48d2982fbe96","choices":[{"finish_reason":"stop","index":0,"delta":{"content":"[{\"no\":1,\"url\":\"https://www.xiaohongshu.com/discovery/item/66d8de3c000000001f01e752\",\"title\":\"郑钦文为国而战，没有理由不坚持🏅\",\"content\":\"·2024年08月03日\\n中国队选手郑钦文夺得巴黎奥运会网球女单比赛金牌（巴黎奥运第16金）\\n#巴黎奥运会[话题]# #郑钦文[话题]# #人物素材积累[话题]# #作文素材积累[话题]# #申论素材[话题]#\",\"web_icon\":\"https://www.xiaohongshu.com/favicon.ico\"}]","role":"tool","tool_call_id":"call_function_6696730535"}}],"created":1748255114,"model":"abab6.5s-chat","object":"chat.completion.chunk","usage":{"total_tokens":0,"total_characters":0},"input_sensitive":false,"output_sensitive":false,"input_sensitive_type":0,"output_sensitive_type":0,"output_sensitive_int":0}
         if (typeof item.delta?.role === 'string' && item.delta.role === 'tool') {
-          return { data: null, id: chunk.id, type: 'text' };
+          return appendUsageChunk({ data: null, id: chunk.id, type: 'text' });
         }
 
         const text = item.delta.content as string;
@@ -287,10 +326,10 @@ const transformOpenAIStream = (
               type: 'base64_image' as const,
             })),
           );
-          return arr;
+          return appendUsageChunk(arr);
         }
 
-        return { data: text, id: chunk.id, type: 'text' };
+        return appendUsageChunk({ data: text, id: chunk.id, type: 'text' });
       }
 
       // OpenAI Search Preview model returns citation sources
@@ -298,21 +337,23 @@ const transformOpenAIStream = (
       if ((item as any).delta?.annotations && (item as any).delta.annotations.length > 0) {
         const citations = (item as any).delta.annotations;
 
-        return [
+        return appendUsageChunk([
           {
             data: {
-              citations: citations.map(
-                (item: any) =>
-                  ({
-                    title: item.url_citation.title,
-                    url: item.url_citation.url,
-                  }) as ChatCitationItem,
+              citations: filterValidCitations(
+                citations.map(
+                  (item: any) =>
+                    ({
+                      title: item.url_citation?.title,
+                      url: item.url_citation?.url,
+                    }) as ChatCitationItem,
+                ),
               ),
             },
             id: chunk.id,
             type: 'grounding',
           },
-        ];
+        ]);
       }
 
       // MiniMax built-in search returns 4 objects in the message array of the last stream, with the last one being annotations
@@ -320,26 +361,28 @@ const transformOpenAIStream = (
       if ((item as any).messages && (item as any).messages.length > 0) {
         const citations = (item as any).messages.at(-1).annotations;
 
-        return [
+        return appendUsageChunk([
           {
             data: {
-              citations: citations.map(
-                (item: any) =>
-                  ({
-                    title: item.url,
-                    url: item.url,
-                  }) as ChatCitationItem,
+              citations: filterValidCitations(
+                citations.map(
+                  (item: any) =>
+                    ({
+                      title: item.url,
+                      url: item.url,
+                    }) as ChatCitationItem,
+                ),
               ),
             },
             id: chunk.id,
             type: 'grounding',
           },
-        ];
+        ]);
       }
 
-      if (chunk.usage) {
-        const usage = chunk.usage;
-        return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
+      if (usageChunk) {
+        delete streamContext.usageMissingDiagnostics;
+        return usageChunk;
       }
 
       // xAI Live Search feature returns citation sources
@@ -350,12 +393,14 @@ const transformOpenAIStream = (
         return [
           {
             data: {
-              citations: citations.map(
-                (item: any) =>
-                  ({
-                    title: item,
-                    url: item,
-                  }) as ChatCitationItem,
+              citations: filterValidCitations(
+                citations.map(
+                  (item: any) =>
+                    ({
+                      title: item,
+                      url: item,
+                    }) as ChatCitationItem,
+                ),
               ),
             },
             id: chunk.id,
@@ -380,12 +425,14 @@ const transformOpenAIStream = (
       return [
         {
           data: {
-            citations: citations.map(
-              (item: any) =>
-                ({
-                  title: item.title,
-                  url: item.url,
-                }) as ChatCitationItem,
+            citations: filterValidCitations(
+              citations.map(
+                (item: any) =>
+                  ({
+                    title: item.title,
+                    url: item.url,
+                  }) as ChatCitationItem,
+              ),
             ),
           },
           id: chunk.id,
@@ -455,6 +502,7 @@ const transformOpenAIStream = (
       if (typeof content === 'string') {
         // If content is an empty string but chunk has usage, prioritize returning usage (e.g., Gemini image-preview eventually returns usage in a separate chunk)
         if (content === '' && chunk.usage) {
+          delete streamContext.usageMissingDiagnostics;
           const usage = chunk.usage;
           return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
         }
@@ -517,12 +565,13 @@ const transformOpenAIStream = (
             const baseChunks: StreamProtocolChunk[] = [
               {
                 data: {
-                  citations: (citations as any[])
-                    .map((item) => ({
+                  // Zhipu built-in search tool sometimes returns empty link causing crashes
+                  citations: filterValidCitations(
+                    (citations as any[]).map((item) => ({
                       title: typeof item === 'string' ? item : item.title,
                       url: typeof item === 'string' ? item : item.url || item.link,
-                    }))
-                    .filter((c) => c.title && c.url), // Zhipu built-in search tool sometimes returns empty link causing crashes
+                    })),
+                  ),
                 },
                 id: chunk.id,
                 type: 'grounding',
@@ -570,6 +619,7 @@ const transformOpenAIStream = (
 
     // In litellm responses, there are cases where delta is empty but usage exists
     if (chunk.usage) {
+      delete streamContext.usageMissingDiagnostics;
       const usage = chunk.usage;
       return { data: convertOpenAIUsage(usage, payload), id: chunk.id, type: 'usage' };
     }
@@ -647,6 +697,6 @@ export const OpenAIStream = (
         }),
       )
       .pipeThrough(createSSEProtocolTransformer((c) => c, streamStack))
-      .pipeThrough(createCallbacksTransformer(callbacks))
+      .pipeThrough(createCallbacksTransformer(callbacks, { streamStack }))
   );
 };

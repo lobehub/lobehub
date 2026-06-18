@@ -1,4 +1,4 @@
-import { AgentRuntimeErrorType } from '@lobechat/types';
+import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import { refineErrorCode } from './refine';
@@ -11,6 +11,57 @@ describe('refineErrorCode', () => {
         message: '429 status code (no body)',
       }),
     ).toBeUndefined();
+  });
+
+  describe('un-typed throw wrappers', () => {
+    // A raw `Error` (e.g. a Drizzle "Failed query: …" throw) is wrapped by
+    // formatErrorForState as InternalServerError (HTTP 500). It must still reach
+    // the message patterns, otherwise it persists as a bare, un-classified 500.
+    it('reclassifies a 500-wrapped Drizzle throw into DatabasePersistError', () => {
+      expect(
+        refineErrorCode({
+          errorType: String(ChatErrorType.InternalServerError),
+          message: 'Failed query: rollback\nparams: ',
+        }),
+      ).toBe(AgentRuntimeErrorType.DatabasePersistError);
+    });
+
+    it('reclassifies an AgentRuntimeError-wrapped throw via its message', () => {
+      expect(
+        refineErrorCode({
+          errorType: AgentRuntimeErrorType.AgentRuntimeError,
+          message: 'Failed query: select "id" from "messages"',
+        }),
+      ).toBe(AgentRuntimeErrorType.DatabasePersistError);
+    });
+
+    it('leaves a 500 wrapper unrefined when nothing matches', () => {
+      expect(
+        refineErrorCode({
+          errorType: String(ChatErrorType.InternalServerError),
+          message: 'some opaque internal failure with no registered pattern',
+        }),
+      ).toBeUndefined();
+    });
+
+    // The HTTP-status fallback is provider-only: a leading "429"/"500" in a
+    // harness/DB/Redis throw is not a real upstream status and must NOT recast
+    // the error with provider retry/failure semantics.
+    it('does not apply the HTTP-status fallback to un-typed wrappers', () => {
+      expect(
+        refineErrorCode({
+          errorType: String(ChatErrorType.InternalServerError),
+          message: '429 some harness throw with no registered pattern',
+        }),
+      ).toBeUndefined();
+      expect(
+        refineErrorCode({
+          errorType: AgentRuntimeErrorType.AgentRuntimeError,
+          httpStatus: 500,
+          message: 'opaque internal failure',
+        }),
+      ).toBeUndefined();
+    });
   });
 
   describe('message-pattern pass', () => {

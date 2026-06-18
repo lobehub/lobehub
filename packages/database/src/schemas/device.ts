@@ -1,7 +1,9 @@
-import { index, pgTable, text, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
+import type { WorkingDirEntry } from '@lobechat/types';
+import { index, jsonb, pgTable, text, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
 
 import { timestamps, timestamptz } from './_helpers';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 /**
  * Stable device identity anchor — one row per physical machine per user.
@@ -20,6 +22,15 @@ export const devices = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    // NOTE: devices are a USER-LEVEL identity, not workspace-scoped content. A
+    // physical machine belongs to the user across all of their workspaces (the
+    // unique key is (userId, deviceId), see below). `workspaceId` here only
+    // records which workspace the device was registered from — it is NOT used to
+    // filter device lookups. So `DeviceModel`/`deviceRouter` intentionally scope
+    // by userId only and do NOT use `buildWorkspaceWhere`. Do not "fix" them to
+    // workspace-scope reads, or a user's device would disappear inside their own
+    // workspaces.
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     /** Machine-derived id (sha256 truncated to 32 chars; 64 leaves room for fallback randomUUID) */
     deviceId: varchar('device_id', { length: 64 }).notNull(),
@@ -33,7 +44,9 @@ export const devices = pgTable(
     friendlyName: text('friendly_name'),
 
     defaultCwd: text('default_cwd'),
+    /** @deprecated superseded by `workingDirs` (structured). Kept as a legacy column; no longer read/written. */
     recentCwds: text('recent_cwds').array().default([]).notNull(),
+    workingDirs: jsonb('working_dirs').$type<WorkingDirEntry[]>().default([]),
 
     firstSeenAt: timestamptz('first_seen_at').defaultNow().notNull(),
     lastSeenAt: timestamptz('last_seen_at').defaultNow().notNull(),
@@ -44,6 +57,7 @@ export const devices = pgTable(
     /** One row per (user, machine); register() upserts on this target */
     uniqueIndex('devices_user_id_device_id_unique').on(t.userId, t.deviceId),
     index('devices_user_id_idx').on(t.userId),
+    index('devices_workspace_id_idx').on(t.workspaceId),
   ],
 );
 

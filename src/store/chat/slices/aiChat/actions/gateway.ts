@@ -8,46 +8,53 @@ import type { ConversationContext, ExecAgentResult, MessageMetadata } from '@lob
 
 import { isDesktop } from '@/const/version';
 import { aiAgentService, type ResumeApprovalParam } from '@/services/aiAgent';
-import { localFileService } from '@/services/electron/localFileService';
+import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { getAgentStoreState } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
+import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { topicSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
+import { settingsSelectors } from '@/store/user/selectors';
 
 import { createGatewayEventHandler } from './gatewayEventHandler';
 
 /**
- * Scan the active working directory for project-level skills
- * (`.agents/skills` / `.claude/skills`) so the server can surface them in
- * `<available_skills>`. Desktop-only and best-effort: a failed scan must not
- * block the send.
+ * When the agent runs against the local machine, resolve this desktop's
+ * own gateway deviceId so it can be passed as the run's `deviceId`. The server
+ * then presets `activeDeviceId` and injects `lobe-local-system` into the very
+ * first LLM payload — skipping the extra `activateDevice` round-trip the model
+ * is otherwise forced to make whenever more than one device is online (with a
+ * single device the server's heuristic already covered it).
+ *
+ * Gated on the effective runtime mode (`isLocalSystemEnabledById`), which
+ * derives from `agencyConfig.executionTarget` — only a `local` target presets
+ * the device. Resolving a device for `sandbox` / `none` / `device` targets
+ * would wrongly route the run to this machine.
+ *
+ * Desktop-only and best-effort: any failure falls back to the server-side
+ * device-resolution heuristics. We don't pre-check online status here — an
+ * offline id simply fails the server's `onlineDevices` guard and stays unrouted.
  */
-const resolveProjectSkills = async (
-  get: () => ChatStore,
-): Promise<{ description?: string; name: string; path: string }[] | undefined> => {
-  if (!isDesktop) return undefined;
+const resolveLocalDeviceId = async (agentId?: string): Promise<string | undefined> => {
+  if (!isDesktop || !agentId) return undefined;
 
-  const topicWorkingDirectory = topicSelectors.currentTopicWorkingDirectory(get());
-  const agentWorkingDirectory = agentSelectors.currentAgentWorkingDirectory(getAgentStoreState());
-  const workingDirectory = topicWorkingDirectory ?? agentWorkingDirectory;
-  if (!workingDirectory) return undefined;
+  const agentState = getAgentStoreState();
+  // Chat mode means "no execution environment" — never resolve a device, even
+  // when the target is `local`. The server enforces this too (it auto-activates
+  // a single online device), but skipping the deviceId round-trip here avoids
+  // sending an id the server would only discard.
+  if (chatConfigByIdSelectors.isChatModeById(agentId)(agentState)) return undefined;
+
+  const isLocal = chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(agentState);
+  if (!isLocal) return undefined;
 
   try {
-    const { skills } = await localFileService.listProjectSkills({ scope: workingDirectory });
-    if (skills.length === 0) return undefined;
-    // The directory tree is enumerated lazily at activation time by the Skills
-    // runtime (via the local-system `listFiles` tool), so we drop `files` here
-    // — keeps the op-param payload small.
-    return skills.map((skill) => ({
-      description: skill.description,
-      name: skill.name,
-      path: skill.path,
-    }));
+    const info = await gatewayConnectionService.getDeviceInfo();
+    return info?.deviceId;
   } catch {
     return undefined;
   }
@@ -262,14 +269,25 @@ export class GatewayActionImpl {
 
   /**
    * Check if Gateway mode is available and enabled.
-   * Returns true if both server config and user lab toggle are set.
+   * Returns true when the server supports Gateway mode and the agent config
+   * has not disabled it. `disableGatewayMode: undefined` means enabled.
    */
-  isGatewayModeEnabled = (): boolean => {
-    const agentGatewayUrl =
-      window.global_serverConfigStore?.getState()?.serverConfig?.agentGatewayUrl;
-    const enableGatewayMode = useUserStore.getState().preference.lab?.enableGatewayMode;
+  isGatewayModeEnabled = (agentId?: string): boolean => {
+    const serverConfig = window.global_serverConfigStore?.getState()?.serverConfig;
+    const agentState = getAgentStoreState();
+    const resolvedAgentId = agentId ?? agentState.activeAgentId;
+    const agentDisableGatewayMode = resolvedAgentId
+      ? chatConfigByIdSelectors.getChatConfigById(resolvedAgentId)(agentState).disableGatewayMode
+      : undefined;
+    const defaultDisableGatewayMode = settingsSelectors.defaultAgentConfig(useUserStore.getState())
+      .chatConfig?.disableGatewayMode;
+    const disableGatewayMode = agentDisableGatewayMode ?? defaultDisableGatewayMode;
 
-    return !!agentGatewayUrl && !!enableGatewayMode;
+    return (
+      !!serverConfig?.agentGatewayUrl &&
+      !!serverConfig.enableGatewayMode &&
+      disableGatewayMode !== true
+    );
   };
 
   /**
@@ -313,6 +331,13 @@ export class GatewayActionImpl {
      * a fresh user prompt.
      */
     resumeApproval?: ResumeApprovalParam;
+    /**
+     * Temporary message IDs created during the initial sendMessage phase.
+     * These are associated with the new gateway operation so the UI doesn't
+     * show a blank loading state while waiting for the first `step_start`
+     * event to call `replaceMessages` with the server's real message IDs.
+     */
+    tempMessageIds?: string[];
   }): Promise<ExecAgentResult> => {
     const {
       context,
@@ -323,6 +348,7 @@ export class GatewayActionImpl {
       parentMessageId,
       parentOperationId,
       resumeApproval,
+      tempMessageIds,
     } = params;
 
     const agentGatewayUrl =
@@ -353,7 +379,7 @@ export class GatewayActionImpl {
       ? this.#get().getOperationAbortSignal(parentOperationId)
       : undefined;
 
-    const projectSkills = await resolveProjectSkills(this.#get);
+    const localDeviceId = await resolveLocalDeviceId(context.agentId);
 
     const result = await aiAgentService.execAgentTask(
       {
@@ -362,6 +388,13 @@ export class GatewayActionImpl {
           agentDocumentId: context.agentDocumentId,
           defaultTaskAssigneeAgentId: context.defaultTaskAssigneeAgentId,
           documentId: context.documentId,
+          // When AgentBuilder runs, context.agentId is the builtin builder agent.
+          // The actual editing target is chatStore.activeAgentId (kept in sync by
+          // AgentBuilderProvider). Pass it so the server can route tool calls to
+          // the correct agent rather than the builder itself.
+          ...(context.scope === 'agent_builder' && {
+            editingAgentId: this.#get().activeAgentId ?? undefined,
+          }),
           groupId: context.groupId,
           ...(initialTopicMetadata && { initialTopicMetadata }),
           scope: context.scope,
@@ -369,9 +402,9 @@ export class GatewayActionImpl {
           threadId: context.threadId,
           topicId: context.topicId,
         },
+        deviceId: localDeviceId,
         fileIds,
         parentMessageId,
-        projectSkills,
         prompt: message,
         resumeApproval,
         trigger: metadata?.trigger,
@@ -447,6 +480,15 @@ export class GatewayActionImpl {
 
     // Associate the server-created assistant message with the gateway operation
     this.#get().associateMessageWithOperation(result.assistantMessageId, gatewayOpId);
+
+    // Also associate temp message IDs so the UI doesn't show a blank loading
+    // state while waiting for the first `step_start` event to call
+    // `replaceMessages` with the server's real message IDs.
+    if (tempMessageIds?.length) {
+      for (const tempId of tempMessageIds) {
+        this.#get().associateMessageWithOperation(tempId, gatewayOpId);
+      }
+    }
 
     // Phase-1 init done: child op is running. Hand off loading state from
     // the caller's op (e.g. `sendMessage`) to the child without a gap.
@@ -581,11 +623,30 @@ export class GatewayActionImpl {
       topicId,
     };
 
+    // Anchor the operation to the run's real start: the assistant message was
+    // created when the run began. Defaulting to Date.now() here would reset
+    // elapsed-time displays (OpStatusTray) to zero on every page refresh.
+    const assistantMessage = Object.values(this.#get().messagesMap)
+      .flat()
+      .find((m) => m.id === assistantMessageId);
+
+    // `createdAt` is typed as a number but, after a DB rehydrate, it can arrive
+    // as a Date / ISO string (the message service casts rows `as unknown` without
+    // converting). Normalize to epoch ms here so the elapsed-time math stays a
+    // number — passing a string/Invalid Date straight through makes
+    // `Date.now() - startTime` resolve to NaN and renders as "NaN:NaN".
+    const startTime = assistantMessage?.createdAt
+      ? new Date(assistantMessage.createdAt).getTime()
+      : undefined;
+
     // Create a local operation for UI loading state, stashing the server op id
     // so intervention flows can find it after reconnect as well.
     const { operationId: gatewayOpId } = this.#get().startOperation({
       context,
-      metadata: { serverOperationId: operationId },
+      metadata: {
+        serverOperationId: operationId,
+        ...(Number.isFinite(startTime) ? { startTime } : {}),
+      },
       type: 'execServerAgentRuntime',
     });
 

@@ -9,6 +9,7 @@ import { PageAgentProvider } from './PageAgentProvider';
 
 interface AgentState {
   activeAgentId?: string;
+  heterogeneousAgentIds?: string[];
   pageAgentId: string;
   setActiveAgentId: (agentId: string) => void;
   useInitBuiltinAgent: (slug: string) => void;
@@ -50,6 +51,10 @@ vi.mock('@/store/agent', () => ({
 }));
 
 vi.mock('@/store/agent/selectors', () => ({
+  agentByIdSelectors: {
+    isAgentHeterogeneousById: (agentId: string) => (state: AgentState) =>
+      !!state.heterogeneousAgentIds?.includes(agentId),
+  },
   builtinAgentSelectors: {
     pageAgentId: (state: AgentState) => state.pageAgentId,
   },
@@ -65,8 +70,12 @@ vi.mock('@/store/chat', () => ({
 }));
 
 vi.mock('@/store/chat/utils/messageMapKey', () => ({
-  messageMapKey: (context: { agentId?: string; scope?: string; topicId?: string | null }) =>
-    `${context.scope}_${context.agentId}_${context.topicId ?? 'new'}`,
+  messageMapKey: (context: {
+    agentId?: string;
+    documentId?: string | null;
+    scope?: string;
+    topicId?: string | null;
+  }) => `${context.scope}_${context.agentId}_${context.topicId ?? context.documentId ?? 'new'}`,
 }));
 
 beforeEach(() => {
@@ -156,5 +165,66 @@ describe('PageAgentProvider', () => {
     await waitFor(() => {
       expect(chatState.switchTopic).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it('falls back to the page agent when the active agent is heterogeneous', async () => {
+    agentState.activeAgentId = 'claude-code';
+    agentState.heterogeneousAgentIds = ['claude-code'];
+
+    render(
+      <PageAgentProvider>
+        <div>child</div>
+      </PageAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(conversationProviderSpy).toHaveBeenCalled();
+    });
+
+    const { context } = conversationProviderSpy.mock.calls.at(-1)![0];
+    expect(context.agentId).toBe('page-agent');
+  });
+
+  it('can avoid syncing the page agent into global agent state', async () => {
+    agentState.activeAgentId = 'claude-code';
+    agentState.heterogeneousAgentIds = ['claude-code'];
+    chatState.activeAgentId = 'claude-code';
+    chatState.activeTopicId = 'topic-1';
+
+    render(
+      <PageAgentProvider pageId="doc-1" syncActiveAgent={false}>
+        <div>child</div>
+      </PageAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(conversationProviderSpy).toHaveBeenCalled();
+    });
+
+    const { context } = conversationProviderSpy.mock.calls.at(-1)![0];
+    expect(context.agentId).toBe('page-agent');
+    expect(context.documentId).toBe('doc-1');
+    expect(context.topicId).toBeNull();
+    expect(agentState.activeAgentId).toBe('claude-code');
+    expect(agentState.setActiveAgentId).not.toHaveBeenCalled();
+    expect(chatState.activeAgentId).toBe('claude-code');
+    expect(chatState.activeTopicId).toBe('topic-1');
+    expect(chatState.switchTopic).not.toHaveBeenCalled();
+  });
+
+  it('injects the open document id into the conversation context', async () => {
+    render(
+      <PageAgentProvider pageId="doc-1">
+        <div>child</div>
+      </PageAgentProvider>,
+    );
+
+    await waitFor(() => {
+      expect(conversationProviderSpy).toHaveBeenCalled();
+    });
+
+    const { context } = conversationProviderSpy.mock.calls.at(-1)![0];
+    expect(context.documentId).toBe('doc-1');
+    expect(context.scope).toBe('page');
   });
 });

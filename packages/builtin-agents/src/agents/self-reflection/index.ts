@@ -1,3 +1,6 @@
+import { DEFAULT_MINI_PROVIDER } from '@lobechat/business-const';
+import { DEFAULT_MINI_MODEL } from '@lobechat/const';
+
 import type { BuiltinAgentDefinition } from '../../types';
 import { BUILTIN_AGENT_SLUGS } from '../../types';
 
@@ -10,6 +13,12 @@ import { BUILTIN_AGENT_SLUGS } from '../../types';
  * receipt table, idempotency namespace) are registered in a follow-up PR.
  */
 export const SELF_REFLECTION: BuiltinAgentDefinition = {
+  // Background self-iteration runs on the cheap mini system model (matching the
+  // legacy executeSelfIteration path), not the user's default chat model.
+  persist: {
+    model: DEFAULT_MINI_MODEL,
+    provider: DEFAULT_MINI_PROVIDER,
+  },
   runtime: {
     plugins: ['agent-signal-reflection'],
     systemRole:

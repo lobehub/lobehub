@@ -15,6 +15,7 @@ import {
   sessions,
   topics,
   users,
+  workspaces,
 } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
@@ -24,7 +25,9 @@ const serverDB: LobeChatDatabase = await getTestDB();
 
 const userId = 'message-update-test';
 const otherUserId = 'message-update-test-other';
+const workspaceId = 'message-update-workspace';
 const messageModel = new MessageModel(serverDB, userId);
+const workspaceMessageModel = new MessageModel(serverDB, otherUserId, workspaceId);
 const embeddingsId = uuid();
 
 beforeEach(async () => {
@@ -33,6 +36,12 @@ beforeEach(async () => {
     await trx.delete(users).where(eq(users.id, userId));
     await trx.delete(users).where(eq(users.id, otherUserId));
     await trx.insert(users).values([{ id: userId }, { id: otherUserId }]);
+    await trx.insert(workspaces).values({
+      id: workspaceId,
+      name: 'Message Workspace',
+      primaryOwnerId: userId,
+      slug: workspaceId,
+    });
 
     await trx.insert(sessions).values([
       // { id: 'session1', userId },
@@ -950,6 +959,30 @@ describe('MessageModel Update Tests', () => {
       expect(dbResult[0].metadata).toEqual({ originalKey: 'originalValue' });
     });
 
+    it('should update workspace messages even when created by another user', async () => {
+      await serverDB.insert(messages).values({
+        id: 'msg-workspace-metadata',
+        userId,
+        workspaceId,
+        role: 'user',
+        content: 'test message',
+        metadata: { originalKey: 'originalValue' },
+      });
+
+      await workspaceMessageModel.updateMetadata('msg-workspace-metadata', {
+        workspaceKey: 'workspaceValue',
+      });
+
+      const dbResult = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, 'msg-workspace-metadata'));
+      expect(dbResult[0].metadata).toEqual({
+        originalKey: 'originalValue',
+        workspaceKey: 'workspaceValue',
+      });
+    });
+
     it('should handle complex nested metadata updates', async () => {
       // Create test data
       await serverDB.insert(messages).values({
@@ -1273,6 +1306,33 @@ describe('MessageModel Update Tests', () => {
       expect(result[0].content).toBe('translated message 1');
     });
 
+    it('should insert workspaceId for workspace translate records', async () => {
+      await serverDB.insert(messages).values({
+        id: 'workspace-translate',
+        userId,
+        workspaceId,
+        role: 'user',
+        content: 'message 1',
+      });
+
+      await workspaceMessageModel.updateTranslate('workspace-translate', {
+        content: 'translated message 1',
+        from: 'en',
+        to: 'zh',
+      });
+
+      const result = await serverDB
+        .select()
+        .from(messageTranslates)
+        .where(eq(messageTranslates.id, 'workspace-translate'));
+
+      expect(result[0]).toMatchObject({
+        id: 'workspace-translate',
+        userId: otherUserId,
+        workspaceId,
+      });
+    });
+
     it('should update the corresponding fields if message exists in messageTranslates table', async () => {
       // Create test data
       await serverDB.transaction(async (trx) => {
@@ -1312,6 +1372,29 @@ describe('MessageModel Update Tests', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].voice).toBe('voice1');
+    });
+
+    it('should insert workspaceId for workspace TTS records', async () => {
+      await serverDB.insert(messages).values({
+        id: 'workspace-tts',
+        userId,
+        workspaceId,
+        role: 'user',
+        content: 'message 1',
+      });
+
+      await workspaceMessageModel.updateTTS('workspace-tts', {
+        contentMd5: 'md5',
+        file: 'f1',
+        voice: 'voice1',
+      });
+
+      const result = await serverDB
+        .select()
+        .from(messageTTS)
+        .where(eq(messageTTS.id, 'workspace-tts'));
+
+      expect(result[0]).toMatchObject({ id: 'workspace-tts', userId: otherUserId, workspaceId });
     });
 
     it('should update the corresponding fields if message exists in messageTTS table', async () => {
@@ -1495,6 +1578,73 @@ describe('MessageModel Update Tests', () => {
         .where(eq(topics.id, 'update-usage-topic'));
       expect(topic.totalTokens).toBe(20);
       expect(topic.totalCost).toBeCloseTo(0.01, 6);
+    });
+  });
+
+  describe('usage column promotion', () => {
+    it('promotes metadata.usage into the dedicated usage column', async () => {
+      await serverDB.insert(messages).values({
+        id: 'promote-msg',
+        role: 'assistant',
+        userId,
+      });
+
+      const usage = { cost: 0.004, totalInputTokens: 70, totalOutputTokens: 30, totalTokens: 100 };
+      await messageModel.update('promote-msg', { metadata: { usage } as any });
+
+      const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'promote-msg'));
+      expect(row.usage).toEqual(usage);
+      // metadata.usage stays written for backward-compatible reads
+      expect((row.metadata as any).usage).toEqual(usage);
+    });
+
+    it('prefers a top-level usage over metadata.usage', async () => {
+      await serverDB.insert(messages).values({
+        id: 'prefer-msg',
+        role: 'assistant',
+        userId,
+      });
+
+      const topLevel = { cost: 0.01, totalTokens: 200 };
+      await messageModel.update('prefer-msg', {
+        metadata: { usage: { cost: 0.004, totalTokens: 100 } } as any,
+        usage: topLevel as any,
+      });
+
+      const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'prefer-msg'));
+      expect(row.usage).toEqual(topLevel);
+      // metadata.usage is kept consistent with the column
+      expect((row.metadata as any).usage).toEqual(topLevel);
+    });
+
+    it('dual-writes metadata.usage when usage arrives as a top-level param only', async () => {
+      await serverDB.insert(messages).values({
+        id: 'top-only-msg',
+        metadata: { tps: 1 }, // pre-existing non-usage metadata must be preserved
+        role: 'assistant',
+        userId,
+      });
+
+      const usage = { cost: 0.006, totalTokens: 150 };
+      // no metadata payload — only the top-level usage
+      await messageModel.update('top-only-msg', { usage: usage as any });
+
+      const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'top-only-msg'));
+      expect(row.usage).toEqual(usage);
+      // legacy readers / rollback paths still see metadata.usage
+      expect((row.metadata as any).usage).toEqual(usage);
+      expect((row.metadata as any).tps).toBe(1);
+    });
+
+    it('updateMetadata syncs usage into the usage column', async () => {
+      await serverDB.insert(messages).values({ id: 'meta-msg', role: 'assistant', userId });
+
+      const usage = { cost: 0.002, totalTokens: 60 };
+      await messageModel.updateMetadata('meta-msg', { usage });
+
+      const [row] = await serverDB.select().from(messages).where(eq(messages.id, 'meta-msg'));
+      expect(row.usage).toEqual(usage);
+      expect((row.metadata as any).usage).toEqual(usage);
     });
   });
 });

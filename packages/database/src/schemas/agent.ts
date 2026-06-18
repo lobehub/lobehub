@@ -4,6 +4,7 @@ import type {
   LobeAgentTTSConfig,
 } from '@lobechat/types';
 import { AgentChatConfigSchema } from '@lobechat/types';
+import { isNotNull, isNull } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -22,6 +23,7 @@ import { timestamps } from './_helpers';
 import { files, knowledgeBases } from './file';
 import { sessionGroups } from './session';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 // Agent table is the main table for storing agents
 // agent is a model that represents the assistant that is created by the user
@@ -50,6 +52,7 @@ export const agents = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     agencyConfig: jsonb('agency_config').$type<LobeAgentAgencyConfig>(),
     chatConfig: jsonb('chat_config').$type<LobeAgentChatConfig>(),
@@ -75,11 +78,15 @@ export const agents = pgTable(
   },
   (t) => [
     uniqueIndex('client_id_user_id_unique').on(t.clientId, t.userId),
-    uniqueIndex('agents_slug_user_id_unique').on(t.slug, t.userId),
+    uniqueIndex('agents_slug_user_id_unique').on(t.slug, t.userId).where(isNull(t.workspaceId)),
     index('agents_user_id_idx').on(t.userId),
     index('agents_title_idx').on(t.title),
     index('agents_description_idx').on(t.description),
     index('agents_session_group_id_idx').on(t.sessionGroupId),
+    index('agents_workspace_id_idx').on(t.workspaceId),
+    uniqueIndex('agents_slug_workspace_id_unique')
+      .on(t.workspaceId, t.slug)
+      .where(isNotNull(t.workspaceId)),
   ],
 );
 
@@ -105,6 +112,7 @@ export const agentsKnowledgeBases = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     enabled: boolean('enabled').default(true),
 
     ...timestamps,
@@ -114,6 +122,7 @@ export const agentsKnowledgeBases = pgTable(
     index('agents_knowledge_bases_agent_id_idx').on(t.agentId),
     index('agents_knowledge_bases_knowledge_base_id_idx').on(t.knowledgeBaseId),
     index('agents_knowledge_bases_user_id_idx').on(t.userId),
+    index('agents_knowledge_bases_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -130,6 +139,7 @@ export const agentsFiles = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     ...timestamps,
   },
@@ -138,5 +148,6 @@ export const agentsFiles = pgTable(
     index('agents_files_agent_id_idx').on(t.agentId),
     index('agents_files_file_id_idx').on(t.fileId),
     index('agents_files_user_id_idx').on(t.userId),
+    index('agents_files_workspace_id_idx').on(t.workspaceId),
   ],
 );

@@ -13,6 +13,7 @@
   "actions.expand.on": "باز کردن",
   "actions.typobar.off": "پنهان کردن نوار ابزار قالب‌بندی",
   "actions.typobar.on": "نمایش نوار ابزار قالب‌بندی",
+  "actions.typobar.title": "ابزار قالب‌بندی",
   "autoSave.latest": "آخرین نسخه بارگذاری شد",
   "autoSave.saved": "ذخیره شد",
   "autoSave.saving": "در حال ذخیره‌سازی خودکار...",

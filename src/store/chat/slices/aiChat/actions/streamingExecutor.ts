@@ -21,7 +21,6 @@ import {
   type UIChatMessage,
 } from '@lobechat/types';
 import debug from 'debug';
-import { t } from 'i18next';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
 import { aiAgentService } from '@/services/aiAgent';
@@ -36,29 +35,25 @@ import { aiModelSelectors } from '@/store/aiInfra/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra/store';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/aiChat/actions/agentSignalBridge';
-import { type OperationStatus } from '@/store/chat/slices/operation/types';
-import { type ChatStore, useChatStore } from '@/store/chat/store';
-import {
-  notifyDesktopHumanApprovalRequired,
-  resolveNotificationNavigatePath,
-} from '@/store/chat/utils/desktopNotification';
+import { type ChatStore } from '@/store/chat/store';
+import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
+import { getElectronStoreState } from '@/store/electron';
 import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
 import { getTaskStoreState } from '@/store/task';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { type StoreSetter } from '@/store/types';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 import { getUserStoreState } from '@/store/user/store';
-import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { topicSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
-import { topicMapKey } from '../../../utils/topicMapKey';
 import {
   selectActivatedSkillsFromMessages,
   selectActivatedToolIdsFromMessages,
   selectTodosFromMessages,
 } from '../../message/selectors/dbMessage';
-import { mergeQueuedMessages, reconstructUploadFilesFromQueue } from '../../operation/types';
+import { buildRunLifecycle } from './runLifecycle/buildRunLifecycle';
+import type { RunScope } from './runLifecycle/types';
 
 const log = debug('lobe-store:streaming-executor');
 
@@ -90,59 +85,6 @@ const getVisualMediaAvailability = (messages: UIChatMessage[]) => ({
 });
 
 /**
- * Normalizes AgentRuntime terminal status into client runtime completion status.
- *
- * Before:
- * - "done"
- * - "waiting_for_human"
- *
- * After:
- * - "completed"
- * - "cancelled"
- */
-const normalizeClientRuntimeCompleteStatus = (
-  runtimeStatus: AgentState['status'],
-  operationStatus?: OperationStatus,
-): 'cancelled' | 'completed' | 'failed' | undefined => {
-  if (operationStatus === 'cancelled') return 'cancelled';
-  if (operationStatus === 'failed') return 'failed';
-  if (runtimeStatus === 'waiting_for_human') return 'cancelled';
-  if (operationStatus === 'completed') return 'completed';
-  if (runtimeStatus === 'done') return 'completed';
-  if (runtimeStatus === 'error' || runtimeStatus === 'interrupted') return 'failed';
-  return undefined;
-};
-
-const findCompletionAssistantMessageId = (
-  messages: UIChatMessage[],
-  parentMessageId: string,
-  parentMessageType: 'user' | 'assistant' | 'tool',
-) => {
-  const messagesById = new Map(messages.map((message) => [message.id, message]));
-  const parentMessage = messagesById.get(parentMessageId);
-  const isDescendantOfParent = (message: UIChatMessage) => {
-    let currentParentId = message.parentId;
-    const visited = new Set<string>();
-
-    while (currentParentId && !visited.has(currentParentId)) {
-      if (currentParentId === parentMessageId) return true;
-      visited.add(currentParentId);
-      currentParentId = messagesById.get(currentParentId)?.parentId;
-    }
-
-    return false;
-  };
-
-  return (
-    messages.findLast((message) => message.role === 'assistant' && isDescendantOfParent(message))
-      ?.id ??
-    (parentMessageType === 'assistant' && parentMessage?.role === 'assistant'
-      ? parentMessage.id
-      : undefined)
-  );
-};
-
-/**
  * Core streaming execution actions for AI chat
  */
 
@@ -152,12 +94,10 @@ export const streamingExecutor = (set: Setter, get: () => ChatStore, _api?: unkn
 
 export class StreamingExecutorActionImpl {
   readonly #get: () => ChatStore;
-  // eslint-disable-next-line no-unused-private-class-members
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
+    void set;
     void _api;
-    this.#set = set;
     this.#get = get;
   }
 
@@ -333,7 +273,9 @@ export class StreamingExecutorActionImpl {
     };
 
     const topicWorkingDirectory = topicSelectors.currentTopicWorkingDirectory(this.#get());
-    const agentWorkingDirectory = agentSelectors.currentAgentWorkingDirectory(getAgentStoreState());
+    const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+    const agentWorkingDirectory =
+      agentSelectors.currentAgentWorkingDirectory(currentDeviceId)(getAgentStoreState());
     const workingDirectory = topicWorkingDirectory ?? agentWorkingDirectory;
 
     // Create initial state or use provided state
@@ -496,7 +438,6 @@ export class StreamingExecutorActionImpl {
 
     // Extract values from context
     const { agentId, topicId, threadId, subAgentId, groupId, scope } = context;
-
     // Determine effectiveAgentId for agent config retrieval:
     // - subAgentId is used when present (behavior depends on scope)
     // - agentId: Default
@@ -510,7 +451,11 @@ export class StreamingExecutorActionImpl {
     if (!operationId) {
       const { operationId: newOperationId } = this.#get().startOperation({
         type: 'execAgentRuntime',
-        context: { ...context, messageId: parentMessageId },
+        context: {
+          ...context,
+          ...(isSubAgent ? { isSubAgent: true } : {}),
+          messageId: parentMessageId,
+        },
         parentOperationId: params.parentOperationId, // Pass parent operation ID
         label: 'AI Generation',
         metadata: {
@@ -640,33 +585,6 @@ export class StreamingExecutorActionImpl {
 
     // Compute contextKey for message queue (per-context, not per-operation)
     const contextKey = messageKey;
-
-    const emitRuntimeCompleteSource = () => {
-      const finalMessages = this.#get().messagesMap[messageKey] || [];
-      const assistantMessageId =
-        findCompletionAssistantMessageId(finalMessages, parentMessageId, parentMessageType) ??
-        findCompletionAssistantMessageId(
-          this.#get().dbMessagesMap[messageKey] || [],
-          parentMessageId,
-          parentMessageType,
-        );
-      const operationStatus = this.#get().operations[operationId]?.status;
-
-      void emitClientAgentSignalSourceEvent({
-        payload: {
-          agentId,
-          ...(assistantMessageId ? { anchorMessageId: assistantMessageId } : {}),
-          assistantMessageId,
-          operationId,
-          status: normalizeClientRuntimeCompleteStatus(state.status, operationStatus),
-          threadId: threadId ?? undefined,
-          topicId: topicId ?? undefined,
-          ...(parentMessageType === 'user' ? { triggerMessageId: parentMessageId } : {}),
-        },
-        sourceId: `${operationId}:client:complete`,
-        sourceType: 'client.runtime.complete',
-      });
-    };
 
     // Execute the agent runtime loop
     let stepCount = 0;
@@ -835,148 +753,32 @@ export class StreamingExecutorActionImpl {
       stepCount,
     );
 
-    // Execute afterCompletion hooks before completing operation
-    // These are registered by tools (e.g., speak/broadcast/delegate) that need to
-    // trigger actions after the AgentRuntime finishes
-    const operation = this.#get().operations[operationId];
-    const afterCompletionCallbacks = operation?.metadata?.runtimeHooks?.afterCompletionCallbacks;
-    if (afterCompletionCallbacks && afterCompletionCallbacks.length > 0) {
-      log(
-        '[executeClientAgent] Executing %d afterCompletion callbacks',
-        afterCompletionCallbacks.length,
-      );
+    // Run-completion side effects are assembled once and invoked at
+    // this boundary. The bodies are relocated verbatim into `buildRunLifecycle`,
+    // so the streamingExecutor characterization net stays green (behavior-preserving).
+    const runScope: RunScope = scope === 'sub_agent' ? 'sub_agent' : 'top_level';
+    const runLifecycle = buildRunLifecycle(this.#get, {
+      context,
+      parentMessageId,
+      parentMessageType,
+      runId: operationId,
+      runScope,
+      runtimeType: 'client',
+    });
+    const completeEvent = {
+      context,
+      operationId,
+      runId: operationId,
+      runScope,
+      runtimeStatus: state.status,
+      runtimeType: 'client' as const,
+    };
 
-      for (const callback of afterCompletionCallbacks) {
-        try {
-          await callback();
-        } catch (error) {
-          console.error('[executeClientAgent] afterCompletion callback error:', error);
-        }
-      }
+    const { requeued } = await runLifecycle.completeRun(completeEvent);
+    // A queued follow-up sendMessage was scheduled — skip the post-run notification.
+    if (requeued) return;
 
-      log('[executeClientAgent] afterCompletion callbacks executed');
-    }
-
-    // If completed successfully and queue has messages, drain and trigger new sendMessage.
-    // Only drain on success — on error the queue is left intact so messages aren't lost.
-    if (state.status === 'done') {
-      const remainingQueued = this.#get().drainQueuedMessages(contextKey);
-      if (remainingQueued.length > 0) {
-        const merged = mergeQueuedMessages(remainingQueued);
-        log(
-          '[executeClientAgent] %d queued messages after completion, triggering new sendMessage',
-          remainingQueued.length,
-        );
-
-        this.#get().completeOperation(operationId);
-
-        const completedOp = this.#get().operations[operationId];
-        if (completedOp?.context.agentId) {
-          this.#get().markUnreadCompleted(completedOp.context.agentId, completedOp.context.topicId);
-        }
-
-        emitRuntimeCompleteSource();
-
-        const execContext = { ...context };
-        const mergedContent = merged.content;
-        // Rebuild UploadFileItem-shaped objects from the queued file previews so
-        // sendMessage can both pass file ids to the server AND construct
-        // imageList/videoList for the optimistic temp message. Falls back to
-        // id-only wrappers if no preview metadata was captured.
-        const mergedFiles =
-          merged.filesPreview.length > 0
-            ? reconstructUploadFilesFromQueue(merged.filesPreview)
-            : merged.files.length > 0
-              ? (merged.files.map((id) => ({ id })) as any)
-              : undefined;
-
-        setTimeout(() => {
-          useChatStore
-            .getState()
-            .sendMessage({
-              context: execContext,
-              editorData: merged.editorData,
-              files: mergedFiles,
-              message: mergedContent,
-              metadata: merged.metadata,
-            })
-            .catch((e: unknown) => {
-              console.error('[executeClientAgent] sendMessage for queued content failed:', e);
-            });
-        }, 100);
-
-        return; // Skip the normal completion below
-      }
-    }
-
-    // Complete operation based on final state
-    switch (state.status) {
-      case 'done': {
-        this.#get().completeOperation(operationId);
-        log('[executeClientAgent] Operation completed successfully');
-
-        // Mark unread completion for background conversations
-        const completedOp = this.#get().operations[operationId];
-        if (completedOp?.context.agentId) {
-          this.#get().markUnreadCompleted(completedOp.context.agentId, completedOp.context.topicId);
-        }
-        break;
-      }
-      case 'error': {
-        this.#get().failOperation(operationId, {
-          type: 'runtime_error',
-          message: 'Agent runtime execution failed',
-        });
-        log('[executeClientAgent] Operation failed');
-        break;
-      }
-      case 'waiting_for_human': {
-        // When waiting for human intervention, complete the current operation
-        // A new operation will be created when user approves/rejects
-        this.#get().completeOperation(operationId);
-        log('[executeClientAgent] Operation paused for human intervention');
-        break;
-      }
-    }
-
-    log('[executeClientAgent] completed');
-    emitRuntimeCompleteSource();
-
-    // Desktop notification (if not in tools calling mode)
-    if (isDesktop) {
-      try {
-        const finalMessages = this.#get().messagesMap[messageKey] || [];
-        const lastAssistant = finalMessages.findLast((m) => m.role === 'assistant');
-
-        // Only show notification if there's content and no tools
-        if (lastAssistant?.content && !lastAssistant?.tools) {
-          const { desktopNotificationService } =
-            await import('@/services/electron/desktopNotification');
-
-          // Use topic title or agent title as notification title
-          let notificationTitle = t('notification.finishChatGeneration', { ns: 'electron' });
-          if (topicId) {
-            const key = topicMapKey({ agentId, groupId });
-            const topicData = this.#get().topicDataMap[key];
-            const topic = topicData?.items?.find((item) => item.id === topicId);
-            if (topic?.title) notificationTitle = topic.title;
-          } else {
-            const agentMeta = agentSelectors.getAgentMetaById(agentId)(getAgentStoreState());
-            if (agentMeta?.title) notificationTitle = agentMeta.title;
-          }
-
-          const navigatePath = resolveNotificationNavigatePath({ agentId, groupId, topicId });
-
-          await desktopNotificationService.showNotification({
-            body: markdownToTxt(lastAssistant.content),
-            navigate: navigatePath ? { path: navigatePath } : undefined,
-            title: notificationTitle,
-          });
-        }
-      } catch (error) {
-        console.error('Desktop notification error:', error);
-      }
-    }
+    await runLifecycle.afterRunComplete(completeEvent);
 
     // Return usage and cost data for caller to use
     return { cost: state.cost, model, provider: provider ?? undefined, usage: state.usage };
@@ -1040,7 +842,13 @@ export class StreamingExecutorActionImpl {
       void this.#get().refreshThreads();
 
       // 2. Build the sub-agent ConversationContext (threadId provides isolation)
-      const subContext: ConversationContext = { agentId, scope: 'thread', threadId, topicId };
+      const subContext: ConversationContext = {
+        agentId,
+        isSubAgent: true,
+        scope: 'thread',
+        threadId,
+        topicId,
+      };
 
       // 3. Create a child operation chained to the parent runtime operation
       const { operationId: taskOperationId } = this.#get().startOperation({

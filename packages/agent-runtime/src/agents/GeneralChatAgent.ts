@@ -158,23 +158,13 @@ export class GeneralChatAgent implements Agent {
       let globalBlocked = false;
       let globalPolicy: HumanInterventionPolicy = 'always';
 
+      // Default global audits are ordered so always-block rules match first
       for (const globalResolver of globalResolvers) {
         if (await globalResolver.resolver(toolArgs, resolverMetadata)) {
           globalBlocked = true;
           globalPolicy = globalResolver.policy ?? 'always';
           break;
         }
-      }
-
-      // Phase 2: Headless mode - fully automated for async tasks
-      if (approvalMode === 'headless') {
-        if (globalBlocked && globalPolicy === 'always') {
-          // Skip 'always' blocked tools entirely (don't execute, don't wait for approval)
-          continue;
-        }
-        // All other tools execute directly (including overridable global blocks)
-        toolsToExecute.push(toolCalling);
-        continue;
       }
 
       // For non-headless modes: 'always' global block requires intervention unconditionally
@@ -197,9 +187,17 @@ export class GeneralChatAgent implements Agent {
       if (dynamicPolicy !== undefined) {
         if (dynamicPolicy === 'never') {
           toolsToExecute.push(toolCalling);
+        } else if (approvalMode === 'headless' && dynamicPolicy !== 'always') {
+          toolsToExecute.push(toolCalling);
         } else {
           toolsNeedingIntervention.push(toolCalling);
         }
+        continue;
+      }
+
+      // Phase 3.5: Headless mode auto-runs global blocks with non-always policy
+      if (approvalMode === 'headless' && globalBlocked && globalPolicy !== 'always') {
+        toolsToExecute.push(toolCalling);
         continue;
       }
 
@@ -212,6 +210,13 @@ export class GeneralChatAgent implements Agent {
       // Phase 4: Check 'always' policy - overrides auto-run mode
       if (this.matchesAlwaysPolicy(staticConfig, toolArgs)) {
         toolsNeedingIntervention.push(toolCalling);
+        continue;
+      }
+
+      // Headless/CLI has no approval UI. Auto-run overridable tool-level policies,
+      // while preserving non-bypassable `always` blocks handled above.
+      if (approvalMode === 'headless') {
+        toolsToExecute.push(toolCalling);
         continue;
       }
 
@@ -515,13 +520,23 @@ export class GeneralChatAgent implements Agent {
           }
 
           // Request approval for tools that need intervention
-          // Runtime will execute this after safe tools and pause with status='waiting_for_human'
+          // Non-headless mode waits for human approval; headless mode returns blocked tool results.
           if (toolsNeedingIntervention.length > 0) {
-            instructions.push({
-              pendingToolsCalling: toolsNeedingIntervention,
-              reason: 'human_intervention_required',
-              type: 'request_human_approve',
-            });
+            if (state.userInterventionConfig?.approvalMode === 'headless') {
+              instructions.push({
+                payload: {
+                  parentMessageId,
+                  toolsCalling: toolsNeedingIntervention,
+                },
+                type: 'resolve_blocked_tools',
+              } satisfies AgentInstruction);
+            } else {
+              instructions.push({
+                pendingToolsCalling: toolsNeedingIntervention,
+                reason: 'human_intervention_required',
+                type: 'request_human_approve',
+              });
+            }
           }
 
           return instructions;
@@ -555,13 +570,13 @@ export class GeneralChatAgent implements Agent {
         const { data, parentMessageId, stop } =
           context.payload as GeneralAgentCallToolResultPayload;
 
-        // Check if this is a sub-agent dispatch request (lobe-agent.callSubAgent /
-        // callSubAgents and similarly-shaped tools emit state.type=execSubAgent*
-        // with stop=true so the runtime forks a sub-agent here).
+        // Legacy async agent invocation path. `callAgent({ runAsTask: true })`
+        // emits state.type=execSubAgent* with stop=true so the runtime can fork
+        // a background agent run after the tool call is persisted.
         if (stop && data?.state) {
           const stateType = data.state.type;
 
-          // Server-side sub-agent (single)
+          // Server-side legacy agent invocation (single)
           if (stateType === 'execSubAgent') {
             const { parentMessageId: execParentId, task } = data.state as {
               parentMessageId: string;
@@ -573,7 +588,7 @@ export class GeneralChatAgent implements Agent {
             };
           }
 
-          // Server-side sub-agents (multiple)
+          // Server-side legacy agent invocations (multiple)
           if (stateType === 'execSubAgents') {
             const { parentMessageId: execParentId, tasks } = data.state as {
               parentMessageId: string;

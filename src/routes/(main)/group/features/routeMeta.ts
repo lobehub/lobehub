@@ -1,8 +1,6 @@
-import { t } from 'i18next';
 import { Users } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 
-import { lambdaClient } from '@/libs/trpc/client';
 import { type DynamicRouteMeta, routeMeta } from '@/spa/router/routeMeta';
 import { useChatStore } from '@/store/chat';
 import { useSessionStore } from '@/store/session';
@@ -19,31 +17,6 @@ const useTopicTitle = (topicId: string | null): string | undefined =>
   });
 
 export const groupRouteMeta = routeMeta({
-  createNewTab: (params) => {
-    const groupId = params.gid;
-    if (!groupId) return null;
-
-    return {
-      onCreate: async () => {
-        const group = sessionGroupSelectors.getGroupById(groupId)(useSessionStore.getState());
-        if (!group) return null;
-
-        const defaultTitle = t('defaultTitle', { ns: 'topic' });
-        const topicId = await lambdaClient.topic.createTopic.mutate({
-          groupId,
-          messages: [],
-          title: defaultTitle,
-        });
-
-        await useChatStore.getState().refreshTopic();
-
-        return {
-          cached: { title: defaultTitle },
-          url: `/group/${groupId}?topic=${topicId}`,
-        };
-      },
-    };
-  },
   icon: Users,
   titleKey: 'navigation.groupChat',
   useDynamicMeta: (params): DynamicRouteMeta => {

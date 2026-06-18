@@ -7,18 +7,30 @@ import {
   pgTable,
   primaryKey,
   text,
+  uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
 import type { AiModelSettings } from 'model-bank';
 
 import { timestamps } from './_helpers';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 export const aiProviders = pgTable(
   'ai_providers',
   {
     id: varchar('id', { length: 64 }).notNull(),
     name: text('name'),
+
+    /**
+     * Surrogate primary key for the ai_providers workspace-scoped unique
+     * constraints migration. The original composite PK (id, user_id) was
+     * incompatible with workspace-scoped duplicates because workspace_id can
+     * be NULL for personal rows. Added nullable + DEFAULT to avoid a full
+     * table rewrite; a later manual step backfills history and adds NOT NULL
+     * before the unique index + PK swap.
+     */
+    _id: uuid('_id').defaultRandom(),
 
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
@@ -42,11 +54,14 @@ export const aiProviders = pgTable(
       .$defaultFn(() => ({}))
       .$type<AiProviderConfig>(),
 
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
     ...timestamps,
   },
   (table) => [
     primaryKey({ columns: [table.id, table.userId] }),
     index('ai_providers_user_id_idx').on(table.userId),
+    index('ai_providers_workspace_id_idx').on(table.workspaceId),
   ],
 );
 
@@ -57,6 +72,17 @@ export const aiModels = pgTable(
   'ai_models',
   {
     id: varchar('id', { length: 150 }).notNull(),
+
+    /**
+     * Surrogate primary key for the ai_models workspace-scoped unique
+     * constraints migration. The original composite PK (id, provider_id,
+     * user_id) was incompatible with workspace-scoped duplicates because
+     * workspace_id can be NULL for personal rows. Added nullable + DEFAULT
+     * to avoid a full table rewrite (~4M rows); a later manual step
+     * backfills history and adds NOT NULL before the unique index + PK swap.
+     */
+    _id: uuid('_id').defaultRandom(),
+
     displayName: varchar('display_name', { length: 200 }),
     description: text('description'),
     organization: varchar('organization', { length: 100 }),
@@ -77,11 +103,14 @@ export const aiModels = pgTable(
     releasedAt: varchar('released_at', { length: 10 }),
     settings: jsonb('settings').default({}).$type<AiModelSettings>(),
 
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
     ...timestamps,
   },
   (table) => [
     primaryKey({ columns: [table.id, table.providerId, table.userId] }),
     index('ai_models_user_id_idx').on(table.userId),
+    index('ai_models_workspace_id_idx').on(table.workspaceId),
   ],
 );
 

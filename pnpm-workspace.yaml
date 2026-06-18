@@ -3,6 +3,7 @@ packages:
   - .
   - e2e
   - apps/desktop/src/main
+  - apps/server
 
 onlyBuiltDependencies:
   - '@google/genai'

@@ -7,10 +7,11 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { ClockIcon, FileTextIcon, StarIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import PublishedTime from '@/components/PublishedTime';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { discoverService } from '@/services/discover';
 import { type DiscoverSkillItem } from '@/types/discover';
 
@@ -65,7 +66,7 @@ const SkillItem = memo<DiscoverSkillItem>(
     resourcesCount = 0,
   }) => {
     const { t } = useTranslation('discover');
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const link = urlJoin('/community/skill', identifier);
 
     const handleClick = useCallback(() => {
@@ -127,11 +128,11 @@ const SkillItem = memo<DiscoverSkillItem>(
                   overflow: 'hidden',
                 }}
               >
-                <Link style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
+                <WorkspaceLink style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
                   <Text ellipsis as={'h2'} className={styles.title}>
                     {name}
                   </Text>
-                </Link>
+                </WorkspaceLink>
               </Flexbox>
               <Flexbox horizontal align={'center'} className={styles.author} gap={8}>
                 {Boolean(ratingAvg) && (

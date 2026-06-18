@@ -1,12 +1,15 @@
 import * as childProcess from 'node:child_process';
 import { EventEmitter } from 'node:events';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import * as os from 'node:os';
+import path from 'node:path';
 import { PassThrough } from 'node:stream';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const spawnCalls: Array<{ args: string[]; command: string; options: any }> = [];
 let nextFakeProc: any = null;
+const tempDirs: string[] = [];
 
 const platformMock = vi.mocked(os.platform);
 const execFileMock = vi.mocked(childProcess.execFile);
@@ -103,8 +106,9 @@ describe('spawnAgent', () => {
     execFileMock.mockReset();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     nextFakeProc = null;
+    await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true })));
   });
 
   it('spawns claude with stream-json flags + writes prompt as user message to stdin', async () => {
@@ -179,7 +183,7 @@ describe('spawnAgent', () => {
     expect(args[resumeIdx + 1]).toBe('cc-prev-123');
   });
 
-  it('builds codex args with `exec` + json + skip-git-repo-check + full-auto', async () => {
+  it('builds codex args with `exec` + json + skip-git-repo-check + bypass approvals/sandbox', async () => {
     nextFakeProc = createFakeProc().proc;
     const { spawnAgent } = await import('./spawnAgent');
     await spawnAgent({ agentType: 'codex', operationId: 'op-1', prompt: 'hello' });
@@ -189,7 +193,23 @@ describe('spawnAgent', () => {
     expect(args[0]).toBe('exec');
     expect(args).toContain('--json');
     expect(args).toContain('--skip-git-repo-check');
+    expect(args).toContain('--dangerously-bypass-approvals-and-sandbox');
+    expect(args).not.toContain('--full-auto');
+  });
+
+  it('does not add the default codex execution mode when extraArgs already choose one', async () => {
+    nextFakeProc = createFakeProc().proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    await spawnAgent({
+      agentType: 'codex',
+      extraArgs: ['--full-auto'],
+      operationId: 'op-1',
+      prompt: 'hello',
+    });
+
+    const { args } = spawnCalls[0];
     expect(args).toContain('--full-auto');
+    expect(args).not.toContain('--dangerously-bypass-approvals-and-sandbox');
   });
 
   it('spawns the Windows executable resolved by the shared CLI spawn plan', async () => {
@@ -206,10 +226,13 @@ describe('spawnAgent', () => {
   });
 
   it('uses codex `exec resume` form with thread id + `-` stdin marker on resume', async () => {
+    const codexHome = await mkdtemp(path.join(os.tmpdir(), 'lobe-codex-spawn-empty-'));
+    tempDirs.push(codexHome);
     nextFakeProc = createFakeProc().proc;
     const { spawnAgent } = await import('./spawnAgent');
     await spawnAgent({
       agentType: 'codex',
+      env: { CODEX_HOME: codexHome },
       operationId: 'op-1',
       prompt: 'continue',
       resumeSessionId: 'thread_abc',
@@ -221,10 +244,77 @@ describe('spawnAgent', () => {
     expect(args.at(-1)).toBe('-');
   });
 
+  it('seeds a real Codex resumed stream with the previous cumulative usage from the session file', async () => {
+    const threadId = '019dba1e-eec2-7a22-bdfb-ac6175e03081';
+    const realCodexFixture = await readFile(
+      new URL('../adapters/__fixtures__/codex/collab_tool_call.spawn_wait.jsonl', import.meta.url),
+      'utf8',
+    );
+    const codexHome = await mkdtemp(path.join(os.tmpdir(), 'lobe-codex-spawn-'));
+    tempDirs.push(codexHome);
+    const sessionDir = path.join(codexHome, 'sessions', '2026', '06', '11');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      path.join(sessionDir, `rollout-2026-06-11T01-31-27-${threadId}.jsonl`),
+      JSON.stringify({
+        type: 'turn.completed',
+        usage: { cached_input_tokens: 42_000, input_tokens: 52_000, output_tokens: 300 },
+      }),
+    );
+
+    const fake = createFakeProc({
+      stdoutChunks: [realCodexFixture],
+    });
+    nextFakeProc = fake.proc;
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'codex',
+      env: { CODEX_HOME: codexHome },
+      operationId: 'op-1',
+      prompt: 'continue',
+      resumeSessionId: threadId,
+    });
+    fake.start();
+
+    const events: any[] = [];
+    for await (const event of handle.events) events.push(event);
+    await handle.exit;
+
+    const usageEvent = events.find(
+      (event) => event.type === 'step_complete' && event.data?.phase === 'turn_metadata',
+    );
+    expect(usageEvent).toMatchObject({
+      data: {
+        phase: 'turn_metadata',
+        usage: {
+          inputCachedTokens: 1008,
+          inputCacheMissTokens: 937,
+          totalInputTokens: 1945,
+          totalOutputTokens: 116,
+          totalTokens: 2061,
+        },
+      },
+      type: 'step_complete',
+    });
+    expect(usageEvent?.data.usage.totalTokens).not.toBe(96_361);
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          data: expect.objectContaining({
+            content: 'Wait completed: 2 + 2 = 4',
+            toolCallId: 'item_4',
+          }),
+          type: 'tool_result',
+        }),
+      ]),
+    );
+  });
+
   it('serializes multimodal content blocks into the CC stream-json user message', async () => {
     nextFakeProc = createFakeProc().proc;
     const { spawnAgent } = await import('./spawnAgent');
-    const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+    const pngBytes = Buffer.from('89504e470d0a1a0a00', 'hex');
     await spawnAgent({
       agentType: 'claude-code',
       operationId: 'op-1',
@@ -259,7 +349,7 @@ describe('spawnAgent', () => {
     const fsp = await import('node:fs/promises');
     const cacheDir = await fsp.mkdtemp(`${os.tmpdir()}/spawn-agent-codex-`);
 
-    const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+    const pngBytes = Buffer.from('89504e470d0a1a0a00', 'hex');
     const { spawnAgent } = await import('./spawnAgent');
     await spawnAgent({
       agentType: 'codex',
@@ -476,5 +566,52 @@ describe('spawnAgent', () => {
         // drain
       }
     }).rejects.toThrow(/boom/);
+  });
+
+  it('tees the child raw stdout to onRawStdout verbatim, before adapting', async () => {
+    const fake = createFakeProc({ stdoutChunks: [ccInit, ccText] });
+    nextFakeProc = fake.proc;
+
+    const rawChunks: string[] = [];
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'claude-code',
+      onRawStdout: (chunk) => rawChunks.push(chunk.toString()),
+      operationId: 'op-1',
+      prompt: 'go',
+    });
+    fake.start();
+
+    const events: any[] = [];
+    for await (const event of handle.events) events.push(event);
+    await handle.exit;
+
+    // The dump receives the untouched stream-json bytes — exactly what CC
+    // emitted — regardless of how the adapter parses them into events.
+    expect(rawChunks.join('')).toBe(`${ccInit}${ccText}`);
+    // ...and the adapter pipeline still produced events from the same stdout.
+    expect(events.length).toBeGreaterThan(0);
+  });
+
+  it('does not let a throwing onRawStdout disrupt the stream', async () => {
+    const fake = createFakeProc({ stdoutChunks: [ccInit, ccText] });
+    nextFakeProc = fake.proc;
+
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'claude-code',
+      onRawStdout: () => {
+        throw new Error('dump sink exploded');
+      },
+      operationId: 'op-1',
+      prompt: 'go',
+    });
+    fake.start();
+
+    const events: any[] = [];
+    for await (const event of handle.events) events.push(event);
+    await handle.exit;
+
+    expect(events.length).toBeGreaterThan(0);
   });
 });

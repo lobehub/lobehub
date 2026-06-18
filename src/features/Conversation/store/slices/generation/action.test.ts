@@ -2,6 +2,10 @@ import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-manageme
 import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { messageService } from '@/services/message';
+import { agentSelectors } from '@/store/agent/selectors';
+import * as agentDispatcher from '@/store/chat/slices/aiChat/actions/agentDispatcher';
+import * as heterogeneousAgentExecutor from '@/store/chat/slices/aiChat/actions/heterogeneousAgentExecutor';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 
 import { type ConversationContext, type ConversationHooks } from '../../../types';
@@ -1023,6 +1027,269 @@ describe('Generation Actions', () => {
 
       // Should not create operation if already regenerating
       expect(mockStartOperation).not.toHaveBeenCalled();
+    });
+  });
+
+  // ===========================================================================
+  // CHARACTERIZATION TESTS (lifecycle refactor regression net)
+  //
+  // These lock the CURRENT behavior of the non-sendMessage entry points so an
+  // upcoming lifecycle refactor cannot silently change them. They assert what
+  // the code does NOW — including behavior that looks buggy (called out inline).
+  // ===========================================================================
+  describe('regenerate hetero branch characterization (lifecycle refactor regression net)', () => {
+    // The hetero regenerate path lives behind `runtimeType === 'hetero'`. We
+    // force that decision (it normally requires desktop + a local CLI provider)
+    // by stubbing `selectRuntimeType`, and supply a `heterogeneousProvider` via
+    // the agent config selector so the `runtimeType === 'hetero' && provider`
+    // guard passes.
+    const heterogeneousProvider = { type: 'claude-code' } as any;
+
+    const setupHeteroChatStore = async (overrides: Record<string, any> = {}) => {
+      const mockRefreshMessages = vi.fn().mockResolvedValue(undefined);
+      const mockInternalUpdateTopicLoading = vi.fn();
+      const mockAssociateMessageWithOperation = vi.fn();
+      const mockHeteroStartOperation = vi
+        .fn()
+        .mockReturnValueOnce({ operationId: 'regen-op-id' }) // parent regenerate op
+        .mockReturnValueOnce({ operationId: 'hetero-op-id' }); // child execHeterogeneousAgent op
+
+      const { useChatStore } = await import('@/store/chat');
+      vi.mocked(useChatStore.getState).mockReturnValue({
+        messagesMap: {},
+        operations: {},
+        operationsByMessage: {},
+        // topicSelectors.getTopicById reads topicDataMap during workingDirectory
+        // resolution; an empty map keeps the selector chain from throwing.
+        topicDataMap: {},
+
+        startOperation: mockHeteroStartOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        isGatewayModeEnabled: vi.fn(() => false),
+        switchMessageBranch: mockSwitchMessageBranch,
+        refreshMessages: mockRefreshMessages,
+        internal_updateTopicLoading: mockInternalUpdateTopicLoading,
+        associateMessageWithOperation: mockAssociateMessageWithOperation,
+        executeClientAgent: mockExecuteClientAgent,
+        executeGatewayAgent: mockExecuteGatewayAgent,
+        ...overrides,
+      } as any);
+
+      return {
+        mockAssociateMessageWithOperation,
+        mockHeteroStartOperation,
+        mockInternalUpdateTopicLoading,
+        mockRefreshMessages,
+      };
+    };
+
+    let executeHeterogeneousAgentSpy: ReturnType<typeof vi.spyOn>;
+    let createMessageSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      // Force the hetero routing decision.
+      vi.spyOn(agentDispatcher, 'selectRuntimeType').mockReturnValue('hetero');
+      // Supply a config that carries the hetero provider used by the branch.
+      vi.spyOn(agentSelectors, 'getAgentConfigById').mockReturnValue(
+        () => ({ agencyConfig: { heterogeneousProvider } }) as any,
+      );
+
+      createMessageSpy = vi
+        .spyOn(messageService, 'createMessage')
+        .mockResolvedValue({ id: 'hetero-assistant-msg', messages: [] } as any) as any;
+
+      executeHeterogeneousAgentSpy = vi
+        .spyOn(heterogeneousAgentExecutor, 'executeHeterogeneousAgent')
+        .mockResolvedValue(undefined) as any;
+    });
+
+    it('routes regenerateUserMessage through executeHeterogeneousAgent with imageList + parentOperationId', async () => {
+      const { mockRefreshMessages } = await setupHeteroChatStore();
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: 'topic-1',
+        threadId: null,
+      };
+
+      const store = createStore({ context });
+
+      const originalImageList = [{ id: 'img-1', url: 'data:image/png;base64,xxx' }];
+      act(() => {
+        store.setState({
+          displayMessages: [
+            {
+              id: 'msg-1',
+              role: 'user',
+              content: 'Draw a cat',
+              imageList: originalImageList,
+            },
+          ],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().regenerateUserMessage('msg-1');
+      });
+
+      // A fresh assistant row is created branched off the user message.
+      expect(createMessageSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          parentId: 'msg-1',
+          role: 'assistant',
+          provider: 'claude-code',
+        }),
+      );
+
+      // Store is refreshed so the loading bubble shows while the CLI streams.
+      expect(mockRefreshMessages).toHaveBeenCalled();
+
+      // The executor receives the new assistant row id, the original user
+      // message's images, the original prompt, and the child hetero op id.
+      expect(executeHeterogeneousAgentSpy).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({
+          assistantMessageId: 'hetero-assistant-msg',
+          heterogeneousProvider,
+          imageList: originalImageList,
+          message: 'Draw a cat',
+          operationId: 'hetero-op-id',
+        }),
+      );
+    });
+
+    it('creates the child execHeterogeneousAgent op as a child of the parent regenerate op', async () => {
+      const { mockHeteroStartOperation, mockAssociateMessageWithOperation } =
+        await setupHeteroChatStore();
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: 'topic-1',
+        threadId: null,
+      };
+
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          displayMessages: [{ id: 'msg-1', role: 'user', content: 'Hello' }],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().regenerateUserMessage('msg-1');
+      });
+
+      // First op: the regenerate op for the user message.
+      expect(mockHeteroStartOperation).toHaveBeenNthCalledWith(1, {
+        context: { ...context, messageId: 'msg-1' },
+        type: 'regenerate',
+      });
+
+      // Second op: the execHeterogeneousAgent op parented to the regenerate op.
+      expect(mockHeteroStartOperation).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          parentOperationId: 'regen-op-id',
+          type: 'execHeterogeneousAgent',
+        }),
+      );
+
+      // The new assistant row is associated with the child hetero op.
+      expect(mockAssociateMessageWithOperation).toHaveBeenCalledWith(
+        'hetero-assistant-msg',
+        'hetero-op-id',
+      );
+    });
+
+    it('CURRENT BEHAVIOR: completes the regenerate op AND calls onRegenerateComplete in the hetero branch', async () => {
+      // NOTE: This characterizes the actual current behavior of the hetero
+      // branch (action.ts ~548-549): after `runHeterogeneousFromExistingMessage`
+      // resolves it DOES call `completeOperation(operationId)` and DOES invoke
+      // `hooks.onRegenerateComplete(messageId)` — synchronously, unlike the
+      // gateway branch which defers both to an async `onComplete` callback.
+      // Locked here so the refactor cannot silently flip this without a failing
+      // test forcing a deliberate decision.
+      const { mockHeteroStartOperation } = await setupHeteroChatStore();
+      void mockHeteroStartOperation;
+
+      const onRegenerateComplete = vi.fn();
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: 'topic-1',
+        threadId: null,
+      };
+
+      const store = createStore({ context, hooks: { onRegenerateComplete } });
+
+      act(() => {
+        store.setState({
+          displayMessages: [{ id: 'msg-1', role: 'user', content: 'Hello' }],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().regenerateUserMessage('msg-1');
+      });
+
+      // The parent regenerate op is completed synchronously after the executor.
+      expect(mockCompleteOperation).toHaveBeenCalledWith('regen-op-id');
+      // And the hook fires synchronously (no deferred onComplete like gateway).
+      expect(onRegenerateComplete).toHaveBeenCalledWith('msg-1');
+    });
+  });
+
+  describe('continue hetero early-return characterization (lifecycle refactor regression net)', () => {
+    // continueGenerationMessage bails out early for hetero agents (action.ts
+    // ~336): CLIs have no "continue a cut-off response" primitive, so the
+    // button is a documented no-op. Lock that no runtime is dispatched.
+    beforeEach(() => {
+      vi.spyOn(agentDispatcher, 'selectRuntimeType').mockReturnValue('hetero');
+      vi.spyOn(agentSelectors, 'getAgentConfigById').mockReturnValue(
+        () =>
+          ({
+            agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+          }) as any,
+      );
+    });
+
+    it('returns early without starting an operation or dispatching any runtime', async () => {
+      const { useChatStore } = await import('@/store/chat');
+      vi.mocked(useChatStore.getState).mockReturnValue({
+        messagesMap: {},
+        operations: {},
+        operationsByMessage: {},
+        startOperation: mockStartOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        executeClientAgent: mockExecuteClientAgent,
+        executeGatewayAgent: mockExecuteGatewayAgent,
+        isGatewayModeEnabled: vi.fn(() => false),
+      } as any);
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: 'topic-1',
+        threadId: null,
+      };
+
+      const store = createStore({ context });
+
+      act(() => {
+        store.setState({
+          displayMessages: [{ id: 'block-1', role: 'assistant', content: 'partial' }],
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().continueGenerationMessage('block-1', 'block-1');
+      });
+
+      // Hetero short-circuits BEFORE creating the continue operation.
+      expect(mockStartOperation).not.toHaveBeenCalled();
+      expect(mockExecuteClientAgent).not.toHaveBeenCalled();
+      expect(mockExecuteGatewayAgent).not.toHaveBeenCalled();
     });
   });
 });

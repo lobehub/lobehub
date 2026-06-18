@@ -2,8 +2,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import {
+  defaultGetLocalFilePreview,
+  defaultGetProjectFileIndex,
+  type DeviceControlDeps,
+  executeDeviceRpc,
+} from '@lobechat/device-control';
 import type {
+  AgentRunRequestMessage,
   DeviceSystemInfo,
+  RpcRequestMessage,
   SystemInfoRequestMessage,
   ToolCallRequestMessage,
 } from '@lobechat/device-gateway-client';
@@ -25,6 +33,7 @@ import {
   stopDaemon,
   writeStatus,
 } from '../daemon/manager';
+import { spawnHeteroAgentRun } from '../device/agentRun';
 import { registerDevice, resolveDeviceIdentity } from '../device/register';
 import { loadOrCreateConnectionId, loadSettings, normalizeUrl, saveSettings } from '../settings';
 import { executeToolCall } from '../tools';
@@ -260,19 +269,23 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
 
   // Handle tool call requests
   client.on('tool_call_request', async (request: ToolCallRequestMessage) => {
-    const { requestId, timeout, toolCall } = request;
+    const { operationId, requestId, timeout, toolCall } = request;
     if (isDaemonChild) {
-      appendLog(`[TOOL] ${toolCall.apiName} (${requestId})`);
+      appendLog(
+        `[TOOL] ${toolCall.apiName}${operationId ? ` op=${operationId}` : ''} (${requestId})`,
+      );
     } else {
-      log.toolCall(toolCall.apiName, requestId, toolCall.arguments);
+      log.toolCall(toolCall.apiName, requestId, toolCall.arguments, operationId);
     }
 
     const result = await executeToolCall(toolCall.apiName, toolCall.arguments, timeout);
 
     if (isDaemonChild) {
-      appendLog(`[RESULT] ${result.success ? 'OK' : 'FAIL'} (${requestId})`);
+      appendLog(
+        `[RESULT] ${result.success ? 'OK' : 'FAIL'}${operationId ? ` op=${operationId}` : ''} (${requestId})`,
+      );
     } else {
-      log.toolResult(requestId, result.success, result.content);
+      log.toolResult(requestId, result.success, result.content, operationId);
     }
 
     client.sendToolCallResponse({
@@ -280,9 +293,68 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       result: {
         content: result.content,
         error: result.error,
+        state: result.state,
         success: result.success,
       },
     });
+  });
+
+  // Handle generic server-internal device RPCs (git / workspace / file ops).
+  // Shares the `@lobechat/device-control` dispatcher with the desktop app so the
+  // CLI exposes the same remote-device control surface. File preview / index use
+  // the package's portable defaults (no preview-protocol approval on the CLI).
+  const deviceControlDeps: DeviceControlDeps = {
+    getLocalFilePreview: defaultGetLocalFilePreview,
+    getProjectFileIndex: defaultGetProjectFileIndex,
+  };
+
+  client.on('rpc_request', async (request: RpcRequestMessage) => {
+    const { method, params, requestId } = request;
+    if (isDaemonChild) appendLog(`[RPC] ${method} (${requestId})`);
+    else info(`Received rpc_request: method=${method} (${requestId})`);
+
+    try {
+      const data = await executeDeviceRpc(method, params, deviceControlDeps);
+      client.sendRpcResponse({ requestId, result: { data, success: true } });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (isDaemonChild) appendLog(`[RPC ERROR] ${method}: ${message} (${requestId})`);
+      else error(`rpc_request method=${method} failed: ${message}`);
+      client.sendRpcResponse({ requestId, result: { error: message, success: false } });
+    }
+  });
+
+  // Handle gateway-dispatched agent runs (heterogeneous agents, e.g. Claude
+  // Code). Mirrors the desktop app: spawn `lh hetero exec`, which owns the full
+  // execution + server-ingest pipeline. Ack with the spawn outcome — `accepted`
+  // once the child starts, `rejected` if it fails to spawn (e.g. bad cwd) — so
+  // a failed dispatch surfaces as an error instead of a stuck assistant message.
+  client.on('agent_run_request', async (request: AgentRunRequestMessage) => {
+    info(
+      `Received agent_run_request: operationId=${request.operationId} type=${request.agentType}`,
+    );
+    try {
+      const ack = await spawnHeteroAgentRun(
+        {
+          agentType: request.agentType,
+          cwd: request.cwd,
+          imageList: request.imageList,
+          jwt: request.jwt,
+          operationId: request.operationId,
+          prompt: request.prompt,
+          resumeSessionId: request.resumeSessionId,
+          serverUrl: auth.serverUrl,
+          systemContext: request.systemContext,
+          topicId: request.topicId,
+        },
+        { error, info },
+      );
+      client.sendAgentRunAck({ operationId: request.operationId, ...ack });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      error(`agent_run_request failed: ${reason}`);
+      client.sendAgentRunAck({ operationId: request.operationId, reason, status: 'rejected' });
+    }
   });
 
   client.on('connected', () => {

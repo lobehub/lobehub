@@ -3,6 +3,7 @@ import { produce } from 'immer';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
+import { toolKeys } from '@/libs/swr/keys';
 import { toolsClient } from '@/libs/trpc/client';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -271,7 +272,7 @@ export class LobehubSkillStoreActionImpl {
 
   useFetchLobehubSkillConnections = (enabled: boolean): SWRResponse<LobehubSkillServer[]> => {
     return useSWR<LobehubSkillServer[]>(
-      enabled ? 'fetchLobehubSkillConnections' : null,
+      enabled ? toolKeys.lobehubSkillConnections() : null,
       async () => {
         const response = await toolsClient.market.connectListConnections.query();
 
@@ -316,13 +317,14 @@ export class LobehubSkillStoreActionImpl {
           }
         },
         revalidateOnFocus: false,
+        shouldRetryOnError: false,
       },
     );
   };
 
   useFetchProviderTools = (provider: string | undefined): SWRResponse<LobehubSkillTool[]> => {
     return useSWR<LobehubSkillTool[]>(
-      provider ? `lobehub-skill-tools-${provider}` : null,
+      provider ? toolKeys.lobehubSkillTools(provider) : null,
       async () => {
         const response = await toolsClient.market.connectListTools.query({ provider: provider! });
         return (response.tools || []).map((tool: any) => ({

@@ -502,6 +502,67 @@ describe('initUserMemoryExtractionMetadata', () => {
 
     expect(result.source).toBe('chat_topic');
   });
+
+  it('should preserve a full control block including upstash workflowRunIds', () => {
+    const cancelRequestedAt = new Date().toISOString();
+    const result = initUserMemoryExtractionMetadata({
+      control: {
+        cancelReason: 'user_requested',
+        cancelRequestedAt,
+        cancelledBy: 'user-1',
+        upstash: {
+          workflowRunIds: ['run-1', 'run-2'],
+        },
+      },
+      progress: {
+        completedTopics: 1,
+        totalTopics: 4,
+      },
+      source: 'chat_topic',
+    } as any);
+
+    expect(result.control).toEqual({
+      cancelReason: 'user_requested',
+      cancelRequestedAt,
+      cancelledBy: 'user-1',
+      upstash: {
+        workflowRunIds: ['run-1', 'run-2'],
+      },
+    });
+    expect(result.progress).toEqual({ completedTopics: 1, totalTopics: 4 });
+  });
+
+  it('should default upstash workflowRunIds to an empty array when missing', () => {
+    const result = initUserMemoryExtractionMetadata({
+      control: {
+        cancelRequestedAt: new Date().toISOString(),
+        upstash: {},
+      },
+      progress: {
+        completedTopics: 0,
+        totalTopics: null,
+      },
+      source: 'chat_topic',
+    } as any);
+
+    expect(result.control?.upstash).toEqual({ workflowRunIds: [] });
+  });
+
+  it('should leave upstash undefined when control has no upstash field', () => {
+    const result = initUserMemoryExtractionMetadata({
+      control: {
+        cancelRequestedAt: new Date().toISOString(),
+      },
+      progress: {
+        completedTopics: 0,
+        totalTopics: null,
+      },
+      source: 'chat_topic',
+    } as any);
+
+    expect(result.control).toBeDefined();
+    expect(result.control?.upstash).toBeUndefined();
+  });
 });
 
 describe('AsyncTaskModel.findByInferenceId', () => {

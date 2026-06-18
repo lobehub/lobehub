@@ -13,6 +13,7 @@
   "actions.expand.on": "Rozwiń",
   "actions.typobar.off": "Ukryj pasek formatowania",
   "actions.typobar.on": "Pokaż pasek formatowania",
+  "actions.typobar.title": "Narzędzie formatowania",
   "autoSave.latest": "Załadowano najnowszą wersję",
   "autoSave.saved": "Zapisano",
   "autoSave.saving": "Automatyczne zapisywanie...",

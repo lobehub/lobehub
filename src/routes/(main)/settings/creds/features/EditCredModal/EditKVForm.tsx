@@ -9,7 +9,9 @@ import { Minus, Plus } from 'lucide-react';
 import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { lambdaClient } from '@/libs/trpc/client';
+import { usePermission } from '@/hooks/usePermission';
+
+import { useCredsApi } from '../useCredsApi';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
@@ -39,14 +41,21 @@ interface FormValues {
 
 const EditKVForm: FC<EditKVFormProps> = ({ cred, onCancel, onSuccess }) => {
   const { t } = useTranslation('setting');
+  const { allowed: canManageCredentials } = usePermission('manage_provider_key');
   const [form] = Form.useForm<FormValues>();
   const [isLoading, setIsLoading] = useState(true);
+  const credsApi = useCredsApi();
 
   // Fetch decrypted values on mount
   useEffect(() => {
     const fetchDecryptedValues = async () => {
+      if (!canManageCredentials) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        const result = await lambdaClient.market.creds.get.query({
+        const result = await credsApi.client.get.query({
           decrypt: true,
           id: cred.id,
         });
@@ -76,10 +85,12 @@ const EditKVForm: FC<EditKVFormProps> = ({ cred, onCancel, onSuccess }) => {
     };
 
     fetchDecryptedValues();
-  }, [cred.id, cred.name, cred.description, form]);
+  }, [canManageCredentials, cred.id, cred.name, cred.description, credsApi, form]);
 
   const updateMutation = useMutation({
-    mutationFn: (values: FormValues) => {
+    mutationFn: async (values: FormValues) => {
+      if (!canManageCredentials) return;
+
       const kvPairs = values.kvPairs || [];
       const valuesObj = kvPairs.reduce(
         (acc, pair) => {
@@ -91,7 +102,7 @@ const EditKVForm: FC<EditKVFormProps> = ({ cred, onCancel, onSuccess }) => {
         {} as Record<string, string>,
       );
 
-      return lambdaClient.market.creds.update.mutate({
+      await credsApi.client.update.mutate({
         description: values.description,
         id: cred.id,
         name: values.name,
@@ -104,6 +115,8 @@ const EditKVForm: FC<EditKVFormProps> = ({ cred, onCancel, onSuccess }) => {
   });
 
   const handleSubmit = (values: FormValues) => {
+    if (!canManageCredentials) return;
+
     updateMutation.mutate(values);
   };
 
@@ -122,7 +135,7 @@ const EditKVForm: FC<EditKVFormProps> = ({ cred, onCancel, onSuccess }) => {
         name="name"
         rules={[{ required: true, message: t('creds.form.nameRequired') }]}
       >
-        <Input />
+        <Input disabled={!canManageCredentials} />
       </Form.Item>
 
       <Form.Item label={t('creds.form.values')}>
@@ -136,21 +149,39 @@ const EditKVForm: FC<EditKVFormProps> = ({ cred, onCancel, onSuccess }) => {
                     name={[name, 'key']}
                     style={{ flex: 1, marginBottom: 0 }}
                   >
-                    <Input placeholder={cred.type === 'kv-env' ? 'ENV_VAR_NAME' : 'Header-Name'} />
+                    <Input
+                      disabled={!canManageCredentials}
+                      placeholder={cred.type === 'kv-env' ? 'ENV_VAR_NAME' : 'Header-Name'}
+                    />
                   </Form.Item>
                   <Form.Item
                     {...restField}
                     name={[name, 'value']}
                     style={{ flex: 2, marginBottom: 0 }}
                   >
-                    <Input.Password placeholder={t('creds.form.valuePlaceholder')} />
+                    <Input.Password
+                      disabled={!canManageCredentials}
+                      placeholder={t('creds.form.valuePlaceholder')}
+                    />
                   </Form.Item>
                   {fields.length > 1 && (
-                    <Button icon={Minus} size="small" type="text" onClick={() => remove(name)} />
+                    <Button
+                      disabled={!canManageCredentials}
+                      icon={Minus}
+                      size="small"
+                      type="text"
+                      onClick={() => remove(name)}
+                    />
                   )}
                 </div>
               ))}
-              <Button block icon={Plus} type="dashed" onClick={() => add({ key: '', value: '' })}>
+              <Button
+                block
+                disabled={!canManageCredentials}
+                icon={Plus}
+                type="dashed"
+                onClick={() => add({ key: '', value: '' })}
+              >
                 {t('creds.form.addPair')}
               </Button>
             </Flexbox>
@@ -159,12 +190,21 @@ const EditKVForm: FC<EditKVFormProps> = ({ cred, onCancel, onSuccess }) => {
       </Form.Item>
 
       <Form.Item label={t('creds.form.description')} name="description">
-        <Input.TextArea placeholder={t('creds.form.descriptionPlaceholder')} rows={2} />
+        <Input.TextArea
+          disabled={!canManageCredentials}
+          placeholder={t('creds.form.descriptionPlaceholder')}
+          rows={2}
+        />
       </Form.Item>
 
       <div className={styles.footer}>
         <Button onClick={onCancel}>{t('creds.form.cancel')}</Button>
-        <Button htmlType="submit" loading={updateMutation.isPending} type="primary">
+        <Button
+          disabled={!canManageCredentials}
+          htmlType="submit"
+          loading={updateMutation.isPending}
+          type="primary"
+        >
           {t('creds.form.save')}
         </Button>
       </div>

@@ -12,10 +12,11 @@ import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 interface AgentBuilderWelcomeProps {
+  disabled?: boolean;
   mode?: SuggestMode;
 }
 
-const AgentBuilderWelcome = memo<AgentBuilderWelcomeProps>(({ mode = 'agent' }) => {
+const AgentBuilderWelcome = memo<AgentBuilderWelcomeProps>(({ disabled, mode = 'agent' }) => {
   const { t } = useTranslation('chat');
   const agentId = useConversationStore(conversationSelectors.agentId);
   const agent = useAgentStore(agentByIdSelectors.getAgentConfigById(agentId));
@@ -37,7 +38,7 @@ const AgentBuilderWelcome = memo<AgentBuilderWelcomeProps>(({ mode = 'agent' }) 
         <Markdown fontSize={14} variant={'chat'}>
           {t('agentBuilder.welcome')}
         </Markdown>
-        <SuggestQuestions count={3} mode={mode} />
+        <SuggestQuestions count={3} disabled={disabled} mode={mode} />
       </Flexbox>
     </>
   );

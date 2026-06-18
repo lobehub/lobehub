@@ -10,20 +10,29 @@ describe('formatCommandOutput', () => {
     expect(result).toMatchInlineSnapshot(`"Output retrieved."`);
   });
 
-  it('should include exit code when present', () => {
+  it('should suppress zero exit code when present', () => {
     const result = formatCommandOutput({
       exitCode: 0,
+      success: true,
+    });
+    expect(result).toMatchInlineSnapshot(`"Output retrieved."`);
+  });
+
+  it('should format duration in seconds when present', () => {
+    const result = formatCommandOutput({
+      durationMs: 45_400,
       success: true,
     });
     expect(result).toMatchInlineSnapshot(`
       "Output retrieved.
 
-      Exit code: 0"
+      Duration: 45s"
     `);
   });
 
-  it('should format successful output with content', () => {
+  it('should format completed output with non-zero exit code', () => {
     const result = formatCommandOutput({
+      durationMs: 123_000,
       exitCode: 17,
       output: 'Process output here',
       success: true,
@@ -32,6 +41,8 @@ describe('formatCommandOutput', () => {
       "Output retrieved.
 
       Exit code: 17
+
+      Duration: 123s
 
       Output:
       Process output here"

@@ -20,6 +20,8 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek-V3.1 is a large hybrid reasoning model with 128K context and efficient mode switching, delivering excellent performance and speed for tool use, code generation, and complex reasoning.',
     displayName: 'DeepSeek V3.1',
+    family: 'deepseek',
+    generation: 'deepseek-v3.1',
     id: 'deepseek/deepseek-chat-v3.1',
     pricing: {
       units: [
@@ -40,7 +42,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Gemini 3.1 Flash Image Preview, a.k.a. "Nano Banana 2," is Google’s latest state of the art image generation and editing model, delivering Pro-level visual quality at Flash speed. It combines advanced contextual understanding with fast, cost-efficient inference, making complex image generation and iterative edits significantly more accessible.',
     displayName: 'Nano Banana 2',
+    family: 'gemini',
+    generation: 'gemini-3.1',
     id: 'google/gemini-3.1-flash-image-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       approximatePricePerImage: 0.067,
@@ -66,7 +71,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Nano Banana Pro is Google’s most advanced image-generation and editing model, built on Gemini 3 Pro. It extends the original Nano Banana with significantly improved multimodal reasoning, real-world grounding, and high-fidelity visual synthesis. The model generates context-rich graphics, from infographics and diagrams to cinematic composites, and can incorporate real-time information via Search grounding.',
     displayName: 'Nano Banana Pro',
+    family: 'gemini',
+    generation: 'gemini-3',
     id: 'google/gemini-3-pro-image-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_768,
     pricing: {
       approximatePricePerImage: 0.134,
@@ -91,7 +99,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Gemini 2.5 Flash Image, a.k.a. "Nano Banana," is now generally available. It is a state of the art image generation model with contextual understanding. It is capable of image generation, edits, and multi-turn conversations.',
     displayName: 'Nano Banana',
+    family: 'gemini',
+    generation: 'gemini-2.5',
     id: 'google/gemini-2.5-flash-image',
+    knowledgeCutoff: '2025-06',
     maxOutput: 8192,
     pricing: {
       approximatePricePerImage: 0.039,
@@ -115,6 +126,8 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Qwen3 is the latest Qwen LLM generation with dense and MoE architectures, excelling at reasoning, multilingual support, and advanced agent tasks. Its unique ability to switch between a thinking mode for complex reasoning and a non-thinking mode for efficient chat ensures versatile, high-quality performance.\n\nQwen3 significantly outperforms prior models like QwQ and Qwen2.5, delivering excellent math, coding, commonsense reasoning, creative writing, and interactive chat. The Qwen3-30B-A3B variant has 30.5B parameters (3.3B active), 48 layers, 128 experts (8 active per task), and supports up to 131K context with YaRN, setting a new bar for open models.',
     displayName: 'Qwen3 30B A3B',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen/qwen3-30b-a3b',
     maxOutput: 40_960,
     pricing: {
@@ -133,6 +146,8 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Qwen3-14B is a dense 14.8B-parameter causal LLM built for complex reasoning and efficient chat. It switches between a thinking mode for math, coding, and logic and a non-thinking mode for general chat. Fine-tuned for instruction following, agent tool use, and creative writing across 100+ languages and dialects. It natively handles 32K context and scales to 131K with YaRN.',
     displayName: 'Qwen3 14B',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen/qwen3-14b',
     maxOutput: 40_960,
     pricing: {
@@ -151,6 +166,8 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Qwen3-32B is a dense 32.8B-parameter causal LLM optimized for complex reasoning and efficient chat. It switches between a thinking mode for math, coding, and logic and a non-thinking mode for faster general chat. It performs strongly on instruction following, agent tool use, and creative writing across 100+ languages and dialects. It natively handles 32K context and scales to 131K with YaRN.',
     displayName: 'Qwen3 32B',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen/qwen3-32b',
     pricing: {
       units: [
@@ -168,6 +185,8 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Qwen3-235B-A22B is a 235B-parameter MoE model from Qwen with 22B active per forward pass. It switches between a thinking mode for complex reasoning, math, and code and a non-thinking mode for efficient chat. It offers strong reasoning, multilingual support (100+ languages/dialects), advanced instruction following, and agent tool use. It natively handles 32K context and scales to 131K with YaRN.',
     displayName: 'Qwen3 235B A22B',
+    family: 'qwen',
+    generation: 'qwen3',
     id: 'qwen/qwen3-235b-a22b',
     maxOutput: 40_960,
     pricing: {
@@ -186,6 +205,8 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'GLM-4-32B-0414 is a 32B bilingual (Chinese/English) open-weights model optimized for code generation, function calling, and agent tasks. It is pretrained on 15T high-quality and reasoning-heavy data and further refined with human preference alignment, rejection sampling, and RL. It excels at complex reasoning, artifact generation, and structured output, reaching GPT-4o and DeepSeek-V3-0324-level performance on multiple benchmarks.',
     displayName: 'GLM 4 32B',
+    family: 'glm',
+    generation: 'glm-4',
     id: 'thudm/glm-4-32b',
     pricing: {
       units: [
@@ -205,7 +226,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Gemini 2.5 Pro is Google’s most advanced thinking model for reasoning over complex problems in code, math, and STEM, and for analyzing large datasets, codebases, and documents with long context.',
     displayName: 'Gemini 2.5 Pro',
+    family: 'gemini',
+    generation: 'gemini-2.5',
     id: 'google/gemini-2.5-pro',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -225,7 +249,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Gemini 2.5 Pro Preview is Google’s most advanced thinking model for reasoning over complex problems in code, math, and STEM, and for analyzing large datasets, codebases, and documents with long context.',
     displayName: 'Gemini 2.5 Pro Preview',
+    family: 'gemini',
+    generation: 'gemini-2.5',
     id: 'google/gemini-2.5-pro-preview',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_536,
     pricing: {
       units: [
@@ -245,7 +272,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Gemini 2.5 Flash is Google’s most advanced flagship model, built for advanced reasoning, coding, math, and science tasks. It includes built-in “thinking” to deliver higher-accuracy responses with finer context processing.\n\nNote: This model has two variants—thinking and non-thinking. Output pricing differs significantly depending on whether thinking is enabled. If you choose the standard variant (without the “:thinking” suffix), the model will explicitly avoid generating thinking tokens.\n\nTo use thinking and receive thinking tokens, you must select the “:thinking” variant, which incurs higher thinking output pricing.\n\nGemini 2.5 Flash can also be configured via the “max reasoning tokens” parameter as documented (https://openrouter.ai/docs/use-cases/reasoning-tokens#max-tokens-for-reasoning).',
     displayName: 'Gemini 2.5 Flash',
+    family: 'gemini',
+    generation: 'gemini-2.5',
     id: 'google/gemini-2.5-flash',
+    knowledgeCutoff: '2025-01',
     maxOutput: 65_535,
     pricing: {
       units: [
@@ -265,7 +295,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'o3 is a powerful general-purpose model that excels across domains. It sets a new bar for math, science, coding, and vision reasoning, and is strong at technical writing and instruction following. Use it to analyze text, code, and images and solve complex multi-step problems.',
     displayName: 'o3',
+    family: 'o-series',
+    generation: 'o3',
     id: 'openai/o3',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -287,7 +320,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'o4-mini high reasoning tier, optimized for fast, efficient reasoning with strong coding and vision performance.',
     displayName: 'o4-mini (high)',
+    family: 'o-series',
+    generation: 'o4',
     id: 'openai/o4-mini-high',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -309,7 +345,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'o4-mini is optimized for fast, effective reasoning with strong efficiency and performance in coding and vision tasks.',
     displayName: 'o4-mini',
+    family: 'o-series',
+    generation: 'o4',
     id: 'openai/o4-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -330,7 +369,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'GPT-4.1 is the flagship model for complex tasks and cross-domain problem solving.',
     displayName: 'GPT-4.1',
+    family: 'gpt',
+    generation: 'gpt-4.1',
     id: 'openai/gpt-4.1',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -350,7 +392,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     contextWindowTokens: 1_047_576,
     description: 'GPT-4.1 mini balances intelligence, speed, and cost for many use cases.',
     displayName: 'GPT-4.1 mini',
+    family: 'gpt',
+    generation: 'gpt-4.1',
     id: 'openai/gpt-4.1-mini',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -370,7 +415,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     contextWindowTokens: 1_047_576,
     description: 'GPT-4.1 nano is the fastest and most cost-effective GPT-4.1 model.',
     displayName: 'GPT-4.1 nano',
+    family: 'gpt',
+    generation: 'gpt-4.1',
     id: 'openai/gpt-4.1-nano',
+    knowledgeCutoff: '2024-06',
     maxOutput: 32_768,
     pricing: {
       units: [
@@ -391,7 +439,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'o3-mini (high reasoning) delivers higher intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini (high)',
+    family: 'o-series',
+    generation: 'o3',
     id: 'openai/o3-mini-high',
+    knowledgeCutoff: '2023-10',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -412,7 +463,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'o3-mini delivers higher intelligence at the same cost and latency targets as o1-mini.',
     displayName: 'o3-mini',
+    family: 'o-series',
+    generation: 'o3',
     id: 'openai/o3-mini',
+    knowledgeCutoff: '2023-10',
     maxOutput: 100_000,
     pricing: {
       units: [
@@ -433,7 +487,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'GPT-4o mini is OpenAI’s latest model after GPT-4 Omni, supporting image+text input with text output. As their most advanced small model, it is far cheaper than recent frontier models and over 60% cheaper than GPT-3.5 Turbo, while retaining top-tier intelligence. It scores 82% on MMLU and ranks above GPT-4 in chat preference.',
     displayName: 'GPT-4o mini',
+    family: 'gpt',
+    generation: 'gpt-4o',
     id: 'openai/gpt-4o-mini',
+    knowledgeCutoff: '2023-10',
     maxOutput: 16_385,
     pricing: {
       units: [
@@ -452,7 +509,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'ChatGPT-4o is a dynamic model updated in real time. It combines strong language understanding and generation for large-scale use cases like customer support, education, and technical assistance.',
     displayName: 'GPT-4o',
+    family: 'gpt',
+    generation: 'gpt-4o',
     id: 'openai/gpt-4o',
+    knowledgeCutoff: '2023-10',
     pricing: {
       units: [
         { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
@@ -470,6 +530,8 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek-R1 greatly improves reasoning with minimal labeled data and outputs a chain-of-thought before the final answer to improve accuracy.',
     displayName: 'DeepSeek R1 0528',
+    family: 'deepseek',
+    generation: 'deepseek-r1',
     id: 'deepseek/deepseek-r1-0528',
     pricing: {
       units: [
@@ -488,6 +550,8 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek-R1 greatly improves reasoning with minimal labeled data and outputs a chain-of-thought before the final answer to improve accuracy.',
     displayName: 'DeepSeek R1',
+    family: 'deepseek',
+    generation: 'deepseek-r1',
     id: 'deepseek/deepseek-r1',
     pricing: {
       units: [
@@ -503,6 +567,8 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'DeepSeek V3 is a 685B-parameter MoE model and the latest iteration of DeepSeek’s flagship chat series.\n\nIt builds on [DeepSeek V3](/deepseek/deepseek-chat-v3) and performs strongly across tasks.',
     displayName: 'DeepSeek V3 0324',
+    family: 'deepseek',
+    generation: 'deepseek-v3',
     id: 'deepseek/deepseek-chat-v3-0324',
     pricing: {
       units: [
@@ -524,7 +590,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Claude Opus 4.5 is Anthropic’s flagship model, combining top-tier intelligence with scalable performance for complex, high-quality reasoning tasks.',
     displayName: 'Claude Opus 4.5',
+    family: 'claude-opus',
+    generation: 'claude-4.5',
     id: 'anthropic/claude-opus-4.5',
+    knowledgeCutoff: '2025-05',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -551,7 +620,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     contextWindowTokens: 200_000,
     description: 'Claude Sonnet 4.5 is Anthropic’s most intelligent model to date.',
     displayName: 'Claude Sonnet 4.5',
+    family: 'claude-sonnet',
+    generation: 'claude-4.5',
     id: 'anthropic/claude-sonnet-4.5',
+    knowledgeCutoff: '2025-01',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -577,7 +649,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Claude 3 Haiku is Anthropic’s fastest and most compact model, designed for near-instant responses with fast, accurate performance.',
     displayName: 'Claude 3 Haiku',
+    family: 'claude-haiku',
+    generation: 'claude-3',
     id: 'anthropic/claude-3-haiku',
+    knowledgeCutoff: '2023-08',
     maxOutput: 4096,
     pricing: {
       units: [
@@ -603,7 +678,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Claude 3.5 Haiku is Anthropic’s fastest next-gen model. Compared to Claude 3 Haiku, it improves across skills and surpasses the previous largest model Claude 3 Opus on many intelligence benchmarks.',
     displayName: 'Claude 3.5 Haiku',
+    family: 'claude-haiku',
+    generation: 'claude-3.5',
     id: 'anthropic/claude-3.5-haiku',
+    knowledgeCutoff: '2024-07',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -631,7 +709,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Claude 3.7 Sonnet is Anthropic’s most intelligent model and the first hybrid reasoning model on the market. It can produce near-instant responses or extended step-by-step reasoning that users can see. Sonnet is especially strong at coding, data science, vision, and agent tasks.',
     displayName: 'Claude 3.7 Sonnet',
+    family: 'claude-sonnet',
+    generation: 'claude-3.7',
     id: 'anthropic/claude-3.7-sonnet',
+    knowledgeCutoff: '2024-10',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -662,7 +743,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Claude Sonnet 4 can produce near-instant responses or extended step-by-step reasoning that users can see. API users can finely control how long the model thinks.',
     displayName: 'Claude Sonnet 4',
+    family: 'claude-sonnet',
+    generation: 'claude-4',
     id: 'anthropic/claude-sonnet-4',
+    knowledgeCutoff: '2025-01',
     maxOutput: 64_000,
     pricing: {
       units: [
@@ -686,7 +770,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Claude Opus 4 is Anthropic’s most powerful model for highly complex tasks, excelling in performance, intelligence, fluency, and comprehension.',
     displayName: 'Claude Opus 4',
+    family: 'claude-opus',
+    generation: 'claude-4',
     id: 'anthropic/claude-opus-4',
+    knowledgeCutoff: '2025-01',
     maxOutput: 32_000,
     pricing: {
       units: [
@@ -709,7 +796,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Gemini 2.0 Flash delivers next-gen capabilities, including excellent speed, native tool use, multimodal generation, and a 1M-token context window.',
     displayName: 'Gemini 2.0 Flash',
+    family: 'gemini',
+    generation: 'gemini-2.0',
     id: 'google/gemini-2.0-flash-001',
+    knowledgeCutoff: '2024-08',
     maxOutput: 8192,
     pricing: {
       units: [
@@ -729,7 +819,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'LLaMA 3.2 is designed for tasks combining vision and text. It excels at image captioning and visual QA, bridging language generation and visual reasoning.',
     displayName: 'Llama 3.2 11B Vision',
+    family: 'llama',
+    generation: 'llama-3.2',
     id: 'meta-llama/llama-3.2-11b-vision-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.162, strategy: 'fixed', unit: 'millionTokens' },
@@ -746,7 +839,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Llama 3.3 is the most advanced multilingual open-source Llama model, delivering near-405B performance at very low cost. It is Transformer-based and improved with SFT and RLHF for usefulness and safety. The instruction-tuned version is optimized for multilingual chat and beats many open and closed chat models on industry benchmarks. Knowledge cutoff: Dec 2023.',
     displayName: 'Llama 3.3 70B Instruct',
+    family: 'llama',
+    generation: 'llama-3.3',
     id: 'meta-llama/llama-3.3-70b-instruct',
+    knowledgeCutoff: '2023-12',
     pricing: {
       units: [
         { name: 'textInput', rate: 0.12, strategy: 'fixed', unit: 'millionTokens' },
@@ -763,7 +859,10 @@ const openrouterChatModels: AIChatModelCard[] = [
     description:
       'Llama 3.3 is the most advanced multilingual open-source Llama model, delivering near-405B performance at very low cost. It is Transformer-based and improved with SFT and RLHF for usefulness and safety. The instruction-tuned version is optimized for multilingual chat and beats many open and closed chat models on industry benchmarks. Knowledge cutoff: Dec 2023.',
     displayName: 'Llama 3.3 70B Instruct (Free)',
+    family: 'llama',
+    generation: 'llama-3.3',
     id: 'meta-llama/llama-3.3-70b-instruct:free',
+    knowledgeCutoff: '2023-12',
     type: 'chat',
   },
 ];

@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import PluginTag from '@/components/Plugins/PluginTag';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { useToolStore } from '@/store/tool';
 import { mcpStoreSelectors } from '@/store/tool/selectors';
@@ -28,6 +29,8 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
     const { message } = App.useApp();
     const { t } = useTranslation('plugin');
     const [loading, setLoading] = useState(false);
+    const { allowed: canCreate } = usePermission('create_content');
+    const { allowed: canEdit } = usePermission('edit_own_content');
 
     // Track config updates
     const [updatedConfig, setUpdatedConfig] = useState<{
@@ -57,7 +60,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
     }, [installRequest]);
 
     const handleConfirm = useCallback(async () => {
-      if (!installRequest || !schema) return;
+      if (!canCreate || !canEdit || !installRequest || !schema) return;
 
       setLoading(true);
       try {
@@ -116,6 +119,8 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
       }
     }, [
       installRequest,
+      canCreate,
+      canEdit,
       schema,
       updatedConfig,
       onComplete,
@@ -176,6 +181,7 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
       <Modal
         open
         confirmLoading={loading || testState.loading}
+        okButtonProps={{ disabled: !canCreate || !canEdit }}
         okText={okText}
         title={modalTitle}
         width={680}

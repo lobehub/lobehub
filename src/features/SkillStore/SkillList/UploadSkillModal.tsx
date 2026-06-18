@@ -8,6 +8,7 @@ import { ArrowLeftRight, InboxIcon, Sparkles, Upload as UploadIcon } from 'lucid
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { lambdaClient } from '@/libs/trpc/client/lambda';
 import { uploadService } from '@/services/upload';
 import { useToolStore } from '@/store/tool';
@@ -23,6 +24,7 @@ const UploadSkillModal = memo<UploadSkillModalProps>(({ open, onOpenChange }) =>
   const importAgentSkillFromZip = useToolStore((s) => s.importAgentSkillFromZip);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { allowed: canCreate } = usePermission('create_content');
 
   const handleClose = () => {
     onOpenChange(false);
@@ -30,6 +32,7 @@ const UploadSkillModal = memo<UploadSkillModalProps>(({ open, onOpenChange }) =>
   };
 
   const handleUploadFile = async (file: File) => {
+    if (!canCreate) return;
     setLoading(true);
     setError(null);
 
@@ -96,9 +99,10 @@ const UploadSkillModal = memo<UploadSkillModalProps>(({ open, onOpenChange }) =>
 
         <Upload.Dragger
           accept=".zip,.skill"
-          disabled={loading}
+          disabled={loading || !canCreate}
           showUploadList={false}
           beforeUpload={(file) => {
+            if (!canCreate) return false;
             handleUploadFile(file);
             return false;
           }}

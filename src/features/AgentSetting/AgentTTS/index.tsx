@@ -28,7 +28,7 @@ const AgentTTS = memo(() => {
     return (all?: boolean) => new VoiceList(all ? undefined : locale);
   });
   const config = useStore(selectors.currentTtsConfig, isEqual);
-  const updateConfig = useStore((s) => s.setAgentConfig);
+  const [disabled, updateConfig] = useStore((s) => [s.disabled, s.setAgentConfig]);
 
   const { edgeVoiceOptions, microsoftVoiceOptions } = useMemo(
     () => voiceList(config.showAllLocaleVoice),
@@ -96,6 +96,7 @@ const AgentTTS = memo(() => {
 
   return (
     <Form
+      disabled={disabled}
       footer={<Form.SubmitFooter />}
       form={form}
       items={[tts]}
@@ -104,7 +105,11 @@ const AgentTTS = memo(() => {
       initialValues={{
         [TTS_SETTING_KEY]: config,
       }}
-      onFinish={updateConfig}
+      onFinish={(values) => {
+        if (disabled) return;
+
+        updateConfig(values);
+      }}
       {...FORM_STYLE}
     />
   );

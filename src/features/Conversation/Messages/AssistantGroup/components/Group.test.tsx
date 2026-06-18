@@ -38,6 +38,7 @@ vi.mock('./CollapsedMessage', () => ({
 vi.mock('./WorkflowCollapse', () => ({
   default: ({
     blocks,
+    workflowChromeComplete,
   }: {
     blocks: Array<{
       content: string;
@@ -48,8 +49,10 @@ vi.mock('./WorkflowCollapse', () => ({
       hasToolsOverride?: boolean;
       tools?: unknown[];
     }>;
+    workflowChromeComplete?: boolean;
   }) => (
     <div
+      data-chrome-complete={String(!!workflowChromeComplete)}
       data-testid="workflow-segment"
       data-blocks={JSON.stringify(
         blocks.map(
@@ -115,6 +118,10 @@ vi.mock('./GroupItem', () => ({
   ),
 }));
 
+vi.mock('@/features/Conversation/Messages/components/ContentLoading', () => ({
+  default: ({ id }: { id: string }) => <div data-id={id} data-testid="tail-running" />,
+}));
+
 const blk = (p: Partial<AssistantContentBlock> & { id: string }): AssistantContentBlock =>
   ({ content: '', ...p }) as AssistantContentBlock;
 
@@ -136,11 +143,14 @@ describe('Group', () => {
     mockIsGenerating = false;
   });
 
-  it('keeps long structured mixed content visible and renders the single tool inline', () => {
+  it('keeps a long mixed single-tool block inline in its natural order', () => {
+    // No promotion/relocation: a block carrying both a tool call and long prose
+    // renders as ONE inline unit (content above its tool inside ContentBlock),
+    // never split into a tool-first / text-after layout.
     const longContent =
-      '后宫番 + 实际项目中的状态管理问题，这个组合挺有意思的！\n\n对于实际项目中的状态管理，你目前遇到的具体问题是什么？比如：\n- 不知道什么时候该用 useState，什么时候该用 Context\n- 组件间状态传递变得混乱\n- 性能问题（不必要的重渲染）';
+      'State management in real projects is an interesting topic!\n\nWhat specific problem are you running into right now? For example:\n- Not sure when to use useState vs Context\n- State passing between components gets messy\n- Performance issues from unnecessary re-renders';
 
-    const { container } = render(
+    render(
       <Group
         id="assistant-1"
         messageIndex={0}
@@ -154,30 +164,15 @@ describe('Group', () => {
       />,
     );
 
-    const sequence = Array.from(container.querySelectorAll('[data-testid]')).map((node) =>
-      node.getAttribute('data-testid'),
-    );
-
-    expect(sequence).toEqual(['answer-segment', 'answer-segment']);
+    expect(screen.queryByTestId('workflow-segment')).not.toBeInTheDocument();
     expect(parseAnswerSegments()).toEqual([
       {
         content: longContent,
-        contentOverride: longContent,
+        contentOverride: undefined,
         disableMarkdownStreaming: false,
-        domId: 'block-1__answer',
+        domId: undefined,
         hasError: false,
-        hasToolsOverride: false,
-        id: 'block-1',
-        isFirstBlock: false,
-        toolCount: 0,
-      },
-      {
-        content: '',
-        contentOverride: '',
-        disableMarkdownStreaming: false,
-        domId: 'block-1__workflow',
-        hasError: false,
-        hasToolsOverride: true,
+        hasToolsOverride: undefined,
         id: 'block-1',
         isFirstBlock: false,
         toolCount: 1,
@@ -214,14 +209,17 @@ describe('Group', () => {
     ]);
   });
 
-  it('promotes the first sentence before folding a multi-tool workflow', () => {
+  it('keeps answer-like mixed prose visible above a folded multi-tool workflow', () => {
+    const answerLikePreamble =
+      'I found the likely rendering issue and need to verify the grouped workflow behavior.\n\n- The assistant prose should remain above the fold when it explains the result.\n- The tools still belong in the collapsed workflow.\n- Short progress lines should not split the workflow.';
+
     const { container } = render(
       <Group
         id="assistant-1"
         messageIndex={0}
         blocks={[
           blk({
-            content: '我先帮你查一下。接下来我会继续整理结果。',
+            content: answerLikePreamble,
             id: 'block-1',
             tools: [{ apiName: 'search', id: 'tool-1' } as any],
           }),
@@ -240,8 +238,8 @@ describe('Group', () => {
 
     expect(sequence).toEqual(['answer-segment', 'workflow-segment']);
     expect(parseAnswerSegment()).toEqual({
-      content: '我先帮你查一下。',
-      contentOverride: '我先帮你查一下。',
+      content: answerLikePreamble,
+      contentOverride: answerLikePreamble,
       disableMarkdownStreaming: true,
       domId: 'block-1__answer',
       hasError: false,
@@ -252,8 +250,8 @@ describe('Group', () => {
     });
     expect(parseWorkflowSegment()).toEqual([
       {
-        content: '接下来我会继续整理结果。',
-        contentOverride: '接下来我会继续整理结果。',
+        content: '',
+        contentOverride: '',
         disableMarkdownStreaming: true,
         domId: 'block-1__workflow',
         hasError: false,
@@ -262,6 +260,50 @@ describe('Group', () => {
       },
       {
         content: '',
+        disableMarkdownStreaming: false,
+        domId: undefined,
+        hasError: false,
+        toolCount: 1,
+      },
+    ]);
+  });
+
+  it('folds consecutive short mixed single-tool blocks into one workflow segment', () => {
+    const { container } = render(
+      <Group
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'Let me inspect the package scripts.',
+            id: 'block-1',
+            tools: [{ apiName: 'command_execution', id: 'tool-1' } as any],
+          }),
+          blk({
+            content: 'Now let me read the source file.',
+            id: 'block-2',
+            tools: [{ apiName: 'readFile', id: 'tool-2' } as any],
+          }),
+        ]}
+      />,
+    );
+
+    const sequence = Array.from(container.querySelectorAll('[data-testid]')).map((node) =>
+      node.getAttribute('data-testid'),
+    );
+
+    expect(sequence).toEqual(['workflow-segment']);
+    expect(screen.queryByTestId('answer-segment')).not.toBeInTheDocument();
+    expect(parseWorkflowSegment()).toEqual([
+      {
+        content: 'Let me inspect the package scripts.',
+        disableMarkdownStreaming: true,
+        domId: undefined,
+        hasError: false,
+        toolCount: 1,
+      },
+      {
+        content: 'Now let me read the source file.',
         disableMarkdownStreaming: false,
         domId: undefined,
         hasError: false,
@@ -351,6 +393,63 @@ describe('Group', () => {
     ]);
   });
 
+  it('shows a running indicator below a settled single inline tool while still generating', () => {
+    mockIsGenerating = true;
+    render(
+      <Group
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: '',
+            id: 'block-1',
+            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId('tail-running')).toHaveAttribute('data-id', 'assistant-1');
+  });
+
+  it('hides the running indicator while the inline tool is still executing', () => {
+    mockIsGenerating = true;
+    render(
+      <Group
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: '',
+            id: 'block-1',
+            tools: [{ apiName: 'bash', id: 'tool-1' } as any],
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByTestId('tail-running')).not.toBeInTheDocument();
+  });
+
+  it('hides the running indicator once generation has finished', () => {
+    mockIsGenerating = false;
+    render(
+      <Group
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: '',
+            id: 'block-1',
+            tools: [{ apiName: 'bash', id: 'tool-1', result: { content: 'done' } } as any],
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByTestId('tail-running')).not.toBeInTheDocument();
+  });
+
   it('only animates the last block in a multi-block group', () => {
     const { container } = render(
       <Group
@@ -379,5 +478,78 @@ describe('Group', () => {
       { disableMarkdownStreaming: true, id: 'block-2' },
       { disableMarkdownStreaming: false, id: 'block-3' },
     ]);
+  });
+
+  it('marks the workflow chrome complete once content renders below a settled fold while generating', () => {
+    // An errored multi-tool block splits into a folded workflow (the tools) plus
+    // a trailing answer segment (the error text). While still generating, the
+    // collapse must not keep showing its streaming "working" header now that the
+    // model has moved past it and content renders below.
+    mockIsGenerating = true;
+
+    const { container } = render(
+      <Group
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'Something failed while running the commands.',
+            error: { message: 'boom' } as any,
+            id: 'block-1',
+            tools: [
+              { apiName: 'command_execution', id: 'tool-1', result: { content: 'ok' } } as any,
+              { apiName: 'command_execution', id: 'tool-2', result: { content: 'ok' } } as any,
+            ],
+          }),
+        ]}
+      />,
+    );
+
+    const sequence = Array.from(container.querySelectorAll('[data-testid]')).map((node) =>
+      node.getAttribute('data-testid'),
+    );
+
+    expect(sequence).toEqual(['workflow-segment', 'answer-segment']);
+    expect(screen.getByTestId('workflow-segment').getAttribute('data-chrome-complete')).toBe(
+      'true',
+    );
+  });
+
+  it('keeps the fold streaming when it still holds a pending intervention, even with content below', () => {
+    // Same shape as above, but one tool awaits user confirmation. The completion
+    // shortcut must be suppressed so the "awaiting confirmation" chrome survives —
+    // areWorkflowToolsComplete ignores pending tools, so we cannot rely on it.
+    mockIsGenerating = true;
+
+    const { container } = render(
+      <Group
+        id="assistant-1"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'Partial output before the failure.',
+            error: { message: 'boom' } as any,
+            id: 'block-1',
+            tools: [
+              { apiName: 'command_execution', id: 'tool-1', result: { content: 'ok' } } as any,
+              {
+                apiName: 'command_execution',
+                id: 'tool-2',
+                intervention: { status: 'pending' },
+              } as any,
+            ],
+          }),
+        ]}
+      />,
+    );
+
+    const sequence = Array.from(container.querySelectorAll('[data-testid]')).map((node) =>
+      node.getAttribute('data-testid'),
+    );
+
+    expect(sequence).toEqual(['workflow-segment', 'answer-segment']);
+    expect(screen.getByTestId('workflow-segment').getAttribute('data-chrome-complete')).toBe(
+      'false',
+    );
   });
 });

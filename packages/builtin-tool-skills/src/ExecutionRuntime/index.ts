@@ -124,13 +124,13 @@ const hasHiddenSegment = (rel: string): boolean =>
 /**
  * Hint appended to activated project-skill content so the model knows how to
  * discover the rest of the skill's directory. We deliberately don't enumerate
- * the tree here — the model has `local-system.listFiles` available and can
+ * the tree here — the model has `local-system.globFiles` available and can
  * call it on demand, which keeps the op-param payload small.
  */
 const buildProjectDirectoryHint = (skillName: string, skillDir: string): string =>
   `## Skill resources
 
-This project skill lives in \`${skillDir}\`. Use \`local-system.listFiles\` on that path to discover reference files, then \`readReference\` with skillName="${skillName}" + the relative path to load any of them.`;
+This project skill lives in \`${skillDir}\`. Use \`local-system.globFiles\` with scope="${skillDir}" and pattern="**/*" to discover reference files, then \`readReference\` with skillName="${skillName}" + the relative path to load any of them.`;
 
 export class SkillsExecutionRuntime {
   private builtinSkills: BuiltinSkill[];
@@ -378,9 +378,9 @@ export class SkillsExecutionRuntime {
         let content = await this.deviceFileAccess.readFile(projectSkill.location);
 
         // Don't enumerate the directory here — let the model do it on demand
-        // via `local-system.listFiles`. Just point at the skill's directory so
+        // via `local-system.globFiles`. Just point at the skill's directory so
         // it knows where to look. Keeps the op-param payload small and avoids
-        // a second deviceProxy round-trip at activation time.
+        // a second deviceGateway round-trip at activation time.
         const skillDir = getDirname(projectSkill.location);
         if (skillDir) {
           content += '\n\n' + buildProjectDirectoryHint(name, skillDir);

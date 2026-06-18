@@ -2,6 +2,7 @@ import type { AgentContextDocument } from '@lobechat/context-engine';
 import type { PartialDeep } from 'type-fest';
 
 import { type AgentSettingsInstance } from '@/features/AgentSetting';
+import { type AvailableAgentItem } from '@/services/agent';
 import { type AgentItem } from '@/types/agent';
 import { type MetaData } from '@/types/meta';
 
@@ -12,9 +13,16 @@ export type SaveStatus = 'idle' | 'saving' | 'saved';
 
 export interface AgentSliceState {
   activeAgentId?: string;
+  /**
+   * Per-agent config fetch error message. Lets the UI distinguish "fetch
+   * failed" from "still loading" instead of showing an endless skeleton
+   * (e.g. 401s are not retried by SWR). Cleared on successful fetch / retry.
+   */
+  agentConfigErrorMap: Record<string, string>;
   agentDocumentsMap: Record<string, AgentContextDocument[]>;
   agentMap: Record<string, PartialDeep<AgentItem>>;
   agentSettingInstance?: AgentSettingsInstance | null;
+  availableAgents?: AvailableAgentItem[];
   /**
    * Whether the agent panel is pinned (UI state)
    */
@@ -51,8 +59,10 @@ export interface AgentSliceState {
 }
 
 export const initialAgentSliceState: AgentSliceState = {
+  agentConfigErrorMap: {},
   agentDocumentsMap: {},
   agentMap: {},
+  availableAgents: undefined,
   isAgentPinned: false,
   lastUpdatedTime: null,
   localAgentWorkingDirectoryMap: readAllLocalAgentWorkingDirectories(),

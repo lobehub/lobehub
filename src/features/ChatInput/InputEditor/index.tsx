@@ -21,6 +21,7 @@ import { useHotkeysContext } from 'react-hotkeys-hook';
 import { usePasteFile, useUploadFiles } from '@/components/DragUploadZone';
 import { useEnterToSend } from '@/hooks/useEnterToSend';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
+import { usePermission } from '@/hooks/usePermission';
 import { aiChatService } from '@/services/aiChat';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -40,6 +41,7 @@ import {
   type InsertActionTagPayload,
   useSlashActionItems,
 } from './ActionTag';
+import { createInputCompletionError, isInputCompletionAbortError } from './inputCompletionError';
 import { createMentionMenu } from './MentionMenu';
 import type { MentionMenuState } from './MentionMenu/types';
 import { mentionFilledClassName } from './mentionStyle';
@@ -89,6 +91,7 @@ const InputEditor = memo<{
   const { restoreDraft, saveDraftDebounced } = useChatInputDraft();
   const restoredDraftEditorRef = useRef<IEditor | null>(null);
   const state = useEditorState(editor);
+  const { allowed: canCreateContent } = usePermission('create_content');
   const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.AddUserMessage));
   const { enableScope, disableScope } = useHotkeysContext();
 
@@ -153,7 +156,7 @@ const InputEditor = memo<{
     isMentionEnabled &&
     !heterogeneousName &&
     categories.some((category) => category.id === 'agent');
-  const { handleUploadFiles } = useUploadFiles({ model, provider });
+  const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
 
   // Listen to editor's paste event for file uploads
   usePasteFile(editor, handleUploadFiles);
@@ -191,6 +194,10 @@ const InputEditor = memo<{
   const inputCompletionConfig = useUserStore(systemAgentSelectors.inputCompletion);
   const isAutoCompleteEnabled = isInputCompletionEnabled && inputCompletionConfig.enabled;
 
+  useEffect(() => {
+    storeApi.getState().clearInputCompletionError();
+  }, [inputCompletionConfig.model, inputCompletionConfig.provider, storeApi]);
+
   const getMessagesRef = useRef(storeApi.getState().getMessages);
   useEffect(() => {
     return storeApi.subscribe((s) => {
@@ -220,6 +227,8 @@ const InputEditor = memo<{
     }): Promise<string | null> => {
       // Skip autocomplete during IME composition (e.g. Chinese input method)
       if (isComposingRef.current) return null;
+
+      if (storeApi.getState().inputCompletionError) return null;
 
       if (!input.trim()) return null;
 
@@ -258,11 +267,18 @@ const InputEditor = memo<{
           },
           abortController,
         )) as { data?: { completion?: string } | null; tracingId?: string } | null;
-      } catch {
+      } catch (error) {
+        if (!isInputCompletionAbortError(error)) {
+          storeApi.getState().pauseInputCompletion(createInputCompletionError(error));
+        }
         return null;
       }
 
       if (abortSignal.aborted) return null;
+
+      // Another in-flight request may have failed while this one was waiting.
+      // Keep the breaker active and drop this stale suggestion in that race.
+      if (storeApi.getState().inputCompletionError) return null;
 
       const completion = envelope?.data?.completion?.trimEnd();
       if (!completion) return null;
@@ -272,7 +288,7 @@ const InputEditor = memo<{
       }
       return completion;
     },
-    [isComposingRef, agentId],
+    [isComposingRef, storeApi, agentId],
   );
 
   const handleSuggestionAccepted = useCallback(
@@ -453,6 +469,7 @@ const InputEditor = memo<{
       pasteAsPlainText
       className={className}
       content={''}
+      editable={canCreateContent}
       editor={editor}
       {...{ slashPlacement }}
       {...richRenderProps}

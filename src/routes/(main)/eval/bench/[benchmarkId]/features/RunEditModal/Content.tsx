@@ -9,8 +9,9 @@ import { createStaticStyles } from 'antd-style';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { type FC, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { agentService } from '@/services/agent';
 import { useEvalStore } from '@/store/eval';
 
@@ -56,7 +57,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
   const { t: tChat } = useTranslation('chat');
   const { close } = useModalContext();
   const { message } = App.useApp();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const { benchmarkId } = useParams<{ benchmarkId: string }>();
   const updateRun = useEvalStore((s) => s.updateRun);
   const datasetList = useEvalStore((s) => s.datasetList);

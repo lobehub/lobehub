@@ -4,7 +4,7 @@ import {
   type AgentDocumentInjectionPosition,
 } from '@lobechat/context-engine';
 
-import type { AgentDocumentWithRules } from '@/database/models/agentDocuments';
+import type { AgentDocumentContextPayload } from '@/database/models/agentDocuments';
 
 const VALID_DOCUMENT_POSITIONS = new Set<AgentDocumentInjectionPosition>(
   AGENT_DOCUMENT_INJECTION_POSITIONS,
@@ -31,8 +31,9 @@ export const normalizeAgentDocumentPosition = (
  * added on the client only, which broke the "hide web crawls from the
  * progressive index" filter on every server-driven chat ().
  */
-export const toAgentContextDocument = (doc: AgentDocumentWithRules): AgentContextDocument => ({
+export const toAgentContextDocument = (doc: AgentDocumentContextPayload): AgentContextDocument => ({
   content: doc.content,
+  contentCharCount: doc.contentCharCount ?? doc.content.length,
   description: doc.description ?? undefined,
   filename: doc.filename,
   id: doc.id,
@@ -60,5 +61,7 @@ export const toAgentContextDocument = (doc: AgentDocumentWithRules): AgentContex
  * field, so the folder check has to happen here, at the DB→context boundary,
  * where the derived `isFolder` flag is still available.
  */
-export const toAgentContextDocuments = (docs: AgentDocumentWithRules[]): AgentContextDocument[] =>
+export const toAgentContextDocuments = (
+  docs: AgentDocumentContextPayload[],
+): AgentContextDocument[] =>
   docs.filter((doc) => !doc.isFolder).map((doc) => toAgentContextDocument(doc));

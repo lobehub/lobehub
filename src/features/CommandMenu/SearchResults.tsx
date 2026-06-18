@@ -18,11 +18,11 @@ import {
 } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
 import { SESSION_CHAT_TOPIC_URL } from '@/const/url';
 import { type SearchResult } from '@/database/repositories/search';
 import { useCommandMenuContext } from '@/features/CommandMenu/CommandMenuContext';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useImageStore } from '@/store/image';
 import { generationTopicSelectors as imageGenerationTopicSelectors } from '@/store/image/slices/generationTopic/selectors';
 import { useVideoStore } from '@/store/video';
@@ -57,7 +57,7 @@ const SearchResults = memo<SearchResultsProps>(
     const { t } = useTranslation('common');
     const { t: tImage } = useTranslation('image');
     const { t: tVideo } = useTranslation('video');
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const { menuContext } = useCommandMenuContext();
     const imageTopics = useImageStore(imageGenerationTopicSelectors.generationTopics);
     const activeImageTopicId = useImageStore((s) => s.activeGenerationTopicId);

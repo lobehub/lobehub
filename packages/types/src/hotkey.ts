@@ -14,8 +14,7 @@ export type HotkeyId =
   | 'showApp'
   | 'switchAgent'
   | 'toggleLeftPanel'
-  | 'toggleRightPanel'
-  | 'toggleZenMode';
+  | 'toggleRightPanel';
 
 export type HotkeyGroupId = 'conversation' | 'essential';
 

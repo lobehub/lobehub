@@ -196,6 +196,47 @@ describe('recomputeTopicUsage', () => {
     expect(claude.usage.totalTokens).toBe(300);
   });
 
+  it('prefers the dedicated usage column over metadata.usage', async () => {
+    await serverDB.insert(messages).values({
+      id: 'col-msg',
+      metadata: {
+        usage: { cost: 9.9, totalInputTokens: 999, totalOutputTokens: 999, totalTokens: 9999 },
+      },
+      model: 'gpt-4o',
+      provider: 'openai',
+      role: 'assistant',
+      topicId,
+      usage: { cost: 0.01, totalInputTokens: 10, totalOutputTokens: 5, totalTokens: 15 } as any,
+      userId,
+    });
+
+    await recompute();
+    const topic = await getTopic();
+
+    expect(topic.totalTokens).toBe(15);
+    expect(topic.totalCost).toBeCloseTo(0.01, 6);
+  });
+
+  it('counts rows that only carry the usage column (no metadata.usage)', async () => {
+    await serverDB.insert(messages).values({
+      id: 'col-only',
+      metadata: { tps: 1 }, // realistic non-usage metadata
+      model: 'gpt-4o',
+      provider: 'openai',
+      role: 'assistant',
+      topicId,
+      usage: { cost: 0.02, totalInputTokens: 30, totalOutputTokens: 20, totalTokens: 50 } as any,
+      userId,
+    });
+
+    await recompute();
+    const topic = await getTopic();
+
+    expect(topic.totalTokens).toBe(50);
+    expect(topic.totalCost).toBeCloseTo(0.02, 6);
+    expect((topic.usage as any).llm.apiCalls).toBe(1);
+  });
+
   it('only counts role=assistant messages with metadata.usage', async () => {
     // counted
     await insertAssistantMessage({

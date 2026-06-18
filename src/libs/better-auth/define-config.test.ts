@@ -12,10 +12,6 @@ vi.mock('@better-auth/passkey', () => ({
   passkey: vi.fn(() => ({ id: 'passkey' })),
 }));
 
-vi.mock('@lobechat/business-const', () => ({
-  ENABLE_BUSINESS_FEATURES: false,
-}));
-
 vi.mock('@lobechat/database', () => ({
   createNanoId: vi.fn(() => vi.fn(() => 'generated-id')),
   idGenerator: vi.fn(() => 'generated-user-id'),
@@ -49,21 +45,9 @@ vi.mock('better-auth/plugins', () => ({
   magicLink: vi.fn(() => ({ id: 'magic-link' })),
 }));
 
-vi.mock('better-auth-harmony', () => ({
-  emailHarmony: vi.fn(() => ({ id: 'email-harmony' })),
-}));
-
-vi.mock('better-auth-harmony/email', () => ({
-  validateEmail: vi.fn(),
-}));
-
 vi.mock('undici', () => ({
   ProxyAgent: vi.fn(),
   setGlobalDispatcher: vi.fn(),
-}));
-
-vi.mock('@/business/server/better-auth', () => ({
-  businessEmailValidator: vi.fn(),
 }));
 
 vi.mock('@/envs/app', () => ({

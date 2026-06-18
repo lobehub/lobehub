@@ -56,6 +56,7 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@lobechat/chat-adapter-imessage": "workspace:*",
     "@lobechat/desktop-bridge": "workspace:*",
+    "@lobechat/device-control": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",
     "@lobechat/device-identity": "workspace:*",
     "@lobechat/electron-client-ipc": "workspace:*",
@@ -78,7 +79,7 @@
     "cross-env": "^10.1.0",
     "diff": "^8.0.4",
     "electron": "41.3.0",
-    "electron-builder": "^26.8.1",
+    "electron-builder": "26.14.0",
     "electron-devtools-installer": "4.0.0",
     "electron-is": "^3.0.0",
     "electron-store": "^8.2.0",
@@ -111,7 +112,7 @@
     "undici": "^7.16.0",
     "uuid": "^14.0.0",
     "vite": "8.0.14",
-    "vitest": "3.2.4",
+    "vitest": "3.2.6",
     "zod": "^3.25.76"
   },
   "optionalDependencies": {
@@ -125,9 +126,10 @@
       "node-mac-permissions"
     ],
     "overrides": {
+      "node-gyp": "^12.4.0",
       "react": "19.2.4",
       "react-dom": "19.2.4",
-      "vitest": "3.2.4"
+      "vitest": "3.2.6"
     }
   }
 }

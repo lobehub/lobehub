@@ -20,7 +20,7 @@ import {
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import { openChangelogModal } from '@/components/ChangelogModal';
 import { openFeedbackModal } from '@/components/FeedbackModal';
@@ -30,6 +30,7 @@ import Billboard from '@/features/Billboard';
 import { useBillboardMenuItems } from '@/features/Billboard/MenuItems';
 import { useActiveNavKey } from '@/features/NavPanel';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useNavLayout } from '@/hooks/useNavLayout';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors/systemStatus';
@@ -256,7 +257,7 @@ const Footer = memo(() => {
             {
               icon: <Icon icon={Settings2} />,
               key: 'setting',
-              label: <Link to="/settings">{t('userPanel.setting')}</Link>,
+              label: <WorkspaceLink to="/settings">{t('userPanel.setting')}</WorkspaceLink>,
             },
             {
               type: 'divider' as const,
@@ -314,7 +315,7 @@ const Footer = memo(() => {
             {
               icon: <Icon icon={FlaskConical} />,
               key: 'eval',
-              label: <Link to="/eval">Evaluation Lab</Link>,
+              label: <WorkspaceLink to="/eval">Evaluation Lab</WorkspaceLink>,
             },
           ]
         : []),
@@ -366,9 +367,9 @@ const Footer = memo(() => {
                 <ActionIcon icon={GithubIcon} size={16} title={'GitHub'} />
               </a>
             )}
-            <Link to="/eval">
+            <WorkspaceLink to="/eval">
               <ActionIcon icon={FlaskConical} size={16} title="Evaluation Lab" />
-            </Link>
+            </WorkspaceLink>
           </Flexbox>
           <ThemeButton placement={'topCenter'} size={16} />
         </Flexbox>
@@ -378,14 +379,14 @@ const Footer = memo(() => {
             <ActionIcon aria-label={t('userPanel.help')} icon={CircleHelp} size={16} />
           </DropdownMenu>
           {isDevMode && (
-            <Link to="/settings">
+            <WorkspaceLink to="/settings">
               <ActionIcon
                 aria-label={t('userPanel.setting')}
                 icon={SettingsIcon}
                 size={16}
                 title={t('userPanel.setting')}
               />
-            </Link>
+            </WorkspaceLink>
           )}
         </Flexbox>
       )}

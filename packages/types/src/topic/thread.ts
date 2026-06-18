@@ -38,6 +38,13 @@ export interface ThreadMetadata {
   duration?: number;
   /** Error details when task failed */
   error?: any;
+  /**
+   * Model the subagent ran on (e.g. CC's per-turn `message.model`). Pinned
+   * once for the run and rolled up here on finalize so historical / cold-load
+   * viewers can surface it (e.g. the subagent inspector chip tooltip) without
+   * the child messages being loaded.
+   */
+  model?: string;
   /** Operation ID for tracking */
   operationId?: string;
   /**
@@ -111,6 +118,7 @@ export const threadMetadataSchema = z.object({
   completedAt: z.string().optional(),
   duration: z.number().optional(),
   error: z.any().optional(),
+  model: z.string().optional(),
   operationId: z.string().optional(),
   sourceToolCallId: z.string().optional(),
   startedAt: z.string().optional(),

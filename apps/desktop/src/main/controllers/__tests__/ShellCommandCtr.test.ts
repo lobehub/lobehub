@@ -26,6 +26,7 @@ vi.mock('@/utils/logger', () => ({
 
 // Mock child_process for the shared package
 vi.mock('node:child_process', () => ({
+  execFile: vi.fn(),
   spawn: vi.fn(),
 }));
 

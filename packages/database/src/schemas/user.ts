@@ -1,14 +1,9 @@
 import { DEFAULT_PREFERENCE } from '@lobechat/const';
-import type {
-  CustomPluginParams,
-  ToolManifest,
-  UserAgentOnboarding,
-  UserOnboarding,
-} from '@lobechat/types';
+import type { UserAgentOnboarding, UserOnboarding } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
-import { boolean, index, jsonb, pgTable, primaryKey, text, varchar } from 'drizzle-orm/pg-core';
+import { boolean, index, jsonb, pgTable, text, varchar } from 'drizzle-orm/pg-core';
 
-import { timestamps, timestamptz, varchar255 } from './_helpers';
+import { timestamps, timestamptz } from './_helpers';
 
 export const users = pgTable(
   'users',
@@ -90,26 +85,3 @@ export const userSettings = pgTable('user_settings', {
   notification: jsonb('notification'),
 });
 export type UserSettingsItem = typeof userSettings.$inferSelect;
-
-export const userInstalledPlugins = pgTable(
-  'user_installed_plugins',
-  {
-    userId: text('user_id')
-      .references(() => users.id, { onDelete: 'cascade' })
-      .notNull(),
-
-    identifier: text('identifier').notNull(),
-    type: text('type', { enum: ['plugin', 'customPlugin'] }).notNull(),
-    manifest: jsonb('manifest').$type<ToolManifest>(),
-    settings: jsonb('settings'),
-    customParams: jsonb('custom_params').$type<CustomPluginParams>(),
-    source: varchar255('source'),
-    ...timestamps,
-  },
-  (self) => ({
-    id: primaryKey({ columns: [self.userId, self.identifier] }),
-  }),
-);
-
-export type NewInstalledPlugin = typeof userInstalledPlugins.$inferInsert;
-export type InstalledPluginItem = typeof userInstalledPlugins.$inferSelect;

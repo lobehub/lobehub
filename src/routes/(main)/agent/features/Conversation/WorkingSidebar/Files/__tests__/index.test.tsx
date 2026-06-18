@@ -46,7 +46,8 @@ vi.mock('@/features/ExplorerTree', () => {
   MockExplorerTree.displayName = 'MockExplorerTree';
   return {
     ExplorerTree: MockExplorerTree,
-    FOLDER_ICON_CSS: '',
+    FOLDER_ICON_CSS: 'folder-css',
+    HIDE_POINTER_FOCUS_RING_CSS: 'hide-pointer-focus-ring-css',
     getExplorerTreeStyleVars: () => ({}),
   };
 });
@@ -165,6 +166,7 @@ describe('Files — reveal request integration', () => {
       { path: 'src/foo/bar.ts', status: 'modified' },
       { path: 'deleted.ts', status: 'deleted' },
     ]);
+    expect(explorerTreeProps.current?.unsafeCSS).toBe('folder-css\nhide-pointer-focus-ring-css');
 
     const nodes = explorerTreeProps.current?.nodes as { id: string }[];
     const dirtyNode = nodes.find((node) => node.id === 'src/foo/bar.ts');

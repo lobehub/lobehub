@@ -4,6 +4,7 @@ import anthropicChatModels from 'model-bank/anthropic';
 import azureChatModels from 'model-bank/azure';
 import deepseekChatModels from 'model-bank/deepseek';
 import googleChatModels from 'model-bank/google';
+import minimaxChatModels from 'model-bank/minimax';
 import openaiChatModels from 'model-bank/openai';
 import vertexAiModels from 'model-bank/vertexai';
 import { describe, expect, it } from 'vitest';
@@ -801,6 +802,75 @@ describe('computeChatPricing', () => {
 
       expect(result?.totalCredits).toBe(154_725);
       expect(result?.totalCost).toBeCloseTo(0.154725, 6);
+    });
+  });
+
+  describe('MiniMax', () => {
+    it('uses total input tokens to select tiered rates for MiniMax-M3', () => {
+      const pricing = minimaxChatModels.find(
+        (model: { id: string }) => model.id === 'MiniMax-M3',
+      )?.pricing;
+      expect(pricing).toBeDefined();
+
+      // Lower tier test (<= 512,000 tokens)
+      const usage1: ModelTokensUsage = {
+        inputCacheMissTokens: 100_000,
+        inputCachedTokens: 20_000,
+        inputTextTokens: 120_000,
+        outputTextTokens: 10_000,
+        totalInputTokens: 120_000,
+        totalOutputTokens: 10_000,
+        totalTokens: 130_000,
+      };
+
+      const result1 = computeChatCost(pricing, usage1);
+      expect(result1).toBeDefined();
+      expect(result1?.issues).toHaveLength(0);
+
+      const input1 = result1?.breakdown.find((item) => item.unit.name === 'textInput');
+      expect(input1?.quantity).toBe(100_000);
+      expect(input1?.credits).toBe(58_989); // Math.ceil((100,000 * 4.2) / 7.12)
+      expect(input1?.segments).toEqual([{ quantity: 100_000, rate: 4.2, credits: 420_000 }]);
+
+      const cached1 = result1?.breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
+      expect(cached1?.quantity).toBe(20_000);
+      expect(cached1?.credits).toBe(2_360); // Math.ceil((20,000 * 0.84) / 7.12)
+      expect(cached1?.segments).toEqual([{ quantity: 20_000, rate: 0.84, credits: 16_800 }]);
+
+      const output1 = result1?.breakdown.find((item) => item.unit.name === 'textOutput');
+      expect(output1?.quantity).toBe(10_000);
+      expect(output1?.credits).toBe(23_596); // Math.ceil((10,000 * 16.8) / 7.12)
+      expect(output1?.segments).toEqual([{ quantity: 10_000, rate: 16.8, credits: 168_000 }]);
+
+      // Higher tier test (> 512,000 tokens)
+      const usage2: ModelTokensUsage = {
+        inputCacheMissTokens: 500_000,
+        inputCachedTokens: 100_000,
+        inputTextTokens: 600_000,
+        outputTextTokens: 50_000,
+        totalInputTokens: 600_000,
+        totalOutputTokens: 50_000,
+        totalTokens: 650_000,
+      };
+
+      const result2 = computeChatCost(pricing, usage2);
+      expect(result2).toBeDefined();
+      expect(result2?.issues).toHaveLength(0);
+
+      const input2 = result2?.breakdown.find((item) => item.unit.name === 'textInput');
+      expect(input2?.quantity).toBe(500_000);
+      expect(input2?.credits).toBe(589_888); // Math.ceil((500,000 * 8.4) / 7.12)
+      expect(input2?.segments).toEqual([{ quantity: 500_000, rate: 8.4, credits: 4_200_000 }]);
+
+      const cached2 = result2?.breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
+      expect(cached2?.quantity).toBe(100_000);
+      expect(cached2?.credits).toBe(23_596); // Math.ceil((100,000 * 1.68) / 7.12)
+      expect(cached2?.segments).toEqual([{ quantity: 100_000, rate: 1.68, credits: 168_000 }]);
+
+      const output2 = result2?.breakdown.find((item) => item.unit.name === 'textOutput');
+      expect(output2?.quantity).toBe(50_000);
+      expect(output2?.credits).toBe(235_956); // Math.ceil((50,000 * 33.6) / 7.12)
+      expect(output2?.segments).toEqual([{ quantity: 50_000, rate: 33.6, credits: 1_680_000 }]);
     });
   });
 

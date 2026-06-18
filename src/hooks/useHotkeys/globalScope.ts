@@ -45,17 +45,14 @@ export const useOpenHotkeyHelperHotkey = () => {
 };
 
 export const useToggleLeftPanelHotkey = () => {
-  const isZenMode = useGlobalStore((s) => s.status.zenMode);
   const toggleLeftPanel = useGlobalStore((s) => s.toggleLeftPanel);
   return useHotkeyById(HotkeyEnum.ToggleLeftPanel, () => toggleLeftPanel(), {
     enableOnContentEditable: true,
-    enabled: !isZenMode,
   });
 };
 
 export const useToggleRightPanelHotkey = () => {
   const { pathname } = useLocation();
-  const isZenMode = useGlobalStore((s) => s.status.zenMode);
   const [toggleAgentBuilderPanel, toggleRightPanel, toggleTaskAgentPanel] = useGlobalStore((s) => [
     s.toggleAgentBuilderPanel,
     s.toggleRightPanel,
@@ -81,7 +78,6 @@ export const useToggleRightPanelHotkey = () => {
     },
     {
       enableOnContentEditable: true,
-      enabled: !isZenMode,
     },
     [
       isAgentProfileRoute,

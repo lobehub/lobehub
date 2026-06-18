@@ -2,6 +2,7 @@ import { omit } from 'es-toolkit';
 import { type SWRResponse } from 'swr';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
+import { userMemoryKeys } from '@/libs/swr/keys';
 import { userMemoryService } from '@/services/userMemory';
 import { type StoreSetter } from '@/store/types';
 import { type RetrieveMemoryResult } from '@/types/userMemory';
@@ -35,7 +36,7 @@ export class AgentMemoryActionImpl {
 
   useFetchMemoriesForTopic = (topicId?: string | null): SWRResponse<RetrieveMemoryResult> => {
     return useClientDataSWRWithSync<RetrieveMemoryResult>(
-      topicId ? ['useFetchMemoriesForTopic', topicId] : null,
+      topicId ? userMemoryKeys.topicMemories(topicId) : null,
       async () => {
         // Retrieve memories using topic's context
         // The backend will use topic info to build the query

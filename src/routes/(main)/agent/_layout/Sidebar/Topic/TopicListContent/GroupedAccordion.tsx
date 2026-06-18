@@ -23,6 +23,7 @@ import { useAgentTopicGroupMode } from '../hooks/useAgentTopicGroupMode';
 export interface GroupItemComponentProps {
   activeThreadId?: string;
   activeTopicId?: string;
+  expanded: boolean;
   group: GroupedTopic;
 }
 
@@ -75,6 +76,7 @@ const GroupedAccordion = memo<GroupedAccordionProps>(({ GroupItem }) => {
           <GroupItem
             activeThreadId={activeThreadId}
             activeTopicId={activeTopicId}
+            expanded={expandedKeys.includes(group.id)}
             group={group}
             key={group.id}
           />

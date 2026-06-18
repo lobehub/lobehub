@@ -10,9 +10,21 @@ import { operationSelectors } from '@/store/chat/selectors';
 import { type OperationType } from '@/store/chat/slices/operation/types';
 import { elapsedTimeStyles, shinyTextStyles } from '@/styles/loading';
 
+import { resolveOperationActivity } from '../../utils/operationActivity';
+
 const ELAPSED_TIME_THRESHOLD = 2100; // Show elapsed time after 2 seconds
 
 const NO_NEED_SHOW_DOT_OP_TYPES = new Set<OperationType>(['reasoning']);
+
+// Container/runtime ops carry their own user-facing `operation.*` copy.
+// Everything else is an internal/bookkeeping op without a dedicated key, so it
+// routes through the shared activity mapping instead of leaking the raw key.
+const DEDICATED_OPERATION_LABELS = new Set<OperationType>([
+  'execAgentRuntime',
+  'execClientSubAgent',
+  'execServerAgentRuntime',
+  'sendMessage',
+]);
 
 interface ContentLoadingProps {
   id: string;
@@ -49,14 +61,27 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
   // so the user can tell which external agent is working.
   const getOperationLabel = () => {
     if (!operationType) return undefined;
-    if (operationType !== 'execHeterogeneousAgent') {
+
+    if (operationType === 'execHeterogeneousAgent') {
+      const heterogeneousType = runningOp?.metadata?.heterogeneousType as string | undefined;
+      const name = heterogeneousType
+        ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
+        : t('operation.heterogeneousAgentFallback');
+      return t('operation.execHeterogeneousAgent', { name });
+    }
+
+    if (DEDICATED_OPERATION_LABELS.has(operationType)) {
       return t(`operation.${operationType}` as any) as string;
     }
-    const heterogeneousType = runningOp?.metadata?.heterogeneousType as string | undefined;
-    const name = heterogeneousType
-      ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
-      : t('operation.heterogeneousAgentFallback');
-    return t('operation.execHeterogeneousAgent', { name });
+
+    // Internal/bookkeeping ops (toolCalling, callLLM, executeToolCall, ...) have
+    // no `operation.*` copy. Reuse the localized op-status-tray phase label so we
+    // never fall back to the raw i18n key. Unmappable container ops return
+    // undefined and render the generic dot loader below.
+    const activity = resolveOperationActivity(operationType);
+    if (activity) return t(`opStatusTray.status.${activity}`);
+
+    return undefined;
   };
   const operationLabel = getOperationLabel();
 

@@ -2,14 +2,31 @@ import { isEqual } from 'es-toolkit';
 import { useEffect } from 'react';
 import { shallow } from 'zustand/shallow';
 
+import {
+  getActiveWorkspaceId,
+  useActiveWorkspaceId,
+} from '@/business/client/hooks/useActiveWorkspaceId';
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { resourceKeys } from '@/libs/swr/keys';
 import { resourceService } from '@/services/resource';
-import { type ResourceQueryParams } from '@/types/resource';
+import type { ResourceQueryParams } from '@/types/resource';
 
 import { useFileStore } from '../../store';
 import { mergeServerResourcesWithOptimistic } from './utils';
 
-const SWR_KEY_RESOURCES = 'SWR_RESOURCES';
+type ResourceSWRKey = [string, ResourceQueryParams, string | null];
+
+const isResourceSWRKey = (
+  key: unknown,
+  queryParams: ResourceQueryParams,
+  workspaceId: string | null,
+) => {
+  if (!Array.isArray(key)) return false;
+
+  return (
+    key[0] === resourceKeys.list.root && isEqual(key[1], queryParams) && key[2] === workspaceId
+  );
+};
 
 /**
  * Revalidate resources with current or specific query params
@@ -17,8 +34,15 @@ const SWR_KEY_RESOURCES = 'SWR_RESOURCES';
  */
 export const revalidateResources = async (params?: ResourceQueryParams) => {
   const queryParams = params || useFileStore.getState().queryParams;
+  const workspaceId = getActiveWorkspaceId();
   if (queryParams) {
-    await mutate([SWR_KEY_RESOURCES, queryParams]);
+    await mutate(
+      (key) => isResourceSWRKey(key, queryParams, workspaceId),
+      async (currentData) => currentData,
+      {
+        revalidate: true,
+      },
+    );
   }
 };
 
@@ -26,9 +50,11 @@ export const revalidateResources = async (params?: ResourceQueryParams) => {
  * Custom SWR hook for fetching resources with caching and revalidation
  */
 export const useFetchResources = (params: ResourceQueryParams | null, enable: any = true) => {
+  const workspaceId = useActiveWorkspaceId();
+
   const swr = useClientDataSWR(
-    enable && params ? [SWR_KEY_RESOURCES, params] : null,
-    async ([, queryParams]: [string, ResourceQueryParams]) => {
+    enable && params ? resourceKeys.list(params, workspaceId) : null,
+    async ([, queryParams]: ResourceSWRKey) => {
       const response = await resourceService.queryResources({
         ...queryParams,
         limit: queryParams.limit || 50,

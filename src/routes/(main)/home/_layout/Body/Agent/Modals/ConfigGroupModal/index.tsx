@@ -6,6 +6,7 @@ import { Plus } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import type { SessionGroupItemBase } from '@/types/session';
@@ -27,6 +28,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
   const { t } = useTranslation('chat');
+  const { allowed: canEdit } = usePermission('edit_own_content');
   // Map SidebarGroup to SessionGroupItem-like structure for the sortable list
   const sessionGroupItems = useHomeStore(
     (s) =>
@@ -61,18 +63,23 @@ const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
               id={item.id}
               justify={'space-between'}
             >
-              <GroupItem {...item} />
+              <GroupItem {...item} disabled={!canEdit} />
             </SortableList.Item>
           )}
           onChange={(items: SessionGroupItemBase[]) => {
+            if (!canEdit) return;
+
             updateGroupSort(items);
           }}
         />
         <Button
           block
+          disabled={!canEdit}
           icon={Plus}
           loading={loading}
           onClick={async () => {
+            if (!canEdit) return;
+
             setLoading(true);
             await addGroup(t('sessionGroup.newGroup'));
             setLoading(false);

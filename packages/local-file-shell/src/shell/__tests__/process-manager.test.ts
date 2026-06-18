@@ -190,6 +190,41 @@ describe('ShellProcessManager', () => {
       expect(result.exit_code).toBe(0);
     });
 
+    it('should report elapsed duration while the process is still running', async () => {
+      vi.useFakeTimers();
+      try {
+        const process = createMockProcess();
+        manager.register('test-1', createShellProcess(process));
+
+        await vi.advanceTimersByTimeAsync(42_000);
+
+        const result = await manager.getOutput({ shell_id: 'test-1', timeout: 0 });
+        expect(result.exit_code).toBeUndefined();
+        expect(result.duration_ms).toBe(42_000);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should keep the final duration after the process exits', async () => {
+      vi.useFakeTimers();
+      try {
+        const process = createMockProcess();
+        manager.register('test-1', createShellProcess(process));
+
+        await vi.advanceTimersByTimeAsync(2500);
+        (process as { exitCode: number | null }).exitCode = 0;
+        process.emit('exit', 0);
+        await vi.advanceTimersByTimeAsync(7500);
+
+        const result = await manager.getOutput({ shell_id: 'test-1', timeout: 0 });
+        expect(result.exit_code).toBe(0);
+        expect(result.duration_ms).toBe(2500);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('should retain completed output after the process exits', async () => {
       const process = createMockProcess();
       manager.register('test-1', {

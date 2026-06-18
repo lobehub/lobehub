@@ -14,7 +14,7 @@
  * Services must be injected via constructor for runtime-agnostic usage
  * (e.g., server-side services vs client-side services).
  */
-import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import { COMPOSIO_APP_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { marketToolsResultsPrompt, modelsResultsPrompt } from '@lobechat/prompts';
 import type { BuiltinToolResult } from '@lobechat/types';
 
@@ -24,11 +24,11 @@ import { getAiInfraStoreState } from '@/store/aiInfra';
 import { getToolStoreState } from '@/store/tool';
 import {
   builtinToolSelectors,
-  klavisStoreSelectors,
+  composioStoreSelectors,
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore/types';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore/types';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -49,6 +49,7 @@ import type {
   InstallPluginState,
   MarketToolItem,
   SearchAgentParams,
+  SearchAgentSource,
   SearchAgentState,
   SearchMarketToolsParams,
   SearchMarketToolsState,
@@ -57,6 +58,9 @@ import type {
   UpdatePromptParams,
   UpdatePromptState,
 } from './types';
+
+/** Max results per searchAgents call (mirrored in the tool manifests: "max: 20") */
+const MAX_SEARCH_AGENT_LIMIT = 20;
 
 export class AgentManagerRuntime {
   private agentService: IAgentService;
@@ -382,15 +386,20 @@ export class AgentManagerRuntime {
   async searchAgents(params: SearchAgentParams): Promise<BuiltinToolResult> {
     try {
       const source = params.source || 'all';
-      const limit = Math.min(params.limit || 10, 20);
+      const limit = Math.min(params.limit || 10, MAX_SEARCH_AGENT_LIMIT);
+      const offset = Math.max(params.offset || 0, 0);
       const agents: AgentSearchItem[] = [];
+
+      let userTotal = 0;
+      let marketTotal = 0;
 
       // Search user's agents
       if (source === 'user' || source === 'all') {
-        const userAgents = await this.agentService.queryAgents({
-          keyword: params.keyword,
-          limit,
-        });
+        const [userAgents, total] = await Promise.all([
+          this.agentService.queryAgents({ keyword: params.keyword, limit, offset }),
+          this.agentService.countAgents({ keyword: params.keyword }),
+        ]);
+        userTotal = total;
 
         agents.push(
           ...userAgents.map(
@@ -412,13 +421,14 @@ export class AgentManagerRuntime {
         );
       }
 
-      // Search marketplace agents
+      // Search marketplace agents (first page only — offset does not apply)
       if (source === 'market' || source === 'all') {
         const marketAgents = await this.discoverService.getAssistantList({
           pageSize: limit,
           q: params.keyword,
           ...(params.category && { category: params.category }),
         });
+        marketTotal = marketAgents.totalCount ?? marketAgents.items.length;
 
         agents.push(
           ...marketAgents.items.map((agent) => ({
@@ -433,21 +443,53 @@ export class AgentManagerRuntime {
       }
 
       const uniqueAgents = agents.slice(0, limit);
+      const totalCount = userTotal + marketTotal;
 
-      const agentList = uniqueAgents
-        .map((a) => `- ${a.title || 'Untitled'} (${a.id})${a.isMarket ? ' [Market]' : ''}`)
-        .join('\n');
+      // hasMore tracks workspace agents only: marketplace results are not offset-paged
+      const shownUserCount = uniqueAgents.filter((a) => !a.isMarket).length;
+      const hasMore = offset + shownUserCount < userTotal;
+
+      const headerBySource: Record<SearchAgentSource, string> = {
+        all: `Found ${userTotal} agents in your workspace and ${marketTotal} in the marketplace, showing ${uniqueAgents.length}:`,
+        market: `Found ${marketTotal} agents in the marketplace, showing the first ${uniqueAgents.length}:`,
+        user: `Found ${userTotal} agents in your workspace, showing ${offset + 1}-${offset + uniqueAgents.length}:`,
+      };
+
+      const notes: string[] = [];
+      if (params.limit && params.limit > MAX_SEARCH_AGENT_LIMIT) {
+        notes.push(
+          `Note: requested limit ${params.limit} exceeds the maximum of ${MAX_SEARCH_AGENT_LIMIT}, so results were capped at ${MAX_SEARCH_AGENT_LIMIT} per call.`,
+        );
+      }
+      if (hasMore) {
+        notes.push(
+          `More workspace agents available: call searchAgent with offset=${offset + shownUserCount}${source === 'all' ? ` and source="user"` : ''} to get the next page.`,
+        );
+      }
+
+      let content: string;
+      if (uniqueAgents.length === 0) {
+        content =
+          totalCount === 0
+            ? 'No agents found matching your search criteria.'
+            : `No agents at offset ${offset}; only ${totalCount} agents match. Retry with a smaller offset.`;
+      } else {
+        const agentList = uniqueAgents
+          .map((a) => `- ${a.title || 'Untitled'} (${a.id})${a.isMarket ? ' [Market]' : ''}`)
+          .join('\n');
+        content = `${headerBySource[source]}\n${agentList}`;
+      }
+      if (notes.length > 0) content += `\n\n${notes.join('\n')}`;
 
       return {
-        content:
-          uniqueAgents.length > 0
-            ? `Found ${uniqueAgents.length} agents:\n${agentList}`
-            : 'No agents found matching your search criteria.',
+        content,
         state: {
           agents: uniqueAgents,
+          hasMore,
           keyword: params.keyword,
+          offset,
           source,
-          totalCount: uniqueAgents.length,
+          totalCount,
         } as SearchAgentState,
         success: true,
       };
@@ -636,19 +678,19 @@ export class AgentManagerRuntime {
       const toolState = getToolStoreState();
 
       if (source === 'official') {
-        // Check if it's a Klavis tool
-        const isKlavisEnabled =
+        // Check if it's a Composio tool
+        const isComposioEnabled =
           typeof window !== 'undefined' &&
-          window.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
+          window.global_serverConfigStore?.getState()?.serverConfig?.enableComposio;
 
-        if (isKlavisEnabled) {
-          const klavisServer = klavisStoreSelectors
+        if (isComposioEnabled) {
+          const composioServer = composioStoreSelectors
             .getServers(toolState)
             .find((s) => s.identifier === identifier);
-          const klavisTypeInfo = KLAVIS_SERVER_TYPES.find((t) => t.identifier === identifier);
+          const composioAppInfo = COMPOSIO_APP_TYPES.find((t) => t.identifier === identifier);
 
-          if (klavisTypeInfo) {
-            return this.handleKlavisInstall(agentId, identifier, klavisTypeInfo, klavisServer);
+          if (composioAppInfo) {
+            return this.handleComposioInstall(agentId, identifier, composioAppInfo, composioServer);
           }
         }
 
@@ -735,39 +777,42 @@ export class AgentManagerRuntime {
     }
   }
 
-  private async handleKlavisInstall(
+  private async handleComposioInstall(
     agentId: string,
     identifier: string,
-    klavisTypeInfo: (typeof KLAVIS_SERVER_TYPES)[0],
-    klavisServer: any,
+    composioAppInfo: (typeof COMPOSIO_APP_TYPES)[0],
+    composioServer: any,
   ): Promise<BuiltinToolResult> {
-    if (klavisServer) {
-      if (klavisServer.status === KlavisServerStatus.CONNECTED) {
+    if (composioServer) {
+      if (composioServer.status === ComposioServerStatus.ACTIVE) {
         await this.enablePluginForAgent(agentId, identifier);
         return {
-          content: `Successfully enabled Klavis tool: ${klavisTypeInfo.label}`,
+          content: `Successfully enabled Composio tool: ${composioAppInfo.label}`,
           state: {
             installed: true,
-            isKlavis: true,
+            isComposio: true,
             pluginId: identifier,
-            pluginName: klavisTypeInfo.label,
+            pluginName: composioAppInfo.label,
             serverStatus: 'connected',
             success: true,
           } as InstallPluginState,
           success: true,
         };
-      } else if (klavisServer.status === KlavisServerStatus.PENDING_AUTH) {
-        if (klavisServer.oauthUrl) {
-          const authResult = await this.openOAuthWindowAndWait(klavisServer.oauthUrl, identifier);
+      } else if (composioServer.status === ComposioServerStatus.PENDING_AUTH) {
+        if (composioServer.redirectUrl) {
+          const authResult = await this.openOAuthWindowAndWait(
+            composioServer.redirectUrl,
+            identifier,
+          );
           if (authResult.success) {
             await this.enablePluginForAgent(agentId, identifier);
             return {
-              content: `Successfully connected and enabled Klavis tool: ${klavisTypeInfo.label}`,
+              content: `Successfully connected and enabled Composio tool: ${composioAppInfo.label}`,
               state: {
                 installed: true,
-                isKlavis: true,
+                isComposio: true,
                 pluginId: identifier,
-                pluginName: klavisTypeInfo.label,
+                pluginName: composioAppInfo.label,
                 serverStatus: 'connected',
                 success: true,
               } as InstallPluginState,
@@ -776,12 +821,12 @@ export class AgentManagerRuntime {
           }
         }
         return {
-          content: `OAuth authorization was cancelled or failed for Klavis tool: ${klavisTypeInfo.label}. Please try again.`,
+          content: `OAuth authorization was cancelled or failed for Composio tool: ${composioAppInfo.label}. Please try again.`,
           state: {
             installed: false,
-            isKlavis: true,
+            isComposio: true,
             pluginId: identifier,
-            pluginName: klavisTypeInfo.label,
+            pluginName: composioAppInfo.label,
             serverStatus: 'pending_auth',
             success: false,
           } as InstallPluginState,
@@ -794,53 +839,52 @@ export class AgentManagerRuntime {
     const userId = userProfileSelectors.userId(getUserStoreState());
     if (!userId) {
       return {
-        content: `Cannot connect Klavis tool: User not logged in.`,
+        content: `Cannot connect Composio tool: User not logged in.`,
         error: { message: 'User not logged in', type: 'AuthRequired' },
-        state: {
-          installed: false,
-          pluginId: identifier,
-          success: false,
-        } as InstallPluginState,
+        state: { installed: false, pluginId: identifier, success: false } as InstallPluginState,
         success: false,
       };
     }
 
-    const newServer = await getToolStoreState().createKlavisServer({
+    const newServer = await getToolStoreState().createComposioConnection({
+      appSlug: composioAppInfo.appSlug,
       identifier,
-      serverName: klavisTypeInfo.serverName,
-      userId,
+      label: composioAppInfo.label,
     });
 
     if (newServer) {
-      await this.enablePluginForAgent(agentId, identifier);
-
-      if (newServer.isAuthenticated) {
-        await getToolStoreState().refreshKlavisServerTools(newServer.identifier);
+      // Enable the plugin only once the connection is actually usable. Enabling
+      // before OAuth completes would leave an enabled-but-unauthorized tool on
+      // the agent if the user cancels the authorization.
+      if (newServer.status === ComposioServerStatus.ACTIVE) {
+        await this.enablePluginForAgent(agentId, identifier);
+        await getToolStoreState().refreshComposioConnectionStatus(newServer.identifier);
         return {
-          content: `Successfully connected and enabled Klavis tool: ${klavisTypeInfo.label}`,
+          content: `Successfully connected and enabled Composio tool: ${composioAppInfo.label}`,
           state: {
             installed: true,
-            isKlavis: true,
+            isComposio: true,
             pluginId: identifier,
-            pluginName: klavisTypeInfo.label,
+            pluginName: composioAppInfo.label,
             serverStatus: 'connected',
             success: true,
           } as InstallPluginState,
           success: true,
         };
-      } else if (newServer.oauthUrl) {
+      } else if (newServer.redirectUrl) {
         const authResult = await this.openOAuthWindowAndWait(
-          newServer.oauthUrl,
+          newServer.redirectUrl,
           newServer.identifier,
         );
         if (authResult.success) {
+          await this.enablePluginForAgent(agentId, identifier);
           return {
-            content: `Successfully connected and enabled Klavis tool: ${klavisTypeInfo.label}`,
+            content: `Successfully connected and enabled Composio tool: ${composioAppInfo.label}`,
             state: {
               installed: true,
-              isKlavis: true,
+              isComposio: true,
               pluginId: identifier,
-              pluginName: klavisTypeInfo.label,
+              pluginName: composioAppInfo.label,
               serverStatus: 'connected',
               success: true,
             } as InstallPluginState,
@@ -851,8 +895,8 @@ export class AgentManagerRuntime {
     }
 
     return {
-      content: `Failed to connect Klavis tool: ${klavisTypeInfo.label}`,
-      error: { message: 'Failed to create Klavis server', type: 'KlavisError' },
+      content: `Failed to connect Composio tool: ${composioAppInfo.label}`,
+      error: { message: 'Failed to create Composio connection', type: 'ComposioError' },
       state: {
         installed: false,
         pluginId: identifier,
@@ -1010,17 +1054,17 @@ export class AgentManagerRuntime {
   }
 
   private openOAuthWindowAndWait(
-    oauthUrl: string,
+    redirectUrl: string,
     identifier: string,
   ): Promise<{ cancelled: boolean; success: boolean }> {
     const checkAuthStatus = async (): Promise<boolean> => {
       try {
-        await getToolStoreState().refreshKlavisServerTools(identifier);
+        await getToolStoreState().refreshComposioConnectionStatus(identifier);
         const freshToolStore = getToolStoreState();
-        const server = klavisStoreSelectors
+        const server = composioStoreSelectors
           .getServers(freshToolStore)
           .find((s) => s.identifier === identifier);
-        return server?.status === KlavisServerStatus.CONNECTED;
+        return server?.status === ComposioServerStatus.ACTIVE;
       } catch {
         return false;
       }
@@ -1061,7 +1105,7 @@ export class AgentManagerRuntime {
         );
       };
 
-      const oauthWindow = window.open(oauthUrl, '_blank', 'width=600,height=700');
+      const oauthWindow = window.open(redirectUrl, '_blank', 'width=600,height=700');
 
       if (oauthWindow) {
         windowCheckInterval = setInterval(async () => {
@@ -1083,7 +1127,7 @@ export class AgentManagerRuntime {
   }
 
   private openLobehubSkillOAuthWindowAndWait(
-    oauthUrl: string,
+    redirectUrl: string,
     provider: string,
   ): Promise<{ cancelled: boolean; success: boolean }> {
     const checkAuthStatus = async (): Promise<boolean> => {
@@ -1146,7 +1190,7 @@ export class AgentManagerRuntime {
         );
       };
 
-      const oauthWindow = window.open(oauthUrl, '_blank', 'width=600,height=700');
+      const oauthWindow = window.open(redirectUrl, '_blank', 'width=600,height=700');
 
       if (oauthWindow) {
         windowCheckInterval = setInterval(async () => {

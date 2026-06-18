@@ -7,6 +7,7 @@ import { type PartialDeep } from 'type-fest';
 
 import { DEFAULT_PREFERENCE } from '@/const/user';
 import { mutate, useOnlyFetchOnceSWR } from '@/libs/swr';
+import { taskTemplateKeys, userKeys } from '@/libs/swr/keys';
 import { userService } from '@/services/user';
 import { type StoreSetter } from '@/store/types';
 import { type UserStore } from '@/store/user';
@@ -20,7 +21,6 @@ import { userGeneralSettingsSelectors } from '../settings/selectors';
 
 const n = setNamespace('common');
 
-const GET_USER_STATE_KEY = 'initUserState';
 /**
  * Common actions
  */
@@ -28,6 +28,9 @@ const GET_USER_STATE_KEY = 'initUserState';
 type Setter = StoreSetter<UserStore>;
 export const createCommonSlice = (set: Setter, get: () => UserStore, _api?: unknown) =>
   new CommonActionImpl(set, get, _api);
+
+export const isTaskTemplateRecommendationKey = (key: unknown): boolean =>
+  Array.isArray(key) && key[0] === taskTemplateKeys.listDailyRecommend.root;
 
 export class CommonActionImpl {
   readonly #get: () => UserStore;
@@ -40,7 +43,7 @@ export class CommonActionImpl {
   }
 
   refreshUserState = async (): Promise<void> => {
-    await mutate(GET_USER_STATE_KEY);
+    await mutate(userKeys.initState());
   };
 
   updateAvatar = async (avatar: string): Promise<void> => {
@@ -59,6 +62,9 @@ export class CommonActionImpl {
       this.#set({ user: { ...previousUser, interests } }, false, n('updateInterests/optimistic'));
     }
     await userService.updateInterests(interests);
+    void mutate(isTaskTemplateRecommendationKey).catch((error) => {
+      console.error('[taskTemplate:recommendationCache:invalidate]', error);
+    });
     await this.#get().refreshUserState();
   };
 
@@ -73,7 +79,7 @@ export class CommonActionImpl {
 
   useCheckTrace = (shouldFetch: boolean): SWRResponse<any> => {
     return useSWR<boolean>(
-      shouldFetch ? 'checkTrace' : null,
+      shouldFetch ? userKeys.checkTrace() : null,
       () => {
         const telemetry = userGeneralSettingsSelectors.telemetry(this.#get());
 
@@ -97,7 +103,7 @@ export class CommonActionImpl {
     },
   ): SWRResponse => {
     return useOnlyFetchOnceSWR<UserInitializationState>(
-      !!isLogin || isDesktop ? GET_USER_STATE_KEY : null,
+      !!isLogin || isDesktop ? userKeys.initState() : null,
       () => userService.getUserState(),
       {
         onError: (error) => {

@@ -13,6 +13,7 @@
   "actions.expand.on": "Genişlet",
   "actions.typobar.off": "Biçimlendirme araç çubuğunu gizle",
   "actions.typobar.on": "Biçimlendirme araç çubuğunu göster",
+  "actions.typobar.title": "Biçimlendirme Aracı",
   "autoSave.latest": "En son sürüm yüklendi",
   "autoSave.saved": "Kaydedildi",
   "autoSave.saving": "Otomatik kaydediliyor...",

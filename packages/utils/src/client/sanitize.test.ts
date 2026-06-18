@@ -41,6 +41,7 @@ describe('sanitizeSVGContent', () => {
     const maliciousSvg = `
       <svg xmlns="http://www.w3.org/2000/svg">
         <circle cx="50" cy="50" r="40" fill="red" onclick="alert('click')" onload="alert('load')" />
+        <rect width="10" height="10" onMouseOver='alert("hover")' onfocus=alert(1) />
       </svg>
     `;
 
@@ -48,8 +49,20 @@ describe('sanitizeSVGContent', () => {
 
     expect(sanitized).not.toContain('onclick');
     expect(sanitized).not.toContain('onload');
+    expect(sanitized).not.toContain('onMouseOver');
+    expect(sanitized).not.toContain('onfocus');
     expect(sanitized).toContain('<circle');
     expect(sanitized).toContain('fill="red"');
+  });
+
+  it('should not leave a recombined event handler after stripping', () => {
+    // Removing the inner handler in a single pass would splice ` on` + `click="y"` back into a
+    // fresh ` onclick="y"`; the scrub must repeat until no handler remains.
+    const malicious = `<svg xmlns="http://www.w3.org/2000/svg"><circle on onclick="x"click="y" /></svg>`;
+
+    const sanitized = sanitizeSVGContent(malicious);
+
+    expect(sanitized).not.toMatch(/\son[a-z]+\s*=/i);
   });
 
   it('should remove dangerous embed and object tags', () => {
@@ -93,16 +106,20 @@ describe('sanitizeSVGContent', () => {
 
     const sanitized = sanitizeSVGContent(complexSvg);
 
-    // Should preserve safe elements and attributes
-    expect(sanitized).toEqual(`
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
-        <defs>
-          <linearGradient id="grad1">
-            <stop offset="0%" stop-color="red"></stop>
-            <stop offset="100%" stop-color="blue"></stop>
-          </linearGradient>
-        </defs>
-        <g transform="translate(50,50)">
-          </g></svg>`);
+    // Should preserve safe structure (assert by property, not exact serialization —
+    // whitespace/self-closing handling varies across DOM engines).
+    expect(sanitized).toContain('<svg');
+    expect(sanitized).toContain('viewBox="0 0 200 200"');
+    expect(sanitized).toContain('<linearGradient id="grad1"');
+    expect(sanitized).toContain('stop-color="red"');
+    expect(sanitized).toContain('transform="translate(50,50)"');
+
+    // Should strip all threats regardless of engine
+    expect(sanitized).not.toContain('<script');
+    expect(sanitized).not.toContain('malicious');
+    expect(sanitized).not.toContain('onclick');
+    expect(sanitized).not.toContain('onload');
+    expect(sanitized).not.toContain('hack()');
+    expect(sanitized).not.toContain('evil()');
   });
 });

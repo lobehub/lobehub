@@ -1,4 +1,5 @@
 import { type DocumentType } from '@lobechat/builtin-tool-notebook';
+import type { AGENT_PLAN_FILE_TYPE } from '@lobechat/const';
 import { type DocumentItem } from '@lobechat/database/schemas';
 import { type NotebookDocument } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
@@ -18,7 +19,7 @@ const n = setNamespace('notebook');
 
 export { SWR_USE_FETCH_NOTEBOOK_DOCUMENTS } from '@/services/document/swrKeys';
 
-type ExtendedDocumentType = DocumentType | 'agent/plan';
+type ExtendedDocumentType = DocumentType | typeof AGENT_PLAN_FILE_TYPE;
 
 interface CreateDocumentParams {
   content: string;

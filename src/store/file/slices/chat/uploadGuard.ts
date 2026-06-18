@@ -8,6 +8,18 @@ const SUPPORTED_CHAT_IMAGE_TYPES = new Set([
 
 const SUPPORTED_CHAT_IMAGE_EXTENSIONS = new Set(['gif', 'jpeg', 'jpg', 'png', 'webp']);
 
+const SUPPORTED_CHAT_AUDIO_EXTENSIONS = new Set([
+  'aac',
+  'flac',
+  'm4a',
+  'mp3',
+  'oga',
+  'ogg',
+  'opus',
+  'wav',
+  'weba',
+]);
+
 const SUPPORTED_CHAT_DOCUMENT_EXTENSIONS = new Set([
   'bat',
   'bash',
@@ -103,7 +115,11 @@ export const isSupportedChatUploadFile = (file: File) => {
 
   if (fileType.startsWith('video/')) return true;
 
-  if (fileType.startsWith('audio/')) return false;
+  if (fileType.startsWith('audio/')) return true;
+
+  // Some audio containers (e.g. .m4a) report an empty or non-audio mime in the
+  // browser, so fall back to the extension before the document checks below.
+  if (SUPPORTED_CHAT_AUDIO_EXTENSIONS.has(extension)) return true;
 
   if (extension) return SUPPORTED_CHAT_DOCUMENT_EXTENSIONS.has(extension);
 

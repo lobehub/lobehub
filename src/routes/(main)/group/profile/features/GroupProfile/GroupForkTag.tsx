@@ -4,8 +4,8 @@ import { Icon, Tag } from '@lobehub/ui';
 import { GitFork } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { marketApiService } from '@/services/marketApi';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
@@ -17,7 +17,7 @@ import { type AgentGroupForkSourceResponse } from '@/types/discover';
  */
 const GroupForkTag = memo(() => {
   const { t } = useTranslation('setting');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const [forkSource, setForkSource] = useState<AgentGroupForkSourceResponse['source']>(null);
   const [loading, setLoading] = useState(false);
 

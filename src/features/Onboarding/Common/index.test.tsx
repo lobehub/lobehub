@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const metrics = {
@@ -19,6 +19,20 @@ interface RenderOptions {
   serverConfigInit?: boolean;
   setOnboardingStep?: ReturnType<typeof vi.fn>;
 }
+
+const BranchPage = ({ label, testId }: { label: string; testId: string }) => {
+  const location = useLocation();
+
+  return (
+    <div>
+      <span>{label}</span>
+      <span data-testid={testId}>
+        {location.pathname}
+        {location.search}
+      </span>
+    </div>
+  );
+};
 
 const renderCommon = async ({
   AGENT_ONBOARDING_ENABLED = true,
@@ -113,8 +127,14 @@ const renderCommon = async ({
     <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
         <Route element={<CommonOnboardingPage />} path="/onboarding" />
-        <Route element={<div>Agent onboarding</div>} path="/onboarding/agent" />
-        <Route element={<div>Classic onboarding</div>} path="/onboarding/classic" />
+        <Route
+          element={<BranchPage label="Agent onboarding" testId="agent-branch-location" />}
+          path="/onboarding/agent"
+        />
+        <Route
+          element={<BranchPage label="Classic onboarding" testId="classic-branch-location" />}
+          path="/onboarding/classic"
+        />
       </Routes>
     </MemoryRouter>,
   );
@@ -169,6 +189,18 @@ describe('CommonOnboardingPage', () => {
   it('redirects to /onboarding/agent when shared prefix is complete and agent flag is on', async () => {
     await renderCommon({ commonStepsCompleted: true, enableAgentOnboarding: true });
     expect(screen.getByText('Agent onboarding')).toBeInTheDocument();
+  });
+
+  it('threads callbackUrl when redirecting to the agent branch', async () => {
+    await renderCommon({
+      commonStepsCompleted: true,
+      enableAgentOnboarding: true,
+      initialEntry: '/onboarding?callbackUrl=%2Fsettings%3Ftab%3Dprofile',
+    });
+
+    expect(screen.getByTestId('agent-branch-location')).toHaveTextContent(
+      '/onboarding/agent?callbackUrl=%2Fsettings%3Ftab%3Dprofile',
+    );
   });
 
   it('redirects to /onboarding/classic when shared prefix is complete and agent flag is off', async () => {

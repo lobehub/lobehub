@@ -21,9 +21,9 @@ const useModelBuiltinSearch = (s: AgentStoreState) =>
 const searchFCModel = (s: AgentStoreState) =>
   chatConfigByIdSelectors.getSearchFCModelById(s.activeAgentId || '')(s);
 
-// Use raw chatConfig value, not the selector with business logic that may force false
+// Read the stored history flag directly; model-level mode overrides should not affect history.
 const enableHistoryCount = (s: AgentStoreState) =>
-  chatConfigByIdSelectors.getChatConfigById(s.activeAgentId || '')(s).enableHistoryCount;
+  chatConfigByIdSelectors.getEnableHistoryCountById(s.activeAgentId || '')(s);
 
 const historyCount = (s: AgentStoreState): number =>
   chatConfigByIdSelectors.getHistoryCountById(s.activeAgentId || '')(s);

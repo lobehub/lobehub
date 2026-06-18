@@ -1,15 +1,7 @@
 export type RedisKey = string | Buffer;
 export type RedisValue = string | Buffer | number;
 
-export type RedisConfig = {
-  database?: number;
-  enabled: boolean;
-  password?: string;
-  prefix: string;
-  tls: boolean;
-  url: string;
-  username?: string;
-};
+export type { RedisConfig } from '@lobechat/types';
 
 export interface SetOptions {
   ex?: number;

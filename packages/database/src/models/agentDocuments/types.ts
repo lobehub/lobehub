@@ -6,6 +6,7 @@
 import type {
   AgentDocumentPolicy,
   DocumentLoadFormat,
+  DocumentLoadPosition as DocumentLoadPositionType,
   DocumentLoadRules,
   PolicyLoad,
 } from '@lobechat/agent-templates';
@@ -23,6 +24,7 @@ export {
 export type { AgentDocumentPolicy, DocumentLoadRules } from '@lobechat/agent-templates';
 
 export type AgentDocumentSourceType = 'file' | 'web' | 'api' | 'topic' | 'agent' | 'agent-signal';
+export type AgentDocumentListSourceType = 'all' | 'file' | 'web';
 
 /**
  * UI-facing tab grouping for an agent document. Derived from `fileType` +
@@ -79,6 +81,60 @@ export interface AgentDocument {
 
 export interface AgentDocumentWithRules extends AgentDocument, AgentDocumentDerivedFields {
   loadRules: DocumentLoadRules;
+}
+
+export interface AgentDocumentListItem extends AgentDocumentDerivedFields {
+  description: string | null;
+  documentId: string;
+  filename: string;
+  fileType: string;
+  id: string;
+  loadPosition: DocumentLoadPositionType | undefined;
+  parentId: string | null;
+  sourceType: AgentDocumentSourceType;
+  templateId: string | null;
+  title: string;
+  updatedAt: Date;
+}
+
+export interface AgentDocumentContextRow extends AgentDocumentDerivedFields {
+  content: string;
+  contentCharCount?: number;
+  description: string | null;
+  documentId: string;
+  editorData: Record<string, any> | null;
+  filename: string;
+  fileType: string;
+  id: string;
+  loadRules: DocumentLoadRules;
+  parentId: string | null;
+  policy: AgentDocumentPolicy | null;
+  policyLoad: PolicyLoad;
+  policyLoadFormat: DocumentLoadFormat;
+  policyLoadPosition: string;
+  policyLoadRule: string;
+  sourceType: AgentDocumentSourceType;
+  templateId: string | null;
+  title: string;
+  updatedAt: Date;
+}
+
+export interface AgentDocumentContextPayload {
+  content: string;
+  contentCharCount?: number;
+  description: string | null;
+  filename: string;
+  id: string;
+  isFolder: boolean;
+  loadRules: DocumentLoadRules;
+  policy: AgentDocumentPolicy | null;
+  policyLoad: PolicyLoad;
+  policyLoadFormat: DocumentLoadFormat;
+  policyLoadPosition: string;
+  sourceType: AgentDocumentSourceType;
+  templateId: string | null;
+  title: string;
+  updatedAt: Date;
 }
 
 export interface ToolUpdateLoadRule {

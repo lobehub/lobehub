@@ -6,7 +6,8 @@ import { createStaticStyles } from 'antd-style';
 import { ImageIcon, Video } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 export interface GenerationMediaModeSegmentProps {
   /** `hero`: large inline headline select (cyan, borderless). `toolbar`: compact control in the input bar. */
@@ -33,7 +34,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const GenerationMediaModeSegment = memo<GenerationMediaModeSegmentProps>(
   ({ mode, layout = 'toolbar' }) => {
     const { t } = useTranslation('common');
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const isHero = layout === 'hero';
 
     const options = useMemo<SelectProps['options']>(

@@ -40,6 +40,7 @@
   "agentMarketplace.render.alreadyInLibraryTag": "قبلاً در کتابخانه",
   "agentMarketplace.render.alreadyInLibrary_one": "{{count}} قبلاً در کتابخانه",
   "agentMarketplace.render.alreadyInLibrary_other": "{{count}} قبلاً در کتابخانه",
+  "claudeCode.askUserQuestion.customOption.placeholder": "یا خودتان بنویسید…",
   "claudeCode.askUserQuestion.escape.back": "بازگشت به گزینه‌ها",
   "claudeCode.askUserQuestion.escape.enter": "یا مستقیماً تایپ کنید",
   "claudeCode.askUserQuestion.escape.placeholder": "پاسخ خود را اینجا تایپ کنید…",

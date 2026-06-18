@@ -1,8 +1,8 @@
 import { builtinTools } from '@lobechat/builtin-tools';
 import {
+  COMPOSIO_APP_TYPES,
+  type ComposioAppType,
   getLobehubSkillProviderById,
-  KLAVIS_SERVER_TYPES,
-  type KlavisServerType,
   type LobehubSkillProviderType,
 } from '@lobechat/const';
 import { type DiscoverPluginDetail, type PluginSource } from '@lobechat/types';
@@ -10,17 +10,17 @@ import { Avatar, Block, Flexbox, Icon, Image, Skeleton, Tag, Text } from '@lobeh
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 import urlJoin from 'url-join';
 
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useDiscoverStore } from '@/store/discover';
 
 /**
- * Icon component for built-in tools (Klavis & LobehubSkill)
+ * Icon component for built-in tools (Composio & LobehubSkill)
  * For string type icon, use Image component to render
  * For IconType type icon, use Icon component to render with theme fill color
  */
-const BuiltinToolIcon = memo<Pick<KlavisServerType | LobehubSkillProviderType, 'icon' | 'label'>>(
+const BuiltinToolIcon = memo<Pick<ComposioAppType | LobehubSkillProviderType, 'icon' | 'label'>>(
   ({ icon, label }) => {
     if (typeof icon === 'string') {
       return <Image alt={label} height={40} src={icon} style={{ flex: 'none' }} width={40} />;
@@ -78,9 +78,9 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
   const usePluginDetail = useDiscoverStore((s) => s.usePluginDetail);
   const { data: apiData, isLoading } = usePluginDetail({ identifier, withManifest: false });
 
-  // Try to get Klavis tool info if API returns no data
-  const klavisTool = useMemo(() => {
-    return KLAVIS_SERVER_TYPES.find((tool) => tool.identifier === identifier);
+  // Try to get Composio tool info if API returns no data
+  const composioTool = useMemo(() => {
+    return COMPOSIO_APP_TYPES.find((tool) => tool.identifier === identifier);
   }, [identifier]);
 
   // Try to get LobehubSkill info if API returns no data
@@ -97,22 +97,22 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
   const data: DiscoverPluginDetail | undefined = useMemo(() => {
     if (apiData) return apiData;
 
-    // Check Klavis tools
-    if (klavisTool) {
+    // Check Composio tools
+    if (composioTool) {
       return {
-        author: 'Klavis',
+        author: 'Composio',
         avatar: '', // Avatar will be rendered by BuiltinToolIcon component
         category: undefined,
         createdAt: '',
-        description: `LobeHub Mcp Server: ${klavisTool.label}`,
-        homepage: 'https://klavis.ai',
-        identifier: klavisTool.identifier,
+        description: `LobeHub Mcp Server: ${composioTool.label}`,
+        homepage: 'https://composio.dev',
+        identifier: composioTool.identifier,
         manifest: undefined,
         related: [],
         schemaVersion: 1,
         source: 'builtin' as const,
-        tags: ['klavis', 'mcp'],
-        title: klavisTool.label,
+        tags: ['composio', 'mcp'],
+        title: composioTool.label,
       };
     }
 
@@ -155,7 +155,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
     }
 
     return undefined;
-  }, [apiData, klavisTool, lobehubSkill, builtinTool]);
+  }, [apiData, composioTool, lobehubSkill, builtinTool]);
 
   const sourceConfig = useMemo(() => {
     const source: PluginSource = data?.source || 'market';
@@ -205,8 +205,8 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
 
   // Render avatar - use BuiltinToolIcon for built-in tools, Avatar for others
   const renderAvatar = () => {
-    if (klavisTool) {
-      return <BuiltinToolIcon icon={klavisTool.icon} label={klavisTool.label} />;
+    if (composioTool) {
+      return <BuiltinToolIcon icon={composioTool.icon} label={composioTool.label} />;
     }
     if (lobehubSkill) {
       return <BuiltinToolIcon icon={lobehubSkill.icon} label={lobehubSkill.label} />;
@@ -270,7 +270,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
 
   // For internal links (market plugins), use Link component
   if (sourceConfig.href) {
-    return <Link to={sourceConfig.href}>{content}</Link>;
+    return <WorkspaceLink to={sourceConfig.href}>{content}</WorkspaceLink>;
   }
 
   return content;

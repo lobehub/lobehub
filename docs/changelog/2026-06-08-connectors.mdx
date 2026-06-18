@@ -1,0 +1,39 @@
+---
+title: Connectors & Connect Agents
+description: >-
+  Govern every tool with the new Connectors system, run Connect Agents on your own device, and track spending right in the activity heatmap.
+
+tags:
+  - Connectors
+  - Connect Agent
+  - Insights
+  - Models
+---
+
+# Connectors & Connect Agents
+
+## Features
+
+- **Connectors.** All of an agent's tools (MCP servers, Skill Market skills, built-in tools, and third-party integrations) now sit under one permission layer. For each tool you choose whether it runs freely, pauses for your approval, or stays off. Read-only actions like fetching or listing are detected automatically, so they aren't blocked by mistake.
+- **Connect Agents.** What you used to create as a "Platform Agent" is now a Connect Agent: a third-party agent that runs on your own device rather than on LobeHub. The execution-device switcher appears for every agent, so you can point any conversation at a specific machine. Agents can call MCP tools through your device with results shown inline, and server-run agents scan the project folder you bind them to, picking up `.agents/skills`, `.claude/skills`, and your `AGENTS.md` / `CLAUDE.md`.
+- **Token usage in the heatmap.** The activity heatmap added a token-usage mode, so you can switch from how often you chatted to how much each day cost without leaving the page.
+- **New model: MiniMax M3**, including its video runtime.
+- **Configurable model routing and starters**, for finer control over which model handles what.
+
+## Improvements
+
+- The chat input's "+" menu was reworked with toggle switches and grouped submenus, and pinned tools now have their own section.
+- Command output renders ANSI colors, so command logs read like your terminal.
+- Inside a task, the comment box is now a full chat input that can start a new run.
+- The topic sidebar can group conversations by status, and one click collapses or expands every group.
+- Cleaner auto-generated topic titles, with better results on DeepSeek and stray Markdown stripped from fallback titles.
+- The agent document editor renders system docs, defaults new files to `.md`, and keeps typing smooth for Chinese, Japanese, and Korean input.
+- Delete confirmations have clearer titles and wording across the app.
+- Agent documents load noticeably faster.
+
+## Fixes
+
+- Page Agent edits now run in the cloud, so they no longer break when you switch tabs, navigate away, or hit a network blip.
+- Streaming no longer duplicates after a dropped reconnect, and home-screen starters load more reliably.
+- Desktop: macOS auto-update signing works again, the updater quits cleanly, CLI tools resolve from your shell `PATH`, and a startup crash is fixed.
+- The GitHub bot now shows its command-result card.

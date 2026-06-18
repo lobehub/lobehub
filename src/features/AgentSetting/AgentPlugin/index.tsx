@@ -7,12 +7,13 @@ import isEqual from 'fast-deep-equal';
 import { BlocksIcon, LucideTrash2, Store } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import PluginTag from '@/components/Plugins/PluginTag';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { createSkillStoreModal } from '@/features/SkillStore';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { pluginHelpers, useToolStore } from '@/store/tool';
@@ -27,14 +28,15 @@ import PluginAction from './PluginAction';
 const AgentPlugin = memo(() => {
   const { t } = useTranslation('setting');
 
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
 
   const handleOpenStore = useCallback(() => {
     createSkillStoreModal();
   }, []);
 
-  const [userEnabledPlugins, toggleAgentPlugin] = useStore((s) => [
+  const [userEnabledPlugins, disabled, toggleAgentPlugin] = useStore((s) => [
     s.config.plugins || [],
+    s.disabled,
     s.toggleAgentPlugin,
   ]);
 
@@ -79,7 +81,10 @@ const AgentPlugin = memo(() => {
       children: (
         <Switch
           checked={true}
+          disabled={disabled}
           onChange={() => {
+            if (disabled) return;
+
             toggleAgentPlugin(id);
           }}
         />
@@ -105,10 +110,13 @@ const AgentPlugin = memo(() => {
       {hasDeprecated ? (
         <Tooltip title={t('plugin.clearDeprecated')}>
           <Button
+            disabled={disabled}
             icon={LucideTrash2}
             size={'small'}
             onClick={(e) => {
               e.stopPropagation();
+              if (disabled) return;
+
               for (const i of deprecatedList) {
                 toggleAgentPlugin(i.tag as string);
               }
@@ -140,7 +148,7 @@ const AgentPlugin = memo(() => {
         description={
           <Trans i18nKey={'plugin.empty'} ns={'setting'}>
             暂无安装插件，
-            <Link
+            <WorkspaceLink
               to={'/community/mcp'}
               onClick={(e) => {
                 e.stopPropagation();
@@ -150,7 +158,7 @@ const AgentPlugin = memo(() => {
               }}
             >
               前往插件市场
-            </Link>
+            </WorkspaceLink>
             安装
           </Trans>
         }

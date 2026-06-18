@@ -1,3 +1,4 @@
+import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import { Button, Flexbox, Icon, Modal } from '@lobehub/ui';
 import { App } from 'antd';
 import { FolderIcon } from 'lucide-react';
@@ -49,7 +50,7 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
 
         // Filter only folders
         const folderItems = response.items
-          .filter((item) => item.fileType === 'custom/folder')
+          .filter((item) => item.fileType === CUSTOM_FOLDER_FILE_TYPE)
           .map((item) => ({
             children: undefined,
             id: item.id,
@@ -85,7 +86,7 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
 
           // Filter only folders
           const childFolders: FolderTreeItem[] = response.items
-            .filter((item) => item.fileType === 'custom/folder')
+            .filter((item) => item.fileType === CUSTOM_FOLDER_FILE_TYPE)
             .map((item) => ({
               children: undefined,
               id: item.id,
@@ -131,7 +132,7 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
 
           // Filter only folders
           const childFolders: FolderTreeItem[] = response.items
-            .filter((item) => item.fileType === 'custom/folder')
+            .filter((item) => item.fileType === CUSTOM_FOLDER_FILE_TYPE)
             .map((item) => ({
               children: undefined,
               id: item.id,

@@ -3,11 +3,10 @@ import type { ToolStatus } from '@lobechat/electron-client-ipc';
 import { HETEROGENEOUS_AGENT_CLIENT_CONFIGS } from '@lobechat/heterogeneous-agents/client';
 import useSWR from 'swr';
 
+import { recommendationsKeys } from '@/libs/swr/keys';
 import { toolDetectorService } from '@/services/electron/toolDetector';
 
 import type { HeteroDetectionMap } from '../actions/types';
-
-const SWR_KEY = 'recommendations.heteroDetections';
 
 /**
  * Probe local Claude Code / Codex CLIs in parallel and cache the result.
@@ -18,7 +17,7 @@ const SWR_KEY = 'recommendations.heteroDetections';
  */
 export const useHeteroDetections = (): HeteroDetectionMap => {
   const { data } = useSWR(
-    isDesktop ? SWR_KEY : null,
+    isDesktop ? recommendationsKeys.heteroDetections() : null,
     async () => {
       const entries = await Promise.all(
         HETEROGENEOUS_AGENT_CLIENT_CONFIGS.map(async (config) => {

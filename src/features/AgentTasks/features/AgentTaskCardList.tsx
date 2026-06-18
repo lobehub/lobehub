@@ -1,8 +1,8 @@
 import { Block, Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { Fragment, memo, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useAgentStore } from '@/store/agent';
 import { useTaskStore } from '@/store/task';
 import { taskListSelectors } from '@/store/task/selectors';
@@ -13,7 +13,7 @@ import TaskListHeader from './TaskListHeader';
 
 const AgentTaskCardList = memo(() => {
   const agentId = useAgentStore((s) => s.activeAgentId);
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const useFetchTaskList = useTaskStore((s) => s.useFetchTaskList);
   useFetchTaskList({ agentId });
 

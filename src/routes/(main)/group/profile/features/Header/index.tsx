@@ -7,6 +7,7 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
+import { usePermission } from '@/hooks/usePermission';
 import { parseAsString, useQueryState } from '@/hooks/useQueryParam';
 import AddGroupMemberModal from '@/routes/(main)/group/_layout/Sidebar/AddGroupMemberModal';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -43,6 +44,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const Header = memo(() => {
   const { t } = useTranslation('chat');
+  const { allowed: canEdit, reason } = usePermission('edit_own_content');
 
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -95,6 +97,8 @@ const Header = memo(() => {
         <div className={styles.tabsWrapper}>
           <ChromeTabs
             activeId={selectedTabId}
+            addDisabled={!canEdit}
+            addDisabledReason={reason}
             items={tabItems}
             onAdd={() => setShowAddModal(true)}
             onChange={setSelectedTabId}

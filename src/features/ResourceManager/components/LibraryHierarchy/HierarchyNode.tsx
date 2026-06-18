@@ -1,16 +1,17 @@
 'use client';
 
 import { CaretDownFilled, LoadingOutlined } from '@ant-design/icons';
+import { DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import { ActionIcon, Block, Flexbox, Icon, showContextMenu, stopPropagation } from '@lobehub/ui';
 import { App, Input } from 'antd';
 import { cx } from 'antd-style';
 import { FileText, FolderIcon, FolderOpenIcon } from 'lucide-react';
 import * as m from 'motion/react-m';
 import React, { memo, useCallback, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import FileIcon from '@/components/FileIcon';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import {
   getTransparentDragImage,
   useDragActive,
@@ -36,7 +37,7 @@ interface HierarchyNodeProps {
 
 export const HierarchyNode = memo<HierarchyNodeProps>(
   ({ item, level = 0, isExpanded, isLoading, onToggle, selectedKey, parentKey }) => {
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const { message } = App.useApp();
 
     const [setMode, libraryId] = useResourceManagerStore((s) => [s.setMode, s.libraryId]);
@@ -62,7 +63,7 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
       const pageMatch =
         !isPDF &&
         !isOfficeFile &&
-        (item.sourceType === 'document' || item.fileType === PAGE_FILE_TYPE);
+        (item.sourceType === DERIVED_DOCUMENT_SOURCE_TYPE || item.fileType === PAGE_FILE_TYPE);
 
       return {
         emoji: pageMatch ? item.metadata?.emoji : null,

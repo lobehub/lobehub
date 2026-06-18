@@ -6,6 +6,7 @@ import { DocumentModel } from '../../models/document';
 import { FileModel } from '../../models/file';
 import { DOCUMENT_FOLDER_TYPE, documents, files, knowledgeBaseFiles } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 
 export interface KnowledgeItem {
   chunkTaskId?: string | null;
@@ -39,13 +40,25 @@ export class KnowledgeRepo {
   private db: LobeChatDatabase;
   private fileModel: FileModel;
   private documentModel: DocumentModel;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
-    this.fileModel = new FileModel(db, userId);
-    this.documentModel = new DocumentModel(db, userId);
+    this.workspaceId = workspaceId;
+    this.fileModel = new FileModel(db, userId, workspaceId);
+    this.documentModel = new DocumentModel(db, userId, workspaceId);
   }
+
+  private fileOwnershipSql = (alias: 'f' = 'f') =>
+    this.workspaceId
+      ? sql`${sql.raw(`${alias}.workspace_id`)} = ${this.workspaceId}`
+      : sql`${sql.raw(`${alias}.user_id`)} = ${this.userId} AND ${sql.raw(`${alias}.workspace_id`)} IS NULL`;
+
+  private documentOwnershipSql = (alias: 'd' | 'documents' = 'd') =>
+    this.workspaceId
+      ? sql`${sql.raw(`${alias}.workspace_id`)} = ${this.workspaceId}`
+      : sql`${sql.raw(`${alias}.user_id`)} = ${this.userId} AND ${sql.raw(`${alias}.workspace_id`)} IS NULL`;
 
   /**
    * Query combined results from files and documents tables
@@ -183,7 +196,7 @@ export class KnowledgeRepo {
       FROM ${files} f
       LEFT JOIN ${documents} d
         ON f.id = d.file_id
-      WHERE f.user_id = ${this.userId}
+      WHERE ${this.fileOwnershipSql('f')}
         AND NOT EXISTS (
           SELECT 1 FROM ${knowledgeBaseFiles}
           WHERE ${knowledgeBaseFiles.fileId} = f.id
@@ -209,7 +222,7 @@ export class KnowledgeRepo {
         metadata,
         'document' as source_type
       FROM ${documents}
-      WHERE user_id = ${this.userId}
+      WHERE ${this.documentOwnershipSql('documents')}
         AND source_type != ${'file'}
         AND knowledge_base_id IS NULL
     `;
@@ -315,7 +328,10 @@ export class KnowledgeRepo {
 
     if (document.fileType === DOCUMENT_FOLDER_TYPE) {
       const children = await this.db.query.documents.findMany({
-        where: and(eq(documents.parentId, id), eq(documents.userId, this.userId)),
+        where: and(
+          eq(documents.parentId, id),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, documents),
+        ),
       });
 
       for (const child of children) {
@@ -323,7 +339,10 @@ export class KnowledgeRepo {
       }
 
       const childFiles = await this.db.query.files.findMany({
-        where: and(eq(files.parentId, id), eq(files.userId, this.userId)),
+        where: and(
+          eq(files.parentId, id),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, files),
+        ),
       });
 
       for (const file of childFiles) {
@@ -345,7 +364,7 @@ export class KnowledgeRepo {
     showFilesInKnowledgeBase,
     parentId,
   }: QueryFileListParams = {}): ReturnType<typeof sql> {
-    const whereConditions: any[] = [sql`f.user_id = ${this.userId}`];
+    const whereConditions: any[] = [this.fileOwnershipSql('f')];
 
     // Parent ID filter
     if (parentId !== undefined) {
@@ -376,7 +395,7 @@ export class KnowledgeRepo {
     // Knowledge base filter
     if (knowledgeBaseId) {
       // Build where conditions using proper table references (f.column instead of files.column)
-      const kbWhereConditions: any[] = [sql`f.user_id = ${this.userId}`];
+      const kbWhereConditions: any[] = [this.fileOwnershipSql('f')];
 
       // Parent ID filter
       if (parentId !== undefined) {
@@ -477,7 +496,7 @@ export class KnowledgeRepo {
     parentId,
   }: QueryFileListParams = {}): ReturnType<typeof sql> {
     const whereConditions: any[] = [
-      sql`${documents.userId} = ${this.userId}`,
+      this.documentOwnershipSql('documents'),
       sql`${documents.sourceType} != ${'file'}`,
     ];
 
@@ -542,7 +561,7 @@ export class KnowledgeRepo {
     // Documents are linked to knowledge bases through files table via fileId
     if (knowledgeBaseId) {
       // Build where conditions using proper table references (d.column instead of documents.column)
-      const kbWhereConditions: any[] = [sql`d.user_id = ${this.userId}`];
+      const kbWhereConditions: any[] = [this.documentOwnershipSql('d')];
 
       // Parent ID filter
       if (parentId !== undefined) {

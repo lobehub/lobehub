@@ -164,16 +164,24 @@ export interface SecurityBlacklistRule {
    * Same format as HumanInterventionRule.match
    */
   match: Record<string, ArgumentMatcher>;
+
+  /**
+   * Policy to apply when this rule matches
+   * @default 'always'
+   */
+  policy?: HumanInterventionPolicy;
 }
 
 export const SecurityBlacklistRuleSchema = z.object({
   description: z.string(),
   match: z.record(z.string(), ArgumentMatcherSchema),
+  policy: HumanInterventionPolicySchema.optional(),
 });
 
 /**
  * Security Blacklist Configuration
- * A list of rules that will always block execution and require intervention
+ * A list of rules that block execution and require intervention.
+ * Rules default to 'always' unless explicitly downgraded to 'required'.
  */
 export type SecurityBlacklistConfig = SecurityBlacklistRule[];
 

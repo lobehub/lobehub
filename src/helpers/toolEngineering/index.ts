@@ -11,20 +11,24 @@ import { createEnableChecker, type PluginEnableChecker } from '@lobechat/context
 import { ToolsEngine } from '@lobechat/context-engine';
 import { type ChatCompletionTool, type ToolManifest, type WorkingModel } from '@lobechat/types';
 
+import type { ConnectorToolPermission } from '@/database/schemas';
 import { isToolAvailableInCurrentEnv } from '@/helpers/toolAvailability';
+import { patchManifestWithPermissions } from '@/libs/mcp/patchManifestPermissions';
 import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { getToolStoreState } from '@/store/tool';
 import {
-  klavisStoreSelectors,
+  composioStoreSelectors,
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
+import { connectorSelectors } from '@/store/tool/slices/connector';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
 import { getSearchConfig } from '../getSearchConfig';
 import { isCanUseFC } from '../isCanUseFC';
+import { buildClientConnectorManifests } from './buildClientConnectorManifests';
 
 /**
  * Tools engine configuration options
@@ -42,7 +46,7 @@ export interface ToolsEngineConfig {
  * A manifest is usable by ToolsEngine only if it has a non-empty `api` array.
  * ToolsEngine.convertManifestsToTools calls `manifest.api.map(...)` unconditionally,
  * so any entry with `api` missing / non-array will crash the whole tools build.
- * Sources that populate manifests (installed plugins, Klavis, LobeHub skills, MCP)
+ * Sources that populate manifests (installed plugins, Composio, LobeHub skills, MCP)
  * have no shared schema validation, so we guard defensively at the merge point.
  */
 const isValidToolManifest = (m: ToolManifest | undefined): m is ToolManifest =>
@@ -83,15 +87,45 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
 
   const toolStoreState = getToolStoreState();
 
-  // Get all available plugin manifests
-  const pluginManifests = pluginSelectors.installedPluginManifestList(toolStoreState);
+  // Get custom connector manifests (user-added MCP servers). Connectors take
+  // priority over plugins: any plugin sharing a connector identifier is dropped
+  // so the connector (server-side execution with its stored token) wins.
+  const connectorManifests = buildClientConnectorManifests(
+    connectorSelectors.customConnectors(toolStoreState),
+  );
+  const connectorIdentifiers = new Set(connectorManifests.map((m) => m.identifier));
+
+  // Per-connector tool permissions, keyed by connector identifier. Used to patch
+  // community-MCP plugin manifests below so the user's needs_approval / disabled
+  // settings surface as humanIntervention (custom connectors are handled by their
+  // own manifests above; disabled is also hard-blocked at the mcp router).
+  const connectorPermsByIdentifier = new Map(
+    connectorSelectors
+      .connectorList(toolStoreState)
+      .map((c) => [c.identifier, new Map(c.tools.map((t) => [t.toolName, t.permission]))] as const),
+  );
+
+  // Get all available plugin manifests (excluding ones now covered by a connector),
+  // patched with their connector tool permissions when a connector row exists.
+  const pluginManifests = pluginSelectors
+    .installedPluginManifestList(toolStoreState)
+    .filter((m) => !connectorIdentifiers.has(m.identifier))
+    .map((m) => {
+      const perms = connectorPermsByIdentifier.get(m.identifier);
+      return perms && perms.size > 0
+        ? (patchManifestWithPermissions(
+            m as any,
+            perms as Map<string, ConnectorToolPermission>,
+          ) as ToolManifest)
+        : m;
+    });
 
   // Get all builtin tool manifests
   const builtinManifests = toolStoreState.builtinTools.map((tool) => tool.manifest as ToolManifest);
 
-  // Get Klavis tool manifests
-  const klavisTools = klavisStoreSelectors.klavisAsLobeTools(toolStoreState);
-  const klavisManifests = klavisTools.map((tool) => tool.manifest as ToolManifest).filter(Boolean);
+  // Get Composio tool manifests
+  const composioTools = composioStoreSelectors.composioAsLobeTools(toolStoreState);
+  const composioManifests = composioTools.map((tool) => tool.manifest as ToolManifest).filter(Boolean);
 
   // Get LobeHub Skill tool manifests
   const lobehubSkillTools = lobehubSkillStoreSelectors.lobehubSkillAsLobeTools(toolStoreState);
@@ -104,8 +138,9 @@ export const createToolsEngine = (config: ToolsEngineConfig = {}): ToolsEngine =
   const allManifests = [
     ...dropInvalidManifests(pluginManifests, 'installedPlugins'),
     ...dropInvalidManifests(builtinManifests, 'builtinTools'),
-    ...dropInvalidManifests(klavisManifests, 'klavis'),
+    ...dropInvalidManifests(composioManifests, 'composio'),
     ...dropInvalidManifests(lobehubSkillManifests, 'lobehubSkills'),
+    ...dropInvalidManifests(connectorManifests, 'connectors'),
     ...dropInvalidManifests(additionalManifests, 'additionalManifests'),
   ];
 

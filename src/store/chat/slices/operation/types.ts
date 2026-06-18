@@ -232,6 +232,9 @@ export interface QueuedMessage {
   files?: string[];
   /** Snapshot of file previews (id, name, mime, url) for tray rendering and optimistic resume */
   filesPreview?: QueuedFile[];
+  /** Mirrors SendMessageParams.forceRuntime so a queued task-topic follow-up
+   *  keeps its gateway pin when the queue drains. */
+  forceRuntime?: 'client' | 'gateway' | 'hetero';
   id: string;
   interruptMode: 'soft' | 'hard';
   metadata?: MessageMetadata;
@@ -246,6 +249,7 @@ export interface MergedQueuedMessage {
   editorData?: Record<string, any>;
   files: string[];
   filesPreview: QueuedFile[];
+  forceRuntime?: 'client' | 'gateway' | 'hetero';
   metadata?: MessageMetadata;
 }
 
@@ -348,11 +352,16 @@ export const mergeQueuedMessages = (messages: QueuedMessage[]): MergedQueuedMess
     };
   }, undefined);
 
+  // If any queued message pins the runtime, propagate it — a "server topic"
+  // follow-up must stay on its rails even after merge.
+  const forceRuntime = sorted.find((m) => m.forceRuntime)?.forceRuntime;
+
   return {
     content: sorted.map((m) => m.content).join('\n\n'),
     editorData: mergeQueuedEditorData(sorted),
     files: sorted.flatMap((m) => m.files ?? []),
     filesPreview: sorted.flatMap((m) => m.filesPreview ?? []),
+    ...(forceRuntime ? { forceRuntime } : {}),
     metadata,
   };
 };

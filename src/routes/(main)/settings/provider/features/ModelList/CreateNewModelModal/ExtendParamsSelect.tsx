@@ -8,6 +8,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import CodexMaxReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/CodexMaxReasoningEffortSlider';
 import DeepSeekReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/DeepSeekReasoningEffortSlider';
 import EffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/EffortSlider';
+import GLM52ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GLM52ReasoningEffortSlider';
 import GPT5ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/GPT52ProReasoningEffortSlider';
@@ -24,6 +25,7 @@ import ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/Contro
 import ReasoningTokenSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider';
 import ReasoningTokenSlider32k from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider32k';
 import ReasoningTokenSlider80k from '@/features/ModelSwitchPanel/components/ControlsForm/ReasoningTokenSlider80k';
+import Ring26ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Ring26ReasoningEffortSlider';
 import Step3_5ReasoningEffortSlider from '@/features/ModelSwitchPanel/components/ControlsForm/Step3_5ReasoningEffortSlider';
 import TextVerbositySlider from '@/features/ModelSwitchPanel/components/ControlsForm/TextVerbositySlider';
 import ThinkingBudgetSlider from '@/features/ModelSwitchPanel/components/ControlsForm/ThinkingBudgetSlider';
@@ -50,6 +52,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint',
     key: 'enableAdaptiveThinking',
+  },
+  {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.preserveThinking.hint',
+    key: 'preserveThinking',
   },
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint',
@@ -96,6 +102,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'gpt5_2ProReasoningEffort',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.glm5_2ReasoningEffort.hint',
+    key: 'glm5_2ReasoningEffort',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.grok4_20ReasoningEffort.hint',
     key: 'grok4_20ReasoningEffort',
   },
@@ -106,6 +116,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.hy3ReasoningEffort.hint',
     key: 'hy3ReasoningEffort',
+  },
+  {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.ring2_6ReasoningEffort.hint',
+    key: 'ring2_6ReasoningEffort',
   },
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint',
@@ -174,10 +188,13 @@ const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
   gpt5_1ReasoningEffort: 'reasoningEffort',
   gpt5_2ProReasoningEffort: 'reasoningEffort',
   gpt5_2ReasoningEffort: 'reasoningEffort',
+  glm5_2ReasoningEffort: 'reasoningEffort',
   grok4_20ReasoningEffort: 'reasoningEffort',
   grok4_3ReasoningEffort: 'reasoningEffort',
   hy3ReasoningEffort: 'reasoningEffort',
+  ring2_6ReasoningEffort: 'reasoningEffort',
   imageAspectRatio2: 'imageAspectRatio',
+  imageResolution2: 'imageResolution',
   opus47Effort: 'effort',
   reasoningBudgetToken32k: 'reasoningBudgetToken',
   reasoningBudgetToken80k: 'reasoningBudgetToken',
@@ -221,6 +238,7 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
     tag: 'reasoning_effort',
   },
   gpt5_2ReasoningEffort: { labelSuffix: ' (GPT-5.2)', previewWidth: 300, tag: 'reasoning_effort' },
+  glm5_2ReasoningEffort: { labelSuffix: ' (GLM-5.2)', previewWidth: 240, tag: 'reasoning_effort' },
   grok4_20ReasoningEffort: {
     labelSuffix: ' (Grok 4.20)',
     previewWidth: 300,
@@ -236,11 +254,21 @@ const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
     previewWidth: 300,
     tag: 'reasoning_effort',
   },
+  ring2_6ReasoningEffort: {
+    labelSuffix: ' (Ring 2.6)',
+    previewWidth: 300,
+    tag: 'reasoning_effort',
+  },
   imageAspectRatio: { labelSuffix: '', previewWidth: 350, tag: 'aspect_ratio' },
   imageAspectRatio2: { labelSuffix: ' (Nano Banana 2)', previewWidth: 350, tag: 'aspect_ratio' },
   imageResolution: { labelSuffix: '', previewWidth: 250, tag: 'resolution' },
   imageResolution2: { labelSuffix: ' (512px+)', previewWidth: 280, tag: 'resolution' },
   opus47Effort: { labelSuffix: ' (Opus 4.7+)', previewWidth: 280, tag: 'output_config.effort' },
+  preserveThinking: {
+    labelSuffix: ' (Qwen3.6+ / GLM-4.7+)',
+    previewWidth: 460,
+    tag: 'preserve_thinking',
+  },
   reasoningBudgetToken: { previewWidth: 350, tag: 'thinking.budget_tokens' },
   reasoningBudgetToken32k: {
     labelSuffix: ' (32k)',
@@ -383,13 +411,16 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
       effort: <EffortSlider value="high" />,
       enableAdaptiveThinking: <Switch checked disabled />,
       enableReasoning: <Switch checked disabled />,
+      preserveThinking: <Switch checked disabled />,
       gpt5ReasoningEffort: <GPT5ReasoningEffortSlider value="medium" />,
       gpt5_1ReasoningEffort: <GPT51ReasoningEffortSlider value="none" />,
       gpt5_2ProReasoningEffort: <GPT52ProReasoningEffortSlider value="medium" />,
       gpt5_2ReasoningEffort: <GPT52ReasoningEffortSlider value="none" />,
+      glm5_2ReasoningEffort: <GLM52ReasoningEffortSlider value="max" />,
       grok4_20ReasoningEffort: <Grok420ReasoningEffortSlider value="medium" />,
       grok4_3ReasoningEffort: <Grok43ReasoningEffortSlider value="low" />,
       hy3ReasoningEffort: <Hy3ReasoningEffortSlider value="high" />,
+      ring2_6ReasoningEffort: <Ring26ReasoningEffortSlider value="high" />,
       imageAspectRatio: <ImageAspectRatioSelect value="1:1" />,
       imageAspectRatio2: <ImageAspectRatio2Select value="1:1" />,
       imageResolution: <ImageResolutionSlider value="1K" />,

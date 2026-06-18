@@ -1,12 +1,15 @@
 'use client';
 
-import { type CSSProperties } from 'react';
+import { MARKDOWN_MIME_TYPES } from '@lobechat/const';
+import type { CSSProperties } from 'react';
 import { memo } from 'react';
 
+import { isHtmlFile } from '@/components/HtmlPreview';
 import { type FileListItem } from '@/types/files';
 
 import NotSupport from './NotSupport';
 import CodeViewer from './Renderer/Code';
+import HTMLViewer from './Renderer/HTML';
 import ImageViewer from './Renderer/Image';
 import MSDocViewer from './Renderer/MSDoc';
 import PDFViewer from './Renderer/PDF';
@@ -160,8 +163,7 @@ const CODE_MIME_TYPES = new Set([
   // Markdown
   'md',
   'mdx',
-  'text/markdown',
-  'text/x-markdown',
+  ...MARKDOWN_MIME_TYPES,
   // Other
   'graphql',
   'txt',
@@ -265,6 +267,11 @@ const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) =>
   // (e.g., 'doc' contains 'c' which would match CODE_EXTENSIONS)
   if (matchesFileType(fileType, name, MSDOC_EXTENSIONS, MSDOC_MIME_TYPES)) {
     return <MSDocViewer fileId={id} url={url} />;
+  }
+
+  // HTML files should render as a sandboxed preview before the broader code-file fallback.
+  if (isHtmlFile({ fileName: name, fileType })) {
+    return <HTMLViewer fileId={id} url={url} />;
   }
 
   // Code files (JavaScript, TypeScript, Python, Java, C++, Go, Rust, Markdown, etc.)

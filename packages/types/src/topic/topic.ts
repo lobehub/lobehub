@@ -217,6 +217,7 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   /** Server-side mock until real token aggregation lands. */
   tokenUsage?: number | null;
   trigger?: string | null;
+  userId?: string;
 }
 
 export type ChatTopicMap = Record<string, ChatTopic>;

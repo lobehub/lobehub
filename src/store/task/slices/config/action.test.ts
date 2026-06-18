@@ -55,7 +55,7 @@ describe('TaskConfigSliceAction', () => {
 
       await useTaskStore.getState().updateCheckpoint('T-1', { onAgentRequest: true });
 
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
     });
   });
 
@@ -83,7 +83,7 @@ describe('TaskConfigSliceAction', () => {
       const result = await useTaskStore.getState().runReview('T-1', { content: 'Test output' });
 
       expect(taskService.runReview).toHaveBeenCalledWith('T-1', { content: 'Test output' });
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
       expect(result).toEqual({ data: mockResult, success: true });
     });
 
@@ -109,7 +109,7 @@ describe('TaskConfigSliceAction', () => {
         model: 'claude-sonnet-4-6',
         provider: 'anthropic',
       });
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
     });
   });
 
@@ -121,7 +121,7 @@ describe('TaskConfigSliceAction', () => {
       await useTaskStore.getState().updatePeriodicInterval('T-1', 600);
 
       expect(taskService.update).toHaveBeenCalledWith('T-1', { heartbeatInterval: 600 });
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
     });
 
     it('should send 0 when null to disable interval (automationMode untouched)', async () => {
@@ -280,7 +280,7 @@ describe('TaskConfigSliceAction', () => {
       expect(useTaskStore.getState().taskDetailMap['T-1'].automationMode).toBe('schedule');
       const refreshCalls = vi
         .mocked(mutate)
-        .mock.calls.filter((c) => Array.isArray(c[0]) && c[0][0] === 'fetchTaskDetail');
+        .mock.calls.filter((c) => Array.isArray(c[0]) && c[0][0] === 'task:detail');
       expect(refreshCalls).toHaveLength(0);
     });
 
@@ -333,7 +333,7 @@ describe('TaskConfigSliceAction', () => {
       // No SWR refresh — optimistic patch is the source of truth.
       const refreshCalls = vi
         .mocked(mutate)
-        .mock.calls.filter((c) => Array.isArray(c[0]) && c[0][0] === 'fetchTaskDetail');
+        .mock.calls.filter((c) => Array.isArray(c[0]) && c[0][0] === 'task:detail');
       expect(refreshCalls).toHaveLength(0);
     });
 
@@ -436,7 +436,7 @@ describe('TaskConfigSliceAction', () => {
       await useTaskStore.getState().resolveBrief('brief_1', { action: 'approve' });
 
       expect(taskService.resolveBrief).toHaveBeenCalledWith('brief_1', { action: 'approve' });
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
     });
   });
 
@@ -448,7 +448,7 @@ describe('TaskConfigSliceAction', () => {
       await useTaskStore.getState().markBriefRead('brief_1');
 
       expect(taskService.markBriefRead).toHaveBeenCalledWith('brief_1');
-      expect(mutate).toHaveBeenCalledWith(['fetchTaskDetail', 'T-1']);
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
     });
   });
 });

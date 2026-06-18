@@ -1,4 +1,4 @@
-import { ActionIcon, DropdownMenu, Flexbox } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox, Tooltip } from '@lobehub/ui';
 import { CreateBotIcon } from '@lobehub/ui/icons';
 import { cssVar } from 'antd-style';
 import { ChevronDownIcon } from 'lucide-react';
@@ -6,11 +6,13 @@ import React, { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { usePermission } from '@/hooks/usePermission';
 
 import { useCreateMenuItems } from '../../hooks';
 
 const AddButton = memo(() => {
   const { t: tChat } = useTranslation('chat');
+  const { allowed: canCreate, reason } = usePermission('create_content');
 
   // Create menu items
   const {
@@ -28,9 +30,10 @@ const AddButton = memo(() => {
     (e: React.MouseEvent) => {
       e.stopPropagation();
       e.preventDefault();
+      if (!canCreate) return;
       openCreateModal?.('agent');
     },
-    [openCreateModal],
+    [canCreate, openCreateModal],
   );
 
   const dropdownItems = useMemo(() => {
@@ -54,25 +57,36 @@ const AddButton = memo(() => {
     createPlatformAgentMenuItem,
   ]);
 
+  // When viewer (no create_content): keep the icons visible per UX rule
+  // (disabled-not-hidden), but the click handler short-circuits and the
+  // dropdown is hidden (it would let users bypass the gate). Tooltip
+  // surfaces the missing-permission reason.
+  const mainIcon = (
+    <ActionIcon
+      disabled={!canCreate}
+      icon={CreateBotIcon}
+      loading={isMutatingAgent || isCreatingGroup}
+      size={DESKTOP_HEADER_ICON_SIZE}
+      title={canCreate ? tChat('newAgent') : undefined}
+      onClick={handleMainIconClick}
+    />
+  );
+
   return (
     <Flexbox horizontal>
-      <ActionIcon
-        icon={CreateBotIcon}
-        loading={isMutatingAgent || isCreatingGroup}
-        size={DESKTOP_HEADER_ICON_SIZE}
-        title={tChat('newAgent')}
-        onClick={handleMainIconClick}
-      />
-      <DropdownMenu items={dropdownItems}>
-        <ActionIcon
-          color={cssVar.colorTextQuaternary}
-          icon={ChevronDownIcon}
-          size={{ blockSize: 32, size: 14 }}
-          style={{
-            width: 16,
-          }}
-        />
-      </DropdownMenu>
+      {canCreate ? mainIcon : <Tooltip title={reason}>{mainIcon}</Tooltip>}
+      {canCreate && (
+        <DropdownMenu items={dropdownItems}>
+          <ActionIcon
+            color={cssVar.colorTextQuaternary}
+            icon={ChevronDownIcon}
+            size={{ blockSize: 32, size: 14 }}
+            style={{
+              width: 16,
+            }}
+          />
+        </DropdownMenu>
+      )}
     </Flexbox>
   );
 });

@@ -17,8 +17,18 @@ Rules:
       "role": "system",
     },
     {
-      "content": "assistant: Hello, how can I assist you?
-user: I need help with my account.",
+      "content": "<task>
+Generate a concise title that captures the essence of the conversation.
+</task>
+
+<conversation>
+<assistant>
+Hello, how can I assist you?
+</assistant>
+<user>
+I need help with my account.
+</user>
+</conversation>",
       "role": "user",
     },
   ],

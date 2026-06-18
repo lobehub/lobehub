@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { FormInput, FormPassword } from '@/components/FormInput';
 import KeyValueEditor from '@/components/KeyValueEditor';
 import { FormAction } from '@/features/Conversation/Error/style';
+import { usePermission } from '@/hooks/usePermission';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { type ComfyUIKeyVault } from '@/types/user/settings';
 
@@ -43,6 +44,7 @@ const styles = createStaticStyles(({ css }) => ({
 const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
   const { t } = useTranslation('error');
   const { t: s } = useTranslation('modelProvider');
+  const { allowed: canManageProvider } = usePermission('manage_provider_key');
 
   // Use aiInfraStore for updating config (same as settings page)
   const updateAiProviderConfig = useAiInfraStore((s) => s.updateAiProviderConfig);
@@ -103,6 +105,8 @@ const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
   ];
 
   const handleValueChange = async (field: string, value: any) => {
+    if (!canManageProvider) return;
+
     const newValues = {
       ...formValues,
       [field]: value,
@@ -148,6 +152,7 @@ const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
               <Flexbox gap={4}>
                 <div style={{ fontSize: 14, fontWeight: 500 }}>{s('comfyui.baseURL.title')}</div>
                 <FormInput
+                  disabled={!canManageProvider}
                   placeholder={s('comfyui.baseURL.placeholder')}
                   suffix={<div>{loading && <Icon spin icon={Loader2Icon} />}</div>}
                   value={formValues.baseURL}
@@ -156,6 +161,7 @@ const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
               </Flexbox>
             ) : (
               <Button
+                disabled={!canManageProvider}
                 icon={<Icon icon={Network} />}
                 type={'text'}
                 onClick={() => setShowBaseURL(true)}
@@ -169,6 +175,7 @@ const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
               <div style={{ fontSize: 14, fontWeight: 500 }}>{s('comfyui.authType.title')}</div>
               <Select
                 allowClear={false}
+                disabled={!canManageProvider}
                 options={authTypeOptions}
                 placeholder={s('comfyui.authType.placeholder')}
                 value={formValues.authType}
@@ -183,6 +190,7 @@ const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
                   <div style={{ fontSize: 14, fontWeight: 500 }}>{s('comfyui.username.title')}</div>
                   <FormInput
                     autoComplete="username"
+                    disabled={!canManageProvider}
                     placeholder={s('comfyui.username.placeholder')}
                     suffix={<div>{loading && <Icon spin icon={Loader2Icon} />}</div>}
                     value={formValues.username}
@@ -193,6 +201,7 @@ const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
                   <div style={{ fontSize: 14, fontWeight: 500 }}>{s('comfyui.password.title')}</div>
                   <FormPassword
                     autoComplete="new-password"
+                    disabled={!canManageProvider}
                     placeholder={s('comfyui.password.placeholder')}
                     suffix={<div>{loading && <Icon spin icon={Loader2Icon} />}</div>}
                     value={formValues.password}
@@ -208,6 +217,7 @@ const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
                 <div style={{ fontSize: 14, fontWeight: 500 }}>{s('comfyui.apiKey.title')}</div>
                 <FormPassword
                   autoComplete="new-password"
+                  disabled={!canManageProvider}
                   placeholder={s('comfyui.apiKey.placeholder')}
                   suffix={<div>{loading && <Icon spin icon={Loader2Icon} />}</div>}
                   value={formValues.apiKey}
@@ -228,6 +238,7 @@ const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
                 <KeyValueEditor
                   addButtonText={s('comfyui.customHeaders.addButton')}
                   deleteTooltip={s('comfyui.customHeaders.deleteTooltip')}
+                  disabled={!canManageProvider}
                   duplicateKeyErrorText={s('comfyui.customHeaders.duplicateKeyError')}
                   keyPlaceholder={s('comfyui.customHeaders.keyPlaceholder')}
                   value={formValues.customHeaders}

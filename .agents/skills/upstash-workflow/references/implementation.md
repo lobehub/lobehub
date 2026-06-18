@@ -4,7 +4,7 @@ Full code templates for the 3-layer architecture. Read this when actually writin
 
 ## Table of Contents
 
-1. [Workflow Class](#workflow-class) — `src/server/workflows/{workflowName}/index.ts`
+1. [Workflow Class](#workflow-class) — `apps/server/src/workflows/{workflowName}/index.ts`
 2. [Layer 1: Entry Point](#layer-1-entry-point-process-) — `process-*` route
 3. [Layer 2: Pagination](#layer-2-pagination-paginate-) — `paginate-*` route
 4. [Layer 3: Execution](#layer-3-execution-execute--generate-) — `execute-*` / `generate-*` route
@@ -13,7 +13,7 @@ Full code templates for the 3-layer architecture. Read this when actually writin
 
 ## Workflow Class
 
-**Location:** `src/server/workflows/{workflowName}/index.ts`
+**Location:** `apps/server/src/workflows/{workflowName}/index.ts`
 
 ```typescript
 import { Client } from '@upstash/workflow';

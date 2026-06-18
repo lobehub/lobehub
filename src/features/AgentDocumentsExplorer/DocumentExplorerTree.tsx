@@ -1,18 +1,25 @@
+import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
 import type { MenuProps } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { Trash2Icon } from 'lucide-react';
+import { Maximize2Icon, Trash2Icon } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { KeyedMutator } from 'swr';
 
+import { buildAgentDocumentPath } from '@/features/AgentDocumentPage/navigation';
 import type {
   ExplorerTreeCanDropCtx,
   ExplorerTreeHandle,
   ExplorerTreeNode,
 } from '@/features/ExplorerTree';
-import { ExplorerTree, FOLDER_ICON_CSS, getExplorerTreeStyleVars } from '@/features/ExplorerTree';
-import { useChatStore } from '@/store/chat';
+import {
+  ExplorerTree,
+  FOLDER_ICON_CSS,
+  getExplorerTreeStyleVars,
+  HIDE_POINTER_FOCUS_RING_CSS,
+} from '@/features/ExplorerTree';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';
 import { useDocumentTreeOps } from './hooks/useDocumentTreeOps';
@@ -21,24 +28,38 @@ import { isOrphanSkillBundleItem } from './types';
 import { canDropDocument } from './utils/canDrop';
 
 const SKILL_INDEX_FILENAME = 'SKILL.md';
+const FILE_TREE_HOST_TAG = 'file-tree-container';
+const RENAME_INPUT_SELECTOR = 'input[data-item-rename-input]';
+const DOCUMENT_TREE_UNSAFE_CSS = `${FOLDER_ICON_CSS}\n${HIDE_POINTER_FOCUS_RING_CSS}`;
+
+// pierre/trees auto-selects the full value when the rename input mounts. For
+// files with extensions (e.g. `Untitled document.md`), narrow the selection to
+// the stem so the user can type a new name without overwriting the suffix.
+const selectStemOfActiveRenameInput = (root: HTMLElement | null) => {
+  if (!root) return;
+  const host = root.querySelector(FILE_TREE_HOST_TAG);
+  const input = host?.shadowRoot?.querySelector<HTMLInputElement>(RENAME_INPUT_SELECTOR);
+  if (!input) return;
+  const value = input.value;
+  const dotIndex = value.lastIndexOf('.');
+  // Skip dotfiles and extension-less names — leave pierre's full-selection.
+  if (dotIndex <= 0) return;
+  input.setSelectionRange(0, dotIndex);
+};
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   tree: css`
     --trees-bg-override: transparent;
     --trees-border-color-override: transparent;
     --trees-selected-bg-override: ${cssVar.colorFillSecondary};
+    --trees-selected-fg-override: ${cssVar.colorText};
     --trees-bg-muted-override: ${cssVar.colorFillTertiary};
-    --trees-fg-override: ${cssVar.colorText};
+    --trees-fg-override: ${cssVar.colorTextSecondary};
     --trees-fg-muted-override: ${cssVar.colorTextSecondary};
     --trees-accent-override: ${cssVar.colorPrimary};
     --trees-padding-inline-override: 0px;
     --trees-font-size-override: 12px;
     --trees-border-radius-override: 6px;
-
-    /* Drop the doubled outline pierre/trees draws via ::before on a
-     * focused+selected row — the filled background from
-     * --trees-selected-bg-override is already a clear selection signal. */
-    --trees-selected-focused-border-color-override: transparent;
   `,
 }));
 
@@ -46,16 +67,21 @@ interface Props {
   agentId: string;
   data: AgentDocumentItem[];
   mutate: KeyedMutator<AgentDocumentItem[]>;
+  onOpenDocument?: (documentId: string, agentDocumentId?: string) => void;
   style?: CSSProperties;
 }
 
-const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
+const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocument, style }) => {
   const { t } = useTranslation(['chat', 'common']);
-  const openDocument = useChatStore((s) => s.openDocument);
+  const navigate = useWorkspaceAwareNavigate();
   const treeRef = useRef<ExplorerTreeHandle | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const startInlineRename = useCallback((id: string) => {
     treeRef.current?.startRenaming(id);
+    // Match the new-file flow: leave the extension out of the selection so
+    // the user can retype only the stem.
+    requestAnimationFrame(() => selectStemOfActiveRenameInput(containerRef.current));
   }, []);
 
   const ops = useDocumentTreeOps({ agentId, data, mutate });
@@ -113,7 +139,12 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   const focusNewRowForRename = useCallback((pendingId: string) => {
     // Defer past the current task so React commits the inserted row and the
     // tree adapter rebuilds its id→path map before we trigger rename.
-    setTimeout(() => treeRef.current?.startRenaming(pendingId), 0);
+    setTimeout(() => {
+      treeRef.current?.startRenaming(pendingId);
+      // After pierre's input.select() runs in its own layout effect, narrow
+      // selection to the stem so the `.md` extension stays intact.
+      requestAnimationFrame(() => selectStemOfActiveRenameInput(containerRef.current));
+    }, 0);
   }, []);
 
   const handleCreateFolder = useCallback(
@@ -131,9 +162,13 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
     (node: ExplorerTreeNode<AgentDocumentItem>) => {
       const doc = node.data;
       if (!doc || node.isFolder) return;
-      openDocument(doc.documentId, doc.id);
+      if (onOpenDocument) {
+        onOpenDocument(doc.documentId, doc.id);
+        return;
+      }
+      navigate(buildAgentDocumentPath(agentId, doc.documentId));
     },
-    [openDocument],
+    [agentId, navigate, onOpenDocument],
   );
 
   const handleCommitRename = useCallback(
@@ -159,12 +194,14 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
   );
 
   const canDrag = useCallback(
-    (node: ExplorerTreeNode<AgentDocumentItem>) => !!node.data && node.data.category === 'document',
+    (node: ExplorerTreeNode<AgentDocumentItem>) =>
+      !!node.data && node.data.category === AGENT_DOCUMENT_CATEGORY,
     [],
   );
 
   const canRename = useCallback(
-    (node: ExplorerTreeNode<AgentDocumentItem>) => !!node.data && node.data.category === 'document',
+    (node: ExplorerTreeNode<AgentDocumentItem>) =>
+      !!node.data && node.data.category === AGENT_DOCUMENT_CATEGORY,
     [],
   );
 
@@ -217,6 +254,17 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
         });
       }
 
+      // A document file (not a folder, skill, or multi-select) can be expanded
+      // into the full-page document route — the standalone view agent links open.
+      if (!isFolder && !isSkill && !isMulti && node.data?.documentId) {
+        items.push({
+          icon: <Maximize2Icon size={14} />,
+          key: 'open-as-page',
+          label: t('agentDocument.openAsPage'),
+          onClick: () => navigate(buildAgentDocumentPath(agentId, node.data!.documentId)),
+        });
+      }
+
       items.push({
         danger: true,
         icon: <Trash2Icon size={14} />,
@@ -229,11 +277,20 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
 
       return items;
     },
-    [handleCreateDocument, handleCreateFolder, isRecoverableSkillBundle, ops, startInlineRename, t],
+    [
+      agentId,
+      handleCreateDocument,
+      handleCreateFolder,
+      isRecoverableSkillBundle,
+      navigate,
+      ops,
+      startInlineRename,
+      t,
+    ],
   );
 
   return (
-    <div className={styles.tree} style={{ ...style, ...treeStyleVars }}>
+    <div className={styles.tree} ref={containerRef} style={{ ...style, ...treeStyleVars }}>
       <ExplorerTree<AgentDocumentItem>
         iconsColored
         canDrag={canDrag}
@@ -245,7 +302,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, style }) => {
         nodes={nodes}
         ref={treeRef}
         style={{ height: '100%' }}
-        unsafeCSS={FOLDER_ICON_CSS}
+        unsafeCSS={DOCUMENT_TREE_UNSAFE_CSS}
         header={
           <DocumentExplorerToolbar
             onCreateDocument={() => handleCreateDocument(null)}

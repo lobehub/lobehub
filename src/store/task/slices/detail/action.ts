@@ -4,6 +4,7 @@ import { t } from 'i18next';
 
 import { message } from '@/components/AntdStaticMethods';
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
@@ -30,7 +31,6 @@ export interface TaskUpdatePayload {
   priority?: number;
 }
 
-const FETCH_TASK_DETAIL_KEY = 'fetchTaskDetail';
 const TASK_DETAIL_POLL_INTERVAL = 10_000;
 
 // Poll while the task itself or any topic activity is still in flight, so the
@@ -298,7 +298,7 @@ export class TaskDetailSliceActionImpl {
     });
 
     return useClientDataSWR(
-      taskId ? [FETCH_TASK_DETAIL_KEY, taskId] : null,
+      taskId ? taskKeys.detail(taskId) : null,
       async ([, id]: [string, string]) => this.fetchTaskDetail(id),
       { refreshInterval: shouldPoll ? TASK_DETAIL_POLL_INTERVAL : 0 },
     );
@@ -316,7 +316,7 @@ export class TaskDetailSliceActionImpl {
   };
 
   internal_refreshTaskDetail = async (id: string): Promise<void> => {
-    await mutate([FETCH_TASK_DETAIL_KEY, id]);
+    await mutate(taskKeys.detail(id));
   };
 }
 

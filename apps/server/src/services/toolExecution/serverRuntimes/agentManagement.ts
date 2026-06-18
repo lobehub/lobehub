@@ -1,0 +1,419 @@
+import {
+  AgentManagementIdentifier,
+  type CallAgentParams,
+  type CreateAgentParams,
+  type DeleteAgentParams,
+  type DuplicateAgentParams,
+  type GetAgentDetailParams,
+  type InstallPluginParams,
+  type SearchAgentParams,
+  type UpdateAgentParams,
+  type UpdatePromptParams,
+} from '@lobechat/builtin-tool-agent-management';
+
+import { AgentModel } from '@/database/models/agent';
+import { PluginModel } from '@/database/models/plugin';
+import { DiscoverService } from '@/server/services/discover';
+
+import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
+import { type ServerRuntimeRegistration } from './types';
+
+const handleError = (error: unknown, message: string): ToolExecutionResult => {
+  const err = error as Error;
+  return { content: `${message}: ${err.message}`, success: false };
+};
+
+/** Max results per searchAgent call (mirrored in the tool manifest: "max: 20") */
+const MAX_SEARCH_AGENT_LIMIT = 20;
+
+export const agentManagementRuntime: ServerRuntimeRegistration = {
+  factory: (context) => {
+    if (!context.userId || !context.serverDB) {
+      throw new Error('userId and serverDB are required for Agent Management execution');
+    }
+
+    const agentModel = new AgentModel(context.serverDB, context.userId, context.workspaceId);
+    const pluginModel = new PluginModel(context.serverDB, context.userId, context.workspaceId);
+    const discoverService = new DiscoverService();
+
+    return {
+      callAgent: async (
+        params: CallAgentParams,
+        ctx: ToolExecutionContext,
+      ): Promise<ToolExecutionResult> => {
+        const { agentId, instruction, taskTitle, timeout } = params;
+
+        if (ctx.isSubAgent) {
+          return {
+            content: 'Agent calls cannot be triggered from within another sub-agent.',
+            error: {
+              code: 'NESTED_AGENT_CALL_NOT_ALLOWED',
+              message: 'Agent calls cannot be triggered from within another sub-agent.',
+            },
+            success: false,
+          };
+        }
+
+        if (!ctx.subAgent) {
+          return {
+            content: 'Agent execution is not available in this runtime.',
+            error: { code: 'AGENT_CALL_UNAVAILABLE' },
+            success: false,
+          };
+        }
+
+        if (!instruction || typeof instruction !== 'string') {
+          return {
+            content: 'instruction is required.',
+            error: { code: 'INVALID_ARGUMENTS', message: 'instruction is required.' },
+            success: false,
+          };
+        }
+
+        const description = taskTitle || `Call agent ${agentId}`;
+        const { started, subOperationId, threadId } = await ctx.subAgent.run({
+          agentId,
+          description,
+          instruction,
+          timeout: timeout || 1_800_000,
+        });
+
+        if (!started) {
+          return {
+            content: `Agent "${agentId}" failed to start.`,
+            error: {
+              code: 'AGENT_CALL_START_FAILED',
+              message: `Agent "${agentId}" failed to start.`,
+            },
+            success: false,
+          };
+        }
+
+        return {
+          content: '',
+          deferred: true,
+          state: {
+            status: 'pending',
+            subOperationId,
+            targetAgentId: agentId,
+            threadId,
+          },
+          success: true,
+        };
+      },
+
+      createAgent: async (params: CreateAgentParams): Promise<ToolExecutionResult> => {
+        try {
+          // Guard against LLM double-encoding: if array fields are JSON strings, parse them.
+          const parseArrayParam = (v: any): string[] | undefined => {
+            if (typeof v === 'string') {
+              try {
+                return JSON.parse(v);
+              } catch {
+                return undefined;
+              }
+            }
+            return v;
+          };
+
+          const agent = await agentModel.create({
+            avatar: params.avatar,
+            backgroundColor: params.backgroundColor,
+            description: params.description,
+            model: params.model,
+            openingMessage: params.openingMessage,
+            openingQuestions: parseArrayParam(params.openingQuestions),
+            plugins: parseArrayParam(params.plugins),
+            provider: params.provider,
+            systemRole: params.systemRole,
+            tags: parseArrayParam(params.tags),
+            title: params.title,
+          });
+
+          return {
+            content: `Successfully created agent "${params.title}" with ID: ${agent.id}`,
+            state: { agentId: agent.id, success: true },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to create agent');
+        }
+      },
+
+      deleteAgent: async (params: DeleteAgentParams): Promise<ToolExecutionResult> => {
+        try {
+          await agentModel.delete(params.agentId);
+          return {
+            content: `Successfully deleted agent ${params.agentId}`,
+            state: { agentId: params.agentId, success: true },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to delete agent');
+        }
+      },
+
+      duplicateAgent: async (params: DuplicateAgentParams): Promise<ToolExecutionResult> => {
+        try {
+          const result = await agentModel.duplicate(params.agentId, params.newTitle);
+          if (!result) {
+            return { content: `Agent "${params.agentId}" not found.`, success: false };
+          }
+          return {
+            content: `Successfully duplicated agent. New agent ID: ${result.agentId}${params.newTitle ? ` with title "${params.newTitle}"` : ''}`,
+            state: { newAgentId: result.agentId, sourceAgentId: params.agentId, success: true },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to duplicate agent');
+        }
+      },
+
+      getAgentDetail: async (params: GetAgentDetailParams): Promise<ToolExecutionResult> => {
+        try {
+          const agent = await agentModel.getAgentConfigById(params.agentId);
+          if (!agent) {
+            return { content: `Agent "${params.agentId}" not found.`, success: false };
+          }
+
+          const detail = {
+            config: {
+              model: agent.model,
+              openingMessage: agent.openingMessage,
+              openingQuestions: agent.openingQuestions,
+              plugins: agent.plugins,
+              provider: agent.provider,
+              systemRole: agent.systemRole,
+            },
+            meta: {
+              avatar: agent.avatar,
+              backgroundColor: agent.backgroundColor,
+              description: agent.description,
+              tags: agent.tags,
+              title: agent.title,
+            },
+          };
+
+          const parts: string[] = [];
+          if (detail.meta.title) parts.push(`**${detail.meta.title}**`);
+          if (detail.meta.description) parts.push(detail.meta.description);
+          if (detail.config.model)
+            parts.push(`Model: ${detail.config.provider || ''}/${detail.config.model}`);
+          if (detail.config.plugins?.length)
+            parts.push(`Plugins: ${detail.config.plugins.join(', ')}`);
+          if (detail.config.systemRole) parts.push(`System Prompt: ${detail.config.systemRole}`);
+
+          return {
+            content: parts.length > 0 ? parts.join('\n') : `Agent "${params.agentId}" found.`,
+            state: { agentId: params.agentId, ...detail, success: true },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to get agent detail');
+        }
+      },
+
+      installPlugin: async (params: InstallPluginParams): Promise<ToolExecutionResult> => {
+        try {
+          const { agentId, identifier } = params;
+          const agent = await agentModel.getAgentConfigById(agentId);
+          if (!agent) {
+            return { content: `Agent "${agentId}" not found.`, success: false };
+          }
+
+          // Ensure the plugin is registered in user_installed_plugins so that
+          // PluginModel.query() can resolve its manifest during agent execution.
+          const existing = await pluginModel.findById(identifier);
+          if (!existing) {
+            await pluginModel.create({ identifier, type: 'plugin' });
+          }
+
+          const currentPlugins = (agent.plugins as string[] | null) || [];
+          if (!currentPlugins.includes(identifier)) {
+            await agentModel.updateConfig(agentId, {
+              plugins: [...currentPlugins, identifier],
+            });
+          }
+
+          return {
+            content: `Successfully enabled plugin "${identifier}" for agent "${agentId}"`,
+            state: { installed: true, pluginId: identifier, success: true },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to install plugin');
+        }
+      },
+
+      searchAgent: async (params: SearchAgentParams): Promise<ToolExecutionResult> => {
+        try {
+          const source = params.source || 'all';
+          const limit = Math.min(params.limit || 10, MAX_SEARCH_AGENT_LIMIT);
+          const offset = Math.max(params.offset || 0, 0);
+          const results: Array<{
+            avatar?: string | null;
+            backgroundColor?: string | null;
+            description?: string | null;
+            id: string;
+            isMarket?: boolean;
+            title?: string | null;
+          }> = [];
+
+          let userTotal = 0;
+          let marketTotal = 0;
+
+          if (source === 'user' || source === 'all') {
+            const [userAgents, total] = await Promise.all([
+              agentModel.queryAgents({ keyword: params.keyword, limit, offset }),
+              agentModel.countAgents({ keyword: params.keyword }),
+            ]);
+            userTotal = total;
+            results.push(...userAgents.map((a) => ({ ...a, isMarket: false })));
+          }
+
+          // Marketplace search returns the first page only — offset does not apply
+          if (source === 'market' || source === 'all') {
+            const marketResult = await discoverService.getAssistantList({
+              pageSize: limit,
+              q: params.keyword,
+              ...(params.category && { category: params.category }),
+            });
+            marketTotal = marketResult.totalCount ?? marketResult.items.length;
+            results.push(
+              ...marketResult.items.map((a) => ({
+                avatar: a.avatar,
+                backgroundColor: a.backgroundColor,
+                description: a.description,
+                id: a.identifier,
+                isMarket: true,
+                title: a.title,
+              })),
+            );
+          }
+
+          const sliced = results.slice(0, limit);
+          const totalCount = userTotal + marketTotal;
+
+          // hasMore tracks workspace agents only: marketplace results are not offset-paged
+          const shownUserCount = sliced.filter((a) => !a.isMarket).length;
+          const hasMore = offset + shownUserCount < userTotal;
+
+          const headerBySource: Record<typeof source, string> = {
+            all: `Found ${userTotal} agents in your workspace and ${marketTotal} in the marketplace, showing ${sliced.length}:`,
+            market: `Found ${marketTotal} agents in the marketplace, showing the first ${sliced.length}:`,
+            user: `Found ${userTotal} agents in your workspace, showing ${offset + 1}-${offset + sliced.length}:`,
+          };
+
+          const notes: string[] = [];
+          if (params.limit && params.limit > MAX_SEARCH_AGENT_LIMIT) {
+            notes.push(
+              `Note: requested limit ${params.limit} exceeds the maximum of ${MAX_SEARCH_AGENT_LIMIT}, so results were capped at ${MAX_SEARCH_AGENT_LIMIT} per call.`,
+            );
+          }
+          if (hasMore) {
+            notes.push(
+              `More workspace agents available: call searchAgent with offset=${offset + shownUserCount}${source === 'all' ? ` and source="user"` : ''} to get the next page.`,
+            );
+          }
+
+          let content: string;
+          if (sliced.length === 0) {
+            content =
+              totalCount === 0
+                ? 'No agents found matching your search criteria.'
+                : `No agents at offset ${offset}; only ${totalCount} agents match. Retry with a smaller offset.`;
+          } else {
+            const list = sliced
+              .map((a) => `- ${a.title || 'Untitled'} (${a.id})${a.isMarket ? ' [Market]' : ''}`)
+              .join('\n');
+            content = `${headerBySource[source]}\n${list}`;
+          }
+          if (notes.length > 0) content += `\n\n${notes.join('\n')}`;
+
+          return {
+            content,
+            state: {
+              agents: sliced,
+              hasMore,
+              keyword: params.keyword,
+              offset,
+              source,
+              totalCount,
+            },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to search agents');
+        }
+      },
+
+      updateAgent: async (params: UpdateAgentParams): Promise<ToolExecutionResult> => {
+        try {
+          const { agentId } = params;
+          let { config, meta } = params;
+
+          // Guard against LLM double-encoding: parse strings if needed
+          if (typeof config === 'string') {
+            try {
+              config = JSON.parse(config as string);
+            } catch {
+              config = undefined;
+            }
+          }
+          if (typeof meta === 'string') {
+            try {
+              meta = JSON.parse(meta as string);
+            } catch {
+              meta = undefined;
+            }
+          }
+
+          const updatedParts: string[] = [];
+
+          if (config && Object.keys(config).length > 0) {
+            await agentModel.updateConfig(agentId, config as Record<string, unknown>);
+            updatedParts.push(`config: ${Object.keys(config).join(', ')}`);
+          }
+
+          if (meta && Object.keys(meta).length > 0) {
+            await agentModel.update(agentId, meta as Record<string, unknown>);
+            updatedParts.push(`meta: ${Object.keys(meta).join(', ')}`);
+          }
+
+          if (updatedParts.length === 0) {
+            return { content: 'No fields to update.', state: { success: true }, success: true };
+          }
+
+          return {
+            content: `Successfully updated agent. Updated ${updatedParts.join('; ')}`,
+            state: { agentId, success: true },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to update agent');
+        }
+      },
+
+      updatePrompt: async (params: UpdatePromptParams): Promise<ToolExecutionResult> => {
+        try {
+          const { agentId, prompt } = params;
+          await agentModel.update(agentId, { editorData: null, systemRole: prompt } as Record<
+            string,
+            unknown
+          >);
+
+          return {
+            content: prompt
+              ? `Successfully updated system prompt (${prompt.length} characters)`
+              : 'Successfully cleared system prompt',
+            state: { newPrompt: prompt, success: true },
+            success: true,
+          };
+        } catch (error) {
+          return handleError(error, 'Failed to update prompt');
+        }
+      },
+    };
+  },
+  identifier: AgentManagementIdentifier,
+};

@@ -5,6 +5,7 @@ import { getServerDB } from '@/database/server';
 import { qstashClient } from '@/libs/qstash';
 import { AgentEvalRunService } from '@/server/services/agentEvalRun';
 import type { ResumeThreadTrajectoryPayload } from '@/server/workflows/agentEvalRun';
+import { resolveAgentEvalRunWorkspace } from '@/server/workflows/agentEvalRun/utils';
 
 const log = debug('lobe-server:workflows:resume-thread-trajectory');
 
@@ -29,7 +30,8 @@ export const { POST } = serve<ResumeThreadTrajectoryPayload>(
     }
 
     const db = await getServerDB();
-    const service = new AgentEvalRunService(db, userId);
+    const wsId = await resolveAgentEvalRunWorkspace(db, runId);
+    const service = new AgentEvalRunService(db, userId, wsId);
 
     await context.run('resume-thread-trajectory:exec-agent', () =>
       service.executeResumedThreadTrajectory(payload),

@@ -13,7 +13,7 @@
     "lexical": "^0.42.0"
   },
   "peerDependencies": {
-    "@lobehub/editor": "^4",
+    "@lobehub/editor": "^4.17.1",
     "debug": "*"
   }
 }

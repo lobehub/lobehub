@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 
 import PriorityHighIcon from './icons/PriorityHighIcon';
@@ -53,6 +54,15 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     color: ${cssVar.orange};
   `,
+  triggerDisabled: css`
+    cursor: not-allowed;
+    opacity: 0.5;
+
+    &:hover {
+      color: ${cssVar.colorTextDescription};
+      filter: none;
+    }
+  `,
 }));
 
 interface TaskPriorityTagProps {
@@ -69,6 +79,7 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
     const [loading, setLoading] = useState(false);
     const [open, setOpen] = useState(false);
     const { t } = useTranslation('chat');
+    const { allowed: canEditTask, reason } = usePermission('create_content');
     const updateTask = useTaskStore((s) => s.updateTask);
     const refreshTaskList = useTaskStore((s) => s.refreshTaskList);
 
@@ -77,6 +88,7 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
 
     const handlePriorityChange = useCallback(
       async (nextPriority: number) => {
+        if (!canEditTask) return;
         if (nextPriority === currentLevel) return;
         if (onChange) {
           onChange(nextPriority);
@@ -88,7 +100,7 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
         await refreshTaskList();
         setLoading(false);
       },
-      [currentLevel, onChange, refreshTaskList, taskIdentifier, updateTask],
+      [canEditTask, currentLevel, onChange, refreshTaskList, taskIdentifier, updateTask],
     );
 
     const handlePriorityChangeRef = useRef(handlePriorityChange);
@@ -155,6 +167,19 @@ const TaskPriorityTag = memo<TaskPriorityTagProps>(
     );
 
     if (disableDropdown) return <>{triggerNode}</>;
+
+    if (!canEditTask)
+      return (
+        <Tooltip title={reason}>
+          <span
+            className={styles.triggerDisabled}
+            style={{ display: 'inline-flex' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {triggerNode}
+          </span>
+        </Tooltip>
+      );
 
     return (
       <DropdownMenu items={menuItems} open={open} onOpenChange={setOpen}>

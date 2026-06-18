@@ -105,7 +105,7 @@ export const openShareModal = ({
     styles: {
       content: { height: 'min(80vh, 800px)' },
     },
-    title: t('share', { ns: 'common' }),
+    title: t('shareModal.title', { ns: 'chat' }),
     width: 'min(90vw, 1024px)',
   });
 

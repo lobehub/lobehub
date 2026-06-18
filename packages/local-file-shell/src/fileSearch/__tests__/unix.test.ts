@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ToolDetector } from '../../toolDetector';
 import { LinuxSearchServiceImpl } from '../impl/linux';
 
 vi.mock('node:os', () => ({
@@ -65,5 +66,23 @@ describe('UnixFileSearch glob fallback root', () => {
 
     const [, options] = fgMock.mock.calls[0] as [string, { cwd: string }];
     expect(options.cwd).toBe('/Users/test-home/Downloads');
+  });
+
+  it('uses fast-glob instead of find for globstar-compatible matching', async () => {
+    const toolDetector: ToolDetector = {
+      getBestTool: vi.fn().mockResolvedValue('find'),
+    };
+    const impl = new LinuxSearchServiceImpl(toolDetector);
+
+    await impl.glob({ pattern: '**/*skill*', scope: '/repo/packages' });
+
+    expect(fgMock).toHaveBeenCalledTimes(1);
+    expect(execaMock).not.toHaveBeenCalledWith('find', expect.anything(), expect.anything());
+
+    const [pattern, options] = fgMock.mock.calls[0] as [string, { cwd: string; ignore: string[] }];
+    expect(pattern).toBe('**/*skill*');
+    expect(options.cwd).toBe('/repo/packages');
+    expect(options.ignore).toContain('**/node_modules/**');
+    expect(options.ignore).toContain('**/.git/**');
   });
 });

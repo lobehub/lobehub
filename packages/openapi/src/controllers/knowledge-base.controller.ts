@@ -27,7 +27,7 @@ export class KnowledgeBaseController extends BaseController {
       const query = this.getQuery(c) as KnowledgeBaseListQuery;
 
       const db = await this.getDatabase();
-      const knowledgeBaseService = new KnowledgeBaseService(db, userId);
+      const knowledgeBaseService = new KnowledgeBaseService(db, userId, this.getWorkspaceId(c));
 
       const result = await knowledgeBaseService.getKnowledgeBaseList(query);
 
@@ -47,7 +47,7 @@ export class KnowledgeBaseController extends BaseController {
       const { id } = this.getParams(c);
 
       const db = await this.getDatabase();
-      const knowledgeBaseService = new KnowledgeBaseService(db, userId);
+      const knowledgeBaseService = new KnowledgeBaseService(db, userId, this.getWorkspaceId(c));
 
       const result = await knowledgeBaseService.getKnowledgeBaseDetail(id);
 
@@ -68,7 +68,7 @@ export class KnowledgeBaseController extends BaseController {
       const query = this.getQuery(c) as KnowledgeBaseFileListQuery;
 
       const db = await this.getDatabase();
-      const fileService = new FileUploadService(db, userId);
+      const fileService = new FileUploadService(db, userId, this.getWorkspaceId(c));
 
       const result = await fileService.getKnowledgeBaseFileList(id, query);
 
@@ -89,7 +89,7 @@ export class KnowledgeBaseController extends BaseController {
       const body = await this.getBody<KnowledgeBaseFileBatchRequest>(c);
 
       const db = await this.getDatabase();
-      const fileService = new FileUploadService(db, userId);
+      const fileService = new FileUploadService(db, userId, this.getWorkspaceId(c));
 
       const result = await fileService.addFilesToKnowledgeBase(id, body);
 
@@ -110,7 +110,7 @@ export class KnowledgeBaseController extends BaseController {
       const body = await this.getBody<KnowledgeBaseFileBatchRequest>(c);
 
       const db = await this.getDatabase();
-      const fileService = new FileUploadService(db, userId);
+      const fileService = new FileUploadService(db, userId, this.getWorkspaceId(c));
 
       const result = await fileService.removeFilesFromKnowledgeBase(id, body);
 
@@ -131,7 +131,7 @@ export class KnowledgeBaseController extends BaseController {
       const body = await this.getBody<MoveKnowledgeBaseFilesRequest>(c);
 
       const db = await this.getDatabase();
-      const fileService = new FileUploadService(db, userId);
+      const fileService = new FileUploadService(db, userId, this.getWorkspaceId(c));
 
       const result = await fileService.moveFilesBetweenKnowledgeBases(id, body);
 
@@ -151,7 +151,7 @@ export class KnowledgeBaseController extends BaseController {
       const body = await this.getBody<CreateKnowledgeBaseRequest>(c);
 
       const db = await this.getDatabase();
-      const knowledgeBaseService = new KnowledgeBaseService(db, userId);
+      const knowledgeBaseService = new KnowledgeBaseService(db, userId, this.getWorkspaceId(c));
 
       const result = await knowledgeBaseService.createKnowledgeBase(body);
 
@@ -172,7 +172,7 @@ export class KnowledgeBaseController extends BaseController {
       const body = await this.getBody<UpdateKnowledgeBaseRequest>(c);
 
       const db = await this.getDatabase();
-      const knowledgeBaseService = new KnowledgeBaseService(db, userId);
+      const knowledgeBaseService = new KnowledgeBaseService(db, userId, this.getWorkspaceId(c));
 
       const result = await knowledgeBaseService.updateKnowledgeBase(id, body);
 
@@ -192,7 +192,7 @@ export class KnowledgeBaseController extends BaseController {
       const { id } = this.getParams(c);
 
       const db = await this.getDatabase();
-      const knowledgeBaseService = new KnowledgeBaseService(db, userId);
+      const knowledgeBaseService = new KnowledgeBaseService(db, userId, this.getWorkspaceId(c));
 
       const result = await knowledgeBaseService.deleteKnowledgeBase(id);
 

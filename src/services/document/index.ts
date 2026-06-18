@@ -1,3 +1,4 @@
+import { CUSTOM_DOCUMENT_FILE_TYPE } from '@lobechat/const';
 import { type DocumentItem } from '@lobechat/database/schemas';
 
 import { lambdaClient } from '@/libs/trpc/client';
@@ -37,6 +38,7 @@ const serializeHistoryList = <
       isCurrent: boolean;
       saveSource: ListHistoryOutput['items'][number]['saveSource'];
       savedAt: Date | string;
+      userId: string;
     }>;
     nextBeforeSavedAt?: Date | string;
   },
@@ -121,6 +123,8 @@ export interface DocumentHistoryClientSurface {
   updateDocument: (params: UpdateDocumentParams) => Promise<UpdateDocumentOutput>;
 }
 
+const autosavedOnceIds = new Set<string>();
+
 export class DocumentService {
   async createDocument(params: CreateDocumentParams): Promise<DocumentItem> {
     return lambdaClient.document.createDocument.mutate(params);
@@ -175,7 +179,7 @@ export class DocumentService {
   async getPageDocuments(pageSize: number = 20): Promise<DocumentItem[]> {
     const result = await this.queryDocuments({
       current: 0,
-      fileTypes: ['custom/document', 'application/pdf'],
+      fileTypes: [CUSTOM_DOCUMENT_FILE_TYPE, 'application/pdf'],
       pageSize,
       sourceTypes: ['editor', 'file', 'api'],
     });
@@ -184,7 +188,7 @@ export class DocumentService {
       .filter(
         (doc) =>
           ['editor', 'file', 'api'].includes(doc.sourceType) &&
-          ['custom/document', 'application/pdf'].includes(doc.fileType),
+          [CUSTOM_DOCUMENT_FILE_TYPE, 'application/pdf'].includes(doc.fileType),
       )
       .map((doc) => ({ ...doc, filename: doc.filename ?? doc.title ?? 'Untitled' }));
   }
@@ -210,7 +214,10 @@ export class DocumentService {
   }
 
   async updateDocument(params: UpdateDocumentParams): Promise<UpdateDocumentOutput> {
-    const result = await lambdaClient.document.updateDocument.mutate(params);
+    const isFirstAutosave = params.saveSource === 'autosave' && !autosavedOnceIds.has(params.id);
+    const mutationParams = isFirstAutosave ? { ...params, breakAutosaveWindow: true } : params;
+    const result = await lambdaClient.document.updateDocument.mutate(mutationParams);
+    if (isFirstAutosave) autosavedOnceIds.add(params.id);
 
     return {
       ...result,
@@ -222,12 +229,40 @@ export class DocumentService {
     };
   }
 
+  /**
+   * Acquire or refresh the collaborative edit lock for a workspace page.
+   * Doubles as the heartbeat. Personal pages always report as unlocked.
+   */
+  async acquireDocumentLock(id: string, ownerId?: string) {
+    return lambdaClient.document.acquireDocumentLock.mutate({ id, ownerId });
+  }
+
+  /** Read-only peek of the current edit lock (does not acquire). */
+  async getDocumentLock(id: string, ownerId?: string) {
+    return lambdaClient.document.getDocumentLock.query({ id, ownerId });
+  }
+
+  async releaseDocumentLock(id: string, ownerId?: string): Promise<void> {
+    await lambdaClient.document.releaseDocumentLock.mutate({ id, ownerId });
+  }
+
   async saveDocumentHistory(params: SaveDocumentHistoryInput): Promise<SaveDocumentHistoryOutput> {
     const result = await lambdaClient.document.saveDocumentHistory.mutate(params);
 
     return {
       savedAt: result.savedAt instanceof Date ? result.savedAt.toISOString() : result.savedAt,
     };
+  }
+
+  async transferDocument(documentId: string, targetWorkspaceId: string | null): Promise<void> {
+    await lambdaClient.document.transferDocument.mutate({ documentId, targetWorkspaceId });
+  }
+
+  async copyDocumentToWorkspace(
+    documentId: string,
+    targetWorkspaceId: string | null,
+  ): Promise<{ rootId: string }> {
+    return lambdaClient.document.copyDocumentToWorkspace.mutate({ documentId, targetWorkspaceId });
   }
 }
 

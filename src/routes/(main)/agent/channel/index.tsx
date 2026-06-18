@@ -7,6 +7,7 @@ import { useParams } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
@@ -31,6 +32,7 @@ const styles = createStaticStyles(({ css }) => ({
 const ChannelPage = memo(() => {
   const { aid } = useParams<{ aid?: string }>();
   const [activeProviderId, setActiveProviderId] = useState<string>('');
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const { data: platforms, isLoading: platformsLoading } = useAgentStore((s) =>
     s.useFetchPlatformDefinitions(),
@@ -45,8 +47,9 @@ const ChannelPage = memo(() => {
   // from cached statuses immediately; SWR revalidates once Redis is updated.
   useEffect(() => {
     if (!aid) return;
+    if (!canEdit) return;
     triggerRefreshAllBotStatuses(aid);
-  }, [aid, triggerRefreshAllBotStatuses]);
+  }, [aid, canEdit, triggerRefreshAllBotStatuses]);
 
   const isLoading = platformsLoading || providersLoading;
 
@@ -104,6 +107,7 @@ const ChannelPage = memo(() => {
             <PlatformList
               activeId={effectiveActiveId}
               agentId={aid}
+              disabled={!canEdit}
               platforms={allPlatforms}
               providers={providers}
               runtimeStatuses={platformRuntimeStatuses}
@@ -115,6 +119,7 @@ const ChannelPage = memo(() => {
               <PlatformDetail
                 agentId={aid}
                 currentConfig={currentConfig}
+                disabled={!canEdit}
                 platformDef={activePlatformDef}
                 runtimeStatus={platformRuntimeStatuses.get(activePlatformDef.id)}
               />

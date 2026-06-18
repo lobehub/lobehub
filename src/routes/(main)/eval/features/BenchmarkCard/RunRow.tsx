@@ -4,7 +4,8 @@ import { Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { AlertTriangle, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
 import { memo } from 'react';
-import { Link } from 'react-router-dom';
+
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 import StatusBadge from '../StatusBadge';
 
@@ -100,7 +101,7 @@ const RunRow = memo<RunRowProps>(
       (status === 'completed' || status === 'running') && passCount + failCount + errorCount > 0;
 
     return (
-      <Link
+      <WorkspaceLink
         style={{ color: 'inherit', textDecoration: 'none' }}
         to={`/eval/bench/${benchmarkId}/runs/${id}`}
       >
@@ -192,7 +193,7 @@ const RunRow = memo<RunRowProps>(
             style={{ color: 'var(--ant-color-text-tertiary)', flexShrink: 0 }}
           />
         </Flexbox>
-      </Link>
+      </WorkspaceLink>
     );
   },
 );

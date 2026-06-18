@@ -5,9 +5,9 @@ import { createStaticStyles } from 'antd-style';
 import { ArrowRight, ChevronRight, Database, Ellipsis, Pencil, Play, Trash2 } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { agentEvalService } from '@/services/agentEval';
 
 import { DATASET_PRESETS } from '../../../../config/datasetPresets';
@@ -251,14 +251,14 @@ const DatasetCard = memo<DatasetCardProps>(
               />
             )}
             <Flexbox horizontal align="center" className={styles.footer} justify="center">
-              <Link
+              <WorkspaceLink
                 className={styles.footerLink}
                 to={`/eval/bench/${benchmarkId}/datasets/${dataset.id}`}
               >
                 <Button icon={ArrowRight} iconPosition="end" size="small" variant="text">
                   {t('dataset.detail.viewDetail')}
                 </Button>
-              </Link>
+              </WorkspaceLink>
             </Flexbox>
           </div>
         )}

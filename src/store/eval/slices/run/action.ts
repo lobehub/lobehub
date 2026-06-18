@@ -3,16 +3,12 @@ import isEqual from 'fast-deep-equal';
 import type { SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { evalKeys } from '@/libs/swr/keys';
 import { agentEvalService } from '@/services/agentEval';
 import type { EvalStore } from '@/store/eval/store';
 import { type StoreSetter } from '@/store/types';
 
 import { type RunDetailDispatch, runDetailReducer } from './reducer';
-
-const FETCH_RUNS_KEY = 'FETCH_EVAL_RUNS';
-const FETCH_DATASET_RUNS_KEY = 'FETCH_EVAL_DATASET_RUNS';
-const FETCH_RUN_DETAIL_KEY = 'FETCH_EVAL_RUN_DETAIL';
-const FETCH_RUN_RESULTS_KEY = 'FETCH_EVAL_RUN_RESULTS';
 
 type Setter = StoreSetter<EvalStore>;
 
@@ -96,18 +92,18 @@ export class RunActionImpl {
   };
 
   refreshDatasetRuns = async (datasetId: string): Promise<void> => {
-    await mutate([FETCH_DATASET_RUNS_KEY, datasetId]);
+    await mutate(evalKeys.datasetRuns(datasetId));
   };
 
   refreshRunDetail = async (id: string): Promise<void> => {
-    await mutate([FETCH_RUN_DETAIL_KEY, id]);
+    await mutate(evalKeys.runDetail(id));
   };
 
   refreshRuns = async (benchmarkId?: string): Promise<void> => {
     if (benchmarkId) {
-      await mutate([FETCH_RUNS_KEY, benchmarkId]);
+      await mutate(evalKeys.runs(benchmarkId));
     } else {
-      await mutate((key) => Array.isArray(key) && key[0] === FETCH_RUNS_KEY);
+      await mutate((key) => Array.isArray(key) && key[0] === evalKeys.runs.root);
     }
   };
 
@@ -116,10 +112,7 @@ export class RunActionImpl {
     targets: Array<{ testCaseId: string; threadId?: string }>,
   ): Promise<void> => {
     await agentEvalService.batchResumeRunCases(runId, targets);
-    await Promise.all([
-      this.#get().refreshRunDetail(runId),
-      mutate([FETCH_RUN_RESULTS_KEY, runId]),
-    ]);
+    await Promise.all([this.#get().refreshRunDetail(runId), mutate(evalKeys.runResults(runId))]);
   };
 
   retryRunCase = async (runId: string, testCaseId: string): Promise<void> => {
@@ -156,25 +149,21 @@ export class RunActionImpl {
   };
 
   useFetchRunDetail = (id: string, config?: { refreshInterval?: number }): SWRResponse =>
-    useClientDataSWR(
-      id ? [FETCH_RUN_DETAIL_KEY, id] : null,
-      () => agentEvalService.getRunDetails(id),
-      {
-        ...config,
-        onSuccess: (data: any) => {
-          this.#get().internal_dispatchRunDetail({
-            id,
-            type: 'setRunDetail',
-            value: data,
-          });
-          this.#get().internal_updateRunDetailLoading(id, false);
-        },
+    useClientDataSWR(id ? evalKeys.runDetail(id) : null, () => agentEvalService.getRunDetails(id), {
+      ...config,
+      onSuccess: (data: any) => {
+        this.#get().internal_dispatchRunDetail({
+          id,
+          type: 'setRunDetail',
+          value: data,
+        });
+        this.#get().internal_updateRunDetailLoading(id, false);
       },
-    );
+    });
 
   useFetchRunResults = (id: string, config?: { refreshInterval?: number }): SWRResponse =>
     useClientDataSWR(
-      id ? [FETCH_RUN_RESULTS_KEY, id] : null,
+      id ? evalKeys.runResults(id) : null,
       () => agentEvalService.getRunResults(id),
       {
         ...config,
@@ -193,7 +182,7 @@ export class RunActionImpl {
 
   useFetchDatasetRuns = (datasetId?: string): SWRResponse =>
     useClientDataSWR(
-      datasetId ? [FETCH_DATASET_RUNS_KEY, datasetId] : null,
+      datasetId ? evalKeys.datasetRuns(datasetId) : null,
       () => agentEvalService.listRuns({ datasetId: datasetId! }),
       {
         onSuccess: (data: any) => {
@@ -210,7 +199,7 @@ export class RunActionImpl {
 
   useFetchRuns = (benchmarkId?: string): SWRResponse =>
     useClientDataSWR(
-      benchmarkId ? [FETCH_RUNS_KEY, benchmarkId] : null,
+      benchmarkId ? evalKeys.runs(benchmarkId) : null,
       () => agentEvalService.listRuns({ benchmarkId: benchmarkId! }),
       {
         onSuccess: (data: any) => {

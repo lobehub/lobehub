@@ -7,7 +7,9 @@ import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon, SquareArrowOutUpRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
+
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 import { useDetailContext } from '../../DetailProvider';
 
@@ -22,7 +24,7 @@ const styles = createStaticStyles(({ css }) => ({
 const ProviderConfig = memo(() => {
   const { t } = useTranslation('discover');
   const { url, modelsUrl, identifier } = useDetailContext();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const openSettings = async () => {
     if (isDesktop) {
       const { ensureElectronIpc } = await import('@/utils/electron/ipc');
@@ -41,18 +43,18 @@ const ProviderConfig = memo(() => {
       icon,
       key: 'officialSite',
       label: (
-        <Link target={'_blank'} to={url}>
+        <WorkspaceLink target={'_blank'} to={url}>
           {t('providers.officialSite')}
-        </Link>
+        </WorkspaceLink>
       ),
     },
     modelsUrl && {
       icon,
       key: 'modelSite',
       label: (
-        <Link target={'_blank'} to={modelsUrl}>
+        <WorkspaceLink target={'_blank'} to={modelsUrl}>
           {t('providers.modelSite')}
-        </Link>
+        </WorkspaceLink>
       ),
     },
   ].filter(Boolean) as any;

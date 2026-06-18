@@ -12,7 +12,6 @@ export const userMemories = pgTable(
       .primaryKey(),
 
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
-
     memoryCategory: varchar255('memory_category'),
     memoryLayer: varchar255('memory_layer'),
     memoryType: varchar255('memory_type'),

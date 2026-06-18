@@ -20,8 +20,9 @@ interface HeaderProps {
 
 const Header = memo<HeaderProps>(({ agentId }) => {
   const { t } = useTranslation(['topic', 'chat', 'common']);
-  const agentTitle = useAgentStore(agentSelectors.currentAgentTitle);
-  const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
+  const agentTitle = useAgentStore((s) => agentSelectors.getAgentMetaById(agentId)(s).title);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const isInbox = !!inboxAgentId && agentId === inboxAgentId;
   const displayTitle = isInbox
     ? agentTitle || t('inbox.title', { ns: 'chat' })
     : agentTitle || t('defaultSession', { ns: 'common' });

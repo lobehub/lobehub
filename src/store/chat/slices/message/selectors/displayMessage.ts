@@ -235,13 +235,6 @@ const getGroupLatestMessageWithoutTools = (id: string) => (s: ChatStoreState) =>
 const findLastBlockId = (block: AssistantContentBlock | undefined): string | undefined => {
   if (!block) return undefined;
 
-  // Check tools for result message ID
-  if (block.tools && block.tools.length > 0) {
-    const lastTool = block.tools.at(-1);
-    return lastTool?.result_msg_id;
-  }
-
-  // Return block ID
   return block.id;
 };
 

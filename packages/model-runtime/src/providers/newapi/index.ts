@@ -5,6 +5,7 @@ import { responsesAPIModels } from '../../const/models';
 import { createRouterRuntime } from '../../core/RouterRuntime';
 import type { CreateRouterRuntimeOptions } from '../../core/RouterRuntime/createRuntime';
 import { detectModelProvider, processMultiProviderModelList } from '../../utils/modelParse';
+import { resolveProviderRouteModels } from '../utils/resolveProviderRouteModels';
 
 export interface NewAPIModelCard {
   created: number;
@@ -158,7 +159,7 @@ export const params = {
 
     return processMultiProviderModelList([...enrichedModelList, ...additionalModels], 'newapi');
   },
-  routers: (options) => {
+  routers: (options, runtimeContext?: { model?: string }) => {
     const userBaseURL = options.baseURL?.replace(/\/v\d+[a-z]*\/?$/, '') || '';
 
     return [
@@ -190,6 +191,19 @@ export const params = {
         options: {
           ...options,
           baseURL: urlJoin(userBaseURL, '/v1'),
+        },
+      },
+      {
+        apiType: 'deepseek',
+        models: resolveProviderRouteModels(
+          'deepseek',
+          LOBE_DEFAULT_MODEL_LIST,
+          runtimeContext?.model,
+        ),
+        options: {
+          ...options,
+          baseURL: urlJoin(userBaseURL, '/v1'),
+          sdkType: 'openai',
         },
       },
       {

@@ -12,7 +12,13 @@ import { ToolInterventionSchema } from '../common/tools';
 import type { UIChatMessage } from './chat';
 import { SemanticSearchChunkSchema } from './rag';
 
-export type CreateMessageRoleType = 'user' | 'assistant' | 'tool' | 'task' | 'supervisor';
+export type CreateMessageRoleType =
+  | 'user'
+  | 'assistant'
+  | 'tool'
+  | 'task'
+  | 'supervisor'
+  | 'verify';
 
 export interface CreateMessageParams extends Partial<
   Omit<UIChatMessage, 'content' | 'role' | 'topicId' | 'chunksList'>
@@ -45,12 +51,14 @@ export interface CreateNewMessageParams {
   content: string;
   // ========== Error handling ==========
   error?: ChatMessageError | null;
-
   fileChunks?: MessageSemanticSearchChunk[];
+
   // ========== Content ==========
   files?: string[];
-
   groupId?: string;
+
+  /** Caller-pre-allocated message id. Omitted → the DB generates one. */
+  id?: string;
   // ========== Model info ==========
   model?: string;
 
@@ -112,6 +120,14 @@ export interface SendMessageParams {
   editorData?: Record<string, any>;
   files?: UploadFileItem[];
   /**
+   * Force the agent runtime regardless of the agent's local/cloud/hetero
+   * config. Injected straight into `selectRuntimeType` as `parentRuntime`,
+   * so it wins over every other signal. Used by task topics (which were
+   * spawned server-side via `runTask`) to keep follow-up sends pinned to
+   * the gateway path even if the user's global runtime preference is local.
+   */
+  forceRuntime?: 'client' | 'gateway' | 'hetero';
+  /**
    *
    * https://github.com/lobehub/lobe-chat/pull/2086
    */
@@ -172,6 +188,10 @@ export const CreateNewMessageParamsSchema = z
     // Required fields
     role: UIMessageRoleTypeSchema,
     content: z.string(),
+    // Caller-pre-allocated id (e.g. the subagent run coordinator assigns ids up
+    // front so parentId chains resolve without a create→backfill round-trip).
+    // Omitted → the DB generates one.
+    id: z.string().optional(),
     // agentId is required, but can be resolved from sessionId in the router
     agentId: z.string().optional(),
     /**

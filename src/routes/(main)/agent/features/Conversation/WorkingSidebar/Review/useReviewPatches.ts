@@ -1,11 +1,11 @@
-import { isDesktop } from '@lobechat/const';
 import type {
   GitWorkingTreePatch,
   SubmoduleWorkingTreePatches,
 } from '@lobechat/electron-client-ipc';
 
 import { useClientDataSWR } from '@/libs/swr';
-import { electronGitService } from '@/services/electron/git';
+import { deviceKeys } from '@/libs/swr/keys';
+import { gitService } from '@/services/git';
 
 export type ReviewMode = 'unstaged' | 'branch';
 
@@ -23,22 +23,26 @@ export interface ReviewPatchesData {
   submodules?: SubmoduleWorkingTreePatches[];
 }
 
-const fetchUnstaged = async (dirPath: string): Promise<ReviewPatchesData> => {
-  const result = await electronGitService.getGitWorkingTreePatches(dirPath);
-  return { mode: 'unstaged', patches: result.patches, submodules: result.submodules };
+const fetchUnstaged = async (
+  dirPath: string,
+  deviceId: string | undefined,
+): Promise<ReviewPatchesData> => {
+  const result = await gitService.getGitWorkingTreePatches({ deviceId, path: dirPath });
+  return { mode: 'unstaged', patches: result?.patches ?? [], submodules: result?.submodules };
 };
 
 const fetchBranch = async (
   dirPath: string,
   baseRef: string | undefined,
+  deviceId: string | undefined,
 ): Promise<ReviewPatchesData> => {
-  const result = await electronGitService.getGitBranchDiff({ baseRef, path: dirPath });
+  const result = await gitService.getGitBranchDiff({ baseRef, deviceId, path: dirPath });
   return {
-    baseRef: result.baseRef,
-    headRef: result.headRef,
+    baseRef: result?.baseRef,
+    headRef: result?.headRef,
     mode: 'branch',
-    patches: result.patches,
-    submodules: result.submodules,
+    patches: result?.patches ?? [],
+    submodules: result?.submodules,
   };
 };
 
@@ -55,13 +59,19 @@ export const useReviewPatches = (
   dirPath: string | undefined,
   mode: ReviewMode,
   baseRef?: string,
+  deviceId?: string,
 ) => {
-  const enabled = isDesktop && Boolean(dirPath);
-  const key = enabled ? ['git-review-patches', dirPath, mode, baseRef ?? ''] : null;
+  const enabled = Boolean(dirPath);
+  const key = enabled
+    ? deviceKeys.gitReviewPatches(deviceId ?? 'local', dirPath!, mode, baseRef ?? '')
+    : null;
 
   return useClientDataSWR<ReviewPatchesData>(
     key,
-    () => (mode === 'branch' ? fetchBranch(dirPath!, baseRef) : fetchUnstaged(dirPath!)),
+    () =>
+      mode === 'branch'
+        ? fetchBranch(dirPath!, baseRef, deviceId)
+        : fetchUnstaged(dirPath!, deviceId),
     {
       focusThrottleInterval: mode === 'branch' ? 30 * 1000 : 5 * 1000,
       revalidateOnFocus: true,
@@ -76,10 +86,19 @@ export const useReviewPatches = (
  * Review panel. Stays disabled until `enabled` flips true so we don't fork
  * a `git for-each-ref` until the user actually opens the dropdown.
  */
-export const useGitRemoteBranches = (dirPath: string | undefined, enabled: boolean) => {
-  const key = isDesktop && dirPath && enabled ? ['git-remote-branches', dirPath] : null;
-  return useClientDataSWR(key, () => electronGitService.listGitRemoteBranches(dirPath!), {
-    revalidateOnFocus: false,
-    shouldRetryOnError: false,
-  });
+export const useGitRemoteBranches = (
+  dirPath: string | undefined,
+  enabled: boolean,
+  deviceId?: string,
+) => {
+  const key =
+    dirPath && enabled ? deviceKeys.gitRemoteBranches(deviceId ?? 'local', dirPath) : null;
+  return useClientDataSWR(
+    key,
+    () => gitService.listGitRemoteBranches({ deviceId, path: dirPath! }),
+    {
+      revalidateOnFocus: false,
+      shouldRetryOnError: false,
+    },
+  );
 };

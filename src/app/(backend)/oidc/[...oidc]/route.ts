@@ -61,7 +61,7 @@ const handler = async (req: NextRequest) => {
           }
         });
         log('Middleware call initiated, waiting for its callback OR nodeResponse.end()...');
-      });
+      }, reject);
     });
 
     log('Promise surrounding middleware call resolved.');

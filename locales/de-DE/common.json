@@ -480,6 +480,9 @@
   "userPanel.setting": "Einstellungen",
   "userPanel.upgradePlan": "Plan upgraden",
   "userPanel.usages": "Nutzungsstatistiken",
+  "userPanel.workspaceCredits": "Arbeitsbereich-Guthaben",
+  "userPanel.workspaceSetting": "Arbeitsbereich-Einstellungen",
+  "userPanel.workspaceUsages": "Arbeitsbereich-Nutzung",
   "version": "Version",
   "zoom": "Zoom"
 }

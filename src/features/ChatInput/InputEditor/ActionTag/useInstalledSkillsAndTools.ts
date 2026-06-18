@@ -5,7 +5,7 @@ import { useToolStore } from '@/store/tool';
 import {
   agentSkillsSelectors,
   builtinToolSelectors,
-  klavisStoreSelectors,
+  composioStoreSelectors,
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
@@ -15,12 +15,12 @@ import type { ActionTagData } from './types';
 /**
  * Collects all installed skills and tools, returning them as ActionTagData[].
  * Skills: builtinSkills, lobehubSkillServers, marketAgentSkills, userAgentSkills
- * Tools:  installedPlugins (excluding skill-type entries), klavisServers
+ * Tools:  installedPlugins (excluding skill-type entries), composioServers
  */
 export const useInstalledSkillsAndTools = (): ActionTagData[] => {
   const builtinSkills = useToolStore(builtinToolSelectors.installedBuiltinSkills, isEqual);
   const installedPlugins = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
-  const klavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
+  const composioServers = useToolStore(composioStoreSelectors.getServers, isEqual);
   const lobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
   const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
   const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
@@ -60,12 +60,12 @@ export const useInstalledSkillsAndTools = (): ActionTagData[] => {
         toolMap.set(item.identifier, { icon: item.avatar, label: item.title || item.identifier });
       }
     }
-    for (const item of klavisServers) {
+    for (const item of composioServers) {
       if (skillMap.has(item.identifier)) continue;
       if (!toolMap.has(item.identifier)) {
         toolMap.set(item.identifier, {
           icon: item.icon,
-          label: item.serverName || item.identifier,
+          label: item.label || item.identifier,
         });
       }
     }
@@ -82,7 +82,7 @@ export const useInstalledSkillsAndTools = (): ActionTagData[] => {
   }, [
     builtinSkills,
     installedPlugins,
-    klavisServers,
+    composioServers,
     lobehubSkillServers,
     marketAgentSkills,
     userAgentSkills,

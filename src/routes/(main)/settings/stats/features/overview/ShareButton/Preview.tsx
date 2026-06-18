@@ -1,4 +1,4 @@
-import { imageUrl,OFFICIAL_URL } from '@lobechat/const';
+import { imageUrl, OFFICIAL_URL } from '@lobechat/const';
 import { Center, Flexbox, Grid, lobeStaticStylish } from '@lobehub/ui';
 import { createStaticStyles, cx, responsive } from 'antd-style';
 import { memo } from 'react';
@@ -9,7 +9,7 @@ import UserAvatar from '@/features/User/UserAvatar';
 
 import AiHeatmaps from '../../visualization/AiHeatmaps';
 import TotalMessages from '../TotalMessages';
-import TotalWords from '../TotalWords';
+import TotalTokens from '../TotalTokens';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   avatar: css`
@@ -133,7 +133,7 @@ const Preview = memo(() => {
             />
             <Grid gap={8} maxItemWidth={100} rows={2} width={'100%'}>
               <TotalMessages inShare />
-              <TotalWords inShare />
+              <TotalTokens inShare />
             </Grid>
           </Flexbox>
           <div className={styles.footer}>{OFFICIAL_URL}</div>

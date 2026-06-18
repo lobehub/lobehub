@@ -11,7 +11,12 @@ import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import type { ExplorerTreeNode } from '@/features/ExplorerTree';
-import { ExplorerTree, FOLDER_ICON_CSS, getExplorerTreeStyleVars } from '@/features/ExplorerTree';
+import {
+  ExplorerTree,
+  FOLDER_ICON_CSS,
+  getExplorerTreeStyleVars,
+  HIDE_POINTER_FOCUS_RING_CSS,
+} from '@/features/ExplorerTree';
 import type { ExplorerTreeHandle } from '@/features/ExplorerTree/types';
 import { localFileService } from '@/services/electron/localFileService';
 import { useChatStore } from '@/store/chat';
@@ -21,6 +26,13 @@ import { buildGitStatusEntries, useGitWorkingTreeFiles } from './useGitWorkingTr
 import { useProjectFiles } from './useProjectFiles';
 
 interface FilesProps {
+  /**
+   * Target device the working directory lives on. Undefined for local desktop;
+   * set for a remote / web-bound device so the tree + git status route through
+   * the device RPCs. OS-level actions (open in app / reveal in Finder) are
+   * hidden for remote — there's no local filesystem to act on.
+   */
+  deviceId?: string;
   workingDirectory: string;
 }
 
@@ -29,18 +41,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     --trees-bg-override: transparent;
     --trees-border-color-override: transparent;
     --trees-selected-bg-override: ${cssVar.colorFillSecondary};
+    --trees-selected-fg-override: ${cssVar.colorText};
     --trees-bg-muted-override: ${cssVar.colorFillTertiary};
-    --trees-fg-override: ${cssVar.colorText};
+    --trees-fg-override: ${cssVar.colorTextSecondary};
     --trees-fg-muted-override: ${cssVar.colorTextSecondary};
     --trees-accent-override: ${cssVar.colorPrimary};
     --trees-padding-inline-override: 0px;
     --trees-font-size-override: 12px;
     --trees-border-radius-override: 6px;
-
-    /* Drop the doubled outline pierre/trees draws via ::before on a
-     * focused+selected row — the filled background from
-     * --trees-selected-bg-override is already a clear selection signal. */
-    --trees-selected-focused-border-color-override: transparent;
 
     flex: 1;
     min-height: 0;
@@ -64,6 +72,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const stripTrailingSlash = (value: string) => (value.endsWith('/') ? value.slice(0, -1) : value);
+
+const FILE_TREE_UNSAFE_CSS = `${FOLDER_ICON_CSS}\n${HIDE_POINTER_FOCUS_RING_CSS}`;
 
 const getParentRelativePath = (relativePath: string): string | null => {
   const cleaned = stripTrailingSlash(relativePath);
@@ -101,10 +111,15 @@ const getAncestorIds = (filePath: string): string[] => {
   return ancestors;
 };
 
-const Files = memo<FilesProps>(({ workingDirectory }) => {
+const Files = memo<FilesProps>(({ deviceId, workingDirectory }) => {
   const { t } = useTranslation('chat');
-  const { data, isLoading, isValidating, mutate } = useProjectFiles(workingDirectory);
-  const { data: gitFiles } = useGitWorkingTreeFiles(workingDirectory, data?.source === 'git');
+  const isRemote = !!deviceId;
+  const { data, isLoading, isValidating, mutate } = useProjectFiles(deviceId, workingDirectory);
+  const { data: gitFiles } = useGitWorkingTreeFiles(
+    deviceId,
+    workingDirectory,
+    data?.source === 'git',
+  );
   const projectRoot = data?.root ?? workingDirectory;
 
   const entries = useMemo(() => data?.entries ?? [], [data]);
@@ -160,16 +175,19 @@ const Files = memo<FilesProps>(({ workingDirectory }) => {
     (node: ExplorerTreeNode<ProjectFileIndexEntry>) => {
       if (!node.data) return;
       if (node.isFolder) {
+        if (isRemote) return;
+
         void localFileService.openLocalFileOrFolder(node.data.path, true);
         return;
       }
-      openLocalFile({ filePath: node.data.path, workingDirectory: projectRoot });
+      openLocalFile({ deviceId, filePath: node.data.path, workingDirectory: projectRoot });
     },
-    [openLocalFile, projectRoot],
+    [deviceId, isRemote, openLocalFile, projectRoot],
   );
 
   const handleNodeClick = useCallback(
     (node: ExplorerTreeNode<ProjectFileIndexEntry>) => {
+      // Folders expand via the tree; files open in the preview panel.
       if (node.isFolder) return;
       openNode(node);
     },
@@ -183,28 +201,39 @@ const Files = memo<FilesProps>(({ workingDirectory }) => {
       const { path, relativePath } = node.data;
       const isDirty = dirtyFilePaths.has(relativePath);
 
+      // OS-level actions (open in app / reveal in Finder) only work on the local
+      // machine — omit them for a remote device.
+      const localActions: MenuProps['items'] = isRemote
+        ? []
+        : [
+            {
+              key: 'open',
+              label: t('workingPanel.files.open'),
+              onClick: () => openNode(node),
+            },
+            { key: 'divider-reveal', type: 'divider' as const },
+            {
+              key: 'show-in-system',
+              label: t('workingPanel.files.showInSystem'),
+              onClick: () => void localFileService.openFileFolder(path),
+            },
+          ];
+
+      const reviewActions: MenuProps['items'] = isDirty
+        ? [
+            {
+              key: 'show-in-review',
+              label: t('workingPanel.files.showInReview'),
+              onClick: () => setWorkingSidebarTab('review'),
+            },
+          ]
+        : [];
+
+      const before = [...localActions, ...reviewActions];
+
       return [
-        {
-          key: 'open',
-          label: t('workingPanel.files.open'),
-          onClick: () => openNode(node),
-        },
-        { key: 'divider-reveal', type: 'divider' as const },
-        {
-          key: 'show-in-system',
-          label: t('workingPanel.files.showInSystem'),
-          onClick: () => void localFileService.openFileFolder(path),
-        },
-        ...(isDirty
-          ? [
-              {
-                key: 'show-in-review',
-                label: t('workingPanel.files.showInReview'),
-                onClick: () => setWorkingSidebarTab('review'),
-              },
-            ]
-          : []),
-        { key: 'divider-copy', type: 'divider' as const },
+        ...before,
+        ...(before.length > 0 ? [{ key: 'divider-copy', type: 'divider' as const }] : []),
         {
           key: 'copy-absolute-path',
           label: t('workingPanel.files.copyAbsolutePath'),
@@ -223,7 +252,7 @@ const Files = memo<FilesProps>(({ workingDirectory }) => {
         },
       ];
     },
-    [dirtyFilePaths, openNode, setWorkingSidebarTab, t],
+    [dirtyFilePaths, isRemote, openNode, setWorkingSidebarTab, t],
   );
 
   const fileCount = data?.totalCount ?? entries.filter((e) => !e.isDirectory).length;
@@ -264,7 +293,7 @@ const Files = memo<FilesProps>(({ workingDirectory }) => {
             nodes={nodes}
             ref={treeRef}
             style={{ height: '100%' }}
-            unsafeCSS={FOLDER_ICON_CSS}
+            unsafeCSS={FILE_TREE_UNSAFE_CSS}
             onExpandedChange={setExpandedIds}
             onNodeClick={handleNodeClick}
           />

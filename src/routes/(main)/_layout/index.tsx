@@ -9,6 +9,7 @@ import { Suspense } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
 import { Outlet } from 'react-router-dom';
 
+import WorkspaceContextSlot from '@/business/client/WorkspaceContextSlot';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { isDesktop } from '@/const/version';
 import { BANNER_HEIGHT } from '@/features/AlertBanner/CloudBanner';
@@ -46,52 +47,54 @@ const Layout: FC = () => {
 
   return (
     <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
-      <RouteMetaBridge />
-      {isDesktop && <TabCacheBridges />}
-      <Suspense fallback={null}>
-        {isDesktop && <DesktopAutoOidcOnFirstOpen />}
-        {isDesktop && <DesktopNavigationBridge />}
-        {isDesktop && <DesktopFileMenuBridge />}
-        {isDesktop && <OverlaySnapshotPublisher />}
-        {isDesktop && <OverlayCaptureUploader />}
-        {isDesktop && <OverlayMessageDispatcher />}
-        {showCloudPromotion && <CloudBanner />}
-      </Suspense>
-      {isDesktop && <AuthRequiredModal />}
-      {isDesktop && <ZoomHUD />}
+      <WorkspaceContextSlot>
+        <RouteMetaBridge />
+        {isDesktop && <TabCacheBridges />}
+        <Suspense fallback={null}>
+          {isDesktop && <DesktopAutoOidcOnFirstOpen />}
+          {isDesktop && <DesktopNavigationBridge />}
+          {isDesktop && <DesktopFileMenuBridge />}
+          {isDesktop && <OverlaySnapshotPublisher />}
+          {isDesktop && <OverlayCaptureUploader />}
+          {isDesktop && <OverlayMessageDispatcher />}
+          {showCloudPromotion && <CloudBanner />}
+        </Suspense>
+        {isDesktop && <AuthRequiredModal />}
+        {isDesktop && <ZoomHUD />}
 
-      <Suspense fallback={null}>{isDesktop && <TitleBar />}</Suspense>
-      <DndContextWrapper>
-        <Flexbox
-          horizontal
-          className={cx(isPWA ? styles.mainContainerPWA : styles.mainContainer)}
-          width={'100%'}
-          height={
-            isDesktop
-              ? `calc(100% - ${TITLE_BAR_HEIGHT}px)`
-              : showCloudPromotion
-                ? `calc(100% - ${BANNER_HEIGHT}px)`
-                : '100%'
-          }
-        >
-          <NavPanel />
-          <DesktopLayoutContainer>
-            <MarketAuthProvider isDesktop={isDesktop}>
-              <DesktopHomeLayout>
-                <DesktopHome />
-              </DesktopHomeLayout>
-              <Suspense fallback={<Loading debugId="DesktopMainLayout > Outlet" />}>
-                <Outlet />
-              </Suspense>
-            </MarketAuthProvider>
-          </DesktopLayoutContainer>
-        </Flexbox>
-      </DndContextWrapper>
-      <Suspense fallback={null}>
-        <HotkeyHelperPanel />
-        <RegisterHotkeys />
-        <CmdkLazy />
-      </Suspense>
+        <Suspense fallback={null}>{isDesktop && <TitleBar />}</Suspense>
+        <DndContextWrapper>
+          <Flexbox
+            horizontal
+            className={cx(isPWA ? styles.mainContainerPWA : styles.mainContainer)}
+            width={'100%'}
+            height={
+              isDesktop
+                ? `calc(100% - ${TITLE_BAR_HEIGHT}px)`
+                : showCloudPromotion
+                  ? `calc(100% - ${BANNER_HEIGHT}px)`
+                  : '100%'
+            }
+          >
+            <NavPanel />
+            <DesktopLayoutContainer>
+              <MarketAuthProvider isDesktop={isDesktop}>
+                <DesktopHomeLayout>
+                  <DesktopHome />
+                </DesktopHomeLayout>
+                <Suspense fallback={<Loading debugId="DesktopMainLayout > Outlet" />}>
+                  <Outlet />
+                </Suspense>
+              </MarketAuthProvider>
+            </DesktopLayoutContainer>
+          </Flexbox>
+        </DndContextWrapper>
+        <Suspense fallback={null}>
+          <HotkeyHelperPanel />
+          <RegisterHotkeys />
+          <CmdkLazy />
+        </Suspense>
+      </WorkspaceContextSlot>
     </HotkeysProvider>
   );
 };

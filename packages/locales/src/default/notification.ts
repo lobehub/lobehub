@@ -1,0 +1,56 @@
+export default {
+  'agent_cron_job_failed':
+    'Your scheduled task "{{jobName}}" failed. Open the task to see the full error.',
+  'agent_cron_job_failed_insufficient_budget':
+    'Your scheduled task "{{jobName}}" couldn\'t run because your account is out of credits. Top up or upgrade your plan to resume future runs.',
+  'agent_cron_job_failed_insufficient_budget_title': 'Scheduled task paused: insufficient credits',
+  'agent_cron_job_failed_title': 'Scheduled task failed',
+  'billboard.learnMore': 'Learn more',
+  'billboard.menuLabel': 'Announcements',
+  'image_generation_completed': 'Your image "{{prompt}}" is ready.',
+  'image_generation_completed_title': 'Image generation completed',
+  'inbox.archiveAll': 'Archive all',
+  'inbox.empty': 'No notifications yet',
+  'inbox.emptyUnread': 'No unread notifications',
+  'inbox.filterUnread': 'Show unread only',
+  'inbox.markAllRead': 'Mark all as read',
+  'inbox.title': 'Notifications',
+  'storage_overage_cap_reached':
+    'Your storage pay-as-you-go monthly cap of ${{monthlyCap}} has been reached. Estimated charges this cycle are ${{estimatedCycleCharge}}. New uploads beyond your included storage will be blocked until the next billing cycle or until you increase the cap.',
+  'storage_overage_cap_reached_title': 'Storage pay-as-you-go cap reached',
+  'video_generation_completed': 'Your video "{{prompt}}" is ready.',
+  'video_generation_completed_title': 'Video generation completed',
+  'workspace_member_invited':
+    '{{inviterLabel}} invited you to join workspace "{{workspaceName}}" as a {{role}}.',
+  'workspace_member_invited_title': 'Invitation to join {{workspaceName}}',
+  'workspace_member_joined': '{{memberLabel}} joined workspace "{{workspaceName}}" as a {{role}}.',
+  'workspace_member_joined_member':
+    '{{memberLabel}} joined workspace "{{workspaceName}}" as a Member.',
+  'workspace_member_joined_member_title': 'New member joined {{workspaceName}}',
+  'workspace_member_joined_owner':
+    '{{memberLabel}} joined workspace "{{workspaceName}}" as an Owner.',
+  'workspace_member_joined_owner_title': 'New member joined {{workspaceName}}',
+  'workspace_member_joined_title': 'New member joined {{workspaceName}}',
+  'workspace_member_joined_viewer':
+    '{{memberLabel}} joined workspace "{{workspaceName}}" as a Viewer.',
+  'workspace_member_joined_viewer_title': 'New member joined {{workspaceName}}',
+  'workspace_member_removed':
+    'You have been removed from workspace "{{workspaceName}}" by the workspace owner.',
+  'workspace_member_removed_downgrade':
+    'You have been removed from workspace "{{workspaceName}}" because the workspace was downgraded.',
+  'workspace_member_removed_downgrade_title': 'Removed from workspace',
+  'workspace_member_removed_title': 'Removed from workspace',
+  'workspace_payment_failed':
+    'Renewal payment for workspace "{{workspaceName}}" failed. Please update your payment method to keep the workspace active.',
+  'workspace_payment_failed_title': 'Payment failed for {{workspaceName}}',
+  'workspace_payment_method_removed':
+    'A payment method was removed from workspace "{{workspaceName}}". Add a card before the next renewal, otherwise the subscription will fail to renew.',
+  'workspace_payment_method_removed_title': 'Payment method removed from {{workspaceName}}',
+  'workspace_primary_ownership_transferred':
+    'You are now the primary owner of workspace "{{workspaceName}}". Billing and primary privileges have been transferred to you.',
+  'workspace_primary_ownership_transferred_title':
+    'You are now the primary owner of {{workspaceName}}',
+  'workspace_subscription_expired':
+    'The subscription for workspace "{{workspaceName}}" has ended. Renew within {{days}} days to restore full access before the workspace is downgraded.',
+  'workspace_subscription_expired_title': 'Subscription ended for {{workspaceName}}',
+};

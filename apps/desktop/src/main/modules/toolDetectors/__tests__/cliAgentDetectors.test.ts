@@ -1,5 +1,6 @@
 import * as childProcess from 'node:child_process';
 import * as os from 'node:os';
+import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -180,6 +181,76 @@ describe('cliAgentDetectors', () => {
       expect(status.path).toBe('/usr/local/bin/claude');
       expect(execMock).not.toHaveBeenCalled();
       expect(execFileMock).toHaveBeenCalledTimes(2);
+      // Resolved on the inherited PATH — nothing extra to carry into spawn.
+      expect(status.resolvedPathEnv).toBeUndefined();
+    });
+
+    it('falls back to the Codex.app bundled CLI when `codex` is not on any PATH', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      // Deterministic env: no SHELL → no login-shell lookup, merged PATH
+      // equals process.env.PATH → no second `which` attempt.
+      process.env.PATH = '/usr/bin:/bin';
+      delete process.env.SHELL;
+
+      try {
+        callExecFileError(new Error('not found')); // which codex
+        callExecFile('codex-cli 0.138.0'); // bundled CLI --version
+
+        const { codexDetector } = await import('../cliAgentDetectors');
+        const status = await codexDetector.detect();
+
+        expect(status.available).toBe(true);
+        expect(status.path).toBe('/Applications/Codex.app/Contents/Resources/codex');
+        expect(status.version).toBe('codex-cli 0.138.0');
+
+        expect(execFileMock).toHaveBeenCalledTimes(2);
+        expect(execFileMock.mock.calls[0]![0]).toBe('which');
+        expect(execFileMock.mock.calls[1]![0]).toBe(
+          '/Applications/Codex.app/Contents/Resources/codex',
+        );
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalShell === undefined) delete process.env.SHELL;
+        else process.env.SHELL = originalShell;
+      }
+    });
+
+    it('stays unavailable when neither PATH nor the well-known locations have codex', async () => {
+      const originalPath = process.env.PATH;
+      const originalShell = process.env.SHELL;
+      process.env.PATH = '/usr/bin:/bin';
+      delete process.env.SHELL;
+
+      try {
+        callExecFileError(new Error('not found')); // which codex
+        callExecFileError(new Error('ENOENT')); // /Applications candidate
+        callExecFileError(new Error('ENOENT')); // ~/Applications candidate
+
+        const { codexDetector } = await import('../cliAgentDetectors');
+        const status = await codexDetector.detect();
+
+        expect(status.available).toBe(false);
+        expect(execFileMock).toHaveBeenCalledTimes(3);
+        expect(execFileMock.mock.calls[2]![0]).toBe(
+          path.join(os.homedir(), 'Applications', 'Codex.app', 'Contents', 'Resources', 'codex'),
+        );
+      } finally {
+        process.env.PATH = originalPath;
+        if (originalShell === undefined) delete process.env.SHELL;
+        else process.env.SHELL = originalShell;
+      }
+    });
+
+    it('does not probe well-known locations for an explicit path-like command', async () => {
+      callExecFileError(new Error('ENOENT')); // /custom/bin/codex --version
+
+      const { detectHeterogeneousCliCommand } = await import('../cliAgentDetectors');
+      const status = await detectHeterogeneousCliCommand('codex', '/custom/bin/codex');
+
+      expect(status.available).toBe(false);
+      // Only the explicit path's --version attempt — no fallback probing.
+      expect(execFileMock).toHaveBeenCalledTimes(1);
     });
 
     it('falls back to the login shell PATH for tools installed by shell setup', async () => {
@@ -200,6 +271,12 @@ describe('cliAgentDetectors', () => {
         expect(status.available).toBe(true);
         expect(status.path).toBe('/Users/Hanam/.local/share/mise/shims/gemini');
         expect(status.version).toBe('gemini 0.2.0');
+        // The login-shell PATH that resolved the shim must be surfaced so the
+        // spawn site can carry it into the child env (mise/nvm `node` lives
+        // there, not on the leaner inherited PATH).
+        expect(status.resolvedPathEnv).toBe(
+          '/opt/homebrew/bin:/Users/Hanam/.local/share/mise/shims:/usr/bin:/bin',
+        );
 
         expect(execFileMock).toHaveBeenCalledTimes(4);
         expect(execFileMock.mock.calls[0]![0]).toBe('which');

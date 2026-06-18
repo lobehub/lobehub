@@ -390,20 +390,130 @@ describe('LobeZhipuAI - custom features', () => {
         ['glm-4.7', true, true],
         ['glm-5', true, true],
         ['glm-5.1', true, true],
+        ['glm-5.2', true, true],
+        ['glm-5.3', true, true],
+        ['glm-6', true, true],
         ['glm-4.5', true, undefined],
         ['glm-5-turbo', true, undefined],
         ['glm-4', true, undefined],
+        ['glm-5.2', false, undefined],
         ['glm-5.1', false, undefined],
-      ] as const)('model=%s stream=%s → tool_stream=%s', async (model, stream, expected) => {
-        await instance.chat({
+      ] as const)('model=%s stream=%s → tool_stream=%s', (model, stream, expected) => {
+        const payload = params.chatCompletion.handlePayload({
+          max_tokens: 4096,
           messages: [{ content: 'Hello', role: 'user' }],
           model,
           stream,
           temperature: 0.5,
         });
 
-        const callArgs = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-        expect(callArgs.tool_stream).toBe(expected);
+        expect(payload.tool_stream).toBe(expected);
+      });
+    });
+
+    describe('GLM-5.2 optional params', () => {
+      it('should forward reasoning_effort with thinking enabled', () => {
+        const payload = params.chatCompletion.handlePayload({
+          max_tokens: 4096,
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'glm-5.2',
+          reasoning_effort: 'max',
+          temperature: 1,
+          thinking: { type: 'enabled' },
+        });
+
+        expect(payload.reasoning_effort).toBe('max');
+        expect(payload.thinking).toEqual({ type: 'enabled' });
+      });
+    });
+
+    describe('preserve thinking mapping', () => {
+      it('should map preserveThinking=true to clear_thinking=false and convert reasoning content', () => {
+        const payload = {
+          messages: [
+            { content: 'hello', role: 'user' },
+            {
+              content: 'answer',
+              reasoning: { content: 'reasoning content' },
+              role: 'assistant',
+            },
+          ],
+          model: 'glm-5',
+          preserveThinking: true,
+          thinking: { budget_tokens: 1024, type: 'enabled' },
+        } as any;
+
+        const result = params.chatCompletion.handlePayload(payload);
+
+        expect(result.thinking).toEqual({ clear_thinking: false, type: 'enabled' });
+        expect(result.messages).toEqual([
+          { content: 'hello', role: 'user' },
+          {
+            content: 'answer',
+            reasoning_content: 'reasoning content',
+            role: 'assistant',
+          },
+        ]);
+      });
+
+      it('should still convert reasoning to reasoning_content when preserveThinking is absent', () => {
+        const payload = {
+          messages: [
+            {
+              content: 'answer',
+              reasoning: { content: 'reasoning content' },
+              role: 'assistant',
+            },
+          ],
+          model: 'glm-5',
+        } as any;
+
+        const result = params.chatCompletion.handlePayload(payload);
+
+        expect(result.thinking).toBeUndefined();
+        expect(result.messages).toEqual([
+          {
+            content: 'answer',
+            reasoning_content: 'reasoning content',
+            role: 'assistant',
+          },
+        ]);
+      });
+
+      it('should map preserveThinking=false to clear_thinking=true', () => {
+        const payload = {
+          messages: [{ content: 'hello', role: 'user' }],
+          model: 'glm-4.7',
+          preserveThinking: false,
+        } as any;
+
+        const result = params.chatCompletion.handlePayload(payload);
+
+        expect(result.thinking).toEqual({ clear_thinking: true });
+      });
+
+      it('should keep caller-provided reasoning_content', () => {
+        const payload = {
+          messages: [
+            {
+              content: 'answer',
+              reasoning_content: 'existing reasoning content',
+              role: 'assistant',
+            },
+          ],
+          model: 'glm-5',
+          preserveThinking: true,
+        } as any;
+
+        const result = params.chatCompletion.handlePayload(payload);
+
+        expect(result.messages).toEqual([
+          {
+            content: 'answer',
+            reasoning_content: 'existing reasoning content',
+            role: 'assistant',
+          },
+        ]);
       });
     });
 

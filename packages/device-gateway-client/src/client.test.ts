@@ -260,6 +260,21 @@ describe('GatewayClient', () => {
       expect(sysInfoCb).toHaveBeenCalledWith(msg);
     });
 
+    it('should handle rpc_request', () => {
+      const rpcCb = vi.fn();
+      client.on('rpc_request', rpcCb);
+
+      const msg = {
+        method: 'initWorkspace',
+        params: { scope: '/proj' },
+        requestId: 'req-rpc',
+        type: 'rpc_request',
+      };
+      handler(JSON.stringify(msg));
+
+      expect(rpcCb).toHaveBeenCalledWith(msg);
+    });
+
     it('should handle auth_expired', () => {
       const expiredCb = vi.fn();
       client.on('auth_expired', expiredCb);
@@ -362,6 +377,27 @@ describe('GatewayClient', () => {
       const sentData = JSON.parse(ws.send.mock.calls.at(-1)[0]);
       expect(sentData.type).toBe('system_info_response');
       expect(sentData.requestId).toBe('req-2');
+    });
+  });
+
+  describe('sendRpcResponse', () => {
+    it('should send rpc response message', async () => {
+      client.connect();
+      await vi.advanceTimersByTimeAsync(1);
+
+      const ws = (client as any).ws;
+      client.sendRpcResponse({
+        requestId: 'req-rpc',
+        result: { data: { skills: [] }, success: true },
+      });
+
+      expect(ws.send).toHaveBeenCalledWith(
+        JSON.stringify({
+          requestId: 'req-rpc',
+          result: { data: { skills: [] }, success: true },
+          type: 'rpc_response',
+        }),
+      );
     });
   });
 

@@ -4,6 +4,7 @@ import type { SWRResponse } from 'swr';
 
 import { LOADING_FLAT } from '@/const/message';
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { videoKeys } from '@/libs/swr/keys';
 import { type UpdateTopicValue } from '@/server/routers/lambda/generationTopic';
 import { chatService } from '@/services/chat';
 import { generationTopicService } from '@/services/generationTopic';
@@ -17,8 +18,6 @@ import { setNamespace } from '@/utils/storeDebug';
 import type { VideoStore } from '../../store';
 import { type GenerationTopicDispatch, generationTopicReducer } from './reducer';
 import { generationTopicSelectors } from './selectors';
-
-const FETCH_GENERATION_TOPICS_KEY = 'fetchVideoGenerationTopics';
 
 const n = setNamespace('videoGenerationTopic');
 
@@ -156,7 +155,7 @@ export class GenerationTopicActionImpl {
   };
 
   refreshGenerationTopics = async (): Promise<void> => {
-    await mutate([FETCH_GENERATION_TOPICS_KEY]);
+    await mutate(videoKeys.generationTopics());
   };
 
   removeGenerationTopic = async (id: string): Promise<void> => {
@@ -268,14 +267,13 @@ export class GenerationTopicActionImpl {
 
   useFetchGenerationTopics = (enabled: boolean): SWRResponse<ImageGenerationTopic[]> =>
     useClientDataSWR<ImageGenerationTopic[]>(
-      enabled ? [FETCH_GENERATION_TOPICS_KEY] : null,
+      enabled ? videoKeys.generationTopics() : null,
       () => generationTopicService.getAllGenerationTopics('video'),
       {
         onSuccess: (data) => {
           if (isEqual(data, this.#get().generationTopics)) return;
           this.#set({ generationTopics: data }, false, n('useFetchGenerationTopics'));
         },
-        suspense: true,
       },
     );
 }

@@ -480,6 +480,9 @@
   "userPanel.setting": "Ayarlar",
   "userPanel.upgradePlan": "Planı Yükselt",
   "userPanel.usages": "Kullanım İstatistikleri",
+  "userPanel.workspaceCredits": "Çalışma Alanı Kredileri",
+  "userPanel.workspaceSetting": "Çalışma Alanı Ayarları",
+  "userPanel.workspaceUsages": "Çalışma Alanı Kullanımı",
   "version": "Sürüm",
   "zoom": "Yakınlaştır"
 }

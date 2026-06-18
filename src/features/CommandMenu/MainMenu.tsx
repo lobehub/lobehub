@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { openFeedbackModal } from '@/components/FeedbackModal';
 import { getNavigableRoutes, getRouteById } from '@/config/routes';
 import { FEEDBACK } from '@/const/url';
+import { usePermission } from '@/hooks/usePermission';
 
 import { useCommandMenuContext } from './CommandMenuContext';
 import { CommandItem } from './components';
@@ -25,6 +26,7 @@ import { useCommandMenu } from './useCommandMenu';
 const MainMenu = memo(() => {
   const { pathname, menuContext, setPages, pages } = useCommandMenuContext();
   const { t } = useTranslation('common');
+  const { allowed: canCreate } = usePermission('create_content');
 
   const {
     handleCreateSession,
@@ -42,6 +44,7 @@ const MainMenu = memo(() => {
 
       <Command.Group>
         <CommandItem
+          disabled={!canCreate}
           icon={<Bot />}
           unpinned={menuContext === 'agent' || menuContext === 'page'}
           value="create new agent assistant"
@@ -51,6 +54,7 @@ const MainMenu = memo(() => {
         </CommandItem>
 
         <CommandItem
+          disabled={!canCreate}
           icon={<Bot />}
           unpinned={menuContext === 'agent' || menuContext === 'page'}
           value="create new agent team"
@@ -61,6 +65,7 @@ const MainMenu = memo(() => {
 
         {menuContext === 'agent' && (
           <CommandItem
+            disabled={!canCreate}
             icon={<MessageSquarePlusIcon />}
             unpinned={menuContext !== 'agent'}
             value="create new topic"
@@ -70,11 +75,17 @@ const MainMenu = memo(() => {
           </CommandItem>
         )}
 
-        <CommandItem icon={<FilePen />} value="create new page" onSelect={handleCreatePage}>
+        <CommandItem
+          disabled={!canCreate}
+          icon={<FilePen />}
+          value="create new page"
+          onSelect={handleCreatePage}
+        >
           {t('cmdk.newPage')}
         </CommandItem>
 
         <CommandItem
+          disabled={!canCreate}
           icon={<LibraryBig />}
           unpinned={menuContext !== 'resource'}
           value="create new library"

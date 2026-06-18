@@ -10,6 +10,7 @@ import { Virtuoso } from 'react-virtuoso';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useClientDataSWR } from '@/libs/swr';
+import { resourceKeys } from '@/libs/swr/keys';
 import { useResourceManagerStore } from '@/routes/(main)/resource/features/store';
 import { resourceService } from '@/services/resource';
 import { useGlobalStore } from '@/store/global';
@@ -20,8 +21,6 @@ import type { FileListItem } from '@/types/files';
 import FileListItemComponent from './ListView/ListItem';
 import MasonryItemWrapper from './MasonryView/MasonryItem/MasonryItemWrapper';
 import { useMasonryColumnCount } from './useMasonryColumnCount';
-
-const SWR_RESOURCE_SEARCH = 'SWR_RESOURCE_SEARCH';
 
 const SearchResultsOverlay = memo(() => {
   const { t } = useTranslation('components');
@@ -43,10 +42,11 @@ const SearchResultsOverlay = memo(() => {
 
   const { data: rawData, isLoading } = useClientDataSWR(
     isActive
-      ? [
-          SWR_RESOURCE_SEARCH,
-          { category: libraryId ? undefined : category, libraryId, q: searchQuery },
-        ]
+      ? resourceKeys.search({
+          category: libraryId ? undefined : category,
+          libraryId,
+          q: searchQuery,
+        })
       : null,
     async ([, params]: [string, { category?: string; libraryId?: string; q: string }]) => {
       const response = await resourceService.queryResources({

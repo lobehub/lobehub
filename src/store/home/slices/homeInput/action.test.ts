@@ -16,6 +16,7 @@ const toggleRightPanelMock = vi.hoisted(() => vi.fn());
 const setChatPanelExpandedMock = vi.hoisted(() => vi.fn());
 const createGroupMock = vi.hoisted(() => vi.fn());
 const loadGroupsMock = vi.hoisted(() => vi.fn());
+const createDocumentMock = vi.hoisted(() => vi.fn());
 
 const agentState = vi.hoisted(() => ({
   agentConfigMap: {
@@ -27,10 +28,12 @@ const agentState = vi.hoisted(() => ({
   agentMap: {
     agentBuilder: {},
     groupAgentBuilder: {},
+    pageAgent: {},
   },
   builtinAgentIdMap: {
     'agent-builder': 'agentBuilder',
     'group-agent-builder': 'groupAgentBuilder',
+    'page-agent': 'pageAgent',
   },
   createAgent: createAgentMock,
   inboxAgentId: 'inbox',
@@ -42,6 +45,13 @@ vi.mock('@lobechat/builtin-agents', () => ({
   BUILTIN_AGENT_SLUGS: {
     agentBuilder: 'agent-builder',
     groupAgentBuilder: 'group-agent-builder',
+    pageAgent: 'page-agent',
+  },
+}));
+
+vi.mock('@/services/document', () => ({
+  documentService: {
+    createDocument: createDocumentMock,
   },
 }));
 
@@ -127,6 +137,7 @@ describe('HomeInputActionImpl', () => {
         id: 'group-new',
       },
     });
+    createDocumentMock.mockResolvedValue({ id: 'doc-new' });
   });
 
   describe('sendAsAgent', () => {
@@ -159,6 +170,25 @@ describe('HomeInputActionImpl', () => {
         expect.objectContaining({
           context: { agentId: 'groupAgentBuilder', scope: 'group_agent_builder' },
           message: 'build a research group',
+        }),
+      );
+    });
+  });
+
+  describe('sendAsWrite', () => {
+    it('passes the freshly created document id through the page context', async () => {
+      const action = createAction();
+
+      await action.sendAsWrite({ message: 'write me a doc' });
+
+      expect(createDocumentMock).toHaveBeenCalled();
+      expect(navigateMock).toHaveBeenCalledWith('/page/doc-new');
+      // The new editor has not mounted yet, so the doc id must travel in context
+      // explicitly rather than relying on the page editor runtime singleton.
+      expect(sendMessageMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: { agentId: 'pageAgent', documentId: 'doc-new', scope: 'page' },
+          message: 'write me a doc',
         }),
       );
     });

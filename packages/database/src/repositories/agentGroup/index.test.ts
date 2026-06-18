@@ -3,9 +3,13 @@ import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import { ChatGroupModel } from '../../models/chatGroup';
 import { agents } from '../../schemas/agent';
 import { chatGroups, chatGroupsAgents } from '../../schemas/chatGroup';
+import { messagePlugins, messages } from '../../schemas/message';
+import { threads, topics } from '../../schemas/topic';
 import { users } from '../../schemas/user';
+import { workspaces } from '../../schemas/workspace';
 import type { LobeChatDatabase } from '../../type';
 import { AgentGroupRepository } from './index';
 
@@ -1254,6 +1258,595 @@ describe('AgentGroupRepository', () => {
           provider: 'anthropic',
           title: 'Custom Supervisor',
           virtual: true,
+        }),
+      );
+    });
+  });
+
+  describe('workspace scoping', () => {
+    const workspaceId = 'agent-group-test-ws';
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: workspaceId,
+        name: 'Test Workspace',
+        primaryOwnerId: userId,
+        slug: 'agent-group-test-ws',
+      });
+    });
+
+    it('stamps workspaceId on the group, supervisor agent, and junction rows', async () => {
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+
+      const result = await wsRepo.createGroupWithSupervisor({ title: 'WS Group' });
+
+      // group row carries the workspace id
+      expect(result.group.workspaceId).toBe(workspaceId);
+
+      // supervisor agent carries the workspace id
+      const supervisor = await serverDB.query.agents.findFirst({
+        where: (a, { eq }) => eq(a.id, result.supervisorAgentId),
+      });
+      expect(supervisor!.workspaceId).toBe(workspaceId);
+
+      // junction rows carry the workspace id
+      const junctions = await serverDB.query.chatGroupsAgents.findMany({
+        where: (cga, { eq }) => eq(cga.chatGroupId, result.group.id),
+      });
+      expect(junctions.every((j) => j.workspaceId === workspaceId)).toBe(true);
+    });
+
+    // Regression for "群组设定 system prompt won't save": a group created inside a
+    // workspace must be updatable through the workspace-scoped ChatGroupModel.
+    // Previously create wrote workspace_id = NULL, so the workspace-scoped UPDATE
+    // matched 0 rows and threw "not found or access denied".
+    it('allows the workspace-scoped ChatGroupModel to update a workspace-created group', async () => {
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+      const { group } = await wsRepo.createGroupWithSupervisor({ title: 'WS Group' });
+
+      const chatGroupModel = new ChatGroupModel(serverDB, userId, workspaceId);
+
+      const updated = await chatGroupModel.update(group.id, {
+        config: { systemPrompt: 'You are a helpful team.' } as any,
+      });
+
+      expect(updated.config).toMatchObject({ systemPrompt: 'You are a helpful team.' });
+    });
+
+    it('isolates workspace groups from personal-mode reads', async () => {
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+      const { group } = await wsRepo.createGroupWithSupervisor({ title: 'WS Group' });
+
+      // personal-mode repo (no workspaceId) must not see the workspace group
+      const personalRepo = new AgentGroupRepository(serverDB, userId);
+      expect(await personalRepo.findByIdWithAgents(group.id)).toBeNull();
+
+      // workspace repo sees it
+      expect(await wsRepo.findByIdWithAgents(group.id)).not.toBeNull();
+    });
+
+    it('keeps personal groups out of workspace-scoped reads', async () => {
+      const personalRepo = new AgentGroupRepository(serverDB, userId);
+      const { group } = await personalRepo.createGroupWithSupervisor({ title: 'Personal Group' });
+
+      expect(group.workspaceId).toBeNull();
+
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+      expect(await wsRepo.findByIdWithAgents(group.id)).toBeNull();
+    });
+
+    it('transfers a workspace group with members and conversation data to the target scope', async () => {
+      const targetWorkspaceId = 'agent-group-target-ws';
+      await serverDB.insert(workspaces).values({
+        id: targetWorkspaceId,
+        name: 'Target Workspace',
+        primaryOwnerId: userId,
+        slug: 'agent-group-target-ws',
+      });
+
+      await serverDB.insert(chatGroups).values({
+        id: 'transfer-group',
+        title: 'Transfer Group',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(agents).values([
+        {
+          id: 'transfer-supervisor',
+          title: 'Supervisor',
+          userId,
+          virtual: true,
+          workspaceId,
+        },
+        {
+          id: 'transfer-member',
+          title: 'Member',
+          userId,
+          virtual: false,
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(chatGroupsAgents).values([
+        {
+          agentId: 'transfer-supervisor',
+          chatGroupId: 'transfer-group',
+          order: -1,
+          role: 'supervisor',
+          userId,
+          workspaceId,
+        },
+        {
+          agentId: 'transfer-member',
+          chatGroupId: 'transfer-group',
+          order: 0,
+          role: 'participant',
+          userId,
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(topics).values({
+        groupId: 'transfer-group',
+        id: 'transfer-topic',
+        title: 'Group Topic',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(threads).values({
+        agentId: 'transfer-member',
+        id: 'transfer-thread',
+        topicId: 'transfer-topic',
+        type: 'continuation',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(messages).values({
+        content: 'hello',
+        groupId: 'transfer-group',
+        id: 'transfer-message',
+        role: 'user',
+        topicId: 'transfer-topic',
+        userId,
+        workspaceId,
+      });
+
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+      const result = await wsRepo.transferToWorkspace('transfer-group', targetWorkspaceId, userId);
+
+      expect(result).toEqual({ groupId: 'transfer-group' });
+
+      const group = await serverDB.query.chatGroups.findFirst({
+        where: (cg, { eq }) => eq(cg.id, 'transfer-group'),
+      });
+      expect(group!.workspaceId).toBe(targetWorkspaceId);
+
+      const memberAgents = await serverDB.query.agents.findMany({
+        where: (a, { inArray }) => inArray(a.id, ['transfer-supervisor', 'transfer-member']),
+      });
+      expect(memberAgents.every((agent) => agent.workspaceId === targetWorkspaceId)).toBe(true);
+
+      const junctions = await serverDB.query.chatGroupsAgents.findMany({
+        where: (cga, { eq }) => eq(cga.chatGroupId, 'transfer-group'),
+      });
+      expect(junctions.every((junction) => junction.workspaceId === targetWorkspaceId)).toBe(true);
+
+      const topic = await serverDB.query.topics.findFirst({
+        where: (t, { eq }) => eq(t.id, 'transfer-topic'),
+      });
+      const thread = await serverDB.query.threads.findFirst({
+        where: (t, { eq }) => eq(t.id, 'transfer-thread'),
+      });
+      const message = await serverDB.query.messages.findFirst({
+        where: (m, { eq }) => eq(m.id, 'transfer-message'),
+      });
+      expect(topic!.workspaceId).toBe(targetWorkspaceId);
+      expect(thread!.workspaceId).toBe(targetWorkspaceId);
+      expect(message!.workspaceId).toBe(targetWorkspaceId);
+    });
+
+    it('copies a workspace group and all members into the target scope', async () => {
+      const targetWorkspaceId = 'agent-group-copy-target-ws';
+      await serverDB.insert(workspaces).values({
+        id: targetWorkspaceId,
+        name: 'Copy Target Workspace',
+        primaryOwnerId: userId,
+        slug: 'agent-group-copy-target-ws',
+      });
+
+      await serverDB.insert(chatGroups).values({
+        avatar: 'group-avatar',
+        id: 'copy-group',
+        title: 'Copy Group',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(agents).values([
+        {
+          id: 'copy-supervisor',
+          model: 'gpt-4o',
+          provider: 'openai',
+          title: 'Supervisor',
+          userId,
+          virtual: true,
+          workspaceId,
+        },
+        {
+          id: 'copy-member',
+          model: 'claude-3',
+          provider: 'anthropic',
+          title: 'Member',
+          userId,
+          virtual: false,
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(chatGroupsAgents).values([
+        {
+          agentId: 'copy-supervisor',
+          chatGroupId: 'copy-group',
+          order: -1,
+          role: 'supervisor',
+          userId,
+          workspaceId,
+        },
+        {
+          agentId: 'copy-member',
+          chatGroupId: 'copy-group',
+          order: 0,
+          role: 'participant',
+          userId,
+          workspaceId,
+        },
+      ]);
+
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+      const result = await wsRepo.copyToWorkspace('copy-group', targetWorkspaceId, userId);
+
+      expect(result).not.toBeNull();
+      expect(result!.groupId).not.toBe('copy-group');
+      expect(result!.supervisorAgentId).not.toBe('copy-supervisor');
+
+      const copiedGroup = await serverDB.query.chatGroups.findFirst({
+        where: (cg, { eq }) => eq(cg.id, result!.groupId),
+      });
+      expect(copiedGroup).toEqual(
+        expect.objectContaining({
+          avatar: 'group-avatar',
+          title: 'Copy Group (Copy)',
+          userId,
+          workspaceId: targetWorkspaceId,
+        }),
+      );
+
+      const copiedJunctions = await serverDB.query.chatGroupsAgents.findMany({
+        where: (cga, { eq }) => eq(cga.chatGroupId, result!.groupId),
+      });
+      expect(copiedJunctions).toHaveLength(2);
+      expect(copiedJunctions.every((junction) => junction.workspaceId === targetWorkspaceId)).toBe(
+        true,
+      );
+      expect(copiedJunctions.some((junction) => junction.agentId === 'copy-member')).toBe(false);
+
+      const copiedAgentIds = copiedJunctions.map((junction) => junction.agentId);
+      const copiedAgents = await serverDB.query.agents.findMany({
+        where: (a, { inArray }) => inArray(a.id, copiedAgentIds),
+      });
+      expect(copiedAgents.every((agent) => agent.workspaceId === targetWorkspaceId)).toBe(true);
+      expect(copiedAgents.map((agent) => agent.title).sort()).toEqual(['Member', 'Supervisor']);
+    });
+
+    it('copies group topics and messages when conversation history is selected', async () => {
+      const targetWorkspaceId = 'agent-group-copy-history-target-ws';
+      await serverDB.insert(workspaces).values({
+        id: targetWorkspaceId,
+        name: 'Copy History Target Workspace',
+        primaryOwnerId: userId,
+        slug: 'agent-group-copy-history-target-ws',
+      });
+
+      await serverDB.insert(chatGroups).values({
+        id: 'copy-history-group',
+        title: 'Copy History Group',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(agents).values([
+        {
+          id: 'copy-history-supervisor',
+          model: 'gpt-4o',
+          provider: 'openai',
+          title: 'Supervisor',
+          userId,
+          virtual: true,
+          workspaceId,
+        },
+        {
+          id: 'copy-history-member',
+          model: 'claude-3',
+          provider: 'anthropic',
+          title: 'Member',
+          userId,
+          virtual: false,
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(chatGroupsAgents).values([
+        {
+          agentId: 'copy-history-supervisor',
+          chatGroupId: 'copy-history-group',
+          order: -1,
+          role: 'supervisor',
+          userId,
+          workspaceId,
+        },
+        {
+          agentId: 'copy-history-member',
+          chatGroupId: 'copy-history-group',
+          order: 0,
+          role: 'participant',
+          userId,
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(topics).values({
+        groupId: 'copy-history-group',
+        id: 'copy-history-topic',
+        title: 'Group topic',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(threads).values({
+        agentId: 'copy-history-member',
+        groupId: 'copy-history-group',
+        id: 'copy-history-thread',
+        sourceMessageId: 'copy-history-message-user',
+        topicId: 'copy-history-topic',
+        type: 'standalone',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(messages).values([
+        {
+          content: 'Hello group',
+          groupId: 'copy-history-group',
+          id: 'copy-history-message-user',
+          role: 'user',
+          targetId: 'copy-history-member',
+          topicId: 'copy-history-topic',
+          userId,
+          workspaceId,
+        },
+        {
+          agentId: 'copy-history-member',
+          content: 'Hello user',
+          groupId: 'copy-history-group',
+          id: 'copy-history-message-assistant',
+          parentId: 'copy-history-message-user',
+          role: 'assistant',
+          threadId: 'copy-history-thread',
+          tools: [{ id: 'toolu_old', type: 'builtin' }],
+          topicId: 'copy-history-topic',
+          userId,
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(messagePlugins).values({
+        apiName: 'search',
+        arguments: '{}',
+        id: 'copy-history-message-assistant',
+        toolCallId: 'toolu_old',
+        userId,
+        workspaceId,
+      });
+
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+      const result = await wsRepo.copyToWorkspace('copy-history-group', targetWorkspaceId, userId, {
+        includeConversationHistory: true,
+      });
+
+      expect(result).not.toBeNull();
+
+      const copiedJunctions = await serverDB.query.chatGroupsAgents.findMany({
+        where: (cga, { eq }) => eq(cga.chatGroupId, result!.groupId),
+      });
+      const copiedMember = copiedJunctions.find((junction) => junction.role === 'participant');
+      expect(copiedMember?.agentId).toBeDefined();
+      expect(copiedMember?.agentId).not.toBe('copy-history-member');
+
+      const copiedTopics = await serverDB.query.topics.findMany({
+        where: (topic, { eq }) => eq(topic.groupId, result!.groupId),
+      });
+      expect(copiedTopics).toHaveLength(1);
+      expect(copiedTopics[0]).toEqual(
+        expect.objectContaining({
+          clientId: null,
+          sessionId: null,
+          title: 'Group topic',
+          userId,
+          workspaceId: targetWorkspaceId,
+        }),
+      );
+
+      const copiedMessages = await serverDB.query.messages.findMany({
+        where: (message, { eq }) => eq(message.groupId, result!.groupId),
+      });
+      expect(copiedMessages).toHaveLength(2);
+      expect(copiedMessages.some((message) => message.id === 'copy-history-message-user')).toBe(
+        false,
+      );
+
+      const copiedAssistantMessage = copiedMessages.find((message) => message.role === 'assistant');
+      const copiedUserMessage = copiedMessages.find((message) => message.role === 'user');
+      expect(copiedUserMessage?.targetId).toBe(copiedMember!.agentId);
+      expect(copiedAssistantMessage).toEqual(
+        expect.objectContaining({
+          agentId: copiedMember!.agentId,
+          clientId: null,
+          targetId: null,
+          userId,
+          workspaceId: targetWorkspaceId,
+        }),
+      );
+      expect(copiedAssistantMessage?.tools).not.toEqual([{ id: 'toolu_old', type: 'builtin' }]);
+
+      const copiedPlugin = await serverDB.query.messagePlugins.findFirst({
+        where: (plugin, { eq }) => eq(plugin.id, copiedAssistantMessage!.id),
+      });
+      expect(copiedPlugin?.toolCallId).not.toBe('toolu_old');
+      expect(copiedPlugin?.workspaceId).toBe(targetWorkspaceId);
+    });
+
+    it('removes workspace virtual agents created by another member', async () => {
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+
+      await serverDB.insert(chatGroups).values({
+        id: 'remove-cross-member-group',
+        title: 'Remove Cross Member Group',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(agents).values({
+        id: 'remove-cross-member-virtual',
+        title: 'Virtual From Other Member',
+        userId: otherUserId,
+        virtual: true,
+        workspaceId,
+      });
+      await serverDB.insert(chatGroupsAgents).values({
+        agentId: 'remove-cross-member-virtual',
+        chatGroupId: 'remove-cross-member-group',
+        role: 'participant',
+        userId,
+        workspaceId,
+      });
+
+      const result = await wsRepo.removeAgentsFromGroup('remove-cross-member-group', [
+        'remove-cross-member-virtual',
+      ]);
+
+      expect(result).toEqual({
+        deletedVirtualAgentIds: ['remove-cross-member-virtual'],
+        removedFromGroup: 1,
+      });
+
+      const relation = await serverDB.query.chatGroupsAgents.findFirst({
+        where: (cga, { eq }) => eq(cga.agentId, 'remove-cross-member-virtual'),
+      });
+      expect(relation).toBeUndefined();
+
+      const deletedAgent = await serverDB.query.agents.findFirst({
+        where: (agent, { eq }) => eq(agent.id, 'remove-cross-member-virtual'),
+      });
+      expect(deletedAgent).toBeUndefined();
+    });
+
+    it('copies workspace group history created by another member', async () => {
+      const targetWorkspaceId = 'agent-group-copy-member-history-target-ws';
+      await serverDB.insert(workspaces).values({
+        id: targetWorkspaceId,
+        name: 'Copy Member History Target Workspace',
+        primaryOwnerId: userId,
+        slug: 'agent-group-copy-member-history-target-ws',
+      });
+
+      await serverDB.insert(chatGroups).values({
+        id: 'copy-member-history-group',
+        title: 'Copy Member History Group',
+        userId,
+        workspaceId,
+      });
+      await serverDB.insert(agents).values([
+        {
+          id: 'copy-member-history-supervisor',
+          title: 'Supervisor',
+          userId,
+          virtual: true,
+          workspaceId,
+        },
+        {
+          id: 'copy-member-history-agent',
+          title: 'Member Agent',
+          userId,
+          virtual: false,
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(chatGroupsAgents).values([
+        {
+          agentId: 'copy-member-history-supervisor',
+          chatGroupId: 'copy-member-history-group',
+          order: -1,
+          role: 'supervisor',
+          userId,
+          workspaceId,
+        },
+        {
+          agentId: 'copy-member-history-agent',
+          chatGroupId: 'copy-member-history-group',
+          order: 0,
+          role: 'participant',
+          userId,
+          workspaceId,
+        },
+      ]);
+      await serverDB.insert(topics).values({
+        groupId: 'copy-member-history-group',
+        id: 'copy-member-history-topic',
+        title: 'Topic From Other Member',
+        userId: otherUserId,
+        workspaceId,
+      });
+      await serverDB.insert(threads).values({
+        agentId: 'copy-member-history-agent',
+        groupId: 'copy-member-history-group',
+        id: 'copy-member-history-thread',
+        topicId: 'copy-member-history-topic',
+        type: 'standalone',
+        userId: otherUserId,
+        workspaceId,
+      });
+      await serverDB.insert(messages).values({
+        agentId: 'copy-member-history-agent',
+        content: 'created by another workspace member',
+        groupId: 'copy-member-history-group',
+        id: 'copy-member-history-message',
+        role: 'assistant',
+        threadId: 'copy-member-history-thread',
+        topicId: 'copy-member-history-topic',
+        userId: otherUserId,
+        workspaceId,
+      });
+
+      const wsRepo = new AgentGroupRepository(serverDB, userId, workspaceId);
+      const result = await wsRepo.copyToWorkspace(
+        'copy-member-history-group',
+        targetWorkspaceId,
+        userId,
+        { includeConversationHistory: true },
+      );
+
+      expect(result).not.toBeNull();
+
+      const copiedTopics = await serverDB.query.topics.findMany({
+        where: (topic, { eq }) => eq(topic.groupId, result!.groupId),
+      });
+      expect(copiedTopics).toHaveLength(1);
+      expect(copiedTopics[0]).toEqual(
+        expect.objectContaining({
+          title: 'Topic From Other Member',
+          userId,
+          workspaceId: targetWorkspaceId,
+        }),
+      );
+
+      const copiedMessages = await serverDB.query.messages.findMany({
+        where: (message, { eq }) => eq(message.groupId, result!.groupId),
+      });
+      expect(copiedMessages).toHaveLength(1);
+      expect(copiedMessages[0]).toEqual(
+        expect.objectContaining({
+          content: 'created by another workspace member',
+          userId,
+          workspaceId: targetWorkspaceId,
         }),
       );
     });

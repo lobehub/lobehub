@@ -3,7 +3,7 @@ const path = require('node:path');
 
 /** @type {import('./scripts/i18nWorkflow/i18nWorkflow').WorkflowConfig} */
 const config = {
-  sourceDir: 'src/locales/default',
+  sourceDir: 'packages/locales/src',
   entry: 'locales/en-US',
   entryLocale: 'en-US',
   output: 'locales',

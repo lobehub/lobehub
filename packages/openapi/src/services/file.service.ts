@@ -71,16 +71,16 @@ export class FileUploadService extends BaseService {
   // Lazy import ChunkService to avoid circular dependency overhead
   // Note: ChunkService is only available in server-side environments
 
-  constructor(db: LobeChatDatabase, userId: string) {
-    super(db, userId);
-    this.fileModel = new FileModel(db, userId);
-    this.documentModel = new DocumentModel(db, userId);
-    this.coreFileService = new CoreFileService(db, userId!);
-    this.documentService = new DocumentService(db, userId);
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+    super(db, userId, workspaceId);
+    this.fileModel = new FileModel(db, userId, workspaceId);
+    this.documentModel = new DocumentModel(db, userId, workspaceId);
+    this.coreFileService = new CoreFileService(db, userId!, workspaceId);
+    this.documentService = new DocumentService(db, userId, workspaceId);
     this.s3Service = new FileS3();
-    this.chunkModel = new ChunkModel(db, userId);
-    this.asyncTaskModel = new AsyncTaskModel(db, userId);
-    this.knowledgeBaseModel = new KnowledgeBaseModel(db, userId);
+    this.chunkModel = new ChunkModel(db, userId, workspaceId);
+    this.asyncTaskModel = new AsyncTaskModel(db, userId, workspaceId);
+    this.knowledgeBaseModel = new KnowledgeBaseModel(db, userId, workspaceId);
   }
 
   /**
@@ -128,7 +128,7 @@ export class FileUploadService extends BaseService {
     }
 
     const knowledgeBase = await this.db.query.knowledgeBases.findFirst({
-      where: eq(knowledgeBases.id, knowledgeBaseId),
+      where: and(eq(knowledgeBases.id, knowledgeBaseId), this.buildWorkspaceWhere(knowledgeBases)),
     });
 
     if (!knowledgeBase) {
@@ -397,7 +397,7 @@ export class FileUploadService extends BaseService {
 
       const ownedFiles = await this.db.query.files.findMany({
         columns: { id: true },
-        where: and(inArray(files.id, uniqueFileIds), eq(files.userId, this.userId)),
+        where: and(inArray(files.id, uniqueFileIds), this.buildWorkspaceWhere(files)),
       });
       const ownedIds = ownedFiles.map((file) => file.id);
 
@@ -412,7 +412,7 @@ export class FileUploadService extends BaseService {
             ownedIds.map((fileId) => ({
               fileId,
               knowledgeBaseId,
-              userId: this.userId,
+              ...this.buildWorkspacePayload({}),
             })),
           )
           .onConflictDoNothing();
@@ -444,7 +444,7 @@ export class FileUploadService extends BaseService {
 
       const ownedFiles = await this.db.query.files.findMany({
         columns: { id: true },
-        where: and(inArray(files.id, uniqueFileIds), eq(files.userId, this.userId)),
+        where: and(inArray(files.id, uniqueFileIds), this.buildWorkspaceWhere(files)),
       });
       const ownedIds = ownedFiles.map((file) => file.id);
 
@@ -458,7 +458,7 @@ export class FileUploadService extends BaseService {
           .where(
             and(
               eq(knowledgeBaseFiles.knowledgeBaseId, knowledgeBaseId),
-              eq(knowledgeBaseFiles.userId, this.userId),
+              this.buildWorkspaceWhere(knowledgeBaseFiles),
               inArray(knowledgeBaseFiles.fileId, ownedIds),
             ),
           );
@@ -494,7 +494,7 @@ export class FileUploadService extends BaseService {
 
       const ownedFiles = await this.db.query.files.findMany({
         columns: { id: true },
-        where: and(inArray(files.id, uniqueFileIds), eq(files.userId, this.userId)),
+        where: and(inArray(files.id, uniqueFileIds), this.buildWorkspaceWhere(files)),
       });
 
       const ownedIds = ownedFiles.map((file) => file.id);
@@ -516,7 +516,7 @@ export class FileUploadService extends BaseService {
           .where(
             and(
               eq(knowledgeBaseFiles.knowledgeBaseId, sourceKnowledgeBaseId),
-              eq(knowledgeBaseFiles.userId, this.userId),
+              this.buildWorkspaceWhere(knowledgeBaseFiles),
               inArray(knowledgeBaseFiles.fileId, ownedIds),
             ),
           );
@@ -527,7 +527,7 @@ export class FileUploadService extends BaseService {
             ownedIds.map((fileId) => ({
               fileId,
               knowledgeBaseId: request.targetKnowledgeBaseId,
-              userId: this.userId,
+              ...this.buildWorkspacePayload({}),
             })),
           )
           .onConflictDoNothing();
@@ -917,7 +917,7 @@ export class FileUploadService extends BaseService {
 
       // Trigger async chunking task
       const { ChunkService } = await import('@/server/services/chunk');
-      const chunkService = new ChunkService(this.db, this.userId);
+      const chunkService = new ChunkService(this.db, this.userId, this.workspaceId);
 
       const chunkTaskId = await chunkService.asyncParseFileToChunks(fileId, req.skipExist);
 
@@ -1127,7 +1127,7 @@ export class FileUploadService extends BaseService {
       columns: { sessionId: true },
       where: and(
         eq(agentsToSessions.agentId, options.agentId),
-        eq(agentsToSessions.userId, this.userId),
+        this.buildWorkspaceWhere(agentsToSessions),
       ),
     });
 
@@ -1152,7 +1152,7 @@ export class FileUploadService extends BaseService {
         .values({
           fileId,
           sessionId,
-          userId: this.userId,
+          ...this.buildWorkspacePayload({}),
         })
         .onConflictDoNothing();
 
@@ -1227,7 +1227,7 @@ export class FileUploadService extends BaseService {
   private async findExistingUserFile(hash: string): Promise<FileItem | null> {
     try {
       const existingFile = await this.db.query.files.findFirst({
-        where: and(eq(files.fileHash, hash), eq(files.userId, this.userId)),
+        where: and(eq(files.fileHash, hash), this.buildWorkspaceWhere(files)),
       });
 
       return existingFile || null;
@@ -1251,9 +1251,8 @@ export class FileUploadService extends BaseService {
     const conditions = [];
 
     // Permission conditions
-    if (permissionResult?.condition?.userId) {
-      conditions.push(eq(files.userId, permissionResult.condition.userId));
-    }
+    const permissionWhere = this.buildPermissionWhere(files, permissionResult.condition);
+    if (permissionWhere) conditions.push(permissionWhere);
 
     // Keyword search
     if (keyword) {
@@ -1287,9 +1286,8 @@ export class FileUploadService extends BaseService {
     permissionResult: { condition?: { userId?: string } },
   ): Promise<FileItem> {
     const whereConditions = [eq(files.id, fileId)];
-    if (permissionResult.condition?.userId) {
-      whereConditions.push(eq(files.userId, permissionResult.condition.userId));
-    }
+    const permissionWhere = this.buildPermissionWhere(files, permissionResult.condition);
+    if (permissionWhere) whereConditions.push(permissionWhere);
 
     const file = await this.db.query.files.findFirst({
       where: and(...whereConditions),
@@ -1521,7 +1519,7 @@ export class FileUploadService extends BaseService {
             .where(
               and(
                 eq(knowledgeBaseFiles.fileId, fileId),
-                eq(knowledgeBaseFiles.userId, targetUserId),
+                this.buildWorkspaceWhere(knowledgeBaseFiles),
               ),
             );
 
@@ -1539,7 +1537,7 @@ export class FileUploadService extends BaseService {
             await trx.insert(knowledgeBaseFiles).values({
               fileId,
               knowledgeBaseId: updateData.knowledgeBaseId,
-              userId: targetUserId,
+              ...this.buildWorkspacePayload({}),
             });
           }
         });

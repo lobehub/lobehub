@@ -7,6 +7,71 @@ import { SparkAIStream, transformSparkResponseToStream } from './spark';
 describe('SparkAIStream', () => {
   beforeAll(() => {});
 
+  it('should expose missing usage diagnostics when terminal content chunk has no usage', async () => {
+    const mockSparkStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          id: 'spark-missing-usage',
+          object: 'chat.completion.chunk',
+          created: 1734395014,
+          model: 'max-32k',
+          choices: [
+            {
+              delta: {
+                content: 'final text',
+                role: 'assistant',
+              },
+              finish_reason: 'stop',
+              index: 0,
+            },
+          ],
+        } as OpenAI.ChatCompletionChunk);
+        controller.close();
+      },
+    });
+    const onFinal = vi.fn();
+
+    const protocolStream = SparkAIStream(mockSparkStream, {
+      callbacks: { onFinal },
+      payload: {
+        apiMode: 'chat_completions',
+        includeUsageRequested: true,
+        model: 'spark-max',
+        provider: 'spark',
+      },
+    });
+
+    const decoder = new TextDecoder();
+    const chunks: string[] = [];
+
+    // @ts-ignore
+    for await (const chunk of protocolStream) {
+      chunks.push(decoder.decode(chunk, { stream: true }));
+    }
+
+    expect(chunks).toEqual([
+      'id: spark-missing-usage\n',
+      'event: text\n',
+      'data: "final text"\n\n',
+    ]);
+    expect(onFinal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: 'final text',
+        usageMissingDiagnostics: expect.objectContaining({
+          apiMode: 'chat_completions',
+          finishReason: 'stop',
+          hasUsageMetadata: false,
+          includeUsageRequested: true,
+          model: 'spark-max',
+          provider: 'spark',
+          responseId: 'spark-missing-usage',
+          source: 'openai_chat_completions',
+          terminalEventType: 'chat.completion.chunk',
+        }),
+      }),
+    );
+  });
+
   it('should handle reasoning content in stream', async () => {
     const data = [
       {

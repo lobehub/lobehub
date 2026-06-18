@@ -2,11 +2,10 @@ import { type CreateNewEvalEvaluation, type RAGEvalDataSetItem } from '@lobechat
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
+import { ragEvalKeys } from '@/libs/swr/keys';
 import { ragEvalService } from '@/services/ragEval';
 import { type KnowledgeBaseStore } from '@/store/library/store';
 import { type StoreSetter } from '@/store/types';
-
-const FETCH_EVALUATION_LIST_KEY = 'FETCH_EVALUATION_LIST_KEY';
 
 type Setter = StoreSetter<KnowledgeBaseStore>;
 export const createRagEvalEvaluationSlice = (
@@ -35,7 +34,7 @@ export class RAGEvalEvaluationActionImpl {
   };
 
   refreshEvaluationList = async (): Promise<void> => {
-    await mutate(FETCH_EVALUATION_LIST_KEY);
+    await mutate(ragEvalKeys.evaluationList());
   };
 
   removeEvaluation = async (id: string): Promise<void> => {
@@ -49,7 +48,7 @@ export class RAGEvalEvaluationActionImpl {
 
   useFetchEvaluationList = (knowledgeBaseId: string): SWRResponse<RAGEvalDataSetItem[]> => {
     return useClientDataSWR<RAGEvalDataSetItem[]>(
-      [FETCH_EVALUATION_LIST_KEY, knowledgeBaseId],
+      ragEvalKeys.evaluationList(knowledgeBaseId),
       () => ragEvalService.getEvaluationList(knowledgeBaseId),
       {
         fallbackData: [],

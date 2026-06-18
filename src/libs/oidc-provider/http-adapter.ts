@@ -1,4 +1,5 @@
 import { type IncomingMessage, type ServerResponse } from 'node:http';
+import { Readable } from 'node:stream';
 
 import debug from 'debug';
 import { cookies } from 'next/headers';
@@ -8,6 +9,8 @@ import urlJoin from 'url-join';
 import { appEnv } from '@/envs/app';
 
 const log = debug('lobe-oidc:http-adapter');
+
+const methodsWithBody = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /**
  * Convert Next.js request headers to standard Node.js HTTP header format
@@ -39,71 +42,28 @@ export const createNodeRequest = async (req: NextRequest): Promise<IncomingMessa
   log('Creating Node.js request from Next.js request');
   log('Original path: %s, Provider path: %s', url.pathname, providerPath);
 
-  // Attempt to parse and attach body for relevant methods
-  let parsedBody: any = undefined;
-  const methodsWithBody = ['POST', 'PUT', 'PATCH', 'DELETE'];
-  if (methodsWithBody.includes(req.method)) {
-    const contentType = req.headers.get('content-type')?.split(';')[0]; // Get content type without charset etc.
-    log(`Attempting to parse body for ${req.method} with Content-Type: ${contentType}`);
-    try {
-      // Check if body exists and has size before attempting to parse
-      if (req.body && req.headers.get('content-length') !== '0') {
-        if (contentType === 'application/x-www-form-urlencoded') {
-          const formData = await req.formData();
-          parsedBody = {};
-          formData.forEach((value, key) => {
-            // If a key appears multiple times, keep the last one (standard form behavior)
-            // Or convert to array if oidc-provider expects it:
-            // if (parsedBody[key]) {
-            //   if (!Array.isArray(parsedBody[key])) parsedBody[key] = [parsedBody[key]];
-            //   parsedBody[key].push(value);
-            // } else {
-            //   parsedBody[key] = value;
-            // }
-            parsedBody[key] = value;
-          });
-          log('Parsed form data body: %O', parsedBody);
-        } else if (contentType === 'application/json') {
-          parsedBody = await req.json();
-          log('Parsed JSON body: %O', parsedBody);
-        } else {
-          log(`Body parsing skipped for Content-Type: ${contentType}. Trying text() as fallback.`);
-          // Fallback: try reading as text if content type is unknown but body exists
-          parsedBody = await req.text();
-          log('Parsed body as text fallback.');
-        }
-      } else {
-        log('Request has no body or content-length is 0, skipping parsing.');
-      }
-    } catch (error) {
-      log('Error parsing request body: %O', error);
-      // Keep parsedBody as undefined, let oidc-provider handle the potential issue
-    }
-  }
-  const nodeRequest = {
+  const bodyStream =
+    methodsWithBody.has(req.method) && req.body && req.headers.get('content-length') !== '0'
+      ? Readable.from([Buffer.from(await req.arrayBuffer())])
+      : Readable.from([]);
+
+  /**
+   * oidc-provider expects a readable Node request and parses supported body types itself.
+   * Passing a pre-parsed `body` triggers its upstream parser warning and bypasses raw-body.
+   */
+  const nodeRequest = Object.assign(bodyStream, {
     // Basic properties
     headers: convertHeadersToNodeHeaders(req.headers),
 
     method: req.method,
-    // Simulate readable stream behavior (oidc-provider might not rely on this if body is pre-parsed)
-    on: (event: string, handler: (...args: any[]) => any) => {
-      if (event === 'end') {
-        // Simulate end immediately as body is already processed or will be attached
-        handler();
-      }
-    },
     // Add extra properties expected by the Node.js server
     socket: {
       remoteAddress: req.headers.get('x-forwarded-for') || '127.0.0.1',
     },
     url: providerPath + url.search,
-    ...(parsedBody !== undefined && { body: parsedBody }), // Attach body if it exists
-  };
+  });
 
   log('Node.js request created with method %s and path %s', nodeRequest.method, nodeRequest.url);
-  if (nodeRequest.body) {
-    log('Attached parsed body to Node.js request.');
-  }
   // Cast back to IncomingMessage for the function's return signature
   return nodeRequest as unknown as IncomingMessage;
 };

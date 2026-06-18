@@ -15,6 +15,8 @@ const moonshotChatModels: AIChatModelCard[] = [
       "Kimi K2.6 is Kimi's latest and most capable model, delivering stronger long-horizon coding, instruction following, and self-correction while supporting text, image, and video inputs plus chat and agent tasks.",
     displayName: 'Kimi K2.6',
     enabled: true,
+    family: 'kimi',
+    generation: 'kimi-k2.6',
     id: 'kimi-k2.6',
     maxOutput: 32_768,
     pricing: {
@@ -43,6 +45,8 @@ const moonshotChatModels: AIChatModelCard[] = [
     description:
       'Kimi K2.5 is Kimi\'s most versatile model to date, featuring a native multimodal architecture that supports both vision and text inputs, "thinking" and "non-thinking" modes, and both conversational and agent tasks.',
     displayName: 'Kimi K2.5',
+    family: 'kimi',
+    generation: 'kimi-k2.5',
     id: 'kimi-k2.5',
     maxOutput: 32_768,
     pricing: {
@@ -62,119 +66,13 @@ const moonshotChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      reasoning: true,
-      structuredOutput: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'K2 long-thinking model with 256k context, supporting multi-step tool use and reasoning for complex problems.',
-    displayName: 'Kimi K2 Thinking',
-    id: 'kimi-k2-thinking',
-    maxOutput: 65_536,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput_cacheRead', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-11-06',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      structuredOutput: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'High-speed K2 long-thinking variant with 256k context, strong deep reasoning, and 60–100 tokens/sec output.',
-    displayName: 'Kimi K2 Thinking Turbo',
-    id: 'kimi-k2-thinking-turbo',
-    maxOutput: 65_536,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput_cacheRead', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 58, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-11-06',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      structuredOutput: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'kimi-k2-0905-preview offers a 256k context window, stronger agentic coding, better front-end code quality, and improved context understanding.',
-    displayName: 'Kimi K2 0905 Preview',
-    id: 'kimi-k2-0905-preview',
-    maxOutput: 65_536,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput_cacheRead', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-05',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'kimi-k2 is an MoE foundation model with strong coding and agent capabilities (1T total params, 32B active), outperforming other mainstream open models across reasoning, programming, math, and agent benchmarks.',
-    displayName: 'Kimi K2 0711 Preview',
-    id: 'kimi-k2-0711-preview',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput_cacheRead', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 16, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-07-11',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'kimi-k2 is an MoE foundation model with strong coding and agent capabilities (1T total params, 32B active), outperforming other mainstream open models across reasoning, programming, math, and agent benchmarks.',
-    displayName: 'Kimi K2 Turbo Preview',
-    id: 'kimi-k2-turbo-preview',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput_cacheRead', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 58, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-05',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
     },
     contextWindowTokens: 8192,
     description:
       'Moonshot V1 8K is optimized for short text generation with efficient performance, handling 8,192 tokens for short chats, notes, and quick content.',
     displayName: 'Moonshot V1 8K',
+    family: 'kimi',
+    generation: 'moonshot-v1',
     id: 'moonshot-v1-8k',
     pricing: {
       currency: 'CNY',
@@ -193,6 +91,8 @@ const moonshotChatModels: AIChatModelCard[] = [
     description:
       'Moonshot V1 32K supports 32,768 tokens for medium-length context, ideal for long documents and complex dialogues in content creation, reports, and chat systems.',
     displayName: 'Moonshot V1 32K',
+    family: 'kimi',
+    generation: 'moonshot-v1',
     id: 'moonshot-v1-32k',
     pricing: {
       currency: 'CNY',
@@ -211,6 +111,8 @@ const moonshotChatModels: AIChatModelCard[] = [
     description:
       'Moonshot V1 128K provides ultra-long context for very long text generation, handling up to 128,000 tokens for research, academic, and large-document scenarios.',
     displayName: 'Moonshot V1 128K',
+    family: 'kimi',
+    generation: 'moonshot-v1',
     id: 'moonshot-v1-128k',
     pricing: {
       currency: 'CNY',
@@ -230,6 +132,8 @@ const moonshotChatModels: AIChatModelCard[] = [
     description:
       'Kimi vision models (including moonshot-v1-8k-vision-preview/moonshot-v1-32k-vision-preview/moonshot-v1-128k-vision-preview) can understand image content such as text, colors, and object shapes.',
     displayName: 'Moonshot V1 8K Vision Preview',
+    family: 'kimi',
+    generation: 'moonshot-v1',
     id: 'moonshot-v1-8k-vision-preview',
     pricing: {
       currency: 'CNY',
@@ -250,6 +154,8 @@ const moonshotChatModels: AIChatModelCard[] = [
     description:
       'Kimi vision models (including moonshot-v1-8k-vision-preview/moonshot-v1-32k-vision-preview/moonshot-v1-128k-vision-preview) can understand image content such as text, colors, and object shapes.',
     displayName: 'Moonshot V1 32K Vision Preview',
+    family: 'kimi',
+    generation: 'moonshot-v1',
     id: 'moonshot-v1-32k-vision-preview',
     pricing: {
       currency: 'CNY',
@@ -270,6 +176,8 @@ const moonshotChatModels: AIChatModelCard[] = [
     description:
       'Kimi vision models (including moonshot-v1-8k-vision-preview/moonshot-v1-32k-vision-preview/moonshot-v1-128k-vision-preview) can understand image content such as text, colors, and object shapes.',
     displayName: 'Moonshot V1 128K Vision Preview',
+    family: 'kimi',
+    generation: 'moonshot-v1',
     id: 'moonshot-v1-128k-vision-preview',
     pricing: {
       currency: 'CNY',

@@ -1,6 +1,7 @@
 # Add directories or file patterns to ignore during indexing (e.g. foo/ or *.csv)
+
 locales/
 apps/desktop/resources/locales/
 **/__snapshots__/
 **/fixtures/
-src/database/migrations/
+packages/database/migrations/

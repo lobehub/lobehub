@@ -39,6 +39,8 @@ const RECEIPT_LUCIDE_ICON_BY_KIND = {
   review: ClipboardCheck,
 } as const satisfies Partial<Record<AgentSignalReceiptView['kind'], LucideIcon>>;
 
+const LEGACY_PREFERENCE_MEMORY_PATTERN = /\bprefer(?:s|red|ence)?\b|偏好|喜好/i;
+
 const renderReceiptIcon = (kind: AgentSignalReceiptView['kind']) => {
   if (kind === 'skill') return <SkillsIcon size={28} />;
   const LucideIconComponent = RECEIPT_LUCIDE_ICON_BY_KIND[kind];
@@ -56,12 +58,23 @@ interface AgentSignalReceiptItemProps {
 const getMemoryRoute = (target?: AgentSignalReceiptView['target']) => {
   if (target?.type !== 'memory') return;
 
-  if (!target.memoryLayer) return '/memory';
+  const hasLayerMetadata = Boolean(target.memoryLayer);
+  const memoryLayer =
+    target.memoryLayer ??
+    (LEGACY_PREFERENCE_MEMORY_PATTERN.test(`${target.title} ${target.summary ?? ''}`)
+      ? LayersEnum.Preference
+      : undefined);
 
-  const route = MEMORY_ROUTE_BY_LAYER[target.memoryLayer];
+  if (!memoryLayer) return '/memory';
+
+  const route = MEMORY_ROUTE_BY_LAYER[memoryLayer];
   if (!route) return '/memory';
 
-  return target.id ? `${route.path}?${route.idParam}=${encodeURIComponent(target.id)}` : route.path;
+  const layerSpecificId = hasLayerMetadata ? target.id : undefined;
+
+  return layerSpecificId
+    ? `${route.path}?${route.idParam}=${encodeURIComponent(layerSpecificId)}`
+    : route.path;
 };
 
 const AgentSignalReceiptItem = memo<AgentSignalReceiptItemProps>(({ receipt }) => {

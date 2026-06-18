@@ -5,9 +5,11 @@ import { App } from 'antd';
 import { CopyPlus, PanelTop, Pencil, Trash2 } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
 import { isDesktop } from '@/const/version';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { usePermission } from '@/hooks/usePermission';
 import { useElectronStore } from '@/store/electron';
 import { usePageStore } from '@/store/page';
 
@@ -22,12 +24,17 @@ export const useDropdownMenu = ({
 }: ActionProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['common', 'file']);
   const { message } = App.useApp();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
+  const { allowed: canCreatePage } = usePermission('create_content');
+  const { allowed: canEditPage } = usePermission('edit_own_content');
   const addTab = useElectronStore((s) => s.addTab);
   const removePage = usePageStore((s) => s.removePage);
   const duplicatePage = usePageStore((s) => s.duplicatePage);
+  const transferMenuItems = useDocumentTransferMenuItem(pageId);
 
   const handleDelete = () => {
+    if (!canEditPage) return;
+
     confirmModal({
       cancelText: t('cancel'),
       content: t('pageEditor.deleteConfirm.content', { ns: 'file' }),
@@ -47,6 +54,8 @@ export const useDropdownMenu = ({
   };
 
   const handleDuplicate = async () => {
+    if (!canCreatePage) return;
+
     try {
       await duplicatePage(pageId);
     } catch (error) {
@@ -73,26 +82,44 @@ export const useDropdownMenu = ({
             ]
           : []),
         {
+          disabled: !canEditPage,
           icon: <Icon icon={Pencil} />,
           key: 'rename',
           label: t('rename'),
-          onClick: () => toggleEditing(true),
+          onClick: () => {
+            if (!canEditPage) return;
+            toggleEditing(true);
+          },
         },
         {
+          disabled: !canCreatePage,
           icon: <Icon icon={CopyPlus} />,
           key: 'duplicate',
           label: t('pageList.duplicate', { ns: 'file' }),
           onClick: handleDuplicate,
         },
+        ...(transferMenuItems ?? []),
         { type: 'divider' },
         {
           danger: true,
+          disabled: !canEditPage,
           icon: <Icon icon={Trash2} />,
           key: 'delete',
           label: t('delete'),
           onClick: handleDelete,
         },
       ].filter(Boolean) as MenuProps['items'],
-    [t, toggleEditing, handleDuplicate, handleDelete, pageId, addTab, navigate],
+    [
+      t,
+      toggleEditing,
+      handleDuplicate,
+      handleDelete,
+      canCreatePage,
+      canEditPage,
+      pageId,
+      addTab,
+      navigate,
+      transferMenuItems,
+    ],
   );
 };

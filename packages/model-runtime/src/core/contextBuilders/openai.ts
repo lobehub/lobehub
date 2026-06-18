@@ -5,6 +5,7 @@ import { toFile } from 'openai';
 
 import { disableStreamModels, systemToUserModels } from '../../const/models';
 import type { ChatStreamPayload, OpenAIChatMessage, UserMessageContentPart } from '../../types';
+import { isDeepSeekThinkingEligibleModel } from '../../utils/modelParse';
 import { parseDataUri } from '../../utils/uriParser';
 
 export type ExtendedChatCompletionContentPart = {
@@ -23,16 +24,6 @@ type ConvertMessageContentOptions = {
 
 const isDeepSeekModel = (model: string | undefined) =>
   typeof model === 'string' && model.toLowerCase().includes('deepseek');
-
-// DeepSeek thinking-mode eligible models require reasoning_content on every
-// assistant history message — otherwise the API rejects follow-up turns with
-// "The reasoning_content in the thinking mode must be passed back to the API."
-// See https://api-docs.deepseek.com/guides/thinking_mode#tool-calls
-const isDeepSeekThinkingEligibleModel = (model: string | undefined) => {
-  if (!model) return false;
-  const lower = model.toLowerCase();
-  return lower.includes('deepseek-reasoner') || lower.includes('deepseek-v4');
-};
 
 type OpenAICompatibleContentPart =
   | ExtendedChatCompletionContentPart

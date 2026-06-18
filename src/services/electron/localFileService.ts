@@ -1,3 +1,4 @@
+import { MARKDOWN_MIME_TYPES } from '@lobechat/const';
 import {
   type AuditSafePathsParams,
   type AuditSafePathsResult,
@@ -42,6 +43,80 @@ import {
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
+const TEXT_PREVIEW_MIME_TYPES = new Set([
+  'application/graphql',
+  'application/javascript',
+  'application/json',
+  'application/markdown',
+  'application/toml',
+  'application/xml',
+  'application/yaml',
+  ...MARKDOWN_MIME_TYPES,
+]);
+
+export interface BinaryLocalFilePreview {
+  contentType: string;
+  type: 'binary' | 'pdf' | 'video';
+}
+
+export interface ImageLocalFilePreview {
+  blob: Blob;
+  contentType: string;
+  type: 'image';
+}
+
+export interface TextLocalFilePreview {
+  content: string;
+  contentType: string;
+  type: 'text';
+}
+
+export type LocalFilePreview =
+  | BinaryLocalFilePreview
+  | ImageLocalFilePreview
+  | TextLocalFilePreview;
+
+const normalizeContentType = (contentType: string | null): string =>
+  contentType?.split(';')[0].trim().toLowerCase() ?? '';
+
+const isTextPreviewMimeType = (mimeType: string): boolean =>
+  mimeType.startsWith('text/') || TEXT_PREVIEW_MIME_TYPES.has(mimeType);
+
+const fetchLocalFilePreview = async (
+  url: string,
+  accept?: LocalFilePreviewUrlParams['accept'],
+): Promise<LocalFilePreview> => {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Failed to load local file: ${response.status}`);
+  }
+
+  const contentType = normalizeContentType(response.headers.get('content-type'));
+
+  if (contentType.startsWith('image/')) {
+    return { blob: await response.blob(), contentType, type: 'image' };
+  }
+
+  if (accept === 'image') {
+    throw new Error('Unsupported local file preview type');
+  }
+
+  if (isTextPreviewMimeType(contentType)) {
+    return { content: await response.text(), contentType, type: 'text' };
+  }
+
+  if (contentType === 'application/pdf') {
+    return { contentType, type: 'pdf' };
+  }
+
+  if (contentType.startsWith('video/')) {
+    return { contentType, type: 'video' };
+  }
+
+  return { contentType, type: 'binary' };
+};
+
 class LocalFileService {
   // File Operations
   async listLocalFiles(params: ListLocalFileParams): Promise<ListLocalFilesResult> {
@@ -65,7 +140,10 @@ class LocalFileService {
   }
 
   async listProjectSkills(params: ListProjectSkillsParams): Promise<ListProjectSkillsResult> {
-    return ensureElectronIpc().localSystem.listProjectSkills(params);
+    // Project-skill scanning lives in the main-process WorkspaceCtr ('workspace'
+    // group), split out of LocalFileCtr — hence the namespace differs from the
+    // other local-file ops here.
+    return ensureElectronIpc().workspace.listProjectSkills(params);
   }
 
   async openLocalFile(params: OpenLocalFileParams) {
@@ -96,6 +174,16 @@ class LocalFileService {
     params: LocalFilePreviewUrlParams,
   ): Promise<LocalFilePreviewUrlResult> {
     return ensureElectronIpc().localSystem.getLocalFilePreviewUrl(params);
+  }
+
+  async getLocalFilePreview(params: LocalFilePreviewUrlParams): Promise<LocalFilePreview> {
+    const result = await this.getLocalFilePreviewUrl(params);
+
+    if (!result.success || !result.url) {
+      throw new Error(result.error || 'Missing local file preview URL');
+    }
+
+    return fetchLocalFilePreview(result.url, params.accept);
   }
 
   async prepareSkillDirectory(

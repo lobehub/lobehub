@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import type {
   AiModelSortMap,
   AiProviderModelListItem,
@@ -21,6 +21,23 @@ export class AiModelModel {
   }
 
   /**
+   * The database column is varchar(10). Remote model feeds can send ISO timestamps
+   * such as `2025-01-01T00:00:00.000Z`, which PostgreSQL rejects on insert.
+   */
+  private normalizeReleasedAt(releasedAt?: string | null) {
+    if (!releasedAt) return releasedAt;
+
+    return releasedAt.length > 10 ? releasedAt.slice(0, 10) : releasedAt;
+  }
+
+  private normalizeAiModelValues<T extends { releasedAt?: string | null }>(values: T): T {
+    return {
+      ...values,
+      releasedAt: this.normalizeReleasedAt(values.releasedAt),
+    };
+  }
+
+  /**
    * Helper method to validate if array is empty and return early if needed
    * @param array - Array to validate
    * @returns true if array is empty, false otherwise
@@ -30,10 +47,12 @@ export class AiModelModel {
   }
 
   create = async (params: NewAiModelItem) => {
+    const values = this.normalizeAiModelValues(params);
+
     const [result] = await this.db
       .insert(aiModels)
       .values({
-        ...params,
+        ...values,
         enabled: params.enabled ?? true, // enabled by default, but respect explicit value
         source: AiModelSourceEnum.Custom,
         userId: this.userId,
@@ -124,13 +143,26 @@ export class AiModelModel {
     });
   };
 
+  findByIdAndProvider = async (id: string, providerId: string) => {
+    return this.db.query.aiModels.findFirst({
+      where: and(
+        eq(aiModels.id, id),
+        eq(aiModels.providerId, providerId),
+        eq(aiModels.userId, this.userId),
+      ),
+    });
+  };
+
   update = async (id: string, providerId: string, value: Partial<AiModelSelectItem>) => {
+    const normalizedValue = this.normalizeAiModelValues(value);
+
     return this.db
       .insert(aiModels)
-      .values({ ...value, id, providerId, updatedAt: new Date(), userId: this.userId })
+      .values({ ...normalizedValue, id, providerId, updatedAt: new Date(), userId: this.userId })
       .onConflictDoUpdate({
-        set: value,
+        set: normalizedValue,
         target: [aiModels.id, aiModels.providerId, aiModels.userId],
+        targetWhere: isNull(aiModels.workspaceId),
       });
   };
 
@@ -157,6 +189,7 @@ export class AiModelModel {
       .onConflictDoUpdate({
         set: updateValues,
         target: [aiModels.id, aiModels.providerId, aiModels.userId],
+        targetWhere: isNull(aiModels.workspaceId),
       });
   };
 
@@ -170,6 +203,7 @@ export class AiModelModel {
       ...model,
       id,
       providerId,
+      releasedAt: this.normalizeReleasedAt(model.releasedAt),
       updatedAt: new Date(),
       userId: this.userId,
     }));
@@ -179,6 +213,7 @@ export class AiModelModel {
       .values(records)
       .onConflictDoNothing({
         target: [aiModels.id, aiModels.userId, aiModels.providerId],
+        where: isNull(aiModels.workspaceId),
       })
       .returning();
   };
@@ -227,6 +262,7 @@ export class AiModelModel {
           updatedAt: sql`excluded.updated_at`,
         },
         target: [aiModels.id, aiModels.userId, aiModels.providerId],
+        targetWhere: isNull(aiModels.workspaceId),
       });
   };
 
@@ -282,6 +318,7 @@ export class AiModelModel {
           .onConflictDoUpdate({
             set: updateValues,
             target: [aiModels.id, aiModels.userId, aiModels.providerId],
+            targetWhere: isNull(aiModels.workspaceId),
           });
       });
 

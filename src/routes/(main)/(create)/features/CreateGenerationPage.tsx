@@ -18,11 +18,12 @@ interface CreateGenerationPageProps {
 }
 
 const CreateGenerationPage = memo<CreateGenerationPageProps>(({ path, Workspace, PromptInput }) => {
-  const isCurrent = useMatch({ path, end: true });
+  const isPersonalPath = useMatch({ end: true, path });
+  const isWorkspacePath = useMatch({ end: true, path: `/:workspaceSlug${path}` });
   const [topic] = useQueryState('topic');
   const isHome = !topic;
 
-  if (!isCurrent) return null;
+  if (!isPersonalPath && !isWorkspacePath) return null;
 
   return (
     <>

@@ -82,9 +82,11 @@ export const processTopicsHandler = (context: WorkflowContext<MemoryExtractionPa
             `memory:user-memory:extract:users:${userId}:cancel-check`,
             () =>
               getServerDB().then((db) =>
-                new AsyncTaskModel(db, userId).isUserMemoryExtractionCancellationRequested(
-                  payload.asyncTaskId!,
-                ),
+                new AsyncTaskModel(
+                  db,
+                  userId,
+                  payload.workspaceId,
+                ).isUserMemoryExtractionCancellationRequested(payload.asyncTaskId!),
               ),
           );
           if (cancelled) {

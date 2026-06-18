@@ -87,6 +87,22 @@ describe('countContextTokens', () => {
       expect(r.messages[0].bySource.content).toBe(5000);
     });
 
+    it('prefers top-level usage.totalOutputTokens over metadata.usage', () => {
+      const r = countContextTokens({
+        messages: [
+          mkMsg({
+            role: 'assistant',
+            content: 'short text',
+            // dedicated field must win over the legacy metadata.usage
+            usage: { totalOutputTokens: 7000 } as any,
+            metadata: { usage: { totalOutputTokens: 5000 } as any } as any,
+          }),
+        ],
+      });
+      expect(r.bySource.content).toBe(7000);
+      expect(r.messages[0].bySource.content).toBe(7000);
+    });
+
     it('falls back to estimating content when usage is missing or zero', () => {
       const r = countContextTokens({
         messages: [

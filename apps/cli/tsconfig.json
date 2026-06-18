@@ -15,6 +15,7 @@
     "paths": {
       "@lobechat/device-gateway-client": ["../../packages/device-gateway-client/src"],
       "@lobechat/local-file-shell": ["../../packages/local-file-shell/src"],
+      "@lobechat/tool-runtime": ["../../packages/tool-runtime/src"],
       "@/*": ["../../src/*"]
     }
   },

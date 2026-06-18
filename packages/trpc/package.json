@@ -1,0 +1,35 @@
+{
+  "name": "@lobechat/trpc",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'"
+  },
+  "dependencies": {
+    "@lobechat/const": "workspace:*",
+    "@lobechat/database": "workspace:*",
+    "@lobechat/desktop-bridge": "workspace:*",
+    "@lobechat/env": "workspace:*",
+    "@lobechat/observability-otel": "workspace:*",
+    "@lobechat/types": "workspace:*",
+    "@lobechat/utils": "workspace:*",
+    "@trpc/client": "^11.8.1",
+    "@trpc/react-query": "^11.8.1",
+    "@trpc/server": "^11.8.1",
+    "cookie": "^1.1.1",
+    "debug": "^4.4.3",
+    "jose": "^6.1.3",
+    "model-bank": "workspace:*",
+    "superjson": "^2.2.6"
+  },
+  "devDependencies": {
+    "vite-tsconfig-paths": "^6.1.1"
+  },
+  "peerDependencies": {
+    "next": "^16.1.5"
+  }
+}

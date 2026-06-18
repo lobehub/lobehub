@@ -1,3 +1,13 @@
+import {
+  AGENT_DOCUMENT_CATEGORY,
+  AGENT_DOCUMENT_FILE_TYPE,
+  AGENT_DOCUMENT_SKILL_CATEGORY,
+  AGENT_DOCUMENT_SOURCE_TYPE,
+  AGENT_DOCUMENT_WEB_CATEGORY,
+  AGENT_SIGNAL_SOURCE_TYPE,
+  CUSTOM_FOLDER_FILE_TYPE,
+  WEB_DOCUMENT_SOURCE_TYPE,
+} from '@lobechat/const';
 import { describe, expect, it } from 'vitest';
 
 import { deriveAgentDocumentFields } from '../deriveFields';
@@ -7,11 +17,11 @@ describe('deriveAgentDocumentFields', () => {
     expect(
       deriveAgentDocumentFields({
         fileType: 'skills/bundle',
-        sourceType: 'agent-signal',
+        sourceType: AGENT_SIGNAL_SOURCE_TYPE,
         templateId: 'agent-skill',
       }),
     ).toEqual({
-      category: 'skill',
+      category: AGENT_DOCUMENT_SKILL_CATEGORY,
       isFolder: true,
       isSkillBundle: true,
       isSkillIndex: false,
@@ -22,11 +32,11 @@ describe('deriveAgentDocumentFields', () => {
     expect(
       deriveAgentDocumentFields({
         fileType: 'skills/index',
-        sourceType: 'agent-signal',
+        sourceType: AGENT_SIGNAL_SOURCE_TYPE,
         templateId: 'agent-skill',
       }),
     ).toEqual({
-      category: 'skill',
+      category: AGENT_DOCUMENT_SKILL_CATEGORY,
       isFolder: false,
       isSkillBundle: false,
       isSkillIndex: true,
@@ -37,21 +47,21 @@ describe('deriveAgentDocumentFields', () => {
     expect(
       deriveAgentDocumentFields({
         fileType: 'skills/bundle',
-        sourceType: 'agent',
+        sourceType: AGENT_DOCUMENT_SOURCE_TYPE,
         templateId: null,
       }).category,
-    ).toBe('skill');
+    ).toBe(AGENT_DOCUMENT_SKILL_CATEGORY);
   });
 
   it('classifies web-sourced articles as web', () => {
     expect(
       deriveAgentDocumentFields({
         fileType: 'article',
-        sourceType: 'web',
+        sourceType: WEB_DOCUMENT_SOURCE_TYPE,
         templateId: null,
       }),
     ).toEqual({
-      category: 'web',
+      category: AGENT_DOCUMENT_WEB_CATEGORY,
       isFolder: false,
       isSkillBundle: false,
       isSkillIndex: false,
@@ -61,12 +71,12 @@ describe('deriveAgentDocumentFields', () => {
   it('marks custom folders as folders without changing the category', () => {
     expect(
       deriveAgentDocumentFields({
-        fileType: 'custom/folder',
-        sourceType: 'agent',
+        fileType: CUSTOM_FOLDER_FILE_TYPE,
+        sourceType: AGENT_DOCUMENT_SOURCE_TYPE,
         templateId: null,
       }),
     ).toEqual({
-      category: 'document',
+      category: AGENT_DOCUMENT_CATEGORY,
       isFolder: true,
       isSkillBundle: false,
       isSkillIndex: false,
@@ -76,12 +86,12 @@ describe('deriveAgentDocumentFields', () => {
   it('falls back to document for ordinary file-backed agent documents', () => {
     expect(
       deriveAgentDocumentFields({
-        fileType: 'agent/document',
+        fileType: AGENT_DOCUMENT_FILE_TYPE,
         sourceType: 'file',
         templateId: null,
       }),
     ).toEqual({
-      category: 'document',
+      category: AGENT_DOCUMENT_CATEGORY,
       isFolder: false,
       isSkillBundle: false,
       isSkillIndex: false,
@@ -94,9 +104,9 @@ describe('deriveAgentDocumentFields', () => {
     expect(
       deriveAgentDocumentFields({
         fileType: 'skills/index',
-        sourceType: 'web',
+        sourceType: WEB_DOCUMENT_SOURCE_TYPE,
         templateId: 'agent-skill',
       }).category,
-    ).toBe('skill');
+    ).toBe(AGENT_DOCUMENT_SKILL_CATEGORY);
   });
 });

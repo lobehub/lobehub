@@ -7,6 +7,7 @@ import { ArrowLeftRight, Sparkles } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 
 interface ImportFromGithubModalProps {
@@ -21,6 +22,7 @@ const ImportFromGithubModal = memo<ImportFromGithubModalProps>(({ open, onOpenCh
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState('');
+  const { allowed: canCreate } = usePermission('create_content');
 
   const handleClose = () => {
     onOpenChange(false);
@@ -30,7 +32,7 @@ const ImportFromGithubModal = memo<ImportFromGithubModalProps>(({ open, onOpenCh
 
   const handleImport = async () => {
     const trimmed = url.trim();
-    if (!trimmed) return;
+    if (!canCreate || !trimmed) return;
 
     setLoading(true);
     setError(null);
@@ -77,6 +79,7 @@ const ImportFromGithubModal = memo<ImportFromGithubModalProps>(({ open, onOpenCh
         <Flexbox gap={8}>
           <Typography.Text strong>URL</Typography.Text>
           <Input
+            disabled={!canCreate}
             placeholder={t('agentSkillModal.github.urlPlaceholder')}
             value={url}
             onPressEnter={handleImport}
@@ -87,7 +90,7 @@ const ImportFromGithubModal = memo<ImportFromGithubModalProps>(({ open, onOpenCh
           />
         </Flexbox>
 
-        <Button block loading={loading} type="primary" onClick={handleImport}>
+        <Button block disabled={!canCreate} loading={loading} type="primary" onClick={handleImport}>
           {t('common:import')}
         </Button>
       </Flexbox>

@@ -7,6 +7,7 @@ import { timestamps } from './_helpers';
 import { knowledgeBases } from './file';
 import { embeddings } from './rag';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 export const evalDatasets = pgTable(
   'rag_eval_datasets',
@@ -23,10 +24,14 @@ export const evalDatasets = pgTable(
       onDelete: 'cascade',
     }),
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     ...timestamps,
   },
-  (t) => [index('rag_eval_datasets_user_id_idx').on(t.userId)],
+  (t) => [
+    index('rag_eval_datasets_user_id_idx').on(t.userId),
+    index('rag_eval_datasets_workspace_id_idx').on(t.workspaceId),
+  ],
 );
 
 export type NewEvalDatasetsItem = typeof evalDatasets.$inferInsert;
@@ -50,9 +55,13 @@ export const evalDatasetRecords = pgTable(
     metadata: jsonb('metadata'),
 
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     ...timestamps,
   },
-  (t) => [index('rag_eval_dataset_records_user_id_idx').on(t.userId)],
+  (t) => [
+    index('rag_eval_dataset_records_user_id_idx').on(t.userId),
+    index('rag_eval_dataset_records_workspace_id_idx').on(t.workspaceId),
+  ],
 );
 
 export type NewEvalDatasetRecordsItem = typeof evalDatasetRecords.$inferInsert;
@@ -83,9 +92,13 @@ export const evalEvaluation = pgTable(
     embeddingModel: text('embedding_model'),
 
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     ...timestamps,
   },
-  (t) => [index('rag_eval_evaluations_user_id_idx').on(t.userId)],
+  (t) => [
+    index('rag_eval_evaluations_user_id_idx').on(t.userId),
+    index('rag_eval_evaluations_workspace_id_idx').on(t.workspaceId),
+  ],
 );
 
 export type NewEvalEvaluationItem = typeof evalEvaluation.$inferInsert;
@@ -123,9 +136,13 @@ export const evaluationRecords = pgTable(
       .notNull(),
 
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
     ...timestamps,
   },
-  (t) => [index('rag_eval_evaluation_records_user_id_idx').on(t.userId)],
+  (t) => [
+    index('rag_eval_evaluation_records_user_id_idx').on(t.userId),
+    index('rag_eval_evaluation_records_workspace_id_idx').on(t.workspaceId),
+  ],
 );
 
 export type NewEvaluationRecordsItem = typeof evaluationRecords.$inferInsert;

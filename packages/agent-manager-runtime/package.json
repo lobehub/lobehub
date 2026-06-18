@@ -6,6 +6,11 @@
     ".": "./src/index.ts"
   },
   "main": "./src/index.ts",
+  "scripts": {
+    "test": "vitest",
+    "test:coverage": "vitest --coverage --silent='passed-only'",
+    "test:update": "vitest -u"
+  },
   "dependencies": {
     "@lobechat/const": "workspace:*",
     "@lobechat/prompts": "workspace:*",

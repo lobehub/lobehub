@@ -11,17 +11,7 @@ export interface DynamicRouteMeta {
   title?: string;
 }
 
-export interface NewTabActionResult {
-  cached?: DynamicRouteMeta;
-  url: string;
-}
-
-export interface NewTabAction {
-  onCreate: () => Promise<NewTabActionResult | null>;
-}
-
 export interface RouteMeta extends StaticRouteMeta {
-  createNewTab?: (params: Record<string, string | undefined>) => NewTabAction | null;
   useDynamicMeta?: (params: Record<string, string | undefined>) => DynamicRouteMeta;
 }
 

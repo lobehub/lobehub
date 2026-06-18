@@ -2,10 +2,9 @@ import { type SecurityBlacklistConfig } from '@lobechat/types';
 
 /**
  * Default Security Blacklist
- * These rules will ALWAYS block execution and require human intervention,
- * regardless of user settings (even in auto-run mode)
  *
- * This is the last line of defense against dangerous operations
+ * These rules block execution and require human intervention by default.
+ * Rules explicitly marked as 'required' can be bypassed by auto-run flows.
  *
  * Note: `description` values are i18n keys (namespace: 'tool', prefix: 'securityBlacklist.')
  * and are translated in the intervention UI via `t(description)`.
@@ -98,6 +97,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.sshConfig',
@@ -107,6 +107,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
 
   // ==================== Package Manager Dangers ====================
@@ -118,6 +119,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
 
   // ==================== Kernel & System Core Dangers ====================
@@ -169,6 +171,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.envFiles',
@@ -178,6 +181,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.sshPrivateKeys',
@@ -188,6 +192,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.sshPrivateKeys',
@@ -197,6 +202,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.awsCredentials',
@@ -206,6 +212,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.awsCredentials',
@@ -215,6 +222,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.dockerConfig',
@@ -224,6 +232,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.dockerConfig',
@@ -233,6 +242,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.kubeConfig',
@@ -242,6 +252,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.kubeConfig',
@@ -251,6 +262,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.gitCredentials',
@@ -260,6 +272,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.gitCredentials',
@@ -269,6 +282,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.npmrc',
@@ -278,6 +292,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.npmrc',
@@ -287,6 +302,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.historyFiles',
@@ -297,6 +313,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.historyFiles',
@@ -306,6 +323,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.browserCredentials',
@@ -316,6 +334,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.gcpCredentials',
@@ -325,6 +344,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
   {
     description: 'securityBlacklist.gcpCredentials',
@@ -334,5 +354,6 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
         type: 'regex',
       },
     },
+    policy: 'required',
   },
 ];

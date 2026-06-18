@@ -1,35 +1,69 @@
 'use client';
 
-import { Button, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, DropdownMenu, Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { useTheme } from 'antd-style';
-import { PlayIcon, Settings2Icon } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { MoreHorizontalIcon, PlayIcon, Settings2Icon } from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
+import { useAgentGroupTransferMenuItem } from '@/business/client/hooks/useAgentGroupTransferMenuItem';
+import { EditingIndicator, type EditLockClient, useEditLock } from '@/features/EditLock';
 import { EditorCanvas } from '@/features/EditorCanvas';
+import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { lambdaClient } from '@/libs/trpc/client';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
 import AgentSettings from '../AgentSettings';
 import AutoSaveHint from '../Header/AutoSaveHint';
-import GroupPublishButton from '../Header/GroupPublishButton';
 import GroupForkTag from './GroupForkTag';
 import GroupHeader from './GroupHeader';
 import GroupStatusTag from './GroupStatusTag';
 import GroupVersionReviewTag from './GroupVersionReviewTag';
 
+// Stable lock RPC binding for the chatGroup resource.
+const groupLockClient: EditLockClient = {
+  acquire: (id) => lambdaClient.group.acquireGroupLock.mutate({ id }),
+  peek: (id) => lambdaClient.group.getGroupLock.query({ id }),
+  release: async (id) => {
+    await lambdaClient.group.releaseGroupLock.mutate({ id });
+  },
+};
+
 const GroupProfile = memo(() => {
   const { t } = useTranslation(['setting', 'chat']);
+  const { allowed: canEdit } = usePermission('edit_own_content');
   const theme = useTheme();
   const [showAgentSetting, setShowAgentSetting] = useState(false);
   const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
   const currentGroup = useAgentGroupStore(agentGroupSelectors.currentGroup);
   const updateGroup = useAgentGroupStore((s) => s.updateGroup);
   const router = useQueryRoute();
+  const transferMenuItems = useAgentGroupTransferMenuItem(groupId ?? undefined);
+
+  // Collaborative edit lock for workspace groups (same model as pages): read-only
+  // when another member is editing; acquired implicitly on the first edit.
+  const [edited, setEdited] = useState(false);
+  const groupIdRef = useRef(groupId);
+  if (groupIdRef.current !== groupId) {
+    groupIdRef.current = groupId;
+    setEdited(false);
+  }
+  const lock = useEditLock({
+    client: groupLockClient,
+    // Only workspace groups lock — personal (non-workspace) groups stay fully
+    // editable with no peek/pending, matching the server's workspace gating.
+    enabled: Boolean(groupId && canEdit && currentGroup?.workspaceId),
+    isDirty: edited,
+    resourceId: groupId ?? undefined,
+  });
+  // Read-only until the lock resolves, so the user can't start typing on a group
+  // that turns out to be locked and get bounced mid-edit.
+  const editable = canEdit && !lock.lockedByOther && !lock.pending;
 
   const editor = useGroupProfileStore((s) => s.editor);
   const handleContentChange = useGroupProfileStore((s) => s.handleContentChange);
@@ -39,18 +73,22 @@ const GroupProfile = memo(() => {
   // Create save callback that captures latest groupId
   const saveContent = useCallback(
     async (payload: { content: string; editorData: Record<string, any> }) => {
+      if (!canEdit) return;
       if (!groupId) return;
       await updateGroup(groupId, {
         content: payload.content,
         editorData: payload.editorData,
       });
     },
-    [updateGroup, groupId],
+    [canEdit, updateGroup, groupId],
   );
 
   const onContentChange = useCallback(() => {
+    if (!editable) return;
+
+    setEdited(true);
     handleContentChange(saveContent);
-  }, [handleContentChange, saveContent]);
+  }, [editable, handleContentChange, saveContent]);
 
   // Stabilize editorData object reference to prevent unnecessary re-renders
   const editorData = useMemo(
@@ -82,7 +120,7 @@ const GroupProfile = memo(() => {
         }}
       >
         <Flexbox height={66} width={'100%'}>
-          <Flexbox horizontal gap={8} paddingBlock={12}>
+          <Flexbox horizontal align={'center'} gap={8} paddingBlock={12}>
             <AutoSaveHint />
             <GroupStatusTag />
             <GroupVersionReviewTag />
@@ -109,13 +147,26 @@ const GroupProfile = memo(() => {
           >
             {t('startConversation')}
           </Button>
-          <GroupPublishButton />
+          {!!transferMenuItems?.length && (
+            <DropdownMenu items={transferMenuItems}>
+              <ActionIcon
+                icon={MoreHorizontalIcon}
+                size={'small'}
+                style={{ color: theme.colorTextSecondary }}
+              />
+            </DropdownMenu>
+          )}
           <Button
+            disabled={!canEdit}
             icon={Settings2Icon}
             size={'small'}
             style={{ color: theme.colorTextSecondary }}
             type={'text'}
-            onClick={() => setShowAgentSetting(true)}
+            onClick={() => {
+              if (!canEdit) return;
+
+              setShowAgentSetting(true);
+            }}
           >
             {t('advancedSettings')}
           </Button>
@@ -123,7 +174,13 @@ const GroupProfile = memo(() => {
       </Flexbox>
       <Divider />
       {/* Group Content Editor */}
+      <EditingIndicator
+        holderId={lock.lockedByOther ? lock.holderId : null}
+        pending={canEdit && lock.pending}
+      />
       <EditorCanvas
+        disabled={!canEdit}
+        editable={!lock.lockedByOther && !lock.pending}
         editor={editor}
         editorData={editorData}
         entityId={groupId}

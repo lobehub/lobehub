@@ -115,7 +115,7 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
       }
 
       case 'getCommandOutput': {
-        return { filter: params.filter, shell_id: params.commandId };
+        return { filter: params.filter, shell_id: params.commandId, timeout: params.timeout };
       }
 
       case 'killCommand': {
@@ -186,6 +186,7 @@ export class LocalSystemExecutionRuntime extends ComputerRuntime {
       case 'getCommandOutput': {
         return {
           result: {
+            durationMs: raw.duration_ms,
             exitCode: raw.exit_code,
             error: raw.error,
             newOutput: raw.output,

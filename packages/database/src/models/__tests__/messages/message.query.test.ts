@@ -96,6 +96,35 @@ describe('MessageModel Query Tests', () => {
       expect(result[1].id).toBe('2');
     });
 
+    it('reads usage from the dedicated column and falls back to metadata.usage', async () => {
+      await serverDB.insert(messages).values([
+        // dedicated column must win over the legacy metadata.usage
+        {
+          id: 'usage-col',
+          userId,
+          role: 'assistant',
+          content: 'a',
+          createdAt: new Date('2023-01-01'),
+          usage: { totalTokens: 100 } as any,
+          metadata: { usage: { totalTokens: 999 } },
+        },
+        // legacy row: only metadata.usage → falls back
+        {
+          id: 'usage-meta',
+          userId,
+          role: 'assistant',
+          content: 'b',
+          createdAt: new Date('2023-01-02'),
+          metadata: { usage: { totalTokens: 50 } },
+        },
+      ]);
+
+      const result = await messageModel.query();
+
+      expect(result.find((m) => m.id === 'usage-col')?.usage).toEqual({ totalTokens: 100 });
+      expect(result.find((m) => m.id === 'usage-meta')?.usage).toEqual({ totalTokens: 50 });
+    });
+
     it('should return empty messages if not match the user ID', async () => {
       // Create test data
       await serverDB.insert(messages).values([
@@ -2925,6 +2954,136 @@ describe('MessageModel Query Tests', () => {
         expect(agent1Result[1].groupId).toBe('group-1');
         expect(agent2Result[1].groupId).toBe('group-1');
       });
+    });
+  });
+
+  describe('getLastChildToolMessageId', () => {
+    it('should return the most recently-created tool child of an assistant message', async () => {
+      await serverDB.insert(messages).values([
+        {
+          id: 'asst-1',
+          userId,
+          role: 'assistant',
+          content: 'assistant step',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          id: 'tool-early',
+          userId,
+          role: 'tool',
+          parentId: 'asst-1',
+          content: 'first tool',
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+        {
+          id: 'tool-late',
+          userId,
+          role: 'tool',
+          parentId: 'asst-1',
+          content: 'second tool',
+          createdAt: new Date('2023-01-01T00:00:02'),
+        },
+      ]);
+
+      const result = await messageModel.getLastChildToolMessageId('asst-1');
+      expect(result).toBe('tool-late');
+    });
+
+    it('should return undefined when the assistant produced no tool children', async () => {
+      await serverDB.insert(messages).values([
+        {
+          id: 'asst-no-tools',
+          userId,
+          role: 'assistant',
+          content: 'no tools here',
+          createdAt: new Date('2023-01-01'),
+        },
+        {
+          // a non-tool child must be ignored
+          id: 'child-assistant',
+          userId,
+          role: 'assistant',
+          parentId: 'asst-no-tools',
+          content: 'follow-up assistant',
+          createdAt: new Date('2023-01-02'),
+        },
+      ]);
+
+      const result = await messageModel.getLastChildToolMessageId('asst-no-tools');
+      expect(result).toBeUndefined();
+    });
+
+    it('should exclude subagent tool rows that live on their own thread', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(sessions).values([{ id: 'session1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+        await trx.insert(threads).values([
+          {
+            id: 'subagent-thread',
+            userId,
+            topicId: 'topic1',
+            sourceMessageId: 'asst-main',
+            type: 'standalone',
+          },
+        ]);
+        await trx.insert(messages).values([
+          {
+            id: 'asst-main',
+            userId,
+            role: 'assistant',
+            content: 'main agent step',
+            createdAt: new Date('2023-01-01T00:00:00'),
+          },
+          {
+            id: 'tool-main',
+            userId,
+            role: 'tool',
+            parentId: 'asst-main',
+            threadId: null,
+            content: 'main-agent tool',
+            createdAt: new Date('2023-01-01T00:00:01'),
+          },
+          {
+            // newer, but on a subagent thread — must not anchor the main wire
+            id: 'tool-subagent',
+            userId,
+            role: 'tool',
+            parentId: 'asst-main',
+            threadId: 'subagent-thread',
+            content: 'subagent tool',
+            createdAt: new Date('2023-01-01T00:00:02'),
+          },
+        ]);
+      });
+
+      const result = await messageModel.getLastChildToolMessageId('asst-main');
+      expect(result).toBe('tool-main');
+    });
+
+    it('should not return tool rows belonging to other users', async () => {
+      const otherModel = new MessageModel(serverDB, otherUserId);
+      await serverDB.insert(messages).values([
+        {
+          id: 'asst-shared-id',
+          userId: otherUserId,
+          role: 'assistant',
+          content: 'other user assistant',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          id: 'tool-other-user',
+          userId: otherUserId,
+          role: 'tool',
+          parentId: 'asst-shared-id',
+          content: 'other user tool',
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      // current user must not see another user's tool rows
+      expect(await messageModel.getLastChildToolMessageId('asst-shared-id')).toBeUndefined();
+      // the owning user does
+      expect(await otherModel.getLastChildToolMessageId('asst-shared-id')).toBe('tool-other-user');
     });
   });
 });

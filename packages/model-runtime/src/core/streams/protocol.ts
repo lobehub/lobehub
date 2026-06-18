@@ -2,13 +2,15 @@ import type { ChatCitationItem, ModelPerformance, ModelUsage } from '@lobechat/t
 import type { Pricing } from 'model-bank';
 
 import { parseToolCalls } from '../../helpers';
-import type { ChatStreamCallbacks } from '../../types';
+import type { ChatStreamCallbacks, OnFinishData, UsageMissingDiagnostics } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import { nanoid } from '../../utils/uuid';
 import type { ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
 
 export type ChatPayloadForTransformStream = {
+  apiMode?: UsageMissingDiagnostics['apiMode'];
+  includeUsageRequested?: boolean;
   model?: string;
   pricing?: Pricing;
   pricingOptions?: ComputeChatCostOptions;
@@ -66,7 +68,33 @@ export interface StreamContext {
    */
   tools?: Record<number, { id: string; index: number; name: string }>;
   usage?: ModelUsage;
+  usageMissingDiagnostics?: UsageMissingDiagnostics;
 }
+
+export const setOpenAIChatCompletionUsageMissingDiagnostics = (
+  streamContext: StreamContext,
+  payload: ChatPayloadForTransformStream | undefined,
+  {
+    finishReason,
+    responseId,
+  }: {
+    finishReason?: string | null;
+    responseId?: string;
+  },
+) => {
+  streamContext.usageMissingDiagnostics = {
+    apiMode: 'chat_completions',
+    chunkIndex: streamContext.chunkIndex,
+    finishReason,
+    hasUsageMetadata: false,
+    includeUsageRequested: payload?.includeUsageRequested,
+    model: payload?.model,
+    provider: payload?.provider,
+    responseId,
+    source: 'openai_chat_completions',
+    terminalEventType: 'chat.completion.chunk',
+  };
+};
 
 export interface StreamProtocolChunk {
   data: any;
@@ -143,6 +171,22 @@ const chatStreamable = async function* <T>(stream: AsyncIterable<T>) {
 };
 
 const ERROR_CHUNK_PREFIX = '%FIRST_CHUNK_ERROR%: ';
+
+export const ABORT_CHUNK = '%ABORT_CHUNK%';
+
+const isAbortError = (error: unknown): boolean => {
+  // SDK iterators may throw non-Error values (strings, plain objects without
+  // a `message`) — guard before touching `.name`/`.message` so the abort
+  // check itself can't blow up inside the stream error handler.
+  if (!error || typeof error !== 'object') return false;
+
+  const { name, message } = error as { message?: unknown; name?: unknown };
+
+  return (
+    name === 'AbortError' ||
+    (typeof message === 'string' && (message.includes('aborted') || message.includes('cancelled')))
+  );
+};
 
 /**
  * Optional diagnostic context attached to errors that surface from the
@@ -271,7 +315,15 @@ export function readableFromAsyncIterable<T>(
         if (done) controller.close();
         else controller.enqueue(value);
       } catch (e) {
-        controller.enqueue(buildStreamErrorPayload(e as Error, context) as T);
+        const error = e as Error;
+
+        if (isAbortError(error)) {
+          controller.enqueue(ABORT_CHUNK as T);
+          controller.close();
+          return;
+        }
+
+        controller.enqueue(buildStreamErrorPayload(error, context) as T);
         controller.close();
       }
     },
@@ -299,7 +351,15 @@ export const convertIterableToStream = <T>(
         if (done) controller.close();
         else controller.enqueue(value);
       } catch (e) {
-        controller.enqueue(buildStreamErrorPayload(e as Error, context) as T);
+        const error = e as Error;
+
+        if (isAbortError(error)) {
+          controller.enqueue(ABORT_CHUNK as T);
+          controller.close();
+          return;
+        }
+
+        controller.enqueue(buildStreamErrorPayload(error, context) as T);
         controller.close();
       }
     },
@@ -310,7 +370,15 @@ export const convertIterableToStream = <T>(
         if (done) controller.close();
         else controller.enqueue(value);
       } catch (e) {
-        controller.enqueue(buildStreamErrorPayload(e as Error, context) as T);
+        const error = e as Error;
+
+        if (isAbortError(error)) {
+          controller.enqueue(ABORT_CHUNK as T);
+          controller.close();
+          return;
+        }
+
+        controller.enqueue(buildStreamErrorPayload(error, context) as T);
         controller.close();
       }
     },
@@ -361,7 +429,10 @@ export const createSSEProtocolTransformer = (
   });
 };
 
-export function createCallbacksTransformer(cb: ChatStreamCallbacks | undefined) {
+export function createCallbacksTransformer(
+  cb: ChatStreamCallbacks | undefined,
+  options?: { streamStack?: StreamContext },
+) {
   const textEncoder = new TextEncoder();
   let aggregatedText = '';
   let aggregatedThinking: string | undefined = undefined;
@@ -379,7 +450,7 @@ export function createCallbacksTransformer(cb: ChatStreamCallbacks | undefined) 
 
   return new TransformStream<string, Uint8Array>({
     async flush(): Promise<void> {
-      const data = {
+      const data: OnFinishData = {
         error: streamError,
         finishReason,
         grounding,
@@ -389,6 +460,10 @@ export function createCallbacksTransformer(cb: ChatStreamCallbacks | undefined) 
         toolsCalling,
         usage,
       };
+      const usageMissingDiagnostics = usage
+        ? undefined
+        : options?.streamStack?.usageMissingDiagnostics;
+      if (usageMissingDiagnostics) data.usageMissingDiagnostics = usageMissingDiagnostics;
 
       if (callbacks.onCompletion) {
         await callbacks.onCompletion(data);
@@ -530,6 +605,11 @@ export const createFirstErrorHandleTransformer = (
 ) => {
   return new TransformStream({
     transform(chunk, controller) {
+      if (chunk === ABORT_CHUNK) {
+        controller.enqueue(chunk);
+        return;
+      }
+
       if (chunk.toString().startsWith(ERROR_CHUNK_PREFIX)) {
         const errorData = JSON.parse(chunk.toString().replace(ERROR_CHUNK_PREFIX, ''));
 
@@ -643,6 +723,15 @@ export const createTokenSpeedCalculator = (
 
   return new TransformStream({
     transform(chunk, controller) {
+      if (chunk === ABORT_CHUNK) {
+        controller.enqueue({
+          data: 'abort',
+          id: streamStack?.id || '',
+          type: 'stop',
+        } as StreamProtocolChunk);
+        return;
+      }
+
       let result = transformer(chunk, streamStack || { id: '' });
       if (!Array.isArray(result)) result = [result];
       result.forEach((r) => {

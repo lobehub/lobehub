@@ -14,7 +14,6 @@ interface ToolApiSpec {
 }
 
 const str = { type: 'string' } as const;
-const strArr = { items: { type: 'string' }, type: 'array' } as const;
 const freeObj = { additionalProperties: true, type: 'object' } as const;
 const freeArr = { items: { additionalProperties: true, type: 'object' }, type: 'array' } as const;
 
@@ -95,16 +94,6 @@ export const RESOURCE_TOOL_APIS: ToolApiSpec[] = [
   },
   {
     description:
-      'Read bounded evidence details for cited topic, message, tool_call, or agent_document ids in the review window. Use this for evidenceRefs; do not pass evidence ids to proposal tools.',
-    name: 'getEvidenceDigest',
-    parameters: obj({
-      evidenceIds: strArr,
-      reviewWindowEnd: str,
-      reviewWindowStart: str,
-    }),
-  },
-  {
-    description:
       'Write one durable user memory when evidence explicitly states a stable normal-sensitivity user preference. Prefer this over skill tools for summary/style/preferences.',
     name: 'writeMemory',
     parameters: obj(
@@ -146,6 +135,15 @@ export const RESOURCE_TOOL_APIS: ToolApiSpec[] = [
     ),
   },
 ];
+
+/**
+ * Skill-only resource tools (skill reads + writes, no `writeMemory`). Derived
+ * from {@link RESOURCE_TOOL_APIS} so the skill-management mode exposes exactly
+ * the skill surface without duplicating schemas.
+ */
+export const SKILL_TOOL_APIS: ToolApiSpec[] = RESOURCE_TOOL_APIS.filter(
+  (api) => api.name !== 'writeMemory',
+);
 
 export const REVIEW_TOOL_APIS: ToolApiSpec[] = [
   {

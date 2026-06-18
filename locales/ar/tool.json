@@ -40,6 +40,7 @@
   "agentMarketplace.render.alreadyInLibraryTag": "موجود بالفعل في المكتبة",
   "agentMarketplace.render.alreadyInLibrary_one": "{{count}} موجود بالفعل في المكتبة",
   "agentMarketplace.render.alreadyInLibrary_other": "{{count}} موجود بالفعل في المكتبة",
+  "claudeCode.askUserQuestion.customOption.placeholder": "أو اكتب نصك الخاص…",
   "claudeCode.askUserQuestion.escape.back": "العودة إلى الخيارات",
   "claudeCode.askUserQuestion.escape.enter": "أو اكتب مباشرة",
   "claudeCode.askUserQuestion.escape.placeholder": "اكتب إجابتك هنا…",

@@ -4,8 +4,9 @@ import { Flexbox } from '@lobehub/ui';
 import { ChatHeader } from '@lobehub/ui/mobile';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useShowMobileWorkspace } from '@/hooks/useShowMobileWorkspace';
 import { SettingsTabs } from '@/store/global/initialState';
 import { useSessionStore } from '@/store/session';
@@ -30,7 +31,7 @@ const TAB_TITLE_KEY: Partial<Record<SettingsTabs, string>> = {
 const Header = memo(() => {
   const { t } = useTranslation(['setting', 'auth', 'subscription']);
   const showMobileWorkspace = useShowMobileWorkspace();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const params = useParams<{ providerId?: string; tab?: string }>();
 
   const isSessionActive = useSessionStore((s) => !!s.activeId);
@@ -40,9 +41,9 @@ const Header = memo(() => {
     if (isSessionActive && showMobileWorkspace) {
       navigate('/agent');
     } else if (isProvider) {
-      navigate('/settings/provider/all');
+      navigate('/settings/provider/all', { escape: true });
     } else {
-      navigate('/me/settings');
+      navigate('/me/settings', { escape: true });
     }
   };
 

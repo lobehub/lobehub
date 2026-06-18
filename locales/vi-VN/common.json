@@ -480,6 +480,9 @@
   "userPanel.setting": "Cài đặt",
   "userPanel.upgradePlan": "Nâng cấp gói",
   "userPanel.usages": "Thống kê sử dụng",
+  "userPanel.workspaceCredits": "Tín dụng Không gian làm việc",
+  "userPanel.workspaceSetting": "Cài đặt Không gian làm việc",
+  "userPanel.workspaceUsages": "Sử dụng Không gian làm việc",
   "version": "Phiên bản",
   "zoom": "Thu phóng"
 }

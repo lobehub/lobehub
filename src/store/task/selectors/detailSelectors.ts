@@ -64,6 +64,8 @@ const activeTaskReview = (s: TaskStoreState) => activeTaskDetail(s)?.review;
 
 const activeTaskWorkspace = (s: TaskStoreState) => activeTaskDetail(s)?.workspace ?? [];
 
+const activeTaskWorkspaceId = (s: TaskStoreState) => activeTaskDetail(s)?.workspaceId;
+
 const activeTaskError = (s: TaskStoreState) => activeTaskDetail(s)?.error;
 
 const activeTaskTopicCount = (s: TaskStoreState) => activeTaskDetail(s)?.topicCount ?? 0;
@@ -115,6 +117,7 @@ export const taskDetailSelectors = {
   activeTaskSubtasks,
   activeTaskTopicCount,
   activeTaskWorkspace,
+  activeTaskWorkspaceId,
   activeTopicDrawerTopicId,
   canCancelActiveTask,
   canPauseActiveTask,

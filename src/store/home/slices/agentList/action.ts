@@ -3,7 +3,9 @@ import { type SWRResponse } from 'swr';
 
 import { type SidebarAgentItem, type SidebarAgentListResponse } from '@/database/repositories/home';
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
+import { agentConfigKeys, agentKeys } from '@/libs/swr/keys';
 import { homeService } from '@/services/home';
+import { getAgentStoreState } from '@/store/agent';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
@@ -11,9 +13,6 @@ import { setNamespace } from '@/utils/storeDebug';
 import { mapResponseToState } from './initialState';
 
 const n = setNamespace('agentList');
-
-const FETCH_AGENT_LIST_KEY = 'fetchAgentList';
-const SEARCH_AGENTS_KEY = 'searchAgents';
 
 type Setter = StoreSetter<HomeStore>;
 export const createAgentListSlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>
@@ -38,12 +37,13 @@ export class AgentListActionImpl {
   };
 
   refreshAgentList = async (): Promise<void> => {
-    await mutate([FETCH_AGENT_LIST_KEY, true]);
+    getAgentStoreState().invalidateAvailableAgents();
+    await mutate(agentKeys.list(true));
   };
 
   useFetchAgentList = (isLogin: boolean | undefined): SWRResponse<SidebarAgentListResponse> => {
     return useClientDataSWRWithSync<SidebarAgentListResponse>(
-      isLogin === true ? [FETCH_AGENT_LIST_KEY, isLogin] : null,
+      isLogin === true ? agentKeys.list(isLogin) : null,
       () => homeService.getSidebarAgentList(),
       {
         onData: (data) => {
@@ -74,7 +74,7 @@ export class AgentListActionImpl {
   };
 
   useSearchAgents = (keyword?: string): SWRResponse<SidebarAgentItem[]> => {
-    return useClientDataSWR<SidebarAgentItem[]>([SEARCH_AGENTS_KEY, keyword], async () => {
+    return useClientDataSWR<SidebarAgentItem[]>(agentConfigKeys.search(keyword), async () => {
       if (!keyword) return [];
 
       return homeService.searchAgents(keyword);

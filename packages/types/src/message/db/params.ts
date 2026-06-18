@@ -9,6 +9,7 @@ import type {
   MessageMetadata,
   MessageToolCall,
   ModelReasoning,
+  ModelUsage,
 } from '../common';
 import {
   ChatImageItemSchema,
@@ -17,6 +18,7 @@ import {
   MessageMetadataSchema,
   MessageToolCallSchema,
   ModelReasoningSchema,
+  ModelUsageSchema,
 } from '../common';
 import type { UIChatMessage } from '../ui';
 
@@ -104,6 +106,12 @@ export interface UpdateMessageParams {
   toolCalls?: MessageToolCall[];
   tools?: ChatToolPayload[] | null;
   traceId?: string;
+  /**
+   * Token usage + cost, promoted out of `metadata.usage` into the dedicated
+   * `usage` column. Writers may pass it top-level; the model also falls back to
+   * `metadata.usage` so existing callers keep populating the column.
+   */
+  usage?: ModelUsage;
 }
 
 export interface NewMessageQueryParams {
@@ -131,5 +139,6 @@ export const UpdateMessageParamsSchema = z
     toolCalls: z.array(MessageToolCallSchema).optional(),
     tools: z.array(ChatToolPayloadSchema).nullable().optional(),
     traceId: z.string().optional(),
+    usage: ModelUsageSchema.optional(),
   })
   .passthrough();

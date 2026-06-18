@@ -14,6 +14,6 @@
     "node-machine-id": "^1.1.12"
   },
   "devDependencies": {
-    "vitest": "^3.0.0"
+    "vitest": "^3.2.6"
   }
 }

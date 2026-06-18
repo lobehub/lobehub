@@ -4,9 +4,10 @@ import { ChevronLeftIcon } from 'lucide-react';
 import { type MouseEvent, type PropsWithChildren, type ReactNode, useCallback } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { isModifierClick } from '@/utils/navigation';
 
 import ToggleLeftPanelButton from '../ToggleLeftPanelButton';
@@ -25,7 +26,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const BackLink = ({ children }: { children: ReactNode }) => {
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const handleClick = useCallback(
     (e: MouseEvent) => {
       if (isModifierClick(e)) return;

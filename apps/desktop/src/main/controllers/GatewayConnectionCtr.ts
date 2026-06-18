@@ -3,7 +3,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import type { AgentRunRequestMessage } from '@lobechat/device-gateway-client';
+import { type DeviceControlDeps, executeDeviceRpc as runDeviceRpc } from '@lobechat/device-control';
+import type {
+  AgentRunRequestMessage,
+  GatewayMcpStdioParams,
+} from '@lobechat/device-gateway-client';
 import type {
   EditLocalFileParams,
   GatewayConnectionStatus,
@@ -24,12 +28,16 @@ import { type ILocalSystemService, LocalSystemExecutionRuntime } from '@lobechat
 
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
+import { createLogger } from '@/utils/logger';
 
 import HeterogeneousAgentCtr from './HeterogeneousAgentCtr';
 import { ControllerModule, IpcMethod } from './index';
 import LocalFileCtr from './LocalFileCtr';
+import McpCtr from './McpCtr';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 import ShellCommandCtr from './ShellCommandCtr';
+
+const logger = createLogger('controllers:GatewayConnectionCtr');
 
 /**
  * Inject the lh-notify protocol into the first turn of a new hetero-agent session.
@@ -170,6 +178,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
     return this.app.getController(HeterogeneousAgentCtr);
   }
 
+  private get mcpCtr() {
+    return this.app.getController(McpCtr);
+  }
+
   // ─── Lifecycle ───
 
   afterAppReady() {
@@ -184,6 +196,9 @@ export default class GatewayConnectionCtr extends ControllerModule {
     // Wire up tool call handler
     srv.setToolCallHandler((apiName, args) => this.executeToolCall(apiName, args));
 
+    // Wire up MCP call handler (tunneled stdio MCP calls from the cloud server)
+    srv.setMcpCallHandler((mcpCall) => this.executeMcpCall(mcpCall));
+
     // Wire up message API handler
     srv.setMessageApiHandler((platform, apiName, payload) =>
       this.executeMessageApi(platform, apiName, payload),
@@ -191,6 +206,10 @@ export default class GatewayConnectionCtr extends ControllerModule {
 
     // Wire up agent run handler
     srv.setAgentRunHandler((request) => this.executeAgentRun(request));
+
+    // Wire up generic device RPC handler (server-internal method forwarding,
+    // e.g. workspace-init scans — never surfaced to the agent)
+    srv.setRpcHandler((method, params) => this.executeDeviceRpc(method, params));
 
     // Wire up device registrar (persists this device to the server registry)
     srv.setDeviceRegistrar((info) => this.registerDevice(info));
@@ -273,6 +292,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       this.heterogeneousAgentCtr.spawnLhHeteroExec({
         agentType: request.agentType,
         cwd: request.cwd,
+        imageList: request.imageList,
         jwt: request.jwt,
         operationId: request.operationId,
         prompt: request.prompt,
@@ -297,7 +317,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
    * renderer uses, so remote tool calls produce identical
    * `{ content, state, success }` envelopes — `content` is the LLM-facing
    * prompt text, `state` is the structured payload, both flow downstream
-   * intact (the gateway / DeviceProxy / RuntimeExecutors paths preserve them
+   * intact (the gateway / DeviceGateway / RuntimeExecutors paths preserve them
    * and write `state` to the tool message's `pluginState`).
    */
   private getLocalSystemRuntime(): LocalSystemExecutionRuntime {
@@ -322,6 +342,35 @@ export default class GatewayConnectionCtr extends ControllerModule {
       this.localSystemRuntime = new LocalSystemExecutionRuntime(service);
     }
     return this.localSystemRuntime;
+  }
+
+  /**
+   * Platform-specific handlers the shared `@lobechat/device-control` dispatcher
+   * delegates to. Git + workspace-scan methods run inside device-control over
+   * `@lobechat/local-file-shell`; only file preview / index (and preview
+   * approval) are desktop-specific and routed back to the controllers here.
+   */
+  private get deviceControlDeps(): DeviceControlDeps {
+    return {
+      approveProjectRoot: async (root) => {
+        try {
+          await this.app.localFileProtocolManager.approveIndexedProjectRoot(root);
+        } catch (error) {
+          logger.error(`Failed to approve project preview root ${root}:`, error);
+        }
+      },
+      getLocalFilePreview: (params) => this.localFileCtr.getLocalFilePreview(params),
+      getProjectFileIndex: (params) => this.localFileCtr.getProjectFileIndex(params),
+    };
+  }
+
+  /**
+   * Dispatch a generic server-internal device RPC (not an agent tool call) by
+   * method name. The dispatch logic lives in `@lobechat/device-control` so the
+   * desktop main process and the CLI daemon share one device RPC surface.
+   */
+  private async executeDeviceRpc(method: string, params: unknown): Promise<unknown> {
+    return runDeviceRpc(method, params, this.deviceControlDeps);
   }
 
   private async executeToolCall(
@@ -459,9 +508,7 @@ export default class GatewayConnectionCtr extends ControllerModule {
       }
 
       case 'getAgentProfile': {
-        const result = await this.getAgentProfile(
-          args as { agentId?: string; platform: string },
-        );
+        const result = await this.getAgentProfile(args as { agentId?: string; platform: string });
         return { content: JSON.stringify(result), state: result, success: true };
       }
 
@@ -493,6 +540,32 @@ export default class GatewayConnectionCtr extends ControllerModule {
         );
       }
     }
+  }
+
+  /**
+   * Execute a stdio MCP tool call tunneled from the cloud server. The server
+   * can't spawn the user's local MCP binary, so it forwards the connection
+   * params (command/args/env); we run the call through the local MCP client,
+   * which spawns the stdio server on this machine.
+   */
+  private async executeMcpCall(mcpCall: {
+    apiName: string;
+    arguments: string;
+    identifier: string;
+    params: GatewayMcpStdioParams;
+  }): Promise<BuiltinServerRuntimeOutput> {
+    const { apiName, arguments: args, params: stdioParams } = mcpCall;
+
+    return this.mcpCtr.runStdioMcpTool({
+      args,
+      env: stdioParams.env,
+      params: {
+        args: stdioParams.args,
+        command: stdioParams.command,
+        name: stdioParams.name,
+      },
+      toolName: apiName,
+    });
   }
 
   private async executeMessageApi(

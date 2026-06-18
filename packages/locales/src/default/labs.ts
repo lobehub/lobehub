@@ -1,0 +1,26 @@
+export default {
+  'features.agentDocumentFloatingChatPanel.desc':
+    'Show the floating chat panel in agent document preview only when this lab feature is enabled.',
+  'features.agentDocumentFloatingChatPanel.title': 'Agent Document Floating Chat Panel',
+  'features.agentSelfIteration.desc':
+    'Allow the agent to reflect, build self-awareness, and continuously iterate through ongoing attempts and interactions.',
+  'features.agentSelfIteration.title': 'Agent Self-iteration',
+  'features.assistantMessageGroup.desc':
+    'Group agent messages and their tool call results together for display',
+  'features.assistantMessageGroup.title': 'Agent Message Grouping',
+  'features.fleet.desc':
+    'Show the Fleet entry in the title bar — a side-by-side dashboard of all running tasks across your agents.',
+  'features.fleet.title': 'Fleet View',
+  'features.imessage.desc':
+    'Connect agents to iMessage through the local LobeHub Desktop BlueBubbles bridge.',
+  'features.imessage.title': 'iMessage Channel',
+  'features.groupChat.desc': 'Enable multi-agent group chat coordination.',
+  'features.groupChat.title': 'Group Chat (Multi-Agent)',
+  'features.inputMarkdown.desc':
+    'Render Markdown in the input area in real time (bold text, code blocks, tables, etc.).',
+  'features.inputMarkdown.title': 'Input Markdown Rendering',
+  'features.platformAgent.desc':
+    'Show the "Connect Agent" entry in the create menu. Connected agents (e.g. OpenClaw, Hermes) run on your own devices and communicate back via lh connect.',
+  'features.platformAgent.title': 'Connect Agent',
+  'title': 'Labs',
+};

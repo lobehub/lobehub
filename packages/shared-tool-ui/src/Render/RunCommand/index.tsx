@@ -6,6 +6,9 @@ import { Block, Flexbox, Highlighter } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
+import { getRunCommandDisplayCommand } from '../../utils/runCommand';
+import AnsiOutput from './AnsiOutput';
+
 const styles = createStaticStyles(({ css }) => ({
   container: css`
     overflow: hidden;
@@ -23,6 +26,7 @@ interface RunCommandArgs {
 const RunCommand = memo<BuiltinRenderProps<RunCommandArgs, RunCommandState>>(
   ({ args, content, pluginState }) => {
     const output = pluginState?.output || pluginState?.stdout || content;
+    const command = getRunCommandDisplayCommand(args?.command);
 
     return (
       <Flexbox className={styles.container} gap={8}>
@@ -34,24 +38,10 @@ const RunCommand = memo<BuiltinRenderProps<RunCommandArgs, RunCommandState>>(
             style={{ maxHeight: 200, overflow: 'auto', paddingInline: 8 }}
             variant={'borderless'}
           >
-            {args?.command || ''}
+            {command}
           </Highlighter>
-          {output && (
-            <Highlighter
-              wrap
-              language={'text'}
-              showLanguage={false}
-              style={{ maxHeight: 200, overflow: 'auto', paddingInline: 8 }}
-              variant={'filled'}
-            >
-              {output}
-            </Highlighter>
-          )}
-          {pluginState?.stderr && (
-            <Highlighter wrap language={'text'} showLanguage={false} variant={'filled'}>
-              {pluginState.stderr}
-            </Highlighter>
-          )}
+          {output && <AnsiOutput text={output} />}
+          {pluginState?.stderr && <AnsiOutput text={pluginState.stderr} />}
         </Block>
       </Flexbox>
     );

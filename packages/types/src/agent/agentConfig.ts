@@ -22,11 +22,8 @@ export type RuntimePlatform = 'desktop' | 'web';
  */
 export interface RuntimeEnvConfig {
   /**
-   * Runtime environment mode per platform
-   */
-  runtimeMode?: Partial<Record<RuntimePlatform, RuntimeEnvMode>>;
-  /**
    * Working directory (desktop only)
+   * @deprecated use `agencyConfig.workingDirByDevice` instead
    */
   workingDirectory?: string;
 }

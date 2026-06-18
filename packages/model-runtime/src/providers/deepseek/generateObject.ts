@@ -5,6 +5,7 @@ import type { AnthropicGenerateObjectConfig } from '../../core/anthropicCompatib
 import { createAnthropicGenerateObject } from '../../core/anthropicCompatibleFactory/generateObject';
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import type { ChatStreamPayload, GenerateObjectOptions, GenerateObjectPayload } from '../../types';
+import { isDeepSeekV4Model } from './chatPayload';
 import { sanitizeDeepSeekJsonPayload } from './sanitizePayload';
 
 type GenerateObjectHandlePayload = NonNullable<
@@ -21,10 +22,11 @@ export const createDeepSeekAnthropicGenerateObject = async (
   options?: GenerateObjectOptions,
   pricing?: Pricing,
 ) => {
-  // DeepSeek V4 thinking mode rejects Anthropic's named schema tool choice,
-  // e.g. `{ type: "tool", name: "task_topic_handoff" }`, but accepts
-  // `{ type: "any" }`. If thinking is already disabled, keep the stricter
-  // named tool choice; otherwise use `any` without changing the thinking mode.
+  // DeepSeek's Anthropic-compatible endpoint rejects named schema tool_choice
+  // while thinking is active, but accepts `{ type: "any" }`. V4 models may
+  // default to thinking enabled server-side, so keep `any` unless the caller
+  // explicitly disabled thinking; with a single schema tool it still forces
+  // structured output.
   const thinkingDisabled = isGenerateObjectThinkingDisabled(payload);
   const requestParams: AnthropicGenerateObjectConfig['requestParams'] = {
     ...(!thinkingDisabled && payload.reasoning_effort
@@ -59,14 +61,29 @@ export const buildDeepSeekGenerateObjectPayload: GenerateObjectHandlePayload = (
   requestPayload,
 ) => {
   const { thinking } = payload;
-  const thinkingExplicitlyDisabled = thinking?.type === 'disabled';
+  const thinkingEnabled = thinking?.type === 'enabled';
   const payloadWithoutReasoningEffort = { ...requestPayload };
   delete (payloadWithoutReasoningEffort as { reasoning_effort?: unknown }).reasoning_effort;
 
+  // V4 models default to thinking enabled server-side, and thinking mode
+  // rejects the forced tool_choice used for structured output (mirrors the
+  // Anthropic-compatible endpoint behavior). Explicitly disable thinking
+  // unless the caller turned it on. deepseek-reasoner is thinking-only, so
+  // leave its thinking parameter untouched.
+  if (isDeepSeekV4Model(payload.model)) {
+    return sanitizeDeepSeekJsonPayload(
+      thinkingEnabled
+        ? { ...requestPayload, thinking: { type: 'enabled' } }
+        : { ...payloadWithoutReasoningEffort, thinking: { type: 'disabled' } },
+    );
+  }
+
+  const thinkingExplicitlyDisabled = thinking?.type === 'disabled';
+
   return sanitizeDeepSeekJsonPayload({
     ...(thinkingExplicitlyDisabled ? payloadWithoutReasoningEffort : requestPayload),
-    ...(thinking?.type === 'enabled' || thinkingExplicitlyDisabled
-      ? { thinking: { type: thinking.type } }
+    ...(thinkingEnabled || thinkingExplicitlyDisabled
+      ? { thinking: { type: thinking!.type } }
       : {}),
   });
 };

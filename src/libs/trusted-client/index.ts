@@ -6,6 +6,13 @@ export interface TrustedClientUserInfo {
   email?: string;
   name?: string;
   userId: string;
+  /**
+   * Cloud workspace id the request acts on behalf of. When set, Market treats
+   * the caller as the workspace's mirrored organization (resolved via the
+   * `workspace:<workspaceId>` clerkId convention), mirroring how `userId`
+   * identifies the personal account. Omit for personal requests.
+   */
+  workspaceId?: string;
 }
 
 export { getSessionUser } from './getSessionUser';
@@ -38,6 +45,7 @@ export const generateTrustedClientToken = (userInfo: TrustedClientUserInfo): str
       email: userInfo.email || '',
       name: userInfo.name,
       userId: userInfo.userId,
+      workspaceId: userInfo.workspaceId,
     });
 
     return createTrustedClientToken(payload, MARKET_TRUSTED_CLIENT_SECRET);

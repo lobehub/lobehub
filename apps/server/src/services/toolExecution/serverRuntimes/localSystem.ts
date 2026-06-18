@@ -1,0 +1,39 @@
+import { LocalSystemIdentifier, LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
+
+import { deviceGateway } from '@/server/services/deviceGateway';
+
+import { type ServerRuntimeRegistration } from './types';
+
+export const localSystemRuntime: ServerRuntimeRegistration = {
+  factory: (context) => {
+    if (!context.userId) {
+      throw new Error('userId is required for Local System device proxy execution');
+    }
+    if (!context.activeDeviceId) {
+      throw new Error('activeDeviceId is required for Local System device proxy execution');
+    }
+
+    const proxy: Record<string, (args: any) => Promise<any>> = {};
+
+    for (const api of LocalSystemManifest.api) {
+      proxy[api.name] = async (args: any) => {
+        return deviceGateway.executeToolCall(
+          {
+            deviceId: context.activeDeviceId!,
+            operationId: context.operationId,
+            userId: context.userId!,
+          },
+          {
+            apiName: api.name,
+            arguments: JSON.stringify(args),
+            identifier: LocalSystemIdentifier,
+          },
+          context.executionTimeoutMs,
+        );
+      };
+    }
+
+    return proxy;
+  },
+  identifier: LocalSystemIdentifier,
+};

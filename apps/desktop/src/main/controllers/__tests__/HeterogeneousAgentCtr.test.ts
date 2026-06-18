@@ -313,6 +313,53 @@ describe('HeterogeneousAgentCtr', () => {
       ]);
     });
 
+    it('does not leak host Anthropic auth env into the spawned CLI', async () => {
+      // A developer with these exported in their shell would otherwise have them
+      // forwarded to `claude`, overriding its subscription login and surfacing
+      // as a baffling "Invalid API key" / non-zero exit. Regression guard for
+      // that env-leak.
+      const original = {
+        ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+        ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
+        ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
+      };
+      process.env.ANTHROPIC_API_KEY = 'sk-host-should-not-leak';
+      process.env.ANTHROPIC_AUTH_TOKEN = 'host-token-should-not-leak';
+      process.env.ANTHROPIC_BASE_URL = 'https://host.example/should-not-leak';
+
+      try {
+        const { options } = await runSendPrompt('hello');
+
+        expect(options.env).not.toHaveProperty('ANTHROPIC_API_KEY');
+        expect(options.env).not.toHaveProperty('ANTHROPIC_AUTH_TOKEN');
+        expect(options.env).not.toHaveProperty('ANTHROPIC_BASE_URL');
+        // Unrelated inherited vars must still pass through.
+        expect(options.env.PATH).toBe(process.env.PATH);
+      } finally {
+        for (const [key, value] of Object.entries(original)) {
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        }
+      }
+    });
+
+    it('lets an agent-configured Anthropic key in session.env override the stripped host env', async () => {
+      const originalKey = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'sk-host-should-not-leak';
+
+      try {
+        const { options } = await runSendPrompt('hello', {
+          env: { ANTHROPIC_API_KEY: 'sk-agent-explicit' },
+        });
+
+        // Explicit per-agent config wins; the host value is never seen.
+        expect(options.env.ANTHROPIC_API_KEY).toBe('sk-agent-explicit');
+      } finally {
+        if (originalKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+        else process.env.ANTHROPIC_API_KEY = originalKey;
+      }
+    });
+
     it('captures the Claude Code session id from stream-json init events', async () => {
       const { ctr, sessionId } = await runSendPrompt('hello', {}, [
         `${JSON.stringify({ session_id: 'sess_cc_123', subtype: 'init', type: 'system' })}\n`,
@@ -433,6 +480,87 @@ describe('HeterogeneousAgentCtr', () => {
       expect(spawnCalls).toHaveLength(0);
     });
 
+    it('spawns through the detector-resolved absolute path when the bare command is off PATH', async () => {
+      // Codex desktop app case: `codex` is not on PATH, but the preflight
+      // detector finds the CLI bundled inside Codex.app. Spawning the bare
+      // command would ENOENT — spawn must use the resolved absolute path.
+      const resolvedPath = '/Applications/Codex.app/Contents/Resources/codex';
+      const detect = vi.fn().mockResolvedValue({ available: true, path: resolvedPath });
+      const { proc } = createFakeProc();
+      nextFakeProc = proc;
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        toolDetectorManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+      });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
+
+      expect(spawnCalls[0].command).toBe(resolvedPath);
+    });
+
+    it('carries the detector login-shell PATH into the spawn env for `env node` shims', async () => {
+      // `codex` resolved via the login-shell PATH (mise/nvm). Spawning the
+      // absolute shim under the leaner inherited PATH would fail at its
+      // `#!/usr/bin/env node` shebang — the resolved PATH must reach the child.
+      const resolvedPath = '/Users/h/.local/share/mise/shims/codex';
+      const searchPath = '/Users/h/.local/share/mise/shims:/usr/bin:/bin';
+      const detect = vi
+        .fn()
+        .mockResolvedValue({ available: true, path: resolvedPath, resolvedPathEnv: searchPath });
+      const { proc } = createFakeProc();
+      nextFakeProc = proc;
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        toolDetectorManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({ agentType: 'codex', command: 'codex' });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
+
+      expect(spawnCalls[0].command).toBe(resolvedPath);
+      expect(spawnCalls[0].options.env.PATH).toBe(searchPath);
+    });
+
+    it('keeps an explicit path-like command for spawn instead of the detector result', async () => {
+      // detectHeterogeneousCliCommand validates the custom path via --version.
+      execFileMock.mockImplementation(
+        (
+          _file: string,
+          _args: string[],
+          optionsOrCallback: unknown,
+          callback?: (error: Error | null, result: { stderr: string; stdout: string }) => void,
+        ) => {
+          const resolvedCallback =
+            typeof optionsOrCallback === 'function' ? optionsOrCallback : callback;
+          (resolvedCallback as any)?.(null, { stderr: '', stdout: 'codex-cli 0.99.0' });
+        },
+      );
+
+      const detect = vi.fn();
+      const { proc } = createFakeProc();
+      nextFakeProc = proc;
+
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+        toolDetectorManager: { detect },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: '/custom/bin/codex',
+      });
+      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
+
+      expect(detect).not.toHaveBeenCalled();
+      expect(spawnCalls[0].command).toBe('/custom/bin/codex');
+    });
+
     it('passes prompt via stdin to codex exec instead of argv', async () => {
       const prompt = '--run a shell-like prompt safely';
       const { cliArgs, command, writes } = await runSendPrompt(prompt);
@@ -440,8 +568,14 @@ describe('HeterogeneousAgentCtr', () => {
       expect(command).toBe('codex');
       expect(cliArgs).not.toContain(prompt);
       expect(cliArgs).toEqual(
-        expect.arrayContaining(['exec', '--json', '--skip-git-repo-check', '--full-auto']),
+        expect.arrayContaining([
+          'exec',
+          '--json',
+          '--skip-git-repo-check',
+          '--dangerously-bypass-approvals-and-sandbox',
+        ]),
       );
+      expect(cliArgs).not.toContain('--full-auto');
       expect(cliArgs).not.toContain('-');
       expect(writes).toEqual([prompt]);
     });

@@ -1,8 +1,10 @@
 import { useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { SESSION_CHAT_TOPIC_URL, SESSION_CHAT_URL } from '@/const/url';
 import { useFocusTopicPopup } from '@/features/TopicPopupGuard/useTopicPopupsRegistry';
+import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { usePathname } from '@/libs/router/navigation';
 import { useChatStore } from '@/store/chat';
@@ -23,6 +25,7 @@ export const useTopicNavigation = () => {
   const router = useQueryRoute();
   const toggleConfig = useGlobalStore((s) => s.toggleMobileTopic);
   const switchTopic = useChatStore((s) => s.switchTopic);
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const routeAgentId = params.aid ?? activeAgentId;
   // URL is the source of truth. Sidebar mounts at `/agent/:aid` so `params.topicId`
   // is undefined here — fall back to parsing pathname directly so consumers can compare
@@ -30,11 +33,19 @@ export const useTopicNavigation = () => {
   const urlTopicId = params.topicId;
   const routeTopicId = params.topicId ?? activeTopicId ?? undefined;
   const topicBasePath =
-    routeAgentId && routeTopicId ? SESSION_CHAT_TOPIC_URL(routeAgentId, routeTopicId) : undefined;
+    routeAgentId && routeTopicId
+      ? buildWorkspaceAwarePath(
+          SESSION_CHAT_TOPIC_URL(routeAgentId, routeTopicId),
+          activeWorkspaceSlug,
+        )
+      : undefined;
 
   const urlTopicBasePath =
     routeAgentId && params.topicId
-      ? SESSION_CHAT_TOPIC_URL(routeAgentId, params.topicId)
+      ? buildWorkspaceAwarePath(
+          SESSION_CHAT_TOPIC_URL(routeAgentId, params.topicId),
+          activeWorkspaceSlug,
+        )
       : undefined;
   const focusTopicPopup = useFocusTopicPopup({ agentId: activeAgentId });
 
@@ -50,7 +61,9 @@ export const useTopicNavigation = () => {
 
   const isInAgentSubRoute = useCallback(() => {
     if (!routeAgentId) return false;
-    const agentBasePath = urlTopicBasePath ?? SESSION_CHAT_URL(routeAgentId);
+    const agentBasePath =
+      urlTopicBasePath ??
+      buildWorkspaceAwarePath(SESSION_CHAT_URL(routeAgentId), activeWorkspaceSlug);
 
     // If pathname has more segments after /agent/:aid (or the active topic), it's a sub-route
     return (
@@ -58,7 +71,7 @@ export const useTopicNavigation = () => {
       pathname !== agentBasePath &&
       pathname !== `${agentBasePath}/`
     );
-  }, [pathname, routeAgentId, urlTopicBasePath]);
+  }, [activeWorkspaceSlug, pathname, routeAgentId, urlTopicBasePath]);
 
   const navigateToTopic = useCallback(
     async (topicId?: string, options?: NavigateToTopicOptions) => {

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { readFile } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type {
@@ -59,6 +60,12 @@ interface ExecOptions {
   inputJson?: string;
   operationId?: string;
   prompt?: string;
+  /**
+   * When set, persist the agent process's RAW stdout/stderr (pre-adapter
+   * stream-json) under `<rawDump>/<timestamp>-<operationId>/` for debugging.
+   * Independent of `--render` and the server ingest path.
+   */
+  rawDump?: string;
   /**
    * Output rendering mode.
    *   jsonl — emit each `AgentStreamEvent` as a JSONL line on stdout (default
@@ -217,10 +224,25 @@ class SerialServerIngester {
   push(event: AgentStreamEvent): void {
     if (this.fatalError) return;
 
+    // Text-snapshot coalescing is a MAIN-AGENT-ONLY transport optimization:
+    // it debounces the main agent's token-level text *deltas* into one
+    // `replace` snapshot to cut ingest calls. Subagent text is explicitly
+    // excluded (`!event.data?.subagent`) for two reasons:
+    //   1. Subagent text is emitted as ONE full block per turn (see
+    //      claudeCode adapter `handleSubagentAssistant` — "the full block IS
+    //      the only emission"), so there is nothing to coalesce.
+    //   2. `accumulatedText` is a single shared accumulator with no subagent
+    //      scope. Folding subagent blocks in would (a) splice main-agent text
+    //      into the subagent message via the shared buffer, and (b) emit a
+    //      `replace` snapshot that the server's subagent path *appends*
+    //      (`persistSubagentText` has no snapshot semantics) → duplicated /
+    //      cross-scope content. Forwarding the raw block straight through lets
+    //      the server append it exactly once, correctly.
     if (
       event.type === 'stream_chunk' &&
       event.data?.chunkType === 'text' &&
-      typeof event.data?.content === 'string'
+      typeof event.data?.content === 'string' &&
+      !event.data?.subagent
     ) {
       this.accumulatedText += event.data.content;
       this.pendingTextEvent = event;
@@ -233,6 +255,17 @@ class SerialServerIngester {
     }
 
     this.queuePendingTextSnapshot();
+    // `accumulatedText` is a PER-MESSAGE accumulator: it coalesces the text
+    // deltas of the current assistant message into one `replace` snapshot.
+    // A new message boundary (`stream_start` / `stream_end`, emitted by the
+    // adapter's `openMainMessage`) must reset it — otherwise it spans the
+    // whole run and every later message's snapshot re-emits all prior
+    // messages' text verbatim, which the server then persists into the new
+    // DB message: cross-message text duplication. Reset
+    // AFTER flushing the just-ended message's pending snapshot above.
+    if (event.type === 'stream_start' || event.type === 'stream_end') {
+      this.accumulatedText = '';
+    }
     this.enqueue(async () => {
       await this.sink.ingest([event]);
     });
@@ -280,6 +313,77 @@ class SerialServerIngester {
   }
 }
 
+interface RawStreamDumpAttempt {
+  /** Flush + close both file streams. Resolves once the bytes are on disk. */
+  close: () => Promise<void>;
+  writeStderr: (chunk: Buffer) => void;
+  writeStdout: (chunk: Buffer) => void;
+}
+
+/**
+ * Persists the agent process's RAW stdout/stderr — the untouched stream-json,
+ * BEFORE the adapter — to disk for post-hoc debugging. The adapted/ingested
+ * view can't tell a CC-side empty `tool_result` apart from an adapter
+ * extraction bug; the raw dump can.
+ *
+ * Enabled via `lh hetero exec --raw-dump <dir>`. Each exec gets its own
+ * `<dir>/<timestamp>-<operationId>/` session folder; each spawn attempt (the
+ * resume retry is a second attempt) writes `<label>.stdout.jsonl` /
+ * `<label>.stderr.log`. Fully best-effort: any dump failure is logged and
+ * swallowed so it never affects the run or its exit code.
+ *
+ * Future: the server-side sandbox runner (`spawnHeteroSandbox`) and the
+ * desktop device path (`spawnLhHeteroExec`) can pass `--raw-dump` pointing at
+ * a collectable location to capture remote runs the same way.
+ */
+class RawStreamDump {
+  private constructor(private readonly dir: string) {}
+
+  static async create(
+    root: string,
+    operationId: string,
+    meta: Record<string, unknown>,
+  ): Promise<RawStreamDump | undefined> {
+    try {
+      const safeTs = new Date().toISOString().replaceAll(/[.:]/g, '-');
+      const dir = path.join(path.resolve(root), `${safeTs}-${operationId}`);
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        path.join(dir, 'meta.json'),
+        `${JSON.stringify({ ...meta, operationId, startedAt: new Date().toISOString() }, null, 2)}\n`,
+      );
+      log.info(`Raw stream dump enabled → ${dir}`);
+      return new RawStreamDump(dir);
+    } catch (err) {
+      log.warn(
+        `Failed to initialize raw stream dump: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return undefined;
+    }
+  }
+
+  openAttempt(label: string): RawStreamDumpAttempt {
+    const stdout = createWriteStream(path.join(this.dir, `${label}.stdout.jsonl`));
+    const stderr = createWriteStream(path.join(this.dir, `${label}.stderr.log`));
+    // A failed dump write must never crash the run — drop write errors.
+    stdout.on('error', () => {});
+    stderr.on('error', () => {});
+    return {
+      close: () =>
+        Promise.all([
+          new Promise<void>((resolve) => stdout.end(() => resolve())),
+          new Promise<void>((resolve) => stderr.end(() => resolve())),
+        ]).then(() => undefined),
+      writeStderr: (chunk: Buffer) => {
+        stderr.write(chunk);
+      },
+      writeStdout: (chunk: Buffer) => {
+        stdout.write(chunk);
+      },
+    };
+  }
+}
+
 const exec = async (options: ExecOptions): Promise<void> => {
   if (!SUPPORTED_AGENT_TYPES.has(options.type)) {
     log.error(
@@ -313,6 +417,17 @@ const exec = async (options: ExecOptions): Promise<void> => {
   }
 
   const operationId = options.operationId || randomUUID();
+
+  // Optional raw stream dump (pre-adapter stdout/stderr) for debugging.
+  let rawDump: RawStreamDump | undefined;
+  if (options.rawDump) {
+    rawDump = await RawStreamDump.create(options.rawDump, operationId, {
+      agentType: options.type,
+      cwd: options.cwd || process.cwd(),
+      resume: options.resume ?? null,
+      topicId: options.topic ?? null,
+    });
+  }
 
   // Determine JSONL output mode.
   // Explicit --render flag always wins. Otherwise: emit JSONL in standalone
@@ -352,25 +467,38 @@ const exec = async (options: ExecOptions): Promise<void> => {
    *   sessionId     — CC session id from `system.init` (undefined on resume failure)
    *   ingestError   — true when a batch could not be flushed after retries
    *   resumeNotFound — true when a resume-not-found error was intercepted
+   *   sawTerminalError — true when a terminal `error` event was pushed to the
+   *                      ingester (CC can relay an API/rate-limit error this way
+   *                      and still exit 0, so the exit code alone is not enough)
+   *   terminalErrorMessage — the message from that terminal `error` event, used
+   *                      as the task-level error detail in the finish payload
    *   stderrContent  — accumulated stderr (only when interceptResumeErrors=true)
    */
   const runOneAgent = async (
     spawnOpts: Parameters<typeof spawnAgent>[0],
     interceptResumeErrors: boolean,
+    runLabel: string,
   ): Promise<{
     code: number | null;
     ingestError: boolean;
     resumeNotFound: boolean;
+    sawTerminalError: boolean;
     sessionId: string | undefined;
     signal: NodeJS.Signals | null;
     stderrContent: string;
+    terminalErrorMessage: string | undefined;
   }> => {
+    // One raw-dump file pair per spawn attempt (the resume retry is a second
+    // attempt). The stdout tee runs inside `spawnAgent` before the adapter.
+    const dumpAttempt = rawDump?.openAttempt(runLabel);
+
     // `spawnAgent` is async and can reject DURING image normalization — fetch
     // failures, missing local --image paths, decode errors.
     let handle: Awaited<ReturnType<typeof spawnAgent>>;
     try {
-      handle = await spawnAgent(spawnOpts);
+      handle = await spawnAgent({ ...spawnOpts, onRawStdout: dumpAttempt?.writeStdout });
     } catch (err) {
+      await dumpAttempt?.close();
       log.error('Failed to start agent:', err instanceof Error ? err.message : String(err));
       process.exit(1);
     }
@@ -387,6 +515,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       if (stderrContent.length < STDERR_CAP) {
         stderrContent += chunk.toString();
       }
+      dumpAttempt?.writeStderr(chunk);
     });
     handle.stderr.pipe(process.stderr);
 
@@ -427,6 +556,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // into the ingester.  When intercepting resume errors, a matching
     // `error` event is withheld from the ingester and flags a retry instead.
     let resumeNotFound = false;
+    let sawTerminalError = false;
+    let terminalErrorMessage: string | undefined;
     const ingestError = false;
     try {
       for await (const event of handle.events) {
@@ -440,6 +571,16 @@ const exec = async (options: ExecOptions): Promise<void> => {
             if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
             continue;
           }
+        }
+        // A terminal `error` event (e.g. an API/rate-limit error relayed by CC)
+        // must mark the run as failed even when the child exits 0 — track it so
+        // the finish result is not derived from the exit code alone. Capture the
+        // message too, so the finish payload can surface it as the task-level
+        // error detail (CC relays these on stdout, not stderr).
+        if (event.type === 'error') {
+          sawTerminalError = true;
+          const data = event.data as Record<string, unknown> | undefined;
+          terminalErrorMessage = String(data?.message ?? data?.error ?? '') || undefined;
         }
         if (emitJsonl) process.stdout.write(`${JSON.stringify(event)}\n`);
         serverIngester?.push(event);
@@ -460,6 +601,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
           // best-effort
         }
       }
+      await dumpAttempt?.close();
       process.exit(1);
     } finally {
       process.off('SIGINT', onSigint);
@@ -468,6 +610,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
 
     const { code, signal } = await handle.exit;
     await stderrEnded;
+    await dumpAttempt?.close();
 
     // Fallback stderr detection: CC may exit non-zero without emitting a
     // result event (e.g. it writes to stderr and quits immediately).
@@ -484,9 +627,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
       code,
       ingestError,
       resumeNotFound,
+      sawTerminalError,
       sessionId: handle.sessionId,
       signal,
       stderrContent,
+      terminalErrorMessage,
     };
   };
 
@@ -503,6 +648,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       resumeSessionId: options.resume,
     },
     interceptResume,
+    'attempt-1',
   );
 
   // ─── Auto-retry without --resume when the session cannot be used ─────────
@@ -531,6 +677,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         // No resumeSessionId — start fresh
       },
       false, // no need to intercept resume errors on a fresh run
+      'attempt-2-noresume',
     );
   }
 
@@ -549,16 +696,23 @@ const exec = async (options: ExecOptions): Promise<void> => {
       result = { ...result, ingestError: true };
     }
 
-    const exitedClean = !result.ingestError && (code === 0 || signal === 'SIGTERM');
+    // CC relays API/rate-limit errors as an in-stream terminal `error` event but
+    // still exits 0, so the exit code alone would report `success`. Treat any
+    // pushed terminal error as a failed run so the topic/task is marked failed.
+    const exitedClean =
+      !result.ingestError && !result.sawTerminalError && (code === 0 || signal === 'SIGTERM');
 
-    // When the run failed, pass stderr as the error detail so the server can
-    // surface a useful message instead of the generic "Agent execution failed"
-    // fallback.  Trim to the last 1 KB — the tail is most informative and
-    // keeps the tRPC payload small.
+    // When the run failed, pass an error detail so the server surfaces a useful
+    // message instead of the generic "Agent execution failed" fallback. Prefer
+    // the in-stream terminal error (CC relays API/rate-limit errors here while
+    // exiting 0, so stderr is empty); otherwise fall back to the stderr tail.
+    // Trim to the last 1 KB — the tail is most informative and keeps the tRPC
+    // payload small.
     const stderrTail = result.stderrContent.trim();
+    const errorDetail = result.terminalErrorMessage || stderrTail;
     const finishError =
-      !exitedClean && stderrTail
-        ? { message: stderrTail.slice(-1024), type: 'AgentRuntimeError' }
+      !exitedClean && errorDetail
+        ? { message: errorDetail.slice(-1024), type: 'AgentRuntimeError' }
         : undefined;
 
     try {
@@ -617,6 +771,10 @@ export function registerHeteroCommand(program: Command) {
     .option(
       '--render <mode>',
       'Output mode: jsonl (emit events as JSONL on stdout) | none (suppress stdout). Defaults to jsonl in standalone, none in server-ingest mode.',
+    )
+    .option(
+      '--raw-dump <dir>',
+      'Persist the agent process RAW stdout/stderr (pre-adapter stream-json) under <dir>/<timestamp>-<operationId>/ for debugging. Each spawn attempt writes its own .stdout.jsonl / .stderr.log. Best-effort; never affects the run.',
     )
     .action(exec);
 }

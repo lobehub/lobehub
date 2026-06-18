@@ -4,6 +4,7 @@ import { createStaticStyles } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { type AiProviderListItem } from '@/types/aiProvider';
 
@@ -29,6 +30,7 @@ interface ConfigGroupModalProps {
 }
 const ConfigGroupModal = memo<ConfigGroupModalProps>(({ open, onCancel, defaultItems }) => {
   const { t } = useTranslation('modelProvider');
+  const { allowed: canManageProvider } = usePermission('manage_provider_key');
   const updateAiProviderSort = useAiInfraStore((s) => s.updateAiProviderSort);
   const [loading, setLoading] = useState(false);
   const { message } = App.useApp();
@@ -55,19 +57,24 @@ const ConfigGroupModal = memo<ConfigGroupModalProps>(({ open, onCancel, defaultI
               id={item.id}
               justify={'space-between'}
             >
-              <GroupItem {...item} />
+              <GroupItem {...item} disabled={!canManageProvider} />
             </SortableList.Item>
           )}
           onChange={async (items: AiProviderListItem[]) => {
+            if (!canManageProvider) return;
+
             setItems(items);
           }}
         />
         <Button
           block
+          disabled={!canManageProvider}
           loading={loading}
           style={{ bottom: 0, position: 'sticky' }}
           type={'primary'}
           onClick={async () => {
+            if (!canManageProvider) return;
+
             const sortMap = items.map((item, index) => ({
               id: item.id,
               sort: index,

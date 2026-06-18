@@ -5,6 +5,12 @@ export interface AgentSignalScope {
   taskId?: string;
   topicId?: string;
   userId: string;
+  /**
+   * Workspace identifier when the chain runs inside a team workspace. Omitted
+   * for personal-mode chains. Action handlers that write workspace-scoped
+   * tables (messages, memories) must honor this when present.
+   */
+  workspaceId?: string;
 }
 
 /** Causal chain metadata for source, signal, and action nodes. */

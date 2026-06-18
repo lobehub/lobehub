@@ -1,11 +1,11 @@
-import type { TaskTemplateSkillRequirement } from '@lobechat/const';
-import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
+import type { TaskTemplateConnectorReference } from '@lobechat/const';
+import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { LOBEHUB_SKILL_AUTH_SUCCESS_MESSAGE } from '@/const/skillConnection';
 import { useToolStore } from '@/store/tool';
-import { klavisStoreSelectors } from '@/store/tool/slices/klavisStore/selectors';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore/types';
+import { composioStoreSelectors } from '@/store/tool/slices/composioStore/selectors';
+import { ComposioServerStatus } from '@/store/tool/slices/composioStore/types';
 import { lobehubSkillStoreSelectors } from '@/store/tool/slices/lobehubSkillStore/selectors';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 import { useUserStore } from '@/store/user';
@@ -33,7 +33,7 @@ export class SkillConnectionPopupBlockedError extends Error {
   }
 }
 
-type ConnectTarget = Pick<SkillProviderMeta, 'provider' | 'source'>;
+type ConnectTarget = Pick<SkillProviderMeta, 'identifier' | 'source'>;
 
 export interface UseSkillConnectionResult {
   connect: () => Promise<void>;
@@ -51,30 +51,30 @@ export interface UseSkillConnectionResult {
  */
 export const useIsSkillConnected = () => {
   const lobehubServers = useToolStore(lobehubSkillStoreSelectors.getServers);
-  const klavisServers = useToolStore(klavisStoreSelectors.getServers);
+  const composioServers = useToolStore(composioStoreSelectors.getServers);
 
   return useCallback(
-    (spec: TaskTemplateSkillRequirement): boolean => {
+    (spec: TaskTemplateConnectorReference): boolean => {
       if (spec.source === 'lobehub') {
         return lobehubServers.some(
-          (s) => s.identifier === spec.provider && s.status === LobehubSkillStatus.CONNECTED,
+          (s) => s.identifier === spec.identifier && s.status === LobehubSkillStatus.CONNECTED,
         );
       }
-      return klavisServers.some(
-        (s) => s.identifier === spec.provider && s.status === KlavisServerStatus.CONNECTED,
+      return composioServers.some(
+        (s) => s.identifier === spec.identifier && s.status === ComposioServerStatus.ACTIVE,
       );
     },
-    [lobehubServers, klavisServers],
+    [lobehubServers, composioServers],
   );
 };
 
 export const useSkillConnection = (
-  specs: TaskTemplateSkillRequirement[] | undefined,
+  specs: TaskTemplateConnectorReference[] | undefined,
 ): UseSkillConnectionResult => {
   const getLobehubAuth = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
   const checkLobehubStatus = useToolStore((s) => s.checkLobehubSkillStatus);
-  const createKlavisServer = useToolStore((s) => s.createKlavisServer);
-  const refreshKlavisServerTools = useToolStore((s) => s.refreshKlavisServerTools);
+  const createComposioConnection = useToolStore((s) => s.createComposioConnection);
+  const refreshComposioConnectionStatus = useToolStore((s) => s.refreshComposioConnectionStatus);
 
   const isConnectedFor = useIsSkillConnected();
 
@@ -132,9 +132,9 @@ export const useSkillConnection = (
       pollIntervalRef.current = setInterval(async () => {
         try {
           if (target.source === 'lobehub') {
-            await checkLobehubStatus(target.provider);
+            await checkLobehubStatus(target.identifier);
           } else {
-            await refreshKlavisServerTools(target.provider);
+            await refreshComposioConnectionStatus(target.identifier);
           }
         } catch {
           // Polling failure is expected until auth completes — suppress noise.
@@ -149,7 +149,7 @@ export const useSkillConnection = (
         setIsWaitingAuth(false);
       }, POLL_TIMEOUT_MS);
     },
-    [checkLobehubStatus, refreshKlavisServerTools],
+    [checkLobehubStatus, refreshComposioConnectionStatus],
   );
 
   const startWindowMonitor = useCallback(
@@ -175,9 +175,9 @@ export const useSkillConnection = (
           // to 15s for fallback polling to release isWaitingAuth.
           try {
             if (target.source === 'lobehub') {
-              await checkLobehubStatus(target.provider);
+              await checkLobehubStatus(target.identifier);
             } else {
-              await refreshKlavisServerTools(target.provider);
+              await refreshComposioConnectionStatus(target.identifier);
             }
           } catch {
             // Status check failure isn't actionable; release waiting state regardless.
@@ -203,7 +203,7 @@ export const useSkillConnection = (
         setIsWaitingAuth(false);
       }, OAUTH_OVERALL_TIMEOUT_MS);
     },
-    [checkLobehubStatus, refreshKlavisServerTools, startFallbackPolling],
+    [checkLobehubStatus, refreshComposioConnectionStatus, startFallbackPolling],
   );
 
   const openOAuthWindow = useCallback(
@@ -224,7 +224,7 @@ export const useSkillConnection = (
     [cleanup, startWindowMonitor],
   );
 
-  // Only LobeHub Skill OAuth signals completion via postMessage; Klavis relies on polling.
+  // Only LobeHub Skill OAuth signals completion via postMessage; Composio relies on polling.
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
@@ -251,29 +251,29 @@ export const useSkillConnection = (
       if (next.source === 'lobehub') {
         // Skip redirectUri on desktop (app:// protocol) since the system browser can't navigate to it
         const redirectUri = window.location.protocol.startsWith('http')
-          ? `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(next.provider)}`
+          ? `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(next.identifier)}`
           : undefined;
-        const { authorizeUrl } = await getLobehubAuth(next.provider, { redirectUri });
+        const { authorizeUrl } = await getLobehubAuth(next.identifier, { redirectUri });
         openOAuthWindow(authorizeUrl, next);
         return;
       }
 
       const userId = useUserStore.getState().user?.id;
       if (!userId) throw new Error('Sign-in required');
-      const klavisType = KLAVIS_SERVER_TYPES.find((t) => t.identifier === next.provider);
-      if (!klavisType) throw new Error(`Unknown Klavis provider: ${next.provider}`);
-      const newServer = await createKlavisServer({
-        identifier: next.provider,
-        serverName: klavisType.serverName,
-        userId,
+      const composioType = COMPOSIO_APP_TYPES.find((t) => t.identifier === next.identifier);
+      if (!composioType) throw new Error(`Unknown Composio connector: ${next.identifier}`);
+      const newServer = await createComposioConnection({
+        appSlug: composioType.appSlug,
+        identifier: next.identifier,
+        label: composioType.label,
       });
-      if (!newServer) throw new Error('Failed to create Klavis server');
-      if (newServer.isAuthenticated) {
-        await refreshKlavisServerTools(newServer.identifier);
-      } else if (newServer.oauthUrl) {
-        openOAuthWindow(newServer.oauthUrl, next);
+      if (!newServer) throw new Error('Failed to create Composio server');
+      if (newServer.status === ComposioServerStatus.ACTIVE) {
+        await refreshComposioConnectionStatus(newServer.identifier);
+      } else if (newServer.redirectUrl) {
+        openOAuthWindow(newServer.redirectUrl, next);
       } else {
-        throw new Error('Klavis server is missing an OAuth URL');
+        throw new Error('Composio server is missing an OAuth URL');
       }
     } catch (error) {
       console.error('[useSkillConnection] Failed to connect:', error);
@@ -286,8 +286,8 @@ export const useSkillConnection = (
     nextUnconnected,
     isWaitingAuth,
     getLobehubAuth,
-    createKlavisServer,
-    refreshKlavisServerTools,
+    createComposioConnection,
+    refreshComposioConnectionStatus,
     openOAuthWindow,
   ]);
 

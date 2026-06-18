@@ -56,7 +56,6 @@ export const HotkeyEnum = {
   SwitchAgent: 'switchAgent',
   ToggleLeftPanel: 'toggleLeftPanel',
   ToggleRightPanel: 'toggleRightPanel',
-  ToggleZenMode: 'toggleZenMode',
 } as const satisfies Record<string, HotkeyId>;
 
 export const HotkeyGroupEnum = {
@@ -118,12 +117,6 @@ export const HOTKEYS_REGISTRATION: HotkeyRegistration = [
     scopes: [HotkeyScopeEnum.Global],
   },
   // Chat
-  {
-    group: HotkeyGroupEnum.Essential,
-    id: HotkeyEnum.ToggleZenMode,
-    keys: combineKeys([KeyEnum.Mod, KeyEnum.Backslash]),
-    scopes: [HotkeyScopeEnum.Chat],
-  },
   {
     group: HotkeyGroupEnum.Conversation,
     id: HotkeyEnum.OpenChatSettings,

@@ -232,7 +232,7 @@ describe('groupTopicsByStatus', () => {
     expect(groupTopicsByStatus([], 'updatedAt')).toEqual([]);
   });
 
-  it('should order groups by fixed priority: waitingForHuman, running, then active', () => {
+  it('should order groups by fixed priority: pending, running, then active', () => {
     const topics = [
       createTopic('a', 'active'),
       createTopic('r', 'running'),
@@ -241,7 +241,30 @@ describe('groupTopicsByStatus', () => {
 
     const result = groupTopicsByStatus(topics, 'updatedAt');
 
-    expect(result.map((g) => g.id)).toEqual(['waitingForHuman', 'running', 'active']);
+    expect(result.map((g) => g.id)).toEqual(['pending', 'running', 'active']);
+  });
+
+  it('should collapse waitingForHuman and failed into the pending bucket', () => {
+    const topics = [
+      createTopic('w', 'waitingForHuman', 2),
+      createTopic('f', 'failed', 1),
+      createTopic('a', 'active'),
+    ];
+
+    const result = groupTopicsByStatus(topics, 'updatedAt');
+
+    expect(result.map((g) => g.id)).toEqual(['pending', 'active']);
+    expect(result[0].children.map((t) => t.id)).toEqual(['w', 'f']);
+  });
+
+  it('should bucket an unread completion as pending while read completions stay completed', () => {
+    const topics = [createTopic('unread', 'completed'), createTopic('read', 'completed')];
+
+    const result = groupTopicsByStatus(topics, 'updatedAt', undefined, new Set(['unread']));
+
+    expect(result.map((g) => g.id)).toEqual(['pending', 'completed']);
+    expect(result[0].children.map((t) => t.id)).toEqual(['unread']);
+    expect(result[1].children.map((t) => t.id)).toEqual(['read']);
   });
 
   it('should bucket topics without a status as active', () => {
@@ -263,7 +286,7 @@ describe('groupTopicsByStatus', () => {
 
     const result = groupTopicsByStatus(topics, 'updatedAt');
 
-    expect(result.map((g) => g.id)).toEqual(['waitingForHuman', 'paused', 'completed']);
+    expect(result.map((g) => g.id)).toEqual(['pending', 'paused', 'completed']);
   });
 
   it('should sort topics inside a group by the chosen field desc', () => {
@@ -288,11 +311,11 @@ describe('groupTopicsByStatus', () => {
     expect(result[1].children.map((t) => t.id)).toEqual(['idle']);
   });
 
-  it('should keep a loading topic in waitingForHuman (it outranks the running overlay)', () => {
+  it('should keep a loading topic in pending (it outranks the running overlay)', () => {
     const topics = [createTopic('waiting', 'waitingForHuman')];
 
     const result = groupTopicsByStatus(topics, 'updatedAt', new Set(['waiting']));
 
-    expect(result.map((g) => g.id)).toEqual(['waitingForHuman']);
+    expect(result.map((g) => g.id)).toEqual(['pending']);
   });
 });

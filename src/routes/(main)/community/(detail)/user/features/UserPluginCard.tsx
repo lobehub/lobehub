@@ -4,9 +4,10 @@ import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { type DiscoverPluginItem } from '@/types/discover';
 
 const styles = createStaticStyles(({ css, cssVar }) => {
@@ -45,7 +46,7 @@ type UserPluginCardProps = DiscoverPluginItem;
 const UserPluginCard = memo<UserPluginCardProps>(
   ({ title, avatar, author, description, identifier, category }) => {
     const { t } = useTranslation('discover');
-    const navigate = useNavigate();
+    const navigate = useWorkspaceAwareNavigate();
     const link = urlJoin('/community/plugin', identifier);
 
     const handleClick = useCallback(() => {
@@ -98,11 +99,11 @@ const UserPluginCard = memo<UserPluginCardProps>(
                   overflow: 'hidden',
                 }}
               >
-                <Link style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
+                <WorkspaceLink style={{ color: 'inherit', overflow: 'hidden' }} to={link}>
                   <Text ellipsis as={'h2'} className={styles.title}>
                     {title}
                   </Text>
-                </Link>
+                </WorkspaceLink>
               </Flexbox>
               <Flexbox horizontal align={'center'} className={styles.author} gap={8}>
                 {author && <div>{author}</div>}

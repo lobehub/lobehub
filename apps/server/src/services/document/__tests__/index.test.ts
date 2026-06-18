@@ -1,0 +1,1509 @@
+import { type LobeChatDatabase } from '@lobechat/database';
+import { TRPCError } from '@trpc/server';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { DocumentModel } from '@/database/models/document';
+import { FileModel } from '@/database/models/file';
+
+import { EditLockService } from '../../editLock';
+import { FileService } from '../../file';
+import { publishResourceEvent } from '../../resourceEvents';
+import { DocumentHistoryService } from '../history';
+import { DocumentService } from '../index';
+
+vi.mock('@/server/modules/AgentRuntime/redis', () => ({ getAgentRuntimeRedisClient: () => null }));
+vi.mock('@/database/models/document');
+vi.mock('@/database/models/file');
+vi.mock('../../file');
+vi.mock('../history');
+// Spy on the realtime broadcast so we can assert lock.changed is published only
+// on a genuine state change (holder edge / actual release).
+vi.mock('../../resourceEvents', () => ({ publishResourceEvent: vi.fn() }));
+
+const publishResourceEventMock = vi.mocked(publishResourceEvent);
+vi.mock('@lobechat/file-loaders', () => ({
+  loadFile: vi.fn(),
+  UnsupportedFileTypeError: class UnsupportedFileTypeError extends Error {
+    fileType: string;
+
+    constructor(fileType: string, filename: string) {
+      super(`Unsupported file type '${fileType || 'unknown'}' for file '${filename}'.`);
+      this.name = 'UnsupportedFileTypeError';
+      this.fileType = fileType;
+    }
+  },
+}));
+vi.mock('debug', () => ({
+  default: () => vi.fn(),
+}));
+
+const { loadFile, UnsupportedFileTypeError } = await import('@lobechat/file-loaders');
+
+const createEditorDataWithDiffNode = () => ({
+  root: {
+    children: [
+      {
+        children: [
+          { children: [{ text: 'origin', type: 'text' }], type: 'paragraph' },
+          { children: [{ text: 'modified', type: 'text' }], type: 'paragraph' },
+        ],
+        diffType: 'modify',
+        type: 'diff',
+      },
+      {
+        children: [{ children: [{ text: 'added', type: 'text' }], type: 'paragraph' }],
+        diffType: 'add',
+        type: 'diff',
+      },
+      {
+        children: [{ children: [{ text: 'removed', type: 'text' }], type: 'paragraph' }],
+        diffType: 'remove',
+        type: 'diff',
+      },
+    ],
+    type: 'root',
+  },
+});
+
+const normalizedEditorDataFromDiffNode = {
+  root: {
+    children: [
+      { children: [{ text: 'origin', type: 'text' }], type: 'paragraph' },
+      { children: [{ text: 'removed', type: 'text' }], type: 'paragraph' },
+    ],
+    type: 'root',
+  },
+};
+
+describe('DocumentService', () => {
+  let service: DocumentService;
+  let mockDb: LobeChatDatabase;
+  let mockDocumentModel: any;
+  let mockDocumentHistoryService: any;
+  let mockFileModel: any;
+  let mockFileService: any;
+  const userId = 'test-user-id';
+
+  beforeEach(() => {
+    mockDb = {
+      query: {
+        documents: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+        files: {
+          findMany: vi.fn().mockResolvedValue([]),
+        },
+      },
+      transaction: vi.fn(async (callback: (tx: LobeChatDatabase) => Promise<unknown>) =>
+        callback(mockDb),
+      ),
+    } as any;
+
+    mockDocumentModel = {
+      create: vi.fn(),
+      delete: vi.fn(),
+      findByFileId: vi.fn().mockResolvedValue(null),
+      findById: vi.fn(),
+      query: vi.fn(),
+      update: vi.fn(),
+    };
+
+    mockDocumentHistoryService = {
+      compareDocumentHistoryItems: vi.fn(),
+      createHistory: vi.fn(),
+      getDocumentHistoryItem: vi.fn(),
+      listDocumentHistory: vi.fn(),
+    };
+
+    mockFileModel = {
+      create: vi.fn(),
+      delete: vi.fn(),
+      findById: vi.fn(),
+      update: vi.fn(),
+    };
+
+    mockFileService = {
+      deleteFile: vi.fn(),
+      downloadFileToLocal: vi.fn(),
+    };
+
+    vi.mocked(DocumentModel).mockImplementation(() => mockDocumentModel);
+    vi.mocked(DocumentHistoryService).mockImplementation(() => mockDocumentHistoryService);
+    vi.mocked(FileModel).mockImplementation(() => mockFileModel);
+    vi.mocked(FileService).mockImplementation(() => mockFileService);
+
+    service = new DocumentService(mockDb, userId);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('constructor', () => {
+    it('should not initialize FileService before file parsing is needed', () => {
+      expect(FileService).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createDocument', () => {
+    it('should create a document without knowledgeBase', async () => {
+      const mockDoc = { id: 'doc-1', title: 'Test Doc' };
+      mockDocumentModel.create.mockResolvedValue(mockDoc);
+
+      const result = await service.createDocument({
+        title: 'Test Doc',
+        editorData: { blocks: [] },
+        content: 'Hello world',
+      });
+
+      expect(result).toEqual(mockDoc);
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Test Doc',
+          filename: 'Test Doc',
+          content: 'Hello world',
+          totalCharCount: 'Hello world'.length,
+          totalLineCount: 1,
+          fileId: null,
+          source: 'document',
+          sourceType: 'api',
+        }),
+      );
+      // Should not create a file record when no knowledgeBaseId
+      expect(mockFileModel.create).not.toHaveBeenCalled();
+    });
+
+    it('should calculate character and line counts correctly', async () => {
+      const content = 'line1\nline2\nline3';
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
+
+      await service.createDocument({
+        title: 'Test',
+        editorData: {},
+        content,
+      });
+
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          totalCharCount: content.length,
+          totalLineCount: 3,
+        }),
+      );
+    });
+
+    it('should handle empty content with 0 counts', async () => {
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
+
+      await service.createDocument({
+        title: 'Test',
+        editorData: {},
+      });
+
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          totalCharCount: 0,
+          totalLineCount: 0,
+        }),
+      );
+    });
+
+    it('should create a file record when knowledgeBaseId is provided and fileType is not folder', async () => {
+      const mockFile = { id: 'file-1' };
+      const mockDoc = { id: 'doc-1', title: 'Test' };
+      mockFileModel.create.mockResolvedValue(mockFile);
+      mockDocumentModel.create.mockResolvedValue(mockDoc);
+
+      const result = await service.createDocument({
+        title: 'Test',
+        editorData: {},
+        content: 'Content',
+        knowledgeBaseId: 'kb-1',
+      });
+
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Test',
+          knowledgeBaseId: 'kb-1',
+          fileType: 'custom/document',
+          url: 'internal://document/placeholder',
+          size: 'Content'.length,
+        }),
+        false,
+      );
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileId: 'file-1',
+          knowledgeBaseId: 'kb-1',
+        }),
+      );
+      expect(result).toEqual(mockDoc);
+    });
+
+    it('should NOT create a file record when fileType is custom/folder', async () => {
+      const mockDoc = { id: 'doc-1', title: 'My Folder' };
+      mockDocumentModel.create.mockResolvedValue(mockDoc);
+
+      await service.createDocument({
+        title: 'My Folder',
+        editorData: {},
+        knowledgeBaseId: 'kb-1',
+        fileType: 'custom/folder',
+      });
+
+      expect(mockFileModel.create).not.toHaveBeenCalled();
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fileId: null,
+          fileType: 'custom/folder',
+          // folders store knowledgeBaseId in metadata
+          metadata: { knowledgeBaseId: 'kb-1' },
+        }),
+      );
+    });
+
+    it('should store knowledgeBaseId in metadata for folders', async () => {
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
+
+      await service.createDocument({
+        title: 'Folder',
+        editorData: {},
+        knowledgeBaseId: 'kb-1',
+        fileType: 'custom/folder',
+        metadata: { existingKey: 'value' },
+      });
+
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: { existingKey: 'value', knowledgeBaseId: 'kb-1' },
+        }),
+      );
+    });
+
+    it('should use custom fileType when provided', async () => {
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
+      mockFileModel.create.mockResolvedValue({ id: 'file-1' });
+
+      await service.createDocument({
+        title: 'PDF Doc',
+        editorData: {},
+        knowledgeBaseId: 'kb-1',
+        fileType: 'application/pdf',
+      });
+
+      expect(mockFileModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ fileType: 'application/pdf' }),
+        false,
+      );
+    });
+
+    it('should pass slug and parentId to document model', async () => {
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
+
+      await service.createDocument({
+        title: 'Test',
+        editorData: {},
+        slug: 'my-slug',
+        parentId: 'parent-doc-id',
+      });
+
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          slug: 'my-slug',
+          parentId: 'parent-doc-id',
+        }),
+      );
+    });
+  });
+
+  describe('createDocuments', () => {
+    it('should create multiple documents in parallel', async () => {
+      const docs = [
+        { title: 'Doc 1', editorData: {} },
+        { title: 'Doc 2', editorData: {}, content: 'Content' },
+      ];
+      const mockResults = [{ id: 'doc-1' }, { id: 'doc-2' }];
+      mockDocumentModel.create
+        .mockResolvedValueOnce(mockResults[0])
+        .mockResolvedValueOnce(mockResults[1]);
+
+      const results = await service.createDocuments(docs);
+
+      expect(results).toEqual(mockResults);
+      expect(mockDocumentModel.create).toHaveBeenCalledTimes(2);
+    });
+
+    it('should return empty array for empty input', async () => {
+      const results = await service.createDocuments([]);
+      expect(results).toEqual([]);
+      expect(mockDocumentModel.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('queryDocuments', () => {
+    it('should delegate to documentModel.query with no params', async () => {
+      const mockResult = { items: [], total: 0 };
+      mockDocumentModel.query.mockResolvedValue(mockResult);
+
+      const result = await service.queryDocuments();
+
+      expect(result).toEqual(mockResult);
+      expect(mockDocumentModel.query).toHaveBeenCalledWith(undefined);
+    });
+
+    it('should delegate to documentModel.query with params', async () => {
+      const params = { current: 1, pageSize: 10, fileTypes: ['pdf'] };
+      const mockResult = { items: [{ id: 'doc-1' }], total: 1 };
+      mockDocumentModel.query.mockResolvedValue(mockResult);
+
+      const result = await service.queryDocuments(params);
+
+      expect(result).toEqual(mockResult);
+      expect(mockDocumentModel.query).toHaveBeenCalledWith(params);
+    });
+  });
+
+  describe('getDocumentById', () => {
+    it('should delegate to documentModel.findById', async () => {
+      const mockDoc = { id: 'doc-1', title: 'Test' };
+      mockDocumentModel.findById.mockResolvedValue(mockDoc);
+
+      const result = await service.getDocumentById('doc-1');
+
+      expect(result).toEqual(mockDoc);
+      expect(mockDocumentModel.findById).toHaveBeenCalledWith('doc-1');
+    });
+
+    it('should return undefined when document not found', async () => {
+      mockDocumentModel.findById.mockResolvedValue(undefined);
+
+      const result = await service.getDocumentById('non-existent');
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('document history', () => {
+    it('should delegate listDocumentHistory to DocumentHistoryService', async () => {
+      const mockResult = {
+        items: [{ id: 'head', isCurrent: true, saveSource: 'system', savedAt: new Date() }],
+      };
+      mockDocumentHistoryService.listDocumentHistory.mockResolvedValue(mockResult);
+
+      const result = await service.listDocumentHistory({ documentId: 'doc-1' });
+
+      expect(mockDocumentHistoryService.listDocumentHistory).toHaveBeenCalledWith(
+        {
+          documentId: 'doc-1',
+        },
+        undefined,
+      );
+      expect(result).toEqual(mockResult);
+    });
+
+    it('should delegate getDocumentHistoryItem to DocumentHistoryService', async () => {
+      const mockResult = {
+        editorData: { blocks: [] },
+        id: 'hist-1',
+        isCurrent: true,
+        saveSource: 'system',
+        savedAt: new Date(),
+      };
+      mockDocumentHistoryService.getDocumentHistoryItem.mockResolvedValue(mockResult);
+
+      const result = await service.getDocumentHistoryItem({
+        documentId: 'doc-1',
+        historyId: 'hist-1',
+      });
+
+      expect(mockDocumentHistoryService.getDocumentHistoryItem).toHaveBeenCalledWith(
+        {
+          documentId: 'doc-1',
+          historyId: 'hist-1',
+        },
+        undefined,
+      );
+      expect(result).toEqual(mockResult);
+    });
+
+    it('should delegate compareDocumentHistoryItems to DocumentHistoryService', async () => {
+      const mockResult = {
+        from: {
+          editorData: { blocks: [{ id: '1' }] },
+          id: 'hist-1',
+          isCurrent: false,
+          saveSource: 'autosave',
+          savedAt: new Date(),
+        },
+        to: {
+          editorData: { blocks: [{ id: '2' }] },
+          id: 'head',
+          isCurrent: true,
+          saveSource: 'system',
+          savedAt: new Date(),
+        },
+      };
+      mockDocumentHistoryService.compareDocumentHistoryItems.mockResolvedValue(mockResult);
+
+      const result = await service.compareDocumentHistoryItems({
+        documentId: 'doc-1',
+        fromHistoryId: 'hist-1',
+        toHistoryId: 'head',
+      });
+
+      expect(mockDocumentHistoryService.compareDocumentHistoryItems).toHaveBeenCalledWith(
+        {
+          documentId: 'doc-1',
+          fromHistoryId: 'hist-1',
+          toHistoryId: 'head',
+        },
+        undefined,
+      );
+      expect(result).toEqual(mockResult);
+    });
+  });
+
+  describe('deleteDocument', () => {
+    it('should return early if document not found', async () => {
+      mockDocumentModel.findById.mockResolvedValue(undefined);
+
+      await service.deleteDocument('non-existent');
+
+      expect(mockDocumentModel.delete).not.toHaveBeenCalled();
+      expect(mockFileModel.delete).not.toHaveBeenCalled();
+    });
+
+    it('should delete a simple document without fileId', async () => {
+      mockDocumentModel.findById.mockResolvedValue({
+        id: 'doc-1',
+        fileType: 'custom/document',
+        fileId: null,
+      });
+      mockDocumentModel.delete.mockResolvedValue(undefined);
+
+      await service.deleteDocument('doc-1');
+
+      expect(mockFileModel.delete).not.toHaveBeenCalled();
+      expect(mockDocumentModel.delete).toHaveBeenCalledWith('doc-1');
+    });
+
+    it('should delete a simple document and its associated file', async () => {
+      mockDocumentModel.findById.mockResolvedValue({
+        id: 'doc-1',
+        fileType: 'custom/document',
+        fileId: 'file-1',
+      });
+      mockDocumentModel.delete.mockResolvedValue(undefined);
+      mockFileModel.delete.mockResolvedValue({ url: 'files/doc-1.md' });
+
+      await service.deleteDocument('doc-1');
+
+      expect(mockFileModel.delete).toHaveBeenCalledWith('file-1');
+      expect(mockFileService.deleteFile).toHaveBeenCalledWith('files/doc-1.md');
+      expect(mockDocumentModel.delete).toHaveBeenCalledWith('doc-1');
+    });
+
+    it('should not delete storage for internal document placeholder files', async () => {
+      mockDocumentModel.findById.mockResolvedValue({
+        id: 'doc-1',
+        fileType: 'custom/document',
+        fileId: 'file-1',
+      });
+      mockFileModel.delete.mockResolvedValue({ url: 'internal://document/placeholder' });
+
+      await service.deleteDocument('doc-1');
+
+      expect(mockFileModel.delete).toHaveBeenCalledWith('file-1');
+      expect(mockFileService.deleteFile).not.toHaveBeenCalled();
+      expect(mockDocumentModel.delete).toHaveBeenCalledWith('doc-1');
+    });
+
+    it('should recursively delete children when deleting a folder', async () => {
+      // Folder has two children: one regular doc and one folder
+      mockDocumentModel.findById
+        .mockResolvedValueOnce({ id: 'folder-1', fileType: 'custom/folder', fileId: null })
+        .mockResolvedValueOnce({
+          id: 'child-doc-1',
+          fileType: 'custom/document',
+          fileId: 'file-child-1',
+        })
+        .mockResolvedValueOnce({ id: 'child-folder-2', fileType: 'custom/folder', fileId: null });
+
+      // First call: children of folder-1
+      (mockDb.query as any).documents.findMany
+        .mockResolvedValueOnce([{ id: 'child-doc-1' }, { id: 'child-folder-2' }])
+        // Second call: children of child-folder-2 (empty)
+        .mockResolvedValueOnce([]);
+
+      // Files in each folder
+      (mockDb.query as any).files.findMany
+        .mockResolvedValueOnce([]) // files in folder-1
+        .mockResolvedValueOnce([]); // files in child-folder-2
+
+      await service.deleteDocument('folder-1');
+
+      // Should have deleted child-doc-1's associated file
+      expect(mockFileModel.delete).toHaveBeenCalledWith('file-child-1');
+      // Should have deleted all documents
+      expect(mockDocumentModel.delete).toHaveBeenCalledWith('child-doc-1');
+      expect(mockDocumentModel.delete).toHaveBeenCalledWith('child-folder-2');
+      expect(mockDocumentModel.delete).toHaveBeenCalledWith('folder-1');
+    });
+
+    it('should delete files in folder when folder has associated files', async () => {
+      mockDocumentModel.findById.mockResolvedValue({
+        id: 'folder-1',
+        fileType: 'custom/folder',
+        fileId: null,
+      });
+      (mockDb.query as any).documents.findMany.mockResolvedValue([]);
+      (mockDb.query as any).files.findMany.mockResolvedValue([
+        { id: 'file-in-folder-1' },
+        { id: 'file-in-folder-2' },
+      ]);
+      mockFileModel.delete
+        .mockResolvedValueOnce({ url: 'files/file-in-folder-1.pdf' })
+        .mockResolvedValueOnce({ url: 'files/file-in-folder-2.pdf' });
+
+      await service.deleteDocument('folder-1');
+
+      expect(mockFileModel.delete).toHaveBeenCalledWith('file-in-folder-1');
+      expect(mockFileModel.delete).toHaveBeenCalledWith('file-in-folder-2');
+      expect(mockFileService.deleteFile).toHaveBeenCalledWith('files/file-in-folder-1.pdf');
+      expect(mockFileService.deleteFile).toHaveBeenCalledWith('files/file-in-folder-2.pdf');
+      expect(mockDocumentModel.delete).toHaveBeenCalledWith('folder-1');
+    });
+  });
+
+  describe('deleteDocuments', () => {
+    it('should delete multiple documents in parallel', async () => {
+      mockDocumentModel.findById
+        .mockResolvedValueOnce({ id: 'doc-1', fileType: 'custom/document', fileId: null })
+        .mockResolvedValueOnce({ id: 'doc-2', fileType: 'custom/document', fileId: 'file-2' });
+
+      await service.deleteDocuments(['doc-1', 'doc-2']);
+
+      expect(mockDocumentModel.delete).toHaveBeenCalledWith('doc-1');
+      expect(mockDocumentModel.delete).toHaveBeenCalledWith('doc-2');
+      expect(mockFileModel.delete).toHaveBeenCalledWith('file-2');
+    });
+
+    it('should handle empty ids array', async () => {
+      await service.deleteDocuments([]);
+      expect(mockDocumentModel.findById).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateDocument', () => {
+    const createCurrentDocument = (overrides: Record<string, unknown> = {}) => ({
+      editorData: { blocks: [] },
+      fileId: null,
+      id: 'doc-1',
+      updatedAt: new Date('2026-04-11T00:00:00.000Z'),
+      ...overrides,
+    });
+
+    it('should update content and recalculate char/line counts', async () => {
+      const newContent = 'Updated\nContent';
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
+
+      const result = await service.updateDocument('doc-1', { content: newContent });
+
+      expect(mockDocumentModel.update).toHaveBeenCalledWith(
+        'doc-1',
+        expect.objectContaining({
+          content: newContent,
+          totalCharCount: newContent.length,
+          totalLineCount: 2,
+        }),
+      );
+      expect(mockDocumentHistoryService.createHistory).not.toHaveBeenCalled();
+      expect(result).toEqual({ historyAppended: false, id: 'doc-1' });
+    });
+
+    it('should append history when editorData changes', async () => {
+      const editorData = { blocks: [{ type: 'paragraph', text: 'Hello' }] };
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
+
+      const result = await service.updateDocument('doc-1', { editorData, saveSource: 'manual' });
+
+      expect(mockDocumentModel.update).toHaveBeenCalledWith(
+        'doc-1',
+        expect.objectContaining({ editorData }),
+      );
+      expect(mockDocumentHistoryService.createHistory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: 'doc-1',
+          editorData: { blocks: [] },
+          saveSource: 'manual',
+        }),
+      );
+      expect(result.historyAppended).toBe(true);
+      expect(result.id).toBe('doc-1');
+      expect(result.savedAt).toBeInstanceOf(Date);
+    });
+
+    it('should persist raw editorData with diff nodes and normalize only the history snapshot', async () => {
+      const editorData = {
+        root: {
+          children: [
+            {
+              children: [
+                { children: [{ text: 'next origin', type: 'text' }], type: 'paragraph' },
+                { children: [{ text: 'next modified', type: 'text' }], type: 'paragraph' },
+              ],
+              diffType: 'modify',
+              type: 'diff',
+            },
+            {
+              children: [{ children: [{ text: 'next added', type: 'text' }], type: 'paragraph' }],
+              diffType: 'add',
+              type: 'diff',
+            },
+          ],
+        },
+      };
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(
+        createCurrentDocument({ editorData: createEditorDataWithDiffNode() }),
+      );
+
+      const result = await service.updateDocument('doc-1', { editorData, saveSource: 'manual' });
+
+      // Persisted editorData keeps the diff nodes — DiffAllToolbar can render
+      // them for human review on next open.
+      expect(mockDocumentModel.update).toHaveBeenCalledWith(
+        'doc-1',
+        expect.objectContaining({ editorData }),
+      );
+      // History snapshot still captures the pre-update accepted view.
+      expect(mockDocumentHistoryService.createHistory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: 'doc-1',
+          editorData: normalizedEditorDataFromDiffNode,
+          saveSource: 'manual',
+        }),
+      );
+      expect(result.historyAppended).toBe(true);
+    });
+
+    it('should skip history when editorData is unchanged', async () => {
+      const editorData = { blocks: [] };
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
+
+      const result = await service.updateDocument('doc-1', { editorData });
+
+      expect(mockDocumentModel.update).toHaveBeenCalledWith(
+        'doc-1',
+        expect.objectContaining({ editorData }),
+      );
+      expect(mockDocumentHistoryService.createHistory).not.toHaveBeenCalled();
+      expect(result).toEqual({ historyAppended: false, id: 'doc-1' });
+    });
+
+    it('should update title and filename together', async () => {
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
+
+      await service.updateDocument('doc-1', { title: 'New Title' });
+
+      expect(mockDocumentModel.update).toHaveBeenCalledWith(
+        'doc-1',
+        expect.objectContaining({
+          title: 'New Title',
+          filename: 'New Title',
+        }),
+      );
+    });
+
+    it('should sync title update to associated file', async () => {
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument({ fileId: 'file-1' }));
+      mockFileModel.update.mockResolvedValue(undefined);
+
+      await service.updateDocument('doc-1', { title: 'New Title' });
+
+      expect(mockFileModel.update).toHaveBeenCalledWith('file-1', { name: 'New Title' });
+    });
+
+    it('should sync parentId update to associated file', async () => {
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument({ fileId: 'file-1' }));
+      mockFileModel.update.mockResolvedValue(undefined);
+
+      await service.updateDocument('doc-1', { parentId: 'new-parent' });
+
+      expect(mockFileModel.update).toHaveBeenCalledWith('file-1', { parentId: 'new-parent' });
+    });
+
+    it('should sync both title and parentId to file when both are updated', async () => {
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument({ fileId: 'file-1' }));
+      mockFileModel.update.mockResolvedValue(undefined);
+
+      await service.updateDocument('doc-1', { title: 'New Title', parentId: 'new-parent' });
+
+      expect(mockFileModel.update).toHaveBeenCalledWith('file-1', {
+        name: 'New Title',
+        parentId: 'new-parent',
+      });
+    });
+
+    it('should NOT update file when document has no associated file', async () => {
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
+
+      await service.updateDocument('doc-1', { title: 'New Title' });
+
+      expect(mockFileModel.update).not.toHaveBeenCalled();
+    });
+
+    it('should update metadata', async () => {
+      const metadata = { key: 'value' };
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
+
+      await service.updateDocument('doc-1', { metadata });
+
+      expect(mockDocumentModel.update).toHaveBeenCalledWith(
+        'doc-1',
+        expect.objectContaining({ metadata }),
+      );
+    });
+
+    it('should update fileType', async () => {
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument());
+
+      await service.updateDocument('doc-1', { fileType: 'text/markdown' });
+
+      expect(mockDocumentModel.update).toHaveBeenCalledWith(
+        'doc-1',
+        expect.objectContaining({ fileType: 'text/markdown' }),
+      );
+    });
+
+    it('should handle parentId null (moving to root)', async () => {
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument({ fileId: 'file-1' }));
+      mockFileModel.update.mockResolvedValue(undefined);
+
+      await service.updateDocument('doc-1', { parentId: null });
+
+      expect(mockFileModel.update).toHaveBeenCalledWith('file-1', { parentId: null });
+    });
+
+    it('should throw when document does not exist', async () => {
+      mockDocumentModel.findById.mockResolvedValue(undefined);
+
+      await expect(service.updateDocument('missing-doc', { title: 'Missing' })).rejects.toThrow(
+        'Document not found: missing-doc',
+      );
+    });
+
+    it('should reject a workspace save when another member holds the edit lock', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument({ workspaceId: 'ws-1' }));
+      vi.spyOn(EditLockService.prototype, 'canWrite').mockResolvedValue(false);
+
+      await expect(wsService.updateDocument('doc-1', { content: 'x' })).rejects.toMatchObject({
+        code: 'CONFLICT',
+      });
+      expect(mockDocumentModel.update).not.toHaveBeenCalled();
+    });
+
+    it('should allow a workspace save when no other member holds the lock', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument({ workspaceId: 'ws-1' }));
+      vi.spyOn(EditLockService.prototype, 'canWrite').mockResolvedValue(true);
+
+      await wsService.updateDocument('doc-1', { content: 'x' });
+
+      expect(mockDocumentModel.update).toHaveBeenCalled();
+    });
+
+    it('checks workspace body saves against the provided lock owner id', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      mockDocumentModel.findById.mockResolvedValue(createCurrentDocument({ workspaceId: 'ws-1' }));
+      const guardSpy = vi.spyOn(EditLockService.prototype, 'canWrite').mockResolvedValue(true);
+
+      await wsService.updateDocument('doc-1', { content: 'x', lockOwnerId: 'owner-1' });
+
+      expect(guardSpy).toHaveBeenCalledWith('document', 'doc-1', 'owner-1');
+      expect(mockDocumentModel.update).toHaveBeenCalled();
+    });
+
+    it('allows a metadata-only save while another member holds the lock (only the body is locked)', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      mockDocumentModel.update.mockResolvedValue({ id: 'doc-1' });
+      // Current body matches what the autosave re-sends — only title changes.
+      mockDocumentModel.findById.mockResolvedValue(
+        createCurrentDocument({ content: 'body', editorData: { blocks: [] }, workspaceId: 'ws-1' }),
+      );
+      const guardSpy = vi.spyOn(EditLockService.prototype, 'canWrite');
+
+      await wsService.updateDocument('doc-1', {
+        content: 'body',
+        editorData: { blocks: [] },
+        title: 'New Title',
+      });
+
+      // Content unchanged → the lock guard never runs and the meta save lands.
+      expect(guardSpy).not.toHaveBeenCalled();
+      expect(mockDocumentModel.update).toHaveBeenCalledWith(
+        'doc-1',
+        expect.objectContaining({ title: 'New Title' }),
+      );
+    });
+
+    it('rejects a body change while locked even when the content string is unchanged', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      mockDocumentModel.findById.mockResolvedValue(
+        createCurrentDocument({ editorData: { blocks: [] }, workspaceId: 'ws-1' }),
+      );
+      vi.spyOn(EditLockService.prototype, 'canWrite').mockResolvedValue(false);
+
+      // editorData changed (historyAppended) → guard runs even with no `content`.
+      await expect(
+        wsService.updateDocument('doc-1', { editorData: { blocks: [{ type: 'paragraph' }] } }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(mockDocumentModel.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('runWithDocumentLock', () => {
+    it('runs the callback without touching the lock for personal documents', async () => {
+      const acquireSpy = vi.spyOn(EditLockService.prototype, 'acquire');
+      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release');
+      const fn = vi.fn().mockResolvedValue('ok');
+
+      const result = await service.runWithDocumentLock('doc-1', fn);
+
+      expect(result).toBe('ok');
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(acquireSpy).not.toHaveBeenCalled();
+      expect(releaseSpy).not.toHaveBeenCalled();
+    });
+
+    it('acquires a free lock, runs the callback, then releases it', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'getActiveLock').mockResolvedValue(undefined);
+      vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+        expiresAt: new Date(),
+        holderId: userId,
+        lockedByOther: false,
+        ownerId: 'server-owner',
+      });
+      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release').mockResolvedValue(true);
+      const fn = vi.fn().mockResolvedValue('written');
+
+      const result = await wsService.runWithDocumentLock('doc-1', fn);
+
+      expect(result).toBe('written');
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(releaseSpy).toHaveBeenCalledWith(
+        'document',
+        'doc-1',
+        expect.stringMatching(/^server:/),
+      );
+    });
+
+    it('rejects when the same user already holds the lease in another edit session', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'getActiveLock').mockResolvedValue({
+        expiresAt: new Date(),
+        ownerId: 'page-owner',
+        userId,
+      });
+      vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+        expiresAt: new Date(),
+        holderId: userId,
+        lockedByOther: true,
+        ownerId: 'page-owner',
+      });
+      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release');
+      const fn = vi.fn();
+
+      await expect(wsService.runWithDocumentLock('doc-1', fn)).rejects.toMatchObject({
+        code: 'CONFLICT',
+      });
+
+      expect(fn).not.toHaveBeenCalled();
+      expect(releaseSpy).not.toHaveBeenCalled();
+    });
+
+    it('rejects with CONFLICT and skips the callback when another member holds the lock', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'getActiveLock').mockResolvedValue({
+        expiresAt: new Date(),
+        ownerId: 'other-owner',
+        userId: 'other-user',
+      });
+      vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+        expiresAt: new Date(),
+        holderId: 'other-user',
+        lockedByOther: true,
+        ownerId: 'other-owner',
+      });
+      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release');
+      const fn = vi.fn();
+
+      await expect(wsService.runWithDocumentLock('doc-1', fn)).rejects.toMatchObject({
+        code: 'CONFLICT',
+      });
+      expect(fn).not.toHaveBeenCalled();
+      expect(releaseSpy).not.toHaveBeenCalled();
+    });
+
+    it('still releases a freshly-claimed lock when the callback throws', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'getActiveLock').mockResolvedValue(undefined);
+      vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+        expiresAt: new Date(),
+        holderId: userId,
+        lockedByOther: false,
+        ownerId: 'server-owner',
+      });
+      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release').mockResolvedValue(true);
+      const fn = vi.fn().mockRejectedValue(new Error('boom'));
+
+      await expect(wsService.runWithDocumentLock('doc-1', fn)).rejects.toThrow('boom');
+      expect(releaseSpy).toHaveBeenCalledWith(
+        'document',
+        'doc-1',
+        expect.stringMatching(/^server:/),
+      );
+    });
+
+    it('rides along on the user existing lease and skips release', async () => {
+      // The user's live editor already holds the lock. The server run must
+      // refresh under the user's ownerId — not mint a fresh one and release
+      // afterwards — or the editor's next save would be rejected by the
+      // owner-scoped guard, and another collaborator could grab the gap.
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'getActiveLock').mockResolvedValue({
+        expiresAt: new Date(),
+        ownerId: 'user-tab-A',
+        userId,
+      });
+      const acquireSpy = vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+        expiresAt: new Date(),
+        holderId: userId,
+        lockedByOther: false,
+        ownerId: 'user-tab-A',
+      });
+      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release');
+      const fn = vi.fn().mockResolvedValue('written');
+
+      const result = await wsService.runWithDocumentLock('doc-1', fn);
+
+      expect(result).toBe('written');
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(acquireSpy).toHaveBeenCalledWith('document', 'doc-1', 'user-tab-A');
+      expect(releaseSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('document edit lock', () => {
+    it('reports unlocked for personal documents without touching the lock service', async () => {
+      const acquireSpy = vi.spyOn(EditLockService.prototype, 'acquire');
+
+      const result = await service.acquireDocumentLock('doc-1');
+
+      expect(result).toEqual({
+        expiresAt: null,
+        holderId: null,
+        lockedByOther: false,
+        ownerId: null,
+      });
+      expect(acquireSpy).not.toHaveBeenCalled();
+    });
+
+    it('delegates to the edit lock service in workspace mode', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      const expiresAt = new Date(Date.now() + 60_000);
+      const acquireSpy = vi
+        .spyOn(EditLockService.prototype, 'acquire')
+        .mockResolvedValue({ expiresAt, holderId: userId, lockedByOther: false, ownerId: userId });
+
+      const result = await wsService.acquireDocumentLock('doc-1');
+
+      expect(acquireSpy).toHaveBeenCalledWith('document', 'doc-1', userId);
+      expect(result).toEqual({
+        expiresAt,
+        holderId: userId,
+        lockedByOther: false,
+        ownerId: userId,
+      });
+    });
+
+    it('reports another member as holder when the lock is taken', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      const expiresAt = new Date(Date.now() + 60_000);
+      vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+        expiresAt,
+        holderId: 'other-user',
+        lockedByOther: true,
+        ownerId: 'other-owner',
+      });
+
+      const result = await wsService.acquireDocumentLock('doc-1');
+
+      expect(result).toEqual({
+        expiresAt,
+        holderId: 'other-user',
+        lockedByOther: true,
+        ownerId: 'other-owner',
+      });
+    });
+
+    it('releaseDocumentLock is a no-op for personal documents', async () => {
+      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release');
+      await service.releaseDocumentLock('doc-1');
+      expect(releaseSpy).not.toHaveBeenCalled();
+    });
+
+    it('releaseDocumentLock delegates to the lock service in workspace mode', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      const releaseSpy = vi.spyOn(EditLockService.prototype, 'release').mockResolvedValue(true);
+      await wsService.releaseDocumentLock('doc-1');
+      expect(releaseSpy).toHaveBeenCalledWith('document', 'doc-1', userId);
+    });
+
+    it('acquireDocumentLock broadcasts lock.changed on a holder edge (first claim)', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'getActiveLock').mockResolvedValue(undefined);
+      vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+        expiresAt: new Date(),
+        holderId: userId,
+        lockedByOther: false,
+        ownerId: userId,
+      });
+
+      await wsService.acquireDocumentLock('doc-1');
+
+      expect(publishResourceEventMock).toHaveBeenCalledWith(
+        { id: 'doc-1', type: 'document' },
+        expect.objectContaining({
+          data: expect.objectContaining({ holderId: userId, ownerId: userId }),
+          type: 'lock.changed',
+        }),
+      );
+    });
+
+    it('acquireDocumentLock does NOT broadcast on a steady-state heartbeat (same holder)', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'getActiveLock').mockResolvedValue({
+        expiresAt: new Date(),
+        ownerId: userId,
+        userId,
+      });
+      vi.spyOn(EditLockService.prototype, 'acquire').mockResolvedValue({
+        expiresAt: new Date(),
+        holderId: userId,
+        lockedByOther: false,
+        ownerId: userId,
+      });
+
+      await wsService.acquireDocumentLock('doc-1');
+
+      expect(publishResourceEventMock).not.toHaveBeenCalled();
+    });
+
+    it('releaseDocumentLock broadcasts unlocked only when it actually freed the lock', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'release').mockResolvedValue(true);
+
+      await wsService.releaseDocumentLock('doc-1');
+
+      expect(publishResourceEventMock).toHaveBeenCalledWith(
+        { id: 'doc-1', type: 'document' },
+        expect.objectContaining({
+          data: expect.objectContaining({ holderId: null, ownerId: null }),
+          type: 'lock.changed',
+        }),
+      );
+    });
+
+    it('releaseDocumentLock does NOT broadcast when the lease expired / was taken over', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      vi.spyOn(EditLockService.prototype, 'release').mockResolvedValue(false);
+
+      await wsService.releaseDocumentLock('doc-1');
+
+      expect(publishResourceEventMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('saveDocumentHistory', () => {
+    it('should create a history entry for an existing document', async () => {
+      mockDocumentModel.findById.mockResolvedValue({ id: 'doc-1', editorData: { blocks: [] } });
+      mockDocumentHistoryService.createHistory.mockResolvedValue(undefined);
+
+      const result = await service.saveDocumentHistory('doc-1', { blocks: [] }, 'llm_call');
+
+      expect(mockDocumentHistoryService.createHistory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: 'doc-1',
+          editorData: { blocks: [] },
+          saveSource: 'llm_call',
+          savedAt: expect.any(Date),
+        }),
+      );
+      expect(result.savedAt).toBeInstanceOf(Date);
+    });
+
+    it('should create history with diff nodes normalized to their origin content', async () => {
+      mockDocumentModel.findById.mockResolvedValue({ id: 'doc-1', editorData: { blocks: [] } });
+      mockDocumentHistoryService.createHistory.mockResolvedValue(undefined);
+
+      await service.saveDocumentHistory('doc-1', createEditorDataWithDiffNode(), 'llm_call');
+
+      expect(mockDocumentHistoryService.createHistory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: 'doc-1',
+          editorData: normalizedEditorDataFromDiffNode,
+          saveSource: 'llm_call',
+        }),
+      );
+    });
+
+    it('should throw when document does not exist', async () => {
+      mockDocumentModel.findById.mockResolvedValue(undefined);
+
+      await expect(service.saveDocumentHistory('missing-doc', {}, 'manual')).rejects.toThrow(
+        'Document not found: missing-doc',
+      );
+      expect(mockDocumentHistoryService.createHistory).not.toHaveBeenCalled();
+    });
+
+    it('does not check the lock for personal documents', async () => {
+      mockDocumentModel.findById.mockResolvedValue({ id: 'doc-1', editorData: { blocks: [] } });
+      const guardSpy = vi.spyOn(EditLockService.prototype, 'canWrite');
+
+      await service.saveDocumentHistory('doc-1', { blocks: [] }, 'llm_call');
+
+      expect(guardSpy).not.toHaveBeenCalled();
+      expect(mockDocumentHistoryService.createHistory).toHaveBeenCalled();
+    });
+
+    it('rejects a workspace history snapshot when another member holds the lock', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      mockDocumentModel.findById.mockResolvedValue({ id: 'doc-1', editorData: { blocks: [] } });
+      vi.spyOn(EditLockService.prototype, 'canWrite').mockResolvedValue(false);
+
+      await expect(
+        wsService.saveDocumentHistory('doc-1', { blocks: [] }, 'llm_call'),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+      expect(mockDocumentHistoryService.createHistory).not.toHaveBeenCalled();
+    });
+
+    it('allows a workspace history snapshot when no other member holds the lock', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      mockDocumentModel.findById.mockResolvedValue({ id: 'doc-1', editorData: { blocks: [] } });
+      vi.spyOn(EditLockService.prototype, 'canWrite').mockResolvedValue(true);
+
+      await wsService.saveDocumentHistory('doc-1', { blocks: [] }, 'llm_call');
+
+      expect(mockDocumentHistoryService.createHistory).toHaveBeenCalled();
+    });
+
+    it('forwards the lock owner so the holder can snapshot its own page', async () => {
+      const wsService = new DocumentService(mockDb, userId, 'ws-1');
+      mockDocumentModel.findById.mockResolvedValue({ id: 'doc-1', editorData: { blocks: [] } });
+      const guardSpy = vi.spyOn(EditLockService.prototype, 'canWrite').mockResolvedValue(true);
+
+      await wsService.saveDocumentHistory('doc-1', { blocks: [] }, 'llm_call', 'page-owner-1');
+
+      expect(guardSpy).toHaveBeenCalledWith('document', 'doc-1', 'page-owner-1');
+    });
+  });
+
+  describe('trySaveCurrentDocumentHistory', () => {
+    it('should create a history entry from the current document editor data', async () => {
+      const editorData = {
+        root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },
+      };
+      mockDocumentModel.findById.mockResolvedValue({ editorData, id: 'doc-1' });
+      mockDocumentHistoryService.createHistory.mockResolvedValue(undefined);
+
+      const result = await service.trySaveCurrentDocumentHistory('doc-1', 'llm_call');
+
+      expect(mockDocumentHistoryService.createHistory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: 'doc-1',
+          editorData,
+          saveSource: 'llm_call',
+          savedAt: expect.any(Date),
+        }),
+      );
+      expect(result?.savedAt).toBeInstanceOf(Date);
+    });
+
+    it('should snapshot current document history with diff nodes normalized to origin content', async () => {
+      mockDocumentModel.findById.mockResolvedValue({
+        editorData: createEditorDataWithDiffNode(),
+        id: 'doc-1',
+      });
+      mockDocumentHistoryService.createHistory.mockResolvedValue(undefined);
+
+      const result = await service.trySaveCurrentDocumentHistory('doc-1', 'llm_call');
+
+      expect(mockDocumentHistoryService.createHistory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: 'doc-1',
+          editorData: normalizedEditorDataFromDiffNode,
+          saveSource: 'llm_call',
+        }),
+      );
+      expect(result?.savedAt).toBeInstanceOf(Date);
+    });
+
+    it('should skip history when the current editor data is empty', async () => {
+      mockDocumentModel.findById.mockResolvedValue({ editorData: {}, id: 'doc-1' });
+
+      const result = await service.trySaveCurrentDocumentHistory('doc-1', 'llm_call');
+
+      expect(result).toBeUndefined();
+      expect(mockDocumentHistoryService.createHistory).not.toHaveBeenCalled();
+    });
+
+    it('should not block the caller when history creation fails', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockDocumentModel.findById.mockResolvedValue({
+        editorData: { root: { children: [{ children: [], type: 'paragraph' }], type: 'root' } },
+        id: 'doc-1',
+      });
+      mockDocumentHistoryService.createHistory.mockRejectedValueOnce(new Error('history failed'));
+
+      await expect(
+        service.trySaveCurrentDocumentHistory('doc-1', 'llm_call'),
+      ).resolves.toBeUndefined();
+
+      expect(consoleError).toHaveBeenCalledWith(
+        '[DocumentService] Failed to save current document history:',
+        expect.any(Error),
+      );
+      consoleError.mockRestore();
+    });
+  });
+
+  describe('parseDocument', () => {
+    const mockCleanup = vi.fn();
+
+    beforeEach(() => {
+      mockFileService.downloadFileToLocal.mockResolvedValue({
+        filePath: '/tmp/test.txt',
+        file: { name: 'test.pdf', url: 's3://bucket/test.pdf', parentId: 'parent-id' },
+        cleanup: mockCleanup,
+      });
+    });
+
+    it('should parse a document file and create document record', async () => {
+      vi.mocked(loadFile).mockResolvedValue({
+        content: 'Parsed content',
+        fileType: 'pdf',
+        metadata: { title: 'My Doc' },
+        pages: undefined,
+        totalCharCount: 14,
+        totalLineCount: 1,
+      } as any);
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-1', title: 'My Doc' });
+
+      const result = await service.parseDocument('file-1');
+
+      expect(loadFile).toHaveBeenCalledWith('/tmp/test.txt');
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: 'Parsed content',
+          fileId: 'file-1',
+          fileType: 'custom/document',
+          filename: 'My Doc',
+          title: 'My Doc',
+          totalCharCount: 'Parsed content'.length,
+          totalLineCount: 1,
+          parentId: 'parent-id',
+          source: 's3://bucket/test.pdf',
+          sourceType: 'file',
+        }),
+      );
+      expect(mockCleanup).toHaveBeenCalled();
+      expect(result).toEqual({ id: 'doc-1', title: 'My Doc' });
+    });
+
+    it('should use filename as title when metadata has no title', async () => {
+      vi.mocked(loadFile).mockResolvedValue({
+        content: 'Content',
+        fileType: 'pdf',
+        metadata: {},
+        pages: undefined,
+        totalCharCount: 7,
+        totalLineCount: 1,
+      } as any);
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
+      mockFileService.downloadFileToLocal.mockResolvedValue({
+        filePath: '/tmp/document.pdf',
+        file: { name: 'document.pdf', url: 's3://bucket/doc.pdf', parentId: null },
+        cleanup: mockCleanup,
+      });
+
+      await service.parseDocument('file-1');
+
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'document' }),
+      );
+    });
+
+    it('should strip <page> tags from content', async () => {
+      vi.mocked(loadFile).mockResolvedValue({
+        content: '<page number="1">Page one content</page><page number="2">Page two content</page>',
+        fileType: 'pdf',
+        metadata: {},
+        pages: undefined,
+        totalCharCount: 32,
+        totalLineCount: 1,
+      } as any);
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
+      mockFileService.downloadFileToLocal.mockResolvedValue({
+        filePath: '/tmp/doc.pdf',
+        file: { name: 'doc.pdf', url: 's3://bucket/doc.pdf', parentId: null },
+        cleanup: mockCleanup,
+      });
+
+      await service.parseDocument('file-1');
+
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: 'Page one contentPage two content',
+        }),
+      );
+    });
+
+    it('should call cleanup even when parsing fails', async () => {
+      vi.mocked(loadFile).mockRejectedValue(new Error('Parse error'));
+
+      await expect(service.parseDocument('file-1')).rejects.toThrow('Parse error');
+
+      expect(mockCleanup).toHaveBeenCalled();
+    });
+  });
+
+  describe('parseFile', () => {
+    const mockCleanup = vi.fn();
+
+    beforeEach(() => {
+      mockFileService.downloadFileToLocal.mockResolvedValue({
+        filePath: '/tmp/test.md',
+        file: { name: 'readme.md', url: 's3://bucket/readme.md', parentId: null },
+        cleanup: mockCleanup,
+      });
+    });
+
+    it('should parse a file and create document record with pages', async () => {
+      vi.mocked(loadFile).mockResolvedValue({
+        content: 'Full file content',
+        fileType: 'markdown',
+        metadata: { title: 'Readme' },
+        pages: [{ content: 'Page 1' }],
+        totalCharCount: 17,
+        totalLineCount: 1,
+      } as any);
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-1', title: 'Readme' });
+
+      const result = await service.parseFile('file-1');
+
+      expect(loadFile).toHaveBeenCalledWith('/tmp/test.md');
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: 'Full file content',
+          fileId: 'file-1',
+          fileType: 'custom/document',
+          filename: 'Readme',
+          title: 'Readme',
+          pages: [{ content: 'Page 1' }],
+          totalCharCount: 17,
+          totalLineCount: 1,
+          source: 's3://bucket/readme.md',
+          sourceType: 'file',
+        }),
+      );
+      expect(mockCleanup).toHaveBeenCalled();
+      expect(result).toEqual({ id: 'doc-1', title: 'Readme' });
+    });
+
+    it('should use file name as title (stripping extension) when metadata has no title', async () => {
+      vi.mocked(loadFile).mockResolvedValue({
+        content: 'Content',
+        fileType: 'markdown',
+        metadata: {},
+        pages: undefined,
+        totalCharCount: 7,
+        totalLineCount: 1,
+      } as any);
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
+
+      await service.parseFile('file-1');
+
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'readme' }),
+      );
+    });
+
+    it('should call cleanup even when file parsing fails', async () => {
+      vi.mocked(loadFile).mockRejectedValue(new Error('File not parseable'));
+
+      await expect(service.parseFile('file-1')).rejects.toThrow('File not parseable');
+
+      expect(mockCleanup).toHaveBeenCalled();
+    });
+
+    it('should surface unsupported file types as BAD_REQUEST', async () => {
+      vi.mocked(loadFile).mockRejectedValue(new UnsupportedFileTypeError('zip', 'archive.zip'));
+
+      try {
+        await service.parseFile('file-1');
+        throw new Error('parseFile should reject unsupported file types');
+      } catch (error) {
+        expect(error).toBeInstanceOf(TRPCError);
+        expect(error).toMatchObject({
+          code: 'BAD_REQUEST',
+          message: "Unsupported file type 'zip' for file 'archive.zip'.",
+        });
+      }
+
+      expect(mockCleanup).toHaveBeenCalled();
+    });
+
+    it('should NOT strip page tags in parseFile (unlike parseDocument)', async () => {
+      const contentWithPageTags =
+        '<page number="1">First page</page><page number="2">Second page</page>';
+      vi.mocked(loadFile).mockResolvedValue({
+        content: contentWithPageTags,
+        fileType: 'pdf',
+        metadata: {},
+        pages: undefined,
+        totalCharCount: contentWithPageTags.length,
+        totalLineCount: 1,
+      } as any);
+      mockDocumentModel.create.mockResolvedValue({ id: 'doc-1' });
+      mockFileService.downloadFileToLocal.mockResolvedValue({
+        filePath: '/tmp/doc.pdf',
+        file: { name: 'doc.pdf', url: 's3://bucket/doc.pdf', parentId: null },
+        cleanup: mockCleanup,
+      });
+
+      await service.parseFile('file-1');
+
+      // parseFile does NOT strip page tags, unlike parseDocument
+      expect(mockDocumentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: contentWithPageTags,
+        }),
+      );
+    });
+  });
+});

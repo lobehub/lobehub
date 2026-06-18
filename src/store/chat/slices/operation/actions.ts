@@ -65,17 +65,23 @@ export class OperationActionsImpl {
           context.operationId,
         );
       } else {
-        const { agentId, topicId, threadId, scope, isNew, groupId } = operation.context;
+        const { agentId, topicId, threadId, scope, isNew, groupId, documentId } = operation.context;
         log(
-          '[internal_getConversationContext] get from operation %s: agentId=%s, topicId=%s, threadId=%s, scope=%s, groupId=%s',
+          '[internal_getConversationContext] get from operation %s: agentId=%s, topicId=%s, threadId=%s, scope=%s, groupId=%s, documentId=%s',
           context.operationId,
           agentId,
           topicId,
           threadId,
           scope,
           groupId,
+          documentId,
         );
-        return { agentId: agentId!, topicId, threadId, scope, isNew, groupId };
+        // Spread the whole operation context so every bucket-key field carries
+        // through — notably `documentId` (page-scoped optimistic writes resolve
+        // to the same `page_<agent>_<documentId>` bucket the editor reads from,
+        // not `page_<agent>_new`) and `subAgentId` (group_agent scope's
+        // subTopicId). Only agentId needs the non-null assertion.
+        return { ...operation.context, agentId: agentId! };
       }
     }
 

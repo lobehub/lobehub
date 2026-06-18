@@ -2,10 +2,12 @@
   "name": "@lobechat/heterogeneous-agents",
   "version": "1.0.0",
   "private": true,
+  "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
     "./askUser": "./src/askUser/index.ts",
     "./client": "./src/client/index.ts",
+    "./protocol": "./src/protocol/index.ts",
     "./spawn": "./src/spawn/index.ts"
   },
   "main": "./src/index.ts",

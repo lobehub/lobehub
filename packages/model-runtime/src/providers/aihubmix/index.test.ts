@@ -2,15 +2,32 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as modelParse from '../../utils/modelParse';
-import { LobeAiHubMixAI } from './index';
+import { LobeAiHubMixAI, params } from './index';
+
+const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: loadModelsMock,
+}));
 
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
+
+type RouterForTest = {
+  apiType: string;
+  models?: string[];
+};
+
+const resolveRouters = (model?: string) =>
+  (typeof params.routers === 'function'
+    ? params.routers({ apiKey: 'test' }, { model })
+    : params.routers) as RouterForTest[];
 
 describe('LobeAiHubMixAI', () => {
   let instance: InstanceType<typeof LobeAiHubMixAI>;
 
   beforeEach(() => {
+    loadModelsMock.mockResolvedValue([]);
     instance = new LobeAiHubMixAI({ apiKey: 'test_api_key' });
   });
 
@@ -29,6 +46,32 @@ describe('LobeAiHubMixAI', () => {
       // The RouterRuntime-based providers have different structure
       // We just verify the instance is created correctly
       expect(instance).toBeInstanceOf(LobeAiHubMixAI);
+    });
+  });
+
+  describe('routers', () => {
+    it('should route the whole DeepSeek family to the deepseek runtime', () => {
+      // The generic openai fallback sends response_format json_schema for
+      // structured output, which DeepSeek upstreams reject — the deepseek
+      // runtime simulates it via tool calling instead.
+      const routers = resolveRouters();
+      const deepseekRouter = routers.find((router) => router.apiType === 'deepseek');
+
+      expect(deepseekRouter?.models).toEqual(
+        expect.arrayContaining([
+          'deepseek-chat',
+          'deepseek-reasoner',
+          'deepseek-v4-flash',
+          'deepseek-v4-pro',
+        ]),
+      );
+    });
+
+    it('should match gateway-specific DeepSeek ids missing from the static model list', () => {
+      const routers = resolveRouters('deepseek-v4-flash-free');
+      const deepseekRouter = routers.find((router) => router.apiType === 'deepseek');
+
+      expect(deepseekRouter?.models).toContain('deepseek-v4-flash-free');
     });
   });
 
@@ -154,27 +197,24 @@ describe('LobeAiHubMixAI', () => {
       expect(passedModels.find((m) => m.id === 'gpt-4o')).toBeDefined();
     });
 
-    it('should return empty array on non-ok HTTP response', async () => {
+    it('should throw on non-ok HTTP response', async () => {
       mockFetch.mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }));
 
-      const list = await instance.models();
-      expect(list).toEqual([]);
+      await expect(instance.models()).rejects.toThrow('HTTP 401: Unauthorized');
     });
 
-    it('should return empty array on network error', async () => {
+    it('should throw on network error', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network Error'));
 
-      const list = await instance.models();
-      expect(list).toEqual([]);
+      await expect(instance.models()).rejects.toThrow('Network Error');
     });
 
-    it('should return empty array on timeout (AbortError)', async () => {
+    it('should throw on timeout (AbortError)', async () => {
       mockFetch.mockRejectedValueOnce(
         Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }),
       );
 
-      const list = await instance.models();
-      expect(list).toEqual([]);
+      await expect(instance.models()).rejects.toThrow('The operation was aborted');
     });
   });
 });

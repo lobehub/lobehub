@@ -10,7 +10,11 @@ import { TOGGLE_BUTTON_ID } from '@/features/NavPanel/ToggleLeftPanelButton';
 import Footer from '@/routes/(main)/home/_layout/Footer';
 import { USER_DROPDOWN_ICON_ID } from '@/routes/(main)/home/_layout/Header/components/User';
 import { useGlobalStore } from '@/store/global';
-import { systemStatusSelectors } from '@/store/global/selectors';
+import {
+  NAV_PANEL_MAX_WIDTH,
+  NAV_PANEL_MIN_WIDTH,
+  systemStatusSelectors,
+} from '@/store/global/selectors';
 import { isMacOS } from '@/utils/platform';
 
 import { useNavPanelSizeChangeHandler } from '../hooks/useNavPanel';
@@ -142,8 +146,8 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent }
       defaultSize={defaultSize}
       expand={expand}
       expandable={false}
-      maxWidth={400}
-      minWidth={240}
+      maxWidth={NAV_PANEL_MAX_WIDTH}
+      minWidth={NAV_PANEL_MIN_WIDTH}
       placement="left"
       showBorder={false}
       style={styles}

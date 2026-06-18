@@ -480,6 +480,9 @@
   "userPanel.setting": "تنظیمات",
   "userPanel.upgradePlan": "ارتقاء طرح",
   "userPanel.usages": "آمار استفاده",
+  "userPanel.workspaceCredits": "اعتبارات فضای کاری",
+  "userPanel.workspaceSetting": "تنظیمات فضای کاری",
+  "userPanel.workspaceUsages": "استفاده از فضای کاری",
   "version": "نسخه",
   "zoom": "بزرگنمایی"
 }

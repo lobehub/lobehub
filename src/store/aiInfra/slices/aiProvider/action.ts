@@ -431,10 +431,7 @@ export class AiProviderActionImpl {
     );
   };
 
-  useFetchAiProviderList = (opts?: {
-    enabled?: boolean;
-    suspense?: boolean;
-  }): SWRResponse<AiProviderListItem[]> => {
+  useFetchAiProviderList = (opts?: { enabled?: boolean }): SWRResponse<AiProviderListItem[]> => {
     return useClientDataSWR<AiProviderListItem[]>(
       opts?.enabled === false ? null : AiProviderSwrKey.fetchAiProviderList,
       () => aiProviderService.getAiProviderList(),

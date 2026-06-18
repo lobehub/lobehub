@@ -2,11 +2,14 @@ import type { ActionIconGroupEvent, ActionIconGroupItemType } from '@lobehub/ui'
 import { ActionIconGroup } from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
 
+import { usePermission } from '@/hooks/usePermission';
+
 import { type MessageActionItem, type MessageActionItemOrDivider } from '../../../types';
 import { DIVIDER_KEY, type MessageActionContext, type MessageActionSlot } from './types';
 import { useBuildActions } from './useBuildActions';
 
 const DIVIDER: MessageActionItemOrDivider = { type: 'divider' };
+const VIEWER_BAR: MessageActionSlot[] = ['copy'];
 
 const stripHandleClick = (item: MessageActionItemOrDivider): ActionIconGroupItemType => {
   if ('type' in item && item.type === 'divider') return item as unknown as ActionIconGroupItemType;
@@ -74,9 +77,16 @@ interface MessageActionBarProps {
  */
 export const MessageActionBar = memo<MessageActionBarProps>(({ ctx, bar, menu }) => {
   const built = useBuildActions(ctx);
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
-  const barItems = useMemo(() => resolveSlots(bar, built), [bar, built]);
-  const menuItems = useMemo(() => (menu ? resolveSlots(menu, built) : undefined), [menu, built]);
+  const effectiveBar = canEdit ? bar : VIEWER_BAR;
+  const effectiveMenu = canEdit ? menu : undefined;
+
+  const barItems = useMemo(() => resolveSlots(effectiveBar, built), [effectiveBar, built]);
+  const menuItems = useMemo(
+    () => (effectiveMenu ? resolveSlots(effectiveMenu, built) : undefined),
+    [effectiveMenu, built],
+  );
 
   const items = useMemo(
     () => barItems.filter((item) => !('disabled' in item && item.disabled)).map(stripHandleClick),

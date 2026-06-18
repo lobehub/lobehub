@@ -1,8 +1,10 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as isCanUseFCModule from '@/helpers/isCanUseFC';
+import { agentService } from '@/services/agent';
 import { agentDocumentService } from '@/services/agentDocument';
+import { useAgentStore } from '@/store/agent';
 
 import * as helpers from '../helper';
 import { contextEngineering } from './contextEngineering';
@@ -46,22 +48,41 @@ vi.mock('@/services/agentDocument', () => ({
   },
 }));
 
-// 默认设置 isServerMode 为 false
-let isServerMode = false;
+vi.mock('@/services/agent', () => ({
+  AVAILABLE_AGENTS_CONTEXT_LIMIT: 10,
+  AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT: 12,
+  agentService: {
+    queryAgents: vi.fn(),
+  },
+}));
+
+// 默认设置运行环境为 browser/client
+const runtimeFlags = vi.hoisted(() => ({
+  isServerMode: false,
+}));
 
 vi.mock('@lobechat/const', async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...(actual as any),
     get isServerMode() {
-      return isServerMode;
+      return runtimeFlags.isServerMode;
     },
-    isDeprecatedEdition: false,
     isDesktop: false,
+    isDeprecatedEdition: false,
   };
 });
 
+beforeEach(() => {
+  vi.mocked(agentService.queryAgents).mockResolvedValue([]);
+  useAgentStore.setState({
+    agentMap: {},
+    availableAgents: undefined,
+  });
+});
+
 afterEach(() => {
+  runtimeFlags.isServerMode = false;
   vi.resetModules();
   vi.clearAllMocks();
 });
@@ -125,9 +146,50 @@ describe('contextEngineering', () => {
     });
   });
 
+  it('should use cached available agents without querying during context engineering', async () => {
+    useAgentStore.setState({
+      availableAgents: [
+        {
+          avatar: null,
+          backgroundColor: null,
+          description: null,
+          id: 'agent-1',
+          title: 'Current Agent',
+        },
+        {
+          avatar: null,
+          backgroundColor: null,
+          description: 'Helps with setup',
+          id: 'agent-2',
+          title: 'Setup Agent',
+        },
+      ],
+    });
+
+    await contextEngineering({
+      agentId: 'agent-1',
+      messages: [{ content: 'Hello', role: 'user' }] as UIChatMessage[],
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(agentService.queryAgents).not.toHaveBeenCalled();
+  });
+
+  it('should query available agents when the prefetch cache is missing', async () => {
+    await contextEngineering({
+      agentId: 'agent-1',
+      messages: [{ content: 'Hello', role: 'user' }] as UIChatMessage[],
+      model: 'gpt-4',
+      provider: 'openai',
+    });
+
+    expect(agentService.queryAgents).toHaveBeenCalledWith({ limit: 12 });
+  });
+
   describe('handle with files content in server mode', () => {
     it('should includes files', async () => {
-      isServerMode = true;
+      runtimeFlags.isServerMode = true;
       // Mock isCanUseVision to return true for vision models
       vi.spyOn(helpers, 'isCanUseVision').mockReturnValue(true);
 
@@ -184,12 +246,12 @@ describe('contextEngineering', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image ref="image_1" name="ttt.png"></image>
+<image ref="image_1" name="ttt.png" url="http://example.com/xxx0asd-dsd.png"></image>
 </images>
 <files>
 <files_docstring>here are user upload files you can refer to</files_docstring>
-<file id="file1" name="abc.png" type="plain/txt" size="100000"></file>
-<file id="file_oKMve9qySLMI" name="2402.16667v1.pdf" type="undefined" size="11256078"></file>
+<file id="file1" name="abc.png" type="plain/txt" size="100000" url="http://abc.com/abc.txt"></file>
+<file id="file_oKMve9qySLMI" name="2402.16667v1.pdf" type="undefined" size="11256078" url="https://xxx.com/ppp/480497/5826c2b8-fde0-4de1-a54b-a224d5e3d898.pdf"></file>
 </files>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,
@@ -208,11 +270,11 @@ describe('contextEngineering', () => {
         },
       ]);
 
-      isServerMode = false;
+      runtimeFlags.isServerMode = false;
     });
 
     it('should include image files in server mode', async () => {
-      isServerMode = true;
+      runtimeFlags.isServerMode = true;
 
       vi.spyOn(helpers, 'isCanUseVision').mockReturnValue(false);
 
@@ -257,7 +319,7 @@ describe('contextEngineering', () => {
 <files_info>
 <images>
 <images_docstring>here are user upload images you can refer to</images_docstring>
-<image ref="image_1" name="abc.png"></image>
+<image ref="image_1" name="abc.png" url="http://example.com/image.jpg"></image>
 </images>
 </files_info>
 <!-- END SYSTEM CONTEXT -->`,
@@ -272,7 +334,7 @@ describe('contextEngineering', () => {
         },
       ]);
 
-      isServerMode = false;
+      runtimeFlags.isServerMode = false;
     });
   });
 
@@ -697,7 +759,7 @@ describe('contextEngineering', () => {
     });
 
     it('should process placeholder variables combined with other processors', async () => {
-      isServerMode = true;
+      runtimeFlags.isServerMode = true;
       vi.spyOn(helpers, 'isCanUseVision').mockReturnValue(true);
 
       const messages: UIChatMessage[] = [
@@ -740,7 +802,7 @@ describe('contextEngineering', () => {
       expect(content[1].type).toBe('image_url');
       expect(content[1].image_url.url).toBe('http://example.com/test.jpg');
 
-      isServerMode = false;
+      runtimeFlags.isServerMode = false;
     });
   });
 

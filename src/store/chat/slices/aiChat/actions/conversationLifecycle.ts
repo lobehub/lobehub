@@ -54,8 +54,10 @@ import {
   getCompressionCandidateMessageIds,
   hasRunningCompressionOperation,
 } from '@/store/chat/utils/compression';
+import { getElectronStoreState } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { type StoreSetter } from '@/store/types';
 import { useUserMemoryStore } from '@/store/userMemory';
 import { markdownToTxt } from '@/utils/markdownToTxt';
@@ -111,6 +113,10 @@ export interface SendMessageResult {
   userMessageId: string;
 }
 
+type SendMessageServerResponseMeta = SendMessageServerResponse & {
+  __isPartialMessages?: boolean;
+};
+
 /**
  * Actions managing the complete lifecycle of conversations including sending,
  * regenerating, and resending messages
@@ -154,6 +160,22 @@ const attachSendTimeMetadataToUserMessage = (
   return changed ? nextMessages : messages;
 };
 
+const mergePartialPersistedMessages = (
+  currentMessages: UIChatMessage[],
+  persistedMessages: UIChatMessage[],
+  replacedMessageIds: string[],
+): UIChatMessage[] => {
+  const replacedIdSet = new Set(replacedMessageIds);
+  const persistedIdSet = new Set(persistedMessages.map((message) => message.id));
+
+  return [
+    ...currentMessages.filter(
+      (message) => !replacedIdSet.has(message.id) && !persistedIdSet.has(message.id),
+    ),
+    ...persistedMessages,
+  ];
+};
+
 export class ConversationLifecycleActionImpl {
   readonly #get: () => ChatStore;
 
@@ -191,6 +213,7 @@ export class ConversationLifecycleActionImpl {
     message,
     editorData: inputEditorData,
     files,
+    forceRuntime,
     metadata,
     onlyAddUserMessage,
     context,
@@ -228,9 +251,14 @@ export class ConversationLifecycleActionImpl {
     const agentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
     const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
     const runtimeType = selectRuntimeType({
+      boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
       executionTarget: agentConfig?.agencyConfig?.executionTarget,
       heterogeneousProvider,
-      isGatewayMode: this.#get().isGatewayModeEnabled(),
+      isGatewayMode: this.#get().isGatewayModeEnabled(agentId),
+      // Callers that need to pin the runtime (e.g. task topics that were
+      // started server-side via runTask) pass `forceRuntime` to override
+      // the agent's local/cloud preference.
+      parentRuntime: forceRuntime,
     });
 
     // ── Command Bus: extract and process built-in commands from editorData ──
@@ -294,12 +322,30 @@ export class ConversationLifecycleActionImpl {
     const hasMentionedAgents =
       !context.groupId && !directMentionRoute && mentionedAgents.length > 0;
 
+    // Page-scoped conversations: the page editor runtime tracks the currently
+    // open document. Inject its id at send time so the agent-runtime context
+    // (and downstream server-side PageAgent tool calls, which only receive that
+    // context) is scoped to the open document. Without this the server runtime
+    // throws "received a tool call without documentId in context".
+    //
+    // This fallback is only authoritative when the active page's editor is
+    // mounted (StoreUpdater has called setCurrentDocId for it). Callers that
+    // create a document and send before that editor mounts (e.g. sendAsWrite)
+    // MUST pass the new documentId in context explicitly — the `!context.documentId`
+    // guard preserves it, so the singleton (still bound to the previous page) is
+    // not consulted and a stale id is never injected.
+    const activePageDocumentId =
+      context.scope === 'page' && !context.documentId
+        ? pageAgentRuntime.getCurrentDocId()
+        : undefined;
+
     const operationContext = {
       ...context,
       ...(isCreatingNewThread && { threadId: undefined }),
       // Only set isSupervisor for actual group supervisors — NOT for @agent mentions.
       // isSupervisor triggers group-specific UI rendering (SupervisorMessage with group avatars).
       ...(isGroupSupervisor && { isSupervisor: true }),
+      ...(activePageDocumentId ? { documentId: activePageDocumentId } : {}),
     };
 
     const fileIdList = files?.map((f) => f.id);
@@ -371,6 +417,7 @@ export class ConversationLifecycleActionImpl {
           editorData: editorData ?? undefined,
           files: fileIdList,
           filesPreview: filesPreview.length > 0 ? filesPreview : undefined,
+          ...(forceRuntime ? { forceRuntime } : {}),
           interruptMode: 'soft',
           metadata: userMessageMetadata,
           createdAt: Date.now(),
@@ -498,8 +545,11 @@ export class ConversationLifecycleActionImpl {
       const existingTopic = operationContext.topicId
         ? topicSelectors.getTopicById(operationContext.topicId)(this.#get())
         : undefined;
-      const agentWorkingDirectory =
-        agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(getAgentStoreState());
+      const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+      const agentWorkingDirectory = agentByIdSelectors.getAgentWorkingDirectoryById(
+        agentId,
+        currentDeviceId,
+      )(getAgentStoreState());
       const workingDirectory = existingTopic?.metadata?.workingDirectory || agentWorkingDirectory;
 
       // Persist messages to DB first (same as client mode)
@@ -555,9 +605,18 @@ export class ConversationLifecycleActionImpl {
         ...operationContext,
         topicId: heteroData.topicId ?? operationContext.topicId,
       };
+      const heteroResponseMeta = heteroData as SendMessageServerResponseMeta;
+      const heteroMessageKey = messageMapKey(heteroContext);
+      const heteroMessages = heteroResponseMeta.__isPartialMessages
+        ? mergePartialPersistedMessages(
+            this.#get().messagesMap[heteroMessageKey] || [],
+            heteroData.messages,
+            [tempId, tempAssistantId],
+          )
+        : heteroData.messages;
 
       // Replace optimistic messages with persisted ones
-      this.#get().replaceMessages(heteroData.messages, {
+      this.#get().replaceMessages(heteroMessages, {
         action: 'sendMessage/serverResponse',
         context: heteroContext,
       });
@@ -670,6 +729,10 @@ export class ConversationLifecycleActionImpl {
           message,
           metadata: requestMetadata,
           parentOperationId: operationId,
+          // Pass temp message IDs so the UI doesn't show a blank loading
+          // state while waiting for the first step_start event to replace
+          // messages with the server's real IDs.
+          tempMessageIds: [tempAssistantId],
         });
 
         return {
@@ -770,6 +833,7 @@ export class ConversationLifecycleActionImpl {
         },
         abortController,
       );
+      const responseMeta = data as SendMessageServerResponseMeta;
       // Use created topicId/threadId if available, otherwise use original from context
       let finalTopicId = data.topicId ?? operationContext.topicId;
       const finalThreadId = data.createdThreadId ?? operationContext.threadId;
@@ -806,6 +870,7 @@ export class ConversationLifecycleActionImpl {
           'sendMessage/createTopicPlaceholder',
         );
         this.#get().updateOperationMetadata(operationId, { createdTopicId: data.topicId });
+        void Promise.resolve(this.#get().refreshTopic()).catch(console.error);
       } else if (operationContext.topicId) {
         // Optimistically update topic's updatedAt so sidebar re-groups immediately
         this.#get().internal_dispatchTopic({
@@ -838,13 +903,21 @@ export class ConversationLifecycleActionImpl {
 
       // Create final context with updated topicId/threadId from server response
       const finalContext = { ...operationContext, topicId: finalTopicId, threadId: finalThreadId };
+      const persistedMessages = attachSendTimeMetadataToUserMessage(
+        data.messages,
+        data.userMessageId,
+        userMessageMetadata,
+      );
+      const finalMessageKey = messageMapKey(finalContext);
       data = {
         ...data,
-        messages: attachSendTimeMetadataToUserMessage(
-          data.messages,
-          data.userMessageId,
-          userMessageMetadata,
-        ),
+        messages: responseMeta.__isPartialMessages
+          ? mergePartialPersistedMessages(
+              this.#get().messagesMap[finalMessageKey] || [],
+              persistedMessages,
+              [tempId, tempAssistantId],
+            )
+          : persistedMessages,
       };
 
       this.#get().replaceMessages(data.messages, {
@@ -1208,9 +1281,10 @@ export class ConversationLifecycleActionImpl {
         { kind: 'mention', targetAgentId, instruction, parentMessageId: toolMessage.id },
         {
           conversationContext: context,
+          boundDeviceId: parentAgentConfig?.agencyConfig?.boundDeviceId,
           heterogeneousProvider: parentAgentConfig?.agencyConfig?.heterogeneousProvider,
           inPortalThread,
-          isGatewayMode: this.#get().isGatewayModeEnabled(),
+          isGatewayMode: this.#get().isGatewayModeEnabled(context.agentId),
           messages: messagesWithInstruction,
           parentOperationId: operationId,
         },

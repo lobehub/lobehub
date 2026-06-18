@@ -7,6 +7,7 @@ import { SparkleIcon } from 'lucide-react';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -68,6 +69,7 @@ const Item = memo<NetworkOption>(({ value, description, icon, label }) => {
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const mode = useAgentStore((s) => chatConfigByIdSelectors.getSearchModeById(agentId)(s));
+  const { allowed: canCreate } = usePermission('create_content');
 
   return (
     <Flexbox
@@ -76,7 +78,12 @@ const Item = memo<NetworkOption>(({ value, description, icon, label }) => {
       className={cx(styles.option, mode === value && styles.active)}
       gap={12}
       key={value}
+      style={{
+        cursor: canCreate ? undefined : 'not-allowed',
+        opacity: canCreate ? undefined : 0.5,
+      }}
       onClick={async () => {
+        if (!canCreate) return;
         await updateAgentChatConfig({ searchMode: value });
       }}
     >
@@ -95,6 +102,7 @@ const Controls = memo(() => {
   const { t } = useTranslation('chat');
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
+  const { allowed: canCreate } = usePermission('create_content');
 
   const [model, provider, useModelBuiltinSearch, searchMode] = useAgentStore((s) => [
     agentByIdSelectors.getAgentModelById(agentId)(s),
@@ -118,10 +126,11 @@ const Controls = memo(() => {
   );
 
   useEffect(() => {
+    if (!canCreate) return;
     if (isModelBuiltinSearchInternal && (searchMode ?? 'auto') === 'off') {
       updateAgentChatConfig({ searchMode: 'auto' });
     }
-  }, [isModelBuiltinSearchInternal, searchMode, updateAgentChatConfig]);
+  }, [canCreate, isModelBuiltinSearchInternal, searchMode, updateAgentChatConfig]);
 
   const options: NetworkOption[] = isModelBuiltinSearchInternal
     ? [
@@ -164,8 +173,8 @@ const Controls = memo(() => {
         <Item {...option} key={option.value} />
       ))}
       {showDivider && <Divider style={{ margin: 0 }} />}
-      {showModelBuiltinSearch && <ModelBuiltinSearch />}
-      {showFCSearchModel && <FCSearchModel />}
+      {showModelBuiltinSearch && <ModelBuiltinSearch disabled={!canCreate} />}
+      {showFCSearchModel && <FCSearchModel disabled={!canCreate} />}
     </Flexbox>
   );
 });

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { useAiInfraStore } from '@/store/aiInfra';
 
-import { isCanUseVideo, isCanUseVision } from './helper';
+import { isCanUseAudio, isCanUseVideo, isCanUseVision } from './helper';
 
 describe('chat helper', () => {
   afterEach(() => {
@@ -14,7 +14,7 @@ describe('chat helper', () => {
     useAiInfraStore.setState({
       enabledAiModels: [
         {
-          abilities: { video: true, vision: true },
+          abilities: { audio: true, video: true, vision: true },
           id: 'gemini-3.1-flash-lite-preview',
           providerId: ModelProvider.Google,
           type: 'chat',
@@ -24,13 +24,14 @@ describe('chat helper', () => {
 
     expect(isCanUseVision('gemini-3.1-flash-lite-preview', ModelProvider.LobeHub)).toBe(true);
     expect(isCanUseVideo('gemini-3.1-flash-lite-preview', ModelProvider.LobeHub)).toBe(true);
+    expect(isCanUseAudio('gemini-3.1-flash-lite-preview', ModelProvider.LobeHub)).toBe(true);
   });
 
   it('should not fallback across non-LobeHub providers', () => {
     useAiInfraStore.setState({
       enabledAiModels: [
         {
-          abilities: { video: true, vision: true },
+          abilities: { audio: true, video: true, vision: true },
           id: 'gemini-3.1-flash-lite-preview',
           providerId: ModelProvider.Google,
           type: 'chat',
@@ -40,5 +41,6 @@ describe('chat helper', () => {
 
     expect(isCanUseVision('gemini-3.1-flash-lite-preview', ModelProvider.OpenAI)).toBe(false);
     expect(isCanUseVideo('gemini-3.1-flash-lite-preview', ModelProvider.OpenAI)).toBe(false);
+    expect(isCanUseAudio('gemini-3.1-flash-lite-preview', ModelProvider.OpenAI)).toBe(false);
   });
 });

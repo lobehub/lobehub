@@ -1,14 +1,35 @@
-import { AgentRuntimeErrorType, type ILobeAgentRuntimeErrorType } from '@lobechat/types';
+import {
+  AgentRuntimeErrorType,
+  ChatErrorType,
+  type ILobeAgentRuntimeErrorType,
+} from '@lobechat/types';
 
 import { matchErrorPattern } from './match';
 
 /**
- * Error codes that are generic enough to be worth re-deriving from the upstream
- * message / HTTP status. Specific codes assigned by a provider adapter are left
- * untouched — we only refine the `ProviderBizError` catch-all, which absorbs
- * any non-OK upstream response that the adapter couldn't name.
+ * Codes whose message is worth running through `matchErrorPattern`.
+ *
+ * Besides the `ProviderBizError` upstream catch-all, this covers the two
+ * fallback wrappers `formatErrorForState` produces for un-typed throws: a raw
+ * `Error` is wrapped as `InternalServerError` (HTTP 500) and any other value as
+ * `AgentRuntimeError`. They must be pattern-refinable so persistence-layer
+ * throws (`Failed query: …`) and state-store drops reach the registry — without
+ * them those land as a bare, un-classified 500.
  */
-const REFINABLE_CODES = new Set<string>([AgentRuntimeErrorType.ProviderBizError]);
+const PATTERN_REFINABLE_CODES = new Set<string>([
+  AgentRuntimeErrorType.AgentRuntimeError,
+  AgentRuntimeErrorType.ProviderBizError,
+  String(ChatErrorType.InternalServerError),
+]);
+
+/**
+ * Codes eligible for the coarse HTTP-status fallback — provider catch-alls
+ * only. A leading "429"/"500" in an upstream body is a real status signal, but
+ * the same digits in a harness/DB/Redis throw (e.g. `Error('500 …')`) are not:
+ * those must keep their original `InternalServerError` / `AgentRuntimeError`
+ * code rather than being recast with provider retry/failure semantics.
+ */
+const STATUS_REFINABLE_CODES = new Set<string>([AgentRuntimeErrorType.ProviderBizError]);
 
 /**
  * Last-resort mapping from a bare HTTP status to a code, used only when the
@@ -50,27 +71,31 @@ export interface RefineErrorInput {
 }
 
 /**
- * Reclassify a generic provider catch-all (`ProviderBizError`) into a more
- * specific code using the upstream message and HTTP status. Returns the refined
- * code, or `undefined` when no better classification is found (caller keeps the
- * original errorType).
+ * Reclassify a generic catch-all (`ProviderBizError`, or the
+ * `InternalServerError` / `AgentRuntimeError` fallback wrappers) into a more
+ * specific code using the message and HTTP status. Returns the refined code, or
+ * `undefined` when no better classification is found (caller keeps the original
+ * errorType).
  *
  * Priority:
  *   1. `matchErrorPattern` over the message — most specific, covers the rich
- *      cases plus the migrated `Upstream*` patterns.
- *   2. HTTP-status fallback for messages that matched nothing.
+ *      cases plus the migrated `Upstream*` patterns. Open to all wrappers.
+ *   2. HTTP-status fallback for messages that matched nothing — provider
+ *      catch-alls only (see `STATUS_REFINABLE_CODES`).
  */
 export const refineErrorCode = (
   input: RefineErrorInput,
 ): ILobeAgentRuntimeErrorType | undefined => {
   const { errorType, httpStatus, message, provider } = input;
-  if (!errorType || !REFINABLE_CODES.has(errorType)) return undefined;
+  if (!errorType || !PATTERN_REFINABLE_CODES.has(errorType)) return undefined;
 
   const matched = matchErrorPattern({ errorType, message, provider });
   if (matched && matched.code !== errorType) return matched.code;
 
-  const byStatus = codeFromHttpStatus(httpStatus ?? leadingStatusFromMessage(message));
-  if (byStatus && byStatus !== errorType) return byStatus;
+  if (STATUS_REFINABLE_CODES.has(errorType)) {
+    const byStatus = codeFromHttpStatus(httpStatus ?? leadingStatusFromMessage(message));
+    if (byStatus && byStatus !== errorType) return byStatus;
+  }
 
   return undefined;
 };

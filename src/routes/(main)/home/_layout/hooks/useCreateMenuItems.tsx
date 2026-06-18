@@ -7,12 +7,13 @@ import type { ItemType } from 'antd/es/menu/interface';
 import { BotIcon, FileTextIcon, FolderCogIcon, FolderPlus, MonitorSmartphone } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import useSWRMutation from 'swr/mutation';
 
 import { useGroupTemplates } from '@/components/ChatGroupWizard/templates';
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useCreateHeteroAgent } from '@/hooks/useCreateHeteroAgent';
+import { usePermission } from '@/hooks/usePermission';
 import { useOptionalAgentModal } from '@/routes/(main)/home/_layout/Body/Agent/ModalProvider';
 import type { CreateAgentParams } from '@/services/agent';
 import type { GroupMemberConfig } from '@/services/chatGroup';
@@ -38,8 +39,9 @@ export const useCreateMenuItems = () => {
   const { t } = useTranslation('chat');
   const { t: tFile } = useTranslation('file');
   const { message } = App.useApp();
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const groupTemplates = useGroupTemplates();
+  const { allowed: canCreate } = usePermission('create_content');
 
   const [storeCreateAgent] = useAgentStore((s) => [s.createAgent]);
   const [addGroup, refreshAgentList, switchToGroup] = useHomeStore((s) => [
@@ -98,11 +100,13 @@ export const useCreateMenuItems = () => {
    */
   const createAgent = useCallback(
     async (options?: CreateAgentOptions & { prompt?: string }) => {
+      if (!canCreate) return;
+
       const config = options?.prompt ? { systemRole: options.prompt } : undefined;
       await mutateAgent({ config, groupId: options?.groupId });
       options?.onSuccess?.();
     },
-    [mutateAgent],
+    [canCreate, mutateAgent],
   );
 
   /**
@@ -111,6 +115,8 @@ export const useCreateMenuItems = () => {
    */
   const createGroupFromTemplate = useCallback(
     async (templateId: string, selectedMemberTitles?: string[]) => {
+      if (!canCreate) return false;
+
       setIsCreatingGroup(true);
       try {
         const template = groupTemplates.find((t) => t.id === templateId);
@@ -156,7 +162,7 @@ export const useCreateMenuItems = () => {
         setIsCreatingGroup(false);
       }
     },
-    [groupTemplates, refreshAgentList, loadGroups, switchToGroup, message, t],
+    [canCreate, groupTemplates, refreshAgentList, loadGroups, switchToGroup, message, t],
   );
 
   /**
@@ -164,6 +170,8 @@ export const useCreateMenuItems = () => {
    */
   const createGroupWithMembers = useCallback(
     async (selectedAgents: string[], groupTitle?: string) => {
+      if (!canCreate) return false;
+
       setIsCreatingGroup(true);
       try {
         const title = groupTitle || t('defaultGroupChat');
@@ -185,7 +193,7 @@ export const useCreateMenuItems = () => {
         setIsCreatingGroup(false);
       }
     },
-    [createGroup, message, t],
+    [canCreate, createGroup, message, t],
   );
 
   /**
@@ -193,9 +201,11 @@ export const useCreateMenuItems = () => {
    */
   const createEmptyGroup = useCallback(
     async (options?: CreateAgentOptions & { title?: string }) => {
+      if (!canCreate) return;
+
       await mutateGroup(options);
     },
-    [mutateGroup],
+    [canCreate, mutateGroup],
   );
 
   const agentModal = useOptionalAgentModal();
@@ -208,10 +218,13 @@ export const useCreateMenuItems = () => {
   const createAgentMenuItem = useCallback(
     (options?: CreateAgentOptions): ItemType => ({
       icon: <Icon icon={BotIcon} />,
+      disabled: !canCreate,
       key: 'newAgent',
       label: t('newAgent'),
       onClick: async (info) => {
         info.domEvent?.stopPropagation();
+        if (!canCreate) return;
+
         if (openCreateModal) {
           openCreateModal('agent', options?.groupId ? { groupId: options.groupId } : undefined);
         } else {
@@ -219,7 +232,7 @@ export const useCreateMenuItems = () => {
         }
       },
     }),
-    [t, createAgent, openCreateModal],
+    [canCreate, t, createAgent, openCreateModal],
   );
 
   /**
@@ -234,16 +247,19 @@ export const useCreateMenuItems = () => {
 
         return {
           icon: <AgentIcon size={'1em'} />,
+          disabled: !canCreate,
           key: definition.menuKey,
           label: t(definition.menuLabelKey),
           onClick: async (info) => {
             info.domEvent?.stopPropagation();
+            if (!canCreate) return;
+
             await createHeterogeneousAgent(definition, options);
           },
         };
       });
     },
-    [t, createHeterogeneousAgent],
+    [canCreate, t, createHeterogeneousAgent],
   );
 
   /**
@@ -275,10 +291,13 @@ export const useCreateMenuItems = () => {
   const createGroupChatMenuItem = useCallback(
     (options?: CreateAgentOptions): ItemType => ({
       icon: <Icon icon={GroupBotSquareIcon} />,
+      disabled: !canCreate,
       key: 'newGroupChat',
       label: t('newGroupChat'),
       onClick: async (info) => {
         info.domEvent?.stopPropagation();
+        if (!canCreate) return;
+
         if (openCreateModal) {
           openCreateModal('group', options?.groupId ? { groupId: options.groupId } : undefined);
         } else {
@@ -286,7 +305,7 @@ export const useCreateMenuItems = () => {
         }
       },
     }),
-    [t, createEmptyGroup, openCreateModal],
+    [canCreate, t, createEmptyGroup, openCreateModal],
   );
 
   /**
@@ -295,16 +314,19 @@ export const useCreateMenuItems = () => {
   const createSessionGroupMenuItem = useCallback(
     (): ItemType => ({
       icon: <Icon icon={FolderPlus} />,
+      disabled: !canCreate,
       key: 'addSessionGroup',
       label: t('sessionGroup.createGroup'),
       onClick: async (info) => {
         info.domEvent?.stopPropagation();
+        if (!canCreate) return;
+
         setIsCreatingSessionGroup(true);
         await addGroup(t('sessionGroup.newGroup'));
         setIsCreatingSessionGroup(false);
       },
     }),
-    [t, addGroup],
+    [canCreate, t, addGroup],
   );
 
   /**
@@ -327,6 +349,8 @@ export const useCreateMenuItems = () => {
    * Create page action
    */
   const createPage = useCallback(async () => {
+    if (!canCreate) return;
+
     const untitledTitle = tFile('pageList.untitled');
     try {
       const newPageId = await createNewPage(untitledTitle);
@@ -335,7 +359,7 @@ export const useCreateMenuItems = () => {
       console.error('Failed to create page:', error);
       message.error('Failed to create page');
     }
-  }, [createNewPage, tFile, navigate, message]);
+  }, [canCreate, createNewPage, tFile, navigate, message]);
 
   /**
    * Create page menu item
@@ -343,14 +367,17 @@ export const useCreateMenuItems = () => {
   const createPageMenuItem = useCallback(
     (): ItemType => ({
       icon: <Icon icon={FileTextIcon} />,
+      disabled: !canCreate,
       key: 'newPage',
       label: t('newPage'),
       onClick: async (info) => {
         info.domEvent?.stopPropagation();
+        if (!canCreate) return;
+
         await createPage();
       },
     }),
-    [t, createPage],
+    [canCreate, t, createPage],
   );
 
   return {

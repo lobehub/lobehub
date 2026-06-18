@@ -2,7 +2,7 @@ import { type TypographyProps } from '@lobehub/ui';
 import { Typography as Typo } from '@lobehub/ui';
 import { mdxComponents } from '@lobehub/ui/mdx';
 import { type FC } from 'react';
-import Markdown, { type Components } from 'react-markdown';
+import Markdown, { type Components, type Options } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import CodeBlock from './CodeBlock';
@@ -31,10 +31,16 @@ export const Typography = ({
 interface CustomMDXProps {
   components?: Components;
   mobile?: boolean;
+  remarkPlugins?: Options['remarkPlugins'];
   source: string;
 }
 
-export const CustomMDX: FC<CustomMDXProps> = ({ mobile, source, components: extraComponents }) => {
+export const CustomMDX: FC<CustomMDXProps> = ({
+  mobile,
+  source,
+  components: extraComponents,
+  remarkPlugins: extraRemarkPlugins,
+}) => {
   const components: Components = {
     ...(mdxComponents as Components),
     a: Link as Components['a'],
@@ -45,7 +51,7 @@ export const CustomMDX: FC<CustomMDXProps> = ({ mobile, source, components: extr
 
   return (
     <Typography mobile={mobile}>
-      <Markdown components={components} remarkPlugins={[remarkGfm]}>
+      <Markdown components={components} remarkPlugins={[remarkGfm, ...(extraRemarkPlugins ?? [])]}>
         {source}
       </Markdown>
     </Typography>

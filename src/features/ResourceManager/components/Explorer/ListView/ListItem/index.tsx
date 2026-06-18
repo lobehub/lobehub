@@ -138,6 +138,7 @@ const FileListItem = ({
   slug,
   sourceType,
   url,
+  userId,
 }: FileListItemProps) => {
   const { t } = useTranslation(['components', 'file']);
   const fileStoreState = useFileStore(

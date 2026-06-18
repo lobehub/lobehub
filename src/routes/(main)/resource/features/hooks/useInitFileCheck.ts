@@ -1,5 +1,6 @@
 'use client';
 
+import { CUSTOM_DOCUMENT_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -41,8 +42,8 @@ export const useInitFileCheck = () => {
 
         const isPage =
           !isPDF &&
-          (fileData?.sourceType === 'document' ||
-            fileData?.fileType === 'custom/document' ||
+          (fileData?.sourceType === DERIVED_DOCUMENT_SOURCE_TYPE ||
+            fileData?.fileType === CUSTOM_DOCUMENT_FILE_TYPE ||
             !!documentData);
 
         if (isPDF) {

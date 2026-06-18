@@ -14,12 +14,17 @@ import { globalGeneralSelectors } from '@/store/global/selectors';
 import { truncateByWeightedLength } from '@/utils/textLength';
 
 import { usePageEditorStore } from './store';
+import { usePageEditable } from './usePageEditable';
 
 const TitleSection = memo(() => {
   const { t } = useTranslation('file');
   const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
   const documentId = usePageEditorStore((s) => s.documentId);
+  // Gate the title/emoji on the same state as the body editor: edit permission
+  // AND not locked by another member (nor pending / save-blocked). The lock makes
+  // the whole page read-only, so metadata must not stay editable behind it.
+  const canEdit = usePageEditable();
   const emoji = usePageEditorStore((s) => s.emoji);
   const title = usePageEditorStore((s) => s.title);
   const setEmoji = usePageEditorStore((s) => s.setEmoji);
@@ -56,14 +61,20 @@ const TitleSection = memo(() => {
           title={t('pageEditor.chooseIcon')}
           value={emoji}
           onChange={(e) => {
+            if (!canEdit) return;
+
             setEmoji(e);
             setShowEmojiPicker(false);
           }}
           onDelete={() => {
+            if (!canEdit) return;
+
             setEmoji(undefined);
             setShowEmojiPicker(false);
           }}
           onOpenChange={(open) => {
+            if (!canEdit) return;
+
             setShowEmojiPicker(open);
           }}
         />
@@ -72,6 +83,7 @@ const TitleSection = memo(() => {
       {/* Choose Icon button - only shown when no emoji */}
       {!emoji && !showEmojiPicker && (
         <Button
+          disabled={!canEdit}
           icon={<Icon icon={SmilePlus} />}
           size="small"
           type="text"
@@ -81,6 +93,8 @@ const TitleSection = memo(() => {
             width: 'fit-content',
           }}
           onClick={() => {
+            if (!canEdit) return;
+
             setEmoji('📄');
             setShowEmojiPicker(true);
           }}
@@ -95,6 +109,7 @@ const TitleSection = memo(() => {
       ) : (
         <TextArea
           autoSize={{ minRows: 1 }}
+          disabled={!canEdit}
           placeholder={t('pageEditor.titlePlaceholder')}
           value={title}
           variant={'borderless'}
@@ -108,9 +123,13 @@ const TitleSection = memo(() => {
           }}
           onChange={(e) => {
             const truncated = truncateByWeightedLength(e.target.value, 100);
+            if (!canEdit) return;
+
             setTitle(truncated);
           }}
           onKeyDown={(e) => {
+            if (!canEdit) return;
+
             if (e.key === 'Enter') {
               e.preventDefault();
               handleTitleSubmit();

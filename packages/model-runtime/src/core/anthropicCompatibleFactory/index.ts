@@ -5,8 +5,8 @@ import type { ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
 import type { Pricing } from 'model-bank';
 
-import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../const/models';
 import { ErrorClassifier } from '../../errors';
+import { shouldDropUnsupportedClaudeAssistantPrefill } from '../../providers/anthropic/claudeModelId';
 import type {
   ChatCompletionErrorPayload,
   ChatMethodOptions,
@@ -30,7 +30,7 @@ import {
   buildSearchTool,
 } from '../contextBuilders/anthropic';
 import { resolveModelSamplingParameters } from '../parameterResolver';
-import { AnthropicStream } from '../streams';
+import { AnthropicStream, type AnthropicStreamOptions } from '../streams';
 import { type ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
 import { createAnthropicGenerateObject } from './generateObject';
 import { handleAnthropicError } from './handleAnthropicError';
@@ -535,12 +535,13 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         const streamOptions = {
           callbacks: options?.callback,
           payload: {
+            apiMode: 'messages',
             model: payload.model,
             pricing,
             pricingOptions,
             provider: this.id,
           },
-        };
+        } satisfies Pick<AnthropicStreamOptions, 'callbacks' | 'payload'>;
 
         if (shouldStream) {
           const streamResponse = response as Stream<Anthropic.MessageStreamEvent>;

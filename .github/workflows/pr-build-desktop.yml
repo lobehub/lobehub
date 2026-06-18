@@ -54,7 +54,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24.11.1
+          node-version: 24.16.0
           package-manager-cache: false
 
       # 主要逻辑：确定构建版本号
@@ -92,6 +92,7 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/desktop-build-setup
         with:
+          cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: 24.11.1
 
       # 设置 package.json 的版本号

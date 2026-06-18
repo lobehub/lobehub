@@ -123,7 +123,12 @@ const ToolPreview = ({ api, mode }: ToolPreviewProps) => {
             </Text>
           </Flexbox>
           <div className={styles.previewShell}>
-            <ToolInspectorSlot api={api} derived={derived} variant={activeVariant} />
+            <ToolInspectorSlot
+              api={api}
+              derived={derived}
+              toolCallId={toolCallId}
+              variant={activeVariant}
+            />
           </div>
         </Flexbox>
 

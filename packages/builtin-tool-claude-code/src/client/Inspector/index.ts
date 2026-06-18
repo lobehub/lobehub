@@ -5,6 +5,7 @@ import {
   createGrepContentInspector,
   createRunCommandInspector,
 } from '@lobechat/shared-tool-ui/inspectors';
+import type { BuiltinInspector } from '@lobechat/types';
 
 import { ClaudeCodeApiName } from '../../types';
 import { AgentInspector } from './Agent';
@@ -33,7 +34,7 @@ import { WriteInspector } from './Write';
 // Bash / Glob / Grep can use the shared factories directly — Glob / Grep only
 // need `pattern`. Edit / Read / Write need arg mapping (or synthesized plugin
 // state for diff stats), so they live in their own sibling files.
-export const ClaudeCodeInspectors = {
+const FixedClaudeCodeInspectors = {
   [ClaudeCodeApiName.Agent]: AgentInspector,
   [ClaudeCodeApiName.AskUserQuestion]: AskUserQuestionInspector,
   [ClaudeCodeApiName.Bash]: createRunCommandInspector(ClaudeCodeApiName.Bash),
@@ -67,3 +68,10 @@ export const ClaudeCodeInspectors = {
   [ClaudeCodeApiName.Write]: WriteInspector,
   ...LinearMcpInspectors,
 };
+
+export const ClaudeCodeInspectors = new Proxy(FixedClaudeCodeInspectors, {
+  get: (target, prop) => {
+    if (typeof prop !== 'string') return undefined;
+    return prop in target ? target[prop as keyof typeof target] : LinearMcpInspectors[prop];
+  },
+}) as unknown as Record<string, BuiltinInspector>;

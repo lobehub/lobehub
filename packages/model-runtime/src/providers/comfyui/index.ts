@@ -76,6 +76,7 @@ export class LobeComfyUI implements LobeRuntimeAI, AuthenticatedImageRuntime {
       const isInVercel = process.env.VERCEL === '1';
       const vercelUrl = `https://${process.env.VERCEL_URL}`;
       const appUrl =
+        process.env.INTERNAL_APP_URL ||
         process.env.APP_URL ||
         (isInVercel ? vercelUrl : `http://localhost:${process.env.PORT || 3010}`);
 

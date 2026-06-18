@@ -2,13 +2,15 @@
 
 import { validateVideoFileSize } from '@lobechat/utils/client';
 import type { IconProps } from '@lobehub/ui';
-import { Icon, Popover } from '@lobehub/ui';
-import { BrainOffIcon, GlobeOffIcon, SkillsIcon } from '@lobehub/ui/icons';
+import { Icon, Popover, Tag } from '@lobehub/ui';
+import { GlobeOffIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { Upload } from 'antd';
 import { css, cssVar, cx } from 'antd-style';
 import {
   Brain,
   CheckIcon,
+  ChevronRight,
+  Cloud,
   CloudCog,
   FileUp,
   Globe,
@@ -16,7 +18,6 @@ import {
   PlusIcon,
   SearchCheck,
   Settings2Icon,
-  Store,
   TypeIcon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -25,7 +26,7 @@ import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
 import { openAttachKnowledgeModal } from '@/features/LibraryModal';
-import { createSkillStoreModal } from '@/features/SkillStore';
+import { useIsDark } from '@/hooks/useIsDark';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useVisualMediaUploadAbility } from '@/hooks/useVisualMediaUploadAbility';
 import { useAgentStore } from '@/store/agent';
@@ -38,7 +39,13 @@ import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { settingsSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
@@ -73,29 +80,6 @@ const activeLabel = css`
     min-width: 0;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-`;
-
-const optionLabel = css`
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
-
-  width: 100%;
-  min-width: 220px;
-
-  .title {
-    line-height: 1.25;
-  }
-
-  .desc {
-    margin-block-start: 3px;
-
-    font-size: 12px;
-    line-height: 1.35;
-    color: ${cssVar.colorTextDescription};
-    white-space: normal;
   }
 `;
 
@@ -160,6 +144,53 @@ const countChip = css`
   background: ${cssVar.colorFillSecondary};
 `;
 
+const gatewayModeLabel = css`
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+
+  .title {
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+`;
+
+const gatewayModeInfoCard = css`
+  overflow: hidden;
+  width: 280px;
+  border-radius: 8px;
+
+  .cover {
+    display: block;
+
+    width: 100%;
+    height: 148px;
+
+    object-fit: cover;
+    background: ${cssVar.colorFillTertiary};
+  }
+
+  .body {
+    padding: 12px;
+  }
+
+  .title {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .desc {
+    margin-block-start: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: ${cssVar.colorTextSecondary};
+  }
+`;
+
 const activeIcon = (icon: IconProps['icon'], active?: boolean): IconProps['icon'] =>
   active ? <Icon color={cssVar.colorInfo} icon={icon} size={16} /> : icon;
 
@@ -173,9 +204,13 @@ const CLOSE_TOOL_DETAIL_POPOVER_EVENT = 'lobe-chat-tool-detail-popover-close';
 interface PopoverLabelProps {
   label: ReactNode;
   popoverContent: ReactNode;
+  // Distance from the label cell's right edge. Switch-type rows reserve a
+  // trailing toggle, so bump this to push the popover clear of the toggle and
+  // out to the right of the whole menu instead of overlapping it.
+  sideOffset?: number;
 }
 
-const PopoverLabel = memo<PopoverLabelProps>(({ label, popoverContent }) => {
+const PopoverLabel = memo<PopoverLabelProps>(({ label, popoverContent, sideOffset = 10 }) => {
   const [open, setOpen] = useState(false);
   const suppressUntilRef = useRef(0);
 
@@ -202,7 +237,7 @@ const PopoverLabel = memo<PopoverLabelProps>(({ label, popoverContent }) => {
       mouseEnterDelay={0.25}
       open={open}
       placement={'rightTop'}
-      positionerProps={{ sideOffset: 10 }}
+      positionerProps={{ sideOffset }}
       styles={{ content: { padding: 0 } }}
       onOpenChange={handleOpenChange}
     >
@@ -235,7 +270,10 @@ const stripPopoverContent = (items?: ActionDropdownMenuItems): ActionDropdownMen
     delete nextItem.popoverContent;
 
     if ('children' in nextItem && nextItem.children) {
-      return { ...nextItem, children: stripPopoverContent(nextItem.children) };
+      return {
+        ...nextItem,
+        children: stripPopoverContent(nextItem.children),
+      } as ActionDropdownMenuItems[number];
     }
 
     if ('label' in nextItem) {
@@ -249,12 +287,17 @@ const PlusAction = memo(() => {
   const { t } = useTranslation('chat');
   const { t: tEditor } = useTranslation('editor');
   const { t: tSetting } = useTranslation('setting');
+  const isDark = useIsDark();
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const upload = useFileStore((s) => s.uploadChatFiles);
   const { enableKnowledgeBase } = useServerConfigStore(featureFlagsSelectors);
+  const enableGatewayMode = useServerConfigStore(serverConfigSelectors.enableGatewayMode);
+  const defaultDisableGatewayMode = useUserStore(
+    (s) => settingsSelectors.defaultAgentConfig(s).chatConfig?.disableGatewayMode,
+  );
 
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
   const provider = useAgentStore((s) => agentByIdSelectors.getAgentModelProviderById(agentId)(s));
@@ -270,15 +313,20 @@ const PlusAction = memo(() => {
   const skillActivateMode = useAgentStore((s) =>
     chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
   );
-  const [searchMode, useModelBuiltinSearch] = useAgentStore((s) => [
+  const [searchMode, useModelBuiltinSearch, disableGatewayMode] = useAgentStore((s) => [
     chatConfigByIdSelectors.getSearchModeById(agentId)(s),
     chatConfigByIdSelectors.getUseModelBuiltinSearchById(agentId)(s),
+    chatConfigByIdSelectors.getChatConfigById(agentId)(s).disableGatewayMode,
   ]);
+  const isGatewayModeEnabled = (disableGatewayMode ?? defaultDisableGatewayMode) !== true;
 
   const isMemoryEnabled = useMemoryEnabled(agentId);
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
   const editor = useChatInputStore((s) => s.editor);
-  const { canUploadImage, canUploadVideo } = useVisualMediaUploadAbility(model, provider);
+  const { canUploadImage, canUploadVideo, canUploadAudio } = useVisualMediaUploadAbility(
+    model,
+    provider,
+  );
   const enableFC = useModelSupportToolUse(model, provider);
   const handleOpenKnowledge = useCallback(() => {
     setDropdownOpen(false);
@@ -315,9 +363,12 @@ const PlusAction = memo(() => {
   const activeSearchOption: 'off' | 'app' | 'provider' =
     searchMode === 'off' ? 'off' : useModelBuiltinSearch ? 'provider' : 'app';
 
-  const handleToggleMemory = useCallback(async () => {
-    await updateAgentChatConfig({ memory: { enabled: !isMemoryEnabled } });
-  }, [isMemoryEnabled, updateAgentChatConfig]);
+  const handleToggleMemory = useCallback(
+    async (enabled: boolean) => {
+      await updateAgentChatConfig({ memory: { enabled } });
+    },
+    [updateAgentChatConfig],
+  );
 
   const handleSelectSearch = useCallback(
     async (option: 'off' | 'app' | 'provider') => {
@@ -332,10 +383,12 @@ const PlusAction = memo(() => {
     [updateAgentChatConfig],
   );
 
-  const handleOpenTools = useCallback(() => {
-    setDropdownOpen(false);
-    createSkillStoreModal();
-  }, []);
+  const handleToggleGatewayMode = useCallback(
+    async (checked: boolean) => {
+      await updateAgentChatConfig({ disableGatewayMode: checked ? false : true });
+    },
+    [updateAgentChatConfig],
+  );
 
   const handleToggleParams = useCallback(() => {
     setDropdownOpen(false);
@@ -357,16 +410,6 @@ const PlusAction = memo(() => {
       ) : (
         label
       );
-
-    const renderOption = (title: string, description: string, active: boolean) => (
-      <div className={cx(optionLabel)}>
-        <div>
-          <div className="title">{title}</div>
-          {description && <div className="desc">{description}</div>}
-        </div>
-        {active && <Icon icon={CheckIcon} size={14} />}
-      </div>
-    );
 
     const renderSearchOption = (
       icon: ReactNode,
@@ -394,12 +437,37 @@ const PlusAction = memo(() => {
         label
       );
 
+    const renderGatewayModeLabel = () => (
+      <span className={cx(gatewayModeLabel)}>
+        {/* Brand name — same in every language, so no i18n. */}
+        <span className="title">Agent Gateway</span>
+        <Tag color={'info'} size={'small'} variant={'filled'}>
+          {t('gatewayMode.beta')}
+        </Tag>
+      </span>
+    );
+
+    const gatewayModeInfo = (
+      <div className={cx(gatewayModeInfoCard)}>
+        <img
+          alt=""
+          className="cover"
+          src={isDark ? '/images/agent_gateway_dark.webp' : '/images/agent_gateway_light.webp'}
+        />
+        <div className="body">
+          <div className="title">{t('gatewayMode.cardTitle')}</div>
+          <div className="desc">{t('gatewayMode.desc')}</div>
+        </div>
+      </div>
+    );
+
     const skillMenuItems = stripPopoverContent(skillItems as ActionDropdownMenuItems);
 
     const uploadItems: ActionDropdownMenuItems = [
       {
         closeOnClick: false,
-        icon: FileUp,
+        // Match the 20px file/library icons below so the label lines up with those rows.
+        icon: <Icon icon={FileUp} size={20} />,
         key: 'upload-file-or-image',
         label: (
           <Upload
@@ -408,16 +476,20 @@ const PlusAction = memo(() => {
             beforeUpload={async (file) => {
               if (file.type.startsWith('image') && !canUploadImage) return false;
               if (file.type.startsWith('video') && !canUploadVideo) return false;
+              if (file.type.startsWith('audio') && !canUploadAudio) return false;
               const validation = validateVideoFileSize(file);
               if (!validation.isValid) {
                 message.error(
-                  t('upload.validation.videoSizeExceeded', { actualSize: validation.actualSize }),
+                  t('upload.validation.videoSizeExceeded', {
+                    actualSize: validation.actualSize,
+                    maxSize: validation.maxSize,
+                  }),
                 );
                 return false;
               }
               setDropdownOpen(false);
               editor?.focus();
-              await upload([file]);
+              await upload([file], agentId);
               return false;
             }}
           >
@@ -435,12 +507,14 @@ const PlusAction = memo(() => {
     const toolsItems: ActionDropdownMenuItems =
       isAgentModeEnabled && enableFC
         ? [
-            { type: 'divider' },
             {
               children: skillMenuItems,
+              // Trailing chevron (replaces base-ui's default triangle submenu arrow,
+              // which is hidden via the .lobe-submenu-chevron rule in ActionDropdown).
+              extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
               footer: skillMarketFooter,
               header: skillMarketHeader,
-              icon: activeIcon(SkillsIcon, activeSkillCount > 0),
+              icon: SkillsIcon,
               key: 'tools',
               label: renderLabelWithCount(
                 tSetting('tools.title'),
@@ -452,38 +526,19 @@ const PlusAction = memo(() => {
                 ),
               ),
             } as ActionDropdownMenuItems[number],
-            {
-              icon: Store,
-              key: 'add-skills',
-              label: t('plus.addSkills'),
-              onClick: handleOpenTools,
-            },
+            { type: 'divider' },
           ]
         : [];
 
     const capabilityItems: ActionDropdownMenuItems = [
-      { type: 'divider' },
-      // Rich text toolbar toggle
+      // Memory toggle — trailing switch; toggle by clicking the switch or the whole row
       {
-        icon: TypeIcon,
-        key: 'typo',
-        label: renderActive(tEditor('actions.typobar.on'), Boolean(showTypoBar)),
-        onClick: () => setShowTypoBar(!showTypoBar),
-      },
-      // Advanced parameter settings — mirrors ParamsPanelToggle in the agent header.
-      {
-        icon: Settings2Icon,
-        key: 'params',
-        label: renderActive(tSetting('settingModel.params.title'), isParamsPanelActive),
-        onClick: handleToggleParams,
-      },
-      { type: 'divider' },
-      // Memory toggle
-      {
-        icon: activeIcon(isMemoryEnabled ? Brain : BrainOffIcon, Boolean(isMemoryEnabled)),
+        checked: Boolean(isMemoryEnabled),
+        icon: Brain,
         key: 'memory',
-        label: renderActive(t('memory.title'), Boolean(isMemoryEnabled)),
-        onClick: handleToggleMemory,
+        label: t('memory.title'),
+        onCheckedChange: handleToggleMemory,
+        type: 'switch',
       },
       // Web search: simple toggle when 2 options, submenu when 3
       ...(showProviderSearch
@@ -538,44 +593,95 @@ const PlusAction = memo(() => {
             } as ActionDropdownMenuItems[number],
           ]
         : [
+            // Web search toggle — trailing switch; toggle by clicking the switch or the whole row
             {
-              icon: activeIcon(
-                activeSearchOption === 'off' ? GlobeOffIcon : Globe,
-                activeSearchOption !== 'off',
-              ),
+              checked: activeSearchOption !== 'off',
+              icon: Globe,
               key: 'search-toggle',
-              label: renderActive(t('search.title'), activeSearchOption !== 'off'),
-              onClick: () => handleSelectSearch(activeSearchOption === 'off' ? 'app' : 'off'),
+              label: t('search.title'),
+              onCheckedChange: (checked: boolean) => handleSelectSearch(checked ? 'app' : 'off'),
+              type: 'switch',
             } as ActionDropdownMenuItems[number],
           ]),
+      ...(enableGatewayMode
+        ? [
+            {
+              checked: isGatewayModeEnabled,
+              icon: Cloud,
+              key: 'gateway-mode',
+              label: (
+                <PopoverLabel
+                  label={renderGatewayModeLabel()}
+                  popoverContent={gatewayModeInfo}
+                  // Clear the trailing toggle so the card sits to the right of the whole menu.
+                  sideOffset={64}
+                />
+              ),
+              onCheckedChange: handleToggleGatewayMode,
+              type: 'switch',
+            } as ActionDropdownMenuItems[number],
+          ]
+        : []),
+      { type: 'divider' },
+      // Skills (with "Add Skills..." merged in) sits directly under the Web Search divider.
       ...toolsItems,
+      // Formatting toolbar toggle — trailing switch; toggle by clicking the switch or the whole row
+      {
+        checked: Boolean(showTypoBar),
+        icon: TypeIcon,
+        key: 'typo',
+        label: tEditor('actions.typobar.title'),
+        onCheckedChange: (checked: boolean) => setShowTypoBar(checked),
+        type: 'switch',
+      },
+      // Advanced parameter settings — mirrors ParamsPanelToggle in the agent header.
+      {
+        icon: Settings2Icon,
+        key: 'params',
+        label: renderActive(tSetting('settingModel.params.title'), isParamsPanelActive),
+        onClick: handleToggleParams,
+      },
     ];
 
-    const knowledgeSectionItems: ActionDropdownMenuItems = enableKnowledgeBase
+    // "Add Attachments..." merges file upload with the knowledge base (libraries / files).
+    // When the knowledge base is disabled there is no submenu, so Upload stays a top-level entry.
+    const attachmentsItems: ActionDropdownMenuItems = enableKnowledgeBase
       ? [
           {
-            children: knowledgeItems,
+            children: [
+              ...uploadItems,
+              ...(knowledgeItems.length > 0
+                ? [{ type: 'divider' as const }, ...knowledgeItems]
+                : []),
+            ],
+            // Trailing chevron (replaces base-ui's default triangle submenu arrow,
+            // which is hidden via the .lobe-submenu-chevron rule in ActionDropdown).
+            extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
             footer: knowledgeFooter,
-            icon: activeIcon(LibraryBig, knowledgeEnabledCount > 0),
-            key: 'knowledge-base',
-            label: renderLabelWithCount(t('knowledgeBase.title'), knowledgeEnabledCount),
+            icon: LibraryBig,
+            key: 'attachments',
+            label: renderLabelWithCount(t('plus.addAttachments'), knowledgeEnabledCount),
           } as ActionDropdownMenuItems[number],
         ]
-      : [];
+      : uploadItems;
 
-    return [...uploadItems, ...knowledgeSectionItems, ...capabilityItems];
+    return [...attachmentsItems, ...capabilityItems];
   }, [
     activeSearchOption,
     canUploadImage,
     canUploadVideo,
+    canUploadAudio,
     editor,
     enableFC,
+    enableGatewayMode,
     enableKnowledgeBase,
-    handleOpenTools,
     handleSelectSearch,
+    handleToggleGatewayMode,
     handleToggleMemory,
     handleToggleParams,
     isAgentModeEnabled,
+    isDark,
+    isGatewayModeEnabled,
     isMemoryEnabled,
     isParamsPanelActive,
     knowledgeEnabledCount,

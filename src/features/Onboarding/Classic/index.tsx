@@ -47,9 +47,9 @@ const ClassicOnboardingPage = memo(() => {
       s.goToNextStep,
       s.goToPreviousStep,
     ]);
-  const enableKlavis = useServerConfigStore(serverConfigSelectors.enableKlavis);
+  const enableComposio = useServerConfigStore(serverConfigSelectors.enableComposio);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
-  const shouldSkipProSettingsStep = serverConfigInit && !enableKlavis;
+  const shouldSkipProSettingsStep = serverConfigInit && !enableComposio;
   const autoSkippedStepKeysRef = useRef<Set<string>>(new Set());
   const viewedStepKeysRef = useRef<Set<string>>(new Set());
 

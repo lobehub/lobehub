@@ -105,6 +105,22 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 
 具体的内容可以参见 [特性标志](/zh/docs/self-hosting/advanced/feature-flags) 中的说明。
 
+### `ENABLE_AGENT_GATEWAY`
+
+- 类型：可选
+- 描述：为自托管部署启用 Gateway Mode。仅在同时配置 `AGENT_GATEWAY_URL` 时生效。
+- 默认值：`0`
+- 示例：`1`
+
+商业版本会自动启用 Gateway Mode。自托管部署可以同时设置 `ENABLE_AGENT_GATEWAY=1` 和 `AGENT_GATEWAY_URL`，让客户端显示 Gateway Mode。
+
+### `AGENT_GATEWAY_URL`
+
+- 类型：可选
+- 描述：Agent Gateway 端点，用于让 Gateway Mode 通过后端运行支持的助理任务。
+- 默认值：-
+- 示例：`https://agent-gateway.example.com`
+
 ### `PROXY_URL`
 
 - 类型：可选
@@ -133,7 +149,8 @@ LobeHub 在部署时提供了一些额外的配置项，你可以使用环境变
 - 示例：`1` 或 `0`
 
 <Callout type="warning">
-  **安全提示**：启用此选项将关闭 SSRF 防护，允许连接私有 IP 地址段（127.0.0.0/8、10.0.0.0/8、172.16.0.0/12、192.168.0.0/16
+  **安全提示**：启用此选项将关闭 SSRF 防护，允许连接私有 IP
+  地址段（127.0.0.0/8、10.0.0.0/8、172.16.0.0/12、192.168.0.0/16
   等）。仅在需要访问内网资源的可信环境中启用。
 </Callout>
 

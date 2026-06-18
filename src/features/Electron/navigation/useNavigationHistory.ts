@@ -3,16 +3,17 @@
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 
 import { matchRouteMeta } from '@/features/Electron/titlebar/TabBar/resolveRouteMeta';
 import { normalizeTabUrl } from '@/features/Electron/titlebar/TabBar/url';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { desktopRoutes } from '@/spa/router/desktopRouter.config';
 import { useElectronStore } from '@/store/electron';
 
 export const useNavigationHistory = () => {
   const { t } = useTranslation('electron');
-  const navigate = useNavigate();
+  const navigate = useWorkspaceAwareNavigate();
   const location = useLocation();
 
   const isNavigatingHistory = useElectronStore((s) => s.isNavigatingHistory);

@@ -1,0 +1,80 @@
+import { describe, expect, it } from 'vitest';
+
+import { buildWorkspaceAwarePath } from '../workspaceAwarePath';
+
+describe('buildWorkspaceAwarePath', () => {
+  it('returns the path unchanged when no active workspace slug exists', () => {
+    expect(buildWorkspaceAwarePath('/memory', null)).toBe('/memory');
+    expect(buildWorkspaceAwarePath('/memory', undefined)).toBe('/memory');
+  });
+
+  it('prefixes absolute paths with the active workspace slug', () => {
+    expect(buildWorkspaceAwarePath('/memory', 'acme')).toBe('/acme/memory');
+    expect(buildWorkspaceAwarePath('/agent/inbox', 'acme')).toBe('/acme/agent/inbox');
+    expect(buildWorkspaceAwarePath('/community/agent/jailbreak', 'acme')).toBe(
+      '/acme/community/agent/jailbreak',
+    );
+    expect(buildWorkspaceAwarePath('/group/group-1', 'acme')).toBe('/acme/group/group-1');
+  });
+
+  it('bypasses the prefix when `escape` is true', () => {
+    expect(buildWorkspaceAwarePath('/settings/profile', 'acme', { escape: true })).toBe(
+      '/settings/profile',
+    );
+    expect(buildWorkspaceAwarePath('/settings/plans', 'acme', { escape: true })).toBe(
+      '/settings/plans',
+    );
+  });
+
+  it('does not double-prefix when the path is already under the active slug', () => {
+    expect(buildWorkspaceAwarePath('/acme', 'acme')).toBe('/acme');
+    expect(buildWorkspaceAwarePath('/acme/memory', 'acme')).toBe('/acme/memory');
+  });
+
+  it('leaves relative paths alone (router resolves them)', () => {
+    expect(buildWorkspaceAwarePath('memory', 'acme')).toBe('memory');
+    expect(buildWorkspaceAwarePath('../tasks', 'acme')).toBe('../tasks');
+  });
+
+  it('skips prefix for personal-only top-level paths', () => {
+    expect(buildWorkspaceAwarePath('/onboarding/agent', 'acme')).toBe('/onboarding/agent');
+    expect(buildWorkspaceAwarePath('/me/profile', 'acme')).toBe('/me/profile');
+    expect(buildWorkspaceAwarePath('/share/t/foo', 'acme')).toBe('/share/t/foo');
+    expect(buildWorkspaceAwarePath('/devtools', 'acme')).toBe('/devtools');
+    // Workspace invite acceptance is a standalone root-level page (no
+    // `/:workspaceSlug` mirror), so notifications linking to it must not be
+    // prefixed while the recipient sits inside another workspace.
+    expect(buildWorkspaceAwarePath('/invite/tok-123', 'acme')).toBe('/invite/tok-123');
+  });
+
+  it('prefixes settings sub-paths that have a workspace mirror', () => {
+    expect(buildWorkspaceAwarePath('/settings/general', 'acme')).toBe('/acme/settings/general');
+    expect(buildWorkspaceAwarePath('/settings/members', 'acme')).toBe('/acme/settings/members');
+    expect(buildWorkspaceAwarePath('/settings/plans', 'acme')).toBe('/acme/settings/plans');
+    expect(buildWorkspaceAwarePath('/settings/billing', 'acme')).toBe('/acme/settings/billing');
+    expect(buildWorkspaceAwarePath('/settings/credits', 'acme')).toBe('/acme/settings/credits');
+    expect(buildWorkspaceAwarePath('/settings/usage', 'acme')).toBe('/acme/settings/usage');
+    expect(buildWorkspaceAwarePath('/settings/skill', 'acme')).toBe('/acme/settings/skill');
+    expect(buildWorkspaceAwarePath('/settings/messenger', 'acme')).toBe('/acme/settings/messenger');
+    expect(buildWorkspaceAwarePath('/settings/creds', 'acme')).toBe('/acme/settings/creds');
+    expect(buildWorkspaceAwarePath('/settings/provider/openai', 'acme')).toBe(
+      '/acme/settings/provider/openai',
+    );
+  });
+
+  it('skips prefix for personal-only settings sub-paths', () => {
+    expect(buildWorkspaceAwarePath('/settings/profile', 'acme')).toBe('/settings/profile');
+    expect(buildWorkspaceAwarePath('/settings/llm', 'acme')).toBe('/settings/llm');
+    expect(buildWorkspaceAwarePath('/settings/memory', 'acme')).toBe('/settings/memory');
+    expect(buildWorkspaceAwarePath('/settings/referral', 'acme')).toBe('/settings/referral');
+    expect(buildWorkspaceAwarePath('/settings/system-tools', 'acme')).toBe(
+      '/settings/system-tools',
+    );
+  });
+
+  it('prefixes the `/settings` index — both personal and workspace have a meaningful redirect', () => {
+    expect(buildWorkspaceAwarePath('/settings', 'acme')).toBe('/acme/settings');
+    expect(buildWorkspaceAwarePath('/settings/', 'acme')).toBe('/acme/settings/');
+    expect(buildWorkspaceAwarePath('/settings?foo=bar', 'acme')).toBe('/acme/settings?foo=bar');
+  });
+});

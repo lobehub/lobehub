@@ -2,21 +2,28 @@
 
 import { type SlashOptions } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { type MenuProps } from '@lobehub/ui';
-import { Alert, Flexbox } from '@lobehub/ui';
+import { Alert, Button, Flexbox, type MenuProps } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 
-import { useBusinessChatInputSendAreaPrefix } from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
+import {
+  getBusinessChatInputSendAreaPrefix,
+  useBusinessChatInputCostEstimateAlert,
+} from '@/business/client/hooks/useBusinessChatInputSendAreaPrefix';
+import { useBusinessInputCompletionErrorAlert } from '@/business/client/hooks/useBusinessInputCompletionErrorAlert';
 import type { ActionKeys, ChatInputFeature } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
+import { selectors as chatInputSelectors, useChatInputStore } from '@/features/ChatInput/store';
 import {
+  type InputCompletionError,
   type SendButtonHandler,
   type SendButtonProps,
 } from '@/features/ChatInput/store/initialState';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import { selectCurrentTurnTodosFromMessages } from '@/store/chat/slices/message/selectors/dbMessage';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 
@@ -24,6 +31,7 @@ import WideScreenContainer from '../../WideScreenContainer';
 import InterventionBar from '../InterventionBar';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../store';
 import TodoProgress from '../TodoProgress';
+import OpStatusTray from './OpStatusTray';
 import QueueTray from './QueueTray';
 import { getConversationChatInputUiState } from './utils';
 
@@ -37,6 +45,55 @@ const toChatInputMessages = (messages: ReturnType<typeof dataSelectors.dbMessage
       content: typeof m.content === 'string' ? m.content : '',
       role: m.role as 'user' | 'assistant' | 'system',
     }));
+
+const InputCompletionErrorAlertContent = memo<{
+  inputCompletionError: InputCompletionError;
+}>(({ inputCompletionError }) => {
+  const { t } = useTranslation('chat');
+  const clearInputCompletionError = useChatInputStore((s) => s.clearInputCompletionError);
+  const businessAlert = useBusinessInputCompletionErrorAlert({
+    error: inputCompletionError,
+    onRetry: clearInputCompletionError,
+  });
+
+  const action = businessAlert.action ?? (
+    <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+      <Button size={'small'} type={'primary'} onClick={clearInputCompletionError}>
+        {t('input.inputCompletionError.retry')}
+      </Button>
+      <Link to={'/settings/agent'}>
+        <Button size={'small'}>{t('input.inputCompletionError.settings')}</Button>
+      </Link>
+    </Flexbox>
+  );
+
+  return (
+    <>
+      <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
+        <Alert
+          showIcon
+          action={action}
+          description={businessAlert.description ?? t('input.inputCompletionError.desc')}
+          title={t('input.inputCompletionError.title')}
+          type={'warning'}
+        />
+      </Flexbox>
+      {businessAlert.extra}
+    </>
+  );
+});
+
+InputCompletionErrorAlertContent.displayName = 'InputCompletionErrorAlertContent';
+
+const InputCompletionErrorAlert = memo(() => {
+  const inputCompletionError = useChatInputStore(chatInputSelectors.inputCompletionErrorVisible);
+
+  if (!inputCompletionError) return null;
+
+  return <InputCompletionErrorAlertContent inputCompletionError={inputCompletionError} />;
+});
+
+InputCompletionErrorAlert.displayName = 'InputCompletionErrorAlert';
 
 export interface ChatInputProps {
   /**
@@ -53,6 +110,11 @@ export interface ChatInputProps {
    */
   children?: ReactNode;
   /**
+   * Custom node to render in place of the default ControlBar
+   * (Local/Cloud/Approval). When provided, replaces the default bar.
+   */
+  controlBarSlot?: ReactNode;
+  /**
    * Suppress the followUp placeholder variant (e.g. onboarding has no
    * follow-up design). When true, placeholder stays in default variant.
    */
@@ -62,6 +124,13 @@ export interface ChatInputProps {
    * Hides the QueueTray and gates handleSend so Enter does not enqueue.
    */
   disableQueue?: boolean;
+  /**
+   * Externally force the send action off, regardless of input content. Grays
+   * out the send button and gates handleSend so Enter can't send either. Used
+   * by host surfaces that are temporarily read-only (e.g. the Page Agent when
+   * another member holds the page edit lock).
+   */
+  disableSend?: boolean;
   /**
    * Extra action items to append to the ActionBar
    */
@@ -97,11 +166,6 @@ export interface ChatInputProps {
    */
   rightActions?: ActionKeys[];
   /**
-   * Custom node to render in place of the default RuntimeConfig bar
-   * (Local/Cloud/Approval). When provided, replaces the default bar.
-   */
-  runtimeConfigSlot?: ReactNode;
-  /**
    * Custom content to render before the SendArea (right side of action bar)
    */
   sendAreaPrefix?: ReactNode;
@@ -114,9 +178,9 @@ export interface ChatInputProps {
    */
   sendMenu?: MenuProps;
   /**
-   * Whether to show the runtime config bar (Local/Cloud/Auto Approve)
+   * Whether to show the control bar (Local/Cloud/Auto Approve)
    */
-  showRuntimeConfig?: boolean;
+  showControlBar?: boolean;
   /**
    * Remove a small margin when placed adjacent to the ChatList
    */
@@ -135,6 +199,7 @@ const ChatInput = memo<ChatInputProps>(
     allowExpand,
     disableFollowUpVariant,
     disableQueue,
+    disableSend,
     feature,
     leftActions = [],
     leftContent,
@@ -143,11 +208,11 @@ const ChatInput = memo<ChatInputProps>(
     extraActionItems,
     isConfigLoading = false,
     mentionItems,
-    runtimeConfigSlot,
+    controlBarSlot,
     sendMenu,
     sendAreaPrefix,
     sendButtonProps: customSendButtonProps,
-    showRuntimeConfig = true,
+    showControlBar = true,
     onEditorReady,
     skipScrollMarginWithList,
   }) => {
@@ -221,6 +286,10 @@ const ChatInput = memo<ChatInputProps>(
       (s) => operationSelectors.queuedMessageCount(context)(s) > 0,
     );
 
+    // Detect whether TodoProgress will render (mirrors its own gating) so we
+    // can square the top corners of OpStatusTray when it sits flush below.
+    const hasTodos = (selectCurrentTurnTodosFromMessages(dbMessages)?.items.length ?? 0) > 0;
+
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
     const { placeholderVariant, showSendMenu, showStopButton } = getConversationChatInputUiState({
@@ -230,13 +299,20 @@ const ChatInput = memo<ChatInputProps>(
     });
     // Input stays enabled during agent execution — messages are queued.
     // When disableQueue is set (e.g. onboarding), block sending while loading.
-    const disabled = isInputEmpty || isUploadingFiles || (!!disableQueue && isInputLoading);
+    // disableSend hard-blocks regardless of content (host surface is read-only).
+    const disabled =
+      isInputEmpty || isUploadingFiles || (!!disableQueue && isInputLoading) || !!disableSend;
     const shouldUsePlainSendButton = !showSendMenu && !!sendMenu;
-    const businessSendAreaPrefix = useBusinessChatInputSendAreaPrefix(sendAreaPrefix);
+    const businessCostEstimateAlert = useBusinessChatInputCostEstimateAlert();
+    const businessSendAreaPrefix = getBusinessChatInputSendAreaPrefix(sendAreaPrefix);
 
     // Send handler - gets message, clears editor immediately, then sends
     const handleSend: SendButtonHandler = useCallback(
       async ({ clearContent, getMarkdownContent, getEditorData }) => {
+        // Host surface is read-only (e.g. page locked) — block Enter too, not
+        // just the grayed-out button.
+        if (disableSend) return;
+
         // Get instant values from stores at trigger time
         const fileStore = useFileStore.getState();
         const currentFileList = fileChatSelectors.chatUploadFileList(fileStore);
@@ -273,7 +349,7 @@ const ChatInput = memo<ChatInputProps>(
         // Fire and forget - send with captured message
         await sendMessage({ editorData, files: currentFileList, message, pageSelections });
       },
-      [sendMessage, disableQueue, isInputLoading],
+      [sendMessage, disableQueue, disableSend, isInputLoading],
     );
 
     const sendButtonProps: SendButtonProps = {
@@ -304,6 +380,8 @@ const ChatInput = memo<ChatInputProps>(
               />
             </Flexbox>
           )}
+          <InputCompletionErrorAlert />
+          {businessCostEstimateAlert}
           <Flexbox
             paddingInline={12}
             ref={overlayRef}
@@ -317,18 +395,19 @@ const ChatInput = memo<ChatInputProps>(
           >
             {!disableQueue && hasQueuedMessages && <QueueTray />}
             <TodoProgress topAttached={!disableQueue && hasQueuedMessages} />
+            <OpStatusTray topAttached={(!disableQueue && hasQueuedMessages) || hasTodos} />
           </Flexbox>
           <DesktopChatInput
             actionBarStyle={actionBarStyle}
             borderRadius={12}
+            controlBarSlot={controlBarSlot}
             extraActionItems={extraActionItems}
             hidden={hasPendingInterventions}
             isConfigLoading={isConfigLoading}
             leftContent={leftContent}
             placeholderVariant={placeholderVariant}
-            runtimeConfigSlot={runtimeConfigSlot}
             sendAreaPrefix={businessSendAreaPrefix}
-            showRuntimeConfig={showRuntimeConfig}
+            showControlBar={showControlBar}
           />
         </div>
       </WideScreenContainer>

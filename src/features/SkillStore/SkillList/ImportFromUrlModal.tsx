@@ -6,6 +6,7 @@ import { ArrowLeftRight, Link, Sparkles } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useToolStore } from '@/store/tool';
 
 interface ImportFromUrlModalProps {
@@ -20,6 +21,7 @@ const ImportFromUrlModal = memo<ImportFromUrlModalProps>(({ open, onOpenChange }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState('');
+  const { allowed: canCreate } = usePermission('create_content');
 
   const handleClose = () => {
     onOpenChange(false);
@@ -29,7 +31,7 @@ const ImportFromUrlModal = memo<ImportFromUrlModalProps>(({ open, onOpenChange }
 
   const handleImport = async () => {
     const trimmed = url.trim();
-    if (!trimmed) return;
+    if (!canCreate || !trimmed) return;
 
     setLoading(true);
     setError(null);
@@ -74,6 +76,7 @@ const ImportFromUrlModal = memo<ImportFromUrlModalProps>(({ open, onOpenChange }
         <Flexbox gap={8}>
           <Typography.Text strong>URL</Typography.Text>
           <Input
+            disabled={!canCreate}
             placeholder={t('agentSkillModal.url.urlPlaceholder')}
             value={url}
             onPressEnter={handleImport}
@@ -84,7 +87,7 @@ const ImportFromUrlModal = memo<ImportFromUrlModalProps>(({ open, onOpenChange }
           />
         </Flexbox>
 
-        <Button block loading={loading} type="primary" onClick={handleImport}>
+        <Button block disabled={!canCreate} loading={loading} type="primary" onClick={handleImport}>
           {t('common:import')}
         </Button>
       </Flexbox>

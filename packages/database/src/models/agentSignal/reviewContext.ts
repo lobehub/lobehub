@@ -1,5 +1,6 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { and, count, desc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import {
   agentDocuments,
@@ -11,6 +12,7 @@ import {
   userMemories,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { buildWorkspaceWhere } from '../../utils/workspace';
 
 const parseAggregateTimestamp = (value: Date | string) =>
   value instanceof Date ? value : new Date(value);
@@ -99,11 +101,16 @@ export interface AgentSignalDocumentActivityRow {
 export class AgentSignalReviewContextModel {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
+  private readonly workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
     this.userId = userId;
+    this.workspaceId = workspaceId;
   }
+
+  private ws = (cols: { userId: AnyPgColumn; workspaceId: AnyPgColumn }) =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, cols);
 
   /** Checks agent ownership, virtual status, and self-iteration opt-in. */
   canAgentRunSelfIteration = async (agentId: string) => {
@@ -113,7 +120,7 @@ export class AgentSignalReviewContextModel {
       .where(
         and(
           eq(agents.id, agentId),
-          eq(agents.userId, this.userId),
+          this.ws(agents),
           or(eq(agents.virtual, false), isNull(agents.virtual), eq(agents.slug, INBOX_SESSION_ID)),
           or(
             eq(agents.slug, INBOX_SESSION_ID),
@@ -183,14 +190,11 @@ export class AgentSignalReviewContextModel {
         totalCount: count(messagePlugins.id),
       })
       .from(messagePlugins)
-      .innerJoin(
-        messages,
-        and(eq(messages.id, messagePlugins.id), eq(messages.userId, this.userId)),
-      )
-      .leftJoin(topics, and(eq(topics.id, messages.topicId), eq(topics.userId, this.userId)))
+      .innerJoin(messages, and(eq(messages.id, messagePlugins.id), this.ws(messages)))
+      .leftJoin(topics, and(eq(topics.id, messages.topicId), this.ws(topics)))
       .where(
         and(
-          eq(messagePlugins.userId, this.userId),
+          this.ws(messagePlugins),
           eq(effectiveAgentId, options.agentId),
           gte(messages.createdAt, options.windowStart),
           lte(messages.createdAt, options.windowEnd),
@@ -220,13 +224,10 @@ export class AgentSignalReviewContextModel {
         updatedAt: agentDocuments.updatedAt,
       })
       .from(agentDocuments)
-      .innerJoin(
-        documents,
-        and(eq(documents.id, agentDocuments.documentId), eq(documents.userId, this.userId)),
-      )
+      .innerJoin(documents, and(eq(documents.id, agentDocuments.documentId), this.ws(documents)))
       .where(
         and(
-          eq(agentDocuments.userId, this.userId),
+          this.ws(agentDocuments),
           eq(agentDocuments.agentId, options.agentId),
           isNull(agentDocuments.deletedAt),
           gte(agentDocuments.updatedAt, options.windowStart),
@@ -285,14 +286,11 @@ export class AgentSignalReviewContextModel {
         topicId: topics.id,
       })
       .from(messages)
-      .leftJoin(topics, and(eq(topics.id, messages.topicId), eq(topics.userId, this.userId)))
-      .leftJoin(
-        messagePlugins,
-        and(eq(messagePlugins.id, messages.id), eq(messagePlugins.userId, this.userId)),
-      )
+      .leftJoin(topics, and(eq(topics.id, messages.topicId), this.ws(topics)))
+      .leftJoin(messagePlugins, and(eq(messagePlugins.id, messages.id), this.ws(messagePlugins)))
       .where(
         and(
-          eq(messages.userId, this.userId),
+          this.ws(messages),
           eq(effectiveAgentId, options.agentId),
           gte(messages.createdAt, options.windowStart),
           lte(messages.createdAt, options.windowEnd),
@@ -349,14 +347,11 @@ export class AgentSignalReviewContextModel {
         topicId: topics.id,
       })
       .from(messages)
-      .leftJoin(topics, and(eq(topics.id, messages.topicId), eq(topics.userId, this.userId)))
-      .leftJoin(
-        messagePlugins,
-        and(eq(messagePlugins.id, messages.id), eq(messagePlugins.userId, this.userId)),
-      )
+      .leftJoin(topics, and(eq(topics.id, messages.topicId), this.ws(topics)))
+      .leftJoin(messagePlugins, and(eq(messagePlugins.id, messages.id), this.ws(messagePlugins)))
       .where(
         and(
-          eq(messages.userId, this.userId),
+          this.ws(messages),
           eq(messages.agentId, options.agentId),
           gte(messages.createdAt, options.windowStart),
           lte(messages.createdAt, options.windowEnd),

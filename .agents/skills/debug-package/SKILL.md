@@ -57,7 +57,7 @@ process.env.DEBUG = 'lobe-*';
 ## Example
 
 ```typescript
-// src/server/routers/edge/market/index.ts
+// apps/server/src/routers/edge/market/index.ts
 import debug from 'debug';
 
 const log = debug('lobe-edge-router:market');

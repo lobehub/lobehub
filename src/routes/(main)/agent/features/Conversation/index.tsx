@@ -19,12 +19,13 @@ const wrapperStyle: React.CSSProperties = {
 };
 
 const ChatConversation = memo(() => {
+  const agentId = useAgentStore((s) => s.activeAgentId || '');
   const model = useAgentStore(agentSelectors.currentAgentModel);
   const provider = useAgentStore(agentSelectors.currentAgentModelProvider);
   const isHeterogeneous = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
   const isLocalSystemEnabled = useAgentStore(agentChatConfigSelectors.isLocalSystemEnabled);
 
-  const { handleUploadFiles } = useUploadFiles({ model, provider });
+  const { handleUploadFiles } = useUploadFiles({ agentId, model, provider });
 
   const enableLocalFolderMention = isDesktop && (isHeterogeneous || isLocalSystemEnabled);
 

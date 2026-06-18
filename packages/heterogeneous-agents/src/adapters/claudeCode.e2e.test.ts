@@ -182,16 +182,22 @@ describe('ClaudeCodeAdapter E2E', () => {
     // 2 boundaries: msg_01 → msg_02, msg_02 → msg_03
     expect(newStepStarts.length).toBe(2);
 
-    // 5. turn_metadata is now emitted on `stream_event: message_delta`, not on
-    // `assistant` events (CC echoes a stale message_start usage on every
-    // content block). This simplified fixture has no stream_event records, so
-    // no turn_metadata fires here — a dedicated test in claudeCode.test.ts
-    // covers the message_delta flow. We still assert the result_usage summary
-    // lands at session end.
+    // 5. This fixture has no `stream_event` records — i.e. BATCH mode, like the
+    // `lh hetero exec` device / sandbox path. There is no `message_delta` to
+    // own per-turn usage, so the adapter emits turn_metadata from each
+    // `assistant` event that carries `message.usage` (authoritative in batch
+    // mode, not a stale echo). The fixture has 5 such assistant events.
+    // In partial mode this path is suppressed — see claudeCode.test.ts.
     const metaEvents = allEvents.filter(
       (e) => e.type === 'step_complete' && e.data?.phase === 'turn_metadata',
     );
-    expect(metaEvents.length).toBe(0);
+    expect(metaEvents.length).toBe(5);
+    // All carry the canonical model + provider.
+    expect(metaEvents.every((e) => e.data.model === 'claude-sonnet-4-6')).toBe(true);
+    expect(metaEvents.every((e) => e.data.provider === 'claude-code')).toBe(true);
+    // Final turn's authoritative usage (msg_03: input 1000 + output 30).
+    expect(metaEvents.at(-1)!.data.usage.totalTokens).toBe(1030);
+
     const resultUsage = allEvents.filter(
       (e) => e.type === 'step_complete' && e.data?.phase === 'result_usage',
     );

@@ -95,6 +95,7 @@ const Inspectors = memo<InspectorProps>(
               partialArgs={partialJson}
               pluginState={result?.state}
               result={result}
+              toolCallId={toolCallId}
             />
           </SafeBoundary>
           <ExecutionTime

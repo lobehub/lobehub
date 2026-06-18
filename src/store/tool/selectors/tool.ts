@@ -1,5 +1,5 @@
 import { getBuiltinRenderDisplayControl } from '@lobechat/builtin-tools/displayControls';
-import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
+import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 import { type RenderDisplayControl, type ToolManifest } from '@lobechat/types';
 
 import {
@@ -11,7 +11,7 @@ import { type LobeToolMeta } from '@/types/tool/tool';
 
 import { type ToolStoreState } from '../initialState';
 import { builtinToolSelectors } from '../slices/builtin/selectors';
-import { KlavisServerStatus } from '../slices/klavisStore';
+import { ComposioServerStatus } from '../slices/composioStore';
 import { lobehubSkillStoreSelectors } from '../slices/lobehubSkillStore';
 import { LobehubSkillStatus } from '../slices/lobehubSkillStore/types';
 import { pluginSelectors } from '../slices/plugin/selectors';
@@ -117,15 +117,15 @@ export interface AvailableToolForDiscovery {
  *
  * Sources:
  * 1. Builtin tools (from s.builtinTools) — exclude non-discoverable, skills, platform-unavailable
- * 2. User-installed plugins (from s.installedPlugins) — exclude Klavis/LobeHub Skill/agent skill overlap
- * 3. Klavis MCP servers (connected) — description from KLAVIS_SERVER_TYPES
+ * 2. User-installed plugins (from s.installedPlugins) — exclude Composio/LobeHub Skill/agent skill overlap
+ * 3. Composio MCP servers (connected) — description from COMPOSIO_APP_TYPES
  * 4. LobeHub Skill servers (connected) — description from LOBEHUB_SKILL_PROVIDERS
  */
 const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscovery[] => {
   // Build exclusion sets for deduplication
   const builtinSkillIds = new Set((s.builtinSkills || []).map((skill) => skill.identifier));
   const agentSkillIds = new Set((s.agentSkills || []).map((skill) => skill.identifier));
-  const klavisIds = new Set((s.servers || []).map((server) => server.identifier));
+  const composioIds = new Set((s.composioServers || []).map((server) => server.identifier));
   const lobehubSkillIds = new Set((s.lobehubSkillServers || []).map((server) => server.identifier));
 
   // 1. Builtin tools — directly from s.builtinTools
@@ -140,12 +140,12 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
     }));
 
   // 2. User-installed plugins — directly from s.installedPlugins
-  //    Exclude Klavis, LobeHub Skill, and agent skill entries (they are handled in dedicated sources)
+  //    Exclude Composio, LobeHub Skill, and agent skill entries (they are handled in dedicated sources)
   const pluginItems = s.installedPlugins
-    .filter((p) => !klavisIds.has(p.identifier))
+    .filter((p) => !composioIds.has(p.identifier))
     .filter((p) => !lobehubSkillIds.has(p.identifier))
     .filter((p) => !agentSkillIds.has(p.identifier))
-    .filter((p) => !p.customParams?.klavis) // extra safety for Klavis plugins
+    .filter((p) => !p.customParams?.composio) // extra safety for Composio plugins
     .filter((plugin) => isInstalledPluginAvailableInCurrentEnv(plugin))
     .map((plugin) => {
       const meta = plugin.manifest?.meta;
@@ -156,15 +156,15 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
       };
     });
 
-  // 3. Klavis MCP servers (connected only)
-  const klavisItems = (s.servers || [])
-    .filter((server) => server.status === KlavisServerStatus.CONNECTED && server.tools?.length)
+  // 3. Composio MCP servers (connected only)
+  const composioItems = (s.composioServers || [])
+    .filter((server) => server.status === ComposioServerStatus.ACTIVE && server.tools?.length)
     .map((server) => {
-      const config = getKlavisServerByServerIdentifier(server.identifier);
+      const config = getComposioAppByIdentifier(server.identifier);
       return {
         description: config?.description || '',
         identifier: server.identifier,
-        name: config?.label || server.serverName,
+        name: config?.label || server.label,
       };
     });
 
@@ -180,7 +180,7 @@ const availableToolsForDiscovery = (s: ToolStoreState): AvailableToolForDiscover
       };
     });
 
-  return [...builtinItems, ...pluginItems, ...klavisItems, ...lobehubSkillItems];
+  return [...builtinItems, ...pluginItems, ...composioItems, ...lobehubSkillItems];
 };
 
 export const toolSelectors = {

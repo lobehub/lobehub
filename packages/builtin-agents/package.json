@@ -19,6 +19,7 @@
     "@lobechat/builtin-tool-notebook": "workspace:*",
     "@lobechat/builtin-tool-task": "workspace:*",
     "@lobechat/builtin-tool-user-interaction": "workspace:*",
+    "@lobechat/builtin-tool-verify": "workspace:*",
     "@lobechat/business-const": "workspace:*",
     "@lobechat/const": "workspace:*"
   },

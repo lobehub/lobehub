@@ -1,6 +1,7 @@
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
+import { discoverKeys } from '@/libs/swr/keys';
 import { discoverService } from '@/services/discover';
 import { type DiscoverStore } from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
@@ -29,7 +30,7 @@ export class ProviderActionImpl {
   }): SWRResponse<DiscoverProviderDetail | undefined> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
-      ['provider-details', locale, params.identifier].filter(Boolean).join('-'),
+      discoverKeys.providerDetail(locale, params.identifier),
       async () => discoverService.getProviderDetail(params),
       {
         revalidateOnFocus: false,
@@ -38,15 +39,19 @@ export class ProviderActionImpl {
   };
 
   useProviderIdentifiers = (): SWRResponse<IdentifiersResponse> => {
-    return useSWR('provider-identifiers', async () => discoverService.getProviderIdentifiers(), {
-      revalidateOnFocus: false,
-    });
+    return useSWR(
+      discoverKeys.providerIdentifiers(),
+      async () => discoverService.getProviderIdentifiers(),
+      {
+        revalidateOnFocus: false,
+      },
+    );
   };
 
   useProviderList = (params: ProviderQueryParams = {}): SWRResponse<ProviderListResponse> => {
     const locale = globalHelpers.getCurrentLanguage();
     return useSWR(
-      ['provider-list', locale, ...Object.values(params)].filter(Boolean).join('-'),
+      discoverKeys.providerList(locale, params),
       async () =>
         discoverService.getProviderList({
           ...params,

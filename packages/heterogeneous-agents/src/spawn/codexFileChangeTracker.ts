@@ -1,8 +1,10 @@
 import { access, readFile } from 'node:fs/promises';
+import path from 'node:path';
 
 import { createPatch } from 'diff';
 
 interface CodexFileChangeEntry {
+  diffText?: string;
   kind?: string;
   path?: string;
 }
@@ -32,10 +34,15 @@ interface CodexFileChangeLineStats {
   linesDeleted: number;
 }
 
-interface CodexTrackedFileChangeEntry extends CodexFileChangeEntry, CodexFileChangeLineStats {}
+interface CodexFileChangeDiff extends CodexFileChangeLineStats {
+  diffText?: string;
+}
+
+interface CodexTrackedFileChangeEntry extends CodexFileChangeEntry, CodexFileChangeDiff {}
 
 interface CodexTrackedFileChangeItem extends CodexFileChangeItem, CodexFileChangeLineStats {
   changes?: CodexTrackedFileChangeEntry[];
+  diffText?: string;
 }
 
 const isCodexFileChangePayload = (
@@ -60,13 +67,10 @@ const readTextFileSnapshot = async (filePath: string): Promise<CodexFileChangeSn
   }
 };
 
-const countPatchLines = (
-  previousContent: string,
-  nextContent: string,
-): CodexFileChangeLineStats => {
-  if (previousContent === nextContent) return { linesAdded: 0, linesDeleted: 0 };
+const resolveFilePath = (filePath: string, cwd: string): string =>
+  path.isAbsolute(filePath) ? filePath : path.resolve(cwd, filePath);
 
-  const patch = createPatch('codex-file-change', previousContent, nextContent, '', '');
+const countPatchLines = (patch: string): CodexFileChangeLineStats => {
   let insideHunk = false;
   let linesAdded = 0;
   let linesDeleted = 0;
@@ -92,37 +96,69 @@ const countPatchLines = (
   return { linesAdded, linesDeleted };
 };
 
-const computeLineStats = async (
+const toGitDiffPath = (prefix: 'a' | 'b', filePath: string): string =>
+  filePath.startsWith('/') ? `${prefix}${filePath}` : `${prefix}/${filePath}`;
+
+const createDiffText = (filePath: string, previousContent: string, nextContent: string): string => {
+  const patch = createPatch(filePath, previousContent, nextContent, '', '');
+  return `diff --git ${toGitDiffPath('a', filePath)} ${toGitDiffPath('b', filePath)}\n${patch}`;
+};
+
+const buildFileChangeDiff = (
+  filePath: string,
+  previousContent: string,
+  nextContent: string,
+): CodexFileChangeDiff => {
+  if (previousContent === nextContent) return { linesAdded: 0, linesDeleted: 0 };
+
+  const diffText = createDiffText(filePath, previousContent, nextContent);
+
+  return {
+    ...countPatchLines(diffText),
+    diffText,
+  };
+};
+
+const computeFileChangeDiff = async (
   change: CodexFileChangeEntry,
+  cwd: string,
   snapshot?: CodexFileChangeSnapshot,
-): Promise<CodexFileChangeLineStats> => {
+): Promise<CodexFileChangeDiff> => {
   const filePath = change.path;
   if (!filePath) return { linesAdded: 0, linesDeleted: 0 };
 
   const kind = change.kind ?? 'update';
   if (kind === 'rename') return { linesAdded: 0, linesDeleted: 0 };
 
+  const resolvedFilePath = resolveFilePath(filePath, cwd);
   const previousContent = snapshot?.content ?? '';
-  const current = await readTextFileSnapshot(filePath);
+  const current = await readTextFileSnapshot(resolvedFilePath);
   const nextContent = current.content ?? '';
 
   if (kind === 'add') {
     if (!current.exists) return { linesAdded: 0, linesDeleted: 0 };
-    return countPatchLines('', nextContent);
+    if (current.content === undefined) return { linesAdded: 0, linesDeleted: 0 };
+    return buildFileChangeDiff(filePath, '', nextContent);
   }
 
   if (kind === 'delete' || kind === 'remove') {
     if (!snapshot?.exists) return { linesAdded: 0, linesDeleted: 0 };
-    return countPatchLines(previousContent, '');
+    if (snapshot.content === undefined) return { linesAdded: 0, linesDeleted: 0 };
+    return buildFileChangeDiff(filePath, previousContent, '');
   }
 
   if (!snapshot?.exists && !current.exists) return { linesAdded: 0, linesDeleted: 0 };
 
-  return countPatchLines(previousContent, nextContent);
+  if (snapshot?.exists && snapshot.content === undefined) return { linesAdded: 0, linesDeleted: 0 };
+  if (current.exists && current.content === undefined) return { linesAdded: 0, linesDeleted: 0 };
+
+  return buildFileChangeDiff(filePath, previousContent, nextContent);
 };
 
 export class CodexFileChangeTracker {
   private snapshots = new Map<string, Map<string, CodexFileChangeSnapshot>>();
+
+  constructor(private readonly cwd = process.cwd()) {}
 
   async track<T extends CodexFileChangePayload>(payload: T): Promise<T> {
     if (!isCodexFileChangePayload(payload)) return payload;
@@ -136,7 +172,10 @@ export class CodexFileChangeTracker {
       await Promise.all(
         changes.map(async (change) => {
           if (!change.path || snapshots.has(change.path)) return;
-          snapshots.set(change.path, await readTextFileSnapshot(change.path));
+          snapshots.set(
+            change.path,
+            await readTextFileSnapshot(resolveFilePath(change.path, this.cwd)),
+          );
         }),
       );
 
@@ -153,14 +192,15 @@ export class CodexFileChangeTracker {
 
     const trackedChanges = await Promise.all(
       changes.map(async (change) => {
-        const stats = await computeLineStats(
+        const diff = await computeFileChangeDiff(
           change,
+          this.cwd,
           change.path ? snapshots.get(change.path) : undefined,
         );
 
         return {
           ...change,
-          ...stats,
+          ...diff,
         } satisfies CodexTrackedFileChangeEntry;
       }),
     );
@@ -172,11 +212,16 @@ export class CodexFileChangeTracker {
       }),
       { linesAdded: 0, linesDeleted: 0 },
     );
+    const diffText = trackedChanges
+      .map((change) => change.diffText)
+      .filter((text): text is string => !!text)
+      .join('\n');
 
     return {
       ...payload,
       item: {
         ...payload.item,
+        ...(diffText ? { diffText } : {}),
         ...totals,
         changes: trackedChanges,
       } satisfies CodexTrackedFileChangeItem,

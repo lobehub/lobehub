@@ -1,0 +1,109 @@
+import agent from './agent';
+import agentGroup from './agentGroup';
+import auth from './auth';
+import authError from './authError';
+import changelog from './changelog';
+import chat from './chat';
+import color from './color';
+import common from './common';
+import components from './components';
+import desktopOnboarding from './desktop-onboarding';
+import device from './device';
+import discover from './discover';
+import editor from './editor';
+import electron from './electron';
+import error from './error';
+import eval_ from './eval';
+import file from './file';
+import home from './home';
+import hotkey from './hotkey';
+import image from './image';
+import knowledgeBase from './knowledgeBase';
+import labs from './labs';
+import marketAuth from './marketAuth';
+import memory from './memory';
+import messenger from './messenger';
+import metadata from './metadata';
+import migration from './migration';
+import modelProvider from './modelProvider';
+import modelRuntime from './modelRuntime';
+import models from './models';
+import notification from './notification';
+import oauth from './oauth';
+import onboarding from './onboarding';
+import openInApp from './openInApp';
+import opStatusTray from './opStatusTray';
+import pageShare from './pageShare';
+import plugin from './plugin';
+import portal from './portal';
+import providers from './providers';
+import ragEval from './ragEval';
+import setting from './setting';
+import spend from './spend';
+import subscription from './subscription';
+import suggestQuestions from './suggestQuestions';
+import taskTemplate from './taskTemplate';
+import thread from './thread';
+import tool from './tool';
+import topic from './topic';
+import ui from './ui';
+import verify from './verify';
+import video from './video';
+import welcome from './welcome';
+
+const resources = {
+  agent,
+  agentGroup,
+  auth,
+  authError,
+  changelog,
+  chat,
+  color,
+  common,
+  components,
+  'desktop-onboarding': desktopOnboarding,
+  device,
+  discover,
+  editor,
+  electron,
+  error,
+  'eval': eval_,
+  file,
+  home,
+  hotkey,
+  image,
+  knowledgeBase,
+  labs,
+  marketAuth,
+  memory,
+  messenger,
+  metadata,
+  migration,
+  modelProvider,
+  modelRuntime,
+  models,
+  notification,
+  oauth,
+  onboarding,
+  opStatusTray,
+  openInApp,
+  pageShare,
+  plugin,
+  portal,
+  providers,
+  ragEval,
+  setting,
+  spend,
+  subscription,
+  suggestQuestions,
+  taskTemplate,
+  thread,
+  tool,
+  topic,
+  ui,
+  verify,
+  video,
+  welcome,
+} as const;
+
+export default resources;

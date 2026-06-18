@@ -1,10 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
 import { type AgentStoreState } from '@/store/agent/initialState';
 import { initialAgentSliceState } from '@/store/agent/slices/agent/initialState';
 import { initialBuiltinAgentSliceState } from '@/store/agent/slices/builtin/initialState';
 
 import { agentByIdSelectors } from './agentByIdSelectors';
+
+// getAgentWorkingDirectoryById is desktop-only; force the desktop branch on.
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal()),
+  isDesktop: true,
+}));
 
 const createState = (overrides: Partial<AgentStoreState> = {}): AgentStoreState => ({
   ...initialAgentSliceState,
@@ -54,6 +61,131 @@ describe('agentByIdSelectors', () => {
         provider: undefined,
         systemRole: undefined,
       });
+    });
+  });
+
+  describe('agent mode', () => {
+    it('should default to agent mode when enableAgentMode is not explicitly false', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            chatConfig: {},
+            model: 'gpt-4o',
+            provider: 'openai',
+          },
+        },
+      });
+
+      expect(agentByIdSelectors.getAgentModeById('agent-1')(state)).toBe('auto');
+      expect(agentByIdSelectors.getAgentEnableModeById('agent-1')(state)).toBe(true);
+    });
+
+    it('should keep the agent in agent mode when agent mode is enabled', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': {
+            chatConfig: { enableAgentMode: true },
+            model: 'claude-opus-4-8',
+            provider: 'lobehub',
+          },
+        },
+      });
+
+      expect(agentByIdSelectors.getAgentModeById('agent-1')(state)).toBe('auto');
+      expect(agentByIdSelectors.getAgentEnableModeById('agent-1')(state)).toBe(true);
+    });
+  });
+
+  describe('getAgentWorkingDirectoryById', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    const stateWith = (config: Record<string, any>, localMap: Record<string, string> = {}) =>
+      createState({
+        agentMap: { 'agent-1': config },
+        localAgentWorkingDirectoryMap: localMap,
+      });
+
+    it('reads the per-device choice for the current (local) device', () => {
+      vi.spyOn(globalAgentContextManager, 'getContext').mockReturnValue({ homePath: '/home/me' });
+      const state = stateWith({
+        agencyConfig: { workingDirByDevice: { 'device-A': '/repos/agent-gateway' } },
+      });
+
+      expect(agentByIdSelectors.getAgentWorkingDirectoryById('agent-1', 'device-A')(state)).toBe(
+        '/repos/agent-gateway',
+      );
+    });
+
+    it('reads the bound device choice when the agent targets a device', () => {
+      vi.spyOn(globalAgentContextManager, 'getContext').mockReturnValue({ homePath: '/home/me' });
+      const state = stateWith({
+        agencyConfig: {
+          boundDeviceId: 'device-B',
+          executionTarget: 'device',
+          workingDirByDevice: { 'device-A': '/repos/local', 'device-B': '/repos/remote' },
+        },
+      });
+
+      // currentDeviceId is the local machine, but executionTarget=device → device-B wins
+      expect(agentByIdSelectors.getAgentWorkingDirectoryById('agent-1', 'device-A')(state)).toBe(
+        '/repos/remote',
+      );
+    });
+
+    it('falls back to the legacy per-agent value when no device choice exists', () => {
+      vi.spyOn(globalAgentContextManager, 'getContext').mockReturnValue({ homePath: '/home/me' });
+      const state = stateWith({ agencyConfig: {} }, { 'agent-1': '/repos/legacy' });
+
+      expect(agentByIdSelectors.getAgentWorkingDirectoryById('agent-1', 'device-A')(state)).toBe(
+        '/repos/legacy',
+      );
+    });
+
+    it('falls back to desktop/home path when nothing is set', () => {
+      vi.spyOn(globalAgentContextManager, 'getContext').mockReturnValue({
+        desktopPath: '/home/me/Desktop',
+        homePath: '/home/me',
+      });
+      const state = stateWith({ agencyConfig: {} });
+
+      expect(agentByIdSelectors.getAgentWorkingDirectoryById('agent-1', 'device-A')(state)).toBe(
+        '/home/me/Desktop',
+      );
+    });
+  });
+
+  describe('getAgentConfigErrorById', () => {
+    it('returns the recorded error for the agent', () => {
+      const state = createState({ agentConfigErrorMap: { 'agent-1': 'boom' } });
+
+      expect(agentByIdSelectors.getAgentConfigErrorById('agent-1')(state)).toBe('boom');
+    });
+
+    it('returns undefined for another agent or an empty id', () => {
+      const state = createState({ agentConfigErrorMap: { 'agent-1': 'boom' } });
+
+      expect(agentByIdSelectors.getAgentConfigErrorById('agent-2')(state)).toBeUndefined();
+      expect(agentByIdSelectors.getAgentConfigErrorById('')(state)).toBeUndefined();
+    });
+  });
+
+  describe('getAgentTTSVoiceById', () => {
+    it('returns the configured openai voice', () => {
+      const state = createState({
+        agentMap: {
+          'agent-1': { tts: { ttsService: 'openai', voice: { openai: 'nova' } } },
+        },
+      });
+
+      expect(agentByIdSelectors.getAgentTTSVoiceById('agent-1', 'en-US')(state)).toBe('nova');
+    });
+
+    it('falls back to a default voice when the agent config is missing', () => {
+      const state = createState({ agentMap: {} });
+
+      expect(agentByIdSelectors.getAgentTTSVoiceById('missing', 'en-US')(state)).toBeTruthy();
     });
   });
 });

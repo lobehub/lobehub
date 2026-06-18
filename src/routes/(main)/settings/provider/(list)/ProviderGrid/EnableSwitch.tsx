@@ -1,6 +1,7 @@
 import { type FC } from 'react';
 
 import InstantSwitch from '@/components/InstantSwitch';
+import { usePermission } from '@/hooks/usePermission';
 import { useAiInfraStore } from '@/store/aiInfra';
 
 interface SwitchProps {
@@ -10,6 +11,7 @@ interface SwitchProps {
 }
 
 const Switch = ({ id, Component, enabled }: SwitchProps) => {
+  const { allowed: canManageProvider } = usePermission('manage_provider_key');
   const [toggleProviderEnabled] = useAiInfraStore((s) => [s.toggleProviderEnabled]);
 
   // slot for cloud
@@ -17,9 +19,11 @@ const Switch = ({ id, Component, enabled }: SwitchProps) => {
 
   return (
     <InstantSwitch
+      disabled={!canManageProvider}
       enabled={enabled}
       size={'small'}
       onChange={async (checked) => {
+        if (!canManageProvider) return;
         await toggleProviderEnabled(id, checked);
       }}
     />

@@ -797,7 +797,12 @@ describe('AuthCtr', () => {
         expect(mockRemoteServerConfigCtr.setRemoteServerConfig).toHaveBeenCalledWith({
           active: false,
         });
-        expect(mockWindow.webContents.send).toHaveBeenCalledWith('authorizationRequired');
+        expect(mockWindow.webContents.send).toHaveBeenCalledWith(
+          'authorizationRequired',
+          expect.objectContaining({
+            reason: expect.stringContaining('startup:non_retryable'),
+          }),
+        );
       });
 
       it('should preserve tokens on transient error', async () => {

@@ -15,6 +15,7 @@ import { timestamps } from './_helpers';
 import { agents } from './agent';
 import { sessionGroups } from './session';
 import { users } from './user';
+import { workspaces } from './workspace';
 
 /**
  * Chat groups table for multi-agent conversations
@@ -42,6 +43,7 @@ export const chatGroups = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     groupId: text('group_id').references(() => sessionGroups.id, { onDelete: 'set null' }),
 
@@ -53,6 +55,7 @@ export const chatGroups = pgTable(
     uniqueIndex('chat_groups_client_id_user_id_unique').on(t.clientId, t.userId),
     index('chat_groups_user_id_idx').on(t.userId),
     index('chat_groups_group_id_idx').on(t.groupId),
+    index('chat_groups_workspace_id_idx').on(t.workspaceId),
   ],
 );
 
@@ -75,6 +78,7 @@ export const chatGroupsAgents = pgTable(
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
 
     /**
      * Whether this agent is active in the group
@@ -96,6 +100,7 @@ export const chatGroupsAgents = pgTable(
   (t) => ({
     pk: primaryKey({ columns: [t.chatGroupId, t.agentId] }),
     userIdIdx: index('chat_groups_agents_user_id_idx').on(t.userId),
+    workspaceIdIdx: index('chat_groups_agents_workspace_id_idx').on(t.workspaceId),
   }),
 );
 

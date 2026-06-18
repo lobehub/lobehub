@@ -139,7 +139,14 @@ describe('format', () => {
     it('should format numbers 10,000,000 and above correctly', () => {
       expect(formatShortenNumber(10000000)).toBe('10.0M');
       expect(formatShortenNumber(123456789)).toBe('123.5M');
-      expect(formatShortenNumber(9876543210)).toBe('9876.5M');
+    });
+
+    it('should format billions and trillions correctly', () => {
+      expect(formatShortenNumber(1000000000)).toBe('1.0B');
+      expect(formatShortenNumber(9876543210)).toBe('9.9B');
+      expect(formatShortenNumber(15065800000)).toBe('15.1B');
+      expect(formatShortenNumber(1000000000000)).toBe('1.0T');
+      expect(formatShortenNumber(2500000000000)).toBe('2.5T');
     });
   });
 

@@ -55,6 +55,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface FileRowProps {
+  /** Target device the repo lives on — undefined for local desktop. */
+  deviceId?: string;
   entry: GitWorkingTreePatch;
   expanded: boolean;
   mode: ReviewMode;
@@ -71,6 +73,7 @@ interface FileRowProps {
 
 const FileRow = memo<FileRowProps>(
   ({
+    deviceId,
     entry,
     expanded,
     mode,
@@ -110,8 +113,10 @@ const FileRow = memo<FileRowProps>(
             additions={entry.additions}
             deletions={entry.deletions}
             filePath={entry.filePath}
-            revertContext={mode === 'unstaged' ? { workingDirectory: repoAbsolutePath } : undefined}
             status={entry.status}
+            revertContext={
+              mode === 'unstaged' ? { deviceId, workingDirectory: repoAbsolutePath } : undefined
+            }
             onReverted={onReverted}
           />
         </div>

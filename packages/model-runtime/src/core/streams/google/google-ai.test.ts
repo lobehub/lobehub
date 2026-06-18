@@ -159,6 +159,46 @@ describe('GoogleGenerativeAIStream', () => {
       ]);
     });
 
+    it('should expose missing usage diagnostics when finishReason has no usageMetadata', async () => {
+      vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('missingUsage');
+      const mockGoogleStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue({
+            candidates: [
+              {
+                content: { parts: [{ text: '' }], role: 'model' },
+                finishReason: 'STOP',
+                index: 0,
+              },
+            ],
+            modelVersion: 'gemini-test',
+          } as unknown as GenerateContentResponse);
+          controller.close();
+        },
+      });
+      const onFinal = vi.fn();
+
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream, {
+        callbacks: { onFinal },
+        payload: { model: 'gemini-3.1-flash-lite', provider: 'google' },
+      });
+
+      await decodeStreamChunks(protocolStream);
+
+      expect(onFinal).toHaveBeenCalledWith(
+        expect.objectContaining({
+          usageMissingDiagnostics: {
+            finishReason: 'STOP',
+            hasUsageMetadata: false,
+            model: 'gemini-3.1-flash-lite',
+            provider: 'google',
+            source: 'google_generative_ai',
+            terminalEventType: 'GenerateContentResponse.candidates.finishReason',
+          },
+        }),
+      );
+    });
+
     it('should return undefined data without text', async () => {
       vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
 

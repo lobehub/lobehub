@@ -13,7 +13,7 @@ import { ImageType, imageTypeOptions, useScreenshot } from '@/hooks/useScreensho
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
-import { useConversationStore } from '../../../store';
+import { contextSelectors, useConversationStore } from '../../../store';
 import { styles } from '../style';
 import Preview from './Preview';
 import { type FieldType, WidthMode } from './type';
@@ -27,7 +27,10 @@ const DEFAULT_FIELD_VALUE: FieldType = {
 
 const ShareImage = memo<{ message: UIChatMessage; mobile?: boolean; uniqueId?: string }>(
   ({ message, uniqueId }) => {
-    const currentAgentTitle = useAgentStore(agentSelectors.currentAgentTitle);
+    const agentId = useConversationStore(contextSelectors.agentId);
+    const currentAgentTitle = useAgentStore(
+      (s) => agentSelectors.getAgentMetaById(agentId)(s).title,
+    );
     const context = useConversationStore((s) => s.context);
     const [fieldValue, setFieldValue] = useState<FieldType>(DEFAULT_FIELD_VALUE);
     const { t } = useTranslation(['chat', 'common']);

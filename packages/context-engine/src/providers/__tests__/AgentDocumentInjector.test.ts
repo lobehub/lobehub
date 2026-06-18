@@ -225,6 +225,33 @@ describe('AgentDocumentInjector', () => {
       expect(result.messages[0].content).not.toContain('Full content that should NOT appear');
     });
 
+    it('should render progressive index sizes from contentCharCount when content is omitted', async () => {
+      const provider = new AgentDocumentContextInjector({
+        currentTime: new Date('2026-04-29T00:00:00.000Z'),
+        documents: [
+          {
+            content: '',
+            contentCharCount: 12_000,
+            filename: 'large-note.txt',
+            id: 'note-1',
+            loadPosition: 'before-first-user',
+            loadRules: { rule: 'always' },
+            policyLoad: 'progressive',
+            sourceType: 'file',
+            title: 'Large Note',
+            updatedAt: new Date('2026-04-27T00:00:00.000Z'),
+          },
+        ],
+      });
+
+      const context = createContext([{ content: 'Hello', id: 'user-1', role: 'user' }]);
+      const result = await provider.process(context);
+
+      expect(result.messages[0].content).toContain('Large Note');
+      expect(result.messages[0].content).toContain('12k');
+      expect(result.messages[0].content).not.toContain('empty');
+    });
+
     it('should hide web-crawled docs from the index and surface the count', async () => {
       const provider = new AgentDocumentContextInjector({
         currentTime: new Date('2026-04-29T00:00:00.000Z'),

@@ -13,8 +13,9 @@ import {
 } from './slices/agentDocumentSkills';
 import { type AgentSkillsAction, createAgentSkillsSlice } from './slices/agentSkills';
 import { type BuiltinToolAction, createBuiltinToolSlice } from './slices/builtin';
+import { type ComposioStoreAction, createComposioStoreSlice } from './slices/composioStore';
+import { type ConnectorAction, createConnectorSlice } from './slices/connector';
 import { createCustomPluginSlice, type CustomPluginAction } from './slices/customPlugin';
-import { createKlavisStoreSlice, type KlavisStoreAction } from './slices/klavisStore';
 import {
   createLobehubSkillStoreSlice,
   type LobehubSkillStoreAction,
@@ -25,21 +26,23 @@ import { createPluginSlice, type PluginAction } from './slices/plugin';
 //  ===============  Aggregate createStoreFn ============ //
 
 export type ToolStore = ToolStoreState &
+  ConnectorAction &
   CustomPluginAction &
   PluginAction &
   BuiltinToolAction &
   PluginMCPStoreAction &
-  KlavisStoreAction &
+  ComposioStoreAction &
   LobehubSkillStoreAction &
   AgentSkillsAction &
   AgentDocumentSkillsAction &
   ResetableStore;
 
-type ToolStoreAction = CustomPluginAction &
+type ToolStoreAction = ConnectorAction &
+  CustomPluginAction &
   PluginAction &
   BuiltinToolAction &
   PluginMCPStoreAction &
-  KlavisStoreAction &
+  ComposioStoreAction &
   LobehubSkillStoreAction &
   AgentSkillsAction &
   AgentDocumentSkillsAction &
@@ -54,11 +57,12 @@ const createStore: StateCreator<ToolStore, [['zustand/devtools', never]]> = (
 ) => ({
   ...initialState,
   ...flattenActions<ToolStoreAction>([
+    createConnectorSlice(...parameters),
     createPluginSlice(...parameters),
     createCustomPluginSlice(...parameters),
     createBuiltinToolSlice(...parameters),
     createMCPPluginStoreSlice(...parameters),
-    createKlavisStoreSlice(...parameters),
+    createComposioStoreSlice(...parameters),
     createLobehubSkillStoreSlice(...parameters),
     createAgentSkillsSlice(...parameters),
     createAgentDocumentSkillsSlice(...parameters),

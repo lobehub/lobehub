@@ -14,6 +14,7 @@ import type {
   ChatToolPayloadWithResult,
   ToolIntervention,
 } from '../common/tools';
+import type { ChatAudioItem } from './audio';
 import type { ChatMessageExtra } from './extra';
 import type { ChatFileChunk } from './rag';
 import type { ChatVideoItem } from './video';
@@ -30,7 +31,8 @@ export type UIMessageRoleType =
   | 'assistantGroup'
   | 'agentCouncil'
   | 'compressedGroup'
-  | 'compareGroup';
+  | 'compareGroup'
+  | 'verify';
 
 export interface ChatFileItem {
   content?: string;
@@ -172,6 +174,7 @@ export interface TaskDetail {
 export interface UIChatMessage {
   // Group chat fields (alphabetically before other fields)
   agentId?: string | 'supervisor';
+  audioList?: ChatAudioItem[];
   /**
    * Branch information for user messages with multiple children
    */

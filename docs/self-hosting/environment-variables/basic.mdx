@@ -1,9 +1,8 @@
 ---
 title: Customize LobeHub Deployment with Environment Variables
 description: >-
-  Learn about the common environment variables used to customize LobeHub
-  deployment, including access code, OAuth SSO, base path, and default agent
-  configuration.
+  Learn about the common environment variables used to customize LobeHub deployment, including access code, OAuth SSO, base path, and default agent configuration.
+
 tags:
   - LobeHub
   - environment variables
@@ -27,7 +26,8 @@ LobeHub provides some additional configuration options during deployment, which 
 - Example: `Kix2wcUONd4CX51E/ZPAd36BqM4wzJgKjPtz2sGztqQ=`
 
 <Callout type={'warning'}>
-  This key is used to encrypt sensitive data. Once set, do not change it, otherwise encrypted data cannot be decrypted.
+  This key is used to encrypt sensitive data. Once set, do not change it, otherwise encrypted data
+  cannot be decrypted.
 </Callout>
 
 <GenerateSecret envName="KEY_VAULTS_SECRET" />
@@ -108,6 +108,22 @@ Available system agents and their functions:
 
 For specific content, please refer to the [Feature Flags](/docs/self-hosting/advanced/feature-flags) documentation.
 
+### `ENABLE_AGENT_GATEWAY`
+
+- Type: Optional
+- Description: Enables Gateway Mode for self-hosted deployments. It only takes effect when `AGENT_GATEWAY_URL` is also configured.
+- Default: `0`
+- Example: `1`
+
+Business builds enable Gateway Mode automatically. Self-hosted deployments can set `ENABLE_AGENT_GATEWAY=1` together with `AGENT_GATEWAY_URL` to expose Gateway Mode to clients.
+
+### `AGENT_GATEWAY_URL`
+
+- Type: Optional
+- Description: Agent Gateway endpoint used by Gateway Mode to run supported agent tasks through the backend.
+- Default: -
+- Example: `https://agent-gateway.example.com`
+
 ### `PROXY_URL`
 
 - Type: Optional
@@ -137,9 +153,9 @@ For specific content, please refer to the [Feature Flags](/docs/self-hosting/adv
 - Example: `1` or `0`
 
 <Callout type="warning">
-  **Security Notice**: Enabling this option will disable SSRF protection and allow connections to private
-  IP addresses (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, etc.). Only enable this in
-  trusted environments where you need to access internal network resources.
+  **Security Notice**: Enabling this option will disable SSRF protection and allow connections to
+  private IP addresses (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, etc.). Only enable
+  this in trusted environments where you need to access internal network resources.
 </Callout>
 
 **Use Cases**:

@@ -10,7 +10,14 @@ import {
   type HeterogeneousAgentSessionError,
   HeterogeneousAgentSessionErrorCode,
 } from '@lobechat/electron-client-ipc';
-import type { SubagentEventContext, ToolCallPayload } from '@lobechat/heterogeneous-agents';
+import {
+  createMainAgentRunState,
+  type MainAgentIntent,
+  type MainAgentReduceCtx,
+  type MainAgentRunState,
+  reduceMainAgent,
+  type SubagentIntent,
+} from '@lobechat/heterogeneous-agents';
 import type {
   ChatMessageError,
   ChatToolPayload,
@@ -33,7 +40,7 @@ import { resolveNotificationNavigatePath } from '@/store/chat/utils/desktopNotif
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { messageMapKey } from '../../../utils/messageMapKey';
-import { mergeQueuedMessages } from '../../operation/types';
+import { mergeQueuedMessages, reconstructUploadFilesFromQueue } from '../../operation/types';
 import { createGatewayEventHandler } from './gatewayEventHandler';
 
 /** Mirrors `idGenerator('threads', 16)` on the server so sync-allocated ids have the same shape. */
@@ -165,8 +172,23 @@ const toHeterogeneousAgentMessageError = (error: unknown, agentType?: string): C
         ? error
         : 'Agent execution failed';
 
+  // Surface the underlying `cause` (e.g. undici's `ENOTFOUND` / `ECONNREFUSED`
+  // hidden under a generic `TypeError: fetch failed`). The desktop IPC layer
+  // ferries `cause` across via an error envelope (see `~common/ipcError`).
+  // Flatten any Error cause to a plain object — `ChatMessageError.body` is
+  // persisted as DB JSONB, where a raw Error would serialize to `{}`.
+  const rawCause = error instanceof Error ? error.cause : undefined;
+  const cause =
+    rawCause instanceof Error
+      ? {
+          code: (rawCause as { code?: unknown }).code,
+          message: rawCause.message,
+          name: rawCause.name,
+        }
+      : rawCause;
+
   return {
-    body: { message },
+    body: cause === undefined || cause === null ? { message } : { cause, message },
     message,
     type: AgentRuntimeErrorType.AgentRuntimeError,
   };
@@ -261,21 +283,6 @@ const subscribeBroadcasts = (
 };
 
 /**
- * Per-assistant-message persistence state — covers ONE assistant row's
- * `tools[]` JSONB and the de-dupe set for its tool_uses. Main-agent
- * and subagent-thread assistants each have their own instance; the
- * `tool_use.id → tool message DB id` lookup is SHARED globally across
- * all scopes (see `toolMsgIdByCallId` in `executeHeterogeneousAgent`)
- * because `tool_result` events identify the target by id alone.
- */
-interface ToolPersistenceState {
-  /** Ordered list of ChatToolPayload[] written to this assistant's tools JSONB */
-  payloads: ChatToolPayload[];
-  /** Set of tool_use.id that have been persisted (de-dupe guard) */
-  persistedIds: Set<string>;
-}
-
-/**
  * Thread-scoped in-memory dispatcher for a single subagent run. The
  * caller binds it to a per-spawn sub-operation whose
  * `OperationContext.threadId` + `scope: 'thread'` cause
@@ -298,684 +305,6 @@ interface SubagentStoreDispatcher {
   /** Update a message already in the thread bucket by id. */
   update: (id: string, value: Partial<UIChatMessage>) => void;
 }
-
-/**
- * Runs the 3-phase tool persistence flow for ONE assistant message —
- * either the main-agent assistant or a subagent-thread-scoped assistant.
- * Same ordering guarantee in both scopes:
- *
- *   1. Pre-register tools[] on the assistant (no result_msg_id yet), so
- *      LobeHub's conversation-flow parser finds matching ids the moment
- *      tool messages land in DB — no orphan window.
- *   2. Create `role:'tool'` messages, one per fresh tool_use. `threadId`
- *      is only set for subagent scope (so the tool messages stay inside
- *      the subagent Thread and don't leak into the main topic).
- *   3. Re-write assistant.tools[] with the backfilled `result_msg_id`
- *      so the UI can hydrate tool results.
- *
- * Carries the latest accumulated text/reasoning into Phases 1+3 so DB
- * stays in sync with streamed content. Without this, the gateway
- * handler's `tool_end → fetchAndReplaceMessages` would read a
- * tools-only row and clobber in-memory streamed text in the UI.
- *
- * Idempotent against re-processing: tool_use ids already in
- * `state.persistedIds` are skipped.
- */
-const persistToolBatch = async (
-  incoming: ToolCallPayload[],
-  state: ToolPersistenceState,
-  assistantMessageId: string,
-  context: ConversationContext,
-  snapshot: { content: string; reasoning: string },
-  /**
-   * Global `tool_use.id → tool message DB id` map, populated by every
-   * call (main + every subagent run) so a later `tool_result` lookup
-   * finds its row without needing to know which scope created it.
-   */
-  toolMsgIdByCallId: Map<string, string>,
-  /**
-   * When set, tool messages are scoped to this thread (subagent mode) and
-   * Phase 1 / 3 target the subagent-thread assistant. Undefined = main
-   * agent scope (tools live under the main topic, threadId stays null).
-   */
-  threadId?: string,
-  /**
-   * Invoked immediately after each fresh tool's `role:'tool'` DB row is
-   * created, with the DB-generated id + the payload. Subagent callers
-   * use this to seed the thread's messagesMap bucket so the UI shows
-   * the tool bubble in sync with the DB row; main-agent callers leave
-   * it undefined (fetchAndReplaceMessages hydrates the main bucket).
-   */
-  onToolCreated?: (args: {
-    assistantMessageId: string;
-    toolMessageId: string;
-    tool: ToolCallPayload;
-  }) => void,
-) => {
-  const freshTools = incoming.filter((t) => !state.persistedIds.has(t.id));
-  if (freshTools.length === 0) return;
-
-  // Mark all fresh tools as persisted up front, so re-entrant calls (from
-  // Claude Code echoing tool_use blocks) are safely deduped.
-  for (const tool of freshTools) state.persistedIds.add(tool.id);
-
-  const buildUpdate = (): Record<string, any> => {
-    const update: Record<string, any> = { tools: state.payloads };
-    if (snapshot.content) update.content = snapshot.content;
-    if (snapshot.reasoning) update.reasoning = { content: snapshot.reasoning };
-    return update;
-  };
-
-  // ─── PHASE 1: pre-register tools[] on the assistant row ───
-  for (const tool of freshTools) state.payloads.push({ ...tool } as ChatToolPayload);
-  try {
-    await messageService.updateMessage(assistantMessageId, buildUpdate(), {
-      agentId: context.agentId,
-      topicId: context.topicId,
-    });
-  } catch (err) {
-    console.error('[HeterogeneousAgent] Failed to pre-register assistant tools:', err);
-  }
-
-  // ─── PHASE 2: create the tool messages ───
-  for (const tool of freshTools) {
-    try {
-      const result = await messageService.createMessage({
-        agentId: context.agentId,
-        content: '',
-        parentId: assistantMessageId,
-        plugin: {
-          apiName: tool.apiName,
-          arguments: tool.arguments,
-          identifier: tool.identifier,
-          type: tool.type as ChatToolPayload['type'],
-        },
-        role: 'tool',
-        threadId,
-        tool_call_id: tool.id,
-        topicId: context.topicId ?? undefined,
-      });
-      toolMsgIdByCallId.set(tool.id, result.id);
-      const entry = state.payloads.find((p) => p.id === tool.id);
-      if (entry) entry.result_msg_id = result.id;
-      onToolCreated?.({ assistantMessageId, toolMessageId: result.id, tool });
-    } catch (err) {
-      console.error('[HeterogeneousAgent] Failed to create tool message:', err);
-    }
-  }
-
-  // ─── PHASE 3: backfill result_msg_id on assistant.tools[] ───
-  try {
-    await messageService.updateMessage(assistantMessageId, buildUpdate(), {
-      agentId: context.agentId,
-      topicId: context.topicId,
-    });
-  } catch (err) {
-    console.error('[HeterogeneousAgent] Failed to finalize assistant tools:', err);
-  }
-};
-
-/**
- * Per-subagent-spawn state tracking the current Thread + current
- * subagent assistant message for a given parent Task tool_use. One entry
- * per `parentToolCallId`, created lazily on the first subagent event.
- *
- * `subagentMessageId` mirrors main-agent turn tracking: when the
- * adapter-reported subagent message.id changes, the executor cuts a new
- * subagent assistant message inside the Thread (same-shaped recursion
- * as the main agent's step boundary — `user → assistant → tool → assistant`).
- */
-interface SubagentRunState {
-  /**
-   * Accumulated text content for the CURRENT in-thread assistant turn.
-   * Mirrors the main agent's `accumulatedContent`: subagent text chunks
-   * append while the turn streams, the value travels alongside tools[]
-   * in each persist batch update so DB sees content + tools in one go,
-   * and is flushed on turn change / subagent finalization.
-   */
-  accumulatedContent: string;
-  /** Accumulated reasoning (thinking) content for the current turn. */
-  accumulatedReasoning: string;
-  /** The in-thread assistant message currently being appended to. */
-  currentAssistantMsgId: string;
-  /** Adapter's `subagentMessageId` for the current turn (change = new assistant). */
-  currentSubagentMessageId: string;
-  /**
-   * Tools created in the most recent persist batch, keyed by tool_use.id
-   * → tool message DB id. Used to chain the NEXT turn's assistant off the
-   * last tool message (mirrors main agent's step-boundary parentId logic).
-   * Populated after each persist from the caller-provided global map.
-   */
-  lastBatchToolMsgIds: string[];
-  /**
-   * Most recent parentId in the thread's chain. Flows like the main
-   * topic: `user → assistant#1 → tool → assistant#2 → tool → ...`.
-   * Updated as new tool messages / assistant messages are created so
-   * the next write lands on the end of the chain.
-   */
-  lastChainParentId: string;
-  /**
-   * Run-lifetime set of every inner tool_call_id this subagent has ever
-   * persisted into its thread. Unlike `state.persistedIds`, which is
-   * turn-scoped and wiped when `currentSubagentMessageId` advances, this
-   * set only grows — so a delayed `tool_result` that lands after the
-   * owning turn has rolled over still resolves back to the right run via
-   * `findRunByInnerToolCallId`. Without this, the thread-bucket
-   * `updateMessage` path is skipped and the in-thread tool bubble stays
-   * stuck on the loading spinner until the user re-opens the Thread
-   * (main-topic `fetchAndReplaceMessages` does not rehydrate thread
-   * buckets).
-   */
-  lifetimeToolCallIds: Set<string>;
-  /**
-   * Assistant message id that a deferred buffer flush is still owed to.
-   * Set when `finalizeSubagentRun` captures the flush target but the DB
-   * write fails; the next retry (typically the `onComplete` fallback)
-   * reads this instead of the live `currentAssistantMsgId` — which the
-   * subsequent terminal-message branch may have advanced to the spawn
-   * result row, i.e. the WRONG target for a leftover streamed buffer.
-   */
-  pendingFlushTarget?: string;
-  /**
-   * Per-subagent-assistant persistence state (tools[] payloads +
-   * dedupe). Reset on every turn boundary so each in-thread assistant
-   * has its own tools[].
-   */
-  state: ToolPersistenceState;
-  /**
-   * Thread-scoped store dispatcher — mutates the thread's messagesMap
-   * bucket in sync with the DB writes so the UI streams subagent text /
-   * tools / results token-by-token (same UX as the main bubble). Created
-   * once per spawn alongside the Thread row + the per-spawn sub-op.
-   */
-  stream: SubagentStoreDispatcher;
-  /**
-   * Per-spawn sub-operation id. Created via `startOperation` with
-   * `parentOperationId` = the main run's op + `context.threadId` set, so
-   * `internal_getConversationContext` resolves dispatches to the Thread
-   * bucket without any threadId-override hack at the dispatch boundary.
-   * Cancellation and cleanup cascade automatically via the existing
-   * parent/child operation linkage.
-   */
-  subOperationId: string;
-  /** The subagent Thread this spawn's messages belong to. */
-  threadId: string;
-}
-
-/**
- * Handle a subagent `tools_calling` chunk: ensure Thread + current
- * subagent assistant exist, then run the shared 3-phase persist
- * targeting the in-thread assistant.
- *
- * Lazy Thread creation: the FIRST subagent chunk for a given parent
- * carries `spawnMetadata` (title / prompt / subagentType) on the
- * event's `subagent` peer. That's when we create the Thread row + the
- * `role:'user'` seed message. Subsequent chunks omit `spawnMetadata`
- * and just append to the existing Thread.
- *
- * Turn tracking: when `subagent.subagentMessageId` differs from the
- * stored `currentSubagentMessageId`, we cut a new in-thread assistant
- * and reset per-turn state. Chain parenting mirrors main-agent step
- * handling: `user → asst#1 → tool → asst#2 → tool → ...`.
- */
-/**
- * Ensure a `SubagentRunState` exists for the given spawn + its current
- * turn matches `subagentMessageId`. Handles two lazy actions:
- *
- *   1. **First event for a new parent** → create the Thread row, seed
- *      its `role:'user'` prompt message, open the first in-thread
- *      `role:'assistant'`.
- *   2. **Turn boundary** (new `subagentMessageId`) → flush the prior
- *      turn's accumulated content to DB, then open the next in-thread
- *      assistant chained off the last tool message (same shape as
- *      main-agent step boundaries).
- *
- * Returns the run or `undefined` if any of the creates failed (the
- * caller drops the event gracefully).
- *
- * Shared by `persistSubagentToolChunk` and `persistSubagentTextChunk`
- * so text-only turns (e.g. the subagent's closing summary) and
- * tool-only turns both flow through the same Thread-lifecycle code.
- */
-const ensureSubagentRun = async (
-  subagentCtx: SubagentEventContext,
-  mainAssistantMessageId: string,
-  context: ConversationContext,
-  subagentRuns: Map<string, SubagentRunState>,
-  /**
-   * Starts the per-spawn sub-operation (so `internal_dispatchMessage`
-   * resolves into the Thread bucket via the standard operation context
-   * path) and returns its id + a thread-scoped dispatcher bound to it.
-   * Closed over `get` + parent `operationId` + `context` in the caller
-   * so this helper doesn't need to know about the store / operation
-   * registry. Called exactly once per spawn (on lazy-create) —
-   * subsequent turn boundaries reuse `run.stream` + `run.subOperationId`.
-   */
-  beginSubagentRun: (threadId: string) => {
-    stream: SubagentStoreDispatcher;
-    subOperationId: string;
-  },
-  /**
-   * Invoked once per Thread creation (the lazy-create path) so the
-   * caller can invalidate SWR caches / push the new thread into any
-   * in-memory list the UI is rendering. Fire-and-forget; the executor
-   * shouldn't block persistence on UI-side cache refresh.
-   */
-  onThreadCreated?: (threadId: string) => void,
-): Promise<SubagentRunState | undefined> => {
-  if (!context.topicId) {
-    // Without a topicId we can't create a Thread — drop silently (same
-    // fallback as the main path; a non-topic-scoped test harness).
-    return undefined;
-  }
-
-  let run = subagentRuns.get(subagentCtx.parentToolCallId);
-
-  // ─── First subagent event for this parent → lazy-create Thread ───
-  if (!run) {
-    const { spawnMetadata } = subagentCtx;
-    const threadId = generateThreadId();
-    const title =
-      spawnMetadata?.description?.slice(0, 80) || spawnMetadata?.subagentType || 'Subagent';
-
-    try {
-      await threadService.createThread({
-        id: threadId,
-        metadata: {
-          sourceToolCallId: subagentCtx.parentToolCallId,
-          startedAt: new Date().toISOString(),
-          subagentType: spawnMetadata?.subagentType,
-        },
-        sourceMessageId: mainAssistantMessageId,
-        status: ThreadStatus.Processing,
-        title,
-        topicId: context.topicId,
-        type: ThreadType.Isolation,
-      });
-      onThreadCreated?.(threadId);
-    } catch (err) {
-      console.error('[HeterogeneousAgent] Failed to create subagent thread:', err);
-      return undefined;
-    }
-
-    let userMsgId: string | undefined;
-    try {
-      const userMsg = await messageService.createMessage({
-        agentId: context.agentId,
-        content: spawnMetadata?.prompt ?? '',
-        parentId: mainAssistantMessageId,
-        role: 'user',
-        threadId,
-        topicId: context.topicId,
-      });
-      userMsgId = userMsg.id;
-    } catch (err) {
-      console.error('[HeterogeneousAgent] Failed to create subagent user message:', err);
-      return undefined;
-    }
-
-    let firstAssistantId: string;
-    try {
-      const firstAssistant = await messageService.createMessage({
-        agentId: context.agentId,
-        content: '',
-        parentId: userMsgId,
-        role: 'assistant',
-        threadId,
-        topicId: context.topicId,
-      });
-      firstAssistantId = firstAssistant.id;
-    } catch (err) {
-      console.error('[HeterogeneousAgent] Failed to create subagent assistant message:', err);
-      return undefined;
-    }
-
-    const { stream, subOperationId } = beginSubagentRun(threadId);
-    // Seed the thread bucket with user + first assistant so the UI
-    // renders the Thread body the moment it opens — without this the
-    // thread's messagesMap entry stays empty until something triggers a
-    // main-topic fetch that happens to include thread rows, leaving the
-    // first subagent turn invisible.
-    stream.create({
-      agentId: context.agentId,
-      content: spawnMetadata?.prompt ?? '',
-      id: userMsgId,
-      parentId: mainAssistantMessageId,
-      role: 'user',
-      threadId,
-      topicId: context.topicId,
-    } as UIChatMessage);
-    stream.create({
-      agentId: context.agentId,
-      content: '',
-      id: firstAssistantId,
-      parentId: userMsgId,
-      role: 'assistant',
-      threadId,
-      topicId: context.topicId,
-    } as UIChatMessage);
-
-    run = {
-      accumulatedContent: '',
-      accumulatedReasoning: '',
-      currentAssistantMsgId: firstAssistantId,
-      currentSubagentMessageId: subagentCtx.subagentMessageId ?? '',
-      lastBatchToolMsgIds: [],
-      lastChainParentId: firstAssistantId,
-      lifetimeToolCallIds: new Set(),
-      state: { payloads: [], persistedIds: new Set() },
-      stream,
-      subOperationId,
-      threadId,
-    };
-    subagentRuns.set(subagentCtx.parentToolCallId, run);
-    return run;
-  }
-
-  // ─── New subagent turn → flush old content, cut a new assistant ───
-  if (
-    subagentCtx.subagentMessageId &&
-    subagentCtx.subagentMessageId !== run.currentSubagentMessageId
-  ) {
-    // Flush accumulated content for the PRIOR turn before it loses its
-    // assistant reference. We rely on persistToolBatch to also keep
-    // content+tools in sync during the turn, but a turn with NO tool
-    // calls (e.g. the subagent's final text-only summary) would never
-    // hit that path otherwise.
-    if (run.accumulatedContent || run.accumulatedReasoning) {
-      try {
-        const update: Record<string, any> = {};
-        if (run.accumulatedContent) update.content = run.accumulatedContent;
-        if (run.accumulatedReasoning) update.reasoning = { content: run.accumulatedReasoning };
-        await messageService.updateMessage(run.currentAssistantMsgId, update, {
-          agentId: context.agentId,
-          topicId: context.topicId,
-        });
-        run.stream.update(run.currentAssistantMsgId, update);
-      } catch (err) {
-        console.error('[HeterogeneousAgent] Failed to flush subagent turn content:', err);
-      }
-    }
-    try {
-      const nextAssistant = await messageService.createMessage({
-        agentId: context.agentId,
-        content: '',
-        parentId: run.lastChainParentId,
-        role: 'assistant',
-        threadId: run.threadId,
-        topicId: context.topicId,
-      });
-      run.stream.create({
-        agentId: context.agentId,
-        content: '',
-        id: nextAssistant.id,
-        parentId: run.lastChainParentId,
-        role: 'assistant',
-        threadId: run.threadId,
-        topicId: context.topicId,
-      } as UIChatMessage);
-      run.currentAssistantMsgId = nextAssistant.id;
-      run.currentSubagentMessageId = subagentCtx.subagentMessageId;
-      run.lastChainParentId = nextAssistant.id;
-      run.state = { payloads: [], persistedIds: new Set() };
-      run.lastBatchToolMsgIds = [];
-      run.accumulatedContent = '';
-      run.accumulatedReasoning = '';
-    } catch (err) {
-      console.error('[HeterogeneousAgent] Failed to create subagent turn assistant:', err);
-      return undefined;
-    }
-  }
-
-  return run;
-};
-
-/**
- * Handle a subagent `tools_calling` chunk: ensure Thread + current
- * subagent assistant exist, then run the shared 3-phase persist
- * targeting the in-thread assistant. Accumulated text/reasoning rides
- * along in the update so DB sees content + tools in one write.
- */
-const persistSubagentToolChunk = async (
-  tools: ToolCallPayload[],
-  subagentCtx: SubagentEventContext,
-  mainAssistantMessageId: string,
-  context: ConversationContext,
-  subagentRuns: Map<string, SubagentRunState>,
-  toolMsgIdByCallId: Map<string, string>,
-  beginSubagentRun: (threadId: string) => {
-    stream: SubagentStoreDispatcher;
-    subOperationId: string;
-  },
-  onThreadCreated?: (threadId: string) => void,
-) => {
-  const run = await ensureSubagentRun(
-    subagentCtx,
-    mainAssistantMessageId,
-    context,
-    subagentRuns,
-    beginSubagentRun,
-    onThreadCreated,
-  );
-  if (!run) return;
-
-  // Record every incoming tool_use id in the run-lifetime lookup set
-  // before persisting, so a `tool_result` that arrives after this turn
-  // has rolled over still finds its owning run via
-  // `findRunByInnerToolCallId` (which can't rely on `state.persistedIds`
-  // alone — that one is wiped on turn advance).
-  for (const tool of tools) run.lifetimeToolCallIds.add(tool.id);
-
-  // Snapshot the tool id set BEFORE the batch so we can compute which
-  // ids this call added (for chain-parent advancement below).
-  const preBatchIds = new Set(toolMsgIdByCallId.keys());
-
-  await persistToolBatch(
-    tools,
-    run.state,
-    run.currentAssistantMsgId,
-    context,
-    { content: run.accumulatedContent, reasoning: run.accumulatedReasoning },
-    toolMsgIdByCallId,
-    run.threadId,
-    ({ assistantMessageId, toolMessageId, tool }) => {
-      // Seed the tool row in the thread bucket right after its DB row
-      // exists, so the tool bubble renders while the result is still
-      // streaming in (matches the main-agent UX where tools[] +
-      // eventual fetchAndReplace bring the row in).
-      run.stream.create({
-        agentId: context.agentId,
-        content: '',
-        id: toolMessageId,
-        parentId: assistantMessageId,
-        plugin: {
-          apiName: tool.apiName,
-          arguments: tool.arguments,
-          identifier: tool.identifier,
-          type: tool.type as ChatToolPayload['type'],
-        },
-        role: 'tool',
-        threadId: run.threadId,
-        tool_call_id: tool.id,
-        topicId: context.topicId,
-      } as UIChatMessage);
-    },
-  );
-
-  // Surface the latest tools[] (with backfilled `result_msg_id`) and any
-  // accumulated text / reasoning on the in-thread assistant so the
-  // subagent bubble streams in step with the DB writes.
-  const assistantUpdate: Partial<UIChatMessage> = { tools: [...run.state.payloads] };
-  if (run.accumulatedContent) (assistantUpdate as any).content = run.accumulatedContent;
-  if (run.accumulatedReasoning)
-    (assistantUpdate as any).reasoning = { content: run.accumulatedReasoning };
-  run.stream.update(run.currentAssistantMsgId, assistantUpdate);
-
-  // Update chain parent to the last tool message THIS batch created so
-  // the NEXT turn's assistant chains off a tool (same shape as main).
-  const newIds = [...toolMsgIdByCallId.entries()]
-    .filter(([id]) => !preBatchIds.has(id))
-    .map(([, msgId]) => msgId);
-  run.lastBatchToolMsgIds.push(...newIds);
-  const lastToolMsgId = newIds.at(-1);
-  if (lastToolMsgId) run.lastChainParentId = lastToolMsgId;
-};
-
-/**
- * Handle a subagent text/reasoning chunk: accumulate the content onto
- * the run state. The actual DB write happens either on the next
- * `persistToolBatch` (content rides along with tools[]) or at turn /
- * finalization flush (`ensureSubagentRun` / `finalizeSubagentRun`).
- *
- * Keeping the write batched — instead of writing on every chunk —
- * matches the main agent's content handling and avoids one DB round
- * trip per streamed token.
- */
-const persistSubagentTextChunk = async (
-  kind: 'text' | 'reasoning',
-  chunk: string,
-  subagentCtx: SubagentEventContext,
-  mainAssistantMessageId: string,
-  context: ConversationContext,
-  subagentRuns: Map<string, SubagentRunState>,
-  beginSubagentRun: (threadId: string) => {
-    stream: SubagentStoreDispatcher;
-    subOperationId: string;
-  },
-  onThreadCreated?: (threadId: string) => void,
-) => {
-  const run = await ensureSubagentRun(
-    subagentCtx,
-    mainAssistantMessageId,
-    context,
-    subagentRuns,
-    beginSubagentRun,
-    onThreadCreated,
-  );
-  if (!run) return;
-  if (kind === 'text') {
-    run.accumulatedContent += chunk;
-    run.stream.update(run.currentAssistantMsgId, { content: run.accumulatedContent });
-  } else {
-    run.accumulatedReasoning += chunk;
-    run.stream.update(run.currentAssistantMsgId, {
-      reasoning: { content: run.accumulatedReasoning },
-    } as Partial<UIChatMessage>);
-  }
-};
-
-/**
- * Finalize a completed subagent run when the main-agent receives the
- * `tool_result` for its spawn tool_use.
- *
- * Two-step persistence:
- *
- *  1. **Flush** any streamed text/reasoning on the current in-thread
- *     assistant. CC itself never emits the subagent's final summary as
- *     a `parent_tool_use_id`-tagged assistant event (the summary only
- *     reaches us via the main-side `tool_result.content`), so this
- *     branch is usually a no-op for CC. Other adapters that stream
- *     subagent text will see their accumulated content landed here.
- *
- *  2. **Create** a terminal `role:'assistant'` message carrying the
- *     authoritative `resultContent` (what the subagent actually handed
- *     back to the main agent). The thread's shape becomes
- *     `user → asst(tools) → tool → … → asst(tools) → tool → asst(result)`,
- *     so opening the Thread view always ends with the subagent's final
- *     answer — matching the main tool_result 1:1 and exposing the
- *     summary in the thread transcript instead of hiding it inside the
- *     main tool bubble.
- *
- * `resultContent` is optional: the main tool_result path passes it, but
- * the `onComplete` fallback (called when the CLI closed without emitting
- * the spawn's tool_result) leaves it undefined so only the flush step
- * runs. Accumulators are cleared after flush so a repeat call (e.g.
- * onComplete re-running after the tool_result already finalized the
- * run) doesn't re-flush the same content.
- */
-const finalizeSubagentRun = async ({
-  parentToolCallId,
-  context,
-  subagentRuns,
-  resultContent,
-  completeSubOp,
-}: {
-  /**
-   * Marks the run's sub-operation as completed once the terminal
-   * persistence steps land. Closed over `get().completeOperation` in
-   * the caller so this helper stays free of store coupling. Idempotent
-   * — `completeOperation` no-ops on already-completed ops.
-   */
-  completeSubOp: (subOperationId: string) => void;
-  context: ConversationContext;
-  parentToolCallId: string;
-  resultContent?: string;
-  subagentRuns: Map<string, SubagentRunState>;
-}) => {
-  const run = subagentRuns.get(parentToolCallId);
-  if (!run) return;
-
-  if (run.accumulatedContent || run.accumulatedReasoning) {
-    // Pin the flush target BEFORE the DB attempt — the subsequent
-    // `resultContent` branch advances `currentAssistantMsgId` to the
-    // terminal message, so a retry (onComplete fallback) that read
-    // `currentAssistantMsgId` after the fact would overwrite the
-    // authoritative terminal content with leftover streamed buffer.
-    // `pendingFlushTarget` carries the correct target forward across
-    // retries; clearing it is part of the success path so a fresh
-    // finalize after a successful flush falls back to
-    // `currentAssistantMsgId` for the next turn's content.
-    const flushTarget = run.pendingFlushTarget ?? run.currentAssistantMsgId;
-    const update: Record<string, any> = {};
-    if (run.accumulatedContent) update.content = run.accumulatedContent;
-    if (run.accumulatedReasoning) update.reasoning = { content: run.accumulatedReasoning };
-    try {
-      await messageService.updateMessage(flushTarget, update, {
-        agentId: context.agentId,
-        topicId: context.topicId,
-      });
-      run.stream.update(flushTarget, update);
-      // Only drain the in-memory buffers after DB confirms the flush —
-      // otherwise a transient updateMessage failure would swallow the
-      // streamed text/reasoning, and the `onComplete` fallback couldn't
-      // retry because the accumulators are already empty.
-      run.accumulatedContent = '';
-      run.accumulatedReasoning = '';
-      run.pendingFlushTarget = undefined;
-    } catch (err) {
-      run.pendingFlushTarget = flushTarget;
-      console.error('[HeterogeneousAgent] Failed to flush subagent streaming content:', err);
-    }
-  }
-
-  if (resultContent) {
-    try {
-      const terminal = await messageService.createMessage({
-        agentId: context.agentId,
-        content: resultContent,
-        parentId: run.lastChainParentId,
-        role: 'assistant',
-        threadId: run.threadId,
-        topicId: context.topicId ?? undefined,
-      });
-      run.stream.create({
-        agentId: context.agentId,
-        content: resultContent,
-        id: terminal.id,
-        parentId: run.lastChainParentId,
-        role: 'assistant',
-        threadId: run.threadId,
-        topicId: context.topicId,
-      } as UIChatMessage);
-      run.currentAssistantMsgId = terminal.id;
-      run.lastChainParentId = terminal.id;
-    } catch (err) {
-      console.error('[HeterogeneousAgent] Failed to create subagent terminal assistant:', err);
-    }
-  }
-
-  completeSubOp(run.subOperationId);
-};
 
 /**
  * Update a tool message's content in DB when tool_result arrives.
@@ -1056,13 +385,13 @@ export const executeHeterogeneousAgent = async (
     options?: { clearContent?: boolean },
   ) => {
     writeTopicStatus('failed');
-    get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+    get().internal_toggleToolCallingStreaming(mainState.currentAssistantId, undefined);
     get().completeOperation(operationId);
 
     if (options?.clearContent) {
       await messageService
         .updateMessage(
-          currentAssistantMessageId,
+          mainState.currentAssistantId,
           { content: '' },
           {
             agentId: context.agentId,
@@ -1073,7 +402,7 @@ export const executeHeterogeneousAgent = async (
     }
 
     const updateResult = await messageService
-      .updateMessageError(currentAssistantMessageId, messageError, {
+      .updateMessageError(mainState.currentAssistantId, messageError, {
         agentId: context.agentId,
         groupId: context.groupId,
         threadId: context.threadId,
@@ -1089,7 +418,7 @@ export const executeHeterogeneousAgent = async (
 
     get().internal_dispatchMessage(
       {
-        id: currentAssistantMessageId,
+        id: mainState.currentAssistantId,
         type: 'updateMessage',
         value: {
           ...(options?.clearContent ? { content: '' } : {}),
@@ -1106,59 +435,49 @@ export const executeHeterogeneousAgent = async (
   let fallbackPromise: Promise<void> | undefined;
   let resumeFallbackTriggered = false;
 
-  // Track state for DB persistence (main-agent scope)
-  const toolState: ToolPersistenceState = {
-    payloads: [],
-    persistedIds: new Set(),
-  };
   /**
    * Global `tool_use.id → tool message DB id` lookup, shared across the
    * main agent and every subagent run. `tool_result` events identify
    * the target row by `toolCallId` alone (no scope context needed), so
-   * one flat map keeps the lookup trivial. Populated by every
-   * `persistToolBatch` call.
+   * one flat map keeps the lookup trivial. Interpreter-owned (NOT reducer
+   * state — it maps to DB row ids the reducer pre-allocates): populated when
+   * `applyMainIntent` / `applySubagentIntent` create tool messages, read by
+   * `persistToolResult` and the intervention handlers.
    */
   const toolMsgIdByCallId: Map<string, string> = new Map();
   /**
-   * Per-subagent-spawn runtime state, keyed by the main-agent Task
-   * tool_use id (`SubagentEventContext.parentToolCallId`). One entry per
-   * spawn, carrying the Thread id + current in-thread assistant + that
-   * assistant's per-turn `ToolPersistenceState`. Lazy-created on the
-   * first subagent event from `persistSubagentToolChunk`.
-   *
-   * Lives at executor scope (not on main `toolState`) because
-   * `toolState` resets on every main-agent step boundary, whereas a
-   * subagent spawn can emit events before and after a step cut.
+   * Shared main-agent run coordinator state — the pure reducer in
+   * `@lobechat/heterogeneous-agents`. Owns the main turn/step state machine
+   * (content accumulation, the `asst → tool → asst` parent chain incl. the
+   * `lastToolMsgIdEver` toolless-step rescue) AND the nested subagent runs
+   * (delegated to `reduceSubagentRuns`). The renderer interpreters
+   * (`applyMainIntent` / `applySubagentIntent`) map its intents onto DB writes
+   * + live UI. Reassigned (commit-on-success) by `reduceAndApplyMain`.
    */
-  const subagentRuns: Map<string, SubagentRunState> = new Map();
+  let mainState: MainAgentRunState = createMainAgentRunState(assistantMessageId);
+  /**
+   * Per-thread UI handles the reducer doesn't model: the thread-scoped store
+   * dispatcher + its sub-operation id. Created on the `createThread` intent,
+   * keyed by threadId, consumed by later intents for the same thread.
+   */
+  const subagentThreads = new Map<
+    string,
+    { stream: SubagentStoreDispatcher; subOperationId: string }
+  >();
+  /**
+   * Renderer-local flush retry, keyed by threadId. A `persistContent` whose DB
+   * write throws stashes its (pinned messageId + content) here instead of
+   * losing the streamed buffer; the next successful `persistContent` for the
+   * thread clears it, and `onComplete` replays any survivors. Preserves the
+   * old `pendingFlushTarget` resilience without the reducer (which is pure)
+   * having to model transient I/O failure.
+   */
+  const pendingSubagentFlush = new Map<
+    string,
+    { content?: string; messageId: string; reasoning?: string }
+  >();
   /** Serializes async persist operations so ordering is stable. */
   let persistQueue: Promise<void> = Promise.resolve();
-  /** Tracks the current assistant message being written to (switches on new steps) */
-  let currentAssistantMessageId = assistantMessageId;
-  /** Content accumulators — reset on each new step */
-  let accumulatedContent = '';
-  let accumulatedReasoning = '';
-  /** Latest model string — updated per turn, written alongside content on step boundaries. */
-  let lastModel: string | undefined;
-  /** Adapter/CLI provider (e.g. `claude-code`) — carried on every turn_metadata. */
-  let lastProvider: string | undefined;
-  /**
-   * Most recent tool `result_msg_id` seen across step boundaries — survives the
-   * `toolState.payloads` reset that happens on every new step.
-   *
-   * Required for the **toolless middle step** case (): when a step
-   * produces only text (e.g. Monitor stdout drives Claude to reply "等一下…"
-   * without invoking a tool), `toolState.payloads` is empty at the next step
-   * boundary. Without this tracker, `stepParentId` would fall back to
-   * `currentAssistantMessageId` (= the toolless assistant), forming an
-   * `assistant → assistant` link. `MessageCollector.collectAssistantChain`
-   * only walks the `assistant → tool → assistant` zigzag, so the UI splits
-   * into one bubble per Monitor stdout line.
-   *
-   * Scope: executor lifetime (one user run). A new user message spawns a
-   * new executor, so this resets implicitly at run boundaries.
-   */
-  let lastToolMsgIdEver: string | undefined;
   /**
    * Deferred terminal event (agent_runtime_end or error). We don't forward
    * these to the gateway handler immediately because handler triggers
@@ -1173,6 +492,17 @@ export const executeHeterogeneousAgent = async (
    * Without this, tools_calling gets dispatched to the OLD assistant → orphan.
    */
   let pendingStepTransition = false;
+  /**
+   * Set synchronously the moment any output-bearing stream event (stream_chunk /
+   * tool_result) ARRIVES, before it's queued onto `persistQueue`. The reducer
+   * now accumulates content/tools/subagent state only INSIDE the queued
+   * `reduceAndApplyMain`, so `hasStreamedState()` (which reads `mainState`) is
+   * blind to events that arrived but haven't drained yet. `retryWithoutResume`
+   * runs its guard synchronously in `onError` BEFORE awaiting the queue, so
+   * without this flag a recoverable resume error landing after partial output
+   * was queued could start a second run and duplicate/interleave messages.
+   */
+  let sawStreamedEvent = false;
 
   // Subscribe to the operation's abort signal so we can drop late events and
   // stop writing to DB the moment the user clicks Stop. If the op is gone
@@ -1181,11 +511,12 @@ export const executeHeterogeneousAgent = async (
   const isAborted = () => !!abortSignal?.aborted;
   const updateTopicMetadata = get().updateTopicMetadata;
   const hasStreamedState = () =>
-    !!accumulatedContent ||
-    !!accumulatedReasoning ||
-    toolState.payloads.length > 0 ||
+    sawStreamedEvent ||
+    !!mainState.accContent ||
+    !!mainState.accReasoning ||
+    mainState.toolState.payloads.length > 0 ||
     toolMsgIdByCallId.size > 0 ||
-    subagentRuns.size > 0;
+    mainState.subagents.runs.size > 0;
   const clearStaleResumeMetadata = async () => {
     if (!context.topicId || !updateTopicMetadata) return;
 
@@ -1251,9 +582,9 @@ export const executeHeterogeneousAgent = async (
    *
    * Lifecycle: the sub-op is a child of the main `operationId` (so
    * cancellation cascades + cleanup are free). It's marked completed
-   * inside `finalizeSubagentRun` once the spawn's tool_result arrives
-   * on main, and again as a fallback in `onComplete` for any spawn
-   * whose tool_result never landed (CLI crash, abort).
+   * on the coordinator's `finalizeThread` intent — fired when the spawn's
+   * tool_result arrives on main, and again via the `onComplete` orphan drain
+   * for any spawn whose tool_result never landed (CLI crash, abort).
    */
   const beginSubagentRun = (
     threadId: string,
@@ -1285,29 +616,445 @@ export const executeHeterogeneousAgent = async (
 
   /**
    * Mark a per-spawn sub-operation completed. Wrapper around
-   * `completeOperation` so module-level helpers (`finalizeSubagentRun`)
-   * stay free of store coupling. Idempotent: `completeOperation` on an
+   * `completeOperation` so the coordinator interpreter (`finalizeThread`)
+   * stays free of store coupling. Idempotent: `completeOperation` on an
    * already-completed op is a no-op.
    */
   const completeSubagentOp = (subOperationId: string) => {
     get().completeOperation(subOperationId);
   };
 
+  // ─── Subagent run coordinator (shared reducer) interpreter ───────────────
+
   /**
-   * Look up a subagent run by the tool_call_id of ANY tool inside it —
-   * across ALL turns of the run, not just the current one. Uses
-   * `lifetimeToolCallIds` (run-scoped, append-only) rather than
-   * `state.persistedIds` (turn-scoped, wiped by `ensureSubagentRun` when
-   * the subagent advances to a new `subagentMessageId`), so a delayed
-   * `tool_result` arriving after the owning turn has rolled over still
-   * routes to the right run and clears the in-thread tool bubble's
-   * loading state.
+   * Apply ONE coordinator intent against the renderer's surfaces: DB via
+   * `messageService` / `threadService` AND the thread-scoped store dispatcher
+   * (so the Thread view streams in step with the DB, exactly as the standalone
+   * helpers used to). Best-effort per op (errors logged), mirroring the prior
+   * persist helpers.
    */
-  const findRunByInnerToolCallId = (toolCallId: string): SubagentRunState | undefined => {
-    for (const run of subagentRuns.values()) {
-      if (run.lifetimeToolCallIds.has(toolCallId)) return run;
+  const applySubagentIntent = async (intent: SubagentIntent) => {
+    // Narrows `context.topicId` to `string` for every DB write below (the
+    // caller already guards, but this function is a separate closure). All
+    // subagent rows are topic-scoped.
+    if (!context.topicId) return;
+    switch (intent.kind) {
+      case 'createThread': {
+        try {
+          await threadService.createThread({
+            id: intent.threadId,
+            metadata: {
+              sourceToolCallId: intent.sourceToolCallId,
+              startedAt: new Date().toISOString(),
+              subagentType: intent.subagentType,
+            },
+            sourceMessageId: intent.sourceMessageId,
+            status: ThreadStatus.Processing,
+            title: intent.title,
+            topicId: context.topicId,
+            type: ThreadType.Isolation,
+          });
+        } catch (err) {
+          // Rethrow so `reduceAndApplyMain` skips the state commit — the
+          // run stays absent and the next chunk retries the lazy create.
+          console.error('[HeterogeneousAgent] Failed to create subagent thread:', err);
+          throw err;
+        }
+        onSubagentThreadCreated();
+        // Open the per-spawn sub-op + dispatcher so subsequent intents for this
+        // thread route into the Thread's messagesMap bucket.
+        subagentThreads.set(intent.threadId, beginSubagentRun(intent.threadId));
+        return;
+      }
+
+      case 'createMessage': {
+        const t = subagentThreads.get(intent.threadId);
+        const msg = {
+          agentId: intent.agentId ?? undefined,
+          content: intent.content,
+          id: intent.messageId,
+          parentId: intent.parentId,
+          role: intent.role,
+          threadId: intent.threadId,
+          topicId: context.topicId,
+        };
+        try {
+          await messageService.createMessage(msg);
+        } catch (err) {
+          // Rethrow so `reduceAndApplyMain` skips the state commit — the
+          // run keeps its pre-create shape and the next event re-emits the
+          // turn-boundary / lazy-create with fresh ids.
+          console.error('[HeterogeneousAgent] Failed to create subagent message:', err);
+          throw err;
+        }
+        t?.stream.create(msg as UIChatMessage);
+        return;
+      }
+
+      // Live token-level UI only — no DB write (durable content lands via
+      // persistContent / persistToolBatch). Mirrors the old text-chunk path.
+      case 'streamContent': {
+        const t = subagentThreads.get(intent.threadId);
+        const value: Partial<UIChatMessage> = {};
+        if (intent.content !== undefined) value.content = intent.content;
+        if (intent.reasoning !== undefined)
+          (value as any).reasoning = { content: intent.reasoning };
+        t?.stream.update(intent.messageId, value);
+        return;
+      }
+
+      case 'persistContent': {
+        const t = subagentThreads.get(intent.threadId);
+        const update: Record<string, any> = {};
+        if (intent.content) update.content = intent.content;
+        if (intent.reasoning) update.reasoning = { content: intent.reasoning };
+        if (Object.keys(update).length === 0) return;
+        try {
+          await messageService.updateMessage(intent.messageId, update, {
+            agentId: context.agentId,
+            topicId: context.topicId,
+          });
+          // Success drains any prior pending flush for this thread.
+          pendingSubagentFlush.delete(intent.threadId);
+          t?.stream.update(intent.messageId, update as Partial<UIChatMessage>);
+        } catch (err) {
+          // Transient failure: stash the buffer pinned to THIS message id so
+          // the onComplete replay retries it against the original turn's
+          // assistant — never the terminal row the reducer advanced onto.
+          console.error('[HeterogeneousAgent] Failed to flush subagent content:', err);
+          pendingSubagentFlush.set(intent.threadId, {
+            content: intent.content,
+            messageId: intent.messageId,
+            reasoning: intent.reasoning,
+          });
+        }
+        return;
+      }
+
+      case 'persistToolBatch': {
+        const t = subagentThreads.get(intent.threadId);
+        const buildUpdate = (withResult: boolean): Record<string, any> => {
+          const update: Record<string, any> = {
+            tools: intent.tools.map((x) =>
+              withResult ? { ...x.payload, result_msg_id: x.toolMessageId } : { ...x.payload },
+            ),
+          };
+          if (intent.content) update.content = intent.content;
+          if (intent.reasoning) update.reasoning = { content: intent.reasoning };
+          return update;
+        };
+
+        // Phase 1: pre-register assistant.tools[] (no result_msg_id yet).
+        try {
+          await messageService.updateMessage(intent.assistantMessageId, buildUpdate(false), {
+            agentId: context.agentId,
+            topicId: context.topicId,
+          });
+        } catch (err) {
+          console.error('[HeterogeneousAgent] Failed to pre-register subagent tools:', err);
+        }
+
+        // Phase 2: create rows for new tools with their pre-allocated ids,
+        // register the global lookup, and seed the thread bucket bubble.
+        for (const x of intent.tools) {
+          if (!x.isNew) continue;
+          const toolMsg = {
+            agentId: context.agentId,
+            content: '',
+            id: x.toolMessageId,
+            parentId: intent.assistantMessageId,
+            plugin: {
+              apiName: x.payload.apiName,
+              arguments: x.payload.arguments,
+              identifier: x.payload.identifier,
+              type: x.payload.type as ChatToolPayload['type'],
+            },
+            role: 'tool' as const,
+            threadId: intent.threadId,
+            tool_call_id: x.payload.id,
+            topicId: context.topicId,
+          };
+          try {
+            await messageService.createMessage(toolMsg);
+          } catch (err) {
+            console.error('[HeterogeneousAgent] Failed to create subagent tool message:', err);
+            continue;
+          }
+          toolMsgIdByCallId.set(x.payload.id, x.toolMessageId);
+          t?.stream.create(toolMsg as UIChatMessage);
+        }
+
+        // Phase 3: backfill result_msg_id on assistant.tools[].
+        try {
+          await messageService.updateMessage(intent.assistantMessageId, buildUpdate(true), {
+            agentId: context.agentId,
+            topicId: context.topicId,
+          });
+        } catch (err) {
+          console.error('[HeterogeneousAgent] Failed to finalize subagent tools:', err);
+        }
+
+        // Surface the live assistant tools[] + content into the thread bucket.
+        t?.stream.update(intent.assistantMessageId, buildUpdate(true) as Partial<UIChatMessage>);
+        return;
+      }
+
+      case 'resolveToolResult': {
+        const t = subagentThreads.get(intent.threadId);
+        // DB write (via the global tool-message map) + live thread bucket update.
+        await persistToolResult(
+          intent.toolCallId,
+          intent.content,
+          intent.isError,
+          toolMsgIdByCallId,
+          context,
+          intent.pluginState,
+        );
+        const toolMsgId = toolMsgIdByCallId.get(intent.toolCallId);
+        if (toolMsgId) {
+          const update: Partial<UIChatMessage> = { content: intent.content };
+          if (intent.pluginState) (update as any).pluginState = intent.pluginState;
+          if (intent.isError) (update as any).pluginError = { message: intent.content };
+          t?.stream.update(toolMsgId, update);
+        }
+        return;
+      }
+
+      case 'recordUsage': {
+        const t = subagentThreads.get(intent.threadId);
+        const update = {
+          metadata: { usage: intent.usage as any },
+          ...(intent.model && { model: intent.model }),
+          ...(intent.provider && { provider: intent.provider }),
+        };
+        t?.stream.update(intent.messageId, update as Partial<UIChatMessage>);
+        try {
+          await messageService.updateMessage(intent.messageId, update, {
+            agentId: context.agentId,
+            topicId: context.topicId,
+          });
+        } catch (err) {
+          console.error('[HeterogeneousAgent] Failed to record subagent usage:', err);
+        }
+        return;
+      }
+
+      case 'finalizeThread': {
+        try {
+          await threadService.updateThread(intent.threadId, { status: ThreadStatus.Active });
+        } catch (err) {
+          console.error('[HeterogeneousAgent] Failed to mark subagent thread complete:', err);
+        }
+        const t = subagentThreads.get(intent.threadId);
+        if (t) completeSubagentOp(t.subOperationId);
+        return;
+      }
     }
-    return undefined;
+  };
+
+  // ─── Main-agent run coordinator (shared reducer) interpreter ─────────────
+
+  /**
+   * Apply ONE main-scoped coordinator intent against the renderer's DB
+   * surfaces. Best-effort (errors logged, never thrown) — mirroring the prior
+   * inline persist helpers, so the run state always advances regardless of a
+   * transient DB failure (the next event / terminal flush re-persists). Live
+   * UI is NOT driven here: the executor still forwards raw stream events to the
+   * gateway `eventHandler` for token-level streaming, so `streamContent` is a
+   * no-op (the server no-ops it too).
+   */
+  const applyMainIntent = async (intent: MainAgentIntent) => {
+    switch (intent.kind) {
+      case 'createAssistant': {
+        try {
+          await messageService.createMessage({
+            agentId: intent.agentId ?? context.agentId,
+            content: '',
+            id: intent.messageId,
+            ...(intent.signal ? { metadata: { signal: intent.signal } } : {}),
+            model: intent.model,
+            parentId: intent.parentId,
+            provider: intent.provider,
+            role: 'assistant',
+            topicId: intent.topicId ?? context.topicId ?? undefined,
+          } as any);
+        } catch (err) {
+          // Rethrow so `reduceAndApplyMain` skips the state commit — DO NOT
+          // advance `currentAssistantId` to a row that was never created, or
+          // every later content/tool/result write (and the gateway handler's
+          // switch) would target a missing assistant and be lost. Keeping the
+          // prior state lets the next event re-derive against the still-valid
+          // current assistant. Mirrors the subagent createMessage path.
+          console.error('[HeterogeneousAgent] Failed to create step assistant:', err);
+          throw err;
+        }
+        // Associate so cancellation / cleanup tracks the new step's message.
+        get().associateMessageWithOperation(intent.messageId, operationId);
+        return;
+      }
+
+      // Durable flush of content/reasoning/model/provider/metadata.
+      case 'persistAssistant': {
+        const update: Record<string, any> = {};
+        if (intent.content !== undefined) update.content = intent.content;
+        if (intent.reasoning !== undefined) update.reasoning = { content: intent.reasoning };
+        if (intent.model) update.model = intent.model;
+        if (intent.provider) update.provider = intent.provider;
+        if (intent.metadata) update.metadata = intent.metadata;
+        if (Object.keys(update).length === 0) return;
+        await messageService
+          .updateMessage(intent.messageId, update, {
+            agentId: context.agentId,
+            topicId: context.topicId,
+          })
+          .catch((err) =>
+            console.error('[HeterogeneousAgent] Failed to flush main assistant:', err),
+          );
+        return;
+      }
+
+      // No-op ON PURPOSE — not dead code. Main-agent live token UI is already
+      // driven by forwarding the RAW stream_chunk to the gateway `eventHandler`
+      // (see handleStreamEvent: it dispatches into `messagesMap` for live
+      // display). Applying streamContent here too would be a redundant double
+      // write. (Contrast the SUBAGENT interpreter, whose `streamContent` DOES
+      // update the thread bucket — subagent events are dropped before the
+      // gateway forward, so the intent is their only live-UI path.)
+      // Verified: in-memory content streams 3→…→N while the op runs; the durable
+      // write still lands via persistAssistant / persistToolBatch.
+      case 'streamContent': {
+        return;
+      }
+
+      case 'persistToolBatch': {
+        const buildUpdate = (withResult: boolean): Record<string, any> => {
+          const update: Record<string, any> = {
+            tools: intent.tools.map((x) =>
+              withResult ? { ...x.payload, result_msg_id: x.toolMessageId } : { ...x.payload },
+            ),
+          };
+          if (intent.content) update.content = intent.content;
+          if (intent.reasoning) update.reasoning = { content: intent.reasoning };
+          return update;
+        };
+
+        // Phase 1: pre-register assistant.tools[] (no result_msg_id yet) so the
+        // conversation-flow parser finds matching ids the moment tool rows land.
+        await messageService
+          .updateMessage(intent.assistantMessageId, buildUpdate(false), {
+            agentId: context.agentId,
+            topicId: context.topicId,
+          })
+          .catch((err) =>
+            console.error('[HeterogeneousAgent] Failed to pre-register main tools:', err),
+          );
+
+        // Phase 2: create rows for new tools with their pre-allocated ids and
+        // register the global lookup so a later tool_result resolves.
+        for (const x of intent.tools) {
+          if (!x.isNew) continue;
+          try {
+            await messageService.createMessage({
+              agentId: context.agentId,
+              content: '',
+              id: x.toolMessageId,
+              parentId: intent.assistantMessageId,
+              plugin: {
+                apiName: x.payload.apiName,
+                arguments: x.payload.arguments,
+                identifier: x.payload.identifier,
+                type: x.payload.type as ChatToolPayload['type'],
+              },
+              role: 'tool',
+              tool_call_id: x.payload.id,
+              topicId: context.topicId ?? undefined,
+            } as any);
+          } catch (err) {
+            console.error('[HeterogeneousAgent] Failed to create main tool message:', err);
+            continue;
+          }
+          toolMsgIdByCallId.set(x.payload.id, x.toolMessageId);
+        }
+
+        // Phase 3: backfill result_msg_id on assistant.tools[].
+        await messageService
+          .updateMessage(intent.assistantMessageId, buildUpdate(true), {
+            agentId: context.agentId,
+            topicId: context.topicId,
+          })
+          .catch((err) =>
+            console.error('[HeterogeneousAgent] Failed to finalize main tools:', err),
+          );
+        return;
+      }
+
+      case 'resolveToolResult': {
+        await persistToolResult(
+          intent.toolCallId,
+          intent.content,
+          intent.isError,
+          toolMsgIdByCallId,
+          context,
+          intent.pluginState,
+        );
+        return;
+      }
+
+      case 'recordUsage': {
+        const update = {
+          metadata: { usage: intent.usage as any },
+          ...(intent.model && { model: intent.model }),
+          ...(intent.provider && { provider: intent.provider }),
+        };
+        await messageService
+          .updateMessage(intent.messageId, update, {
+            agentId: context.agentId,
+            topicId: context.topicId,
+          })
+          .catch((err) => console.error('[HeterogeneousAgent] Failed to record main usage:', err));
+        return;
+      }
+
+      // Terminal error: classify the raw wire data here (adapterType lives in
+      // the interpreter) and route through the full error-UI routine.
+      case 'setError': {
+        const messageError = toHeterogeneousAgentMessageError(intent.errorData, adapterType);
+        await persistTerminalError(messageError, { clearContent: intent.clearContent });
+        return;
+      }
+    }
+  };
+
+  /**
+   * Reduce one event through the shared main-agent coordinator and apply its
+   * intents. The reducer returns a mix of main-scoped and (delegated)
+   * subagent-scoped intents; route each by whether it carries a `threadId`
+   * (subagent) so the existing `applySubagentIntent` stays untouched.
+   *
+   * Commit-on-success: `mainState` advances only after every intent lands. A
+   * throwing intent (only subagent createThread / createMessage rethrow; main
+   * intents are best-effort) skips the commit so the next event re-derives —
+   * the same resilience `reduceSubagentRuns` relies on. Always invoked inside
+   * `persistQueue` so reduce reads the latest committed state and ordering
+   * matches arrival.
+   */
+  const reduceAndApplyMain = async (event: AgentStreamEvent) => {
+    const ctx: MainAgentReduceCtx = {
+      agentId: context.agentId,
+      newId: (kind) => (kind === 'thread' ? generateThreadId() : `msg_${createNanoId(18)()}`),
+      topicId: context.topicId ?? null,
+    };
+    const { intents, state: next } = reduceMainAgent(mainState, event, ctx);
+    try {
+      for (const intent of intents) {
+        if ('threadId' in intent) await applySubagentIntent(intent as SubagentIntent);
+        else await applyMainIntent(intent as MainAgentIntent);
+      }
+    } catch (err) {
+      console.error('[HeterogeneousAgent] Intent failed, run state not advanced:', err);
+      return;
+    }
+    mainState = next;
   };
 
   try {
@@ -1433,200 +1180,44 @@ export const executeHeterogeneousAgent = async (
         return;
       }
 
-      // ─── tool_result: update tool message content in DB (ACP-only) ───
+      // ─── tool_result: reducer writes the tool content + finalizes spawns ───
+      // For a main tool (incl. a subagent's parent Task tool, which is
+      // main-scoped) the reducer emits `resolveToolResult` → DB content write
+      // via the global `toolMsgIdByCallId` map, AND delegates so a parent-spawn
+      // tool_result finalizes its run (terminal assistant + thread Active). An
+      // inner subagent tool_result resolves into its thread. Not forwarded —
+      // the following tool_end triggers fetchAndReplaceMessages.
       if (event.type === 'tool_result') {
-        const { content, isError, pluginState, toolCallId } = event.data as {
-          content: string;
-          isError?: boolean;
-          pluginState?: Record<string, any>;
-          subagent?: SubagentEventContext;
-          toolCallId: string;
-        };
-        // Subagent vs main lookup is transparent — one global
-        // `toolMsgIdByCallId` map spans both scopes.
-        persistQueue = persistQueue.then(() =>
-          persistToolResult(
-            toolCallId,
-            content,
-            !!isError,
-            toolMsgIdByCallId,
-            context,
-            pluginState,
-          ),
-        );
-        // Mirror the tool_result content into the owning subagent
-        // run's thread bucket so the in-thread tool bubble stops
-        // showing "loading" and renders the result the moment it
-        // arrives (main-topic fetchAndReplace does not refresh
-        // thread buckets, so without this the subagent UI would
-        // stay stuck on the spinner until the user re-opens the
-        // Thread). Lookup is deferred into the queue because the
-        // prior `persistSubagentToolChunk` that adds this toolCallId
-        // to the run's `persistedIds` is still pending when the
-        // tool_result event arrives.
-        persistQueue = persistQueue.then(() => {
-          const run = findRunByInnerToolCallId(toolCallId);
-          if (!run) return;
-          const toolMsgId = toolMsgIdByCallId.get(toolCallId);
-          if (!toolMsgId) return;
-          const update: Partial<UIChatMessage> = { content };
-          if (pluginState) (update as any).pluginState = pluginState;
-          if (isError) (update as any).pluginError = { message: content };
-          run.stream.update(toolMsgId, update);
-        });
-        // If this tool_result IS for a subagent's spawning tool_use
-        // (tool_result lands on the MAIN side but its toolCallId
-        // matches a subagent run's parent), the subagent run just
-        // ended — finalize so the terminal assistant with the
-        // authoritative result lands in DB before fetchAndReplace.
-        //
-        // The `subagentRuns.has` check is deferred INTO the queue so
-        // that any subagent tool_use/text chunks from earlier in the
-        // same stream batch — which register the run via
-        // `persistSubagent*Chunk` — have already drained. Checking
-        // synchronously here races with those writes and silently
-        // misses the run in pure-tools subagents (no preceding text
-        // event to force an earlier registration).
-        persistQueue = persistQueue.then(() => {
-          if (!subagentRuns.has(toolCallId)) return;
-          return finalizeSubagentRun({
-            completeSubOp: completeSubagentOp,
-            context,
-            parentToolCallId: toolCallId,
-            resultContent: content,
-            subagentRuns,
-          });
-        });
-        // Don't forward — the tool_end that follows triggers fetchAndReplaceMessages
-        // which reads the updated content from DB.
+        sawStreamedEvent = true; // sync: partial output exists even before the queue drains
+        persistQueue = persistQueue.then(() => reduceAndApplyMain(event));
         return;
       }
 
-      // ─── step_complete with turn_metadata: persist per-step usage ───
-      // `turn_metadata.usage` is the per-turn delta (deduped by adapter per
-      // message.id) and already normalized to the MessageMetadata.usage
-      // shape — write it straight through to the current step's assistant
-      // message. Queue the write so it lands after any in-flight
-      // stream_start(newStep) that may still be swapping
-      // `currentAssistantMessageId` to the new step's message.
-      //
-      // `result_usage` (grand total across all turns) is intentionally
-      // ignored — applying it would overwrite the last step with the sum
-      // of all prior steps. Sum of turn_metadata equals result_usage for
-      // a healthy run.
+      // ─── step_complete with turn_metadata: per-step usage + model/provider ───
+      // The reducer writes usage/model/provider onto the current step's
+      // assistant (main) or the subagent's in-thread assistant (delegated).
+      // `result_usage` (grand total) is ignored by the reducer. The operation
+      // usage tray derives its total from these per-message usages directly
+      // (OpStatusTray → calculateOperationUsageMetrics), so there is no separate
+      // accumulation here. Not forwarded (bookkeeping).
       if (event.type === 'step_complete' && event.data?.phase === 'turn_metadata') {
-        if (event.data.model) lastModel = event.data.model;
-        if (event.data.provider) lastProvider = event.data.provider;
-        const turnUsage = event.data.usage;
-        if (turnUsage) {
-          persistQueue = persistQueue.then(async () => {
-            await messageService
-              .updateMessage(
-                currentAssistantMessageId,
-                { metadata: { usage: turnUsage } },
-                { agentId: context.agentId, topicId: context.topicId },
-              )
-              .catch(console.error);
-          });
-        }
-        // Don't forward turn metadata — it's internal bookkeeping
+        persistQueue = persistQueue.then(() => reduceAndApplyMain(event));
         return;
       }
 
-      // ─── stream_start with newStep: new LLM turn, create new assistant message ───
+      // ─── stream_start with newStep: new LLM turn ───
+      // The reducer flushes the prior turn's content/reasoning/model and opens
+      // a new assistant chained off the last tool message (the shared chain rule
+      // incl. the `lastToolMsgIdEver` toolless-step rescue — the chain-break fix). We
+      // then forward the event (carrying the new assistant id) for live UI.
       if (event.type === 'stream_start' && event.data?.newStep) {
-        // ⚠️ Snapshot CONTENT accumulators synchronously — stream_chunk events for
-        // the new step arrive in the same stream batch and would contaminate.
-        // Tool state (toolMsgIdByCallId) is populated ASYNC by persistQueue, so
-        // it must be read inside the queue where previous persists have completed.
-        const prevContent = accumulatedContent;
-        const prevReasoning = accumulatedReasoning;
-        const prevModel = lastModel;
-        const prevProvider = lastProvider;
-        // External-signal context (): set when the adapter
-        // detected a repeated tool_result on the same tool_use.id
-        // (Monitor stdout push, etc.). Stamp on the new message's
-        // `metadata.signal` so MessageCollector can route toolless
-        // signal-tagged assistants into a SignalCallbacksNode.
-        //
-        // Phase 1 lives in metadata; Phase 2 () promotes to a
-        // dedicated `messages.signal` column — to migrate, change THIS
-        // assignment and the `getMessageSignal()` helper in
-        // conversation-flow, nothing else.
-        const externalSignal = event.data.externalSignal;
-
-        // Reset content accumulators synchronously so new-step chunks go to fresh state
-        accumulatedContent = '';
-        accumulatedReasoning = '';
-
-        // Mark that we're in a step transition. Events from the same stream
-        // batch (stream_chunk, tool_start, etc.) must be deferred through
-        // persistQueue so the handler receives stream_start FIRST — otherwise
-        // it dispatches tools to the OLD assistant (orphan tool bug).
+        // Defer same-batch stream_chunk / tool events through persistQueue so the
+        // handler receives stream_start FIRST — otherwise it dispatches tools to
+        // the OLD assistant (orphan tool bug).
         pendingStepTransition = true;
-
-        persistQueue = persistQueue.then(async () => {
-          // Persist previous step's content to its assistant message
-          const prevUpdate: Record<string, any> = {};
-          if (prevContent) prevUpdate.content = prevContent;
-          if (prevReasoning) prevUpdate.reasoning = { content: prevReasoning };
-          if (prevModel) prevUpdate.model = prevModel;
-          if (prevProvider) prevUpdate.provider = prevProvider;
-          if (Object.keys(prevUpdate).length > 0) {
-            await messageService
-              .updateMessage(currentAssistantMessageId, prevUpdate, {
-                agentId: context.agentId,
-                topicId: context.topicId,
-              })
-              .catch(console.error);
-          }
-
-          // Create new assistant message for this step.
-          // parentId should point to the last tool message from the previous step
-          // (if any), forming the chain: assistant → tool → assistant → tool → ...
-          // If no tool was used, fall back to the previous assistant message.
-          //
-          // Read from `toolState.payloads` (not the global
-          // `toolMsgIdByCallId`) so we only pick up MAIN-agent tools —
-          // the global map also holds subagent tool msg ids which
-          // would break the main-agent step chain.
-          const lastToolMsgId = [...toolState.payloads]
-            .reverse()
-            .find((p) => !!p.result_msg_id)?.result_msg_id;
-          if (lastToolMsgId) lastToolMsgIdEver = lastToolMsgId;
-          // Prefer this step's last tool, then the most recent tool ever seen
-          // in the run (rescues toolless middle steps — see ), then
-          // the previous assistant as a last resort.
-          const stepParentId = lastToolMsgId ?? lastToolMsgIdEver ?? currentAssistantMessageId;
-
-          const newMsg = await messageService.createMessage({
-            agentId: context.agentId,
-            content: '',
-            ...(externalSignal ? { metadata: { signal: externalSignal } } : {}),
-            model: lastModel,
-            parentId: stepParentId,
-            provider: lastProvider,
-            role: 'assistant',
-            topicId: context.topicId ?? undefined,
-          });
-          currentAssistantMessageId = newMsg.id;
-
-          // Associate the new message with the operation
-          get().associateMessageWithOperation(currentAssistantMessageId, operationId);
-
-          // Reset tool state AFTER reading — new-step tool persists are queued
-          // AFTER this handler, so they'll write to the clean state.
-          toolState.payloads = [];
-          toolState.persistedIds.clear();
-          // toolMsgIdByCallId is NOT cleared — it's the global
-          // id→row lookup and subagent tool_results from a previous
-          // step may still land after the step boundary.
-        });
-
-        // Update the stream_start event to carry the new message ID
-        // so the gateway handler can switch to it
+        persistQueue = persistQueue.then(() => reduceAndApplyMain(event));
         persistQueue = persistQueue.then(() => {
-          event.data.assistantMessage = { id: currentAssistantMessageId };
+          event.data.assistantMessage = { id: mainState.currentAssistantId };
           eventHandler(event);
           // Step transition complete — handler has the new assistant ID now
           pendingStepTransition = false;
@@ -1642,96 +1233,20 @@ export const executeHeterogeneousAgent = async (
         return;
       }
 
-      // ─── stream_chunk: accumulate content + persist tool_use ───
-      if (event.type === 'stream_chunk') {
-        const chunk = event.data;
-        const chunkSubagentCtx = chunk?.subagent as SubagentEventContext | undefined;
-        if (chunk?.chunkType === 'text' && chunk.content) {
-          if (chunkSubagentCtx) {
-            // Subagent text → accumulates on the run's in-thread
-            // assistant, NOT on the main assistant's content.
-            const mainAsstId = currentAssistantMessageId;
-            persistQueue = persistQueue.then(() =>
-              persistSubagentTextChunk(
-                'text',
-                chunk.content,
-                chunkSubagentCtx,
-                mainAsstId,
-                context,
-                subagentRuns,
-                beginSubagentRun,
-                onSubagentThreadCreated,
-              ),
-            );
-          } else {
-            accumulatedContent += chunk.content;
-          }
-        }
-        if (chunk?.chunkType === 'reasoning' && chunk.reasoning) {
-          if (chunkSubagentCtx) {
-            const mainAsstId = currentAssistantMessageId;
-            persistQueue = persistQueue.then(() =>
-              persistSubagentTextChunk(
-                'reasoning',
-                chunk.reasoning,
-                chunkSubagentCtx,
-                mainAsstId,
-                context,
-                subagentRuns,
-                beginSubagentRun,
-                onSubagentThreadCreated,
-              ),
-            );
-          } else {
-            accumulatedReasoning += chunk.reasoning;
-          }
-        }
-        if (chunk?.chunkType === 'tools_calling') {
-          const tools = chunk.toolsCalling as ToolCallPayload[];
-          const subagentCtx = chunk.subagent as SubagentEventContext | undefined;
-          if (tools?.length) {
-            if (subagentCtx) {
-              // Subagent chunk → lazy-create Thread + in-thread
-              // assistant, then persist into that scope. Kept off the
-              // main path so main-agent snapshot logic stays untouched.
-              const mainAsstId = currentAssistantMessageId;
-              persistQueue = persistQueue.then(() =>
-                persistSubagentToolChunk(
-                  tools,
-                  subagentCtx,
-                  mainAsstId,
-                  context,
-                  subagentRuns,
-                  toolMsgIdByCallId,
-                  beginSubagentRun,
-                  onSubagentThreadCreated,
-                ),
-              );
-            } else {
-              // Main-agent chunk — existing path.
-              // Snapshot accumulators sync — must travel with the
-              // same step's assistantMessageId. A late-bound getter
-              // would read NEW step's content if a step transition
-              // lands between scheduling and execution, while
-              // assistantMessageId would still be the OLD one (also
-              // captured sync) → cross-step contamination.
-              const snapshot = {
-                content: accumulatedContent,
-                reasoning: accumulatedReasoning,
-              };
-              persistQueue = persistQueue.then(() =>
-                persistToolBatch(
-                  tools,
-                  toolState,
-                  currentAssistantMessageId,
-                  context,
-                  snapshot,
-                  toolMsgIdByCallId,
-                ),
-              );
-            }
-          }
-        }
+      // ─── stream_chunk / stream_start(init): drive the reducer for DB ───
+      // text/reasoning accumulation, main tool-batch persistence, subagent
+      // delegation (thread create / turn boundary / tool persist / live thread
+      // bucket), and the init model/provider backfill all live in the reducer.
+      // Ordering is preserved by the single FIFO persistQueue. Live MAIN-scope
+      // UI is still driven by the raw-event forward below (subagent events are
+      // dropped from that forward).
+      if (event.type === 'stream_chunk' || event.type === 'stream_start') {
+        // A stream_chunk = partial output (text / reasoning / tools / subagent
+        // activity). Flag it synchronously so a resume-error retry can't fire
+        // before the queued reduce records it. (stream_start init carries only
+        // model/provider — no output — so it doesn't count.)
+        if (event.type === 'stream_chunk') sawStreamedEvent = true;
+        persistQueue = persistQueue.then(() => reduceAndApplyMain(event));
       }
 
       // ALL subagent-tagged events are handled inline (tool_result, line
@@ -1767,7 +1282,7 @@ export const executeHeterogeneousAgent = async (
       // — otherwise the handler reads `assistant.tools[]` while a parallel
       // `persistToolBatch` is still mid-flight and `replaceMessages` clobbers
       // the in-memory cumulative tools[] with a shorter snapshot. That's the
-      // "7 → 6 次技能调用" rollback users see on parallel CC tool batches.
+      // "7 → 6 tool-calls" rollback users see on parallel CC tool batches.
       //
       // Other forwards (text / reasoning / tools_calling dispatches) stay
       // synchronous so live streaming UX isn't gated on DB round-trips.
@@ -1797,69 +1312,60 @@ export const executeHeterogeneousAgent = async (
         // Wait for all tool persistence to finish before writing final state
         await persistQueue.catch(console.error);
 
-        // Flush any subagent runs that didn't see their parent's
-        // tool_result (e.g. CLI crashed mid-subagent, or CC emitted the
-        // spawn's tool_result after the stream closed). Ensures the
-        // in-thread assistant has its final text before fetchAndReplace.
-        for (const parentId of subagentRuns.keys()) {
-          await finalizeSubagentRun({
-            completeSubOp: completeSubagentOp,
-            context,
-            parentToolCallId: parentId,
-            subagentRuns,
-          }).catch(console.error);
-        }
+        const isErrorTerminal = deferredTerminalEvent?.type === 'error';
+        // Snapshot the final content BEFORE the terminal reduce resets the
+        // accumulator — used for the completion notification body below.
+        const finalContent = mainState.accContent;
+        const terminalEvent: AgentStreamEvent = deferredTerminalEvent ?? {
+          data: {},
+          operationId,
+          stepIndex: 0,
+          timestamp: Date.now(),
+          type: 'agent_runtime_end',
+        };
 
-        // Persist final content + reasoning + model for the last step BEFORE the
-        // terminal event triggers fetchAndReplaceMessages. Usage for this step
-        // was already written per-turn via the turn_metadata branch.
-        const terminalMessageError =
-          deferredTerminalEvent?.type === 'error'
-            ? toHeterogeneousAgentMessageError(deferredTerminalEvent.data, adapterType)
-            : undefined;
-        const shouldClearTerminalErrorContent =
-          !!terminalMessageError &&
-          shouldSuppressTerminalErrorEcho(accumulatedContent, terminalMessageError);
-        const updateValue: Record<string, any> = {};
-        if (accumulatedContent && !shouldClearTerminalErrorContent) {
-          updateValue.content = accumulatedContent;
-        }
-        if (accumulatedReasoning) updateValue.reasoning = { content: accumulatedReasoning };
-        if (lastModel) updateValue.model = lastModel;
-        if (lastProvider) updateValue.provider = lastProvider;
+        // Reduce the terminal event through the shared coordinator: it flushes
+        // the last step's content/reasoning/model (with echo suppression), and
+        // — for an error terminal — emits `setError` → `persistTerminalError`
+        // (full error UI). It also drains any subagent run that never saw its
+        // parent tool_result (CLI crashed mid-subagent, or the spawn's
+        // tool_result arrived after the stream closed), flushing each run's
+        // trailing content and marking the thread Active. `completeOperation`
+        // does not cascade to child sub-ops, so the main-error path running
+        // before the drain still lets each subagent op finalize.
+        await reduceAndApplyMain(terminalEvent);
 
-        if (Object.keys(updateValue).length > 0) {
-          await messageService
-            .updateMessage(currentAssistantMessageId, updateValue, {
+        // Replay any subagent flush that failed transiently mid-stream, pinned
+        // to its original in-thread assistant (NOT the terminal row).
+        for (const [threadId, pending] of pendingSubagentFlush) {
+          const update: Record<string, any> = {};
+          if (pending.content) update.content = pending.content;
+          if (pending.reasoning) update.reasoning = { content: pending.reasoning };
+          if (Object.keys(update).length === 0) continue;
+          try {
+            await messageService.updateMessage(pending.messageId, update, {
               agentId: context.agentId,
               topicId: context.topicId,
-            })
-            .catch(console.error);
+            });
+            subagentThreads.get(threadId)?.stream.update(pending.messageId, update);
+          } catch (err) {
+            console.error('[HeterogeneousAgent] Failed to replay subagent flush:', err);
+          }
         }
+        pendingSubagentFlush.clear();
 
-        if (terminalMessageError) {
-          await persistTerminalError(terminalMessageError, {
-            clearContent: shouldClearTerminalErrorContent,
-          });
-        } else {
+        if (!isErrorTerminal) {
           writeTopicStatus('active');
-          // NOW forward the deferred terminal event — handler will fetchAndReplaceMessages
-          // and pick up the final persisted state.
-          const terminal: AgentStreamEvent = deferredTerminalEvent ?? {
-            data: {},
-            operationId,
-            stepIndex: 0,
-            timestamp: Date.now(),
-            type: 'agent_runtime_end',
-          };
-          eventHandler(terminal);
+          // NOW forward the deferred terminal event — handler will
+          // fetchAndReplaceMessages and pick up the final persisted state.
+          eventHandler(terminalEvent);
         }
 
         // Signal completion to the user — dock badge + (window-hidden) notification.
         // Skip for aborted runs and for error terminations.
-        if (!isAborted() && deferredTerminalEvent?.type !== 'error') {
-          const body = accumulatedContent
-            ? markdownToTxt(accumulatedContent)
+        if (!isAborted() && !isErrorTerminal) {
+          const body = finalContent
+            ? markdownToTxt(finalContent)
             : t('notification.finishChatGeneration', { ns: 'electron' });
           notifyCompletion(
             t('notification.finishChatGeneration', { ns: 'electron' }),
@@ -1883,15 +1389,15 @@ export const executeHeterogeneousAgent = async (
         const messageError =
           deferredMessageError || toHeterogeneousAgentMessageError(error, adapterType);
         const shouldClearTerminalErrorContent = shouldSuppressTerminalErrorEcho(
-          accumulatedContent,
+          mainState.accContent,
           messageError,
         );
 
-        if (accumulatedContent && !shouldClearTerminalErrorContent) {
+        if (mainState.accContent && !shouldClearTerminalErrorContent) {
           await messageService
             .updateMessage(
-              currentAssistantMessageId,
-              { content: accumulatedContent },
+              mainState.currentAssistantId,
+              { content: mainState.accContent },
               {
                 agentId: context.agentId,
                 topicId: context.topicId,
@@ -1964,7 +1470,11 @@ export const executeHeterogeneousAgent = async (
 
         const merged = mergeQueuedMessages(remainingQueued);
         const mergedFiles =
-          merged.files.length > 0 ? merged.files.map((id) => ({ id }) as any) : undefined;
+          merged.filesPreview.length > 0
+            ? reconstructUploadFilesFromQueue(merged.filesPreview)
+            : merged.files.length > 0
+              ? (merged.files.map((id) => ({ id })) as any)
+              : undefined;
 
         setTimeout(() => {
           useChatStore
@@ -1973,6 +1483,7 @@ export const executeHeterogeneousAgent = async (
               context: { ...context },
               editorData: merged.editorData,
               files: mergedFiles,
+              ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
               message: merged.content,
               metadata: merged.metadata,
             })
@@ -2000,7 +1511,7 @@ export const executeHeterogeneousAgent = async (
       }
       const messageError = toHeterogeneousAgentMessageError(error, adapterType);
       await persistTerminalError(messageError, {
-        clearContent: shouldSuppressTerminalErrorEcho(accumulatedContent, messageError),
+        clearContent: shouldSuppressTerminalErrorEcho(mainState.accContent, messageError),
       });
     }
   } finally {

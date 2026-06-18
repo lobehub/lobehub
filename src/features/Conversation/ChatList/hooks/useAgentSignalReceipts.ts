@@ -2,6 +2,7 @@ import type { UIChatMessage } from '@lobechat/types';
 import { useMemo, useRef } from 'react';
 import useSWR from 'swr';
 
+import { agentSignalKeys } from '@/libs/swr/keys';
 import { agentSignalService } from '@/services/agentSignal';
 
 /** Poll cadence for the active conversation's Agent Signal receipt surface. */
@@ -49,7 +50,7 @@ export const useAgentSignalReceipts = (input: {
   }
 
   const { data, isLoading } = useSWR(
-    shouldFetch ? ['agentSignalReceipts', input.agentId, input.topicId] : null,
+    shouldFetch ? agentSignalKeys.receipts(input.agentId!, input.topicId!) : null,
     async () => {
       const result = await agentSignalService.listReceipts({
         agentId: input.agentId!,

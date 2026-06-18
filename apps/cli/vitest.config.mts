@@ -17,6 +17,10 @@ export default defineConfig({
         find: '@lobechat/file-loaders',
         replacement: path.resolve(__dirname, '../../packages/file-loaders/src/index.ts'),
       },
+      {
+        find: '@lobechat/tool-runtime',
+        replacement: path.resolve(__dirname, '../../packages/tool-runtime/src/index.ts'),
+      },
     ],
   },
   test: {

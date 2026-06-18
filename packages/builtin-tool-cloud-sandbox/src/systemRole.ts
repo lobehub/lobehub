@@ -1,3 +1,5 @@
+import { SANDBOX_UPLOADED_FILES_DIR } from './uploadedFiles';
+
 export const systemPrompt = `You have access to a Cloud Sandbox that provides a secure, isolated environment for executing code and file operations. This sandbox runs on AWS Bedrock AgentCore and is completely separate from the user's local system.
 
 
@@ -7,13 +9,19 @@ export const systemPrompt = `You have access to a Cloud Sandbox that provides a 
 - Each conversation topic has its own isolated session
 - Sessions may expire after inactivity; files will be recreated if needed
 - The sandbox has its own isolated file system starting at the root directory
-- Commands will time out after 60 seconds by default
+- Commands will time out after 120 seconds by default
 - **Default shell is /bin/sh** (typically dash or ash), NOT bash. The \`source\` command may not work as expected. If you need bash-specific features or \`source\`, wrap your command with bash: \`bash -c "source ~/.creds/env && your_command"\`
 
 **Credential Injection Locations:**
 - Environment-based credentials (oauth, kv-env, kv-header) are written to \`~/.creds/env\`
 - File-based credentials are extracted to \`~/.creds/files/{key}/{filename}\`
 </sandbox_environment>
+
+
+<uploaded_files>
+Files the user uploaded in this conversation (attachments and session files) are automatically synced into \`${SANDBOX_UPLOADED_FILES_DIR}\` when your sandbox session starts. If the user refers to a file they shared, look there first — do NOT ask them to re-upload. Run \`listFiles\` on \`${SANDBOX_UPLOADED_FILES_DIR}\` to see everything that is available.
+{{sandbox_uploaded_files}}
+</uploaded_files>
 
 
 <preinstalled_software>

@@ -1,7 +1,7 @@
 'use client';
 
 import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, Icon, Skeleton } from '@lobehub/ui';
+import { Form, Icon, Skeleton, Tooltip } from '@lobehub/ui';
 import { Select } from '@lobehub/ui/base-ui';
 import { Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
@@ -10,6 +10,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { usePermission } from '@/hooks/usePermission';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
@@ -17,6 +18,7 @@ import { sttOptions } from './const';
 
 const STT = memo(() => {
   const { t } = useTranslation('setting');
+  const { allowed: canManageServiceModel, reason } = usePermission('manage_settings');
   const [form] = Form.useForm();
   const { tts } = useUserStore(settingsSelectors.currentSettings, isEqual);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
@@ -27,13 +29,21 @@ const STT = memo(() => {
   const stt: FormGroupItemType = {
     children: [
       {
-        children: <Select options={sttOptions} style={{ width: 448 }} />,
+        children: (
+          <Tooltip title={reason}>
+            <Select disabled={!canManageServiceModel} options={sttOptions} style={{ width: 448 }} />
+          </Tooltip>
+        ),
         desc: t('settingTTS.sttService.desc'),
         label: t('settingTTS.sttService.title'),
         name: 'sttServer',
       },
       {
-        children: <Switch />,
+        children: (
+          <Tooltip title={reason}>
+            <Switch disabled={!canManageServiceModel} />
+          </Tooltip>
+        ),
         desc: t('settingTTS.sttAutoStop.desc'),
         label: t('settingTTS.sttAutoStop.title'),
         layout: 'horizontal',
@@ -54,6 +64,8 @@ const STT = memo(() => {
       itemsType={'group'}
       variant={'filled'}
       onValuesChange={async (values) => {
+        if (!canManageServiceModel) return;
+
         setLoading(true);
         await setSettings({
           tts: values,

@@ -1,21 +1,30 @@
-import { useUnmount } from 'ahooks';
-import { createStoreUpdater } from 'zustand-utils';
+import { useLayoutEffect } from 'react';
 
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 
 const HomeAgentIdSync = () => {
-  const useAgentStoreUpdater = createStoreUpdater(useAgentStore);
-
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
 
-  // Sync inbox agent id to activeAgentId when on home page
-  useAgentStoreUpdater('activeAgentId', inboxAgentId);
+  // Sync inbox agent id to activeAgentId when on home page. Layout effect (not
+  // passive) so it stays ordered with AgentIdSync's layout-effect clear/backfill:
+  // in a single route-switch commit, removed-tree layout cleanups always run
+  // before new-tree layout effects.
+  useLayoutEffect(() => {
+    if (!inboxAgentId) return;
 
-  // Clear activeAgentId when unmounting (leaving home page)
-  useUnmount(() => {
-    useAgentStore.setState({ activeAgentId: undefined });
-  });
+    if (useAgentStore.getState().activeAgentId !== inboxAgentId)
+      useAgentStore.setState({ activeAgentId: inboxAgentId }, false, 'HomeAgentIdSync/syncAgentId');
+  }, [inboxAgentId]);
+
+  // Clear activeAgentId when unmounting (leaving home page) — layout cleanup
+  // for the same ordering reason as above.
+  useLayoutEffect(
+    () => () => {
+      useAgentStore.setState({ activeAgentId: undefined }, false, 'HomeAgentIdSync/unmountAgentId');
+    },
+    [],
+  );
 
   return null;
 };

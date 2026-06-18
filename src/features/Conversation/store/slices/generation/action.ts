@@ -1,6 +1,10 @@
 import { AgentManagementIdentifier } from '@lobechat/builtin-tool-agent-management';
 import { LOADING_FLAT } from '@lobechat/const';
-import type { ConversationContext, HeterogeneousProviderConfig } from '@lobechat/types';
+import type {
+  ChatImageItem,
+  ConversationContext,
+  HeterogeneousProviderConfig,
+} from '@lobechat/types';
 import { t } from 'i18next';
 import { type StateCreator } from 'zustand';
 
@@ -24,6 +28,7 @@ import {
   mergeAgentRuntimeInitialContexts,
   resolveActiveTopicDocumentInitialContext,
 } from '@/store/chat/utils/activeTopicDocumentContext';
+import { getElectronStoreState } from '@/store/electron';
 
 import { type Store as ConversationStore } from '../../action';
 
@@ -70,12 +75,15 @@ const runHeterogeneousFromExistingMessage = async (
   params: {
     context: ConversationContext;
     heterogeneousProvider: HeterogeneousProviderConfig;
+    /** Image attachments from the original user message — forwarded to the CLI for vision support */
+    imageList?: ChatImageItem[];
     parentMessageId: string;
     parentOperationId: string;
     prompt: string;
   },
 ): Promise<string> => {
-  const { context, heterogeneousProvider, parentMessageId, parentOperationId, prompt } = params;
+  const { context, heterogeneousProvider, imageList, parentMessageId, parentOperationId, prompt } =
+    params;
   const agentId = context.agentId;
   if (!agentId) throw new Error('agentId is required for heterogeneous agent');
 
@@ -85,8 +93,11 @@ const runHeterogeneousFromExistingMessage = async (
   const topic = context.topicId
     ? topicSelectors.getTopicById(context.topicId)(chatStore)
     : undefined;
-  const agentWorkingDirectory =
-    agentByIdSelectors.getAgentWorkingDirectoryById(agentId)(getAgentStoreState());
+  const currentDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+  const agentWorkingDirectory = agentByIdSelectors.getAgentWorkingDirectoryById(
+    agentId,
+    currentDeviceId,
+  )(getAgentStoreState());
   const workingDirectory = topic?.metadata?.workingDirectory || agentWorkingDirectory;
 
   // Drops the saved sessionId when its bound cwd disagrees with the current
@@ -128,6 +139,7 @@ const runHeterogeneousFromExistingMessage = async (
       assistantMessageId: assistantMsg.id,
       context,
       heterogeneousProvider,
+      imageList: imageList?.length ? imageList : undefined,
       message: prompt,
       operationId: heteroOpId,
       resumeSessionId,
@@ -311,9 +323,10 @@ export const generationSlice: StateCreator<
 
     const agentConfig = agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState());
     const runtimeType = selectRuntimeType({
+      boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
       executionTarget: agentConfig?.agencyConfig?.executionTarget,
       heterogeneousProvider: agentConfig?.agencyConfig?.heterogeneousProvider,
-      isGatewayMode: chatStore.isGatewayModeEnabled(),
+      isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
     });
 
     // Hetero CLIs (CC / Codex) have no "continue a cut-off response" primitive
@@ -489,9 +502,10 @@ export const generationSlice: StateCreator<
       const agentConfig = agentSelectors.getAgentConfigById(context.agentId)(getAgentStoreState());
       const heterogeneousProvider = agentConfig?.agencyConfig?.heterogeneousProvider;
       const runtimeType = selectRuntimeType({
+        boundDeviceId: agentConfig?.agencyConfig?.boundDeviceId,
         executionTarget: agentConfig?.agencyConfig?.executionTarget,
         heterogeneousProvider,
-        isGatewayMode: chatStore.isGatewayModeEnabled(),
+        isGatewayMode: chatStore.isGatewayModeEnabled(context.agentId),
       });
 
       // ── Gateway mode: trigger server-side regeneration ──
@@ -522,6 +536,11 @@ export const generationSlice: StateCreator<
         await runHeterogeneousFromExistingMessage(chatStore, {
           context,
           heterogeneousProvider,
+          // Forward the original user message's images so regenerate re-runs
+          // the CLI with the same vision input as the first attempt. Without
+          // this, regenerate silently drops attachments (the send path reads
+          // imageList off the persisted user message; this path must too).
+          imageList: item.imageList,
           parentMessageId: messageId,
           parentOperationId: operationId,
           prompt: item.content,

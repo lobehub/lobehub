@@ -1,3 +1,8 @@
+import {
+  CUSTOM_DOCUMENT_FILE_TYPE,
+  CUSTOM_FOLDER_FILE_TYPE,
+  DERIVED_DOCUMENT_SOURCE_TYPE,
+} from '@lobechat/const';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -24,7 +29,7 @@ const createDocumentFixture = (overrides: Partial<LobeDocument> = {}): LobeDocum
   content: 'Body',
   createdAt: new Date('2024-01-01T00:00:00.000Z'),
   editorData: {},
-  fileType: 'custom/document',
+  fileType: CUSTOM_DOCUMENT_FILE_TYPE,
   filename: 'Old title',
   id: 'doc-1',
   metadata: {},
@@ -41,14 +46,14 @@ const createResourceFixture = (overrides: Partial<ResourceItem> = {}): ResourceI
   content: 'Body',
   createdAt: new Date('2024-01-01T00:00:00.000Z'),
   editorData: {},
-  fileType: 'custom/document',
+  fileType: CUSTOM_DOCUMENT_FILE_TYPE,
   id: 'doc-1',
   knowledgeBaseId: 'kb-1',
   metadata: {},
   name: 'Old title',
   parentId: null,
   size: 4,
-  sourceType: 'document',
+  sourceType: DERIVED_DOCUMENT_SOURCE_TYPE,
   title: 'Old title',
   updatedAt: new Date('2024-01-01T00:00:00.000Z'),
   url: 'document',
@@ -82,7 +87,7 @@ describe('DocumentAction', () => {
       content: '',
       createdAt: new Date('2024-01-01T00:00:00.000Z'),
       editorData: '{}',
-      fileType: 'custom/folder',
+      fileType: CUSTOM_FOLDER_FILE_TYPE,
       id: 'folder-1',
       metadata: {},
       parentId: null,
@@ -111,13 +116,13 @@ describe('DocumentAction', () => {
 
     expect(useStore.getState().resourceList.map((item) => item.id)).toEqual(['folder-1']);
     expect(useStore.getState().resourceMap.get('folder-1')).toMatchObject({
-      fileType: 'custom/folder',
+      fileType: CUSTOM_FOLDER_FILE_TYPE,
       id: 'folder-1',
       knowledgeBaseId: 'kb-1',
       name: 'New Folder',
       parentId: null,
       slug: 'new-folder',
-      sourceType: 'document',
+      sourceType: DERIVED_DOCUMENT_SOURCE_TYPE,
       title: 'New Folder',
     });
   });

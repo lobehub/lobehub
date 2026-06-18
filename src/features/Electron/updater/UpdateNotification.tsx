@@ -1,6 +1,6 @@
 import { type UpdateInfo } from '@lobechat/electron-client-ipc';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Button, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Markdown } from '@lobehub/ui';
 import { Modal } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CircleFadingArrowUp } from 'lucide-react';
@@ -134,12 +134,18 @@ export const UpdateNotification: React.FC = () => {
             <div style={{ color: cssVar.colorTextSecondary, fontSize: 12 }}>
               {updateInfo?.version}
             </div>
-            {updateInfo?.releaseNotes && (
-              <div
-                className={styles.releaseNote}
-                dangerouslySetInnerHTML={{ __html: updateInfo.releaseNotes }}
-              />
-            )}
+            {updateInfo?.releaseNotes &&
+              (typeof updateInfo.releaseNotes === 'string' ? (
+                <div className={styles.releaseNote}>
+                  <Markdown>{updateInfo.releaseNotes}</Markdown>
+                </div>
+              ) : (
+                <div className={styles.releaseNote}>
+                  {updateInfo.releaseNotes.map((note) => (
+                    <Markdown key={note.version}>{note.note ?? ''}</Markdown>
+                  ))}
+                </div>
+              ))}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <Button size="small" onClick={() => autoUpdateService.installLater()}>
                 {t('updater.installLater')}

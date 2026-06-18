@@ -247,7 +247,7 @@ describe('AgentSignalReceiptList', () => {
             sourceType: 'client.gateway.runtime_end',
             status: 'applied',
             target: {
-              title: 'Decision-first PR review preference',
+              title: 'Remember this PR review workflow',
               type: 'memory',
             },
             title: 'Memory saved',
@@ -258,9 +258,44 @@ describe('AgentSignalReceiptList', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Decision-first PR review preference/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Remember this PR review workflow/ }));
 
     expect(mocks.navigate).toHaveBeenCalledWith('/memory');
+  });
+
+  it('opens legacy preference memory receipts without layer metadata on the preferences route', () => {
+    render(
+      <AgentSignalReceiptList
+        receipts={[
+          {
+            agentId: 'agent-1',
+            createdAt: 1,
+            detail: 'Saved this for future replies',
+            id: 'receipt-1',
+            kind: 'memory',
+            sourceId: 'source-1',
+            sourceType: 'client.gateway.runtime_end',
+            status: 'applied',
+            target: {
+              id: 'base-memory-1',
+              title: 'AmAzing- prefers the assistant to respond in Chinese.',
+              type: 'memory',
+            },
+            title: 'Memory saved',
+            topicId: 'topic-1',
+            userId: 'user-1',
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /AmAzing- prefers the assistant to respond in Chinese./,
+      }),
+    );
+
+    expect(mocks.navigate).toHaveBeenCalledWith('/memory/preferences');
   });
 
   it('opens memory receipts on their layer detail route when target metadata is available', () => {

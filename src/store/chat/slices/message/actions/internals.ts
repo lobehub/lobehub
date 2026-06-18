@@ -11,6 +11,7 @@ import { displayMessageSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
 import { type MessageDispatch } from '../reducer';
 import { messagesReducer } from '../reducer';
+import { reconcileAssistantToolLinks } from '../utils/reconcileTools';
 
 const log = debug('lobe-store:message-internals');
 
@@ -52,12 +53,19 @@ export class MessageInternalsActionImpl {
     const rawMessages = this.#get().dbMessagesMap[messagesKey] || [];
     const updatedRawMessages = messagesReducer(rawMessages, payload);
 
-    const nextDbMap = { ...this.#get().dbMessagesMap, [messagesKey]: updatedRawMessages };
+    // Re-link any tool row whose parent assistant lost its tools[] entry — an
+    // optimistic updateMessage{tools} on the wrong/old assistant during a step
+    // boundary can drop the link while the tool row survives, orphaning the
+    // tool bubble. Reconcile on the RAW array so the SoT stays consistent (see
+    // reconcileAssistantToolLinks).
+    const reconciled = reconcileAssistantToolLinks(updatedRawMessages);
+
+    const nextDbMap = { ...this.#get().dbMessagesMap, [messagesKey]: reconciled };
 
     if (isEqual(nextDbMap, this.#get().dbMessagesMap)) return;
 
     // parse to get display messages
-    const { flatList } = parse(updatedRawMessages);
+    const { flatList } = parse(reconciled);
     const nextDisplayMap = { ...this.#get().messagesMap, [messagesKey]: flatList };
 
     this.#set({ dbMessagesMap: nextDbMap, messagesMap: nextDisplayMap }, false, {

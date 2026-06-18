@@ -20,8 +20,8 @@ vi.mock('@/components/AntdStaticMethods', () => ({
   message: { error: vi.fn(), success: vi.fn() },
 }));
 
-vi.mock('@/services/electron/git', () => ({
-  electronGitService: { revertGitFile: vi.fn() },
+vi.mock('@/services/git', () => ({
+  gitService: { revertGitFile: vi.fn() },
 }));
 
 describe('FileItemHeader — reveal in tree', () => {

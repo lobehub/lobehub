@@ -11,6 +11,7 @@ import { DEFAULT_AVATAR } from '@/const/meta';
 import AgentProfilePopup from '@/features/AgentProfileCard/AgentProfilePopup';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import UserAvatar from '@/features/User/UserAvatar';
+import { usePermission } from '@/hooks/usePermission';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
@@ -45,6 +46,7 @@ interface GroupMemberProps {
  */
 const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange, groupId }) => {
   const { t } = useTranslation('chat');
+  const { allowed: canEdit, reason } = usePermission('edit_own_content');
   const router = useQueryRoute();
   const location = useLocation();
   const [nickname, username] = useUserStore((s) => [
@@ -68,6 +70,7 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
   }, [groupId, location.pathname]);
 
   const handleAddMembers = async (selectedAgents: string[]) => {
+    if (!canEdit) return;
     if (!groupId) {
       console.error('No active group to add members to');
       return;
@@ -92,6 +95,7 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
   };
 
   const handleRemoveMember = async (memberId: string) => {
+    if (!canEdit) return;
     if (!groupId) return;
 
     await withRemovingFlag(memberId, () => removeAgentFromGroup(groupId, memberId));
@@ -128,10 +132,11 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
                   actions={
                     <ActionIcon
                       danger
+                      disabled={!canEdit}
                       icon={UserMinus}
                       loading={removingMemberIds.includes(item.id)}
                       size={'small'}
-                      title={t('groupSidebar.members.removeMember')}
+                      title={canEdit ? t('groupSidebar.members.removeMember') : reason}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleRemoveMember(item.id);

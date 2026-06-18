@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useClientDataSWR } from '@/libs/swr';
+import { statsKeys } from '@/libs/swr/keys';
 import { messageService } from '@/services/message';
 import { sessionService } from '@/services/session';
 import { topicService } from '@/services/topic';
@@ -46,16 +47,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const DataStatistics = memo<Omit<FlexboxProps, 'children'>>(({ style, ...rest }) => {
   const mobile = useServerConfigStore((s) => s.isMobile);
   // sessions
-  const { data: sessions, isLoading: sessionsLoading } = useClientDataSWR('count-sessions', () =>
-    sessionService.countSessions(),
+  const { data: sessions, isLoading: sessionsLoading } = useClientDataSWR(
+    statsKeys.countSessions(),
+    () => sessionService.countSessions(),
   );
   // topics
-  const { data: topics, isLoading: topicsLoading } = useClientDataSWR('count-topics', () =>
+  const { data: topics, isLoading: topicsLoading } = useClientDataSWR(statsKeys.countTopics(), () =>
     topicService.countTopics(),
   );
   // messages
   const { data: { messages, messagesToday } = {}, isLoading: messagesLoading } = useClientDataSWR(
-    'count-messages',
+    statsKeys.countMessages(),
     async () => ({
       messages: await messageService.countMessages(),
       messagesToday: await messageService.countMessages({

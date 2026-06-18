@@ -2,7 +2,6 @@ import { Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { App } from 'antd';
 import { type ItemType } from 'antd/es/menu/interface';
-import { createStaticStyles } from 'antd-style';
 import { FolderCogIcon, FolderPenIcon, Trash } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,24 +9,21 @@ import { useTranslation } from 'react-i18next';
 import { useGroupTemplates } from '@/components/ChatGroupWizard/templates';
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
 import { openEditingPopover } from '@/features/EditingPopover/store';
+import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
-
-const styles = createStaticStyles(({ css }) => ({
-  modalRoot: css`
-    z-index: 2000;
-  `,
-}));
 
 /**
  * Hook for generating menu items for session group containers
  * Used in List/Group/Actions.tsx
  */
 export const useSessionGroupMenuItems = () => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'common']);
   const { message } = App.useApp();
   const groupTemplates = useGroupTemplates();
+  const { allowed: canCreate } = usePermission('create_content');
+  const { allowed: canEdit } = usePermission('edit_own_content');
 
   const [storeCreateAgent] = useAgentStore((s) => [s.createAgent]);
   const [removeGroup, refreshAgentList] = useHomeStore((s) => [s.removeGroup, s.refreshAgentList]);
@@ -43,18 +39,21 @@ export const useSessionGroupMenuItems = () => {
     (groupId: string, groupName: string, anchor: HTMLElement | null): ItemType => {
       const iconElement = <Icon icon={FolderPenIcon} />;
       return {
+        disabled: !canEdit,
         icon: iconElement,
         key: 'rename',
         label: t('sessionGroup.rename'),
         onClick: (info: any) => {
           info.domEvent?.stopPropagation();
+          if (!canEdit) return;
+
           if (anchor) {
             openEditingPopover({ anchor, id: groupId, title: groupName, type: 'group' });
           }
         },
       };
     },
-    [t],
+    [canEdit, t],
   );
 
   /**
@@ -64,16 +63,19 @@ export const useSessionGroupMenuItems = () => {
     (onOpenConfig: () => void): ItemType => {
       const iconElement = <Icon icon={FolderCogIcon} />;
       return {
+        disabled: !canEdit,
         icon: iconElement,
         key: 'config',
         label: t('sessionGroup.config'),
         onClick: (info: any) => {
           info.domEvent?.stopPropagation();
+          if (!canEdit) return;
+
           onOpenConfig();
         },
       };
     },
-    [t],
+    [canEdit, t],
   );
 
   /**
@@ -84,22 +86,28 @@ export const useSessionGroupMenuItems = () => {
       const trashIcon = <Icon icon={Trash} />;
       return {
         danger: true,
+        disabled: !canEdit,
         icon: trashIcon,
         key: 'delete',
         label: t('delete', { ns: 'common' }),
         onClick: (info: any) => {
           info.domEvent?.stopPropagation();
+          if (!canEdit) return;
+
           confirmModal({
+            cancelText: t('cancel', { ns: 'common' }),
+            content: t('sessionGroup.confirmRemoveGroupAlert'),
             okButtonProps: { danger: true },
+            okText: t('delete', { ns: 'common' }),
             onOk: async () => {
               await removeGroup(groupId);
             },
-            title: t('sessionGroup.confirmRemoveGroupAlert'),
+            title: t('delete', { ns: 'common' }),
           });
         },
       };
     },
-    [t, removeGroup],
+    [canEdit, t, removeGroup],
   );
 
   /**
@@ -109,11 +117,13 @@ export const useSessionGroupMenuItems = () => {
     (groupId: string, _isPinned?: boolean): ItemType => {
       const iconElement = <Icon icon={FolderPenIcon} />;
       return {
+        disabled: !canCreate,
         icon: iconElement,
         key: 'createAgent',
         label: t('newAgent'),
         onClick: async (info: any) => {
           info.domEvent?.stopPropagation();
+          if (!canCreate) return;
 
           const key = 'createNewAgent';
           message.loading({ content: t('sessionGroup.creatingAgent'), duration: 0, key });
@@ -135,7 +145,7 @@ export const useSessionGroupMenuItems = () => {
         },
       };
     },
-    [t, message, storeCreateAgent, refreshAgentList],
+    [canCreate, t, message, storeCreateAgent, refreshAgentList],
   );
 
   /**
@@ -152,11 +162,13 @@ export const useSessionGroupMenuItems = () => {
     ): ItemType => {
       const iconElement = <Icon icon={FolderPenIcon} />;
       return {
+        disabled: !canCreate,
         icon: iconElement,
         key: 'createGroupChat',
         label: t('newGroupChat'),
         onClick: async (info: any) => {
           info.domEvent?.stopPropagation();
+          if (!canCreate) return;
 
           onOpenMemberSelection({
             onCancel: () => {},
@@ -181,7 +193,7 @@ export const useSessionGroupMenuItems = () => {
         },
       };
     },
-    [t, message, createGroup],
+    [canCreate, t, message, createGroup],
   );
 
   /**
@@ -190,6 +202,8 @@ export const useSessionGroupMenuItems = () => {
    */
   const createGroupFromTemplate = useCallback(
     async (templateId: string, selectedMemberTitles?: string[]) => {
+      if (!canCreate) return false;
+
       setIsCreatingGroup(true);
       try {
         const template = groupTemplates.find((t) => t.id === templateId);
@@ -249,7 +263,7 @@ export const useSessionGroupMenuItems = () => {
         setIsCreatingGroup(false);
       }
     },
-    [groupTemplates, storeCreateAgent, refreshAgentList, createGroup, message, t],
+    [canCreate, groupTemplates, storeCreateAgent, refreshAgentList, createGroup, message, t],
   );
 
   /**
@@ -258,6 +272,8 @@ export const useSessionGroupMenuItems = () => {
    */
   const createGroupWithMembers = useCallback(
     async (selectedAgents: string[], groupTitle?: string) => {
+      if (!canCreate) return false;
+
       setIsCreatingGroup(true);
       try {
         const title = groupTitle || t('defaultGroupChat');
@@ -279,7 +295,7 @@ export const useSessionGroupMenuItems = () => {
         setIsCreatingGroup(false);
       }
     },
-    [createGroup, message, t],
+    [canCreate, createGroup, message, t],
   );
 
   return {

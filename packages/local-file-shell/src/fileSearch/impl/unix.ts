@@ -244,13 +244,14 @@ export abstract class UnixFileSearch extends BaseFileSearch {
 
   /**
    * Perform glob pattern matching
-   * Uses fd > find > fast-glob fallback strategy
+   * Uses fd when available; falls back to fast-glob to preserve globstar semantics.
    */
   async glob(params: GlobFilesParams): Promise<GlobFilesResult> {
     const tool = await this.determineBestUnixTool();
-    logger.info(`Using glob tool: ${tool}`);
+    const globTool = tool === 'find' ? 'fast-glob' : tool;
+    logger.info(`Using glob tool: ${globTool}`);
 
-    return this.globWithUnixTool(tool, params);
+    return this.globWithUnixTool(globTool, params);
   }
 
   protected async globWithUnixTool(
@@ -262,7 +263,7 @@ export abstract class UnixFileSearch extends BaseFileSearch {
         return this.globWithFd(params);
       }
       case 'find': {
-        return this.globWithFind(params);
+        return this.globWithFastGlob(params);
       }
       default: {
         return this.globWithFastGlob(params);
@@ -296,8 +297,8 @@ export abstract class UnixFileSearch extends BaseFileSearch {
       });
 
       if (exitCode !== 0 && !stdout.trim()) {
-        logger.warn(`${logPrefix} fd glob failed with code ${exitCode}, falling back to find`);
-        return this.globWithFind(params);
+        logger.warn(`${logPrefix} fd glob failed with code ${exitCode}, falling back to fast-glob`);
+        return this.globWithFastGlob(params);
       }
 
       const files = stdout
@@ -318,8 +319,8 @@ export abstract class UnixFileSearch extends BaseFileSearch {
       };
     } catch (error) {
       logger.error(`${logPrefix} fd glob failed:`, error);
-      logger.warn(`${logPrefix} Falling back to find`);
-      return this.globWithFind(params);
+      logger.warn(`${logPrefix} Falling back to fast-glob`);
+      return this.globWithFastGlob(params);
     }
   }
 
