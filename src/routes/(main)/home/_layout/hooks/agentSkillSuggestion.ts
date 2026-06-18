@@ -100,10 +100,6 @@ export const buildAgentSkillSuggestionQueries = (prompt: string): string[] => {
     if (queries.length >= MAX_QUERY_COUNT) break;
   }
 
-  if (cleaned.length >= 4) {
-    pushUnique(queries, cleaned.slice(0, 80));
-  }
-
   return queries.slice(0, MAX_QUERY_COUNT);
 };
 
