@@ -1,11 +1,12 @@
 'use client';
 
-import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
+import { AGENT_DOCUMENT_CATEGORY, AGENT_DOCUMENT_SKILL_CATEGORY } from '@lobechat/const';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { PanelRightCloseIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router-dom';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { isDesktop } from '@/const/version';
@@ -18,6 +19,7 @@ import { agentDocumentService, agentDocumentSWRKeys } from '@/services/agentDocu
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
+import { standardizeIdentifier } from '@/utils/identifier';
 
 type AgentDocumentPanelTab = 'documents' | 'skills';
 
@@ -71,6 +73,7 @@ const AgentDocumentRightPanel = memo(() => {
   const { t } = useTranslation('chat');
   // null = not yet picked by the user → follow the auto default below.
   const [pickedTab, setPickedTab] = useState<AgentDocumentPanelTab | null>(null);
+  const { docId } = useParams<{ docId?: string }>();
   const toggleRightPanel = useGlobalStore((s) => s.toggleRightPanel);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   const isHetero = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
@@ -98,8 +101,23 @@ const AgentDocumentRightPanel = memo(() => {
     () => documentList.some((doc) => doc.category === AGENT_DOCUMENT_CATEGORY),
     [documentList],
   );
+  // The open doc itself decides the default tab: a skill entry (SKILL.md or any
+  // file inside a skill bundle) lands on Skills even when normal documents
+  // exist — otherwise the skill-entry flow would open on the wrong tab.
+  const isSkillEntry = useMemo(
+    () =>
+      docId
+        ? documentList.some(
+            (doc) =>
+              standardizeIdentifier(doc.documentId) === docId &&
+              doc.category === AGENT_DOCUMENT_SKILL_CATEGORY,
+          )
+        : false,
+    [docId, documentList],
+  );
   const activeTab: AgentDocumentPanelTab =
-    pickedTab ?? (!isDocumentListLoading && !hasDocuments ? 'skills' : 'documents');
+    pickedTab ??
+    (isSkillEntry || (!isDocumentListLoading && !hasDocuments) ? 'skills' : 'documents');
 
   return (
     <RightPanel stableLayout defaultWidth={360} maxWidth={720} minWidth={300}>
