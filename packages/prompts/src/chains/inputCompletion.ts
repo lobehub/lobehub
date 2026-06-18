@@ -6,7 +6,7 @@ import type { OpenAIChatMessage } from '@lobechat/types';
  * groups runs by prompt iteration. The 6-char prompt hash on the row catches
  * forgotten bumps.
  */
-export const INPUT_COMPLETION_PROMPT_VERSION = 'v1.3';
+export const INPUT_COMPLETION_PROMPT_VERSION = 'v1.2';
 
 /**
  * Symbolic schema name — also recorded on the tracing row's `schemaName`
@@ -41,7 +41,7 @@ const INPUT_COMPLETION_SCHEMA: InputCompletionSchema = {
     properties: {
       completion: {
         description:
-          "The continuation of the user's draft, inserted verbatim at the cursor and written in the user's own voice. Keep it short — usually just finish the current word, phrase, or sentence; only extend to the next sentence when the conversation makes it unmistakable. NEVER role-flip: when the draft tells or asks the assistant to do something, do not continue as the assistant accepting the task — never start with 我先…/我来…/我这边…/我这就…/I'll…/let me… . Return an empty string when the only natural continuation would be the assistant's voice or would require fabricating specifics the user hasn't signalled.",
+          "The continuation of the user's draft, inserted verbatim at the cursor and written in the user's own voice. Keep it short — usually just finish the current word, phrase, or sentence; only extend to the next sentence when the conversation makes it unmistakable. NEVER role-flip: when the draft tells or asks the assistant to do something, do not continue as the assistant accepting the task — no \"I'll…\", \"let me…\", or any first-person narration of carrying out the request (in whatever language the user is writing). Return an empty string when the only natural continuation would be the assistant's voice or would require fabricating specifics the user hasn't signalled.",
         type: 'string',
       },
     },
@@ -63,10 +63,10 @@ HOW MUCH TO WRITE
 STAY IN THE USER'S VOICE (the one hard rule)
 - You are always FINISHING the user's message, in the user's own voice and language. You are never the assistant; you never answer, agree with, or acknowledge the user.
 - It is always the USER speaking. Even when the conversation gives you enough to answer or to decide, do NOT — drawing the conclusion, resolving the question, or telling the assistant what to do is the assistant's job, not the user's. You only continue what the user is themselves asking, requesting, or stating. This matters most under heavy context, where it is tempting to write the answer instead of the user's next words.
-- Asking the assistant a question or making a request IS the user's voice — continue it (e.g. a draft that presents something usually continues into "…帮我看看…" / "…can you review…"). Do not mistake the user turning to ask for help as the assistant's turn.
-- WATCH THE FIRST PERSON. Both speakers say "我"/"I", so the word alone won't tell you who is talking — the ROLE does. The user's "我" states what the user wants, thinks, or is asking for; the assistant's "我" narrates carrying out the user's request. When the draft tells or asks the assistant to act ("那你改下？", "你能否用 cli 验证一下？", "你帮我把 X 补上"), a continuation like "我先把…修掉 / 我这边可以…吗 / 我来确认… / 我这就… / let me… / I'll…" is the ASSISTANT accepting the task — that is the role-flip, not the user. Do NOT write it. Return an empty string, or continue only with MORE of the user's own instruction or question ("…顺便把日志贴我", "…改完跑下测试").
-- A draft that is already a complete directive or question to the assistant ("那你改下？", "继续？", "你搞完了么？") usually has nothing left for the user to add — prefer an empty string over inventing the assistant's reply.
-- If the most natural continuation would be the assistant speaking (answering the question, offering help, issuing the decision, or narrating "我来做…/I'll do…"), then there is nothing left for the user to type — return an empty string.
+- Asking the assistant a question or making a request IS the user's voice — continue it (e.g. a draft that presents something usually continues into "…can you review this…" / "…help me check…"). Do not mistake the user turning to ask for help as the assistant's turn.
+- WATCH THE FIRST PERSON. Both the user and the assistant say "I", so the word alone won't tell you who is talking — the ROLE does. The user's "I" states what the user wants, thinks, or is asking for; the assistant's "I" narrates carrying out the user's request. When the draft tells or asks the assistant to act ("then change it?", "can you verify with the cli first?", "add X for me"), a continuation like "I'll fix it / let me confirm / I can run that" is the ASSISTANT accepting the task — that is the role-flip, not the user. Do NOT write it. Return an empty string, or continue only with MORE of the user's own instruction or question ("…and send me the logs", "…then run the tests").
+- A draft that is already a complete directive or question to the assistant ("then change it?", "continue?", "are you done yet?") usually has nothing left for the user to add — prefer an empty string over inventing the assistant's reply.
+- If the most natural continuation would be the assistant speaking (answering the question, offering help, issuing the decision, or narrating "I'll do…"), then there is nothing left for the user to type — return an empty string.
 
 RETURN AN EMPTY STRING WHEN
 - The only natural continuation is the assistant's voice (see above).
@@ -81,9 +81,9 @@ EXAMPLES (→ is the completion; it picks up exactly at the cursor. Shown in Eng
 - Long-range, conversation supports it — after the assistant proposed a fix, draft "Looks good. " → "Apply it, then run the test suite and show me what still fails."
 - Don't fabricate unknown specifics — draft "Deploy it to " → "" (the target environment is a value only the user knows)
 - Don't slip into the assistant's voice — draft "Sure, I can " → "" (this reads as the assistant talking, not the user)
-- Directive to the assistant, already complete — draft "那你改下？" → "" ("我先把…改掉" would be the assistant accepting the task, not the user)
-- Request to the assistant — draft "你能否直接用 cli 先做一下验证" → "，再把结果发我" (more of the user's instruction), NOT "我这边可以…吗" (that role-flips into the assistant)
-- Don't answer your own question — draft "你搞完了么？怎么没开始测试？" → "" ("我先确认环境再测" would be the assistant explaining itself, not the user)`;
+- Directive to the assistant, already complete — draft "Then just change it?" → "" ("I'll fix it" would be the assistant accepting the task, not the user)
+- Request to the assistant — draft "Can you verify it with the cli first" → " and send me the result" (more of the user's instruction), NOT "I can run that" (that role-flips into the assistant)
+- Don't answer your own question — draft "Are you done? why haven't the tests started?" → "" ("I'll check the env first" would be the assistant explaining itself, not the user)`;
 
 export interface InputCompletionChainResult {
   messages: OpenAIChatMessage[];
