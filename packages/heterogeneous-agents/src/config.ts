@@ -66,6 +66,11 @@ export type RemoteHeterogeneousAgentType =
 export type HeterogeneousAgentType = LocalHeterogeneousAgentType | RemoteHeterogeneousAgentType;
 
 const REMOTE_HETERO_TYPES = new Set<string>(REMOTE_HETEROGENEOUS_AGENT_CONFIGS.map((c) => c.type));
+const LOCAL_HETERO_TYPES = new Set<string>(HETEROGENEOUS_AGENT_CONFIGS.map((c) => c.type));
+
+/** Returns true when `type` identifies a local CLI agent (Claude Code, Codex, ...). */
+export const isLocalHeterogeneousType = (type: string): type is LocalHeterogeneousAgentType =>
+  LOCAL_HETERO_TYPES.has(type);
 
 /** Returns true when `type` identifies a remote platform agent (openclaw, hermes, …). */
 export const isRemoteHeterogeneousType = (type: string): type is RemoteHeterogeneousAgentType =>

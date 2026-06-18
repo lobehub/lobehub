@@ -7,6 +7,7 @@ export type {
 export {
   getHeterogeneousAgentConfig,
   HETEROGENEOUS_AGENT_CONFIGS,
+  isLocalHeterogeneousType,
   isRemoteHeterogeneousType,
   REMOTE_HETEROGENEOUS_AGENT_CONFIGS,
 } from './config';

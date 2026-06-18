@@ -21,6 +21,7 @@ import type { Command } from 'commander';
 import { resolveToken } from '../auth/resolveToken';
 import { CLI_API_KEY_ENV } from '../constants/auth';
 import { OFFICIAL_GATEWAY_URL } from '../constants/urls';
+import { registerAgentRun } from '../daemon/agentRunSupervisor';
 import {
   appendLog,
   getLogPath,
@@ -384,7 +385,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       `Received agent_run_request: operationId=${request.operationId} type=${request.agentType}`,
     );
     try {
-      const ack = await spawnHeteroAgentRun(
+      const { ack, child } = await spawnHeteroAgentRun(
         {
           agentType: request.agentType,
           args: request.args,
@@ -400,6 +401,14 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
         },
         { error, info },
       );
+      if (ack.status === 'accepted' && child) {
+        registerAgentRun({
+          agentType: request.agentType,
+          child,
+          operationId: request.operationId,
+          topicId: request.topicId,
+        });
+      }
       client.sendAgentRunAck({ operationId: request.operationId, ...ack });
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);

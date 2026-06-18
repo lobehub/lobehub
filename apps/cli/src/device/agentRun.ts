@@ -1,3 +1,4 @@
+import type { ChildProcess } from 'node:child_process';
 import { spawn } from 'node:child_process';
 
 import {
@@ -26,6 +27,11 @@ export interface AgentRunAckResult {
   status: 'accepted' | 'rejected';
 }
 
+export interface SpawnHeteroAgentRunResult {
+  ack: AgentRunAckResult;
+  child?: ChildProcess;
+}
+
 interface SpawnHeteroAgentRunLogger {
   error?: (msg: string) => void;
   info?: (msg: string) => void;
@@ -51,7 +57,7 @@ interface SpawnHeteroAgentRunLogger {
 export function spawnHeteroAgentRun(
   params: SpawnHeteroAgentRunParams,
   logger?: SpawnHeteroAgentRunLogger,
-): Promise<AgentRunAckResult> {
+): Promise<SpawnHeteroAgentRunResult> {
   const {
     agentType,
     args: extraArgs,
@@ -95,9 +101,9 @@ export function spawnHeteroAgentRun(
   // coerceJsonPrompt.
   const stdinPayload = buildHeteroExecStdinPayload({ imageList, prompt, systemContext });
 
-  return new Promise<AgentRunAckResult>((resolve) => {
+  return new Promise<SpawnHeteroAgentRunResult>((resolve) => {
     let settled = false;
-    const settle = (result: AgentRunAckResult) => {
+    const settle = (result: SpawnHeteroAgentRunResult) => {
       if (settled) return;
       settled = true;
       resolve(result);
@@ -123,12 +129,12 @@ export function spawnHeteroAgentRun(
           `hetero exec stdin write failed (op=${operationId}): ${(err as Error).message}`,
         );
       }
-      settle({ status: 'accepted' });
+      settle({ ack: { status: 'accepted' }, child });
     });
 
     child.once('error', (err) => {
       logger?.error?.(`hetero exec spawn failed (op=${operationId}): ${err.message}`);
-      settle({ reason: err.message, status: 'rejected' });
+      settle({ ack: { reason: err.message, status: 'rejected' } });
     });
 
     child.on('exit', (code, signal) => {

@@ -173,6 +173,16 @@ export interface ChatTopicMetadata {
      * local mode dispatches the in-memory handlers registered at dispatch time.
      */
     hooks?: SerializedAgentHook[];
+    /**
+     * Device handling this operation when it was dispatched through `lh connect`.
+     * Used only for runtime cancellation routing.
+     */
+    deviceId?: string;
+    /**
+     * Heterogeneous agent type for device-dispatched runs. Lets interrupt route
+     * local CLI agents (codex/claude-code) separately from task-style agents.
+     */
+    heteroType?: string;
     operationId: string;
     scope?: string;
     threadId?: string | null;

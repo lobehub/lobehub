@@ -1,3 +1,4 @@
+import { cancelAgentRun } from '../daemon/agentRunSupervisor';
 import { log } from '../utils/logger';
 import { checkPlatformCapability } from './checkPlatformCapability';
 import { getAgentProfile } from './getAgentProfile';
@@ -11,6 +12,7 @@ import { runLocalSystemTool } from './localSystemRuntime';
  * `LocalSystemExecutionRuntime` so the result carries structured `state`.
  */
 const methodMap: Record<string, (args: any) => Promise<unknown>> = {
+  cancelAgentRun,
   cancelHeteroTask,
   checkPlatformCapability,
   getAgentProfile,
