@@ -385,6 +385,14 @@ export default {
   'plans.workspace.solo': 'Solo (1 member)',
   'plans.target': 'Target Plan',
   'plans.unlimited': 'Unlimited',
+  'plansModal.creditLimit.desc':
+    'Upgrade your plan to unlock more monthly credits and keep working without interruption.',
+  'plansModal.creditLimit.title': 'You’re out of credits',
+  'plansModal.default.desc': 'Unlock more capacity and advanced features.',
+  'plansModal.default.title': 'Upgrade your plan',
+  'plansModal.fileStorageLimit.desc':
+    'Your file storage is full. Upgrade to keep uploading and managing files.',
+  'plansModal.fileStorageLimit.title': 'Storage limit reached',
   'qa.desc':
     'If your question is not answered, check <1>Product Documentation</1> for more FAQs, or contact us.',
   'qa.detail': 'View Details',
