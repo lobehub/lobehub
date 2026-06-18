@@ -1,8 +1,6 @@
 import { handleGenerationPromptModerationError } from '@/business/client/handleGenerationPromptModerationError';
 import { handleLobeHubModelDeprecatedError } from '@/business/client/handleLobeHubModelDeprecatedError';
-import { markUserValidAction } from '@/business/client/markUserValidAction';
 import { imageService } from '@/services/image';
-import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
 import { type StoreSetter } from '@/store/types';
 
 import { type ImageStore } from '../../store';
@@ -72,14 +70,6 @@ export class CreateImageActionImpl {
           false,
           'createImage/startCreateImageWithNewTopic',
         );
-      }
-
-      const serverConfigState = getServerConfigStoreState();
-      const enableBusinessFeatures =
-        !!serverConfigState && serverConfigSelectors.enableBusinessFeatures(serverConfigState);
-
-      if (enableBusinessFeatures) {
-        markUserValidAction();
       }
 
       // 5. Create image via service

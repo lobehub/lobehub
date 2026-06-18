@@ -23,7 +23,6 @@ import { nanoid } from '@lobechat/utils';
 import { TRPCClientError } from '@trpc/client';
 import { t } from 'i18next';
 
-import { markUserValidAction } from '@/business/client/markUserValidAction';
 import { message as antdMessage } from '@/components/AntdStaticMethods';
 import { agentService } from '@/services/agent';
 import { aiChatService } from '@/services/aiChat';
@@ -56,7 +55,6 @@ import {
 import { getElectronStoreState } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { type StoreSetter } from '@/store/types';
 import { useUserMemoryStore } from '@/store/userMemory';
@@ -972,14 +970,6 @@ export class ConversationLifecycleActionImpl {
     // Clear editor temp state after message created
     if (data) {
       this.#get().updateOperationMetadata(operationId, { inputEditorTempState: null });
-    }
-
-    const serverConfigState = getServerConfigStoreState();
-    const enableBusinessFeatures =
-      !!serverConfigState && serverConfigSelectors.enableBusinessFeatures(serverConfigState);
-
-    if (enableBusinessFeatures) {
-      markUserValidAction();
     }
 
     if (!data) return;
