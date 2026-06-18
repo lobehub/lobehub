@@ -1,7 +1,7 @@
 import { isRecord } from '@lobechat/utils/object';
 import { safeParseJSON } from '@lobechat/utils/safeParseJSON';
 
-import { type ParsedTool, parseToolName, staticLabelFor } from '../../Inspector/Linear/labels';
+import { parseToolName, staticLabelFor } from '../../Inspector/Linear/labels';
 
 const PRIORITY_LABEL: Record<number, string> = {
   0: 'None',
@@ -269,21 +269,30 @@ const buildEntity = (record: Record<PropertyKey, unknown>): LinearEntity | undef
   };
 };
 
-const extractResultRecords = (
-  value: unknown,
-  verb?: ParsedTool['verb'],
-): Record<PropertyKey, unknown>[] => {
+// Identity fields that mark a record as a single entity (issue / comment /
+// document / …) rather than a list/search wrapper. buildEntity reads the id from
+// `id | identifier` and the title from `title | name | subject`, so the same
+// keys decide whether an object "is" an entity.
+const ENTITY_IDENTITY_KEYS = ['id', 'identifier', 'title', 'name', 'subject'] as const;
+
+const looksLikeEntity = (record: Record<PropertyKey, unknown>): boolean =>
+  ENTITY_IDENTITY_KEYS.some((key) => Boolean(readDisplayString(record[key])));
+
+const extractResultRecords = (value: unknown): Record<PropertyKey, unknown>[] => {
   if (Array.isArray(value)) return value.filter(isRecord);
   if (!isRecord(value)) return [];
 
-  // Only `list_*` endpoints carry their payload in a nested collection
-  // (`{ issues: [...] }`, `{ nodes: [...] }`). Single-entity endpoints like
-  // `get_issue` return the entity directly — and that entity often embeds its
-  // own sub-collections (`documents: []`, `attachments: []`) whose keys overlap
-  // RESULT_ARRAY_KEYS. Matching those would wrongly drop the whole entity (e.g.
-  // an empty `documents: []` yielding zero records → raw JSON fallback), so we
-  // scan nested arrays for list endpoints only.
-  if (verb === 'list') {
+  // Wrapper responses (`list_*`, `search`, fetch-collection) carry their payload
+  // in a nested collection (`{ issues: [...] }`, `{ results: [...] }`) and have
+  // no identity of their own. A single entity (`get_*` / `save_*` / `create_*` /
+  // fetch-one) has its own id/title and may merely *embed* sub-collections
+  // (`documents: []`, `attachments: []`) whose keys overlap RESULT_ARRAY_KEYS —
+  // those must not hijack the entity (an empty `documents: []` would otherwise
+  // yield zero records → raw JSON fallback). So only unwrap nested collections
+  // when the object itself doesn't look like an entity. This is verb-agnostic on
+  // purpose: Codex routes Linear `search` through a bare `search` apiName that
+  // parses to `verb: 'other'`, so keying off the verb would miss it.
+  if (!looksLikeEntity(value)) {
     for (const key of RESULT_ARRAY_KEYS) {
       const nested = value[key];
       if (Array.isArray(nested)) return nested.filter(isRecord);
@@ -318,7 +327,7 @@ export const buildLinearRenderModel = ({
 }): LinearRenderModel => {
   const parsedTool = parseToolName(apiName || '');
   const result = parseResultContent(content);
-  const resultEntities = extractResultRecords(result, parsedTool.verb)
+  const resultEntities = extractResultRecords(result)
     .map(buildEntity)
     .filter((entity): entity is LinearEntity => Boolean(entity));
   const resultText = typeof result === 'string' ? result : undefined;

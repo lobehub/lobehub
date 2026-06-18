@@ -144,6 +144,43 @@ describe('buildLinearRenderModel', () => {
     expect(model.resultEntities.map((entity) => entity.id)).toEqual(['TEST-1', 'TEST-2']);
   });
 
+  it('unwraps search-style { results: [...] } wrappers into cards (Codex bare `search`)', () => {
+    // Codex routes Linear search through a bare `search` apiName → parses to
+    // `verb: 'other'`, so the unwrap must be driven by the wrapper shape, not the verb.
+    const model = buildLinearRenderModel({
+      apiName: 'search',
+      args: { query: 'mock query' },
+      content: JSON.stringify({
+        results: [
+          { id: 'TEST-1', title: 'First match', url: 'https://linear.app/acme/issue/TEST-1' },
+          { id: 'TEST-2', title: 'Second match', url: 'https://linear.app/acme/issue/TEST-2' },
+        ],
+      }),
+    });
+
+    expect(model.rawResultJson).toBeUndefined();
+    expect(model.resultEntities).toHaveLength(2);
+    expect(model.resultEntities.map((entity) => entity.id)).toEqual(['TEST-1', 'TEST-2']);
+  });
+
+  it('keeps a single fetched entity intact even when it embeds a populated sub-collection', () => {
+    // A project (fetch-one) carries its own id/title AND a nested `issues` array;
+    // the entity must win over its sub-collection.
+    const model = buildLinearRenderModel({
+      apiName: 'get_project',
+      args: { id: 'PRJ-1' },
+      content: JSON.stringify({
+        id: 'PRJ-1',
+        issues: [{ id: 'TEST-1', title: 'Child issue' }],
+        name: 'Mock Project',
+        url: 'https://linear.app/acme/project/PRJ-1',
+      }),
+    });
+
+    expect(model.resultEntities).toHaveLength(1);
+    expect(model.resultEntities[0]).toMatchObject({ id: 'PRJ-1', title: 'Mock Project' });
+  });
+
   it('keeps non-JSON result text as a readable fallback', () => {
     const model = buildLinearRenderModel({
       apiName: 'search',
