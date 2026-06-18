@@ -3,6 +3,8 @@ import { memo } from 'react';
 
 import { type ChatAudioItem } from '@/types/index';
 
+import AudioPlayer from './AudioPlayer';
+
 interface AudioFileListViewerProps {
   items: ChatAudioItem[];
 }
@@ -11,10 +13,7 @@ const AudioFileListViewer = memo<AudioFileListViewerProps>(({ items }) => {
   return (
     <Flexbox gap={8}>
       {items.map((item) => (
-        <audio controls key={item.id} style={{ maxWidth: '100%', width: 360 }}>
-          <source src={item.url} />
-          {item.alt}
-        </audio>
+        <AudioPlayer alt={item.alt} key={item.id} url={item.url} />
       ))}
     </Flexbox>
   );

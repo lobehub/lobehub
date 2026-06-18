@@ -59,6 +59,7 @@ const FileUpload = memo(() => {
   const { canUploadImage, canUploadVideo, canUploadAudio } = useVisualMediaUploadAbility(
     model,
     provider,
+    agentId,
   );
 
   const [showTip, updateGuideState] = useUserStore((s) => [

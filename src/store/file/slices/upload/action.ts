@@ -12,6 +12,7 @@ import { type FileMetadata, type UploadFileItem } from '@/types/files';
 import { getImageDimensions } from '@/utils/client/imageDimensions';
 
 import { type FileStore } from '../../store';
+import { audioMimeFromExtension } from '../chat/uploadGuard';
 
 type OnStatusUpdate = (
   data:
@@ -179,6 +180,12 @@ export class FileUploadActionImpl {
         const type = await fileTypeFromBuffer(fileArrayBuffer);
         fileType = type?.mime || 'text/plain';
       }
+
+      // Audio containers like .m4a share the ISO-BMFF box with .mp4, so both the browser and
+      // byte-sniffing may report an empty or `video/*` mime. Trust the extension to keep these
+      // classified (and rendered) as audio.
+      const audioMime = audioMimeFromExtension(normalizedFile.name);
+      if (audioMime && !fileType.startsWith('audio/')) fileType = audioMime;
 
       // 5. create file to db
       const data = await fileService.createFile(

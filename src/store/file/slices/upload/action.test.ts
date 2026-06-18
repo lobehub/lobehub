@@ -594,6 +594,74 @@ describe('FileUploadAction', () => {
           undefined,
         );
       });
+
+      it('should backfill audio mime from extension when byte-sniffing reports video/mp4', async () => {
+        const { result } = renderHook(() => useStore());
+
+        // .m4a shares the ISO-BMFF container with mp4, so file-type may report video/mp4.
+        const mockFile = new File(['test content'], 'voice.m4a', { type: '' });
+        const mockMetadata = {
+          date: '12345',
+          dirname: '/uploads',
+          filename: 'voice.m4a',
+          path: '/uploads/voice.m4a',
+        };
+
+        vi.mocked(getImageDimensions).mockResolvedValue(undefined);
+        vi.spyOn(fileService, 'checkFileHash').mockResolvedValue({ isExist: false });
+        vi.spyOn(uploadService, 'uploadFileToS3').mockResolvedValue({
+          data: mockMetadata,
+          success: true,
+        });
+        vi.spyOn(fileService, 'createFile').mockResolvedValue({
+          id: 'file-id-m4a',
+          url: 'https://example.com/voice.m4a',
+        });
+
+        const { fileTypeFromBuffer } = await import('file-type');
+        vi.mocked(fileTypeFromBuffer).mockResolvedValue({ ext: 'mp4', mime: 'video/mp4' } as any);
+
+        await act(async () => {
+          await result.current.uploadWithProgress({ file: mockFile });
+        });
+
+        expect(fileService.createFile).toHaveBeenCalledWith(
+          expect.objectContaining({ fileType: 'audio/mp4' }),
+          undefined,
+        );
+      });
+
+      it('should keep a correct audio mime reported by the browser', async () => {
+        const { result } = renderHook(() => useStore());
+
+        const mockFile = new File(['test content'], 'voice.m4a', { type: 'audio/x-m4a' });
+        const mockMetadata = {
+          date: '12345',
+          dirname: '/uploads',
+          filename: 'voice.m4a',
+          path: '/uploads/voice.m4a',
+        };
+
+        vi.mocked(getImageDimensions).mockResolvedValue(undefined);
+        vi.spyOn(fileService, 'checkFileHash').mockResolvedValue({ isExist: false });
+        vi.spyOn(uploadService, 'uploadFileToS3').mockResolvedValue({
+          data: mockMetadata,
+          success: true,
+        });
+        vi.spyOn(fileService, 'createFile').mockResolvedValue({
+          id: 'file-id-m4a-2',
+          url: 'https://example.com/voice.m4a',
+        });
+
+        await act(async () => {
+          await result.current.uploadWithProgress({ file: mockFile });
+        });
+
+        expect(fileService.createFile).toHaveBeenCalledWith(
+          expect.objectContaining({ fileType: 'audio/x-m4a' }),
+          undefined,
+        );
+      });
     });
 
     describe('knowledge base integration', () => {
