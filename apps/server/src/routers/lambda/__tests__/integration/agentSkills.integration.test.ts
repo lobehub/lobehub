@@ -760,6 +760,48 @@ describe('Skill Router Integration Tests', () => {
     });
   });
 
+  describe('generateSkillMeta', () => {
+    it('should surface NOT_FOUND when the source document does not exist', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      await expect(
+        caller.generateSkillMeta({
+          agentId,
+          sourceAgentDocumentId: '00000000-0000-0000-0000-000000000000',
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    });
+
+    it('should reject generating meta for an existing managed skill', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      const doc = await caller.createDocument({
+        agentId,
+        content: '# Existing Skill\n\nBody.',
+        title: 'Existing Skill',
+      });
+
+      const skill = await caller.convertDocumentToSkill({
+        agentId,
+        description: 'An existing skill.',
+        name: 'existing-skill',
+        sourceAgentDocumentId: doc!.id,
+        title: 'Existing Skill',
+      });
+
+      // Shares the convert guard: managed skill rows are not convertible, so
+      // meta generation must reject before reaching the model.
+      await expect(
+        caller.generateSkillMeta({
+          agentId,
+          sourceAgentDocumentId: skill.index.agentDocumentId,
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+  });
+
   describe('listResources', () => {
     it('should return empty array for skill without resources', async () => {
       const caller = agentSkillsRouter.createCaller(createTestContext(userId));

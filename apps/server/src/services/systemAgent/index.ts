@@ -1,4 +1,8 @@
-import { chainSummaryTitle } from '@lobechat/prompts';
+import {
+  chainGenerateSkillMeta,
+  chainSummaryTitle,
+  GENERATE_SKILL_META_SCHEMA,
+} from '@lobechat/prompts';
 import type { UserSystemAgentConfig, UserSystemAgentConfigKey } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
@@ -93,6 +97,59 @@ export class SystemAgentService {
       return title;
     } catch (error) {
       console.error('SystemAgentService.generateTopicTitle failed:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Generate skill metadata (name / title / description) from a document body,
+   * used to prefill the "convert document to skill" form.
+   *
+   * @returns The generated metadata, or null on failure
+   */
+  async generateSkillMeta(params: {
+    content: string;
+  }): Promise<{ description: string; name: string; title: string } | null> {
+    const { content } = params;
+    if (!content.trim()) return null;
+
+    try {
+      const { model, provider } = await this.getTaskModelConfig('agentMeta');
+      const locale = await this.getUserLocale();
+
+      log('generateSkillMeta: locale=%s, model=%s, provider=%s', locale, model, provider);
+
+      const payload = chainGenerateSkillMeta({ content, responseLanguage: locale });
+
+      const modelRuntime = await initModelRuntimeFromDB(
+        this.db,
+        this.userId,
+        provider,
+        this.workspaceId,
+      );
+      const result = await modelRuntime.generateObject(
+        {
+          messages: payload.messages as any[],
+          model,
+          schema: GENERATE_SKILL_META_SCHEMA,
+        },
+        { metadata: { trigger: RequestTrigger.Api } },
+      );
+
+      const meta = result as { description?: string; name?: string; title?: string };
+      const name = meta?.name?.trim();
+      const title = meta?.title?.trim();
+      const description = meta?.description?.trim();
+
+      if (!name || !title || !description) {
+        log('generateSkillMeta: LLM returned incomplete meta');
+        return null;
+      }
+
+      log('generateSkillMeta: generated name="%s", title="%s"', name, title);
+      return { description, name, title };
+    } catch (error) {
+      console.error('SystemAgentService.generateSkillMeta failed:', error);
       return null;
     }
   }

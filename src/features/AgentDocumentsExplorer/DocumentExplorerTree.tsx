@@ -186,14 +186,22 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
       openConvertToSkillModal({
         defaultDescription: doc.description ?? '',
         defaultName: slugifySkillName(fallbackTitle),
-        onSubmit: async ({ name, description }) => {
+        defaultTitle: fallbackTitle,
+        onGenerate: async () => {
+          const meta = await agentDocumentService.generateSkillMeta({
+            agentId,
+            sourceAgentDocumentId: doc.id,
+          });
+          return meta ?? undefined;
+        },
+        onSubmit: async ({ name, description, title }) => {
           try {
             await agentDocumentService.convertDocumentToSkill({
               agentId,
               description,
               name,
               sourceAgentDocumentId: doc.id,
-              title: fallbackTitle || name,
+              title,
             });
             await mutate();
             return undefined;

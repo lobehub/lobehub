@@ -5,6 +5,7 @@ import { createModal, type ModalInstance, useModalContext } from '@lobehub/ui/ba
 import { type InputRef } from 'antd';
 import { cssVar } from 'antd-style';
 import { t } from 'i18next';
+import { Sparkles } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,24 +25,40 @@ export const slugifySkillName = (input: string): string =>
     .slice(0, MAX_SKILL_NAME_LENGTH)
     .replaceAll(/-+$/g, '');
 
+/** Skill metadata the auto-generator returns and the form collects. */
+export interface ConvertSkillMeta {
+  description: string;
+  name: string;
+  title: string;
+}
+
 interface ConvertToSkillContentProps {
   defaultDescription: string;
   defaultName: string;
+  defaultTitle: string;
+  /**
+   * Auto-generate skill metadata from the document content. Return the metadata
+   * to prefill the form, or undefined when generation fails (an inline error is
+   * shown). Omit to hide the auto-generate button.
+   */
+  onGenerate?: () => Promise<ConvertSkillMeta | undefined>;
   /**
    * Convert the document into a skill. Return an error message to show inline and
    * keep the modal open; return undefined on success (the modal closes).
    */
-  onSubmit: (params: { description: string; name: string }) => Promise<string | undefined>;
+  onSubmit: (params: ConvertSkillMeta) => Promise<string | undefined>;
 }
 
 const ConvertToSkillContent = memo<ConvertToSkillContentProps>(
-  ({ defaultName, defaultDescription, onSubmit }) => {
+  ({ defaultName, defaultTitle, defaultDescription, onGenerate, onSubmit }) => {
     const { t: tChat } = useTranslation('chat');
     const { t: tCommon } = useTranslation('common');
     const { close } = useModalContext();
     const [name, setName] = useState(defaultName);
+    const [title, setTitle] = useState(defaultTitle);
     const [description, setDescription] = useState(defaultDescription);
     const [loading, setLoading] = useState(false);
+    const [generating, setGenerating] = useState(false);
     const [error, setError] = useState<string>();
     const nameRef = useRef<InputRef>(null);
 
@@ -50,18 +67,44 @@ const ConvertToSkillContent = memo<ConvertToSkillContentProps>(
     }, []);
 
     const trimmedName = name.trim();
+    const trimmedTitle = title.trim();
     const trimmedDescription = description.trim();
     const nameInvalid = useMemo(
       () => !!trimmedName && !SKILL_NAME_PATTERN.test(trimmedName),
       [trimmedName],
     );
-    const canSubmit = !!trimmedName && !nameInvalid && !!trimmedDescription;
+    const busy = loading || generating;
+    const canSubmit = !!trimmedName && !nameInvalid && !!trimmedTitle && !!trimmedDescription;
+
+    const handleGenerate = useCallback(async () => {
+      if (!onGenerate || busy) return;
+      setGenerating(true);
+      setError(undefined);
+      try {
+        const meta = await onGenerate();
+        if (!meta) {
+          setError(tChat('workingPanel.skills.convert.generateError'));
+          return;
+        }
+        // The model is instructed to return kebab-case, but slugify defensively
+        // so an off-spec name still lands in a valid state.
+        setName(slugifySkillName(meta.name) || meta.name);
+        setTitle(meta.title);
+        setDescription(meta.description);
+      } finally {
+        setGenerating(false);
+      }
+    }, [busy, onGenerate, tChat]);
 
     const handleSubmit = useCallback(async () => {
-      if (loading || !canSubmit) return;
+      if (busy || !canSubmit) return;
       setLoading(true);
       try {
-        const message = await onSubmit({ description: trimmedDescription, name: trimmedName });
+        const message = await onSubmit({
+          description: trimmedDescription,
+          name: trimmedName,
+          title: trimmedTitle,
+        });
         if (message) {
           setError(message);
           return;
@@ -70,10 +113,20 @@ const ConvertToSkillContent = memo<ConvertToSkillContentProps>(
       } finally {
         setLoading(false);
       }
-    }, [canSubmit, close, loading, onSubmit, trimmedDescription, trimmedName]);
+    }, [busy, canSubmit, close, onSubmit, trimmedDescription, trimmedName, trimmedTitle]);
 
     return (
       <Flexbox gap={16}>
+        {onGenerate ? (
+          <Flexbox horizontal align={'center'} gap={8} justify={'space-between'}>
+            <Text style={{ fontSize: 12 }} type={'secondary'}>
+              {tChat('workingPanel.skills.convert.generateHint')}
+            </Text>
+            <Button icon={Sparkles} loading={generating} size={'small'} onClick={handleGenerate}>
+              {tChat('workingPanel.skills.convert.generate')}
+            </Button>
+          </Flexbox>
+        ) : null}
         <Flexbox gap={6}>
           <Text type={'secondary'}>{tChat('workingPanel.skills.convert.nameLabel')}</Text>
           <Input
@@ -96,6 +149,17 @@ const ConvertToSkillContent = memo<ConvertToSkillContentProps>(
           )}
         </Flexbox>
         <Flexbox gap={6}>
+          <Text type={'secondary'}>{tChat('workingPanel.skills.convert.titleLabel')}</Text>
+          <Input
+            placeholder={tChat('workingPanel.skills.convert.titlePlaceholder')}
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              setError(undefined);
+            }}
+          />
+        </Flexbox>
+        <Flexbox gap={6}>
           <Text type={'secondary'}>{tChat('workingPanel.skills.convert.descriptionLabel')}</Text>
           <TextArea
             autoSize={{ maxRows: 4, minRows: 2 }}
@@ -109,10 +173,15 @@ const ConvertToSkillContent = memo<ConvertToSkillContentProps>(
         </Flexbox>
         {error ? <Text style={{ color: cssVar.colorError, fontSize: 12 }}>{error}</Text> : null}
         <Flexbox horizontal gap={8} justify={'flex-end'}>
-          <Button disabled={loading} onClick={close}>
+          <Button disabled={busy} onClick={close}>
             {tCommon('cancel')}
           </Button>
-          <Button disabled={!canSubmit} loading={loading} type={'primary'} onClick={handleSubmit}>
+          <Button
+            disabled={!canSubmit || generating}
+            loading={loading}
+            type={'primary'}
+            onClick={handleSubmit}
+          >
             {tChat('workingPanel.skills.convert.action')}
           </Button>
         </Flexbox>
@@ -131,13 +200,17 @@ ConvertToSkillContent.displayName = 'ConvertToSkillContent';
 export const openConvertToSkillModal = (options: {
   defaultDescription: string;
   defaultName: string;
-  onSubmit: (params: { description: string; name: string }) => Promise<string | undefined>;
+  defaultTitle: string;
+  onGenerate?: () => Promise<ConvertSkillMeta | undefined>;
+  onSubmit: (params: ConvertSkillMeta) => Promise<string | undefined>;
 }): ModalInstance =>
   createModal({
     content: (
       <ConvertToSkillContent
         defaultDescription={options.defaultDescription}
         defaultName={options.defaultName}
+        defaultTitle={options.defaultTitle}
+        onGenerate={options.onGenerate}
         onSubmit={options.onSubmit}
       />
     ),

@@ -1182,12 +1182,19 @@ export default {
   'workingPanel.skills.convert.descriptionLabel': 'Description',
   'workingPanel.skills.convert.descriptionPlaceholder':
     'Describe when this skill should be used, so the agent knows when to load it.',
+  'workingPanel.skills.convert.generate': 'Auto-generate',
+  'workingPanel.skills.convert.generateError':
+    'Failed to generate skill details. Please fill them in manually.',
+  'workingPanel.skills.convert.generateHint':
+    'Generate the name, title, and description from the document.',
   'workingPanel.skills.convert.nameHint': 'Lowercase letters, digits, and hyphens only.',
   'workingPanel.skills.convert.nameInvalid':
     'Use lowercase letters, digits, and hyphens only (e.g. weekly-report).',
   'workingPanel.skills.convert.nameLabel': 'Skill name',
   'workingPanel.skills.convert.namePlaceholder': 'e.g. weekly-report',
   'workingPanel.skills.convert.title': 'Convert document to skill',
+  'workingPanel.skills.convert.titleLabel': 'Title',
+  'workingPanel.skills.convert.titlePlaceholder': 'e.g. Weekly Report',
   'workingPanel.skills.delete.agentConfirm':
     'Remove the skill “{{name}}” from this agent? This cannot be undone.',
   'workingPanel.skills.delete.error': 'Failed to delete skill',
