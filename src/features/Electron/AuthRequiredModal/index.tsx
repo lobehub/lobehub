@@ -2,12 +2,8 @@
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { Button, Flexbox, Icon } from '@lobehub/ui';
-import {
-  createModal,
-  type ImperativeModalProps,
-  ModalFooter,
-  type ModalInstance,
-} from '@lobehub/ui/base-ui';
+import type { ImperativeModalProps, ModalInstance } from '@lobehub/ui/base-ui';
+import { createModal, ModalFooter } from '@lobehub/ui/base-ui';
 import debug from 'debug';
 import { AlertCircle, LogIn } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -75,17 +71,13 @@ AuthRequiredModalContent.displayName = 'AuthRequiredModalContent';
 
 interface FooterProps {
   isSigningIn: boolean;
-  onLater: () => void;
   onSignIn: () => void;
 }
 
-const AuthRequiredFooter = memo<FooterProps>(({ isSigningIn, onLater, onSignIn }) => {
+const AuthRequiredFooter = memo<FooterProps>(({ isSigningIn, onSignIn }) => {
   const { t } = useTranslation('auth');
   return (
     <ModalFooter>
-      <Button disabled={isSigningIn} onClick={onLater}>
-        {t('authModal.later')}
-      </Button>
       <Button icon={<Icon icon={LogIn} />} loading={isSigningIn} type="primary" onClick={onSignIn}>
         {isSigningIn ? t('authModal.signingIn') : t('authModal.signIn')}
       </Button>
@@ -94,8 +86,19 @@ const AuthRequiredFooter = memo<FooterProps>(({ isSigningIn, onLater, onSignIn }
 });
 AuthRequiredFooter.displayName = 'AuthRequiredFooter';
 
-export const useAuthRequiredModal = () => {
+const AuthRequiredModalTitle = memo(() => {
   const { t } = useTranslation('auth');
+
+  return (
+    <Flexbox horizontal align="center" gap={8}>
+      <Icon icon={AlertCircle} />
+      {t('authModal.title')}
+    </Flexbox>
+  );
+});
+AuthRequiredModalTitle.displayName = 'AuthRequiredModalTitle';
+
+export const useAuthRequiredModal = () => {
   const instanceRef = useRef<ModalInstance | null>(null);
 
   const open = useCallback(() => {
@@ -113,11 +116,7 @@ export const useAuthRequiredModal = () => {
     };
 
     const renderFooter = () => (
-      <AuthRequiredFooter
-        isSigningIn={isSigningIn}
-        onLater={handleClose}
-        onSignIn={() => signIn()}
-      />
+      <AuthRequiredFooter isSigningIn={isSigningIn} onSignIn={() => signIn()} />
     );
 
     instanceRef.current = createModal({
@@ -132,21 +131,21 @@ export const useAuthRequiredModal = () => {
             isSigningIn = next;
             instanceRef.current?.update?.({
               footer: renderFooter(),
-              maskClosable: !next,
+              maskClosable: false,
             } as Partial<ImperativeModalProps>);
           }}
         />
       ),
       footer: renderFooter(),
       maskClosable: false,
-      title: (
-        <Flexbox horizontal align="center" gap={8}>
-          <Icon icon={AlertCircle} />
-          {t('authModal.title')}
-        </Flexbox>
-      ),
+      onOpenChange: (nextOpen) => {
+        if (!nextOpen) {
+          instanceRef.current = null;
+        }
+      },
+      title: <AuthRequiredModalTitle />,
     });
-  }, [t]);
+  }, []);
 
   return { open };
 };
