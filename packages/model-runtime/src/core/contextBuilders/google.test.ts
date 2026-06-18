@@ -1556,7 +1556,7 @@ describe('google contextBuilders', () => {
       });
     });
 
-    // Regression for LOBE-10456: the memory tool's `memoryType` enum carried a
+    // Regression: the memory tool's `memoryType` enum carried a trailing `null` sentinel
     // trailing `null` sentinel (`[...MEMORY_TYPES, null]`), which Gemini rejected
     // with `enum[10]: cannot be empty`. The sanitizer must drop the null member.
     it('should strip the null sentinel from a memory-style nullable enum', () => {
