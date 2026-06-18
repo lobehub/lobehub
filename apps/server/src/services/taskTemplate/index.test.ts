@@ -178,7 +178,7 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     expect(result).toEqual([templateWithConnectors]);
   });
 
-  it('filters required and strips optional Composio templates when the Composio client is unavailable', async () => {
+  it('filters required Composio templates when the Composio client is unavailable', async () => {
     mockIsComposioClientAvailable.mockReturnValue(false);
     const requiredComposioTemplate = {
       ...template,
@@ -205,13 +205,10 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     expect(mockGetTaskTemplateRecommendations).toHaveBeenCalledWith(
       expect.objectContaining({ count: TASK_TEMPLATE_RECOMMEND_MAX_COUNT }),
     );
-    expect(result).toEqual([
-      { ...optionalComposioTemplate, connectors: [] },
-      requiredLobehubTemplate,
-    ]);
+    expect(result).toEqual([optionalComposioTemplate, requiredLobehubTemplate]);
   });
 
-  it('filters required and strips optional LobeHub connector templates when trusted client auth is unavailable', async () => {
+  it('filters required LobeHub connector templates when trusted client auth is unavailable', async () => {
     mockAppEnv.MARKET_TRUSTED_CLIENT_ID = undefined;
     mockAppEnv.MARKET_TRUSTED_CLIENT_SECRET = undefined;
     const requiredLobehubTemplate = {
@@ -239,10 +236,7 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     expect(mockGetTaskTemplateRecommendations).toHaveBeenCalledWith(
       expect.objectContaining({ count: TASK_TEMPLATE_RECOMMEND_MAX_COUNT }),
     );
-    expect(result).toEqual([
-      { ...optionalLobehubTemplate, connectors: [] },
-      requiredComposioTemplate,
-    ]);
+    expect(result).toEqual([optionalLobehubTemplate, requiredComposioTemplate]);
   });
 
   it('throws when Market recommendation items are malformed', async () => {
