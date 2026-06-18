@@ -268,3 +268,36 @@ describe('formatErrorRef / parseErrorRef', () => {
     expect(parseErrorRef('E9999')).toBeUndefined();
   });
 });
+
+describe('matchErrorPattern — refines the UpstreamHttpError fallback bucket', () => {
+  // Real messages that were landing as the bare-HTTP fallback (a 4xx
+  // ProviderBizError whose message matched nothing → codeFromHttpStatus →
+  // UpstreamHttpError). Each must now resolve to a precise code.
+  const cases: [string, string][] = [
+    [
+      'Hệ thống đang bận, vui lòng thử lại sau ít phút.',
+      AgentRuntimeErrorType.ProviderServiceUnavailable,
+    ],
+    ['服务器问题调试中', AgentRuntimeErrorType.ProviderServiceUnavailable],
+    ['1m 上下文已经全量可用，请启用 1m 上下文后重试', AgentRuntimeErrorType.ExceededContextWindow],
+    [
+      'Request body too large for gpt-4o model. Max size: 1000000 tokens.',
+      AgentRuntimeErrorType.ExceededContextWindow,
+    ],
+    ["Model 'glm-5.2:cloud' is not allowed on this server.", AgentRuntimeErrorType.ModelNotFound],
+    ['User has been banned (request id: 2026...)', AgentRuntimeErrorType.PermissionDenied],
+    ['Only Codex clients can use this group', AgentRuntimeErrorType.PermissionDenied],
+    [
+      "messages.content.type 参数非法，取值范围 ['text']",
+      AgentRuntimeErrorType.InvalidRequestFormat,
+    ],
+    ['参数错误超过100个', AgentRuntimeErrorType.InvalidRequestFormat],
+    ['max_tokens must be at least 1, got -1.', AgentRuntimeErrorType.InvalidRequestFormat],
+  ];
+
+  it.each(cases)('classifies %j', (message, expected) => {
+    expect(
+      matchErrorPattern({ errorType: AgentRuntimeErrorType.ProviderBizError, message })?.code,
+    ).toBe(expected);
+  });
+});

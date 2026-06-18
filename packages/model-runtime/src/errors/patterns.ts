@@ -122,6 +122,17 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('content exceeds maximum length of 100KB'),
   },
   { code: AgentRuntimeErrorType.ExceededContextWindow, match: sub('免费API限制模型输入token小于') },
+  { code: AgentRuntimeErrorType.ExceededContextWindow, match: sub('Request body too large') },
+  {
+    code: AgentRuntimeErrorType.ExceededContextWindow,
+    match: sub('conversation is too long'),
+    note: 'Anthropic suggests /compact when the context overflows',
+  },
+  {
+    code: AgentRuntimeErrorType.ExceededContextWindow,
+    match: sub('上下文已经全量可用'),
+    note: 'proxy gates 1m context — request overflowed the default window',
+  },
 
   // ─────────────────────────────────────────────────────────────────────────
   // InsufficientQuota — account balance / billing exhausted (long-term)
@@ -496,6 +507,13 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   { code: AgentRuntimeErrorType.ProviderServiceUnavailable, match: sub('502: Bad gateway') },
   { code: AgentRuntimeErrorType.ProviderServiceUnavailable, match: sub('502 <!DOCTYPE html>') },
   { code: AgentRuntimeErrorType.ProviderServiceUnavailable, match: sub('503 Gateway Error') },
+  {
+    code: AgentRuntimeErrorType.ProviderServiceUnavailable,
+    match: sub('Hệ thống đang bận'),
+    note: 'Vietnamese proxy: system busy, retry shortly',
+  },
+  { code: AgentRuntimeErrorType.ProviderServiceUnavailable, match: sub('服务器问题调试中') },
+  { code: AgentRuntimeErrorType.ProviderServiceUnavailable, match: sub('undergoing an upgrade') },
 
   // ─────────────────────────────────────────────────────────────────────────
   // ProviderNetworkError — connection / timeout
@@ -629,6 +647,19 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
     match: sub('reached its end of life on'),
     note: 'newapi-style 410 Gone',
   },
+  {
+    code: AgentRuntimeErrorType.ModelNotFound,
+    match: sub('is not allowed on this server'),
+    note: 'ollama allow-list rejects the requested model',
+  },
+  {
+    code: AgentRuntimeErrorType.ModelNotFound,
+    match: sub('Publisher Model'),
+    note: 'Vertex: publisher model path not found',
+  },
+  { code: AgentRuntimeErrorType.ModelNotFound, match: sub('你请求的模型') },
+  { code: AgentRuntimeErrorType.ModelNotFound, match: sub('不存在或未上线') },
+  { code: AgentRuntimeErrorType.ModelNotFound, match: sub('has no provider supported') },
 
   // ─────────────────────────────────────────────────────────────────────────
   // InvalidProviderAPIKey
@@ -697,6 +728,13 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   { code: AgentRuntimeErrorType.PermissionDenied, match: sub('This token has no access to model') },
   { code: AgentRuntimeErrorType.PermissionDenied, match: sub('该令牌无权访问模型') },
   { code: AgentRuntimeErrorType.PermissionDenied, match: sub('您的 IP 不在令牌允许访问的列表中') },
+  { code: AgentRuntimeErrorType.PermissionDenied, match: sub('User has been banned') },
+  {
+    code: AgentRuntimeErrorType.PermissionDenied,
+    match: sub('Only Codex clients can use this group'),
+    note: 'proxy restricts the group to Codex clients',
+  },
+  { code: AgentRuntimeErrorType.PermissionDenied, match: sub('not available for trial users') },
 
   // ─────────────────────────────────────────────────────────────────────────
   // AccountDeactivated
@@ -907,6 +945,27 @@ export const ERROR_PATTERNS: ErrorPattern[] = [
   },
   { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('Unknown name "definitions"') },
   { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub("function_response.response' (") },
+  // Malformed-request rejections harvested from the UpstreamHttpError fallback
+  // bucket. Mix of upstream-proxy quirks and request-shape rejections; a few may
+  // also surface harness request-building bugs (negative max_tokens, illegal
+  // content-block type) — classifying keeps them visible under a precise code
+  // instead of the bare HTTP fallback.
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('参数非法，取值范围') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('参数错误超过') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('Param Incorrect') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('tokenization failed') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('invalid image detail') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub("invalid 'parameters' schema") },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub("can't find closing '}'") },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('Unsupported parameter(s):') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('messages parameter is illegal') },
+  {
+    code: AgentRuntimeErrorType.InvalidRequestFormat,
+    match: sub('GenerateContentRequest proto is invalid'),
+    note: 'Gemini: malformed function_response / content in request',
+  },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('max_tokens must be at least') },
+  { code: AgentRuntimeErrorType.InvalidRequestFormat, match: sub('Yêu cầu không hợp lệ') },
 
   // ─────────────────────────────────────────────────────────────────────────
   // UserConfigError
