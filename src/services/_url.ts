@@ -11,9 +11,6 @@ export const API_ENDPOINTS = {
   models: (provider: string) => `/webapi/models/${provider}`,
   modelPull: (provider: string) => `/webapi/models/${provider}/pull`,
 
-  // STT
-  stt: '/webapi/stt/openai',
-
   // TTS
   tts: (provider: string) => `/webapi/tts/${provider}`,
   edge: '/webapi/tts/edge',

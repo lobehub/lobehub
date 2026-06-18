@@ -21,7 +21,7 @@ import { useSendMenuItems } from './useSendMenuItems';
 
 const leftActions: ActionKeys[] = ['typo', 'fileUpload', '---', ['tools', 'params', 'clear']];
 
-const dmLeftActions: ActionKeys[] = ['typo', 'fileUpload', '---', ['stt']];
+const dmLeftActions: ActionKeys[] = ['typo', 'fileUpload'];
 
 const rightActions: ActionKeys[] = ['contextWindow'];
 
