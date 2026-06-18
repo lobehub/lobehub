@@ -41,6 +41,8 @@
   "artifact.thinking": "思考中",
   "artifact.thought": "思考过程",
   "artifact.unknownTitle": "未命名作品",
+  "audioPlayer.pause": "暂停音频",
+  "audioPlayer.play": "播放音频",
   "availableAgents": "可用助理",
   "backToBottom": "跳转到最新",
   "beforeUnload.confirmLeave": "你有正在生成中的请求，确定要离开吗？",

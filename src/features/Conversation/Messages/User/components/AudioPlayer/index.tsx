@@ -4,6 +4,7 @@ import { Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { PauseIcon, PlayIcon } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useWaveform } from './useWaveform';
 
@@ -94,17 +95,22 @@ interface AudioPlayerProps {
 }
 
 const AudioPlayer = memo<AudioPlayerProps>(({ url, alt }) => {
-  const peaks = useWaveform(url);
+  const { t } = useTranslation('chat');
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  // Only fetch/decode the waveform once the user actually engages with the clip, so a conversation
+  // full of audio attachments doesn't download every file just to draw decorative bars.
+  const [waveformEnabled, setWaveformEnabled] = useState(false);
 
+  const peaks = useWaveform(url, waveformEnabled);
   const progress = duration > 0 ? currentTime / duration : 0;
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    setWaveformEnabled(true);
     if (audio.paused) void audio.play();
     else audio.pause();
   }, []);
@@ -113,6 +119,7 @@ const AudioPlayer = memo<AudioPlayerProps>(({ url, alt }) => {
     (e: MouseEvent<HTMLDivElement>) => {
       const audio = audioRef.current;
       if (!audio || !duration) return;
+      setWaveformEnabled(true);
       const rect = e.currentTarget.getBoundingClientRect();
       const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
       audio.currentTime = ratio * duration;
@@ -135,8 +142,10 @@ const AudioPlayer = memo<AudioPlayerProps>(({ url, alt }) => {
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
       />
       <button
-        aria-label={alt || 'audio'}
+        aria-label={isPlaying ? t('audioPlayer.pause') : t('audioPlayer.play')}
+        aria-pressed={isPlaying}
         className={styles.button}
+        title={alt}
         type={'button'}
         onClick={togglePlay}
       >

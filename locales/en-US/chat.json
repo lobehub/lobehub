@@ -41,6 +41,8 @@
   "artifact.thinking": "Thinking",
   "artifact.thought": "Thought process",
   "artifact.unknownTitle": "Untitled Work",
+  "audioPlayer.pause": "Pause audio",
+  "audioPlayer.play": "Play audio",
   "availableAgents": "Available Agents",
   "backToBottom": "Jump to latest",
   "beforeUnload.confirmLeave": "A request is still running. Leave anyway?",

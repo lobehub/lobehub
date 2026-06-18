@@ -2,8 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 
 export const BAR_COUNT = 56;
 
+// Skip decoding files larger than this. decodeAudioData holds the full decoded PCM in memory, so
+// big recordings would spike memory for what is only a decorative waveform — fall back instead.
+const MAX_DECODE_BYTES = 20 * 1024 * 1024;
+
 // Deterministic fallback bars when decoding isn't possible (unsupported codec, CORS, network
-// error, etc.) so the player still shows a stable, non-flat waveform shape instead of a blank row.
+// error, oversized file, etc.) so the player still shows a stable, non-flat waveform shape.
 const fallbackPeaks = (seed: string): number[] => {
   let hash = 0;
   for (let i = 0; i < seed.length; i += 1) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
@@ -36,13 +40,17 @@ const extractPeaks = (buffer: AudioBuffer, bars: number): number[] => {
 
 /**
  * Decode an audio url into normalized waveform peaks (0..1) for visualization. Falls back to a
- * deterministic shape if the audio can't be fetched/decoded (e.g. unsupported codec).
+ * deterministic shape if the audio can't be fetched/decoded (e.g. unsupported codec, oversized).
+ *
+ * The decode is lazy: it only runs once `enabled` is true (set on first playback) so opening a
+ * conversation with many audio attachments doesn't download/decode every clip up front.
  */
-export const useWaveform = (url: string): number[] => {
+export const useWaveform = (url: string, enabled: boolean): number[] => {
   const [peaks, setPeaks] = useState<number[]>(() => fallbackPeaks(url));
   const requestedUrl = useRef<string>('');
 
   useEffect(() => {
+    if (!enabled) return;
     if (typeof window === 'undefined') return;
     // Avoid re-decoding the same url across re-renders.
     if (requestedUrl.current === url) return;
@@ -58,6 +66,8 @@ export const useWaveform = (url: string): number[] => {
 
         const res = await fetch(url);
         const arrayBuffer = await res.arrayBuffer();
+        if (cancelled || arrayBuffer.byteLength > MAX_DECODE_BYTES) return;
+
         ctx = new Ctor();
         const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
         if (cancelled) return;
@@ -76,7 +86,7 @@ export const useWaveform = (url: string): number[] => {
       cancelled = true;
       void ctx?.close?.();
     };
-  }, [url]);
+  }, [url, enabled]);
 
   return peaks;
 };
