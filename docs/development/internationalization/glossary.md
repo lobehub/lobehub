@@ -1,6 +1,6 @@
-# Glossary
+# Term Translation Reference
 
-> Looking for the product glossary? See [Glossary](/docs/usage/glossary) for plain-language definitions of LobeHub's concepts and terms, organized by first letter.
+> Looking for the product glossary? See [Glossary](/docs/glossary) for plain-language definitions of LobeHub's concepts and terms, organized by first letter.
 
 The table below is a translation-consistency reference for contributors: the fixed translations for a few core terms.
 
