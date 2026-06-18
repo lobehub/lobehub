@@ -278,6 +278,22 @@ interface InternalExecAgentParams extends ExecAgentParams {
 }
 
 /**
+ * Result of {@link AiAgentService.resolveWorkspaceInit}: the cacheable scan
+ * (`workspace`) plus the per-run resolved bound directory (`boundCwd`).
+ *
+ * `boundCwd` is deliberately kept OUT of {@link WorkspaceInitResult}: that type
+ * is persisted into `devices.workingDirs[].workspace` and read by the web UI,
+ * and its scanned root is always the enclosing `WorkingDirEntry.path` — not a
+ * field on the scan. Surfacing it here lets the caller fill the system prompt's
+ * `{{workingDirectory}}` (and the tool cwd/scope downstream) without re-loading
+ * the device + topic the scan already read.
+ */
+interface ResolvedWorkspaceInit {
+  boundCwd?: string;
+  workspace: WorkspaceInitResult;
+}
+
+/**
  * AI Agent Service
  *
  * Encapsulates agent execution logic that can be triggered via:
@@ -370,15 +386,15 @@ export class AiAgentService {
     activeDeviceId: string | undefined;
     agencyConfig?: LobeAgentAgencyConfig;
     topicId: string;
-  }): Promise<WorkspaceInitResult & { boundCwd?: string }> {
+  }): Promise<ResolvedWorkspaceInit> {
     const empty: WorkspaceInitResult = { instructions: [], skills: [] };
     const { activeDeviceId, agencyConfig, topicId } = params;
-    if (!activeDeviceId) return empty;
+    if (!activeDeviceId) return { workspace: empty };
 
     try {
       const deviceModel = new DeviceModel(this.db, this.userId);
       const device = await deviceModel.findByDeviceId(activeDeviceId);
-      if (!device) return empty;
+      if (!device) return { workspace: empty };
 
       // The bound project root we scan — resolved via the shared precedence
       // helper so it cannot drift from hetero dispatch / topic backfill. Read
@@ -393,14 +409,14 @@ export class AiAgentService {
         topicWorkingDirectory: topic?.metadata?.workingDirectory,
         workingDirByDevice: agencyConfig?.workingDirByDevice,
       });
-      if (!boundCwd) return empty;
+      if (!boundCwd) return { workspace: empty };
 
       const workingDirs = device.workingDirs ?? [];
       const cached = workingDirs.find((dir) => dir.path === boundCwd);
 
       if (isWorkspaceCacheFresh(cached, Date.now()) && cached?.workspace) {
         log('execAgent: reusing cached workspace init for %s', boundCwd);
-        return { ...cached.workspace, boundCwd };
+        return { boundCwd, workspace: cached.workspace };
       }
 
       const scanned = await deviceGateway.initWorkspace({
@@ -413,9 +429,9 @@ export class AiAgentService {
         // cache rather than dropping the project's skills + instructions.
         if (cached?.workspace) {
           log('execAgent: workspace init scan failed, using stale cache for %s', boundCwd);
-          return { ...cached.workspace, boundCwd };
+          return { boundCwd, workspace: cached.workspace };
         }
-        return { ...empty, boundCwd };
+        return { boundCwd, workspace: empty };
       }
 
       // Persist the fresh scan back onto `workingDirs` (update in place or prepend
@@ -424,10 +440,10 @@ export class AiAgentService {
       await deviceModel.update(activeDeviceId, { workingDirs: updated });
       log('execAgent: scanned and cached workspace init for %s', boundCwd);
 
-      return { ...scanned, boundCwd };
+      return { boundCwd, workspace: scanned };
     } catch (error) {
       log('execAgent: resolveWorkspaceInit failed: %O', error);
-      return empty;
+      return { workspace: empty };
     }
   }
 
@@ -2673,7 +2689,7 @@ export class AiAgentService {
         deviceSystemInfo.workingDirectory = workspaceInit.boundCwd;
       }
 
-      const projectMetas = workspaceInit.skills.map((s) => ({
+      const projectMetas = workspaceInit.workspace.skills.map((s) => ({
         description: s.description ?? '',
         identifier: `project:${s.name}`,
         location: s.path,
@@ -2693,8 +2709,8 @@ export class AiAgentService {
       // trailing blocks on the system role — after the agent's persona and any
       // page/task/additional instructions. `agentConfig` is read by
       // `createOperation` below, so appending here still reaches the LLM.
-      if (workspaceInit.instructions.length) {
-        const block = workspaceInit.instructions
+      if (workspaceInit.workspace.instructions.length) {
+        const block = workspaceInit.workspace.instructions
           .map(
             ({ content, source }) =>
               `<project_instructions source="${source}">\n${content}\n</project_instructions>`,
@@ -2705,8 +2721,8 @@ export class AiAgentService {
           : block;
         log(
           'execAgent: injected %d project instruction file(s): %s',
-          workspaceInit.instructions.length,
-          workspaceInit.instructions.map((i) => i.source).join(', '),
+          workspaceInit.workspace.instructions.length,
+          workspaceInit.workspace.instructions.map((i) => i.source).join(', '),
         );
       }
 

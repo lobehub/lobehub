@@ -153,11 +153,28 @@ describe('localSystemRuntime', () => {
       expect(parseArgs()).toEqual({ command: 'ls', cwd: '/explicit' });
     });
 
-    it('does not inject into file ops (model passes absolute paths from the prompt)', async () => {
+    it('injects cwd into file ops so the daemon can resolve a relative path', async () => {
       const proxy = buildProxy('/Users/me/repo');
-      await proxy[LocalSystemApiName.readFile]({ path: '/Users/me/repo/src/index.ts' });
+      await proxy[LocalSystemApiName.readFile]({ path: 'src/index.ts' });
 
-      expect(parseArgs()).toEqual({ path: '/Users/me/repo/src/index.ts' });
+      // The daemon's resolveAgainstCwd anchors the relative path to cwd; an
+      // absolute path the model supplies passes through unchanged there.
+      expect(parseArgs()).toEqual({ cwd: '/Users/me/repo', path: 'src/index.ts' });
+    });
+
+    it('injects cwd into writeFile / editFile / listFiles', async () => {
+      for (const api of [
+        LocalSystemApiName.writeFile,
+        LocalSystemApiName.editFile,
+        LocalSystemApiName.listFiles,
+      ]) {
+        mockExecuteToolCall.mockClear();
+        const proxy = buildProxy('/Users/me/repo');
+        await proxy[api]({ path: 'x' });
+        expect(JSON.parse(mockExecuteToolCall.mock.calls[0][1].arguments).cwd).toBe(
+          '/Users/me/repo',
+        );
+      }
     });
 
     it('does not inject for command-id ops (getCommandOutput / killCommand)', async () => {

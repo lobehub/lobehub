@@ -9,26 +9,35 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 import { type ServerRuntimeRegistration } from './types';
 
 /**
- * Which arg carries the working directory for the APIs that actually consume
- * one. The model never picks the working directory — the system prompt's
- * `{{workingDirectory}}` already tells it where it is, so file ops
- * (readFile/writeFile/editFile/moveFiles/listFiles) get absolute paths and need
- * nothing injected. Only two cases need a runtime-supplied default:
+ * Which arg carries the working directory for the APIs that consume one. The
+ * model never picks the working directory — the system prompt's
+ * `{{workingDirectory}}` tells it where it is — so the runtime injects it as the
+ * tool call's cwd/scope. `executeToolCall` only forwards `arguments`, so it must
+ * ride in the args; the daemon otherwise falls back to `process.cwd()` (= `/`
+ * for a Finder/Dock-launched app):
  *
- * - `runCommand`: the manifest deliberately hides `cwd`, but the daemon spawns
- *   in `params.cwd` (→ `process.cwd()` = `/` when omitted), so we must inject it.
- * - search ops (`searchFiles`/`globFiles`/`grepContent`): their manifest claims
- *   `scope` "defaults to the working directory", but the daemon falls back to
- *   `process.cwd()`. Inject `scope` so that promise holds and broad searches
- *   don't run from `/`.
+ * - `runCommand → cwd`: the manifest deliberately hides `cwd`, but the daemon
+ *   spawns in `params.cwd`.
+ * - file ops (`readFile`/`writeFile`/`editFile`/`moveFiles`/`listFiles`) → `cwd`:
+ *   the daemon resolves a relative `path`/`file_path`/move item against
+ *   `params.cwd` (see `resolveAgainstCwd`), so a model-supplied relative path
+ *   lands in the bound directory instead of `/`. Absolute paths ignore it.
+ * - search ops (`searchFiles`/`globFiles`/`grepContent`) → `scope`: their
+ *   manifest claims `scope` "defaults to the working directory", but the daemon
+ *   falls back to `process.cwd()`. Inject `scope` so that promise holds.
  *
  * APIs that act on a command id (getCommandOutput / killCommand) take neither.
  */
 const WORKING_DIR_ARG: Partial<Record<string, 'cwd' | 'scope'>> = {
+  [LocalSystemApiName.editFile]: 'cwd',
   [LocalSystemApiName.globFiles]: 'scope',
   [LocalSystemApiName.grepContent]: 'scope',
+  [LocalSystemApiName.listFiles]: 'cwd',
+  [LocalSystemApiName.moveFiles]: 'cwd',
+  [LocalSystemApiName.readFile]: 'cwd',
   [LocalSystemApiName.runCommand]: 'cwd',
   [LocalSystemApiName.searchFiles]: 'scope',
+  [LocalSystemApiName.writeFile]: 'cwd',
 };
 
 export const localSystemRuntime: ServerRuntimeRegistration = {
