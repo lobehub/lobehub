@@ -1,15 +1,7 @@
 import { ActionIcon, Block, Button, Flexbox, Text } from '@lobehub/ui';
 import { Modal } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import {
-  Blocks,
-  CheckCircle2,
-  Lightbulb,
-  Loader2,
-  PencilLineIcon,
-  RefreshCw,
-  X,
-} from 'lucide-react';
+import { Blocks, CheckCircle2, Lightbulb, PencilLineIcon, RefreshCw, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -38,6 +30,8 @@ import {
 } from './createAgentModalAnalytics';
 
 const LEFT_ACTIONS: ActionKeys[] = ['model'];
+const CREATE_MODAL_WIDTH = 'min(90vw, 760px)';
+const INSTALLED_SKILL_MODAL_WIDTH = 'min(90vw, 560px)';
 
 interface InstalledSkill {
   identifier: string;
@@ -55,7 +49,7 @@ interface SkillSuggestionPanelProps {
 const SkillSuggestionPanel = memo<SkillSuggestionPanelProps>(
   ({ installError, installingIdentifier, items, onContinueCreate, onInstall }) => {
     const { t } = useTranslation('chat');
-    const primarySkillIdentifier = items[0]?.identifier;
+    const usePrimaryInstallButton = items.length === 1;
     const installing = Boolean(installingIdentifier);
 
     return (
@@ -80,39 +74,47 @@ const SkillSuggestionPanel = memo<SkillSuggestionPanelProps>(
           </Text>
         </Flexbox>
         <Flexbox gap={8}>
-          {items.map((item) => (
-            <Flexbox
-              horizontal
-              align={'center'}
-              gap={12}
-              justify={'space-between'}
-              key={item.identifier}
-              style={{
-                background: cssVar.colorBgContainer,
-                border: `1px solid ${cssVar.colorFillTertiary}`,
-                borderRadius: 10,
-                padding: 10,
-              }}
-            >
-              <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
-                <Text ellipsis fontSize={13} style={{ fontWeight: 500 }}>
-                  {item.name}
-                </Text>
-                <Text color={cssVar.colorTextTertiary} ellipsis={{ rows: 2 }} fontSize={12}>
-                  {item.description}
-                </Text>
-              </Flexbox>
-              <Button
-                disabled={installing}
-                icon={installingIdentifier === item.identifier ? <Loader2 size={14} /> : undefined}
-                size={'small'}
-                type={item.identifier === primarySkillIdentifier ? 'primary' : undefined}
-                onClick={() => onInstall(item.identifier)}
+          {items.map((item) => {
+            const installingThisSkill = installingIdentifier === item.identifier;
+
+            return (
+              <Flexbox
+                horizontal
+                align={'center'}
+                gap={12}
+                justify={'space-between'}
+                key={item.identifier}
+                style={{
+                  background: cssVar.colorBgContainer,
+                  border: `1px solid ${cssVar.colorFillTertiary}`,
+                  borderRadius: 10,
+                  padding: 10,
+                }}
               >
-                {t('createModal.skillSuggestion.actions.install')}
-              </Button>
-            </Flexbox>
-          ))}
+                <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
+                  <Text ellipsis fontSize={13} style={{ fontWeight: 500 }}>
+                    {item.name}
+                  </Text>
+                  <Text color={cssVar.colorTextTertiary} ellipsis={{ rows: 2 }} fontSize={12}>
+                    {item.description}
+                  </Text>
+                </Flexbox>
+                <Button
+                  disabled={installing && !installingThisSkill}
+                  loading={installingThisSkill}
+                  size={'small'}
+                  type={usePrimaryInstallButton ? 'primary' : undefined}
+                  onClick={() => onInstall(item.identifier)}
+                >
+                  {t(
+                    installingThisSkill
+                      ? 'createModal.skillSuggestion.actions.installing'
+                      : 'createModal.skillSuggestion.actions.install',
+                  )}
+                </Button>
+              </Flexbox>
+            );
+          })}
         </Flexbox>
         {installError && (
           <Text color={cssVar.colorError} fontSize={12}>
@@ -143,22 +145,33 @@ const SkillInstalledPanel = memo<SkillInstalledPanelProps>(({ onClose, onOpenSki
 
   return (
     <Flexbox
-      gap={16}
+      align={'center'}
+      gap={20}
       style={{
-        background: cssVar.colorFillQuaternary,
-        border: `1px solid ${cssVar.colorFillSecondary}`,
-        borderRadius: 12,
-        padding: 16,
+        paddingBlock: 8,
       }}
     >
-      <Flexbox gap={8}>
-        <Flexbox horizontal align={'center'} gap={8}>
-          <CheckCircle2 color={cssVar.colorSuccess} size={18} />
-          <Text fontSize={14} style={{ fontWeight: 600 }}>
-            {t('createModal.skillSuggestion.installed.title')}
-          </Text>
+      <Flexbox align={'center'} gap={8} style={{ textAlign: 'center' }}>
+        <Flexbox
+          align={'center'}
+          justify={'center'}
+          style={{
+            background: cssVar.colorSuccessBg,
+            borderRadius: '50%',
+            height: 48,
+            width: 48,
+          }}
+        >
+          <CheckCircle2 color={cssVar.colorSuccess} size={28} />
         </Flexbox>
-        <Text color={cssVar.colorTextSecondary} fontSize={13}>
+        <Text fontSize={18} style={{ fontWeight: 600 }}>
+          {t('createModal.skillSuggestion.installed.title')}
+        </Text>
+        <Text
+          color={cssVar.colorTextSecondary}
+          fontSize={13}
+          style={{ maxWidth: 360, textAlign: 'center' }}
+        >
           {t('createModal.skillSuggestion.installed.description')}
         </Text>
       </Flexbox>
@@ -168,22 +181,37 @@ const SkillInstalledPanel = memo<SkillInstalledPanelProps>(({ onClose, onOpenSki
         gap={12}
         justify={'space-between'}
         style={{
-          background: cssVar.colorBgContainer,
+          background: cssVar.colorFillQuaternary,
           border: `1px solid ${cssVar.colorFillTertiary}`,
-          borderRadius: 10,
-          padding: 10,
+          borderRadius: 12,
+          padding: 12,
+          width: '100%',
         }}
       >
+        <Flexbox
+          align={'center'}
+          justify={'center'}
+          style={{
+            background: cssVar.colorBgContainer,
+            border: `1px solid ${cssVar.colorFillTertiary}`,
+            borderRadius: 10,
+            flex: 'none',
+            height: 38,
+            width: 38,
+          }}
+        >
+          <Blocks color={cssVar.colorTextSecondary} size={18} />
+        </Flexbox>
         <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
           <Text ellipsis fontSize={13} style={{ fontWeight: 500 }}>
             {skill.name}
           </Text>
           <Text color={cssVar.colorTextTertiary} fontSize={12}>
-            {skill.identifier}
+            {t('createModal.skillSuggestion.installed.ready')}
           </Text>
         </Flexbox>
       </Flexbox>
-      <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'}>
+      <Flexbox horizontal align={'center'} gap={8} justify={'center'} style={{ width: '100%' }}>
         {onOpenSkills && (
           <Button onClick={() => onOpenSkills(skill.identifier)}>
             {t('createModal.skillSuggestion.actions.openSkills')}
@@ -508,31 +536,38 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
         footer={null}
         open={open}
         title={false}
-        width={'min(90vw, 760px)'}
+        width={installedSkill ? INSTALLED_SKILL_MODAL_WIDTH : CREATE_MODAL_WIDTH}
         styles={{
           body: { padding: 0 },
         }}
         onCancel={handleClose}
       >
-        <Flexbox gap={24} paddingBlock={'16px 24px'} paddingInline={24}>
-          {/* Header: Create Blank + Close */}
-          <Flexbox horizontal align="center" gap={4} justify="flex-end">
-            {!installedSkill && (
+        {installedSkill ? (
+          <Flexbox gap={12} paddingBlock={'12px 24px'} paddingInline={24}>
+            <Flexbox horizontal align="center" justify="flex-end">
+              <ActionIcon icon={X} onClick={handleClose} />
+            </Flexbox>
+            <SkillInstalledPanel
+              skill={installedSkill}
+              onClose={handleTryInLobeAI}
+              onOpenSkills={onOpenSkills ? handleOpenInstalledSkill : undefined}
+            />
+          </Flexbox>
+        ) : (
+          <Flexbox gap={24} paddingBlock={'16px 24px'} paddingInline={24}>
+            {/* Header: Start Blank + Close */}
+            <Flexbox horizontal align="center" gap={4} justify="flex-end">
               <Button icon={<PencilLineIcon size={14} />} type="text" onClick={handleCreateBlank}>
                 {t('createModal.createBlank')}
               </Button>
-            )}
-            <ActionIcon icon={X} onClick={handleClose} />
-          </Flexbox>
-          {/* Title */}
-          {!installedSkill && (
+              <ActionIcon icon={X} onClick={handleClose} />
+            </Flexbox>
+            {/* Title */}
             <Flexbox align="center">
               <h3 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>{modalTitle}</h3>
             </Flexbox>
-          )}
 
-          {/* ChatInput */}
-          {open && !installedSkill && (
+            {/* ChatInput */}
             <ChatInputProvider
               agentId={agentId}
               allowExpand={false}
@@ -566,31 +601,23 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
                 }
               />
             </ChatInputProvider>
-          )}
 
-          {isAgent && installedSkill && (
-            <SkillInstalledPanel
-              skill={installedSkill}
-              onClose={handleTryInLobeAI}
-              onOpenSkills={onOpenSkills ? handleOpenInstalledSkill : undefined}
-            />
-          )}
+            {isAgent && skillSuggestion && (
+              <SkillSuggestionPanel
+                installError={skillInstallError}
+                installingIdentifier={installingSkillIdentifier}
+                items={skillSuggestion.items}
+                onContinueCreate={handleContinueCreate}
+                onInstall={handleInstallSkill}
+              />
+            )}
 
-          {isAgent && skillSuggestion && !installedSkill && (
-            <SkillSuggestionPanel
-              installError={skillInstallError}
-              installingIdentifier={installingSkillIdentifier}
-              items={skillSuggestion.items}
-              onContinueCreate={handleContinueCreate}
-              onInstall={handleInstallSkill}
-            />
-          )}
-
-          {/* Examples */}
-          {!skillSuggestion && !installedSkill && (
-            <Examples suggestMode={type} onExampleClick={handleExampleClick} />
-          )}
-        </Flexbox>
+            {/* Examples */}
+            {!skillSuggestion && (
+              <Examples suggestMode={type} onExampleClick={handleExampleClick} />
+            )}
+          </Flexbox>
+        )}
       </Modal>
     );
   },

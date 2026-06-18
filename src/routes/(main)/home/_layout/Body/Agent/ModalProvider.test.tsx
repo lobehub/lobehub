@@ -49,10 +49,10 @@ vi.mock('@/routes/(main)/home/_layout/hooks/useCreateModal', () => ({
     open ? (
       <>
         <button type="button" onClick={() => void onCreateBlank()}>
-          Create Blank
+          Start Blank
         </button>
         <button type="button" onClick={() => onOpenSkills?.('product-requirements-writer')}>
-          Open Skills
+          View in Skills
         </button>
       </>
     ) : null,
@@ -136,7 +136,7 @@ describe('AgentModalProvider', () => {
     renderProvider();
 
     fireEvent.click(screen.getByText('Open create agent modal'));
-    fireEvent.click(screen.getByText('Create Blank'));
+    fireEvent.click(screen.getByText('Start Blank'));
 
     await waitFor(() => {
       expect(mocks.createAgent).toHaveBeenCalledWith({ groupId: undefined });
@@ -150,7 +150,7 @@ describe('AgentModalProvider', () => {
     renderProvider();
 
     fireEvent.click(screen.getByText('Open create agent modal'));
-    fireEvent.click(screen.getByText('Open Skills'));
+    fireEvent.click(screen.getByText('View in Skills'));
 
     expect(mocks.navigate).toHaveBeenCalledWith(
       '/settings/skill?tab=skill&skill=product-requirements-writer',
