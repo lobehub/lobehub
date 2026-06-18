@@ -31,10 +31,6 @@ vi.mock('@/server/services/market', () => ({
   MarketService: vi.fn(() => ({ market: mockMarket })),
 }));
 
-vi.mock('@/config/composio', () => ({
-  composioEnv: { COMPOSIO_API_KEY: 'composio-key' },
-}));
-
 vi.mock('@/envs/app', () => ({
   appEnv: mockAppEnv,
 }));
@@ -91,10 +87,6 @@ describe('TaskTemplateService.listDailyRecommend', () => {
 
     await service.listDailyRecommend(['coding'], {
       count: 10,
-      enabledConnectors: [
-        { identifier: 'github', source: 'lobehub' },
-        { identifier: 'gmail', source: 'composio' },
-      ],
       excludeIds: [101],
       locale: 'zh-CN',
       refreshSeed: 'refresh-1',
@@ -102,10 +94,6 @@ describe('TaskTemplateService.listDailyRecommend', () => {
 
     expect(mockGetTaskTemplateRecommendations).toHaveBeenCalledWith({
       count: 10,
-      enabledConnectors: [
-        { identifier: 'github', source: 'lobehub' },
-        { identifier: 'gmail', source: 'composio' },
-      ],
       excludeIds: [101],
       interestKeys: ['coding'],
       locale: 'zh-CN',

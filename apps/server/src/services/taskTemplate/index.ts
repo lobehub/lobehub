@@ -1,16 +1,10 @@
 import { createHash } from 'node:crypto';
 
-import type {
-  TaskTemplate,
-  TaskTemplateConnector,
-  TaskTemplateConnectorReference,
-} from '@lobechat/const';
+import type { TaskTemplate, TaskTemplateConnector } from '@lobechat/const';
 import {
-  COMPOSIO_APP_TYPES,
   getComposioAppByIdentifier,
   getLobehubConnectorProviderById,
   INTEREST_AREA_KEYS,
-  LOBEHUB_CONNECTOR_PROVIDERS,
   TASK_TEMPLATE_CATEGORIES,
   TASK_TEMPLATE_ICONS,
   TASK_TEMPLATE_RECOMMEND_COUNT,
@@ -18,34 +12,9 @@ import {
 } from '@lobechat/const';
 import { z } from 'zod';
 
-import { composioEnv } from '@/config/composio';
 import { appEnv } from '@/envs/app';
 import { isTrustedClientEnabled } from '@/libs/trusted-client';
 import { MarketService } from '@/server/services/market';
-
-export const ENABLED_TASK_TEMPLATE_CONNECTORS: TaskTemplateConnectorReference[] = (() => {
-  const connectors: TaskTemplateConnectorReference[] = [];
-
-  if (composioEnv.COMPOSIO_API_KEY) {
-    connectors.push(
-      ...COMPOSIO_APP_TYPES.map((app) => ({
-        identifier: app.identifier,
-        source: 'composio' as const,
-      })),
-    );
-  }
-
-  if (appEnv.MARKET_TRUSTED_CLIENT_ID && appEnv.MARKET_TRUSTED_CLIENT_SECRET) {
-    connectors.push(
-      ...LOBEHUB_CONNECTOR_PROVIDERS.map((provider) => ({
-        identifier: provider.id,
-        source: 'lobehub' as const,
-      })),
-    );
-  }
-
-  return connectors;
-})();
 
 const clampRecommendationCount = (count?: number) =>
   Math.min(Math.max(1, count ?? TASK_TEMPLATE_RECOMMEND_COUNT), TASK_TEMPLATE_RECOMMEND_MAX_COUNT);
@@ -152,7 +121,6 @@ export class TaskTemplateService {
     interestKeys: string[],
     options: {
       count?: number;
-      enabledConnectors?: readonly TaskTemplateConnectorReference[];
       excludeIds?: number[];
       locale?: string;
       refreshSeed?: string;
@@ -161,7 +129,6 @@ export class TaskTemplateService {
     try {
       const result = await this.marketService.market.taskTemplates.getTaskTemplateRecommendations({
         count: clampRecommendationCount(options.count),
-        enabledConnectors: options.enabledConnectors ? [...options.enabledConnectors] : undefined,
         excludeIds: options.excludeIds,
         interestKeys,
         locale: options.locale,
