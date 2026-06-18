@@ -74,6 +74,16 @@ describe('asrRouter.transcribe', () => {
     await expect(caller.transcribe({ model: 'whisper-1' } as any)).rejects.toThrow();
   });
 
+  it('rejects oversized inline base64 and guides to fileId', async () => {
+    // > 3MB decoded → base64 string exceeds the cap
+    const tooBig = 'A'.repeat(5 * 1024 * 1024);
+
+    await expect(caller.transcribe({ audioBase64: tooBig, model: 'whisper-1' })).rejects.toThrow(
+      /fileId/i,
+    );
+    expect(transcribeMock).not.toHaveBeenCalled();
+  });
+
   it('rejects when both fileId and audioBase64 are provided', async () => {
     await expect(
       caller.transcribe({

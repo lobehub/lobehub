@@ -11,6 +11,15 @@ import { FileService } from '@/server/services/file';
 
 const asrProcedure = wsCompatProcedure.use(serverDatabase);
 
+// Inline base64 is only for short clips. The whole request must fit inside the
+// platform body limit (≈4.5MB on serverless deploys) and base64 inflates bytes
+// by ~4/3, so cap the decoded audio well under that — anything larger should be
+// uploaded and passed as `fileId`.
+const MAX_INLINE_AUDIO_BYTES = 3 * 1024 * 1024;
+// base64 length ≈ ceil(bytes / 3) * 4; validating the string length lets us
+// reject oversized payloads before allocating/decoding them.
+const MAX_INLINE_AUDIO_BASE64_CHARS = Math.ceil(MAX_INLINE_AUDIO_BYTES / 3) * 4;
+
 interface ResolvedAudio {
   bytes: Uint8Array;
   fileName: string;
@@ -23,7 +32,8 @@ export const asrRouter = router({
    *
    * Accepts the audio either as an already-uploaded `fileId` (preferred — the
    * server streams the bytes from storage, nothing large travels over tRPC) or
-   * inline as base64 for ad-hoc / small clips.
+   * inline as base64 for short clips (capped at `MAX_INLINE_AUDIO_BYTES`;
+   * larger payloads are rejected with guidance to upload and pass `fileId`).
    *
    * Note on base64: tRPC here uses an `httpLink` + superjson (JSON only), which
    * has no binary representation for a `Buffer`/`Uint8Array` — a raw buffer would
@@ -37,8 +47,14 @@ export const asrRouter = router({
     .input(
       z
         .object({
-          /** Base64-encoded audio bytes. Mutually exclusive with `fileId`. */
-          audioBase64: z.string().min(1).optional(),
+          /** Base64-encoded audio bytes (short clips only). Mutually exclusive with `fileId`. */
+          audioBase64: z
+            .string()
+            .min(1)
+            .max(MAX_INLINE_AUDIO_BASE64_CHARS, {
+              message: `Inline audio is limited to ${MAX_INLINE_AUDIO_BYTES / 1024 / 1024}MB. Upload the file and pass \`fileId\` instead.`,
+            })
+            .optional(),
           /** Already-uploaded audio file id. Mutually exclusive with `audioBase64`. */
           fileId: z.string().min(1).optional(),
           /** Original file name (base64 path); its extension helps format detection. */
