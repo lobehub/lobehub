@@ -582,6 +582,78 @@ Document content here.
     });
   });
 
+  describe('Active Topic Document context', () => {
+    it('should inject active topic document context to the last user message', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: '继续修改刚才的文档',
+          createdAt: Date.now(),
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const params = createBasicParams({
+        initialContext: {
+          activeTopicDocument: {
+            agentDocumentId: 'agd_123',
+            documentId: 'docs_123',
+            title: 'Topic Plan',
+          },
+        },
+        messages,
+      });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+      const userMessage = result.messages.find((m) => m.role === 'user');
+
+      expect(userMessage?.content).toContain('<active_topic_document>');
+      expect(userMessage?.content).toContain('document_id="docs_123"');
+      expect(userMessage?.content).toContain('agent_document_id="agd_123"');
+      expect(userMessage?.content).toContain('scope="currentTopic"');
+      expect(userMessage?.content).toContain('Do not use PageAgent editor tools');
+      expect(result.metadata.activeTopicDocumentContextInjected).toBe(true);
+    });
+
+    it('should skip active topic document context when page editor context is enabled', async () => {
+      const messages: UIChatMessage[] = [
+        {
+          content: 'Question',
+          createdAt: Date.now(),
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: Date.now(),
+        } as UIChatMessage,
+      ];
+
+      const params = createBasicParams({
+        initialContext: {
+          activeTopicDocument: {
+            agentDocumentId: 'agd_123',
+            documentId: 'docs_123',
+            title: 'Topic Plan',
+          },
+          pageEditor: {
+            markdown: '# Page',
+            metadata: { title: 'Page' },
+            xml: '<root />',
+          },
+        },
+        messages,
+      });
+      const engine = new MessagesEngine(params);
+
+      const result = await engine.process();
+      const userMessage = result.messages.find((m) => m.role === 'user');
+
+      expect(userMessage?.content).not.toContain('<active_topic_document>');
+      expect(result.metadata.activeTopicDocumentContextInjected).toBeUndefined();
+      expect(result.metadata.pageEditorContextInjected).toBe(true);
+    });
+  });
+
   describe('Disabled tool call filtering', () => {
     it('should remove historical PageAgent tool calls when the tool is disabled', async () => {
       const messages: UIChatMessage[] = [

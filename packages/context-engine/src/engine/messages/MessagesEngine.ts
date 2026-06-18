@@ -24,6 +24,7 @@ import {
   VerifyMessageProcessor,
 } from '../../processors';
 import {
+  ActiveTopicDocumentContextInjector,
   AgentBuilderContextInjector,
   AgentDocumentBeforeSystemInjector,
   AgentDocumentContextInjector,
@@ -193,6 +194,7 @@ export class MessagesEngine {
     const hasAgentDocuments = !!agentDocuments && agentDocuments.length > 0 && isAgentMode;
     // Page editor is enabled if either direct pageContentContext or initialContext.pageEditor is provided
     const isPageEditorEnabled = !!pageContentContext || !!initialContext?.pageEditor;
+    const hasActiveTopicDocument = !!initialContext?.activeTopicDocument;
     // Plan/Todo is enabled if planTodo.enabled is true and either plan or todos is provided
     const isPlanEnabled = planTodo?.enabled && planTodo?.plan;
     const isTodoEnabled = planTodo?.enabled && planTodo?.todos;
@@ -328,6 +330,11 @@ export class MessagesEngine {
 
       // Agent documents → after-first-user, context-end
       new AgentDocumentMessageInjector(agentDocConfig),
+      // Active topic document → last user message, for continuing document work outside page scope
+      new ActiveTopicDocumentContextInjector({
+        activeTopicDocument: initialContext?.activeTopicDocument,
+        enabled: hasActiveTopicDocument && !isPageEditorEnabled,
+      }),
       // Selected skills (ephemeral user-selected slash skills for this request)
       new SelectedSkillInjector({ enabled: hasSelectedSkills, selectedSkills }),
       // Selected tools (ephemeral user-selected @tool for this request)

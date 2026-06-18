@@ -110,6 +110,34 @@ describe('serverMessagesEngine', () => {
 
       expect(content[0].text).toContain('url="https://app.example.com/f/file1"');
     });
+
+    it('should pass active topic document initial context into MessagesEngine', async () => {
+      const result = await serverMessagesEngine({
+        initialContext: {
+          activeTopicDocument: {
+            agentDocumentId: 'agd_1',
+            documentId: 'docs_1',
+            title: 'Topic Doc',
+          },
+        },
+        messages: [
+          {
+            content: '继续修改',
+            createdAt: Date.now(),
+            id: 'msg-1',
+            role: 'user',
+            updatedAt: Date.now(),
+          } as UIChatMessage,
+        ],
+        model: 'gpt-4',
+        provider: 'openai',
+      });
+
+      const userMessage = result.find((message) => message.role === 'user');
+
+      expect(userMessage?.content).toContain('<active_topic_document>');
+      expect(userMessage?.content).toContain('agent_document_id="agd_1"');
+    });
   });
 
   describe('knowledge injection', () => {

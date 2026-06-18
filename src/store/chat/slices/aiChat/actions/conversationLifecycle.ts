@@ -46,11 +46,14 @@ import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 import { type ChatStore } from '@/store/chat/store';
 import {
+  mergeAgentRuntimeInitialContexts,
+  resolveActiveTopicDocumentInitialContext,
+} from '@/store/chat/utils/activeTopicDocumentContext';
+import {
   createPendingCompressedGroup,
   getCompressionCandidateMessageIds,
   hasRunningCompressionOperation,
 } from '@/store/chat/utils/compression';
-import { mergeAgentRuntimeInitialContexts } from '@/store/chat/utils/runtimeInitialContext';
 import { getElectronStoreState } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -1094,6 +1097,8 @@ export class ConversationLifecycleActionImpl {
           // When agents are @mentioned, inject a slim callAgent-only manifest
           // so the AI can delegate directly without activating the full agent-management tool
           const injectedManifests = hasMentionedAgents ? [createCallAgentManifest()] : undefined;
+          const activeTopicDocumentInitialContext =
+            await resolveActiveTopicDocumentInitialContext(execContext);
 
           const hasInitialContext = hasMentionedAgents || !!injectedManifests;
 
@@ -1112,6 +1117,7 @@ export class ConversationLifecycleActionImpl {
               }
             : undefined;
           const mergedAgentRuntimeInitialContext = mergeAgentRuntimeInitialContexts(
+            activeTopicDocumentInitialContext,
             agentRuntimeInitialContext,
           );
 

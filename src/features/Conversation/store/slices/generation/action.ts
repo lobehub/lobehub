@@ -24,7 +24,10 @@ import {
 import { resolveHeteroResume } from '@/store/chat/slices/aiChat/actions/heteroResume';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
-import { mergeAgentRuntimeInitialContexts } from '@/store/chat/utils/runtimeInitialContext';
+import {
+  mergeAgentRuntimeInitialContexts,
+  resolveActiveTopicDocumentInitialContext,
+} from '@/store/chat/utils/activeTopicDocumentContext';
 import { getElectronStoreState } from '@/store/electron';
 
 import { type Store as ConversationStore } from '../../action';
@@ -463,6 +466,7 @@ export const generationSlice: StateCreator<
     const item = displayMessages[currentIndex];
     if (!item) return;
     const initialContext = mergeAgentRuntimeInitialContexts(
+      await resolveActiveTopicDocumentInitialContext(context),
       buildRetryInitialContext(item.editorData),
     );
 

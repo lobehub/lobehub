@@ -84,10 +84,10 @@ export interface FloatingChatPanelProps {
   className?: string;
   dismissible?: boolean;
   /**
-   * Active document id for the conversation context. Forwarded into the
-   * agent runtime context so doc-aware tools (e.g. lobe-agent-documents
-   * `readDocument` / `modifyNodes`) can resolve the row without a reverse
-   * lookup. Omit when no document is in focus.
+   * Active document id for the conversation context. Passed through so the
+   * `ActiveTopicDocumentContextInjector` can tell the LLM which agent document
+   * the user is currently viewing (e.g. when opened from a document preview
+   * portal). Omit when no document is in focus.
    */
   documentId?: string;
   headerActions?: ReactNode;

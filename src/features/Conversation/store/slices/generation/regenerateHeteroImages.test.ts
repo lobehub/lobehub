@@ -23,8 +23,9 @@ vi.mock('@/store/chat/slices/aiChat/actions/heteroResume', () => ({
   resolveHeteroResume: () => ({ cwdChanged: false, resumeSessionId: 'sess-1' }),
 }));
 
-vi.mock('@/store/chat/utils/runtimeInitialContext', () => ({
+vi.mock('@/store/chat/utils/activeTopicDocumentContext', () => ({
   mergeAgentRuntimeInitialContexts: () => undefined,
+  resolveActiveTopicDocumentInitialContext: async () => undefined,
 }));
 
 vi.mock('@/store/chat/slices/operation/selectors', () => ({
