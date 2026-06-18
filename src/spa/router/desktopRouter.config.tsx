@@ -424,6 +424,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
             },
             index: true,
           },
+          ...BusinessResourceRoutes,
         ],
         element: dynamicElement(
           () => import('@/routes/(main)/resource/(home)/_layout'),
@@ -460,7 +461,6 @@ export const sharedMainAreaChildren: RouteObject[] = [
         ),
         path: 'library/:id',
       },
-      ...BusinessResourceRoutes,
     ],
     element: dynamicElement(
       () => import('@/routes/(main)/resource/_layout'),
