@@ -18,6 +18,7 @@ export const TRACING_SCENARIOS = {
   SignalSkillIntent: 'signal_skill_intent',
   SignalSkillManagement: 'signal_skill_management',
   SignupEmailReview: 'signup_email_review',
+  SkillMeta: 'skill_meta',
   TaskBrief: 'task_brief',
   TaskBriefJudge: 'task_brief_judge',
   TaskHandoff: 'task_handoff',

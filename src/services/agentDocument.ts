@@ -247,6 +247,31 @@ class AgentDocumentService {
     return lambdaClient.agentDocument.generateSkillMeta.mutate(params);
   };
 
+  /**
+   * Records implicit feedback on an auto-generated skill-meta generation: when
+   * the user saves without editing the generated values it's a positive signal,
+   * otherwise negative. Best-effort — never block the save on a feedback write.
+   */
+  recordSkillMetaFeedback = async (params: {
+    data?: Record<string, unknown>;
+    edited: boolean;
+    tracingId: string;
+  }) => {
+    try {
+      await lambdaClient.llmGenerationTracing.recordFeedback.mutate(
+        {
+          data: params.data,
+          signal: params.edited ? 'negative' : 'positive',
+          source: 'convert_to_skill',
+          tracingId: params.tracingId,
+        },
+        { context: { showNotification: false } },
+      );
+    } catch (error) {
+      console.warn('[agentDocument] Failed to record skill-meta feedback:', error);
+    }
+  };
+
   createFolder = async (params: { agentId: string; path: string; recursive?: boolean }) => {
     const result = await lambdaClient.agentDocument.mkdirDocumentByPath.mutate(params);
     await revalidateAgentDocuments(params.agentId);

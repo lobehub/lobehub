@@ -1,7 +1,13 @@
+import { randomUUID } from 'node:crypto';
+
+import { TRACING_SCENARIOS } from '@lobechat/const';
+import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import {
   chainGenerateSkillMeta,
   chainSummaryTitle,
+  GENERATE_SKILL_META_PROMPT_VERSION,
   GENERATE_SKILL_META_SCHEMA,
+  GENERATE_SKILL_META_SCHEMA_NAME,
 } from '@lobechat/prompts';
 import type { UserSystemAgentConfig, UserSystemAgentConfigKey } from '@lobechat/types';
 import { RequestTrigger } from '@lobechat/types';
@@ -105,12 +111,17 @@ export class SystemAgentService {
    * Generate skill metadata (name / title / description) from a document body,
    * used to prefill the "convert document to skill" form.
    *
-   * @returns The generated metadata, or null on failure
+   * Emits an `llm_generation_tracing` row under a pre-allocated `tracingId` and
+   * returns it so the client can later record implicit feedback (whether the
+   * user edited the generated values before saving).
+   *
+   * @returns The generated metadata + tracingId, or null on failure
    */
   async generateSkillMeta(params: {
+    agentId?: string;
     content: string;
-  }): Promise<{ description: string; name: string; title: string } | null> {
-    const { content } = params;
+  }): Promise<{ description: string; name: string; title: string; tracingId: string } | null> {
+    const { agentId, content } = params;
     if (!content.trim()) return null;
 
     try {
@@ -120,6 +131,7 @@ export class SystemAgentService {
       log('generateSkillMeta: locale=%s, model=%s, provider=%s', locale, model, provider);
 
       const payload = chainGenerateSkillMeta({ content, responseLanguage: locale });
+      const tracingId = randomUUID();
 
       const modelRuntime = await initModelRuntimeFromDB(
         this.db,
@@ -133,7 +145,16 @@ export class SystemAgentService {
           model,
           schema: GENERATE_SKILL_META_SCHEMA,
         },
-        { metadata: { trigger: RequestTrigger.Api } },
+        {
+          metadata: { trigger: RequestTrigger.Api },
+          tracing: {
+            agentId,
+            promptVersion: GENERATE_SKILL_META_PROMPT_VERSION,
+            scenario: TRACING_SCENARIOS.SkillMeta,
+            schemaName: GENERATE_SKILL_META_SCHEMA_NAME,
+            tracingId,
+          } satisfies TracingOptions,
+        },
       );
 
       const meta = result as { description?: string; name?: string; title?: string };
@@ -147,7 +168,7 @@ export class SystemAgentService {
       }
 
       log('generateSkillMeta: generated name="%s", title="%s"', name, title);
-      return { description, name, title };
+      return { description, name, title, tracingId };
     } catch (error) {
       console.error('SystemAgentService.generateSkillMeta failed:', error);
       return null;

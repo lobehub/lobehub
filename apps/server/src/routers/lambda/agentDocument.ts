@@ -714,7 +714,10 @@ export const agentDocumentRouter = router({
         input.sourceAgentDocumentId,
       );
 
-      return ctx.systemAgentService.generateSkillMeta({ content: bodyMarkdown });
+      return ctx.systemAgentService.generateSkillMeta({
+        agentId: input.agentId,
+        content: bodyMarkdown,
+      });
     }),
 
   updateSkillByPath: agentDocumentProcedureWrite

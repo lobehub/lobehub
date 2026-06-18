@@ -194,7 +194,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
           });
           return meta ?? undefined;
         },
-        onSubmit: async ({ name, description, title }) => {
+        onSubmit: async ({ name, description, title, generation }) => {
           try {
             await agentDocumentService.convertDocumentToSkill({
               agentId,
@@ -203,6 +203,19 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
               sourceAgentDocumentId: doc.id,
               title,
             });
+            // Record implicit feedback: saving the generated values unchanged is
+            // a positive signal, editing them is negative. Best-effort.
+            if (generation) {
+              void agentDocumentService.recordSkillMetaFeedback({
+                data: {
+                  editedFields: generation.editedFields,
+                  final: { description, name, title },
+                  generated: generation.generated,
+                },
+                edited: generation.edited,
+                tracingId: generation.tracingId,
+              });
+            }
             await mutate();
             return undefined;
           } catch (error) {
