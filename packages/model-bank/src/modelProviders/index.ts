@@ -55,6 +55,7 @@ import OpenCodeCodingPlanProvider from './opencodeCodingPlan';
 import OpenCodeZenProvider from './opencodeZen';
 import OpenRouterProvider from './openrouter';
 import PerplexityProvider from './perplexity';
+import PinstripesProvider from './pinstripes';
 import PPIOProvider from './ppio';
 import QiniuProvider from './qiniu';
 import QwenProvider from './qwen';
@@ -177,6 +178,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   FireworksAIProvider,
   GroqProvider,
   PerplexityProvider,
+  PinstripesProvider,
   MistralProvider,
   ModelScopeProvider,
   Ai21Provider,
@@ -290,6 +292,7 @@ export { default as OpenCodeCodingPlanProviderCard } from './opencodeCodingPlan'
 export { default as OpenCodeZenProviderCard } from './opencodeZen';
 export { default as OpenRouterProviderCard } from './openrouter';
 export { default as PerplexityProviderCard } from './perplexity';
+export { default as PinstripesProviderCard } from './pinstripes';
 export { default as PPIOProviderCard } from './ppio';
 export { default as QiniuProviderCard } from './qiniu';
 export { default as QwenProviderCard } from './qwen';

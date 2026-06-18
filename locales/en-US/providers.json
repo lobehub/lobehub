@@ -52,6 +52,7 @@
   "opencodezen.description": "OpenCode Zen provides access to curated models from OpenAI, Anthropic, Moonshot, MiniMax, Zhipu, Qwen, and more via a single API key.",
   "openrouter.description": "OpenRouter provides access to many frontier models from OpenAI, Anthropic, LLaMA, and more, letting users pick the best model and price for their use case.",
   "perplexity.description": "Perplexity provides advanced chat models, including Llama 3.1 variants, for online and offline use and complex NLP workloads.",
+  "pinstripes.description": "Pinstripes is an OpenAI-compatible inference API offering high-quality models at competitive prices, including DeepSeek, GLM, Qwen, and MiniMax variants.",
   "ppio.description": "PPIO provides reliable, cost-effective open-model APIs, including DeepSeek, Llama, Qwen, and other leading models.",
   "qiniu.description": "Qiniu provides reliable, cost-effective real-time and batch AI inference services that are easy to use.",
   "qwen.description": "Qwen is Alibaba Cloud's large-scale language model with strong understanding and generation, covering Q&A, writing, opinion expression, and code across many domains.",

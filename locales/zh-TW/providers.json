@@ -52,6 +52,7 @@
   "opencodezen.description": "OpenCode Zen 透過單一 API 金鑰，即可存取包含 OpenAI、Anthropic、Moonshot、MiniMax、智譜、Qwen 等在內的精選模型。",
   "openrouter.description": "OpenRouter 提供來自 OpenAI、Anthropic、LLaMA 等多個前沿模型的存取，讓使用者可依需求選擇最佳模型與價格。",
   "perplexity.description": "Perplexity 提供先進的對話模型，包括 Llama 3.1 變體，支援線上與離線使用及複雜 NLP 任務。",
+  "pinstripes.description": "Pinstripes is an OpenAI-compatible inference API offering high-quality models at competitive prices, including DeepSeek, GLM, Qwen, and MiniMax variants.",
   "ppio.description": "PPIO 提供可靠且具成本效益的開源模型 API，包括 DeepSeek、Llama、Qwen 等領先模型。",
   "qiniu.description": "七牛提供可靠、具成本效益的即時與批次 AI 推理服務，操作簡便。",
   "qwen.description": "Qwen 是阿里雲的大型語言模型，具備強大的理解與生成能力，涵蓋問答、寫作、觀點表達與程式碼等多種領域。",

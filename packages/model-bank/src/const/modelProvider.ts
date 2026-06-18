@@ -52,6 +52,7 @@ export enum ModelProvider {
   OpenCodeZen = 'opencodezen',
   OpenRouter = 'openrouter',
   Perplexity = 'perplexity',
+  Pinstripes = 'pinstripes',
   PPIO = 'ppio',
   Qiniu = 'qiniu',
   Qwen = 'qwen',
