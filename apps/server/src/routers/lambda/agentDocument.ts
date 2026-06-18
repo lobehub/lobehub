@@ -3,6 +3,7 @@ import {
   DocumentLoadFormat,
   DocumentLoadRule,
 } from '@lobechat/agent-templates';
+import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import matter from 'gray-matter';
 import { z } from 'zod';
@@ -10,7 +11,7 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { TopicTrigger } from '@/const/topic';
-import { AgentDocumentModel } from '@/database/models/agentDocuments';
+import { AgentDocumentModel, deriveAgentDocumentFields } from '@/database/models/agentDocuments';
 import { TopicModel } from '@/database/models/topic';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { router } from '@/libs/trpc/lambda';
@@ -637,6 +638,20 @@ export const agentDocumentRouter = router({
 
       if (!source) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Source document not found' });
+      }
+
+      // Only a plain agent document may be converted. Reject folders, web
+      // sources, and managed skill bundle/index rows: `createSkill` reparents
+      // the source row under a new bundle, so converting an existing skill
+      // index would strip its original bundle of its SKILL.md and corrupt it.
+      // The UI hides the action for these, but a stale/scripted client could
+      // still call through, so enforce the constraint here.
+      const { category, isFolder } = deriveAgentDocumentFields(source);
+      if (category !== AGENT_DOCUMENT_CATEGORY || isFolder) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Only a plain agent document can be converted into a skill',
+        });
       }
 
       const bodyMarkdown = stripLeadingFrontmatter(source.content ?? '').trim();

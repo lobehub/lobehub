@@ -22,7 +22,6 @@ import {
 } from '@/features/ExplorerTree';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { agentDocumentService } from '@/services/agentDocument';
-import { useChatStore } from '@/store/chat';
 
 import { openConvertToSkillModal, slugifySkillName } from './ConvertToSkillModal';
 import DocumentExplorerToolbar from './DocumentExplorerToolbar';

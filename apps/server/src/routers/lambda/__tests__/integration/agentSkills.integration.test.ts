@@ -727,6 +727,37 @@ describe('Skill Router Integration Tests', () => {
         }),
       ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     });
+
+    it('should reject converting an existing managed skill index', async () => {
+      const caller = agentDocumentRouter.createCaller(createTestContext(userId));
+      const agentId = await createTestAgent(serverDB, userId);
+
+      const doc = await caller.createDocument({
+        agentId,
+        content: '# Existing Skill\n\nBody.',
+        title: 'Existing Skill',
+      });
+
+      const skill = await caller.convertDocumentToSkill({
+        agentId,
+        description: 'An existing skill.',
+        name: 'existing-skill',
+        sourceAgentDocumentId: doc!.id,
+        title: 'Existing Skill',
+      });
+
+      // Converting the managed skill index again would reparent it under a new
+      // bundle and strip the original bundle of its SKILL.md, corrupting it.
+      await expect(
+        caller.convertDocumentToSkill({
+          agentId,
+          description: 'desc',
+          name: 'another-skill',
+          sourceAgentDocumentId: skill.index.agentDocumentId,
+          title: 'Another Skill',
+        }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
   });
 
   describe('listResources', () => {
