@@ -405,7 +405,9 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
         registerAgentRun({
           agentType: request.agentType,
           child,
+          jwt: request.jwt,
           operationId: request.operationId,
+          serverUrl: auth.serverUrl,
           topicId: request.topicId,
         });
       }

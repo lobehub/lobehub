@@ -1,10 +1,14 @@
 import type { ChildProcess } from 'node:child_process';
 
+import { createLambdaClient } from '../api/client';
+
 export interface AgentRunEntry {
   agentType: string;
   child: ChildProcess;
+  jwt: string;
   operationId: string;
   pid?: number;
+  serverUrl: string;
   startedAt: string;
   topicId: string;
 }
@@ -14,19 +18,25 @@ const runs = new Map<string, AgentRunEntry>();
 export function registerAgentRun({
   agentType,
   child,
+  jwt,
   operationId,
+  serverUrl,
   topicId,
 }: {
   agentType: string;
   child: ChildProcess;
+  jwt: string;
   operationId: string;
+  serverUrl: string;
   topicId: string;
 }): AgentRunEntry {
   const entry: AgentRunEntry = {
     agentType,
     child,
+    jwt,
     operationId,
     pid: child.pid,
+    serverUrl,
     startedAt: new Date().toISOString(),
     topicId,
   };
@@ -76,6 +86,20 @@ export async function cancelAgentRun({
   }
 
   const killed = entry.child.kill(signal);
+  if (killed) {
+    const client = createLambdaClient({
+      serverUrl: entry.serverUrl,
+      token: entry.jwt,
+      tokenType: 'jwt',
+    });
+
+    await client.aiAgent.heteroFinish.mutate({
+      agentType: entry.agentType as 'claude-code' | 'codex',
+      operationId,
+      result: 'cancelled',
+      topicId: entry.topicId,
+    });
+  }
 
   return {
     message: killed ? undefined : `Failed to send ${signal} to operationId: ${operationId}`,
