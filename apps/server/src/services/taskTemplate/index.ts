@@ -111,12 +111,10 @@ const parseTaskTemplateRecommendations = (value: unknown): TaskTemplate[] => {
   return items.data;
 };
 
-const isRequiredConnectorAvailable = (
+const isConnectorAuthAvailable = (
   connector: TaskTemplateConnector,
   options: { composioAvailable: boolean; lobehubSkillAvailable: boolean },
 ) => {
-  if (!connector.required) return true;
-
   if (connector.source === 'composio') return options.composioAvailable;
 
   return options.lobehubSkillAvailable;
@@ -127,9 +125,21 @@ const filterAvailableTaskTemplates = (
   options: { composioAvailable: boolean; count: number; lobehubSkillAvailable: boolean },
 ) =>
   templates
-    .filter((template) =>
-      template.connectors.every((connector) => isRequiredConnectorAvailable(connector, options)),
-    )
+    .flatMap((template) => {
+      const hasUnavailableRequiredConnector = template.connectors.some(
+        (connector) => connector.required && !isConnectorAuthAvailable(connector, options),
+      );
+      if (hasUnavailableRequiredConnector) return [];
+
+      return [
+        {
+          ...template,
+          connectors: template.connectors.filter((connector) =>
+            isConnectorAuthAvailable(connector, options),
+          ),
+        },
+      ];
+    })
     .slice(0, options.count);
 
 export class TaskTemplateService {
