@@ -40,18 +40,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-self: stretch;
 
     width: 100%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
 
     background: ${cssVar.colorBgContainer};
 
     transition:
-      border-color 240ms cubic-bezier(0.32, 0.72, 0, 1),
+      border-block-start-color 240ms cubic-bezier(0.32, 0.72, 0, 1),
       background 240ms cubic-bezier(0.32, 0.72, 0, 1);
 
-    /* Collapsed strip should sit flush against the page — only the expanded sheet earns the card surface. */
     &[data-collapsed='true'] {
-      border-color: transparent;
+      border-block-start-color: transparent;
       background: transparent;
     }
   `,
