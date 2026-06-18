@@ -244,39 +244,14 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     expect(result).toEqual([templateWithIcon]);
   });
 
-  it('defaults missing Market skill dependencies to an empty connector list', async () => {
+  it('throws when Market recommendation items omit connectors', async () => {
     const marketTemplate = { ...template, connectors: undefined, id: 102 };
     mockGetTaskTemplateRecommendations.mockResolvedValue({ items: [marketTemplate] });
     const service = new TaskTemplateService('user-1');
 
-    const result = await service.listDailyRecommend(['coding']);
-
-    expect(result).toEqual([{ ...template, connectors: [], id: 102 }]);
-  });
-
-  it('normalizes Market skill dependencies into task template connectors', async () => {
-    const marketTemplate = {
-      ...template,
-      connectors: undefined,
-      id: 102,
-      optionalSkills: [{ skillProvider: 'gmail', skillSource: 'klavis' }],
-      requiresSkills: [{ skillProvider: 'github', skillSource: 'lobehub' }],
-    };
-    mockGetTaskTemplateRecommendations.mockResolvedValue({ items: [marketTemplate] });
-    const service = new TaskTemplateService('user-1');
-
-    const result = await service.listDailyRecommend(['coding']);
-
-    expect(result).toEqual([
-      {
-        ...template,
-        connectors: [
-          { identifier: 'github', required: true, source: 'lobehub' },
-          { identifier: 'gmail', required: false, source: 'composio' },
-        ],
-        id: 102,
-      },
-    ]);
+    await expect(service.listDailyRecommend(['coding'])).rejects.toThrow(
+      'Market recommendations returned malformed items',
+    );
   });
 
   it('throws when Market recommendation items include unknown connector identifiers', async () => {
@@ -300,45 +275,6 @@ describe('TaskTemplateService.listDailyRecommend', () => {
           ...template,
           connectors: [{ identifier: 'unknown-optional', required: false, source: 'composio' }],
           id: 104,
-        },
-      ],
-    });
-    const service = new TaskTemplateService('user-1');
-
-    await expect(service.listDailyRecommend(['coding'])).rejects.toThrow(
-      'Market recommendations returned malformed items',
-    );
-  });
-
-  it('throws when Market recommendation items include malformed skill dependencies', async () => {
-    mockGetTaskTemplateRecommendations.mockResolvedValue({
-      items: [
-        template,
-        { ...template, connectors: undefined, id: 102, requiresSkills: 'invalid-skills' },
-        { ...template, connectors: undefined, id: 103, optionalSkills: [null] },
-        {
-          ...template,
-          connectors: undefined,
-          id: 104,
-          requiresSkills: [{ skillProvider: 101, skillSource: 'lobehub' }],
-        },
-        {
-          ...template,
-          connectors: undefined,
-          id: 105,
-          requiresSkills: [{ skillProvider: 'github', skillSource: 101 }],
-        },
-        {
-          ...template,
-          connectors: undefined,
-          id: 106,
-          requiresSkills: [{ skillProvider: 'github', skillSource: 'unknown-source' }],
-        },
-        {
-          ...template,
-          connectors: undefined,
-          id: 107,
-          optionalSkills: [{ skillProvider: 'unknown-provider', skillSource: 'klavis' }],
         },
       ],
     });
