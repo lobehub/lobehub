@@ -83,6 +83,15 @@ const isCronNumber = (value: string, max: number) => {
   return parsed >= 0 && parsed <= max;
 };
 
+const isCronStep = (value: string, max: number) => {
+  if (!/^\*\/\d+$/.test(value)) return false;
+  const parsed = Number.parseInt(value.slice(2), 10);
+  return parsed >= 1 && parsed <= max;
+};
+
+const isCronNumberList = (value: string, max: number) =>
+  value.split(',').every((item) => isCronNumber(item, max));
+
 const isSupportedTaskTemplateCronPattern = (value: unknown): value is string => {
   if (typeof value !== 'string') return false;
 
@@ -90,10 +99,15 @@ const isSupportedTaskTemplateCronPattern = (value: unknown): value is string => 
   if (parts.length !== 5) return false;
 
   const [minute, hour, dayOfMonth, month, weekday] = parts;
-  if (!isCronNumber(minute, 59) || !isCronNumber(hour, 23)) return false;
+  if (
+    !(minute === '*' || isCronNumberList(minute, 59) || isCronStep(minute, 59)) ||
+    !(hour === '*' || isCronNumberList(hour, 23) || isCronStep(hour, 24))
+  ) {
+    return false;
+  }
   if (dayOfMonth !== '*' || month !== '*') return false;
 
-  return weekday === '*' || isCronNumber(weekday, 6);
+  return weekday === '*' || isCronNumberList(weekday, 6);
 };
 
 type MarketTaskTemplateSkillSource = 'klavis' | 'lobehub';

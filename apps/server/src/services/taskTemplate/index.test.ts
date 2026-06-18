@@ -198,13 +198,14 @@ describe('TaskTemplateService.listDailyRecommend', () => {
         { ...template, title: 101 },
         { ...template, cronPattern: 0 },
         { ...template, cronPattern: '0 9 * *' },
-        { ...template, cronPattern: '0 */6 * * *' },
+        { ...template, cronPattern: '*/0 * * * *' },
+        { ...template, cronPattern: '0 */0 * * *' },
         { ...template, cronPattern: '60 9 * * *' },
         { ...template, cronPattern: '0 24 * * *' },
         { ...template, cronPattern: '0 9 1 * *' },
         { ...template, cronPattern: '0 9 * 1 *' },
-        { ...template, cronPattern: '0 9 * * 1,3' },
         { ...template, cronPattern: '0 9 * * 7' },
+        { ...template, cronPattern: '0 9 * * 1,7' },
         { ...template, connectors: [{ identifier: 101, required: true, source: 'lobehub' }] },
         { ...template, connectors: [{ identifier: 'github', source: 'lobehub' }] },
         { ...template, connectors: [{ identifier: 'github', required: true, source: 'unknown' }] },
@@ -215,6 +216,22 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     await expect(service.listDailyRecommend(['coding'])).rejects.toThrow(
       'Market recommendations returned malformed items',
     );
+  });
+
+  it('accepts scheduler-supported cron patterns from Market recommendation items', async () => {
+    const templates = [
+      { ...template, cronPattern: '0 * * * *', id: 102 },
+      { ...template, cronPattern: '30 */6 * * *', id: 103 },
+      { ...template, cronPattern: '*/30 * * * *', id: 104 },
+      { ...template, cronPattern: '0 9 * * 1,3', id: 105 },
+      { ...template, cronPattern: '0 9 * * 0,1,2,3,4,5,6', id: 106 },
+    ] satisfies TaskTemplate[];
+    mockGetTaskTemplateRecommendations.mockResolvedValue({ items: templates });
+    const service = new TaskTemplateService('user-1');
+
+    const result = await service.listDailyRecommend(['coding']);
+
+    expect(result).toEqual(templates);
   });
 
   it('keeps valid optional template icons from Market recommendation items', async () => {
