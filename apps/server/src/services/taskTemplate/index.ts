@@ -13,7 +13,6 @@ import {
 import { z } from 'zod';
 
 import { appEnv } from '@/envs/app';
-import { isComposioClientAvailable } from '@/libs/composio';
 import { isTrustedClientEnabled } from '@/libs/trusted-client';
 import { MarketService } from '@/server/services/market';
 
@@ -111,27 +110,6 @@ const parseTaskTemplateRecommendations = (value: unknown): TaskTemplate[] => {
   return items.data;
 };
 
-const isRequiredConnectorAvailable = (
-  connector: TaskTemplateConnector,
-  options: { composioAvailable: boolean },
-) => {
-  if (!connector.required) return true;
-
-  if (connector.source === 'composio') return options.composioAvailable;
-
-  return true;
-};
-
-const filterAvailableTaskTemplates = (
-  templates: TaskTemplate[],
-  options: { composioAvailable: boolean; count: number },
-) =>
-  templates
-    .filter((template) =>
-      template.connectors.every((connector) => isRequiredConnectorAvailable(connector, options)),
-    )
-    .slice(0, options.count);
-
 export class TaskTemplateService {
   private marketService: MarketService;
 
@@ -149,10 +127,8 @@ export class TaskTemplateService {
     } = {},
   ): Promise<TaskTemplate[]> {
     try {
-      const count = clampRecommendationCount(options.count);
-      const composioAvailable = isComposioClientAvailable();
       const result = await this.marketService.market.taskTemplates.getTaskTemplateRecommendations({
-        count: composioAvailable ? count : TASK_TEMPLATE_RECOMMEND_MAX_COUNT,
+        count: clampRecommendationCount(options.count),
         excludeIds: options.excludeIds,
         interestKeys,
         locale: options.locale,
@@ -162,10 +138,7 @@ export class TaskTemplateService {
           : { seedKey: createTaskTemplateRecommendationSeedKey(this.userId) }),
       });
 
-      return filterAvailableTaskTemplates(parseTaskTemplateRecommendations(result), {
-        composioAvailable,
-        count,
-      });
+      return parseTaskTemplateRecommendations(result);
     } catch (error) {
       console.error('[taskTemplate:listDailyRecommend] Market recommendations failed', error);
       throw error;

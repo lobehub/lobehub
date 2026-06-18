@@ -5,12 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTaskTemplateRecommendationSeedKey, TaskTemplateService } from './index';
 
-const {
-  mockAppEnv,
-  mockGetTaskTemplateRecommendations,
-  mockIsComposioClientAvailable,
-  mockMarket,
-} = vi.hoisted(() => {
+const { mockAppEnv, mockGetTaskTemplateRecommendations, mockMarket } = vi.hoisted(() => {
   const market: {
     taskTemplates: {
       getTaskTemplateRecommendations: ReturnType<typeof vi.fn>;
@@ -28,7 +23,6 @@ const {
       MARKET_TRUSTED_CLIENT_SECRET: 'secret' as string | undefined,
     },
     mockGetTaskTemplateRecommendations: vi.fn(),
-    mockIsComposioClientAvailable: vi.fn(() => true),
     mockMarket: market,
   };
 });
@@ -39,10 +33,6 @@ vi.mock('@/server/services/market', () => ({
 
 vi.mock('@/envs/app', () => ({
   appEnv: mockAppEnv,
-}));
-
-vi.mock('@/libs/composio', () => ({
-  isComposioClientAvailable: mockIsComposioClientAvailable,
 }));
 
 const template = {
@@ -64,7 +54,6 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     vi.clearAllMocks();
     mockAppEnv.MARKET_TRUSTED_CLIENT_ID = 'client-id';
     mockAppEnv.MARKET_TRUSTED_CLIENT_SECRET = 'secret';
-    mockIsComposioClientAvailable.mockReturnValue(true);
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockMarket.taskTemplates = {
       getTaskTemplateRecommendations: mockGetTaskTemplateRecommendations,
@@ -178,36 +167,6 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     expect(result).toEqual([templateWithConnectors]);
   });
 
-  it('filters required Composio templates when the Composio client is unavailable', async () => {
-    mockIsComposioClientAvailable.mockReturnValue(false);
-    const requiredComposioTemplate = {
-      ...template,
-      connectors: [{ identifier: 'gmail', required: true, source: 'composio' }],
-      id: 102,
-    } satisfies TaskTemplate;
-    const optionalComposioTemplate = {
-      ...template,
-      connectors: [{ identifier: 'gmail', required: false, source: 'composio' }],
-      id: 103,
-    } satisfies TaskTemplate;
-    const requiredLobehubTemplate = {
-      ...template,
-      connectors: [{ identifier: 'github', required: true, source: 'lobehub' }],
-      id: 104,
-    } satisfies TaskTemplate;
-    mockGetTaskTemplateRecommendations.mockResolvedValue({
-      items: [requiredComposioTemplate, optionalComposioTemplate, requiredLobehubTemplate],
-    });
-    const service = new TaskTemplateService('user-1');
-
-    const result = await service.listDailyRecommend(['coding'], { count: 2 });
-
-    expect(mockGetTaskTemplateRecommendations).toHaveBeenCalledWith(
-      expect.objectContaining({ count: TASK_TEMPLATE_RECOMMEND_MAX_COUNT }),
-    );
-    expect(result).toEqual([optionalComposioTemplate, requiredLobehubTemplate]);
-  });
-
   it('throws when Market recommendation items are malformed', async () => {
     mockGetTaskTemplateRecommendations.mockResolvedValue({
       items: [
@@ -258,7 +217,7 @@ describe('TaskTemplateService.listDailyRecommend', () => {
     mockGetTaskTemplateRecommendations.mockResolvedValue({ items: templates });
     const service = new TaskTemplateService('user-1');
 
-    const result = await service.listDailyRecommend(['coding'], { count: 5 });
+    const result = await service.listDailyRecommend(['coding']);
 
     expect(result).toEqual(templates);
   });
