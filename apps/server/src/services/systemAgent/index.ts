@@ -150,7 +150,7 @@ export class SystemAgentService {
           tracing: {
             agentId,
             promptVersion: GENERATE_SKILL_META_PROMPT_VERSION,
-            scenario: TRACING_SCENARIOS.SkillMeta,
+            scenario: TRACING_SCENARIOS.DocumentToSkillMeta,
             schemaName: GENERATE_SKILL_META_SCHEMA_NAME,
             tracingId,
           } satisfies TracingOptions,

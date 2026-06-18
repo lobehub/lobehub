@@ -187,6 +187,7 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
         defaultDescription: doc.description ?? '',
         defaultName: slugifySkillName(fallbackTitle),
         defaultTitle: fallbackTitle,
+        generateCacheKey: ['document-to-skill-meta', agentId, doc.id],
         onGenerate: async () => {
           const meta = await agentDocumentService.generateSkillMeta({
             agentId,
