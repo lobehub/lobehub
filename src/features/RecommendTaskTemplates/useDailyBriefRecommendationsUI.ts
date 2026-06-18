@@ -112,6 +112,7 @@ export function useDailyBriefRecommendationsUI(
   const [refreshSeed, setRefreshSeed] = useSessionStorageState<string>(REFRESH_SEED_STORAGE_KEY, {
     defaultValue: '',
   });
+
   const recommendationRequest = useMemo(
     () =>
       resolveDailyBriefRecommendationRequest({
@@ -133,7 +134,7 @@ export function useDailyBriefRecommendationsUI(
         })
     : null;
 
-  const { data, isLoading, isValidating, mutate } = useSWR(
+  const { data, error, isLoading, isValidating, mutate } = useSWR(
     recommendationRequest.key,
     recommendationFetcher,
     {
@@ -161,6 +162,10 @@ export function useDailyBriefRecommendationsUI(
     waitedForInterestsRef.current = false;
     void mutate();
   }, [interestKeys, mutate, recommendationRequest.key]);
+
+  useEffect(() => {
+    if (error) console.error('[taskTemplate:listDailyRecommend]', error);
+  }, [error]);
 
   const handleRefresh = useCallback(() => {
     setRefreshSeed(nextRefreshSeed());
@@ -222,6 +227,7 @@ export function useDailyBriefRecommendationsUI(
     isValidating,
     isWaitingForInterestsFetch: interestKeys !== null && waitedForInterestsRef.current,
   });
+  if (error) return { mode: 'hidden' };
   if (displayMode === 'hidden') return { mode: 'hidden' };
   if (displayMode === 'skeleton') return { mode: 'skeleton', skeletonCount: recommendationCount };
 

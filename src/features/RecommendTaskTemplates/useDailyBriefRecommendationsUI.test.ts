@@ -1,14 +1,106 @@
 /**
  * @vitest-environment happy-dom
  */
-import { describe, expect, it } from 'vitest';
+import type { TaskTemplate } from '@lobechat/const';
+import { renderHook, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { taskTemplateKeys } from '@/libs/swr/keys';
+import { taskTemplateService } from '@/services/taskTemplate';
 
 import {
   resolveDailyBriefRecommendationDisplayMode,
   resolveDailyBriefRecommendationRequest,
+  useDailyBriefRecommendationsUI,
 } from './useDailyBriefRecommendationsUI';
+
+const {
+  mockMutate,
+  mockSetRefreshSeed,
+  mockUseFetchBriefs,
+  mockUseFetchLobehubSkillConnections,
+  mockUseFetchUserComposioConnections,
+  mockUseResolvedInterestKeys,
+  mockUseSWR,
+} = vi.hoisted(() => ({
+  mockMutate: vi.fn(),
+  mockSetRefreshSeed: vi.fn(),
+  mockUseFetchBriefs: vi.fn(),
+  mockUseFetchLobehubSkillConnections: vi.fn(),
+  mockUseFetchUserComposioConnections: vi.fn(),
+  mockUseResolvedInterestKeys: vi.fn(),
+  mockUseSWR: vi.fn(),
+}));
+
+vi.mock('ahooks', () => ({
+  useSessionStorageState: () => ['', mockSetRefreshSeed],
+}));
+
+vi.mock('antd', () => ({
+  App: {
+    useApp: () => ({ message: { error: vi.fn() } }),
+  },
+}));
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    i18n: { language: 'en-US', resolvedLanguage: 'en-US' },
+    t: (key: string) => key,
+  }),
+}));
+
+vi.mock('swr', () => ({
+  default: mockUseSWR,
+}));
+
+vi.mock('@/store/brief', () => ({
+  useBriefStore: (selector: (state: any) => unknown) =>
+    selector({
+      isBriefsInit: true,
+      useFetchBriefs: mockUseFetchBriefs,
+    }),
+}));
+
+vi.mock('@/store/tool', () => ({
+  useToolStore: (selector: (state: any) => unknown) =>
+    selector({
+      useFetchLobehubSkillConnections: mockUseFetchLobehubSkillConnections,
+      useFetchUserComposioConnections: mockUseFetchUserComposioConnections,
+    }),
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: (selector: (state: any) => unknown) =>
+    selector({
+      isLoaded: true,
+      isSignedIn: true,
+      user: { interests: ['coding'] },
+    }),
+}));
+
+vi.mock('@/services/taskTemplate', () => ({
+  taskTemplateService: {
+    dismiss: vi.fn(),
+    listDailyRecommend: vi.fn(),
+    recordCreated: vi.fn(),
+  },
+}));
+
+vi.mock('./useResolvedInterestKeys', () => ({
+  useResolvedInterestKeys: mockUseResolvedInterestKeys,
+}));
+
+const template = {
+  category: 'engineering',
+  connectors: [],
+  cronPattern: '0 9 * * *',
+  description: 'Description',
+  id: 101,
+  identifier: 'daily-engineering',
+  instruction: 'Instruction',
+  interests: ['coding'],
+  title: 'Title',
+} satisfies TaskTemplate;
 
 describe('resolveDailyBriefRecommendationRequest', () => {
   it('keeps the cache key available while interests are still initializing', () => {
@@ -140,5 +232,63 @@ describe('resolveDailyBriefRecommendationDisplayMode', () => {
         isWaitingForInterestsFetch: false,
       }),
     ).toBe('hidden');
+  });
+});
+
+describe('useDailyBriefRecommendationsUI', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockUseResolvedInterestKeys.mockReturnValue(['coding']);
+    mockUseSWR.mockReturnValue({
+      data: { data: [template], success: true },
+      isLoading: false,
+      isValidating: false,
+      mutate: mockMutate,
+    });
+  });
+
+  it('returns cards when recommendations are loaded and forwards locale/count inputs', async () => {
+    vi.mocked(taskTemplateService.listDailyRecommend).mockResolvedValue({
+      data: [template],
+      success: true,
+    });
+
+    const { result } = renderHook(() => useDailyBriefRecommendationsUI({ count: 2 }));
+
+    expect(result.current).toMatchObject({ mode: 'cards', templates: [template] });
+    expect(mockUseSWR.mock.calls[0][0]).toEqual(
+      taskTemplateKeys.listDailyRecommend('', 2, 'en-US'),
+    );
+
+    const fetcher = mockUseSWR.mock.calls[0][1];
+    await fetcher();
+
+    expect(taskTemplateService.listDailyRecommend).toHaveBeenCalledWith(['coding'], {
+      count: 2,
+      locale: 'en-US',
+      refreshSeed: undefined,
+    });
+  });
+
+  it('logs recommendation request errors instead of treating them as normal empty data', async () => {
+    const error = new Error('market down');
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockUseSWR.mockReturnValue({
+      error,
+      isLoading: false,
+      isValidating: false,
+      mutate: mockMutate,
+    });
+
+    const { result } = renderHook(() => useDailyBriefRecommendationsUI());
+
+    try {
+      expect(result.current).toEqual({ mode: 'hidden' });
+      await waitFor(() =>
+        expect(consoleErrorSpy).toHaveBeenCalledWith('[taskTemplate:listDailyRecommend]', error),
+      );
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 });

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import type {
   TaskTemplate,
   TaskTemplateConnector,
@@ -18,6 +20,7 @@ import {
 
 import { composioEnv } from '@/config/composio';
 import { appEnv } from '@/envs/app';
+import { isTrustedClientEnabled } from '@/libs/trusted-client';
 import { MarketService } from '@/server/services/market';
 
 export const ENABLED_TASK_TEMPLATE_CONNECTORS: TaskTemplateConnectorReference[] = (() => {
@@ -50,6 +53,17 @@ const clampRecommendationCount = (count?: number) =>
 const TASK_TEMPLATE_CATEGORY_SET = new Set<string>(TASK_TEMPLATE_CATEGORIES);
 const TASK_TEMPLATE_ICON_SET = new Set<string>(TASK_TEMPLATE_ICONS);
 const MARKET_SKILL_SOURCE_SET = new Set<string>(['klavis', 'lobehub']);
+
+const getInstanceSeedScope = () =>
+  process.env.VERCEL_PROJECT_ID || process.env.VERCEL_PROJECT_PRODUCTION_URL || appEnv.APP_URL;
+
+export const createTaskTemplateRecommendationSeedKey = (
+  userId: string,
+  instanceSeedScope = getInstanceSeedScope(),
+) =>
+  createHash('sha256')
+    .update(`task-template-recommendation:v1:${instanceSeedScope}:${userId}`)
+    .digest('base64url');
 
 const isTaskTemplateCategory = (value: unknown): value is TaskTemplate['category'] =>
   typeof value === 'string' && TASK_TEMPLATE_CATEGORY_SET.has(value);
@@ -244,26 +258,26 @@ export class TaskTemplateService {
         interestKeys,
         locale: options.locale,
         refreshSeed: options.refreshSeed,
+        ...(isTrustedClientEnabled()
+          ? {}
+          : { seedKey: createTaskTemplateRecommendationSeedKey(this.userId) }),
       });
 
       if (!Array.isArray(result.items)) {
-        console.error('[taskTemplate:listDailyRecommend] Market recommendations returned no items');
-        return [];
+        throw new Error('Market recommendations returned no items array');
       }
 
       const items = result.items
         .map((item) => normalizeTaskTemplate(item))
         .filter((item): item is TaskTemplate => !!item);
       if (items.length !== result.items.length) {
-        console.error(
-          '[taskTemplate:listDailyRecommend] Market recommendations returned malformed items',
-        );
+        throw new Error('Market recommendations returned malformed items');
       }
 
       return items;
     } catch (error) {
       console.error('[taskTemplate:listDailyRecommend] Market recommendations failed', error);
-      return [];
+      throw error;
     }
   }
 }
