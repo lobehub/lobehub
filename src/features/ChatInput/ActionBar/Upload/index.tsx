@@ -37,32 +37,10 @@ const hotArea = css`
   }
 `;
 
-// Keep every row's leading icon the same width so labels line up across rows.
+// Keep every row's leading icon the same width. The menu's icon slot sizes to its
+// content, so a larger file-type icon next to a smaller line icon would widen that
+// slot and push its label out of alignment with the upload / "view more" rows.
 const MENU_ICON_SIZE = 20;
-
-// base-ui pins the menu item's icon slot to 14px and stretches its <svg> to fill,
-// then adds a 12px gap. That squashes our raw file-type <svg> icons (which arrive as
-// a direct slot child) down to 14px while the wrapped line icons keep their size, so
-// file rows end up with a smaller icon and an oversized icon→label gap. Pin the slot
-// to the icon size and tighten the gap so the file name lines up with the Upload /
-// "View More" rows. The icon slot is the aria-hidden span inside each item's content.
-const menuLayout = css`
-  & [role='menuitem'] span[aria-hidden='false'] {
-    flex: none;
-
-    width: ${MENU_ICON_SIZE}px;
-    min-width: ${MENU_ICON_SIZE}px;
-    max-width: ${MENU_ICON_SIZE}px;
-    height: ${MENU_ICON_SIZE}px;
-    margin-inline-end: 8px;
-  }
-
-  & [role='menuitem'] span[aria-hidden='false'] > * {
-    flex: none;
-    width: ${MENU_ICON_SIZE}px;
-    height: ${MENU_ICON_SIZE}px;
-  }
-`;
 
 const FileUpload = memo(() => {
   const { t } = useTranslation('chat');
@@ -238,7 +216,6 @@ const FileUpload = memo(() => {
           label: (
             <CheckboxItem
               checked={item.enabled}
-              hasPadding={false}
               id={item.id}
               label={item.name}
               onUpdate={async (id, enabled) => {
@@ -257,7 +234,6 @@ const FileUpload = memo(() => {
           label: (
             <CheckboxItem
               checked={item.enabled}
-              hasPadding={false}
               id={item.id}
               label={item.name}
               onUpdate={async (id, enabled) => {
@@ -307,7 +283,7 @@ const FileUpload = memo(() => {
       dropdown={{
         maxHeight: 500,
         maxWidth: 480,
-        menu: { className: cx(menuLayout), items },
+        menu: { items },
         minWidth: 240,
       }}
       onOpenChange={setDropdownOpen}
