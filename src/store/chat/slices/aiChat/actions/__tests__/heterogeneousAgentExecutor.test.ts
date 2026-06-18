@@ -634,7 +634,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   // ────────────────────────────────────────────────────
 
   describe('multi-step parentId chain', () => {
-    it('should create assistant messages chained: assistant → tool → assistant', async () => {
+    it('should chain step assistants along the spine, with tools inline', async () => {
       await runWithEvents([
         ccInit(),
         // Step 1: tool_use Read (message_start primes turn + model/provider
@@ -662,14 +662,15 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
       expect(tool1Create?.[0].parentId).toBe('ast-initial');
 
-      // Assistant for step 2 — parentId should be step 1's TOOL message (not assistant)
+      // Assistant for step 2 — parentId should be the spine (the initial
+      // assistant), NOT step 1's tool. Tools are inline children of their own
+      // assistant; the next assistant chains off the most recent non-tool
+      // main message (the spine).
       const step2Assistant = mockCreateMessage.mock.calls.find(
         ([p]: any) => p.role === 'assistant' && p.parentId !== undefined,
       );
       expect(step2Assistant).toBeDefined();
-      // The parentId should be the (pre-allocated) tool message ID from step 1
-      const tool1Id = tool1Create![0].id;
-      expect(step2Assistant![0].parentId).toBe(tool1Id);
+      expect(step2Assistant![0].parentId).toBe('ast-initial');
       // createMessage should carry the adapter provider so step 2's assistant
       // lands in DB with provider set from the start (no later backfill needed).
       expect(step2Assistant![0].provider).toBe('claude-code');
@@ -1479,15 +1480,14 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       const newAstId = mockCreateMessage.mock.calls.find(
         ([params]: any) => params.role === 'assistant',
       )![0].id;
-      const item1ToolId = mockCreateMessage.mock.calls.find(
-        ([params]: any) => params.role === 'tool' && params.tool_call_id === 'item_1',
-      )![0].id;
 
+      // The second-turn assistant chains off the spine (turn 1's assistant,
+      // here the initial one), NOT turn 1's last tool.
       const secondTurnAssistantCreate = mockCreateMessage.mock.calls.find(
         ([params]: any) => params.role === 'assistant',
       );
       expect(secondTurnAssistantCreate?.[0]).toMatchObject({
-        parentId: item1ToolId,
+        parentId: 'ast-initial',
         role: 'assistant',
       });
 
@@ -1662,18 +1662,16 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ([params]: any) => params.role === 'assistant',
       );
       expect(assistantCreates).toHaveLength(2);
-      const toolIdOf = (callId: string) =>
-        mockCreateMessage.mock.calls.find(
-          ([p]: any) => p.role === 'tool' && p.tool_call_id === callId,
-        )![0].id;
       const newAst1 = assistantCreates[0]![0].id;
       const newAst2 = assistantCreates[1]![0].id;
+      // The cut assistants chain along the spine (each off the previous
+      // non-tool main message), NOT off the preceding turn's last tool.
       expect(assistantCreates[0]?.[0]).toMatchObject({
-        parentId: toolIdOf('item_3'),
+        parentId: 'ast-initial',
         role: 'assistant',
       });
       expect(assistantCreates[1]?.[0]).toMatchObject({
-        parentId: toolIdOf('item_6'),
+        parentId: newAst1,
         role: 'assistant',
       });
 
@@ -2246,9 +2244,10 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         expect.any(Object),
       );
 
-      // 3. Step 2 assistant created chained off the Read tool message
+      // 3. Step 2 assistant created chained off the spine (the initial
+      // assistant), with the Read tool inline under step 1.
       const step2Create = mockCreateMessage.mock.calls.find(
-        ([p]: any) => p.role === 'assistant' && p.parentId === readToolId,
+        ([p]: any) => p.role === 'assistant' && p.parentId === 'ast-initial',
       );
       expect(step2Create).toBeDefined();
 
@@ -2267,9 +2266,10 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         expect.any(Object),
       );
 
-      // 6. Step 3 assistant created chained off the Write tool message
+      // 6. Step 3 assistant created chained off the spine (step 2 assistant),
+      // with the Write tool inline under step 2.
       const step3Create = mockCreateMessage.mock.calls.find(
-        ([p]: any) => p.role === 'assistant' && p.parentId === writeToolId,
+        ([p]: any) => p.role === 'assistant' && p.parentId === step2Create![0].id,
       );
       expect(step3Create).toBeDefined();
 
@@ -2843,20 +2843,18 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
       expect(terminalCreate).toBeDefined();
 
-      // Terminal message should chain off the last tool, not off the
-      // thread's initial assistant, so the transcript flows
-      // user → asst(tools) → tool → asst(result).
+      // Terminal message chains off the in-thread assistant (the subagent
+      // spine), with the child tool inline, so the transcript flows
+      // user → asst(tools) → asst(result) — the subagent reducer keeps the
+      // chain anchor on the assistant instead of advancing it to the tool.
       const toolCreate = mockCreateMessage.mock.calls.find(
         ([payload]: any) => payload.role === 'tool' && payload.tool_call_id === 'toolu_child',
       );
       expect(toolCreate).toBeDefined();
-      // The tool create returns an id; since the mock returns { id } we
-      // just assert the terminal's parentId is NOT the first assistant
-      // (id of which was returned earlier in mockCreateMessage).
       const firstAssistantCreate = mockCreateMessage.mock.calls.find(
         ([payload]: any) => payload.role === 'assistant' && payload.threadId === threadId,
       );
-      expect(terminalCreate![0].parentId).not.toBe(firstAssistantCreate![0].id);
+      expect(terminalCreate![0].parentId).toBe(firstAssistantCreate![0].id);
     });
 
     it('streams the terminal assistant into the thread messagesMap bucket', async () => {
@@ -3222,11 +3220,14 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   describe('Monitor parentId chain', () => {
     /**
      * Monitor pattern: initial tool_use returns immediately ("Monitor started"),
-     * then Monitor's stdout is fed back as synthetic user content that drives
-     * new CC assistant turns. Each step should parent to the previous step's
-     * last tool message to form a single assistantGroup in the UI.
+     * then Monitor's stdout drives new CC assistant turns. These reactive steps
+     * arrive as ordinary CC message steps (no `task_started`/`task_notification`
+     * signal context — see the `external signal` describe below for the tagged
+     * case), so under the spine rule each one parents off the most recent
+     * non-tool main message: the conversation chains user → asst → asst with
+     * tools inline, and the reactive callbacks render as plain spine assistants.
      */
-    it('basic flow: each step parents to previous step last tool', async () => {
+    it('basic flow: each reactive step chains along the spine', async () => {
       const idCounter = { tool: 0, assistant: 0 };
       mockCreateMessage.mockImplementation(async (params: any) => {
         if (params.role === 'tool') {
@@ -3267,22 +3268,18 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       // Two new assistants (step 1 + step 2); step 0 uses ast-initial
       expect(assistantCreates.length).toBe(2);
 
-      const toolId = (callId: string) =>
-        mockCreateMessage.mock.calls.find(
-          ([p]: any) => p.role === 'tool' && p.tool_call_id === callId,
-        )![0].id;
-      // Step 1 parent = Monitor tool from step 0
-      expect(assistantCreates[0][0].parentId).toBe(toolId('toolu_mon_0'));
-      // Step 2 parent = LAST tool from step 1 = Monitor_1
-      expect(assistantCreates[1][0].parentId).toBe(toolId('toolu_mon_1'));
+      // Step 1 parent = the spine (initial assistant); its tools are inline.
+      expect(assistantCreates[0][0].parentId).toBe('ast-initial');
+      // Step 2 parent = the spine advanced to step 1's assistant.
+      expect(assistantCreates[1][0].parentId).toBe(assistantCreates[0][0].id);
     });
 
     /**
-     * regression: a toolless step in the middle must NOT break the
-     * zigzag chain. The next step should chain back to the most recent tool
-     * result ever produced in the run, not to the toolless assistant.
+     * regression: a toolless step in the middle keeps the spine linear.
+     * The next step chains off the toolless assistant (the most recent
+     * non-tool main message), so no message is orphaned.
      */
-    it('toolless middle step: next step chains back to last real tool', async () => {
+    it('toolless middle step: spine stays linear through the toolless step', async () => {
       const idCounter = { tool: 0, assistant: 0 };
       mockCreateMessage.mockImplementation(async (params: any) => {
         if (params.role === 'tool') {
@@ -3311,26 +3308,21 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       );
       expect(assistantCreates.length).toBe(2);
 
-      const monitorToolId = mockCreateMessage.mock.calls.find(
-        ([p]: any) => p.role === 'tool' && p.tool_call_id === 'toolu_mon_0',
-      )![0].id;
-      // Step 1 parent = Monitor tool from step 0
-      expect(assistantCreates[0][0].parentId).toBe(monitorToolId);
+      // Step 1 (toolless) parent = the spine (initial assistant).
+      expect(assistantCreates[0][0].parentId).toBe('ast-initial');
 
-      // Step 2 parent: step 1 was toolless, but the chain must skip back to
-      // step 0's Monitor so MessageCollector's assistant → tool → assistant
-      // walk keeps every assistant in the same group.
-      expect(assistantCreates[1][0].parentId).toBe(monitorToolId);
+      // Step 2 parent = step 1's assistant: the spine advances on the toolless
+      // step too, so the chain stays linear (no skip-back to a tool needed).
+      expect(assistantCreates[1][0].parentId).toBe(assistantCreates[0][0].id);
     });
 
     /**
      * follow-up: N consecutive toolless steps (Monitor pushing
      * stdout line by line, each line triggering a new LLM call that only
-     * answers with text). All toolless assistants must chain back to the
-     * same originating tool result; otherwise the UI splits one bubble per
-     * Monitor line.
+     * answers with text). Each toolless assistant chains off the previous
+     * one, forming a continuous spine — no message is dropped.
      */
-    it('consecutive toolless steps: all parents resolve to the originating tool', async () => {
+    it('consecutive toolless steps: each chains off the previous spine assistant', async () => {
       const idCounter = { tool: 0, assistant: 0 };
       mockCreateMessage.mockImplementation(async (params: any) => {
         if (params.role === 'tool') {
@@ -3362,16 +3354,11 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       // 4 new assistants (steps 1–4); step 0 reuses ast-initial
       expect(assistantCreates.length).toBe(4);
 
-      const monitorToolId = mockCreateMessage.mock.calls.find(
-        ([p]: any) => p.role === 'tool' && p.tool_call_id === 'toolu_mon_0',
-      )![0].id;
-      // All toolless steps chain back to the Monitor tool from step 0
-      expect(assistantCreates[0][0].parentId).toBe(monitorToolId);
-      expect(assistantCreates[1][0].parentId).toBe(monitorToolId);
-      expect(assistantCreates[2][0].parentId).toBe(monitorToolId);
-      // Step 4 also chains to the Monitor tool — its own step had no tools yet
-      // at step_start, the Bash tool only persists after stream_start fires.
-      expect(assistantCreates[3][0].parentId).toBe(monitorToolId);
+      // Each step chains off the previous spine assistant; step 1 off the seed.
+      expect(assistantCreates[0][0].parentId).toBe('ast-initial');
+      expect(assistantCreates[1][0].parentId).toBe(assistantCreates[0][0].id);
+      expect(assistantCreates[2][0].parentId).toBe(assistantCreates[1][0].id);
+      expect(assistantCreates[3][0].parentId).toBe(assistantCreates[2][0].id);
     });
 
     /**
@@ -3412,13 +3399,10 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         ([p]: any) => p.role === 'assistant',
       );
       expect(assistantCreates.length).toBe(1);
-      // Step 1 parent should be the Monitor tool from step 0. The tool message
-      // id is pre-allocated by the reducer (carried in the persistToolBatch
-      // intent), so the chain resolves even though the tool_result interleaves.
-      const monitorToolId = mockCreateMessage.mock.calls.find(
-        ([p]: any) => p.role === 'tool' && p.tool_call_id === 'toolu_mon_0',
-      )![0].id;
-      expect(assistantCreates[0][0].parentId).toBe(monitorToolId);
+      // Step 1 parent = the spine (initial assistant). The interleaved Monitor
+      // tool_result does not affect the chain: the spine anchor is the most
+      // recent non-tool main message, independent of tool timing.
+      expect(assistantCreates[0][0].parentId).toBe('ast-initial');
     });
   });
 
