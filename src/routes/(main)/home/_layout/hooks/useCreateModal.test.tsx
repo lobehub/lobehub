@@ -230,6 +230,23 @@ const renderModal = (type: 'agent' | 'group' = 'agent') => {
   return { onClose, onCreateBlank, onOpenSkills, onSubmit };
 };
 
+const expectTrackedSkillSuggestionAction = async (
+  action: string,
+  properties: Record<string, unknown> = {},
+) => {
+  await waitFor(() => {
+    expect(analyticsTrack).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'create_agent_modal_skill_suggestion_action',
+        properties: expect.objectContaining({
+          action,
+          ...properties,
+        }),
+      }),
+    );
+  });
+};
+
 describe('CreateAgentModal analytics', () => {
   beforeEach(() => {
     analyticsTrack.mockReset();
@@ -400,6 +417,11 @@ describe('CreateAgentModal analytics', () => {
     expect(screen.getByText('Resume Reviewer')).toBeInTheDocument();
     expect(screen.queryByText('Example title')).not.toBeInTheDocument();
     expect(screen.getByText('Skill not a fit?')).toBeInTheDocument();
+    await expectTrackedSkillSuggestionAction('shown', {
+      skill_count: 1,
+      source: 'manual',
+      top_skill_identifier: 'resume-reviewer',
+    });
 
     expect(screen.getByText('Add Skill')).toHaveAttribute('data-button-type', 'primary');
 
@@ -409,6 +431,19 @@ describe('CreateAgentModal analytics', () => {
 
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith('帮我做一个简历优化检查清单');
+    });
+    await expectTrackedSkillSuggestionAction('create_agent_anyway_clicked', {
+      skill_count: 1,
+      source: 'manual',
+      top_skill_identifier: 'resume-reviewer',
+    });
+    await waitFor(() => {
+      expect(analyticsTrack).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'create_agent_modal_creation_succeeded',
+          properties: expect.objectContaining({ source: 'manual' }),
+        }),
+      );
     });
   });
 
@@ -490,6 +525,12 @@ describe('CreateAgentModal analytics', () => {
     await waitFor(() => {
       expect(skillServiceMocks.importFromMarket).toHaveBeenCalledWith('resume-reviewer');
     });
+    await expectTrackedSkillSuggestionAction('install_clicked', {
+      selected_skill_identifier: 'resume-reviewer',
+    });
+    await expectTrackedSkillSuggestionAction('install_succeeded', {
+      selected_skill_identifier: 'resume-reviewer',
+    });
     expect(toolStoreMocks.refreshAgentSkills).toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
     expect(onSubmit).not.toHaveBeenCalled();
@@ -505,9 +546,15 @@ describe('CreateAgentModal analytics', () => {
     fireEvent.click(openSkillsButton);
 
     expect(onOpenSkills).toHaveBeenCalledWith('resume-reviewer');
+    await expectTrackedSkillSuggestionAction('open_skills_clicked', {
+      selected_skill_identifier: 'resume-reviewer',
+    });
 
     fireEvent.click(tryInLobeAIButton);
     expect(onClose).toHaveBeenCalled();
+    await expectTrackedSkillSuggestionAction('try_in_lobeai_clicked', {
+      selected_skill_identifier: 'resume-reviewer',
+    });
   });
 
   it('keeps the suggestion visible when installing the recommended skill fails', async () => {
@@ -543,6 +590,9 @@ describe('CreateAgentModal analytics', () => {
     });
     expect(toolStoreMocks.refreshAgentSkills).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+    await expectTrackedSkillSuggestionAction('install_failed', {
+      selected_skill_identifier: 'resume-reviewer',
+    });
     expect(
       await screen.findByText("Skill wasn't added. Retry, or create an Agent anyway."),
     ).toBeInTheDocument();

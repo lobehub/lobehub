@@ -28,8 +28,14 @@ import {
   type AgentSkillSuggestionResult,
   searchAgentSkillSuggestion,
 } from './agentSkillSuggestion';
-import type { CreateAgentModalSubmitSource } from './createAgentModalAnalytics';
-import { trackCreateAgentModalCreationSucceeded } from './createAgentModalAnalytics';
+import type {
+  CreateAgentModalSkillSuggestionAction,
+  CreateAgentModalSubmitSource,
+} from './createAgentModalAnalytics';
+import {
+  trackCreateAgentModalCreationSucceeded,
+  trackCreateAgentModalSkillSuggestionAction,
+} from './createAgentModalAnalytics';
 
 const LEFT_ACTIONS: ActionKeys[] = ['model'];
 
@@ -334,6 +340,24 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
       return submitSourceRef.current;
     }, []);
 
+    const trackSkillSuggestionAction = useCallback(
+      (
+        action: CreateAgentModalSkillSuggestionAction,
+        selectedSkillIdentifier?: string,
+        suggestion = skillSuggestion,
+      ) => {
+        if (!suggestion) return;
+
+        void trackCreateAgentModalSkillSuggestionAction({
+          action,
+          selectedSkillIdentifier,
+          skillIdentifiers: suggestion.items.map((item) => item.identifier),
+          source: getSubmitSource(suggestion.prompt),
+        });
+      },
+      [getSubmitSource, skillSuggestion],
+    );
+
     const handleSubmit = useCallback(
       async (prompt?: string) => {
         const text = prompt || contentRef.current.trim();
@@ -350,6 +374,11 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
                 setInstalledSkill(undefined);
                 setSkillInstallError(false);
                 setSkillSuggestion({ ...suggestion, prompt: text });
+                void trackCreateAgentModalSkillSuggestionAction({
+                  action: 'shown',
+                  skillIdentifiers: suggestion.items.map((item) => item.identifier),
+                  source: getSubmitSource(text),
+                });
                 return;
               }
             } catch (error) {
@@ -373,13 +402,15 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
     const handleContinueCreate = useCallback(() => {
       const prompt = skillSuggestion?.prompt || contentRef.current.trim();
       if (!prompt) return;
+      trackSkillSuggestionAction('create_agent_anyway_clicked');
       skipSkillSuggestionPromptRef.current = prompt;
       void handleSubmit(prompt);
-    }, [handleSubmit, skillSuggestion?.prompt]);
+    }, [handleSubmit, skillSuggestion?.prompt, trackSkillSuggestionAction]);
 
     const handleInstallSkill = useCallback(
       async (identifier: string) => {
         if (installingSkillIdentifier || loading) return;
+        trackSkillSuggestionAction('install_clicked', identifier);
         setInstallingSkillIdentifier(identifier);
         setSkillInstallError(false);
         try {
@@ -391,15 +422,38 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
             identifier: skill?.identifier || marketSkill?.identifier || identifier,
             name: skill?.name || marketSkill?.name || identifier,
           });
+          trackSkillSuggestionAction('install_succeeded', identifier);
         } catch (error) {
           console.warn('[CreateAgentModal] Failed to import suggested skill:', error);
           setSkillInstallError(true);
+          trackSkillSuggestionAction('install_failed', identifier);
         } finally {
           setInstallingSkillIdentifier(undefined);
         }
       },
-      [installingSkillIdentifier, loading, refreshAgentSkills, skillSuggestion?.items],
+      [
+        installingSkillIdentifier,
+        loading,
+        refreshAgentSkills,
+        skillSuggestion?.items,
+        trackSkillSuggestionAction,
+      ],
     );
+
+    const handleOpenInstalledSkill = useCallback(
+      (identifier: string) => {
+        trackSkillSuggestionAction('open_skills_clicked', identifier);
+        onOpenSkills?.(identifier);
+      },
+      [onOpenSkills, trackSkillSuggestionAction],
+    );
+
+    const handleTryInLobeAI = useCallback(() => {
+      if (installedSkill) {
+        trackSkillSuggestionAction('try_in_lobeai_clicked', installedSkill.identifier);
+      }
+      handleClose();
+    }, [handleClose, installedSkill, trackSkillSuggestionAction]);
 
     const handleCreateBlank = useCallback(async () => {
       if (loading) return;
@@ -517,8 +571,8 @@ export const CreateAgentModal = memo<CreateAgentModalProps>(
           {isAgent && installedSkill && (
             <SkillInstalledPanel
               skill={installedSkill}
-              onClose={handleClose}
-              onOpenSkills={onOpenSkills}
+              onClose={handleTryInLobeAI}
+              onOpenSkills={onOpenSkills ? handleOpenInstalledSkill : undefined}
             />
           )}
 
