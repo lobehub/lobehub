@@ -2,6 +2,31 @@
 
 # Changelog
 
+## [Version 2.2.6](https://github.com/lobehub/lobe-chat/compare/v2.2.6-canary.8...v2.2.6)
+
+<sup>Released on **2026-06-17**</sup>
+
+#### ✨ Features
+
+- **agent**: improve connector, document, and fleet workflows.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **agent**: improve connector, document, and fleet workflows, closes [#15936](https://github.com/lobehub/lobe-chat/issues/15936) ([3f82033](https://github.com/lobehub/lobe-chat/commit/3f82033))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.2.1](https://github.com/lobehub/lobe-chat/compare/v0.0.0-nightly.pr15228.13999...v2.2.1)
 
 <sup>Released on **2026-05-29**</sup>

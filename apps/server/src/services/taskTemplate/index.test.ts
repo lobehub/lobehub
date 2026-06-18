@@ -1,303 +1,162 @@
 // @vitest-environment node
-import type { TaskTemplate } from '@lobechat/const';
-import {
-  TASK_TEMPLATE_PERSONAL_ONLY_CATEGORIES,
-  TASK_TEMPLATE_RECOMMEND_COUNT,
-  taskTemplates,
-} from '@lobechat/const';
-import { describe, expect, it } from 'vitest';
+import { TASK_TEMPLATE_RECOMMEND_MAX_COUNT } from '@lobechat/const';
+import type { TaskTemplate } from '@lobehub/market-sdk';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { isTemplateSkillSourceEligible, TaskTemplateService } from './index';
+import { TaskTemplateService } from './index';
 
-const makeTemplate = (overrides: Partial<TaskTemplate>): TaskTemplate => ({
-  category: 'engineering',
-  cronPattern: '0 9 * * *',
-  id: 't',
-  interests: [],
-  ...overrides,
+const { mockGetTaskTemplateRecommendations, mockMarket } = vi.hoisted(() => {
+  const market: {
+    taskTemplates?: {
+      getTaskTemplateRecommendations: ReturnType<typeof vi.fn>;
+    };
+  } = {
+    taskTemplates: {
+      getTaskTemplateRecommendations: vi.fn(),
+    },
+  };
+
+  return {
+    mockGetTaskTemplateRecommendations: vi.fn(),
+    mockMarket: market,
+  };
 });
 
-const UTC_DAY_1 = new Date('2026-04-24T10:00:00Z');
-const UTC_DAY_2 = new Date('2026-04-25T10:00:00Z');
+vi.mock('@/server/services/market', () => ({
+  MarketService: vi.fn(() => ({ market: mockMarket })),
+}));
+
+vi.mock('@/config/composio', () => ({
+  composioEnv: { COMPOSIO_API_KEY: 'composio-key' },
+}));
+
+vi.mock('@/envs/app', () => ({
+  appEnv: {
+    MARKET_TRUSTED_CLIENT_ID: 'client-id',
+    MARKET_TRUSTED_CLIENT_SECRET: 'secret',
+  },
+}));
+
+const template = {
+  category: 'engineering',
+  connectors: [],
+  createdAt: '2026-06-17T00:00:00.000Z',
+  cronPattern: '0 9 * * *',
+  description: 'Description',
+  id: 101,
+  identifier: 'daily-engineering',
+  instruction: 'Instruction',
+  interests: ['coding'],
+  title: 'Title',
+  updatedAt: '2026-06-17T00:00:00.000Z',
+  version: '1.0.0',
+  versionNumber: 1,
+} satisfies TaskTemplate;
 
 describe('TaskTemplateService.listDailyRecommend', () => {
-  it('returns the default recommendation count when user has matching interests', async () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockMarket.taskTemplates = {
+      getTaskTemplateRecommendations: mockGetTaskTemplateRecommendations,
+    };
+    mockGetTaskTemplateRecommendations.mockResolvedValue({ items: [template] });
+  });
+
+  it('returns Market recommendation items', async () => {
     const service = new TaskTemplateService('user-1');
-    const picked = await service.listDailyRecommend(['coding'], { now: UTC_DAY_1 });
 
-    expect(picked).toHaveLength(TASK_TEMPLATE_RECOMMEND_COUNT);
-    const codingMatches = taskTemplates.filter((t) => t.interests.includes('coding'));
-    expect(picked.some((p) => codingMatches.some((m) => m.id === p.id))).toBe(true);
+    const result = await service.listDailyRecommend(['coding']);
+
+    expect(result).toEqual([template]);
   });
 
-  it('is stable for the same (userId, utcDate)', async () => {
+  it('returns an empty list when Market returns no recommendation items', async () => {
+    mockGetTaskTemplateRecommendations.mockResolvedValue({ items: [] });
     const service = new TaskTemplateService('user-1');
 
-    const a = await service.listDailyRecommend(['coding'], { now: UTC_DAY_1 });
-    const b = await service.listDailyRecommend(['coding'], {
-      now: new Date('2026-04-24T23:59:00Z'), // still same UTC day
-    });
+    const result = await service.listDailyRecommend(['coding']);
 
-    expect(a.map((t) => t.id)).toEqual(b.map((t) => t.id));
+    expect(result).toEqual([]);
   });
 
-  it('changes across UTC days', async () => {
-    let matches = 0;
-    for (const suffix of ['a', 'b', 'c', 'd', 'e']) {
-      const service = new TaskTemplateService(`user-${suffix}`);
-      const d1 = await service.listDailyRecommend([], { now: UTC_DAY_1 });
-      const d2 = await service.listDailyRecommend([], { now: UTC_DAY_2 });
-      if (JSON.stringify(d1) === JSON.stringify(d2)) matches += 1;
-    }
-    expect(matches).toBeLessThan(5);
-  });
-
-  it('differs across users on the same day', async () => {
-    const results = await Promise.all(
-      ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((s) =>
-        new TaskTemplateService(`user-${s}`)
-          .listDailyRecommend([], { now: UTC_DAY_1 })
-          .then((r) => r.map((t) => t.id).join(',')),
-      ),
-    );
-    expect(new Set(results).size).toBeGreaterThan(1);
-  });
-
-  it('falls back to fallback categories when user has no interests', async () => {
+  it('passes recommendation inputs to Market', async () => {
     const service = new TaskTemplateService('user-1');
-    const picked = await service.listDailyRecommend([], { now: UTC_DAY_1 });
 
-    expect(picked).toHaveLength(TASK_TEMPLATE_RECOMMEND_COUNT);
-    for (const p of picked) {
-      expect(taskTemplates.some((t) => t.id === p.id)).toBe(true);
-    }
-  });
-
-  it('intersection is case-insensitive and trims whitespace', async () => {
-    const service = new TaskTemplateService('user-1');
-    const picked = await service.listDailyRecommend(['  CoDing  '], { now: UTC_DAY_1 });
-
-    const codingMatches = taskTemplates.filter((t) => t.interests.includes('coding'));
-    expect(picked.some((p) => codingMatches.some((m) => m.id === p.id))).toBe(true);
-  });
-
-  it('unrecognized interest strings fall back to non-matched pool', async () => {
-    const service = new TaskTemplateService('user-1');
-    // Freeform custom input won't match any template's interests and should still return defaults.
-    const picked = await service.listDailyRecommend(['my special hobby'], { now: UTC_DAY_1 });
-
-    expect(picked).toHaveLength(TASK_TEMPLATE_RECOMMEND_COUNT);
-  });
-
-  it('excludes templates listed in excludeIds', async () => {
-    const service = new TaskTemplateService('user-1');
-    const baseline = await service.listDailyRecommend(['coding'], { now: UTC_DAY_1 });
-    expect(baseline.length).toBeGreaterThan(0);
-
-    const excludedId = baseline[0].id;
-    const picked = await service.listDailyRecommend(['coding'], {
-      excludeIds: [excludedId],
-      now: UTC_DAY_1,
-    });
-
-    expect(picked.some((t) => t.id === excludedId)).toBe(false);
-    expect(picked).toHaveLength(TASK_TEMPLATE_RECOMMEND_COUNT);
-  });
-
-  it('drops templates whose required skill sources are not all enabled', async () => {
-    const service = new TaskTemplateService('user-1');
-    // Without `enabledSkillSources`, any template with `requiresSkills` is filtered out.
-    // Since current catalog has none, this should match the baseline (no-op).
-    const baseline = await service.listDailyRecommend(['coding'], { now: UTC_DAY_1 });
-    expect(baseline).toHaveLength(TASK_TEMPLATE_RECOMMEND_COUNT);
-  });
-
-  it('returns only non-excluded templates when most are excluded', async () => {
-    const service = new TaskTemplateService('user-1');
-    const allIds = taskTemplates.map((t) => t.id);
-    const keepIds = allIds.slice(0, 2);
-    const excludeIds = allIds.slice(2);
-
-    const picked = await service.listDailyRecommend(['coding'], {
-      excludeIds,
-      now: UTC_DAY_1,
-    });
-
-    expect(picked.map((t) => t.id).sort()).toEqual([...keepIds].sort());
-  });
-
-  it('matches baseline when refreshSeed is undefined', async () => {
-    const service = new TaskTemplateService('user-1');
-    const baseline = await service.listDailyRecommend(['coding'], { now: UTC_DAY_1 });
-    const withUndefined = await service.listDailyRecommend(['coding'], {
-      now: UTC_DAY_1,
-      refreshSeed: undefined,
-    });
-    const withEmpty = await service.listDailyRecommend(['coding'], {
-      now: UTC_DAY_1,
-      refreshSeed: '',
-    });
-
-    expect(withUndefined.map((t) => t.id)).toEqual(baseline.map((t) => t.id));
-    expect(withEmpty.map((t) => t.id)).toEqual(baseline.map((t) => t.id));
-  });
-
-  it('is stable for the same (userId, utcDay, refreshSeed)', async () => {
-    const service = new TaskTemplateService('user-1');
-    const a = await service.listDailyRecommend(['coding'], {
-      now: UTC_DAY_1,
-      refreshSeed: 'seed-x',
-    });
-    const b = await service.listDailyRecommend(['coding'], {
-      now: new Date('2026-04-24T23:59:00Z'), // same UTC day
-      refreshSeed: 'seed-x',
-    });
-    expect(a.map((t) => t.id)).toEqual(b.map((t) => t.id));
-  });
-
-  it('differs when refreshSeed changes', async () => {
-    const service = new TaskTemplateService('user-1');
-    const seeds = ['s1', 's2', 's3', 's4', 's5'];
-    const results = await Promise.all(
-      seeds.map((s) =>
-        service
-          .listDailyRecommend([], { now: UTC_DAY_1, refreshSeed: s })
-          .then((r) => r.map((t) => t.id).join(',')),
-      ),
-    );
-    expect(new Set(results).size).toBeGreaterThan(1);
-  });
-
-  it('refreshSeed does not bypass excludeIds', async () => {
-    const service = new TaskTemplateService('user-1');
-    const baseline = await service.listDailyRecommend(['coding'], { now: UTC_DAY_1 });
-    const excludedId = baseline[0].id;
-
-    for (const seed of ['s1', 's2', 's3']) {
-      const picked = await service.listDailyRecommend(['coding'], {
-        excludeIds: [excludedId],
-        now: UTC_DAY_1,
-        refreshSeed: seed,
-      });
-      expect(picked.some((t) => t.id === excludedId)).toBe(false);
-    }
-  });
-
-  it('drops personal-only categories in workspace mode', async () => {
-    const service = new TaskTemplateService('user-1');
-    const personalCategories = new Set(TASK_TEMPLATE_PERSONAL_ONLY_CATEGORIES);
-
-    // Use a personal interest that would otherwise match personal-life templates.
-    const picked = await service.listDailyRecommend(['personal'], {
-      now: UTC_DAY_1,
-      workspaceMode: true,
-    });
-    for (const p of picked) {
-      expect(personalCategories.has(p.category), `template ${p.id} category`).toBe(false);
-    }
-  });
-
-  it('shuffles broadly across refreshSeeds in workspace mode with empty interests', async () => {
-    // The original narrow workspace fallback (operations + learning-research)
-    // resolved to ~4 templates after skill gating, locking "换一批" to a
-    // permutation of the same 3-of-4. Workspace fallback must draw from the
-    // full non-personal candidate set so refresh actually rotates.
-    const service = new TaskTemplateService('user-1');
-    const seenIds = new Set<string>();
-    for (const seed of ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8']) {
-      const picked = await service.listDailyRecommend([], {
-        now: UTC_DAY_1,
-        refreshSeed: seed,
-        workspaceMode: true,
-      });
-      for (const p of picked) seenIds.add(p.id);
-    }
-    // 8 refreshes × 3 picks = 24 slots. Across this many seeds the pool
-    // should clearly exceed the old 4-template ceiling.
-    expect(seenIds.size).toBeGreaterThan(10);
-  });
-
-  it('keeps personal-only categories in personal mode (default)', async () => {
-    const service = new TaskTemplateService('user-1');
-    const personalCategories = new Set(TASK_TEMPLATE_PERSONAL_ONLY_CATEGORIES);
-
-    // Sample enough seeds so the personal fallback pool surfaces.
-    const reached = new Set<string>();
-    for (const seed of ['p1', 'p2', 'p3', 'p4', 'p5', 'p6']) {
-      const picked = await service.listDailyRecommend(['personal'], {
-        now: UTC_DAY_1,
-        refreshSeed: seed,
-      });
-      for (const p of picked) {
-        if (personalCategories.has(p.category)) reached.add(p.id);
-      }
-    }
-    expect(reached.size).toBeGreaterThan(0);
-  });
-
-  it('produces a different shuffle seed for workspace mode vs personal mode', async () => {
-    // Seed namespaces are isolated so workspace recommendations don't mirror
-    // the personal lineup for the same user/day.
-    const service = new TaskTemplateService('user-1');
-    const personal = await service.listDailyRecommend(['coding'], { now: UTC_DAY_1 });
-    const workspace = await service.listDailyRecommend(['coding'], {
-      now: UTC_DAY_1,
-      workspaceMode: true,
-    });
-    expect(personal.map((t) => t.id).join(',')).not.toBe(workspace.map((t) => t.id).join(','));
-  });
-
-  it('changes the first item across refreshSeeds when matched candidates are fewer than the default recommendation count', async () => {
-    // Repro for: `health` interest matches only one template (`diet-log-companion`),
-    // so the legacy "matched-first" logic locked it to position 0 regardless of seed.
-    const service = new TaskTemplateService('user-1');
-    const firstItems = new Set<string>();
-    for (const seed of ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8']) {
-      const picked = await service.listDailyRecommend(['health'], {
-        now: UTC_DAY_1,
-        refreshSeed: seed,
-      });
-      firstItems.add(picked[0]?.id ?? '');
-    }
-    expect(firstItems.size).toBeGreaterThan(1);
-  });
-});
-
-describe('isTemplateSkillSourceEligible', () => {
-  it('treats templates without requiresSkills as always eligible', () => {
-    expect(isTemplateSkillSourceEligible(makeTemplate({}))).toBe(true);
-    expect(isTemplateSkillSourceEligible(makeTemplate({}), new Set())).toBe(true);
-  });
-
-  it('filters out skill-dependent templates when enabledSkillSources is undefined', () => {
-    const t = makeTemplate({ requiresSkills: [{ provider: 'github', source: 'lobehub' }] });
-    expect(isTemplateSkillSourceEligible(t, undefined)).toBe(false);
-  });
-
-  it('keeps templates whose only source is enabled', () => {
-    const t = makeTemplate({ requiresSkills: [{ provider: 'notion', source: 'lobehub' }] });
-    expect(isTemplateSkillSourceEligible(t, new Set(['lobehub']))).toBe(true);
-  });
-
-  it('drops templates whose source is not in enabledSkillSources', () => {
-    const t = makeTemplate({ requiresSkills: [{ provider: 'notion', source: 'lobehub' }] });
-    expect(isTemplateSkillSourceEligible(t, new Set(['composio']))).toBe(false);
-  });
-
-  it('requires every source for multi-skill templates', () => {
-    const t = makeTemplate({
-      requiresSkills: [
-        { provider: 'notion', source: 'lobehub' },
-        { provider: 'google-calendar', source: 'composio' },
+    await service.listDailyRecommend(['coding'], {
+      count: 10,
+      enabledConnectors: [
+        { identifier: 'github', source: 'lobehub' },
+        { identifier: 'gmail', source: 'composio' },
       ],
+      excludeIds: [101],
+      locale: 'zh-CN',
+      refreshSeed: 'refresh-1',
     });
-    expect(isTemplateSkillSourceEligible(t, new Set(['lobehub']))).toBe(false);
-    expect(isTemplateSkillSourceEligible(t, new Set(['composio']))).toBe(false);
-    expect(isTemplateSkillSourceEligible(t, new Set(['lobehub', 'composio']))).toBe(true);
+
+    expect(mockGetTaskTemplateRecommendations).toHaveBeenCalledWith({
+      count: 10,
+      enabledConnectors: [
+        { identifier: 'github', source: 'lobehub' },
+        { identifier: 'gmail', source: 'composio' },
+      ],
+      excludeIds: [101],
+      interestKeys: ['coding'],
+      locale: 'zh-CN',
+      refreshSeed: 'refresh-1',
+    });
   });
 
-  it('treats empty requiresSkills array same as undefined (always eligible)', () => {
-    const t = makeTemplate({ requiresSkills: [] });
-    expect(isTemplateSkillSourceEligible(t, undefined)).toBe(true);
+  it('clamps oversized recommendation counts before calling Market', async () => {
+    const service = new TaskTemplateService('user-1');
+
+    await service.listDailyRecommend(['coding'], { count: 25 });
+
+    expect(mockGetTaskTemplateRecommendations).toHaveBeenCalledWith(
+      expect.objectContaining({ count: TASK_TEMPLATE_RECOMMEND_MAX_COUNT }),
+    );
+  });
+
+  it('returns an empty list when Market recommendations fail', async () => {
+    mockGetTaskTemplateRecommendations.mockRejectedValue(new Error('market down'));
+    const service = new TaskTemplateService('user-1');
+
+    const result = await service.listDailyRecommend(['coding']);
+
+    expect(result).toEqual([]);
+  });
+
+  it('returns an empty list when Market returns malformed recommendations', async () => {
+    mockGetTaskTemplateRecommendations.mockResolvedValue({});
+    const service = new TaskTemplateService('user-1');
+
+    const result = await service.listDailyRecommend(['coding']);
+
+    expect(result).toEqual([]);
+  });
+
+  it('returns official connector fields from Market recommendation items', async () => {
+    const templateWithConnectors = {
+      ...template,
+      connectors: [
+        { identifier: 'github', required: true, source: 'lobehub' },
+        { identifier: 'gmail', required: false, source: 'composio' },
+      ],
+      id: 102,
+    } satisfies TaskTemplate;
+    mockGetTaskTemplateRecommendations.mockResolvedValue({ items: [templateWithConnectors] });
+    const service = new TaskTemplateService('user-1');
+
+    const result = await service.listDailyRecommend(['coding']);
+
+    expect(result).toEqual([templateWithConnectors]);
+  });
+
+  it('returns an empty list when the SDK has no taskTemplates namespace', async () => {
+    mockMarket.taskTemplates = undefined;
+    const service = new TaskTemplateService('user-1');
+
+    const result = await service.listDailyRecommend(['coding']);
+
+    expect(result).toEqual([]);
   });
 });

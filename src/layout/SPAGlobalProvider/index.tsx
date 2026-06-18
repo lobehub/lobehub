@@ -12,6 +12,7 @@ import AgentMockDevtools from '@/features/AgentMockDevtools';
 import DevFeatureFlagPanel from '@/features/DevFeatureFlagPanel';
 import AuthProvider from '@/layout/AuthProvider';
 import AppTheme from '@/layout/GlobalProvider/AppTheme';
+import CacheHydrationGate from '@/layout/GlobalProvider/CacheHydrationGate';
 import DynamicFavicon from '@/layout/GlobalProvider/DynamicFavicon';
 import { FaviconProvider } from '@/layout/GlobalProvider/FaviconProvider';
 import { GroupWizardProvider } from '@/layout/GlobalProvider/GroupWizardProvider';
@@ -59,7 +60,9 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
                     <LazyMotion features={domMax}>
                       <TooltipGroup layoutAnimation={false}>
                         <StyleProvider speedy={import.meta.env.PROD}>
-                          <LobeAnalyticsProviderWrapper>{children}</LobeAnalyticsProviderWrapper>
+                          <LobeAnalyticsProviderWrapper>
+                            <CacheHydrationGate>{children}</CacheHydrationGate>
+                          </LobeAnalyticsProviderWrapper>
                         </StyleProvider>
                       </TooltipGroup>
                       <Suspense>

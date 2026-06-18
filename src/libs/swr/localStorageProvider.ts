@@ -440,6 +440,7 @@ export const CACHE_TIERS = {
     'fetchRecentResources',
     'fetchRecentPages',
     'group:list',
+    'taskTemplate:', // home task-template recommendations
   ],
 } as const;
 

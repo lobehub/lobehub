@@ -68,6 +68,20 @@ export class UserPersonaModel {
     return result;
   };
 
+  deletePersona = async (profile = 'default'): Promise<void> => {
+    const existing = await this.getLatestPersonaDocument(profile);
+    if (!existing) return;
+
+    await this.db
+      .delete(userPersonaDocuments)
+      .where(
+        and(
+          eq(userPersonaDocuments.userId, this.userId),
+          eq(userPersonaDocuments.profile, profile),
+        ),
+      );
+  };
+
   upsertPersona = async (
     params: UpsertUserPersonaParams,
   ): Promise<{ diff?: UserPersonaDocumentHistoriesItem; document: UserPersonaDocument }> => {

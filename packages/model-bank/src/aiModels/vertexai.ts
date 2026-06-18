@@ -6,6 +6,7 @@ import { imagenGenParameters } from './google';
 const vertexaiChatModels: AIChatModelCard[] = [
   {
     abilities: {
+      audio: true,
       functionCall: true,
       reasoning: true,
       search: true,
@@ -83,6 +84,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      audio: true,
       functionCall: true,
       reasoning: true,
       search: true,
@@ -174,6 +176,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      audio: true,
       functionCall: true,
       reasoning: true,
       search: true,
@@ -213,6 +216,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      audio: true,
       functionCall: true,
       reasoning: true,
       search: true,
@@ -249,6 +253,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      audio: true,
       functionCall: true,
       reasoning: true,
       search: true,
@@ -308,6 +313,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      audio: true,
       functionCall: true,
       reasoning: true,
       search: true,

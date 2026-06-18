@@ -7,10 +7,15 @@ import { resolveTemplateIcon } from './resolveTemplateIcon';
 
 const baseTemplate = {
   category: 'engineering',
+  connectors: [],
   cronPattern: '0 9 * * *',
-  id: 'test-template',
+  description: 'Description',
+  id: 101,
+  identifier: 'daily-engineering',
+  instruction: 'Instruction',
   interests: [],
-} satisfies Pick<TaskTemplate, 'category' | 'cronPattern' | 'id' | 'interests'>;
+  title: 'Title',
+} satisfies TaskTemplate;
 
 const make = (overrides: Partial<TaskTemplate>): TaskTemplate =>
   ({ ...baseTemplate, ...overrides }) as TaskTemplate;
@@ -26,8 +31,8 @@ describe('resolveTemplateIcon', () => {
   it('falls back to a required skill provider icon (component form)', () => {
     const spec = resolveTemplateIcon(
       make({
+        connectors: [{ identifier: 'github', required: true, source: 'lobehub' }],
         interests: ['coding'],
-        requiresSkills: [{ provider: 'github', source: 'lobehub' }],
       }),
       interestMap,
     );
@@ -37,8 +42,8 @@ describe('resolveTemplateIcon', () => {
   it('falls back to a required skill provider icon (URL form)', () => {
     const spec = resolveTemplateIcon(
       make({
+        connectors: [{ identifier: 'gmail', required: true, source: 'composio' }],
         interests: ['coding'],
-        requiresSkills: [{ provider: 'gmail', source: 'composio' }],
       }),
       interestMap,
     );
@@ -49,8 +54,10 @@ describe('resolveTemplateIcon', () => {
   it('prefers required over optional when both are present', () => {
     const spec = resolveTemplateIcon(
       make({
-        optionalSkills: [{ provider: 'notion', source: 'lobehub' }],
-        requiresSkills: [{ provider: 'github', source: 'lobehub' }],
+        connectors: [
+          { identifier: 'notion', required: false, source: 'lobehub' },
+          { identifier: 'github', required: true, source: 'lobehub' },
+        ],
       }),
       interestMap,
     );
@@ -60,8 +67,8 @@ describe('resolveTemplateIcon', () => {
   it('falls back to optional skill icon when required is absent', () => {
     const spec = resolveTemplateIcon(
       make({
+        connectors: [{ identifier: 'notion', required: false, source: 'lobehub' }],
         interests: ['coding'],
-        optionalSkills: [{ provider: 'notion', source: 'lobehub' }],
       }),
       interestMap,
     );
@@ -72,8 +79,10 @@ describe('resolveTemplateIcon', () => {
   it('skips unresolvable required spec and tries optional', () => {
     const spec = resolveTemplateIcon(
       make({
-        optionalSkills: [{ provider: 'notion', source: 'lobehub' }],
-        requiresSkills: [{ provider: 'nonexistent-x', source: 'lobehub' }],
+        connectors: [
+          { identifier: 'nonexistent-x', required: true, source: 'lobehub' },
+          { identifier: 'notion', required: false, source: 'lobehub' },
+        ],
       }),
       interestMap,
     );

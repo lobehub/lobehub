@@ -323,7 +323,10 @@ const PlusAction = memo(() => {
   const isMemoryEnabled = useMemoryEnabled(agentId);
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
   const editor = useChatInputStore((s) => s.editor);
-  const { canUploadImage, canUploadVideo } = useVisualMediaUploadAbility(model, provider);
+  const { canUploadImage, canUploadVideo, canUploadAudio } = useVisualMediaUploadAbility(
+    model,
+    provider,
+  );
   const enableFC = useModelSupportToolUse(model, provider);
   const handleOpenKnowledge = useCallback(() => {
     setDropdownOpen(false);
@@ -473,6 +476,7 @@ const PlusAction = memo(() => {
             beforeUpload={async (file) => {
               if (file.type.startsWith('image') && !canUploadImage) return false;
               if (file.type.startsWith('video') && !canUploadVideo) return false;
+              if (file.type.startsWith('audio') && !canUploadAudio) return false;
               const validation = validateVideoFileSize(file);
               if (!validation.isValid) {
                 message.error(
@@ -666,6 +670,7 @@ const PlusAction = memo(() => {
     activeSearchOption,
     canUploadImage,
     canUploadVideo,
+    canUploadAudio,
     editor,
     enableFC,
     enableGatewayMode,

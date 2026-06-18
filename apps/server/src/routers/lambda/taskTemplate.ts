@@ -1,21 +1,22 @@
-import { KNOWN_TASK_TEMPLATE_IDS } from '@lobechat/const';
+import { TASK_TEMPLATE_RECOMMEND_MAX_COUNT } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { authedProcedure, router } from '@/libs/trpc/lambda';
-import { ENABLED_SKILL_SOURCES, TaskTemplateService } from '@/server/services/taskTemplate';
+import {
+  ENABLED_TASK_TEMPLATE_CONNECTORS,
+  TaskTemplateService,
+} from '@/server/services/taskTemplate';
 
 const listDailyRecommendSchema = z.object({
-  count: z.number().int().min(1).optional(),
+  count: z.number().int().min(1).max(TASK_TEMPLATE_RECOMMEND_MAX_COUNT).optional(),
   interestKeys: z.array(z.string().max(64)).max(32),
+  locale: z.string().max(32).optional(),
   refreshSeed: z.string().min(1).max(32).optional(),
 });
 
 const templateIdSchema = z.object({
-  templateId: z
-    .string()
-    .max(64)
-    .refine((id) => KNOWN_TASK_TEMPLATE_IDS.has(id), { message: 'Unknown task template id' }),
+  templateId: z.number().int().positive(),
 });
 
 export const taskTemplateRouter = router({
@@ -28,7 +29,8 @@ export const taskTemplateRouter = router({
         const service = new TaskTemplateService(ctx.userId);
         const data = await service.listDailyRecommend(input.interestKeys, {
           count: input.count,
-          enabledSkillSources: ENABLED_SKILL_SOURCES,
+          enabledConnectors: ENABLED_TASK_TEMPLATE_CONNECTORS,
+          locale: input.locale,
           refreshSeed: input.refreshSeed,
         });
         return { data, success: true };

@@ -176,6 +176,40 @@ export const buildGooglePart = async (
 
       throw new TypeError(`currently we don't support video url: ${content.video_url.url}`);
     }
+
+    case 'audio_url': {
+      const { mimeType, base64, type } = parseDataUri(content.audio_url.url);
+
+      if (type === 'base64') {
+        if (!base64) {
+          throw new TypeError("Audio URL doesn't contain base64 data");
+        }
+
+        return {
+          inlineData: { data: base64, mimeType: mimeType || 'audio/mp3' },
+          thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+        };
+      }
+
+      if (type === 'url') {
+        const url = content.audio_url.url;
+
+        const externalUrlPart = await buildExternalUrlFileDataPart(url, options);
+        if (externalUrlPart) return externalUrlPart;
+
+        // Fallback: convert URL to base64 (for private/local URLs or earlier model
+        // generations that don't support external fileData URIs).
+        // imageUrlToBase64 provides SSRF protection and works for any binary data.
+        const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(url);
+
+        return {
+          inlineData: { data: urlBase64, mimeType: urlMimeType || 'audio/mp3' },
+          thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+        };
+      }
+
+      throw new TypeError(`currently we don't support audio url: ${content.audio_url.url}`);
+    }
   }
 };
 

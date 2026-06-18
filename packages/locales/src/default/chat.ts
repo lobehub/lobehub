@@ -1108,6 +1108,7 @@ export default {
   'workingPanel.resources.deleteTitle': 'Delete document?',
   'workingPanel.resources.deleteTitleMulti': 'Delete {{count}} items?',
   'workingPanel.resources.empty': 'No webpages. Webpages crawled in this agent will show up here.',
+  'workingPanel.resources.emptyDocuments': 'No documents yet. Create one with the + above.',
   'workingPanel.resources.error': 'Failed to load resources',
   'workingPanel.resources.filter.documents': 'Documents',
   'workingPanel.resources.filter.skills': 'Skills',

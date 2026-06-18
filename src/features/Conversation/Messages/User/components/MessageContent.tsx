@@ -6,6 +6,7 @@ import { cleanSpeakerTag } from '@/store/chat/utils/cleanSpeakerTag';
 import { type UIChatMessage } from '@/types/index';
 
 import { useMarkdown } from '../useMarkdown';
+import AudioFileListViewer from './AudioFileListViewer';
 import CollapsibleContent from './CollapsibleContent';
 import FileListViewer from './FileListViewer';
 import ImageFileListViewer from './ImageFileListViewer';
@@ -14,7 +15,7 @@ import RichTextMessage from './RichTextMessage';
 import VideoFileListViewer from './VideoFileListViewer';
 
 const UserMessageContent = memo<UIChatMessage>(
-  ({ id, content, editorData, imageList, videoList, fileList, metadata }) => {
+  ({ id, content, editorData, imageList, videoList, audioList, fileList, metadata }) => {
     const markdownProps = useMarkdown(id);
     const pageSelections = metadata?.pageSelections;
     const displayContent = useMemo(() => (content ? cleanSpeakerTag(content) : content), [content]);
@@ -36,6 +37,7 @@ const UserMessageContent = memo<UIChatMessage>(
         {textBody && <CollapsibleContent>{textBody}</CollapsibleContent>}
         {imageList && imageList?.length > 0 && <ImageFileListViewer items={imageList} />}
         {videoList && videoList?.length > 0 && <VideoFileListViewer items={videoList} />}
+        {audioList && audioList?.length > 0 && <AudioFileListViewer items={audioList} />}
         {fileList && fileList?.length > 0 && <FileListViewer items={fileList} />}
       </Flexbox>
     );

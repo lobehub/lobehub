@@ -69,7 +69,7 @@ const TYPE_MAP: Record<string, string> = {
   embedding: 'embedding',
   image_generation: 'image',
   llm: 'chat',
-  stt: 'stt',
+  stt: 'asr',
   tts: 'tts',
   video: 'video',
   // Legacy aliases (platform docs note automatic bidirectional mapping)

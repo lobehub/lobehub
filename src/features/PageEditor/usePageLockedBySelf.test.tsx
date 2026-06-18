@@ -77,7 +77,7 @@ describe('usePageLockedBySelf', () => {
     expect(result.current).toBe(false);
   });
 
-  it('returns true when I hold the lock and the lock is reported as "by other" (future LOBE-10480 path)', () => {
+  it('returns true when I hold the lock and the lock is reported as "by other" (future session-scoped lock path)', () => {
     mockPageState.current.lockHolderId = 'user-me';
     isLockedByOtherMock.mockReturnValue(true);
     const { result } = renderHook(() => usePageLockedBySelf());

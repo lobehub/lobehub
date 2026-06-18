@@ -4,7 +4,7 @@ import { parse } from '../parse';
 import type { Message } from '../types/shared';
 
 /**
- * Dual-form message-chain reader (LOBE-10445, phase 1)
+ * Dual-form message-chain reader (phase 1)
  *
  * Two persisted chain shapes must parse to equivalent display output:
  *
@@ -106,7 +106,7 @@ const shape = (flatList: Message[]) =>
     role: m.role,
   }));
 
-describe('dual-form message chain (LOBE-10445)', () => {
+describe('dual-form message chain', () => {
   // Canonical turn: u1 → a1(tc1) → a2(tc2) → a3(final, no tool)
   const canonical: StepSpec[] = [
     { content: 'step1', id: 'a1', tools: ['tc1'] },

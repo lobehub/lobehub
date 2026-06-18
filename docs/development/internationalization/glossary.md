@@ -1,6 +1,8 @@
-# Glossary
+# Term Translation Reference
 
-以下是一些词汇的固定翻译：
+> Looking for the product glossary? See [Glossary](/docs/glossary) for plain-language definitions of LobeHub's concepts and terms, organized by first letter.
+
+The table below is a translation-consistency reference for contributors: the fixed translations for a few core terms.
 
 | develop key | zh-CN (中文) | en-US(English) |
 | ----------- | ------------ | -------------- |

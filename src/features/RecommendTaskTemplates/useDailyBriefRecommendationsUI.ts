@@ -1,9 +1,9 @@
-import type { TaskTemplate, TaskTemplateSkillSource } from '@lobechat/const';
+import type { TaskTemplate, TaskTemplateConnectorSource } from '@lobechat/const';
 import { TASK_TEMPLATE_RECOMMEND_COUNT } from '@lobechat/const';
 import { createNanoId } from '@lobechat/utils';
 import { useSessionStorageState } from 'ahooks';
 import { App } from 'antd';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
@@ -25,8 +25,8 @@ export type DailyBriefRecommendationsUIState =
   | { mode: 'skeleton'; skeletonCount: number }
   | {
       mode: 'cards';
-      onCreated: (templateId: string) => void;
-      onDismiss: (templateId: string) => void;
+      onCreated: (templateId: number) => void;
+      onDismiss: (templateId: number) => void;
       onRefresh: () => void;
       templates: TaskTemplate[];
     };
@@ -35,12 +35,72 @@ interface UseDailyBriefRecommendationsUIOptions {
   count?: number;
 }
 
+interface ResolveDailyBriefRecommendationRequestParams {
+  interestKeys: string[] | null;
+  isLogin: boolean | undefined;
+  locale: string;
+  recommendationCount: number;
+  refreshSeed?: string;
+}
+
+export const resolveDailyBriefRecommendationRequest = ({
+  interestKeys,
+  isLogin,
+  locale,
+  recommendationCount,
+  refreshSeed,
+}: ResolveDailyBriefRecommendationRequestParams) => {
+  const enabled = isLogin === true;
+
+  return {
+    key: enabled
+      ? taskTemplateKeys.listDailyRecommend(refreshSeed ?? '', recommendationCount, locale)
+      : null,
+    shouldFetch: enabled && interestKeys !== null,
+  };
+};
+
+interface ResolveDailyBriefRecommendationDisplayModeParams {
+  canFetchRecommendations: boolean;
+  hasRecommendationKey: boolean;
+  hasTemplates: boolean;
+  isInit: boolean;
+  isLoading: boolean;
+  isValidating: boolean;
+  isWaitingForInterestsFetch: boolean;
+}
+
+export const resolveDailyBriefRecommendationDisplayMode = ({
+  canFetchRecommendations,
+  hasRecommendationKey,
+  hasTemplates,
+  isInit,
+  isLoading,
+  isValidating,
+  isWaitingForInterestsFetch,
+}: ResolveDailyBriefRecommendationDisplayModeParams): DailyBriefRecommendationsUIState['mode'] => {
+  if (!hasRecommendationKey) return 'hidden';
+  if (hasTemplates) return 'cards';
+  if (
+    !isInit ||
+    isLoading ||
+    isValidating ||
+    !canFetchRecommendations ||
+    isWaitingForInterestsFetch
+  ) {
+    return 'skeleton';
+  }
+
+  return 'hidden';
+};
+
 export function useDailyBriefRecommendationsUI(
   options: UseDailyBriefRecommendationsUIOptions = {},
 ): DailyBriefRecommendationsUIState {
   const { count } = options;
   const recommendationCount = count ?? TASK_TEMPLATE_RECOMMEND_COUNT;
-  const { t } = useTranslation('taskTemplate');
+  const { i18n, t } = useTranslation('taskTemplate');
+  const locale = i18n.resolvedLanguage || i18n.language;
   const { message } = App.useApp();
   const isLogin = useUserStore(authSelectors.isLogin);
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
@@ -49,30 +109,65 @@ export function useDailyBriefRecommendationsUI(
   const isInit = useBriefStore(briefListSelectors.isBriefsInit);
 
   const interestKeys = useResolvedInterestKeys();
-  const swrKey = interestKeys ? [...interestKeys].sort().join(',') : '';
-  const swrEnabled = isLogin && interestKeys !== null;
   const [refreshSeed, setRefreshSeed] = useSessionStorageState<string>(REFRESH_SEED_STORAGE_KEY, {
     defaultValue: '',
   });
-
-  const { data, isLoading, mutate } = useSWR(
-    swrEnabled
-      ? taskTemplateKeys.listDailyRecommend(swrKey, refreshSeed, recommendationCount)
-      : null,
-    async () =>
-      taskTemplateService.listDailyRecommend(interestKeys ?? [], {
-        count: recommendationCount,
-        refreshSeed: refreshSeed || undefined,
+  const recommendationRequest = useMemo(
+    () =>
+      resolveDailyBriefRecommendationRequest({
+        interestKeys,
+        isLogin,
+        locale,
+        recommendationCount,
+        refreshSeed,
       }),
-    { revalidateOnFocus: false, revalidateOnReconnect: false },
+    [interestKeys, isLogin, locale, recommendationCount, refreshSeed],
   );
+  const canFetchRecommendations = recommendationRequest.shouldFetch && interestKeys !== null;
+  const recommendationFetcher = canFetchRecommendations
+    ? async () =>
+        taskTemplateService.listDailyRecommend(interestKeys, {
+          count: recommendationCount,
+          locale,
+          refreshSeed: refreshSeed || undefined,
+        })
+    : null;
+
+  const { data, isLoading, isValidating, mutate } = useSWR(
+    recommendationRequest.key,
+    recommendationFetcher,
+    {
+      keepPreviousData: true,
+      revalidateIfStale: canFetchRecommendations,
+      revalidateOnFocus: false,
+      revalidateOnMount: canFetchRecommendations,
+      revalidateOnReconnect: false,
+    },
+  );
+  const waitedForInterestsRef = useRef(false);
+
+  useEffect(() => {
+    if (!recommendationRequest.key) {
+      waitedForInterestsRef.current = false;
+      return;
+    }
+
+    if (interestKeys === null) {
+      waitedForInterestsRef.current = true;
+      return;
+    }
+
+    if (!waitedForInterestsRef.current) return;
+    waitedForInterestsRef.current = false;
+    void mutate();
+  }, [interestKeys, mutate, recommendationRequest.key]);
 
   const handleRefresh = useCallback(() => {
     setRefreshSeed(nextRefreshSeed());
   }, [setRefreshSeed]);
 
   const removeTemplateFromList = useCallback(
-    (templateId: string) => {
+    (templateId: number) => {
       mutate(
         (current) =>
           current
@@ -85,14 +180,14 @@ export function useDailyBriefRecommendationsUI(
   );
 
   const handleCreated = useCallback(
-    (templateId: string) => {
+    (templateId: number) => {
       removeTemplateFromList(templateId);
     },
     [removeTemplateFromList],
   );
 
   const handleDismiss = useCallback(
-    async (templateId: string) => {
+    async (templateId: number) => {
       removeTemplateFromList(templateId);
       try {
         await taskTemplateService.dismiss(templateId);
@@ -107,10 +202,9 @@ export function useDailyBriefRecommendationsUI(
 
   const templates = useMemo(() => data?.data ?? [], [data]);
   const requiredSources = useMemo(() => {
-    const sources = new Set<TaskTemplateSkillSource>();
+    const sources = new Set<TaskTemplateConnectorSource>();
     for (const tmpl of templates) {
-      for (const s of tmpl.requiresSkills ?? []) sources.add(s.source);
-      for (const s of tmpl.optionalSkills ?? []) sources.add(s.source);
+      for (const connector of tmpl.connectors) sources.add(connector.source);
     }
     return sources;
   }, [templates]);
@@ -119,9 +213,17 @@ export function useDailyBriefRecommendationsUI(
   useFetchUserComposioConnections(requiredSources.has('composio'));
   useFetchLobehubSkillConnections(requiredSources.has('lobehub'));
 
-  if (!swrEnabled) return { mode: 'hidden' };
-  if (!isInit || isLoading) return { mode: 'skeleton', skeletonCount: recommendationCount };
-  if (templates.length === 0) return { mode: 'hidden' };
+  const displayMode = resolveDailyBriefRecommendationDisplayMode({
+    canFetchRecommendations,
+    hasRecommendationKey: Boolean(recommendationRequest.key),
+    hasTemplates: templates.length > 0,
+    isInit,
+    isLoading,
+    isValidating,
+    isWaitingForInterestsFetch: interestKeys !== null && waitedForInterestsRef.current,
+  });
+  if (displayMode === 'hidden') return { mode: 'hidden' };
+  if (displayMode === 'skeleton') return { mode: 'skeleton', skeletonCount: recommendationCount };
 
   return {
     mode: 'cards',

@@ -20,8 +20,6 @@ import {
   ClockIcon,
   CoinsIcon,
   ExternalLink,
-  Eye,
-  EyeOff,
   GitForkIcon,
   MoreVerticalIcon,
   Pencil,
@@ -154,10 +152,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
       { skipNull: true },
     );
 
-    const isPublished = status === 'published';
-    // Agents under review can't be self-managed — publishing is approval-gated and
-    // the market rejects manual publish with `forbidden`. Show a view-only card
-    // (no owner action menu) until the agent has been validated.
+    // Under-review agents stay view-only until the agent has been validated.
     const isUnderReview = isValidated === false;
 
     const handleViewDetail = useCallback(() => {
@@ -215,7 +210,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
     }, [canCreate, canEdit, identifier, navigate, createAgent, refreshAgentList, message, t]);
 
     const handleStatusAction = useCallback(
-      (action: 'publish' | 'unpublish' | 'deprecate') => {
+      (action: 'deprecate') => {
         if (!canEdit) return;
         onStatusChange?.(identifier, action);
       },
@@ -239,15 +234,6 @@ const UserAgentCard = memo<UserAgentCardProps>(
           },
           {
             type: 'divider' as const,
-          },
-          {
-            disabled: !canEdit,
-            icon: <Icon icon={isPublished ? EyeOff : Eye} />,
-            key: 'togglePublish',
-            label: isPublished
-              ? t('setting:myAgents.actions.unpublish')
-              : t('setting:myAgents.actions.publish'),
-            onClick: () => handleStatusAction(isPublished ? 'unpublish' : 'publish'),
           },
           {
             danger: true,

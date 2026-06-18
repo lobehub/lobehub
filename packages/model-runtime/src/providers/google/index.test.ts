@@ -996,4 +996,106 @@ describe('models', () => {
       'x-goog-api-key': apiKey,
     });
   });
+
+  describe('transcribe', () => {
+    it('should transcribe audio via native generateContent and return text', async () => {
+      const generateContentMock = vi
+        .spyOn(instance['client'].models, 'generateContent')
+        .mockResolvedValue({ text: '  你好，我感觉很不开心。  ' } as any);
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.m4a', { type: 'audio/mp4' });
+
+      const result = await instance.transcribe!({ file, model: 'gemini-2.5-flash' });
+
+      // text is trimmed
+      expect(result).toEqual({ text: '你好，我感觉很不开心。' });
+
+      // sends inline audio + a text instruction part to the model
+      const callArg = generateContentMock.mock.calls[0][0] as any;
+      expect(callArg.model).toBe('gemini-2.5-flash');
+      const parts = callArg.contents[0].parts;
+      expect(parts[0].inlineData.mimeType).toBe('audio/mp4');
+      expect(typeof parts[0].inlineData.data).toBe('string');
+      expect(parts[1].text).toBeTruthy();
+    });
+
+    it('should include the language hint when provided', async () => {
+      const generateContentMock = vi
+        .spyOn(instance['client'].models, 'generateContent')
+        .mockResolvedValue({ text: 'hi' } as any);
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.wav', { type: '' });
+
+      await instance.transcribe!({ file, language: 'zh', model: 'gemini-2.5-flash' });
+
+      const callArg = generateContentMock.mock.calls[0][0] as any;
+      // mime inferred from the .wav extension when the blob has no type
+      expect(callArg.contents[0].parts[0].inlineData.mimeType).toBe('audio/wav');
+      expect(callArg.contents[0].parts[1].text).toContain('zh');
+    });
+
+    it('should map provider errors through AgentRuntimeError', async () => {
+      vi.spyOn(instance['client'].models, 'generateContent').mockRejectedValue(new Error('boom'));
+
+      const file = new File([new Uint8Array([1, 2, 3])], 'speech.m4a', { type: 'audio/mp4' });
+
+      await expect(
+        instance.transcribe!({ file, model: 'gemini-2.5-flash' }),
+      ).rejects.toHaveProperty('provider', 'google');
+    });
+
+    it('should upload large audio via the Files API and reference it by uri', async () => {
+      const uploadMock = vi.spyOn(instance['client'].files, 'upload').mockResolvedValue({
+        mimeType: 'audio/mp4',
+        name: 'files/abc',
+        state: 'ACTIVE',
+        uri: 'https://generativelanguage.googleapis.com/files/abc',
+      } as any);
+      const generateContentMock = vi
+        .spyOn(instance['client'].models, 'generateContent')
+        .mockResolvedValue({ text: 'big transcript' } as any);
+
+      // 15MB > the 14MB inline threshold → Files API path
+      const big = new File([new Uint8Array(15 * 1024 * 1024)], 'long.m4a', { type: 'audio/mp4' });
+
+      const result = await instance.transcribe!({ file: big, model: 'gemini-2.5-flash' });
+
+      expect(result).toEqual({ text: 'big transcript' });
+      expect(uploadMock).toHaveBeenCalledWith(
+        expect.objectContaining({ config: { mimeType: 'audio/mp4' } }),
+      );
+
+      // references the uploaded file by uri (fileData), not inline base64
+      const parts = (generateContentMock.mock.calls[0][0] as any).contents[0].parts;
+      expect(parts[0].fileData.fileUri).toBe('https://generativelanguage.googleapis.com/files/abc');
+      expect(parts[0].inlineData).toBeUndefined();
+    });
+
+    it('should poll until the uploaded file becomes ACTIVE', async () => {
+      vi.spyOn(instance['client'].files, 'upload').mockResolvedValue({
+        mimeType: 'audio/mp4',
+        name: 'files/xyz',
+        state: 'PROCESSING',
+      } as any);
+      const getMock = vi
+        .spyOn(instance['client'].files, 'get')
+        .mockResolvedValueOnce({ name: 'files/xyz', state: 'PROCESSING' } as any)
+        .mockResolvedValueOnce({
+          mimeType: 'audio/mp4',
+          name: 'files/xyz',
+          state: 'ACTIVE',
+          uri: 'https://generativelanguage.googleapis.com/files/xyz',
+        } as any);
+      vi.spyOn(instance['client'].models, 'generateContent').mockResolvedValue({
+        text: 'ok',
+      } as any);
+
+      const big = new File([new Uint8Array(15 * 1024 * 1024)], 'long.m4a', { type: 'audio/mp4' });
+
+      const result = await instance.transcribe!({ file: big, model: 'gemini-2.5-flash' });
+
+      expect(result).toEqual({ text: 'ok' });
+      expect(getMock).toHaveBeenCalledTimes(2);
+    }, 15_000);
+  });
 });

@@ -453,6 +453,7 @@ export class MessagesEngine {
       // Message content processing (image encoding, multimodal)
       new MessageContentProcessor({
         fileContext: fileContext || { enabled: true, includeFileUrl: true },
+        isCanUseAudio: capabilities?.isCanUseAudio || (() => false),
         isCanUseVideo: capabilities?.isCanUseVideo || (() => false),
         isCanUseVision: capabilities?.isCanUseVision || (() => true),
         model,

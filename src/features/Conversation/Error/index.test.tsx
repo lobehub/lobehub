@@ -1,6 +1,7 @@
 import type * as businessConstModule from '@lobechat/business-const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import type * as modelRuntimeModule from '@lobechat/model-runtime';
+import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type * as lobechatTypesModule from '@lobechat/types';
 import type * as lobehubUiModule from '@lobehub/ui';
 import { render, screen } from '@testing-library/react';
@@ -212,6 +213,24 @@ describe('ErrorMessageExtra', () => {
 
     expect(screen.queryByText('dynamic')).not.toBeInTheDocument();
     expect(screen.getByText('response.GoogleAIBlockReason.SAFETY')).toBeInTheDocument();
+  });
+
+  it('renders the business rate-limit fallback for the canonical runtime code', () => {
+    serverConfigMock.enableBusinessFeatures = true;
+
+    render(
+      <ErrorMessageExtra
+        error={{ message: 'response.RateLimitExceeded' }}
+        data={{
+          error: {
+            type: AgentRuntimeErrorType.RateLimitExceeded,
+          } as any,
+          id: 'msg-rate-limit-runtime',
+        }}
+      />,
+    );
+
+    expect(screen.getByText('dynamic')).toBeInTheDocument();
   });
 
   it('renders the auth guide when the refreshed error is missing type but still carries session code', () => {

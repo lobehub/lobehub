@@ -1,6 +1,7 @@
 'use client';
 
-import { ThemeProvider } from '@lobehub/ui';
+import { ConfigProvider, ThemeProvider } from '@lobehub/ui';
+import * as m from 'motion/react-m';
 import { type ComponentType, type ReactElement } from 'react';
 import { lazy, memo, Suspense, useLayoutEffect } from 'react';
 import type { RouteObject } from 'react-router-dom';
@@ -114,7 +115,9 @@ export const ErrorBoundary = ({ resetPath }: ErrorBoundaryProps) => {
       defaultThemeMode={appearance}
       theme={{ cssVar: { key: 'lobe-vars' } }}
     >
-      <ErrorCapture error={error} resetPath={resetPath} />
+      <ConfigProvider motion={m}>
+        <ErrorCapture error={error} resetPath={resetPath} />
+      </ConfigProvider>
     </ThemeProvider>
   );
 };

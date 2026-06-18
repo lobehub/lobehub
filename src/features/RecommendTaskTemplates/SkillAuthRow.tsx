@@ -1,4 +1,4 @@
-import type { TaskTemplateSkillRequirement } from '@lobechat/const';
+import type { TaskTemplateConnectorReference } from '@lobechat/const';
 import { Button, Flexbox, Icon, Image, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo, useCallback, useMemo } from 'react';
@@ -10,7 +10,7 @@ import { SkillConnectionPopupBlockedError, useSkillConnection } from './useSkill
 interface SkillAuthRowProps {
   disabled?: boolean;
   onError: (error: unknown) => void;
-  spec: TaskTemplateSkillRequirement;
+  spec: TaskTemplateConnectorReference;
 }
 
 /**

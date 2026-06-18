@@ -26,7 +26,7 @@ const ChatBody = memo(() => {
       >
         <ChatList />
       </Flexbox>
-      <ChatInput leftActions={['typo', 'stt']} rightActions={['contextWindow']} />
+      <ChatInput leftActions={['typo']} rightActions={['contextWindow']} />
     </Flexbox>
   );
 });

@@ -548,10 +548,10 @@ export const chatToolKeys = {
 };
 
 // =========================================================================
-// UI-layer keys (features / routes / components). Same rule as above: every
-// prefix below is deliberately kept OUT of `CACHE_TIERS` (memory-only). Names
-// avoid colliding with cached prefixes — e.g. share/topicInfo is `share:` not
-// `topic:`, portal header is `portal:` not `document:`.
+// UI-layer keys (features / routes / components). Prefixes below stay
+// memory-only unless explicitly listed in `CACHE_TIERS`. Names avoid colliding
+// with cached prefixes — e.g. share/topicInfo is `share:` not `topic:`, portal
+// header is `portal:` not `document:`.
 // =========================================================================
 
 // ---- stats (settings/stats + user header counts) ------------------------
@@ -732,18 +732,18 @@ export const topicActionKeys = {
   openNewOrSave: def('topicAction:openNewOrSave', () => ['topicAction:openNewOrSave']),
 };
 
-// ---- misc remaining domains (memory-only; off CACHE_TIERS) --------------
+// ---- misc remaining domains ---------------------------------------------
 export const homeKeys = {
   dailyBrief: def('home:dailyBrief', (userId: string) => ['home:dailyBrief', userId]),
 };
 export const taskTemplateKeys = {
   listDailyRecommend: def(
     'taskTemplate:listDailyRecommend',
-    (interestsKey: string, refreshSeed: unknown, recommendationCount: number) => [
+    (refreshSeed: unknown, recommendationCount: number, locale: string) => [
       'taskTemplate:listDailyRecommend',
-      interestsKey,
       refreshSeed,
       recommendationCount,
+      locale,
     ],
   ),
 };

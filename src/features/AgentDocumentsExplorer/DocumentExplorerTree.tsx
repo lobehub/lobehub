@@ -1,7 +1,8 @@
 import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
+import { Center, Empty, Flexbox } from '@lobehub/ui';
 import type { MenuProps } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { Maximize2Icon, Trash2Icon } from 'lucide-react';
+import { FileTextIcon, Maximize2Icon, Trash2Icon } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -105,16 +106,35 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
     [rowIdByDocumentId],
   );
 
+  const resolveNodeName = useCallback(
+    (doc: AgentDocumentItem): string => {
+      if (doc.isSkillIndex) return SKILL_INDEX_FILENAME;
+      // Never let an empty name through: a blank segment collides with its
+      // parent's path inside the tree's path store and crashes the whole panel
+      // (see ExplorerTree/adapter/normalize.ts). Fall back to a localized label.
+      return (
+        doc.title ||
+        doc.filename ||
+        t(
+          doc.isFolder
+            ? 'workingPanel.resources.tree.untitledFolder'
+            : 'workingPanel.resources.tree.untitledDocument',
+        )
+      );
+    },
+    [t],
+  );
+
   const nodes = useMemo<ExplorerTreeNode<AgentDocumentItem>[]>(
     () =>
       documents.map((doc) => ({
         data: doc,
         id: doc.id,
         isFolder: doc.isFolder,
-        name: doc.isSkillIndex ? SKILL_INDEX_FILENAME : doc.title || doc.filename || '',
+        name: resolveNodeName(doc),
         parentId: resolveParentRowId(doc.parentId),
       })),
-    [documents, resolveParentRowId],
+    [documents, resolveNodeName, resolveParentRowId],
   );
   const defaultExpandedIds = useMemo(
     () => nodes.filter((node) => node.isFolder && node.parentId == null).map((node) => node.id),
@@ -289,30 +309,42 @@ const DocumentExplorerTree = memo<Props>(({ agentId, data, mutate, onOpenDocumen
     ],
   );
 
+  const toolbar = (
+    <DocumentExplorerToolbar
+      onCreateDocument={() => handleCreateDocument(null)}
+      onCreateFolder={() => handleCreateFolder(null)}
+    />
+  );
+
   return (
     <div className={styles.tree} ref={containerRef} style={{ ...style, ...treeStyleVars }}>
-      <ExplorerTree<AgentDocumentItem>
-        iconsColored
-        canDrag={canDrag}
-        canDrop={canDrop}
-        canRename={canRename}
-        defaultExpandedIds={defaultExpandedIds}
-        getContextMenuItems={getContextMenuItems}
-        iconSet="complete"
-        nodes={nodes}
-        ref={treeRef}
-        style={{ height: '100%' }}
-        unsafeCSS={DOCUMENT_TREE_UNSAFE_CSS}
-        header={
-          <DocumentExplorerToolbar
-            onCreateDocument={() => handleCreateDocument(null)}
-            onCreateFolder={() => handleCreateFolder(null)}
-          />
-        }
-        onCommitRename={handleCommitRename}
-        onMove={handleMove}
-        onNodeClick={handleNodeClick}
-      />
+      {nodes.length === 0 ? (
+        // Keep the toolbar reachable (new folder / new doc) above the placeholder.
+        <Flexbox height={'100%'}>
+          {toolbar}
+          <Center flex={1} paddingBlock={24}>
+            <Empty description={t('workingPanel.resources.emptyDocuments')} icon={FileTextIcon} />
+          </Center>
+        </Flexbox>
+      ) : (
+        <ExplorerTree<AgentDocumentItem>
+          iconsColored
+          canDrag={canDrag}
+          canDrop={canDrop}
+          canRename={canRename}
+          defaultExpandedIds={defaultExpandedIds}
+          getContextMenuItems={getContextMenuItems}
+          header={toolbar}
+          iconSet="complete"
+          nodes={nodes}
+          ref={treeRef}
+          style={{ height: '100%' }}
+          unsafeCSS={DOCUMENT_TREE_UNSAFE_CSS}
+          onCommitRename={handleCommitRename}
+          onMove={handleMove}
+          onNodeClick={handleNodeClick}
+        />
+      )}
     </div>
   );
 });

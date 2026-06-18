@@ -4,18 +4,13 @@ import {
   type SidebarGroup,
 } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { and, desc, eq, inArray, not, sql } from 'drizzle-orm';
+import { and, desc, eq, not, sql } from 'drizzle-orm';
 
-import {
-  agents,
-  agentsToSessions,
-  chatGroups,
-  chatGroupsAgents,
-  sessionGroups,
-  sessions,
-} from '../../schemas';
+import { ChatGroupModel } from '../../models/chatGroup';
+import { agents, agentsToSessions, chatGroups, sessionGroups, sessions } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { sanitizeBm25Query } from '../../utils/bm25';
+import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
 import { buildWorkspaceWhere } from '../../utils/workspace';
 
 // Re-export types for backward compatibility
@@ -61,6 +56,7 @@ export class HomeRepository {
         sessionGroupId: sessions.groupId,
         sessionId: sessions.id,
         sessionPinned: sessions.pinned,
+        slug: agents.slug,
         title: agents.title,
         updatedAt: agents.updatedAt,
       })
@@ -116,6 +112,7 @@ export class HomeRepository {
       sessionGroupId: string | null;
       sessionId: string | null;
       sessionPinned: boolean | null;
+      slug: string | null;
       title: string | null;
       updatedAt: Date;
     }>,
@@ -140,19 +137,26 @@ export class HomeRepository {
     // For pinned status: agents.pinned takes priority, fallback to sessions.pinned for backward compatibility
     // For groupId: agents.sessionGroupId takes priority, fallback to sessions.groupId for backward compatibility
     const allItems: Array<SidebarAgentItem & { groupId: string | null }> = [
-      ...agentItems.map((a) => ({
-        avatar: a.avatar,
-        backgroundColor: a.backgroundColor,
-        description: a.description,
-        groupId: a.agentSessionGroupId ?? a.sessionGroupId,
-        heterogeneousType: a.agencyConfig?.heterogeneousProvider?.type ?? null,
-        id: a.id,
-        pinned: a.pinned ?? a.sessionPinned ?? false,
-        sessionId: a.sessionId,
-        title: a.title,
-        type: 'agent' as const,
-        updatedAt: a.updatedAt,
-      })),
+      ...agentItems.map((a) => {
+        const meta = normalizeInboxAgentMeta(
+          { avatar: a.avatar, title: a.title },
+          { slug: a.slug },
+        );
+
+        return {
+          avatar: meta.avatar,
+          backgroundColor: a.backgroundColor,
+          description: a.description,
+          groupId: a.agentSessionGroupId ?? a.sessionGroupId,
+          heterogeneousType: a.agencyConfig?.heterogeneousProvider?.type ?? null,
+          id: a.id,
+          pinned: a.pinned ?? a.sessionPinned ?? false,
+          sessionId: a.sessionId,
+          title: meta.title,
+          type: 'agent' as const,
+          updatedAt: a.updatedAt,
+        };
+      }),
       ...chatGroupItems.map((g) => ({
         // If group has custom avatar, use it (string); otherwise fallback to member avatars (array)
         avatar: g.avatar ? g.avatar : (memberAvatarsMap.get(g.id) ?? null),
@@ -224,6 +228,7 @@ export class HomeRepository {
           pinned: agents.pinned,
           sessionId: sessions.id,
           sessionPinned: sessions.pinned,
+          slug: agents.slug,
           title: agents.title,
           updatedAt: agents.updatedAt,
         })
@@ -266,19 +271,24 @@ export class HomeRepository {
 
     // 3. Combine and format results
     const results: SidebarAgentItem[] = [
-      ...agentResults.map((a) =>
-        cleanObject({
-          avatar: a.avatar,
+      ...agentResults.map((a) => {
+        const meta = normalizeInboxAgentMeta(
+          { avatar: a.avatar, title: a.title },
+          { slug: a.slug },
+        );
+
+        return cleanObject({
+          avatar: meta.avatar,
           backgroundColor: a.backgroundColor,
           description: a.description,
           id: a.id,
           pinned: a.pinned ?? a.sessionPinned ?? false,
           sessionId: a.sessionId,
-          title: a.title,
+          title: meta.title,
           type: 'agent' as const,
           updatedAt: a.updatedAt,
-        }),
-      ),
+        });
+      }),
       ...chatGroupResults.map((g) =>
         cleanObject({
           avatar: g.avatar ? g.avatar : (memberAvatarsMap.get(g.id) ?? null),
@@ -309,26 +319,22 @@ export class HomeRepository {
 
     if (chatGroupIds.length === 0) return memberAvatarsMap;
 
-    const memberAvatars = await this.db
-      .select({
-        avatar: agents.avatar,
-        backgroundColor: agents.backgroundColor,
-        chatGroupId: chatGroupsAgents.chatGroupId,
-      })
-      .from(chatGroupsAgents)
-      .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
-      .where(inArray(chatGroupsAgents.chatGroupId, chatGroupIds))
-      .orderBy(chatGroupsAgents.order);
+    const metasMap = await new ChatGroupModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).getMemberAvatarsByGroupIds(chatGroupIds);
 
-    for (const member of memberAvatars) {
-      const existing = memberAvatarsMap.get(member.chatGroupId) || [];
-      if (member.avatar) {
-        existing.push({
-          avatar: member.avatar,
-          background: member.backgroundColor ?? undefined,
-        });
-      }
-      memberAvatarsMap.set(member.chatGroupId, existing);
+    for (const [chatGroupId, members] of metasMap) {
+      memberAvatarsMap.set(
+        chatGroupId,
+        members
+          .filter((member) => member.avatar)
+          .map((member) => ({
+            avatar: member.avatar as string,
+            background: member.backgroundColor ?? undefined,
+          })),
+      );
     }
 
     return memberAvatarsMap;

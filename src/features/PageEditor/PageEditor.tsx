@@ -108,6 +108,12 @@ interface PageEditorProps {
   fullWidthHeader?: boolean;
   header?: PageEditorHeader;
   knowledgeBaseId?: string;
+  /**
+   * Make the page title/emoji read-only while keeping the body editable. Set for
+   * managed docs whose identity lives elsewhere (e.g. a skill's `SKILL.md`
+   * index — see {@link PublicState.metaReadOnly}).
+   */
+  metaReadOnly?: boolean;
   onBack?: () => void;
   onDelete?: () => void;
   onDocumentIdChange?: (newId: string) => void;
@@ -347,6 +353,7 @@ export const PageEditor: FC<PageEditorProps> = ({
   header,
   fullWidthHeader,
   knowledgeBaseId,
+  metaReadOnly,
   onDocumentIdChange,
   onEmojiChange,
   onSave,
@@ -366,6 +373,7 @@ export const PageEditor: FC<PageEditorProps> = ({
         <PageEditorProvider
           emoji={emoji}
           knowledgeBaseId={knowledgeBaseId}
+          metaReadOnly={metaReadOnly}
           pageId={pageId}
           title={title}
           onBack={onBack}

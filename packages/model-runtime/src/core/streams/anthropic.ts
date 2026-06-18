@@ -193,16 +193,38 @@ export const transformAnthropicStream = (
       }
 
       if (aggregatedUsage && (aggregatedUsage.totalTokens ?? 0) > 0) {
+        delete context.usageMissingDiagnostics;
         return [
           { data: chunk.delta.stop_reason, id: context.id, type: 'stop' },
           { data: aggregatedUsage, id: context.id, type: 'usage' },
         ];
       }
 
+      context.usageMissingDiagnostics = {
+        apiMode: 'messages',
+        finishReason: chunk.delta.stop_reason,
+        hasUsageMetadata: Boolean(chunk.usage),
+        model: payload?.model,
+        provider: payload?.provider,
+        source: 'anthropic_messages',
+        terminalEventType: chunk.type,
+      };
+
       return { data: chunk.delta.stop_reason, id: context.id, type: 'stop' };
     }
 
     case 'message_stop': {
+      if (!context.usage && !context.usageMissingDiagnostics) {
+        context.usageMissingDiagnostics = {
+          apiMode: 'messages',
+          hasUsageMetadata: false,
+          model: payload?.model,
+          provider: payload?.provider,
+          source: 'anthropic_messages',
+          terminalEventType: chunk.type,
+        };
+      }
+
       return [
         ...(context.returnedCitationArray?.length
           ? [
@@ -253,5 +275,5 @@ export const AnthropicStream = (
       }),
     )
     .pipeThrough(createSSEProtocolTransformer((c) => c, streamStack))
-    .pipeThrough(createCallbacksTransformer(callbacks));
+    .pipeThrough(createCallbacksTransformer(callbacks, { streamStack }));
 };

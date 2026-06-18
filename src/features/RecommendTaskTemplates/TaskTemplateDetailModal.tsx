@@ -17,7 +17,7 @@ import { useTaskTemplateCreate } from './useTaskTemplateCreate';
 import { useVisibleAuthSpecs } from './useVisibleAuthSpecs';
 
 interface TaskTemplateDetailContentProps {
-  onCreated: (templateId: string) => void;
+  onCreated: (templateId: number) => void;
   template: TaskTemplate;
 }
 
@@ -28,9 +28,9 @@ const TaskTemplateDetailContent = memo<TaskTemplateDetailContentProps>(
 
     const iconSpec = useMemo(() => resolveTemplateIcon(template, INTEREST_ICON_MAP), [template]);
 
-    const title = t(`${template.id}.title`, { defaultValue: '' });
-    const description = t(`${template.id}.description`, { defaultValue: '' });
-    const instruction = t(`${template.id}.instruction`, { defaultValue: '' });
+    const title = template.title;
+    const description = template.description;
+    const instruction = template.instruction;
 
     const visibleAuthSpecs = useVisibleAuthSpecs(template);
     const scheduleText = useScheduleText(template.cronPattern);
@@ -85,7 +85,7 @@ const TaskTemplateDetailContent = memo<TaskTemplateDetailContentProps>(
             {visibleAuthSpecs.map((spec) => (
               <SkillAuthRow
                 disabled={disabled}
-                key={`${spec.source}:${spec.provider}`}
+                key={`${spec.source}:${spec.identifier}`}
                 spec={spec}
                 onError={handleConnectError}
               />
@@ -112,7 +112,7 @@ const TaskTemplateDetailContent = memo<TaskTemplateDetailContentProps>(
 TaskTemplateDetailContent.displayName = 'TaskTemplateDetailContent';
 
 interface CreateTaskTemplateDetailModalOptions {
-  onCreated: (templateId: string) => void;
+  onCreated: (templateId: number) => void;
   template: TaskTemplate;
 }
 

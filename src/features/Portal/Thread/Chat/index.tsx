@@ -101,9 +101,7 @@ const ThreadChatContent = memo<ThreadChatContentProps>(({ isSubagentThread }) =>
           <ChatList itemContent={itemContent} />
         </Flexbox>
       </Suspense>
-      {!isSubagentThread && (
-        <ChatInput leftActions={['typo', 'stt']} rightActions={['contextWindow']} />
-      )}
+      {!isSubagentThread && <ChatInput leftActions={['typo']} rightActions={['contextWindow']} />}
     </>
   );
 });

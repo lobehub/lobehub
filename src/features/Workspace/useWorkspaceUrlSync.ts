@@ -5,7 +5,7 @@ import { useLocation } from 'react-router-dom';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useIsWorkspaceLoading } from '@/business/client/hooks/useIsWorkspaceLoading';
-import { useSwitchWorkspace } from '@/business/client/hooks/useSwitchWorkspace';
+import { useSilentSwitchWorkspace } from '@/business/client/hooks/useSwitchWorkspace';
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 
 /**
@@ -73,7 +73,10 @@ export const useWorkspaceUrlSync = (): void => {
   const workspaces = useWorkspaces();
   const activeId = useActiveWorkspaceId();
   const isLoading = useIsWorkspaceLoading();
-  const { switchWorkspace, switchToPersonal } = useSwitchWorkspace();
+  // URL is a passive source, not an explicit user intent — use the silent
+  // variant so refreshing or following a `/{slug}` link is not treated as
+  // a user-driven switch.
+  const { switchWorkspace, switchToPersonal } = useSilentSwitchWorkspace();
 
   // `useLayoutEffect` (not `useEffect`) so the workspace switch is scheduled
   // before the browser paints. With `useEffect` there is one paintable frame

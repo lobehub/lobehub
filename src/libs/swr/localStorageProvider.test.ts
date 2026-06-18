@@ -75,6 +75,24 @@ describe('createCacheProvider — tiering', () => {
     expect(keys).not.toContain('random');
   });
 
+  it('persists task-template recommendation keys in the local tier', async () => {
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope, {
+      idbPatterns: [...CACHE_TIERS.idb],
+      localPatterns: [...CACHE_TIERS.local],
+    });
+    const map = provider();
+    const key = 'taskTemplate:listDailyRecommend:ai,,3,zh-CN';
+
+    map.set(key, { data: [{ id: 1, title: 'Daily brief' }] });
+
+    await until(() => localStorage.getItem(getScopedCacheKey('s1')) !== null);
+
+    const stored = JSON.parse(localStorage.getItem(getScopedCacheKey('s1'))!);
+    expect(stored.map(([k]: [string]) => k)).toContain(key);
+    expect(await localDataCache.entriesByScope('s1')).toEqual([]);
+  });
+
   it('routes idb-tier keys to IndexedDB and reloads them on a fresh provider', async () => {
     const scope = { value: 's1' };
     const { provider } = buildProvider(scope);
@@ -193,6 +211,7 @@ describe('createCacheProvider — tiering', () => {
     expect(CACHE_TIERS.idb).toContain('message:');
     expect(CACHE_TIERS.idb).toContain('topic:');
     expect(CACHE_TIERS.local).toContain('recent:list');
+    expect(CACHE_TIERS.local).toContain('taskTemplate:');
   });
 });
 

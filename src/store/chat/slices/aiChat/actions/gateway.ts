@@ -42,7 +42,14 @@ import { createGatewayEventHandler } from './gatewayEventHandler';
 const resolveLocalDeviceId = async (agentId?: string): Promise<string | undefined> => {
   if (!isDesktop || !agentId) return undefined;
 
-  const isLocal = chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(getAgentStoreState());
+  const agentState = getAgentStoreState();
+  // Chat mode means "no execution environment" — never resolve a device, even
+  // when the target is `local`. The server enforces this too (it auto-activates
+  // a single online device), but skipping the deviceId round-trip here avoids
+  // sending an id the server would only discard.
+  if (chatConfigByIdSelectors.isChatModeById(agentId)(agentState)) return undefined;
+
+  const isLocal = chatConfigByIdSelectors.isLocalSystemEnabledById(agentId)(agentState);
   if (!isLocal) return undefined;
 
   try {

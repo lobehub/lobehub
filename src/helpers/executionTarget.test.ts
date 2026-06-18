@@ -258,6 +258,72 @@ describe('resolveExecutionPlan', () => {
     });
   });
 
+  describe('chat mode — no execution environment, even on a local target', () => {
+    it('degrades every device-capable target to none despite an online device', () => {
+      // regression: chat mode only removes local-system from the rule-layer
+      // whitelist; the device track resolved an `activeDeviceId` from the
+      // default/stored `local` target and `buildStepToolDelta` re-injected
+      // local-system. The plan now honours chat mode at the source.
+      for (const executionTarget of ['local', 'device'] as const) {
+        // both ways of expressing chat mode degrade the plan
+        for (const chatConfig of [{ enableAgentMode: false }, { toolMode: 'chat' as const }]) {
+          expect(
+            resolveExecutionPlan({
+              agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget }),
+              chatConfig,
+              isDesktop: true,
+              onlineDeviceIds: ONLINE_A,
+            }),
+          ).toEqual({ kind: 'none', target: 'none' });
+        }
+      }
+    });
+
+    it('degrades the unset desktop default (local) and sandbox to none', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: undefined,
+          chatConfig: { enableAgentMode: false },
+          isDesktop: true,
+          onlineDeviceIds: ONLINE_A,
+        }),
+      ).toEqual({ kind: 'none', target: 'none' });
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'sandbox' }),
+          chatConfig: { enableAgentMode: false },
+          isDesktop: true,
+          onlineDeviceIds: ONLINE_A,
+        }),
+      ).toEqual({ kind: 'none', target: 'none' });
+    });
+
+    it('does not degrade agent mode (toolMode wins over enableAgentMode)', () => {
+      // explicit toolMode='agent' must keep device routing even if
+      // enableAgentMode is somehow false
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'local' }),
+          chatConfig: { enableAgentMode: false, toolMode: 'agent' },
+          isDesktop: true,
+          onlineDeviceIds: ONLINE_A,
+        }),
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'local' });
+    });
+
+    it('ignores chat mode for hetero agents (they always need a runtime)', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'device' }),
+          chatConfig: { enableAgentMode: false },
+          isDesktop: false,
+          isHetero: true,
+          onlineDeviceIds: ONLINE_A,
+        }),
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'device' });
+    });
+  });
+
   describe('canUseDevice=false — hetero degrades to sandbox, never a machine', () => {
     it('sends denied hetero device-capable targets to the sandbox', () => {
       // regression: the hetero early-dispatch used to omit the policy, so an

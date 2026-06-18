@@ -1043,6 +1043,7 @@
   "workingPanel.resources.deleteTitle": "删除该文档？",
   "workingPanel.resources.deleteTitleMulti": "删除 {{count}} 项？",
   "workingPanel.resources.empty": "暂无网页。本智能体抓取的网页将显示在这里。",
+  "workingPanel.resources.emptyDocuments": "暂无文档，点击上方 + 新建文档。",
   "workingPanel.resources.error": "资源加载失败",
   "workingPanel.resources.filter.documents": "文档",
   "workingPanel.resources.filter.skills": "技能",

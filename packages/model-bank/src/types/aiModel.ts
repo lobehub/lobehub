@@ -16,7 +16,7 @@ export const AiModelTypeSchema = z.enum([
   'chat',
   'embedding',
   'tts',
-  'stt',
+  'asr',
   'image',
   'video',
   'text2music',
@@ -25,7 +25,20 @@ export const AiModelTypeSchema = z.enum([
 
 export type AiModelType = z.infer<typeof AiModelTypeSchema>;
 
+/**
+ * The speech-to-text model type was renamed from the legacy `stt` to the
+ * standard `asr`. Instead of a bulk DB data migration, persisted rows and
+ * external API inputs are normalized at the read/write boundary — only data
+ * that is actually touched gets converted, old untouched rows stay valid.
+ */
+export const normalizeAiModelType = <T extends string | null | undefined>(type: T): T =>
+  (type === 'stt' ? 'asr' : type) as T;
+
 export interface ModelAbilities {
+  /**
+   * whether model supports audio input understanding
+   */
+  audio?: boolean;
   /**
    * whether model supports file upload
    */
@@ -61,6 +74,7 @@ export interface ModelAbilities {
 }
 
 const AiModelAbilitiesSchema = z.object({
+  audio: z.boolean().optional(),
   // files: z.boolean().optional(),
   functionCall: z.boolean().optional(),
   imageOutput: z.boolean().optional(),
@@ -407,9 +421,9 @@ export interface AITTSModelCard extends AIBaseModelCard {
   type: 'tts';
 }
 
-export interface AISTTModelCard extends AIBaseModelCard {
+export interface AIASRModelCard extends AIBaseModelCard {
   pricing?: Pricing;
-  type: 'stt';
+  type: 'asr';
 }
 
 export interface AIRealtimeModelCard extends AIBaseModelCard {

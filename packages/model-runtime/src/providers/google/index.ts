@@ -12,6 +12,9 @@ import { buildGoogleMessages, buildGoogleTools } from '../../core/contextBuilder
 import { GoogleGenerativeAIStream } from '../../core/streams';
 import { LOBE_ERROR_KEY } from '../../core/streams/google';
 import {
+  type ASROptions,
+  type ASRPayload,
+  type ASRResponse,
   type ChatCompletionTool,
   type ChatMethodOptions,
   type ChatStreamPayload,
@@ -30,6 +33,7 @@ import { createGoogleImage } from './createImage';
 import { createGoogleVideo, pollGoogleVideoOperation } from './createVideo';
 import { createGoogleGenerateObject, createGoogleGenerateObjectWithTools } from './generateObject';
 import { resolveGoogleThinkingConfig } from './thinkingResolver';
+import { createGoogleTranscription } from './transcribe';
 
 const log = debug('model-runtime:google');
 
@@ -315,6 +319,32 @@ export class LobeGoogleAI implements LobeRuntimeAI {
 
   async createVideo(payload: CreateVideoPayload): Promise<CreateVideoResponse> {
     return createGoogleVideo(this.client, this.provider, payload);
+  }
+
+  /**
+   * Transcribe audio (ASR) with Gemini's native multimodal API.
+   * @see https://ai.google.dev/gemini-api/docs/audio
+   */
+  async transcribe(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse> {
+    try {
+      return await createGoogleTranscription(this.client, payload, options);
+    } catch (e) {
+      const err = e as Error;
+
+      if (isAbortError(err)) {
+        log('Request was cancelled');
+        throw AgentRuntimeError.chat({
+          error: { message: 'Request was cancelled' },
+          errorType: AgentRuntimeErrorType.ProviderBizError,
+          provider: this.provider,
+        });
+      }
+
+      log('Error: %O', err);
+      const { errorType, error } = parseGoogleErrorMessage(err.message);
+
+      throw AgentRuntimeError.chat({ error, errorType, provider: this.provider });
+    }
   }
 
   async handlePollVideoStatus(inferenceId: string) {

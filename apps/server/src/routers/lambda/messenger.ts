@@ -1,6 +1,5 @@
-import { DEFAULT_INBOX_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, ne, or } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
@@ -12,6 +11,7 @@ import {
   isMessengerPlatformEnabled,
   type MessengerPlatform,
 } from '@/config/messenger';
+import { AgentModel } from '@/database/models/agent';
 import {
   MessengerAccountLinkConflictError,
   MessengerAccountLinkModel,
@@ -23,7 +23,6 @@ import { RbacModel } from '@/database/models/rbac';
 import { WorkspaceModel } from '@/database/models/workspace';
 import { agents, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
@@ -122,6 +121,12 @@ const messengerProcedure = authedProcedure.use(serverDatabase).use(async (opts) 
       // userId), and per-agent authorization happens in-handler via
       // `resolveAuthorizedAgentScope`.
       messengerLinkModel: new MessengerAccountLinkModel(ctx.serverDB, ctx.userId),
+      // The bindable-agents scope is request-driven — the cascading scope
+      // picker passes the workspace via input, not the ambient header — so
+      // expose a workspace-parameterized AgentModel factory rather than a
+      // single pre-scoped instance.
+      getAgentModel: (workspaceId?: string | null) =>
+        new AgentModel(ctx.serverDB, ctx.userId, workspaceId ?? undefined),
     },
   });
 });
@@ -454,44 +459,10 @@ export const messengerRouter = router({
         }
       }
 
-      const rows = await serverDB
-        .select({
-          avatar: agents.avatar,
-          backgroundColor: agents.backgroundColor,
-          id: agents.id,
-          slug: agents.slug,
-          title: agents.title,
-        })
-        .from(agents)
-        .where(
-          and(
-            buildWorkspaceWhere({ userId, workspaceId: workspaceId ?? undefined }, agents),
-            or(ne(agents.virtual, true), eq(agents.slug, INBOX_SESSION_ID)),
-          ),
-        )
-        .orderBy(desc(agents.updatedAt));
-
-      const mapped = rows
-        .filter((row) => row.id)
-        .map((row) => ({
-          avatar: row.avatar || (row.slug === INBOX_SESSION_ID ? DEFAULT_INBOX_AVATAR : null),
-          backgroundColor: row.backgroundColor,
-          id: row.id,
-          slug: row.slug,
-          title: row.title || (row.slug === INBOX_SESSION_ID ? 'LobeAI' : null),
-        }));
-
-      // Pin the inbox/LobeAI agent to the top regardless of updatedAt — it's
-      // the implicit "default" agent and should always be the first option.
-      const inboxIdx = mapped.findIndex((row) => row.slug === INBOX_SESSION_ID);
-      if (inboxIdx > 0) {
-        const [inbox] = mapped.splice(inboxIdx, 1);
-        mapped.unshift(inbox);
-      }
-      return mapped.map(({ slug, ...rest }) => ({
-        ...rest,
-        isInbox: slug === INBOX_SESSION_ID,
-      }));
+      // Inbox meta fallback, the virtual-or-inbox filter, inbox pinning, and the
+      // `isInbox` flag all live in the model. Blank non-inbox titles stay null
+      // here so the web picker can apply its own i18n default.
+      return ctx.getAgentModel(workspaceId).listMessengerBindableAgents();
     }),
 
   /**

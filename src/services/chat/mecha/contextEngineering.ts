@@ -69,7 +69,7 @@ import {
 } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 
-import { isCanUseVideo, isCanUseVision } from '../helper';
+import { isCanUseAudio, isCanUseVideo, isCanUseVision } from '../helper';
 import { combineUserMemoryData, resolveTopicMemories, resolveUserPersona } from './memoryManager';
 import { resolveClientSkills } from './skillEngineering';
 
@@ -670,6 +670,7 @@ export const contextEngineering = async ({
 
     // Capability injection
     capabilities: {
+      isCanUseAudio,
       isCanUseFC,
       isCanUseVideo,
       isCanUseVision,

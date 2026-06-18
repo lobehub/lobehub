@@ -28,7 +28,11 @@ import { ToolsEngine } from '@lobechat/context-engine';
 import { type RuntimeEnvMode, type RuntimePlatform } from '@lobechat/types';
 import debug from 'debug';
 
-import { executionTargetToRuntimeMode, resolveExecutionTarget } from '@/helpers/executionTarget';
+import {
+  executionTargetToRuntimeMode,
+  resolveExecutionTarget,
+  resolveToolMode,
+} from '@/helpers/executionTarget';
 import {
   buildAllowedBuiltinTools,
   DEVICE_TOOL_IDENTIFIERS,
@@ -170,9 +174,7 @@ export const createServerAgentToolsEngine = (
   const isSearchEnabled = searchMode !== 'off';
   // Tool mode: explicit `toolMode` wins; otherwise derive from `enableAgentMode`
   // (undefined = agent). `custom` = toolset is exactly the agent's plugins.
-  const toolMode: 'agent' | 'chat' | 'custom' =
-    agentConfig.chatConfig?.toolMode ??
-    (agentConfig.chatConfig?.enableAgentMode === false ? 'chat' : 'agent');
+  const toolMode = resolveToolMode(agentConfig.chatConfig ?? undefined);
   const isChatMode = toolMode === 'chat';
   const isCustomMode = toolMode === 'custom';
 

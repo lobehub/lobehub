@@ -4,19 +4,21 @@ import {
   type RecentTopicGroupMember,
 } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { eq, inArray } from 'drizzle-orm';
+import { inArray } from 'drizzle-orm';
 import { after } from 'next/server';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AgentModel } from '@/database/models/agent';
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { ChatGroupModel } from '@/database/models/chatGroup';
 import { MessageModel } from '@/database/models/message';
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
 import { AgentMigrationRepo } from '@/database/repositories/agentMigration';
 import { TopicImporterRepo } from '@/database/repositories/topicImporter';
-import { agents, chatGroups, chatGroupsAgents } from '@/database/schemas';
+import { chatGroups } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { type BatchTaskResult } from '@/types/service';
@@ -35,7 +37,9 @@ const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
   return opts.next({
     ctx: {
       agentMigrationRepo: new AgentMigrationRepo(ctx.serverDB, ctx.userId, wsId),
+      agentModel: new AgentModel(ctx.serverDB, ctx.userId, wsId),
       agentOperationModel: new AgentOperationModel(ctx.serverDB, ctx.userId, wsId),
+      chatGroupModel: new ChatGroupModel(ctx.serverDB, ctx.userId, wsId),
       topicImporterRepo: new TopicImporterRepo(ctx.serverDB, ctx.userId, wsId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
       topicShareModel: new TopicShareModel(ctx.serverDB, ctx.userId, wsId),
@@ -445,22 +449,14 @@ export const topicRouter = router({
       // Collect all agentIds to fetch agent info
       const allAgentIds = [...new Set(topicAgentIdMap.values())];
 
-      // Batch query agent info
+      // Batch query agent info (already normalized for the inbox agent)
       const agentInfoMap = new Map<
         string,
         { avatar: string | null; backgroundColor: string | null; id: string; title: string | null }
       >();
 
       if (allAgentIds.length > 0) {
-        const agentInfos = await ctx.serverDB
-          .select({
-            avatar: agents.avatar,
-            backgroundColor: agents.backgroundColor,
-            id: agents.id,
-            title: agents.title,
-          })
-          .from(agents)
-          .where(inArray(agents.id, allAgentIds));
+        const agentInfos = await ctx.agentModel.getAgentAvatarsByIds(allAgentIds);
 
         for (const agent of agentInfos) {
           agentInfoMap.set(agent.id, agent);
@@ -481,28 +477,9 @@ export const topicRouter = router({
           .from(chatGroups)
           .where(inArray(chatGroups.id, allGroupIds));
 
-        // Query group member agents (get avatar info)
-        const groupMembersRaw = await ctx.serverDB
-          .select({
-            agentAvatar: agents.avatar,
-            agentBackgroundColor: agents.backgroundColor,
-            chatGroupId: chatGroupsAgents.chatGroupId,
-            order: chatGroupsAgents.order,
-          })
-          .from(chatGroupsAgents)
-          .leftJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
-          .where(inArray(chatGroupsAgents.chatGroupId, allGroupIds));
-
-        // Group members by chatGroupId
-        const groupMembersMap = new Map<string, RecentTopicGroupMember[]>();
-        for (const member of groupMembersRaw) {
-          const members = groupMembersMap.get(member.chatGroupId) || [];
-          members.push({
-            avatar: member.agentAvatar,
-            backgroundColor: member.agentBackgroundColor,
-          });
-          groupMembersMap.set(member.chatGroupId, members);
-        }
+        // Query group member avatars (already normalized for the inbox agent)
+        const groupMembersMap: Map<string, RecentTopicGroupMember[]> =
+          await ctx.chatGroupModel.getMemberAvatarsByGroupIds(allGroupIds);
 
         // Build group info map
         for (const group of chatGroupInfos) {

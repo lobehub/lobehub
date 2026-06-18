@@ -54,6 +54,8 @@ export interface FileContextConfig {
 export interface MessageContentConfig {
   /** File context configuration */
   fileContext?: FileContextConfig;
+  /** Function to check if audio input is supported */
+  isCanUseAudio?: (model: string, provider: string) => boolean | undefined;
   /** Function to check if video is supported */
   isCanUseVideo?: (model: string, provider: string) => boolean | undefined;
   /** Function to check if vision is supported */
@@ -65,6 +67,9 @@ export interface MessageContentConfig {
 }
 
 export interface UserMessageContentPart {
+  audio_url?: {
+    url: string;
+  };
   googleThoughtSignature?: string;
   image_url?: {
     detail?: string;
@@ -73,7 +78,7 @@ export interface UserMessageContentPart {
   signature?: string;
   text?: string;
   thinking?: string;
-  type: 'text' | 'image_url' | 'thinking' | 'video_url';
+  type: 'text' | 'image_url' | 'thinking' | 'video_url' | 'audio_url';
   video_url?: {
     url: string;
   };
@@ -150,10 +155,12 @@ export class MessageContentProcessor extends BaseProcessor {
     // Check if images, videos or files need processing
     const hasImages = message.imageList && message.imageList.length > 0;
     const hasVideos = message.videoList && message.videoList.length > 0;
+    const hasAudios = message.audioList && message.audioList.length > 0;
     const hasFiles = message.fileList && message.fileList.length > 0;
 
     const canUseVision = !!this.config.isCanUseVision?.(this.config.model, this.config.provider);
     const canUseVideo = !!this.config.isCanUseVideo?.(this.config.model, this.config.provider);
+    const canUseAudio = !!this.config.isCanUseAudio?.(this.config.model, this.config.provider);
 
     // Historical messages may already be stored in multimodal parts form
     // (content is an array of {type, text|image_url|video_url}). Those parts
@@ -166,7 +173,7 @@ export class MessageContentProcessor extends BaseProcessor {
     const needsArrayRewrite = contentIsArray && arrayImageUrlCount > 0 && !canUseVision;
 
     // Fast path: nothing to transform — plain text content passes through.
-    if (!hasImages && !hasVideos && !hasFiles && !needsArrayRewrite) {
+    if (!hasImages && !hasVideos && !hasAudios && !hasFiles && !needsArrayRewrite) {
       return {
         ...message,
         content: message.content,
@@ -209,12 +216,13 @@ export class MessageContentProcessor extends BaseProcessor {
       textContent = textContent ? `${textContent}\n\n${placeholders}` : placeholders;
     }
 
-    // Add file context (if file context is enabled and has files, images or videos)
-    if ((hasFiles || hasImages || hasVideos) && this.config.fileContext?.enabled) {
+    // Add file context (if file context is enabled and has files, images, videos or audios)
+    if ((hasFiles || hasImages || hasVideos || hasAudios) && this.config.fileContext?.enabled) {
       const filesContext = filesPrompts({
         // File access URLs are needed by sandbox/code tools that fetch attachments from text.
         // Call sites can still disable them for environments such as desktop local files.
         addUrl: this.config.fileContext.includeFileUrl ?? true,
+        audioList: message.audioList || [],
         fileList: message.fileList,
         imageList: message.imageList || [],
         messageId: message.id,
@@ -253,18 +261,27 @@ export class MessageContentProcessor extends BaseProcessor {
       contentParts.push(...videoContentParts);
     }
 
+    // Process audio content
+    if (hasAudios && canUseAudio) {
+      const audioContentParts = await this.processAudioList(message.audioList || []);
+      contentParts.push(...audioContentParts);
+    }
+
     // Explicitly return fields, keeping only necessary message fields
-    const hasFileContext = (hasFiles || hasImages || hasVideos) && this.config.fileContext?.enabled;
+    const hasFileContext =
+      (hasFiles || hasImages || hasVideos || hasAudios) && this.config.fileContext?.enabled;
     const hasVisionContent = (hasImages || arrayImageUrlCount > 0) && canUseVision;
     const hasVideoContent = hasVideos && canUseVideo;
+    const hasAudioContent = hasAudios && canUseAudio;
 
-    // If only text content and no file context added and no vision/video content, return plain text
+    // If only text content and no file context added and no vision/video/audio content, return plain text
     if (
       contentParts.length === 1 &&
       contentParts[0].type === 'text' &&
       !hasFileContext &&
       !hasVisionContent &&
-      !hasVideoContent
+      !hasVideoContent &&
+      !hasAudioContent
     ) {
       return {
         content: contentParts[0].text,
@@ -503,6 +520,22 @@ export class MessageContentProcessor extends BaseProcessor {
   }
 
   /**
+   * Process audio list
+   */
+  private async processAudioList(audioList: any[]): Promise<UserMessageContentPart[]> {
+    if (!audioList || audioList.length === 0) {
+      return [];
+    }
+
+    return audioList.map((audio) => {
+      return {
+        audio_url: { url: audio.url },
+        type: 'audio_url',
+      } as UserMessageContentPart;
+    });
+  }
+
+  /**
    * Validate content part format
    */
   private validateContentPart(part: UserMessageContentPart): boolean {
@@ -520,6 +553,9 @@ export class MessageContentProcessor extends BaseProcessor {
       }
       case 'video_url': {
         return !!(part.video_url && part.video_url.url);
+      }
+      case 'audio_url': {
+        return !!(part.audio_url && part.audio_url.url);
       }
       default: {
         return false;
