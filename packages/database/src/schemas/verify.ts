@@ -2,13 +2,10 @@ import type { ToulminVerdict, VerifyRubricConfig } from '@lobechat/types';
 import {
   verifierTypes,
   verifyCheckResultStatuses,
-  verifyEvidenceCaptureSources,
-  verifyEvidenceTypes,
   verifyOnFailStrategies,
   verifyUserDecisions,
   verifyVerdicts,
 } from '@lobechat/types';
-import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
   boolean,
   index,
@@ -253,66 +250,3 @@ export const verifyCheckResults = pgTable(
 
 export type NewVerifyCheckResult = typeof verifyCheckResults.$inferInsert;
 export type VerifyCheckResultItem = typeof verifyCheckResults.$inferSelect;
-
-// ============================================
-// 5. verify_evidence — captured artifacts backing a check result (the evidence tree)
-// ============================================
-export const verifyEvidence = pgTable(
-  'verify_evidence',
-  {
-    id: uuid('id').defaultRandom().primaryKey().notNull(),
-
-    /** The check result this evidence supports. */
-    checkResultId: uuid('check_result_id')
-      .references(() => verifyCheckResults.id, { onDelete: 'cascade' })
-      .notNull(),
-
-    /** Media kind — screenshot / gif / video / text / dom_snapshot / transcript. */
-    type: text('type', { enum: verifyEvidenceTypes }).notNull(),
-
-    /** Storage location (e.g. S3 key) of the raw artifact. */
-    storageKey: text('storage_key').notNull(),
-
-    // ---- Metadata ----
-    mimeType: text('mime_type'),
-    width: integer('width'),
-    height: integer('height'),
-    durationMs: integer('duration_ms'),
-    byteSize: integer('byte_size'),
-    /** Integrity checksum of the stored artifact. */
-    checksum: text('checksum'),
-
-    // ---- Provenance ----
-    capturedBy: text('captured_by', { enum: verifyEvidenceCaptureSources }),
-    capturedAt: timestamptz('captured_at'),
-
-    /** Human-readable caption, e.g. "首页首屏完整渲染". */
-    description: text('description'),
-
-    /**
-     * Evidence chain — points to a parent artifact to form an evidence tree
-     * (self-reference). `set null` keeps children when a parent is removed.
-     */
-    parentEvidenceId: uuid('parent_evidence_id').references((): AnyPgColumn => verifyEvidence.id, {
-      onDelete: 'set null',
-    }),
-
-    // ---- Standard ownership ----
-    userId: text('user_id')
-      .references(() => users.id, { onDelete: 'cascade' })
-      .notNull(),
-    /** Workspace this evidence belongs to (mirrors the result) — scopes listing + cascade. */
-    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
-
-    createdAt: timestamptz('created_at').notNull().defaultNow(),
-  },
-  (t) => [
-    index('verify_evidence_check_result_id_idx').on(t.checkResultId),
-    index('verify_evidence_parent_evidence_id_idx').on(t.parentEvidenceId),
-    index('verify_evidence_user_id_idx').on(t.userId),
-    index('verify_evidence_workspace_id_idx').on(t.workspaceId),
-  ],
-);
-
-export type NewVerifyEvidence = typeof verifyEvidence.$inferInsert;
-export type VerifyEvidenceItem = typeof verifyEvidence.$inferSelect;
