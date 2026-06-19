@@ -24,6 +24,9 @@ const invalidErrorType = 'InvalidProviderAPIKey';
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: vi.fn().mockResolvedValue([]),
+}));
 
 let instance: LobeOpenAICompatibleRuntime;
 
@@ -1104,7 +1107,7 @@ describe('LobeOpenAICompatibleFactory', () => {
         }
       });
 
-      it('should detect QuotaLimitReached from error message text', async () => {
+      it('should detect RateLimitExceeded from error message text', async () => {
         const apiError = new OpenAI.APIError(
           429,
           {
@@ -1134,7 +1137,7 @@ describe('LobeOpenAICompatibleFactory', () => {
               },
               status: 429,
             },
-            errorType: AgentRuntimeErrorType.QuotaLimitReached,
+            errorType: AgentRuntimeErrorType.RateLimitExceeded,
             message: expect.any(String),
             provider,
           });

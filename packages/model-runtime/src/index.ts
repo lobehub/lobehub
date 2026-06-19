@@ -1,4 +1,3 @@
-export * from './const/models';
 export * from './core/BaseAI';
 export { pruneReasoningPayload } from './core/contextBuilders/openai';
 export { mergeModelRuntimeHooks } from './core/mergeHooks';
@@ -60,6 +59,7 @@ export { LobeNewAPIAI } from './providers/newapi';
 export { LobeOllamaAI } from './providers/ollama';
 export { LobeOllamaCloudAI } from './providers/ollamacloud';
 export { LobeOpenAI } from './providers/openai';
+export * from './providers/openai/openaiModelId';
 export { LobeOpenRouterAI } from './providers/openrouter';
 export { LobePerplexityAI } from './providers/perplexity';
 export { LobeQwenAI } from './providers/qwen';

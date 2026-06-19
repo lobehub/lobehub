@@ -62,6 +62,7 @@ describe('LobeAzureOpenAI', () => {
       const mockResponse = Promise.resolve(mockStream);
 
       (instance['client'].chat.completions.create as Mock).mockResolvedValue(mockResponse);
+      vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(undefined);
 
       // Act
       const result = await instance.chat({

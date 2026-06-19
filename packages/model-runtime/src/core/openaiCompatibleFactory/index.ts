@@ -8,8 +8,12 @@ import type { ClientOptions } from 'openai';
 import OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
-import { isGPT5ProResponsesModel, responsesAPIModels } from '../../const/models';
 import { ErrorClassifier } from '../../errors';
+import {
+  isGPT5ProResponsesModel,
+  isResponsesAPIModel,
+  supportsGPT5ResponsesReasoningEffortNone,
+} from '../../providers/openai/openaiModelId';
 import type {
   ASROptions,
   ASRPayload,
@@ -124,9 +128,6 @@ const getGenerateObjectReasoningParams = ({
   ...(reasoning_effort && thinking?.type !== 'disabled' ? { reasoning_effort } : {}),
 });
 
-const supportsResponsesReasoningEffortNone = (model: string): boolean =>
-  /(?:^|\/)gpt-5\.[1-9]\d*(?:-(?!pro(?:-|$))|$)/.test(model);
-
 const getGenerateObjectResponsesReasoningParams = ({
   model,
   reasoning_effort,
@@ -137,7 +138,7 @@ const getGenerateObjectResponsesReasoningParams = ({
   }
 
   if (thinking?.type === 'disabled') {
-    return supportsResponsesReasoningEffortNone(model) ? { reasoning: { effort: 'none' } } : {};
+    return supportsGPT5ResponsesReasoningEffortNone(model) ? { reasoning: { effort: 'none' } } : {};
   }
 
   return reasoning_effort && reasoning_effort !== 'max'
@@ -371,10 +372,10 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
       const log = debug(`${this.logPrefix}:shouldUseResponsesAPI`);
 
-      // Priority 0: Check built-in responsesAPIModels FIRST (highest priority)
-      // These models MUST use Responses API regardless of user settings
-      if (model && responsesAPIModels.has(model)) {
-        log('using Responses API: model %s in built-in responsesAPIModels (forced)', model);
+      // Priority 0: Check built-in Responses API model rules FIRST (highest priority)
+      // These models MUST use Responses API regardless of user settings.
+      if (model && isResponsesAPIModel(model)) {
+        log('using Responses API: model %s matches built-in Responses API model rules', model);
         return true;
       }
 
@@ -856,7 +857,6 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       options: GenerateObjectOptions | undefined,
       usagePayload: Parameters<typeof convertOpenAIUsage>[1],
     ) {
-      const log = debug(`${this.logPrefix}:generateObject`);
       const { messages, schema, model } = payload;
 
       // Apply schema transformation if configured
@@ -1286,7 +1286,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         return AgentRuntimeError.chat({
           endpoint: desensitizedEndpoint,
           error: errorResult,
-          errorType: AgentRuntimeErrorType.QuotaLimitReached,
+          errorType: AgentRuntimeErrorType.RateLimitExceeded,
           message,
           provider: this.id,
         });

@@ -4,11 +4,16 @@ import type { Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as debugStreamModule from '../../utils/debugStream';
+import * as getModelPricingModule from '../../utils/getModelPricing';
 import officalOpenAIModels from './fixtures/openai-models.json';
 import { LobeOpenAI, params } from './index';
 
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
+vi.spyOn(getModelPricingModule, 'getModelPricing').mockResolvedValue(undefined);
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: vi.fn().mockResolvedValue([]),
+}));
 
 // Mock fetch for most tests, but will be restored for real network tests
 const mockFetch = vi.fn();
@@ -273,10 +278,10 @@ describe('LobeOpenAI', () => {
       expect(createCall.model).toBe('o1-pro');
     });
 
-    it('should use responses API for gpt-5.5', async () => {
+    it('should use responses API for future GPT-5 minor models', async () => {
       const payload = {
         messages: [{ content: 'Hello', role: 'user' as const }],
-        model: 'gpt-5.5',
+        model: 'gpt-5.6',
         temperature: 0.7,
       };
 
@@ -284,7 +289,7 @@ describe('LobeOpenAI', () => {
 
       expect(instance['client'].responses.create).toHaveBeenCalled();
       const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
-      expect(createCall.model).toBe('gpt-5.5');
+      expect(createCall.model).toBe('gpt-5.6');
     });
 
     it('should use responses API when enabledSearch is true', async () => {
@@ -398,10 +403,10 @@ describe('LobeOpenAI', () => {
       expect(createCall.reasoning).toEqual({ effort: 'medium', summary: 'auto' });
     });
 
-    it('should handle prunePrefixes models without computer-use truncation', async () => {
+    it('should handle reasoning payload models without computer-use truncation', async () => {
       const payload = {
         messages: [{ content: 'Hello', role: 'user' as const }],
-        model: 'o3-pro', // prunePrefixes 模型但非 computer-use，且在 responsesAPIModels 中
+        model: 'o3-pro',
         temperature: 0.7,
       };
 
@@ -438,10 +443,10 @@ describe('LobeOpenAI', () => {
       expect(createCall.reasoning).toEqual({ effort: 'high', summary: 'auto' });
     });
 
-    it('should set reasoning.effort to high for gpt-5.4-pro models', async () => {
+    it('should set reasoning.effort to high for future gpt-5.x-pro models', async () => {
       const payload = {
         messages: [{ content: 'Hello', role: 'user' as const }],
-        model: 'gpt-5.4-pro',
+        model: 'gpt-5.6-pro',
         temperature: 0.7,
       };
 
@@ -493,27 +498,6 @@ describe('LobeOpenAI', () => {
       const createCall = (instance['client'].responses.create as Mock).mock.calls[0][0];
       expect(createCall.max_output_tokens).toBe(4096);
       expect(createCall.max_tokens).toBeUndefined();
-    });
-  });
-
-  describe('supportsFlexTier', () => {
-    // Note: enableServiceTierFlex is read at module load time
-    // These tests verify the logic would work if env var was set at module load
-    it('should verify flex tier logic for supported models', () => {
-      // Since enableServiceTierFlex is read at module load time,
-      // we can't dynamically test it without reloading the module.
-      // Instead, we verify that the supportsFlexTier function logic is correct
-      // by checking the model patterns it should support.
-
-      const flexSupportedModels = ['gpt-5', 'o3', 'o4-mini'];
-
-      // Should support these models
-      expect(flexSupportedModels.some((m) => 'gpt-5-turbo'.startsWith(m))).toBe(true);
-      expect(flexSupportedModels.some((m) => 'o3-pro'.startsWith(m))).toBe(true);
-      expect(flexSupportedModels.some((m) => 'o4-mini'.startsWith(m))).toBe(true);
-
-      // Should NOT support o3-mini (explicitly excluded)
-      expect('o3-mini'.startsWith('o3-mini')).toBe(true);
     });
   });
 
