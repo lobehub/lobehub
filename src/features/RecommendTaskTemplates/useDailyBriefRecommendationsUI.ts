@@ -214,9 +214,11 @@ export function useDailyBriefRecommendationsUI(
     return sources;
   }, [templates]);
   const useFetchUserComposioConnections = useToolStore((s) => s.useFetchUserComposioConnections);
-  const useFetchLobehubSkillConnections = useToolStore((s) => s.useFetchLobehubSkillConnections);
+  const useFetchLobehubConnectorConnections = useToolStore(
+    (s) => s.useFetchLobehubSkillConnections,
+  );
   useFetchUserComposioConnections(requiredSources.has('composio'));
-  useFetchLobehubSkillConnections(requiredSources.has('lobehub'));
+  useFetchLobehubConnectorConnections(requiredSources.has('lobehub'));
 
   const displayMode = resolveDailyBriefRecommendationDisplayMode({
     canFetchRecommendations,

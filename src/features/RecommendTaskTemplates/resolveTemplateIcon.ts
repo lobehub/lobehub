@@ -53,9 +53,9 @@ export const resolveTemplateIcon = (
 };
 
 /**
- * The skill spec whose visual the card's main icon already represents.
+ * The connector spec whose visual the card's main icon already represents.
  *
- * Mirrors the self/skill branches of `resolveTemplateIcon` so callers can hide
+ * Mirrors the self/connector branches of `resolveTemplateIcon` so callers can hide
  * that provider from inline lists (e.g. the auth row) to avoid showing the
  * same logo twice on a card. Returns `undefined` when the main icon falls back
  * to the interest icon or `Sparkles` — those carry no provider semantics.

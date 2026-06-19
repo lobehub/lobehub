@@ -5,7 +5,7 @@ import type {
 } from '@lobechat/const';
 import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 
-export interface SkillProviderMeta {
+export interface ConnectorProviderMeta {
   icon: LobehubSkillProviderType['icon'];
   identifier: string;
   label: string;
@@ -14,7 +14,7 @@ export interface SkillProviderMeta {
 
 export const getProviderMeta = (
   spec: TaskTemplateConnectorReference,
-): SkillProviderMeta | undefined => {
+): ConnectorProviderMeta | undefined => {
   if (spec.source === 'lobehub') {
     const p = getLobehubSkillProviderById(spec.identifier);
     if (!p) return undefined;
@@ -28,7 +28,7 @@ export const getProviderMeta = (
 export const findNextUnconnectedSpec = (
   specs: TaskTemplateConnectorReference[] | undefined,
   isConnected: (spec: TaskTemplateConnectorReference) => boolean,
-): SkillProviderMeta | undefined => {
+): ConnectorProviderMeta | undefined => {
   if (!specs || specs.length === 0) return undefined;
   for (const spec of specs) {
     if (isConnected(spec)) continue;

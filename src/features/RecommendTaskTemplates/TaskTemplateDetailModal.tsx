@@ -9,8 +9,8 @@ import { Clock, X } from 'lucide-react';
 import { memo, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ConnectorAuthRow } from './ConnectorAuthRow';
 import { resolveTemplateIcon } from './resolveTemplateIcon';
-import { SkillAuthRow } from './SkillAuthRow';
 import { INTEREST_ICON_MAP, TemplateBriefIcon } from './TemplateBriefIcon';
 import { useScheduleText } from './useScheduleText';
 import { useTaskTemplateCreate } from './useTaskTemplateCreate';
@@ -83,7 +83,7 @@ const TaskTemplateDetailContent = memo<TaskTemplateDetailContentProps>(
         {visibleAuthSpecs.length > 0 && (
           <Flexbox gap={6}>
             {visibleAuthSpecs.map((spec) => (
-              <SkillAuthRow
+              <ConnectorAuthRow
                 disabled={disabled}
                 key={`${spec.source}:${spec.identifier}`}
                 spec={spec}

@@ -4,14 +4,14 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SkillAuthRow } from './SkillAuthRow';
+import { ConnectorAuthRow } from './ConnectorAuthRow';
 
 const connectMock = vi.hoisted(() => vi.fn());
 
-vi.mock('./useSkillConnection', () => ({
-  SkillConnectionMarketAuthRequiredError: class SkillConnectionMarketAuthRequiredError extends Error {},
-  SkillConnectionPopupBlockedError: class SkillConnectionPopupBlockedError extends Error {},
-  useSkillConnection: () => ({
+vi.mock('./useConnectorConnection', () => ({
+  ConnectorConnectionMarketAuthRequiredError: class ConnectorConnectionMarketAuthRequiredError extends Error {},
+  ConnectorConnectionPopupBlockedError: class ConnectorConnectionPopupBlockedError extends Error {},
+  useConnectorConnection: () => ({
     connect: connectMock,
     isAllConnected: false,
     isConnecting: false,
@@ -26,14 +26,14 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-describe('SkillAuthRow', () => {
+describe('ConnectorAuthRow', () => {
   beforeEach(() => {
     connectMock.mockReset();
   });
 
   it('disables provider connection when template actions are disabled', () => {
     render(
-      <SkillAuthRow
+      <ConnectorAuthRow
         disabled
         spec={{ identifier: 'gmail', source: 'composio' }}
         onError={vi.fn()}

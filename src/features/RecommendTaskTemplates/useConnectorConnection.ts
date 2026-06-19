@@ -11,13 +11,13 @@ import { lobehubSkillStoreSelectors } from '@/store/tool/slices/lobehubSkillStor
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 import { useUserStore } from '@/store/user';
 
-import type { SkillProviderMeta } from './providerMeta';
+import type { ConnectorProviderMeta } from './providerMeta';
 import { findNextUnconnectedSpec } from './providerMeta';
 
 // Re-exported for callers that prefer a single import surface for the hook +
 // its types/helpers. The pure helpers themselves live in `./providerMeta` so
 // unit tests can import them without dragging in the store-dependency graph.
-export type { SkillProviderMeta } from './providerMeta';
+export type { ConnectorProviderMeta } from './providerMeta';
 export { findNextUnconnectedSpec, getProviderMeta } from './providerMeta';
 
 const POLL_INTERVAL_MS = 1000;
@@ -27,18 +27,18 @@ const POLL_TIMEOUT_MS = 15_000;
 const OAUTH_OVERALL_TIMEOUT_MS = 5 * 60 * 1000;
 
 /** Thrown when the browser blocks the OAuth popup so callers can surface a clear hint. */
-export class SkillConnectionPopupBlockedError extends Error {
+export class ConnectorConnectionPopupBlockedError extends Error {
   constructor() {
     super('Browser popup blocked');
-    this.name = 'SkillConnectionPopupBlockedError';
+    this.name = 'ConnectorConnectionPopupBlockedError';
   }
 }
 
-/** Thrown when connecting a LobeHub Skill first needs Market auth. */
-export class SkillConnectionMarketAuthRequiredError extends Error {
+/** Thrown when connecting a LobeHub connector first needs Market auth. */
+export class ConnectorConnectionMarketAuthRequiredError extends Error {
   constructor() {
-    super('Market auth required before connecting LobeHub Skill');
-    this.name = 'SkillConnectionMarketAuthRequiredError';
+    super('Market auth required before connecting LobeHub connector');
+    this.name = 'ConnectorConnectionMarketAuthRequiredError';
   }
 }
 
@@ -52,23 +52,23 @@ const isMarketUnauthorizedError = (error: unknown): boolean => {
   return data.httpStatus === 401 || data.code === 'UNAUTHORIZED';
 };
 
-type ConnectTarget = Pick<SkillProviderMeta, 'identifier' | 'source'>;
+type ConnectTarget = Pick<ConnectorProviderMeta, 'identifier' | 'source'>;
 
-export interface UseSkillConnectionResult {
+export interface UseConnectorConnectionResult {
   connect: () => Promise<void>;
   isAllConnected: boolean;
   isConnecting: boolean;
   /** True when there is at least one spec and at least one of them is not yet connected. */
   needsConnect: boolean;
   /** First spec in input order whose connection is missing. undefined when all connected or specs is empty. */
-  nextUnconnected: SkillProviderMeta | undefined;
+  nextUnconnected: ConnectorProviderMeta | undefined;
 }
 
 /**
- * Shared predicate for both `useSkillConnection` and ad-hoc filtering
+ * Shared predicate for both `useConnectorConnection` and ad-hoc filtering
  * (e.g. hiding already-connected providers from the inline auth list).
  */
-export const useIsSkillConnected = () => {
+export const useIsConnectorConnected = () => {
   const lobehubServers = useToolStore(lobehubSkillStoreSelectors.getServers);
   const composioServers = useToolStore(composioStoreSelectors.getServers);
 
@@ -87,16 +87,16 @@ export const useIsSkillConnected = () => {
   );
 };
 
-export const useSkillConnection = (
+export const useConnectorConnection = (
   specs: TaskTemplateConnectorReference[] | undefined,
-): UseSkillConnectionResult => {
+): UseConnectorConnectionResult => {
   const getLobehubAuth = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
   const checkLobehubStatus = useToolStore((s) => s.checkLobehubSkillStatus);
   const createComposioConnection = useToolStore((s) => s.createComposioConnection);
   const refreshComposioConnectionStatus = useToolStore((s) => s.refreshComposioConnectionStatus);
   const { isAuthenticated: isMarketAuthenticated, signIn: signInMarket } = useMarketAuth();
 
-  const isConnectedFor = useIsSkillConnected();
+  const isConnectedFor = useIsConnectorConnected();
 
   const nextUnconnected = useMemo(
     () => findNextUnconnectedSpec(specs, isConnectedFor),
@@ -236,7 +236,7 @@ export const useSkillConnection = (
         // Popup blocked — abandon the flow so the caller can surface a clear
         // error instead of polling forever for an auth that never started.
         setIsWaitingAuth(false);
-        throw new SkillConnectionPopupBlockedError();
+        throw new ConnectorConnectionPopupBlockedError();
       }
       oauthWindowRef.current = oauthWindow;
       startWindowMonitor(oauthWindow, target);
@@ -244,7 +244,7 @@ export const useSkillConnection = (
     [cleanup, startWindowMonitor],
   );
 
-  // Only LobeHub Skill OAuth signals completion via postMessage; Composio relies on polling.
+  // Only LobeHub connector OAuth signals completion via postMessage; Composio relies on polling.
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
@@ -275,7 +275,7 @@ export const useSkillConnection = (
           } catch {
             // MarketAuthProvider already surfaces auth failures; task templates only need to stop this run.
           }
-          throw new SkillConnectionMarketAuthRequiredError();
+          throw new ConnectorConnectionMarketAuthRequiredError();
         }
         // Skip redirectUri on desktop (app:// protocol) since the system browser can't navigate to it
         const redirectUri = window.location.protocol.startsWith('http')
@@ -304,11 +304,11 @@ export const useSkillConnection = (
         throw new Error('Composio server is missing an OAuth URL');
       }
     } catch (error) {
-      if (error instanceof SkillConnectionMarketAuthRequiredError) throw error;
+      if (error instanceof ConnectorConnectionMarketAuthRequiredError) throw error;
       if (next.source === 'lobehub' && isMarketUnauthorizedError(error)) {
-        throw new SkillConnectionMarketAuthRequiredError();
+        throw new ConnectorConnectionMarketAuthRequiredError();
       }
-      console.error('[useSkillConnection] Failed to connect:', error);
+      console.error('[useConnectorConnection] Failed to connect:', error);
       throw error;
     } finally {
       isConnectingRef.current = false;

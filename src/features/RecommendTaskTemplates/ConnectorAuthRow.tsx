@@ -6,27 +6,27 @@ import { useTranslation } from 'react-i18next';
 
 import { getProviderMeta } from './providerMeta';
 import {
-  SkillConnectionMarketAuthRequiredError,
-  SkillConnectionPopupBlockedError,
-  useSkillConnection,
-} from './useSkillConnection';
+  ConnectorConnectionMarketAuthRequiredError,
+  ConnectorConnectionPopupBlockedError,
+  useConnectorConnection,
+} from './useConnectorConnection';
 
-interface SkillAuthRowProps {
+interface ConnectorAuthRowProps {
   disabled?: boolean;
   onError: (error: unknown) => void;
   spec: TaskTemplateConnectorReference;
 }
 
 /**
- * Inline row for a single required/optional skill the user has not yet authorized.
+ * Inline row for a single required/optional connector the user has not yet authorized.
  * Renders `null` once the provider is connected so the caller can collapse the
  * surrounding container without extra bookkeeping.
  */
-export const SkillAuthRow = memo<SkillAuthRowProps>(({ disabled, spec, onError }) => {
+export const ConnectorAuthRow = memo<ConnectorAuthRowProps>(({ disabled, spec, onError }) => {
   const { t } = useTranslation('taskTemplate');
   const specs = useMemo(() => [spec], [spec]);
   const meta = useMemo(() => getProviderMeta(spec), [spec]);
-  const { connect, isAllConnected, isConnecting } = useSkillConnection(specs);
+  const { connect, isAllConnected, isConnecting } = useConnectorConnection(specs);
 
   const handleConnect = useCallback(async () => {
     if (disabled) return;
@@ -64,6 +64,6 @@ export const SkillAuthRow = memo<SkillAuthRowProps>(({ disabled, spec, onError }
   );
 });
 
-SkillAuthRow.displayName = 'SkillAuthRow';
+ConnectorAuthRow.displayName = 'ConnectorAuthRow';
 
-export { SkillConnectionMarketAuthRequiredError, SkillConnectionPopupBlockedError };
+export { ConnectorConnectionMarketAuthRequiredError, ConnectorConnectionPopupBlockedError };

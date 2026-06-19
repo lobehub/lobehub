@@ -18,7 +18,7 @@ const {
   mockMutate,
   mockSetRefreshSeed,
   mockUseFetchBriefs,
-  mockUseFetchLobehubSkillConnections,
+  mockUseFetchLobehubConnectorConnections,
   mockUseFetchUserComposioConnections,
   mockUseResolvedInterestKeys,
   mockUseSWR,
@@ -26,7 +26,7 @@ const {
   mockMutate: vi.fn(),
   mockSetRefreshSeed: vi.fn(),
   mockUseFetchBriefs: vi.fn(),
-  mockUseFetchLobehubSkillConnections: vi.fn(),
+  mockUseFetchLobehubConnectorConnections: vi.fn(),
   mockUseFetchUserComposioConnections: vi.fn(),
   mockUseResolvedInterestKeys: vi.fn(),
   mockUseSWR: vi.fn(),
@@ -64,7 +64,7 @@ vi.mock('@/store/brief', () => ({
 vi.mock('@/store/tool', () => ({
   useToolStore: (selector: (state: any) => unknown) =>
     selector({
-      useFetchLobehubSkillConnections: mockUseFetchLobehubSkillConnections,
+      useFetchLobehubSkillConnections: mockUseFetchLobehubConnectorConnections,
       useFetchUserComposioConnections: mockUseFetchUserComposioConnections,
     }),
 }));

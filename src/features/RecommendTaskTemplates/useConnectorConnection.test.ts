@@ -5,7 +5,10 @@ import type { TaskTemplateConnectorReference } from '@lobechat/const';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SkillConnectionMarketAuthRequiredError, useSkillConnection } from './useSkillConnection';
+import {
+  ConnectorConnectionMarketAuthRequiredError,
+  useConnectorConnection,
+} from './useConnectorConnection';
 
 const mocks = vi.hoisted(() => ({
   marketAuth: {
@@ -38,7 +41,7 @@ vi.mock('@/store/user', () => ({
 
 const lobehubSpec: TaskTemplateConnectorReference = { identifier: 'linear', source: 'lobehub' };
 
-describe('useSkillConnection', () => {
+describe('useConnectorConnection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.marketAuth.isAuthenticated = false;
@@ -60,8 +63,8 @@ describe('useSkillConnection', () => {
     vi.restoreAllMocks();
   });
 
-  it('asks the user to sign in to Market before requesting LobeHub Skill OAuth', async () => {
-    const { result } = renderHook(() => useSkillConnection([lobehubSpec]));
+  it('asks the user to sign in to Market before requesting LobeHub connector OAuth', async () => {
+    const { result } = renderHook(() => useConnectorConnection([lobehubSpec]));
 
     let error: unknown;
     await act(async () => {
@@ -72,7 +75,7 @@ describe('useSkillConnection', () => {
       }
     });
 
-    expect(error).toBeInstanceOf(SkillConnectionMarketAuthRequiredError);
+    expect(error).toBeInstanceOf(ConnectorConnectionMarketAuthRequiredError);
     expect(mocks.marketAuth.signIn).toHaveBeenCalledWith('connector');
     expect(mocks.toolState.getLobehubSkillAuthorizeUrl).not.toHaveBeenCalled();
     expect(window.open).not.toHaveBeenCalled();
@@ -80,7 +83,7 @@ describe('useSkillConnection', () => {
 
   it('opens provider OAuth directly when Market is authenticated', async () => {
     mocks.marketAuth.isAuthenticated = true;
-    const { result, unmount } = renderHook(() => useSkillConnection([lobehubSpec]));
+    const { result, unmount } = renderHook(() => useConnectorConnection([lobehubSpec]));
 
     await act(async () => {
       await result.current.connect();
@@ -104,7 +107,7 @@ describe('useSkillConnection', () => {
     mocks.toolState.getLobehubSkillAuthorizeUrl.mockRejectedValue({
       data: { code: 'UNAUTHORIZED', httpStatus: 401 },
     });
-    const { result } = renderHook(() => useSkillConnection([lobehubSpec]));
+    const { result } = renderHook(() => useConnectorConnection([lobehubSpec]));
 
     let error: unknown;
     await act(async () => {
@@ -115,7 +118,7 @@ describe('useSkillConnection', () => {
       }
     });
 
-    expect(error).toBeInstanceOf(SkillConnectionMarketAuthRequiredError);
+    expect(error).toBeInstanceOf(ConnectorConnectionMarketAuthRequiredError);
     expect(window.open).not.toHaveBeenCalled();
   });
 });

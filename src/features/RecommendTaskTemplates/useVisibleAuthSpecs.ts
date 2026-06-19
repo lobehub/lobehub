@@ -2,13 +2,13 @@ import type { TaskTemplate, TaskTemplateConnector } from '@lobechat/const';
 import { useMemo } from 'react';
 
 import { getMainIconProvider } from './resolveTemplateIcon';
-import { useIsSkillConnected } from './useSkillConnection';
+import { useIsConnectorConnected } from './useConnectorConnection';
 
 interface UseVisibleAuthSpecsOptions {
   /**
    * Drop the provider already shown as the main card icon to avoid showing the
    * same logo twice on the recommend card. Modal callers should keep this off:
-   * surfacing every unconnected skill prevents surprises when "Add task"
+   * surfacing every unconnected connector prevents surprises when "Add task"
    * triggers OAuth.
    */
   hideMainIconProvider?: boolean;
@@ -18,7 +18,7 @@ export const useVisibleAuthSpecs = (
   template: TaskTemplate,
   { hideMainIconProvider = false }: UseVisibleAuthSpecsOptions = {},
 ): TaskTemplateConnector[] => {
-  const isSkillConnected = useIsSkillConnected();
+  const isConnectorConnected = useIsConnectorConnected();
   const mainIconProvider = useMemo(
     () => (hideMainIconProvider ? getMainIconProvider(template) : undefined),
     [hideMainIconProvider, template],
@@ -26,7 +26,7 @@ export const useVisibleAuthSpecs = (
 
   return useMemo(() => {
     return template.connectors.filter((spec) => {
-      if (isSkillConnected(spec)) return false;
+      if (isConnectorConnected(spec)) return false;
       if (
         mainIconProvider &&
         mainIconProvider.identifier === spec.identifier &&
@@ -36,5 +36,5 @@ export const useVisibleAuthSpecs = (
       }
       return true;
     });
-  }, [template.connectors, isSkillConnected, mainIconProvider]);
+  }, [template.connectors, isConnectorConnected, mainIconProvider]);
 };

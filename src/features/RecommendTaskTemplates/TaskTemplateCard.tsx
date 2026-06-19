@@ -9,8 +9,8 @@ import { useTranslation } from 'react-i18next';
 import BriefCardSummary from '@/features/DailyBrief/BriefCardSummary';
 import { styles as briefStyles } from '@/features/DailyBrief/style';
 
+import { ConnectorAuthRow } from './ConnectorAuthRow';
 import { resolveTemplateIcon } from './resolveTemplateIcon';
-import { SkillAuthRow } from './SkillAuthRow';
 import { styles } from './style';
 import { createTaskTemplateDetailModal } from './TaskTemplateDetailModal';
 import { INTEREST_ICON_MAP, TemplateBriefIcon } from './TemplateBriefIcon';
@@ -134,7 +134,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
         {visibleAuthSpecs.length > 0 && (
           <Flexbox gap={6} onClick={(e) => e.stopPropagation()}>
             {visibleAuthSpecs.map((spec) => (
-              <SkillAuthRow
+              <ConnectorAuthRow
                 disabled={disabled}
                 key={`${spec.source}:${spec.identifier}`}
                 spec={spec}
