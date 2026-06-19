@@ -9,6 +9,7 @@ import {
 } from '@lobechat/file-loaders';
 
 import type { ReadFileParams, ReadFileResult } from '../types';
+import { ensurePathWithin, resolveWithinRoot } from './containPath';
 import { expandTilde } from './expandTilde';
 
 /** Hard cap on file size we will read into memory at all (10MB). */
@@ -46,9 +47,15 @@ export async function readLocalFile({
   path: rawPath,
   loc,
   fullContent,
+  workingDirectory,
 }: ReadFileParams): Promise<ReadFileResult> {
-  const filePath = expandTilde(rawPath) ?? rawPath;
+  const filePath = resolveWithinRoot(expandTilde(rawPath) ?? rawPath, workingDirectory);
   const effectiveLoc = fullContent ? undefined : (loc ?? [0, 200]);
+
+  const containment = await ensurePathWithin(filePath, workingDirectory);
+  if (!containment.allowed) {
+    return buildErrorResult(filePath, `Error: ${containment.reason}`);
+  }
 
   let stats;
   try {
