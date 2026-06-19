@@ -1159,6 +1159,37 @@ describe('createGatewayEventHandler', () => {
       );
     });
 
+    it('error event preserves normalized body fields for trace-id error UI', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('error', {
+          body: {
+            message: 'Upstream failed',
+            traceId: 'trace-123',
+          },
+          error: 'Upstream failed',
+          errorType: 'ProviderBizError',
+          phase: 'llm_execution',
+        }),
+      );
+      await flush();
+
+      expect(messageService.updateMessageError).toHaveBeenCalledWith(
+        'msg-initial',
+        expect.objectContaining({
+          body: expect.objectContaining({
+            message: 'Upstream failed',
+            traceId: 'trace-123',
+          }),
+          message: 'Upstream failed',
+          type: 'ProviderBizError',
+        }),
+        expect.anything(),
+      );
+    });
+
     // Contrast probe: agent_runtime_end on the SAME operation (which has a
     // context.agentId) DOES mark unread completed — proving the negative
     // assertion above is the error path's own behavior, not a missing agentId.

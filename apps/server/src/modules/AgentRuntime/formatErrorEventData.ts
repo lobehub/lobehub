@@ -1,4 +1,17 @@
+import { isRecord } from '@lobechat/utils';
+
+import { formatErrorForState } from './formatErrorForState';
 import { formatPgError, pgErrorType, unwrapPgError } from './pgError';
+
+const isErrorType = (value: unknown): value is string | number =>
+  typeof value === 'string' || typeof value === 'number';
+
+const formatStructuredError = (error: unknown) => {
+  if (error instanceof Error || !isRecord(error)) return;
+  if (!isErrorType(error.errorType) && !isErrorType(error.type)) return;
+
+  return formatErrorForState(error);
+};
 
 /**
  * Normalize an arbitrary thrown value into the shape the runtime stream-event
@@ -25,6 +38,8 @@ import { formatPgError, pgErrorType, unwrapPgError } from './pgError';
 export const formatErrorEventData = (error: unknown, phase: string) => {
   let errorMessage = 'Unknown error';
   let errorType: string | undefined;
+  const structuredError = formatStructuredError(error);
+  const body = structuredError?.body;
   // True when `errorType` came from a business-typed field on the error
   // payload (step 1 above). Driver class names assigned via `error.name`
   // do NOT set this flag, so raw `PostgresError` / `DatabaseError` instances
@@ -32,10 +47,18 @@ export const formatErrorEventData = (error: unknown, phase: string) => {
   let hasBusinessErrorType = false;
 
   if (error && typeof error === 'object') {
-    const payload = error as { error?: unknown; errorType?: unknown; message?: unknown };
+    const payload = error as {
+      error?: unknown;
+      errorType?: unknown;
+      message?: unknown;
+      type?: unknown;
+    };
 
-    if (typeof payload.errorType === 'string') {
-      errorType = payload.errorType;
+    if (isErrorType(payload.errorType)) {
+      errorType = String(structuredError?.type ?? payload.errorType);
+      hasBusinessErrorType = true;
+    } else if (isErrorType(payload.type)) {
+      errorType = String(structuredError?.type ?? payload.type);
       hasBusinessErrorType = true;
     }
 
@@ -80,6 +103,7 @@ export const formatErrorEventData = (error: unknown, phase: string) => {
   }
 
   return {
+    ...(body === undefined ? {} : { body }),
     error: errorMessage,
     errorType,
     phase,

@@ -219,13 +219,15 @@ const buildGatewayRuntimeErrorBody = (
   data: Record<string, unknown>,
   message: string,
 ): Record<string, unknown> => {
-  const sourceBody = isRecord(data._responseBody)
-    ? data._responseBody
-    : isRecord(data.error)
-      ? data.error
-      : {};
+  const sourceBody = isRecord(data.body)
+    ? data.body
+    : isRecord(data._responseBody)
+      ? data._responseBody
+      : isRecord(data.error)
+        ? data.error
+        : {};
   const mergedBody =
-    data._responseBody === undefined
+    isRecord(data.body) || data._responseBody === undefined
       ? sourceBody
       : mergeGatewayPayloadError(sourceBody, data.error);
 
