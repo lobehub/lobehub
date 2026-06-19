@@ -20,7 +20,7 @@ import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
-import { createGatewayEventHandler } from './gatewayEventHandler';
+import { createGatewayEventHandler, isCompletedRuntimeEnd } from './gatewayEventHandler';
 
 /**
  * When the agent runs against the local machine, resolve this desktop's
@@ -188,7 +188,16 @@ export class GatewayActionImpl {
       if (event.type === 'agent_runtime_end' || event.type === 'error') {
         receivedTerminalEvent = true;
       }
-      if (event.type === 'agent_runtime_end') terminalSucceeded = true;
+      // Only a clean completion counts as success — a cancel ('interrupted') or
+      // deferred-tool park ('waiting_for_async_tool') must take the non-success
+      // branch so onSessionComplete clears the run back to 'active' instead of
+      // leaving the topic persisted as an unread completion.
+      if (
+        event.type === 'agent_runtime_end' &&
+        isCompletedRuntimeEnd((event.data as { reason?: string } | undefined)?.reason)
+      ) {
+        terminalSucceeded = true;
+      }
       onEvent?.(event);
     });
 
