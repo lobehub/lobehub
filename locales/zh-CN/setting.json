@@ -1017,6 +1017,7 @@
   "tools.activation.auto": "自动",
   "tools.activation.auto.desc": "智能调用",
   "tools.activation.fixed.hint": "由应用强制开启，始终可用，无法关闭",
+  "tools.activation.pin": "固定启用",
   "tools.activation.pinned": "固定启用",
   "tools.activation.pinned.desc": "始终注入",
   "tools.add": "集成技能",

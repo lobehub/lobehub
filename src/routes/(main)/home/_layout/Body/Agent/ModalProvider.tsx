@@ -1,5 +1,6 @@
 'use client';
 
+import { DEFAULT_INBOX_TITLE, SESSION_CHAT_URL } from '@lobechat/const';
 import { type ReactNode, useCallback } from 'react';
 import { createContext, memo, use, useMemo, useState } from 'react';
 
@@ -10,7 +11,7 @@ import EditingPopover from '@/features/EditingPopover';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { CreateAgentModal } from '@/routes/(main)/home/_layout/hooks/useCreateModal';
 import { useAgentStore } from '@/store/agent';
-import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 
@@ -72,6 +73,8 @@ interface CreateModalRendererProps {
 const CreateModalRenderer = memo<CreateModalRendererProps>(({ open, type, groupId, onClose }) => {
   const navigate = useWorkspaceAwareNavigate();
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const inboxMeta = useAgentStore(agentSelectors.getAgentMetaById(inboxAgentId!));
+  const inboxAgentName = inboxMeta.title || DEFAULT_INBOX_TITLE;
   const storeCreateAgent = useAgentStore((s) => s.createAgent);
   const refreshAgentList = useHomeStore((s) => s.refreshAgentList);
   const sendAsAgent = useHomeStore((s) => s.sendAsAgent);
@@ -107,15 +110,23 @@ const CreateModalRenderer = memo<CreateModalRendererProps>(({ open, type, groupI
     [navigate, onClose],
   );
 
+  const handleTryInLobeAI = useCallback(() => {
+    if (!inboxAgentId) return;
+
+    navigate(SESSION_CHAT_URL(inboxAgentId, false));
+  }, [inboxAgentId, navigate]);
+
   return (
     <CreateAgentModal
       agentId={inboxAgentId}
+      inboxAgentName={inboxAgentName}
       open={open}
       type={type}
       onClose={onClose}
       onCreateBlank={handleCreateBlank}
       onOpenSkills={handleOpenSkills}
       onSubmit={handleSubmit}
+      onTryInLobeAI={handleTryInLobeAI}
     />
   );
 });

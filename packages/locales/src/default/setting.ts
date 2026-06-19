@@ -2458,6 +2458,7 @@ When I am ___, I need ___
   'tools.activation.auto': 'Auto',
   'tools.activation.auto.desc': 'Smart',
   'tools.activation.fixed.hint': 'Always on — managed by the app and can’t be turned off',
+  'tools.activation.pin': 'Pin',
   'tools.activation.pinned': 'Pinned',
   'tools.activation.pinned.desc': 'Always On',
   'tools.skillActivateMode.auto.desc':
