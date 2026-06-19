@@ -14,88 +14,106 @@ const cfg = (over: Partial<LobeAgentAgencyConfig> = {}): LobeAgentAgencyConfig =
 
 describe('resolveExecutionTarget', () => {
   it('returns the stored target verbatim when set', () => {
-    expect(resolveExecutionTarget(cfg({ executionTarget: 'device' }), { isDesktop: true })).toBe(
-      'device',
-    );
-    expect(resolveExecutionTarget(cfg({ executionTarget: 'sandbox' }), { isDesktop: true })).toBe(
-      'sandbox',
-    );
+    expect(
+      resolveExecutionTarget(cfg({ executionTarget: 'device' }), {
+        clientExecutionAvailable: true,
+      }),
+    ).toBe('device');
+    expect(
+      resolveExecutionTarget(cfg({ executionTarget: 'sandbox' }), {
+        clientExecutionAvailable: true,
+      }),
+    ).toBe('sandbox');
   });
 
   it('defaults to local on desktop, none on web when unset', () => {
-    expect(resolveExecutionTarget(undefined, { isDesktop: true })).toBe('local');
-    expect(resolveExecutionTarget(undefined, { isDesktop: false })).toBe('none');
-    expect(resolveExecutionTarget(cfg(), { isDesktop: true })).toBe('local');
-    expect(resolveExecutionTarget(cfg(), { isDesktop: false })).toBe('none');
+    expect(resolveExecutionTarget(undefined, { clientExecutionAvailable: true })).toBe('local');
+    expect(resolveExecutionTarget(undefined, { clientExecutionAvailable: false })).toBe('none');
+    expect(resolveExecutionTarget(cfg(), { clientExecutionAvailable: true })).toBe('local');
+    expect(resolveExecutionTarget(cfg(), { clientExecutionAvailable: false })).toBe('none');
   });
 
   it('coerces a stored `local` to `sandbox` on web (no local filesystem)', () => {
-    expect(resolveExecutionTarget(cfg({ executionTarget: 'local' }), { isDesktop: false })).toBe(
-      'sandbox',
-    );
+    expect(
+      resolveExecutionTarget(cfg({ executionTarget: 'local' }), {
+        clientExecutionAvailable: false,
+      }),
+    ).toBe('sandbox');
     // …but keeps it on desktop
-    expect(resolveExecutionTarget(cfg({ executionTarget: 'local' }), { isDesktop: true })).toBe(
-      'local',
-    );
+    expect(
+      resolveExecutionTarget(cfg({ executionTarget: 'local' }), { clientExecutionAvailable: true }),
+    ).toBe('local');
   });
 
   it('routes hetero desktop-local bindings to the bound device on web', () => {
     expect(
       resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
-        isDesktop: false,
+        clientExecutionAvailable: false,
         isHetero: true,
       }),
     ).toBe('device');
 
     expect(
       resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
-        isDesktop: false,
+        clientExecutionAvailable: false,
       }),
     ).toBe('sandbox');
   });
 
   it('keeps `device` on web (a bound device is reachable from anywhere)', () => {
-    expect(resolveExecutionTarget(cfg({ executionTarget: 'device' }), { isDesktop: false })).toBe(
-      'device',
-    );
+    expect(
+      resolveExecutionTarget(cfg({ executionTarget: 'device' }), {
+        clientExecutionAvailable: false,
+      }),
+    ).toBe('device');
   });
 
   it('keeps an explicit `none` on both platforms', () => {
-    expect(resolveExecutionTarget(cfg({ executionTarget: 'none' }), { isDesktop: true })).toBe(
-      'none',
-    );
-    expect(resolveExecutionTarget(cfg({ executionTarget: 'none' }), { isDesktop: false })).toBe(
-      'none',
-    );
+    expect(
+      resolveExecutionTarget(cfg({ executionTarget: 'none' }), { clientExecutionAvailable: true }),
+    ).toBe('none');
+    expect(
+      resolveExecutionTarget(cfg({ executionTarget: 'none' }), { clientExecutionAvailable: false }),
+    ).toBe('none');
   });
 
   it('coerces `none` for hetero agents — they must execute somewhere', () => {
     // stored none → desktop local, web sandbox
     expect(
-      resolveExecutionTarget(cfg({ executionTarget: 'none' }), { isDesktop: true, isHetero: true }),
+      resolveExecutionTarget(cfg({ executionTarget: 'none' }), {
+        clientExecutionAvailable: true,
+        isHetero: true,
+      }),
     ).toBe('local');
     expect(
       resolveExecutionTarget(cfg({ executionTarget: 'none' }), {
-        isDesktop: false,
+        clientExecutionAvailable: false,
         isHetero: true,
       }),
     ).toBe('sandbox');
     // unset → platform default, then the same coercion on web
-    expect(resolveExecutionTarget(undefined, { isDesktop: true, isHetero: true })).toBe('local');
-    expect(resolveExecutionTarget(undefined, { isDesktop: false, isHetero: true })).toBe('sandbox');
+    expect(
+      resolveExecutionTarget(undefined, { clientExecutionAvailable: true, isHetero: true }),
+    ).toBe('local');
+    expect(
+      resolveExecutionTarget(undefined, { clientExecutionAvailable: false, isHetero: true }),
+    ).toBe('sandbox');
   });
 
   describe('trigger=bot — coerces a local target to auto', () => {
     it('coerces a desktop `local` (and the unset desktop default) to auto', () => {
       expect(
         resolveExecutionTarget(cfg({ executionTarget: 'local' }), {
-          isDesktop: true,
+          clientExecutionAvailable: true,
           trigger: RequestTrigger.Bot,
         }),
       ).toBe('auto');
       // unset desktop default is `local`, so it coerces too
       expect(
-        resolveExecutionTarget(undefined, { isDesktop: true, trigger: RequestTrigger.Bot }),
+        resolveExecutionTarget(undefined, {
+          clientExecutionAvailable: true,
+          trigger: RequestTrigger.Bot,
+        }),
       ).toBe('auto');
     });
 
@@ -103,7 +121,7 @@ describe('resolveExecutionTarget', () => {
       for (const executionTarget of ['none', 'sandbox', 'device'] as const) {
         expect(
           resolveExecutionTarget(cfg({ executionTarget }), {
-            isDesktop: true,
+            clientExecutionAvailable: true,
             trigger: RequestTrigger.Bot,
           }),
         ).toBe(executionTarget);
@@ -115,7 +133,7 @@ describe('resolveExecutionTarget', () => {
       // never becomes auto (there is no in-process local on web anyway).
       expect(
         resolveExecutionTarget(cfg({ executionTarget: 'local' }), {
-          isDesktop: false,
+          clientExecutionAvailable: false,
           trigger: RequestTrigger.Bot,
         }),
       ).toBe('sandbox');
@@ -124,7 +142,10 @@ describe('resolveExecutionTarget', () => {
     it('only fires for the bot trigger — other triggers keep `local`', () => {
       for (const trigger of [RequestTrigger.Chat, RequestTrigger.Cron, undefined]) {
         expect(
-          resolveExecutionTarget(cfg({ executionTarget: 'local' }), { isDesktop: true, trigger }),
+          resolveExecutionTarget(cfg({ executionTarget: 'local' }), {
+            clientExecutionAvailable: true,
+            trigger,
+          }),
         ).toBe('local');
       }
     });
@@ -172,14 +193,14 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'none' }),
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ kind: 'none', target: 'none' });
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'none' }),
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ kind: 'none', target: 'none' });
@@ -191,7 +212,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'sandbox' }),
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ kind: 'sandbox', target: 'sandbox' });
@@ -202,7 +223,7 @@ describe('resolveExecutionPlan', () => {
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'sandbox' }),
           canUseDevice: false,
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ kind: 'sandbox', target: 'sandbox' });
@@ -214,7 +235,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'device' }),
-          isDesktop: false,
+          clientExecutionAvailable: false,
           onlineDeviceIds: ONLINE_AB,
         }),
       ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'device' });
@@ -224,7 +245,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-x', executionTarget: 'device' }),
-          isDesktop: false,
+          clientExecutionAvailable: false,
           onlineDeviceIds: ONLINE_AB,
         }),
       ).toEqual({ kind: 'device-unrouted', reason: 'bound-device-offline', target: 'device' });
@@ -235,10 +256,18 @@ describe('resolveExecutionPlan', () => {
       // a single online device used to be auto-activated for `local`; now only
       // `auto` does that — `local` stays unrouted until a device is bound.
       expect(
-        resolveExecutionPlan({ agencyConfig: local, isDesktop: true, onlineDeviceIds: ONLINE_A }),
+        resolveExecutionPlan({
+          agencyConfig: local,
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_A,
+        }),
       ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' });
       expect(
-        resolveExecutionPlan({ agencyConfig: local, isDesktop: true, onlineDeviceIds: ONLINE_AB }),
+        resolveExecutionPlan({
+          agencyConfig: local,
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_AB,
+        }),
       ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' });
     });
 
@@ -247,7 +276,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: undefined,
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' });
@@ -257,7 +286,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: undefined,
-          isDesktop: false,
+          clientExecutionAvailable: false,
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ kind: 'none', target: 'none' });
@@ -269,25 +298,41 @@ describe('resolveExecutionPlan', () => {
 
     it('activates the single online device', () => {
       expect(
-        resolveExecutionPlan({ agencyConfig: auto, isDesktop: true, onlineDeviceIds: ONLINE_A }),
+        resolveExecutionPlan({
+          agencyConfig: auto,
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_A,
+        }),
       ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'auto' });
     });
 
     it('stays unrouted (model picks) when several devices are online', () => {
       expect(
-        resolveExecutionPlan({ agencyConfig: auto, isDesktop: true, onlineDeviceIds: ONLINE_AB }),
+        resolveExecutionPlan({
+          agencyConfig: auto,
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_AB,
+        }),
       ).toEqual({ kind: 'device-unrouted', reason: 'ambiguous-online-devices', target: 'auto' });
     });
 
     it('stays unrouted when no device is online', () => {
       expect(
-        resolveExecutionPlan({ agencyConfig: auto, isDesktop: true, onlineDeviceIds: [] }),
+        resolveExecutionPlan({
+          agencyConfig: auto,
+          clientExecutionAvailable: true,
+          onlineDeviceIds: [],
+        }),
       ).toEqual({ kind: 'device-unrouted', reason: 'no-online-device', target: 'auto' });
     });
 
     it('works on web too (auto can pick a remote device)', () => {
       expect(
-        resolveExecutionPlan({ agencyConfig: auto, isDesktop: false, onlineDeviceIds: ONLINE_A }),
+        resolveExecutionPlan({
+          agencyConfig: auto,
+          clientExecutionAvailable: false,
+          onlineDeviceIds: ONLINE_A,
+        }),
       ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'auto' });
     });
 
@@ -298,7 +343,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: staleBound,
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_AB,
         }),
       ).toEqual({ kind: 'device-unrouted', reason: 'ambiguous-online-devices', target: 'auto' });
@@ -308,7 +353,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: auto,
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_AB,
           requestedDeviceId: 'device-b',
         }),
@@ -321,7 +366,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'sandbox' }),
-          isDesktop: false,
+          clientExecutionAvailable: false,
           onlineDeviceIds: ONLINE_AB,
           requestedDeviceId: 'device-b',
         }),
@@ -332,7 +377,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'device' }),
-          isDesktop: false,
+          clientExecutionAvailable: false,
           onlineDeviceIds: ONLINE_AB,
           requestedDeviceId: 'device-b',
         }),
@@ -347,7 +392,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'local' }),
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
           trigger: RequestTrigger.Bot,
         }),
@@ -358,7 +403,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: undefined,
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
           trigger: RequestTrigger.Bot,
         }),
@@ -369,7 +414,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'local' }),
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_AB,
           trigger: RequestTrigger.Bot,
         }),
@@ -380,7 +425,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'none' }),
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
           trigger: RequestTrigger.Bot,
         }),
@@ -391,7 +436,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'sandbox' }),
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
           trigger: RequestTrigger.Bot,
         }),
@@ -402,7 +447,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-b', executionTarget: 'device' }),
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_AB,
           trigger: RequestTrigger.Bot,
         }),
@@ -417,7 +462,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'local' }),
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_AB,
           requestedDeviceId: 'device-b',
           trigger: RequestTrigger.Bot,
@@ -430,7 +475,7 @@ describe('resolveExecutionPlan', () => {
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'local' }),
           chatConfig: { enableAgentMode: false },
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
           trigger: RequestTrigger.Bot,
         }),
@@ -441,7 +486,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'local' }),
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
           trigger: RequestTrigger.Chat,
         }),
@@ -456,7 +501,7 @@ describe('resolveExecutionPlan', () => {
           resolveExecutionPlan({
             agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget }),
             canUseDevice: false,
-            isDesktop: true,
+            clientExecutionAvailable: true,
             onlineDeviceIds: ONLINE_A,
             requestedDeviceId: 'device-a',
           }),
@@ -478,7 +523,7 @@ describe('resolveExecutionPlan', () => {
             resolveExecutionPlan({
               agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget }),
               chatConfig,
-              isDesktop: true,
+              clientExecutionAvailable: true,
               onlineDeviceIds: ONLINE_A,
             }),
           ).toEqual({ kind: 'none', target: 'none' });
@@ -491,7 +536,7 @@ describe('resolveExecutionPlan', () => {
         resolveExecutionPlan({
           agencyConfig: undefined,
           chatConfig: { enableAgentMode: false },
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ kind: 'none', target: 'none' });
@@ -499,7 +544,7 @@ describe('resolveExecutionPlan', () => {
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'sandbox' }),
           chatConfig: { enableAgentMode: false },
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ kind: 'none', target: 'none' });
@@ -514,7 +559,7 @@ describe('resolveExecutionPlan', () => {
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'auto' }),
           chatConfig: { enableAgentMode: false, toolMode: 'agent' },
-          isDesktop: true,
+          clientExecutionAvailable: true,
           onlineDeviceIds: ONLINE_A,
         }),
       ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'auto' });
@@ -525,7 +570,7 @@ describe('resolveExecutionPlan', () => {
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'device' }),
           chatConfig: { enableAgentMode: false },
-          isDesktop: false,
+          clientExecutionAvailable: false,
           isHetero: true,
           onlineDeviceIds: ONLINE_A,
         }),
@@ -543,7 +588,7 @@ describe('resolveExecutionPlan', () => {
           resolveExecutionPlan({
             agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget }),
             canUseDevice: false,
-            isDesktop: false,
+            clientExecutionAvailable: false,
             isHetero: true,
           }),
         ).toEqual({ kind: 'sandbox', target: 'sandbox' });
@@ -553,7 +598,7 @@ describe('resolveExecutionPlan', () => {
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'sandbox' }),
           canUseDevice: false,
-          isDesktop: false,
+          clientExecutionAvailable: false,
           isHetero: true,
           requestedDeviceId: 'device-a',
         }),
@@ -566,14 +611,14 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'device' }),
-          isDesktop: false,
+          clientExecutionAvailable: false,
           isHetero: true,
         }),
       ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'device' });
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ executionTarget: 'device' }),
-          isDesktop: false,
+          clientExecutionAvailable: false,
           isHetero: true,
         }),
       ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'device' });
@@ -583,7 +628,7 @@ describe('resolveExecutionPlan', () => {
       expect(
         resolveExecutionPlan({
           agencyConfig: cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }),
-          isDesktop: false,
+          clientExecutionAvailable: false,
           isHetero: true,
         }),
       ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'device' });
@@ -595,7 +640,7 @@ describe('resolveExecutionPlan', () => {
       for (const executionTarget of ['local', 'none', 'sandbox', undefined] as const) {
         const plan: ExecutionPlan = resolveExecutionPlan({
           agencyConfig: executionTarget ? cfg({ executionTarget }) : undefined,
-          isDesktop: false,
+          clientExecutionAvailable: false,
           isHetero: true,
         });
         expect(plan).toEqual({ kind: 'sandbox', target: 'sandbox' });

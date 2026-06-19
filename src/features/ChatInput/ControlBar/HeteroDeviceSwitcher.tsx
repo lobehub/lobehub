@@ -322,7 +322,10 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   // Effective target: shared with server dispatch. In particular, a hetero
   // desktop "local" selection that carries this desktop's boundDeviceId becomes
   // a device target when the same agent is opened from web.
-  const executionTarget = resolveExecutionTarget(agencyConfig, { isDesktop, isHetero });
+  const executionTarget = resolveExecutionTarget(agencyConfig, {
+    isHetero,
+    clientExecutionAvailable: isDesktop,
+  });
 
   const handleSelect = useCallback(
     async (target: DeviceExecutionTarget, deviceId?: string) => {

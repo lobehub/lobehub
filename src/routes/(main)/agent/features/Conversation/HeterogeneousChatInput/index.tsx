@@ -56,8 +56,8 @@ const HeterogeneousChatInput = memo(() => {
   );
   const providerType = agencyConfig?.heterogeneousProvider?.type;
   const executionTarget = resolveExecutionTarget(agencyConfig, {
-    isDesktop,
     isHetero: !!providerType,
+    clientExecutionAvailable: isDesktop,
   });
   const isRemoteAgent = !!providerType && isRemoteHeterogeneousType(providerType);
 

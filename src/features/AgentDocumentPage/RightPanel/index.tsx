@@ -82,8 +82,8 @@ const AgentDocumentRightPanel = memo(() => {
     activeAgentId ? agentByIdSelectors.getAgencyConfigById(activeAgentId)(s) : undefined,
   );
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
-    isDesktop,
     isHetero,
+    clientExecutionAvailable: isDesktop,
   });
   const remoteDeviceId =
     effectiveTarget === 'device' && agencyConfig?.boundDeviceId

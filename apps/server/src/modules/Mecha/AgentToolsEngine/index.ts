@@ -161,7 +161,7 @@ export const createServerAgentToolsEngine = (
   const executionTarget =
     executionPlan?.target ??
     resolveExecutionTarget(agentConfig.agencyConfig, {
-      isDesktop: platform === 'desktop',
+      clientExecutionAvailable: platform === 'desktop',
     });
   const runtimeMode: RuntimeEnvMode = executionTargetToRuntimeMode(executionTarget);
   // Device tools (local-system, remote-device proxy) only exist for

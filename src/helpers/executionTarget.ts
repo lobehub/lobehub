@@ -21,11 +21,25 @@ export const resolveToolMode = (
 
 export interface ResolveExecutionTargetOptions {
   /**
-   * Platform of the resolving side. On the server there is no real "desktop"
-   * flag — callers pass `gatewayConfigured` as a proxy (a device-gateway
-   * deployment serves desktop-class users). See `resolveExecutionPlan`.
+   * Whether tools can run on the user's own client/device in this environment —
+   * i.e. the `local` target (`runtimeMode: 'local'`, the `'client'` executor)
+   * has somewhere to run. This is the boolean form of `RuntimePlatform`
+   * (`'desktop'` vs `'web'`); it is NOT "the build is desktop" and NOT "the
+   * message came from a desktop client". It is true for:
+   *   - the Electron desktop build (the client runs tools in-process), and
+   *   - a server with a device gateway (`!!DEVICE_GATEWAY_URL`), which tunnels
+   *     the run to a registered device — the client lives at the other end.
+   * When false (plain web / a server with no gateway) there is no client to run
+   * on, so a `local` target coerces to `sandbox` (cloud) or the default is
+   * `none` (plain chat). Each layer passes the value that means this for it:
+   * `isDesktop` (build const) in the UI, `gatewayConfigured` on the server,
+   * `hasDeviceProxy` in the tools engine.
+   *
+   * Note this gates only `local` — `device` (an explicit `boundDeviceId`) is a
+   * concrete remote target reachable from anywhere, so it is honoured even when
+   * this is false.
    */
-  isDesktop: boolean;
+  clientExecutionAvailable: boolean;
   /**
    * Heterogeneous agents (Claude Code / Codex) bring their own toolchain and
    * must execute somewhere, so `'none'` is not a valid target for them: it
@@ -72,19 +86,19 @@ export interface ResolveExecutionTargetOptions {
  */
 export const resolveExecutionTarget = (
   agencyConfig: LobeAgentAgencyConfig | undefined,
-  { isDesktop, isHetero, trigger }: ResolveExecutionTargetOptions,
+  { clientExecutionAvailable, isHetero, trigger }: ResolveExecutionTargetOptions,
 ): DeviceExecutionTarget => {
   const stored = agencyConfig?.executionTarget;
-  let effective = stored ?? (isDesktop ? 'local' : 'none');
-  if (isHetero && !isDesktop && stored === 'local' && agencyConfig?.boundDeviceId) {
+  let effective = stored ?? (clientExecutionAvailable ? 'local' : 'none');
+  if (isHetero && !clientExecutionAvailable && stored === 'local' && agencyConfig?.boundDeviceId) {
     return 'device';
   }
-  if (isHetero && effective === 'none') effective = isDesktop ? 'local' : 'sandbox';
-  if (!isDesktop && effective === 'local') return 'sandbox';
+  if (isHetero && effective === 'none') effective = clientExecutionAvailable ? 'local' : 'sandbox';
+  if (!clientExecutionAvailable && effective === 'local') return 'sandbox';
   // Bot trigger: `local` (unreachable in-process from the cloud bot server)
   // becomes `auto`. Sits after the web→sandbox coercion, so `effective` is only
-  // still `local` on a desktop/gateway resolve — exactly where auto-activation
-  // makes sense.
+  // still `local` when a client/device can actually run it here — exactly where
+  // auto-activation makes sense.
   if (trigger === RequestTrigger.Bot && effective === 'local') return 'auto';
   return effective;
 };
@@ -116,9 +130,9 @@ export const executionTargetToRuntimeMode = (target: DeviceExecutionTarget): Run
  */
 export const resolveRuntimeMode = (
   agencyConfig: LobeAgentAgencyConfig | undefined,
-  isDesktop: boolean,
+  clientExecutionAvailable: boolean,
 ): RuntimeEnvMode =>
-  executionTargetToRuntimeMode(resolveExecutionTarget(agencyConfig, { isDesktop }));
+  executionTargetToRuntimeMode(resolveExecutionTarget(agencyConfig, { clientExecutionAvailable }));
 
 export type ExecutionPlanUnroutedReason =
   /** `auto` mode with more than one device online — the model must pick one */
@@ -180,7 +194,8 @@ export interface ResolveExecutionPlanParams {
    * always need a runtime.
    */
   chatConfig?: LobeAgentChatConfig;
-  isDesktop: boolean;
+  /** See {@link ResolveExecutionTargetOptions.clientExecutionAvailable}. */
+  clientExecutionAvailable: boolean;
   isHetero?: boolean;
   /**
    * Online device ids from the device gateway. Pass `undefined` to skip
@@ -231,7 +246,7 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
     agencyConfig,
     canUseDevice = true,
     chatConfig,
-    isDesktop,
+    clientExecutionAvailable,
     isHetero,
     onlineDeviceIds,
     requestedDeviceId,
@@ -245,7 +260,11 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
   // agents always need a runtime, so they never take this path.
   if (resolveToolMode(chatConfig) === 'chat' && !isHetero) return { kind: 'none', target: 'none' };
 
-  const target = resolveExecutionTarget(agencyConfig, { isDesktop, isHetero, trigger });
+  const target = resolveExecutionTarget(agencyConfig, {
+    isHetero,
+    clientExecutionAvailable,
+    trigger,
+  });
   const wantsDevice =
     !!requestedDeviceId || target === 'device' || target === 'local' || target === 'auto';
 

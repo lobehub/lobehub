@@ -230,8 +230,8 @@ const GroupItem = memo<GroupItemComponentProps>(
     // Web can add a topic in a directory too when the agent targets a bound
     // device — the write goes to `workingDirByDevice`, no Electron dependency.
     const effectiveTarget = resolveExecutionTarget(agencyConfig, {
-      isDesktop,
       isHetero: isHeterogeneous,
+      clientExecutionAvailable: isDesktop,
     });
     const isDeviceMode = effectiveTarget === 'device' && !!agencyConfig?.boundDeviceId;
     const canAddTopic = (isDesktop || isDeviceMode) && !!workingDirectory;
