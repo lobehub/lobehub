@@ -38,7 +38,7 @@ import { registerUserCommand } from './commands/user';
 import { registerVerifyCommand } from './commands/verify';
 
 const require = createRequire(import.meta.url);
-const { version } = require('../package.json');
+const { name, version } = require('../package.json') as { name: string; version: string };
 
 export function createProgram() {
   const program = new Command();
@@ -86,4 +86,4 @@ export function createProgram() {
   return program;
 }
 
-export { version as cliVersion };
+export { name as cliPackageName, version as cliVersion };

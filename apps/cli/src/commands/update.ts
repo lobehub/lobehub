@@ -1,14 +1,14 @@
 import { spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
-import { createRequire } from 'node:module';
 
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
+// Reuse the package metadata resolved by the bundled entry. update.ts lives one
+// directory deeper than program.ts in source, so a local `require('../../package.json')`
+// would point outside the package once everything is bundled into dist/index.js.
+import { cliPackageName, cliVersion } from '../program';
 import { log } from '../utils/logger';
-
-const require = createRequire(import.meta.url);
-const pkg = require('../../package.json') as { name: string; version: string };
 
 export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
 
@@ -141,14 +141,14 @@ export function registerUpdateCommand(program: Command) {
         return;
       }
 
-      const current = pkg.version;
+      const current = cliVersion;
       const tag = options.tag || 'latest';
 
       log.info(`Current version: ${pc.bold(current)}`);
 
       let latest: string;
       try {
-        latest = await fetchLatestVersion(pkg.name, tag);
+        latest = await fetchLatestVersion(cliPackageName, tag);
       } catch (error) {
         log.error(`Unable to check for updates: ${(error as Error).message}`);
         process.exit(1);
@@ -170,7 +170,7 @@ export function registerUpdateCommand(program: Command) {
       }
 
       const pm = options.packageManager || detectPackageManager();
-      const spec = `${pkg.name}@${latest}`;
+      const spec = `${cliPackageName}@${latest}`;
       const { args, command } = buildInstallCommand(pm, spec);
 
       log.info(`Upgrading via ${pc.bold(pm)}: ${pc.dim([command, ...args].join(' '))}`);
