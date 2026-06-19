@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <linearGradient id="acensus-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#06B6D4"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="176" height="176" rx="40" fill="url(#acensus-grad)"/>
+  <path
+    d="M48 138 L96 50 L144 138 L124 138 L96 88 L68 138 Z"
+    fill="white"
+    fill-opacity="0.95"
+  />
+  <rect x="78" y="118" width="36" height="10" rx="3" fill="white" fill-opacity="0.95"/>
+</svg>

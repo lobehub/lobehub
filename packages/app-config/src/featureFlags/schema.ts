@@ -70,7 +70,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   openai_api_key: true,
   openai_proxy_url: true,
 
-  api_key_manage: false,
+  api_key_manage: true,
   edit_agent: true,
 
   ai_image: true,
@@ -80,24 +80,24 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   token_counter: true,
 
   knowledge_base: true,
-  rag_eval: false,
+  rag_eval: true,
 
   agent_self_iteration: isDev,
   agent_onboarding: isDev,
   auth_captcha: true,
-  cloud_promotion: false,
+  cloud_promotion: true,
   storage_overage: true,
-  workspace: false,
+  workspace: true,
 
-  market: true,
+  market: false,
   speech_to_text: true,
   changelog: true,
 
   // the flags below can only be used with commercial license
   // if you want to use it in the commercial usage
   // please contact us for more information: hello@lobehub.com
-  commercial_hide_github: false,
-  commercial_hide_docs: false,
+  commercial_hide_github: true,
+  commercial_hide_docs: true,
 };
 
 export const mapFeatureFlagsEnvToState = (config: IFeatureFlags, userId?: string) => {
@@ -112,6 +112,7 @@ export const mapFeatureFlagsEnvToState = (config: IFeatureFlags, userId?: string
 
     showAiImage: evaluateFeatureFlag(config.ai_image, userId),
     showChangelog: evaluateFeatureFlag(config.changelog, userId),
+    enableTokenCounter: evaluateFeatureFlag(config.token_counter, userId),
 
     enableCheckUpdates: evaluateFeatureFlag(config.check_updates, userId),
     showWelcomeSuggest: evaluateFeatureFlag(config.welcome_suggest, userId),

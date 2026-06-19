@@ -5,21 +5,21 @@
 export const LOBE_CHAT_CLOUD = 'Acensus Cloud';
 
 export const BRANDING_NAME = 'Acensus';
-export const BRANDING_LOGO_URL = '';
+export const BRANDING_LOGO_URL = '/icons/acensus-logo.svg';
 
 export const ORG_NAME = 'Acensus';
 
 export const BRANDING_URL = {
-  help: undefined,
+  help: 'https://artemevkhv.t.me',
   privacy: undefined,
-  subscription: undefined,
-  support: undefined,
+  subscription: 'https://artemevkhv.t.me',
+  support: 'https://artemevkhv.t.me',
   terms: undefined,
 };
 
 export const SOCIAL_URL = {
   discord: undefined,
-  github: undefined,
+  github: 'https://acensus.ru',
   medium: undefined,
   x: undefined,
   youtube: undefined,
@@ -30,8 +30,8 @@ export const FILE_URL = {
 };
 
 export const BRANDING_EMAIL = {
-  business: 'hello@acensus.local',
-  support: 'support@acensus.local',
+  business: 'support@acensus.ru',
+  support: 'support@acensus.ru',
 };
 
 // Internal provider id. Keep stable until Acensus has a dedicated model-bank/runtime provider.
