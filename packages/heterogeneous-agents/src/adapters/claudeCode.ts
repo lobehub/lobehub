@@ -218,18 +218,27 @@ const CLI_OVERLOADED_PATTERNS = [
 ] as const;
 
 /**
- * The one reliable discriminator between a user-side plan/quota limit and a
- * transient server throttle: only the genuine user limit carries a concrete
- * reset window in the structured `rate_limit_event` — `resetsAt` (epoch
- * seconds) and/or a named `rateLimitType` (e.g. `seven_day`). Anthropic's
- * transient throttle emits a rate_limit_event too, but with just
- * `status: 'rejected'` and no reset info. Status codes (429 / 529) alone are
- * ambiguous, so this structured signal — not the HTTP status, not the message
- * text — is what decides whether we show the "usage limit reached, resets at
- * X" guide vs the "temporarily overloaded, retry" guide.
+ * Discriminates a user-side plan/quota limit from everything else.
+ *
+ * Two signals must BOTH hold:
+ *  1. The request was actually `status: 'rejected'`. Anthropic stamps a
+ *     `rate_limit_info` onto its events even when the request goes through
+ *     (`status: 'allowed'`) — that block is just the rolling-window metadata
+ *     (`resetsAt`, `rateLimitType`) for an *allowed* call, NOT evidence the
+ *     limit was hit. Leaning on the presence of a reset window alone made a
+ *     later unrelated terminal failure (e.g. an `ECONNRESET` network drop)
+ *     inherit the last allowed event's window and render a bogus "usage limit
+ *     reached, resets at X" guide. The `status` is the gate.
+ *  2. A concrete reset window (`resetsAt` epoch seconds and/or a named
+ *     `rateLimitType` such as `seven_day`). A bare `rejected` with no window is
+ *     Anthropic's transient server throttle — left to the overloaded (retry)
+ *     classifier, not the usage-limit guide.
+ *
+ * Status codes (429 / 529) and message text are deliberately not consulted
+ * here — only this structured signal decides the "usage limit reached" guide.
  */
 const isUserQuotaRateLimit = (info?: HeterogeneousRateLimitInfo): boolean =>
-  !!info && (info.resetsAt != null || info.rateLimitType != null);
+  !!info && info.status === 'rejected' && (info.resetsAt != null || info.rateLimitType != null);
 
 const getCliResultMessage = (result: unknown): string | undefined => {
   if (typeof result === 'string') return result;

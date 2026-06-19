@@ -176,6 +176,38 @@ describe('ClaudeCodeAdapter', () => {
       });
     });
 
+    it('does not treat an allowed rate_limit_event window as a quota limit on a later network error', () => {
+      const adapter = new ClaudeCodeAdapter();
+      // CC stamps a rate_limit_info onto an *allowed* request — it carries the
+      // rolling-window metadata (resetsAt / rateLimitType) even though nothing
+      // was rejected. A later ECONNRESET must surface as a generic error, NOT
+      // inherit this window and render a bogus "usage limit reached" guide.
+      const rawError = 'API Error: Unable to connect to API (ECONNRESET)';
+
+      adapter.adapt({ subtype: 'init', type: 'system' });
+      adapter.adapt({
+        rate_limit_info: {
+          isUsingOverage: false,
+          rateLimitType: 'five_hour',
+          resetsAt: 1_781_853_000,
+          status: 'allowed',
+        },
+        type: 'rate_limit_event',
+      });
+
+      const events = adapter.adapt({
+        api_error_status: null,
+        is_error: true,
+        result: rawError,
+        type: 'result',
+      });
+
+      expect(events.map((e) => e.type)).toEqual(['stream_end', 'error']);
+      expect(events[1].data).toMatchObject({ error: rawError, message: rawError });
+      expect(events[1].data).not.toHaveProperty('code', 'rate_limit');
+      expect(events[1].data).not.toHaveProperty('rateLimitInfo');
+    });
+
     it('classifies rate-limit failures from paired rate_limit_event + result events', () => {
       const adapter = new ClaudeCodeAdapter();
       const rawError = "You've hit your limit · resets 9am (Asia/Shanghai)";
