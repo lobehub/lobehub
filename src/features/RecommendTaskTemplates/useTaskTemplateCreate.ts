@@ -11,7 +11,11 @@ import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 
-import { SkillConnectionPopupBlockedError, useSkillConnection } from './useSkillConnection';
+import {
+  SkillConnectionMarketAuthRequiredError,
+  SkillConnectionPopupBlockedError,
+  useSkillConnection,
+} from './useSkillConnection';
 
 interface UseTaskTemplateCreateOptions {
   description: string;
@@ -29,6 +33,16 @@ export interface UseTaskTemplateCreateResult {
   pendingCreate: boolean;
   primaryButtonLabel: string;
 }
+
+type ConnectErrorMessageKey = 'action.connect.error' | 'action.connect.popupBlocked';
+
+export const resolveTaskTemplateConnectErrorMessageKey = (
+  error: unknown,
+): ConnectErrorMessageKey | undefined => {
+  if (error instanceof SkillConnectionMarketAuthRequiredError) return undefined;
+  if (error instanceof SkillConnectionPopupBlockedError) return 'action.connect.popupBlocked';
+  return 'action.connect.error';
+};
 
 export const useTaskTemplateCreate = ({
   description,
@@ -97,11 +111,9 @@ export const useTaskTemplateCreate = ({
 
   const handleConnectError = useCallback(
     (error: unknown) => {
-      message.error(
-        error instanceof SkillConnectionPopupBlockedError
-          ? t('action.connect.popupBlocked')
-          : t('action.connect.error'),
-      );
+      const messageKey = resolveTaskTemplateConnectErrorMessageKey(error);
+      if (!messageKey) return;
+      message.error(t(messageKey));
     },
     [message, t],
   );

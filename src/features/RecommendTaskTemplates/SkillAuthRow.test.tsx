@@ -9,6 +9,7 @@ import { SkillAuthRow } from './SkillAuthRow';
 const connectMock = vi.hoisted(() => vi.fn());
 
 vi.mock('./useSkillConnection', () => ({
+  SkillConnectionMarketAuthRequiredError: class SkillConnectionMarketAuthRequiredError extends Error {},
   SkillConnectionPopupBlockedError: class SkillConnectionPopupBlockedError extends Error {},
   useSkillConnection: () => ({
     connect: connectMock,

@@ -83,8 +83,8 @@ const MarketAuthConfirmModal = memo<MarketAuthConfirmModalProps>(
     return (
       <Modal
         centered
-        cancelText={t('authorize.cancel')}
-        okText={t('authorize.confirm')}
+        cancelText={ts('cancel')}
+        okText={ts('confirm')}
         open={open}
         title={null}
         width={440}

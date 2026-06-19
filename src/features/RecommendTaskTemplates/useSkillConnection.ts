@@ -3,6 +3,7 @@ import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { LOBEHUB_SKILL_AUTH_SUCCESS_MESSAGE } from '@/const/skillConnection';
+import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { useToolStore } from '@/store/tool';
 import { composioStoreSelectors } from '@/store/tool/slices/composioStore/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore/types';
@@ -32,6 +33,24 @@ export class SkillConnectionPopupBlockedError extends Error {
     this.name = 'SkillConnectionPopupBlockedError';
   }
 }
+
+/** Thrown when connecting a LobeHub Skill first needs Market auth. */
+export class SkillConnectionMarketAuthRequiredError extends Error {
+  constructor() {
+    super('Market auth required before connecting LobeHub Skill');
+    this.name = 'SkillConnectionMarketAuthRequiredError';
+  }
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+const isMarketUnauthorizedError = (error: unknown): boolean => {
+  if (!isRecord(error)) return false;
+  const data = error.data;
+  if (!isRecord(data)) return false;
+  return data.httpStatus === 401 || data.code === 'UNAUTHORIZED';
+};
 
 type ConnectTarget = Pick<SkillProviderMeta, 'identifier' | 'source'>;
 
@@ -75,6 +94,7 @@ export const useSkillConnection = (
   const checkLobehubStatus = useToolStore((s) => s.checkLobehubSkillStatus);
   const createComposioConnection = useToolStore((s) => s.createComposioConnection);
   const refreshComposioConnectionStatus = useToolStore((s) => s.refreshComposioConnectionStatus);
+  const { isAuthenticated: isMarketAuthenticated, signIn: signInMarket } = useMarketAuth();
 
   const isConnectedFor = useIsSkillConnected();
 
@@ -249,6 +269,14 @@ export const useSkillConnection = (
     setIsConnecting(true);
     try {
       if (next.source === 'lobehub') {
+        if (!isMarketAuthenticated) {
+          try {
+            await signInMarket('connector');
+          } catch {
+            // MarketAuthProvider already surfaces auth failures; task templates only need to stop this run.
+          }
+          throw new SkillConnectionMarketAuthRequiredError();
+        }
         // Skip redirectUri on desktop (app:// protocol) since the system browser can't navigate to it
         const redirectUri = window.location.protocol.startsWith('http')
           ? `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(next.identifier)}`
@@ -276,6 +304,10 @@ export const useSkillConnection = (
         throw new Error('Composio server is missing an OAuth URL');
       }
     } catch (error) {
+      if (error instanceof SkillConnectionMarketAuthRequiredError) throw error;
+      if (next.source === 'lobehub' && isMarketUnauthorizedError(error)) {
+        throw new SkillConnectionMarketAuthRequiredError();
+      }
       console.error('[useSkillConnection] Failed to connect:', error);
       throw error;
     } finally {
@@ -285,6 +317,8 @@ export const useSkillConnection = (
   }, [
     nextUnconnected,
     isWaitingAuth,
+    isMarketAuthenticated,
+    signInMarket,
     getLobehubAuth,
     createComposioConnection,
     refreshComposioConnectionStatus,

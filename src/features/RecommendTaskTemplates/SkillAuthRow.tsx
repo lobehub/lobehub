@@ -5,7 +5,11 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getProviderMeta } from './providerMeta';
-import { SkillConnectionPopupBlockedError, useSkillConnection } from './useSkillConnection';
+import {
+  SkillConnectionMarketAuthRequiredError,
+  SkillConnectionPopupBlockedError,
+  useSkillConnection,
+} from './useSkillConnection';
 
 interface SkillAuthRowProps {
   disabled?: boolean;
@@ -62,4 +66,4 @@ export const SkillAuthRow = memo<SkillAuthRowProps>(({ disabled, spec, onError }
 
 SkillAuthRow.displayName = 'SkillAuthRow';
 
-export { SkillConnectionPopupBlockedError };
+export { SkillConnectionMarketAuthRequiredError, SkillConnectionPopupBlockedError };

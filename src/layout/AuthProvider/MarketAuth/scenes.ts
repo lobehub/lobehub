@@ -6,7 +6,7 @@
  * while falling back to the generic community-profile copy when unknown.
  */
 
-export type MarketAuthScene = 'default' | 'sandbox' | 'mcp';
+export type MarketAuthScene = 'default' | 'sandbox' | 'mcp' | 'connector';
 
 /**
  * Infer the scene from a tRPC procedure path (e.g. `market.execInSandbox`).
@@ -15,5 +15,6 @@ export type MarketAuthScene = 'default' | 'sandbox' | 'mcp';
 export const pathToMarketAuthScene = (path: string): MarketAuthScene => {
   if (path.includes('execInSandbox')) return 'sandbox';
   if (path.includes('CloudMcp') || path.includes('callCloudMcpEndpoint')) return 'mcp';
+  if (path.startsWith('market.connect')) return 'connector';
   return 'default';
 };
