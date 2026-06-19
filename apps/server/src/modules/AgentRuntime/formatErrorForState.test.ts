@@ -227,6 +227,24 @@ describe('formatErrorForState', () => {
       });
     });
 
+    it('merges payload status into an existing _responseBody error object', () => {
+      const result = formatErrorForState({
+        _responseBody: { error: { message: 'Payment required' }, provider: 'lobehub' },
+        error: { status: 402 },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        message: 'opaque upstream message',
+      });
+
+      expect(result).toMatchObject({
+        body: {
+          error: { message: 'Payment required', status: 402 },
+          provider: 'lobehub',
+        },
+        category: 'quota',
+        type: AgentRuntimeErrorType.InsufficientQuota,
+      });
+    });
+
     it('keeps a genuine residual as ProviderBizError (E8002)', () => {
       const result = formatErrorForState({
         errorType: AgentRuntimeErrorType.ProviderBizError,

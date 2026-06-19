@@ -42,6 +42,17 @@ interface ChatCompletionErrorPayloadLike {
   provider?: unknown;
 }
 
+const mergePayloadError = (
+  sourceBody: Record<string, unknown>,
+  payload: ChatCompletionErrorPayloadLike,
+): unknown | undefined => {
+  if (payload._responseBody === undefined || payload.error === undefined) return undefined;
+  if (!('error' in sourceBody)) return payload.error;
+  if (isRecord(sourceBody.error) && isRecord(payload.error)) {
+    return { ...payload.error, ...sourceBody.error };
+  }
+};
+
 const buildPayloadBody = (
   payload: ChatCompletionErrorPayloadLike,
   originalError: unknown,
@@ -58,17 +69,14 @@ const buildPayloadBody = (
   if (typeof payload.provider === 'string') context.provider = payload.provider;
 
   if (isRecord(sourceBody)) {
-    const shouldAttachPayloadError =
-      payload._responseBody !== undefined &&
-      payload.error !== undefined &&
-      !('error' in sourceBody);
+    const payloadError = mergePayloadError(sourceBody, payload);
 
     return {
       ...sourceBody,
       // `_responseBody` is the display-facing body, but gateway/model-runtime
       // still carries status/provider details in `error` for some failures:
-      // `{ _responseBody: {...}, error: { status: 402 } }`.
-      ...(shouldAttachPayloadError ? { error: payload.error } : {}),
+      // `{ _responseBody: { error: { message } }, error: { status: 402 } }`.
+      ...(payloadError === undefined ? {} : { error: payloadError }),
       ...(payload.budget !== undefined && !('budget' in sourceBody)
         ? { budget: payload.budget }
         : {}),
