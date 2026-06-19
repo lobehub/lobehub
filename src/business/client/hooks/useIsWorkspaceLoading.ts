@@ -1,1 +1,3 @@
-export const useIsWorkspaceLoading = (): boolean => false;
+import { useWorkspaceListSWR } from './useWorkspaces';
+
+export const useIsWorkspaceLoading = (): boolean => useWorkspaceListSWR().isLoading;

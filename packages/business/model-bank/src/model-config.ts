@@ -8,11 +8,22 @@ interface LobeHubModelConfig {
   version: number;
 }
 
-const getDefaultLobeHubModelConfig = (): LobeHubModelConfig => ({
-  models: [],
-  planCardModels: [],
-  version: 1,
-});
+const getDefaultLobeHubModelConfig = (): LobeHubModelConfig => {
+  const models = (process.env.ACENSUS_AI_MODELS || process.env.ACENSUS_AI_DEFAULT_MODEL || '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+
+  return {
+    models: models.map((id) => ({
+      enabled: true,
+      id,
+      type: 'chat' as const,
+    })),
+    planCardModels: models.slice(0, 3),
+    version: 1,
+  };
+};
 
 const loadLobeHubModelConfig = async (): Promise<LobeHubModelConfig> =>
   getDefaultLobeHubModelConfig();
@@ -37,4 +48,15 @@ export const isLobeHubModelAvailable = (
     getUserEmail?: () => Promise<string | null | undefined>;
     userEmail?: string | null;
   },
-): boolean => false;
+): boolean => {
+  const configuredModels = (
+    process.env.ACENSUS_AI_MODELS ||
+    process.env.ACENSUS_AI_DEFAULT_MODEL ||
+    ''
+  )
+    .split(',')
+    .map((model) => model.trim())
+    .filter(Boolean);
+
+  return configuredModels.includes(_id);
+};

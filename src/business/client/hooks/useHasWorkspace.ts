@@ -1,1 +1,3 @@
-export const useHasWorkspace = (): boolean => false;
+import { useWorkspaces } from './useWorkspaces';
+
+export const useHasWorkspace = (): boolean => useWorkspaces().length > 0;

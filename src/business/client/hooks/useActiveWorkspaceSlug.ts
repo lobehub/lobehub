@@ -1,3 +1,5 @@
-export const getActiveWorkspaceSlug = (): string | null => null;
+import { getWorkspaceSnapshot, useWorkspaceSnapshot } from './workspaceState';
 
-export const useActiveWorkspaceSlug = (): string | null => null;
+export const getActiveWorkspaceSlug = (): string | null => getWorkspaceSnapshot().slug;
+
+export const useActiveWorkspaceSlug = (): string | null => useWorkspaceSnapshot().slug;
