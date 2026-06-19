@@ -472,7 +472,7 @@ export default {
   'referral.hero.title': 'Invite friends, you both earn <0>{{reward}}M credits</0>',
   'referral.inviteCode.description':
     'Share your exclusive referral code to invite friends to register',
-  'referral.inviteCode.title': 'My Referral Code',
+  'referral.inviteCode.title': 'My Exclusive Referral Code',
   'referral.inviteLink.description':
     'Copy the link and share with friends. Both of you earn credits after your friend makes a payment',
   'referral.inviteLink.title': 'Referral Link',
