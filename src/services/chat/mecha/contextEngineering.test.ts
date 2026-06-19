@@ -187,6 +187,23 @@ describe('contextEngineering', () => {
     expect(agentService.queryAgents).toHaveBeenCalledWith({ limit: 12 });
   });
 
+  it('should inject runtime model knowledge cutoff', async () => {
+    vi.spyOn(helpers, 'getRuntimeModelKnowledgeCutoff').mockReturnValue('2024-06');
+
+    const output = await contextEngineering({
+      messages: [{ content: 'Hello', role: 'user' }] as UIChatMessage[],
+      model: 'gpt-4',
+      provider: 'openai',
+      systemRole: 'You are a helpful assistant',
+    });
+
+    expect(helpers.getRuntimeModelKnowledgeCutoff).toHaveBeenCalledWith('gpt-4', 'openai');
+    expect(output[0]).toEqual({
+      content: expect.stringContaining('Model knowledge cutoff: 2024-06'),
+      role: 'system',
+    });
+  });
+
   describe('handle with files content in server mode', () => {
     it('should includes files', async () => {
       runtimeFlags.isServerMode = true;

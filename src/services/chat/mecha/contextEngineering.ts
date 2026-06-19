@@ -69,7 +69,12 @@ import {
 } from '@/store/tool/selectors';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 
-import { isCanUseAudio, isCanUseVideo, isCanUseVision } from '../helper';
+import {
+  getRuntimeModelKnowledgeCutoff,
+  isCanUseAudio,
+  isCanUseVideo,
+  isCanUseVision,
+} from '../helper';
 import { combineUserMemoryData, resolveTopicMemories, resolveUserPersona } from './memoryManager';
 import { resolveClientSkills } from './skillEngineering';
 
@@ -691,6 +696,7 @@ export const contextEngineering = async ({
 
     // Model info
     model,
+    modelKnowledgeCutoff: getRuntimeModelKnowledgeCutoff(model, provider),
     provider,
 
     // runtime context

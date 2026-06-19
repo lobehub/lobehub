@@ -72,7 +72,7 @@ import {
 } from '@lobechat/types';
 import { sanitizeToolCallArguments, serializePartsForStorage } from '@lobechat/utils';
 import debug from 'debug';
-import type { ExtendParamsType } from 'model-bank';
+import { type ExtendParamsType, ModelProvider } from 'model-bank';
 
 import { composioEnv } from '@/config/composio';
 import { type MessageModel, MessageModel as MessageModelClass } from '@/database/models/message';
@@ -911,6 +911,12 @@ export const createRuntimeExecutors = (
             item.providerId === provider &&
             (item.id === model || item.config?.deploymentName === model),
         );
+        const canonicalModelCard = builtinModels.find(
+          (item) => item.id === model || item.config?.deploymentName === model,
+        );
+        const modelKnowledgeCutoff =
+          modelCard?.knowledgeCutoff ??
+          (provider === ModelProvider.LobeHub ? canonicalModelCard?.knowledgeCutoff : undefined);
 
         let modelExtendParams = readExtendParams(modelCard);
 
@@ -920,10 +926,7 @@ export const createRuntimeExecutors = (
         // `thinkingLevel` still reach the model. Mirrors the client-side
         // `transformToAiModelList` re-namespacing behavior.
         if (!modelExtendParams || modelExtendParams.length === 0) {
-          const canonicalCard = builtinModels.find(
-            (item) => item.id === model || item.config?.deploymentName === model,
-          );
-          modelExtendParams = readExtendParams(canonicalCard);
+          modelExtendParams = readExtendParams(canonicalModelCard);
         }
 
         const modelSupportsPreserveThinkingFromCard =
@@ -1300,6 +1303,7 @@ export const createRuntimeExecutors = (
           },
           messages: messagesForContext,
           model,
+          modelKnowledgeCutoff,
           provider,
           systemRole: agentConfig.systemRole ?? undefined,
           toolDiscoveryConfig,

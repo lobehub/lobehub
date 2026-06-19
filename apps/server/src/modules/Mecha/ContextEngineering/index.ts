@@ -51,6 +51,7 @@ const createServerVariableGenerators = (params: {
 export const serverMessagesEngine = async ({
   messages = [],
   model,
+  modelKnowledgeCutoff,
   provider,
   systemRole,
   inputTemplate,
@@ -121,6 +122,7 @@ export const serverMessagesEngine = async ({
 
     // Model info
     model,
+    modelKnowledgeCutoff,
 
     provider,
     systemRole,

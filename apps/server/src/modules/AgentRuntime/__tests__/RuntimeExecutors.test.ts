@@ -14,6 +14,7 @@ const mockBuiltinModels = vi.hoisted(() => [
   {
     abilities: { functionCall: true, video: false, vision: true },
     id: 'gpt-4',
+    knowledgeCutoff: '2024-06',
     providerId: 'openai',
   },
   {
@@ -77,6 +78,9 @@ vi.mock('@/business/client/model-bank/loadModels', () => ({
 // model-bank is a TypeScript source file that cannot be dynamically imported in vitest
 vi.mock('model-bank', () => ({
   LOBE_DEFAULT_MODEL_LIST: mockBuiltinModels,
+  ModelProvider: {
+    LobeHub: 'lobehub',
+  },
 }));
 
 // composioEnv uses @t3-oss/env-nextjs which throws in jsdom (treats it as client context)
@@ -1573,6 +1577,87 @@ describe('RuntimeExecutors', () => {
         expect(chatMessages.at(-1)).toEqual(
           expect.objectContaining({ content: 'Hello', role: 'user' }),
         );
+      });
+
+      it('should pass model knowledge cutoff into serverMessagesEngine', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            plugins: [],
+            systemRole: 'You are a helpful assistant',
+          },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+
+        const instruction = {
+          payload: {
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: 'gpt-4',
+            provider: 'openai',
+          },
+          type: 'call_llm' as const,
+        };
+
+        await executors.call_llm!(instruction, state);
+
+        expect(engineSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ modelKnowledgeCutoff: '2024-06' }),
+        );
+      });
+
+      it('should resolve LobeHub routed model knowledge cutoff by model id fallback', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            plugins: [],
+            systemRole: 'You are a helpful assistant',
+          },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+
+        await executors.call_llm!(
+          {
+            payload: {
+              messages: [{ content: 'Hello', role: 'user' }],
+              model: 'gpt-4',
+              provider: 'lobehub',
+            },
+            type: 'call_llm' as const,
+          },
+          state,
+        );
+
+        expect(engineSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ modelKnowledgeCutoff: '2024-06' }),
+        );
+      });
+
+      it('should omit model knowledge cutoff for unknown non-LobeHub providers', async () => {
+        const ctxWithConfig: RuntimeExecutorContext = {
+          ...ctx,
+          agentConfig: {
+            plugins: [],
+            systemRole: 'You are a helpful assistant',
+          },
+        };
+        const executors = createRuntimeExecutors(ctxWithConfig);
+        const state = createMockState();
+
+        await executors.call_llm!(
+          {
+            payload: {
+              messages: [{ content: 'Hello', role: 'user' }],
+              model: 'gpt-4',
+              provider: 'custom-openai',
+            },
+            type: 'call_llm' as const,
+          },
+          state,
+        );
+
+        expect(engineSpy.mock.calls[0][0]).toHaveProperty('modelKnowledgeCutoff', undefined);
       });
 
       it('should keep current turn when agent historyCount is 0', async () => {
