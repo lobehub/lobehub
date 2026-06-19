@@ -99,7 +99,7 @@ export function useDailyBriefRecommendationsUI(
 ): DailyBriefRecommendationsUIState {
   const { count } = options;
   const recommendationCount = count ?? TASK_TEMPLATE_RECOMMEND_COUNT;
-  const { i18n, t } = useTranslation('taskTemplate');
+  const { i18n, t } = useTranslation('common');
   const locale = i18n.resolvedLanguage || i18n.language;
   const { message } = App.useApp();
   const isLogin = useUserStore(authSelectors.isLogin);
@@ -198,7 +198,7 @@ export function useDailyBriefRecommendationsUI(
         await taskTemplateService.dismiss(templateId);
       } catch (error) {
         console.error('[taskTemplate:dismiss]', error);
-        message.error(t('action.dismiss.error'));
+        message.error(t('taskTemplate.action.dismiss.error'));
         mutate();
       }
     },

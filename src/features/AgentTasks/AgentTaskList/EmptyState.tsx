@@ -30,7 +30,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const EmptyState = memo(() => {
   const { t } = useTranslation('chat');
-  const { t: tTaskTemplate } = useTranslation('taskTemplate');
+  const { t: tCommon } = useTranslation('common');
   const templatesState = useDailyBriefRecommendationsUI({ count: EMPTY_STATE_RECOMMEND_COUNT });
 
   return (
@@ -66,7 +66,7 @@ const EmptyState = memo(() => {
                 onClick={templatesState.onRefresh}
               >
                 <Icon icon={RefreshCw} size={12} />
-                <Text fontSize={12}>{tTaskTemplate('action.refresh.button')}</Text>
+                <Text fontSize={12}>{tCommon('taskTemplate.action.refresh.button')}</Text>
               </Flexbox>
             )}
           </Flexbox>

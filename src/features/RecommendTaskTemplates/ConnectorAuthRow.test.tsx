@@ -40,7 +40,9 @@ describe('ConnectorAuthRow', () => {
       />,
     );
 
-    const connectButton = screen.getByRole('button', { name: 'action.connect.short' });
+    const connectButton = screen.getByRole('button', {
+      name: 'taskTemplate.action.connect.short',
+    });
     expect(connectButton).toBeDisabled();
 
     fireEvent.click(connectButton);
