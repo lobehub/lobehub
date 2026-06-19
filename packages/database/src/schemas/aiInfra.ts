@@ -1,12 +1,13 @@
 import type { AiProviderConfig, AiProviderSettings } from '@lobechat/types';
+import { isNotNull, isNull } from 'drizzle-orm';
 import {
   boolean,
   index,
   integer,
   jsonb,
   pgTable,
-  primaryKey,
   text,
+  uniqueIndex,
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
@@ -23,14 +24,11 @@ export const aiProviders = pgTable(
     name: text('name'),
 
     /**
-     * Surrogate primary key for the ai_providers workspace-scoped unique
-     * constraints migration. The original composite PK (id, user_id) was
-     * incompatible with workspace-scoped duplicates because workspace_id can
-     * be NULL for personal rows. Added nullable + DEFAULT to avoid a full
-     * table rewrite; a later manual step backfills history and adds NOT NULL
-     * before the unique index + PK swap.
+     * Surrogate primary key for the workspace-scoped rebuild (LOBE-10056). The
+     * business uniqueness now lives in the workspace-scoped partial unique
+     * indexes below, so the PK no longer carries it.
      */
-    _id: uuid('_id').defaultRandom(),
+    _id: uuid('_id').defaultRandom().notNull().primaryKey(),
 
     userId: text('user_id')
       .references(() => users.id, { onDelete: 'cascade' })
@@ -59,7 +57,12 @@ export const aiProviders = pgTable(
     ...timestamps,
   },
   (table) => [
-    primaryKey({ columns: [table.id, table.userId] }),
+    uniqueIndex('ai_providers_id_user_id_unique')
+      .on(table.id, table.userId)
+      .where(isNull(table.workspaceId)),
+    uniqueIndex('ai_providers_id_user_id_workspace_id_unique')
+      .on(table.id, table.userId, table.workspaceId)
+      .where(isNotNull(table.workspaceId)),
     index('ai_providers_user_id_idx').on(table.userId),
     index('ai_providers_workspace_id_idx').on(table.workspaceId),
   ],
@@ -74,14 +77,11 @@ export const aiModels = pgTable(
     id: varchar('id', { length: 150 }).notNull(),
 
     /**
-     * Surrogate primary key for the ai_models workspace-scoped unique
-     * constraints migration. The original composite PK (id, provider_id,
-     * user_id) was incompatible with workspace-scoped duplicates because
-     * workspace_id can be NULL for personal rows. Added nullable + DEFAULT
-     * to avoid a full table rewrite (~4M rows); a later manual step
-     * backfills history and adds NOT NULL before the unique index + PK swap.
+     * Surrogate primary key for the workspace-scoped rebuild (LOBE-10056). The
+     * business uniqueness now lives in the workspace-scoped partial unique
+     * indexes below, so the PK no longer carries it.
      */
-    _id: uuid('_id').defaultRandom(),
+    _id: uuid('_id').defaultRandom().notNull().primaryKey(),
 
     displayName: varchar('display_name', { length: 200 }),
     description: text('description'),
@@ -108,7 +108,12 @@ export const aiModels = pgTable(
     ...timestamps,
   },
   (table) => [
-    primaryKey({ columns: [table.id, table.providerId, table.userId] }),
+    uniqueIndex('ai_models_id_provider_id_user_id_unique')
+      .on(table.id, table.providerId, table.userId)
+      .where(isNull(table.workspaceId)),
+    uniqueIndex('ai_models_id_provider_id_user_id_workspace_id_unique')
+      .on(table.id, table.providerId, table.userId, table.workspaceId)
+      .where(isNotNull(table.workspaceId)),
     index('ai_models_user_id_idx').on(table.userId),
     index('ai_models_workspace_id_idx').on(table.workspaceId),
   ],

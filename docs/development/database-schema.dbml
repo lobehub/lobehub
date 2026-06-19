@@ -132,7 +132,6 @@ table agent_cron_jobs {
     enabled [name: 'agent_cron_jobs_enabled_idx']
     remaining_executions [name: 'agent_cron_jobs_remaining_executions_idx']
     last_executed_at [name: 'agent_cron_jobs_last_executed_at_idx']
-    workspace_id [name: 'agent_cron_jobs_workspace_id_idx']
   }
 }
 
@@ -390,7 +389,6 @@ table agent_operations {
     status [name: 'agent_operations_status_idx']
     (user_id, created_at) [name: 'agent_operations_user_id_created_at_idx']
     metadata [name: 'agent_operations_metadata_idx']
-    workspace_id [name: 'agent_operations_workspace_id_idx']
   }
 }
 
@@ -440,7 +438,7 @@ table agent_skills {
 
 table ai_models {
   id varchar(150) [not null]
-  "_id" uuid [default: `gen_random_uuid()`]
+  "_id" uuid [pk, not null, default: `gen_random_uuid()`]
   display_name varchar(200)
   description text
   organization varchar(100)
@@ -473,7 +471,7 @@ table ai_models {
 table ai_providers {
   id varchar(64) [not null]
   name text
-  "_id" uuid [default: `gen_random_uuid()`]
+  "_id" uuid [pk, not null, default: `gen_random_uuid()`]
   user_id text [not null]
   sort integer
   enabled boolean
@@ -765,6 +763,7 @@ table devices {
 
   indexes {
     (user_id, device_id) [name: 'devices_user_id_device_id_unique', unique]
+    (workspace_id, device_id) [name: 'devices_workspace_id_device_id_unique', unique]
     user_id [name: 'devices_user_id_idx']
     workspace_id [name: 'devices_workspace_id_idx']
   }
@@ -784,7 +783,6 @@ table document_histories {
     user_id [name: 'document_histories_user_id_idx']
     workspace_id [name: 'document_histories_workspace_id_idx']
     saved_at [name: 'document_histories_saved_at_idx']
-    workspace_id [name: 'document_histories_workspace_id_idx']
   }
 }
 
@@ -1040,7 +1038,6 @@ table llm_generation_tracing {
     validation_failed [name: 'llm_generation_tracing_validation_failed_idx']
     feedback_signal [name: 'llm_generation_tracing_feedback_signal_idx']
     created_at [name: 'llm_generation_tracing_created_at_idx']
-    workspace_id [name: 'llm_generation_tracing_workspace_id_idx']
   }
 }
 
@@ -1802,7 +1799,6 @@ table file_chunks {
     workspace_id [name: 'file_chunks_workspace_id_idx']
     file_id [name: 'file_chunks_file_id_idx']
     chunk_id [name: 'file_chunks_chunk_id_idx']
-    workspace_id [name: 'file_chunks_workspace_id_idx']
   }
 }
 
@@ -1818,7 +1814,6 @@ table files_to_sessions {
     workspace_id [name: 'files_to_sessions_workspace_id_idx']
     file_id [name: 'files_to_sessions_file_id_idx']
     session_id [name: 'files_to_sessions_session_id_idx']
-    workspace_id [name: 'files_to_sessions_workspace_id_idx']
   }
 }
 
@@ -2609,6 +2604,9 @@ table workspaces {
   avatar text
   primary_owner_id text [not null]
   settings jsonb [default: `{}`]
+  frozen boolean [default: false]
+  frozen_reason text
+  frozen_at "timestamp with time zone"
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
