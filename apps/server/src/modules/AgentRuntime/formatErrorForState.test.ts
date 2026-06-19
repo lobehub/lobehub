@@ -16,7 +16,35 @@ describe('formatErrorForState', () => {
 
       expect(result.type).toBe(AgentRuntimeErrorType.InvalidProviderAPIKey);
       expect(result.message).toBe('Invalid API key');
-      expect(result.body).toEqual({ detail: 'Unauthorized' });
+      expect(result.body).toEqual({
+        detail: 'Unauthorized',
+        message: 'Invalid API key',
+        provider: 'openai',
+      });
+    });
+
+    it('preserves top-level context from ChatCompletionErrorPayload', () => {
+      const budget = { required: 12 };
+
+      const result = formatErrorForState({
+        budget,
+        error: { message: 'Budget exceeded' },
+        errorType: ChatErrorType.FreePlanLimit,
+        provider: 'lobehub',
+      });
+
+      expect(result).toMatchObject({
+        attribution: 'user',
+        body: {
+          budget,
+          message: 'Budget exceeded',
+          provider: 'lobehub',
+        },
+        category: 'quota',
+        httpStatus: 402,
+        message: 'Budget exceeded',
+        type: ChatErrorType.FreePlanLimit,
+      });
     });
 
     it('wraps standard Error as InternalServerError', () => {

@@ -14,6 +14,7 @@ import type {
   UIChatMessage,
 } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils';
 
 import { messageService } from '@/services/message';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/aiChat/actions/agentSignalBridge';
@@ -155,21 +156,69 @@ const findNextAssistantMessageId = (
   }
 };
 
+const isErrorType = (value: unknown): value is ChatMessageError['type'] =>
+  typeof value === 'string' || typeof value === 'number';
+
+const getMessageFromErrorData = (data: unknown): string | undefined => {
+  if (!isRecord(data)) return undefined;
+
+  const message = data.message;
+  if (typeof message === 'string' && message) return message;
+
+  const error = data.error;
+  if (typeof error === 'string' && error) return error;
+  if (isRecord(error)) {
+    const errorMessage = error.message;
+    if (typeof errorMessage === 'string' && errorMessage) return errorMessage;
+
+    const nestedError = error.error;
+    if (isRecord(nestedError)) {
+      const nestedMessage = nestedError.message;
+      if (typeof nestedMessage === 'string' && nestedMessage) return nestedMessage;
+    }
+  }
+
+  const body = data.body;
+  if (isRecord(body)) {
+    const bodyMessage = body.message;
+    if (typeof bodyMessage === 'string' && bodyMessage) return bodyMessage;
+  }
+};
+
 const toChatMessageError = (data: unknown): ChatMessageError => {
-  if (typeof data === 'object' && data && 'type' in data && typeof data.type === 'string') {
-    const error = data as ChatMessageError;
+  if (isRecord(data) && isErrorType(data.type)) {
+    const message =
+      typeof data.message === 'string' && data.message
+        ? data.message
+        : getMessageFromErrorData({ body: data.body });
+
     return {
-      ...error,
-      message: error.message || error.body?.message,
+      ...data,
+      ...(message ? { message } : {}),
+      type: data.type,
     };
   }
 
-  const message =
-    typeof data === 'object' && data && 'message' in data && typeof data.message === 'string'
-      ? data.message
-      : typeof data === 'object' && data && 'error' in data && typeof data.error === 'string'
-        ? data.error
-        : 'Unknown error';
+  // Gateway realtime error events can carry the model-runtime payload shape
+  // (`errorType` + `error`) before the terminal DB message is refreshed. Treat
+  // it as the same semantic error instead of falling back to AgentRuntimeError.
+  if (isRecord(data) && isErrorType(data.errorType)) {
+    const message = getMessageFromErrorData(data) || String(data.errorType);
+    const errorBody = isRecord(data.error) ? data.error : {};
+
+    return {
+      body: {
+        ...errorBody,
+        ...(data.budget === undefined ? {} : { budget: data.budget }),
+        ...(typeof data.provider === 'string' ? { provider: data.provider } : {}),
+        message,
+      },
+      message,
+      type: data.errorType,
+    };
+  }
+
+  const message = getMessageFromErrorData(data) || 'Unknown error';
 
   return {
     body: { message },
