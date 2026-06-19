@@ -1,6 +1,8 @@
 name: Publish Docker Image
 permissions:
-  contents: read
+  actions: write
+  contents: write
+  packages: write
 
 on:
   workflow_dispatch: {}
@@ -12,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  REGISTRY_IMAGE: lobehub/lobehub
+  REGISTRY_IMAGE: ghcr.io/stormofthegalaxy/lobehub
 
 jobs:
   build:
@@ -44,15 +46,19 @@ jobs:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
             type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
+            type=raw,value=latest
             type=raw,value=canary,enable=${{ contains(github.event.release.tag_name, '-canary.') }}
             type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event.release.prerelease }}
 
-      - name: Docker login
-        uses: docker/login-action@v3
+      # Login against a Docker registry except on PR
+      # https://github.com/docker/login-action
+      - name: Log into registry ghcr.io
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0
         with:
-          username: ${{ secrets.DOCKER_REGISTRY_USER }}
-          password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Get commit SHA
         if: github.ref == 'refs/heads/main'
@@ -111,15 +117,16 @@ jobs:
           images: ${{ env.REGISTRY_IMAGE }}
           tags: |
             type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
+            type=raw,value=latest
             type=raw,value=canary,enable=${{ contains(github.event.release.tag_name, '-canary.') }}
             type=raw,value=${{ github.event.release.tag_name }},enable=${{ github.event.release.prerelease }}
 
       - name: Docker login
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_REGISTRY_USER }}
-          password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create manifest list and push
         working-directory: /tmp/digests
