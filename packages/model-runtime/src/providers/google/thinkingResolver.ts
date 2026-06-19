@@ -93,6 +93,7 @@ export const getGoogleThinkingModelCategory = (model?: string): GoogleThinkingMo
 
   const parsed = parseGoogleModelId(model);
   if (!parsed || parsed.family !== 'gemini') return 'other';
+  if (parsed.majorVersion === undefined) return 'other';
 
   if (hasModifier(model, 'flash') && hasModifier(model, 'lite')) return 'flashLite';
   if (hasModifier(model, 'flash')) return 'flash';
@@ -133,6 +134,7 @@ export const isThinkingEnabledModel = (model?: string): boolean => {
 
   if (parsed.family === 'nanoBanana') return parsed.modifiers.includes('pro');
   if (parsed.family !== 'gemini') return false;
+  if (parsed.majorVersion === undefined) return false;
 
   return (
     parsed.modifiers.includes('pro') ||
