@@ -64,6 +64,10 @@ describe('isGPT5ResponsesModel', () => {
   it('should preserve current base GPT-5 chat-completions models', () => {
     expect(isGPT5ResponsesModel('gpt-5')).toBe(false);
     expect(isGPT5ResponsesModel('gpt-5-mini')).toBe(false);
+    expect(isGPT5ResponsesModel('gpt-5-chat-latest')).toBe(false);
+    expect(isGPT5ResponsesModel('gpt-5.2-chat-latest')).toBe(false);
+    expect(isGPT5ResponsesModel('gpt-5.3-chat-latest')).toBe(false);
+    expect(isResponsesAPIModel('gpt-5.2-chat-latest')).toBe(false);
   });
 
   it('should match existing GPT-5 Responses models', () => {

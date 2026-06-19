@@ -128,6 +128,7 @@ export const isGPT5ResponsesModel = (model: string): boolean => {
   const parsed = isNativeGPT5Model(model);
   if (!parsed) return false;
 
+  if (hasModifier(parsed, 'chat')) return false;
   if (hasModifier(parsed, 'codex') || hasModifier(parsed, 'pro')) return true;
 
   return parsed.minorVersion !== undefined && parsed.minorVersion >= 2;
