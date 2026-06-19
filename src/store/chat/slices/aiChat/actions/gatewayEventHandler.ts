@@ -178,11 +178,51 @@ const getMessageFromErrorData = (data: unknown): string | undefined => {
     }
   }
 
+  const responseBody = data._responseBody;
+  const responseBodyMessage = getMessageFromErrorData(responseBody);
+  if (responseBodyMessage) return responseBodyMessage;
+
   const body = data.body;
   if (isRecord(body)) {
     const bodyMessage = body.message;
     if (typeof bodyMessage === 'string' && bodyMessage) return bodyMessage;
   }
+};
+
+const mergeGatewayPayloadError = (
+  sourceBody: Record<string, unknown>,
+  payloadError: unknown,
+): Record<string, unknown> => {
+  if (payloadError === undefined) return sourceBody;
+  if (!('error' in sourceBody)) return { ...sourceBody, error: payloadError };
+  if (isRecord(sourceBody.error) && isRecord(payloadError)) {
+    return { ...sourceBody, error: { ...payloadError, ...sourceBody.error } };
+  }
+  return sourceBody;
+};
+
+const buildGatewayRuntimeErrorBody = (
+  data: Record<string, unknown>,
+  message: string,
+): Record<string, unknown> => {
+  const sourceBody = isRecord(data._responseBody)
+    ? data._responseBody
+    : isRecord(data.error)
+      ? data.error
+      : {};
+  const mergedBody =
+    data._responseBody === undefined
+      ? sourceBody
+      : mergeGatewayPayloadError(sourceBody, data.error);
+
+  return {
+    ...mergedBody,
+    ...(data.budget === undefined || 'budget' in mergedBody ? {} : { budget: data.budget }),
+    ...(typeof data.provider === 'string' && !('provider' in mergedBody)
+      ? { provider: data.provider }
+      : {}),
+    ...('message' in mergedBody ? {} : { message }),
+  };
 };
 
 const toChatMessageError = (data: unknown): ChatMessageError => {
@@ -204,15 +244,9 @@ const toChatMessageError = (data: unknown): ChatMessageError => {
   // it as the same semantic error instead of falling back to AgentRuntimeError.
   if (isRecord(data) && isErrorType(data.errorType)) {
     const message = getMessageFromErrorData(data) || String(data.errorType);
-    const errorBody = isRecord(data.error) ? data.error : {};
 
     return {
-      body: {
-        ...errorBody,
-        ...(data.budget === undefined ? {} : { budget: data.budget }),
-        ...(typeof data.provider === 'string' ? { provider: data.provider } : {}),
-        message,
-      },
+      body: buildGatewayRuntimeErrorBody(data, message),
       message,
       type: data.errorType,
     };

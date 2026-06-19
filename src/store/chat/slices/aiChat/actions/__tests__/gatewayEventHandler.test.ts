@@ -1128,6 +1128,37 @@ describe('createGatewayEventHandler', () => {
       );
     });
 
+    it('error event preserves _responseBody while merging payload error metadata', async () => {
+      const store = createMockStore();
+      const handler = createHandler(store);
+
+      handler(
+        makeEvent('error', {
+          _responseBody: {
+            error: { message: 'Payment required' },
+            provider: 'lobehub',
+          },
+          error: { status: 402 },
+          errorType: 'ProviderBizError',
+        }),
+      );
+      await flush();
+
+      expect(messageService.updateMessageError).toHaveBeenCalledWith(
+        'msg-initial',
+        expect.objectContaining({
+          body: expect.objectContaining({
+            error: { message: 'Payment required', status: 402 },
+            message: 'Payment required',
+            provider: 'lobehub',
+          }),
+          message: 'Payment required',
+          type: 'ProviderBizError',
+        }),
+        expect.anything(),
+      );
+    });
+
     // Contrast probe: agent_runtime_end on the SAME operation (which has a
     // context.agentId) DOES mark unread completed — proving the negative
     // assertion above is the error path's own behavior, not a missing agentId.
