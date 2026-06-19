@@ -18,7 +18,7 @@ import { type ServerRuntimeRegistration } from './types';
  *
  * - `runCommand → cwd`: the manifest deliberately hides `cwd`, but the daemon
  *   spawns in `params.cwd`.
- * - file ops (`readFile`/`writeFile`/`editFile`/`moveFiles`/`listFiles`) → `cwd`:
+ * - file ops (`readFile`/`writeFile`/`editFile`/`moveFiles`) → `cwd`:
  *   the daemon resolves a relative `path`/`file_path`/move item against
  *   `params.cwd` (see `resolveAgainstCwd`), so a model-supplied relative path
  *   lands in the bound directory instead of `/`. Absolute paths ignore it.
@@ -32,7 +32,6 @@ const WORKING_DIR_ARG: Partial<Record<string, 'cwd' | 'scope'>> = {
   [LocalSystemApiName.editFile]: 'cwd',
   [LocalSystemApiName.globFiles]: 'scope',
   [LocalSystemApiName.grepContent]: 'scope',
-  [LocalSystemApiName.listFiles]: 'cwd',
   [LocalSystemApiName.moveFiles]: 'cwd',
   [LocalSystemApiName.readFile]: 'cwd',
   [LocalSystemApiName.runCommand]: 'cwd',

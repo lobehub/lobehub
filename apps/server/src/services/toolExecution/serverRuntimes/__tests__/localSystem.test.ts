@@ -162,11 +162,11 @@ describe('localSystemRuntime', () => {
       expect(parseArgs()).toEqual({ cwd: '/Users/me/repo', path: 'src/index.ts' });
     });
 
-    it('injects cwd into writeFile / editFile / listFiles', async () => {
+    it('injects cwd into writeFile / editFile / moveFiles', async () => {
       for (const api of [
         LocalSystemApiName.writeFile,
         LocalSystemApiName.editFile,
-        LocalSystemApiName.listFiles,
+        LocalSystemApiName.moveFiles,
       ]) {
         mockExecuteToolCall.mockClear();
         const proxy = buildProxy('/Users/me/repo');
