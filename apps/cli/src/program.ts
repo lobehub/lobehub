@@ -33,6 +33,7 @@ import { registerStatusCommand } from './commands/status';
 import { registerTaskCommand } from './commands/task';
 import { registerThreadCommand } from './commands/thread';
 import { registerTopicCommand } from './commands/topic';
+import { registerUpdateCommand } from './commands/update';
 import { registerUserCommand } from './commands/user';
 import { registerVerifyCommand } from './commands/verify';
 
@@ -80,6 +81,7 @@ export function createProgram() {
   registerConfigCommand(program);
   registerEvalCommand(program);
   registerMigrateCommand(program);
+  registerUpdateCommand(program);
 
   return program;
 }
