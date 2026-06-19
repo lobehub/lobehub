@@ -108,6 +108,30 @@ describe('formatErrorEventData', () => {
       });
     });
 
+    it('uses the normalized runtime message when the payload message is a placeholder', () => {
+      const out = formatErrorEventData(
+        {
+          error: { message: 'Payment required', status: 402, traceId: 'trace-402' },
+          errorType: AgentRuntimeErrorType.ProviderBizError,
+          message: 'error',
+          provider: 'lobehub',
+        },
+        'llm_execution',
+      );
+
+      expect(out).toMatchObject({
+        body: {
+          message: 'Payment required',
+          provider: 'lobehub',
+          status: 402,
+          traceId: 'trace-402',
+        },
+        error: 'Payment required',
+        errorType: AgentRuntimeErrorType.InsufficientQuota,
+        phase: 'llm_execution',
+      });
+    });
+
     it('preserves ConversationParentMissing errorType and message even when .cause has PG info', () => {
       // Mirrors createConversationParentMissingError from messagePersistErrors.ts:
       // the user-facing errorType lives on the error object directly, and the

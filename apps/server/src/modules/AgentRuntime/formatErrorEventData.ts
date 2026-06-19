@@ -43,6 +43,7 @@ export const formatErrorEventData = (error: unknown, phase: string) => {
     : undefined;
   const payloadError = payload?.error;
   let errorMessage =
+    pickNonEmptyString(structuredError?.message) ??
     pickNonEmptyString(payload?.message) ??
     pickNonEmptyString(payloadError) ??
     pickNonEmptyString(toRecord(payloadError)?.message) ??
