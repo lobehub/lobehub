@@ -114,11 +114,18 @@ const isGPT5Model = (model: string): ParsedOpenAIModelId | undefined => {
   return parsed;
 };
 
+const isNativeGPT5Model = (model: string): ParsedOpenAIModelId | undefined => {
+  const parsed = isGPT5Model(model);
+  if (!parsed || parsed.source !== 'openai') return;
+
+  return parsed;
+};
+
 const hasModifier = (parsed: ParsedOpenAIModelId, modifier: string): boolean =>
   parsed.modifiers.includes(modifier);
 
 export const isGPT5ResponsesModel = (model: string): boolean => {
-  const parsed = isGPT5Model(model);
+  const parsed = isNativeGPT5Model(model);
   if (!parsed) return false;
 
   if (hasModifier(parsed, 'codex') || hasModifier(parsed, 'pro')) return true;
@@ -130,12 +137,12 @@ export const isResponsesAPIModel = (model: string): boolean =>
   responsesAPIModels.has(model) || isGPT5ResponsesModel(model);
 
 export const isGPT5ProResponsesModel = (model: string): boolean => {
-  const parsed = isGPT5Model(model);
+  const parsed = isNativeGPT5Model(model);
   return !!parsed && hasModifier(parsed, 'pro');
 };
 
 export const supportsGPT5ResponsesReasoningEffortNone = (model: string): boolean => {
-  const parsed = isGPT5Model(model);
+  const parsed = isNativeGPT5Model(model);
   if (!parsed || parsed.minorVersion === undefined) return false;
 
   return !hasModifier(parsed, 'pro');

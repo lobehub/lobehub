@@ -5,6 +5,7 @@ import {
   isGPT5ResponsesModel,
   isOpenAIComputerUseModel,
   isOpenAIReasoningPayloadModel,
+  isResponsesAPIModel,
   parseOpenAIModelId,
   supportsGPT5ResponsesReasoningEffortNone,
   supportsOpenAIServiceTierFlex,
@@ -77,7 +78,12 @@ describe('isGPT5ResponsesModel', () => {
   it('should match future GPT-5 minor versions without allowlist entries', () => {
     expect(isGPT5ResponsesModel('gpt-5.6')).toBe(true);
     expect(isGPT5ResponsesModel('gpt-5.6-mini')).toBe(true);
-    expect(isGPT5ResponsesModel('openai/gpt-5.6-pro')).toBe(true);
+    expect(isGPT5ResponsesModel('gpt-5.6-pro')).toBe(true);
+  });
+
+  it('should not force OpenRouter GPT slugs into the built-in Responses API rules', () => {
+    expect(isGPT5ResponsesModel('openai/gpt-5.6-pro')).toBe(false);
+    expect(isResponsesAPIModel('openai/gpt-5.6-pro')).toBe(false);
   });
 
   it('should not match non-GPT-5 ids', () => {
@@ -90,12 +96,13 @@ describe('isGPT5ResponsesModel', () => {
 describe('isGPT5ProResponsesModel', () => {
   it('should match future GPT-5 pro variants', () => {
     expect(isGPT5ProResponsesModel('gpt-5.6-pro')).toBe(true);
-    expect(isGPT5ProResponsesModel('openai/gpt-5.6-pro-2026-06-25')).toBe(true);
+    expect(isGPT5ProResponsesModel('gpt-5.6-pro-2026-06-25')).toBe(true);
   });
 
   it('should not match non-pro GPT-5 variants', () => {
     expect(isGPT5ProResponsesModel('gpt-5.6')).toBe(false);
     expect(isGPT5ProResponsesModel('gpt-5.6-mini')).toBe(false);
+    expect(isGPT5ProResponsesModel('openai/gpt-5.6-pro-2026-06-25')).toBe(false);
   });
 });
 
@@ -108,6 +115,7 @@ describe('supportsGPT5ResponsesReasoningEffortNone', () => {
   it('should preserve unsupported cases', () => {
     expect(supportsGPT5ResponsesReasoningEffortNone('gpt-5')).toBe(false);
     expect(supportsGPT5ResponsesReasoningEffortNone('gpt-5.6-pro')).toBe(false);
+    expect(supportsGPT5ResponsesReasoningEffortNone('openai/gpt-5.6')).toBe(false);
     expect(supportsGPT5ResponsesReasoningEffortNone('gpt-4o')).toBe(false);
   });
 });
