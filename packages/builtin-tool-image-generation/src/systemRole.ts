@@ -11,4 +11,4 @@ Do not put the full list of every provider/model into the conversation unless th
 
 Reference images are URL-only in this tool. Pass imageUrl or imageUrls only when the user supplied accessible image URLs; do not invent file references or local paths.
 
-When generation completes, show the generated images in the final response using the markdown image tags returned by generateImage. Include generation ids only if a follow-up status check is actually needed.`;
+When generation completes, show the generated images in the final response by copying the markdown image tags returned by generateImage exactly. Do not rewrite, shorten, translate, or rebuild the image URLs. Include generation ids only if a follow-up status check is actually needed.`;

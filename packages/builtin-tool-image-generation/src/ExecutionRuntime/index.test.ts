@@ -135,6 +135,8 @@ describe('ImageGenerationExecutionRuntime', () => {
       ],
     });
     expect(result.content).toContain('https://cdn.example.com/image.png');
+    expect(result.content).not.toContain('imageUrl=https://cdn.example.com/image.png');
+    expect(result.content).toContain('Copy them exactly');
     expect(result.content).toContain('![Generated image 1](https://cdn.example.com/image.png)');
   });
 

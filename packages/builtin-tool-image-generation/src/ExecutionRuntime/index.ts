@@ -186,13 +186,19 @@ const formatStatusContent = (state: GetImageGenerationStatusState) => {
   return `Image generation ${state.generationId} is ${state.status}. Check again later with getImageGenerationStatus.`;
 };
 
-const formatGenerationLines = (generations: GeneratedImageTask[]) =>
+const formatGenerationLines = (
+  generations: GeneratedImageTask[],
+  options: { includeImageUrl?: boolean } = {},
+) =>
   generations.map((item, index) => {
     const url = getTaskAssetUrl(item);
     const status = item.status ? `, status=${item.status}` : '';
     const error =
       item.status === AsyncTaskStatus.Error ? `, error=${asyncTaskErrorMessage(item.error)}` : '';
-    const suffix = url ? `, imageUrl=${url}` : `, asyncTaskId=${item.asyncTaskId}${error}`;
+    const suffix =
+      url && options.includeImageUrl !== false
+        ? `, imageUrl=${url}`
+        : `, asyncTaskId=${item.asyncTaskId}${error}`;
 
     return `${index + 1}. generationId=${item.generationId}${status}${suffix}`;
   });
@@ -221,7 +227,8 @@ const formatCompletedContent = (state: GenerateImageState) =>
     `Image generation completed with ${state.provider}/${state.model}.`,
     state.batchId ? `Batch ID: ${state.batchId}` : undefined,
     'Images:',
-    ...formatGenerationLines(state.generations),
+    ...formatGenerationLines(state.generations, { includeImageUrl: false }),
+    'Markdown image tags for the final response. Copy them exactly; do not rewrite the URLs:',
     ...formatMarkdownImageLines(state.generations),
   ]
     .filter((line): line is string => Boolean(line))
