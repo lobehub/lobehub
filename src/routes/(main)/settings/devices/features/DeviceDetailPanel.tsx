@@ -61,7 +61,7 @@ interface DeviceDetailPanelProps {
 }
 
 const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onClose }) => {
-  const { t } = useTranslation('setting');
+  const { t } = useTranslation(['setting', 'device']);
   const utils = lambdaQuery.useUtils();
 
   const [name, setName] = useState(device.friendlyName ?? '');
@@ -138,8 +138,8 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
       onSubmit: async (path) => {
         const result = await deviceService.statPath(device.deviceId, path);
         if (result) {
-          if (!result.exists) return t('workingDirectory.pathNotExist', { ns: 'device' });
-          if (!result.isDirectory) return t('workingDirectory.pathNotDirectory', { ns: 'device' });
+          if (!result.exists) return t('device:workingDirectory.pathNotExist');
+          if (!result.isDirectory) return t('device:workingDirectory.pathNotDirectory');
         }
         addRecent({ path, repoType: result?.repoType });
         return undefined;
