@@ -32,45 +32,19 @@ import { StreamingResponse } from '../../utils/response';
 import { createGoogleImage } from './createImage';
 import { createGoogleVideo, pollGoogleVideoOperation } from './createVideo';
 import { createGoogleGenerateObject, createGoogleGenerateObjectWithTools } from './generateObject';
+import {
+  isGemini3OrAbove,
+  isGoogleImageResponseModel,
+  isGoogleSafetyOffModel,
+  shouldDisableGoogleSystemInstruction,
+  shouldDisableGoogleThinkingConfig,
+  shouldUseGoogleImageSearchTypes,
+  supportsGoogleSearchOnImageResponseModel,
+} from './googleModelId';
 import { resolveGoogleThinkingConfig } from './thinkingResolver';
 import { createGoogleTranscription } from './transcribe';
 
 const log = debug('model-runtime:google');
-
-const modelsOffSafetySettings = new Set(['gemini-2.0-flash-exp']);
-
-const modelsWithModalities = new Set([
-  'gemini-2.0-flash-exp',
-  'gemini-2.0-flash-exp-image-generation',
-  'gemini-2.0-flash-preview-image-generation',
-  'gemini-2.5-flash-image-preview',
-  'gemini-2.5-flash-image',
-  'gemini-3-pro-image-preview',
-  'gemini-3.1-flash-image-preview',
-  'nano-banana-pro-preview',
-]);
-
-// These models need the explicit image/web searchTypes payload when googleSearch is enabled.
-// Other search-capable models use the plain `{ googleSearch: {} }` shape.
-const modelsWithImageSearchTypes = new Set(['gemini-3.1-flash-image-preview']);
-
-// Image-response chat models are stricter than text-only chat models because the request
-// also asks Gemini to return images via `responseModalities: ['Text', 'Image']`.
-// For example, gemini-2.5-flash-image rejects googleSearch with:
-// "Search as tool is not enabled for this model", while these models accept googleSearch.
-const imageResponseModelsWithGoogleSearch = new Set([
-  'gemini-3-pro-image-preview',
-  'gemini-3.1-flash-image-preview',
-]);
-
-// Gemini 3+ models support combined tools (search + urlContext + functionDeclarations)
-const isGemini3OrAbove = (model?: string): boolean => {
-  if (!model) return false;
-  // Match gemini-X or gemini-X.Y patterns, extract major version
-  const match = /gemini-(\d+)/.exec(model);
-  if (!match) return false;
-  return Number.parseInt(match[1], 10) >= 3;
-};
 
 const normalizeThinkingConfig = (config?: ThinkingConfig): ThinkingConfig | undefined => {
   if (!config) return undefined;
@@ -84,24 +58,6 @@ const normalizeThinkingConfig = (config?: ThinkingConfig): ThinkingConfig | unde
 
   return config;
 };
-
-const modelsDisableInstuction = new Set([
-  'gemini-2.0-flash-exp',
-  'gemini-2.0-flash-exp-image-generation',
-  'gemini-2.0-flash-preview-image-generation',
-  'gemini-2.5-flash-image-preview',
-  'gemini-2.5-flash-image',
-  'gemma-3-1b-it',
-  'gemma-3-4b-it',
-  'gemma-3-12b-it',
-  'gemma-3-27b-it',
-  'gemma-3n-e4b-it',
-  // ZenMux
-  'google/gemini-2.5-flash-image-free',
-  'google/gemini-2.5-flash-image',
-  'google/gemini-3-pro-image-preview-free',
-  'google/gemini-3-pro-image-preview',
-]);
 
 export interface GoogleModelCard {
   displayName: string;
@@ -122,7 +78,7 @@ enum HarmBlockThreshold {
 }
 
 function getThreshold(model: string): HarmBlockThreshold {
-  if (modelsOffSafetySettings.has(model)) {
+  if (isGoogleSafetyOffModel(model)) {
     return 'OFF' as HarmBlockThreshold; // https://discuss.ai.google.dev/t/59352
   }
   return HarmBlockThreshold.BLOCK_NONE;
@@ -191,6 +147,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       }) as ThinkingConfig;
 
       const contents = await buildGoogleMessages(payload.messages, { model });
+      const isImageResponseModel = isGoogleImageResponseModel(model);
 
       const controller = new AbortController();
       const originalSignal = options?.signal;
@@ -209,14 +166,14 @@ export class LobeGoogleAI implements LobeRuntimeAI {
       const config: GenerateContentConfig = {
         abortSignal: originalSignal,
         imageConfig:
-          modelsWithModalities.has(model) && imageAspectRatio && imageAspectRatio !== 'auto'
+          isImageResponseModel && imageAspectRatio && imageAspectRatio !== 'auto'
             ? {
                 aspectRatio: imageAspectRatio,
                 imageSize: imageResolution,
               }
             : undefined,
         maxOutputTokens: payload.max_tokens,
-        responseModalities: modelsWithModalities.has(model) ? ['Text', 'Image'] : undefined,
+        responseModalities: isImageResponseModel ? ['Text', 'Image'] : undefined,
         // avoid wide sensitive words
         // refs: https://github.com/lobehub/lobe-chat/pull/1418
         safetySettings: [
@@ -237,16 +194,15 @@ export class LobeGoogleAI implements LobeRuntimeAI {
             threshold: getThreshold(model),
           },
         ],
-        systemInstruction: modelsDisableInstuction.has(model)
+        systemInstruction: shouldDisableGoogleSystemInstruction(model)
           ? undefined
           : (payload.system as string),
-        temperature: modelsWithModalities.has(model)
+        temperature: isImageResponseModel
           ? Math.min(payload.temperature ?? 1, 1)
           : payload.temperature,
-        thinkingConfig:
-          modelsDisableInstuction.has(model) || model.toLowerCase().includes('learnlm')
-            ? undefined
-            : normalizeThinkingConfig(thinkingConfig),
+        thinkingConfig: shouldDisableGoogleThinkingConfig(model)
+          ? undefined
+          : normalizeThinkingConfig(thinkingConfig),
         // https://ai.google.dev/gemini-api/docs/tool-combination
         // Vertex AI does not support includeServerSideToolInvocations
         toolConfig:
@@ -559,14 +515,14 @@ export class LobeGoogleAI implements LobeRuntimeAI {
     const hasSearch = payload?.enabledSearch;
     const hasUrlContext = payload?.urlContext;
     const model = payload?.model ?? '';
-    const isImageResponseModel = modelsWithModalities.has(model);
-    const supportsImageResponseGoogleSearch = imageResponseModelsWithGoogleSearch.has(model);
+    const isImageResponseModel = isGoogleImageResponseModel(model);
+    const supportsImageResponseGoogleSearch = supportsGoogleSearchOnImageResponseModel(model);
 
     // Build GoogleSearch tool config with the model-specific search payload shape.
     const googleSearchTool =
       hasSearch && (!isImageResponseModel || supportsImageResponseGoogleSearch)
         ? {
-            googleSearch: modelsWithImageSearchTypes.has(model)
+            googleSearch: shouldUseGoogleImageSearchTypes(model)
               ? { searchTypes: { imageSearch: {}, webSearch: {} } }
               : {},
           }

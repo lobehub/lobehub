@@ -26,6 +26,8 @@ describe('thinkingResolver', () => {
         'gemini-3-pro',
         'gemini-3-pro-preview',
         'gemini-3.0-pro',
+        'gemini-3.5-pro',
+        'google/gemini-3.5-pro',
         'pro-latest',
       ])('should return "pro" for %s', (model) => {
         expect(getGoogleThinkingModelCategory(model)).toBe('pro');
@@ -88,6 +90,8 @@ describe('thinkingResolver', () => {
       'gemini-3-flash',
       'gemini-3.0-pro',
       'gemini-3.0-flash',
+      'google/gemini-3.5-pro',
+      'publishers/google/models/gemini-3.5-pro',
       'gemini-3-pro-image-preview',
       'gemma-4-31b-it',
       'gemma-4-26b-a4b-it',
@@ -114,6 +118,8 @@ describe('thinkingResolver', () => {
       'gemini-3-pro',
       'gemini-3-pro-preview',
       'gemini-3.0-pro',
+      'gemini-3.5-pro',
+      'google/gemini-3.5-pro',
       'gemini-3-flash',
       'gemini-3.0-flash',
       // Pro image models
@@ -274,6 +280,20 @@ describe('thinkingResolver', () => {
         expect(result).toEqual({
           includeThoughts: true,
           thinkingBudget: 5000,
+        });
+      });
+    });
+
+    describe('gemini-3.5-pro (future model ids)', () => {
+      const model = 'gemini-3.5-pro';
+
+      it('should use thinkingLevel without a static model-id entry', () => {
+        const result = resolveGoogleThinkingConfig(model, { thinkingLevel: 'medium' });
+
+        expect(result).toEqual({
+          includeThoughts: true,
+          thinkingBudget: undefined,
+          thinkingLevel: 'medium',
         });
       });
     });
