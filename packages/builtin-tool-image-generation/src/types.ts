@@ -126,10 +126,10 @@ export interface ImageGenerationCreateImagePayload {
 
 export interface ImageGenerationCreateImageResult {
   data?: {
-    batch?: { id: string };
+    batch?: { id?: string };
     generations?: Array<{
       asyncTaskId?: null | string;
-      id: string;
+      id?: string;
     }>;
   };
   success?: boolean;

@@ -419,10 +419,10 @@ export class ImageGenerationExecutionRuntime {
         });
       }
 
-      if (result.data.generations.some((item) => !item.asyncTaskId)) {
+      if (result.data.generations.some((item) => !item.id || !item.asyncTaskId)) {
         return errorOutput(
           'GenerateImageFailed',
-          'Image generation did not return async task ids.',
+          'Image generation did not return generation or async task ids.',
           {
             generationTopicId,
             model,
@@ -433,7 +433,7 @@ export class ImageGenerationExecutionRuntime {
 
       const generations = result.data.generations.map((item) => ({
         asyncTaskId: item.asyncTaskId ?? '',
-        generationId: item.id,
+        generationId: item.id ?? '',
       }));
 
       const state: GenerateImageState = {

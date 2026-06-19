@@ -4,7 +4,7 @@ import type {
   BuiltinToolResult,
 } from '@lobechat/types';
 import { BaseExecutor } from '@lobechat/types';
-import type { AiProviderModelListItem } from 'model-bank';
+import type { AiModelForSelect, AiProviderModelListItem } from 'model-bank';
 
 import { aiModelService } from '@/services/aiModel';
 import { aiProviderService } from '@/services/aiProvider';
@@ -12,7 +12,6 @@ import { generationService } from '@/services/generation';
 import { generationTopicService } from '@/services/generationTopic';
 import { imageService } from '@/services/image';
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
-import type { ProviderModelListItem } from '@/store/aiInfra/slices/aiProvider/action';
 
 import { ImageGenerationExecutionRuntime } from '../../ExecutionRuntime';
 import { ImageGenerationManifest } from '../../manifest';
@@ -26,7 +25,7 @@ import type {
 } from '../../types';
 import { ImageGenerationApiName } from '../../types';
 
-const normalizeStoreModel = (model: ProviderModelListItem): ImageGenerationModelSummary => ({
+const normalizeStoreModel = (model: AiModelForSelect): ImageGenerationModelSummary => ({
   approximatePricePerImage: model.approximatePricePerImage,
   description: model.description,
   displayName: model.displayName,

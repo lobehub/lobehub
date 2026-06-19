@@ -206,6 +206,26 @@ describe('ImageGenerationExecutionRuntime', () => {
     expect(service.createGenerationTopic).not.toHaveBeenCalled();
   });
 
+  it('rejects createImage responses without generation task identifiers', async () => {
+    const service = createService({
+      createImage: vi.fn().mockResolvedValue({
+        data: {
+          batch: {},
+          generations: [{ asyncTaskId: null }],
+        },
+        success: true,
+      }),
+    });
+    const runtime = new ImageGenerationExecutionRuntime(service);
+
+    const result = await runtime.generateImage({ prompt: 'A compact workbench UI' });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.type).toBe('GenerateImageFailed');
+    expect(result.content).toContain('generation or async task ids');
+    expect(service.getGenerationStatus).not.toHaveBeenCalled();
+  });
+
   it('returns image URL when status succeeds', async () => {
     const runtime = new ImageGenerationExecutionRuntime(
       createService({
