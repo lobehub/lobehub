@@ -1,5 +1,3 @@
-import { createRequire } from 'node:module';
-
 import { Command } from 'commander';
 
 import { registerAgentCommand } from './commands/agent';
@@ -36,9 +34,7 @@ import { registerTopicCommand } from './commands/topic';
 import { registerUpdateCommand } from './commands/update';
 import { registerUserCommand } from './commands/user';
 import { registerVerifyCommand } from './commands/verify';
-
-const require = createRequire(import.meta.url);
-const { name, version } = require('../package.json') as { name: string; version: string };
+import { cliVersion } from './pkg';
 
 export function createProgram() {
   const program = new Command();
@@ -46,7 +42,7 @@ export function createProgram() {
   program
     .name('lh')
     .description('LobeHub CLI - manage and connect to LobeHub services')
-    .version(version);
+    .version(cliVersion);
 
   registerLoginCommand(program);
   registerLogoutCommand(program);
@@ -86,4 +82,4 @@ export function createProgram() {
   return program;
 }
 
-export { name as cliPackageName, version as cliVersion };
+export { cliPackageName, cliVersion } from './pkg';

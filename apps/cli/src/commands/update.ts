@@ -4,10 +4,10 @@ import { realpathSync } from 'node:fs';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
-// Reuse the package metadata resolved by the bundled entry. update.ts lives one
-// directory deeper than program.ts in source, so a local `require('../../package.json')`
-// would point outside the package once everything is bundled into dist/index.js.
-import { cliPackageName, cliVersion } from '../program';
+// Pull package metadata from the shared `src/pkg.ts` module (resolved at the
+// bundled entry's depth) rather than a local `require('../../package.json')`,
+// which would point outside the package once bundled into dist/index.js.
+import { cliPackageName, cliVersion } from '../pkg';
 import { log } from '../utils/logger';
 
 export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
