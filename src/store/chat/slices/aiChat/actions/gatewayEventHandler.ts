@@ -14,7 +14,7 @@ import type {
   UIChatMessage,
 } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
-import { isRecord } from '@lobechat/utils';
+import { isRecord, pickNonEmptyString, toRecord } from '@lobechat/utils';
 
 import { messageService } from '@/services/message';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/aiChat/actions/agentSignalBridge';
@@ -176,19 +176,20 @@ const isErrorType = (value: unknown): value is ChatMessageError['type'] =>
 const getMessageFromErrorData = (data: unknown): string | undefined => {
   if (!isRecord(data)) return undefined;
 
-  const message = data.message;
-  if (typeof message === 'string' && message) return message;
+  const message = pickNonEmptyString(data.message);
+  if (message) return message;
 
   const error = data.error;
-  if (typeof error === 'string' && error) return error;
+  const errorString = pickNonEmptyString(error);
+  if (errorString) return errorString;
   if (isRecord(error)) {
-    const errorMessage = error.message;
-    if (typeof errorMessage === 'string' && errorMessage) return errorMessage;
+    const errorMessage = pickNonEmptyString(error.message);
+    if (errorMessage) return errorMessage;
 
     const nestedError = error.error;
     if (isRecord(nestedError)) {
-      const nestedMessage = nestedError.message;
-      if (typeof nestedMessage === 'string' && nestedMessage) return nestedMessage;
+      const nestedMessage = pickNonEmptyString(nestedError.message);
+      if (nestedMessage) return nestedMessage;
     }
   }
 
@@ -198,8 +199,8 @@ const getMessageFromErrorData = (data: unknown): string | undefined => {
 
   const body = data.body;
   if (isRecord(body)) {
-    const bodyMessage = body.message;
-    if (typeof bodyMessage === 'string' && bodyMessage) return bodyMessage;
+    const bodyMessage = pickNonEmptyString(body.message);
+    if (bodyMessage) return bodyMessage;
   }
 };
 
@@ -219,17 +220,14 @@ const buildGatewayRuntimeErrorBody = (
   data: Record<string, unknown>,
   message: string,
 ): Record<string, unknown> => {
-  const sourceBody = isRecord(data.body)
-    ? data.body
-    : isRecord(data._responseBody)
-      ? data._responseBody
-      : isRecord(data.error)
-        ? data.error
-        : {};
-  const mergedBody =
-    isRecord(data.body) || data._responseBody === undefined
-      ? sourceBody
-      : mergeGatewayPayloadError(sourceBody, data.error);
+  const body = toRecord(data.body);
+  const responseBody = toRecord(data._responseBody);
+  const errorBody = toRecord(data.error);
+  const sourceBody = body ?? responseBody ?? errorBody ?? {};
+  const shouldMergePayloadError = body === undefined && data._responseBody !== undefined;
+  const mergedBody = shouldMergePayloadError
+    ? mergeGatewayPayloadError(sourceBody, data.error)
+    : sourceBody;
 
   return {
     ...mergedBody,
