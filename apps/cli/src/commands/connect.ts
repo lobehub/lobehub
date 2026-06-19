@@ -74,17 +74,7 @@ export function registerConnectCommand(program: Command) {
     });
 
   // Subcommands
-  connectCmd
-    .command('stop')
-    .description('Stop the background daemon process')
-    .action(() => {
-      const stopped = stopDaemon();
-      if (stopped) {
-        log.info('Daemon stopped.');
-      } else {
-        log.warn('No daemon is running.');
-      }
-    });
+  connectCmd.command('stop').description('Stop the background daemon process').action(handleStop);
 
   connectCmd
     .command('status')
@@ -148,9 +138,26 @@ export function registerConnectCommand(program: Command) {
       }
       handleDaemonStart({ ...options, daemon: true });
     });
+
+  // Top-level alias for `connect stop`. Users who run `lh connect` naturally
+  // reach for `lh disconnect` to undo it; the nested `connect stop` is not
+  // discoverable enough on its own.
+  program
+    .command('disconnect')
+    .description('Disconnect from the device gateway (alias for `connect stop`)')
+    .action(handleStop);
 }
 
 // --- Internal helpers ---
+
+function handleStop() {
+  const stopped = stopDaemon();
+  if (stopped) {
+    log.info('Daemon stopped.');
+  } else {
+    log.warn('No daemon is running.');
+  }
+}
 
 function handleDaemonStart(options: ConnectOptions) {
   const existingPid = getRunningDaemonPid();
