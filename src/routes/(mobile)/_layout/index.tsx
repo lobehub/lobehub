@@ -7,7 +7,6 @@ import { Outlet, useLocation } from 'react-router';
 import WorkspaceContextSlot from '@/business/client/WorkspaceContextSlot';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { RouteMetaBridge } from '@/features/RouteMeta';
-import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
 import dynamic from '@/libs/next/dynamic';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
@@ -34,12 +33,10 @@ const MobileMainLayout: FC = () => {
     <WorkspaceContextSlot>
       <RouteMetaBridge />
       <Suspense fallback={null}>{showCloudPromotion && <CloudBanner mobile />}</Suspense>
-      <MarketAuthProvider isDesktop={false}>
-        <Suspense fallback={<Loading debugId="MobileMainLayout > Outlet" />}>
-          <Outlet />
-          {showNav && <NavBar />}
-        </Suspense>
-      </MarketAuthProvider>
+      <Suspense fallback={<Loading debugId="MobileMainLayout > Outlet" />}>
+        <Outlet />
+        {showNav && <NavBar />}
+      </Suspense>
     </WorkspaceContextSlot>
   );
 };
