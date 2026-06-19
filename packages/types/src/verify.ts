@@ -36,6 +36,27 @@ export type VerifyVerdict = (typeof verifyVerdicts)[number];
 export const verifyUserDecisions = ['accepted', 'rejected', 'overridden'] as const;
 export type VerifyUserDecision = (typeof verifyUserDecisions)[number];
 
+/** Media kind of a captured piece of evidence. */
+export const verifyEvidenceTypes = [
+  'screenshot',
+  'gif',
+  'video',
+  'text',
+  'dom_snapshot',
+  'transcript',
+] as const;
+export type VerifyEvidenceType = (typeof verifyEvidenceTypes)[number];
+
+/** Which actor produced a piece of evidence (provenance). */
+export const verifyEvidenceCaptureSources = [
+  'agent-browser',
+  'cdp',
+  'cli',
+  'program',
+  'llm_judge',
+] as const;
+export type VerifyEvidenceCaptureSource = (typeof verifyEvidenceCaptureSources)[number];
+
 /** Default cap on automatic repair rounds when a rubric doesn't override it. */
 export const DEFAULT_MAX_REPAIR_ROUNDS = 3;
 
