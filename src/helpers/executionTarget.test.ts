@@ -100,8 +100,8 @@ describe('resolveExecutionTarget', () => {
     ).toBe('sandbox');
   });
 
-  describe('trigger=bot — coerces a local target to auto', () => {
-    it('coerces a desktop `local` (and the unset desktop default) to auto', () => {
+  describe('trigger=bot — upgrades a local target (bound → device, unbound → auto)', () => {
+    it('coerces an UNBOUND desktop `local` (and the unset desktop default) to auto', () => {
       expect(
         resolveExecutionTarget(cfg({ executionTarget: 'local' }), {
           clientExecutionAvailable: true,
@@ -115,6 +115,17 @@ describe('resolveExecutionTarget', () => {
           trigger: RequestTrigger.Bot,
         }),
       ).toBe('auto');
+    });
+
+    it('routes a BOUND `local` to `device` — honours the pinned machine, not auto', () => {
+      // the switcher persists the desktop's own deviceId as boundDeviceId for a
+      // `local` pick; a bot run must reach THAT machine, not auto-grab another.
+      expect(
+        resolveExecutionTarget(cfg({ boundDeviceId: 'device-a', executionTarget: 'local' }), {
+          clientExecutionAvailable: true,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toBe('device');
     });
 
     it('leaves `none` / `sandbox` / `device` untouched — explicit intent', () => {
@@ -419,6 +430,31 @@ describe('resolveExecutionPlan', () => {
           trigger: RequestTrigger.Bot,
         }),
       ).toEqual({ kind: 'device-unrouted', reason: 'ambiguous-online-devices', target: 'auto' });
+    });
+
+    it('routes a BOUND `local` to its pinned device, even with several online (no auto-grab)', () => {
+      // regression: the bot upgrade used to relabel bound `local` → auto, which
+      // ignores boundDeviceId and would auto-pick / go ambiguous. A pinned
+      // machine must win — here device-b is bound and stays selected.
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ boundDeviceId: 'device-b', executionTarget: 'local' }),
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_AB,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ deviceId: 'device-b', kind: 'device', target: 'device' });
+    });
+
+    it('keeps a BOUND `local` on its pinned device when offline (no silent fallback)', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ boundDeviceId: 'device-x', executionTarget: 'local' }),
+          clientExecutionAvailable: true,
+          onlineDeviceIds: ONLINE_AB,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ kind: 'device-unrouted', reason: 'bound-device-offline', target: 'device' });
     });
 
     it('does NOT upgrade `none` — an explicit opt-out stays plain chat', () => {

@@ -49,8 +49,10 @@ export interface ResolveExecutionTargetOptions {
   /**
    * What initiated the run. A `bot` trigger has no UI to pick a device, and
    * `local` (in-process IPC) is unreachable from the cloud bot server — so a
-   * stored `local` target coerces to `auto` to auto-activate an online device.
-   * `none` / `sandbox` are explicit opt-outs and are left untouched.
+   * stored `local` target is upgraded: to `device` when it carries a
+   * `boundDeviceId` (route to the pinned machine), otherwise to `auto`
+   * (auto-activate an online device). `none` / `sandbox` are explicit opt-outs
+   * and are left untouched.
    */
   trigger?: RequestTrigger;
 }
@@ -79,10 +81,11 @@ export interface ResolveExecutionTargetOptions {
  * selection that has already been bound to that desktop's `deviceId` resolves
  * to `device` on web, so the same machine can execute through `lh connect`.
  *
- * Bot triggers (`trigger === bot`) coerce a `local` target to `auto`: a bot
- * conversation has no UI to pick a device, and `local` in-process IPC is
- * unreachable from the cloud bot server, so the run auto-activates an online
- * device instead. `none` / `sandbox` are explicit opt-outs and stay.
+ * Bot triggers (`trigger === bot`) upgrade a `local` target (a bot has no UI
+ * to pick a device and `local` in-process IPC is unreachable from the cloud
+ * bot server): to `device` when a `boundDeviceId` pins a specific machine,
+ * otherwise to `auto` to auto-activate an online device. `none` / `sandbox`
+ * are explicit opt-outs and stay.
  */
 export const resolveExecutionTarget = (
   agencyConfig: LobeAgentAgencyConfig | undefined,
@@ -95,11 +98,17 @@ export const resolveExecutionTarget = (
   }
   if (isHetero && effective === 'none') effective = clientExecutionAvailable ? 'local' : 'sandbox';
   if (!clientExecutionAvailable && effective === 'local') return 'sandbox';
-  // Bot trigger: `local` (unreachable in-process from the cloud bot server)
-  // becomes `auto`. Sits after the web→sandbox coercion, so `effective` is only
-  // still `local` when a client/device can actually run it here — exactly where
-  // auto-activation makes sense.
-  if (trigger === RequestTrigger.Bot && effective === 'local') return 'auto';
+  // Bot trigger: a `local` target can't run in-process from the cloud bot
+  // server, so it has to reach a real device. If the user pinned a specific
+  // machine (the switcher persists that desktop's own `deviceId` as
+  // `boundDeviceId` for a `local` pick), honour it as `device` — `auto` would
+  // ignore the binding and could grab a different online device, or go
+  // ambiguous with several. Only an UNBOUND `local` auto-activates. Sits after
+  // the web→sandbox coercion, so `effective` is only still `local` when a
+  // client/device can actually run it here.
+  if (trigger === RequestTrigger.Bot && effective === 'local') {
+    return agencyConfig?.boundDeviceId ? 'device' : 'auto';
+  }
   return effective;
 };
 
