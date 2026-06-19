@@ -4,6 +4,14 @@ export async function register() {
     await import('./libs/debug-file-logger');
   }
 
+  // Initialize global HTTP proxy from environment variables.
+  // Node.js native fetch (undici) does not respect HTTP_PROXY / HTTPS_PROXY / NO_PROXY
+  // by default. This sets up undici's global dispatcher to route all outbound HTTP
+  // requests through the configured proxy, covering all provider API calls.
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    await import('./libs/proxy');
+  }
+
   // Auto-start GatewayManager on server start for non-Vercel environments (Docker, local).
   // Persistent bots need reconnection after restart.
   // On Vercel, the cron job at /api/agent/gateway handles this reliably instead.
@@ -23,7 +31,8 @@ export async function register() {
 
     // Recover pending memory extraction tasks when using in-process scheduler
     if (process.env.MEMORY_USER_MEMORY_USE_IN_PROCESS_SCHEDULER === 'true') {
-      const { MemoryExtractionWorkflowService } = await import('@/server/services/memory/userMemory/extract');
+      const { MemoryExtractionWorkflowService } =
+        await import('@/server/services/memory/userMemory/extract');
       MemoryExtractionWorkflowService.recoverPendingTasks().catch((err) => {
         console.error('[Instrumentation] Failed to recover pending memory tasks:', err);
       });
