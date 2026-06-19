@@ -99,6 +99,7 @@ export interface GenerateImageState {
   model: string;
   prompt: string;
   provider: string;
+  waitError?: string;
   waitTimedOut?: boolean;
   waitUntilComplete?: boolean;
 }

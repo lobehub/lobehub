@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useClientDataSWR } from '@/libs/swr';
+import { imageKeys } from '@/libs/swr/keys';
 import { generationService } from '@/services/generation';
 
 import type {
@@ -134,7 +135,7 @@ const getTaskErrorDetail = (task: GeneratedImageTask) => {
 const useGenerationStatus = (params: GetImageGenerationStatusParams, enabled: boolean) => {
   return useClientDataSWR<GetImageGenerationStatusState>(
     enabled && params.asyncTaskId
-      ? ['builtin-image-generation-status', params.generationId, params.asyncTaskId]
+      ? imageKeys.generationStatus(params.generationId, params.asyncTaskId)
       : null,
     async () => {
       const result = await generationService.getGenerationStatus(

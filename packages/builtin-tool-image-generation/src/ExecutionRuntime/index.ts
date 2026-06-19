@@ -238,6 +238,18 @@ const formatTimedOutContent = (state: GenerateImageState, waitTimeoutMs: number)
     .filter((line): line is string => Boolean(line))
     .join('\n');
 
+const formatWaitFailedContent = (state: GenerateImageState, message: string) =>
+  [
+    `Image generation started with ${state.provider}/${state.model}, but the latest status could not be checked.`,
+    state.batchId ? `Batch ID: ${state.batchId}` : undefined,
+    'Generations:',
+    ...formatGenerationLines(state.generations),
+    `Status check error: ${message}`,
+    'Use getImageGenerationStatus later for each generation until status is success or error.',
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join('\n');
+
 const normalizeReferenceUrls = ({
   imageUrl,
   imageUrls,
@@ -456,7 +468,23 @@ export class ImageGenerationExecutionRuntime {
       }
 
       const waitTimeoutMs = resolveWaitTimeoutMs(args.waitTimeoutMs, context.executionTimeoutMs);
-      const waitResult = await this.waitForGenerations(generations, waitTimeoutMs, context.signal);
+      let waitResult: { generations: GeneratedImageTask[]; timedOut: boolean };
+      try {
+        waitResult = await this.waitForGenerations(generations, waitTimeoutMs, context.signal);
+      } catch (error) {
+        const message = formatErrorMessage(error, 'Failed to wait for image generation status');
+        const waitFailedState: GenerateImageState = {
+          ...state,
+          waitError: message,
+        };
+
+        return {
+          content: formatWaitFailedContent(waitFailedState, message),
+          state: waitFailedState,
+          success: true,
+        };
+      }
+
       const waitedState: GenerateImageState = {
         ...state,
         generations: waitResult.generations,

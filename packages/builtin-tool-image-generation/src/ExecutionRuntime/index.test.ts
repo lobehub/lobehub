@@ -195,6 +195,27 @@ describe('ImageGenerationExecutionRuntime', () => {
     }
   });
 
+  it('keeps generated task ids when waiting for status fails after task creation', async () => {
+    const service = createService({
+      getGenerationStatus: vi.fn().mockRejectedValue(new Error('network timeout')),
+    });
+    const runtime = new ImageGenerationExecutionRuntime(service);
+
+    const result = await runtime.generateImage({ prompt: 'A compact workbench UI' });
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(service.createImage).toHaveBeenCalledTimes(1);
+    expect(result.content).toContain('latest status could not be checked');
+    expect(result.content).toContain('Use getImageGenerationStatus later');
+    expect(result.state).toMatchObject({
+      batchId: 'batch-1',
+      generations: [{ asyncTaskId: 'task-1', generationId: 'generation-1' }],
+      generationTopicId: 'topic-1',
+      waitError: 'network timeout',
+    });
+  });
+
   it('rejects invalid image counts before creating tasks', async () => {
     const service = createService();
     const runtime = new ImageGenerationExecutionRuntime(service);
