@@ -8,7 +8,7 @@ import { message } from '@/components/AntdStaticMethods';
 import { fileService } from '@/services/file';
 import { uploadService } from '@/services/upload';
 import { type StoreSetter } from '@/store/types';
-import { type FileMetadata, type UploadFileItem } from '@/types/files';
+import { type UploadFileItem } from '@/types/files';
 import { getImageDimensions } from '@/utils/client/imageDimensions';
 
 import { type FileStore } from '../../store';
@@ -71,6 +71,15 @@ const normalizeUploadedImageFileType = async (
   });
 };
 
+type ExistingFileMetadata = Record<string, unknown> & { path?: string };
+
+const normalizeExistingFileMetadata = (metadata: unknown): ExistingFileMetadata => {
+  // Existing hash records can come from generated assets or older upload paths where metadata is null.
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return {};
+
+  return metadata as ExistingFileMetadata;
+};
+
 type Setter = StoreSetter<FileStore>;
 
 export const createFileUploadSlice = (set: Setter, get: () => FileStore, _api?: unknown) =>
@@ -131,11 +140,11 @@ export class FileUploadActionImpl {
       const hash = sha256(fileArrayBuffer);
 
       const checkStatus = await fileService.checkFileHash(hash);
-      let metadata: FileMetadata;
+      let metadata: ExistingFileMetadata;
 
       // 3. if file exist, just skip upload
       if (checkStatus.isExist) {
-        metadata = checkStatus.metadata as FileMetadata;
+        metadata = normalizeExistingFileMetadata(checkStatus.metadata);
         onStatusUpdate?.({
           id: statusId,
           type: 'updateFile',
@@ -168,7 +177,7 @@ export class FileUploadActionImpl {
         });
         if (!success) return;
 
-        metadata = data;
+        metadata = { ...data };
       }
 
       // 4. use more powerful file type detector to get file type
@@ -188,6 +197,10 @@ export class FileUploadActionImpl {
       if (audioMime && !fileType.startsWith('audio/')) fileType = audioMime;
 
       // 5. create file to db
+      // Fall back to the global file URL when legacy/generated metadata has no `path`.
+      const fileUrl = metadata.path || checkStatus.url;
+      if (!fileUrl) throw new Error('File upload failed: missing file url');
+
       const data = await fileService.createFile(
         {
           fileType,
@@ -197,7 +210,7 @@ export class FileUploadActionImpl {
           parentId,
           size: normalizedFile.size,
           source,
-          url: metadata.path || checkStatus.url,
+          url: fileUrl,
         },
         knowledgeBaseId,
       );

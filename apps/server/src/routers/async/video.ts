@@ -20,8 +20,8 @@ import { GenerationModel } from '@/database/models/generation';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { VideoGenerationService } from '@/server/services/generation/video';
+import { buildVideoGenerationFilePayload } from '@/server/services/generation/videoFile';
 import { FileSource } from '@/types/files';
-import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
 const log = debug('lobe-video:async');
 
@@ -196,13 +196,11 @@ export const videoRouter = router({
             url: processResult.videoKey,
             width: processResult.width,
           },
-          {
-            fileHash: processResult.fileHash,
-            fileType: processResult.mimeType,
-            name: `${sanitizeFileName(batch?.prompt ?? '', generationId)}.mp4`,
-            size: processResult.fileSize,
-            url: processResult.videoKey,
-          },
+          buildVideoGenerationFilePayload({
+            generationId,
+            processResult,
+            prompt: batch?.prompt,
+          }),
           FileSource.VideoGeneration,
         );
 
