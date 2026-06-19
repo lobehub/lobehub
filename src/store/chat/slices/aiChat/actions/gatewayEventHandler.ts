@@ -553,7 +553,11 @@ export const createGatewayEventHandler = (
 
           const completedOp = get().operations[operationId];
           if (completedOp?.context.agentId) {
-            get().markUnreadCompleted(completedOp.context.agentId, completedOp.context.topicId);
+            get().markTopicUnread({
+              agentId: completedOp.context.agentId,
+              groupId: completedOp.context.groupId,
+              topicId: completedOp.context.topicId,
+            });
           }
 
           // Terminal step has no later step_start to carry SoT — server

@@ -350,7 +350,11 @@ export class GroupOrchestrationActionImpl {
       // Mark unread completion for background conversations
       const completedOp = this.#get().operations[operationId];
       if (completedOp?.context.agentId) {
-        this.#get().markUnreadCompleted(completedOp.context.agentId, completedOp.context.topicId);
+        this.#get().markTopicUnread({
+          agentId: completedOp.context.agentId,
+          groupId: completedOp.context.groupId,
+          topicId: completedOp.context.topicId,
+        });
       }
 
       log('[internal_execGroupOrchestration] Operation completed successfully');

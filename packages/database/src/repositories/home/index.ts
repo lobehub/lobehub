@@ -4,10 +4,17 @@ import {
   type SidebarGroup,
 } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
-import { and, desc, eq, not, sql } from 'drizzle-orm';
+import { and, count, desc, eq, not, sql } from 'drizzle-orm';
 
 import { ChatGroupModel } from '../../models/chatGroup';
-import { agents, agentsToSessions, chatGroups, sessionGroups, sessions } from '../../schemas';
+import {
+  agents,
+  agentsToSessions,
+  chatGroups,
+  sessionGroups,
+  sessions,
+  topics,
+} from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
 import { sanitizeBm25Query } from '../../utils/bm25';
 import { normalizeInboxAgentMeta } from '../../utils/inboxAgent';
@@ -85,6 +92,12 @@ export class HomeRepository {
     // 2.1 Query member avatars for each chat group
     const memberAvatarsMap = await this.getChatGroupMemberAvatars(chatGroupList.map((g) => g.id));
 
+    // 2.2 Unread completion counts per agent / group, derived from persisted
+    // `topics.status === 'unread'`. The list query covers all agents, so this is
+    // the source of truth for the sidebar badge even on agents the client hasn't
+    // loaded topics for.
+    const { agentUnread, groupUnread } = await this.getUnreadCounts();
+
     // 3. Query all sessionGroups (user-defined folders)
     const groupList = await this.db
       .select({
@@ -97,7 +110,58 @@ export class HomeRepository {
       .orderBy(sessionGroups.sort);
 
     // 4. Process and categorize
-    return this.processAgentList(agentList, chatGroupList, groupList, memberAvatarsMap);
+    return this.processAgentList(
+      agentList,
+      chatGroupList,
+      groupList,
+      memberAvatarsMap,
+      agentUnread,
+      groupUnread,
+    );
+  }
+
+  /**
+   * Count topics with an unread completed generation, grouped by agent and by
+   * group. Returns plain maps keyed by agentId / groupId.
+   */
+  private async getUnreadCounts(): Promise<{
+    agentUnread: Map<string, number>;
+    groupUnread: Map<string, number>;
+  }> {
+    const isUnread = eq(topics.status, 'unread');
+
+    const [byAgent, byGroup] = await Promise.all([
+      this.db
+        .select({ id: topics.agentId, value: count() })
+        .from(topics)
+        .where(
+          and(
+            buildWorkspaceWhere(this.scope, topics),
+            isUnread,
+            sql`${topics.agentId} is not null`,
+          ),
+        )
+        .groupBy(topics.agentId),
+      this.db
+        .select({ id: topics.groupId, value: count() })
+        .from(topics)
+        .where(
+          and(
+            buildWorkspaceWhere(this.scope, topics),
+            isUnread,
+            sql`${topics.groupId} is not null`,
+          ),
+        )
+        .groupBy(topics.groupId),
+    ]);
+
+    const agentUnread = new Map<string, number>();
+    for (const row of byAgent) if (row.id) agentUnread.set(row.id, row.value);
+
+    const groupUnread = new Map<string, number>();
+    for (const row of byGroup) if (row.id) groupUnread.set(row.id, row.value);
+
+    return { agentUnread, groupUnread };
   }
 
   private processAgentList(
@@ -132,6 +196,8 @@ export class HomeRepository {
       sort: number | null;
     }>,
     memberAvatarsMap: Map<string, Array<{ avatar: string; background?: string }>>,
+    agentUnread: Map<string, number> = new Map(),
+    groupUnread: Map<string, number> = new Map(),
   ): SidebarAgentListResponse {
     // Convert to unified format
     // For pinned status: agents.pinned takes priority, fallback to sessions.pinned for backward compatibility
@@ -154,6 +220,7 @@ export class HomeRepository {
           sessionId: a.sessionId,
           title: meta.title,
           type: 'agent' as const,
+          unreadCount: agentUnread.get(a.id) ?? 0,
           updatedAt: a.updatedAt,
         };
       }),
@@ -169,6 +236,7 @@ export class HomeRepository {
         sessionId: null,
         title: g.title,
         type: 'group' as const,
+        unreadCount: groupUnread.get(g.id) ?? 0,
         updatedAt: g.updatedAt,
       })),
     ];

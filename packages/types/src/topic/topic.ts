@@ -197,7 +197,11 @@ export type ChatTopicStatus =
   | 'waitingForHuman'
   | 'failed'
   | 'completed'
-  | 'archived';
+  | 'archived'
+  // A completed generation the user hasn't read yet. Persisted so the unread
+  // indicator survives reload and syncs across devices; cleared back to
+  // 'active' when the user opens the topic. See operation slice unread actions.
+  | 'unread';
 
 export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   completedAt?: Date | null;

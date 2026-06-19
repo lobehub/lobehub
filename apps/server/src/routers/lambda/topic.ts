@@ -623,6 +623,7 @@ export const topicRouter = router({
               'failed',
               'completed',
               'archived',
+              'unread',
             ])
             .nullable()
             .optional(),

@@ -195,7 +195,7 @@ function createMockStore(overrides: Record<string, any> = {}) {
     drainQueuedMessages: vi.fn(() => []),
     internal_dispatchMessage: vi.fn(),
     internal_toggleToolCallingStreaming: vi.fn(),
-    markUnreadCompleted: vi.fn(),
+    markTopicUnread: vi.fn(),
     operations: {
       'op-1': {
         context: { agentId: 'agent-1', scope: 'main', topicId: 'topic-1' },
@@ -3917,8 +3917,10 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
 
       expect(store.drainQueuedMessages).toHaveBeenCalled();
       expect(store.completeOperation).toHaveBeenCalledWith('op-1');
-      // op-1 context carries agentId/topicId → markUnreadCompleted fires.
-      expect(store.markUnreadCompleted).toHaveBeenCalledWith('agent-1', 'topic-1');
+      // op-1 context carries agentId/topicId → markTopicUnread fires.
+      expect(store.markTopicUnread).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'agent-1', topicId: 'topic-1' }),
+      );
 
       // The merged follow-up is dispatched via the setTimeout(100) sendMessage.
       expect(realSendMessage).toHaveBeenCalledTimes(1);
@@ -3987,6 +3989,10 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       const abortController = new AbortController();
       abortController.abort();
       const store = createMockStore({
+        // The user is viewing this topic, so the clean stream end clears the
+        // running state back to 'active' (a background completion would instead
+        // be left to markTopicUnread → status 'unread').
+        activeTopicId: 'topic-1',
         drainQueuedMessages: vi.fn(() => [{ content: 'queued', id: 'q1' }]),
         operations: {
           'op-1': {
@@ -4005,8 +4011,9 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(store.drainQueuedMessages).not.toHaveBeenCalled();
 
       // Characterize the actual behavior: onComplete's non-error branch still
-      // writes 'active' (the abort gate only guards the notification + drain,
-      // not the writeTopicStatus('active') call on a clean stream end).
+      // writes 'active' while the user is viewing (the abort gate only guards
+      // the notification + drain, not the writeTopicStatus('active') call on a
+      // clean stream end).
       expect(updateTopicStatus).toHaveBeenCalledWith(
         expect.objectContaining({
           status: 'active',

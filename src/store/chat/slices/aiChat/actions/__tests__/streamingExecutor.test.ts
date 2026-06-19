@@ -2513,13 +2513,13 @@ describe('StreamingExecutor actions', () => {
         topicId: TEST_IDS.TOPIC_ID,
       });
       const drainQueuedMessages = vi.fn(() => []);
-      const markUnreadCompleted = vi.fn();
+      const markTopicUnread = vi.fn();
 
       restoreExecutor();
       act(() => {
         useChatStore.setState({
           drainQueuedMessages,
-          markUnreadCompleted,
+          markTopicUnread,
           queuedMessages: {
             [contextKey]: [
               { content: 'queued', createdAt: Date.now(), id: 'q1', interruptMode: 'soft' },
@@ -2540,16 +2540,16 @@ describe('StreamingExecutor actions', () => {
       await runExecutor(result, operationId);
 
       expect(drainQueuedMessages).not.toHaveBeenCalled();
-      expect(markUnreadCompleted).not.toHaveBeenCalled();
+      expect(markTopicUnread).not.toHaveBeenCalled();
     });
 
     it('marks unread on a successful (done) terminal with an empty queue', async () => {
       const { result } = renderHook(() => useChatStore());
-      const markUnreadCompleted = vi.fn();
+      const markTopicUnread = vi.fn();
 
       restoreExecutor();
       act(() => {
-        useChatStore.setState({ markUnreadCompleted });
+        useChatStore.setState({ markTopicUnread });
       });
 
       let operationId!: string;
@@ -2563,7 +2563,9 @@ describe('StreamingExecutor actions', () => {
       driveTerminal(operationId, 'done');
       await runExecutor(result, operationId);
 
-      expect(markUnreadCompleted).toHaveBeenCalledWith(TEST_IDS.SESSION_ID, TEST_IDS.TOPIC_ID);
+      expect(markTopicUnread).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID }),
+      );
       expect(result.current.operations[operationId].status).toBe('completed');
     });
 
@@ -2614,10 +2616,10 @@ describe('StreamingExecutor actions', () => {
     it('on waiting_for_human (parked): completes the op for the UI but does NOT drain queue or mark unread', async () => {
       const { result } = renderHook(() => useChatStore());
       const drainQueuedMessages = vi.fn(() => []);
-      const markUnreadCompleted = vi.fn();
+      const markTopicUnread = vi.fn();
       restoreExecutor();
       act(() => {
-        useChatStore.setState({ drainQueuedMessages, markUnreadCompleted });
+        useChatStore.setState({ drainQueuedMessages, markTopicUnread });
       });
 
       let operationId!: string;
@@ -2637,7 +2639,7 @@ describe('StreamingExecutor actions', () => {
       // new operation runs them when the user approves/rejects.
       expect(result.current.operations[operationId].status).toBe('completed');
       expect(drainQueuedMessages).not.toHaveBeenCalled();
-      expect(markUnreadCompleted).not.toHaveBeenCalled();
+      expect(markTopicUnread).not.toHaveBeenCalled();
     });
 
     describe('desktop notification gating', () => {

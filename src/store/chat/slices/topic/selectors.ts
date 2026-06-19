@@ -122,7 +122,6 @@ const getGroupFn = (
   groupMode: TopicGroupMode,
   sortBy: TopicSortBy,
   loadingTopicIds?: ReadonlySet<string>,
-  unreadTopicIds?: ReadonlySet<string>,
 ) => {
   const field: 'createdAt' | 'updatedAt' = sortBy === 'createdAt' ? 'createdAt' : 'updatedAt';
   if (groupMode === 'byProject') {
@@ -135,7 +134,7 @@ const getGroupFn = (
   }
   if (groupMode === 'byStatus') {
     return (topics: ChatTopic[]) =>
-      groupTopicsByStatus(topics, field, loadingTopicIds, unreadTopicIds).map((group) => ({
+      groupTopicsByStatus(topics, field, loadingTopicIds).map((group) => ({
         ...group,
         title: t(`groupTitle.byStatus.${group.id}` as any, { ns: 'topic' }),
       }));
@@ -181,19 +180,12 @@ const groupedTopicsForSidebar =
   (s: ChatStoreState): GroupedTopic[] => {
     const limitedTopics = displayTopicsForSidebar(pageSize, sortBy)(s);
     if (!limitedTopics) return [];
-    // Topics actively streaming on this client surface under "running", and
-    // topics with an unread completion surface under "pending", even though
-    // their persisted status says otherwise — see resolveStatusBucket. Both are
-    // client-only states the server can't see.
+    // Topics actively streaming on this client surface under "running" even
+    // though their persisted status says otherwise — that's the one client-only
+    // overlay (see resolveStatusBucket). Unread is now a persisted status, so it
+    // buckets straight from `topic.status`.
     const loadingTopicIds = groupMode === 'byStatus' ? new Set(s.topicLoadingIds) : undefined;
-    const unreadTopicIds =
-      groupMode === 'byStatus'
-        ? new Set(Object.values(s.unreadCompletedTopicsByAgent).flatMap((set) => [...set]))
-        : undefined;
-    return buildGroupedTopics(
-      limitedTopics,
-      getGroupFn(groupMode, sortBy, loadingTopicIds, unreadTopicIds),
-    );
+    return buildGroupedTopics(limitedTopics, getGroupFn(groupMode, sortBy, loadingTopicIds));
   };
 
 const hasMoreTopics = (s: ChatStoreState): boolean => {
