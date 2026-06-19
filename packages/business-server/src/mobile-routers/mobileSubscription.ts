@@ -1,3 +1,3 @@
-import { router } from '@/libs/trpc/lambda';
+import { subscriptionRouter } from '../lambda-routers/subscription';
 
-export const mobileSubscriptionRouter = router({});
+export const mobileSubscriptionRouter = subscriptionRouter;

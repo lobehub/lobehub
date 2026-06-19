@@ -53,7 +53,7 @@ export default function UserPanelWorkspaceSection({ onSwitch }: UserPanelWorkspa
           onSwitch?.();
         }}
       >
-        Personal
+        Личное пространство
       </Button>
       {workspaces.map((workspace) => (
         <Button
@@ -71,7 +71,7 @@ export default function UserPanelWorkspaceSection({ onSwitch }: UserPanelWorkspa
         </Button>
       ))}
       <Button block loading={creating} size="small" onClick={createWorkspace}>
-        Create workspace
+        Создать workspace
       </Button>
     </Flexbox>
   );

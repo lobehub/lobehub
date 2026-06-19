@@ -21,7 +21,8 @@ export default function WorkspaceGeneral() {
     setSlug(workspace?.slug ?? '');
   }, [workspace]);
 
-  if (!workspace) return <Text type="secondary">Select a workspace to edit its settings.</Text>;
+  if (!workspace)
+    return <Text type="secondary">Выберите workspace для редактирования настроек.</Text>;
 
   const save = async () => {
     setSaving(true);
@@ -36,7 +37,7 @@ export default function WorkspaceGeneral() {
   return (
     <Flexbox gap={16} style={{ maxWidth: 560 }}>
       <Flexbox gap={4}>
-        <Text weight={600}>Workspace name</Text>
+        <Text weight={600}>Название workspace</Text>
         <Input value={name} onChange={(e) => setName(e.target.value)} />
       </Flexbox>
       <Flexbox gap={4}>
@@ -44,11 +45,11 @@ export default function WorkspaceGeneral() {
         <Input value={slug} onChange={(e) => setSlug(e.target.value)} />
       </Flexbox>
       <Flexbox gap={4}>
-        <Text weight={600}>Description</Text>
+        <Text weight={600}>Описание</Text>
         <Input value={description} onChange={(e) => setDescription(e.target.value)} />
       </Flexbox>
       <Button loading={saving} type="primary" onClick={save}>
-        Save changes
+        Сохранить изменения
       </Button>
     </Flexbox>
   );

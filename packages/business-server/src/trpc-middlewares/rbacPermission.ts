@@ -1,28 +1,78 @@
+import { TRPCError } from '@trpc/server';
+import { and, eq, isNull } from 'drizzle-orm';
+
+import { getServerDB } from '@/database/core/db-adaptor';
+import { workspaceMembers } from '@/database/schemas';
 import { trpc } from '@/libs/trpc/lambda/init';
 
-/**
- * No-op stub for OSS builds. Cloud overrides this entire module via tsconfig
- * path priority and provides the real workspace-RBAC-aware implementations
- * (see `src/business/server/trpc-middlewares/rbacPermission.ts` in the cloud
- * repo). In OSS there is no workspace concept worth gating, so every gate
- * passes through.
- *
- * Keep the export shape identical to the cloud version so router code that
- * imports from `@/business/server/trpc-middlewares/rbacPermission` compiles
- * and runs in both environments without conditional imports.
- */
-export const withRbacPermission = (_code: string) => trpc.middleware(async (opts) => opts.next());
+const OWNER_ACTIONS = new Set(['create', 'delete', 'update', 'manage', 'transfer']);
 
-export const withAnyRbacPermission = (_codes: string[]) =>
-  trpc.middleware(async (opts) => opts.next());
+const requiresOwner = (code: string) => {
+  const action = code.split(':').at(-1) ?? '';
+  return OWNER_ACTIONS.has(action);
+};
 
-export const withAllRbacPermissions = (_codes: string[]) =>
-  trpc.middleware(async (opts) => opts.next());
+const assertPermission = async (params: {
+  code: string;
+  userId?: string | null;
+  workspaceId?: string | null;
+}) => {
+  if (!params.workspaceId) return;
+  if (!params.userId) throw new TRPCError({ code: 'UNAUTHORIZED' });
+
+  const db = await getServerDB();
+  const membership = await db.query.workspaceMembers.findFirst({
+    where: and(
+      eq(workspaceMembers.workspaceId, params.workspaceId),
+      eq(workspaceMembers.userId, params.userId),
+      isNull(workspaceMembers.deletedAt),
+    ),
+  });
+
+  if (!membership) throw new TRPCError({ code: 'FORBIDDEN', message: 'Нет доступа к workspace' });
+  if (requiresOwner(params.code) && membership.role !== 'owner') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Требуется роль владельца workspace' });
+  }
+};
+
+export const withRbacPermission = (code: string) =>
+  trpc.middleware(async (opts) => {
+    await assertPermission({ code, userId: opts.ctx.userId, workspaceId: opts.ctx.workspaceId });
+
+    return opts.next();
+  });
+
+export const withAnyRbacPermission = (codes: string[]) =>
+  trpc.middleware(async (opts) => {
+    let lastError: unknown;
+    for (const code of codes) {
+      try {
+        await assertPermission({
+          code,
+          userId: opts.ctx.userId,
+          workspaceId: opts.ctx.workspaceId,
+        });
+        return opts.next();
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError;
+  });
+
+export const withAllRbacPermissions = (codes: string[]) =>
+  trpc.middleware(async (opts) => {
+    for (const code of codes) {
+      await assertPermission({ code, userId: opts.ctx.userId, workspaceId: opts.ctx.workspaceId });
+    }
+
+    return opts.next();
+  });
 
 /**
  * Sugar for the "member-or-owner" gate — in cloud this fans the action code
  * out into the `:all | :owner` scope pair so a member with the `:owner` grant
  * passes alongside an owner with the `:all` grant. OSS no-op.
  */
-export const withScopedPermission = (_action: string) =>
-  trpc.middleware(async (opts) => opts.next());
+export const withScopedPermission = (action: string) => withRbacPermission(action);

@@ -1,4 +1,5 @@
-import { Button, Flexbox, Input, Select, Text } from '@lobehub/ui';
+import { Button, Flexbox, Input, Text } from '@lobehub/ui';
+import { Select } from '@lobehub/ui/base-ui';
 import { useState } from 'react';
 import useSWR from 'swr';
 
@@ -22,7 +23,8 @@ export default function WorkspaceMembers() {
     () => lambdaClient.workspaceMember.listInvitations.query({ workspaceId: workspace!.id }),
   );
 
-  if (!workspace) return <Text type="secondary">Select a workspace to manage members.</Text>;
+  if (!workspace)
+    return <Text type="secondary">Выберите workspace для управления участниками.</Text>;
 
   const addMember = async () => {
     if (!userId.trim()) return;
@@ -58,11 +60,12 @@ export default function WorkspaceMembers() {
   return (
     <Flexbox gap={16} style={{ maxWidth: 720 }}>
       <Text type="secondary">
-        Owners can invite users, add known internal users, update roles, and remove members.
+        Владельцы могут приглашать пользователей, добавлять внутренних пользователей, менять роли и
+        удалять участников.
       </Text>
       <Flexbox horizontal gap={8}>
         <Input
-          placeholder="Email for invitation"
+          placeholder="Email для приглашения"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
@@ -70,20 +73,24 @@ export default function WorkspaceMembers() {
           style={{ width: 140 }}
           value={role}
           options={[
-            { label: 'Owner', value: 'owner' },
-            { label: 'Member', value: 'member' },
-            { label: 'Viewer', value: 'viewer' },
+            { label: 'Владелец', value: 'owner' },
+            { label: 'Участник', value: 'member' },
+            { label: 'Наблюдатель', value: 'viewer' },
           ]}
           onChange={(value) => setRole(value as 'member' | 'owner' | 'viewer')}
         />
         <Button loading={inviting} type="primary" onClick={inviteMember}>
-          Invite
+          Пригласить
         </Button>
       </Flexbox>
       <Flexbox horizontal gap={8}>
-        <Input placeholder="User id" value={userId} onChange={(e) => setUserId(e.target.value)} />
+        <Input
+          placeholder="ID пользователя"
+          value={userId}
+          onChange={(e) => setUserId(e.target.value)}
+        />
         <Button loading={adding} type="primary" onClick={addMember}>
-          Add
+          Добавить
         </Button>
       </Flexbox>
       <Flexbox gap={8}>
@@ -102,9 +109,9 @@ export default function WorkspaceMembers() {
                 style={{ width: 120 }}
                 value={member.role}
                 options={[
-                  { label: 'Owner', value: 'owner' },
-                  { label: 'Member', value: 'member' },
-                  { label: 'Viewer', value: 'viewer' },
+                  { label: 'Владелец', value: 'owner' },
+                  { label: 'Участник', value: 'member' },
+                  { label: 'Наблюдатель', value: 'viewer' },
                 ]}
                 onChange={async (value) => {
                   await lambdaClient.workspaceMember.updateRole.mutate({
@@ -125,7 +132,7 @@ export default function WorkspaceMembers() {
                   await mutateMembers();
                 }}
               >
-                Remove
+                Удалить
               </Button>
             </Flexbox>
           </Flexbox>
@@ -133,7 +140,7 @@ export default function WorkspaceMembers() {
       </Flexbox>
       {invitations.length > 0 && (
         <Flexbox gap={8}>
-          <Text weight={600}>Pending invitations</Text>
+          <Text weight={600}>Ожидающие приглашения</Text>
           {invitations.map((invitation) => (
             <Flexbox
               horizontal
@@ -144,7 +151,7 @@ export default function WorkspaceMembers() {
               style={{ border: '1px solid var(--lobe-color-border-secondary)', borderRadius: 8 }}
             >
               <Flexbox gap={2}>
-                <Text>{invitation.email || 'Invitation link'}</Text>
+                <Text>{invitation.email || 'Ссылка-приглашение'}</Text>
                 <Text code fontSize={12} type="secondary">
                   {invitation.token}
                 </Text>
@@ -159,7 +166,7 @@ export default function WorkspaceMembers() {
                   await mutateInvitations();
                 }}
               >
-                Revoke
+                Отозвать
               </Button>
             </Flexbox>
           ))}

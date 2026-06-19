@@ -1,3 +1,5 @@
+import { Tag } from '@lobehub/ui';
+
 export default function HomeFreeCreditBadge() {
-  return null;
+  return <Tag color="blue">Acensus in-house</Tag>;
 }

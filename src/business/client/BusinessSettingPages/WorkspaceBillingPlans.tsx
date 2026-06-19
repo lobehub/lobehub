@@ -14,10 +14,10 @@ export default function WorkspaceBillingPlans() {
 
   return (
     <Flexbox gap={16}>
-      <Text weight={600}>Workspace plan</Text>
+      <Text weight={600}>Тариф workspace</Text>
       <Text type="secondary">
-        Plans are managed locally for in-house quotas and chargeback. No SaaS billing provider is
-        required.
+        Тарифы управляются локально для внутренних лимитов и chargeback. Внешний SaaS-биллинг не
+        нужен.
       </Text>
       <Flexbox gap={8}>
         {data?.plans.map((plan) => (
@@ -29,12 +29,12 @@ export default function WorkspaceBillingPlans() {
           >
             <Text weight={600}>{plan.name}</Text>
             <Text type="secondary">
-              Members: {plan.limits.members === -1 ? 'Unlimited' : plan.limits.members}
+              Участники: {plan.limits.members === -1 ? 'Без лимита' : plan.limits.members}
             </Text>
             <Text type="secondary">
-              Monthly tokens:{' '}
+              Токены в месяц:{' '}
               {plan.limits.monthlyTokens === -1
-                ? 'Unlimited'
+                ? 'Без лимита'
                 : plan.limits.monthlyTokens.toLocaleString()}
             </Text>
             <Button
@@ -50,7 +50,7 @@ export default function WorkspaceBillingPlans() {
                 await mutate();
               }}
             >
-              {data.plan === plan.id ? 'Current plan' : 'Set plan'}
+              {data.plan === plan.id ? 'Текущий тариф' : 'Назначить тариф'}
             </Button>
           </Flexbox>
         ))}
