@@ -76,7 +76,7 @@ describe('spawnHeteroAgentRun', () => {
     expect(child.stdin.write).not.toHaveBeenCalled();
     child.emit('spawn');
 
-    await expect(ackPromise).resolves.toEqual({ status: 'accepted' });
+    await expect(ackPromise).resolves.toEqual({ ack: { status: 'accepted' }, child });
     expect(child.stdin.write).toHaveBeenCalledWith(JSON.stringify('hi'));
     expect(child.stdin.end).toHaveBeenCalledTimes(1);
   });
@@ -88,7 +88,9 @@ describe('spawnHeteroAgentRun', () => {
     const ackPromise = spawnHeteroAgentRun({ ...baseParams, cwd: '/missing' });
     child.emit('error', new Error('spawn ENOENT'));
 
-    await expect(ackPromise).resolves.toEqual({ reason: 'spawn ENOENT', status: 'rejected' });
+    await expect(ackPromise).resolves.toEqual({
+      ack: { reason: 'spawn ENOENT', status: 'rejected' },
+    });
     expect(child.stdin.write).not.toHaveBeenCalled();
   });
 
