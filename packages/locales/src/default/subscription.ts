@@ -393,6 +393,9 @@ export default {
   'plansModal.fileStorageLimit.desc':
     'Your file storage is full. Upgrade to keep uploading and managing files.',
   'plansModal.fileStorageLimit.title': 'Storage limit reached',
+  'plansModal.modelAccess.desc':
+    'This model is available on paid plans. Upgrade to use the full model lineup.',
+  'plansModal.modelAccess.title': 'Unlock all models',
   'qa.desc':
     'If your question is not answered, check <1>Product Documentation</1> for more FAQs, or contact us.',
   'qa.detail': 'View Details',
