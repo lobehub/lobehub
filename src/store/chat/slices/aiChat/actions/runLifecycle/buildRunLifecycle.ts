@@ -15,17 +15,21 @@ import { messageMapKey } from '../../../../utils/messageMapKey';
 import { topicMapKey } from '../../../../utils/topicMapKey';
 import type { OperationStatus } from '../../../operation/types';
 import { mergeQueuedMessages, reconstructUploadFilesFromQueue } from '../../../operation/types';
-import type { AgentRunLifecycle, RunCompleteEvent, RunCompleteResult, RunScope } from './types';
+import type {
+  AgentRunLifecycle,
+  RunCompleteEvent,
+  RunCompleteResult,
+  RunParkedEvent,
+  RunScope,
+} from './types';
 
 /**
  * Normalize the runtime/operation status into the cross-runtime
- * `client.runtime.complete` signal status. Relocated verbatim from
- * `streamingExecutor` — kept identical for behavior preservation.
+ * `client.runtime.complete` signal status.
  *
- * NOTE: `waiting_for_human` is encoded as `cancelled` (a parked state mis-encoded as terminal) and
- * `waiting_for_async_tool` falls through to `undefined`. Both are parked, not
- * terminal — this mis-encoding is locked by characterization tests and fixed
- * when the parked/resumed signal is unified.
+ * Only TERMINAL states reach here: parked states (`waiting_for_human` /
+ * `waiting_for_async_tool`) are routed to `onRunParked` by the executor and
+ * never emit a completion signal — a run is not complete while it is parked.
  */
 const normalizeClientRuntimeCompleteStatus = (
   runtimeStatus: AgentState['status'] | undefined,
@@ -33,7 +37,6 @@ const normalizeClientRuntimeCompleteStatus = (
 ): 'cancelled' | 'completed' | 'failed' | undefined => {
   if (operationStatus === 'cancelled') return 'cancelled';
   if (operationStatus === 'failed') return 'failed';
-  if (runtimeStatus === 'waiting_for_human') return 'cancelled';
   if (operationStatus === 'completed') return 'completed';
   if (runtimeStatus === 'done') return 'completed';
   if (runtimeStatus === 'error' || runtimeStatus === 'interrupted') return 'failed';
@@ -88,11 +91,11 @@ const NOOP = async () => {};
 /**
  * Assemble the store/UI run-lifecycle hooks for a single run.
  *
- * Phase 1 (behavior-preserving): the implementations are the CLIENT
- * completion effects relocated verbatim from `streamingExecutor`, so wiring the
- * client executor to these hooks keeps the characterization net green. The
- * gateway/hetero adapters are wired in the follow-up transport unification, where the currently-missing
- * effects (title / notification / queue on gateway) are folded in.
+ * The hook bodies are the CLIENT completion effects (the fullest set today), to
+ * be reused as the shared implementation when gateway/hetero are wired in the
+ * follow-up entry convergence. `completeRun` handles only TERMINAL states;
+ * parked states route to `onRunParked` and fire no terminal side effects — a
+ * run is not complete while it is parked (see LOBE-10382).
  */
 export const buildRunLifecycle = (
   get: () => ChatStore,
@@ -257,12 +260,8 @@ export const buildRunLifecycle = (
           });
           break;
         }
-        case 'waiting_for_human': {
-          // Parked for human intervention: complete this op so the loading UI
-          // clears; a new operation runs when the user approves/rejects.
-          get().completeOperation(operationId);
-          break;
-        }
+        // Parked states (`waiting_for_human` / `waiting_for_async_tool`) never
+        // reach `completeRun` — the executor routes them to `onRunParked`.
       }
 
       emitComplete(operationId, runtimeStatus);
@@ -270,7 +269,20 @@ export const buildRunLifecycle = (
       return { requeued: false };
     },
     onRunError: NOOP,
-    onRunParked: NOOP,
+    onRunParked: async ({ operationId, reason }: RunParkedEvent) => {
+      // Parked is NOT terminal: fire NO terminal side effects (title / queue
+      // drain / notification / markUnread) and emit NO `client.runtime.complete`
+      // — the run has not ended, it is waiting out-of-band.
+      //
+      // - `waiting_for_human`: complete this operation so the loading spinner
+      //   clears for the approval UI; a NEW operation resumes the run when the
+      //   user approves / rejects / submits / skips.
+      // - `waiting_for_async_tool`: keep the operation running until the async
+      //   tool / sub-agent result resolves and drives the run forward.
+      if (reason === 'waiting_for_human') {
+        get().completeOperation(operationId);
+      }
+    },
     onRunResumed: NOOP,
     onRunStarted: NOOP,
     onTerminalPersisted: NOOP,
