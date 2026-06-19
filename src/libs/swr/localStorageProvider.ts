@@ -441,6 +441,7 @@ export const CACHE_TIERS = {
     'fetchRecentPages',
     'group:list',
     'taskTemplate:', // home task-template recommendations
+    'modelConfig:', // small remote model config shells used by home starter chips
   ],
 } as const;
 

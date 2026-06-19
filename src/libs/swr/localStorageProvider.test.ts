@@ -93,6 +93,24 @@ describe('createCacheProvider — tiering', () => {
     expect(await localDataCache.entriesByScope('s1')).toEqual([]);
   });
 
+  it('persists model config keys in the local tier', async () => {
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope, {
+      idbPatterns: [...CACHE_TIERS.idb],
+      localPatterns: [...CACHE_TIERS.local],
+    });
+    const map = provider();
+    const key = 'modelConfig:lobehub';
+
+    map.set(key, { data: { homeNewModels: [{ model: 'gpt-image-2', type: 'image' }] } });
+
+    await until(() => localStorage.getItem(getScopedCacheKey('s1')) !== null);
+
+    const stored = JSON.parse(localStorage.getItem(getScopedCacheKey('s1'))!);
+    expect(stored.map(([k]: [string]) => k)).toContain(key);
+    expect(await localDataCache.entriesByScope('s1')).toEqual([]);
+  });
+
   it('routes idb-tier keys to IndexedDB and reloads them on a fresh provider', async () => {
     const scope = { value: 's1' };
     const { provider } = buildProvider(scope);
@@ -212,6 +230,7 @@ describe('createCacheProvider — tiering', () => {
     expect(CACHE_TIERS.idb).toContain('topic:');
     expect(CACHE_TIERS.local).toContain('recent:list');
     expect(CACHE_TIERS.local).toContain('taskTemplate:');
+    expect(CACHE_TIERS.local).toContain('modelConfig:');
   });
 });
 
