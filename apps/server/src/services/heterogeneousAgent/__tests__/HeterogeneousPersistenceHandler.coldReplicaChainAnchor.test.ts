@@ -18,7 +18,7 @@ import {
  * chain parent were derived from that in-memory pointer, every later `newStep`
  * would open off the seed → orphan sibling forks.
  *
- * LOBE-10445 phase 2 anchors the chain to the run's latest NON-tool / NON-signal
+ * The phase 2 rewrite anchors the chain to the run's latest NON-tool / NON-signal
  * main-thread message (`getLastMainThreadSpineMessageId`), read straight from the
  * DB and ordered by createdAt — independent of `currentAssistantId`. So step 2
  * chains off step 1's assistant even though the in-memory pointer regressed.

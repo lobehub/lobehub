@@ -529,7 +529,7 @@ export class HeterogeneousPersistenceHandler {
     if (snapshot.model) state.main.turnModel = snapshot.model;
     if (snapshot.provider) state.main.turnProvider = snapshot.provider;
 
-    // Recover the chain spine from the DB (LOBE-10445 phase 2). The next normal
+    // Recover the chain spine from the DB. The next normal
     // turn parents off the run's latest NON-tool / NON-signal main-thread
     // message; reading it straight from the DB (independent of
     // `currentAssistantId`, which can regress to the seed placeholder on a cold
@@ -649,7 +649,7 @@ export class HeterogeneousPersistenceHandler {
     if (!currentAssistant) return undefined;
 
     const toolRows = messages.filter((m) => m.role === 'tool' && m.tool_call_id);
-    // Chain rule (LOBE-10445 phase 2): the next turn's assistant parents off the
+    // Chain rule: the next turn's assistant parents off the
     // prior assistant (the spine), not its last child tool — recover the anchor
     // as the current assistant itself (matches the subagent reducer, and is
     // fork-resistant since it reads the thread's real latest assistant from DB).

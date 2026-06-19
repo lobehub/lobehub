@@ -349,7 +349,7 @@ const reduceToolsChunk = (
     })),
   });
 
-  // Chain rule (LOBE-10445 phase 2): the next turn's assistant parents off the
+  // Chain rule: the next turn's assistant parents off the
   // prior assistant (the spine), NOT this batch's last tool — so
   // `lastChainParentId` stays at `currentAssistantId` here, tools become inline
   // children, and the read side reconstructs the zigzag. (Subagent threads have

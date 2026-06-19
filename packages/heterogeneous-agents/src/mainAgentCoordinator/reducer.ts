@@ -100,7 +100,7 @@ const delegateSubagent = (
 // ─── Chain rule ───
 
 /**
- * Parent for the NEXT turn's assistant (LOBE-10445 phase 2 — write-side spine).
+ * Parent for the NEXT turn's assistant (write-side spine).
  *
  * Normal turns parent off the run's spine (`lastSpineMessageId`, the most recent
  * non-tool / non-signal main message) so the persisted shape is
