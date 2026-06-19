@@ -3,7 +3,7 @@
 import { isDesktop } from '@lobechat/const';
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { Flexbox } from '@lobehub/ui';
-import { Divider, Tabs } from 'antd';
+import { Divider, Tabs, type TabsProps } from 'antd';
 import isEqual from 'fast-deep-equal';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -57,6 +57,36 @@ const ProfileEditor = memo(() => {
     isHeterogeneous &&
     !!heterogeneousProvider &&
     isRemoteHeterogeneousType(heterogeneousProvider.type);
+  const showCloudHeterogeneousTab = heterogeneousProvider?.type === 'claude-code';
+  const heterogeneousTabItems: TabsProps['items'] = heterogeneousProvider
+    ? [
+        ...(showCloudHeterogeneousTab
+          ? [
+              {
+                key: 'cloud',
+                label: t('heterogeneousStatus.cloud.tabLabel'),
+                children: (
+                  <CloudHeterogeneousConfig
+                    provider={heterogeneousProvider}
+                    onEnvChange={updateHeterogeneousEnv}
+                  />
+                ),
+              },
+            ]
+          : []),
+        {
+          key: 'desktop',
+          label: t('heterogeneousStatus.desktop.tabLabel'),
+          disabled: !isDesktop,
+          children: (
+            <HeterogeneousAgentStatusCard
+              provider={heterogeneousProvider}
+              onCommandChange={updateHeterogeneousCommand}
+            />
+          ),
+        },
+      ]
+    : [];
 
   return (
     <>
@@ -77,33 +107,11 @@ const ProfileEditor = memo(() => {
             />
           </Flexbox>
         ) : isHeterogeneous && heterogeneousProvider ? (
-          // Local CLI agents (claude-code, codex): tabs for cloud (web) and desktop environments
+          // Local CLI agents: Claude Code supports cloud config; Codex is desktop-only for now.
           <Tabs
-            defaultActiveKey={isDesktop ? 'desktop' : 'cloud'}
+            defaultActiveKey={isDesktop || !showCloudHeterogeneousTab ? 'desktop' : 'cloud'}
+            items={heterogeneousTabItems}
             size="small"
-            items={[
-              {
-                key: 'cloud',
-                label: t('heterogeneousStatus.cloud.tabLabel'),
-                children: (
-                  <CloudHeterogeneousConfig
-                    provider={heterogeneousProvider}
-                    onEnvChange={updateHeterogeneousEnv}
-                  />
-                ),
-              },
-              {
-                key: 'desktop',
-                label: t('heterogeneousStatus.desktop.tabLabel'),
-                disabled: !isDesktop,
-                children: (
-                  <HeterogeneousAgentStatusCard
-                    provider={heterogeneousProvider}
-                    onCommandChange={updateHeterogeneousCommand}
-                  />
-                ),
-              },
-            ]}
           />
         ) : (
           <>
