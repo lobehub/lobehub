@@ -15,7 +15,10 @@ vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(() => testDB),
 }));
 
-const mockInterruptOperation = vi.fn();
+const { mockExecuteToolCall, mockInterruptOperation } = vi.hoisted(() => ({
+  mockExecuteToolCall: vi.fn(),
+  mockInterruptOperation: vi.fn(),
+}));
 
 // Mock AgentRuntimeService
 vi.mock('@/server/services/agentRuntime', () => ({
@@ -27,6 +30,12 @@ vi.mock('@/server/services/agentRuntime', () => ({
 // Mock AiChatService
 vi.mock('@/server/services/aiChat', () => ({
   AiChatService: vi.fn().mockImplementation(() => ({})),
+}));
+
+vi.mock('@/server/services/deviceGateway', () => ({
+  deviceGateway: {
+    executeToolCall: mockExecuteToolCall,
+  },
 }));
 
 describe('aiAgentRouter.interruptTask', () => {
@@ -43,6 +52,8 @@ describe('aiAgentRouter.interruptTask', () => {
     userId = await createTestUser(serverDB);
     mockInterruptOperation.mockReset();
     mockInterruptOperation.mockResolvedValue(true);
+    mockExecuteToolCall.mockReset();
+    mockExecuteToolCall.mockResolvedValue({ success: true });
 
     // Create test agent
     const [agent] = await serverDB
@@ -202,6 +213,97 @@ describe('aiAgentRouter.interruptTask', () => {
         .where(eq(threads.id, testThreadId));
 
       expect(updatedThread.status).toBe(ThreadStatus.Cancel);
+    });
+  });
+
+  describe('remote device cancellation routing', () => {
+    it('should call cancelAgentRun for device-dispatched local hetero runs', async () => {
+      await serverDB
+        .update(topics)
+        .set({
+          metadata: {
+            runningOperation: {
+              assistantMessageId: 'asst-1',
+              deviceId: 'device-1',
+              heteroType: 'codex',
+              operationId: 'op-local',
+            },
+          },
+        })
+        .where(eq(topics.id, testTopicId));
+
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      await caller.interruptTask({
+        operationId: 'op-local',
+        topicId: testTopicId,
+      });
+
+      expect(mockExecuteToolCall).toHaveBeenCalledWith(
+        { deviceId: 'device-1', userId },
+        {
+          apiName: 'cancelAgentRun',
+          arguments: JSON.stringify({ operationId: 'op-local', signal: 'SIGINT' }),
+          identifier: 'cancelAgentRun',
+        },
+        5000,
+      );
+    });
+
+    it('should keep using cancelHeteroTask for task-style remote hetero runs', async () => {
+      await serverDB
+        .update(topics)
+        .set({
+          metadata: {
+            runningOperation: {
+              assistantMessageId: 'asst-2',
+              deviceId: 'device-1',
+              heteroType: 'openclaw',
+              operationId: 'op-remote',
+            },
+          },
+        })
+        .where(eq(topics.id, testTopicId));
+
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      await caller.interruptTask({
+        operationId: 'op-remote',
+        topicId: testTopicId,
+      });
+
+      expect(mockExecuteToolCall).toHaveBeenCalledWith(
+        { deviceId: 'device-1', userId },
+        {
+          apiName: 'cancelHeteroTask',
+          arguments: JSON.stringify({ signal: 'SIGINT', taskId: 'op-remote' }),
+          identifier: 'cancelHeteroTask',
+        },
+        5000,
+      );
+    });
+
+    it('should not dispatch remote cancel without device routing metadata', async () => {
+      await serverDB
+        .update(topics)
+        .set({
+          metadata: {
+            runningOperation: {
+              assistantMessageId: 'asst-3',
+              operationId: 'op-sandbox',
+            },
+          },
+        })
+        .where(eq(topics.id, testTopicId));
+
+      const caller = aiAgentRouter.createCaller(createTestContext());
+
+      await caller.interruptTask({
+        operationId: 'op-sandbox',
+        topicId: testTopicId,
+      });
+
+      expect(mockExecuteToolCall).not.toHaveBeenCalled();
     });
   });
 
