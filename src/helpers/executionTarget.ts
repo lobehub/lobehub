@@ -4,6 +4,7 @@ import type {
   LobeAgentChatConfig,
   RuntimeEnvMode,
 } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 
 /**
  * The agent's tool mode — explicit `chatConfig.toolMode` wins; otherwise derive
@@ -31,6 +32,13 @@ export interface ResolveExecutionTargetOptions {
    * coerces to `'local'` on desktop and `'sandbox'` on web.
    */
   isHetero?: boolean;
+  /**
+   * What initiated the run. A `bot` trigger has no UI to pick a device, and
+   * `local` (in-process IPC) is unreachable from the cloud bot server — so a
+   * stored `local` target coerces to `auto` to auto-activate an online device.
+   * `none` / `sandbox` are explicit opt-outs and are left untouched.
+   */
+  trigger?: RequestTrigger;
 }
 
 /**
@@ -56,10 +64,15 @@ export interface ResolveExecutionTargetOptions {
  * resolves to `sandbox`. For heterogeneous CLI agents, a desktop `local`
  * selection that has already been bound to that desktop's `deviceId` resolves
  * to `device` on web, so the same machine can execute through `lh connect`.
+ *
+ * Bot triggers (`trigger === bot`) coerce a `local` target to `auto`: a bot
+ * conversation has no UI to pick a device, and `local` in-process IPC is
+ * unreachable from the cloud bot server, so the run auto-activates an online
+ * device instead. `none` / `sandbox` are explicit opt-outs and stay.
  */
 export const resolveExecutionTarget = (
   agencyConfig: LobeAgentAgencyConfig | undefined,
-  { isDesktop, isHetero }: ResolveExecutionTargetOptions,
+  { isDesktop, isHetero, trigger }: ResolveExecutionTargetOptions,
 ): DeviceExecutionTarget => {
   const stored = agencyConfig?.executionTarget;
   let effective = stored ?? (isDesktop ? 'local' : 'none');
@@ -68,6 +81,11 @@ export const resolveExecutionTarget = (
   }
   if (isHetero && effective === 'none') effective = isDesktop ? 'local' : 'sandbox';
   if (!isDesktop && effective === 'local') return 'sandbox';
+  // Bot trigger: `local` (unreachable in-process from the cloud bot server)
+  // becomes `auto`. Sits after the web→sandbox coercion, so `effective` is only
+  // still `local` on a desktop/gateway resolve — exactly where auto-activation
+  // makes sense.
+  if (trigger === RequestTrigger.Bot && effective === 'local') return 'auto';
   return effective;
 };
 
@@ -177,6 +195,14 @@ export interface ResolveExecutionPlanParams {
    * of the stored target.
    */
   requestedDeviceId?: string;
+  /**
+   * What initiated this run. Bot triggers have no UI to pick a device, so a
+   * stored `local` target (in-process IPC, unreachable from the cloud bot
+   * server) is upgraded to `auto` and auto-activates an online device. `none`
+   * and `sandbox` are deliberate opt-outs and are left untouched. See
+   * `resolveExecutionPlan`.
+   */
+  trigger?: RequestTrigger;
 }
 
 /**
@@ -195,6 +221,10 @@ export interface ResolveExecutionPlanParams {
  *    run auto-activates ONLY in the opt-in `auto` mode (single device → use it;
  *    several → stay unrouted so the model picks one). `local` / `device` never
  *    silently grab a device — they stay unrouted until one is bound/requested.
+ * Bot triggers coerce a `local` target to `auto` upstream in
+ * `resolveExecutionTarget` (not here) — by the time the plan resolves, a bot
+ * run already carries `target: 'auto'` and follows the auto-activation rules
+ * above. `none` / `sandbox` stay as the owner's explicit opt-out.
  */
 export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): ExecutionPlan => {
   const {
@@ -205,6 +235,7 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
     isHetero,
     onlineDeviceIds,
     requestedDeviceId,
+    trigger,
   } = params;
 
   // Chat mode = no execution environment (plain chat). It's orthogonal to the
@@ -214,7 +245,7 @@ export const resolveExecutionPlan = (params: ResolveExecutionPlanParams): Execut
   // agents always need a runtime, so they never take this path.
   if (resolveToolMode(chatConfig) === 'chat' && !isHetero) return { kind: 'none', target: 'none' };
 
-  const target = resolveExecutionTarget(agencyConfig, { isDesktop, isHetero });
+  const target = resolveExecutionTarget(agencyConfig, { isDesktop, isHetero, trigger });
   const wantsDevice =
     !!requestedDeviceId || target === 'device' || target === 'local' || target === 'auto';
 

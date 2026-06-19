@@ -1,4 +1,5 @@
 import type { LobeAgentAgencyConfig } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -82,6 +83,51 @@ describe('resolveExecutionTarget', () => {
     // unset → platform default, then the same coercion on web
     expect(resolveExecutionTarget(undefined, { isDesktop: true, isHetero: true })).toBe('local');
     expect(resolveExecutionTarget(undefined, { isDesktop: false, isHetero: true })).toBe('sandbox');
+  });
+
+  describe('trigger=bot — coerces a local target to auto', () => {
+    it('coerces a desktop `local` (and the unset desktop default) to auto', () => {
+      expect(
+        resolveExecutionTarget(cfg({ executionTarget: 'local' }), {
+          isDesktop: true,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toBe('auto');
+      // unset desktop default is `local`, so it coerces too
+      expect(
+        resolveExecutionTarget(undefined, { isDesktop: true, trigger: RequestTrigger.Bot }),
+      ).toBe('auto');
+    });
+
+    it('leaves `none` / `sandbox` / `device` untouched — explicit intent', () => {
+      for (const executionTarget of ['none', 'sandbox', 'device'] as const) {
+        expect(
+          resolveExecutionTarget(cfg({ executionTarget }), {
+            isDesktop: true,
+            trigger: RequestTrigger.Bot,
+          }),
+        ).toBe(executionTarget);
+      }
+    });
+
+    it('does not resurrect a device on web — `local` still coerces to sandbox first', () => {
+      // the web→sandbox coercion runs before the bot rule, so a web `local`
+      // never becomes auto (there is no in-process local on web anyway).
+      expect(
+        resolveExecutionTarget(cfg({ executionTarget: 'local' }), {
+          isDesktop: false,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toBe('sandbox');
+    });
+
+    it('only fires for the bot trigger — other triggers keep `local`', () => {
+      for (const trigger of [RequestTrigger.Chat, RequestTrigger.Cron, undefined]) {
+        expect(
+          resolveExecutionTarget(cfg({ executionTarget: 'local' }), { isDesktop: true, trigger }),
+        ).toBe('local');
+      }
+    });
   });
 });
 
@@ -291,6 +337,115 @@ describe('resolveExecutionPlan', () => {
           requestedDeviceId: 'device-b',
         }),
       ).toEqual({ deviceId: 'device-b', kind: 'device', target: 'device' });
+    });
+  });
+
+  describe('trigger=bot — upgrades a local target to auto', () => {
+    it('upgrades a stored `local` target to auto and activates the single online device', () => {
+      // a bot conversation can't pick a device, and `local` in-process IPC is
+      // unreachable from the cloud bot server — so `local` auto-activates.
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'local' }),
+          isDesktop: true,
+          onlineDeviceIds: ONLINE_A,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'auto' });
+    });
+
+    it('upgrades the unset desktop default (local) to auto', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: undefined,
+          isDesktop: true,
+          onlineDeviceIds: ONLINE_A,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ deviceId: 'device-a', kind: 'device', target: 'auto' });
+    });
+
+    it('stays unrouted (model picks) when several devices are online', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'local' }),
+          isDesktop: true,
+          onlineDeviceIds: ONLINE_AB,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ kind: 'device-unrouted', reason: 'ambiguous-online-devices', target: 'auto' });
+    });
+
+    it('does NOT upgrade `none` — an explicit opt-out stays plain chat', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'none' }),
+          isDesktop: true,
+          onlineDeviceIds: ONLINE_A,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ kind: 'none', target: 'none' });
+    });
+
+    it('does NOT upgrade `sandbox` — an explicit cloud choice stays', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'sandbox' }),
+          isDesktop: true,
+          onlineDeviceIds: ONLINE_A,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ kind: 'sandbox', target: 'sandbox' });
+    });
+
+    it('does NOT touch an explicitly bound `device` target (binding wins over auto)', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ boundDeviceId: 'device-b', executionTarget: 'device' }),
+          isDesktop: true,
+          onlineDeviceIds: ONLINE_AB,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ deviceId: 'device-b', kind: 'device', target: 'device' });
+    });
+
+    it('still routes a requestedDeviceId-pinned local run to that device (now under auto)', () => {
+      // the local→auto coercion lives in resolveExecutionTarget, so it applies
+      // before requestedDeviceId is considered. The explicit device still wins
+      // the routing; only the target label is `auto` (gateway routing) rather
+      // than `local` (in-process) — correct for a server-side bot run.
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'local' }),
+          isDesktop: true,
+          onlineDeviceIds: ONLINE_AB,
+          requestedDeviceId: 'device-b',
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ deviceId: 'device-b', kind: 'device', target: 'auto' });
+    });
+
+    it('still honours chat mode — a bot on a chat-mode agent stays plain chat', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'local' }),
+          chatConfig: { enableAgentMode: false },
+          isDesktop: true,
+          onlineDeviceIds: ONLINE_A,
+          trigger: RequestTrigger.Bot,
+        }),
+      ).toEqual({ kind: 'none', target: 'none' });
+    });
+
+    it('only fires for bot triggers — a chat trigger leaves `local` unrouted', () => {
+      expect(
+        resolveExecutionPlan({
+          agencyConfig: cfg({ executionTarget: 'local' }),
+          isDesktop: true,
+          onlineDeviceIds: ONLINE_A,
+          trigger: RequestTrigger.Chat,
+        }),
+      ).toEqual({ kind: 'device-unrouted', reason: 'no-bound-device', target: 'local' });
     });
   });
 

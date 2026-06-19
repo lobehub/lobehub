@@ -1453,6 +1453,7 @@ export class AiAgentService {
           isDesktop: false,
           isHetero: true,
           requestedDeviceId,
+          trigger: requestTriggerMetadata?.trigger,
         });
 
         if (heteroPlan.kind !== 'sandbox') {
@@ -1930,6 +1931,7 @@ export class AiAgentService {
         isDesktop: gatewayConfigured,
         onlineDeviceIds: onlineDevices.map((device) => device.deviceId),
         requestedDeviceId,
+        trigger: requestTriggerMetadata?.trigger,
       });
       // Device tools (local-system / remote-device proxy) only exist in a
       // device-capable session — `none` and `sandbox` sessions must never see
