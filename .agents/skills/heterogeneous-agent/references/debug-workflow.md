@@ -73,9 +73,8 @@ wc -l "$dir/stdout.jsonl" # raw event count
 ```
 
 Reproduce the same session yourself by reusing the recorded `meta.json` `args`
-
-- `stdin.txt` (it already includes `--resume <sessionId>`), instead of
-  guessing flags.
+together with `stdin.txt` (the args already include `--resume <sessionId>`),
+instead of guessing flags.
 
 ### Codex raw JSONL
 
