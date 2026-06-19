@@ -23,6 +23,7 @@ vi.mock('react-i18next', () => ({
         'userPanel.docs': 'Docs',
         'userPanel.feedback': 'Feedback',
         'userPanel.help': 'Help',
+        'userPanel.inviteFriend': 'Invite a friend',
         'userPanel.setting': 'Settings',
       })[key] || key,
   }),
@@ -33,6 +34,7 @@ interface RenderFooterOptions {
   agentStarted?: boolean;
   classicFinished?: boolean;
   desktop?: boolean;
+  enableBusinessFeatures?: boolean;
   enabled?: boolean;
   mobile?: boolean;
   readSlugs?: string[];
@@ -69,6 +71,7 @@ const renderFooter = async ({
   classicFinished = true,
   desktop = false,
   enabled = true,
+  enableBusinessFeatures = false,
   mobile = false,
   readSlugs = [],
   serverConfigInit = true,
@@ -83,6 +86,7 @@ const renderFooter = async ({
 
   mockGlobalState = createGlobalState(readSlugs);
   mockServerConfigState = {
+    enableBusinessFeatures,
     featureFlags: { enableAgentOnboarding: enabled },
     isMobile: mobile,
     serverConfigInit,
@@ -152,8 +156,19 @@ const renderFooter = async ({
         </div>
       ) : null,
   }));
+  vi.doMock('@/features/Billboard', () => ({
+    default: () => null,
+  }));
+  vi.doMock('@/features/Billboard/MenuItems', () => ({
+    useBillboardMenuItems: () => [],
+  }));
   vi.doMock('@/features/User/UserPanel/ThemeButton', () => ({
     default: () => null,
+  }));
+  vi.doMock('@/features/Workspace/WorkspaceLink', () => ({
+    default: ({ children, to }: { children: React.ReactNode; to: string }) => (
+      <a href={to}>{children}</a>
+    ),
   }));
   function createNavLayoutState() {
     return {
@@ -185,6 +200,9 @@ const renderFooter = async ({
     return selector(mockServerConfigState);
   }
   vi.doMock('@/store/serverConfig', () => ({
+    serverConfigSelectors: {
+      enableBusinessFeatures: (s: Record<string, unknown>) => !!s.enableBusinessFeatures,
+    },
     useServerConfigStore: selectFromServerConfigStore,
   }));
   function selectFromUserStore(selector: (state: Record<string, unknown>) => unknown) {
@@ -214,7 +232,10 @@ afterEach(() => {
   vi.doUnmock('@/components/ChangelogModal');
   vi.doUnmock('@/components/FeedbackModal');
   vi.doUnmock('@/components/HighlightNotification');
+  vi.doUnmock('@/features/Billboard');
+  vi.doUnmock('@/features/Billboard/MenuItems');
   vi.doUnmock('@/features/User/UserPanel/ThemeButton');
+  vi.doUnmock('@/features/Workspace/WorkspaceLink');
   vi.doUnmock('@/hooks/useNavLayout');
   vi.doUnmock('@/store/global');
   vi.doUnmock('@/store/serverConfig');

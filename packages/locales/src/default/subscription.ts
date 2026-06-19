@@ -467,6 +467,9 @@ export default {
     'Invalid referral code format, please enter 2-8 letters, numbers or underscores',
   'referral.errors.selfReferral': 'You cannot use your own invite code',
   'referral.errors.updateFailed': 'Update failed, please try again later',
+  'referral.hero.description':
+    'Share your referral link below. After your friend makes their first payment, you each earn {{reward}}M credits.',
+  'referral.hero.title': 'Invite friends, you both earn <0>{{reward}}M credits</0>',
   'referral.inviteCode.description':
     'Share your exclusive referral code to invite friends to register',
   'referral.inviteCode.title': 'My Referral Code',
