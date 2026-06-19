@@ -1,4 +1,4 @@
-import { pickNonEmptyString, toRecord } from '@lobechat/utils';
+import { pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 
 import { formatErrorForState } from './formatErrorForState';
 import { formatPgError, pgErrorType, unwrapPgError } from './pgError';
