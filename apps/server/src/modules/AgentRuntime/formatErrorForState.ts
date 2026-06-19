@@ -58,8 +58,17 @@ const buildPayloadBody = (
   if (typeof payload.provider === 'string') context.provider = payload.provider;
 
   if (isRecord(sourceBody)) {
+    const shouldAttachPayloadError =
+      payload._responseBody !== undefined &&
+      payload.error !== undefined &&
+      !('error' in sourceBody);
+
     return {
       ...sourceBody,
+      // `_responseBody` is the display-facing body, but gateway/model-runtime
+      // still carries status/provider details in `error` for some failures:
+      // `{ _responseBody: {...}, error: { status: 402 } }`.
+      ...(shouldAttachPayloadError ? { error: payload.error } : {}),
       ...(payload.budget !== undefined && !('budget' in sourceBody)
         ? { budget: payload.budget }
         : {}),

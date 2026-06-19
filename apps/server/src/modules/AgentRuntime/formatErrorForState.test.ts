@@ -208,6 +208,25 @@ describe('formatErrorForState', () => {
       expect(result.category).toBe('quota');
     });
 
+    it('keeps payload.error available when _responseBody is present', () => {
+      const result = formatErrorForState({
+        _responseBody: { provider: 'lobehub' },
+        error: { status: 402 },
+        errorType: AgentRuntimeErrorType.ProviderBizError,
+        message: 'opaque upstream message',
+      });
+
+      expect(result).toMatchObject({
+        body: {
+          error: { status: 402 },
+          message: 'opaque upstream message',
+          provider: 'lobehub',
+        },
+        category: 'quota',
+        type: AgentRuntimeErrorType.InsufficientQuota,
+      });
+    });
+
     it('keeps a genuine residual as ProviderBizError (E8002)', () => {
       const result = formatErrorForState({
         errorType: AgentRuntimeErrorType.ProviderBizError,
