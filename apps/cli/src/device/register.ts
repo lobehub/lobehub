@@ -38,3 +38,45 @@ export async function registerDevice(
     platform: process.platform,
   });
 }
+
+type Auth = { serverUrl: string; token: string; tokenType: 'apiKey' | 'jwt' | 'serviceToken' };
+
+/**
+ * Identity for a WORKSPACE device: derived from the workspaceId (namespaced) so
+ * the same physical machine enrolled into a workspace is a distinct device from
+ * its personal identity, and stable across reconnects.
+ */
+export function resolveWorkspaceDeviceIdentity(
+  workspaceId: string,
+  explicitDeviceId?: string,
+): DeviceIdentity {
+  if (explicitDeviceId) return { deviceId: explicitDeviceId, identitySource: 'fallback' };
+  return deriveDeviceId(`workspace:${workspaceId}`);
+}
+
+/**
+ * Mint a workspace-device connect token (owner-only on the server). The returned
+ * token carries the `workspace_id` claim the gateway routes by.
+ */
+export async function mintWorkspaceConnectToken(
+  auth: Auth,
+  workspaceId: string,
+): Promise<{ token: string; workspaceId: string }> {
+  const trpc = createLambdaClient(auth, workspaceId);
+  return trpc.device.mintWorkspaceConnectToken.mutate();
+}
+
+/** Register this machine as a device of the given workspace (owner-only). */
+export async function registerWorkspaceDevice(
+  auth: Auth,
+  identity: DeviceIdentity,
+  workspaceId: string,
+): Promise<void> {
+  const trpc = createLambdaClient(auth, workspaceId);
+  await trpc.device.registerWorkspaceDevice.mutate({
+    deviceId: identity.deviceId,
+    hostname: os.hostname(),
+    identitySource: identity.identitySource,
+    platform: process.platform,
+  });
+}

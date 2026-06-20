@@ -16,6 +16,7 @@ import { deviceService } from '@/services/device';
 import { electronSystemService } from '@/services/electron/system';
 import { nextWorkingDirs } from '@/store/device';
 
+import { refreshDeviceList } from './const';
 import { getDeviceIcon } from './getDeviceIcon';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -62,14 +63,20 @@ interface DeviceDetailPanelProps {
 
 const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onClose }) => {
   const { t } = useTranslation(['setting', 'device']);
-  const utils = lambdaQuery.useUtils();
 
   const [name, setName] = useState(device.friendlyName ?? '');
   const [cwd, setCwd] = useState(device.defaultCwd ?? '');
 
-  const update = lambdaQuery.device.updateDevice.useMutation({
-    onSuccess: () => utils.device.listDevices.invalidate(),
+  // Workspace devices commit via the owner-gated, workspace-scoped mutation;
+  // personal devices stay userId-scoped. Route by the device's own scope.
+  const onUpdateSuccess = () => refreshDeviceList();
+  const updatePersonal = lambdaQuery.device.updateDevice.useMutation({
+    onSuccess: onUpdateSuccess,
   });
+  const updateWorkspace = lambdaQuery.device.updateWorkspaceDevice.useMutation({
+    onSuccess: onUpdateSuccess,
+  });
+  const update = device.scope === 'workspace' ? updateWorkspace : updatePersonal;
 
   // Only the machine you're on can browse its own filesystem natively.
   const canBrowse = !!isCurrent && isDesktop;

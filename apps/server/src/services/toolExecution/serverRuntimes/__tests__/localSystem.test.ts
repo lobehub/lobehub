@@ -83,7 +83,7 @@ describe('localSystemRuntime', () => {
       const result = await proxy[apiName](args);
 
       expect(mockExecuteToolCall).toHaveBeenCalledWith(
-        { deviceId: 'device-1', operationId: 'op-1', userId: 'user-1' },
+        { deviceId: 'device-1', operationId: 'op-1', userId: 'user-1', workspaceId: undefined },
         {
           apiName,
           arguments: JSON.stringify(args),
@@ -110,9 +110,34 @@ describe('localSystemRuntime', () => {
       await proxy[apiName](complexArgs);
 
       expect(mockExecuteToolCall).toHaveBeenCalledWith(
-        { deviceId: 'device-2', userId: 'user-2' },
+        { deviceId: 'device-2', userId: 'user-2', workspaceId: undefined },
         expect.objectContaining({
           arguments: JSON.stringify(complexArgs),
+        }),
+        undefined,
+      );
+    });
+
+    it('should forward workspaceId so workspace-owned devices route to the correct gateway pool', async () => {
+      const context: ToolExecutionContext = {
+        activeDeviceId: 'device-ws',
+        toolManifestMap: {},
+        userId: 'user-1',
+        workspaceId: 'ws-42',
+      };
+
+      mockExecuteToolCall.mockResolvedValue({ content: '', success: true });
+
+      const proxy = localSystemRuntime.factory(context);
+      const apiName = LocalSystemManifest.api[0].name;
+
+      await proxy[apiName]({ path: '/tmp' });
+
+      expect(mockExecuteToolCall).toHaveBeenCalledWith(
+        { deviceId: 'device-ws', userId: 'user-1', workspaceId: 'ws-42' },
+        expect.objectContaining({
+          apiName,
+          identifier: LocalSystemIdentifier,
         }),
         undefined,
       );

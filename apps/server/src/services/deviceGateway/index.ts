@@ -87,23 +87,25 @@ export class DeviceGateway {
     return !!gatewayEnv.DEVICE_GATEWAY_URL;
   }
 
-  async queryDeviceStatus(userId: string): Promise<DeviceStatusResult> {
+  async queryDeviceStatus(userId: string, workspaceId?: string): Promise<DeviceStatusResult> {
     const client = this.getClient();
     if (!client) return { deviceCount: 0, online: false };
 
     try {
-      return await client.queryDeviceStatus(userId);
+      return await client.queryDeviceStatus(userId, workspaceId);
     } catch {
       return { deviceCount: 0, online: false };
     }
   }
 
-  async queryDeviceList(userId: string): Promise<DeviceAttachment[]> {
+  // Pass a `workspaceId` to address a workspace-owned device pool (the gateway
+  // routes to the `workspace:<id>` principal); omit it for the personal pool.
+  async queryDeviceList(userId: string, workspaceId?: string): Promise<DeviceAttachment[]> {
     const client = this.getClient();
     if (!client) return [];
 
     try {
-      const devices = await client.queryDeviceList(userId);
+      const devices = await client.queryDeviceList(userId, workspaceId);
       // The gateway already dedupes to one entry per physical device, with its
       // live connections nested as `channels`. Map to the runtime shape; every
       // returned device has at least one channel, so it's online.
@@ -129,12 +131,13 @@ export class DeviceGateway {
   async queryDeviceSystemInfo(
     userId: string,
     deviceId: string,
+    workspaceId?: string,
   ): Promise<DeviceSystemInfo | undefined> {
     const client = this.getClient();
     if (!client) return undefined;
 
     try {
-      const result = await client.getDeviceSystemInfo(userId, deviceId);
+      const result = await client.getDeviceSystemInfo(userId, deviceId, workspaceId);
       return result.success ? result.systemInfo : undefined;
     } catch {
       log('queryDeviceSystemInfo: failed for userId=%s, deviceId=%s', userId, deviceId);
@@ -876,6 +879,7 @@ export class DeviceGateway {
     systemContext?: string;
     topicId: string;
     userId: string;
+    workspaceId?: string;
   }): Promise<{ error?: string; success: boolean }> {
     const client = this.getClient();
     if (!client) return { error: 'GATEWAY_NOT_CONFIGURED', success: false };
@@ -890,7 +894,7 @@ export class DeviceGateway {
   }
 
   async executeToolCall(
-    params: { deviceId: string; operationId?: string; userId: string },
+    params: { deviceId: string; operationId?: string; userId: string; workspaceId?: string },
     toolCall: { apiName: string; arguments: string; identifier: string },
     timeout = 30_000,
   ): Promise<DeviceToolCallResult> {
@@ -919,6 +923,7 @@ export class DeviceGateway {
           operationId: params.operationId,
           timeout,
           userId: params.userId,
+          workspaceId: params.workspaceId,
         },
         toolCall,
       );
@@ -942,6 +947,7 @@ export class DeviceGateway {
       identifier: string;
       params: GatewayMcpStdioParams;
       userId: string;
+      workspaceId?: string;
     },
     timeout = 30_000,
   ): Promise<DeviceToolCallResult> {
@@ -972,7 +978,7 @@ export class DeviceGateway {
   }
 
   async executeMessageApi(
-    params: { deviceId: string; userId: string },
+    params: { deviceId: string; userId: string; workspaceId?: string },
     api: { apiName: string; payload: Record<string, unknown>; platform: string },
     timeout = 30_000,
   ): Promise<DeviceMessageApiResult> {
@@ -995,7 +1001,12 @@ export class DeviceGateway {
 
     try {
       return await client.executeMessageApi(
-        { deviceId: params.deviceId, timeout, userId: params.userId },
+        {
+          deviceId: params.deviceId,
+          timeout,
+          userId: params.userId,
+          workspaceId: params.workspaceId,
+        },
         api,
       );
     } catch (error) {

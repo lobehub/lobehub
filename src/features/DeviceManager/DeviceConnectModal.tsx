@@ -1,11 +1,14 @@
 'use client';
 
 import { DOWNLOAD_URL } from '@lobechat/const';
+import type { DeviceScope } from '@lobechat/types';
 import { Button, CopyButton, Flexbox, Icon, Modal, Segmented, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { DownloadIcon, MonitorDownIcon, ShieldCheckIcon, TerminalIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 
 const styles = createStaticStyles(({ css }) => ({
   codeBlock: css`
@@ -71,12 +74,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-interface ConnectDeviceModalProps {
-  initialTab?: 'cli' | 'desktop';
-  onClose: () => void;
-  open: boolean;
-}
-
 interface StepProps {
   children?: React.ReactNode;
   desc: string;
@@ -106,19 +103,64 @@ const CommandLine = memo<{ command: string }>(({ command }) => (
   </div>
 ));
 
-const cliCommands = {
-  connect: 'lh connect --daemon',
-  install: 'npm install -g @lobehub/cli',
-  login: 'lh login',
-};
+interface DeviceConnectModalProps {
+  initialTab?: 'cli' | 'desktop';
+  onClose: () => void;
+  open: boolean;
+  scope: DeviceScope;
+}
 
-const ConnectDeviceModal = memo<ConnectDeviceModalProps>(({ onClose, open, initialTab }) => {
+/**
+ * Device enrollment wizard, shared by the personal and workspace device pages.
+ * - Personal: Desktop (auto-connect) + CLI tabs.
+ * - Workspace: CLI-only (shared machines are headless), and the connect step
+ *   carries the `--workspace <id>` flag that routes the device to the workspace
+ *   principal. Owner-only on the server.
+ */
+const DeviceConnectModal = memo<DeviceConnectModalProps>(({ onClose, open, initialTab, scope }) => {
   const { t } = useTranslation('setting');
-  const [active, setActive] = useState<'cli' | 'desktop'>(initialTab ?? 'desktop');
+  const workspaceId = useActiveWorkspaceId();
+  const isWorkspace = scope === 'workspace';
 
+  const [active, setActive] = useState<'cli' | 'desktop'>(initialTab ?? 'desktop');
   useEffect(() => {
-    if (open) setActive(initialTab ?? 'desktop');
-  }, [open, initialTab]);
+    if (open) setActive(isWorkspace ? 'cli' : (initialTab ?? 'desktop'));
+  }, [open, initialTab, isWorkspace]);
+
+  const connectCommand = isWorkspace
+    ? `lh connect --workspace ${workspaceId ?? '<workspace-id>'} --daemon`
+    : 'lh connect --daemon';
+
+  const cliSteps = (
+    <Flexbox>
+      <Step
+        desc={t('devices.connectWizard.cli.installDesc')}
+        index={1}
+        title={t('devices.connectWizard.cli.installTitle')}
+      >
+        <CommandLine command={'npm install -g @lobehub/cli'} />
+      </Step>
+      <Step
+        desc={t('devices.connectWizard.cli.loginDesc')}
+        index={2}
+        title={t('devices.connectWizard.cli.loginTitle')}
+      >
+        <CommandLine command={'lh login'} />
+      </Step>
+      <Step
+        last
+        index={3}
+        title={t('devices.connectWizard.cli.connectTitle')}
+        desc={
+          isWorkspace
+            ? t('workspaceSetting.devices.enrollDesc')
+            : t('devices.connectWizard.cli.connectDesc')
+        }
+      >
+        <CommandLine command={connectCommand} />
+      </Step>
+    </Flexbox>
+  );
 
   return (
     <Modal
@@ -129,27 +171,31 @@ const ConnectDeviceModal = memo<ConnectDeviceModalProps>(({ onClose, open, initi
       onCancel={onClose}
     >
       <Flexbox gap={20}>
-        <Text className={styles.subtitle}>{t('devices.connectWizard.subtitle')}</Text>
+        <Text className={styles.subtitle}>
+          {isWorkspace ? t('workspaceSetting.devices.desc') : t('devices.connectWizard.subtitle')}
+        </Text>
 
-        <Segmented
-          block
-          value={active}
-          options={[
-            {
-              icon: <Icon icon={MonitorDownIcon} />,
-              label: t('devices.connectWizard.method.desktop'),
-              value: 'desktop',
-            },
-            {
-              icon: <Icon icon={TerminalIcon} />,
-              label: t('devices.connectWizard.method.cli'),
-              value: 'cli',
-            },
-          ]}
-          onChange={(value) => setActive(value as 'cli' | 'desktop')}
-        />
+        {isWorkspace ? null : (
+          <Segmented
+            block
+            value={active}
+            options={[
+              {
+                icon: <Icon icon={MonitorDownIcon} />,
+                label: t('devices.connectWizard.method.desktop'),
+                value: 'desktop',
+              },
+              {
+                icon: <Icon icon={TerminalIcon} />,
+                label: t('devices.connectWizard.method.cli'),
+                value: 'cli',
+              },
+            ]}
+            onChange={(value) => setActive(value as 'cli' | 'desktop')}
+          />
+        )}
 
-        {active === 'desktop' ? (
+        {!isWorkspace && active === 'desktop' ? (
           <Flexbox>
             <Step
               desc={t('devices.connectWizard.desktop.step1Desc')}
@@ -175,30 +221,7 @@ const ConnectDeviceModal = memo<ConnectDeviceModalProps>(({ onClose, open, initi
             />
           </Flexbox>
         ) : (
-          <Flexbox>
-            <Step
-              desc={t('devices.connectWizard.cli.installDesc')}
-              index={1}
-              title={t('devices.connectWizard.cli.installTitle')}
-            >
-              <CommandLine command={cliCommands.install} />
-            </Step>
-            <Step
-              desc={t('devices.connectWizard.cli.loginDesc')}
-              index={2}
-              title={t('devices.connectWizard.cli.loginTitle')}
-            >
-              <CommandLine command={cliCommands.login} />
-            </Step>
-            <Step
-              last
-              desc={t('devices.connectWizard.cli.connectDesc')}
-              index={3}
-              title={t('devices.connectWizard.cli.connectTitle')}
-            >
-              <CommandLine command={cliCommands.connect} />
-            </Step>
-          </Flexbox>
+          cliSteps
         )}
 
         <Flexbox horizontal align={'center'} className={styles.footer} gap={8}>
@@ -210,6 +233,6 @@ const ConnectDeviceModal = memo<ConnectDeviceModalProps>(({ onClose, open, initi
   );
 });
 
-ConnectDeviceModal.displayName = 'ConnectDeviceModal';
+DeviceConnectModal.displayName = 'DeviceConnectModal';
 
-export default ConnectDeviceModal;
+export default DeviceConnectModal;

@@ -5,14 +5,18 @@ import { MonitorUpIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { DeviceConnectModal, DeviceManager } from '@/features/DeviceManager';
 import SettingHeader from '@/routes/(main)/settings/features/SettingHeader';
-
-import ConnectDeviceModal from './features/ConnectDeviceModal';
-import DeviceList from './features/DeviceList';
 
 const Page = memo(() => {
   const { t } = useTranslation('setting');
-  const [connectModalOpen, setConnectModalOpen] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [initialTab, setInitialTab] = useState<'cli' | 'desktop'>();
+
+  const handleConnect = (tab?: 'cli' | 'desktop') => {
+    setInitialTab(tab);
+    setOpen(true);
+  };
 
   return (
     <>
@@ -22,16 +26,21 @@ const Page = memo(() => {
           <Button
             icon={<Icon icon={MonitorUpIcon} />}
             size={'small'}
-            onClick={() => setConnectModalOpen(true)}
+            onClick={() => handleConnect()}
           >
             {t('devices.connectWizard.button')}
           </Button>
         }
       />
 
-      <DeviceList />
+      <DeviceManager scope={'personal'} onConnect={handleConnect} />
 
-      <ConnectDeviceModal open={connectModalOpen} onClose={() => setConnectModalOpen(false)} />
+      <DeviceConnectModal
+        initialTab={initialTab}
+        open={open}
+        scope={'personal'}
+        onClose={() => setOpen(false)}
+      />
     </>
   );
 });

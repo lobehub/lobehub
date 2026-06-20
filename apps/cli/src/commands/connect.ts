@@ -18,7 +18,6 @@ import type {
 import { GatewayClient } from '@lobechat/device-gateway-client';
 import type { Command } from 'commander';
 
-import { getValidToken } from '../auth/refresh';
 import { resolveToken } from '../auth/resolveToken';
 import { CLI_API_KEY_ENV } from '../constants/auth';
 import { OFFICIAL_GATEWAY_URL } from '../constants/urls';
@@ -34,7 +33,13 @@ import {
   writeStatus,
 } from '../daemon/manager';
 import { spawnHeteroAgentRun } from '../device/agentRun';
-import { registerDevice, resolveDeviceIdentity } from '../device/register';
+import {
+  mintWorkspaceConnectToken,
+  registerDevice,
+  registerWorkspaceDevice,
+  resolveDeviceIdentity,
+  resolveWorkspaceDeviceIdentity,
+} from '../device/register';
 import { loadOrCreateConnectionId, loadSettings, normalizeUrl, saveSettings } from '../settings';
 import { executeToolCall } from '../tools';
 import { cleanupAllProcesses } from '../tools/shell';
@@ -47,6 +52,8 @@ interface ConnectOptions {
   gateway?: string;
   token?: string;
   verbose?: boolean;
+  /** Enroll this machine as a device of the given workspace (admin only). */
+  workspace?: string;
 }
 
 export function registerConnectCommand(program: Command) {
@@ -56,6 +63,7 @@ export function registerConnectCommand(program: Command) {
     .option('--token <jwt>', 'JWT access token')
     .option('--gateway <url>', 'Device gateway URL')
     .option('--device-id <id>', 'Device ID (auto-generated if not provided)')
+    .option('--workspace <id>', 'Enroll as a device of this workspace (admin only)')
     .option('-v, --verbose', 'Enable verbose logging')
     .option('-d, --daemon', 'Run as a background daemon process')
     .option('--daemon-child', 'Internal: runs as the daemon child process')
@@ -185,6 +193,7 @@ function buildDaemonArgs(options: ConnectOptions): string[] {
   if (options.token) args.push('--token', options.token);
   if (options.gateway) args.push('--gateway', options.gateway);
   if (options.deviceId) args.push('--device-id', options.deviceId);
+  if (options.workspace) args.push('--workspace', options.workspace);
   if (options.verbose) args.push('--verbose');
 
   return args;
@@ -209,10 +218,43 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
 
   const resolvedGatewayUrl = gatewayUrl || OFFICIAL_GATEWAY_URL;
 
+  // Workspace enrollment: the device joins a workspace pool (reachable by all
+  // members) instead of the personal pool. It authenticates with a minted
+  // workspace-device token (carrying the `workspace_id` claim) and uses a
+  // workspace-derived deviceId. `auth` stays the admin's identity — used only to
+  // (re-)mint the connect token and register the row.
+  const workspaceId = options.workspace;
+
   // Resolve a stable device identity. An explicit `--device-id` wins (lets a
   // user pin a VM to a fixed identity); otherwise derive from the machine id so
-  // the same machine + user maps to one device across reconnects.
-  const identity = resolveDeviceIdentity(auth.userId, options.deviceId);
+  // the same machine maps to one device across reconnects.
+  const identity = workspaceId
+    ? resolveWorkspaceDeviceIdentity(workspaceId, options.deviceId)
+    : resolveDeviceIdentity(auth.userId, options.deviceId);
+
+  // The token the gateway socket authenticates with. Re-minted on refresh for
+  // workspace devices (see `refreshConnectToken`).
+  let connectToken = auth.token;
+  let connectTokenType: 'apiKey' | 'jwt' | 'serviceToken' = auth.tokenType;
+  if (workspaceId) {
+    const minted = await mintWorkspaceConnectToken(auth, workspaceId);
+    connectToken = minted.token;
+    connectTokenType = 'jwt';
+  }
+
+  // Re-resolve the admin auth and, for workspace mode, re-mint the connect token.
+  const refreshConnectToken = async (): Promise<string | undefined> => {
+    const refreshed = await resolveToken({});
+    if (!refreshed) return undefined;
+    auth = refreshed;
+    if (workspaceId) {
+      const minted = await mintWorkspaceConnectToken(auth, workspaceId);
+      connectToken = minted.token;
+      return connectToken;
+    }
+    connectToken = refreshed.token;
+    return connectToken;
+  };
 
   // Freeform channel label (`cli` by default); `LOBEHUB_CLI_CHANNEL` lets a
   // dev build tag itself `cli-dev` so the gateway can prioritise / display it.
@@ -225,9 +267,10 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     gatewayUrl: resolvedGatewayUrl,
     logger: isDaemonChild ? createDaemonLogger() : log,
     serverUrl: auth.serverUrl,
-    token: auth.token,
-    tokenType: auth.tokenType,
-    userId: auth.userId,
+    token: connectToken,
+    tokenType: connectTokenType,
+    userId: workspaceId ? undefined : auth.userId,
+    workspaceId,
   });
 
   const info = (msg: string) => {
@@ -376,15 +419,21 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     updateStatus('reconnecting');
   });
 
-  // Proactive token refresh — schedule before JWT expires
-  const startProactiveRefresh = () =>
+  // Proactive token refresh — schedule before the connect token expires. For a
+  // workspace device `refreshConnectToken` re-mints the workspace token; for a
+  // personal device it refreshes the user token. Scheduling watches the actual
+  // connect token, so the workspace token's shorter life is respected.
+  const startProactiveRefresh = (): (() => void) | null =>
     scheduleProactiveRefresh(
-      auth,
-      (refreshed) => {
-        client.updateToken(refreshed.token);
-        auth = refreshed;
-        // Schedule next refresh based on the new token
-        cancelRefreshTimer = startProactiveRefresh();
+      connectToken,
+      connectTokenType,
+      async () => {
+        const newToken = await refreshConnectToken();
+        if (newToken) {
+          client.updateToken(newToken);
+          cancelRefreshTimer = startProactiveRefresh();
+        }
+        return newToken;
       },
       info,
       error,
@@ -395,15 +444,15 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // (e.g., auto-reconnect may send an expired JWT before proactive refresh fires)
   let authFailedRefreshAttempted = false;
   client.on('auth_failed', async (reason) => {
-    if (auth.tokenType === 'jwt' && !authFailedRefreshAttempted) {
+    if (connectTokenType === 'jwt' && !authFailedRefreshAttempted) {
       authFailedRefreshAttempted = true;
       info(`Authentication failed (${reason}). Attempting token refresh...`);
       try {
-        const refreshed = await resolveToken({});
-        if (refreshed && refreshed.token !== auth.token) {
+        const prev = connectToken;
+        const newToken = await refreshConnectToken();
+        if (newToken && newToken !== prev) {
           info('Token refreshed successfully. Reconnecting...');
-          client.updateToken(refreshed.token);
-          auth = refreshed;
+          client.updateToken(newToken);
           authFailedRefreshAttempted = false;
           cancelRefreshTimer = startProactiveRefresh();
           await client.reconnect();
@@ -424,7 +473,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
 
   // Handle auth expired — refresh token and reconnect automatically
   client.on('auth_expired', async () => {
-    if (auth.tokenType === 'apiKey') {
+    if (connectTokenType === 'apiKey') {
       // API keys don't expire; ignore stale auth_expired signals
       return;
     }
@@ -432,11 +481,10 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     info('Authentication expired. Attempting to refresh token...');
 
     try {
-      const refreshed = await resolveToken({});
-      if (refreshed) {
+      const newToken = await refreshConnectToken();
+      if (newToken) {
         info('Token refreshed successfully. Reconnecting...');
-        client.updateToken(refreshed.token);
-        auth = refreshed;
+        client.updateToken(newToken);
         cancelRefreshTimer = startProactiveRefresh();
         await client.reconnect();
         return;
@@ -486,7 +534,8 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     try {
       // Reuse the already-resolved auth (respects `--token` mode) so we don't
       // re-discover creds and exit when none are found.
-      await registerDevice(auth, identity);
+      if (workspaceId) await registerWorkspaceDevice(auth, identity, workspaceId);
+      else await registerDevice(auth, identity);
     } catch (err) {
       error(`Device registration failed (non-fatal): ${(err as Error).message}`);
     }
@@ -534,47 +583,49 @@ function parseJwtExp(token: string): number | undefined {
 }
 
 /**
- * Schedule a proactive token refresh before the JWT expires.
- * Returns a cleanup function that cancels the scheduled timer.
+ * Schedule a proactive token refresh before the (connect) token expires.
+ * `refresh` performs the actual refresh — re-minting a workspace token or
+ * refreshing the user token — and returns the new token. Returns a cleanup
+ * function that cancels the scheduled timer.
  */
 function scheduleProactiveRefresh(
-  auth: { token: string; tokenType: string },
-  onRefreshed: (newAuth: Awaited<ReturnType<typeof resolveToken>>) => void,
+  token: string,
+  tokenType: string,
+  refresh: () => Promise<string | undefined>,
   info: (msg: string) => void,
   error: (msg: string) => void,
 ): (() => void) | null {
-  if (auth.tokenType !== 'jwt') return null;
+  if (tokenType !== 'jwt') return null;
 
-  const exp = parseJwtExp(auth.token);
+  const exp = parseJwtExp(token);
   if (!exp) return null;
 
-  const refreshAt = (exp - PROACTIVE_REFRESH_BUFFER) * 1000;
-  const delay = refreshAt - Date.now();
-
-  if (delay < 0) {
-    // Already past the refresh window — refresh immediately on next tick
+  const lifetimeMs = exp * 1000 - Date.now();
+  if (lifetimeMs <= 0) {
+    // Token already expired — refresh once on next tick.
     void doRefresh();
     return null;
   }
+
+  // Refresh ahead of expiry, but never let the buffer meet or exceed the token's
+  // remaining lifetime: a buffer >= lifetime collapses the refresh window to <=0
+  // and busy-loops re-minting (e.g. a 1h token with a 1h buffer). Cap the buffer
+  // at half the remaining lifetime so a short-lived token refreshes about once per
+  // half-life instead of spinning.
+  const bufferMs = Math.min(PROACTIVE_REFRESH_BUFFER * 1000, lifetimeMs / 2);
+  const delay = lifetimeMs - bufferMs;
 
   const timer = setTimeout(() => void doRefresh(), delay);
   return () => clearTimeout(timer);
 
   async function doRefresh() {
     try {
-      // Use the same buffer so getValidToken actually triggers a refresh
-      const result = await getValidToken(PROACTIVE_REFRESH_BUFFER);
-      if (!result) {
+      const newToken = await refresh();
+      if (!newToken) {
         error('Proactive token refresh failed — no valid credentials.');
         return;
       }
-
-      const refreshed = await resolveToken({});
-      // Only notify if the token actually changed to avoid reschedule loops
-      if (refreshed.token !== auth.token) {
-        info('Proactively refreshed token.');
-        onRefreshed(refreshed);
-      }
+      if (newToken !== token) info('Proactively refreshed token.');
     } catch {
       error('Proactive token refresh failed.');
     }

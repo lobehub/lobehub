@@ -1,6 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
+import type { DeviceScope } from '@lobechat/types';
 import { Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
@@ -8,6 +9,7 @@ import {
   FolderCogIcon,
   type LucideIcon,
   MonitorDownIcon,
+  ServerIcon,
   ShieldCheckIcon,
   TerminalIcon,
   ZapIcon,
@@ -15,12 +17,13 @@ import {
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { lambdaQuery } from '@/libs/trpc/client';
+import { useClientDataSWR } from '@/libs/swr';
+import { deviceService } from '@/services/device';
 import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
-import ConnectDeviceModal from './ConnectDeviceModal';
+import { DEVICE_LIST_SWR_KEY } from './const';
 import DeviceDetailPanel from './DeviceDetailPanel';
 import DeviceItem from './DeviceItem';
 
@@ -163,115 +166,133 @@ const ConnectOption = memo<ConnectOptionProps>(({ icon, title, desc, badge, onCl
   </Flexbox>
 ));
 
-const DeviceList = memo(() => {
+const Capabilities = memo(() => {
   const { t } = useTranslation('setting');
+  const items: { desc: string; icon: LucideIcon; title: string }[] = [
+    {
+      desc: t('devices.capabilities.files.desc'),
+      icon: FolderCogIcon,
+      title: t('devices.capabilities.files.title'),
+    },
+    {
+      desc: t('devices.capabilities.commands.desc'),
+      icon: TerminalIcon,
+      title: t('devices.capabilities.commands.title'),
+    },
+    {
+      desc: t('devices.capabilities.tools.desc'),
+      icon: ZapIcon,
+      title: t('devices.capabilities.tools.title'),
+    },
+  ];
+  return (
+    <Flexbox gap={16}>
+      <Flexbox horizontal align={'center'} gap={8}>
+        <Icon icon={ShieldCheckIcon} size={16} style={{ color: cssVar.colorPrimary }} />
+        <Text style={{ fontSize: 14, fontWeight: 500 }}>{t('devices.capabilities.title')}</Text>
+      </Flexbox>
+      <Flexbox horizontal gap={16}>
+        {items.map((cap) => (
+          <Flexbox className={styles.capabilityCard} flex={1} gap={12} key={cap.title}>
+            <span className={styles.capabilityIcon}>
+              <Icon icon={cap.icon} size={18} />
+            </span>
+            <Flexbox gap={2}>
+              <Text style={{ fontSize: 14, fontWeight: 500 }}>{cap.title}</Text>
+              <Text className={styles.subtitle} style={{ fontSize: 12 }}>
+                {cap.desc}
+              </Text>
+            </Flexbox>
+          </Flexbox>
+        ))}
+      </Flexbox>
+    </Flexbox>
+  );
+});
+
+interface DeviceManagerProps {
+  /** Open the enrollment wizard (the modal is owned by the route, by the header button). */
+  onConnect: (tab?: 'cli' | 'desktop') => void;
+  /** Which device pool this surface manages. */
+  scope: DeviceScope;
+}
+
+/**
+ * Master-detail device manager shared by the personal (`/settings/devices`) and
+ * workspace (`/:slug/settings/devices`) pages — list + detail panel + onboarding
+ * empty state, filtered to the given `scope`.
+ */
+const DeviceManager = memo<DeviceManagerProps>(({ onConnect, scope }) => {
+  const { t } = useTranslation('setting');
+  const isWorkspace = scope === 'workspace';
+
+  // Fetch via SWR so the cache key carries the active workspace id (see
+  // `DEVICE_LIST_SWR_KEY`). The raw TRPC React Query key had no workspace
+  // dimension, so a fetch primed while the workspace was still resolving (empty
+  // `X-Workspace-Id` header → personal pool) stuck for the whole session and the
+  // workspace list rendered empty until a hard refresh.
   // Devices come from an authed lambda procedure, so only query once signed in
   // (desktop always queries — it lists the local device's registered cwd).
   const isLogin = useUserStore(authSelectors.isLogin);
-  const { data: devices, isLoading } = lambdaQuery.device.listDevices.useQuery(undefined, {
-    enabled: isLogin || isDesktop,
-    staleTime: 30_000,
-  });
+  const { data, isLoading } = useClientDataSWR(
+    isLogin || isDesktop ? [DEVICE_LIST_SWR_KEY] : null,
+    () => deviceService.listDevices(),
+  );
+  // `listDevices` is workspace-aware and returns both pools — keep each surface
+  // to its own scope.
+  const devices = (data ?? []).filter((d) => d.scope === scope);
 
-  // Identify which row is the machine the user is on right now (desktop only —
-  // the web client isn't itself a registered device), so it can be badged and
-  // offered a native folder picker for its working directory.
+  // The machine the user is on right now (desktop only) — personal pool only;
+  // a workspace device is never "this machine" in the personal sense.
   const useFetchDeviceInfo = useElectronStore((s) => s.useFetchGatewayDeviceInfo);
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
   useFetchDeviceInfo();
-  const currentDeviceId = isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
+  const currentDeviceId = !isWorkspace && isDesktop ? gatewayDeviceInfo?.deviceId : undefined;
 
-  // No device is selected by default — the detail panel only appears once the
-  // user clicks a row.
   const [selectedId, setSelectedId] = useState<string>();
-  const [connectTab, setConnectTab] = useState<'cli' | 'desktop'>();
-
-  const openConnect = (tab: 'cli' | 'desktop') => setConnectTab(tab);
 
   if (isLoading) return <Skeleton active paragraph={{ rows: 4 }} title={false} />;
 
-  if (!devices || devices.length === 0)
+  // ─── Empty state: onboarding hero + connect options + capabilities ───
+  if (devices.length === 0) {
     return (
-      <>
-        <Flexbox gap={32}>
-          {/* Onboarding card: hero + the two real connection methods */}
-          <Flexbox className={styles.emptyCard}>
-            <Flexbox align={'center'} className={styles.emptyHero} gap={12}>
-              <span className={styles.heroIcon}>
-                <Icon icon={MonitorDownIcon} size={28} />
-              </span>
-              <Text style={{ fontSize: 18, fontWeight: 600 }}>{t('devices.empty.title')}</Text>
-              <Text className={styles.subtitle} style={{ maxWidth: 440 }}>
-                {t('devices.empty.desc')}
-              </Text>
-            </Flexbox>
+      <Flexbox gap={32}>
+        <Flexbox className={styles.emptyCard}>
+          <Flexbox align={'center'} className={styles.emptyHero} gap={12}>
+            <span className={styles.heroIcon}>
+              <Icon icon={isWorkspace ? ServerIcon : MonitorDownIcon} size={28} />
+            </span>
+            <Text style={{ fontSize: 18, fontWeight: 600 }}>
+              {t(isWorkspace ? 'workspaceSetting.devices.heroTitle' : 'devices.empty.title')}
+            </Text>
+            <Text className={styles.subtitle} style={{ maxWidth: 440 }}>
+              {t(isWorkspace ? 'workspaceSetting.devices.heroDesc' : 'devices.empty.desc')}
+            </Text>
+          </Flexbox>
 
-            <div className={styles.optionGrid}>
+          <div className={isWorkspace ? undefined : styles.optionGrid}>
+            {!isWorkspace && (
               <ConnectOption
                 badge={t('devices.empty.methodDesktop.badge')}
                 desc={t('devices.empty.methodDesktop.desc')}
                 icon={MonitorDownIcon}
                 title={t('devices.empty.methodDesktop.title')}
-                onClick={() => openConnect('desktop')}
+                onClick={() => onConnect('desktop')}
               />
-              <ConnectOption
-                desc={t('devices.empty.methodCli.desc')}
-                icon={TerminalIcon}
-                title={t('devices.empty.methodCli.title')}
-                onClick={() => openConnect('cli')}
-              />
-            </div>
-          </Flexbox>
-
-          {/* Capabilities unlocked once a device is connected */}
-          <Flexbox gap={16}>
-            <Flexbox horizontal align={'center'} gap={8}>
-              <Icon icon={ShieldCheckIcon} size={16} style={{ color: cssVar.colorPrimary }} />
-              <Text style={{ fontSize: 14, fontWeight: 500 }}>
-                {t('devices.capabilities.title')}
-              </Text>
-            </Flexbox>
-            <Flexbox horizontal gap={16}>
-              {[
-                {
-                  desc: t('devices.capabilities.files.desc'),
-                  icon: FolderCogIcon,
-                  title: t('devices.capabilities.files.title'),
-                },
-                {
-                  desc: t('devices.capabilities.commands.desc'),
-                  icon: TerminalIcon,
-                  title: t('devices.capabilities.commands.title'),
-                },
-                {
-                  desc: t('devices.capabilities.tools.desc'),
-                  icon: ZapIcon,
-                  title: t('devices.capabilities.tools.title'),
-                },
-              ].map((cap) => (
-                <Flexbox className={styles.capabilityCard} flex={1} gap={12} key={cap.title}>
-                  <span className={styles.capabilityIcon}>
-                    <Icon icon={cap.icon} size={18} />
-                  </span>
-                  <Flexbox gap={2}>
-                    <Text style={{ fontSize: 14, fontWeight: 500 }}>{cap.title}</Text>
-                    <Text className={styles.subtitle} style={{ fontSize: 12 }}>
-                      {cap.desc}
-                    </Text>
-                  </Flexbox>
-                </Flexbox>
-              ))}
-            </Flexbox>
-          </Flexbox>
+            )}
+            <ConnectOption
+              desc={t('devices.empty.methodCli.desc')}
+              icon={TerminalIcon}
+              title={t('devices.empty.methodCli.title')}
+              onClick={() => onConnect('cli')}
+            />
+          </div>
         </Flexbox>
 
-        <ConnectDeviceModal
-          initialTab={connectTab}
-          open={!!connectTab}
-          onClose={() => setConnectTab(undefined)}
-        />
-      </>
+        <Capabilities />
+      </Flexbox>
     );
+  }
 
   const selected = selectedId ? devices.find((d) => d.deviceId === selectedId) : undefined;
   const isCurrent = (id: string) => !!currentDeviceId && id === currentDeviceId;
@@ -306,6 +327,6 @@ const DeviceList = memo(() => {
   );
 });
 
-DeviceList.displayName = 'DeviceList';
+DeviceManager.displayName = 'DeviceManager';
 
-export default DeviceList;
+export default DeviceManager;

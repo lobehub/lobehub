@@ -77,13 +77,19 @@ export async function getTrpcClient(): Promise<TrpcClient> {
  * via env/stored creds and `process.exit(1)` when none exist, which would
  * abort an otherwise-valid explicit-token session.
  */
-export function createLambdaClient(auth: {
-  serverUrl: string;
-  token: string;
-  tokenType: 'apiKey' | 'jwt' | 'serviceToken';
-}): TrpcClient {
-  const headers =
-    auth.tokenType === 'apiKey' ? { 'X-API-Key': auth.token } : { 'Oidc-Auth': auth.token };
+export function createLambdaClient(
+  auth: {
+    serverUrl: string;
+    token: string;
+    tokenType: 'apiKey' | 'jwt' | 'serviceToken';
+  },
+  /** When set, scopes the request to a workspace (e.g. workspace-device enrollment). */
+  workspaceId?: string,
+): TrpcClient {
+  const headers: Record<string, string> = {
+    ...(auth.tokenType === 'apiKey' ? { 'X-API-Key': auth.token } : { 'Oidc-Auth': auth.token }),
+    ...(workspaceId ? { 'X-Workspace-Id': workspaceId } : {}),
+  };
 
   return createTRPCClient<LambdaRouter>({
     links: [httpLink({ headers, transformer: superjson, url: `${auth.serverUrl}/trpc/lambda` })],
