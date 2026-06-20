@@ -553,13 +553,14 @@ describe('createOpenAICompatibleImage', () => {
       vi.mocked(mockClient.chat.completions.create).mockResolvedValue(mockChatResponse as any);
 
       const payload: CreateImagePayload = {
-        model: 'upstream-model',
+        model: 'logical-model:image',
         params: {
           prompt: 'Test mapped routing',
         },
       };
 
       const result = await createOpenAICompatibleImage(mockClient, payload, 'test-provider', {
+        requestModel: 'upstream-model',
         routingModel: 'logical-model:image',
       });
 

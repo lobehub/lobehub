@@ -22,7 +22,7 @@ import { debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
 import { getModelPricing } from '../../utils/getModelPricing';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
-import { withMappedModelId } from '../../utils/modelIdMapping';
+import { resolveMappedModelId } from '../../utils/modelIdMapping';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { StreamingResponse } from '../../utils/response';
 import type { LobeRuntimeAI } from '../BaseAI';
@@ -34,7 +34,10 @@ import {
 import { resolveModelSamplingParameters } from '../parameterResolver';
 import { AnthropicStream, type AnthropicStreamOptions } from '../streams';
 import { type ComputeChatCostOptions } from '../usageConverters/utils/computeChatCost';
-import { createAnthropicGenerateObject } from './generateObject';
+import {
+  type AnthropicGenerateObjectConfig,
+  createAnthropicGenerateObject,
+} from './generateObject';
 import { handleAnthropicError } from './handleAnthropicError';
 import { resolveCacheTTL } from './resolveCacheTTL';
 import { resolveMaxTokens } from './resolveMaxTokens';
@@ -113,6 +116,7 @@ export interface AnthropicCompatibleFactoryOptions<T extends Record<string, any>
     payload: GenerateObjectPayload,
     options?: GenerateObjectOptions,
     pricing?: Pricing,
+    config?: AnthropicGenerateObjectConfig,
   ) => Promise<any>;
   models?: (params: {
     apiKey?: string;
@@ -455,6 +459,7 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
 
     private id: string;
     private logPrefix: string;
+    private modelIdMappingOptions: ModelIdMappingOptions = {};
 
     baseURL!: string;
     protected _options: ConstructorOptions<T>;
@@ -476,9 +481,11 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
       const {
         apiKey: finalApiKey,
         baseURL: finalBaseURL = DEFAULT_BASE_URL,
+        modelIdMapping,
         ...rest
       } = resolvedOptions;
       this._options = resolvedOptions as ConstructorOptions<T>;
+      this.modelIdMappingOptions = { modelIdMapping };
 
       if (!finalApiKey) throw AgentRuntimeError.createError(ErrorType.invalidAPIKey);
 
@@ -501,6 +508,20 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
       this.logPrefix = `lobe-model-runtime:${this.id}`;
     }
 
+    private withMappedRequestModel<TPayload extends { model?: string }>(
+      requestPayload: TPayload,
+      logicalModel: string,
+    ): TPayload {
+      if (!requestPayload.model) return requestPayload;
+
+      const mappedModel = resolveMappedModelId(logicalModel, this.modelIdMappingOptions);
+      if (requestPayload.model !== logicalModel || mappedModel === requestPayload.model) {
+        return requestPayload;
+      }
+
+      return { ...requestPayload, model: mappedModel };
+    }
+
     async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
       try {
         if (!chatCompletion?.handlePayload) {
@@ -509,24 +530,24 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
 
         const log = debug(`${this.logPrefix}:chat`);
         const inputStartAt = Date.now();
-        const requestPayload = withMappedModelId(payload, this._options);
 
         log('chat called with model: %s, stream: %s', payload.model, payload.stream ?? true);
 
-        const postPayload = await chatCompletion.handlePayload(requestPayload, this._options);
+        const postPayload = await chatCompletion.handlePayload(payload, this._options);
         const shouldStream = postPayload.stream ?? payload.stream ?? true;
         const finalPayload = { ...postPayload, stream: shouldStream };
+        const requestPayload = this.withMappedRequestModel(finalPayload, payload.model);
 
         if (debugParams?.chatCompletion?.()) {
           // eslint-disable-next-line no-console
           console.log('[requestPayload]');
           // eslint-disable-next-line no-console
-          console.log(JSON.stringify(finalPayload), '\n');
+          console.log(JSON.stringify(requestPayload), '\n');
         }
 
         const response = await this.client.messages.create(
           {
-            ...finalPayload,
+            ...requestPayload,
             metadata: options?.user ? { user_id: options.user } : undefined,
           },
           {
@@ -669,12 +690,9 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
 
       try {
         const pricing = await getModelPricing(payload.model, this.id);
-        return await generateObject(
-          this.client,
-          withMappedModelId(payload, this._options),
-          options,
-          pricing,
-        );
+        return await generateObject(this.client, payload, options, pricing, {
+          requestModel: resolveMappedModelId(payload.model, this.modelIdMappingOptions),
+        });
       } catch (error) {
         throw this.handleError(error);
       }

@@ -58,7 +58,7 @@ describe('LobeZhipuAI - custom features', () => {
     it('should send mapped model id when modelIdMapping is configured', async () => {
       const mappedInstance = new LobeZhipuAI({
         apiKey: 'test',
-        modelIdMapping: { 'glm-public': 'glm-4' },
+        modelIdMapping: { 'glm-4-alltools': 'upstream-glm-deployment' },
       });
       vi.spyOn(mappedInstance['client'].chat.completions, 'create').mockResolvedValue(
         new ReadableStream() as any,
@@ -66,13 +66,16 @@ describe('LobeZhipuAI - custom features', () => {
 
       await mappedInstance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
-        model: 'glm-public',
-        temperature: 0,
+        model: 'glm-4-alltools',
+        temperature: 2,
+        top_p: 2,
       });
 
       expect(mappedInstance['client'].chat.completions.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'glm-4',
+          model: 'upstream-glm-deployment',
+          temperature: 0.99,
+          top_p: 0.99,
         }),
         expect.anything(),
       );

@@ -449,18 +449,19 @@ describe('LobeAzureOpenAI', () => {
       instance = new LobeAzureOpenAI({
         apiKey: 'test_key',
         baseURL: 'https://test.openai.azure.com/',
-        modelIdMapping: { 'logical-image': 'azure-image-deployment' },
+        modelIdMapping: { 'gpt-image-1': 'azure-image-deployment' },
       });
-      const generateSpy = vi
-        .spyOn(instance['client'].images, 'generate')
+      const editSpy = vi
+        .spyOn(instance['client'].images, 'edit')
         .mockResolvedValue({ data: [{ url: 'https://example.com/mapped.png' }] } as any);
 
       await instance.createImage({
-        model: 'logical-image',
-        params: { prompt: 'mapped cat' },
+        model: 'gpt-image-1',
+        params: { image: new Blob(['image']) as any, prompt: 'mapped cat' },
       });
 
-      expect(vi.mocked(generateSpy).mock.calls[0][0]).toMatchObject({
+      expect(vi.mocked(editSpy).mock.calls[0][0]).toMatchObject({
+        input_fidelity: 'high',
         model: 'azure-image-deployment',
         prompt: 'mapped cat',
       });

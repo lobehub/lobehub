@@ -133,6 +133,41 @@ describe('LobeOpenAICompatibleFactory', () => {
       expect(result).toBeInstanceOf(Response);
     });
 
+    it('should keep logical model for provider payload handling while sending mapped model id', async () => {
+      const handlePayload = vi.fn((payload: ChatStreamPayload) => ({
+        messages: payload.messages,
+        model: payload.model,
+        stream: payload.stream ?? true,
+      }));
+      const Runtime = createOpenAICompatibleRuntime({
+        baseURL: defaultBaseURL,
+        chatCompletion: { handlePayload },
+        provider: 'mapped-provider',
+      });
+      const runtime = new Runtime({
+        apiKey: 'test',
+        modelIdMapping: { 'logical-model': 'upstream-model' },
+      });
+      vi.spyOn(runtime['client'].chat.completions, 'create').mockResolvedValue(
+        new ReadableStream() as any,
+      );
+
+      await runtime.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'logical-model',
+        temperature: 0,
+      });
+
+      expect(handlePayload).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'logical-model' }),
+        expect.anything(),
+      );
+      expect(runtime['client'].chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'upstream-model' }),
+        expect.anything(),
+      );
+    });
+
     describe('streaming response', () => {
       it('should handle multiple data chunks correctly', async () => {
         const mockStream = new ReadableStream({
@@ -2113,6 +2148,43 @@ describe('LobeOpenAICompatibleFactory', () => {
       );
 
       expect(result).toEqual({ age: 30, name: 'John' });
+    });
+
+    it('should choose generateObject API by logical model while sending mapped model id', async () => {
+      const Runtime = createOpenAICompatibleRuntime({
+        baseURL: defaultBaseURL,
+        generateObject: {
+          useResponseModels: ['logical-response-model'],
+        },
+        provider: 'mapped-provider',
+      });
+      const runtime = new Runtime({
+        apiKey: 'test',
+        modelIdMapping: { 'logical-response-model': 'upstream-response-model' },
+      });
+      vi.spyOn(runtime['client'].responses, 'create').mockResolvedValue({
+        output_text: '{"ok":true}',
+      } as any);
+      vi.spyOn(runtime['client'].chat.completions, 'create').mockResolvedValue({} as any);
+
+      const result = await runtime.generateObject({
+        messages: [{ content: 'Generate JSON', role: 'user' }],
+        model: 'logical-response-model',
+        schema: {
+          name: 'result',
+          schema: {
+            properties: { ok: { type: 'boolean' } },
+            type: 'object',
+          },
+        },
+      });
+
+      expect(runtime['client'].responses.create).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'upstream-response-model' }),
+        expect.anything(),
+      );
+      expect(runtime['client'].chat.completions.create).not.toHaveBeenCalled();
+      expect(result).toEqual({ ok: true });
     });
 
     it('should map disabled thinking to no reasoning effort for GPT-5.4 Responses generateObject', async () => {

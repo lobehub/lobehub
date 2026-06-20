@@ -48,7 +48,7 @@ import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProper
 import { getModelPricing } from '../../utils/getModelPricing';
 import { handleOpenAIError } from '../../utils/handleOpenAIError';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
-import { withMappedModelId } from '../../utils/modelIdMapping';
+import { resolveMappedModelId, withMappedModelId } from '../../utils/modelIdMapping';
 import { detectModelProvider } from '../../utils/modelParse';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import {
@@ -120,10 +120,11 @@ type ResponseCreateParamsWithPromptCacheKey = (
   | OpenAI.Responses.ResponseCreateParams
 ) &
   OpenAIExtraParams;
-export type CreateImageOptions = Omit<ClientOptions, 'apiKey'> & {
-  apiKey: string;
-  provider: string;
-};
+export type CreateImageOptions = Omit<ClientOptions, 'apiKey'> &
+  ModelIdMappingOptions & {
+    apiKey: string;
+    provider: string;
+  };
 
 const getGenerateObjectReasoningParams = ({
   reasoning_effort,
@@ -153,10 +154,11 @@ const getGenerateObjectResponsesReasoningParams = ({
     : {};
 };
 
-export type CreateVideoOptions = Omit<ClientOptions, 'apiKey'> & {
-  apiKey: string;
-  provider: string;
-};
+export type CreateVideoOptions = Omit<ClientOptions, 'apiKey'> &
+  ModelIdMappingOptions & {
+    apiKey: string;
+    provider: string;
+  };
 
 export interface CustomClientOptions<T extends Record<string, any> = any> {
   createChatCompletionStream?: (
@@ -319,6 +321,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
     private id: string;
     private logPrefix: string;
+    private modelIdMappingOptions: ModelIdMappingOptions = {};
 
     baseURL!: string;
     protected _options: ConstructorOptions<T>;
@@ -329,8 +332,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         apiKey: options.apiKey?.trim() || DEFAULT_API_KEY,
         baseURL: options.baseURL?.trim() || DEFAULT_BASE_URL,
       };
-      const { apiKey, baseURL = DEFAULT_BASE_URL, ...res } = _options;
+      const { apiKey, baseURL = DEFAULT_BASE_URL, modelIdMapping, ...res } = _options;
       this._options = _options as ConstructorOptions<T>;
+      this.modelIdMappingOptions = { modelIdMapping };
 
       if (!apiKey) throw AgentRuntimeError.createError(ErrorType?.invalidAPIKey);
 
@@ -347,6 +351,20 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
       this.id = options.id || provider;
       this.logPrefix = `lobe-model-runtime:${this.id}`;
+    }
+
+    private withMappedRequestModel<TPayload extends { model?: string }>(
+      requestPayload: TPayload,
+      logicalModel: string,
+    ): TPayload {
+      if (!requestPayload.model) return requestPayload;
+
+      const mappedModel = resolveMappedModelId(logicalModel, this.modelIdMappingOptions);
+      if (requestPayload.model !== logicalModel || mappedModel === requestPayload.model) {
+        return requestPayload;
+      }
+
+      return { ...requestPayload, model: mappedModel };
     }
 
     /**
@@ -479,13 +497,12 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       try {
         const log = debug(`${this.logPrefix}:chat`);
         const inputStartAt = Date.now();
-        const requestPayload = withMappedModelId(payload, this._options);
 
         log('chat called with model: %s, stream: %s', payload.model, payload.stream ?? true);
 
-        let processedPayload: any = requestPayload;
-        const userApiMode = (requestPayload as any).apiMode as string | undefined;
-        const modelId = (requestPayload as any).model as string | undefined;
+        let processedPayload: any = payload;
+        const userApiMode = (payload as any).apiMode as string | undefined;
+        const modelId = (payload as any).model as string | undefined;
 
         const instanceChat = ((this._options as any).chatCompletion || {}) as {
           useResponse?: boolean;
@@ -506,7 +523,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         });
 
         if (shouldUseResponses) {
-          processedPayload = { ...requestPayload, apiMode: 'responses' } as any;
+          processedPayload = { ...payload, apiMode: 'responses' } as any;
         }
 
         // Pre-flight: abort doomed requests before invoking handlePayload so
@@ -554,6 +571,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           const optionApiKey = restOptions.apiKey;
           delete restOptions.apiKey;
           delete restOptions.baseURL;
+          delete restOptions.modelIdMapping;
 
           const sanitizedApiKey = optionApiKey?.toString().trim() || DEFAULT_API_KEY;
 
@@ -561,6 +579,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             ...restOptions,
             apiKey: sanitizedApiKey,
             baseURL: targetBaseURL,
+            modelIdMapping: this.modelIdMappingOptions.modelIdMapping,
           } as ConstructorOptions<T>;
 
           const initOptions = {
@@ -613,19 +632,17 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             preserveThinking: _preserveThinking,
             ...cleanProcessedPayload
           } = processedPayload as any;
+          const customRequestPayload = {
+            ...cleanProcessedPayload,
+            ...resolveModelSamplingParameters(cleanProcessedPayload.model, cleanProcessedPayload, {
+              normalizeTemperature: false,
+              preferTemperature: true,
+            }),
+          };
+
           response = customClient.createChatCompletionStream(
             this.client,
-            {
-              ...cleanProcessedPayload,
-              ...resolveModelSamplingParameters(
-                cleanProcessedPayload.model,
-                cleanProcessedPayload,
-                {
-                  normalizeTemperature: false,
-                  preferTemperature: true,
-                },
-              ),
-            },
+            this.withMappedRequestModel(customRequestPayload, payload.model),
             this,
           ) as any;
         } else {
@@ -644,6 +661,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             ),
             stream_options: includeUsageRequested ? { include_usage: true } : undefined,
           };
+          const requestPayload = this.withMappedRequestModel(finalPayload, payload.model);
 
           log('sending chat completion request with %d messages', messages.length);
 
@@ -651,10 +669,10 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             // eslint-disable-next-line no-console
             console.log('[requestPayload]');
             // eslint-disable-next-line no-console
-            console.log(JSON.stringify(finalPayload), '\n');
+            console.log(JSON.stringify(requestPayload), '\n');
           }
 
-          response = (await this.client.chat.completions.create(finalPayload, {
+          response = (await this.client.chat.completions.create(requestPayload, {
             // https://github.com/lobehub/lobe-chat/pull/318
             headers: { Accept: '*/*', ...options?.requestHeaders },
             signal: options?.signal,
@@ -722,44 +740,46 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
     async createImage(payload: CreateImagePayload) {
       const log = debug(`${this.logPrefix}:createImage`);
-      const requestPayload = withMappedModelId(payload, this._options);
 
       // If custom createImage implementation is provided, use it
       if (customCreateImage) {
         log('using custom createImage implementation');
-        return customCreateImage(requestPayload, {
+        return customCreateImage(payload, {
           ...this._options,
           apiKey: this._options.apiKey!,
+          modelIdMapping: this.modelIdMappingOptions.modelIdMapping,
           provider,
         });
       }
 
       log('using default createOpenAICompatibleImage');
       // Use the new createOpenAICompatibleImage function
-      return createOpenAICompatibleImage(this.client, requestPayload, this.id, {
+      return createOpenAICompatibleImage(this.client, payload, this.id, {
         pricingModel: payload.model,
+        requestModel: resolveMappedModelId(payload.model, this.modelIdMappingOptions),
         routingModel: payload.model,
       });
     }
 
     async createVideo(payload: CreateVideoPayload) {
       const log = debug(`${this.logPrefix}:createVideo`);
-      const requestPayload = withMappedModelId(payload, this._options);
 
       if (customCreateVideo) {
         log('using custom createVideo implementation');
-        return customCreateVideo(requestPayload, {
+        return customCreateVideo(payload, {
           ...this._options,
           apiKey: this._options.apiKey!,
+          modelIdMapping: this.modelIdMappingOptions.modelIdMapping,
           provider,
         });
       }
 
       log('using default createOpenAICompatibleVideo');
-      return createOpenAICompatibleVideo(requestPayload, {
+      return createOpenAICompatibleVideo(payload, {
         ...this._options,
         apiKey: this._options.apiKey!,
         baseURL: this._options.baseURL || '',
+        modelIdMapping: this.modelIdMappingOptions.modelIdMapping,
         provider,
       });
     }
@@ -889,15 +909,18 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       };
 
       const res = await this.client.chat.completions.create(
-        this.handleGenerateObjectPayload(payload, {
-          ...getGenerateObjectReasoningParams(payload),
-          messages,
-          model,
-          ...this.resolvePromptCacheKeyParams(model, options?.user),
-          tool_choice: { function: { name: tool.function.name }, type: 'function' },
-          tools: [tool],
-          user: options?.user,
-        }) as OpenAI.ChatCompletionCreateParamsNonStreaming,
+        this.withMappedRequestModel(
+          this.handleGenerateObjectPayload(payload, {
+            ...getGenerateObjectReasoningParams(payload),
+            messages,
+            model,
+            ...this.resolvePromptCacheKeyParams(model, options?.user),
+            tool_choice: { function: { name: tool.function.name }, type: 'function' },
+            tools: [tool],
+            user: options?.user,
+          }),
+          payload.model,
+        ) as OpenAI.ChatCompletionCreateParamsNonStreaming,
         { headers: options?.headers, signal: options?.signal },
       );
 
@@ -931,8 +954,6 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
       try {
         const { messages, schema, model, responseApi, tools } = payload;
-        const requestPayload = withMappedModelId(payload, this._options);
-        const requestModel = requestPayload.model;
 
         const log = debug(`${this.logPrefix}:generateObject`);
         log(
@@ -947,7 +968,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         if (tools) {
           log('using tools-based generation');
-          return this.generateObjectWithTools(requestPayload, options, usagePayload);
+          return this.generateObjectWithTools(payload, options, usagePayload);
         }
 
         if (!schema) throw new Error('tools or schema is required');
@@ -958,12 +979,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         // unavailable now` to json_schema requests, so DeepSeek-family models served
         // through generic OpenAI-compatible providers (aggregator gateways, custom
         // endpoints) must simulate structured output via forced tool calling.
-        if (
-          generateObjectConfig?.useToolsCalling ||
-          detectModelProvider(requestModel) === 'deepseek'
-        ) {
+        if (generateObjectConfig?.useToolsCalling || detectModelProvider(model) === 'deepseek') {
           log('using tool calling fallback for structured output');
-          return await this.generateObjectViaToolCalling(requestPayload, options, usagePayload);
+          return await this.generateObjectViaToolCalling(payload, options, usagePayload);
         }
 
         // Factory-level Responses API routing control (supports instance override)
@@ -981,7 +999,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           context: 'generateObject',
           flagUseResponse,
           flagUseResponseModels,
-          model: requestModel,
+          model,
           responseApi,
         });
 
@@ -993,15 +1011,18 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         if (shouldUseResponses) {
           log('calling responses.create for structured output');
           const res = await this.client!.responses.create(
-            {
-              input: messages,
-              model: requestModel,
-              ...getGenerateObjectResponsesReasoningParams(requestPayload),
-              ...this.resolvePromptCacheKeyParams(requestModel, options?.user),
-              text: { format: { strict: true, type: 'json_schema', ...processedSchema } },
-              // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
-              safety_identifier: options?.user,
-            } as any,
+            this.withMappedRequestModel(
+              {
+                input: messages,
+                model,
+                ...getGenerateObjectResponsesReasoningParams(payload),
+                ...this.resolvePromptCacheKeyParams(model, options?.user),
+                text: { format: { strict: true, type: 'json_schema', ...processedSchema } },
+                // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
+                safety_identifier: options?.user,
+              } as any,
+              model,
+            ),
             { headers: options?.headers, signal: options?.signal },
           );
 
@@ -1026,14 +1047,17 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         let res: OpenAI.ChatCompletion;
         try {
           res = await this.client.chat.completions.create(
-            this.handleGenerateObjectPayload(requestPayload, {
-              ...getGenerateObjectReasoningParams(requestPayload),
-              messages,
-              model: requestModel,
-              response_format: { json_schema: processedSchema, type: 'json_schema' },
-              ...this.resolvePromptCacheKeyParams(requestModel, options?.user),
-              user: options?.user,
-            }) as OpenAI.ChatCompletionCreateParamsNonStreaming,
+            this.withMappedRequestModel(
+              this.handleGenerateObjectPayload(payload, {
+                ...getGenerateObjectReasoningParams(payload),
+                messages,
+                model,
+                response_format: { json_schema: processedSchema, type: 'json_schema' },
+                ...this.resolvePromptCacheKeyParams(model, options?.user),
+                user: options?.user,
+              }),
+              model,
+            ) as OpenAI.ChatCompletionCreateParamsNonStreaming,
             { headers: options?.headers, signal: options?.signal },
           );
         } catch (error) {
@@ -1044,7 +1068,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           if (!isResponseFormatUnsupportedError(error)) throw error;
 
           log('provider rejected json_schema response_format, retrying via tool calling');
-          return await this.generateObjectViaToolCalling(requestPayload, options, usagePayload);
+          return await this.generateObjectViaToolCalling(payload, options, usagePayload);
         }
         if (res.usage) {
           await options?.onUsage?.(convertOpenAIUsage(res.usage, usagePayload));
@@ -1082,7 +1106,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       options?: EmbeddingsOptions,
     ): Promise<Embeddings[]> {
       const log = debug(`${this.logPrefix}:embeddings`);
-      const requestPayload = withMappedModelId(payload, this._options);
+      const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
       log(
         'embeddings called with model: %s, input items: %d',
         payload.model,
@@ -1115,7 +1139,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
     async textToSpeech(payload: TextToSpeechPayload, options?: TextToSpeechOptions) {
       const log = debug(`${this.logPrefix}:textToSpeech`);
-      const requestPayload = withMappedModelId(payload, this._options);
+      const requestPayload = withMappedModelId(payload, this.modelIdMappingOptions);
       log(
         'textToSpeech called with input length: %d, voice: %s',
         payload.input?.length || 0,
@@ -1138,7 +1162,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     async transcribe(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse> {
       const log = debug(`${this.logPrefix}:transcribe`);
       const { file, fileName, model, language, prompt, responseFormat, temperature } = payload;
-      const requestModel = withMappedModelId(payload, this._options).model;
+      const requestModel = withMappedModelId(payload, this.modelIdMappingOptions).model;
       log('transcribe called with model: %s, audio size: %d bytes', model, file?.size || 0);
 
       try {
@@ -1386,17 +1410,18 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           preferTemperature: true,
         }),
       } as ResponseCreateParamsWithPromptCacheKey;
+      const requestPayload = this.withMappedRequestModel(postPayload, usageModel);
 
       if (debugParams?.responses?.()) {
         // eslint-disable-next-line no-console
         console.log('[requestPayload]');
         // eslint-disable-next-line no-console
-        console.log(JSON.stringify(postPayload), '\n');
+        console.log(JSON.stringify(requestPayload), '\n');
       }
 
       log('sending responses.create request');
 
-      const response = await this.client.responses.create(postPayload, {
+      const response = await this.client.responses.create(requestPayload, {
         headers: options?.requestHeaders,
         signal: options?.signal,
       });
@@ -1500,15 +1525,18 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         });
 
         const res = await this.client.responses.create(
-          {
-            input,
-            model,
-            ...this.resolvePromptCacheKeyParams(model, options?.user),
-            tool_choice: 'required',
-            tools: tools!.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
-            // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
-            safety_identifier: options?.user,
-          } as any,
+          this.withMappedRequestModel(
+            {
+              input,
+              model,
+              ...this.resolvePromptCacheKeyParams(model, options?.user),
+              tool_choice: 'required',
+              tools: tools!.map((tool) => this.convertChatCompletionToolToResponseTool(tool)),
+              // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
+              safety_identifier: options?.user,
+            } as any,
+            payload.model,
+          ),
           { headers: options?.headers, signal: options?.signal },
         );
 
@@ -1542,15 +1570,18 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       const msgs = messages;
 
       const res = await this.client.chat.completions.create(
-        this.handleGenerateObjectPayload(payload, {
-          ...getGenerateObjectReasoningParams(payload),
-          messages: msgs,
-          model,
-          ...this.resolvePromptCacheKeyParams(model, options?.user),
-          tool_choice: 'required',
-          tools,
-          user: options?.user,
-        }) as OpenAI.ChatCompletionCreateParamsNonStreaming,
+        this.withMappedRequestModel(
+          this.handleGenerateObjectPayload(payload, {
+            ...getGenerateObjectReasoningParams(payload),
+            messages: msgs,
+            model,
+            ...this.resolvePromptCacheKeyParams(model, options?.user),
+            tool_choice: 'required',
+            tools,
+            user: options?.user,
+          }),
+          payload.model,
+        ) as OpenAI.ChatCompletionCreateParamsNonStreaming,
         { headers: options?.headers, signal: options?.signal },
       );
 

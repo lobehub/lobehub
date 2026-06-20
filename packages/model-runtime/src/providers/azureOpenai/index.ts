@@ -243,7 +243,7 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
 
       // gpt-image-2 rejects input_fidelity because it is always high fidelity by default.
       // Keep the parameter limited to the gpt-image-1 family, matching OpenAI-compatible runtime.
-      const shouldUseInputFidelity = isImageEdit && supportsImageInputFidelity(requestModel);
+      const shouldUseInputFidelity = isImageEdit && supportsImageInputFidelity(model);
 
       const azureImageOptions: Record<string, any> = {
         model: requestModel,
