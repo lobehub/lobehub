@@ -173,6 +173,10 @@ export const buildRunLifecycle = (
     afterRunComplete: async (event: RunCompleteEvent) => {
       // Desktop notification + dock badge. Single home for all three runtimes'
       // completion notification (LOBE-10379 "通知去重，统一到 afterRunComplete").
+      // Top-level-only: a nested sub-agent finishing is not a user-facing run
+      // completion — the parent run is still going, so it must not fire a
+      // "generation finished" notification / badge. See RunScope.
+      if (adapter.runScope === 'sub_agent') return;
       if (!isDesktop) return;
       try {
         const { desktopNotificationService } =
@@ -274,7 +278,10 @@ export const buildRunLifecycle = (
 
       // 2. On success with queued messages: drain, complete, and re-trigger a new
       //    sendMessage. Only drain on success — on error the queue is preserved.
-      if (disposition === 'success') {
+      //    Gated to TOP-LEVEL runs only: the input queue belongs to the parent
+      //    run, so a nested sub-agent completion must never drain it (it would
+      //    re-trigger the user's queued message mid-parent-run). See RunScope.
+      if (disposition === 'success' && adapter.runScope !== 'sub_agent') {
         const remainingQueued = get().drainQueuedMessages(contextKey);
         if (remainingQueued.length > 0) {
           const merged = mergeQueuedMessages(remainingQueued);

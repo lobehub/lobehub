@@ -37,13 +37,17 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
   return { get: (() => store) as unknown as () => ChatStore, store };
 };
 
-const lifecycle = (runtimeType: AgentRuntimeType, get: () => ChatStore) =>
+const lifecycle = (
+  runtimeType: AgentRuntimeType,
+  get: () => ChatStore,
+  runScope: 'sub_agent' | 'top_level' = 'top_level',
+) =>
   buildRunLifecycle(get, {
     context: CONTEXT,
     parentMessageId: 'u1',
     parentMessageType: 'user',
     runId: OP,
-    runScope: 'top_level',
+    runScope,
     runtimeType,
   });
 
@@ -128,5 +132,45 @@ describe('buildRunLifecycle.completeRun — transport-driven disposition', () =>
     await lifecycle('hetero', get).completeRun(completeEvent('hetero', { status: 'completed' }));
 
     expect(cb).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
+  it('a sub_agent success completes the op but does NOT drain the parent input queue', async () => {
+    const { get, store } = makeStore();
+    // Even with a queued follow-up present, a nested sub-agent completion must
+    // NOT drain it — the queue belongs to the parent run.
+    store.drainQueuedMessages = vi.fn(() => [{ content: 'queued', id: 'q1' } as any]);
+
+    const { requeued } = await lifecycle('gateway', get, 'sub_agent').completeRun(
+      completeEvent('gateway', { runScope: 'sub_agent', status: 'completed' }),
+    );
+
+    expect(requeued).toBe(false);
+    expect(store.drainQueuedMessages).not.toHaveBeenCalled();
+    // The op still completes so its loading clears.
+    expect(store.completeOperation).toHaveBeenCalledWith(OP);
+  });
+
+  it('a top_level success DOES drain the queue (contrast probe)', async () => {
+    const { get, store } = makeStore();
+    store.drainQueuedMessages = vi.fn(() => []);
+
+    await lifecycle('gateway', get, 'top_level').completeRun(
+      completeEvent('gateway', { status: 'completed' }),
+    );
+
+    expect(store.drainQueuedMessages).toHaveBeenCalled();
+  });
+
+  it('afterRunComplete is a no-op for a sub_agent run (no notification)', async () => {
+    const { get } = makeStore();
+    // Resolves without touching the desktop notification path (early return on
+    // runScope === 'sub_agent', before the isDesktop / dynamic-import branch).
+    await expect(
+      lifecycle('gateway', get, 'sub_agent').afterRunComplete(
+        completeEvent('gateway', { runScope: 'sub_agent', status: 'completed' }),
+      ),
+    ).resolves.toBeUndefined();
   });
 });
