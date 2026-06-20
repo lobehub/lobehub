@@ -3,6 +3,7 @@ import { Select } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Link2, ShieldCheck, UserPlus, UsersRound } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import useSWR from 'swr';
 
 import { lambdaClient } from '@/libs/trpc/client';
@@ -26,7 +27,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   controls: css`
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 150px auto;
+    grid-template-columns: 150px auto;
     gap: 8px;
 
     @media (width <= 720px) {
@@ -75,8 +76,8 @@ const roleLabel = (role: string) =>
 
 export default function WorkspaceMembers() {
   const workspace = useActiveWorkspace();
+  const navigate = useNavigate();
   const [adding, setAdding] = useState(false);
-  const [email, setEmail] = useState('');
   const [inviting, setInviting] = useState(false);
   const [lastInviteUrl, setLastInviteUrl] = useState('');
   const [query, setQuery] = useState('');
@@ -116,13 +117,13 @@ export default function WorkspaceMembers() {
     setInviting(true);
     try {
       const invitation = await lambdaClient.workspaceMember.invite.mutate({
-        email: email.trim() || undefined,
         role,
         workspaceId: workspace.id,
       });
       const origin = globalThis.location?.origin ?? '';
-      setLastInviteUrl(`${origin}/invite/${invitation.token}`);
-      setEmail('');
+      const inviteUrl = `${origin}/invite/${invitation.token}`;
+      setLastInviteUrl(inviteUrl);
+      await navigator.clipboard?.writeText(inviteUrl);
       await mutateInvitations();
     } finally {
       setInviting(false);
@@ -147,7 +148,7 @@ export default function WorkspaceMembers() {
           </Text>
         </Flexbox>
         <Text type="secondary">
-          Приглашайте людей по email или ссылке, назначайте роли и держите доступ к общим агентам,
+          Создавайте invite link как в Discord, назначайте роли и держите доступ к общим агентам,
           знаниям, провайдерам и кредитам под контролем.
         </Text>
         <Flexbox horizontal gap={8}>
@@ -164,24 +165,24 @@ export default function WorkspaceMembers() {
           </Flexbox>
           <Flexbox gap={4}>
             <Text fontSize={13} type="secondary">
-              Создайте ссылку и отправьте ее вручную. После входа пользователь вернется на страницу
-              приглашения и попадет в нужный workspace.
+              Нажмите кнопку, мы создадим одноразовую invite-ссылку и сразу скопируем ее в буфер.
+              Новый пользователь после входа попадет в нужный workspace.
             </Text>
           </Flexbox>
           <div className={styles.controls}>
-            <Input
-              placeholder="Email приглашенного"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
             <Select
               options={roleOptions}
               style={{ width: 150 }}
               value={role}
               onChange={(value) => setRole(value as 'member' | 'owner' | 'viewer')}
             />
-            <Button loading={inviting} type="primary" onClick={inviteMember}>
-              Создать приглашение
+            <Button
+              icon={<Link2 size={16} />}
+              loading={inviting}
+              type="primary"
+              onClick={inviteMember}
+            >
+              Создать invite link
             </Button>
           </div>
           {lastInviteUrl && (
@@ -193,6 +194,9 @@ export default function WorkspaceMembers() {
               >
                 Скопировать
               </Button>
+              <Text fontSize={13} type="secondary">
+                Ссылка готова и уже скопирована.
+              </Text>
             </Flexbox>
           )}
           <Flexbox horizontal className={styles.mobileStack} gap={8}>
@@ -297,12 +301,15 @@ export default function WorkspaceMembers() {
           {invitations.map((invitation) => (
             <div className={styles.item} key={invitation.id}>
               <Flexbox gap={2}>
-                <Text>{invitation.email || 'Ссылка-приглашение'}</Text>
+                <Text>{invitation.email || 'Invite link'}</Text>
                 <Text code fontSize={12} type="secondary">
                   /invite/{invitation.token}
                 </Text>
               </Flexbox>
               <Flexbox horizontal className={styles.mobileStack} gap={8}>
+                <Button size="small" onClick={() => navigate(`/invite/${invitation.token}`)}>
+                  Открыть
+                </Button>
                 <Button
                   size="small"
                   onClick={() =>

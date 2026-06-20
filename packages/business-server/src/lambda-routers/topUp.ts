@@ -28,11 +28,14 @@ export const topUpRouter = router({
 
       await updateWorkspaceSettings(ctx, input.workspaceId, {
         creditBalance: balance,
+        creditCurrency: 'tokens',
+        creditInitialized: true,
         creditLedger: [
           ...ledger,
           {
             amount: input.amount,
             at: new Date().toISOString(),
+            balanceAfter: balance,
             note: input.note,
             type: 'top_up',
             userId: ctx.userId,

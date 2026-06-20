@@ -26,6 +26,8 @@ const PERSONAL_PLANS = [
   },
 ] as const;
 
+const STARTER_PERSONAL_CREDITS = 100_000;
+
 const getMarket = async (ctx: { serverDB: LobeChatDatabase }, userId: string) => {
   const row = await ctx.serverDB.query.userSettings.findFirst({
     columns: { market: true },
@@ -62,7 +64,25 @@ const resolveUser = async (ctx: { serverDB: LobeChatDatabase }, identity: string
 
 export const personalBillingRouter = router({
   get: authedProcedure.use(serverDatabase).query(async ({ ctx }) => {
-    const market = await getMarket(ctx, ctx.userId);
+    let market = await getMarket(ctx, ctx.userId);
+    if (!market.personalCreditInitialized) {
+      market = {
+        ...market,
+        personalCreditBalance: STARTER_PERSONAL_CREDITS,
+        personalCreditCurrency: 'tokens',
+        personalCreditInitialized: true,
+        personalCreditLedger: [
+          ...(Array.isArray(market.personalCreditLedger) ? market.personalCreditLedger : []),
+          {
+            amount: STARTER_PERSONAL_CREDITS,
+            at: new Date().toISOString(),
+            balanceAfter: STARTER_PERSONAL_CREDITS,
+            type: 'starter_grant',
+          },
+        ],
+      };
+      await saveMarket(ctx, ctx.userId, market);
+    }
     const credits = Number(market.personalCreditBalance ?? 0);
     const plan = credits > 0 ? 'personal' : 'free';
 

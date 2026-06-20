@@ -428,7 +428,7 @@ export const initModelRuntimeFromDB = async (
   const payload = buildPayloadFromKeyVaults(keyVaults, runtimeProvider);
 
   // 4. Get business hooks (billing in cloud, undefined in OSS)
-  const businessHooks = getBusinessModelRuntimeHooks(userId, provider, workspaceId);
+  const businessHooks = getBusinessModelRuntimeHooks(db, userId, provider, workspaceId);
 
   // 5. Compose with the per-call llm_generation_tracing hook (no-op when the
   //    service is unconfigured, so OSS / self-hosted setups pay nothing for it).

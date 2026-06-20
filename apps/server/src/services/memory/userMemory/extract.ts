@@ -1569,7 +1569,12 @@ export class MemoryExtractionExecutor {
           );
           const language = userState.settings?.general?.responseLanguage;
 
-          const runtimes = await this.getRuntime(job.userId, memoryServiceConfig, keyVaults);
+          const runtimes = await this.getRuntime(
+            job.userId,
+            memoryServiceConfig,
+            keyVaults,
+            job.workspaceId,
+          );
 
           const conversations = await this.listConversationsForTopic(
             job.userId,
@@ -2429,6 +2434,7 @@ export class MemoryExtractionExecutor {
     userId: string,
     memoryServiceConfig: ResolvedMemoryServiceConfig,
     keyVaults?: ProviderKeyVaultMap,
+    workspaceId?: string,
   ): Promise<RuntimeBundle> {
     // TODO: implement a better cache eviction strategy
     // TODO: make cache size configurable
@@ -2441,6 +2447,7 @@ export class MemoryExtractionExecutor {
       memoryServiceConfig.agents.embedding.provider,
       memoryServiceConfig.agents.gatekeeper.provider,
       memoryServiceConfig.agents.layerExtractor.provider,
+      workspaceId ?? 'personal',
     ].join(':');
     const cached = this.runtimeCache.get(cacheKey);
     if (cached) return cached;
@@ -2484,7 +2491,7 @@ export class MemoryExtractionExecutor {
       userId,
     };
 
-    const hooks = getBusinessModelRuntimeHooks(userId, 'lobehub');
+    const hooks = getBusinessModelRuntimeHooks(await this.db, userId, 'lobehub', workspaceId);
 
     const runtimes: RuntimeBundle = {
       embeddings: await resolveRuntimeAgentConfig(

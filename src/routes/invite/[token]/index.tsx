@@ -3,7 +3,7 @@
 import { Button, Center, Flexbox, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { CheckCircle2, Clock3, ShieldAlert, UsersRound } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { mutate } from 'swr';
 
@@ -41,6 +41,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 type State =
+  | { status: 'ready' }
   | { status: 'accepting' }
   | { message: string; status: 'error' }
   | { slug: string; status: 'accepted'; workspaceName: string };
@@ -48,45 +49,33 @@ type State =
 const InvitePage = () => {
   const navigate = useNavigate();
   const { token } = useParams<{ token: string }>();
-  const [state, setState] = useState<State>({ status: 'accepting' });
+  const [state, setState] = useState<State>({ status: 'ready' });
 
-  useEffect(() => {
-    let cancelled = false;
+  const accept = async () => {
+    if (!token) {
+      setState({ message: 'Ссылка приглашения неполная или повреждена.', status: 'error' });
+      return;
+    }
 
-    const accept = async () => {
-      if (!token) {
-        setState({ message: 'Ссылка приглашения неполная или повреждена.', status: 'error' });
-        return;
-      }
+    setState({ status: 'accepting' });
+    try {
+      const accepted = await lambdaClient.workspaceMember.acceptInvitation.mutate({ token });
+      const workspace = accepted.workspace;
+      if (!workspace) throw new Error('Workspace приглашения не найден.');
 
-      setState({ status: 'accepting' });
-      try {
-        const accepted = await lambdaClient.workspaceMember.acceptInvitation.mutate({ token });
-        const workspace = accepted.workspace;
-        if (!workspace) throw new Error('Workspace приглашения не найден.');
+      setActiveWorkspaceSnapshot({ id: accepted.workspaceId, slug: workspace.slug });
+      await mutate(WORKSPACE_LIST_KEY);
 
-        setActiveWorkspaceSnapshot({ id: accepted.workspaceId, slug: workspace.slug });
-        await mutate(WORKSPACE_LIST_KEY);
-
-        if (!cancelled) {
-          setState({
-            slug: workspace.slug,
-            status: 'accepted',
-            workspaceName: workspace.name || workspace.slug,
-          });
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Не удалось принять приглашение.';
-        if (!cancelled) setState({ message, status: 'error' });
-      }
-    };
-
-    void accept();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
+      setState({
+        slug: workspace.slug,
+        status: 'accepted',
+        workspaceName: workspace.name || workspace.slug,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось принять приглашение.';
+      setState({ message, status: 'error' });
+    }
+  };
 
   return (
     <Center height="100%" padding={16} width="100%">
@@ -105,16 +94,31 @@ const InvitePage = () => {
                 ? 'Приглашение принято'
                 : state.status === 'error'
                   ? 'Не удалось принять приглашение'
-                  : 'Принимаем приглашение'}
+                  : state.status === 'accepting'
+                    ? 'Принимаем приглашение'
+                    : 'Вас пригласили в workspace'}
             </Text>
           </Flexbox>
         </Flexbox>
 
+        {state.status === 'ready' && (
+          <Flexbox gap={14}>
+            <Text className={styles.muted}>
+              Нажмите кнопку, чтобы принять приглашение и добавить этот аккаунт в workspace.
+            </Text>
+            <Button block type="primary" onClick={accept}>
+              Принять приглашение
+            </Button>
+          </Flexbox>
+        )}
+
         {state.status === 'accepting' && (
-          <Text className={styles.muted}>
-            Подключаем вас к workspace. Если вы только что вошли в аккаунт, мы сохраним исходную
-            ссылку и вернем вас сюда автоматически.
-          </Text>
+          <Flexbox gap={14}>
+            <Text className={styles.muted}>Подключаем вас к workspace.</Text>
+            <Button block disabled loading type="primary">
+              Принимаем
+            </Button>
+          </Flexbox>
         )}
 
         {state.status === 'accepted' && (

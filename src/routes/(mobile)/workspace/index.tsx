@@ -1,3 +1,5 @@
-import MobileWorkspaceHomeDashboard from '@/business/client/features/MobileWorkspaceHomeDashboard';
+import { Navigate } from 'react-router';
 
-export default MobileWorkspaceHomeDashboard;
+export default function MobileWorkspaceIndex() {
+  return <Navigate replace to="agent/inbox" />;
+}

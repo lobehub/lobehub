@@ -327,7 +327,7 @@ export class ChatService extends BaseService {
       const { apiKey } = JSON.parse(await this.getApiKey(provider));
 
       // Create AgentRuntime instance
-      const hooks = getBusinessModelRuntimeHooks(this.userId!, provider);
+      const hooks = getBusinessModelRuntimeHooks(this.db, this.userId!, provider, this.workspaceId);
       const modelRuntime = await initModelRuntimeWithUserPayload(
         provider,
         { apiKey, userId: this.userId! },

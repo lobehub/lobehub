@@ -31,6 +31,19 @@ export class WorkspaceModel {
           description: params.description,
           name: params.name,
           primaryOwnerId: this.userId,
+          settings: {
+            creditBalance: 100_000,
+            creditCurrency: 'tokens',
+            creditInitialized: true,
+            creditLedger: [
+              {
+                amount: 100_000,
+                at: new Date().toISOString(),
+                balanceAfter: 100_000,
+                type: 'starter_grant',
+              },
+            ],
+          },
           slug: params.slug,
         } satisfies NewWorkspace)
         .returning();

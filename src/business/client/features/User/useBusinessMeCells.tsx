@@ -1,7 +1,7 @@
 import { BriefcaseBusiness, Plus, ShieldCheck, UserRound } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useSWRConfig } from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 
 import { type CellProps } from '@/components/Cell';
 import { lambdaClient } from '@/libs/trpc/client';
@@ -17,6 +17,9 @@ export default function useBusinessMeCells(): CellProps[] {
   const [creating, setCreating] = useState(false);
   const { switchToPersonal, switchWorkspace } = useSwitchWorkspace();
   const workspaces = useWorkspaces();
+  const { data: personalBilling } = useSWR(['business/personal-billing'], () =>
+    lambdaClient.personalBilling.get.query(),
+  );
 
   const createWorkspace = async () => {
     if (creating) return;
@@ -64,12 +67,16 @@ export default function useBusinessMeCells(): CellProps[] {
       label: creating ? 'Создаём workspace...' : 'Создать workspace',
       onClick: createWorkspace,
     },
-    {
-      icon: ShieldCheck,
-      key: 'business-admin-mobile',
-      label: 'Super-admin: Business',
-      onClick: () => navigate('/admin/business'),
-    },
+    ...(personalBilling?.isSuperAdmin
+      ? [
+          {
+            icon: ShieldCheck,
+            key: 'business-admin-mobile',
+            label: 'Super-admin: Business',
+            onClick: () => navigate('/admin/business'),
+          },
+        ]
+      : []),
     { type: 'divider' },
   ];
 }
