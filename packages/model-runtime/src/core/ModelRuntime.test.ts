@@ -566,6 +566,19 @@ describe('ModelRuntime', () => {
         expect(mockRuntimeAI.chat).toHaveBeenCalled();
       });
 
+      it('forwards beforeChat option mutations to runtime.chat', async () => {
+        const pricingContext = { plan: 'premium', scope: 'personal' } as const;
+        const beforeChat: ModelRuntimeHooks['beforeChat'] = async (_payload, options) => {
+          if (options) options.pricingContext = pricingContext;
+        };
+        const { runtime, mockRuntimeAI } = createMockRuntime({ beforeChat });
+        mockRuntimeAI.chat.mockResolvedValue(new Response(''));
+
+        await runtime.chat(chatPayload);
+
+        expect(mockRuntimeAI.chat).toHaveBeenCalledWith(chatPayload, { pricingContext });
+      });
+
       it('beforeChat throwing aborts chat call', async () => {
         const beforeChat = vi.fn().mockRejectedValue(new Error('budget exceeded'));
         const { runtime, mockRuntimeAI } = createMockRuntime({ beforeChat });

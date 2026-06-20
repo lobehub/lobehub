@@ -1,74 +1,12 @@
 import type { LobeDefaultAiModelListItem, Pricing } from 'model-bank';
 
-export interface ModelPricingContext {
-  plan: string;
-  scope: 'personal';
-}
-
-export interface ModelPricingOptions {
-  pricingContext?: ModelPricingContext;
-}
-
-export const MODEL_PRICING_CONTEXT_METADATA_KEY = 'modelPricingContext';
+import type { ModelPricingContext } from '../types';
 
 interface BusinessModelConfigModule {
-  loadModels: (options?: ModelPricingOptions) => Promise<LobeDefaultAiModelListItem[]>;
+  loadModels: (options?: {
+    pricingContext?: ModelPricingContext;
+  }) => Promise<LobeDefaultAiModelListItem[]>;
 }
-
-interface ModelPricingContextStorage {
-  getStore: () => ModelPricingContext | undefined;
-  run: <T>(
-    pricingContext: ModelPricingContext | undefined,
-    callback: () => T | Promise<T>,
-  ) => T | Promise<T>;
-}
-
-let modelPricingContextStorage: ModelPricingContextStorage | undefined;
-
-const getModelPricingContextStorage = async (): Promise<ModelPricingContextStorage> => {
-  if (modelPricingContextStorage) return modelPricingContextStorage;
-
-  const { AsyncLocalStorage } = await import('node:async_hooks');
-  modelPricingContextStorage = new AsyncLocalStorage<ModelPricingContext | undefined>();
-
-  return modelPricingContextStorage;
-};
-
-export const runWithModelPricingContext = async <T>(
-  pricingContext: ModelPricingContext | undefined,
-  callback: () => T | Promise<T>,
-): Promise<T> => {
-  if (!pricingContext) return callback();
-
-  const storage = await getModelPricingContextStorage();
-
-  return storage.run(pricingContext, callback);
-};
-
-export const getModelPricingOptionsFromMetadata = (
-  metadata?: Record<string, unknown>,
-): ModelPricingOptions | undefined => {
-  const pricingContext = metadata?.[MODEL_PRICING_CONTEXT_METADATA_KEY];
-
-  if (
-    !pricingContext ||
-    typeof pricingContext !== 'object' ||
-    (pricingContext as ModelPricingContext).scope !== 'personal' ||
-    typeof (pricingContext as ModelPricingContext).plan !== 'string'
-  ) {
-    return undefined;
-  }
-
-  return { pricingContext: pricingContext as ModelPricingContext };
-};
-
-const resolveModelPricingOptions = (
-  options?: ModelPricingOptions,
-): ModelPricingOptions | undefined => {
-  const pricingContext = options?.pricingContext ?? modelPricingContextStorage?.getStore();
-
-  return pricingContext ? { pricingContext } : undefined;
-};
 
 /**
  * 1. First try to get pricing from the specified provider
@@ -80,11 +18,11 @@ const resolveModelPricingOptions = (
 export async function getModelPricing(
   model: string,
   provider?: string,
-  options?: ModelPricingOptions,
+  pricingContext?: ModelPricingContext,
 ): Promise<Pricing | undefined> {
   const { loadModels } =
     (await import('@lobechat/business-model-bank/model-config')) as BusinessModelConfigModule;
-  const models = await loadModels(resolveModelPricingOptions(options));
+  const models = await loadModels(pricingContext ? { pricingContext } : undefined);
 
   // 1. First try to get pricing from the specified provider
   if (provider) {

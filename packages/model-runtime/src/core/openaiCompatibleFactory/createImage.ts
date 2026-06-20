@@ -4,7 +4,11 @@ import createDebug from 'debug';
 import type { RuntimeImageGenParamsValue } from 'model-bank';
 import type OpenAI from 'openai';
 
-import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type {
+  CreateImageMethodOptions,
+  CreateImagePayload,
+  CreateImageResponse,
+} from '../../types/image';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { parseDataUri } from '../../utils/uriParser';
 import { convertImageUrlToFile } from '../contextBuilders/openai';
@@ -13,6 +17,7 @@ import { convertOpenAIImageUsage } from '../usageConverters/openai';
 const log = createDebug('lobe-image:openai-compatible');
 
 interface CreateOpenAICompatibleImageOptions {
+  pricingContext?: CreateImageMethodOptions['pricingContext'];
   pricingModel?: string;
   requestModel?: string;
   routingModel?: string;
@@ -137,7 +142,11 @@ async function generateByImageMode(
       ? {
           modelUsage: convertOpenAIImageUsage(
             img.usage,
-            await getModelPricing(imageOptions?.pricingModel ?? routingModel, provider),
+            await getModelPricing(
+              imageOptions?.pricingModel ?? routingModel,
+              provider,
+              imageOptions?.pricingContext,
+            ),
           ),
         }
       : {}),

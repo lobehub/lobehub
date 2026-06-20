@@ -33,10 +33,6 @@ import type {
   HandleCreateVideoWebhookPayload,
 } from '../types/video';
 import { AgentRuntimeError } from '../utils/createError';
-import {
-  getModelPricingOptionsFromMetadata,
-  runWithModelPricingContext,
-} from '../utils/getModelPricing';
 import type { LobeRuntimeAI } from './BaseAI';
 
 const { logger: timing } = createTimingHelpers('lobe-server:chat:lobehub:timing');
@@ -212,10 +208,7 @@ export class ModelRuntime {
         );
       }
       const runtimeStartedAt = Date.now();
-      const response = await runWithModelPricingContext(
-        getModelPricingOptionsFromMetadata(finalOptions?.metadata)?.pricingContext,
-        () => this._runtime.chat(payload, finalOptions),
-      );
+      const response = await this._runtime.chat(payload, finalOptions);
       if (metadata) {
         timing(
           'ModelRuntime.chat runtime done model=%s durationMs=%d totalMs=%d traceId=%s',
@@ -386,12 +379,9 @@ export class ModelRuntime {
               }
             },
           }
-        : options;
+        : hookOptions;
 
-      const output = await runWithModelPricingContext(
-        getModelPricingOptionsFromMetadata(finalOptions?.metadata)?.pricingContext,
-        () => this._runtime.generateObject!(payload, finalOptions),
-      );
+      const output = await this._runtime.generateObject!(payload, finalOptions);
       await fireComplete({ output, success: true });
       return output;
     } catch (error) {
@@ -420,20 +410,14 @@ export class ModelRuntime {
     const finalOptions = this._hooks?.beforeCreateImage && !options ? {} : options;
     await this._hooks?.beforeCreateImage?.(payload, finalOptions);
 
-    return runWithModelPricingContext(
-      getModelPricingOptionsFromMetadata(finalOptions?.metadata)?.pricingContext,
-      () => this._runtime.createImage?.(payload, finalOptions),
-    );
+    return this._runtime.createImage?.(payload, finalOptions);
   }
 
   async createVideo(payload: CreateVideoPayload, options?: CreateVideoMethodOptions) {
     const finalOptions = this._hooks?.beforeCreateVideo && !options ? {} : options;
     await this._hooks?.beforeCreateVideo?.(payload, finalOptions);
 
-    return runWithModelPricingContext(
-      getModelPricingOptionsFromMetadata(finalOptions?.metadata)?.pricingContext,
-      () => this._runtime.createVideo?.(payload, finalOptions),
-    );
+    return this._runtime.createVideo?.(payload, finalOptions);
   }
 
   async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {
@@ -468,12 +452,9 @@ export class ModelRuntime {
               }
             },
           }
-        : options;
+        : hookOptions;
 
-      return await runWithModelPricingContext(
-        getModelPricingOptionsFromMetadata(finalOptions?.metadata)?.pricingContext,
-        () => this._runtime.embeddings?.(payload, finalOptions),
-      );
+      return await this._runtime.embeddings?.(payload, finalOptions);
     } catch (error) {
       if (this._hooks?.onEmbeddingsError) {
         await this._hooks.onEmbeddingsError(error as ChatCompletionErrorPayload, {

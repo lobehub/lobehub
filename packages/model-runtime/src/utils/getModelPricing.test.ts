@@ -6,7 +6,7 @@ vi.mock('@lobechat/business-model-bank/model-config', () => ({
   loadModels: loadModelsMock,
 }));
 
-const { getModelPricing, runWithModelPricingContext } = await import('./getModelPricing');
+const { getModelPricing } = await import('./getModelPricing');
 
 describe('getModelPricing', () => {
   beforeEach(() => {
@@ -71,19 +71,7 @@ describe('getModelPricing', () => {
   });
 
   it('should pass explicit pricing context to loadModels', async () => {
-    await getModelPricing('gpt-4o', 'openai', {
-      pricingContext: { plan: 'premium', scope: 'personal' },
-    });
-
-    expect(loadModelsMock).toHaveBeenCalledWith({
-      pricingContext: { plan: 'premium', scope: 'personal' },
-    });
-  });
-
-  it('should use request-scoped pricing context when providers call without options', async () => {
-    await runWithModelPricingContext({ plan: 'premium', scope: 'personal' }, () =>
-      getModelPricing('gpt-4o', 'openai'),
-    );
+    await getModelPricing('gpt-4o', 'openai', { plan: 'premium', scope: 'personal' });
 
     expect(loadModelsMock).toHaveBeenCalledWith({
       pricingContext: { plan: 'premium', scope: 'personal' },
