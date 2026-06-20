@@ -123,6 +123,14 @@ export interface SystemStatus {
    * so dismissing the current one does not hide future ones.
    */
   dismissedBannerIds?: string[];
+  /**
+   * Per-agent expanded state of the agent sidebar's top-level sections
+   * (Tasks / Topic), keyed by agentId. Lets each agent remember its own
+   * collapse/expand state so switching agents doesn't share one accordion.
+   * Nested booleans (not a key array) so the lodash `merge` in
+   * `updateSystemStatus` replaces scalars cleanly instead of index-merging arrays.
+   */
+  expandAgentSidebarSectionsByAgent?: Record<string, Record<string, boolean>>;
   expandInputActionbar?: boolean;
   // which sessionGroup should expand
   expandSessionGroupKeys: string[];
