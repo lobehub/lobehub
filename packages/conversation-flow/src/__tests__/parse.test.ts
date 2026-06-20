@@ -513,6 +513,78 @@ describe('parse', () => {
       expect(children[0].tools).toBeUndefined();
       expect(children[1].tools[0].result_msg_id).toBe('t1');
     });
+
+    // Guard for the narrow scope above: when MORE than one toolless prose step
+    // precedes the first tool call, the head is NOT folded. collectAssistantChain
+    // stops at the first toolless continuation, so folding here would emit a
+    // tools-less assistantGroup and still leave the tool step split. The multi-
+    // prose prelude must instead stay as plain assistant bubbles — and crucially
+    // we must never produce an assistantGroup with no tools.
+    it('should not fold a multi-step toolless prelude (no tools-less assistantGroup)', () => {
+      const messages: Message[] = [
+        {
+          content: 'Can you check the build status?',
+          createdAt: 0,
+          id: 'u1',
+          role: 'user',
+          updatedAt: 0,
+        },
+        {
+          content: 'Sure, let me think about where to look.',
+          createdAt: 1,
+          id: 'a-head', // toolless, parent is the user message
+          parentId: 'u1',
+          role: 'assistant',
+          updatedAt: 1,
+        },
+        {
+          content: 'The CI config is probably under .github/workflows.',
+          createdAt: 2,
+          id: 'a-prose', // SECOND toolless prose step before any tool
+          parentId: 'a-head',
+          role: 'assistant',
+          updatedAt: 2,
+        },
+        {
+          content: 'Reading it now.',
+          createdAt: 3,
+          id: 'a-tool',
+          parentId: 'a-prose',
+          role: 'assistant',
+          tools: [
+            { apiName: 'readFile', arguments: '{}', id: 't1', identifier: 'fs', type: 'default' },
+          ],
+          updatedAt: 3,
+        },
+        {
+          content: 'name: CI',
+          createdAt: 4,
+          id: 't1',
+          parentId: 'a-tool',
+          role: 'tool',
+          tool_call_id: 't1',
+          updatedAt: 4,
+        },
+      ] as Message[];
+
+      const result = parse(messages);
+
+      // No assistantGroup may exist without tools in any of its children.
+      const toollessGroups = result.flatList.filter(
+        (m) =>
+          m.role === 'assistantGroup' &&
+          ((m as any).children ?? []).every((c: any) => !c.tools || c.tools.length === 0),
+      );
+      expect(toollessGroups).toHaveLength(0);
+
+      // The two prose steps render as plain assistant bubbles; the tool step
+      // forms its own (well-formed) assistantGroup.
+      const head = result.flatList.find((m) => m.id === 'a-head');
+      expect(head?.role).toBe('assistant');
+      const toolGroup = result.flatList.find((m) => m.id === 'a-tool');
+      expect(toolGroup?.role).toBe('assistantGroup');
+      expect((toolGroup as any).children[0].tools[0].result_msg_id).toBe('t1');
+    });
   });
 
   describe('Agent Group Scenarios', () => {
