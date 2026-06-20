@@ -210,8 +210,15 @@ export class FlatListBuilder {
         continue;
       }
 
-      // Priority 2: AssistantGroup (assistant + tools)
-      if (message.role === 'assistant' && message.tools && message.tools.length > 0) {
+      // Priority 2: AssistantGroup (assistant + tools), or the toolless
+      // narration step that heads a tool-using chain — the latter must seed the
+      // group instead of splitting into its own standalone bubble. Supervisors
+      // are excluded from the toolless-head path so they still fall to 2b.
+      if (
+        message.role === 'assistant' &&
+        ((message.tools && message.tools.length > 0) ||
+          (!message.metadata?.isSupervisor && this.messageCollector.isToolChainHead(message)))
+      ) {
         // Collect the entire assistant group chain
         const assistantChain: Message[] = [];
         const allToolMessages: Message[] = [];
