@@ -759,6 +759,15 @@ export class AgentRuntimeService {
           externalRetryCount,
         };
 
+        // Rehydrate `messages` from the DB at every step entry. Each step is a
+        // separate invocation that loads state fresh from Redis, so this makes
+        // the DB the single source of truth for the conversation on every path
+        // — not just the async-tool / human-intervention resumes that already
+        // refresh below. With this in place the Redis-persisted state no longer
+        // needs to carry the (potentially multi-MB) `messages` array, which is
+        // what trips Upstash's 10MB single-request limit and drops the op.
+        await this.rehydrateStateMessagesFromDB(agentState);
+
         // Enrich invoke_agent span with agent identity now that state is loaded.
         const stateAgentConfig = agentState.metadata?.agentConfig as
           { description?: string | null; title?: string | null } | undefined;
@@ -1970,6 +1979,23 @@ export class AgentRuntimeService {
     // `updateToolMessage` swallows transaction errors into `success: false`,
     // so the flag must be checked — an unfulfilled message would hold the
     // parent's barrier forever while the callback acked with 200.
+    //
+    // A state loaded via the fallback above arrives without `messages` (the
+    // persisted Redis blob no longer carries them — see
+    // AgentStateManager.serializeStateForPersist), so rehydrate from the DB
+    // before reading the sub-agent's final answer. An in-process
+    // params.finalState already carries them and skips this.
+    if (!failed && finalState && !Array.isArray(finalState.messages)) {
+      try {
+        finalState.messages = await this.refreshMessagesFromDB(finalState);
+      } catch (error) {
+        console.error(
+          '[%s] sub-agent bridge: failed to refresh messages from DB: %O',
+          operationId,
+          error,
+        );
+      }
+    }
     const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
     const lastAssistant = [...messages]
       .reverse()
@@ -2140,6 +2166,22 @@ export class AgentRuntimeService {
     );
 
     // 1. Backfill this member's anchor.
+    // The member's textual answer is only read in delegate mode below; a state
+    // loaded via the fallback above arrives without `messages` (dropped from
+    // the persisted Redis blob — see AgentStateManager.serializeStateForPersist),
+    // so rehydrate from the DB when we actually need them. An in-process
+    // params.finalState already carries them and skips this.
+    if (!failed && mode !== 'in_group' && finalState && !Array.isArray(finalState.messages)) {
+      try {
+        finalState.messages = await this.refreshMessagesFromDB(finalState);
+      } catch (error) {
+        console.error(
+          '[%s] group-member bridge: failed to refresh messages from DB: %O',
+          operationId,
+          error,
+        );
+      }
+    }
     const messages = Array.isArray(finalState?.messages) ? finalState.messages : [];
     const lastAssistant = [...messages]
       .reverse()
@@ -2322,6 +2364,30 @@ export class AgentRuntimeService {
 
     const { flatList } = parse(dbMessages);
     return flatList as AgentState['messages'];
+  }
+
+  /**
+   * Overwrite `state.messages` in place with the canonical DB conversation at
+   * step entry, making the DB the single source of truth for messages.
+   *
+   * Guarded against regressions: skips when topic/agent identifiers aren't
+   * known yet (early bootstrap, before the topic row is committed), and never
+   * replaces a populated working set with an empty one or on a DB error —
+   * those fall back to whatever messages the loaded Redis state carried. This
+   * keeps a transient read miss from blanking the conversation mid-operation.
+   */
+  private async rehydrateStateMessagesFromDB(state: AgentState): Promise<void> {
+    if (!state.metadata?.agentId || !state.metadata?.topicId) return;
+
+    try {
+      const refreshed = await this.refreshMessagesFromDB(state);
+      if (refreshed.length > 0) state.messages = refreshed;
+    } catch (error) {
+      console.error(
+        '[rehydrateStateMessagesFromDB] failed, keeping Redis state snapshot: %O',
+        error,
+      );
+    }
   }
 
   private resolveAsyncToolResumeParentMessageId(

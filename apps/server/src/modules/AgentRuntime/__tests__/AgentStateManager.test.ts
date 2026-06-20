@@ -2,26 +2,33 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { AgentStateManager } from '../AgentStateManager';
 
-// Mock Redis client
-vi.mock('../redis', () => ({
-  getAgentRuntimeRedisClient: () => ({
+// Mock Redis client. Hoisted so individual tests can assert on the exact
+// payloads handed to `setex` / `lpush`.
+const { redisMock, pipelineMock } = vi.hoisted(() => {
+  const pipelineMock = {
+    exec: vi.fn(),
+    expire: vi.fn(),
+    hmset: vi.fn(),
+    lpush: vi.fn(),
+    ltrim: vi.fn(),
+    setex: vi.fn(),
+  };
+  const redisMock = {
     del: vi.fn(),
     expire: vi.fn(),
     get: vi.fn(),
     hgetall: vi.fn(),
     hmset: vi.fn(),
     keys: vi.fn(),
-    multi: vi.fn(() => ({
-      exec: vi.fn(),
-      expire: vi.fn(),
-      hmset: vi.fn(),
-      lpush: vi.fn(),
-      ltrim: vi.fn(),
-      setex: vi.fn(),
-    })),
+    multi: vi.fn(() => pipelineMock),
     quit: vi.fn(),
     setex: vi.fn(),
-  }),
+  };
+  return { pipelineMock, redisMock };
+});
+
+vi.mock('../redis', () => ({
+  getAgentRuntimeRedisClient: () => redisMock,
 }));
 
 describe('AgentStateManager', () => {
@@ -67,6 +74,22 @@ describe('AgentStateManager', () => {
 
       await expect(stateManager.saveAgentState(operationId, state as any)).resolves.not.toThrow();
     });
+
+    it('omits the messages array from the persisted state blob', async () => {
+      const state = {
+        cost: { total: 1 },
+        messages: [{ content: 'x'.repeat(1000), role: 'user' }],
+        status: 'running' as const,
+        stepCount: 1,
+      };
+
+      await stateManager.saveAgentState('op-strip', state as any);
+
+      const serialized = redisMock.setex.mock.calls.at(-1)?.[2] as string;
+      expect(JSON.parse(serialized).messages).toBeUndefined();
+      // Other fields are retained.
+      expect(JSON.parse(serialized).status).toBe('running');
+    });
   });
 
   describe('saveStepResult', () => {
@@ -102,6 +125,41 @@ describe('AgentStateManager', () => {
       await expect(
         stateManager.saveStepResult(operationId, stepResult as any),
       ).resolves.not.toThrow();
+    });
+
+    it('strips messages from both the persisted state and the done-event finalState', async () => {
+      const stepResult = {
+        events: [
+          {
+            finalState: {
+              messages: [{ content: 'big assistant answer', role: 'assistant' }],
+              status: 'done',
+            },
+            reason: 'completed',
+            type: 'done',
+          },
+        ],
+        executionTime: 1,
+        newState: {
+          cost: { total: 1 },
+          messages: [{ content: 'x'.repeat(1000), role: 'user' }],
+          status: 'done' as const,
+          stepCount: 1,
+        },
+        stepIndex: 1,
+      };
+
+      await stateManager.saveStepResult('op-strip-step', stepResult as any);
+
+      const stateValue = pipelineMock.setex.mock.calls.at(-1)?.[2] as string;
+      expect(JSON.parse(stateValue).messages).toBeUndefined();
+
+      const eventsValue = pipelineMock.lpush.mock.calls.at(-1)?.[1] as string;
+      const persistedEvents = JSON.parse(eventsValue);
+      expect(persistedEvents[0].finalState.messages).toBeUndefined();
+      // The event envelope itself is preserved.
+      expect(persistedEvents[0].type).toBe('done');
+      expect(persistedEvents[0].finalState.status).toBe('done');
     });
   });
 });
