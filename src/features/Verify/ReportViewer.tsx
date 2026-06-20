@@ -25,6 +25,33 @@ const useStyles = createStyles(({ css, token }) => ({
     border: 1px solid ${token.colorBorderSecondary};
     border-radius: ${token.borderRadiusLG}px;
   `,
+  evidenceLink: css`
+    display: inline-flex;
+    align-items: center;
+
+    width: fit-content;
+    max-width: 100%;
+    padding-block: 6px;
+    padding-inline: 10px;
+    border: 1px solid ${token.colorBorderSecondary};
+    border-radius: ${token.borderRadius}px;
+
+    color: ${token.colorText};
+    text-decoration: none;
+
+    background: ${token.colorFillQuaternary};
+
+    &:hover {
+      border-color: ${token.colorLink};
+      color: ${token.colorLink};
+    }
+
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  `,
   evidenceText: css`
     overflow: auto;
 
@@ -38,6 +65,12 @@ const useStyles = createStyles(({ css, token }) => ({
     white-space: pre-wrap;
 
     background: ${token.colorFillQuaternary};
+  `,
+  evidenceVideo: css`
+    max-width: 100%;
+    max-height: 360px;
+    border: 1px solid ${token.colorBorderSecondary};
+    border-radius: ${token.borderRadiusLG}px;
   `,
   resultCard: css`
     padding: 16px;
@@ -57,6 +90,8 @@ const VERDICT_META = {
   passed: { color: 'success', icon: Check, label: 'Passed' },
   uncertain: { color: 'warning', icon: CircleHelp, label: 'Uncertain' },
 } as const;
+
+const imageEvidenceTypes = new Set(['gif', 'screenshot']);
 
 const VerdictTag = memo<{ verdict?: string | null }>(({ verdict }) => {
   const meta = VERDICT_META[(verdict ?? 'uncertain') as keyof typeof VERDICT_META];
@@ -90,8 +125,19 @@ const ResultItem = memo<{ result: VerifyResultWithEvidence }>(({ result }) => {
                   {e.description}
                 </Text>
               )}
-              {e.fileUrl ? (
+              {e.fileUrl && imageEvidenceTypes.has(e.type) ? (
                 <img alt={e.description ?? e.type} className={styles.evidenceImg} src={e.fileUrl} />
+              ) : e.fileUrl && e.type === 'video' ? (
+                <video controls className={styles.evidenceVideo} src={e.fileUrl} />
+              ) : e.fileUrl ? (
+                <a
+                  className={styles.evidenceLink}
+                  href={e.fileUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  <span>{e.description ?? e.type}</span>
+                </a>
               ) : e.content ? (
                 <div className={styles.evidenceText}>{e.content}</div>
               ) : (
