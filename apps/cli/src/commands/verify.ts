@@ -1,9 +1,13 @@
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { uploadLocalFile } from '../utils/uploadLocalFile';
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -30,6 +34,36 @@ function assertEnum<T extends string>(value: T | undefined, allowed: T[], flag: 
     log.error(`${flag} must be one of: ${allowed.join(', ')}`);
     process.exit(1);
   }
+}
+
+type Verdict = 'failed' | 'passed' | 'uncertain';
+type EvidenceType = 'dom_snapshot' | 'gif' | 'screenshot' | 'text' | 'transcript' | 'video';
+
+/** Map a free-form case/summary result token onto the verify verdict vocabulary. */
+function toVerdict(raw: unknown): Verdict {
+  const s = String(raw ?? '').toLowerCase();
+  if (['pass', 'passed', 'ok', 'success'].includes(s)) return 'passed';
+  if (['fail', 'failed', 'error'].includes(s)) return 'failed';
+  return 'uncertain'; // partial / blocked / skipped / pending / unknown
+}
+
+/** Pick an evidence medium from a file extension. */
+function evidenceTypeForFile(file: string): EvidenceType {
+  const ext = path.extname(file).toLowerCase().slice(1);
+  if (ext === 'gif') return 'gif';
+  if (['png', 'jpg', 'jpeg', 'webp', 'svg', 'bmp'].includes(ext)) return 'screenshot';
+  if (['mp4', 'webm', 'mov', 'm4v'].includes(ext)) return 'video';
+  if (['html', 'htm'].includes(ext)) return 'dom_snapshot';
+  return 'text';
+}
+
+/** Normalize a case's `evidence` field (string | string[] | {path}[]) to path strings. */
+function evidencePaths(evidence: unknown): string[] {
+  if (!evidence) return [];
+  const arr = Array.isArray(evidence) ? evidence : [evidence];
+  return arr
+    .map((e) => (typeof e === 'string' ? e : (e?.path ?? e?.file)))
+    .filter((p): p is string => typeof p === 'string' && p.length > 0);
 }
 
 // ── Command Registration ───────────────────────────────────
@@ -431,6 +465,177 @@ export function registerVerifyCommand(program: Command) {
       await client.verify.submitDecision.mutate({ decision, resultId });
       console.log(`${pc.green('✓')} Recorded ${pc.bold(decision)} on result ${pc.bold(resultId)}`);
     });
+
+  // ════════════ ingest (standalone sessions) ════════════
+  verify
+    .command('upload-evidence')
+    .description('Attach an evidence artifact (file or inline text) to a check result')
+    .requiredOption('--check <checkResultId>', 'Target check result id')
+    .requiredOption(
+      '--type <type>',
+      'screenshot|gif|video|text|dom_snapshot|transcript (inferred from --file when omitted)',
+    )
+    .option('--file <path>', 'Local file to upload as the artifact')
+    .option('--content <text>', 'Inline text payload (instead of a file)')
+    .option('--by <capturedBy>', 'agent-browser|cdp|cli|program|llm_judge', 'cli')
+    .option('--desc <text>', 'Human-readable caption')
+    .option('--json [fields]', 'Output JSON')
+    .action(
+      async (options: {
+        by?: string;
+        check: string;
+        content?: string;
+        desc?: string;
+        file?: string;
+        json?: boolean | string;
+        type: string;
+      }) => {
+        if (!options.file && !options.content) {
+          log.error('Provide either --file or --content');
+          process.exit(1);
+        }
+        const client = await getTrpcClient();
+        let fileId: string | undefined;
+        if (options.file) {
+          const uploaded = await uploadLocalFile(client, options.file);
+          fileId = uploaded.id;
+        }
+        const evidence = await client.verify.uploadEvidence.mutate({
+          capturedBy: options.by as any,
+          checkResultId: options.check,
+          content: options.content,
+          description: options.desc,
+          fileId,
+          type: options.type as any,
+        });
+        if (options.json !== undefined) {
+          outputJson(evidence, typeof options.json === 'string' ? options.json : undefined);
+          return;
+        }
+        console.log(
+          `${pc.green('✓')} Evidence ${pc.bold(evidence.id)}${fileId ? ` (file ${fileId})` : ''}`,
+        );
+      },
+    );
+
+  verify
+    .command('ingest-report <reportDir>')
+    .description(
+      'Ingest a local agent-testing report (result.json + report.md + assets) as a verify session',
+    )
+    .option('--source <source>', 'agent | agent-testing', 'agent-testing')
+    .option('--operation <id>', 'Link the session to an existing Agent Run')
+    .option('--title <title>', 'Override the session title')
+    .option('--goal <goal>', 'The goal/task being verified')
+    .option('--open', 'Print the in-app URL to open the report')
+    .option('--json [fields]', 'Output JSON')
+    .action(
+      async (
+        reportDir: string,
+        options: {
+          goal?: string;
+          json?: boolean | string;
+          open?: boolean;
+          operation?: string;
+          source?: string;
+          title?: string;
+        },
+      ) => {
+        const dir = path.resolve(reportDir);
+        const resultPath = path.join(dir, 'result.json');
+        if (!existsSync(resultPath)) {
+          log.error(`result.json not found in ${dir}`);
+          process.exit(1);
+        }
+
+        let result: any;
+        try {
+          result = JSON.parse(readFileSync(resultPath, 'utf8'));
+        } catch {
+          log.error('result.json is not valid JSON');
+          process.exit(1);
+        }
+
+        const cases: any[] = Array.isArray(result.cases) ? result.cases : [];
+        const summary = result.summary ?? {};
+        const reportMdPath = path.join(dir, 'report.md');
+        const content = existsSync(reportMdPath) ? readFileSync(reportMdPath, 'utf8') : undefined;
+
+        const client = await getTrpcClient();
+
+        // 1. Create the verification session.
+        const run = await client.verify.createRun.mutate({
+          goal: options.goal,
+          operationId: options.operation,
+          source: options.source as any,
+          title: options.title ?? result.title,
+        });
+
+        // 2. Ingest each case as a check result + its evidence.
+        let uploaded = 0;
+        for (const [index, c] of cases.entries()) {
+          const checkItemId = String(c.id ?? c.checkItemId ?? `case-${index + 1}`);
+          const verdict = toVerdict(c.result ?? c.status ?? c.verdict);
+          const observation = c.keyObservation ?? c.observation ?? c.note;
+          const checkResult = await client.verify.ingestResult.mutate({
+            checkItemId,
+            checkItemIndex: index,
+            checkItemTitle: c.name ?? c.case ?? c.title ?? checkItemId,
+            required: c.required ?? true,
+            suggestion: typeof observation === 'string' ? observation : undefined,
+            toulmin: typeof observation === 'string' ? { evidence: observation } : undefined,
+            verdict,
+            verifierType: 'agent',
+            verifyRunId: run.id,
+          });
+
+          for (const rel of evidencePaths(c.evidence)) {
+            const abs = path.isAbsolute(rel) ? rel : path.join(dir, rel);
+            if (!existsSync(abs)) {
+              log.warn(`evidence not found, skipping: ${rel}`);
+              continue;
+            }
+            const file = await uploadLocalFile(client, abs);
+            await client.verify.uploadEvidence.mutate({
+              capturedBy: 'cli',
+              checkResultId: checkResult.id,
+              description: c.name ?? path.basename(abs),
+              fileId: file.id,
+              type: evidenceTypeForFile(abs),
+            });
+            uploaded += 1;
+          }
+        }
+
+        // 3. Write the report (full markdown + stats snapshot).
+        await client.verify.upsertReport.mutate({
+          content,
+          failedChecks: summary.failed,
+          passedChecks: summary.passed,
+          summary: typeof summary.note === 'string' ? summary.note : undefined,
+          totalChecks: summary.total ?? cases.length,
+          uncertainChecks: (summary.blocked ?? 0) + (summary.uncertain ?? 0) || undefined,
+          verdict: summary.verdict ? toVerdict(summary.verdict) : undefined,
+          verifyRunId: run.id,
+        });
+
+        if (options.json !== undefined) {
+          outputJson(
+            { cases: cases.length, evidence: uploaded, verifyRunId: run.id },
+            typeof options.json === 'string' ? options.json : undefined,
+          );
+          return;
+        }
+
+        console.log(
+          `${pc.green('✓')} Ingested ${pc.bold(String(cases.length))} case(s), ${pc.bold(String(uploaded))} evidence file(s)`,
+        );
+        console.log(`${pc.bold('verifyRunId')}: ${run.id}`);
+        if (options.open) {
+          console.log(`${pc.bold('open')}: /verify-im?verifyRunId=${run.id}`);
+        }
+      },
+    );
 }
 
 function printResults(results: any[]): void {

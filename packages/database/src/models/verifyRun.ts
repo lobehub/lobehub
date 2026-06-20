@@ -1,5 +1,5 @@
 import type { VerifyCheckItem, VerifyRunSource, VerifyRunStatus } from '@lobechat/types';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 
 import type { NewVerifyRun, VerifyRunItem } from '../schemas/verify';
 import { verifyRuns } from '../schemas/verify';
@@ -61,6 +61,15 @@ export class VerifyRunModel {
   findById = async (id: string) => {
     return this.db.query.verifyRuns.findFirst({
       where: and(eq(verifyRuns.id, id), this.ownership()),
+    });
+  };
+
+  /** Recent verification sessions for the current user/workspace, newest first. */
+  query = async (limit = 50) => {
+    return this.db.query.verifyRuns.findMany({
+      limit,
+      orderBy: [desc(verifyRuns.createdAt)],
+      where: this.ownership(),
     });
   };
 

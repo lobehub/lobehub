@@ -5,6 +5,8 @@ import { AgentOperationModel } from '@/database/models/agentOperation';
 import { LlmGenerationTracingModel } from '@/database/models/llmGenerationTracing';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
+import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
+import { VerifyReportModel } from '@/database/models/verifyReport';
 import { VerifyRubricModel } from '@/database/models/verifyRubric';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { router } from '@/libs/trpc/lambda';
@@ -19,6 +21,28 @@ const verifierTypeSchema = z.enum(['program', 'agent', 'llm']);
 const onFailSchema = z.enum(['manual', 'auto_repair']);
 const decisionSchema = z.enum(['accepted', 'rejected', 'overridden']);
 const modelConfigSchema = z.object({ model: z.string(), provider: z.string() });
+const verdictSchema = z.enum(['passed', 'failed', 'uncertain']);
+const checkStatusSchema = z.enum(['pending', 'running', 'passed', 'failed', 'skipped']);
+const runSourceSchema = z.enum(['agent', 'agent-testing']);
+const evidenceTypeSchema = z.enum([
+  'screenshot',
+  'gif',
+  'video',
+  'text',
+  'dom_snapshot',
+  'transcript',
+]);
+const evidenceCapturedBySchema = z.enum(['agent-browser', 'cdp', 'cli', 'program', 'llm_judge']);
+const toulminSchema = z.object({
+  counterEvidence: z.string().optional(),
+  evidence: z.string().optional(),
+  limitation: z.string().optional(),
+  reasoning: z.string().optional(),
+});
+
+/** Derive the lifecycle status from a verdict when the caller doesn't pin one. */
+const statusForVerdict = (verdict: 'passed' | 'failed' | 'uncertain') =>
+  verdict === 'passed' ? ('passed' as const) : ('failed' as const);
 
 /** Run-policy knobs persisted on a rubric (see VerifyRubricConfig). */
 const rubricConfigSchema = z.object({
@@ -43,11 +67,13 @@ const verifyProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
   return opts.next({
     ctx: {
       criterionModel: new VerifyCriterionModel(ctx.serverDB, ctx.userId, workspaceId),
+      evidenceModel: new VerifyEvidenceModel(ctx.serverDB, ctx.userId, workspaceId),
       executorService: new VerifyExecutorService(ctx.serverDB, ctx.userId, workspaceId),
       tracingModel: new LlmGenerationTracingModel(ctx.serverDB, ctx.userId, workspaceId),
       feedbackService: new VerifyFeedbackService(ctx.serverDB, ctx.userId, workspaceId),
       operationModel: new AgentOperationModel(ctx.serverDB, ctx.userId, workspaceId),
       planGenerator: new VerifyPlanGeneratorService(ctx.serverDB, ctx.userId, workspaceId),
+      reportModel: new VerifyReportModel(ctx.serverDB, ctx.userId, workspaceId),
       resultModel: new VerifyCheckResultModel(ctx.serverDB, ctx.userId, workspaceId),
       rubricModel: new VerifyRubricModel(ctx.serverDB, ctx.userId, workspaceId),
       runModel: new VerifyRunModel(ctx.serverDB, ctx.userId, workspaceId),
@@ -239,4 +265,127 @@ export const verifyRouter = router({
     .mutation(async ({ ctx, input }) =>
       ctx.feedbackService.submitDecision(input.resultId, input.decision),
     ),
+
+  // ---- ingest (standalone sessions: results / evidence / report, e.g. agent-testing) ----
+  // A verification session that isn't a live Agent Run (no executor): an external
+  // harness creates the run, ingests each check's verdict + evidence, and writes a
+  // report — all keyed by verifyRunId.
+  createRun: verifyProcedure
+    .input(
+      z.object({
+        goal: z.string().optional(),
+        operationId: z.string().optional(),
+        source: runSourceSchema.optional(),
+        title: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      ctx.runModel.create({
+        goal: input.goal,
+        operationId: input.operationId,
+        source: input.source ?? 'agent-testing',
+        title: input.title,
+      }),
+    ),
+
+  getRun: verifyProcedure
+    .input(z.object({ verifyRunId: z.string() }))
+    .query(async ({ ctx, input }) => ctx.runModel.findById(input.verifyRunId)),
+
+  listRuns: verifyProcedure.query(async ({ ctx }) => ctx.runModel.query()),
+
+  ingestResult: verifyProcedure
+    .input(
+      z.object({
+        checkItemId: z.string(),
+        checkItemIndex: z.number().optional(),
+        checkItemTitle: z.string().optional(),
+        confidence: z.number().min(0).max(1).optional(),
+        required: z.boolean().optional(),
+        status: checkStatusSchema.optional(),
+        suggestion: z.string().optional(),
+        toulmin: toulminSchema.optional(),
+        verdict: verdictSchema,
+        verifierType: verifierTypeSchema.optional(),
+        verifyRunId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      ctx.resultModel.upsertByCheckItem({
+        checkItemId: input.checkItemId,
+        checkItemIndex: input.checkItemIndex,
+        checkItemTitle: input.checkItemTitle,
+        completedAt: new Date(),
+        confidence: input.confidence,
+        required: input.required ?? true,
+        status: input.status ?? statusForVerdict(input.verdict),
+        suggestion: input.suggestion,
+        toulmin: input.toulmin,
+        verdict: input.verdict,
+        verifierType: input.verifierType ?? 'agent',
+        verifyRunId: input.verifyRunId,
+      }),
+    ),
+
+  uploadEvidence: verifyProcedure
+    .input(
+      z.object({
+        capturedBy: evidenceCapturedBySchema.optional(),
+        // Exactly one of `content` (inline text) or `fileId` (already-uploaded artifact).
+        checkResultId: z.string(),
+        content: z.string().optional(),
+        description: z.string().optional(),
+        fileId: z.string().optional(),
+        type: evidenceTypeSchema,
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      ctx.evidenceModel.create({
+        capturedAt: new Date(),
+        capturedBy: input.capturedBy ?? null,
+        checkResultId: input.checkResultId,
+        content: input.content ?? null,
+        description: input.description ?? null,
+        fileId: input.fileId ?? null,
+        type: input.type,
+      }),
+    ),
+
+  listEvidence: verifyProcedure
+    .input(z.object({ checkResultId: z.string() }))
+    .query(async ({ ctx, input }) => ctx.evidenceModel.listByCheckResult(input.checkResultId)),
+
+  upsertReport: verifyProcedure
+    .input(
+      z.object({
+        content: z.string().optional(),
+        failedChecks: z.number().optional(),
+        generatedBy: z.string().optional(),
+        overallConfidence: z.number().min(0).max(1).optional(),
+        passedChecks: z.number().optional(),
+        summary: z.string().optional(),
+        totalChecks: z.number().optional(),
+        uncertainChecks: z.number().optional(),
+        verdict: verdictSchema.optional(),
+        verifyRunId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) =>
+      ctx.reportModel.upsertByRun({
+        content: input.content ?? null,
+        failedChecks: input.failedChecks ?? null,
+        generatedBy: input.generatedBy ?? 'agent-testing',
+        overallConfidence: input.overallConfidence ?? null,
+        passedChecks: input.passedChecks ?? null,
+        summary: input.summary ?? null,
+        totalChecks: input.totalChecks ?? null,
+        uncertainChecks: input.uncertainChecks ?? null,
+        verdict: input.verdict ?? null,
+        verifyRunId: input.verifyRunId,
+      }),
+    ),
+
+  getReport: verifyProcedure
+    .input(z.object({ verifyRunId: z.string() }))
+    .query(async ({ ctx, input }) => ctx.reportModel.findByRun(input.verifyRunId)),
 });

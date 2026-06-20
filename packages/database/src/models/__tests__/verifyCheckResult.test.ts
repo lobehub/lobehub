@@ -145,6 +145,34 @@ describe('VerifyCheckResultModel', () => {
     expect(reloaded?.verifierTracingId).toBe(tracing.id);
   });
 
+  it('upsertByCheckItem inserts then overwrites in place on the (run, item) key', async () => {
+    const model = new VerifyCheckResultModel(serverDB, userId);
+
+    const first = await model.upsertByCheckItem({
+      checkItemId: 'c1',
+      checkItemTitle: 'first',
+      status: 'failed',
+      verdict: 'failed',
+      verifierType: 'agent',
+      verifyRunId,
+    });
+    expect(first.verdict).toBe('failed');
+
+    const second = await model.upsertByCheckItem({
+      checkItemId: 'c1',
+      checkItemTitle: 'second',
+      status: 'passed',
+      verdict: 'passed',
+      verifierType: 'agent',
+      verifyRunId,
+    });
+
+    // same row, overwritten — the unique (verify_run_id, check_item_id) guard held
+    expect(second.id).toBe(first.id);
+    expect(second.verdict).toBe('passed');
+    expect(await model.listByRun(verifyRunId)).toHaveLength(1);
+  });
+
   it('updates a result by its stable (verifyRunId, checkItemId) key', async () => {
     const model = new VerifyCheckResultModel(serverDB, userId);
     await model.create({ checkItemId: 'a', checkItemIndex: 0, verifierType: 'llm', verifyRunId });

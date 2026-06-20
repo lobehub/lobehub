@@ -41,6 +41,37 @@ export class VerifyCheckResultModel {
       .returning();
   };
 
+  /**
+   * Insert-or-update a result by its stable `(verifyRunId, checkItemId)` key.
+   * Used by the ingest path (e.g. agent-testing) which supplies a verdict for a
+   * check directly rather than running a verifier. Idempotent — re-ingesting the
+   * same check overwrites in place via the unique index.
+   */
+  upsertByCheckItem = async (
+    params: Omit<NewVerifyCheckResult, 'userId' | 'workspaceId'> & {
+      checkItemId: string;
+      verifyRunId: string;
+    },
+  ): Promise<VerifyCheckResultItem> => {
+    const values = buildWorkspacePayload(
+      { userId: this.userId, workspaceId: this.workspaceId },
+      params,
+    );
+    // The conflict target keys identify the row, so they're excluded from the set.
+    const { verifyRunId: _r, checkItemId: _c, ...mutable } = values;
+
+    const [row] = await this.db
+      .insert(verifyCheckResults)
+      .values(values)
+      .onConflictDoUpdate({
+        set: mutable,
+        target: [verifyCheckResults.verifyRunId, verifyCheckResults.checkItemId],
+      })
+      .returning();
+
+    return row;
+  };
+
   findById = async (id: string) => {
     return this.db.query.verifyCheckResults.findFirst({
       where: and(eq(verifyCheckResults.id, id), this.ownership()),
