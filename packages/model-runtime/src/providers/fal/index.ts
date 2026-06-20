@@ -8,6 +8,8 @@ import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
 import { AgentRuntimeError } from '../../utils/createError';
+import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
+import { resolveMappedModelId } from '../../utils/modelIdMapping';
 
 // Create debug logger
 const log = debug('lobe-image:fal');
@@ -15,19 +17,26 @@ const log = debug('lobe-image:fal');
 type FluxDevOutput = Awaited<ReturnType<typeof fal.subscribe<'fal-ai/flux/dev'>>>['data'];
 
 export class LobeFalAI implements LobeRuntimeAI {
+  private readonly modelIdMappingOptions: ModelIdMappingOptions;
+
   // OpenAI SDK v6 widened `apiKey` to `string | ApiKeySetter`; lobehub only uses the string form.
-  constructor({ apiKey }: Omit<ClientOptions, 'apiKey'> & { apiKey?: string } = {}) {
+  constructor({
+    apiKey,
+    modelIdMapping,
+  }: Omit<ClientOptions, 'apiKey'> & { apiKey?: string } & ModelIdMappingOptions = {}) {
     if (!apiKey) throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidProviderAPIKey);
 
     fal.config({
       credentials: apiKey,
     });
+    this.modelIdMappingOptions = { modelIdMapping };
     log('FalAI initialized with apiKey: %s', apiKey ? '*****' : 'Not set');
   }
 
   async createImage(payload: CreateImagePayload): Promise<CreateImageResponse> {
     const { model, params } = payload;
-    log('Creating image with model: %s and params: %O', model, params);
+    const requestModel = resolveMappedModelId(model, this.modelIdMappingOptions);
+    log('Creating image with model: %s and params: %O', requestModel, params);
 
     const paramsMap = new Map<RuntimeImageGenParamsValue, string>([
       ['steps', 'num_inference_steps'],
@@ -65,12 +74,12 @@ export class LobeFalAI implements LobeRuntimeAI {
     }
 
     const modelsAcceleratedByDefault = new Set<string>(['flux/krea']);
-    if (modelsAcceleratedByDefault.has(model)) {
+    if (modelsAcceleratedByDefault.has(requestModel)) {
       defaultInput['acceleration'] = 'high';
     }
 
     // Ensure model has fal-ai/ prefix
-    let endpoint = model.startsWith('fal-ai/') ? model : `fal-ai/${model}`;
+    let endpoint = requestModel.startsWith('fal-ai/') ? requestModel : `fal-ai/${requestModel}`;
     const hasImageUrls = (params.imageUrls?.length ?? 0) > 0;
     if (
       ['fal-ai/bytedance/seedream/v', 'fal-ai/hunyuan-image/v'].some((m) => endpoint.startsWith(m))

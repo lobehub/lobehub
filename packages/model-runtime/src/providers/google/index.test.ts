@@ -61,6 +61,28 @@ describe('LobeGoogleAI', () => {
       // Assert
       expect(result).toBeInstanceOf(Response);
     });
+
+    it('should use mapped model id for upstream chat requests while keeping pricing on logical model', async () => {
+      const mappedInstance = new LobeGoogleAI({
+        apiKey: 'test',
+        modelIdMapping: { 'gemini-logical': 'gemini-upstream' },
+      });
+      const mockStreamData = createEmptyAsyncGenerator<GenerateContentResponse>();
+      vi.spyOn(mappedInstance['client'].models, 'generateContentStream').mockResolvedValue(
+        mockStreamData,
+      );
+
+      await mappedInstance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'gemini-logical',
+        temperature: 0,
+      });
+
+      const callArgs = (mappedInstance['client'].models.generateContentStream as any).mock.calls[0];
+      expect(callArgs[0].model).toBe('gemini-upstream');
+      expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical', provider);
+    });
+
     it('should handle text messages correctly', async () => {
       // Mock Google AI SDK's generateContentStream method to return a successful response stream
       const mockStream = new ReadableStream({
@@ -1072,6 +1094,70 @@ describe('buildGoogleToolsWithSearch', () => {
     const config = callArgs[0].config as any;
     // Pre-Gemini 3 models should only have search tools, no functionDeclarations
     expect(config.tools).toEqual([{ urlContext: {} }, { googleSearch: {} }]);
+  });
+});
+
+describe('modelIdMapping', () => {
+  it('should use mapped model id for upstream chat-image requests while keeping logical model usage pricing', async () => {
+    const mappedInstance = new LobeGoogleAI({
+      apiKey: 'test',
+      modelIdMapping: { 'gemini-logical:image': 'gemini-upstream-image' },
+    });
+    const generateContentMock = vi
+      .spyOn(mappedInstance['client'].models, 'generateContent')
+      .mockResolvedValue({
+        candidates: [
+          {
+            content: {
+              parts: [{ inlineData: { data: 'image-base64', mimeType: 'image/png' } }],
+            },
+          },
+        ],
+        usageMetadata: {
+          candidatesTokenCount: 1,
+          promptTokenCount: 1,
+          totalTokenCount: 2,
+        },
+      } as any);
+
+    const result = await mappedInstance.createImage!({
+      model: 'gemini-logical:image',
+      params: { prompt: 'Create a sunset' },
+    });
+
+    expect(result.imageUrl).toBe('data:image/png;base64,image-base64');
+    expect(generateContentMock.mock.calls[0][0].model).toBe('gemini-upstream-image');
+    expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical:image', provider);
+  });
+
+  it('should use mapped model id for upstream generateObject requests while keeping pricing on logical model', async () => {
+    const mappedInstance = new LobeGoogleAI({
+      apiKey: 'test',
+      modelIdMapping: { 'gemini-logical': 'gemini-upstream' },
+    });
+    const generateContentMock = vi
+      .spyOn(mappedInstance['client'].models, 'generateContent')
+      .mockResolvedValue({ text: '{"ok":true}' } as any);
+
+    const result = await mappedInstance.generateObject(
+      {
+        messages: [{ content: 'Return JSON', role: 'user' }],
+        model: 'gemini-logical',
+        schema: {
+          name: 'result',
+          schema: {
+            properties: { ok: { type: 'boolean' } },
+            required: ['ok'],
+            type: 'object',
+          },
+        },
+      } as any,
+      {},
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(generateContentMock.mock.calls[0][0].model).toBe('gemini-upstream');
+    expect(getModelPricingMock).toHaveBeenCalledWith('gemini-logical', provider);
   });
 });
 

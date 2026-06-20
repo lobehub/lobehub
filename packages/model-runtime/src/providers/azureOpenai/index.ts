@@ -8,6 +8,7 @@ import type { ChatMethodOptions, ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload } from '../../types/image';
 import { AgentRuntimeError } from '../../utils/createError';
+import { resolveMappedModelId } from '../../utils/modelIdMapping';
 import { sanitizeError } from '../../utils/sanitizeError';
 import {
   isResponsesAPIModel,
@@ -70,7 +71,7 @@ const normalizeAzureBaseURL = (value?: string) => {
 const maskSensitiveUrl = (url: string) => {
   const regex = /^(https:\/\/)([^.]+)(\.(?:openai\.azure\.com|cognitiveservices\.azure\.com).*)$/;
 
-  return url.replace(regex, (match, protocol, subdomain, rest) => `${protocol}***${rest}`);
+  return url.replace(regex, (_match, protocol, _subdomain, rest) => `${protocol}***${rest}`);
 };
 
 const BaseAzureOpenAI = createOpenAICompatibleRuntime({
@@ -210,7 +211,8 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
 
   async createImage(payload: CreateImagePayload) {
     const { model, params } = payload;
-    azureImageLogger('Creating image with model: %s and params: %O', model, params);
+    const requestModel = resolveMappedModelId(model, this._options);
+    azureImageLogger('Creating image with model: %s and params: %O', requestModel, params);
 
     try {
       const userInput: Record<string, any> = { ...params };
@@ -241,10 +243,10 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
 
       // gpt-image-2 rejects input_fidelity because it is always high fidelity by default.
       // Keep the parameter limited to the gpt-image-1 family, matching OpenAI-compatible runtime.
-      const shouldUseInputFidelity = isImageEdit && supportsImageInputFidelity(model);
+      const shouldUseInputFidelity = isImageEdit && supportsImageInputFidelity(requestModel);
 
       const azureImageOptions: Record<string, any> = {
-        model,
+        model: requestModel,
         n: 1,
         ...(shouldUseInputFidelity ? { input_fidelity: 'high' } : {}),
         ...userInput,

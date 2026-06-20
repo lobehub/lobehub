@@ -445,6 +445,27 @@ describe('LobeAzureOpenAI', () => {
       expect(res).toEqual({ imageUrl: url });
     });
 
+    it('should use mapped model id for image generation requests', async () => {
+      instance = new LobeAzureOpenAI({
+        apiKey: 'test_key',
+        baseURL: 'https://test.openai.azure.com/',
+        modelIdMapping: { 'logical-image': 'azure-image-deployment' },
+      });
+      const generateSpy = vi
+        .spyOn(instance['client'].images, 'generate')
+        .mockResolvedValue({ data: [{ url: 'https://example.com/mapped.png' }] } as any);
+
+      await instance.createImage({
+        model: 'logical-image',
+        params: { prompt: 'mapped cat' },
+      });
+
+      expect(vi.mocked(generateSpy).mock.calls[0][0]).toMatchObject({
+        model: 'azure-image-deployment',
+        prompt: 'mapped cat',
+      });
+    });
+
     it('should parse string JSON response from images.generate', async () => {
       const url = 'https://example.com/str.png';
       const payload = JSON.stringify({ data: [{ url }] });
