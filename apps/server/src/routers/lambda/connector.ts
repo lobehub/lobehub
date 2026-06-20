@@ -130,8 +130,7 @@ export const connectorRouter = router({
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
       const connector = await ctx.connectorModel.findById(input.id);
-      if (!connector)
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
 
       const { oidcConfig, credentials, ...rest } = connector;
       const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
@@ -532,15 +531,34 @@ async function upsertConnectorEntry(
     return existing[0].id;
   }
 
-  const created = await connectorModel.create({
-    identifier: params.identifier,
-    isEnabled: true,
-    metadata,
-    name: params.name,
-    sourceType: params.sourceType as any,
-    status: ConnectorStatus.connected,
-  });
-  return created.id;
+  try {
+    const created = await connectorModel.create({
+      identifier: params.identifier,
+      isEnabled: true,
+      metadata,
+      name: params.name,
+      sourceType: params.sourceType as any,
+      status: ConnectorStatus.connected,
+    });
+    return created.id;
+  } catch (error: any) {
+    const code = error?.cause?.cause?.code || error?.cause?.code || error?.code;
+    if (code !== '23505') throw error;
+
+    const duplicate = await connectorModel.queryByIdentifiers([params.identifier]);
+    if (duplicate[0]) {
+      await connectorModel.update(duplicate[0].id, { metadata });
+      return duplicate[0].id;
+    }
+
+    const legacyDuplicate = await connectorModel.queryByIdentifiersAnyScope([params.identifier]);
+    if (legacyDuplicate[0]) {
+      await connectorModel.update(legacyDuplicate[0].id, { metadata });
+      return legacyDuplicate[0].id;
+    }
+
+    throw error;
+  }
 }
 
 /** Map builtin manifest humanIntervention → default ConnectorToolPermission */

@@ -26,22 +26,10 @@ export const DEFAULT_LLM_CONFIG = genUserLLMConfig({
   lobehub: {
     enabled: true,
   },
-  anthropic: {
-    enabled: true,
-  },
-  deepseek: {
-    enabled: true,
-  },
-  google: {
-    enabled: true,
-  },
   lmstudio: {
     fetchOnClient: true,
   },
   ollama: {
     fetchOnClient: true,
-  },
-  openai: {
-    enabled: true,
   },
 });

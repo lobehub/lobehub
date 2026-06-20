@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, Plus, UserRound } from 'lucide-react';
+import { BriefcaseBusiness, Plus, ShieldCheck, UserRound } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useSWRConfig } from 'swr';
@@ -63,6 +63,12 @@ export default function useBusinessMeCells(): CellProps[] {
       key: 'create-workspace',
       label: creating ? 'Создаём workspace...' : 'Создать workspace',
       onClick: createWorkspace,
+    },
+    {
+      icon: ShieldCheck,
+      key: 'business-admin-mobile',
+      label: 'Super-admin: Business',
+      onClick: () => navigate('/admin/business'),
     },
     { type: 'divider' },
   ];

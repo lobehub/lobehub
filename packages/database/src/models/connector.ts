@@ -88,6 +88,25 @@ export class ConnectorModel {
     return Promise.all(rows.map((r) => decryptRow(r, gateKeeper)));
   };
 
+  queryByIdentifiersAnyScope = async (
+    identifiers: string[],
+    gateKeeper: GateKeeper | undefined = this.gateKeeper,
+  ): Promise<DecryptedConnector[]> => {
+    if (identifiers.length === 0) return [];
+
+    const rows = await this.db
+      .select()
+      .from(userConnectors)
+      .where(
+        and(
+          eq(userConnectors.userId, this.userId),
+          inArray(userConnectors.identifier, identifiers),
+        ),
+      );
+
+    return Promise.all(rows.map((r) => decryptRow(r, gateKeeper)));
+  };
+
   findById = async (
     id: string,
     gateKeeper: GateKeeper | undefined = this.gateKeeper,

@@ -10,6 +10,7 @@ import {
   Gauge,
   MessageSquarePlus,
   Settings,
+  ShieldCheck,
   Users,
 } from 'lucide-react';
 import { type ReactNode } from 'react';
@@ -227,6 +228,11 @@ export default function WorkspaceHomeDashboard() {
             </Text>
           </Flexbox>
           <Flexbox horizontal gap={8}>
+            {workspace.role === 'super_admin' && (
+              <Button icon={<ShieldCheck />} onClick={() => navigate('/admin/business')}>
+                Super-admin
+              </Button>
+            )}
             <Button
               icon={<MessageSquarePlus />}
               type="primary"
@@ -263,12 +269,12 @@ export default function WorkspaceHomeDashboard() {
             value={formatCredits(credits?.balance)}
           />
           <MetricCard
-            description={
-              canManage ? `Ожидают приглашения: ${invites.length}` : 'Доступно владельцам'
-            }
             icon={<Bot size={18} />}
             title="Сообщения"
             value={formatNumber(usage?.messages)}
+            description={
+              canManage ? `Ожидают приглашения: ${invites.length}` : 'Доступно владельцам'
+            }
           />
         </div>
       </Flexbox>

@@ -10,6 +10,7 @@ import {
   Gauge,
   MessageSquarePlus,
   Settings,
+  ShieldCheck,
   Users,
 } from 'lucide-react';
 import { type ReactNode } from 'react';
@@ -205,6 +206,11 @@ export default function MobileWorkspaceHomeDashboard() {
           >
             Начать workspace chat
           </Button>
+          {workspace.role === 'super_admin' && (
+            <Button block icon={<ShieldCheck />} onClick={() => navigate('/admin/business')}>
+              Super-admin console
+            </Button>
+          )}
         </Flexbox>
 
         <Flexbox horizontal gap={10}>
