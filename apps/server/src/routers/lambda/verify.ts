@@ -469,11 +469,32 @@ export const verifyRouter = router({
       ]);
 
       // Resolve a displayable URL for each file-backed evidence artifact.
-      const fileService = new FileService(ctx.serverDB, run.userId, run.workspaceId ?? undefined);
+      let fileService: FileService | null | undefined;
+      const getFileService = () => {
+        if (fileService !== undefined) return fileService;
+
+        try {
+          fileService = new FileService(ctx.serverDB, run.userId, run.workspaceId ?? undefined);
+        } catch (error) {
+          console.error('[verify:getReportBundle:resolveFileUrl]', error);
+          fileService = null;
+        }
+
+        return fileService;
+      };
       const resolveFileUrl = async (fileId: string | null) => {
         if (!fileId) return null;
-        const file = await FileModel.getFileById(ctx.serverDB, fileId);
-        return file?.url ? await fileService.getFullFileUrl(file.url) : null;
+
+        try {
+          const file = await FileModel.getFileById(ctx.serverDB, fileId);
+          if (!file?.url) return null;
+
+          const service = getFileService();
+          return service ? await service.getFullFileUrl(file.url) : null;
+        } catch (error) {
+          console.error('[verify:getReportBundle:resolveFileUrl]', error);
+          return null;
+        }
       };
 
       const resultsWithEvidence = await Promise.all(

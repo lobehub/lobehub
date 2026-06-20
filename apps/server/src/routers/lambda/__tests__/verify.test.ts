@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { verifyRouter } from '@/server/routers/lambda/verify';
+import { FileService } from '@/server/services/file';
 
 const modelMocks = vi.hoisted(() => ({
   findRunById: vi.fn(),
@@ -54,6 +55,12 @@ describe('verifyRouter', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     modelMocks.getServerDB.mockResolvedValue({});
+    vi.mocked(FileService).mockImplementation(
+      () =>
+        ({
+          getFullFileUrl: modelMocks.getFullFileUrl,
+        }) as any,
+    );
   });
 
   describe('ingestResult', () => {
@@ -168,6 +175,78 @@ describe('verifyRouter', () => {
         run,
       });
       expect(modelMocks.findRunById).not.toHaveBeenCalled();
+    });
+
+    it('keeps returning the bundle when file URL resolution is unavailable', async () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(FileService).mockImplementation(() => {
+        throw new Error('S3 env missing');
+      });
+
+      const run = {
+        goal: 'Ship a working page',
+        id: 'run-1',
+        title: 'Run report',
+        userId: 'owner-user',
+        workspaceId: null,
+      };
+      const result = {
+        checkItemId: 'check-1',
+        checkItemIndex: 0,
+        checkItemTitle: 'Page renders',
+        id: 'result-1',
+        required: true,
+        status: 'passed',
+        verdict: 'passed',
+        verifyRunId: 'run-1',
+      };
+      const evidence = {
+        checkResultId: 'result-1',
+        content: null,
+        description: 'Homepage screenshot',
+        fileId: 'file-1',
+        id: 'evidence-1',
+        type: 'screenshot',
+      };
+      const serverDB = {
+        query: {
+          files: {
+            findFirst: vi.fn(async () => ({ id: 'file-1', url: 'verify/evidence.png' })),
+          },
+          verifyReports: {
+            findFirst: vi.fn(async () => null),
+          },
+          verifyRuns: {
+            findFirst: vi.fn(async () => run),
+          },
+        },
+        select: vi
+          .fn()
+          .mockReturnValueOnce(selectRows([result]))
+          .mockReturnValueOnce(selectRows([evidence])),
+      };
+      modelMocks.getServerDB.mockResolvedValue(serverDB);
+
+      const bundle = await createPublicCaller().getReportBundle({ verifyRunId: 'run-1' });
+
+      expect(bundle).toMatchObject({
+        results: [
+          {
+            evidence: [
+              {
+                fileId: 'file-1',
+                fileUrl: null,
+              },
+            ],
+          },
+        ],
+        run,
+      });
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[verify:getReportBundle:resolveFileUrl]',
+        expect.any(Error),
+      );
+      consoleErrorSpy.mockRestore();
     });
   });
 });
