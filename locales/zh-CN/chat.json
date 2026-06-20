@@ -246,6 +246,7 @@
   "heteroAgent.executionTarget.loading": "正在加载设备…",
   "heteroAgent.executionTarget.local": "本机",
   "heteroAgent.executionTarget.localDesc": "在当前桌面端以本地进程运行",
+  "heteroAgent.executionTarget.manage": "管理",
   "heteroAgent.executionTarget.noDevices": "暂无远程设备。在另一台机器上执行 `lh connect` 即可接入。",
   "heteroAgent.executionTarget.none": "无设备",
   "heteroAgent.executionTarget.noneDesc": "不启用任何设备",

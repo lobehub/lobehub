@@ -17,11 +17,13 @@ import {
   MonitorDownIcon,
   MonitorIcon,
   MonitorOffIcon,
+  SettingsIcon,
   SparklesIcon,
 } from 'lucide-react';
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { gatewayConnectionService } from '@/services/electron/gatewayConnection';
@@ -232,6 +234,27 @@ const styles = createStaticStyles(({ css }) => ({
     font-weight: 500;
     color: ${cssVar.colorTextTertiary};
   `,
+  manageButton: css`
+    cursor: pointer;
+
+    display: flex;
+    gap: 3px;
+    align-items: center;
+
+    padding: 0;
+    border: none;
+
+    font-size: 11px;
+    color: ${cssVar.colorTextQuaternary};
+
+    background: none;
+
+    transition: color 0.2s;
+
+    &:hover {
+      color: ${cssVar.colorPrimary};
+    }
+  `,
 }));
 
 interface OptionRowProps {
@@ -295,6 +318,7 @@ interface HeteroDeviceSwitcherProps {
 const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
+  const navigate = useWorkspaceAwareNavigate();
 
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
@@ -437,7 +461,19 @@ const HeteroDeviceSwitcher = memo<HeteroDeviceSwitcherProps>(({ agentId }) => {
             </span>
           </Tooltip>
         </Flexbox>
-        {isDesktop || showWebDownloadCard ? null : (
+        {isDesktop || showWebDownloadCard ? (
+          <button
+            className={styles.manageButton}
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              navigate('/settings/devices');
+            }}
+          >
+            <Icon icon={SettingsIcon} size={11} />
+            <span>{t('heteroAgent.executionTarget.manage')}</span>
+          </button>
+        ) : (
           <a
             className={styles.headerLink}
             href="https://lobehub.com/downloads"
