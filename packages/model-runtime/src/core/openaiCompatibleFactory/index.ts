@@ -99,7 +99,10 @@ export const CHAT_MODELS_BLOCK_LIST = [
   'dall-e',
 ];
 
-type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions & T;
+// OpenAI SDK v6 widened `apiKey` to `string | ApiKeySetter`; lobehub only ever
+// passes a plain string, so narrow it back to keep `.trim()` / string assignments valid.
+type LobeClientOptions = Omit<ClientOptions, 'apiKey'> & { apiKey?: string };
+type ConstructorOptions<T extends Record<string, any> = any> = LobeClientOptions & T;
 type OpenAIExtraParams = { prompt_cache_key?: string; safety_identifier?: string };
 type ChatCompletionCreateParamsWithPromptCacheKey = Omit<
   OpenAI.ChatCompletionCreateParamsNonStreaming,
@@ -316,7 +319,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     baseURL!: string;
     protected _options: ConstructorOptions<T>;
 
-    constructor(options: ClientOptions & Record<string, any> = {}) {
+    constructor(options: LobeClientOptions & Record<string, any> = {}) {
       const _options = {
         ...options,
         apiKey: options.apiKey?.trim() || DEFAULT_API_KEY,
@@ -1541,10 +1544,14 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       log('received %d tool calls from Chat Completions API', toolCalls?.length || 0);
 
       try {
-        const result = toolCalls.map((item) => ({
-          arguments: JSON.parse(item.function.arguments),
-          name: item.function.name,
-        }));
+        const result = toolCalls.map((item) => {
+          // OpenAI SDK v6 made tool calls a function|custom union; lobehub only emits function calls.
+          const { function: fn } = item as OpenAI.ChatCompletionMessageFunctionToolCall;
+          return {
+            arguments: JSON.parse(fn.arguments),
+            name: fn.name,
+          };
+        });
         log(
           'successfully parsed tool calls: %O',
           result.map((r) => r.name),

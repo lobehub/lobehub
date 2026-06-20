@@ -132,7 +132,8 @@ const transformOpenAIStream = (
       }
 
       case 'response.output_text.annotation.added': {
-        const citations = chunk.annotation;
+        // OpenAI SDK v6 types the annotation payload as `unknown`; narrow to the URL-citation shape we read.
+        const citations = chunk.annotation as { title?: string; url?: string };
 
         if (streamContext.returnedCitationArray) {
           streamContext.returnedCitationArray.push({
