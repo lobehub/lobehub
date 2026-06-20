@@ -33,6 +33,10 @@ import type {
   HandleCreateVideoWebhookPayload,
 } from '../types/video';
 import { AgentRuntimeError } from '../utils/createError';
+import {
+  getModelPricingOptionsFromMetadata,
+  runWithModelPricingContext,
+} from '../utils/getModelPricing';
 import type { LobeRuntimeAI } from './BaseAI';
 
 const { logger: timing } = createTimingHelpers('lobe-server:chat:lobehub:timing');
@@ -67,6 +71,14 @@ export interface ModelRuntimeHooks {
    * Runs before the LLM call. Throw to abort (e.g., budget exceeded).
    */
   beforeChat?: (payload: ChatStreamPayload, options?: ChatMethodOptions) => Promise<void>;
+  beforeCreateImage?: (
+    payload: CreateImagePayload,
+    options?: CreateImageMethodOptions,
+  ) => Promise<void>;
+  beforeCreateVideo?: (
+    payload: CreateVideoPayload,
+    options?: CreateVideoMethodOptions,
+  ) => Promise<void>;
   beforeEmbeddings?: (payload: EmbeddingsPayload, options?: EmbeddingsOptions) => Promise<void>;
   beforeGenerateObject?: (
     payload: GenerateObjectPayload,
@@ -200,7 +212,10 @@ export class ModelRuntime {
         );
       }
       const runtimeStartedAt = Date.now();
-      const response = await this._runtime.chat(payload, finalOptions);
+      const response = await runWithModelPricingContext(
+        getModelPricingOptionsFromMetadata(finalOptions?.metadata)?.pricingContext,
+        () => this._runtime.chat(payload, finalOptions),
+      );
       if (metadata) {
         timing(
           'ModelRuntime.chat runtime done model=%s durationMs=%d totalMs=%d traceId=%s',
@@ -243,6 +258,7 @@ export class ModelRuntime {
     payload: ChatStreamPayload,
     options?: ChatMethodOptions,
   ): Promise<ChatMethodOptions | undefined> {
+    const hookOptions = this._hooks?.beforeChat && !options ? {} : options;
     const metadata = getLobeHubTimingMetadata(options);
     const beforeChatStartedAt = Date.now();
     if (metadata) {
@@ -254,7 +270,7 @@ export class ModelRuntime {
       );
     }
     try {
-      await this._hooks?.beforeChat?.(payload, options);
+      await this._hooks?.beforeChat?.(payload, hookOptions);
     } catch (error) {
       if (metadata) {
         timing(
@@ -275,14 +291,14 @@ export class ModelRuntime {
       );
     }
 
-    if (!this._hooks?.onChatFinal) return options;
+    if (!this._hooks?.onChatFinal) return hookOptions;
 
     const hookFn = this._hooks.onChatFinal;
-    const existingOnFinal = options?.callback?.onFinal;
+    const existingOnFinal = hookOptions?.callback?.onFinal;
     return {
-      ...options,
+      ...hookOptions,
       callback: {
-        ...options?.callback,
+        ...hookOptions?.callback,
         async onFinal(data) {
           const finalStartedAt = Date.now();
           if (metadata) {
@@ -348,7 +364,8 @@ export class ModelRuntime {
     };
 
     try {
-      await this._hooks?.beforeGenerateObject?.(payload, options);
+      const hookOptions = this._hooks?.beforeGenerateObject && !options ? {} : options;
+      await this._hooks?.beforeGenerateObject?.(payload, hookOptions);
       const runtimeStartedAt = Date.now();
 
       const needsUsageCapture =
@@ -356,11 +373,11 @@ export class ModelRuntime {
 
       const finalOptions = needsUsageCapture
         ? {
-            ...options,
+            ...hookOptions,
             onUsage: async (usage: ModelUsage) => {
               usageCapture = usage;
               const speed = buildGenerateObjectSpeed(runtimeStartedAt, usage);
-              await options?.onUsage?.(usage);
+              await hookOptions?.onUsage?.(usage);
               try {
                 await this._hooks?.onGenerateObjectFinal?.({ speed, usage }, { options, payload });
               } catch (e) {
@@ -371,7 +388,10 @@ export class ModelRuntime {
           }
         : options;
 
-      const output = await this._runtime.generateObject!(payload, finalOptions);
+      const output = await runWithModelPricingContext(
+        getModelPricingOptionsFromMetadata(finalOptions?.metadata)?.pricingContext,
+        () => this._runtime.generateObject!(payload, finalOptions),
+      );
       await fireComplete({ output, success: true });
       return output;
     } catch (error) {
@@ -397,11 +417,23 @@ export class ModelRuntime {
   }
 
   async createImage(payload: CreateImagePayload, options?: CreateImageMethodOptions) {
-    return this._runtime.createImage?.(payload, options);
+    const finalOptions = this._hooks?.beforeCreateImage && !options ? {} : options;
+    await this._hooks?.beforeCreateImage?.(payload, finalOptions);
+
+    return runWithModelPricingContext(
+      getModelPricingOptionsFromMetadata(finalOptions?.metadata)?.pricingContext,
+      () => this._runtime.createImage?.(payload, finalOptions),
+    );
   }
 
   async createVideo(payload: CreateVideoPayload, options?: CreateVideoMethodOptions) {
-    return this._runtime.createVideo?.(payload, options);
+    const finalOptions = this._hooks?.beforeCreateVideo && !options ? {} : options;
+    await this._hooks?.beforeCreateVideo?.(payload, finalOptions);
+
+    return runWithModelPricingContext(
+      getModelPricingOptionsFromMetadata(finalOptions?.metadata)?.pricingContext,
+      () => this._runtime.createVideo?.(payload, finalOptions),
+    );
   }
 
   async handleCreateVideoWebhook(payload: HandleCreateVideoWebhookPayload) {
@@ -418,15 +450,16 @@ export class ModelRuntime {
 
   async embeddings(payload: EmbeddingsPayload, options?: EmbeddingsOptions) {
     try {
-      await this._hooks?.beforeEmbeddings?.(payload, options);
+      const hookOptions = this._hooks?.beforeEmbeddings && !options ? {} : options;
+      await this._hooks?.beforeEmbeddings?.(payload, hookOptions);
 
       const startTime = Date.now();
 
       const finalOptions = this._hooks?.onEmbeddingsFinal
         ? {
-            ...options,
+            ...hookOptions,
             onUsage: async (usage: ModelUsage) => {
-              await options?.onUsage?.(usage);
+              await hookOptions?.onUsage?.(usage);
               try {
                 const latencyMs = Date.now() - startTime;
                 await this._hooks!.onEmbeddingsFinal!({ latencyMs, usage }, { options, payload });
@@ -437,7 +470,10 @@ export class ModelRuntime {
           }
         : options;
 
-      return await this._runtime.embeddings?.(payload, finalOptions);
+      return await runWithModelPricingContext(
+        getModelPricingOptionsFromMetadata(finalOptions?.metadata)?.pricingContext,
+        () => this._runtime.embeddings?.(payload, finalOptions),
+      );
     } catch (error) {
       if (this._hooks?.onEmbeddingsError) {
         await this._hooks.onEmbeddingsError(error as ChatCompletionErrorPayload, {

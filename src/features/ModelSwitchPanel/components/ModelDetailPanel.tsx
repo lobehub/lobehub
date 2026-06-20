@@ -249,24 +249,53 @@ const formatUnitRate = (
     const tiers = (unit as TieredPricingUnit).tiers;
     if (tiers.length === 1) {
       const price = formatRate(tiers[0].rate);
-      return { current: price };
+      return {
+        current: price,
+        original:
+          typeof tiers[0].originalRate === 'number' && tiers[0].originalRate > tiers[0].rate
+            ? formatRate(tiers[0].originalRate)
+            : undefined,
+      };
     }
     const low = formatRate(tiers[0].rate);
     const high = formatRate(tiers.at(-1)!.rate);
-    return { current: formatRange(low, high) };
+    const originalLow = tiers[0].originalRate;
+    const originalHigh = tiers.at(-1)!.originalRate;
+    const original =
+      typeof originalLow === 'number' &&
+      typeof originalHigh === 'number' &&
+      (originalLow > tiers[0].rate || originalHigh > tiers.at(-1)!.rate)
+        ? formatRange(formatRate(originalLow), formatRate(originalHigh))
+        : undefined;
+    return { current: formatRange(low, high), original };
   }
 
   // lookup strategy
   if (unit.strategy === 'lookup') {
-    const prices = Object.values(unit.lookup.prices);
-    if (prices.length === 1) {
-      const price = formatRate(prices[0]);
-      return { current: price };
+    const entries = Object.entries(unit.lookup.prices);
+    if (entries.length === 1) {
+      const [key, price] = entries[0];
+      const originalPrice = unit.lookup.originalPrices?.[key];
+      return {
+        current: formatRate(price),
+        original:
+          typeof originalPrice === 'number' && originalPrice > price
+            ? formatRate(originalPrice)
+            : undefined,
+      };
     }
-    const sorted = [...prices].sort((a, b) => a - b);
-    const low = formatRate(sorted[0]);
-    const high = formatRate(sorted.at(-1)!);
-    return { current: formatRange(low, high) };
+    const sorted = [...entries].sort((a, b) => a[1] - b[1]);
+    const [lowKey, lowPrice] = sorted[0];
+    const [highKey, highPrice] = sorted.at(-1)!;
+    const originalLow = unit.lookup.originalPrices?.[lowKey];
+    const originalHigh = unit.lookup.originalPrices?.[highKey];
+    const original =
+      typeof originalLow === 'number' &&
+      typeof originalHigh === 'number' &&
+      (originalLow > lowPrice || originalHigh > highPrice)
+        ? formatRange(formatRate(originalLow), formatRate(originalHigh))
+        : undefined;
+    return { current: formatRange(formatRate(lowPrice), formatRate(highPrice)), original };
   }
 
   return { current: '-' };

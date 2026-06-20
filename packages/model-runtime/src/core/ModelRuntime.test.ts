@@ -3,11 +3,16 @@ import type { ClientSecretPayload } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ChatStreamCallbacks, ChatStreamPayload, ModelRuntimeHooks } from '../index';
-import { LobeOpenAI, ModelRuntime } from '../index';
+import { LobeOpenAI } from '../providers/openai';
 import { providerRuntimeMap } from '../runtimeMap';
+import type { ChatStreamCallbacks, ChatStreamPayload } from '../types';
 import type { CreateImagePayload } from '../types/image';
 import type { CreateVideoPayload } from '../types/video';
+import { ModelRuntime, type ModelRuntimeHooks } from './ModelRuntime';
+
+vi.mock('../providers/lobehub', () => ({
+  LobeHubAI: class LobeHubAI {},
+}));
 
 /**
  * Mock createTraceOptions for testing purposes.
@@ -557,7 +562,7 @@ describe('ModelRuntime', () => {
 
         await runtime.chat(chatPayload);
 
-        expect(beforeChat).toHaveBeenCalledWith(chatPayload, undefined);
+        expect(beforeChat).toHaveBeenCalledWith(chatPayload, {});
         expect(mockRuntimeAI.chat).toHaveBeenCalled();
       });
 
@@ -649,7 +654,7 @@ describe('ModelRuntime', () => {
 
         await runtime.generateObject(genObjPayload);
 
-        expect(beforeGenerateObject).toHaveBeenCalledWith(genObjPayload, undefined);
+        expect(beforeGenerateObject).toHaveBeenCalledWith(genObjPayload, {});
         expect(mockRuntimeAI.generateObject).toHaveBeenCalled();
       });
 

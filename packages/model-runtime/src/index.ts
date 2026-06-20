@@ -79,7 +79,14 @@ export * from './types/error';
 export { consumeStreamUntilDone } from './utils/consumeStream';
 export { AgentRuntimeError } from './utils/createError';
 export { getModelPropertyWithFallback } from './utils/getFallbackModelProperty';
-export { getModelPricing } from './utils/getModelPricing';
+export {
+  getModelPricing,
+  getModelPricingOptionsFromMetadata,
+  MODEL_PRICING_CONTEXT_METADATA_KEY,
+  type ModelPricingContext,
+  type ModelPricingOptions,
+  runWithModelPricingContext,
+} from './utils/getModelPricing';
 export {
   applyModelExtendParams,
   type ApplyModelExtendParamsContext,
