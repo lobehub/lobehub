@@ -92,7 +92,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 const DatasetDetail = memo(() => {
   const { t } = useTranslation('eval');
-  const { benchmarkId, datasetId } = useParams<{ benchmarkId: string; datasetId: string }>();
+  const { benchmarkId, datasetId } = useParams() as { benchmarkId: string; datasetId: string };
   const navigate = useWorkspaceAwareNavigate();
 
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
@@ -103,7 +103,7 @@ const DatasetDetail = memo(() => {
   const useFetchDatasetDetail = useEvalStore((s) => s.useFetchDatasetDetail);
   const useFetchTestCases = useEvalStore((s) => s.useFetchTestCases);
   const useFetchDatasetRuns = useEvalStore((s) => s.useFetchDatasetRuns);
-  const runList = useEvalStore(runSelectors.datasetRunList(datasetId!));
+  const runList = useEvalStore(runSelectors.datasetRunList(datasetId));
   const refreshTestCases = useEvalStore((s) => s.refreshTestCases);
   const refreshDatasetDetail = useEvalStore((s) => s.refreshDatasetDetail);
 
@@ -119,7 +119,7 @@ const DatasetDetail = memo(() => {
   );
 
   const { data: testCaseData } = useFetchTestCases({
-    datasetId: datasetId!,
+    datasetId: datasetId,
     limit: pagination.pageSize,
     offset: (pagination.current - 1) * pagination.pageSize,
   });
@@ -186,7 +186,7 @@ const DatasetDetail = memo(() => {
       okText: t('common.delete'),
       onOk: async () => {
         try {
-          await agentEvalService.deleteDataset(datasetId!);
+          await agentEvalService.deleteDataset(datasetId);
           toast.success(t('dataset.delete.success'));
           navigate(`/eval/bench/${benchmarkId}`);
         } catch {
@@ -311,7 +311,7 @@ const DatasetDetail = memo(() => {
                   onPageChange={(page, pageSize) => setPagination({ current: page, pageSize })}
                   onPreview={setPreviewCase}
                   onAddCase={() =>
-                    createTestCaseCreateModal({ datasetId: datasetId!, onSuccess: handleRefresh })
+                    createTestCaseCreateModal({ datasetId: datasetId, onSuccess: handleRefresh })
                   }
                   onDiffFilterChange={(f) => {
                     setDiffFilter(f);
@@ -321,7 +321,7 @@ const DatasetDetail = memo(() => {
                     createTestCaseEditModal({ onSuccess: handleRefresh, testCase })
                   }
                   onImport={() =>
-                    createDatasetImportModal({ datasetId: datasetId!, onSuccess: handleRefresh })
+                    createDatasetImportModal({ datasetId: datasetId, onSuccess: handleRefresh })
                   }
                   onSearchChange={(v) => {
                     setSearch(v);
@@ -354,7 +354,7 @@ const DatasetDetail = memo(() => {
               {sortedRuns.length > 0 ? (
                 <Flexbox gap={12}>
                   {sortedRuns.map((run) => (
-                    <RunCard benchmarkId={benchmarkId!} key={run.id} run={run} />
+                    <RunCard benchmarkId={benchmarkId} key={run.id} run={run} />
                   ))}
                 </Flexbox>
               ) : (
