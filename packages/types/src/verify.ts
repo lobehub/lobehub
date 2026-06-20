@@ -36,6 +36,31 @@ export type VerifyVerdict = (typeof verifyVerdicts)[number];
 export const verifyUserDecisions = ['accepted', 'rejected', 'overridden'] as const;
 export type VerifyUserDecision = (typeof verifyUserDecisions)[number];
 
+/**
+ * Denormalized rollup of a verification session's pipeline state — mirrors the
+ * legacy `agent_operations.verify_status` set so the two stay interchangeable
+ * while results/reports migrate from being operation-anchored to run-anchored.
+ */
+export const verifyRunStatuses = [
+  'unverified',
+  'planned',
+  'verifying',
+  'passed',
+  'failed',
+  'repairing',
+  'delivered',
+] as const;
+export type VerifyRunStatus = (typeof verifyRunStatuses)[number];
+
+/**
+ * What produced a verification session.
+ * - agent:         verifying a real Agent Run (`verify_runs.operation_id` set)
+ * - agent-testing: a standalone session ingested from the agent-testing harness
+ *   (no Agent Run — `operation_id` is null)
+ */
+export const verifyRunSources = ['agent', 'agent-testing'] as const;
+export type VerifyRunSource = (typeof verifyRunSources)[number];
+
 /** Default cap on automatic repair rounds when a rubric doesn't override it. */
 export const DEFAULT_MAX_REPAIR_ROUNDS = 3;
 
@@ -155,8 +180,9 @@ export interface VerifyEvidence {
 
 /**
  * A delivery-verification report. A generated artifact (not a computed one):
- * `summary` / `content` are written by an LLM from the run's check results +
- * evidence. Optionally tied to an Agent Run via `operationId` (not required).
+ * `summary` / `content` are written by an LLM from the session's check results +
+ * evidence. Tied to a verification session via `verifyRunId` (which itself
+ * optionally links back to an Agent Run).
  */
 export interface VerifyReport {
   /** Full Markdown report, shown in the expanded review view. */
@@ -167,8 +193,6 @@ export interface VerifyReport {
   /** Producer of this report, e.g. 'system' / a model id. */
   generatedBy?: string | null;
   id: string;
-  /** The Agent Run this report verifies, when bound to one. */
-  operationId?: string | null;
   /** 0-1 aggregate confidence across the run. */
   overallConfidence?: number | null;
   passedChecks?: number | null;
@@ -180,4 +204,6 @@ export interface VerifyReport {
   uncertainChecks?: number | null;
   /** Overall Claim, reusing the verdict vocabulary. */
   verdict?: VerifyVerdict | null;
+  /** The verification session this report summarizes. */
+  verifyRunId: string;
 }

@@ -6,6 +6,7 @@ import { LlmGenerationTracingModel } from '@/database/models/llmGenerationTracin
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
 import { VerifyRubricModel } from '@/database/models/verifyRubric';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import {
@@ -49,6 +50,7 @@ const verifyProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
       planGenerator: new VerifyPlanGeneratorService(ctx.serverDB, ctx.userId, workspaceId),
       resultModel: new VerifyCheckResultModel(ctx.serverDB, ctx.userId, workspaceId),
       rubricModel: new VerifyRubricModel(ctx.serverDB, ctx.userId, workspaceId),
+      runModel: new VerifyRunModel(ctx.serverDB, ctx.userId, workspaceId),
     },
   });
 });
@@ -143,7 +145,10 @@ export const verifyRouter = router({
   // ---- per-run plan ----
   confirmPlan: verifyProcedure
     .input(z.object({ operationId: z.string() }))
-    .mutation(async ({ ctx, input }) => ctx.operationModel.confirmVerifyPlan(input.operationId)),
+    .mutation(async ({ ctx, input }) => {
+      const run = await ctx.runModel.ensureForOperation(input.operationId);
+      return ctx.runModel.confirmPlan(run.id);
+    }),
 
   generateDraftPlan: verifyProcedure
     .input(
@@ -188,19 +193,21 @@ export const verifyRouter = router({
 
   getVerifyState: verifyProcedure
     .input(z.object({ operationId: z.string() }))
-    .query(async ({ ctx, input }) => ctx.operationModel.getVerifyState(input.operationId)),
+    .query(async ({ ctx, input }) => ctx.runModel.getStateByOperation(input.operationId)),
 
   skipPlan: verifyProcedure
     .input(z.object({ operationId: z.string() }))
-    .mutation(async ({ ctx, input }) =>
-      ctx.operationModel.updateVerifyStatus(input.operationId, null),
-    ),
+    .mutation(async ({ ctx, input }) => {
+      const run = await ctx.runModel.findByOperation(input.operationId);
+      if (run) await ctx.runModel.updateStatus(run.id, null);
+    }),
 
   updateDraftItems: verifyProcedure
     .input(z.object({ items: z.array(checkItemSchema), operationId: z.string() }))
-    .mutation(async ({ ctx, input }) =>
-      ctx.operationModel.replaceVerifyPlanItems(input.operationId, input.items),
-    ),
+    .mutation(async ({ ctx, input }) => {
+      const run = await ctx.runModel.ensureForOperation(input.operationId);
+      return ctx.runModel.replacePlanItems(run.id, input.items);
+    }),
 
   // ---- results / execution ----
   executeVerify: verifyProcedure
@@ -215,12 +222,16 @@ export const verifyRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       await ctx.executorService.execute(input);
-      return ctx.resultModel.listByOperation(input.operationId);
+      const run = await ctx.runModel.findByOperation(input.operationId);
+      return run ? ctx.resultModel.listByRun(run.id) : [];
     }),
 
   listResults: verifyProcedure
     .input(z.object({ operationId: z.string() }))
-    .query(async ({ ctx, input }) => ctx.resultModel.listByOperation(input.operationId)),
+    .query(async ({ ctx, input }) => {
+      const run = await ctx.runModel.findByOperation(input.operationId);
+      return run ? ctx.resultModel.listByRun(run.id) : [];
+    }),
 
   // ---- feedback (data flywheel) ----
   submitDecision: verifyProcedure

@@ -5,10 +5,10 @@ import type { TracingOptions } from '@lobechat/llm-generation-tracing';
 import type { VerifyCheckItem } from '@lobechat/types';
 import debug from 'debug';
 
-import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DocumentModel } from '@/database/models/document';
 import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
 import { VerifyRubricModel } from '@/database/models/verifyRubric';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { VerifyCriterionItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
@@ -72,7 +72,7 @@ export class VerifyPlanGeneratorService {
   private readonly userId: string;
   private readonly criterionModel: VerifyCriterionModel;
   private readonly rubricModel: VerifyRubricModel;
-  private readonly operationModel: AgentOperationModel;
+  private readonly runModel: VerifyRunModel;
   private readonly documentModel: DocumentModel;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
@@ -80,7 +80,7 @@ export class VerifyPlanGeneratorService {
     this.userId = userId;
     this.criterionModel = new VerifyCriterionModel(db, userId, workspaceId);
     this.rubricModel = new VerifyRubricModel(db, userId, workspaceId);
-    this.operationModel = new AgentOperationModel(db, userId, workspaceId);
+    this.runModel = new VerifyRunModel(db, userId, workspaceId);
     this.documentModel = new DocumentModel(db, userId, workspaceId);
   }
 
@@ -155,9 +155,10 @@ export class VerifyPlanGeneratorService {
     // 3. Aggregate the criteria under the rubric (criteria reusable across rubrics).
     await this.rubricModel.setCriteria(rubric.id, links);
 
-    // 4. Snapshot onto the operation + confirm so it runs when the op completes.
-    await this.operationModel.setVerifyPlan(params.operationId, items);
-    await this.operationModel.confirmVerifyPlan(params.operationId);
+    // 4. Snapshot onto the run + confirm so it runs when the op completes.
+    const run = await this.runModel.ensureForOperation(params.operationId, { title: params.title });
+    await this.runModel.setPlan(run.id, items);
+    await this.runModel.confirmPlan(run.id);
 
     log(
       'created rubric %s with %d criteria for op %s',
@@ -215,7 +216,8 @@ export class VerifyPlanGeneratorService {
       }
     }
 
-    await this.operationModel.setVerifyPlan(params.operationId, items);
+    const run = await this.runModel.ensureForOperation(params.operationId, { goal: params.goal });
+    await this.runModel.setPlan(run.id, items);
     log('generated draft plan for op %s with %d items', params.operationId, items.length);
 
     return items;

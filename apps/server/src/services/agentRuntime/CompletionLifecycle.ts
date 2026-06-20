@@ -6,6 +6,7 @@ import {
   type RecordOperationStartParams,
 } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
+import { VerifyRunModel } from '@/database/models/verifyRun';
 import { type LobeChatDatabase } from '@/database/type';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
 import { buildFinalSnapshotKey } from '@/server/modules/AgentTracing';
@@ -278,11 +279,10 @@ export class CompletionLifecycle {
     userId: string,
   ): Promise<void> {
     try {
-      const operationModel = new AgentOperationModel(this.serverDB, userId);
-      const state = await operationModel.getVerifyState(operationId);
-      if (!state?.verifyPlan?.length) return;
+      const run = await new VerifyRunModel(this.serverDB, userId).findByOperation(operationId);
+      if (!run?.plan?.length) return;
 
-      const op = await operationModel.findById(operationId);
+      const op = await new AgentOperationModel(this.serverDB, userId).findById(operationId);
       if (!op?.topicId) return;
 
       const messageModel = new MessageModel(this.serverDB, userId);

@@ -23,23 +23,23 @@ export class VerifyReportModel {
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, verifyReports);
 
   /**
-   * Write the report for a run. A report is unique per operation (regenerating
-   * overwrites in place), so this upserts on the `operation_id` unique index
+   * Write the report for a session. A report is unique per run (regenerating
+   * overwrites in place), so this upserts on the `verify_run_id` unique index
    * rather than ever inserting a second row.
    */
-  upsertByOperation = async (params: CreateVerifyReport) => {
+  upsertByRun = async (params: CreateVerifyReport) => {
     const values = buildWorkspacePayload(
       { userId: this.userId, workspaceId: this.workspaceId },
       params,
     );
 
-    // `operation_id` is the conflict key, so it's excluded from the update set.
-    const { operationId: _operationId, ...mutable } = values;
+    // `verify_run_id` is the conflict key, so it's excluded from the update set.
+    const { verifyRunId: _verifyRunId, ...mutable } = values;
 
     const [result] = await this.db
       .insert(verifyReports)
       .values(values)
-      .onConflictDoUpdate({ set: mutable, target: verifyReports.operationId })
+      .onConflictDoUpdate({ set: mutable, target: verifyReports.verifyRunId })
       .returning();
 
     return result;
@@ -51,10 +51,10 @@ export class VerifyReportModel {
     });
   };
 
-  /** The single report for one Agent Run, or undefined when not yet generated. */
-  findByOperation = async (operationId: string) => {
+  /** The single report for one verification session, or undefined when not yet generated. */
+  findByRun = async (verifyRunId: string) => {
     return this.db.query.verifyReports.findFirst({
-      where: and(eq(verifyReports.operationId, operationId), this.ownership()),
+      where: and(eq(verifyReports.verifyRunId, verifyRunId), this.ownership()),
     });
   };
 
@@ -66,11 +66,11 @@ export class VerifyReportModel {
   };
 
   /** Record that the user has acknowledged the report. */
-  markReviewed = async (operationId: string) => {
+  markReviewed = async (verifyRunId: string) => {
     return this.db
       .update(verifyReports)
       .set({ reviewedByUser: true })
-      .where(and(eq(verifyReports.operationId, operationId), this.ownership()));
+      .where(and(eq(verifyReports.verifyRunId, verifyRunId), this.ownership()));
   };
 
   delete = async (id: string) => {

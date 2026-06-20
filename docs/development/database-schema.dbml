@@ -2451,7 +2451,8 @@ table user_memory_persona_documents {
 
 table verify_check_results {
   id uuid [pk, not null, default: `gen_random_uuid()`]
-  operation_id text [not null]
+  verify_run_id uuid
+  operation_id text
   user_id text [not null]
   workspace_id text
   check_item_id text [not null]
@@ -2476,9 +2477,10 @@ table verify_check_results {
   created_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
+    verify_run_id [name: 'verify_check_results_verify_run_id_idx']
     operation_id [name: 'verify_check_results_operation_id_idx']
     user_id [name: 'verify_check_results_user_id_idx']
-    (operation_id, check_item_id) [name: 'verify_check_results_operation_id_check_item_id_unique', unique]
+    (verify_run_id, check_item_id) [name: 'verify_check_results_verify_run_id_check_item_id_unique', unique]
     verifier_type [name: 'verify_check_results_verifier_type_idx']
     verifier_operation_id [name: 'verify_check_results_verifier_operation_id_idx']
     verifier_tracing_id [name: 'verify_check_results_verifier_tracing_id_idx']
@@ -2535,6 +2537,7 @@ table verify_evidence {
 
 table verify_reports {
   id uuid [pk, not null, default: `gen_random_uuid()`]
+  verify_run_id uuid
   operation_id text
   user_id text [not null]
   workspace_id text
@@ -2552,7 +2555,8 @@ table verify_reports {
   created_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    operation_id [name: 'verify_reports_operation_id_unique', unique]
+    verify_run_id [name: 'verify_reports_verify_run_id_unique', unique]
+    operation_id [name: 'verify_reports_operation_id_idx']
     user_id [name: 'verify_reports_user_id_idx']
     workspace_id [name: 'verify_reports_workspace_id_idx']
   }
@@ -2588,6 +2592,29 @@ table verify_rubrics {
   indexes {
     user_id [name: 'verify_rubrics_user_id_idx']
     workspace_id [name: 'verify_rubrics_workspace_id_idx']
+  }
+}
+
+table verify_runs {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  user_id text [not null]
+  workspace_id text
+  operation_id text
+  source text [not null, default: 'agent']
+  title text
+  goal text
+  plan jsonb
+  plan_confirmed_at "timestamp with time zone"
+  status text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    user_id [name: 'verify_runs_user_id_idx']
+    workspace_id [name: 'verify_runs_workspace_id_idx']
+    operation_id [name: 'verify_runs_operation_id_unique', unique]
+    source [name: 'verify_runs_source_idx']
   }
 }
 

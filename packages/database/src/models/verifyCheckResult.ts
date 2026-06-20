@@ -47,12 +47,12 @@ export class VerifyCheckResultModel {
     });
   };
 
-  /** All results for one Agent Run, ordered by display index. */
-  listByOperation = async (operationId: string): Promise<VerifyCheckResultItem[]> => {
+  /** All results for one verification session, ordered by display index. */
+  listByRun = async (verifyRunId: string): Promise<VerifyCheckResultItem[]> => {
     return this.db
       .select()
       .from(verifyCheckResults)
-      .where(and(eq(verifyCheckResults.operationId, operationId), this.ownership()))
+      .where(and(eq(verifyCheckResults.verifyRunId, verifyRunId), this.ownership()))
       .orderBy(asc(verifyCheckResults.checkItemIndex));
   };
 
@@ -64,12 +64,12 @@ export class VerifyCheckResultModel {
   };
 
   /**
-   * Update a result by its stable `(operationId, checkItemId)` key rather than
+   * Update a result by its stable `(verifyRunId, checkItemId)` key rather than
    * the row id — used by the executor / batch judge which produces verdicts keyed
    * by check item id, never by array position.
    */
   updateByCheckItem = async (
-    operationId: string,
+    verifyRunId: string,
     checkItemId: string,
     value: Partial<Omit<VerifyCheckResultItem, 'id' | 'userId'>>,
   ) => {
@@ -78,7 +78,7 @@ export class VerifyCheckResultModel {
       .set(value)
       .where(
         and(
-          eq(verifyCheckResults.operationId, operationId),
+          eq(verifyCheckResults.verifyRunId, verifyRunId),
           eq(verifyCheckResults.checkItemId, checkItemId),
           this.ownership(),
         ),
@@ -92,14 +92,14 @@ export class VerifyCheckResultModel {
    * backfilled only once that row exists. Idempotent — only fills `NULL`s and is
    * scoped to the items judged in this call (a batch shares one tracing id).
    */
-  backfillTracingId = async (operationId: string, checkItemIds: string[], tracingId: string) => {
+  backfillTracingId = async (verifyRunId: string, checkItemIds: string[], tracingId: string) => {
     if (checkItemIds.length === 0) return;
     return this.db
       .update(verifyCheckResults)
       .set({ verifierTracingId: tracingId })
       .where(
         and(
-          eq(verifyCheckResults.operationId, operationId),
+          eq(verifyCheckResults.verifyRunId, verifyRunId),
           this.ownership(),
           inArray(verifyCheckResults.checkItemId, checkItemIds),
           isNull(verifyCheckResults.verifierTracingId),
