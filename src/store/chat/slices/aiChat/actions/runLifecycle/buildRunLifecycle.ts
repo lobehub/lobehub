@@ -43,6 +43,35 @@ const normalizeClientRuntimeCompleteStatus = (
   return undefined;
 };
 
+/** The effective terminal disposition a run ended on, transport-agnostic. */
+type TerminalDisposition = 'cancelled' | 'failed' | 'success';
+
+/**
+ * Resolve the terminal disposition from EITHER the client's raw `runtimeStatus`
+ * (`AgentState['status']`) OR the normalized cross-runtime `status` that gateway
+ * / hetero supply. This lets `completeRun` drive the same store/UI side effects
+ * regardless of which transport reached the terminal boundary.
+ *
+ * `cancelled` / `undefined` deliberately do not complete the operation here — the
+ * client cancel path already moves the operation to its terminal state out of
+ * band; gateway/hetero cancel completion is handled when those transports are
+ * wired in.
+ */
+const resolveTerminalDisposition = (
+  event: Pick<RunCompleteEvent, 'runtimeStatus' | 'status'>,
+): TerminalDisposition | undefined => {
+  const { runtimeStatus, status } = event;
+  // Client drives off the raw runtime status.
+  if (runtimeStatus === 'done') return 'success';
+  if (runtimeStatus === 'error') return 'failed';
+  if (runtimeStatus === 'interrupted') return 'cancelled';
+  // Gateway / hetero drive off the normalized terminal status.
+  if (status === 'completed') return 'success';
+  if (status === 'failed') return 'failed';
+  if (status === 'cancelled') return 'cancelled';
+  return undefined;
+};
+
 const findCompletionAssistantMessageId = (
   messages: UIChatMessage[],
   parentMessageId: string,
@@ -107,6 +136,11 @@ export const buildRunLifecycle = (
   const contextKey = messageKey;
 
   const emitComplete = (operationId: string, runtimeStatus: AgentState['status'] | undefined) => {
+    // `client.runtime.complete` is a CLIENT-only source event (browser → server
+    // policy pipeline). Gateway / hetero emit their own `client.gateway.*` events
+    // at their transport boundaries, so the shared lifecycle must not emit it for
+    // them.
+    if (adapter.runtimeType !== 'client') return;
     const finalMessages = get().messagesMap[messageKey] || [];
     const assistantMessageId =
       findCompletionAssistantMessageId(finalMessages, parentMessageId, parentMessageType) ??
@@ -171,10 +205,25 @@ export const buildRunLifecycle = (
       void operationId;
     },
     beforeRunComplete: NOOP,
-    completeRun: async ({
-      operationId,
-      runtimeStatus,
-    }: RunCompleteEvent): Promise<RunCompleteResult> => {
+    completeRun: async (event: RunCompleteEvent): Promise<RunCompleteResult> => {
+      const { operationId, runtimeStatus } = event;
+      // Effective terminal disposition, resolved from the client `runtimeStatus`
+      // OR the normalized `status` gateway/hetero pass — so the same side effects
+      // fire regardless of which transport reached this boundary.
+      const disposition = resolveTerminalDisposition(event);
+
+      const completeSuccess = () => {
+        get().completeOperation(operationId);
+        const completedOp = get().operations[operationId];
+        if (completedOp?.context.agentId) {
+          get().markTopicUnread({
+            agentId: completedOp.context.agentId,
+            groupId: completedOp.context.groupId,
+            topicId: completedOp.context.topicId,
+          });
+        }
+      };
+
       // 1. afterCompletion callbacks — fire on ALL terminal states (tools that
       //    registered post-run actions: speak / broadcast / delegate).
       const operation = get().operations[operationId];
@@ -192,22 +241,12 @@ export const buildRunLifecycle = (
 
       // 2. On success with queued messages: drain, complete, and re-trigger a new
       //    sendMessage. Only drain on success — on error the queue is preserved.
-      if (runtimeStatus === 'done') {
+      if (disposition === 'success') {
         const remainingQueued = get().drainQueuedMessages(contextKey);
         if (remainingQueued.length > 0) {
           const merged = mergeQueuedMessages(remainingQueued);
 
-          get().completeOperation(operationId);
-
-          const completedOp = get().operations[operationId];
-          if (completedOp?.context.agentId) {
-            get().markTopicUnread({
-              agentId: completedOp.context.agentId,
-              groupId: completedOp.context.groupId,
-              topicId: completedOp.context.topicId,
-            });
-          }
-
+          completeSuccess();
           emitComplete(operationId, runtimeStatus);
 
           const execContext = { ...context };
@@ -239,29 +278,22 @@ export const buildRunLifecycle = (
         }
       }
 
-      // 3. Complete the operation based on the terminal state.
-      switch (runtimeStatus) {
-        case 'done': {
-          get().completeOperation(operationId);
-          const completedOp = get().operations[operationId];
-          if (completedOp?.context.agentId) {
-            get().markTopicUnread({
-              agentId: completedOp.context.agentId,
-              groupId: completedOp.context.groupId,
-              topicId: completedOp.context.topicId,
-            });
-          }
+      // 3. Complete the operation based on the terminal disposition.
+      switch (disposition) {
+        case 'success': {
+          completeSuccess();
           break;
         }
-        case 'error': {
+        case 'failed': {
           get().failOperation(operationId, {
             type: 'runtime_error',
             message: 'Agent runtime execution failed',
           });
           break;
         }
-        // Parked states (`waiting_for_human` / `waiting_for_async_tool`) never
-        // reach `completeRun` — the executor routes them to `onRunParked`.
+        // `cancelled` / `undefined`: the operation already reached its terminal
+        // state out of band (client cancel path). Parked states never reach
+        // `completeRun` — the executor routes them to `onRunParked`.
       }
 
       emitComplete(operationId, runtimeStatus);
