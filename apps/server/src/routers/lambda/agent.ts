@@ -293,25 +293,6 @@ export const agentRouter = router({
       ];
     }),
 
-  /**
-   * Query non-virtual agents with optional keyword filter.
-   * Returns agents with minimal info (id, title, description, avatar, backgroundColor).
-   * Used by AddGroupMemberModal and group-management tool to search/select agents.
-   */
-  queryAgents: agentProcedure
-    .input(
-      z
-        .object({
-          keyword: z.string().optional(),
-          limit: z.number().max(100).optional(),
-          offset: z.number().optional(),
-        })
-        .optional(),
-    )
-    .query(async ({ input, ctx }) => {
-      return ctx.agentModel.queryAgents(input);
-    }),
-
   rankAgents: agentProcedure.input(z.number().max(50).optional()).query(async ({ ctx, input }) => {
     return ctx.agentModel.rank(input);
   }),
@@ -458,21 +439,6 @@ export const agentRouter = router({
 
       // Use AgentService to update and return the updated agent data
       return ctx.agentService.updateAgentConfig(input.agentId, input.value);
-    }),
-
-  /**
-   * Pin or unpin an agent
-   */
-  updateAgentPinned: agentProcedure
-    .use(withScopedPermission('agent:update'))
-    .input(
-      z.object({
-        id: z.string(),
-        pinned: z.boolean(),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      return ctx.agentModel.update(input.id, { pinned: input.pinned });
     }),
 
   acquireAgentLock: agentProcedure

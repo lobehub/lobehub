@@ -49,14 +49,6 @@ const topicProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
 });
 
 export const topicRouter = router({
-  getTopicDetail: topicProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ input, ctx }) => {
-      const topic = await ctx.topicModel.findById(input.id);
-      if (!topic) return null;
-      return topic;
-    }),
-
   getTopicContext: topicProcedure
     .input(z.object({ topicId: z.string() }))
     .query(async ({ input, ctx }) => {
@@ -134,39 +126,6 @@ export const topicRouter = router({
       return { added: data.length, ids: [], skips: [], success: true };
     }),
 
-  batchDelete: topicProcedure
-    .use(withScopedPermission('topic:delete'))
-    .input(z.object({ ids: z.array(z.string()) }))
-    .mutation(async ({ input, ctx }) => {
-      return ctx.topicModel.batchDelete(input.ids);
-    }),
-
-  batchDeleteByAgentId: topicProcedure
-    .use(withScopedPermission('topic:delete'))
-    .input(z.object({ agentId: z.string() }))
-    .mutation(async ({ input, ctx }) => {
-      return ctx.topicModel.batchDeleteByAgentId(input.agentId);
-    }),
-
-  batchDeleteBySessionId: topicProcedure
-    .use(withScopedPermission('topic:delete'))
-    .input(
-      z.object({
-        agentId: z.string().optional(),
-        id: z.string().nullable().optional(),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      const resolved = await resolveContext(
-        { agentId: input.agentId, sessionId: input.id },
-        ctx.serverDB,
-        ctx.userId,
-        ctx.workspaceId ?? undefined,
-      );
-
-      return ctx.topicModel.batchDeleteBySessionId(resolved.sessionId);
-    }),
-
   batchMoveTopics: topicProcedure
     .use(withScopedPermission('topic:update'))
     .input(
@@ -186,22 +145,6 @@ export const topicRouter = router({
       const data = await ctx.topicModel.duplicate(input.id, input.newTitle);
 
       return data.topic.id;
-    }),
-
-  countTopics: topicProcedure
-    .input(
-      z
-        .object({
-          agentId: z.string().optional(),
-          containerId: z.string().nullable().optional(),
-          endDate: z.string().optional(),
-          range: z.tuple([z.string(), z.string()]).optional(),
-          startDate: z.string().optional(),
-        })
-        .optional(),
-    )
-    .query(async ({ ctx, input }) => {
-      return ctx.topicModel.count(input);
     }),
 
   createTopic: topicProcedure
@@ -254,19 +197,6 @@ export const topicRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       return ctx.topicShareModel.create(input.topicId, input.visibility);
-    }),
-
-  queryTopics: topicProcedure
-    .input(
-      z
-        .object({
-          pageSize: z.number().max(500).optional(),
-          statuses: z.array(z.string()).optional(),
-        })
-        .optional(),
-    )
-    .query(async ({ input, ctx }) => {
-      return ctx.topicModel.queryTopics({ pageSize: input?.pageSize, statuses: input?.statuses });
     }),
 
   getShareInfo: topicProcedure
@@ -537,19 +467,6 @@ export const topicRouter = router({
           updatedAt: topic.updatedAt,
         };
       });
-    }),
-
-  removeAllTopics: topicProcedure
-    .use(withScopedPermission('topic:delete'))
-    .mutation(async ({ ctx }) => {
-      return ctx.topicModel.deleteAll();
-    }),
-
-  removeTopic: topicProcedure
-    .use(withScopedPermission('topic:delete'))
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ input, ctx }) => {
-      return ctx.topicModel.delete(input.id);
     }),
 
   searchTopics: topicProcedure

@@ -310,32 +310,6 @@ describe('agentRouter', () => {
     });
   });
 
-  describe('updateAgentPinned', () => {
-    it('should pin an agent', async () => {
-      const mockInput = {
-        id: 'agent1',
-        pinned: true,
-      };
-
-      const caller = agentRouter.createCaller(mockCtx);
-      await caller.updateAgentPinned(mockInput);
-
-      expect(agentModelMock.update).toHaveBeenCalledWith(mockInput.id, { pinned: true });
-    });
-
-    it('should unpin an agent', async () => {
-      const mockInput = {
-        id: 'agent1',
-        pinned: false,
-      };
-
-      const caller = agentRouter.createCaller(mockCtx);
-      await caller.updateAgentPinned(mockInput);
-
-      expect(agentModelMock.update).toHaveBeenCalledWith(mockInput.id, { pinned: false });
-    });
-  });
-
   describe('edit lock', () => {
     const wsCtx = () => ({ ...mockCtx, workspaceId: 'ws-1' });
 

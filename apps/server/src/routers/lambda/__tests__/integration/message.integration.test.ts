@@ -785,44 +785,6 @@ describe('Message Router Integration Tests', () => {
     });
   });
 
-  describe('removeAllMessages', () => {
-    it('should remove all messages for the user', async () => {
-      const caller = messageRouter.createCaller(createTestContext(userId));
-
-      // Create multiple sessions and messages
-      await caller.createMessage({
-        content: 'Message 1',
-        role: 'user',
-        sessionId: testSessionId,
-      });
-
-      const [anotherSession] = await serverDB
-        .insert(sessions)
-        .values({
-          userId,
-          type: 'agent',
-        })
-        .returning();
-
-      await caller.createMessage({
-        content: 'Message 2',
-        role: 'user',
-        sessionId: anotherSession.id,
-      });
-
-      // Delete all messages
-      await caller.removeAllMessages();
-
-      // Verify all messages were deleted
-      const remainingMessages = await serverDB
-        .select()
-        .from(messages)
-        .where(eq(messages.userId, userId));
-
-      expect(remainingMessages).toHaveLength(0);
-    });
-  });
-
   describe('removeMessageQuery', () => {
     it('should remove message query', async () => {
       const caller = messageRouter.createCaller(createTestContext(userId));
@@ -1494,47 +1456,6 @@ describe('Message Router Integration Tests', () => {
   });
 
   describe('count and statistics', () => {
-    it('should count messages', async () => {
-      const caller = messageRouter.createCaller(createTestContext(userId));
-
-      // Create message
-      await caller.createMessage({
-        content: 'Message 1',
-        role: 'user',
-        sessionId: testSessionId,
-      });
-
-      await caller.createMessage({
-        content: 'Message 2',
-        role: 'assistant',
-        sessionId: testSessionId,
-      });
-
-      const count = await caller.count();
-
-      expect(count).toBe(2);
-    });
-
-    it('should count messages with date range', async () => {
-      const caller = messageRouter.createCaller(createTestContext(userId));
-
-      await caller.createMessage({
-        content: 'Message 1',
-        role: 'user',
-        sessionId: testSessionId,
-      });
-
-      const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const endDate = new Date().toISOString();
-
-      const count = await caller.count({
-        startDate,
-        endDate,
-      });
-
-      expect(count).toBeGreaterThanOrEqual(1);
-    });
-
     it('should count words', async () => {
       const caller = messageRouter.createCaller(createTestContext(userId));
 

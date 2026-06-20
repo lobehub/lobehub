@@ -126,22 +126,6 @@ export const knowledgeBaseRouter = router({
     return ctx.knowledgeBaseModel.query();
   }),
 
-  removeAllKnowledgeBases: knowledgeBaseProcedure
-    .use(withScopedPermission('knowledge_base:delete'))
-    .mutation(async ({ ctx }) => {
-      const result = await ctx.knowledgeBaseModel.deleteAllWithFiles(
-        serverDBEnv.REMOVE_GLOBAL_FILE,
-      );
-
-      if (result.deletedFiles.length > 0) {
-        const fileService = new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
-        const urls = result.deletedFiles.map((f) => f.url).filter(Boolean) as string[];
-        if (urls.length > 0) {
-          await fileService.deleteFiles(urls);
-        }
-      }
-    }),
-
   removeFilesFromKnowledgeBase: knowledgeBaseProcedure
     .use(withScopedPermission('knowledge_base:update'))
     .input(z.object({ ids: z.array(z.string()), knowledgeBaseId: z.string() }))
@@ -159,7 +143,12 @@ export const knowledgeBaseRouter = router({
       );
 
       if (result.deletedFiles.length > 0) {
-        const fileService = new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
+        const fileService = new FileService(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+          ctx.kratosSessionToken,
+        );
         const urls = result.deletedFiles.map((f) => f.url).filter(Boolean) as string[];
         if (urls.length > 0) {
           await fileService.deleteFiles(urls);

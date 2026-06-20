@@ -33,7 +33,7 @@ const messageProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
   return opts.next({
     ctx: {
       compressionRepo: new CompressionRepository(ctx.serverDB, ctx.userId, wsId),
-      fileService: new FileService(ctx.serverDB, ctx.userId, wsId),
+      fileService: new FileService(ctx.serverDB, ctx.userId, wsId, ctx.kratosSessionToken),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId, wsId),
       messageService: new MessageService(ctx.serverDB, ctx.userId, wsId),
     },
@@ -86,33 +86,6 @@ export const messageRouter = router({
         threadId,
         topicId,
       });
-    }),
-
-  listAll: messageProcedure
-    .input(
-      z
-        .object({
-          current: z.number().optional(),
-          pageSize: z.number().optional(),
-        })
-        .optional(),
-    )
-    .query(async ({ ctx, input }) => {
-      return ctx.messageModel.queryAll(input);
-    }),
-
-  count: messageProcedure
-    .input(
-      z
-        .object({
-          endDate: z.string().optional(),
-          range: z.tuple([z.string(), z.string()]).optional(),
-          startDate: z.string().optional(),
-        })
-        .optional(),
-    )
-    .query(async ({ ctx, input }) => {
-      return ctx.messageModel.count(input);
     }),
 
   countWords: messageProcedure
@@ -231,7 +204,12 @@ export const messageRouter = router({
         );
 
         const messageModel = new MessageModel(ctx.serverDB, share.ownerId);
-        const fileService = new FileService(ctx.serverDB, share.ownerId);
+        const fileService = new FileService(
+          ctx.serverDB,
+          share.ownerId,
+          undefined,
+          ctx.kratosSessionToken,
+        );
 
         return messageModel.query(
           { ...queryParams, topicId: share.topicId },
@@ -249,7 +227,7 @@ export const messageRouter = router({
 
       const wsId = ctx.workspaceId ?? undefined;
       const messageModel = new MessageModel(ctx.serverDB, ctx.userId, wsId);
-      const fileService = new FileService(ctx.serverDB, ctx.userId, wsId);
+      const fileService = new FileService(ctx.serverDB, ctx.userId, wsId, ctx.kratosSessionToken);
 
       return messageModel.query(queryParams, {
         postProcessUrl: (path, file) => fileService.getFileAccessUrl({ id: file.id, url: path }),
@@ -259,12 +237,6 @@ export const messageRouter = router({
   rankModels: messageProcedure.query(async ({ ctx }) => {
     return ctx.messageModel.rankModels();
   }),
-
-  removeAllMessages: messageProcedure
-    .use(withScopedPermission('message:delete'))
-    .mutation(async ({ ctx }) => {
-      return ctx.messageModel.deleteAllMessages();
-    }),
 
   removeMessage: messageProcedure
     .use(withScopedPermission('message:delete'))

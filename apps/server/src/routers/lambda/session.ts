@@ -9,8 +9,6 @@ import { insertAgentSchema, insertSessionSchema } from '@/database/schemas';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentChatConfigSchema } from '@/types/agent';
-import { LobeMetaDataSchema } from '@/types/meta';
-import { type BatchTaskResult } from '@/types/service';
 import { type ChatSessionList, type LobeGroupSession } from '@/types/session';
 
 const sessionProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
@@ -27,39 +25,11 @@ const sessionProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) 
 
 /**
  * @deprecated Session router is legacy. Use agent router for agent CRUD operations.
- * Session-based agent creation (createSession, batchCreateSessions) should migrate
+ * Session-based agent creation (createSession) should migrate
  * to agent.createAgent which uses agentModel.create directly.
  * Session query/update methods are still used by mobile but should be migrated.
  */
 export const sessionRouter = router({
-  /** @deprecated Use agent.createAgent instead */
-  batchCreateSessions: sessionProcedure
-    .use(withScopedPermission('session:create'))
-    .input(
-      z.array(
-        z
-          .object({
-            config: z.object({}).passthrough(),
-            group: z.string().optional(),
-            id: z.string(),
-            meta: LobeMetaDataSchema,
-            pinned: z.boolean().optional(),
-            type: z.string(),
-          })
-          .partial(),
-      ),
-    )
-    .mutation(async ({ input, ctx }): Promise<BatchTaskResult> => {
-      const data = await ctx.sessionModel.batchCreate(
-        input.map((item) => ({
-          ...item,
-          ...item.meta,
-        })) as any,
-      );
-
-      return { added: data.rowCount as number, ids: [], skips: [], success: true };
-    }),
-
   cloneSession: sessionProcedure
     .use(withScopedPermission('session:create'))
     .input(z.object({ id: z.string(), newTitle: z.string() }))
