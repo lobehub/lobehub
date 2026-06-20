@@ -40,6 +40,8 @@ import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGr
 import { selectRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
 import { resolveHeteroResume } from '@/store/chat/slices/aiChat/actions/heteroResume';
 import { dispatchNonHeteroSubAgent } from '@/store/chat/slices/aiChat/actions/nonHeteroSubAgentDispatcher';
+import { buildRunLifecycle } from '@/store/chat/slices/aiChat/actions/runLifecycle/buildRunLifecycle';
+import type { RunScope } from '@/store/chat/slices/aiChat/actions/runLifecycle/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 import { type ChatStore } from '@/store/chat/store';
@@ -465,6 +467,21 @@ export class ConversationLifecycleActionImpl {
       },
     });
 
+    // Shared run lifecycle for the post-persist topic-title hook. Built once here
+    // so all three runtime branches fire the SAME `afterUserMessagePersisted`
+    // (LOBE-10379 "补齐缺列 title" — gateway/hetero previously had no LLM title).
+    // `parentMessage*` are unused by this hook.
+    const sendRunScope: RunScope =
+      operationContext.scope === 'sub_agent' ? 'sub_agent' : 'top_level';
+    const sendRunLifecycle = buildRunLifecycle(this.#get, {
+      context: operationContext,
+      parentMessageId: parentId ?? tempId,
+      parentMessageType: 'user',
+      runId: operationId,
+      runScope: sendRunScope,
+      runtimeType,
+    });
+
     // Construct local media preview for server-mode temporary messages (S3 URL takes priority).
     // Use the captured `files` param (not the global file store) so the optimistic preview
     // also works on the queue-drain path, where chatUploadFileList has already been cleared.
@@ -645,6 +662,22 @@ export class ConversationLifecycleActionImpl {
       // Complete sendMessage operation, start ACP execution as child operation
       this.#get().completeOperation(operationId);
 
+      // Topic title (LOBE-10379): hetero used to set only a sliced placeholder
+      // title on new topics — upgrade it to the LLM summary via the shared hook
+      // (reads the just-persisted conversation from the store). Fire-and-forget.
+      void sendRunLifecycle
+        .afterUserMessagePersisted({
+          assistantMessageId: heteroData.assistantMessageId,
+          context: heteroContext,
+          isCreateNewTopic: heteroData.isCreateNewTopic,
+          operationId,
+          runId: operationId,
+          runScope: sendRunScope,
+          runtimeType,
+          topicId: heteroData.topicId,
+        })
+        .catch(console.error);
+
       // Clear editor temp state — the user's message is already persisted, so
       // a later Stop click must NOT restore it into the input (would feel like
       // the app re-sent the message). Client/Gateway paths clear this at
@@ -732,6 +765,25 @@ export class ConversationLifecycleActionImpl {
           // messages with the server's real IDs.
           tempMessageIds: [tempAssistantId],
         });
+
+        // Topic title (LOBE-10379): gateway-created topics had no LLM-summarized
+        // title. executeGatewayAgent has already replaced messages + switched to
+        // the new topic, so the shared hook reads the persisted conversation from
+        // the store and titles it. Fire-and-forget.
+        if (result.topicId) {
+          void sendRunLifecycle
+            .afterUserMessagePersisted({
+              assistantMessageId: result.assistantMessageId,
+              context: { ...operationContext, topicId: result.topicId },
+              isCreateNewTopic: !operationContext.topicId,
+              operationId,
+              runId: operationId,
+              runScope: sendRunScope,
+              runtimeType,
+              topicId: result.topicId,
+            })
+            .catch(console.error);
+        }
 
         return {
           assistantMessageId: result.assistantMessageId,
@@ -976,46 +1028,23 @@ export class ConversationLifecycleActionImpl {
 
     if (data.topicId) this.#get().internal_updateTopicLoading(data.topicId, true);
 
-    // Dev-only fast path: fall back to slicing the first user message instead of calling
-    // the LLM. Keeps chat logs uncluttered while still giving the topic a usable title.
-    // Only honored in non-production builds so a misconfigured prod env can't disable it.
-    const shouldSliceTopicTitle = __DEV__ && process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC === '1';
-
-    const applyTopicTitle = async (topicId: string, messages: UIChatMessage[]) => {
-      if (!shouldSliceTopicTitle) {
-        await this.#get().summaryTopicTitle(topicId, messages);
-        return;
-      }
-
-      const firstUserText = messages.find((m) => m.role === 'user')?.content?.trim() ?? '';
-      const title = markdownToTxt(firstUserText).slice(0, 80) || 'New Topic';
-      await this.#get().internal_updateTopic(topicId, { title });
-      // summaryTopicTitle would normally clear loading via onLoadingChange; do it manually.
-      this.#get().internal_updateTopicLoading(topicId, false);
-      console.info('[dev] sliced topic title (NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC=1):', title);
-    };
-
-    const summaryTitle = async () => {
-      // check activeTopic and then auto update topic title
-      if (data.isCreateNewTopic) {
-        await applyTopicTitle(data.topicId, data.messages);
-        return;
-      }
-
-      if (!data.topicId) return;
-
-      const topic = topicSelectors.getTopicById(data.topicId)(this.#get());
-
-      if (topic && !topic.title) {
-        const chats = displayMessageSelectors
-          .getDisplayMessagesByKey(messageMapKey({ agentId, topicId: topic.id }))(this.#get())
-          .filter((item) => item.id !== data.assistantMessageId);
-
-        await applyTopicTitle(topic.id, chats);
-      }
-    };
-
-    summaryTitle().catch(console.error);
+    // Topic title auto-generation, now via the shared `afterUserMessagePersisted`
+    // hook (LOBE-10379). The client passes its freshly-created `data.messages`
+    // (not yet in the store under the real topicId); gateway/hetero call the same
+    // hook from their branches and let it read the persisted conversation.
+    void sendRunLifecycle
+      .afterUserMessagePersisted({
+        assistantMessageId: data.assistantMessageId,
+        context: operationContext,
+        isCreateNewTopic: data.isCreateNewTopic,
+        messages: data.messages,
+        operationId,
+        runId: operationId,
+        runScope: sendRunScope,
+        runtimeType,
+        topicId: data.topicId,
+      })
+      .catch(console.error);
 
     // Complete sendMessage operation here - message creation is done
     // execAgentRuntime is a separate operation (child) that handles AI response generation

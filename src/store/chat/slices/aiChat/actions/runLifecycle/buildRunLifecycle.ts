@@ -13,14 +13,17 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { messageMapKey } from '../../../../utils/messageMapKey';
 import { topicMapKey } from '../../../../utils/topicMapKey';
+import { displayMessageSelectors } from '../../../message/selectors/displayMessage';
 import type { OperationStatus } from '../../../operation/types';
 import { mergeQueuedMessages, reconstructUploadFilesFromQueue } from '../../../operation/types';
+import { topicSelectors } from '../../../topic/selectors';
 import type {
   AgentRunLifecycle,
   RunCompleteEvent,
   RunCompleteResult,
   RunParkedEvent,
   RunScope,
+  UserMessagePersistedEvent,
 } from './types';
 
 /**
@@ -169,7 +172,62 @@ export const buildRunLifecycle = (
   };
 
   return {
-    afterUserMessagePersisted: NOOP,
+    afterUserMessagePersisted: async (event: UserMessagePersistedEvent) => {
+      // Topic title auto-generation. Single home for all three runtimes
+      // (LOBE-10379 "补齐缺列 title"): the client used to do this inline in
+      // sendMessage and gateway/hetero had no LLM-summarized title at all.
+      // Top-level only — a nested sub-agent / `/compact` run must not retitle the
+      // user's topic. See RunScope.
+      if (adapter.runScope !== 'top_level') return;
+      const { isCreateNewTopic, topicId, assistantMessageId } = event;
+      if (!topicId) return;
+
+      // Dev-only fast path: slice the first user message instead of calling the
+      // LLM. Only honored in non-production builds. Relocated verbatim.
+      const shouldSliceTopicTitle =
+        __DEV__ && process.env.NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC === '1';
+
+      const applyTopicTitle = async (tid: string, messages: UIChatMessage[]) => {
+        if (!shouldSliceTopicTitle) {
+          await get().summaryTopicTitle(tid, messages);
+          return;
+        }
+        const firstUserText = messages.find((m) => m.role === 'user')?.content?.trim() ?? '';
+        const title = markdownToTxt(firstUserText).slice(0, 80) || 'New Topic';
+        await get().internal_updateTopic(tid, { title });
+        // summaryTopicTitle would normally clear loading via onLoadingChange; do it manually.
+        get().internal_updateTopicLoading(tid, false);
+        console.info('[dev] sliced topic title (NEXT_PUBLIC_DEV_DISABLE_AUTO_TOPIC=1):', title);
+      };
+
+      const readStoreChats = () =>
+        displayMessageSelectors.getDisplayMessagesByKey(messageMapKey({ agentId, topicId }))(get());
+
+      // New topic → always title. Use caller-provided messages when present
+      // (client's freshly-created rows aren't in the store under topicId yet);
+      // otherwise read the persisted conversation from the store (gateway/hetero).
+      if (isCreateNewTopic) {
+        // The gateway path adds the new topic via a FIRE-AND-FORGET refreshTopic
+        // (gateway.ts), so it may not be in the store yet — and `summaryTopicTitle`
+        // bails on a missing topic. Load it first when absent (client / hetero
+        // already inserted it synchronously, so this is a no-op for them).
+        if (!topicSelectors.getTopicById(topicId)(get())) {
+          await get()
+            .refreshTopic()
+            .catch(() => {});
+        }
+        await applyTopicTitle(topicId, event.messages ?? readStoreChats());
+        return;
+      }
+
+      // Existing topic → title only when it still has none. Read from the store,
+      // excluding the just-created assistant placeholder.
+      const topic = topicSelectors.getTopicById(topicId)(get());
+      if (topic && !topic.title) {
+        const chats = readStoreChats().filter((item) => item.id !== assistantMessageId);
+        await applyTopicTitle(topicId, chats);
+      }
+    },
     afterRunComplete: async (event: RunCompleteEvent) => {
       // Desktop notification + dock badge. Single home for all three runtimes'
       // completion notification (LOBE-10379 "通知去重，统一到 afterRunComplete").
