@@ -1320,6 +1320,63 @@ describe('ClaudeCodeAdapter', () => {
       expect(types).not.toContain('stream_end');
       expect(types).not.toContain('stream_start');
     });
+
+    // ── Regression: post-tool text must not coalesce onto the tool-issuing turn ──
+    // Observed on a DEVICE (batch / `lh hetero exec`) Claude Code run — topic
+    // tpc_58GZ5d8NGPLx, assistant msg_orSJYzAH9HEL9Gb4k3. That run persisted the
+    // final answer text AND the 2 Bash `tool_use` blocks onto a SINGLE assistant
+    // message (the tool-issuing seed, no `metadata.mainMessageId`), while a
+    // trailing EMPTY assistant shell (msg_MUtsnMCWkbtBwcLlAH — content_len=0,
+    // `metadata.mainMessageId` set) was spawned. Downstream the renderer then
+    // drops the "Bash (2)" block BELOW the answer because text + tool_use share
+    // one message.
+    //
+    // Proximate cause: when CC reuses a `message.id` to stream the post-tool
+    // continuation (the model answering after a `tool_result`), the
+    // `messageId === this.currentMessageId` short-circuit in `openMainMessage`
+    // returns `[]` → no `newStep` → the text anchors to the same assistant that
+    // issued the tool calls. A turn that has ALREADY emitted `tool_use` must open
+    // a new step before absorbing post-tool text, so the answer lands on its own
+    // assistant (chained after the tool results).
+    //
+    // Fixed in `openMainMessage` / `handleAssistant`: a text-only event on the
+    // in-flight message.id that already emitted a tool_use now forces a step
+    // boundary so the answer anchors to its own assistant.
+    it('opens a new step for post-tool text that reuses the tool_use message.id (regression: tpc_58GZ5d8NGPLx)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      // 1. Assistant issues a tool_use under msg_1.
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [
+            { id: 'tu_1', input: { command: 'mock command' }, name: 'Bash', type: 'tool_use' },
+          ],
+        },
+        type: 'assistant',
+      });
+
+      // 2. Tool returns.
+      adapter.adapt({
+        message: {
+          content: [{ content: 'mock tool output', tool_use_id: 'tu_1', type: 'tool_result' }],
+        },
+        type: 'user',
+      });
+
+      // 3. Model continues with the final answer — CC REUSES msg_1 for this
+      //    post-tool text instead of minting a fresh message.id.
+      const events = adapter.adapt({
+        message: { id: 'msg_1', content: [{ text: 'mock post-tool answer', type: 'text' }] },
+        type: 'assistant',
+      });
+
+      // Desired: a step boundary precedes the post-tool text so it anchors to a
+      // NEW assistant, not the tool-issuing turn.
+      const newStep = events.find((e) => e.type === 'stream_start' && e.data?.newStep);
+      expect(newStep).toBeDefined();
+    });
   });
 
   describe('usage and model extraction', () => {
