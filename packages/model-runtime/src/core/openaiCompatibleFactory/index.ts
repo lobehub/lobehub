@@ -47,6 +47,8 @@ import { desensitizeUrl } from '../../utils/desensitizeUrl';
 import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { handleOpenAIError } from '../../utils/handleOpenAIError';
+import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
+import { withMappedModelId } from '../../utils/modelIdMapping';
 import { detectModelProvider } from '../../utils/modelParse';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import {
@@ -102,7 +104,9 @@ export const CHAT_MODELS_BLOCK_LIST = [
 // OpenAI SDK v6 widened `apiKey` to `string | ApiKeySetter`; lobehub only ever
 // passes a plain string, so narrow it back to keep `.trim()` / string assignments valid.
 type LobeClientOptions = Omit<ClientOptions, 'apiKey'> & { apiKey?: string };
-type ConstructorOptions<T extends Record<string, any> = any> = LobeClientOptions & T;
+type ConstructorOptions<T extends Record<string, any> = any> = LobeClientOptions &
+  ModelIdMappingOptions &
+  T;
 type OpenAIExtraParams = { prompt_cache_key?: string; safety_identifier?: string };
 type ChatCompletionCreateParamsWithPromptCacheKey = Omit<
   OpenAI.ChatCompletionCreateParamsNonStreaming,
@@ -475,12 +479,13 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       try {
         const log = debug(`${this.logPrefix}:chat`);
         const inputStartAt = Date.now();
+        const requestPayload = withMappedModelId(payload, this._options);
 
         log('chat called with model: %s, stream: %s', payload.model, payload.stream ?? true);
 
-        let processedPayload: any = payload;
-        const userApiMode = (payload as any).apiMode as string | undefined;
-        const modelId = (payload as any).model as string | undefined;
+        let processedPayload: any = requestPayload;
+        const userApiMode = (requestPayload as any).apiMode as string | undefined;
+        const modelId = (requestPayload as any).model as string | undefined;
 
         const instanceChat = ((this._options as any).chatCompletion || {}) as {
           useResponse?: boolean;
@@ -501,7 +506,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         });
 
         if (shouldUseResponses) {
-          processedPayload = { ...payload, apiMode: 'responses' } as any;
+          processedPayload = { ...requestPayload, apiMode: 'responses' } as any;
         }
 
         // Pre-flight: abort doomed requests before invoking handlePayload so
@@ -521,7 +526,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             } as OpenAI.ChatCompletionCreateParamsStreaming);
 
         if ((handledPayload as any).apiMode === 'responses') {
-          return await this.handleResponseAPIMode(processedPayload, options);
+          return await this.handleResponseAPIMode(processedPayload, options, payload.model);
         }
 
         // Sanitize temperature/top_p conflict for Claude 4+ models routed via OpenAI-compatible API.
@@ -717,11 +722,12 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
     async createImage(payload: CreateImagePayload) {
       const log = debug(`${this.logPrefix}:createImage`);
+      const requestPayload = withMappedModelId(payload, this._options);
 
       // If custom createImage implementation is provided, use it
       if (customCreateImage) {
         log('using custom createImage implementation');
-        return customCreateImage(payload, {
+        return customCreateImage(requestPayload, {
           ...this._options,
           apiKey: this._options.apiKey!,
           provider,
@@ -730,15 +736,18 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
       log('using default createOpenAICompatibleImage');
       // Use the new createOpenAICompatibleImage function
-      return createOpenAICompatibleImage(this.client, payload, this.id);
+      return createOpenAICompatibleImage(this.client, requestPayload, this.id, {
+        pricingModel: payload.model,
+      });
     }
 
     async createVideo(payload: CreateVideoPayload) {
       const log = debug(`${this.logPrefix}:createVideo`);
+      const requestPayload = withMappedModelId(payload, this._options);
 
       if (customCreateVideo) {
         log('using custom createVideo implementation');
-        return customCreateVideo(payload, {
+        return customCreateVideo(requestPayload, {
           ...this._options,
           apiKey: this._options.apiKey!,
           provider,
@@ -746,7 +755,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       }
 
       log('using default createOpenAICompatibleVideo');
-      return createOpenAICompatibleVideo(payload, {
+      return createOpenAICompatibleVideo(requestPayload, {
         ...this._options,
         apiKey: this._options.apiKey!,
         baseURL: this._options.baseURL || '',
@@ -921,6 +930,8 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
       try {
         const { messages, schema, model, responseApi, tools } = payload;
+        const requestPayload = withMappedModelId(payload, this._options);
+        const requestModel = requestPayload.model;
 
         const log = debug(`${this.logPrefix}:generateObject`);
         log(
@@ -935,7 +946,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         if (tools) {
           log('using tools-based generation');
-          return this.generateObjectWithTools(payload, options, usagePayload);
+          return this.generateObjectWithTools(requestPayload, options, usagePayload);
         }
 
         if (!schema) throw new Error('tools or schema is required');
@@ -946,9 +957,12 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         // unavailable now` to json_schema requests, so DeepSeek-family models served
         // through generic OpenAI-compatible providers (aggregator gateways, custom
         // endpoints) must simulate structured output via forced tool calling.
-        if (generateObjectConfig?.useToolsCalling || detectModelProvider(model) === 'deepseek') {
+        if (
+          generateObjectConfig?.useToolsCalling ||
+          detectModelProvider(requestModel) === 'deepseek'
+        ) {
           log('using tool calling fallback for structured output');
-          return await this.generateObjectViaToolCalling(payload, options, usagePayload);
+          return await this.generateObjectViaToolCalling(requestPayload, options, usagePayload);
         }
 
         // Factory-level Responses API routing control (supports instance override)
@@ -966,7 +980,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           context: 'generateObject',
           flagUseResponse,
           flagUseResponseModels,
-          model,
+          model: requestModel,
           responseApi,
         });
 
@@ -980,9 +994,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           const res = await this.client!.responses.create(
             {
               input: messages,
-              model,
-              ...getGenerateObjectResponsesReasoningParams(payload),
-              ...this.resolvePromptCacheKeyParams(model, options?.user),
+              model: requestModel,
+              ...getGenerateObjectResponsesReasoningParams(requestPayload),
+              ...this.resolvePromptCacheKeyParams(requestModel, options?.user),
               text: { format: { strict: true, type: 'json_schema', ...processedSchema } },
               // Responses API replaced `user` with `safety_identifier`; some endpoints reject `user`
               safety_identifier: options?.user,
@@ -1011,12 +1025,12 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         let res: OpenAI.ChatCompletion;
         try {
           res = await this.client.chat.completions.create(
-            this.handleGenerateObjectPayload(payload, {
-              ...getGenerateObjectReasoningParams(payload),
+            this.handleGenerateObjectPayload(requestPayload, {
+              ...getGenerateObjectReasoningParams(requestPayload),
               messages,
-              model,
+              model: requestModel,
               response_format: { json_schema: processedSchema, type: 'json_schema' },
-              ...this.resolvePromptCacheKeyParams(model, options?.user),
+              ...this.resolvePromptCacheKeyParams(requestModel, options?.user),
               user: options?.user,
             }) as OpenAI.ChatCompletionCreateParamsNonStreaming,
             { headers: options?.headers, signal: options?.signal },
@@ -1029,7 +1043,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           if (!isResponseFormatUnsupportedError(error)) throw error;
 
           log('provider rejected json_schema response_format, retrying via tool calling');
-          return await this.generateObjectViaToolCalling(payload, options, usagePayload);
+          return await this.generateObjectViaToolCalling(requestPayload, options, usagePayload);
         }
         if (res.usage) {
           await options?.onUsage?.(convertOpenAIUsage(res.usage, usagePayload));
@@ -1067,6 +1081,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       options?: EmbeddingsOptions,
     ): Promise<Embeddings[]> {
       const log = debug(`${this.logPrefix}:embeddings`);
+      const requestPayload = withMappedModelId(payload, this._options);
       log(
         'embeddings called with model: %s, input items: %d',
         payload.model,
@@ -1075,7 +1090,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
       try {
         const res = await this.client.embeddings.create(
-          { ...payload, encoding_format: 'float', user: options?.user },
+          { ...requestPayload, encoding_format: 'float', user: options?.user },
           { headers: options?.headers, signal: options?.signal },
         );
 
@@ -1099,6 +1114,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
     async textToSpeech(payload: TextToSpeechPayload, options?: TextToSpeechOptions) {
       const log = debug(`${this.logPrefix}:textToSpeech`);
+      const requestPayload = withMappedModelId(payload, this._options);
       log(
         'textToSpeech called with input length: %d, voice: %s',
         payload.input?.length || 0,
@@ -1106,7 +1122,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       );
 
       try {
-        const mp3 = await this.client.audio.speech.create(payload as any, {
+        const mp3 = await this.client.audio.speech.create(requestPayload as any, {
           headers: options?.headers,
           signal: options?.signal,
         });
@@ -1121,6 +1137,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     async transcribe(payload: ASRPayload, options?: ASROptions): Promise<ASRResponse> {
       const log = debug(`${this.logPrefix}:transcribe`);
       const { file, fileName, model, language, prompt, responseFormat, temperature } = payload;
+      const requestModel = withMappedModelId(payload, this._options).model;
       log('transcribe called with model: %s, audio size: %d bytes', model, file?.size || 0);
 
       try {
@@ -1133,7 +1150,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           {
             file: uploadFile,
             language,
-            model,
+            model: requestModel,
             prompt,
             response_format: responseFormat,
             temperature,
@@ -1308,6 +1325,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     private async handleResponseAPIMode(
       payload: ChatStreamPayload,
       options?: ChatMethodOptions,
+      usageModel = payload.model,
     ): Promise<Response> {
       const log = debug(`${this.logPrefix}:handleResponseAPIMode`);
       log('handleResponseAPIMode called with model: %s', payload.model);
@@ -1387,8 +1405,8 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
         callbacks: options?.callback,
         payload: {
           apiMode: 'responses',
-          model: payload.model,
-          pricing: await getModelPricing(payload.model, this.id),
+          model: usageModel,
+          pricing: await getModelPricing(usageModel, this.id),
           provider: this.id,
         },
       };

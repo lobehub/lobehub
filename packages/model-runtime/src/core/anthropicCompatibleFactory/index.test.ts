@@ -17,6 +17,10 @@ vi.mock('@lobechat/const', () => ({
   CURRENT_VERSION: '1.0.0-test',
 }));
 
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: vi.fn().mockResolvedValue([]),
+}));
+
 const MockedAnthropic = vi.mocked(Anthropic);
 const originalAnthropicClientTimeout = process.env.ANTHROPIC_CLIENT_TIMEOUT;
 
@@ -156,5 +160,50 @@ describe('createAnthropicCompatibleRuntime', () => {
       }),
     );
     expect(runtime.baseURL).toBe('https://aihubmix.com');
+  });
+
+  it('should send mapped model id to Anthropic Messages API', async () => {
+    const messagesCreate = vi.fn().mockResolvedValue({ content: [] });
+    const getPricingOptions = vi.fn(() => undefined);
+    const Runtime = createAnthropicCompatibleRuntime({
+      chatCompletion: {
+        getPricingOptions,
+        handlePayload: (payload) => ({
+          max_tokens: 1024,
+          messages: [],
+          model: payload.model,
+        }),
+      },
+      customClient: {
+        createClient: (options) =>
+          ({
+            baseURL: options.baseURL,
+            messages: { create: messagesCreate },
+          }) as unknown as Anthropic,
+      },
+      provider: 'test-provider',
+    });
+    const runtime = new Runtime({
+      apiKey: 'test-key',
+      modelIdMapping: { 'logical-model': 'upstream-model' },
+    });
+
+    await runtime.chat({
+      messages: [{ content: 'hi', role: 'user' }],
+      model: 'logical-model',
+      responseMode: 'json',
+      stream: false,
+    } as any);
+
+    expect(messagesCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'upstream-model',
+      }),
+      expect.anything(),
+    );
+    expect(getPricingOptions).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'logical-model' }),
+      expect.objectContaining({ model: 'upstream-model' }),
+    );
   });
 });

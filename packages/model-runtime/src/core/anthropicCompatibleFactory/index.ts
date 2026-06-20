@@ -21,6 +21,8 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { desensitizeUrl } from '../../utils/desensitizeUrl';
 import { getModelPricing } from '../../utils/getModelPricing';
+import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
+import { withMappedModelId } from '../../utils/modelIdMapping';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 import { StreamingResponse } from '../../utils/response';
 import type { LobeRuntimeAI } from '../BaseAI';
@@ -37,7 +39,9 @@ import { handleAnthropicError } from './handleAnthropicError';
 import { resolveCacheTTL } from './resolveCacheTTL';
 import { resolveMaxTokens } from './resolveMaxTokens';
 
-type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions & T;
+type ConstructorOptions<T extends Record<string, any> = any> = ClientOptions &
+  ModelIdMappingOptions &
+  T;
 
 type AnthropicTools = Anthropic.Tool | Anthropic.WebSearchTool20250305;
 
@@ -505,10 +509,11 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
 
         const log = debug(`${this.logPrefix}:chat`);
         const inputStartAt = Date.now();
+        const requestPayload = withMappedModelId(payload, this._options);
 
         log('chat called with model: %s, stream: %s', payload.model, payload.stream ?? true);
 
-        const postPayload = await chatCompletion.handlePayload(payload, this._options);
+        const postPayload = await chatCompletion.handlePayload(requestPayload, this._options);
         const shouldStream = postPayload.stream ?? payload.stream ?? true;
         const finalPayload = { ...postPayload, stream: shouldStream };
 
@@ -664,7 +669,12 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
 
       try {
         const pricing = await getModelPricing(payload.model, this.id);
-        return await generateObject(this.client, payload, options, pricing);
+        return await generateObject(
+          this.client,
+          withMappedModelId(payload, this._options),
+          options,
+          pricing,
+        );
       } catch (error) {
         throw this.handleError(error);
       }

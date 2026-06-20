@@ -19,6 +19,7 @@ async function generateByImageMode(
   client: OpenAI,
   payload: CreateImagePayload,
   provider: string,
+  pricingModel?: string,
 ): Promise<CreateImageResponse> {
   const { model, params } = payload;
 
@@ -126,7 +127,10 @@ async function generateByImageMode(
     imageUrl,
     ...(img.usage
       ? {
-          modelUsage: convertOpenAIImageUsage(img.usage, await getModelPricing(model, provider)),
+          modelUsage: convertOpenAIImageUsage(
+            img.usage,
+            await getModelPricing(pricingModel ?? model, provider),
+          ),
         }
       : {}),
   };
@@ -232,6 +236,7 @@ export async function createOpenAICompatibleImage(
   client: OpenAI,
   payload: CreateImagePayload,
   provider: string,
+  options?: { pricingModel?: string },
 ): Promise<CreateImageResponse> {
   const { model } = payload;
 
@@ -241,5 +246,5 @@ export async function createOpenAICompatibleImage(
   }
 
   // Default to traditional images API
-  return await generateByImageMode(client, payload, provider);
+  return await generateByImageMode(client, payload, provider, options?.pricingModel);
 }

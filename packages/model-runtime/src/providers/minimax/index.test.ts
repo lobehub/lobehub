@@ -140,6 +140,54 @@ describe('LobeMinimaxAI', () => {
         'Unsupported MiniMax sdkType: invalid',
       );
     });
+
+    it('should pass modelIdMapping to the OpenAI-compatible runtime', async () => {
+      const modelIdMapping = { 'minimax-public': 'MiniMax-M3' };
+      const chatSpy = vi
+        .spyOn(LobeMinimaxOpenAI.prototype as any, 'chat')
+        .mockResolvedValue(new Response());
+
+      try {
+        const runtime = new LobeMinimaxAI({
+          apiKey: 'test',
+          modelIdMapping,
+          sdkType: 'openai',
+        });
+
+        await runtime.chat({
+          messages: [{ content: 'hi', role: 'user' }],
+          model: 'minimax-public',
+        });
+
+        expect((chatSpy.mock.contexts[0] as any)._options.modelIdMapping).toEqual(modelIdMapping);
+      } finally {
+        chatSpy.mockRestore();
+      }
+    });
+
+    it('should pass modelIdMapping to the Anthropic-compatible runtime', async () => {
+      const modelIdMapping = { 'minimax-public': 'MiniMax-M3' };
+      const chatSpy = vi
+        .spyOn(LobeMinimaxAnthropicAI.prototype as any, 'chat')
+        .mockResolvedValue(new Response());
+
+      try {
+        const runtime = new LobeMinimaxAI({
+          apiKey: 'test',
+          modelIdMapping,
+          sdkType: 'anthropic',
+        });
+
+        await runtime.chat({
+          messages: [{ content: 'hi', role: 'user' }],
+          model: 'minimax-public',
+        });
+
+        expect((chatSpy.mock.contexts[0] as any)._options.modelIdMapping).toEqual(modelIdMapping);
+      } finally {
+        chatSpy.mockRestore();
+      }
+    });
   });
 });
 

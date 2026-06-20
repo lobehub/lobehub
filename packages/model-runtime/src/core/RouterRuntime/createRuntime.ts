@@ -57,6 +57,7 @@ interface ProviderIniOptions extends Record<string, any> {
   baseURL?: string;
   baseURLOrAccountID?: string;
   dangerouslyAllowBrowser?: boolean;
+  modelIdMapping?: Record<string, string>;
   region?: string;
   sdkType?: string;
   sessionToken?: string;
