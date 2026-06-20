@@ -19,6 +19,24 @@ import { reconcileAssistantToolLinks } from '../utils/reconcileTools';
  * Handles fetching, refreshing, and replacing message data
  */
 
+/**
+ * Dedupe window for the `message:list` switch-back revalidate.
+ *
+ * The Conversation store is recreated on every topic/session switch, which
+ * remounts `useFetchMessages`. At the `useClientDataSWR` default
+ * (`dedupingInterval: 0`) that fires a network revalidate on every single
+ * switch. Message mutations now write through to this cache (see
+ * `replaceMessages` → `#writeThroughMessageCache`), so a switch-back within
+ * this window hydrates from a FRESH cache and the refetch is pure redundancy.
+ *
+ * 30s covers the typical "switch away, glance at another conversation, switch
+ * back" loop while keeping cross-device / server-agent updates within an
+ * acceptable staleness bound — `revalidateOnFocus` (5min throttle) and
+ * `revalidateOnReconnect` remain the longer-tail backstop, and a running
+ * conversation keeps its live gateway stream regardless of this window.
+ */
+const MESSAGE_LIST_DEDUPING_INTERVAL = 30 * 1000;
+
 type Setter = StoreSetter<ChatStore>;
 export const messageQuery = (set: Setter, get: () => ChatStore, _api?: unknown) =>
   new MessageQueryActionImpl(set, get, _api);
@@ -199,6 +217,10 @@ export class MessageQueryActionImpl {
       shouldFetch ? messageKeys.list(context) : null,
       () => messageService.getMessages(context),
       {
+        // Skip the redundant switch-back refetch within this window — the cache
+        // is kept current by mutation write-through, so a remount hydrates from
+        // a fresh cache instead of forcing a network revalidate every switch.
+        dedupingInterval: MESSAGE_LIST_DEDUPING_INTERVAL,
         onData: (data) => {
           if (!data || !context.topicId) return;
 
