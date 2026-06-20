@@ -9,6 +9,9 @@ import { createOpenAICompatibleImage } from './createImage';
 
 // Mock the console to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
+vi.mock('@lobechat/business-model-bank/model-config', () => ({
+  loadModels: vi.fn().mockResolvedValue([]),
+}));
 
 // Polyfill File for Node environment
 if (typeof File === 'undefined') {
@@ -530,6 +533,44 @@ describe('createOpenAICompatibleImage', () => {
       expect(mockClient.images.edit).not.toHaveBeenCalled();
     });
 
+    it('should route by logical image model while sending mapped model id', async () => {
+      const mockChatResponse = {
+        choices: [
+          {
+            message: {
+              images: [
+                {
+                  image_url: {
+                    url: 'data:image/png;base64,mappedChatModelResult',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      };
+
+      vi.mocked(mockClient.chat.completions.create).mockResolvedValue(mockChatResponse as any);
+
+      const payload: CreateImagePayload = {
+        model: 'upstream-model',
+        params: {
+          prompt: 'Test mapped routing',
+        },
+      };
+
+      const result = await createOpenAICompatibleImage(mockClient, payload, 'test-provider', {
+        routingModel: 'logical-model:image',
+      });
+
+      expect(result.imageUrl).toBe('data:image/png;base64,mappedChatModelResult');
+      expect(mockClient.chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'upstream-model' }),
+      );
+      expect(mockClient.images.generate).not.toHaveBeenCalled();
+      expect(mockClient.images.edit).not.toHaveBeenCalled();
+    });
+
     it('should route to image mode when model does not end with :image', async () => {
       const mockImageResponse = {
         data: [
@@ -567,7 +608,7 @@ describe('createOpenAICompatibleImage', () => {
       };
 
       // Mock fetch for image download
-      const mockArrayBuffer = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0]).buffer;
+      const mockArrayBuffer = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer;
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         arrayBuffer: async () => mockArrayBuffer,

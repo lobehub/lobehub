@@ -738,6 +738,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       // Use the new createOpenAICompatibleImage function
       return createOpenAICompatibleImage(this.client, requestPayload, this.id, {
         pricingModel: payload.model,
+        routingModel: payload.model,
       });
     }
 

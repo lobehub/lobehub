@@ -12,6 +12,11 @@ import { convertOpenAIImageUsage } from '../usageConverters/openai';
 
 const log = createDebug('lobe-image:openai-compatible');
 
+interface CreateOpenAICompatibleImageOptions {
+  pricingModel?: string;
+  routingModel?: string;
+}
+
 /**
  * Generate images using traditional OpenAI images API (DALL-E, etc.)
  */
@@ -236,12 +241,13 @@ export async function createOpenAICompatibleImage(
   client: OpenAI,
   payload: CreateImagePayload,
   provider: string,
-  options?: { pricingModel?: string },
+  options?: CreateOpenAICompatibleImageOptions,
 ): Promise<CreateImageResponse> {
   const { model } = payload;
+  const routingModel = options?.routingModel ?? model;
 
   // Check if it's a chat model for image generation (via :image suffix)
-  if (model.endsWith(':image')) {
+  if (routingModel.endsWith(':image')) {
     return await generateByChatModel(client, payload);
   }
 

@@ -1659,6 +1659,42 @@ describe('LobeOpenAICompatibleFactory', () => {
         });
       });
 
+      it('should route mapped logical image-chat models through chat completions', async () => {
+        const mappedInstance = new LobeMockProvider({
+          apiKey: 'test',
+          modelIdMapping: { 'logical-image-model:image': 'upstream-image-model' },
+        });
+        vi.spyOn(mappedInstance['client'].chat.completions, 'create').mockResolvedValue({
+          choices: [
+            {
+              message: {
+                images: [
+                  {
+                    image_url: {
+                      url: 'data:image/png;base64,mapped-chat-image',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        } as any);
+        vi.spyOn(mappedInstance['client'].images, 'generate').mockResolvedValue({} as any);
+
+        const result = await (mappedInstance as any).createImage({
+          model: 'logical-image-model:image',
+          params: {
+            prompt: 'A beautiful sunset',
+          },
+        });
+
+        expect(mappedInstance['client'].chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({ model: 'upstream-image-model' }),
+        );
+        expect(mappedInstance['client'].images.generate).not.toHaveBeenCalled();
+        expect(result).toEqual({ imageUrl: 'data:image/png;base64,mapped-chat-image' });
+      });
+
       it('should handle size auto parameter correctly', async () => {
         const mockResponse = {
           data: [{ b64_json: 'mock-base64-data' }],
