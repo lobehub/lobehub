@@ -920,12 +920,15 @@ export const taskRouter = router({
     .input(
       idInput.merge(
         z.object({
+          // `.nullish()` lets callers clear a saved field: `null` removes it
+          // (JSON can't send `undefined`), omission leaves it untouched. See
+          // TaskModel.updateVerifyConfig.
           verify: z.object({
-            enabled: z.boolean().optional(),
-            maxIterations: z.number().min(1).max(10).optional(),
-            verifierAgentId: z.string().optional(),
-            verifyCriteriaIds: z.array(z.string()).optional(),
-            verifyRubricId: z.string().optional(),
+            enabled: z.boolean().nullish(),
+            maxIterations: z.number().min(1).max(10).nullish(),
+            verifierAgentId: z.string().nullish(),
+            verifyCriteriaIds: z.array(z.string()).nullish(),
+            verifyRubricId: z.string().nullish(),
           }),
         }),
       ),

@@ -533,11 +533,32 @@ export class TaskModel {
     return undefined;
   }
 
+  /**
+   * Patch the task's own `config.verify`. Per-key semantics (a plain deep-merge
+   * can't express "remove", and JSON can't transmit `undefined`):
+   * - `null`      → clear the key (e.g. switch a rubric/verifier back to default)
+   * - omitted     → leave the existing value untouched
+   * - any value   → set it (arrays replace wholesale, not index-merged)
+   *
+   * The merge is scoped to the `verify` sub-object so sibling config keys
+   * (model, checkpoint, schedule, …) are preserved.
+   */
   async updateVerifyConfig(
     id: string,
-    verify: Partial<TaskVerifyConfig>,
+    patch: { [K in keyof TaskVerifyConfig]?: TaskVerifyConfig[K] | null },
   ): Promise<TaskItem | null> {
-    return this.updateTaskConfig(id, { verify });
+    const task = await this.findById(id);
+    if (!task) return null;
+
+    const config = (task.config as Record<string, any>) || {};
+    const next: Record<string, any> = { ...(config.verify as TaskVerifyConfig | undefined) };
+
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null) delete next[key];
+      else if (value !== undefined) next[key] = value;
+    }
+
+    return this.update(id, { config: { ...config, verify: next } });
   }
 
   // Check if a task should pause after a topic completes

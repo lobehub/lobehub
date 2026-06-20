@@ -1338,7 +1338,7 @@ describe('TaskModel', () => {
   });
 
   describe('verify config', () => {
-    it('updateVerifyConfig delegates to updateTaskConfig and preserves other keys', async () => {
+    it('updateVerifyConfig writes config.verify and preserves other config keys', async () => {
       const model = new TaskModel(serverDB, userId);
       const task = await model.create({ instruction: 'Test' });
 
@@ -1358,6 +1358,57 @@ describe('TaskModel', () => {
         maxIterations: 3,
         verifierAgentId: 'agt_codex',
         verifyRubricId: 'rub_1',
+      });
+    });
+
+    it('updateVerifyConfig leaves omitted keys untouched and merges new ones', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({
+        config: { verify: { enabled: true, verifyRubricId: 'rub_1' } },
+        instruction: 'Test',
+      });
+
+      await model.updateVerifyConfig(task.id, { verifierAgentId: 'agt_codex' });
+
+      expect(model.getVerifyConfig((await model.findById(task.id))!)).toEqual({
+        enabled: true,
+        verifierAgentId: 'agt_codex',
+        verifyRubricId: 'rub_1',
+      });
+    });
+
+    it('updateVerifyConfig clears a saved key when passed null', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({
+        config: {
+          provider: 'anthropic',
+          verify: { enabled: true, verifierAgentId: 'agt_codex', verifyRubricId: 'rub_1' },
+        },
+        instruction: 'Test',
+      });
+
+      // Switch back to the default verifier + drop the rubric, keep enabled.
+      await model.updateVerifyConfig(task.id, { verifierAgentId: null, verifyRubricId: null });
+
+      const updated = (await model.findById(task.id))!;
+      const config = updated.config as Record<string, any>;
+      // Sibling config keys survive; cleared keys are gone (not stored as null).
+      expect(config.provider).toBe('anthropic');
+      expect(config.verify).toEqual({ enabled: true });
+      expect('verifyRubricId' in config.verify).toBe(false);
+    });
+
+    it('updateVerifyConfig replaces verifyCriteriaIds wholesale', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({
+        config: { verify: { verifyCriteriaIds: ['c1', 'c2', 'c3'] } },
+        instruction: 'Test',
+      });
+
+      await model.updateVerifyConfig(task.id, { verifyCriteriaIds: ['c4'] });
+
+      expect(model.getVerifyConfig((await model.findById(task.id))!)).toEqual({
+        verifyCriteriaIds: ['c4'],
       });
     });
 
