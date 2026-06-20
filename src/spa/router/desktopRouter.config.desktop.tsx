@@ -121,8 +121,8 @@ import SharePagePage from '@/routes/share/page/[id]';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
 import { shareTopicRouteMeta } from '@/routes/share/t/[id]/routeMeta';
+import VerifyReportPage from '@/routes/verify/[runId]';
 import VerifyImPage from '@/routes/verify-im';
-import VerifyReportPage from '@/routes/verify-report';
 import { routeMeta } from '@/spa/router/routeMeta';
 import { SettingsTabs } from '@/store/global/initialState';
 import { ErrorBoundary, redirectElement } from '@/utils/router';
@@ -756,7 +756,7 @@ export const desktopRoutes: RouteObject[] = [
   {
     element: <VerifyReportPage />,
     errorElement: <ErrorBoundary />,
-    path: '/verify-report',
+    path: '/verify/:runId',
   },
 
   // Devtools route (outside main layout, dev-only)

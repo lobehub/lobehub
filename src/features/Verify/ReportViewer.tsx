@@ -4,7 +4,7 @@ import { Block, Flexbox, Icon, Markdown, Tag, Text } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { Check, CircleHelp, X } from 'lucide-react';
 import { memo } from 'react';
-import { useSearchParams } from 'react-router';
+import { useParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import type { VerifyResultWithEvidence } from '@/services/verify';
@@ -112,11 +112,12 @@ const ResultItem = memo<{ result: VerifyResultWithEvidence }>(({ result }) => {
  */
 const ReportViewer = memo(() => {
   const { styles } = useStyles();
-  const [searchParams] = useSearchParams();
-  const verifyRunId = searchParams.get('id');
+  const { runId } = useParams<{ runId: string }>();
+  const verifyRunId = runId ?? null;
   const { data, isLoading } = useVerifyReportBundle(verifyRunId);
 
-  if (!verifyRunId) return <Text type="danger">Missing report id (?id=&lt;verifyRunId&gt;).</Text>;
+  if (!verifyRunId)
+    return <Text type="danger">Missing report id (/verify/&lt;verifyRunId&gt;).</Text>;
   if (isLoading) return <Loading debugId="verify-report-viewer" />;
   if (!data) return <Text type="danger">Report not found.</Text>;
 

@@ -957,9 +957,9 @@ export const desktopRoutes: RouteObject[] = [
 
   // Standalone verification-report viewer (outside main layout)
   {
-    element: dynamicElement(() => import('@/routes/verify-report'), 'Desktop > VerifyReport'),
+    element: dynamicElement(() => import('@/routes/verify/[runId]'), 'Desktop > VerifyReport'),
     errorElement: <ErrorBoundary />,
-    path: '/verify-report',
+    path: '/verify/:runId',
   },
 
   // Devtools route (outside main layout, dev-only)
