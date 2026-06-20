@@ -531,4 +531,11 @@ export const mobileRoutes: RouteObject[] = [
     errorElement: <ErrorBoundary />,
     path: '/verify-im',
   },
+
+  // Standalone verification-report viewer (outside main layout)
+  {
+    element: dynamicElement(() => import('@/routes/verify-report'), 'Mobile > VerifyReport'),
+    errorElement: <ErrorBoundary />,
+    path: '/verify-report',
+  },
 ];

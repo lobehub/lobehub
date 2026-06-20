@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { FileModel } from '@/database/models/file';
 import { LlmGenerationTracingModel } from '@/database/models/llmGenerationTracing';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
@@ -11,6 +12,7 @@ import { VerifyRubricModel } from '@/database/models/verifyRubric';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { FileService } from '@/server/services/file';
 import {
   VerifyExecutorService,
   VerifyFeedbackService,
@@ -388,4 +390,43 @@ export const verifyRouter = router({
   getReport: verifyProcedure
     .input(z.object({ verifyRunId: z.string() }))
     .query(async ({ ctx, input }) => ctx.reportModel.findByRun(input.verifyRunId)),
+
+  /**
+   * One-shot payload for the standalone report viewer: the session, its report,
+   * and every check result with its evidence — addressed purely by verifyRunId
+   * (no operation / chat context required).
+   */
+  getReportBundle: verifyProcedure
+    .input(z.object({ verifyRunId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const run = await ctx.runModel.findById(input.verifyRunId);
+      if (!run) return null;
+      const [report, results] = await Promise.all([
+        ctx.reportModel.findByRun(input.verifyRunId),
+        ctx.resultModel.listByRun(input.verifyRunId),
+      ]);
+
+      // Resolve a displayable URL for each file-backed evidence artifact.
+      const workspaceId = ctx.workspaceId ?? undefined;
+      const fileModel = new FileModel(ctx.serverDB, ctx.userId, workspaceId);
+      const fileService = new FileService(ctx.serverDB, ctx.userId, workspaceId);
+      const resolveFileUrl = async (fileId: string | null) => {
+        if (!fileId) return null;
+        const file = await fileModel.findById(fileId);
+        return file?.url ? await fileService.getFullFileUrl(file.url) : null;
+      };
+
+      const resultsWithEvidence = await Promise.all(
+        results.map(async (r) => {
+          const evidence = await ctx.evidenceModel.listByCheckResult(r.id);
+          return {
+            ...r,
+            evidence: await Promise.all(
+              evidence.map(async (e) => ({ ...e, fileUrl: await resolveFileUrl(e.fileId) })),
+            ),
+          };
+        }),
+      );
+      return { report: report ?? null, results: resultsWithEvidence, run };
+    }),
 });

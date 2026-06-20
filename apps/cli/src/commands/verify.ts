@@ -632,7 +632,7 @@ export function registerVerifyCommand(program: Command) {
         );
         console.log(`${pc.bold('verifyRunId')}: ${run.id}`);
         if (options.open) {
-          console.log(`${pc.bold('open')}: /verify-im?verifyRunId=${run.id}`);
+          console.log(`${pc.bold('open')}: /verify-report?id=${run.id}`);
         }
       },
     );
