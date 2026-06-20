@@ -2,6 +2,7 @@ import type {
   CheckpointConfig,
   NewTask,
   TaskItem,
+  TaskVerifyConfig,
   WorkspaceData,
   WorkspaceDocNode,
   WorkspaceTreeNode,
@@ -486,6 +487,57 @@ export class TaskModel {
 
   async updateReviewConfig(id: string, review: Record<string, any>): Promise<TaskItem | null> {
     return this.updateTaskConfig(id, { review });
+  }
+
+  // ========== Verify Config ==========
+
+  /**
+   * Read this task's own verify config from `config.verify`. During the
+   * migration window it falls back to the legacy `config.review` key so tasks
+   * configured before the verify cutover still surface their gate settings —
+   * only the shared `enabled` / `maxIterations` fields carry over (review's
+   * inline rubrics are dropped, no data was using them).
+   */
+  getVerifyConfig(task: TaskItem): TaskVerifyConfig | undefined {
+    const config = task.config as Record<string, any> | undefined;
+    if (config?.verify) return config.verify as TaskVerifyConfig;
+
+    const review = config?.review as Record<string, any> | undefined;
+    if (review && (review.enabled !== undefined || review.maxIterations !== undefined)) {
+      return { enabled: review.enabled, maxIterations: review.maxIterations };
+    }
+    return undefined;
+  }
+
+  /**
+   * Resolve the effective verify config for a task, honoring subtask
+   * inheritance. Whole-config override semantics: the task uses its own config
+   * when it has one, otherwise it walks up `parentTaskId` and adopts the
+   * nearest ancestor's config in full (never a field-level merge of the two).
+   * Returns `undefined` when no task in the chain has a verify config.
+   */
+  async resolveVerifyConfig(taskId: string): Promise<TaskVerifyConfig | undefined> {
+    const seen = new Set<string>();
+    let currentId: string | null = taskId;
+
+    while (currentId && !seen.has(currentId)) {
+      seen.add(currentId);
+      const task = await this.findById(currentId);
+      if (!task) break;
+
+      const config = this.getVerifyConfig(task);
+      if (config) return config;
+
+      currentId = task.parentTaskId;
+    }
+    return undefined;
+  }
+
+  async updateVerifyConfig(
+    id: string,
+    verify: Partial<TaskVerifyConfig>,
+  ): Promise<TaskItem | null> {
+    return this.updateTaskConfig(id, { verify });
   }
 
   // Check if a task should pause after a topic completes
