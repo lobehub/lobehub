@@ -6,6 +6,7 @@ import {
 import debug from 'debug';
 import { type Redis } from 'ioredis';
 
+import { hasNonPersistedMessage } from './messagePersistence';
 import { getAgentRuntimeRedisClient } from './redis';
 import { stripFinalStateInEventData } from './StreamEventManager';
 
@@ -77,8 +78,17 @@ export class AgentStateManager {
    * Keep this in sync with the stream-event strip in `StreamEventManager`
    * (`stripStateForStream`) and the `done`-event strip in
    * `OperationTraceRecorder` — all drop the same reconstructible payload.
+   *
+   * Exception: when the working set carries a non-persisted (ephemeral /
+   * suppressed) message — one with no DB row — the array is NOT reconstructible
+   * from a query, so persist it in full. These ops are rare and short-lived
+   * (group-member supervisor turns); the size win is forgone to avoid losing
+   * the prompt.
    */
   private serializeStateForPersist(state: AgentState): string {
+    if (hasNonPersistedMessage((state as { messages?: unknown }).messages)) {
+      return JSON.stringify(state);
+    }
     const { messages: _messages, ...rest } = state as AgentState & { messages?: unknown };
     return JSON.stringify(rest);
   }

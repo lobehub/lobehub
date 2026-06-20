@@ -78,7 +78,7 @@ describe('AgentStateManager', () => {
     it('omits the messages array from the persisted state blob', async () => {
       const state = {
         cost: { total: 1 },
-        messages: [{ content: 'x'.repeat(1000), role: 'user' }],
+        messages: [{ content: 'x'.repeat(1000), id: 'msg-1', role: 'user' }],
         status: 'running' as const,
         stepCount: 1,
       };
@@ -89,6 +89,26 @@ describe('AgentStateManager', () => {
       expect(JSON.parse(serialized).messages).toBeUndefined();
       // Other fields are retained.
       expect(JSON.parse(serialized).status).toBe('running');
+    });
+
+    it('keeps the full messages array when an ephemeral (id-less) message is present', async () => {
+      const state = {
+        cost: { total: 1 },
+        messages: [
+          { content: 'persisted history', id: 'msg-1', role: 'user' },
+          // ephemeral supervisor instruction — never written to the DB (no id)
+          { content: 'respond to the group', role: 'user' },
+        ],
+        status: 'running' as const,
+        stepCount: 1,
+      };
+
+      await stateManager.saveAgentState('op-ephemeral', state as any);
+
+      const serialized = redisMock.setex.mock.calls.at(-1)?.[2] as string;
+      const persisted = JSON.parse(serialized);
+      expect(persisted.messages).toHaveLength(2);
+      expect(persisted.messages[1].content).toBe('respond to the group');
     });
   });
 
@@ -142,7 +162,7 @@ describe('AgentStateManager', () => {
         executionTime: 1,
         newState: {
           cost: { total: 1 },
-          messages: [{ content: 'x'.repeat(1000), role: 'user' }],
+          messages: [{ content: 'x'.repeat(1000), id: 'msg-1', role: 'user' }],
           status: 'done' as const,
           stepCount: 1,
         },

@@ -42,6 +42,7 @@ import { appEnv } from '@/envs/app';
 import { type AgentRuntimeCoordinatorOptions } from '@/server/modules/AgentRuntime';
 import { AgentRuntimeCoordinator, createStreamEventManager } from '@/server/modules/AgentRuntime';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
+import { hasNonPersistedMessage } from '@/server/modules/AgentRuntime/messagePersistence';
 import {
   createRuntimeExecutors,
   type RuntimeExecutorContext,
@@ -2370,13 +2371,23 @@ export class AgentRuntimeService {
    * Overwrite `state.messages` in place with the canonical DB conversation at
    * step entry, making the DB the single source of truth for messages.
    *
-   * Guarded against regressions: skips when topic/agent identifiers aren't
-   * known yet (early bootstrap, before the topic row is committed), and never
-   * replaces a populated working set with an empty one or on a DB error —
-   * those fall back to whatever messages the loaded Redis state carried. This
-   * keeps a transient read miss from blanking the conversation mid-operation.
+   * Guarded against regressions:
+   * - Ops carrying a non-persisted (ephemeral / suppressed) message — e.g. the
+   *   group-member supervisor instruction, which has no DB row — keep their
+   *   full working set in Redis (see `AgentStateManager.serializeStateForPersist`),
+   *   so leave the loaded array intact instead of clobbering it with a DB-only
+   *   view that would drop the prompt.
+   * - `state.messages` is guaranteed to end up an array, so a missing-identifier
+   *   early return or an empty/failed read never hands `undefined` to downstream
+   *   consumers (e.g. `shouldCompress(state.messages)`).
+   * - A populated working set is never replaced with an empty one or on a DB
+   *   error, so a transient read miss can't blank the conversation mid-op.
    */
   private async rehydrateStateMessagesFromDB(state: AgentState): Promise<void> {
+    if (hasNonPersistedMessage(state.messages)) return;
+
+    if (!Array.isArray(state.messages)) state.messages = [];
+
     if (!state.metadata?.agentId || !state.metadata?.topicId) return;
 
     try {
