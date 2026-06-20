@@ -2,7 +2,7 @@ import {
   RemoteDeviceExecutionRuntime,
   RemoteDeviceIdentifier,
 } from '@lobechat/builtin-tool-remote-device';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ToolExecutionContext } from '../../types';
 
@@ -16,6 +16,10 @@ vi.mock('@/server/services/deviceGateway', () => ({
 
 // Import after mock setup
 const { remoteDeviceRuntime } = await import('../remoteDevice');
+
+beforeEach(() => {
+  mockQueryDeviceList.mockReset();
+});
 
 describe('remoteDeviceRuntime', () => {
   it('should have the correct identifier', () => {
