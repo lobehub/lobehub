@@ -70,6 +70,13 @@ const CreateTaskInlineEntry = memo<CreateTaskInlineEntryProps>((props) => {
 
   const assigneeMeta = useAgentDisplayMeta(assigneeAgentId);
 
+  // When the assignee is locked to a scoped agent, keep it in sync with the
+  // `agentId` prop. The route subtree is reused across /agent/A/tasks ->
+  // /agent/B/tasks, so without this the hidden assignee would stay on A.
+  useEffect(() => {
+    if (lockAssignee) setAssigneeAgentId(agentId);
+  }, [agentId, lockAssignee]);
+
   useEffect(() => {
     if (!canCreateTask) return;
     if (autoFocus || isHero) editor?.focus?.();

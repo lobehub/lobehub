@@ -74,13 +74,18 @@ const optimisticMoveTask = (
   });
 };
 
-const KanbanBoard = memo(() => {
+interface KanbanBoardProps {
+  /** When set, scopes the board (and task creation) to a single agent. */
+  agentId?: string;
+}
+
+const KanbanBoard = memo<KanbanBoardProps>(({ agentId }) => {
   const { t } = useTranslation('chat');
   const navigate = useWorkspaceAwareNavigate();
   const { allowed: canEditTask } = usePermission('create_content');
 
   const useFetchTaskGroupList = useTaskStore((s) => s.useFetchTaskGroupList);
-  useFetchTaskGroupList({ allAgents: true });
+  useFetchTaskGroupList(agentId ? { agentId } : { allAgents: true });
 
   const taskGroups = useTaskStore(taskListSelectors.taskGroups);
   const isInit = useTaskStore(taskListSelectors.isTaskGroupListInit);
@@ -143,12 +148,14 @@ const KanbanBoard = memo(() => {
   const handleCreateTask = useCallback(() => {
     if (!canEditTask) return;
     createTaskModal({
+      agentId,
+      lockAssignee: !!agentId,
       onCreated: (task) => {
         navigate(taskDetailPath(task.identifier, task.agentId));
       },
       showInlineToggle: false,
     });
-  }, [canEditTask, navigate]);
+  }, [agentId, canEditTask, navigate]);
 
   const handleHideColumn = useCallback(
     (columnKey: string) => {
