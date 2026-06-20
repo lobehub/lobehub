@@ -6,6 +6,8 @@ import { workspaceMembers } from '@/database/schemas';
 import { authedProcedure } from '@/libs/trpc/lambda';
 import { trpc } from '@/libs/trpc/lambda/init';
 
+import { isSuperAdmin } from '../enterprise/superAdmin';
+
 export type WorkspaceRole = 'member' | 'owner' | 'viewer';
 
 const roleRank: Record<WorkspaceRole, number> = {
@@ -22,6 +24,8 @@ const assertWorkspaceRole = async (params: {
   if (!params.workspaceId) return null;
 
   const db = await getServerDB();
+  if (await isSuperAdmin(db, params.userId)) return 'owner';
+
   const membership = await db.query.workspaceMembers.findFirst({
     where: and(
       eq(workspaceMembers.workspaceId, params.workspaceId),
@@ -86,8 +90,8 @@ export const requireWorkspaceRoleWhenScoped = (_minRole: WorkspaceRole) =>
 
 export const wsProcedure = authedProcedure;
 
-export const wsMemberProcedure = authedProcedure;
+export const wsMemberProcedure = authedProcedure.use(requireWorkspaceRoleWhenScoped('member'));
 
-export const wsOwnerProcedure = authedProcedure;
+export const wsOwnerProcedure = authedProcedure.use(requireWorkspaceRoleWhenScoped('owner'));
 
 export const wsCompatProcedure = authedProcedure;

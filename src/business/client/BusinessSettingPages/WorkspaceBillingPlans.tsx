@@ -7,6 +7,7 @@ import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 
 export default function WorkspaceBillingPlans() {
   const workspace = useActiveWorkspace();
+  const canManage = workspace?.role === 'owner' || workspace?.role === 'super_admin';
   const { data, mutate } = useSWR(
     workspace ? ['business/workspace-plan', workspace.id] : null,
     () => lambdaClient.subscription.getWorkspacePlan.query({ workspaceId: workspace!.id }),
@@ -38,7 +39,7 @@ export default function WorkspaceBillingPlans() {
                 : plan.limits.monthlyTokens.toLocaleString()}
             </Text>
             <Button
-              disabled={data.plan === plan.id}
+              disabled={!canManage || data.plan === plan.id}
               size="small"
               type={data.plan === plan.id ? 'primary' : 'default'}
               onClick={async () => {
@@ -50,7 +51,11 @@ export default function WorkspaceBillingPlans() {
                 await mutate();
               }}
             >
-              {data.plan === plan.id ? 'Текущий тариф' : 'Назначить тариф'}
+              {data.plan === plan.id
+                ? 'Текущий тариф'
+                : canManage
+                  ? 'Назначить тариф'
+                  : 'Только для владельца'}
             </Button>
           </Flexbox>
         ))}

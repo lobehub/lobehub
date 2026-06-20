@@ -47,6 +47,15 @@ export const resolveBusinessModelMapping = async (
 const parseModelMapping = (value: string | undefined): Record<string, string> => {
   if (!value) return {};
 
+  const pairs = value
+    .split(',')
+    .map((pair) => pair.split('=').map((item) => item.trim()))
+    .filter(
+      (pair): pair is [string, string] => pair.length === 2 && Boolean(pair[0]) && Boolean(pair[1]),
+    );
+
+  if (pairs.length > 0) return Object.fromEntries(pairs);
+
   try {
     const parsed = JSON.parse(value) as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};

@@ -1,9 +1,14 @@
 'use client';
 
-import { Button, Center } from '@lobehub/ui';
-import { type FC } from 'react';
+import { Button, Center, Flexbox, Text } from '@lobehub/ui';
+import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Outlet, useNavigate } from 'react-router';
+import { Outlet, useLocation, useNavigate } from 'react-router';
+import { mutate } from 'swr';
+
+import { WORKSPACE_LIST_KEY } from '@/business/client/hooks/useWorkspaces';
+import { setActiveWorkspaceSnapshot } from '@/business/client/hooks/workspaceState';
+import { lambdaClient } from '@/libs/trpc/client';
 
 import { useWorkspaceFromSlug } from './useWorkspaceFromSlug';
 
@@ -16,20 +21,53 @@ import { useWorkspaceFromSlug } from './useWorkspaceFromSlug';
  */
 const WorkspaceSlugBoundary: FC = () => {
   const { t } = useTranslation('error');
+  const { search } = useLocation();
   const navigate = useNavigate();
   const result = useWorkspaceFromSlug();
+  const [accepting, setAccepting] = useState(false);
+  const inviteToken = new URLSearchParams(search).get('invite');
 
   // Workspaces are still being fetched — render nothing so the parent layout
   // spinner shows through instead of flashing a false 404.
   if (result.status === 'loading') return null;
 
   if (result.status === 'not-found') {
+    const acceptInvite = async () => {
+      setAccepting(true);
+      try {
+        const accepted = inviteToken
+          ? await lambdaClient.workspaceMember.acceptInvitation.mutate({ token: inviteToken })
+          : (
+              await lambdaClient.workspaceMember.acceptInvitationByWorkspaceSlug.mutate({
+                slug: result.slug,
+              })
+            ).member;
+
+        setActiveWorkspaceSnapshot({ id: accepted.workspaceId, slug: result.slug });
+        await mutate(WORKSPACE_LIST_KEY);
+        navigate(`/${result.slug}`, { replace: true });
+      } finally {
+        setAccepting(false);
+      }
+    };
+
     return (
       <Center gap={16} height={'100%'} style={{ flexDirection: 'column' }} width={'100%'}>
-        <div style={{ fontSize: 48 }}>🔍</div>
-        <div style={{ fontWeight: 600, fontSize: 20 }}>{t('notFound.title')}</div>
-        <div style={{ opacity: 0.6 }}>{t('notFound.check')}</div>
-        <Button onClick={() => navigate('/')}>{t('notFound.backHome')}</Button>
+        <Flexbox align="center" gap={8} style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 48 }}>🔍</div>
+          <Text as="div" style={{ fontWeight: 600, fontSize: 20 }}>
+            Workspace «{result.slug}» пока недоступен
+          </Text>
+          <Text as="div" type="secondary">
+            Если вас пригласили в эту команду, примите приглашение. Иначе проверьте адрес.
+          </Text>
+        </Flexbox>
+        <Flexbox horizontal gap={8}>
+          <Button loading={accepting} type="primary" onClick={acceptInvite}>
+            Принять приглашение
+          </Button>
+          <Button onClick={() => navigate('/')}>{t('notFound.backHome')}</Button>
+        </Flexbox>
       </Center>
     );
   }

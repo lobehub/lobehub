@@ -5,6 +5,8 @@ import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
+import { isSuperAdmin } from '../enterprise/superAdmin';
+
 const auditProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
@@ -27,7 +29,9 @@ export const workspaceAuditLogRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const membership = await ctx.workspaceMemberModel.getMember(input.workspaceId, ctx.userId);
-      if (membership?.role !== 'owner') return { items: [], nextCursor: null };
+      if (membership?.role !== 'owner' && !(await isSuperAdmin(ctx.serverDB, ctx.userId))) {
+        return { items: [], nextCursor: null };
+      }
 
       return ctx.workspaceAuditLogModel.list(input);
     }),

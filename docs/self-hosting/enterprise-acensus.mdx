@@ -1,0 +1,120 @@
+---
+title: Acensus Enterprise для self-hosted установки
+description: Настройка workspace, super-admin, приглашений, локальных тарифов, кредитов, лимитов и Acensus AI facade.
+tags:
+  - Acensus
+  - Enterprise
+  - Self-hosting
+  - Workspace
+---
+
+# Acensus Enterprise для self-hosted установки
+
+Этот режим включает in-house B2B-функции без зависимости от внешнего SaaS-биллинга LobeHub: workspace, роли, приглашения, локальные тарифы, кредиты, лимиты, workspace credentials, sharing и Acensus AI facade.
+
+## Обязательные настройки
+
+```bash
+# Список super-admin: user id или email через запятую
+ACENSUS_SUPER_ADMINS=admin@example.com,user_xxxxxxxxx
+
+# Серверный CometAPI-compatible gateway для встроенного провайдера Acensus AI
+ACENSUS_AI_API_KEY=sk-xxxxxxxx
+ACENSUS_AI_API_TYPE=openai
+ACENSUS_AI_BASE_URL=https://api.cometapi.com/v1
+ACENSUS_AI_MODELS=gpt-4.1,gpt-4.1-mini
+ACENSUS_AI_DEFAULT_MODEL=gpt-4.1-mini
+ACENSUS_AI_MODEL_MAPPING=gpt-4.1=internal-gpt-4.1,gpt-4.1-mini=internal-gpt-4.1-mini
+```
+
+`ACENSUS_AI_API_KEY` остаётся на сервере. Пользователи видят провайдера как `Acensus AI`, а internal provider id остаётся `lobehub`, чтобы не ломать runtime/model-bank интеграции. Если `ACENSUS_AI_BASE_URL` не задан, используется `https://api.cometapi.com/v1`.
+
+## Super-admin
+
+`ACENSUS_SUPER_ADMINS` принимает email или internal user id. Пользователь из списка получает enterprise-права поверх workspace RBAC:
+
+- видит все workspace в переключателе;
+- может открывать любой workspace по slug;
+- может менять настройки workspace, тариф, кредиты, участников и workspace credentials;
+- может читать audit log workspace;
+- может работать через workspace-scoped API, даже если не добавлен как участник.
+
+Super-admin не является автоматически Better Auth admin. Это отдельный enterprise-check для workspace-функций Acensus. Если нужно управление пользователями auth-системы, настраивайте его отдельно в провайдере авторизации.
+
+Также поддерживается значение `users.role = 'super_admin'` или `users.role = 'acensus_super_admin'`, если роль назначается через внутреннюю админку или миграцию.
+
+## Роли workspace
+
+- `owner`: полный контроль workspace, участники, тарифы, кредиты, credentials, настройки и audit.
+- `member`: может работать и общаться внутри workspace, создавать сообщения и использовать общий workspace context.
+- `viewer`: может читать workspace-контент, но не должен выполнять write/admin операции.
+- `super_admin`: не хранится как обычная membership-роль; вычисляется из env/поля пользователя и даёт owner-level доступ ко всем workspace.
+
+Generic RBAC не делает `create` и `update` owner-only. Это важно: `message:create` должен быть доступен участникам workspace, иначе они не смогут общаться. Административные действия ограничиваются отдельными owner-checks или generic actions `manage`, `delete`, `transfer`.
+
+## Приглашения
+
+Владельцы и super-admin могут создавать приглашения на странице участников workspace.
+
+Доступны два сценария:
+
+- Email invite: если email приглашённого совпадает с email аккаунта, пользователь может просто открыть `/{workspaceSlug}` и принять приглашение.
+- Link invite: ссылка вида `/{workspaceSlug}?invite=<token>` принимает конкретный token.
+
+Если SMTP ещё не подключён, скопируйте ссылку вручную из UI и отправьте пользователю через корпоративный канал.
+
+## Локальные тарифы и лимиты
+
+Тариф workspace хранится в `workspaces.settings.plan`.
+
+Доступные тарифы:
+
+- `starter`: до 5 участников, 2 000 000 токенов в месяц.
+- `business`: до 50 участников, 50 000 000 токенов в месяц.
+- `enterprise`: без лимитов.
+
+Страница Usage показывает usage summary и quota status. Перед production rollout рекомендуется включить hard enforcement лимитов в generation/runtime path, если лимиты должны быть финансовым контролем, а не только мониторингом.
+
+## Кредиты
+
+Баланс workspace хранится в `workspaces.settings.creditBalance`.
+
+Операции top-up и spend пишутся в `workspaces.settings.creditLedger`. Это подходит для in-house chargeback и ручного администрирования. Для строгого финансового учёта перенесите ledger в отдельную append-only таблицу с immutable audit trail.
+
+## Workspace credentials
+
+Workspace credentials доступны через `workspaceCreds` и хранятся в `workspaces.settings.workspaceCreds`.
+
+Поддерживаются:
+
+- KV env/header secrets;
+- file credentials;
+- OAuth connection records;
+- inject/list/get/update/delete операции.
+
+Для production с реальными секретами включите шифрование на уровне storage. Минимальный вариант: хранить values через общий key-vault/envelope encryption, а в `settings` оставлять только metadata и encrypted payload.
+
+## Data tools
+
+`workspaceData.exportSummary` возвращает summary workspace: участники, agents, groups, files, sessions, topics, messages, API keys и настройки.
+
+`workspaceData.clearApiKeys` удаляет API keys workspace и доступен только owner/super-admin.
+
+## Sharing
+
+Page sharing позволяет публиковать readonly-документы по share id. Настройки sharing хранятся в metadata документа. Для external sharing в production проверьте требования к access policy, rate limit и watermarking.
+
+## Account deletion
+
+Account deletion удаляет текущего пользователя после подтверждения `DELETE_MY_ACCOUNT`. В enterprise deployment обычно дополнительно нужны retention policy, legal hold и export-before-delete workflow.
+
+## Что проверить перед production
+
+- `ACENSUS_SUPER_ADMINS` задан только для доверенных администраторов.
+- SMTP/почтовый канал подключён или есть регламент ручной отправки invite links.
+- Workspace credentials шифруются, если через них идут реальные секреты.
+- Credit ledger вынесен в отдельную таблицу, если нужен финансовый audit-grade учёт.
+- Quota enforcement включён в runtime/generation path, если лимиты должны блокировать spend.
+- Backup/restore PostgreSQL покрывает `workspaces.settings`.
+- Audit events включены для admin actions: участники, тарифы, кредиты, credentials, sharing, data tools.
+- Все внешние reverse proxies пробрасывают auth cookies и не режут `X-Workspace-Id`.

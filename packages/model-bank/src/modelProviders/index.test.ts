@@ -3,6 +3,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type ModelProviderCard } from '@/types/llm';
 
 import { DEFAULT_MODEL_PROVIDER_LIST, isProviderDisableBrowserRequest } from './index';
+import LobeHubProvider from './lobehub';
+
+describe('official business provider card', () => {
+  it('shows Acensus AI while keeping the stable internal provider id', () => {
+    expect(LobeHubProvider.id).toBe('lobehub');
+    expect(LobeHubProvider.name).toBe('Acensus AI');
+    expect(LobeHubProvider.description).toContain('Acensus AI');
+  });
+});
 
 describe('isProviderDisableBrowserRequest', () => {
   const originalProviders = [...DEFAULT_MODEL_PROVIDER_LIST];

@@ -8,6 +8,7 @@ import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 
 export default function WorkspaceBillingCredits() {
   const workspace = useActiveWorkspace();
+  const canManage = workspace?.role === 'owner' || workspace?.role === 'super_admin';
   const [amount, setAmount] = useState('');
   const { data, mutate } = useSWR(
     workspace ? ['business/workspace-credits', workspace.id] : null,
@@ -33,12 +34,16 @@ export default function WorkspaceBillingCredits() {
       <Text weight={600}>Кредиты</Text>
       <Text type="secondary">Кредиты управляются локально и не завязаны на SaaS-платежи.</Text>
       <Text>Баланс: {data?.balance ?? 0}</Text>
-      <Flexbox horizontal gap={8}>
-        <Input placeholder="Сумма" value={amount} onChange={(e) => setAmount(e.target.value)} />
-        <Button type="primary" onClick={topUp}>
-          Пополнить
-        </Button>
-      </Flexbox>
+      {canManage ? (
+        <Flexbox horizontal gap={8}>
+          <Input placeholder="Сумма" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <Button type="primary" onClick={topUp}>
+            Пополнить
+          </Button>
+        </Flexbox>
+      ) : (
+        <Text type="secondary">Пополнять баланс могут только владельцы workspace.</Text>
+      )}
     </Flexbox>
   );
 }

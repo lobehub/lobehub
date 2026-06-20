@@ -8,6 +8,8 @@ import { messages, workspaceMembers } from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
+import { isSuperAdmin } from '../enterprise/superAdmin';
+
 const usageProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
@@ -35,7 +37,7 @@ export const workspaceUsageRouter = router({
     .input(z.object({ workspaceId: z.string() }))
     .query(async ({ ctx, input }) => {
       const membership = await ctx.workspaceMemberModel.getMember(input.workspaceId, ctx.userId);
-      if (!membership)
+      if (!membership && !(await isSuperAdmin(ctx.serverDB, ctx.userId)))
         throw new TRPCError({ code: 'FORBIDDEN', message: 'No access to this workspace' });
 
       const [memberStats] = await ctx.serverDB
@@ -74,7 +76,7 @@ export const workspaceUsageRouter = router({
     .input(z.object({ workspaceId: z.string() }))
     .query(async ({ ctx, input }) => {
       const membership = await ctx.workspaceMemberModel.getMember(input.workspaceId, ctx.userId);
-      if (!membership)
+      if (!membership && !(await isSuperAdmin(ctx.serverDB, ctx.userId)))
         throw new TRPCError({ code: 'FORBIDDEN', message: 'No access to this workspace' });
 
       const settings = (await ctx.workspaceModel.getSettings(input.workspaceId)) as Record<

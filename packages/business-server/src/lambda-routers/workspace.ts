@@ -1,11 +1,16 @@
 import { TRPCError } from '@trpc/server';
+import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { WorkspaceModel } from '@/database/models/workspace';
 import { WorkspaceAuditLogModel } from '@/database/models/workspaceAuditLog';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
+import { workspaces } from '@/database/schemas';
+import type { LobeChatDatabase } from '@/database/type';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+
+import { isSuperAdmin } from '../enterprise/superAdmin';
 
 const workspaceProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
@@ -21,12 +26,14 @@ const workspaceProcedure = authedProcedure.use(serverDatabase).use(async (opts) 
 
 const assertOwner = async (
   ctx: {
+    serverDB: LobeChatDatabase;
     userId: string;
     workspaceMemberModel: WorkspaceMemberModel;
   },
   workspaceId: string,
 ) => {
   const membership = await ctx.workspaceMemberModel.getMember(workspaceId, ctx.userId);
+  if (await isSuperAdmin(ctx.serverDB, ctx.userId)) return;
   if (membership?.role !== 'owner') {
     throw new TRPCError({
       code: 'FORBIDDEN',
@@ -92,7 +99,11 @@ export const workspaceRouter = router({
         userId: ctx.userId,
         workspaceId: input.id,
       });
-      await ctx.workspaceModel.delete(input.id);
+      if (await isSuperAdmin(ctx.serverDB, ctx.userId)) {
+        await ctx.serverDB.delete(workspaces).where(eq(workspaces.id, input.id));
+      } else {
+        await ctx.workspaceModel.delete(input.id);
+      }
     }),
 
   ensureMarketOrganization: workspaceProcedure.mutation(
@@ -101,7 +112,17 @@ export const workspaceRouter = router({
     }),
   ),
 
-  list: workspaceProcedure.query(async ({ ctx }) => ctx.workspaceModel.listUserWorkspaces()),
+  list: workspaceProcedure.query(async ({ ctx }) => {
+    if (await isSuperAdmin(ctx.serverDB, ctx.userId)) {
+      const items = await ctx.serverDB.query.workspaces.findMany({
+        orderBy: (table, { desc }) => [desc(table.updatedAt)],
+      });
+
+      return items.map((workspace) => ({ ...workspace, role: 'super_admin' }));
+    }
+
+    return ctx.workspaceModel.listUserWorkspaces();
+  }),
 
   update: workspaceProcedure
     .input(

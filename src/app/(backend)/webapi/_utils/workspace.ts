@@ -1,3 +1,4 @@
+import { isSuperAdmin } from '@lobechat/business-server/enterprise/superAdmin';
 import { and, eq, isNull } from 'drizzle-orm';
 
 import { workspaceMembers, workspaces } from '@/database/schemas';
@@ -18,6 +19,8 @@ export const resolveValidWorkspaceIdFromRequest = async (params: {
     where: eq(workspaces.id, workspaceId),
   });
   if (!workspace) return undefined;
+
+  if (await isSuperAdmin(params.serverDB, params.userId)) return workspaceId;
 
   const membership = await params.serverDB.query.workspaceMembers.findFirst({
     columns: { userId: true },

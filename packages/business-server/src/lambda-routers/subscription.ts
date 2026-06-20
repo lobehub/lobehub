@@ -7,6 +7,8 @@ import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
+import { isSuperAdmin } from '../enterprise/superAdmin';
+
 const planSchema = z.enum(['starter', 'business', 'enterprise']);
 
 const plans = [
@@ -44,7 +46,7 @@ export const subscriptionRouter = router({
     .input(z.object({ workspaceId: z.string() }))
     .query(async ({ ctx, input }) => {
       const membership = await ctx.workspaceMemberModel.getMember(input.workspaceId, ctx.userId);
-      if (!membership) {
+      if (!membership && !(await isSuperAdmin(ctx.serverDB, ctx.userId))) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'No access to this workspace' });
       }
 
@@ -64,7 +66,7 @@ export const subscriptionRouter = router({
     .input(z.object({ plan: planSchema, workspaceId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const membership = await ctx.workspaceMemberModel.getMember(input.workspaceId, ctx.userId);
-      if (membership?.role !== 'owner') {
+      if (membership?.role !== 'owner' && !(await isSuperAdmin(ctx.serverDB, ctx.userId))) {
         throw new TRPCError({
           code: 'FORBIDDEN',
           message: 'Only owners can update workspace plan',

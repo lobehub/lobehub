@@ -5,7 +5,10 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { workspaceMembers } from '@/database/schemas';
 import { trpc } from '@/libs/trpc/lambda/init';
 
-const OWNER_ACTIONS = new Set(['create', 'delete', 'update', 'manage', 'transfer']);
+import { isSuperAdmin } from '../enterprise/superAdmin';
+
+const OWNER_ACTIONS = new Set(['manage', 'transfer']);
+const WRITE_ACTIONS = new Set(['create', 'delete', 'update']);
 
 const requiresOwner = (code: string) => {
   const action = code.split(':').at(-1) ?? '';
@@ -21,6 +24,8 @@ const assertPermission = async (params: {
   if (!params.userId) throw new TRPCError({ code: 'UNAUTHORIZED' });
 
   const db = await getServerDB();
+  if (await isSuperAdmin(db, params.userId)) return;
+
   const membership = await db.query.workspaceMembers.findFirst({
     where: and(
       eq(workspaceMembers.workspaceId, params.workspaceId),
@@ -30,6 +35,10 @@ const assertPermission = async (params: {
   });
 
   if (!membership) throw new TRPCError({ code: 'FORBIDDEN', message: 'Нет доступа к workspace' });
+  const action = params.code.split(':').at(-1) ?? '';
+  if (WRITE_ACTIONS.has(action) && membership.role === 'viewer') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Требуется роль участника workspace' });
+  }
   if (requiresOwner(params.code) && membership.role !== 'owner') {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'Требуется роль владельца workspace' });
   }

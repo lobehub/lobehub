@@ -19,13 +19,14 @@ interface LobehubRouterRuntimeOptions {
   routers: (options: any, runtimeContext: { model?: string }) => Promise<RouterInstance[]>;
 }
 
-const parseModels = (value: string | undefined): string[] | undefined => {
-  const models = value
-    ?.split(',')
+const parseModels = (...values: Array<string | undefined>): string[] | undefined => {
+  const models = values
+    .filter(Boolean)
+    .flatMap((item) => item!.split(','))
     .map((item) => item.trim())
     .filter(Boolean);
 
-  return models?.length ? models : undefined;
+  return models.length ? models : undefined;
 };
 
 export const lobehubRouterRuntimeOptions: LobehubRouterRuntimeOptions = {
@@ -39,11 +40,14 @@ export const lobehubRouterRuntimeOptions: LobehubRouterRuntimeOptions = {
       {
         apiType: options?.apiType || process.env.ACENSUS_AI_API_TYPE || 'openai',
         models:
-          parseModels(options?.models || process.env.ACENSUS_AI_MODELS) ??
-          (model ? [model] : undefined),
+          parseModels(
+            options?.models || process.env.ACENSUS_AI_MODELS,
+            process.env.ACENSUS_AI_DEFAULT_MODEL,
+          ) ?? (model ? [model] : undefined),
         options: {
           apiKey,
-          baseURL: options?.baseURL || process.env.ACENSUS_AI_BASE_URL,
+          baseURL:
+            options?.baseURL || process.env.ACENSUS_AI_BASE_URL || 'https://api.cometapi.com/v1',
         },
       },
     ];

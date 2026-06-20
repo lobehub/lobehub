@@ -2,7 +2,10 @@ import { TRPCError } from '@trpc/server';
 
 import { WorkspaceModel } from '@/database/models/workspace';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
+import type { WorkspaceMemberItem } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+
+import { isSuperAdmin } from '../enterprise/superAdmin';
 
 export interface WorkspaceControlContext {
   serverDB: LobeChatDatabase;
@@ -17,6 +20,17 @@ export const getWorkspaceControl = (ctx: WorkspaceControlContext) => ({
 export const assertWorkspaceMember = async (ctx: WorkspaceControlContext, workspaceId: string) => {
   const { memberModel } = getWorkspaceControl(ctx);
   const membership = await memberModel.getMember(workspaceId, ctx.userId);
+  if (!membership && (await isSuperAdmin(ctx.serverDB, ctx.userId))) {
+    return {
+      deletedAt: null,
+      joinedAt: new Date(0),
+      role: 'owner',
+      updatedAt: new Date(0),
+      userId: ctx.userId,
+      workspaceId,
+    } satisfies WorkspaceMemberItem;
+  }
+
   if (!membership) {
     throw new TRPCError({
       code: 'FORBIDDEN',
