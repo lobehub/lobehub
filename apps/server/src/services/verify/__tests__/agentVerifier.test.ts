@@ -1,4 +1,5 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { VerifyToolIdentifier } from '@lobechat/builtin-tool-verify';
 import type { VerifyCheckItem } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,11 +9,18 @@ import { createVerifierAgentRunner } from '../agentVerifier';
 // (instance props, not on the prototype), so they can't be spied via the
 // prototype — mock the modules instead. Hoisted so the factories can close over them.
 const { existsByIdMock, getBuiltinAgentMock, threadCreateMock, execAgentMock } = vi.hoisted(() => ({
-  execAgentMock: vi.fn(async () => ({ operationId: 'verifier-op-1' })),
+  execAgentMock: vi.fn(async (_params: any) => ({ operationId: 'verifier-op-1' })),
   existsByIdMock: vi.fn(),
   getBuiltinAgentMock: vi.fn(),
   threadCreateMock: vi.fn(async () => ({ id: 'thread-1' })),
 }));
+
+/** The single execAgent param object, asserted to exist. */
+const execParams = (): any => {
+  const call = execAgentMock.mock.calls[0];
+  expect(call).toBeDefined();
+  return call![0];
+};
 
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn().mockImplementation(() => ({
@@ -72,12 +80,14 @@ describe('createVerifierAgentRunner', () => {
     expect(existsByIdMock).toHaveBeenCalledWith('agent-codex');
     expect(getBuiltinAgentMock).not.toHaveBeenCalled();
 
-    const params = execAgentMock.mock.calls[0][0];
+    const params = execParams();
     expect(params.agentId).toBe('agent-codex');
     // A pinned agent keeps its own agency — never overridden by the parent run.
     expect(params.slug).toBeUndefined();
     expect(params.model).toBeUndefined();
     expect(params.provider).toBeUndefined();
+    // A pinned agent lacks the writeback tool, so it must be injected.
+    expect(params.additionalPluginIds).toEqual([VerifyToolIdentifier]);
   });
 
   it('falls back to the builtin verify agent (by slug) inheriting parent model/provider', async () => {
@@ -88,11 +98,13 @@ describe('createVerifierAgentRunner', () => {
     await runner(runnerArgs);
 
     expect(getBuiltinAgentMock).toHaveBeenCalledWith(BUILTIN_AGENT_SLUGS.verifyAgent);
-    const params = execAgentMock.mock.calls[0][0];
+    const params = execParams();
     expect(params.slug).toBe(BUILTIN_AGENT_SLUGS.verifyAgent);
     expect(params.agentId).toBeUndefined();
     expect(params.model).toBe('gpt-parent');
     expect(params.provider).toBe('openai');
+    // The builtin verify agent already declares the tool — not re-injected.
+    expect(params.additionalPluginIds).toBeUndefined();
   });
 
   it('uses the builtin agent when no verifierAgentId is pinned', async () => {
@@ -103,6 +115,6 @@ describe('createVerifierAgentRunner', () => {
 
     // No pinned id → never probes existsById, goes straight to the builtin.
     expect(existsByIdMock).not.toHaveBeenCalled();
-    expect(execAgentMock.mock.calls[0][0].slug).toBe(BUILTIN_AGENT_SLUGS.verifyAgent);
+    expect(execParams().slug).toBe(BUILTIN_AGENT_SLUGS.verifyAgent);
   });
 });

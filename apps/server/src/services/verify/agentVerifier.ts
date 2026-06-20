@@ -1,4 +1,5 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { VerifyToolIdentifier } from '@lobechat/builtin-tool-verify';
 import type { VerifyCheckItem } from '@lobechat/types';
 import { ThreadType } from '@lobechat/types';
 import debug from 'debug';
@@ -84,10 +85,16 @@ export const createVerifierAgentRunner = (params: {
     let threadAgentId: string;
     let agentRef: { agentId: string } | { slug: string };
     let inheritModel = false;
+    // A pinned agent (selected for its runtime/device) carries only its own
+    // configured plugins, so it lacks the verify writeback tool — inject it, else
+    // the verdict never lands and the check result is stuck `running`. The builtin
+    // verify agent already declares this tool in its plugins, so it isn't re-added.
+    let extraPluginIds: string[] = [];
 
     if (verifierAgentId && (await agentModel.existsById(verifierAgentId))) {
       threadAgentId = verifierAgentId;
       agentRef = { agentId: verifierAgentId };
+      extraPluginIds = [VerifyToolIdentifier];
     } else {
       if (verifierAgentId) {
         log('pinned verify agent %s not found, falling back to builtin', verifierAgentId);
@@ -118,6 +125,8 @@ export const createVerifierAgentRunner = (params: {
     // → verify lifecycle → this runner → aiAgent.
     const { AiAgentService } = await import('@/server/services/aiAgent');
     const result = await new AiAgentService(db, userId, { workspaceId }).execAgent({
+      // Inject the verify writeback tool for pinned agents (no-op list otherwise).
+      ...(extraPluginIds.length ? { additionalPluginIds: extraPluginIds } : {}),
       appContext: { threadId: thread.id, topicId },
       autoStart: true,
       // Only the builtin fallback inherits the parent run's model/provider; a
