@@ -1465,11 +1465,25 @@ export class ClaudeCodeAdapter implements AgentEventAdapter {
       if (!forcePostToolBoundary) return [];
       this.stepIndex++;
       this.currentTurnHadToolUse = false;
+      // The post-tool answer is the natural follow-up to the preceding
+      // tool_result — consume the user-input flag exactly like the normal turn
+      // boundary does (below), or a later signal callback (e.g. a Monitor stdout
+      // turn opened while a task is active) would see a stale `true` and skip
+      // its external-signal tag.
+      this.hasUnhandledUserInput = false;
       this.pendingExternalSignal = undefined;
+      // Reusing the tool turn's message.id as the newStep id would make the
+      // reducer treat this as a REPLAY and drop it (it ignores a `newStep` whose
+      // id === currentMainMessageId). For any tool turn opened by a prior
+      // newStep that id already IS currentMainMessageId, so the split would be
+      // dropped and the text would coalesce anyway. Stamp a DISTINCT,
+      // replay-stable idempotency key — suffixed by stepIndex, so it is unique
+      // per split and deterministic across cold-replica reprocessing — so a
+      // fresh assistant is actually opened.
       return [
         this.makeEvent('stream_end', {}),
         this.makeEvent('stream_start', {
-          messageId,
+          messageId: `${messageId}:s${this.stepIndex}`,
           model,
           newStep: true,
           provider: 'claude-code',
