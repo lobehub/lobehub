@@ -3,6 +3,7 @@ import { realpathSync } from 'node:fs';
 
 import type { Command } from 'commander';
 import pc from 'picocolors';
+import semver from 'semver';
 
 // Pull package metadata from the shared `src/pkg.ts` module (resolved at the
 // bundled entry's depth) rather than a local `require('../../package.json')`,
@@ -68,27 +69,18 @@ export function buildInstallCommand(
   }
 }
 
-/** Compare two semver strings. Returns 1 if a > b, -1 if a < b, 0 if equal. */
-export function compareSemver(a: string, b: string): number {
-  const parse = (value: string) => {
-    const [core, pre] = value.replace(/^v/, '').split('-');
-    const nums = core.split('.').map((part) => Number.parseInt(part, 10) || 0);
-    return { nums, pre };
-  };
-
-  const pa = parse(a);
-  const pb = parse(b);
-
-  for (let i = 0; i < 3; i += 1) {
-    const diff = (pa.nums[i] || 0) - (pb.nums[i] || 0);
-    if (diff !== 0) return diff > 0 ? 1 : -1;
-  }
-
-  // Equal core: a stable release outranks a prerelease of the same core.
-  if (!pa.pre && pb.pre) return 1;
-  if (pa.pre && !pb.pre) return -1;
-  if (pa.pre && pb.pre) return pa.pre === pb.pre ? 0 : pa.pre > pb.pre ? 1 : -1;
-  return 0;
+/**
+ * Whether `latest` is a newer version than `current`. Delegates to `semver` so
+ * prerelease identifiers order correctly (e.g. `1.0.0-beta.10` > `1.0.0-beta.9`,
+ * which a lexicographic compare gets wrong). Tolerates a leading `v` and missing
+ * segments via coercion; an unparseable `latest` is treated as "not newer".
+ */
+export function isNewerVersion(latest: string, current: string): boolean {
+  const latestParsed = semver.coerce(latest, { includePrerelease: true }) ?? semver.parse(latest);
+  const currentParsed =
+    semver.coerce(current, { includePrerelease: true }) ?? semver.parse(current);
+  if (!latestParsed || !currentParsed) return false;
+  return semver.gt(latestParsed, currentParsed);
 }
 
 async function fetchLatestVersion(name: string, tag: string): Promise<string> {
@@ -157,7 +149,7 @@ export function registerUpdateCommand(program: Command) {
 
       log.info(`Latest version:  ${pc.bold(latest)} ${pc.dim(`(${tag})`)}`);
 
-      if (compareSemver(latest, current) <= 0) {
+      if (!isNewerVersion(latest, current)) {
         log.info(pc.green('Already on the latest version.'));
         return;
       }
