@@ -8,7 +8,6 @@ import type { ChatMethodOptions, ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload } from '../../types/image';
 import { AgentRuntimeError } from '../../utils/createError';
-import { resolveMappedModelId } from '../../utils/modelIdMapping';
 import { sanitizeError } from '../../utils/sanitizeError';
 import {
   isResponsesAPIModel,
@@ -211,7 +210,7 @@ export class LobeAzureOpenAI extends BaseAzureOpenAI {
 
   async createImage(payload: CreateImagePayload) {
     const { model, params } = payload;
-    const requestModel = resolveMappedModelId(model, this._options);
+    const requestModel = this.getMappedModelId(model);
     azureImageLogger('Creating image with model: %s and params: %O', requestModel, params);
 
     try {

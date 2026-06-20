@@ -134,11 +134,13 @@ describe('LobeOpenAICompatibleFactory', () => {
     });
 
     it('should keep logical model for provider payload handling while sending mapped model id', async () => {
-      const handlePayload = vi.fn((payload: ChatStreamPayload) => ({
-        messages: payload.messages,
-        model: payload.model,
-        stream: payload.stream ?? true,
-      }));
+      const handlePayload = vi.fn(
+        (payload: ChatStreamPayload): OpenAI.ChatCompletionCreateParamsStreaming => ({
+          messages: payload.messages as OpenAI.ChatCompletionCreateParamsStreaming['messages'],
+          model: payload.model,
+          stream: true,
+        }),
+      );
       const Runtime = createOpenAICompatibleRuntime({
         baseURL: defaultBaseURL,
         chatCompletion: { handlePayload },

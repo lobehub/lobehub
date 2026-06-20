@@ -243,7 +243,7 @@ describe('createAnthropicCompatibleRuntime', () => {
       model: 'logical-model',
       schema: {
         name: 'result',
-        schema: { type: 'object' },
+        schema: { properties: {}, type: 'object' },
       },
     });
 

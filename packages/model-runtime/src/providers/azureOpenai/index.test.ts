@@ -454,10 +454,12 @@ describe('LobeAzureOpenAI', () => {
       const editSpy = vi
         .spyOn(instance['client'].images, 'edit')
         .mockResolvedValue({ data: [{ url: 'https://example.com/mapped.png' }] } as any);
+      const helpers = await import('../../core/contextBuilders/openai');
+      vi.spyOn(helpers, 'convertImageUrlToFile').mockResolvedValue({} as any);
 
       await instance.createImage({
         model: 'gpt-image-1',
-        params: { image: new Blob(['image']) as any, prompt: 'mapped cat' },
+        params: { imageUrl: 'https://example.com/source.png', prompt: 'mapped cat' },
       });
 
       expect(vi.mocked(editSpy).mock.calls[0][0]).toMatchObject({

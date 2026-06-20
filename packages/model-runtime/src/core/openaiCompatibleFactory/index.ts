@@ -356,13 +356,17 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       this.logPrefix = `lobe-model-runtime:${this.id}`;
     }
 
+    protected getMappedModelId(model: string) {
+      return resolveMappedModelId(model, this.modelIdMappingOptions);
+    }
+
     private withMappedRequestModel<TPayload extends { model?: string }>(
       requestPayload: TPayload,
       logicalModel: string,
     ): TPayload {
       if (!requestPayload.model) return requestPayload;
 
-      const mappedModel = resolveMappedModelId(logicalModel, this.modelIdMappingOptions);
+      const mappedModel = this.getMappedModelId(logicalModel);
       if (requestPayload.model !== logicalModel || mappedModel === requestPayload.model) {
         return requestPayload;
       }
