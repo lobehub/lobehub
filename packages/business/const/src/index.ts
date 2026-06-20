@@ -8,7 +8,7 @@ const isDev = process.env.NODE_ENV === 'development';
 
 export const ENABLE_BUSINESS_FEATURES = true;
 
-export const AGENT_ONBOARDING_ENABLED = isDev;
+export const AGENT_ONBOARDING_ENABLED = true;
 
 export const OFFICIAL_PROVIDER_DISABLE_ERROR = 'The official provider cannot be disabled.';
 
