@@ -63,6 +63,31 @@ interface PromotionCard {
   title: string;
 }
 
+type FooterMenuItems = NonNullable<MenuProps['items']>;
+
+/**
+ * Wrap each clickable menu item with a unified click tracker, preserving any
+ * existing onClick. Skips dividers and items without a key. Used to measure
+ * which footer menu entries get clicked (breakdown by `key`).
+ */
+const injectMenuTracking = (
+  items: FooterMenuItems,
+  track: (key: string) => void,
+): FooterMenuItems =>
+  items.map((item) => {
+    if (!item || (item as { type?: string }).type === 'divider') return item;
+    const key = (item as { key?: string | number }).key;
+    if (!key) return item;
+    const originalOnClick = (item as { onClick?: (info: unknown) => void }).onClick;
+    return {
+      ...item,
+      onClick: (info: unknown) => {
+        track(String(key));
+        originalOnClick?.(info);
+      },
+    };
+  });
+
 const Footer = memo(() => {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
@@ -132,6 +157,20 @@ const Footer = memo(() => {
     (eventName: string, properties: Record<string, string>) => {
       try {
         analytics?.track({ name: eventName, properties });
+      } catch {
+        // silently ignore tracking errors to avoid affecting business logic
+      }
+    },
+    [analytics],
+  );
+
+  const trackMenuClick = useCallback(
+    (key: string) => {
+      try {
+        analytics?.track({
+          name: 'home_footer_menu_clicked',
+          properties: { key, spm: `homepage.footer.${key}.clicked` },
+        });
       } catch {
         // silently ignore tracking errors to avoid affecting business logic
       }
@@ -252,8 +291,8 @@ const Footer = memo(() => {
     t,
   ]);
 
-  const helpMenuItems: MenuProps['items'] = useMemo(
-    () => [
+  const helpMenuItems: MenuProps['items'] = useMemo(() => {
+    const ownItems: FooterMenuItems = [
       ...(footer.showSettingsEntry && !isDevMode
         ? [
             {
@@ -342,25 +381,49 @@ const Footer = memo(() => {
             },
           ]
         : []),
+    ];
+
+    return [
+      ...injectMenuTracking(ownItems, trackMenuClick),
       ...(isHomeSidebar && billboardMenuItems && billboardMenuItems.length > 0
         ? [{ type: 'divider' as const }, ...billboardMenuItems]
         : []),
-    ],
-    [
-      footer.showSettingsEntry,
-      footer.layout,
-      footer.hideGitHub,
-      footer.showEvalEntry,
-      enableBusinessFeatures,
-      handleOpenChangelogModal,
-      handleOpenFeedbackModal,
-      handleOpenProductHuntCard,
-      isDevMode,
-      shouldShowProductHuntMenuEntry,
-      t,
-      billboardMenuItems,
-      isHomeSidebar,
-    ],
+    ];
+  }, [
+    trackMenuClick,
+    footer.showSettingsEntry,
+    footer.layout,
+    footer.hideGitHub,
+    footer.showEvalEntry,
+    enableBusinessFeatures,
+    handleOpenChangelogModal,
+    handleOpenFeedbackModal,
+    handleOpenProductHuntCard,
+    isDevMode,
+    shouldShowProductHuntMenuEntry,
+    t,
+    billboardMenuItems,
+    isHomeSidebar,
+  ]);
+
+  const handleMenuOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) return;
+      const keys = (helpMenuItems ?? [])
+        .filter((item) => item && (item as { type?: string }).type !== 'divider')
+        .map((item) => (item as { key?: string | number }).key)
+        .filter((key): key is string | number => key !== undefined)
+        .map(String);
+      try {
+        analytics?.track({
+          name: 'home_footer_menu_opened',
+          properties: { keys: keys.join(','), spm: 'homepage.footer.opened' },
+        });
+      } catch {
+        // silently ignore tracking errors to avoid affecting business logic
+      }
+    },
+    [analytics, helpMenuItems],
   );
 
   return (
@@ -368,7 +431,11 @@ const Footer = memo(() => {
       {footer.layout === 'expanded' ? (
         <Flexbox horizontal align={'center'} gap={2} justify={'space-between'} padding={8}>
           <Flexbox horizontal align={'center'} flex={1} gap={2}>
-            <DropdownMenu items={helpMenuItems} placement="topLeft">
+            <DropdownMenu
+              items={helpMenuItems}
+              placement="topLeft"
+              onOpenChange={handleMenuOpenChange}
+            >
               <ActionIcon
                 aria-label={t('userPanel.help')}
                 data-billboard-anchor=""
@@ -389,7 +456,11 @@ const Footer = memo(() => {
         </Flexbox>
       ) : (
         <Flexbox horizontal align={'center'} gap={2} padding={8}>
-          <DropdownMenu items={helpMenuItems} placement="topLeft">
+          <DropdownMenu
+            items={helpMenuItems}
+            placement="topLeft"
+            onOpenChange={handleMenuOpenChange}
+          >
             <ActionIcon aria-label={t('userPanel.help')} icon={CircleHelp} size={16} />
           </DropdownMenu>
           {isDevMode && (

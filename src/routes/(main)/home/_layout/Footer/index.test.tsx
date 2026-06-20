@@ -318,3 +318,40 @@ describe('Footer agent onboarding promotion', () => {
     expect(screen.queryByTestId('highlight-notification')).not.toBeInTheDocument();
   });
 });
+
+describe('Footer help menu tracking', () => {
+  it('tracks menu open with the visible item keys', async () => {
+    const user = userEvent.setup();
+    await renderFooter({ enableBusinessFeatures: true });
+
+    await user.click(screen.getByRole('button', { name: 'Help' }));
+
+    const openedCall = analyticsTrack.mock.calls.find(
+      ([event]) => event?.name === 'home_footer_menu_opened',
+    );
+    expect(openedCall).toBeTruthy();
+    expect((openedCall![0].properties.keys as string).split(',')).toContain('inviteFriend');
+  }, 20000);
+
+  it('tracks a unified click event when the invite friend entry is clicked', async () => {
+    const user = userEvent.setup();
+    await renderFooter({ enableBusinessFeatures: true });
+
+    await user.click(screen.getByRole('button', { name: 'Help' }));
+    await user.click(await screen.findByText('Invite a friend'));
+
+    expect(analyticsTrack).toHaveBeenCalledWith({
+      name: 'home_footer_menu_clicked',
+      properties: { key: 'inviteFriend', spm: 'homepage.footer.inviteFriend.clicked' },
+    });
+  }, 20000);
+
+  it('does not render the invite friend entry without business features', async () => {
+    const user = userEvent.setup();
+    await renderFooter({ enableBusinessFeatures: false });
+
+    await user.click(screen.getByRole('button', { name: 'Help' }));
+
+    expect(screen.queryByText('Invite a friend')).not.toBeInTheDocument();
+  }, 20000);
+});
