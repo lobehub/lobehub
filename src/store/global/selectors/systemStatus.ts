@@ -26,6 +26,11 @@ const sessionGroupKeys = (s: GlobalState): string[] =>
 
 const topicGroupKeys = (s: GlobalState): string[] | undefined => s.status.expandTopicGroupKeys;
 
+const agentSidebarSections =
+  (agentId: string | undefined) =>
+  (s: GlobalState): Record<string, boolean> | undefined =>
+    agentId ? s.status.expandAgentSidebarSectionsByAgent?.[agentId] : undefined;
+
 const topicPageSize = (s: GlobalState): number => s.status.topicPageSize || 20;
 
 const agentPageSize = (s: GlobalState): number => s.status.agentPageSize || 5;
@@ -357,6 +362,7 @@ export const systemStatusSelectors = {
   taskKanbanHiddenPanelCollapsed,
   taskListViewOptions,
   sidebarExpandedKeys,
+  agentSidebarSections,
   sidebarItems,
   sessionGroupKeys,
   showAgentBuilderPanel,

@@ -25,6 +25,11 @@ import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';
 
 export interface CreateTaskContentProps {
   agentId?: string;
+  /**
+   * Locks the assignee to `agentId` and hides the agent picker. Used on the
+   * agent-scoped task list where every task belongs to that agent.
+   */
+  lockAssignee?: boolean;
   onCreated?: (task: { agentId?: string; identifier: string }) => void;
   /**
    * Whether to show the "minimize to inline entry" button. Only the list view has an
@@ -34,7 +39,7 @@ export interface CreateTaskContentProps {
 }
 
 const CreateTaskContent = memo<CreateTaskContentProps>(
-  ({ agentId, onCreated, showInlineToggle = true }) => {
+  ({ agentId, lockAssignee, onCreated, showInlineToggle = true }) => {
     const { t } = useTranslation('chat');
     const { close } = useModalContext();
     const { allowed: canCreateTask, reason } = usePermission('create_content');
@@ -177,31 +182,44 @@ const CreateTaskContent = memo<CreateTaskContentProps>(
               </Block>
             </TaskPriorityTag>
 
-            <AssigneeAgentSelector currentAgentId={assigneeAgentId} onChange={setAssigneeAgentId}>
-              <Block
-                clickable
-                horizontal
-                align="center"
-                gap={6}
-                paddingBlock={4}
-                paddingInline={8}
-                variant={'borderless'}
-              >
-                {assigneeAgentId ? (
-                  <>
-                    <AssigneeAvatar agentId={assigneeAgentId} size={18} />
-                    <Text fontSize={12}>{assigneeMeta?.title}</Text>
-                  </>
-                ) : (
-                  <>
-                    <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={14} />
-                    <Text color={cssVar.colorTextDescription} fontSize={12}>
-                      {t('createTask.assignee')}
-                    </Text>
-                  </>
-                )}
-              </Block>
-            </AssigneeAgentSelector>
+            {(() => {
+              const assigneeChip = (
+                <Block
+                  horizontal
+                  align="center"
+                  clickable={!lockAssignee}
+                  gap={6}
+                  paddingBlock={4}
+                  paddingInline={8}
+                  variant={'borderless'}
+                >
+                  {assigneeAgentId ? (
+                    <>
+                      <AssigneeAvatar agentId={assigneeAgentId} size={18} />
+                      <Text fontSize={12}>{assigneeMeta?.title}</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Icon color={cssVar.colorTextDescription} icon={UserCircle2} size={14} />
+                      <Text color={cssVar.colorTextDescription} fontSize={12}>
+                        {t('createTask.assignee')}
+                      </Text>
+                    </>
+                  )}
+                </Block>
+              );
+
+              return lockAssignee ? (
+                assigneeChip
+              ) : (
+                <AssigneeAgentSelector
+                  currentAgentId={assigneeAgentId}
+                  onChange={setAssigneeAgentId}
+                >
+                  {assigneeChip}
+                </AssigneeAgentSelector>
+              );
+            })()}
 
             <ActionIcon
               icon={Paperclip}

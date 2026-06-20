@@ -890,7 +890,7 @@ describe('LobeOpenAICompatibleFactory', () => {
             status: 400,
           },
           'Error message',
-          {},
+          new Headers(),
         );
 
         vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
@@ -931,7 +931,7 @@ describe('LobeOpenAICompatibleFactory', () => {
             message: 'api is undefined',
           },
         };
-        const apiError = new OpenAI.APIError(400, errorInfo, 'module error', {});
+        const apiError = new OpenAI.APIError(400, errorInfo, 'module error', new Headers());
 
         vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
 
@@ -960,7 +960,7 @@ describe('LobeOpenAICompatibleFactory', () => {
         const errorInfo = {
           cause: { message: 'api is undefined' },
         };
-        const apiError = new OpenAI.APIError(400, errorInfo, 'module error', {});
+        const apiError = new OpenAI.APIError(400, errorInfo, 'module error', new Headers());
 
         instance = new LobeMockProvider({
           apiKey: 'test',
@@ -1044,7 +1044,7 @@ describe('LobeOpenAICompatibleFactory', () => {
             status: 400,
           },
           'Error message',
-          {},
+          new Headers(),
         );
 
         vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
@@ -1080,7 +1080,7 @@ describe('LobeOpenAICompatibleFactory', () => {
             status: 400,
           },
           'Error message',
-          {},
+          new Headers(),
         );
 
         vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
@@ -1118,7 +1118,7 @@ describe('LobeOpenAICompatibleFactory', () => {
             status: 429,
           },
           'Error message',
-          {},
+          new Headers(),
         );
 
         vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
@@ -2349,7 +2349,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           status: 400,
         },
         'Error message',
-        {},
+        new Headers(),
       );
 
       vi.spyOn(instance['client'].responses, 'create').mockRejectedValue(apiError);

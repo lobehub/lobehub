@@ -422,14 +422,24 @@ export class CompletionLifecycle {
       ? Date.now() - new Date(state.createdAt).getTime()
       : undefined;
 
+    // On the error path, normalize the runtime error once so the lifecycle
+    // event carries the stable taxonomy fields (errorType + attribution). Bot
+    // reply renderers switch on these to surface a perceivable cause (network /
+    // quota / provider outage …) instead of an opaque Operation ID. Mirrors the
+    // same normalization dispatchHooks runs before writing the error onto the
+    // assistant message row.
+    const formattedError = state?.error ? formatErrorForState(state.error) : undefined;
+
     return {
       event: {
         agentId: metadata?.agentId || '',
         attachments: attachments.length > 0 ? attachments : undefined,
         cost: state?.cost?.total,
         duration,
+        errorAttribution: formattedError?.attribution,
         errorDetail: state?.error,
         errorMessage: this.extractErrorMessage(state?.error) || String(state?.error || ''),
+        errorType: formattedError?.type === undefined ? undefined : String(formattedError.type),
         finalState: state,
         lastAssistantContent,
         llmCalls: state?.usage?.llm?.apiCalls,

@@ -150,9 +150,12 @@ export const createTaskRuntime = (deps: TaskRuntimeDeps) => {
     },
 
     createTask: async (args: CreateTaskArgs) => {
-      const result = await createTaskImpl(args);
-      const { identifier: _identifier, ...rest } = result;
-      return rest;
+      const { identifier, ...rest } = await createTaskImpl(args);
+      // Surface the created task identifier as plugin state (mirrors the client
+      // executor's `{ identifier, success }`) so the inline render can link to
+      // the task detail. Without this the tool message persists no state and the
+      // card has nothing to open.
+      return identifier ? { ...rest, state: { identifier, success: rest.success } } : rest;
     },
 
     createTasks: async (args: { tasks: CreateTaskArgs[] }) => {

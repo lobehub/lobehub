@@ -14,6 +14,7 @@ import {
   FlaskConical,
   MessageCircle,
   Rocket,
+  Send,
   Settings2,
   SettingsIcon,
 } from 'lucide-react';
@@ -34,7 +35,7 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useNavLayout } from '@/hooks/useNavLayout';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors/systemStatus';
-import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors/general';
 
@@ -62,6 +63,45 @@ interface PromotionCard {
   title: string;
 }
 
+type FooterMenuItems = NonNullable<MenuProps['items']>;
+
+/**
+ * Wrap each clickable menu item with a unified click tracker, preserving any
+ * existing onClick. Skips dividers and items without a key. Used to measure
+ * which footer menu entries get clicked (breakdown by `key`).
+ */
+const injectMenuTracking = (
+  items: FooterMenuItems,
+  track: (key: string) => void,
+): FooterMenuItems =>
+  items.map((item) => {
+    if (!item || (item as { type?: string }).type === 'divider') return item;
+    const key = (item as { key?: string | number }).key;
+    if (!key) return item;
+    const originalOnClick = (item as { onClick?: (info: unknown) => void }).onClick;
+    return {
+      ...item,
+      onClick: (info: unknown) => {
+        track(String(key));
+        originalOnClick?.(info);
+      },
+    };
+  });
+
+/**
+ * Collect the keys of click-trackable items — the exact same set wrapped by
+ * `injectMenuTracking` (non-divider items with a key). Used so the menu-open
+ * exposure event reports only keys that can later emit `home_footer_menu_clicked`,
+ * keeping per-key CTR denominators and numerators aligned. Billboard items are
+ * excluded here (they emit their own `billboard_*` events).
+ */
+const collectMenuKeys = (items: FooterMenuItems): string[] =>
+  items
+    .filter((item) => item && (item as { type?: string }).type !== 'divider')
+    .map((item) => (item as { key?: string | number }).key)
+    .filter((key): key is string | number => Boolean(key))
+    .map(String);
+
 const Footer = memo(() => {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
@@ -73,6 +113,7 @@ const Footer = memo(() => {
   const enableAgentOnboarding = useServerConfigStore((s) => s.featureFlags.enableAgentOnboarding);
   const isMobile = useServerConfigStore((s) => !!s.isMobile);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const [agentOnboardingFinished, agentOnboardingStarted, classicOnboardingFinished, isDevMode] =
     useUserStore((s) => [
       !!s.agentOnboarding?.finishedAt,
@@ -130,6 +171,20 @@ const Footer = memo(() => {
     (eventName: string, properties: Record<string, string>) => {
       try {
         analytics?.track({ name: eventName, properties });
+      } catch {
+        // silently ignore tracking errors to avoid affecting business logic
+      }
+    },
+    [analytics],
+  );
+
+  const trackMenuClick = useCallback(
+    (key: string) => {
+      try {
+        analytics?.track({
+          name: 'home_footer_menu_clicked',
+          properties: { key, spm: `homepage.footer.${key}.clicked` },
+        });
       } catch {
         // silently ignore tracking errors to avoid affecting business logic
       }
@@ -250,8 +305,11 @@ const Footer = memo(() => {
     t,
   ]);
 
-  const helpMenuItems: MenuProps['items'] = useMemo(
-    () => [
+  const { helpMenuItems, trackedMenuKeys } = useMemo<{
+    helpMenuItems: MenuProps['items'];
+    trackedMenuKeys: string[];
+  }>(() => {
+    const ownItems: FooterMenuItems = [
       ...(footer.showSettingsEntry && !isDevMode
         ? [
             {
@@ -261,6 +319,17 @@ const Footer = memo(() => {
             },
             {
               type: 'divider' as const,
+            },
+          ]
+        : []),
+      ...(enableBusinessFeatures
+        ? [
+            {
+              icon: <Icon icon={Send} />,
+              key: 'inviteFriend',
+              label: (
+                <WorkspaceLink to="/settings/referral">{t('userPanel.inviteFriend')}</WorkspaceLink>
+              ),
             },
           ]
         : []),
@@ -329,24 +398,47 @@ const Footer = memo(() => {
             },
           ]
         : []),
-      ...(isHomeSidebar && billboardMenuItems && billboardMenuItems.length > 0
-        ? [{ type: 'divider' as const }, ...billboardMenuItems]
-        : []),
-    ],
-    [
-      footer.showSettingsEntry,
-      footer.layout,
-      footer.hideGitHub,
-      footer.showEvalEntry,
-      handleOpenChangelogModal,
-      handleOpenFeedbackModal,
-      handleOpenProductHuntCard,
-      isDevMode,
-      shouldShowProductHuntMenuEntry,
-      t,
-      billboardMenuItems,
-      isHomeSidebar,
-    ],
+    ];
+
+    return {
+      helpMenuItems: [
+        ...injectMenuTracking(ownItems, trackMenuClick),
+        ...(isHomeSidebar && billboardMenuItems && billboardMenuItems.length > 0
+          ? [{ type: 'divider' as const }, ...billboardMenuItems]
+          : []),
+      ],
+      trackedMenuKeys: collectMenuKeys(ownItems),
+    };
+  }, [
+    trackMenuClick,
+    footer.showSettingsEntry,
+    footer.layout,
+    footer.hideGitHub,
+    footer.showEvalEntry,
+    enableBusinessFeatures,
+    handleOpenChangelogModal,
+    handleOpenFeedbackModal,
+    handleOpenProductHuntCard,
+    isDevMode,
+    shouldShowProductHuntMenuEntry,
+    t,
+    billboardMenuItems,
+    isHomeSidebar,
+  ]);
+
+  const handleMenuOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) return;
+      try {
+        analytics?.track({
+          name: 'home_footer_menu_opened',
+          properties: { keys: trackedMenuKeys.join(','), spm: 'homepage.footer.opened' },
+        });
+      } catch {
+        // silently ignore tracking errors to avoid affecting business logic
+      }
+    },
+    [analytics, trackedMenuKeys],
   );
 
   return (
@@ -354,7 +446,11 @@ const Footer = memo(() => {
       {footer.layout === 'expanded' ? (
         <Flexbox horizontal align={'center'} gap={2} justify={'space-between'} padding={8}>
           <Flexbox horizontal align={'center'} flex={1} gap={2}>
-            <DropdownMenu items={helpMenuItems} placement="topLeft">
+            <DropdownMenu
+              items={helpMenuItems}
+              placement="topLeft"
+              onOpenChange={handleMenuOpenChange}
+            >
               <ActionIcon
                 aria-label={t('userPanel.help')}
                 data-billboard-anchor=""
@@ -375,7 +471,11 @@ const Footer = memo(() => {
         </Flexbox>
       ) : (
         <Flexbox horizontal align={'center'} gap={2} padding={8}>
-          <DropdownMenu items={helpMenuItems} placement="topLeft">
+          <DropdownMenu
+            items={helpMenuItems}
+            placement="topLeft"
+            onOpenChange={handleMenuOpenChange}
+          >
             <ActionIcon aria-label={t('userPanel.help')} icon={CircleHelp} size={16} />
           </DropdownMenu>
           {isDevMode && (

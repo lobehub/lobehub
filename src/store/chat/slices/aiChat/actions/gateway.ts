@@ -21,6 +21,8 @@ import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from './gatewayEventHandler';
+import { buildRunLifecycle } from './runLifecycle/buildRunLifecycle';
+import type { RunScope } from './runLifecycle/types';
 
 /**
  * When the agent runs against the local machine, resolve this desktop's
@@ -89,12 +91,20 @@ export interface ConnectGatewayParams {
   onEvent?: (event: AgentStreamEvent) => void;
   /**
    * Called when the session completes (agent_runtime_end or session_complete).
+   *
    * `succeeded` is true only for a clean `agent_runtime_end`; callers use it to
    * avoid stomping the `unread` status a background completion writes (the
    * completion's `markTopicUnread` and this terminal `active` write
    * partition the cases by `succeeded && !viewing`).
+   *
+   * `terminalReceived` is true when a terminal agent event (`agent_runtime_end` /
+   * `error`) was processed — meaning the gateway event handler already completed
+   * the op via the shared run lifecycle, so `onSessionComplete` is pure transport
+   * cleanup. When false (terminal-missing: `session_complete` / `auth_failed` /
+   * token-refresh failure arrived with no terminal agent event), the callback must
+   * itself complete the op as the explicit fallback so it never sticks `running`.
    */
-  onSessionComplete?: (info: { succeeded: boolean }) => void;
+  onSessionComplete?: (info: { succeeded: boolean; terminalReceived: boolean }) => void;
   /**
    * The operation ID returned by execAgent
    */
@@ -180,7 +190,10 @@ export class GatewayActionImpl {
     const fireSessionComplete = () => {
       if (sessionCompleted) return;
       sessionCompleted = true;
-      onSessionComplete?.({ succeeded: terminalSucceeded });
+      onSessionComplete?.({
+        succeeded: terminalSucceeded,
+        terminalReceived: receivedTerminalEvent,
+      });
     };
 
     // Forward agent events to caller, and track terminal events
@@ -552,13 +565,27 @@ export class GatewayActionImpl {
       // the same WS that gatewayConnections is keyed on.
       gatewayOperationId: result.operationId,
       operationId: gatewayOpId,
+      // Shared run lifecycle: drives the terminal completeRun / afterRunComplete
+      // for the gateway transport (op completion + unread + queue drain +
+      // notification) at `agent_runtime_end` / `error`.
+      runLifecycle: buildRunLifecycle(this.#get, {
+        context: execContext,
+        parentMessageId: result.assistantMessageId,
+        parentMessageType: 'assistant',
+        runId: gatewayOpId,
+        runScope: (execContext.scope === 'sub_agent' ? 'sub_agent' : 'top_level') as RunScope,
+        runtimeType: 'gateway',
+      }),
     });
 
     this.#get().connectToGateway({
       gatewayUrl: agentGatewayUrl,
       onEvent: eventHandler,
-      onSessionComplete: ({ succeeded }) => {
-        this.#get().completeOperation(gatewayOpId);
+      onSessionComplete: ({ succeeded, terminalReceived }) => {
+        // The gateway event handler already completed the op via the shared run
+        // lifecycle on `agent_runtime_end` / `error`. Only complete here as the
+        // terminal-missing fallback so the op never sticks `running`.
+        if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
         if (result.topicId) {
           this.#get().internal_updateTopicLoading(result.topicId, false);
           // A clean completion the user isn't watching is owned by
@@ -689,13 +716,24 @@ export class GatewayActionImpl {
       // the same WS that gatewayConnections is keyed on.
       gatewayOperationId: operationId,
       operationId: gatewayOpId,
+      runLifecycle: buildRunLifecycle(this.#get, {
+        context,
+        parentMessageId: assistantMessageId,
+        parentMessageType: 'assistant',
+        runId: gatewayOpId,
+        runScope: (context.scope === 'sub_agent' ? 'sub_agent' : 'top_level') as RunScope,
+        runtimeType: 'gateway',
+      }),
     });
 
     this.#get().connectToGateway({
       gatewayUrl: agentGatewayUrl,
       onEvent: eventHandler,
-      onSessionComplete: ({ succeeded }) => {
-        this.#get().completeOperation(gatewayOpId);
+      onSessionComplete: ({ succeeded, terminalReceived }) => {
+        // See executeGatewayAgent's onSessionComplete: the handler owns op
+        // completion via the run lifecycle; complete here only as the
+        // terminal-missing fallback.
+        if (!terminalReceived) this.#get().completeOperation(gatewayOpId);
         this.#get().internal_updateTopicLoading(topicId, false);
         // See executeGatewayAgent's onSessionComplete: a clean background
         // completion is left to markTopicUnread (status: 'unread').

@@ -1,12 +1,13 @@
 import { ChatInput, ChatInputActionBar, SendButton, useEditor } from '@lobehub/editor/react';
-import { Button } from '@lobehub/ui';
+import { Button, Flexbox } from '@lobehub/ui';
 import { $getRoot } from 'lexical';
-import { MessageCirclePlus } from 'lucide-react';
+import { ChevronDownIcon, MessageCirclePlus } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
 import { useConversationStore } from '@/features/Conversation';
+import OpStatusTray from '@/features/Conversation/ChatInput/OpStatusTray';
 import { EditorCanvas } from '@/features/EditorCanvas';
 import {
   getAttachmentFileIdsFromEditor,
@@ -78,49 +79,70 @@ const FeedbackInput = memo(() => {
     }
   }, [editor, sendMessage, submitting]);
 
+  // Mirror Fleet's ReplyArea: surface the live running-op status flush above the
+  // reply affordance (seamless inline row that renders nothing when idle), so the
+  // user can watch the agent work without expanding the composer.
   if (!expanded) {
     return (
-      <Button block icon={MessageCirclePlus} variant={'filled'} onClick={() => setExpanded(true)}>
-        {t('taskDetail.sendFollowUp')}
-      </Button>
+      <Flexbox gap={8}>
+        <OpStatusTray seamless />
+        <Button block icon={MessageCirclePlus} variant={'filled'} onClick={() => setExpanded(true)}>
+          {t('taskDetail.sendFollowUp')}
+        </Button>
+      </Flexbox>
     );
   }
 
   return (
-    <ChatInput
-      maxHeight={240}
-      minHeight={64}
-      footer={
-        <ChatInputActionBar
-          left={<AttachmentUploadButton onFiles={handleAttach} />}
-          style={{ paddingInline: 8 }}
-          right={
-            <SendButton
-              disabled={!canSubmit && !submitting}
-              loading={submitting}
-              shape={'round'}
-              title={t('taskDetail.replyInThread')}
-              type={'primary'}
-              onClick={handleSubmit}
-            />
-          }
+    <Flexbox gap={8}>
+      <OpStatusTray seamless />
+      <ChatInput
+        maxHeight={240}
+        minHeight={64}
+        footer={
+          <ChatInputActionBar
+            style={{ paddingInline: 8 }}
+            left={
+              <Flexbox horizontal align={'center'} gap={2}>
+                <Button
+                  icon={ChevronDownIcon}
+                  size={'small'}
+                  type={'text'}
+                  onClick={() => setExpanded(false)}
+                >
+                  {t('taskDetail.collapseReply')}
+                </Button>
+                <AttachmentUploadButton onFiles={handleAttach} />
+              </Flexbox>
+            }
+            right={
+              <SendButton
+                disabled={!canSubmit && !submitting}
+                loading={submitting}
+                shape={'round'}
+                title={t('taskDetail.replyInThread')}
+                type={'primary'}
+                onClick={handleSubmit}
+              />
+            }
+          />
+        }
+      >
+        <EditorCanvas
+          editor={editor}
+          floatingToolbar={false}
+          placeholder={t('taskDetail.replyPlaceholder')}
+          style={{ paddingBlock: 0 }}
+          onContentChange={handleContentChange}
+          onPressEnter={({ event }) => {
+            if (shouldSendOnEnter(event)) {
+              handleSubmit();
+              return true;
+            }
+          }}
         />
-      }
-    >
-      <EditorCanvas
-        editor={editor}
-        floatingToolbar={false}
-        placeholder={t('taskDetail.replyPlaceholder')}
-        style={{ paddingBlock: 0 }}
-        onContentChange={handleContentChange}
-        onPressEnter={({ event }) => {
-          if (shouldSendOnEnter(event)) {
-            handleSubmit();
-            return true;
-          }
-        }}
-      />
-    </ChatInput>
+      </ChatInput>
+    </Flexbox>
   );
 });
 

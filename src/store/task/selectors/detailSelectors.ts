@@ -60,8 +60,6 @@ const activeTaskScheduleMaxExecutions = (s: TaskStoreState) =>
 
 const activeTaskCheckpoint = (s: TaskStoreState) => activeTaskDetail(s)?.checkpoint;
 
-const activeTaskReview = (s: TaskStoreState) => activeTaskDetail(s)?.review;
-
 const activeTaskWorkspace = (s: TaskStoreState) => activeTaskDetail(s)?.workspace ?? [];
 
 const activeTaskWorkspaceId = (s: TaskStoreState) => activeTaskDetail(s)?.workspaceId;
@@ -109,7 +107,6 @@ export const taskDetailSelectors = {
   activeTaskPeriodicInterval,
   activeTaskPriority,
   activeTaskProvider,
-  activeTaskReview,
   activeTaskScheduleMaxExecutions,
   activeTaskSchedulePattern,
   activeTaskScheduleTimezone,

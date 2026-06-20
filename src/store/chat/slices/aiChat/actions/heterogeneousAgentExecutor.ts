@@ -3,7 +3,6 @@ import type {
   AgentInterventionResponseData,
   AgentStreamEvent,
 } from '@lobechat/agent-gateway-client';
-import { isDesktop } from '@lobechat/const';
 import {
   CLAUDE_CODE_CLI_INSTALL_DOCS_URL,
   CODEX_CLI_INSTALL_DOCS_URL,
@@ -36,42 +35,16 @@ import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgen
 import { messageService } from '@/services/message';
 import { threadService } from '@/services/thread';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
-import { resolveNotificationNavigatePath } from '@/store/chat/utils/desktopNotification';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { messageMapKey } from '../../../utils/messageMapKey';
 import { mergeQueuedMessages, reconstructUploadFilesFromQueue } from '../../operation/types';
 import { createGatewayEventHandler } from './gatewayEventHandler';
+import { buildRunLifecycle } from './runLifecycle/buildRunLifecycle';
+import type { RunScope } from './runLifecycle/types';
 
 /** Mirrors `idGenerator('threads', 16)` on the server so sync-allocated ids have the same shape. */
 const generateThreadId = () => `thd_${createNanoId(16)()}`;
-
-/**
- * Fire desktop notification + dock badge when a CC/Codex/ACP run finishes.
- * Notification only shows when the window is hidden (enforced in main); the
- * badge is always set so a minimized/backgrounded app still signals completion.
- */
-const notifyCompletion = async (title: string, body: string, context: ConversationContext) => {
-  if (!isDesktop) return;
-  try {
-    const { desktopNotificationService } = await import('@/services/electron/desktopNotification');
-    const navigatePath = resolveNotificationNavigatePath({
-      agentId: context.agentId,
-      groupId: context.groupId,
-      topicId: context.topicId,
-    });
-    await Promise.allSettled([
-      desktopNotificationService.showNotification({
-        body,
-        navigate: navigatePath ? { path: navigatePath } : undefined,
-        title,
-      }),
-      desktopNotificationService.setBadgeCount(1),
-    ]);
-  } catch (error) {
-    console.error('[HeterogeneousAgent] Desktop notification failed:', error);
-  }
-};
 
 const CLI_AUTH_REQUIRED_PATTERNS = [
   /failed to authenticate/i,
@@ -374,11 +347,30 @@ export const executeHeterogeneousAgent = async (
 
   const adapterType = resolveAdapterType(heterogeneousProvider);
 
-  // Create the unified event handler (same one Gateway uses)
+  // Shared run lifecycle (LOBE-10379). Hetero owns its terminal lifecycle here
+  // (the desktop notification via `afterRunComplete`); the queue drain + op
+  // completion stay in this executor's flow because the resume-session-id save
+  // must run before the drain. `parentMessage*` are unused for non-client.
+  const runScope: RunScope = context.scope === 'sub_agent' ? 'sub_agent' : 'top_level';
+  const runLifecycle = buildRunLifecycle(get, {
+    context,
+    parentMessageId: assistantMessageId,
+    parentMessageType: 'assistant',
+    runId: operationId,
+    runScope,
+    runtimeType: 'hetero',
+  });
+
+  // Create the unified event handler (same one Gateway uses). `runtimeType:
+  // 'hetero'` keeps the handler to per-event message reconciliation only — this
+  // executor owns the terminal lifecycle (notification + queue drain), so the
+  // handler must NOT double-notify or drain. It still completes the op + marks
+  // unread on a clean terminal (the legacy reconciliation path this flow relies on).
   const eventHandler = createGatewayEventHandler(get, {
     assistantMessageId,
     context,
     operationId,
+    runtimeType: 'hetero',
   });
   const persistTerminalError = async (
     messageError: ChatMessageError,
@@ -1365,16 +1357,23 @@ export const executeHeterogeneousAgent = async (
         }
 
         // Signal completion to the user — dock badge + (window-hidden) notification.
+        // Relocated into the shared `afterRunComplete` hook (LOBE-10379 "通知统一到
+        // afterRunComplete"): it does the same showNotification + setBadgeCount
+        // fan-out for non-client runtimes. The body is resolved here from the
+        // in-memory accumulated content (the store snapshot isn't durable yet).
         // Skip for aborted runs and for error terminations.
         if (!isAborted() && !isErrorTerminal) {
           const body = finalContent
             ? markdownToTxt(finalContent)
             : t('notification.finishChatGeneration', { ns: 'electron' });
-          notifyCompletion(
-            t('notification.finishChatGeneration', { ns: 'electron' }),
-            body,
+          await runLifecycle.afterRunComplete({
             context,
-          );
+            notification: { body },
+            operationId,
+            runId: operationId,
+            runScope,
+            runtimeType: 'hetero',
+          });
         }
       },
 
@@ -1439,10 +1438,17 @@ export const executeHeterogeneousAgent = async (
       .getSessionInfo(agentSessionId)
       .catch(() => undefined);
     if (sessionInfo?.agentSessionId && context.topicId) {
+      // Best-effort (LOBE-10379 "heteroSessionId 保存…失败不阻断 core"): a rejected
+      // metadata save must NOT throw past the queue drain below — guarding the
+      // await here keeps the resume-id persistence from blocking the follow-up
+      // send. The save still runs BEFORE the drain so the next turn's
+      // `resolveHeteroResume` reads the just-finished session id.
       await updateTopicMetadata?.(context.topicId, {
         heteroSessionId: sessionInfo.agentSessionId,
         workingDirectory: workingDirectory ?? '',
-      });
+      }).catch((err) =>
+        console.error('[HeterogeneousAgent] Failed to persist resume session id:', err),
+      );
     }
 
     // ━━━ Drain queued messages after a successful CC turn ━━━

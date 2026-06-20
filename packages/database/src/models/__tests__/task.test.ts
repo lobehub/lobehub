@@ -1337,6 +1337,168 @@ describe('TaskModel', () => {
     });
   });
 
+  describe('verify config', () => {
+    it('updateVerifyConfig writes config.verify and preserves other config keys', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+
+      await model.updateTaskConfig(task.id, { provider: 'anthropic' });
+      await model.updateVerifyConfig(task.id, {
+        enabled: true,
+        maxIterations: 3,
+        verifierAgentId: 'agt_codex',
+        verifyRubricId: 'rub_1',
+      });
+
+      const updated = (await model.findById(task.id))!;
+      const config = updated.config as Record<string, any>;
+      expect(config.provider).toBe('anthropic');
+      expect(config.verify).toEqual({
+        enabled: true,
+        maxIterations: 3,
+        verifierAgentId: 'agt_codex',
+        verifyRubricId: 'rub_1',
+      });
+    });
+
+    it('updateVerifyConfig leaves omitted keys untouched and merges new ones', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({
+        config: { verify: { enabled: true, verifyRubricId: 'rub_1' } },
+        instruction: 'Test',
+      });
+
+      await model.updateVerifyConfig(task.id, { verifierAgentId: 'agt_codex' });
+
+      expect(model.getVerifyConfig((await model.findById(task.id))!)).toEqual({
+        enabled: true,
+        verifierAgentId: 'agt_codex',
+        verifyRubricId: 'rub_1',
+      });
+    });
+
+    it('updateVerifyConfig clears a saved key when passed null', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({
+        config: {
+          provider: 'anthropic',
+          verify: { enabled: true, verifierAgentId: 'agt_codex', verifyRubricId: 'rub_1' },
+        },
+        instruction: 'Test',
+      });
+
+      // Switch back to the default verifier + drop the rubric, keep enabled.
+      await model.updateVerifyConfig(task.id, { verifierAgentId: null, verifyRubricId: null });
+
+      const updated = (await model.findById(task.id))!;
+      const config = updated.config as Record<string, any>;
+      // Sibling config keys survive; cleared keys are gone (not stored as null).
+      expect(config.provider).toBe('anthropic');
+      expect(config.verify).toEqual({ enabled: true });
+      expect('verifyRubricId' in config.verify).toBe(false);
+    });
+
+    it('updateVerifyConfig replaces verifyCriteriaIds wholesale', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({
+        config: { verify: { verifyCriteriaIds: ['c1', 'c2', 'c3'] } },
+        instruction: 'Test',
+      });
+
+      await model.updateVerifyConfig(task.id, { verifyCriteriaIds: ['c4'] });
+
+      expect(model.getVerifyConfig((await model.findById(task.id))!)).toEqual({
+        verifyCriteriaIds: ['c4'],
+      });
+    });
+
+    it('getVerifyConfig reads config.verify', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({
+        config: { verify: { enabled: true, verifyRubricId: 'rub_1' } },
+        instruction: 'Test',
+      });
+      expect(model.getVerifyConfig(task)).toEqual({ enabled: true, verifyRubricId: 'rub_1' });
+    });
+
+    it('getVerifyConfig returns undefined when no verify or review config', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({ instruction: 'Test' });
+      expect(model.getVerifyConfig(task)).toBeUndefined();
+    });
+
+    it('getVerifyConfig falls back to the legacy review key during migration', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({
+        config: { review: { enabled: true, maxIterations: 5, rubrics: [{ id: 'r1' }] } },
+        instruction: 'Test',
+      });
+      // Only the shared fields carry over; inline rubrics are dropped.
+      expect(model.getVerifyConfig(task)).toEqual({ enabled: true, maxIterations: 5 });
+    });
+
+    it('getVerifyConfig prefers config.verify over the legacy review key', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const task = await model.create({
+        config: {
+          review: { enabled: false, maxIterations: 5 },
+          verify: { enabled: true, verifyRubricId: 'rub_1' },
+        },
+        instruction: 'Test',
+      });
+      expect(model.getVerifyConfig(task)).toEqual({ enabled: true, verifyRubricId: 'rub_1' });
+    });
+
+    describe('resolveVerifyConfig inheritance chain', () => {
+      it('uses the task own config when present', async () => {
+        const model = new TaskModel(serverDB, userId);
+        const parent = await model.create({
+          config: { verify: { enabled: true, verifyRubricId: 'parent_rub' } },
+          instruction: 'Parent',
+        });
+        const child = await model.create({
+          config: { verify: { enabled: true, verifyRubricId: 'child_rub' } },
+          instruction: 'Child',
+          parentTaskId: parent.id,
+        });
+
+        const resolved = await model.resolveVerifyConfig(child.id);
+        expect(resolved).toEqual({ enabled: true, verifyRubricId: 'child_rub' });
+      });
+
+      it('falls back to the nearest ancestor with whole-config override', async () => {
+        const model = new TaskModel(serverDB, userId);
+        const grandparent = await model.create({
+          config: { verify: { enabled: true, verifyRubricId: 'gp_rub' } },
+          instruction: 'Grandparent',
+        });
+        const parent = await model.create({
+          instruction: 'Parent (no verify config)',
+          parentTaskId: grandparent.id,
+        });
+        const child = await model.create({
+          instruction: 'Child (no verify config)',
+          parentTaskId: parent.id,
+        });
+
+        // Whole-config override: child adopts the grandparent's config in full.
+        const resolved = await model.resolveVerifyConfig(child.id);
+        expect(resolved).toEqual({ enabled: true, verifyRubricId: 'gp_rub' });
+      });
+
+      it('returns undefined when no task in the chain has a verify config', async () => {
+        const model = new TaskModel(serverDB, userId);
+        const parent = await model.create({ instruction: 'Parent' });
+        const child = await model.create({
+          instruction: 'Child',
+          parentTaskId: parent.id,
+        });
+
+        expect(await model.resolveVerifyConfig(child.id)).toBeUndefined();
+      });
+    });
+  });
+
   describe('static getScheduledTasks', () => {
     it('should return schedule-mode tasks that are not terminal/paused/running', async () => {
       const model = new TaskModel(serverDB, userId);

@@ -1,6 +1,7 @@
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { TaskModel } from '@/database/models/task';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { createVerifierAgentRunner } from './agentVerifier';
@@ -49,14 +50,24 @@ export const runVerifyOnCompletion = async (
       return;
     }
 
+    // Task-bound runs may pin which agent verifies (TaskVerifyConfig.verifierAgentId,
+    // with subtask inheritance). Non-task runs leave it undefined → builtin fallback.
+    let verifierAgentId: string | undefined;
+    if (op.taskId) {
+      const verifyConfig = await new TaskModel(db, userId, workspaceId).resolveVerifyConfig(
+        op.taskId,
+      );
+      verifierAgentId = verifyConfig?.verifierAgentId ?? undefined;
+    }
+
     const executor = new VerifyExecutorService(db, userId, workspaceId);
     await executor.execute({
       deliverable: params.deliverable,
       goal: params.goal,
       modelConfig: { model: op.model, provider: op.provider },
       operationId: params.operationId,
-      // `agent`-type checks run as the dedicated builtin verify agent, which
-      // writes its verdict back via the submitVerifyResult tool during its run.
+      // `agent`-type checks run as the task-pinned verify agent (or the builtin
+      // one), which writes its verdict back via the submitVerifyResult tool.
       runVerifierAgent: createVerifierAgentRunner({
         db,
         deliverable: params.deliverable,
@@ -64,6 +75,7 @@ export const runVerifyOnCompletion = async (
         provider: op.provider,
         topicId: op.topicId,
         userId,
+        verifierAgentId,
         workspaceId,
       }),
     });

@@ -235,9 +235,7 @@ describe('LobeSiliconCloudAI - custom features', () => {
           message: 'Value error, current model does not support parameter `enable_thinking`.',
         },
       };
-      const apiError = new OpenAI.APIError(400, errorInfo, 'Request failed', {
-        status: 400,
-      } as any);
+      const apiError = new OpenAI.APIError(400, errorInfo, 'Request failed', undefined);
 
       vi.spyOn(instance['client'].chat.completions, 'create').mockRejectedValue(apiError);
 

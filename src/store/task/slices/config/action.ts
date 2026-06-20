@@ -109,12 +109,6 @@ export class TaskConfigSliceActionImpl {
     id: string,
     review: Parameters<typeof taskService.updateReview>[0]['review'],
   ): Promise<void> => {
-    this.#get().internal_dispatchTaskDetail({
-      id,
-      type: 'updateTaskDetail',
-      value: { review },
-    });
-
     try {
       await taskService.updateReview({ id, review });
       await this.#get().internal_refreshTaskDetail(id);

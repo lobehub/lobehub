@@ -2221,16 +2221,13 @@ describe('StreamingExecutor actions', () => {
       // 1. User can see the tool intervention UI without loading indicator
       // 2. A new operation will be created when user approves/rejects
       expect(result.current.operations[operationId!].status).toBe('completed');
-      expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          payload: expect.objectContaining({
-            operationId,
-            status: 'cancelled',
-          }),
-          sourceId: `${operationId}:client:complete`,
-          sourceType: 'client.runtime.complete',
-        }),
+      // Parked ≠ terminal: NO `client.runtime.complete` is emitted — the run has
+      // not ended, it is waiting for human approval (LOBE-10382). Previously this
+      // mis-emitted a terminal `cancelled` complete signal.
+      const completeCall = agentSignalBridgeMock.emitClientAgentSignalSourceEvent.mock.calls.find(
+        (c: any) => c[0]?.sourceType === 'client.runtime.complete',
       );
+      expect(completeCall).toBeUndefined();
     });
 
     it('should fail operation when state is error', async () => {
@@ -2569,8 +2566,9 @@ describe('StreamingExecutor actions', () => {
       expect(result.current.operations[operationId].status).toBe('completed');
     });
 
-    // Parked states (run ≠ operation). These lock the CURRENT per-state handling that
-    // the unified run-lifecycle + normalized parked signal — cross-transport parked / resumed / terminal signal normalization will rewrite.
+    // Parked states (run ≠ operation): parked is NOT terminal, so it fires no
+    // terminal side effects and emits no `client.runtime.complete`. The run
+    // resumes under a new operation when the user acts (LOBE-10382).
     const pinStep = (operationId: string, status: AgentState['status']) => {
       vi.spyOn(agentRuntime.AgentRuntime.prototype, 'step').mockResolvedValue({
         events: [],
@@ -2579,7 +2577,7 @@ describe('StreamingExecutor actions', () => {
       });
     };
 
-    it('on waiting_for_async_tool: leaves the op uncompleted and emits an undefined complete-signal status', async () => {
+    it('on waiting_for_async_tool (parked): leaves the op running and emits NO complete signal', async () => {
       const { result } = renderHook(() => useChatStore());
       const drainQueuedMessages = vi.fn(() => []);
       restoreExecutor();
@@ -2599,18 +2597,16 @@ describe('StreamingExecutor actions', () => {
       pinStep(operationId, 'waiting_for_async_tool');
       await runExecutor(result, operationId);
 
-      // CURRENT BEHAVIOR (suspected gap, locked as baseline for cross-transport parked/resumed/terminal signal normalization): the completion switch
-      // has no `waiting_for_async_tool` case, so the op is never completed (stays
-      // 'running') and the queue is not drained.
+      // Parked ≠ terminal: `waiting_for_async_tool` routes to `onRunParked`, which
+      // keeps the op RUNNING until the async tool resolves and drains nothing.
       expect(result.current.operations[operationId].status).toBe('running');
       expect(drainQueuedMessages).not.toHaveBeenCalled();
 
-      // normalizeClientRuntimeCompleteStatus falls through for async_tool → undefined.
+      // No `client.runtime.complete` — the run has not ended (LOBE-10382).
       const completeCall = agentSignalBridgeMock.emitClientAgentSignalSourceEvent.mock.calls.find(
         (c: any) => c[0]?.sourceType === 'client.runtime.complete',
       );
-      expect(completeCall).toBeTruthy();
-      expect(completeCall![0].payload.status).toBeUndefined();
+      expect(completeCall).toBeUndefined();
     });
 
     it('on waiting_for_human (parked): completes the op for the UI but does NOT drain queue or mark unread', async () => {

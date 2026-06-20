@@ -900,6 +900,62 @@ export const taskRouter = router({
       }
     }),
 
+  getVerifyConfig: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
+    try {
+      const model = ctx.taskModel;
+      const task = await resolveOrThrow(model, input.id);
+      return { data: model.getVerifyConfig(task) || null, success: true };
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      console.error('[task:getVerifyConfig]', error);
+      throw new TRPCError({
+        cause: error,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to get verify config',
+      });
+    }
+  }),
+
+  updateVerifyConfig: taskProcedureWrite
+    .input(
+      idInput.merge(
+        z.object({
+          // `.nullish()` lets callers clear a saved field: `null` removes it
+          // (JSON can't send `undefined`), omission leaves it untouched. See
+          // TaskModel.updateVerifyConfig.
+          verify: z.object({
+            enabled: z.boolean().nullish(),
+            maxIterations: z.number().min(1).max(10).nullish(),
+            verifierAgentId: z.string().nullish(),
+            verifyCriteriaIds: z.array(z.string()).nullish(),
+            verifyRubricId: z.string().nullish(),
+          }),
+        }),
+      ),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { id, verify } = input;
+      try {
+        const model = ctx.taskModel;
+        const resolved = await resolveOrThrow(model, id);
+        const task = await model.updateVerifyConfig(resolved.id, verify);
+        if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+        return {
+          data: model.getVerifyConfig(task),
+          message: 'Verify config updated',
+          success: true,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('[task:updateVerifyConfig]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to update verify config',
+        });
+      }
+    }),
+
   runReview: taskProcedureWrite
     .input(
       idInput.merge(

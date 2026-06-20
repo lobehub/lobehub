@@ -24,9 +24,10 @@ export const aiProviders = pgTable(
     name: text('name'),
 
     /**
-     * Surrogate primary key for the workspace-scoped rebuild (LOBE-10056). The
-     * business uniqueness now lives in the workspace-scoped partial unique
-     * indexes below, so the PK no longer carries it.
+     * Surrogate primary key for the workspace-scoped rebuild. Migration 0110
+     * replaced the composite PK (id, provider_id, user_id) with this single-col
+     * surrogate so that workspace-scoped partial unique indexes can enforce
+     * business uniqueness. The PK itself no longer carries unique semantics.
      */
     _id: uuid('_id').defaultRandom().notNull().primaryKey(),
 
@@ -77,9 +78,10 @@ export const aiModels = pgTable(
     id: varchar('id', { length: 150 }).notNull(),
 
     /**
-     * Surrogate primary key for the workspace-scoped rebuild (LOBE-10056). The
-     * business uniqueness now lives in the workspace-scoped partial unique
-     * indexes below, so the PK no longer carries it.
+     * Surrogate primary key for the workspace-scoped rebuild. Migration 0110
+     * replaced the composite PK (id, provider_id, user_id) with this single-col
+     * surrogate so that workspace-scoped partial unique indexes can enforce
+     * business uniqueness. The PK itself no longer carries unique semantics.
      */
     _id: uuid('_id').defaultRandom().notNull().primaryKey(),
 

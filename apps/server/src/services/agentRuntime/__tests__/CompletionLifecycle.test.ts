@@ -196,6 +196,30 @@ describe('CompletionLifecycle.buildLifecycleEvent', () => {
     expect(event.attachments).toBeUndefined();
     expect(event.agentId).toBe('a');
   });
+
+  it('populates errorType + attribution from the normalized error on the error path', () => {
+    // Regression: the event previously carried only errorDetail/errorMessage, so
+    // bot reply renderers never saw the stable code/attribution and always fell
+    // back to the opaque Operation ID. buildLifecycleEvent must normalize the
+    // runtime error via formatErrorForState and surface these taxonomy fields.
+    const state = {
+      error: { error: { message: 'fetch failed' }, errorType: 'ProviderNetworkError' },
+      metadata: { agentId: 'agent-1', userId: 'user-1' },
+    };
+
+    const { event } = callBuild(state, 'error');
+
+    expect(event.errorType).toBe('ProviderNetworkError');
+    expect(event.errorAttribution).toBe('system');
+    expect(event.errorMessage).toBe('fetch failed');
+  });
+
+  it('leaves errorType + attribution undefined when there is no error', () => {
+    const { event } = callBuild({ messages: [], metadata: {} }, 'done');
+
+    expect(event.errorType).toBeUndefined();
+    expect(event.errorAttribution).toBeUndefined();
+  });
 });
 
 describe('CompletionLifecycle.dispatchHooks — error persistence', () => {

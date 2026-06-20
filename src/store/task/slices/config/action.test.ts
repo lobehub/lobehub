@@ -25,7 +25,6 @@ const mockDetail = {
   checkpoint: { onAgentRequest: false },
   identifier: 'T-1',
   instruction: 'Test',
-  review: null,
   status: 'backlog',
 } as any;
 
@@ -60,14 +59,15 @@ describe('TaskConfigSliceAction', () => {
   });
 
   describe('updateReview', () => {
-    it('should optimistically update and call service', async () => {
+    it('should call service and refresh detail', async () => {
+      const { mutate } = await import('@/libs/swr');
       vi.mocked(taskService.updateReview).mockResolvedValue({ success: true } as any);
 
       const review = { enabled: true, rubrics: [] };
       await useTaskStore.getState().updateReview('T-1', review as any);
 
-      expect(useTaskStore.getState().taskDetailMap['T-1'].review).toEqual(review);
       expect(taskService.updateReview).toHaveBeenCalledWith({ id: 'T-1', review });
+      expect(mutate).toHaveBeenCalledWith(['task:detail', 'T-1']);
     });
   });
 

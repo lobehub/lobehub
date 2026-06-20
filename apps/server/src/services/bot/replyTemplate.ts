@@ -237,11 +237,19 @@ type SystemStrings = {
   errorExceededContextWindow: string;
   errorInvalidProviderAPIKey: string;
   errorCommandConnectionClosed: string;
+  errorContentModeration: string;
+  errorEmptyCompletion: string;
+  errorHarnessInternal: string;
   errorLocationNotSupported: string;
   errorModelNotFound: string;
   errorNoAvailableProvider: string;
   errorPermissionDenied: string;
+  errorProviderUnavailable: string;
   errorQuotaLimitReached: string;
+  errorRateLimited: string;
+  errorTimeout: string;
+  errorTransientNetwork: string;
+  errorUserGeneric: string;
   errorWithDetails: (details: string, operationId?: string) => string;
   errorWithId: (operationId: string) => string;
   groupRejectedAllowlist: string;
@@ -293,6 +301,12 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       "**Context window exceeded.**\nThe conversation is too long for this model. Send `/new` to start a fresh topic, or switch to a model with a larger context window in the agent's settings.",
     errorCommandConnectionClosed:
       '**Command session disconnected.**\nThe agent lost its command connection before finishing. Please retry. If this keeps happening, check the sandbox or device connection and review the server logs for the operation.',
+    errorContentModeration:
+      "**Blocked by the content-safety filter.**\nThe model provider's safety filter rejected the request or response. Please rephrase and try again.",
+    errorEmptyCompletion:
+      "**The model returned an empty response.**\nThe model finished without producing any output. Please try again, or switch to a different model in the agent's settings.",
+    errorHarnessInternal:
+      '**Something went wrong on our side.**\nThe agent run hit an internal error, which has been logged. Please try again — if it keeps happening, share the Operation ID below with support.',
     errorInvalidProviderAPIKey:
       "**Invalid or missing API key.**\nThe configured model provider rejected its API key. Please verify the key in the agent's provider settings (it may be expired, revoked, or mistyped) and try again.",
     errorLocationNotSupported:
@@ -303,8 +317,18 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       "**No model provider configured.**\nThis bot's agent has no available model provider — please add an API key and enable a provider in the agent's settings, then try again.",
     errorPermissionDenied:
       "**Permission denied by the model provider.**\nThe API key doesn't have access to the requested model or operation. Please check the key's permissions, or switch to a model your account is authorized to use.",
+    errorProviderUnavailable:
+      "**Model provider temporarily unavailable.**\nThe model provider is overloaded or unavailable right now. Please wait a moment and try again, or switch to a different model in the agent's settings.",
     errorQuotaLimitReached:
       "**Provider quota exhausted.**\nThe configured model provider is out of quota or rate-limited. Please wait a moment and try again, top up the account, or switch to a different provider in the agent's settings.",
+    errorRateLimited:
+      "**Too many requests.**\nThe model provider is rate-limiting requests right now. Please wait a moment before trying again, or switch to a different model in the agent's settings.",
+    errorTimeout:
+      '**The agent run timed out.**\nThe operation ran too long without progress and was stopped. Please try again; if the task is large, try breaking it into smaller steps.',
+    errorTransientNetwork:
+      "**Network error talking to the model provider.**\nThe connection to the model provider timed out or dropped. This is usually temporary — please try again in a moment. If it keeps happening, try a different model in the agent's settings.",
+    errorUserGeneric:
+      "**The agent run couldn't be completed.**\nPlease check your input or the agent's settings and try again.",
     errorWithDetails: (details, operationId) =>
       operationId
         ? `**Agent Execution Failed**\nOperation ID: \`${operationId}\`\nDetails:\n\`\`\`\n${details}\n\`\`\``
@@ -350,6 +374,12 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       '**上下文已超出模型上限**\n当前对话长度超过了该模型的上下文窗口。可以发送 `/new` 开启新话题，或在 Agent 设置中切换到上下文更大的模型后重试。',
     errorCommandConnectionClosed:
       '**命令会话已断开**\nAgent 在完成前丢失了命令连接。请重试；如果该问题持续出现，请检查 sandbox 或设备连接，并结合 Operation ID 查看服务端日志。',
+    errorContentModeration:
+      '**被内容安全策略拦截**\n模型 Provider 的安全策略拒绝了本次请求或回复。请调整内容后重试。',
+    errorEmptyCompletion:
+      '**模型未返回任何内容**\n模型执行结束但没有产生输出。请重试，或在 Agent 设置中切换到其他模型。',
+    errorHarnessInternal:
+      '**我们这边出了点问题**\nAgent 执行遇到内部错误，已记录。请重试；如果持续出现，请把下方 Operation ID 提供给支持人员。',
     errorInvalidProviderAPIKey:
       '**API Key 无效或缺失**\n所配置的模型 Provider 拒绝了 API Key，可能已过期、被吊销或填写错误。请到 Agent 的 Provider 设置中检查并更新 API Key 后重试。',
     errorLocationNotSupported:
@@ -360,8 +390,17 @@ const SYSTEM_STRINGS: Partial<Record<BotReplyLocale, SystemStrings>> = {
       '**未配置可用的模型 Provider**\n该机器人的 Agent 当前没有可用的模型 Provider，请在 Agent 设置中添加 API Key 并启用一个 Provider 后重试。',
     errorPermissionDenied:
       '**模型 Provider 拒绝访问**\nAPI Key 没有访问该模型或操作的权限。请检查 Key 的权限范围，或在 Agent 设置中切换到当前账户已授权的模型。',
+    errorProviderUnavailable:
+      '**模型 Provider 暂时不可用**\n模型 Provider 当前过载或不可用。请稍后重试，或在 Agent 设置中切换到其他模型。',
     errorQuotaLimitReached:
       '**Provider 配额已用尽**\n所配置的模型 Provider 已达到配额上限或被限流。请稍后重试、为账户充值，或在 Agent 设置中切换到其他 Provider。',
+    errorRateLimited:
+      '**请求过于频繁**\n模型 Provider 正在限流。请稍后再试，或在 Agent 设置中切换到其他模型。',
+    errorTimeout:
+      '**Agent 执行超时**\n操作长时间无进展，已被中止。请重试；如果任务较大，可尝试拆分成更小的步骤。',
+    errorTransientNetwork:
+      '**与模型 Provider 的网络连接异常**\n连接模型 Provider 时超时或中断。通常是临时问题，请稍后重试；如果反复出现，可在 Agent 设置中换一个模型。',
+    errorUserGeneric: '**Agent 执行未能完成**\n请检查你的输入或 Agent 设置后重试。',
     errorWithDetails: (details, operationId) =>
       operationId
         ? `**Agent 执行失败**\nOperation ID: \`${operationId}\`\n详细信息：\n\`\`\`\n${details}\n\`\`\``
@@ -389,14 +428,19 @@ export function renderError(operationId?: string, lng?: BotReplyLocale): string 
 
 /**
  * Map known `AgentRuntimeError` codes to the `SystemStrings` field that
- * carries the friendly, actionable copy for that failure mode. Codes not in
- * this map fall back to the generic `Operation ID` template — opaque enough
- * not to leak internal error strings, but still traceable in logs.
+ * carries the friendly, actionable copy for that failure mode. This is the
+ * precise tier: when we recognize the exact code we show copy tailored to it.
+ *
+ * Codes not in this map fall back to {@link FALLBACK_ERROR_BY_ATTRIBUTION}
+ * (a per-`attribution` tier), and only then to the generic `Operation ID`
+ * template.
  *
  * When adding a new code: extend `SystemStrings`, drop the copy into both the
  * `en-US` and `zh-CN` dictionaries, then add the mapping here.
  */
 const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
+  // ── user-fixable config / input (attribution: user) ──
+  ContentModeration: 'errorContentModeration',
   ExceededContextWindow: 'errorExceededContextWindow',
   InsufficientQuota: 'errorQuotaLimitReached',
   InvalidProviderAPIKey: 'errorInvalidProviderAPIKey',
@@ -405,7 +449,39 @@ const FRIENDLY_ERROR_BY_TYPE: Record<string, keyof SystemStrings> = {
   NoAvailableProvider: 'errorNoAvailableProvider',
   PermissionDenied: 'errorPermissionDenied',
   QuotaLimitReached: 'errorQuotaLimitReached',
+  // ── transient provider / capacity (attribution: provider) ──
+  ModelEmptyCompletion: 'errorEmptyCompletion',
+  NoAvailableChannel: 'errorProviderUnavailable',
+  ProviderServiceUnavailable: 'errorProviderUnavailable',
+  RateLimitExceeded: 'errorRateLimited',
+  // ── network / infra (attribution: system) ──
+  ProviderNetworkError: 'errorTransientNetwork',
+  // ── harness watchdog: harness-owned but retry-friendly, so it gets its
+  //    own retry-oriented copy rather than the generic internal-error tier ──
+  OperationInactivityTimeout: 'errorTimeout',
 };
+
+/**
+ * When a specific error code has no precise copy above, fall back to a message
+ * keyed on the error's `attribution` (from the model-runtime error taxonomy) so
+ * the user still learns *who owns the failure* and whether to retry — instead of
+ * a bare Operation ID. Unknown / absent attribution falls through to the legacy
+ * template.
+ */
+const FALLBACK_ERROR_BY_ATTRIBUTION: Record<string, keyof SystemStrings> = {
+  harness: 'errorHarnessInternal',
+  provider: 'errorProviderUnavailable',
+  system: 'errorTransientNetwork',
+  user: 'errorUserGeneric',
+};
+
+/**
+ * Append the Operation ID as a traceable footer so operators can still grep
+ * logs for the failure even when the user-facing copy is a friendly, actionable
+ * message rather than the raw "Operation ID" line.
+ */
+const appendOperationId = (value: string, operationId: string | undefined): string =>
+  operationId ? `${value}\nOperation ID: \`${operationId}\`` : value;
 
 const isCommandConnectionClosedError = (
   errorType: string | undefined,
@@ -418,34 +494,39 @@ const isCommandConnectionClosedError = (
 };
 
 /**
- * Render an agent-execution failure for the user. Switches on the stable
- * `errorType` code (from `AgentRuntimeError.chat`) to surface a friendly,
- * actionable message for known failure modes.
+ * Render an agent-execution failure for the user, in three tiers:
  *
- * For unknown error codes — or when `errorType` is missing — falls back to
- * the legacy `Operation ID` template.
+ * 1. **Precise** — switch on the stable `errorType` code (from
+ *    `AgentRuntimeError.chat`) for copy tailored to that exact failure mode.
+ * 2. **Attribution** — when the code is unknown, fall back to a message keyed
+ *    on `attribution` (network / provider / harness / user) so the user still
+ *    learns who owns the failure and whether to retry.
+ * 3. **Legacy** — when neither is known, the opaque `Operation ID` template.
+ *
+ * The Operation ID is appended as a footer to every tier (not the whole
+ * message) so it stays traceable in logs without being the only thing the
+ * user sees.
  */
 export function renderAgentError(
   errorType: string | undefined,
   errorMessage: string | undefined,
   operationId: string | undefined,
   lng?: BotReplyLocale,
+  attribution?: string,
 ): string {
   const strings = getSystemStrings(lng);
 
   if (isCommandConnectionClosedError(errorType, errorMessage)) {
-    const value = strings.errorCommandConnectionClosed;
-    return operationId ? `${value}\nOperation ID: \`${operationId}\`` : value;
+    return appendOperationId(strings.errorCommandConnectionClosed, operationId);
   }
 
-  const stringKey = errorType ? FRIENDLY_ERROR_BY_TYPE[errorType] : undefined;
+  const stringKey =
+    (errorType ? FRIENDLY_ERROR_BY_TYPE[errorType] : undefined) ??
+    (attribution ? FALLBACK_ERROR_BY_ATTRIBUTION[attribution] : undefined);
   if (stringKey) {
     const value = strings[stringKey];
     if (typeof value === 'string') {
-      // Append the operationId as a traceable footer so operators can still
-      // grep logs for the failure even when the user-facing copy is a
-      // friendly, actionable message rather than the raw "Operation ID" line.
-      return operationId ? `${value}\nOperation ID: \`${operationId}\`` : value;
+      return appendOperationId(value, operationId);
     }
   }
 

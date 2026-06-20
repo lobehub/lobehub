@@ -6,6 +6,7 @@ import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/aiChat/act
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 
 import { createGatewayEventHandler } from '../gatewayEventHandler';
+import { buildRunLifecycle } from '../runLifecycle/buildRunLifecycle';
 
 vi.mock('@/services/message', () => ({
   messageService: {
@@ -32,10 +33,16 @@ function createMockStore() {
   return {
     associateMessageWithOperation: vi.fn(),
     completeOperation: vi.fn(),
+    // completeRun (via buildRunLifecycle) drains the input queue on a successful
+    // terminal and fails the op on an errored terminal.
+    dbMessagesMap: {} as Record<string, any>,
+    drainQueuedMessages: vi.fn(() => [] as any[]),
+    failOperation: vi.fn(),
     internal_dispatchMessage: vi.fn(),
     internal_executeClientTool: vi.fn().mockResolvedValue(undefined),
     internal_toggleToolCallingStreaming: vi.fn(),
     markTopicUnread: vi.fn(),
+    messagesMap: {} as Record<string, any>,
     operations: {
       'op-1': {
         context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' },
@@ -59,11 +66,24 @@ function createHandler(
   overrides?: { assistantMessageId?: string; gatewayOperationId?: string },
 ) {
   const get = vi.fn(() => store) as any;
+  const assistantMessageId = overrides?.assistantMessageId ?? 'msg-initial';
+  const context = { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any;
   return createGatewayEventHandler(get, {
-    assistantMessageId: overrides?.assistantMessageId ?? 'msg-initial',
-    context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any,
+    assistantMessageId,
+    context,
     gatewayOperationId: overrides?.gatewayOperationId,
     operationId: 'op-1',
+    // The gateway transport injects the shared run lifecycle (built once per run
+    // in gateway.ts). Build the real one here so the terminal completeRun /
+    // afterRunComplete path under test runs against the mock store.
+    runLifecycle: buildRunLifecycle(get, {
+      context,
+      parentMessageId: assistantMessageId,
+      parentMessageType: 'assistant',
+      runId: 'op-1',
+      runScope: 'top_level',
+      runtimeType: 'gateway',
+    }),
   });
 }
 
@@ -781,7 +801,9 @@ describe('createGatewayEventHandler', () => {
         'msg-initial',
         undefined,
       );
-      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      // error→fail: an errored gateway run FAILS the op (not complete).
+      expect(store.failOperation).toHaveBeenCalledWith('op-1', expect.anything());
+      expect(store.completeOperation).not.toHaveBeenCalled();
       expect(messageService.updateMessageError).toHaveBeenCalledWith(
         'msg-initial',
         {
@@ -829,7 +851,8 @@ describe('createGatewayEventHandler', () => {
         'msg-step2',
         undefined,
       );
-      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      expect(store.failOperation).toHaveBeenCalledWith('op-1', expect.anything());
+      expect(store.completeOperation).not.toHaveBeenCalled();
       expect(messageService.updateMessageError).toHaveBeenCalledWith(
         'msg-step2',
         {
@@ -1076,25 +1099,22 @@ describe('createGatewayEventHandler', () => {
   // They describe what the gateway terminal path does NOW, not ideal
   // behavior. If something reads like a bug it is locked as-is with a note.
   describe('gateway terminal characterization (lifecycle refactor regression net)', () => {
-    // CURRENT BEHAVIOR (gatewayEventHandler.ts ~622-624): the `error` event
-    // handler completes the operation but, UNLIKE `agent_runtime_end`
-    // (~552-557 which calls markTopicUnread when the operation has a
-    // context.agentId), the error path NEVER calls markTopicUnread.
-    // This is an intentional asymmetry to lock: an errored run does not get
-    // marked as an unread "completed" agent run. If a future refactor unifies
-    // the terminal paths, revisit whether errors SHOULD mark unread —
-    // changing this assertion is the signal that the contract moved.
-    it('error event completes the operation but does NOT call markTopicUnread (asymmetry vs agent_runtime_end)', async () => {
+    // POST-LOBE-10379 CONTRACT: the `error` event FAILS the operation
+    // (`failOperation`) via the shared run lifecycle — an errored run is a failed
+    // run, not a completed one. Like `agent_runtime_end`'s cancel/park endings it
+    // does NOT mark the topic unread (no unread badge for a failed generation).
+    it('error event FAILS the operation and does NOT call markTopicUnread', async () => {
       const store = createMockStore();
       const handler = createHandler(store);
 
       handler(makeEvent('error', { message: 'kaboom' }));
       await flush();
 
-      // completeOperation IS called on error.
-      expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      // failOperation IS called on error; completeOperation is NOT.
+      expect(store.failOperation).toHaveBeenCalledWith('op-1', expect.anything());
+      expect(store.completeOperation).not.toHaveBeenCalled();
       // markTopicUnread is NOT — even though operations['op-1'] has a
-      // context.agentId (which WOULD trigger it on agent_runtime_end).
+      // context.agentId (which WOULD trigger it on a clean agent_runtime_end).
       expect(store.markTopicUnread).not.toHaveBeenCalled();
     });
 
@@ -1220,14 +1240,12 @@ describe('createGatewayEventHandler', () => {
       },
     );
 
-    // CURRENT BEHAVIOR: completeOperation runs once in the agent_runtime_end
-    // handler (gatewayEventHandler.ts:552) and again in gateway.ts
-    // onSessionComplete (gateway.ts:532) for the same operationId. The
-    // underlying reducer (operation/actions.ts:281-306) is idempotent: a
-    // second completeOperation on an already-'completed' op leaves status as
-    // 'completed' (it only refuses to overwrite a 'cancelled' status). This
-    // models the real reducer so the double-call is locked as a no-throw,
-    // no-flip stable terminal state.
+    // POST-LOBE-10379: the agent_runtime_end handler completes the op once via
+    // the shared run lifecycle, and gateway.ts onSessionComplete no longer
+    // double-completes (it only completes as the terminal-missing fallback). The
+    // reducer is still idempotent (a stray second completeOperation on an
+    // already-'completed' op is a no-throw, no-flip no-op) — locked here as a
+    // safety net in case any path issues a redundant completion.
     it('completeOperation is idempotent: double-calling the same op leaves status=completed (no throw, no flip)', async () => {
       // Local harness whose completeOperation MIRRORS the real reducer
       // (operation/actions.ts completeOperation): set status to 'completed'
@@ -1255,6 +1273,14 @@ describe('createGatewayEventHandler', () => {
         assistantMessageId: 'msg-initial',
         context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any,
         operationId: 'op-1',
+        runLifecycle: buildRunLifecycle(get, {
+          context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any,
+          parentMessageId: 'msg-initial',
+          parentMessageType: 'assistant',
+          runId: 'op-1',
+          runScope: 'top_level',
+          runtimeType: 'gateway',
+        }),
       });
 
       // First terminal completion (agent_runtime_end handler).
@@ -1296,6 +1322,14 @@ describe('createGatewayEventHandler', () => {
         assistantMessageId: 'msg-initial',
         context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any,
         operationId: 'op-1',
+        runLifecycle: buildRunLifecycle(get, {
+          context: { agentId: 'agent-1', scope: 'session', topicId: 'topic-1' } as any,
+          parentMessageId: 'msg-initial',
+          parentMessageType: 'assistant',
+          runId: 'op-1',
+          runScope: 'top_level',
+          runtimeType: 'gateway',
+        }),
       });
 
       handler(makeEvent('agent_runtime_end', { reason: 'interrupted' }));

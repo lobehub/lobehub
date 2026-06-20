@@ -18,7 +18,6 @@ const mockDetail: TaskDetailData = {
   name: 'Test Task',
   parent: { agentId: 'agt_parent', identifier: 'T-0', name: 'Parent' },
   priority: 2,
-  review: { enabled: false },
   status: 'running',
   subtasks: [{ identifier: 'T-1-1', name: 'Sub', status: 'backlog' }],
   topicCount: 3,
