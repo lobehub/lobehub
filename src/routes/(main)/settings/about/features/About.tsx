@@ -8,7 +8,7 @@ import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { BLOG, mailTo,OFFICIAL_SITE, PRIVACY_URL, TERMS_URL } from '@/const/url';
+import { BLOG, mailTo, OFFICIAL_SITE, PRIVACY_URL, TERMS_URL } from '@/const/url';
 
 import AboutList from './AboutList';
 import ItemCard from './ItemCard';
@@ -78,20 +78,20 @@ const About = memo<{ mobile?: boolean }>(({ mobile }) => {
               value: 'feedback',
             },
             {
-              href: SOCIAL_URL.discord,
+              href: SOCIAL_URL.discord ?? SOCIAL_URL.github,
               icon: SiDiscord,
               label: 'Discord',
               value: 'discord',
             },
             {
-              href: SOCIAL_URL.x,
+              href: SOCIAL_URL.x ?? SOCIAL_URL.github,
               icon: SiX as any,
               label: 'X / Twitter',
               value: 'x',
             },
 
             {
-              href: SOCIAL_URL.youtube,
+              href: SOCIAL_URL.youtube ?? SOCIAL_URL.github,
               icon: SiYoutube,
               label: 'YouTube',
               value: 'youtube',

@@ -2,7 +2,7 @@ import { analyticsEnv } from '@/envs/analytics';
 import { serializeForHtml } from '@/server/utils/serializeForHtml';
 import { type AnalyticsConfig } from '@/types/spaServerConfig';
 
-export const VITE_DEV_ORIGIN = 'http://localhost:9876';
+export const VITE_DEV_ORIGIN = 'http://192.168.100.39:9876';
 
 const SERVER_CONFIG_PLACEHOLDER =
   /window\.__SERVER_CONFIG__\s*=\s*undefined;\s*\/\*\s*SERVER_CONFIG\s*\*\//;

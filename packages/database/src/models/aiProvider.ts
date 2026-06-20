@@ -5,7 +5,7 @@ import type {
   CreateAiProviderParams,
   UpdateAiProviderConfigParams,
 } from '@lobechat/types';
-import { and, asc, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { isEmpty } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
@@ -23,11 +23,32 @@ type EncryptUserKeyVaults = (keyVaults: string) => Promise<string>;
 export class AiProviderModel {
   private userId: string;
   private db: LobeChatDatabase;
+  private workspaceId?: string;
 
-  constructor(db: LobeChatDatabase, userId: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.userId = userId;
     this.db = db;
+    this.workspaceId = workspaceId;
   }
+
+  private scopeWhere = () =>
+    this.workspaceId
+      ? and(eq(aiProviders.userId, this.userId), eq(aiProviders.workspaceId, this.workspaceId))
+      : and(eq(aiProviders.userId, this.userId), isNull(aiProviders.workspaceId));
+
+  private scopedValues = () => ({
+    userId: this.userId,
+    ...(this.workspaceId ? { workspaceId: this.workspaceId } : {}),
+  });
+
+  private conflictTarget = () => ({
+    target: this.workspaceId
+      ? [aiProviders.id, aiProviders.userId, aiProviders.workspaceId]
+      : [aiProviders.id, aiProviders.userId],
+    targetWhere: this.workspaceId
+      ? isNotNull(aiProviders.workspaceId)
+      : isNull(aiProviders.workspaceId),
+  });
 
   create = async (
     { keyVaults: userKey, ...params }: CreateAiProviderParams,
@@ -44,7 +65,7 @@ export class AiProviderModel {
         // each new ai provider we will set it to enabled by default
         enabled: true,
         keyVaults,
-        userId: this.userId,
+        ...this.scopedValues(),
       })
       .returning();
 
@@ -56,23 +77,29 @@ export class AiProviderModel {
       // 1. delete all models of the provider
       await trx
         .delete(aiModels)
-        .where(and(eq(aiModels.providerId, id), eq(aiModels.userId, this.userId)));
+        .where(
+          and(
+            eq(aiModels.providerId, id),
+            eq(aiModels.userId, this.userId),
+            this.workspaceId
+              ? eq(aiModels.workspaceId, this.workspaceId)
+              : isNull(aiModels.workspaceId),
+          ),
+        );
 
       // 2. delete the provider
-      await trx
-        .delete(aiProviders)
-        .where(and(eq(aiProviders.id, id), eq(aiProviders.userId, this.userId)));
+      await trx.delete(aiProviders).where(and(eq(aiProviders.id, id), this.scopeWhere()));
     });
   };
 
   deleteAll = async () => {
-    return this.db.delete(aiProviders).where(eq(aiProviders.userId, this.userId));
+    return this.db.delete(aiProviders).where(this.scopeWhere());
   };
 
   query = async () => {
     return this.db.query.aiProviders.findMany({
       orderBy: [desc(aiProviders.updatedAt)],
-      where: eq(aiProviders.userId, this.userId),
+      where: this.scopeWhere(),
     });
   };
 
@@ -88,7 +115,7 @@ export class AiProviderModel {
         source: aiProviders.source,
       })
       .from(aiProviders)
-      .where(eq(aiProviders.userId, this.userId))
+      .where(this.scopeWhere())
       .orderBy(asc(aiProviders.sort), desc(aiProviders.updatedAt));
 
     return result as AiProviderListItem[];
@@ -96,7 +123,7 @@ export class AiProviderModel {
 
   findById = async (id: string) => {
     return this.db.query.aiProviders.findFirst({
-      where: and(eq(aiProviders.id, id), eq(aiProviders.userId, this.userId)),
+      where: and(eq(aiProviders.id, id), this.scopeWhere()),
     });
   };
 
@@ -104,7 +131,7 @@ export class AiProviderModel {
     return this.db
       .update(aiProviders)
       .set({ ...value, updatedAt: new Date() })
-      .where(and(eq(aiProviders.id, id), eq(aiProviders.userId, this.userId)));
+      .where(and(eq(aiProviders.id, id), this.scopeWhere()));
   };
 
   updateConfig = async (
@@ -147,12 +174,11 @@ export class AiProviderModel {
         ...commonFields,
         id,
         source: this.getProviderSource(id),
-        userId: this.userId,
+        ...this.scopedValues(),
       })
       .onConflictDoUpdate({
         set: commonFields,
-        target: [aiProviders.id, aiProviders.userId],
-        targetWhere: isNull(aiProviders.workspaceId),
+        ...this.conflictTarget(),
       });
   };
 
@@ -164,12 +190,11 @@ export class AiProviderModel {
         id,
         source: this.getProviderSource(id),
         updatedAt: new Date(),
-        userId: this.userId,
+        ...this.scopedValues(),
       })
       .onConflictDoUpdate({
         set: { enabled },
-        target: [aiProviders.id, aiProviders.userId],
-        targetWhere: isNull(aiProviders.workspaceId),
+        ...this.conflictTarget(),
       });
   };
 
@@ -184,12 +209,11 @@ export class AiProviderModel {
             sort,
             source: this.getProviderSource(id),
             updatedAt: new Date(),
-            userId: this.userId,
+            ...this.scopedValues(),
           })
           .onConflictDoUpdate({
             set: { sort, updatedAt: new Date() },
-            target: [aiProviders.id, aiProviders.userId],
-            targetWhere: isNull(aiProviders.workspaceId),
+            ...this.conflictTarget(),
           });
       });
 
@@ -216,7 +240,7 @@ export class AiProviderModel {
         source: aiProviders.source,
       })
       .from(aiProviders)
-      .where(and(eq(aiProviders.id, id), eq(aiProviders.userId, this.userId)))
+      .where(and(eq(aiProviders.id, id), this.scopeWhere()))
       .limit(1);
 
     const [result] = await query;
@@ -226,7 +250,7 @@ export class AiProviderModel {
       if (this.isBuiltInProvider(id)) {
         await this.db
           .insert(aiProviders)
-          .values({ id, source: 'builtin', userId: this.userId })
+          .values({ id, source: 'builtin', ...this.scopedValues() })
           .onConflictDoNothing();
 
         const resultAgain = await query;
@@ -267,7 +291,7 @@ export class AiProviderModel {
         settings: aiProviders.settings,
       })
       .from(aiProviders)
-      .where(and(eq(aiProviders.userId, this.userId)));
+      .where(this.scopeWhere());
 
     const decrypt = decryptor ?? JSON.parse;
     const runtimeConfig: Record<string, AiProviderRuntimeConfig> = {};

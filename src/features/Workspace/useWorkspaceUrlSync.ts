@@ -31,6 +31,8 @@ const RESERVED_FIRST_SEGMENTS = new Set([
   'task',
   // Personal-only:
   'settings',
+  'admin',
+  'invite',
   'onboarding',
   'me',
   'share',

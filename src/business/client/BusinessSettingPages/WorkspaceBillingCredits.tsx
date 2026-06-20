@@ -1,10 +1,37 @@
 import { Button, Flexbox, Input, Text } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
+import { Coins, PlusCircle } from 'lucide-react';
 import { useState } from 'react';
 import useSWR from 'swr';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  card: css`
+    padding: 22px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 22px;
+    background: ${cssVar.colorBgContainer};
+  `,
+  hero: css`
+    border-color: ${cssVar.colorPrimary};
+    background:
+      radial-gradient(circle at 100% 0, ${cssVar.colorPrimaryBg} 0, transparent 42%),
+      ${cssVar.colorBgContainer};
+  `,
+  mobileStack: css`
+    @media (width <= 720px) {
+      flex-direction: column;
+      align-items: stretch;
+
+      > * {
+        width: 100% !important;
+      }
+    }
+  `,
+}));
 
 export default function WorkspaceBillingCredits() {
   const workspace = useActiveWorkspace();
@@ -30,19 +57,31 @@ export default function WorkspaceBillingCredits() {
   };
 
   return (
-    <Flexbox gap={16} style={{ maxWidth: 560 }}>
-      <Text weight={600}>Кредиты</Text>
-      <Text type="secondary">Кредиты управляются локально и не завязаны на SaaS-платежи.</Text>
-      <Text>Баланс: {data?.balance ?? 0}</Text>
+    <Flexbox gap={18} style={{ maxWidth: 760 }}>
+      <Flexbox className={`${styles.card} ${styles.hero}`} gap={14}>
+        <Flexbox horizontal align="center" gap={10}>
+          <Coins size={24} />
+          <Text as="h1" style={{ fontSize: 28, fontWeight: 800, margin: 0 }}>
+            Кредиты workspace
+          </Text>
+        </Flexbox>
+        <Text type="secondary">
+          Общий баланс команды для Acensus AI. Пополнения видят владельцы и super-admin, участники
+          используют доступный баланс в workspace-сценариях.
+        </Text>
+        <Text style={{ fontSize: 40, fontWeight: 800 }}>{data?.balance ?? 0}</Text>
+      </Flexbox>
       {canManage ? (
-        <Flexbox horizontal gap={8}>
+        <Flexbox horizontal className={`${styles.card} ${styles.mobileStack}`} gap={8}>
           <Input placeholder="Сумма" value={amount} onChange={(e) => setAmount(e.target.value)} />
-          <Button type="primary" onClick={topUp}>
+          <Button icon={<PlusCircle size={16} />} type="primary" onClick={topUp}>
             Пополнить
           </Button>
         </Flexbox>
       ) : (
-        <Text type="secondary">Пополнять баланс могут только владельцы workspace.</Text>
+        <Flexbox className={styles.card}>
+          <Text type="secondary">Пополнять баланс могут только владельцы workspace.</Text>
+        </Flexbox>
       )}
     </Flexbox>
   );

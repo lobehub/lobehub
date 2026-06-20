@@ -108,7 +108,9 @@ export const workspaceMemberRouter = router({
         workspaceId: invitation.workspaceId,
       });
 
-      return member;
+      const workspace = await ctx.workspaceModel.findById(invitation.workspaceId);
+
+      return { ...member, workspace };
     }),
 
   acceptInvitationByWorkspaceSlug: memberProcedure

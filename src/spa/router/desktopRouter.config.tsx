@@ -742,6 +742,21 @@ export const desktopRoutes: RouteObject[] = [
         path: 'settings',
       },
 
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/admin/business'),
+          'Desktop > Business Admin',
+        ),
+        errorElement: <ErrorBoundary />,
+        path: 'admin/business',
+      },
+
+      {
+        element: dynamicElement(() => import('@/routes/invite/[token]'), 'Desktop > Invite'),
+        errorElement: <ErrorBoundary />,
+        path: 'invite/:token',
+      },
+
       // Workspace slug routes — `/:workspaceSlug/*` mirrors the shared main area.
       // Must come AFTER all reserved root paths so they don't shadow e.g. /agent.
       {

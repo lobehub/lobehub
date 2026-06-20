@@ -44,6 +44,7 @@ import WorkspaceSlugSettingsSkillPage from '@/routes/(main)/[workspaceSlug]/sett
 import WorkspaceSlugSettingsStatsPage from '@/routes/(main)/[workspaceSlug]/settings/stats';
 import WorkspaceSlugSettingsStoragePage from '@/routes/(main)/[workspaceSlug]/settings/storage';
 import WorkspaceSlugSettingsUsagePage from '@/routes/(main)/[workspaceSlug]/settings/usage';
+import BusinessAdminPage from '@/routes/(main)/admin/business';
 // Pages — sync import
 import AgentPage from '@/routes/(main)/agent';
 import DesktopChatLayout from '@/routes/(main)/agent/_layout';
@@ -116,6 +117,7 @@ import { settingsRouteMeta } from '@/routes/(main)/settings/features/routeMeta';
 import { ProviderDetailPage, ProviderLayout } from '@/routes/(main)/settings/provider';
 import TaskDetailRoute from '@/routes/(main)/task/[taskId]';
 import AllTasksPage from '@/routes/(main)/tasks';
+import InvitePage from '@/routes/invite/[token]';
 import SharePagePage from '@/routes/share/page/[id]';
 import ShareTopicPage from '@/routes/share/t/[id]';
 import ShareTopicLayout from '@/routes/share/t/[id]/_layout';
@@ -636,6 +638,18 @@ export const desktopRoutes: RouteObject[] = [
         element: <SettingsLayout />,
         errorElement: <ErrorBoundary />,
         path: 'settings',
+      },
+
+      {
+        element: <BusinessAdminPage />,
+        errorElement: <ErrorBoundary />,
+        path: 'admin/business',
+      },
+
+      {
+        element: <InvitePage />,
+        errorElement: <ErrorBoundary />,
+        path: 'invite/:token',
       },
 
       // Workspace slug routes — `/:workspaceSlug/*` mirrors the shared main area.

@@ -133,11 +133,12 @@ export class AiInfraRepos {
     db: LobeChatDatabase,
     userId: string,
     providerConfigs: Record<string, ProviderConfig>,
+    workspaceId?: string,
   ) {
     this.userId = userId;
     this.db = db;
-    this.aiProviderModel = new AiProviderModel(db, userId);
-    this.aiModelModel = new AiModelModel(db, userId);
+    this.aiProviderModel = new AiProviderModel(db, userId, workspaceId);
+    this.aiModelModel = new AiModelModel(db, userId, workspaceId);
     this.providerConfigs = providerConfigs;
   }
 

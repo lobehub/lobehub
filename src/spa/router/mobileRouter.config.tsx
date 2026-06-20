@@ -379,6 +379,21 @@ export const mobileRoutes: RouteObject[] = [
         ),
       },
 
+      {
+        element: dynamicElement(() => import('@/routes/invite/[token]'), 'Mobile > Invite'),
+        errorElement: <ErrorBoundary />,
+        path: 'invite/:token',
+      },
+
+      {
+        element: dynamicElement(
+          () => import('@/routes/(mobile)/admin/business'),
+          'Mobile > Business Admin',
+        ),
+        errorElement: <ErrorBoundary />,
+        path: 'admin/business',
+      },
+
       // Workspace slug routes — `/:workspaceSlug/*` mirrors the shared main area.
       // Must come AFTER all reserved root paths so they don't shadow e.g. /agent.
       {
@@ -391,9 +406,7 @@ export const mobileRoutes: RouteObject[] = [
             index: true,
           },
           ...sharedMainAreaChildren,
-          // Workspace settings — `/:slug/settings/*`. Mobile reuses the mobile
-          // settings chrome (header + content wrapper) for now; a dedicated
-          // mobile workspace sidebar is follow-up work.
+          // Workspace settings — `/:slug/settings/*` with dedicated mobile header.
           {
             children: [
               { element: redirectElement('general'), index: true },
@@ -441,14 +454,56 @@ export const mobileRoutes: RouteObject[] = [
               },
               {
                 element: dynamicElement(
-                  () => import('@/routes/(main)/[workspaceSlug]/settings/provider'),
+                  () => import('@/routes/(mobile)/workspace/settings/provider'),
                   'Mobile > Workspace > Settings > Provider',
                 ),
                 path: 'provider',
               },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/stats'),
+                  'Mobile > Workspace > Settings > Stats',
+                ),
+                path: 'stats',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/skill'),
+                  'Mobile > Workspace > Settings > Skill',
+                ),
+                path: 'skill',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/service-model'),
+                  'Mobile > Workspace > Settings > Service Model',
+                ),
+                path: 'service-model',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/creds'),
+                  'Mobile > Workspace > Settings > Creds',
+                ),
+                path: 'creds',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/apikey'),
+                  'Mobile > Workspace > Settings > API Key',
+                ),
+                path: 'apikey',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/storage'),
+                  'Mobile > Workspace > Settings > Storage',
+                ),
+                path: 'storage',
+              },
             ],
             element: dynamicLayout(
-              () => import('@/routes/(mobile)/settings/_layout'),
+              () => import('@/routes/(mobile)/workspace/settings/_layout'),
               'Mobile > Workspace > Settings > Layout',
             ),
             errorElement: <ErrorBoundary />,

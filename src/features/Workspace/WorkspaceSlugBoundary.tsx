@@ -43,9 +43,14 @@ const WorkspaceSlugBoundary: FC = () => {
               })
             ).member;
 
-        setActiveWorkspaceSnapshot({ id: accepted.workspaceId, slug: result.slug });
+        const acceptedWorkspace = (
+          accepted as typeof accepted & { workspace?: { slug?: string } | null }
+        ).workspace;
+        const acceptedSlug = acceptedWorkspace?.slug ?? result.slug;
+
+        setActiveWorkspaceSnapshot({ id: accepted.workspaceId, slug: acceptedSlug });
         await mutate(WORKSPACE_LIST_KEY);
-        navigate(`/${result.slug}`, { replace: true });
+        navigate(`/${acceptedSlug}`, { replace: true });
       } finally {
         setAccepting(false);
       }

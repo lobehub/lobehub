@@ -20,7 +20,10 @@ describe('business model config', () => {
     mockLoadModelBankModels.mockImplementation(async ({ providerLoaders }) => {
       const lobehubModels = await providerLoaders.lobehub?.();
 
-      return (lobehubModels ?? []).map((model) => ({ ...model, providerId: 'lobehub' }));
+      return (lobehubModels ?? []).map((model: { id: string }) => ({
+        ...model,
+        providerId: 'lobehub',
+      }));
     });
   });
 

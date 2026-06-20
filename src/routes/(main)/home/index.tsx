@@ -2,7 +2,6 @@ import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 import { useLocation } from 'react-router';
 
-import WorkspaceHomeDashboard from '@/business/client/features/WorkspaceHomeDashboard';
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import HomePageTracker from '@/components/Analytics/HomePageTracker';
 import NavHeader from '@/features/NavHeader';
@@ -26,7 +25,7 @@ const Home: FC = () => {
         width={'100%'}
       >
         <WideScreenContainer>
-          {isWorkspaceHome ? <WorkspaceHomeDashboard /> : <HomeContent />}
+          <HomeContent />
         </WideScreenContainer>
       </Flexbox>
     </>

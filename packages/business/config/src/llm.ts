@@ -23,6 +23,9 @@ const genUserLLMConfig = (specificConfig: Record<any, any>): UserModelProviderCo
 };
 
 export const DEFAULT_LLM_CONFIG = genUserLLMConfig({
+  lobehub: {
+    enabled: true,
+  },
   anthropic: {
     enabled: true,
   },

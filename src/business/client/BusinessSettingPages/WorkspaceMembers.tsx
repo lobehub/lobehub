@@ -1,6 +1,7 @@
 import { Button, Flexbox, Input, Tag, Text } from '@lobehub/ui';
 import { Select } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
+import { Link2, ShieldCheck, UserPlus, UsersRound } from 'lucide-react';
 import { useState } from 'react';
 import useSWR from 'swr';
 
@@ -10,10 +11,18 @@ import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
-    padding: 14px;
+    padding: 20px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 14px;
+    border-radius: 22px;
     background: ${cssVar.colorBgContainer};
+  `,
+  hero: css`
+    padding: 24px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 26px;
+    background:
+      radial-gradient(circle at 100% 0, ${cssVar.colorPrimaryBg} 0, transparent 42%),
+      linear-gradient(135deg, ${cssVar.colorBgContainer} 0%, ${cssVar.colorFillQuaternary} 100%);
   `,
   controls: css`
     display: grid;
@@ -32,7 +41,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     padding: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
+    border-radius: 18px;
+
+    background: ${cssVar.colorBgContainer};
 
     @media (width <= 720px) {
       grid-template-columns: 1fr;
@@ -110,7 +121,7 @@ export default function WorkspaceMembers() {
         workspaceId: workspace.id,
       });
       const origin = globalThis.location?.origin ?? '';
-      setLastInviteUrl(`${origin}/${workspace.slug}?invite=${invitation.token}`);
+      setLastInviteUrl(`${origin}/invite/${invitation.token}`);
       setEmail('');
       await mutateInvitations();
     } finally {
@@ -127,18 +138,34 @@ export default function WorkspaceMembers() {
   });
 
   return (
-    <Flexbox gap={16} style={{ maxWidth: 860 }}>
-      <Text type="secondary">
-        Участники workspace могут работать в общем контексте команды. Владельцы и super-admin могут
-        управлять ролями, приглашениями, тарифом, кредитами и ключами workspace.
-      </Text>
+    <Flexbox gap={18} style={{ maxWidth: 960 }}>
+      <Flexbox className={styles.hero} gap={14}>
+        <Flexbox horizontal align="center" gap={10}>
+          <UsersRound size={24} />
+          <Text as="h1" style={{ fontSize: 28, fontWeight: 800, margin: 0 }}>
+            Команда workspace
+          </Text>
+        </Flexbox>
+        <Text type="secondary">
+          Приглашайте людей по email или ссылке, назначайте роли и держите доступ к общим агентам,
+          знаниям, провайдерам и кредитам под контролем.
+        </Text>
+        <Flexbox horizontal gap={8}>
+          <Tag>{data.length} участников</Tag>
+          <Tag>{invitations.length} ожидают</Tag>
+          {canManage && <Tag color="green">Можно управлять</Tag>}
+        </Flexbox>
+      </Flexbox>
       {canManage && (
         <Flexbox className={styles.card} gap={12}>
+          <Flexbox horizontal align="center" gap={10}>
+            <UserPlus size={20} />
+            <Text weight={700}>Пригласить в workspace</Text>
+          </Flexbox>
           <Flexbox gap={4}>
-            <Text weight={600}>Пригласить в workspace</Text>
             <Text fontSize={13} type="secondary">
-              Email-приглашение можно принять просто открыв /{workspace.slug}. Ссылку ниже можно
-              отправить вручную, если почта не подключена.
+              Создайте ссылку и отправьте ее вручную. После входа пользователь вернется на страницу
+              приглашения и попадет в нужный workspace.
             </Text>
           </Flexbox>
           <div className={styles.controls}>
@@ -160,7 +187,10 @@ export default function WorkspaceMembers() {
           {lastInviteUrl && (
             <Flexbox horizontal align="center" className={styles.mobileStack} gap={8}>
               <Input readOnly value={lastInviteUrl} />
-              <Button onClick={() => navigator.clipboard.writeText(lastInviteUrl)}>
+              <Button
+                icon={<Link2 size={16} />}
+                onClick={() => navigator.clipboard.writeText(lastInviteUrl)}
+              >
                 Скопировать
               </Button>
             </Flexbox>
@@ -186,7 +216,7 @@ export default function WorkspaceMembers() {
           justify="space-between"
         >
           <Flexbox gap={2}>
-            <Text weight={600}>Участники</Text>
+            <Text weight={700}>Участники</Text>
             <Text className={styles.muted} fontSize={13}>
               {filteredMembers.length} из {data.length}
             </Text>
@@ -246,6 +276,7 @@ export default function WorkspaceMembers() {
                 <Button
                   size="small"
                   onClick={async () => {
+                    if (!globalThis.confirm('Удалить пользователя из workspace?')) return;
                     await lambdaClient.workspaceMember.remove.mutate({
                       userId: member.userId,
                       workspaceId: workspace.id,
@@ -268,7 +299,7 @@ export default function WorkspaceMembers() {
               <Flexbox gap={2}>
                 <Text>{invitation.email || 'Ссылка-приглашение'}</Text>
                 <Text code fontSize={12} type="secondary">
-                  /{workspace.slug}?invite={invitation.token}
+                  /invite/{invitation.token}
                 </Text>
               </Flexbox>
               <Flexbox horizontal className={styles.mobileStack} gap={8}>
@@ -276,7 +307,7 @@ export default function WorkspaceMembers() {
                   size="small"
                   onClick={() =>
                     navigator.clipboard.writeText(
-                      `${globalThis.location?.origin ?? ''}/${workspace.slug}?invite=${invitation.token}`,
+                      `${globalThis.location?.origin ?? ''}/invite/${invitation.token}`,
                     )
                   }
                 >
@@ -285,6 +316,7 @@ export default function WorkspaceMembers() {
                 <Button
                   size="small"
                   onClick={async () => {
+                    if (!globalThis.confirm('Отозвать это приглашение?')) return;
                     await lambdaClient.workspaceMember.revokeInvitation.mutate({
                       id: invitation.id,
                       workspaceId: workspace.id,
@@ -297,6 +329,14 @@ export default function WorkspaceMembers() {
               </Flexbox>
             </div>
           ))}
+        </Flexbox>
+      )}
+      {!canManage && (
+        <Flexbox horizontal align="center" className={styles.card} gap={10}>
+          <ShieldCheck size={18} />
+          <Text type="secondary">
+            Роли и приглашения доступны владельцам workspace и super-admin.
+          </Text>
         </Flexbox>
       )}
     </Flexbox>

@@ -180,7 +180,7 @@ const MainMenu = memo(() => {
           icon={<DiscordIcon />}
           keywords={t('cmdk.keywords.discord').split(' ')}
           value="discord"
-          onSelect={() => handleExternalLink(SOCIAL_URL.discord)}
+          onSelect={() => handleExternalLink(SOCIAL_URL.discord ?? SOCIAL_URL.github)}
         >
           {t('cmdk.communitySupport')}
         </CommandItem>
