@@ -1,12 +1,12 @@
-import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import { type SidebarAgentItem } from '@lobechat/types';
-import { ActionIcon, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { ActionIcon, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2, PinIcon } from 'lucide-react';
 import { type CSSProperties, type DragEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import HeterogeneousTag from '@/features/HeterogeneousTag';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { usePrefetchAgent } from '@/hooks/usePrefetchAgent';
@@ -101,18 +101,12 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) 
 
   // Heterogeneous agents (Claude Code, Codex, …) show their runtime as a tag
   // so they stand out from built-in agents in the sidebar.
-  const heterogeneousLabel = heterogeneousType
-    ? (HETEROGENEOUS_TYPE_LABELS[heterogeneousType] ?? heterogeneousType)
-    : null;
-
-  const titleNode = heterogeneousLabel ? (
+  const titleNode = heterogeneousType ? (
     <Flexbox horizontal align="center" gap={4}>
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {displayTitle}
       </span>
-      <Tag size="small" style={{ flexShrink: 0 }}>
-        {heterogeneousLabel}
-      </Tag>
+      <HeterogeneousTag type={heterogeneousType} />
     </Flexbox>
   ) : (
     displayTitle
