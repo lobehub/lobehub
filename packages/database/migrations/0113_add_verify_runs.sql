@@ -56,4 +56,31 @@ ALTER TABLE "verify_reports" ADD CONSTRAINT "verify_reports_verify_run_id_verify
 CREATE INDEX IF NOT EXISTS "verify_check_results_verify_run_id_idx" ON "verify_check_results" USING btree ("verify_run_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "verify_check_results_verify_run_id_check_item_id_unique" ON "verify_check_results" USING btree ("verify_run_id","check_item_id");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "verify_reports_verify_run_id_unique" ON "verify_reports" USING btree ("verify_run_id");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "verify_reports_operation_id_idx" ON "verify_reports" USING btree ("operation_id");
+CREATE INDEX IF NOT EXISTS "verify_reports_operation_id_idx" ON "verify_reports" USING btree ("operation_id");--> statement-breakpoint
+
+-- 5. Backfill: the new readers address sessions via verify_runs (plan/status by
+--    getStateByOperation, results/reports by verify_run_id), so existing
+--    operation-keyed verification work must be lifted onto verify_runs or it
+--    disappears after deploy. Mint exactly one run per operation that carries any
+--    verify data (a plan/status on agent_operations, or results/reports keyed by
+--    operation_id), copying its plan snapshot + rollup status and ownership.
+--    Idempotent: ON CONFLICT keeps the unique operation_id, the relinks only fill
+--    NULLs.
+INSERT INTO "verify_runs" ("operation_id", "user_id", "workspace_id", "source", "plan", "plan_confirmed_at", "status")
+SELECT o."id", o."user_id", o."workspace_id", 'agent', o."verify_plan", o."verify_plan_confirmed_at", o."verify_status"
+FROM "agent_operations" o
+WHERE o."verify_plan" IS NOT NULL
+	OR o."verify_status" IS NOT NULL
+	OR EXISTS (SELECT 1 FROM "verify_check_results" r WHERE r."operation_id" = o."id")
+	OR EXISTS (SELECT 1 FROM "verify_reports" rep WHERE rep."operation_id" = o."id")
+ON CONFLICT ("operation_id") DO NOTHING;--> statement-breakpoint
+
+-- Relink the existing operation-keyed results / reports onto their new run.
+UPDATE "verify_check_results" r
+SET "verify_run_id" = vr."id"
+FROM "verify_runs" vr
+WHERE r."operation_id" = vr."operation_id" AND r."verify_run_id" IS NULL;--> statement-breakpoint
+UPDATE "verify_reports" rep
+SET "verify_run_id" = vr."id"
+FROM "verify_runs" vr
+WHERE rep."operation_id" = vr."operation_id" AND rep."verify_run_id" IS NULL;

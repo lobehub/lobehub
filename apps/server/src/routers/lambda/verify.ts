@@ -296,6 +296,10 @@ export const verifyRouter = router({
 
   listRuns: verifyProcedure.query(async ({ ctx }) => ctx.runModel.query()),
 
+  listResultsByRun: verifyProcedure
+    .input(z.object({ verifyRunId: z.string() }))
+    .query(async ({ ctx, input }) => ctx.resultModel.listByRun(input.verifyRunId)),
+
   ingestResult: verifyProcedure
     .input(
       z.object({

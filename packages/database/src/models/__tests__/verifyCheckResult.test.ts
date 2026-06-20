@@ -226,4 +226,19 @@ describe('VerifyRunModel plan', () => {
     expect(again.id).toBe(verifyRunId);
     expect((await model.findByOperation(operationId))?.id).toBe(verifyRunId);
   });
+
+  it('refuses to reserve a run for an operation owned by another user', async () => {
+    const otherUserId = 'verify-run-other-user';
+    await serverDB.insert(users).values([{ id: otherUserId }]);
+    // `operationId` belongs to `userId`; the attacker must not reserve its
+    // globally-unique operation_id under their own ownership.
+    const attacker = new VerifyRunModel(serverDB, otherUserId);
+    await expect(attacker.ensureForOperation(operationId)).rejects.toThrow();
+    await expect(attacker.create({ operationId, source: 'agent-testing' })).rejects.toThrow();
+
+    // The real owner is still able to reserve / find their run.
+    expect((await new VerifyRunModel(serverDB, userId).findByOperation(operationId))?.id).toBe(
+      verifyRunId,
+    );
+  });
 });

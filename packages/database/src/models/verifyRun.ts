@@ -1,6 +1,7 @@
 import type { VerifyCheckItem, VerifyRunSource, VerifyRunStatus } from '@lobechat/types';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 
+import { agentOperations } from '../schemas/agentOperations';
 import type { NewVerifyRun, VerifyRunItem } from '../schemas/verify';
 import { verifyRuns } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
@@ -48,9 +49,42 @@ export class VerifyRunModel {
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, verifyRuns);
 
+  /**
+   * Guard before reserving the (globally-unique) `operation_id` on a new run.
+   *
+   * A verify_run stamps the *current* caller's ownership, but `operation_id` is
+   * unique across the whole table — so reserving one for an Agent Run that isn't
+   * ours would (a) mis-attribute that operation's session to the wrong owner and
+   * (b) lock the real owner out: their later insert hits the unique conflict and
+   * the ownership-scoped re-read filters the stolen row away, yielding no run.
+   * Confirm the operation is actually owned by this user/workspace first.
+   */
+  private assertOperationOwned = async (operationId: string): Promise<void> => {
+    const [op] = await this.db
+      .select({ id: agentOperations.id })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.id, operationId),
+          buildWorkspaceWhere(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            agentOperations,
+          ),
+        ),
+      )
+      .limit(1);
+    if (!op) {
+      throw new Error(`Agent operation "${operationId}" not found in the current workspace`);
+    }
+  };
+
   create = async (
     params: Omit<NewVerifyRun, 'userId' | 'workspaceId'> & { source?: VerifyRunSource },
   ): Promise<VerifyRunItem> => {
+    // A caller-supplied operation link must belong to this owner before we
+    // reserve its unique operation_id (see {@link assertOperationOwned}).
+    if (params.operationId) await this.assertOperationOwned(params.operationId);
+
     const [run] = await this.db
       .insert(verifyRuns)
       .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, params))
@@ -90,6 +124,11 @@ export class VerifyRunModel {
   ): Promise<VerifyRunItem> => {
     const existing = await this.findByOperation(operationId);
     if (existing) return existing;
+
+    // No run yet for an operation we can see — but `findByOperation` is scoped to
+    // our ownership, so a row could exist under another owner. Verify the
+    // operation is ours before reserving its unique operation_id.
+    await this.assertOperationOwned(operationId);
 
     await this.db
       .insert(verifyRuns)
