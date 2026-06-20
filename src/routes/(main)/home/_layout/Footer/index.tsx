@@ -88,6 +88,20 @@ const injectMenuTracking = (
     };
   });
 
+/**
+ * Collect the keys of click-trackable items — the exact same set wrapped by
+ * `injectMenuTracking` (non-divider items with a key). Used so the menu-open
+ * exposure event reports only keys that can later emit `home_footer_menu_clicked`,
+ * keeping per-key CTR denominators and numerators aligned. Billboard items are
+ * excluded here (they emit their own `billboard_*` events).
+ */
+const collectMenuKeys = (items: FooterMenuItems): string[] =>
+  items
+    .filter((item) => item && (item as { type?: string }).type !== 'divider')
+    .map((item) => (item as { key?: string | number }).key)
+    .filter((key): key is string | number => Boolean(key))
+    .map(String);
+
 const Footer = memo(() => {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
@@ -291,7 +305,10 @@ const Footer = memo(() => {
     t,
   ]);
 
-  const helpMenuItems: MenuProps['items'] = useMemo(() => {
+  const { helpMenuItems, trackedMenuKeys } = useMemo<{
+    helpMenuItems: MenuProps['items'];
+    trackedMenuKeys: string[];
+  }>(() => {
     const ownItems: FooterMenuItems = [
       ...(footer.showSettingsEntry && !isDevMode
         ? [
@@ -383,12 +400,15 @@ const Footer = memo(() => {
         : []),
     ];
 
-    return [
-      ...injectMenuTracking(ownItems, trackMenuClick),
-      ...(isHomeSidebar && billboardMenuItems && billboardMenuItems.length > 0
-        ? [{ type: 'divider' as const }, ...billboardMenuItems]
-        : []),
-    ];
+    return {
+      helpMenuItems: [
+        ...injectMenuTracking(ownItems, trackMenuClick),
+        ...(isHomeSidebar && billboardMenuItems && billboardMenuItems.length > 0
+          ? [{ type: 'divider' as const }, ...billboardMenuItems]
+          : []),
+      ],
+      trackedMenuKeys: collectMenuKeys(ownItems),
+    };
   }, [
     trackMenuClick,
     footer.showSettingsEntry,
@@ -409,21 +429,16 @@ const Footer = memo(() => {
   const handleMenuOpenChange = useCallback(
     (open: boolean) => {
       if (!open) return;
-      const keys = (helpMenuItems ?? [])
-        .filter((item) => item && (item as { type?: string }).type !== 'divider')
-        .map((item) => (item as { key?: string | number }).key)
-        .filter((key): key is string | number => key !== undefined)
-        .map(String);
       try {
         analytics?.track({
           name: 'home_footer_menu_opened',
-          properties: { keys: keys.join(','), spm: 'homepage.footer.opened' },
+          properties: { keys: trackedMenuKeys.join(','), spm: 'homepage.footer.opened' },
         });
       } catch {
         // silently ignore tracking errors to avoid affecting business logic
       }
     },
-    [analytics, helpMenuItems],
+    [analytics, trackedMenuKeys],
   );
 
   return (
