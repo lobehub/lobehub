@@ -651,6 +651,7 @@
   "taskDetail.artifacts": "Artifacts",
   "taskDetail.blockedBy": "Blocked by {{id}}",
   "taskDetail.cancelSchedule": "Cancel schedule",
+  "taskDetail.collapseReply": "Collapse",
   "taskDetail.comment.cancel": "Cancel",
   "taskDetail.comment.delete": "Delete",
   "taskDetail.comment.deleteConfirm.content": "This comment will be permanently removed.",

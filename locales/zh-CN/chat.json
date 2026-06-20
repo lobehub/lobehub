@@ -651,6 +651,7 @@
   "taskDetail.artifacts": "产物",
   "taskDetail.blockedBy": "被 {{id}} 阻塞",
   "taskDetail.cancelSchedule": "取消定时",
+  "taskDetail.collapseReply": "收起",
   "taskDetail.comment.cancel": "取消",
   "taskDetail.comment.delete": "删除",
   "taskDetail.comment.deleteConfirm.content": "此评论将被永久删除。",
