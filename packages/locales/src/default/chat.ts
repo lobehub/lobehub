@@ -810,6 +810,8 @@ export default {
   'taskDetail.runTask': 'Run',
   'taskDetail.stopTask': 'Stop task',
   'taskDetail.navigation': 'Navigation',
+  'taskDetail.closeDetail': 'Close detail',
+  'taskDetail.openDetail': 'Open detail',
   'taskDetail.notFound.backToTasks': 'Back to all tasks',
   'taskDetail.notFound.desc':
     "This task may have been deleted, or you don't have permission to view it.",

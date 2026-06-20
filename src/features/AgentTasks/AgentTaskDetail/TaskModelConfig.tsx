@@ -15,8 +15,20 @@ const TaskModelConfig = memo(() => {
   const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
   const updateTaskModelConfig = useTaskStore((s) => s.updateTaskModelConfig);
 
-  const agentModel = useAgentStore(agentSelectors.currentAgentModel);
-  const agentProvider = useAgentStore(agentSelectors.currentAgentModelProvider);
+  // Fall back to the *assignee* agent's model, not whatever agent is active in
+  // the surrounding chat (e.g. a Portal opened from an orchestrator). The detail
+  // surface front-loads the assignee config (see `useActiveTaskDetail`), so this
+  // resolves correctly. Only an unassigned task falls back to the active agent.
+  const agentModel = useAgentStore((s) =>
+    assigneeAgentId
+      ? agentByIdSelectors.getAgentModelById(assigneeAgentId)(s)
+      : agentSelectors.currentAgentModel(s),
+  );
+  const agentProvider = useAgentStore((s) =>
+    assigneeAgentId
+      ? agentByIdSelectors.getAgentModelProviderById(assigneeAgentId)(s)
+      : agentSelectors.currentAgentModelProvider(s),
+  );
   const isHeterogeneous = useAgentStore(
     agentByIdSelectors.isAgentHeterogeneousById(assigneeAgentId ?? ''),
   );
