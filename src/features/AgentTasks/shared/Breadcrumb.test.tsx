@@ -38,6 +38,18 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('react-router', () => ({
   Link: ({ children, to }: { children: ReactNode; to: string }) => <a href={to}>{children}</a>,
+  useParams: () => ({}),
+}));
+
+// Render the workspace-aware link as a plain anchor so the asserted hrefs stay
+// the raw task paths (no workspace-slug prefix, no real router context).
+vi.mock('@/features/Workspace/WorkspaceLink', () => ({
+  default: ({ children, to }: { children: ReactNode; to: string }) => <a href={to}>{children}</a>,
+}));
+
+// Agent crumb metadata isn't under test here; the agent store isn't mocked.
+vi.mock('./useAgentDisplayMeta', () => ({
+  useAgentDisplayMeta: () => undefined,
 }));
 
 vi.mock('zustand/react/shallow', () => ({
