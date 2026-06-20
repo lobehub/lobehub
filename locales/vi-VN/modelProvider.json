@@ -272,7 +272,7 @@
   "providerModels.item.modelConfig.tokens.title": "Cửa sổ ngữ cảnh tối đa",
   "providerModels.item.modelConfig.tokens.unlimited": "Không giới hạn",
   "providerModels.item.modelConfig.type.extra": "Các loại mô hình khác nhau có mục đích sử dụng và khả năng riêng biệt",
-  "providerModels.item.modelConfig.type.options.asr": "Chuyển đổi giọng nói thành văn bản",
+  "providerModels.item.modelConfig.type.options.asr": "Chuyển giọng nói thành văn bản",
   "providerModels.item.modelConfig.type.options.chat": "Trò chuyện",
   "providerModels.item.modelConfig.type.options.embedding": "Embedding",
   "providerModels.item.modelConfig.type.options.image": "Tạo hình ảnh",

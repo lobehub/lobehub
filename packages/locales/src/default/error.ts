@@ -175,6 +175,29 @@ export default {
     'The model "{{model}}" is no longer available. Please pick a current model from the model selector.',
   'response.UnknownChatFetchError':
     'Sorry, an unknown request error occurred. Please check the information below or try again.',
+  'response.WorkspaceFrozenByAdmin':
+    'This workspace is frozen by an admin and cannot run requests. Please contact the workspace owner to resolve the issue.',
+  'response.WorkspaceFrozenByRiskControl':
+    'This workspace was auto-frozen by risk control and cannot run requests. Please contact support to review the status.',
+  'workspaceFrozenByAdmin.bannerDescription': 'Contact support to review the reason and unfreeze.',
+  'workspaceFrozenByAdmin.bannerHint': 'Click for details',
+  'workspaceFrozenByAdmin.bannerTitle': 'Workspace frozen by admin',
+  'workspaceFrozenByAdmin.contactSupport': 'Contact support',
+  'workspaceFrozenByAdmin.description':
+    'This workspace was frozen by an admin. Review the reason below and contact support if you have questions.',
+  'workspaceFrozenByAdmin.frozenAt': 'Frozen at',
+  'workspaceFrozenByAdmin.reason': 'Reason',
+  'workspaceFrozenByAdmin.title': 'Workspace is frozen',
+  'workspaceFrozenByRiskControl.available': 'Available credits',
+  'workspaceFrozenByRiskControl.bannerDescription': 'Top up credits to resume spend.',
+  'workspaceFrozenByRiskControl.bannerHint': 'Click for details',
+  'workspaceFrozenByRiskControl.bannerTitle': 'Workspace frozen by risk control',
+  'workspaceFrozenByRiskControl.contactSupport': 'Contact support',
+  'workspaceFrozenByRiskControl.description':
+    'This workspace was auto-frozen by risk control after abnormal spending was detected. Top up credits so the workspace is ready to resume, and contact support to unfreeze.',
+  'workspaceFrozenByRiskControl.frozenAt': 'Frozen at',
+  'workspaceFrozenByRiskControl.title': 'Workspace auto-frozen by risk control',
+  'workspaceFrozenByRiskControl.topup': 'Top up credits',
   'stt.responseError': 'Service request failed, please check the configuration or try again',
   'supervisor.decisionFailed':
     'The group host is unable to function. Please check your host configuration to ensure the correct model, API Key, and API endpoint are set.',

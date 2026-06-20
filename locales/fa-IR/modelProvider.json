@@ -257,7 +257,7 @@
   "providerModels.item.modelConfig.files.title": "پشتیبانی از آپلود فایل",
   "providerModels.item.modelConfig.functionCall.extra": "این پیکربندی فقط قابلیت استفاده از ابزارها را برای مدل فعال می‌کند. اما استفاده واقعی از ابزارها به خود مدل بستگی دارد؛ لطفاً قابلیت استفاده را خودتان آزمایش کنید.",
   "providerModels.item.modelConfig.functionCall.title": "پشتیبانی از استفاده از ابزار",
-  "providerModels.item.modelConfig.id.duplicate": "مدلی با این شناسه قبلاً وجود دارد. از شناسه مدل دیگری استفاده کنید.",
+  "providerModels.item.modelConfig.id.duplicate": "مدلی با این شناسه قبلاً وجود دارد. از یک شناسه مدل متفاوت استفاده کنید.",
   "providerModels.item.modelConfig.id.extra": "پس از ایجاد قابل تغییر نیست و به عنوان شناسه مدل هنگام فراخوانی AI استفاده می‌شود",
   "providerModels.item.modelConfig.id.placeholder": "شناسه مدل را وارد کنید، مانند gpt-4o یا claude-3.5-sonnet",
   "providerModels.item.modelConfig.id.title": "شناسه مدل",

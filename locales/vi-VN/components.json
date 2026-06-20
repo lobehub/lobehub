@@ -101,7 +101,7 @@
   "LocalFile.action.open": "Mở",
   "LocalFile.action.showInFolder": "Hiển thị trong thư mục",
   "MaxTokenSlider.unlimited": "Không giới hạn",
-  "ModelSelect.featureTag.audio": "Mô hình này hỗ trợ nhận diện đầu vào âm thanh.",
+  "ModelSelect.featureTag.audio": "Mô hình này hỗ trợ nhận dạng đầu vào âm thanh.",
   "ModelSelect.featureTag.custom": "Mô hình tùy chỉnh, mặc định hỗ trợ gọi hàm và nhận diện hình ảnh. Vui lòng xác minh khả năng thực tế.",
   "ModelSelect.featureTag.file": "Mô hình này hỗ trợ tải lên tệp để đọc và nhận diện.",
   "ModelSelect.featureTag.functionCall": "Mô hình này hỗ trợ gọi hàm.",
