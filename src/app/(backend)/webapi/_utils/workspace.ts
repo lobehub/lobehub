@@ -1,6 +1,6 @@
-import { isSuperAdmin } from '@lobechat/business-server/enterprise/superAdmin';
 import { and, eq, isNull } from 'drizzle-orm';
 
+import { isSuperAdmin } from '@/business/server/enterprise/superAdmin';
 import { workspaceMembers, workspaces } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 

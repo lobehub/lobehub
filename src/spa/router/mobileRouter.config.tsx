@@ -383,9 +383,11 @@ export const mobileRoutes: RouteObject[] = [
       // Must come AFTER all reserved root paths so they don't shadow e.g. /agent.
       {
         children: [
-          // Workspace home — handled by the persistent home layout (mirrors
-          // how `/` index is empty); rendering here would duplicate Home.
           {
+            element: dynamicElement(
+              () => import('@/routes/(mobile)/workspace'),
+              'Mobile > Workspace',
+            ),
             index: true,
           },
           ...sharedMainAreaChildren,
@@ -436,6 +438,13 @@ export const mobileRoutes: RouteObject[] = [
                   'Mobile > Workspace > Settings > Usage',
                 ),
                 path: 'usage',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/provider'),
+                  'Mobile > Workspace > Settings > Provider',
+                ),
+                path: 'provider',
               },
             ],
             element: dynamicLayout(

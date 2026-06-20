@@ -17,6 +17,7 @@ import CollapseGroup from './CollapseGroup';
 import Actions from './CollapseGroup/Actions';
 import Inbox from './Inbox';
 import SessionList from './List';
+import MobileAgentDirectory from './MobileAgentDirectory';
 import ConfigGroupModal from './Modals/ConfigGroupModal';
 import RenameGroupModal from './Modals/RenameGroupModal';
 
@@ -98,9 +99,21 @@ const DefaultMode = memo(() => {
     [t, filteredCustomSessionGroups, filteredPinnedSessions, filteredDefaultSessions],
   );
 
+  const visibleSessionIds = useMemo(
+    () => [
+      ...filteredDefaultSessions.map((session) => session.id),
+      ...filteredPinnedSessions.map((session) => session.id),
+      ...(filteredCustomSessionGroups ?? []).flatMap((group) =>
+        group.children.map((session) => session.id),
+      ),
+    ],
+    [filteredCustomSessionGroups, filteredDefaultSessions, filteredPinnedSessions],
+  );
+
   return (
     <>
       <Inbox />
+      {isMobile && <MobileAgentDirectory existingSessionIds={visibleSessionIds} />}
       <CollapseGroup
         activeKey={sessionGroupKeys}
         items={items}

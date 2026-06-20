@@ -1,6 +1,9 @@
 import { Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
+import { useLocation } from 'react-router';
 
+import WorkspaceHomeDashboard from '@/business/client/features/WorkspaceHomeDashboard';
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import HomePageTracker from '@/components/Analytics/HomePageTracker';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -8,6 +11,11 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 import HomeContent from './features';
 
 const Home: FC = () => {
+  const { pathname } = useLocation();
+  const activeSlug = useActiveWorkspaceSlug();
+  const isWorkspaceHome =
+    !!activeSlug && (pathname === `/${activeSlug}` || pathname === `/${activeSlug}/`);
+
   return (
     <>
       <HomePageTracker />
@@ -18,7 +26,7 @@ const Home: FC = () => {
         width={'100%'}
       >
         <WideScreenContainer>
-          <HomeContent />
+          {isWorkspaceHome ? <WorkspaceHomeDashboard /> : <HomeContent />}
         </WideScreenContainer>
       </Flexbox>
     </>

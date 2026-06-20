@@ -4,6 +4,7 @@ import { type FC } from 'react';
 import { Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import WorkspaceContextSlot from '@/business/client/WorkspaceContextSlot';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { RouteMetaBridge } from '@/features/RouteMeta';
@@ -27,8 +28,11 @@ const MOBILE_NAV_ROUTES = new Set([
 const MobileMainLayout: FC = () => {
   const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);
   const location = useLocation();
+  const activeSlug = useActiveWorkspaceSlug();
   const pathname = location.pathname;
-  const showNav = MOBILE_NAV_ROUTES.has(pathname);
+  const showNav =
+    MOBILE_NAV_ROUTES.has(pathname) ||
+    (!!activeSlug && (pathname === `/${activeSlug}` || pathname === `/${activeSlug}/`));
   return (
     <WorkspaceContextSlot>
       <RouteMetaBridge />

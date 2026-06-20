@@ -1,5 +1,6 @@
 import { Button, Flexbox, Input, Tag, Text } from '@lobehub/ui';
 import { Select } from '@lobehub/ui/base-ui';
+import { createStaticStyles } from 'antd-style';
 import { useState } from 'react';
 import useSWR from 'swr';
 
@@ -7,13 +8,69 @@ import { lambdaClient } from '@/libs/trpc/client';
 
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace';
 
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  card: css`
+    padding: 14px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 14px;
+    background: ${cssVar.colorBgContainer};
+  `,
+  controls: css`
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 150px auto;
+    gap: 8px;
+
+    @media (width <= 720px) {
+      grid-template-columns: 1fr;
+    }
+  `,
+  item: css`
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+
+    padding: 12px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 12px;
+
+    @media (width <= 720px) {
+      grid-template-columns: 1fr;
+    }
+  `,
+  mobileStack: css`
+    @media (width <= 720px) {
+      flex-direction: column;
+      align-items: stretch;
+
+      > * {
+        width: 100% !important;
+      }
+    }
+  `,
+  muted: css`
+    color: ${cssVar.colorTextSecondary};
+  `,
+}));
+
+const roleOptions = [
+  { label: 'Владелец', value: 'owner' },
+  { label: 'Участник', value: 'member' },
+  { label: 'Наблюдатель', value: 'viewer' },
+];
+
+const roleLabel = (role: string) =>
+  role === 'owner' ? 'Владелец' : role === 'viewer' ? 'Наблюдатель' : 'Участник';
+
 export default function WorkspaceMembers() {
   const workspace = useActiveWorkspace();
   const [adding, setAdding] = useState(false);
   const [email, setEmail] = useState('');
   const [inviting, setInviting] = useState(false);
   const [lastInviteUrl, setLastInviteUrl] = useState('');
+  const [query, setQuery] = useState('');
   const [role, setRole] = useState<'member' | 'owner' | 'viewer'>('member');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'member' | 'owner' | 'viewer'>('all');
   const [userId, setUserId] = useState('');
   const canManage = workspace?.role === 'owner' || workspace?.role === 'super_admin';
   const { data = [], mutate: mutateMembers } = useSWR(
@@ -61,6 +118,14 @@ export default function WorkspaceMembers() {
     }
   };
 
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredMembers = data.filter((member) => {
+    const matchesRole = roleFilter === 'all' || member.role === roleFilter;
+    const matchesQuery = !normalizedQuery || member.userId.toLowerCase().includes(normalizedQuery);
+
+    return matchesRole && matchesQuery;
+  });
+
   return (
     <Flexbox gap={16} style={{ maxWidth: 860 }}>
       <Text type="secondary">
@@ -68,11 +133,7 @@ export default function WorkspaceMembers() {
         управлять ролями, приглашениями, тарифом, кредитами и ключами workspace.
       </Text>
       {canManage && (
-        <Flexbox
-          gap={12}
-          padding={16}
-          style={{ border: '1px solid var(--lobe-color-border-secondary)', borderRadius: 12 }}
-        >
+        <Flexbox className={styles.card} gap={12}>
           <Flexbox gap={4}>
             <Text weight={600}>Пригласить в workspace</Text>
             <Text fontSize={13} type="secondary">
@@ -80,35 +141,31 @@ export default function WorkspaceMembers() {
               отправить вручную, если почта не подключена.
             </Text>
           </Flexbox>
-          <Flexbox horizontal gap={8}>
+          <div className={styles.controls}>
             <Input
               placeholder="Email приглашенного"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
             <Select
+              options={roleOptions}
               style={{ width: 150 }}
               value={role}
-              options={[
-                { label: 'Владелец', value: 'owner' },
-                { label: 'Участник', value: 'member' },
-                { label: 'Наблюдатель', value: 'viewer' },
-              ]}
               onChange={(value) => setRole(value as 'member' | 'owner' | 'viewer')}
             />
             <Button loading={inviting} type="primary" onClick={inviteMember}>
               Создать приглашение
             </Button>
-          </Flexbox>
+          </div>
           {lastInviteUrl && (
-            <Flexbox horizontal align="center" gap={8}>
+            <Flexbox horizontal align="center" className={styles.mobileStack} gap={8}>
               <Input readOnly value={lastInviteUrl} />
               <Button onClick={() => navigator.clipboard.writeText(lastInviteUrl)}>
                 Скопировать
               </Button>
             </Flexbox>
           )}
-          <Flexbox horizontal gap={8}>
+          <Flexbox horizontal className={styles.mobileStack} gap={8}>
             <Input
               placeholder="ID пользователя для прямого добавления"
               value={userId}
@@ -121,30 +178,56 @@ export default function WorkspaceMembers() {
         </Flexbox>
       )}
       <Flexbox gap={8}>
-        <Text weight={600}>Участники</Text>
-        {data.map((member) => (
-          <Flexbox
-            horizontal
-            align="center"
-            justify="space-between"
-            key={`${member.workspaceId}-${member.userId}`}
-            padding={12}
-            style={{ border: '1px solid var(--lobe-color-border-secondary)', borderRadius: 8 }}
-          >
+        <Flexbox
+          horizontal
+          align="center"
+          className={styles.mobileStack}
+          gap={8}
+          justify="space-between"
+        >
+          <Flexbox gap={2}>
+            <Text weight={600}>Участники</Text>
+            <Text className={styles.muted} fontSize={13}>
+              {filteredMembers.length} из {data.length}
+            </Text>
+          </Flexbox>
+          <Flexbox horizontal className={styles.mobileStack} gap={8}>
+            <Input
+              placeholder="Поиск по user id"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <Select
+              options={[{ label: 'Все роли', value: 'all' }, ...roleOptions]}
+              style={{ width: 150 }}
+              value={roleFilter}
+              onChange={(value) => setRoleFilter(value as 'all' | 'member' | 'owner' | 'viewer')}
+            />
+          </Flexbox>
+        </Flexbox>
+        {filteredMembers.length === 0 && (
+          <Flexbox align="center" className={styles.card} gap={4} padding={20}>
+            <Text weight={600}>Никого не нашли</Text>
+            <Text className={styles.muted} fontSize={13}>
+              Измените поиск или фильтр роли.
+            </Text>
+          </Flexbox>
+        )}
+        {filteredMembers.map((member) => (
+          <div className={styles.item} key={`${member.workspaceId}-${member.userId}`}>
             <Flexbox gap={2}>
               <Text>{member.userId}</Text>
-              {member.userId === workspace.primaryOwnerId && <Tag>Основной владелец</Tag>}
+              <Flexbox horizontal gap={6}>
+                <Tag>{roleLabel(member.role)}</Tag>
+                {member.userId === workspace.primaryOwnerId && <Tag>Основной владелец</Tag>}
+              </Flexbox>
             </Flexbox>
-            <Flexbox horizontal align="center" gap={8}>
+            <Flexbox horizontal align="center" className={styles.mobileStack} gap={8}>
               {canManage ? (
                 <Select
+                  options={roleOptions}
                   style={{ width: 130 }}
                   value={member.role}
-                  options={[
-                    { label: 'Владелец', value: 'owner' },
-                    { label: 'Участник', value: 'member' },
-                    { label: 'Наблюдатель', value: 'viewer' },
-                  ]}
                   onChange={async (value) => {
                     await lambdaClient.workspaceMember.updateRole.mutate({
                       role: value as 'member' | 'owner' | 'viewer',
@@ -155,13 +238,9 @@ export default function WorkspaceMembers() {
                   }}
                 />
               ) : (
-                <Tag>
-                  {member.role === 'owner'
-                    ? 'Владелец'
-                    : member.role === 'viewer'
-                      ? 'Наблюдатель'
-                      : 'Участник'}
-                </Tag>
+                <Text className={styles.muted} fontSize={13}>
+                  Управлять ролями может только владелец workspace.
+                </Text>
               )}
               {canManage && (
                 <Button
@@ -178,28 +257,21 @@ export default function WorkspaceMembers() {
                 </Button>
               )}
             </Flexbox>
-          </Flexbox>
+          </div>
         ))}
       </Flexbox>
       {canManage && invitations.length > 0 && (
         <Flexbox gap={8}>
           <Text weight={600}>Ожидающие приглашения</Text>
           {invitations.map((invitation) => (
-            <Flexbox
-              horizontal
-              align="center"
-              justify="space-between"
-              key={invitation.id}
-              padding={12}
-              style={{ border: '1px solid var(--lobe-color-border-secondary)', borderRadius: 8 }}
-            >
+            <div className={styles.item} key={invitation.id}>
               <Flexbox gap={2}>
                 <Text>{invitation.email || 'Ссылка-приглашение'}</Text>
                 <Text code fontSize={12} type="secondary">
                   /{workspace.slug}?invite={invitation.token}
                 </Text>
               </Flexbox>
-              <Flexbox horizontal gap={8}>
+              <Flexbox horizontal className={styles.mobileStack} gap={8}>
                 <Button
                   size="small"
                   onClick={() =>
@@ -223,7 +295,7 @@ export default function WorkspaceMembers() {
                   Отозвать
                 </Button>
               </Flexbox>
-            </Flexbox>
+            </div>
           ))}
         </Flexbox>
       )}
