@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "exports": {
+    "./enterprise/superAdmin": "./src/enterprise/superAdmin.ts",
     "./*": "./src/*.ts"
   },
   "dependencies": {
