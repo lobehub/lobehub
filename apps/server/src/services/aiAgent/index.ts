@@ -410,9 +410,23 @@ export class AiAgentService {
     if (!activeDeviceId) return { workspace: empty };
 
     try {
-      const deviceModel = new DeviceModel(this.db, this.userId);
-      const device = await deviceModel.findByDeviceId(activeDeviceId);
+      // The active device may be personal (userId-scoped) or workspace-owned
+      // (workspace-scoped) — look up both pools so the bound cwd, project
+      // skills, and AGENTS/CLAUDE instructions still resolve for a workspace
+      // device. Mirrors the dispatch-side lookup (see `deviceModelForCwd`).
+      const deviceModel = new DeviceModel(this.db, this.userId, this.workspaceId);
+      const personalDevice = await deviceModel.findByDeviceId(activeDeviceId);
+      const workspaceDevice = personalDevice
+        ? undefined
+        : await deviceModel.findWorkspaceDeviceById(activeDeviceId);
+      const device = personalDevice ?? workspaceDevice;
       if (!device) return { workspace: empty };
+
+      // For a workspace-owned device, route the gateway RPC to the
+      // `workspace:<id>` principal and persist the scan via the workspace
+      // update path — otherwise the scan goes through the personal pool
+      // (empty result) and the writeback misses the row.
+      const deviceWorkspaceId = workspaceDevice ? this.workspaceId : undefined;
 
       // The bound project root we scan — resolved via the shared precedence
       // helper so it cannot drift from hetero dispatch / topic backfill. Read
@@ -441,6 +455,7 @@ export class AiAgentService {
         deviceId: activeDeviceId,
         scope: boundCwd,
         userId: this.userId,
+        workspaceId: deviceWorkspaceId,
       });
       if (!scanned) {
         // Scan failed (offline mid-run / parse error). Fall back to a stale
@@ -453,9 +468,15 @@ export class AiAgentService {
       }
 
       // Persist the fresh scan back onto `workingDirs` (update in place or prepend
-      // a new MRU entry), keeping the JSONB payload bounded.
+      // a new MRU entry), keeping the JSONB payload bounded. Workspace devices
+      // are owned by the workspace, not a userId — use the workspace-scoped
+      // update path so the writeback actually lands.
       const updated = upsertWorkspaceScan(workingDirs, boundCwd, scanned, Date.now());
-      await deviceModel.update(activeDeviceId, { workingDirs: updated });
+      if (deviceWorkspaceId) {
+        await deviceModel.updateWorkspaceDevice(activeDeviceId, { workingDirs: updated });
+      } else {
+        await deviceModel.update(activeDeviceId, { workingDirs: updated });
+      }
       log('execAgent: scanned and cached workspace init for %s', boundCwd);
 
       return { boundCwd, workspace: scanned };
@@ -1432,6 +1453,11 @@ export class AiAgentService {
               prompt,
               taskId: operationId,
               topicId,
+              // Scope notify callbacks to the same workspace as the dispatched
+              // topic so agentNotify can resolve the workspace-owned topic.
+              // Without this the device's notify call falls back to personal
+              // mode and TopicModel.findById returns NOT_FOUND.
+              workspaceId: remoteDeviceWorkspaceId,
             }),
             identifier: 'runHeteroTask',
           },

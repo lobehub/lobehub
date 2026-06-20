@@ -75,7 +75,7 @@ export const deviceRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.executeToolCall(
-        { deviceId: input.deviceId, userId: ctx.userId },
+        { deviceId: input.deviceId, userId: ctx.userId, workspaceId: ctx.workspaceId },
         {
           apiName: 'checkPlatformCapability',
           arguments: JSON.stringify({ platform: input.platform }),
@@ -112,6 +112,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       });
       return result ?? null;
     }),
@@ -124,6 +125,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       });
       return result ?? null;
     }),
@@ -135,6 +137,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       });
       return result ?? null;
     }),
@@ -146,6 +149,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       });
       return result ?? null;
     }),
@@ -162,6 +166,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       });
       return result ?? [];
     }),
@@ -183,6 +188,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       });
       return result ?? [];
     }),
@@ -207,6 +213,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       }),
     ),
 
@@ -230,6 +237,7 @@ export const deviceRouter = router({
         path: input.path,
         to: input.to,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       }),
     ),
 
@@ -251,6 +259,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       }),
     ),
 
@@ -265,6 +274,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       }),
     ),
 
@@ -279,6 +289,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       }),
     ),
 
@@ -294,6 +305,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       });
       return result ?? null;
     }),
@@ -310,6 +322,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       });
       return result ?? null;
     }),
@@ -325,6 +338,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       });
       return result ?? [];
     }),
@@ -341,6 +355,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       });
       return result ?? null;
     }),
@@ -357,6 +372,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         scope: input.scope,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       });
       return result ?? null;
     }),
@@ -378,6 +394,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
         workingDirectory: input.workingDirectory,
       });
     }),
@@ -394,6 +411,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         scope: input.scope,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       });
       return result ?? null;
     }),
@@ -410,6 +428,7 @@ export const deviceRouter = router({
         filePath: input.filePath,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       }),
     ),
 
@@ -428,6 +447,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         items: input.items,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
         workingDirectory: input.workingDirectory,
       });
     }),
@@ -449,6 +469,7 @@ export const deviceRouter = router({
         newName: input.newName,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
         workingDirectory: input.workingDirectory,
       });
     }),
@@ -470,6 +491,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
         workingDirectory: input.workingDirectory,
       });
     }),
@@ -487,6 +509,7 @@ export const deviceRouter = router({
         deviceId: input.deviceId,
         path: input.path,
         userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
       });
       return result ?? null;
     }),
@@ -505,7 +528,7 @@ export const deviceRouter = router({
     )
     .query(async ({ ctx, input }) => {
       const result = await deviceGateway.executeToolCall(
-        { deviceId: input.deviceId, userId: ctx.userId },
+        { deviceId: input.deviceId, userId: ctx.userId, workspaceId: ctx.workspaceId },
         {
           apiName: 'getAgentProfile',
           arguments: JSON.stringify({ platform: input.platform }),
@@ -530,7 +553,7 @@ export const deviceRouter = router({
   getDeviceSystemInfo: deviceProcedure
     .input(z.object({ deviceId: z.string() }))
     .query(async ({ ctx, input }) => {
-      return deviceGateway.queryDeviceSystemInfo(ctx.userId, input.deviceId);
+      return deviceGateway.queryDeviceSystemInfo(ctx.userId, input.deviceId, ctx.workspaceId);
     }),
 
   /**
@@ -737,7 +760,7 @@ export const deviceRouter = router({
     }),
 
   status: deviceProcedure.query(async ({ ctx }) => {
-    return deviceGateway.queryDeviceStatus(ctx.userId);
+    return deviceGateway.queryDeviceStatus(ctx.userId, ctx.workspaceId);
   }),
 
   /** User-editable fields only — never the machine-reported identity columns. */
