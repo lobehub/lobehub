@@ -582,7 +582,9 @@ export function registerVerifyCommand(program: Command) {
             checkItemIndex: index,
             checkItemTitle: c.name ?? c.case ?? c.title ?? checkItemId,
             required: c.required ?? true,
-            suggestion: typeof observation === 'string' ? observation : undefined,
+            // The case's key observation is recorded as Toulmin evidence; a real
+            // remediation hint (if the report provides one) goes to `suggestion`.
+            suggestion: typeof c.suggestion === 'string' ? c.suggestion : undefined,
             toulmin: typeof observation === 'string' ? { evidence: observation } : undefined,
             verdict,
             verifierType: 'agent',
