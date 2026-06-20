@@ -2,6 +2,8 @@ import type { ToulminVerdict, VerifyRubricConfig } from '@lobechat/types';
 import {
   verifierTypes,
   verifyCheckResultStatuses,
+  verifyEvidenceCapturedBy,
+  verifyEvidenceTypes,
   verifyOnFailStrategies,
   verifyUserDecisions,
   verifyVerdicts,
@@ -22,7 +24,7 @@ import {
 
 import { createdAt, timestamps, timestamptz } from './_helpers';
 import { agentOperations } from './agentOperations';
-import { documents } from './file';
+import { documents, files } from './file';
 import { llmGenerationTracing } from './llmGenerationTracing';
 import { users } from './user';
 import { workspaces } from './workspace';
@@ -250,3 +252,114 @@ export const verifyCheckResults = pgTable(
 
 export type NewVerifyCheckResult = typeof verifyCheckResults.$inferInsert;
 export type VerifyCheckResultItem = typeof verifyCheckResults.$inferSelect;
+
+// ============================================
+// 5. verify_evidence — first-class artifacts a check produces (screenshots, logs, …)
+// ============================================
+export const verifyEvidence = pgTable(
+  'verify_evidence',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+
+    /** Human-readable caption, e.g. "首页首屏完整渲染". */
+    description: text('description'),
+
+    /** The check result this evidence backs; evidence dies with its result. */
+    checkResultId: uuid('check_result_id')
+      .references(() => verifyCheckResults.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** Medium of the artifact (screenshot / gif / video / text / dom_snapshot / transcript). */
+    type: text('type', { enum: verifyEvidenceTypes }).notNull(),
+
+    // ---- Payload: exactly one of `content` (inline text) or `fileId` (stored artifact) ----
+    /** Inline payload for small text evidence (dom snapshot / console log / transcript). */
+    content: text('content'),
+
+    /**
+     * Stored artifact (screenshot / gif / video, or large text persisted to storage).
+     * FK to `files`, which already owns mime / size / hash / url — so this table keeps
+     * none of that metadata. Set null if the underlying file is removed.
+     */
+    fileId: text('file_id').references(() => files.id, { onDelete: 'set null' }),
+
+    // ---- Provenance ----
+    /** Who / what produced this artifact. */
+    capturedBy: text('captured_by', { enum: verifyEvidenceCapturedBy }),
+    capturedAt: timestamptz('captured_at'),
+
+    /** Redundant ownership column — required for list queries / access control. */
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** Workspace this evidence belongs to — scopes listing and cascades on workspace delete. */
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('verify_evidence_check_result_id_idx').on(t.checkResultId),
+    index('verify_evidence_file_id_idx').on(t.fileId),
+    index('verify_evidence_user_id_idx').on(t.userId),
+    index('verify_evidence_workspace_id_idx').on(t.workspaceId),
+  ],
+);
+
+// ============================================
+// 6. verify_reports — LLM-generated delivery-verification narrative for a run
+// ============================================
+export const verifyReports = pgTable(
+  'verify_reports',
+  {
+    id: uuid('id').defaultRandom().primaryKey().notNull(),
+
+    /**
+     * The Agent Run this report verifies, when bound to one — not required, so a
+     * report isn't strongly coupled to an operation. The unique index still keeps
+     * at most one report per operation (regenerating overwrites in place).
+     */
+    operationId: text('operation_id').references(() => agentOperations.id, {
+      onDelete: 'cascade',
+    }),
+
+    /** Redundant ownership column — required for list queries / access control. */
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    /** Workspace this report belongs to — scopes listing and cascades on workspace delete. */
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    // ---- Summary verdict ----
+    verdict: text('verdict', { enum: verifyVerdicts }),
+    overallConfidence: numeric('overall_confidence', { mode: 'number', precision: 3, scale: 2 }),
+
+    // ---- Statistics snapshot ----
+    totalChecks: integer('total_checks'),
+    passedChecks: integer('passed_checks'),
+    failedChecks: integer('failed_checks'),
+    uncertainChecks: integer('uncertain_checks'),
+
+    // ---- LLM-generated narrative (a produced artifact, not a computed one) ----
+    /** Short 3-5 sentence summary, suitable for embedding in a chat message. */
+    summary: text('summary'),
+    /** Full Markdown report, shown in the expanded review view. */
+    content: text('content'),
+
+    /** Whether the user has acknowledged the report. */
+    reviewedByUser: boolean('reviewed_by_user').default(false),
+
+    /** Producer of this report, e.g. 'system' / a model id. */
+    generatedBy: text('generated_by').default('system'),
+    generatedAt: timestamptz('generated_at').notNull().defaultNow(),
+
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    // One report per Agent Run — regenerating overwrites the existing row in place.
+    uniqueIndex('verify_reports_operation_id_unique').on(t.operationId),
+    index('verify_reports_user_id_idx').on(t.userId),
+    index('verify_reports_workspace_id_idx').on(t.workspaceId),
+  ],
+);

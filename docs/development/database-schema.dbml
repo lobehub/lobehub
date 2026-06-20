@@ -2512,6 +2512,52 @@ table verify_criteria {
   }
 }
 
+table verify_evidence {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  description text
+  check_result_id uuid [not null]
+  type text [not null]
+  content text
+  file_id text
+  captured_by text
+  captured_at "timestamp with time zone"
+  user_id text [not null]
+  workspace_id text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    check_result_id [name: 'verify_evidence_check_result_id_idx']
+    file_id [name: 'verify_evidence_file_id_idx']
+    user_id [name: 'verify_evidence_user_id_idx']
+    workspace_id [name: 'verify_evidence_workspace_id_idx']
+  }
+}
+
+table verify_reports {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  operation_id text
+  user_id text [not null]
+  workspace_id text
+  verdict text
+  overall_confidence "numeric(3, 2)"
+  total_checks integer
+  passed_checks integer
+  failed_checks integer
+  uncertain_checks integer
+  summary text
+  content text
+  reviewed_by_user boolean [default: false]
+  generated_by text [default: 'system']
+  generated_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    operation_id [name: 'verify_reports_operation_id_unique', unique]
+    user_id [name: 'verify_reports_user_id_idx']
+    workspace_id [name: 'verify_reports_workspace_id_idx']
+  }
+}
+
 table verify_rubric_criteria {
   rubric_id uuid [not null]
   criterion_id uuid [not null]
