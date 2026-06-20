@@ -25,6 +25,7 @@
   "actions.unmarkCompleted": "Als aktiv markieren",
   "defaultTitle": "Standardthema",
   "displayItems": "Elemente anzeigen",
+  "draft": "[Entwurf]",
   "duplicateLoading": "Thema wird kopiert...",
   "duplicateSuccess": "Thema erfolgreich kopiert",
   "failedStatusTip": "Dieser Durchlauf hat einen Fehler — öffnen Sie ihn, um nachzusehen.",

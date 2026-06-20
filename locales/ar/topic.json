@@ -25,6 +25,7 @@
   "actions.unmarkCompleted": "وضع علامة كنشط",
   "defaultTitle": "موضوع افتراضي",
   "displayItems": "عرض العناصر",
+  "draft": "[مسودة]",
   "duplicateLoading": "جارٍ نسخ الموضوع...",
   "duplicateSuccess": "تم نسخ الموضوع بنجاح",
   "failedStatusTip": "تعرضت هذه العملية لخطأ — افتحها لإلقاء نظرة.",

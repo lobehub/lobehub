@@ -25,6 +25,7 @@
   "actions.unmarkCompleted": "Segna come attivo",
   "defaultTitle": "Argomento Predefinito",
   "displayItems": "Visualizza Elementi",
+  "draft": "[Bozza]",
   "duplicateLoading": "Copia dell'argomento in corso...",
   "duplicateSuccess": "Argomento copiato con successo",
   "failedStatusTip": "Questa esecuzione ha riscontrato un errore — aprila per dare un'occhiata.",

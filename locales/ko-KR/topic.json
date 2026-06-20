@@ -25,6 +25,7 @@
   "actions.unmarkCompleted": "활성으로 표시",
   "defaultTitle": "기본 주제",
   "displayItems": "항목 표시",
+  "draft": "[초안]",
   "duplicateLoading": "주제 복사 중...",
   "duplicateSuccess": "주제 복사 성공",
   "failedStatusTip": "이 실행에서 오류가 발생했습니다 — 열어서 확인하세요.",

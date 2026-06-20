@@ -25,6 +25,7 @@
   "actions.unmarkCompleted": "Отметить как активное",
   "defaultTitle": "Тема по умолчанию",
   "displayItems": "Отображаемые элементы",
+  "draft": "[Черновик]",
   "duplicateLoading": "Копирование темы...",
   "duplicateSuccess": "Тема успешно скопирована",
   "failedStatusTip": "Этот запуск завершился ошибкой — откройте его, чтобы узнать подробности.",
