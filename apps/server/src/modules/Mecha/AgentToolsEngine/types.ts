@@ -101,8 +101,6 @@ export interface ServerCreateAgentToolsEngineParams {
   executionPlan?: ExecutionPlan;
   /** Whether the user's global memory setting is enabled */
   globalMemoryEnabled?: boolean;
-  /** Whether agent has agent documents */
-  hasAgentDocuments?: boolean;
   /** Whether agent has enabled knowledge bases */
   hasEnabledKnowledgeBases?: boolean;
   /** Whether the request originates from a bot conversation (auto-enables message tool) */

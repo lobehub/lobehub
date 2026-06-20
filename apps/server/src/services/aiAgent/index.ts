@@ -1986,7 +1986,6 @@ export class AiAgentService {
         disableLocalSystem,
         executionPlan,
         globalMemoryEnabled,
-        hasAgentDocuments,
         hasEnabledKnowledgeBases,
         isBotConversation,
         model,
