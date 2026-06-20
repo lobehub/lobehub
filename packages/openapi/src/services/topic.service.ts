@@ -15,8 +15,8 @@ import type {
 } from '../types/topic.type';
 
 export class TopicService extends BaseService {
-  constructor(db: LobeChatDatabase, userId: string | null) {
-    super(db, userId);
+  constructor(db: LobeChatDatabase, userId: string | null, workspaceId?: string) {
+    super(db, userId, workspaceId);
   }
 
   /**
@@ -37,27 +37,17 @@ export class TopicService extends BaseService {
       const conditions = [];
 
       // Add permission-related query conditions
-      if (permissionResult?.condition?.userId) {
-        conditions.push(eq(topics.userId, permissionResult.condition.userId));
-      }
+      const permissionWhere = this.buildPermissionWhere(topics, permissionResult.condition);
+      if (permissionWhere) conditions.push(permissionWhere);
 
       // Filter by groupId first
       if (request.groupId) {
         conditions.push(eq(topics.groupId, request.groupId));
       } else if (request.agentId) {
-        // Reverse-lookup sessionId from agentId, then filter by sessionId
-        const [relation] = await this.db
-          .select({ sessionId: agentsToSessions.sessionId })
-          .from(agentsToSessions)
-          .where(eq(agentsToSessions.agentId, request.agentId))
-          .limit(1);
-
-        if (relation) {
-          conditions.push(eq(topics.sessionId, relation.sessionId));
-        } else {
-          // No session found for agentId, return empty directly
-          return { topics: [], total: 0 };
-        }
+        // Filter directly by agentId to support both regular agents and Agent Groups
+        // Group topics have agentId set with sessionId = NULL, so sessionId
+        // reverse-lookup would miss them. This matches the DB model behavior.
+        conditions.push(eq(topics.agentId, request.agentId));
       } else if (request.isInbox) {
         // inbox: sessionId is null, groupId is null, and agentId is null
         conditions.push(isNull(topics.sessionId));
@@ -131,9 +121,8 @@ export class TopicService extends BaseService {
       const whereConditions = [eq(topics.id, topicId)];
 
       // Apply permission conditions
-      if (permissionResult.condition?.userId) {
-        whereConditions.push(eq(topics.userId, permissionResult.condition.userId));
-      }
+      const permissionWhere = this.buildPermissionWhere(topics, permissionResult.condition);
+      if (permissionWhere) whereConditions.push(permissionWhere);
 
       const [result] = await this.db
         .select({
@@ -178,7 +167,9 @@ export class TopicService extends BaseService {
         const [relation] = await this.db
           .select({ sessionId: agentsToSessions.sessionId })
           .from(agentsToSessions)
-          .where(eq(agentsToSessions.agentId, agentId))
+          .where(
+            and(eq(agentsToSessions.agentId, agentId), this.buildWorkspaceWhere(agentsToSessions)),
+          )
           .limit(1);
 
         effectiveSessionId = relation?.sessionId ?? null;
@@ -203,7 +194,7 @@ export class TopicService extends BaseService {
           id: idGenerator('topics'),
           sessionId: effectiveSessionId,
           title,
-          userId: this.userId,
+          ...this.buildWorkspacePayload({}),
         })
         .returning();
 
@@ -234,9 +225,8 @@ export class TopicService extends BaseService {
       const whereConditions = [eq(topics.id, topicId)];
 
       // Apply permission conditions
-      if (permissionResult.condition?.userId) {
-        whereConditions.push(eq(topics.userId, permissionResult.condition.userId));
-      }
+      const permissionWhere = this.buildPermissionWhere(topics, permissionResult.condition);
+      if (permissionWhere) whereConditions.push(permissionWhere);
 
       const [updatedTopic] = await this.db
         .update(topics)
@@ -273,9 +263,8 @@ export class TopicService extends BaseService {
       const whereConditions = [eq(topics.id, topicId)];
 
       // Apply permission conditions
-      if (permissionResult.condition?.userId) {
-        whereConditions.push(eq(topics.userId, permissionResult.condition.userId));
-      }
+      const permissionWhere = this.buildPermissionWhere(topics, permissionResult.condition);
+      if (permissionWhere) whereConditions.push(permissionWhere);
 
       const [existingTopic] = await this.db
         .delete(topics)
