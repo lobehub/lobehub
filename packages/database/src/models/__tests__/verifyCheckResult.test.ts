@@ -173,6 +173,49 @@ describe('VerifyCheckResultModel', () => {
     expect(await model.listByRun(verifyRunId)).toHaveLength(1);
   });
 
+  it('rejects upserting a colliding check item into another user run', async () => {
+    const otherUserId = 'verify-result-other-user';
+    const otherOperationId = 'verify-result-other-op';
+    await serverDB.insert(users).values([{ id: otherUserId }]);
+    await new AgentOperationModel(serverDB, otherUserId).recordStart({
+      operationId: otherOperationId,
+    });
+    const otherRun = await new VerifyRunModel(serverDB, otherUserId).ensureForOperation(
+      otherOperationId,
+    );
+    const otherModel = new VerifyCheckResultModel(serverDB, otherUserId);
+    const original = await otherModel.upsertByCheckItem({
+      checkItemId: 'shared-check',
+      checkItemTitle: 'other owner result',
+      status: 'failed',
+      verdict: 'failed',
+      verifierType: 'agent',
+      verifyRunId: otherRun.id,
+    });
+
+    await expect(
+      new VerifyCheckResultModel(serverDB, userId).upsertByCheckItem({
+        checkItemId: 'shared-check',
+        checkItemTitle: 'attacker update',
+        status: 'passed',
+        verdict: 'passed',
+        verifierType: 'agent',
+        verifyRunId: otherRun.id,
+      }),
+    ).rejects.toThrow('not found in the current workspace');
+
+    const [reloaded] = await otherModel.listByRun(otherRun.id);
+    expect(reloaded).toMatchObject({
+      checkItemTitle: 'other owner result',
+      id: original.id,
+      userId: otherUserId,
+      verdict: 'failed',
+    });
+    expect(await new VerifyCheckResultModel(serverDB, userId).listByRun(otherRun.id)).toHaveLength(
+      0,
+    );
+  });
+
   it('updates a result by its stable (verifyRunId, checkItemId) key', async () => {
     const model = new VerifyCheckResultModel(serverDB, userId);
     await model.create({ checkItemId: 'a', checkItemIndex: 0, verifierType: 'llm', verifyRunId });

@@ -1,7 +1,7 @@
 import type { VerifyReport } from '@lobechat/types';
 import { and, eq } from 'drizzle-orm';
 
-import { verifyReports } from '../schemas/verify';
+import { verifyReports, verifyRuns } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -22,25 +22,55 @@ export class VerifyReportModel {
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, verifyReports);
 
+  private runOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, verifyRuns);
+
+  private assertRunOwned = async (verifyRunId: string): Promise<void> => {
+    const [run] = await this.db
+      .select({ id: verifyRuns.id })
+      .from(verifyRuns)
+      .where(and(eq(verifyRuns.id, verifyRunId), this.runOwnership()))
+      .limit(1);
+
+    if (!run) {
+      throw new Error(`Verify run "${verifyRunId}" not found in the current workspace`);
+    }
+  };
+
   /**
    * Write the report for a session. A report is unique per run (regenerating
    * overwrites in place), so this upserts on the `verify_run_id` unique index
    * rather than ever inserting a second row.
    */
   upsertByRun = async (params: CreateVerifyReport) => {
+    await this.assertRunOwned(params.verifyRunId);
+
     const values = buildWorkspacePayload(
       { userId: this.userId, workspaceId: this.workspaceId },
       params,
     );
 
-    // `verify_run_id` is the conflict key, so it's excluded from the update set.
-    const { verifyRunId: _verifyRunId, ...mutable } = values;
+    // The conflict target and ownership keys identify the row, so they're excluded from the set.
+    const {
+      verifyRunId: _verifyRunId,
+      userId: _userId,
+      workspaceId: _workspaceId,
+      ...mutable
+    } = values;
 
     const [result] = await this.db
       .insert(verifyReports)
       .values(values)
-      .onConflictDoUpdate({ set: mutable, target: verifyReports.verifyRunId })
+      .onConflictDoUpdate({
+        set: mutable,
+        setWhere: this.ownership(),
+        target: verifyReports.verifyRunId,
+      })
       .returning();
+
+    if (!result) {
+      throw new Error(`Verify report "${params.verifyRunId}" not found in the current workspace`);
+    }
 
     return result;
   };

@@ -1,3 +1,4 @@
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
@@ -63,6 +64,22 @@ const checkItemSchema = z.object({
   verifierType: verifierTypeSchema,
 });
 
+const verifyRunIdInputSchema = z.object({ verifyRunId: z.string() });
+
+const uploadEvidenceInputSchema = z
+  .object({
+    capturedBy: evidenceCapturedBySchema.optional(),
+    // Exactly one of `content` (inline text) or `fileId` (already-uploaded artifact).
+    checkResultId: z.string(),
+    content: z.string().min(1).optional(),
+    description: z.string().optional(),
+    fileId: z.string().min(1).optional(),
+    type: evidenceTypeSchema,
+  })
+  .refine((data) => Boolean(data.content) !== Boolean(data.fileId), {
+    message: 'Provide exactly one of `content` or `fileId`.',
+  });
+
 const verifyProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
   const workspaceId = ctx.workspaceId ?? undefined;
@@ -82,6 +99,29 @@ const verifyProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
     },
   });
 });
+
+const resolveVerifyRun = async (ctx: { runModel: VerifyRunModel }, verifyRunId: string) => {
+  const run = await ctx.runModel.findById(verifyRunId);
+
+  if (!run) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Verification run not found' });
+  }
+
+  return run;
+};
+
+const resolveCheckResult = async (
+  ctx: { resultModel: VerifyCheckResultModel },
+  checkResultId: string,
+) => {
+  const result = await ctx.resultModel.findById(checkResultId);
+
+  if (!result) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Verification check result not found' });
+  }
+
+  return result;
+};
 
 export const verifyRouter = router({
   // ---- criteria (reusable atomic standards) ----
@@ -291,14 +331,15 @@ export const verifyRouter = router({
     ),
 
   getRun: verifyProcedure
-    .input(z.object({ verifyRunId: z.string() }))
+    .input(verifyRunIdInputSchema)
     .query(async ({ ctx, input }) => ctx.runModel.findById(input.verifyRunId)),
 
   listRuns: verifyProcedure.query(async ({ ctx }) => ctx.runModel.query()),
 
-  listResultsByRun: verifyProcedure
-    .input(z.object({ verifyRunId: z.string() }))
-    .query(async ({ ctx, input }) => ctx.resultModel.listByRun(input.verifyRunId)),
+  listResultsByRun: verifyProcedure.input(verifyRunIdInputSchema).query(async ({ ctx, input }) => {
+    const run = await resolveVerifyRun(ctx, input.verifyRunId);
+    return ctx.resultModel.listByRun(run.id);
+  }),
 
   ingestResult: verifyProcedure
     .input(
@@ -316,8 +357,10 @@ export const verifyRouter = router({
         verifyRunId: z.string(),
       }),
     )
-    .mutation(async ({ ctx, input }) =>
-      ctx.resultModel.upsertByCheckItem({
+    .mutation(async ({ ctx, input }) => {
+      const run = await resolveVerifyRun(ctx, input.verifyRunId);
+
+      return ctx.resultModel.upsertByCheckItem({
         checkItemId: input.checkItemId,
         checkItemIndex: input.checkItemIndex,
         checkItemTitle: input.checkItemTitle,
@@ -329,37 +372,32 @@ export const verifyRouter = router({
         toulmin: input.toulmin,
         verdict: input.verdict,
         verifierType: input.verifierType ?? 'agent',
-        verifyRunId: input.verifyRunId,
-      }),
-    ),
+        verifyRunId: run.id,
+      });
+    }),
 
   uploadEvidence: verifyProcedure
-    .input(
-      z.object({
-        capturedBy: evidenceCapturedBySchema.optional(),
-        // Exactly one of `content` (inline text) or `fileId` (already-uploaded artifact).
-        checkResultId: z.string(),
-        content: z.string().optional(),
-        description: z.string().optional(),
-        fileId: z.string().optional(),
-        type: evidenceTypeSchema,
-      }),
-    )
-    .mutation(async ({ ctx, input }) =>
-      ctx.evidenceModel.create({
+    .input(uploadEvidenceInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      const result = await resolveCheckResult(ctx, input.checkResultId);
+
+      return ctx.evidenceModel.create({
         capturedAt: new Date(),
         capturedBy: input.capturedBy ?? null,
-        checkResultId: input.checkResultId,
+        checkResultId: result.id,
         content: input.content ?? null,
         description: input.description ?? null,
         fileId: input.fileId ?? null,
         type: input.type,
-      }),
-    ),
+      });
+    }),
 
   listEvidence: verifyProcedure
     .input(z.object({ checkResultId: z.string() }))
-    .query(async ({ ctx, input }) => ctx.evidenceModel.listByCheckResult(input.checkResultId)),
+    .query(async ({ ctx, input }) => {
+      const result = await resolveCheckResult(ctx, input.checkResultId);
+      return ctx.evidenceModel.listByCheckResult(result.id);
+    }),
 
   upsertReport: verifyProcedure
     .input(
@@ -376,8 +414,10 @@ export const verifyRouter = router({
         verifyRunId: z.string(),
       }),
     )
-    .mutation(async ({ ctx, input }) =>
-      ctx.reportModel.upsertByRun({
+    .mutation(async ({ ctx, input }) => {
+      const run = await resolveVerifyRun(ctx, input.verifyRunId);
+
+      return ctx.reportModel.upsertByRun({
         content: input.content ?? null,
         failedChecks: input.failedChecks ?? null,
         generatedBy: input.generatedBy ?? 'agent-testing',
@@ -387,50 +427,49 @@ export const verifyRouter = router({
         totalChecks: input.totalChecks ?? null,
         uncertainChecks: input.uncertainChecks ?? null,
         verdict: input.verdict ?? null,
-        verifyRunId: input.verifyRunId,
-      }),
-    ),
+        verifyRunId: run.id,
+      });
+    }),
 
-  getReport: verifyProcedure
-    .input(z.object({ verifyRunId: z.string() }))
-    .query(async ({ ctx, input }) => ctx.reportModel.findByRun(input.verifyRunId)),
+  getReport: verifyProcedure.input(verifyRunIdInputSchema).query(async ({ ctx, input }) => {
+    const run = await resolveVerifyRun(ctx, input.verifyRunId);
+    return ctx.reportModel.findByRun(run.id);
+  }),
 
   /**
    * One-shot payload for the standalone report viewer: the session, its report,
    * and every check result with its evidence — addressed purely by verifyRunId
    * (no operation / chat context required).
    */
-  getReportBundle: verifyProcedure
-    .input(z.object({ verifyRunId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const run = await ctx.runModel.findById(input.verifyRunId);
-      if (!run) return null;
-      const [report, results] = await Promise.all([
-        ctx.reportModel.findByRun(input.verifyRunId),
-        ctx.resultModel.listByRun(input.verifyRunId),
-      ]);
+  getReportBundle: verifyProcedure.input(verifyRunIdInputSchema).query(async ({ ctx, input }) => {
+    const run = await ctx.runModel.findById(input.verifyRunId);
+    if (!run) return null;
+    const [report, results] = await Promise.all([
+      ctx.reportModel.findByRun(input.verifyRunId),
+      ctx.resultModel.listByRun(input.verifyRunId),
+    ]);
 
-      // Resolve a displayable URL for each file-backed evidence artifact.
-      const workspaceId = ctx.workspaceId ?? undefined;
-      const fileModel = new FileModel(ctx.serverDB, ctx.userId, workspaceId);
-      const fileService = new FileService(ctx.serverDB, ctx.userId, workspaceId);
-      const resolveFileUrl = async (fileId: string | null) => {
-        if (!fileId) return null;
-        const file = await fileModel.findById(fileId);
-        return file?.url ? await fileService.getFullFileUrl(file.url) : null;
-      };
+    // Resolve a displayable URL for each file-backed evidence artifact.
+    const workspaceId = ctx.workspaceId ?? undefined;
+    const fileModel = new FileModel(ctx.serverDB, ctx.userId, workspaceId);
+    const fileService = new FileService(ctx.serverDB, ctx.userId, workspaceId);
+    const resolveFileUrl = async (fileId: string | null) => {
+      if (!fileId) return null;
+      const file = await fileModel.findById(fileId);
+      return file?.url ? await fileService.getFullFileUrl(file.url) : null;
+    };
 
-      const resultsWithEvidence = await Promise.all(
-        results.map(async (r) => {
-          const evidence = await ctx.evidenceModel.listByCheckResult(r.id);
-          return {
-            ...r,
-            evidence: await Promise.all(
-              evidence.map(async (e) => ({ ...e, fileUrl: await resolveFileUrl(e.fileId) })),
-            ),
-          };
-        }),
-      );
-      return { report: report ?? null, results: resultsWithEvidence, run };
-    }),
+    const resultsWithEvidence = await Promise.all(
+      results.map(async (r) => {
+        const evidence = await ctx.evidenceModel.listByCheckResult(r.id);
+        return {
+          ...r,
+          evidence: await Promise.all(
+            evidence.map(async (e) => ({ ...e, fileUrl: await resolveFileUrl(e.fileId) })),
+          ),
+        };
+      }),
+    );
+    return { report: report ?? null, results: resultsWithEvidence, run };
+  }),
 });

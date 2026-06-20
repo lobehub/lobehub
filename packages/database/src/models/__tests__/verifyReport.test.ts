@@ -89,6 +89,49 @@ describe('VerifyReportModel', () => {
     expect(all).toHaveLength(1);
   });
 
+  it('rejects upserting a report for another user run without re-owning it', async () => {
+    const otherUserId = 'verify-report-other-user';
+    const otherOperationId = 'verify-report-other-op';
+    await serverDB.insert(users).values([{ id: otherUserId }]);
+    await new AgentOperationModel(serverDB, otherUserId).recordStart({
+      operationId: otherOperationId,
+    });
+    const otherRun = await new VerifyRunModel(serverDB, otherUserId).ensureForOperation(
+      otherOperationId,
+    );
+    const otherModel = new VerifyReportModel(serverDB, otherUserId);
+    const original = await otherModel.upsertByRun({
+      failedChecks: 1,
+      passedChecks: 0,
+      summary: 'Original owner report',
+      totalChecks: 1,
+      uncertainChecks: 0,
+      verdict: 'failed',
+      verifyRunId: otherRun.id,
+    });
+
+    await expect(
+      new VerifyReportModel(serverDB, userId).upsertByRun({
+        failedChecks: 0,
+        passedChecks: 1,
+        summary: 'Attacker report',
+        totalChecks: 1,
+        uncertainChecks: 0,
+        verdict: 'passed',
+        verifyRunId: otherRun.id,
+      }),
+    ).rejects.toThrow('not found in the current workspace');
+
+    const reloaded = await otherModel.findByRun(otherRun.id);
+    expect(reloaded).toMatchObject({
+      id: original.id,
+      summary: 'Original owner report',
+      userId: otherUserId,
+      verdict: 'failed',
+    });
+    expect(await new VerifyReportModel(serverDB, userId).findByRun(otherRun.id)).toBeUndefined();
+  });
+
   it('marks a report reviewed by its run', async () => {
     const model = new VerifyReportModel(serverDB, userId);
     await model.upsertByRun({

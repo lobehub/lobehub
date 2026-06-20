@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 
 import type { NewVerifyCheckResult, VerifyCheckResultItem } from '../schemas/verify';
-import { verifyCheckResults } from '../schemas/verify';
+import { verifyCheckResults, verifyRuns } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
@@ -19,7 +19,24 @@ export class VerifyCheckResultModel {
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, verifyCheckResults);
 
+  private runOwnership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, verifyRuns);
+
+  private assertRunOwned = async (verifyRunId: string): Promise<void> => {
+    const [run] = await this.db
+      .select({ id: verifyRuns.id })
+      .from(verifyRuns)
+      .where(and(eq(verifyRuns.id, verifyRunId), this.runOwnership()))
+      .limit(1);
+
+    if (!run) {
+      throw new Error(`Verify run "${verifyRunId}" not found in the current workspace`);
+    }
+  };
+
   create = async (params: Omit<NewVerifyCheckResult, 'userId' | 'workspaceId'>) => {
+    if (typeof params.verifyRunId === 'string') await this.assertRunOwned(params.verifyRunId);
+
     const [result] = await this.db
       .insert(verifyCheckResults)
       .values(buildWorkspacePayload({ userId: this.userId, workspaceId: this.workspaceId }, params))
@@ -31,6 +48,13 @@ export class VerifyCheckResultModel {
   /** Batch-insert the initial `pending` rows when verify execution starts. */
   createMany = async (rows: Omit<NewVerifyCheckResult, 'userId' | 'workspaceId'>[]) => {
     if (rows.length === 0) return [];
+    const verifyRunIds = [
+      ...new Set(
+        rows.map((r) => r.verifyRunId).filter((id): id is string => typeof id === 'string'),
+      ),
+    ];
+    await Promise.all(verifyRunIds.map((verifyRunId) => this.assertRunOwned(verifyRunId)));
+
     return this.db
       .insert(verifyCheckResults)
       .values(
@@ -53,21 +77,30 @@ export class VerifyCheckResultModel {
       verifyRunId: string;
     },
   ): Promise<VerifyCheckResultItem> => {
+    await this.assertRunOwned(params.verifyRunId);
+
     const values = buildWorkspacePayload(
       { userId: this.userId, workspaceId: this.workspaceId },
       params,
     );
-    // The conflict target keys identify the row, so they're excluded from the set.
-    const { verifyRunId: _r, checkItemId: _c, ...mutable } = values;
+    // The conflict target and ownership keys identify the row, so they're excluded from the set.
+    const { verifyRunId: _r, checkItemId: _c, userId: _u, workspaceId: _w, ...mutable } = values;
 
     const [row] = await this.db
       .insert(verifyCheckResults)
       .values(values)
       .onConflictDoUpdate({
         set: mutable,
+        setWhere: this.ownership(),
         target: [verifyCheckResults.verifyRunId, verifyCheckResults.checkItemId],
       })
       .returning();
+
+    if (!row) {
+      throw new Error(
+        `Verify check result "${params.checkItemId}" not found in the current workspace`,
+      );
+    }
 
     return row;
   };

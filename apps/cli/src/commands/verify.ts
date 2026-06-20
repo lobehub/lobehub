@@ -612,8 +612,8 @@ export function registerVerifyCommand(program: Command) {
         json?: boolean | string;
         type: string;
       }) => {
-        if (!options.file && !options.content) {
-          log.error('Provide either --file or --content');
+        if (Boolean(options.file) === Boolean(options.content)) {
+          log.error('Provide exactly one of --file or --content');
           process.exit(1);
         }
         const client = await getTrpcClient();
