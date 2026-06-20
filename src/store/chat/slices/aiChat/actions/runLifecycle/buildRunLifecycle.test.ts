@@ -99,13 +99,27 @@ describe('buildRunLifecycle.completeRun — transport-driven disposition', () =>
     },
   );
 
-  it('gateway `status: cancelled` neither completes nor fails the op, and emits nothing', async () => {
+  it('gateway `status: cancelled` completes the op (cancel reaches this boundary still running) but does NOT fail it or emit', async () => {
     const { get, store } = makeStore();
     await lifecycle('gateway', get).completeRun(completeEvent('gateway', { status: 'cancelled' }));
 
-    expect(store.completeOperation).not.toHaveBeenCalled();
+    // Unlike the client (whose cancel path completes the op out of band),
+    // gateway/hetero reach completeRun with the op still `running`, so cancelled
+    // must move it to terminal here. No markUnread, no failOperation, no signal.
+    expect(store.completeOperation).toHaveBeenCalledWith(OP);
+    expect(store.markTopicUnread).not.toHaveBeenCalled();
     expect(store.failOperation).not.toHaveBeenCalled();
     expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).not.toHaveBeenCalled();
+  });
+
+  it('client `runtimeStatus: interrupted` does NOT complete the op (cancel already moved it out of band)', async () => {
+    const { get, store } = makeStore();
+    await lifecycle('client', get).completeRun(
+      completeEvent('client', { runtimeStatus: 'interrupted' }),
+    );
+
+    expect(store.completeOperation).not.toHaveBeenCalled();
+    expect(store.failOperation).not.toHaveBeenCalled();
   });
 
   it('runs afterCompletion callbacks on every terminal regardless of transport', async () => {

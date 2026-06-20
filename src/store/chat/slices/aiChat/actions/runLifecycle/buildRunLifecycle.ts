@@ -7,7 +7,7 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import type { AgentRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/aiChat/actions/agentSignalBridge';
-import { type ChatStore, useChatStore } from '@/store/chat/store';
+import type { ChatStore } from '@/store/chat/store';
 import { resolveNotificationNavigatePath } from '@/store/chat/utils/desktopNotification';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
@@ -52,10 +52,11 @@ type TerminalDisposition = 'cancelled' | 'failed' | 'success';
  * / hetero supply. This lets `completeRun` drive the same store/UI side effects
  * regardless of which transport reached the terminal boundary.
  *
- * `cancelled` / `undefined` deliberately do not complete the operation here — the
- * client cancel path already moves the operation to its terminal state out of
- * band; gateway/hetero cancel completion is handled when those transports are
- * wired in.
+ * `cancelled` completes the operation for gateway/hetero (their cancel reaches
+ * this boundary with the op still `running`, so it must be moved to a terminal
+ * state here) but NOT for the client (its cancel path already moved the op out
+ * of band before reaching `completeRun`). `undefined` never completes — it means
+ * the transport reached an unrecognized status and falls through untouched.
  */
 const resolveTerminalDisposition = (
   event: Pick<RunCompleteEvent, 'runtimeStatus' | 'status'>,
@@ -169,16 +170,23 @@ export const buildRunLifecycle = (
 
   return {
     afterUserMessagePersisted: NOOP,
-    afterRunComplete: async ({ operationId }: RunCompleteEvent) => {
-      // Desktop notification (only outside tool-calling mode). Relocated verbatim.
+    afterRunComplete: async (event: RunCompleteEvent) => {
+      // Desktop notification + dock badge. Single home for all three runtimes'
+      // completion notification (LOBE-10379 "通知去重，统一到 afterRunComplete").
       if (!isDesktop) return;
       try {
-        const finalMessages = get().messagesMap[messageKey] || [];
-        const lastAssistant = finalMessages.findLast((m) => m.role === 'assistant');
+        const { desktopNotificationService } =
+          await import('@/services/electron/desktopNotification');
+        const navigatePath = resolveNotificationNavigatePath({ agentId, groupId, topicId });
+        const navigate = navigatePath ? { path: navigatePath } : undefined;
 
-        if (lastAssistant?.content && !lastAssistant?.tools) {
-          const { desktopNotificationService } =
-            await import('@/services/electron/desktopNotification');
+        if (adapter.runtimeType === 'client') {
+          // CLIENT: notify only OUTSIDE tool-calling mode; title + body derived
+          // from the in-memory store. Relocated verbatim — no badge (preserves
+          // the prior client behavior).
+          const finalMessages = get().messagesMap[messageKey] || [];
+          const lastAssistant = finalMessages.findLast((m) => m.role === 'assistant');
+          if (!lastAssistant?.content || lastAssistant?.tools) return;
 
           let notificationTitle = t('notification.finishChatGeneration', { ns: 'electron' });
           if (topicId) {
@@ -191,18 +199,43 @@ export const buildRunLifecycle = (
             if (agentMeta?.title) notificationTitle = agentMeta.title;
           }
 
-          const navigatePath = resolveNotificationNavigatePath({ agentId, groupId, topicId });
-
           await desktopNotificationService.showNotification({
             body: markdownToTxt(lastAssistant.content),
-            navigate: navigatePath ? { path: navigatePath } : undefined,
+            navigate,
             title: notificationTitle,
           });
+          return;
         }
+
+        // GATEWAY / HETERO: the run-complete title is the generic completion
+        // string; the body is executor-resolved (hetero's `accContent`) when
+        // supplied, else derived from the store's final assistant content
+        // (gateway, after its terminal DB reconciliation). Dock badge is set so a
+        // backgrounded app still signals completion. Mirrors the prior
+        // `notifyCompletion` fan-out.
+        const fallbackContent = (
+          get().messagesMap?.[messageKey] ||
+          get().dbMessagesMap?.[messageKey] ||
+          []
+        ).findLast((m) => m.role === 'assistant')?.content;
+        const body =
+          event.notification?.body ??
+          (fallbackContent
+            ? markdownToTxt(fallbackContent)
+            : t('notification.finishChatGeneration', { ns: 'electron' }));
+        await Promise.allSettled([
+          desktopNotificationService.showNotification({
+            body,
+            navigate,
+            title:
+              event.notification?.title ??
+              t('notification.finishChatGeneration', { ns: 'electron' }),
+          }),
+          desktopNotificationService.setBadgeCount?.(1),
+        ]);
       } catch (error) {
         console.error('Desktop notification error:', error);
       }
-      void operationId;
     },
     beforeRunComplete: NOOP,
     completeRun: async (event: RunCompleteEvent): Promise<RunCompleteResult> => {
@@ -259,8 +292,12 @@ export const buildRunLifecycle = (
                 : undefined;
 
           setTimeout(() => {
-            useChatStore
-              .getState()
+            // Use the passed `get` (the live chat-store getter) rather than a
+            // direct `useChatStore` import: in prod they resolve to the same
+            // singleton sendMessage, and avoiding the value import keeps the chat
+            // store out of this module's graph — so gateway.ts can statically
+            // import buildRunLifecycle without re-entering the store mid-eval.
+            get()
               .sendMessage({
                 context: execContext,
                 editorData: merged.editorData,
@@ -291,9 +328,18 @@ export const buildRunLifecycle = (
           });
           break;
         }
-        // `cancelled` / `undefined`: the operation already reached its terminal
-        // state out of band (client cancel path). Parked states never reach
-        // `completeRun` — the executor routes them to `onRunParked`.
+        case 'cancelled': {
+          // Gateway / hetero reach this boundary with the op still `running`
+          // (their interrupt ends the run segment server- / CLI-side), so the op
+          // must be moved to terminal here. The client is exempt: its cancel
+          // path already set the op to `cancelled` out of band, and
+          // `completeOperation` deliberately preserves a `cancelled` status.
+          if (adapter.runtimeType !== 'client') get().completeOperation(operationId);
+          break;
+        }
+        // `undefined`: unrecognized terminal status — fall through untouched.
+        // Parked states never reach `completeRun` — the executor routes them to
+        // `onRunParked`.
       }
 
       emitComplete(operationId, runtimeStatus);

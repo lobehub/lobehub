@@ -3801,24 +3801,13 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(mockSetBadgeCount).not.toHaveBeenCalled();
     });
 
-    // ── 2. metadata-save failure isolation (CURRENT behavior, locked as-is) ──
-    it('swallows an updateTopicMetadata REJECTION without surfacing an error to the caller', async () => {
-      // CHARACTERIZATION — locks ACTUAL current behavior, which DIFFERS from the
-      // intended acceptance criterion ("metadata failure must not block the
-      // drain"):
-      //
-      //   const sessionInfo = await getSessionInfo(...).catch(() => undefined);
-      //   if (sessionInfo?.agentSessionId && context.topicId)
-      //     await updateTopicMetadata?.(...);   // ← NO .catch here
-      //   if (!isAborted() && terminalEvent?.type !== 'error') { ...drain... }
-      //
-      // Because the `updateTopicMetadata` await is UNGUARDED, a rejection throws
-      // past the drain block into the function's outer try/catch. `completed` is
-      // already `true` (onComplete ran), so `catch { if (!completed) ... }` is a
-      // no-op: the executor resolves cleanly (no error escapes to the caller),
-      // BUT the queue drain is SKIPPED. The completion notification still fired
-      // (it runs inside onComplete, before this metadata await). Pinned here so
-      // the lifecycle refactor surfaces any change to this latent edge.
+    // ── 2. metadata-save failure isolation (POST-LOBE-10379: guarded) ──
+    it('a rejected updateTopicMetadata is swallowed and no longer blocks the queue drain', async () => {
+      // POST-LOBE-10379 ("heteroSessionId 保存…失败不阻断 core"): the metadata save
+      // is now `.catch`-guarded, so a rejection is logged but does NOT throw past
+      // the drain block. The executor still resolves cleanly (no error escapes),
+      // the completion notification still fires, AND — unlike the old unguarded
+      // behavior — the queue drain now proceeds.
       desktopFlag.value = true;
       const queued = [
         {
@@ -3862,11 +3851,10 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(store.updateTopicMetadata).toHaveBeenCalled();
       // ...and the rejection did NOT escape to the caller (executor resolved).
       expect(threw).toBe(false);
-      // The completion notification still fired (runs in onComplete, BEFORE the
-      // unguarded metadata await throws).
+      // The completion notification still fired (afterRunComplete in onComplete).
       expect(mockSetBadgeCount).toHaveBeenCalledWith(1);
-      // Current behavior: the unguarded throw bypasses the drain → it is SKIPPED.
-      expect(store.drainQueuedMessages).not.toHaveBeenCalled();
+      // POST-LOBE-10379: the guarded metadata save no longer bypasses the drain.
+      expect(store.drainQueuedMessages).toHaveBeenCalled();
     });
 
     // ── 3. queue-drain gating ──

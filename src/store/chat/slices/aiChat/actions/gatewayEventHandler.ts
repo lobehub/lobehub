@@ -18,6 +18,10 @@ import { isRecord, pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 
 import { messageService } from '@/services/message';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/aiChat/actions/agentSignalBridge';
+import type {
+  AgentRunLifecycle,
+  RunScope,
+} from '@/store/chat/slices/aiChat/actions/runLifecycle/types';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 
@@ -300,10 +304,39 @@ export const createGatewayEventHandler = (
      */
     gatewayOperationId?: string;
     operationId: string;
+    /**
+     * Shared run lifecycle for this run, assembled by the caller (gateway.ts).
+     * Only the gateway transport supplies it — it drives the terminal lifecycle
+     * (completeRun / afterRunComplete) here. hetero reuses this handler ONLY for
+     * per-event message reconciliation; its executor owns the terminal lifecycle
+     * (completeRun + notification + queue drain) in `onComplete`, so it omits this
+     * and the handler must NOT double-complete or double-notify.
+     *
+     * Injected (not built here) to avoid statically importing `buildRunLifecycle`
+     * — which pulls `@/store/chat/store` into this module's evaluation and breaks
+     * the gateway.ts → gatewayEventHandler import cycle.
+     */
+    runLifecycle?: AgentRunLifecycle;
+    /**
+     * Which transport owns this handler. `gateway` (default) drives the terminal
+     * run lifecycle here (completeRun / afterRunComplete). `hetero` reuses the
+     * handler ONLY for per-event message reconciliation.
+     */
+    runtimeType?: 'gateway' | 'hetero';
   },
 ) => {
-  const { context, operationId } = params;
+  const { context, operationId, runLifecycle } = params;
   const gatewayOperationId = params.gatewayOperationId ?? operationId;
+  const runtimeType = params.runtimeType ?? 'gateway';
+
+  const runScope: RunScope = context.scope === 'sub_agent' ? 'sub_agent' : 'top_level';
+  const lifecycleEventBase = {
+    context,
+    operationId,
+    runId: operationId,
+    runScope,
+    runtimeType: 'gateway' as const,
+  };
 
   // Dispatch context — ensures internal_dispatchMessage resolves the correct messageMapKey
   const dispatchContext = { operationId };
@@ -646,20 +679,10 @@ export const createGatewayEventHandler = (
           });
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();
-          get().completeOperation(operationId);
 
-          // Only a clean completion surfaces an unread badge — a mid-stream
-          // cancel ('interrupted') or deferred-tool park ('waiting_for_async_tool')
-          // must not. Those endings clear back to 'active' in onSessionComplete.
-          const completedOp = get().operations[operationId];
-          if (completedOp?.context.agentId && isCompletedRuntimeEnd(data?.reason)) {
-            get().markTopicUnread({
-              agentId: completedOp.context.agentId,
-              groupId: completedOp.context.groupId,
-              topicId: completedOp.context.topicId,
-            });
-          }
-
+          // Reconcile messages FIRST so the terminal run lifecycle's notification
+          // (afterRunComplete) can read the final assistant content from the store.
+          //
           // Terminal step has no later step_start to carry SoT — server
           // pushes the canonical snapshot directly on this event. Fall back
           // to a DB refetch only if the snapshot is absent (older server
@@ -694,6 +717,39 @@ export const createGatewayEventHandler = (
           } else {
             await fetchAndReplaceMessages(get, context).catch(console.error);
           }
+
+          // Terminal run lifecycle. `isCompletedRuntimeEnd` is the clean-vs-not
+          // gate (a mid-stream cancel 'interrupted' or deferred-tool park
+          // 'waiting_for_async_tool' is NOT a clean completion):
+          //   • completed → completeRun completes the op, marks the topic unread,
+          //     drains the input queue, then afterRunComplete fires the desktop
+          //     notification (skipped if a queued follow-up was scheduled).
+          //   • cancelled → completeRun only completes the op (no unread badge,
+          //     no queue drain, no notification) — same as the old inline path.
+          if (runtimeType === 'gateway' && runLifecycle) {
+            const status = isCompletedRuntimeEnd(data?.reason) ? 'completed' : 'cancelled';
+            const { requeued } = await runLifecycle.completeRun({
+              ...lifecycleEventBase,
+              status,
+            });
+            if (!requeued && status === 'completed') {
+              await runLifecycle.afterRunComplete({ ...lifecycleEventBase, status });
+            }
+          } else {
+            // hetero reuses this handler only for message reconciliation; its
+            // executor owns completeRun + notification + queue drain. Complete the
+            // op here so loading clears, and mark unread on a clean completion —
+            // matching the legacy inline path the hetero executor still relies on.
+            get().completeOperation(operationId);
+            const completedOp = get().operations[operationId];
+            if (completedOp?.context.agentId && isCompletedRuntimeEnd(data?.reason)) {
+              get().markTopicUnread({
+                agentId: completedOp.context.agentId,
+                groupId: completedOp.context.groupId,
+                topicId: completedOp.context.topicId,
+              });
+            }
+          }
         });
         break;
       }
@@ -725,7 +781,18 @@ export const createGatewayEventHandler = (
 
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();
-          get().completeOperation(operationId);
+
+          // An errored run is a FAILED run, not a completed one (LOBE-10379
+          // "error→fail"). For gateway, drive the terminal disposition through the
+          // shared lifecycle so the op lands in `failed` (no unread badge, no queue
+          // drain, no notification). hetero never forwards `error` to this handler
+          // (its executor routes errors through persistTerminalError), but keep the
+          // legacy completeOperation for any other caller for safety.
+          if (runtimeType === 'gateway' && runLifecycle) {
+            await runLifecycle.completeRun({ ...lifecycleEventBase, status: 'failed' });
+          } else {
+            get().completeOperation(operationId);
+          }
 
           const updateResult = await messageService
             .updateMessageError(currentAssistantMessageId, messageError, {
