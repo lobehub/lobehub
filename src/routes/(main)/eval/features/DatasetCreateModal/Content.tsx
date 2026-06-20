@@ -154,8 +154,8 @@ const DatasetCreateContent: FC<DatasetCreateContentProps> = ({
         name: result.name,
         preset: selectedPreset,
       });
-    } catch (error: any) {
-      toast.error(error?.message || t('dataset.create.error'));
+    } catch (error) {
+      toast.error((error as Error)?.message || t('dataset.create.error'));
     } finally {
       onLoadingChange?.(false);
     }
