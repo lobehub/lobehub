@@ -349,12 +349,6 @@ export interface TaskDetailData {
   name?: string | null;
   parent?: { agentId?: string | null; identifier: string; name: string | null } | null;
   priority?: number | null;
-  /**
-   * @deprecated Legacy eval-rubric review config (`tasks.config.review`).
-   * Superseded by {@link TaskVerifyConfig} under `verify`; kept for the
-   * migration window and removed once taskReview is retired (LOBE-10614 §10).
-   */
-  review?: Record<string, any> | null;
   schedule?: {
     maxExecutions?: number | null;
     pattern?: string | null;

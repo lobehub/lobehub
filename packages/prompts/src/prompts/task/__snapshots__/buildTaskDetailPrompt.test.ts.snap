@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`buildTaskDetailPrompt > includes subtasks, dependencies, and review 1`] = `
+exports[`buildTaskDetailPrompt > includes subtasks and dependencies 1`] = `
 "<page_context>The user is currently viewing the detail page of task T-3. When the user says "this task" or refers ambiguously, it means T-3.</page_context>
 <task>
 <hint>This tag contains the complete context of the task the user is viewing. Do NOT call viewTask to re-fetch it.</hint>
@@ -15,9 +15,6 @@ Dependencies: completion: T-2
 Subtasks:
   T-3-1 ✓ completed Draft
   T-3-2 ○ backlog Polish ← blocks: T-3-1
-
-Review (maxIterations: 3):
-  - Clarity [llm] ≥ 80%
 </task>"
 `;
 
@@ -28,8 +25,6 @@ exports[`buildTaskDetailPrompt > renders minimal task with page_context header 1
 T-3 Chapter 3
 Status: ● running     Priority: high
 Instruction: 写第3章 评测方法论
-
-Review: (not configured)
 </task>"
 `;
 
@@ -40,8 +35,6 @@ exports[`buildTaskDetailPrompt > renders workspace tree and activities timeline 
 T-3 Chapter 3
 Status: ● running     Priority: high
 Instruction: 写第3章 评测方法论
-
-Review: (not configured)
 
 Workspace (2):
   📁 Drafts (doc_root)

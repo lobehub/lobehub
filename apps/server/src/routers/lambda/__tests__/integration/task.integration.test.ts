@@ -371,6 +371,16 @@ describe('Task Router Integration', () => {
         verifyCriteriaIds: ['c1', 'c2'],
         verifyRubricId: 'rub_1',
       });
+
+      // task.detail must surface the saved verify config (not leave it undefined).
+      const detail = await caller.detail({ id: task.data.id });
+      expect(detail.data!.verify).toEqual({
+        enabled: true,
+        maxIterations: 3,
+        verifierAgentId: 'agt_codex',
+        verifyCriteriaIds: ['c1', 'c2'],
+        verifyRubricId: 'rub_1',
+      });
     });
 
     it('should clear a saved field when passed null', async () => {
