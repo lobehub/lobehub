@@ -777,6 +777,13 @@
       "when": 1780832120210,
       "tag": "0110_add_verify_tables_and_ai_infra_id",
       "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1781883177374,
+      "tag": "0111_workspace_device_and_ai_infra_surrogate_pk",
+      "breakpoints": true
     }
   ],
   "version": "6"

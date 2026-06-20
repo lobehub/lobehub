@@ -24,7 +24,7 @@ export const useRecommendationsVisible = (): boolean => {
 
 const Recommendations = memo(() => {
   const { t } = useTranslation('home');
-  const { t: tTaskTemplate } = useTranslation('taskTemplate');
+  const { t: tCommon } = useTranslation('common');
   const taskTemplatesState = useDailyBriefRecommendationsUI();
   const { actions } = useEligibleActions();
 
@@ -44,7 +44,7 @@ const Recommendations = memo(() => {
             type={'text'}
             onClick={taskTemplatesState.onRefresh}
           >
-            {tTaskTemplate('action.refresh.button')}
+            {tCommon('taskTemplate.action.refresh.button')}
           </Button>
         )}
       </Flexbox>

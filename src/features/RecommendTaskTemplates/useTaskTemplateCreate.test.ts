@@ -16,12 +16,12 @@ describe('resolveTaskTemplateConnectErrorMessageKey', () => {
   it('keeps the popup-blocked message for OAuth popup failures', () => {
     expect(
       resolveTaskTemplateConnectErrorMessageKey(new ConnectorConnectionPopupBlockedError()),
-    ).toBe('action.connect.popupBlocked');
+    ).toBe('taskTemplate.action.connect.popupBlocked');
   });
 
   it('falls back to the generic connector error for other failures', () => {
     expect(resolveTaskTemplateConnectErrorMessageKey(new Error('network failed'))).toBe(
-      'action.connect.error',
+      'taskTemplate.action.connect.error',
     );
   });
 });

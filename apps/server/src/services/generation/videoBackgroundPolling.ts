@@ -8,10 +8,10 @@ import { GenerationModel } from '@/database/models/generation';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { VideoGenerationService } from '@/server/services/generation/video';
+import { buildVideoGenerationFilePayload } from '@/server/services/generation/videoFile';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 import { FileSource } from '@/types/files';
 import type { VideoGenerationAsset } from '@/types/generation';
-import { sanitizeFileName } from '@/utils/sanitizeFileName';
 
 const log = debug('lobe-video:background-polling');
 
@@ -88,13 +88,11 @@ export async function processBackgroundVideoPolling(
     await generationModel.createAssetAndFile(
       generationId,
       asset,
-      {
-        fileHash: processResult.fileHash,
-        fileType: processResult.mimeType,
-        name: `${sanitizeFileName(batch?.prompt ?? '', generationId)}.mp4`,
-        size: processResult.fileSize,
-        url: processResult.videoKey,
-      },
+      buildVideoGenerationFilePayload({
+        generationId,
+        processResult,
+        prompt: batch?.prompt,
+      }),
       FileSource.VideoGeneration,
     );
 

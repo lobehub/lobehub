@@ -198,7 +198,11 @@ export const buildRunLifecycle = (
 
           const completedOp = get().operations[operationId];
           if (completedOp?.context.agentId) {
-            get().markUnreadCompleted(completedOp.context.agentId, completedOp.context.topicId);
+            get().markTopicUnread({
+              agentId: completedOp.context.agentId,
+              groupId: completedOp.context.groupId,
+              topicId: completedOp.context.topicId,
+            });
           }
 
           emitComplete(operationId, runtimeStatus);
@@ -238,7 +242,11 @@ export const buildRunLifecycle = (
           get().completeOperation(operationId);
           const completedOp = get().operations[operationId];
           if (completedOp?.context.agentId) {
-            get().markUnreadCompleted(completedOp.context.agentId, completedOp.context.topicId);
+            get().markTopicUnread({
+              agentId: completedOp.context.agentId,
+              groupId: completedOp.context.groupId,
+              topicId: completedOp.context.topicId,
+            });
           }
           break;
         }

@@ -20,7 +20,7 @@ import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
-import { createGatewayEventHandler } from './gatewayEventHandler';
+import { createGatewayEventHandler, isCompletedRuntimeEnd } from './gatewayEventHandler';
 
 /**
  * When the agent runs against the local machine, resolve this desktop's
@@ -88,9 +88,13 @@ export interface ConnectGatewayParams {
    */
   onEvent?: (event: AgentStreamEvent) => void;
   /**
-   * Called when the session completes (agent_runtime_end or session_complete)
+   * Called when the session completes (agent_runtime_end or session_complete).
+   * `succeeded` is true only for a clean `agent_runtime_end`; callers use it to
+   * avoid stomping the `unread` status a background completion writes (the
+   * completion's `markTopicUnread` and this terminal `active` write
+   * partition the cases by `succeeded && !viewing`).
    */
-  onSessionComplete?: () => void;
+  onSessionComplete?: (info: { succeeded: boolean }) => void;
   /**
    * The operation ID returned by execAgent
    */
@@ -171,17 +175,28 @@ export class GatewayActionImpl {
     // so we can fire onSessionComplete from the subsequent disconnect.
     // session_complete is handled separately as an explicit server signal.
     let receivedTerminalEvent = false;
+    let terminalSucceeded = false;
     let sessionCompleted = false;
     const fireSessionComplete = () => {
       if (sessionCompleted) return;
       sessionCompleted = true;
-      onSessionComplete?.();
+      onSessionComplete?.({ succeeded: terminalSucceeded });
     };
 
     // Forward agent events to caller, and track terminal events
     client.on('agent_event', (event) => {
       if (event.type === 'agent_runtime_end' || event.type === 'error') {
         receivedTerminalEvent = true;
+      }
+      // Only a clean completion counts as success — a cancel ('interrupted') or
+      // deferred-tool park ('waiting_for_async_tool') must take the non-success
+      // branch so onSessionComplete clears the run back to 'active' instead of
+      // leaving the topic persisted as an unread completion.
+      if (
+        event.type === 'agent_runtime_end' &&
+        isCompletedRuntimeEnd((event.data as { reason?: string } | undefined)?.reason)
+      ) {
+        terminalSucceeded = true;
       }
       onEvent?.(event);
     });
@@ -542,16 +557,23 @@ export class GatewayActionImpl {
     this.#get().connectToGateway({
       gatewayUrl: agentGatewayUrl,
       onEvent: eventHandler,
-      onSessionComplete: () => {
+      onSessionComplete: ({ succeeded }) => {
         this.#get().completeOperation(gatewayOpId);
         if (result.topicId) {
           this.#get().internal_updateTopicLoading(result.topicId, false);
-          void this.#get().updateTopicStatus?.({
-            agentId: execContext.agentId,
-            groupId: execContext.groupId,
-            status: 'active',
-            topicId: result.topicId,
-          });
+          // A clean completion the user isn't watching is owned by
+          // `markTopicUnread` (status: 'unread'); skip the 'active' write so
+          // the two never race over the status field. Every other case (viewing,
+          // error, abort) clears the running state back to 'active' as before.
+          const viewing = this.#get().activeTopicId === result.topicId;
+          if (viewing || !succeeded) {
+            void this.#get().updateTopicStatus?.({
+              agentId: execContext.agentId,
+              groupId: execContext.groupId,
+              status: 'active',
+              topicId: result.topicId,
+            });
+          }
           // Clear running operation from topic metadata (best-effort from frontend;
           // if browser was closed, reconnect logic will handle stale entries)
           topicService
@@ -672,14 +694,19 @@ export class GatewayActionImpl {
     this.#get().connectToGateway({
       gatewayUrl: agentGatewayUrl,
       onEvent: eventHandler,
-      onSessionComplete: () => {
+      onSessionComplete: ({ succeeded }) => {
         this.#get().completeOperation(gatewayOpId);
         this.#get().internal_updateTopicLoading(topicId, false);
-        void this.#get().updateTopicStatus?.({
-          agentId: context.agentId,
-          status: 'active',
-          topicId,
-        });
+        // See executeGatewayAgent's onSessionComplete: a clean background
+        // completion is left to markTopicUnread (status: 'unread').
+        const viewing = this.#get().activeTopicId === topicId;
+        if (viewing || !succeeded) {
+          void this.#get().updateTopicStatus?.({
+            agentId: context.agentId,
+            status: 'active',
+            topicId,
+          });
+        }
         topicService.updateTopicMetadata(topicId, { runningOperation: null }).catch(() => {});
       },
       operationId,

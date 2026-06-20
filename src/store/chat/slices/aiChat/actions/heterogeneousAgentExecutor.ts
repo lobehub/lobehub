@@ -1355,7 +1355,10 @@ export const executeHeterogeneousAgent = async (
         pendingSubagentFlush.clear();
 
         if (!isErrorTerminal) {
-          writeTopicStatus('active');
+          // A clean completion the user isn't watching is owned by the gateway
+          // handler's markTopicUnread (status: 'unread'); only clear back to
+          // 'active' when the user is viewing so the two writes don't race.
+          if (get().activeTopicId === context.topicId) writeTopicStatus('active');
           // NOW forward the deferred terminal event — handler will
           // fetchAndReplaceMessages and pick up the final persisted state.
           eventHandler(terminalEvent);
@@ -1465,7 +1468,11 @@ export const executeHeterogeneousAgent = async (
         get().completeOperation(operationId);
         const completedOp = get().operations?.[operationId];
         if (completedOp?.context.agentId) {
-          get().markUnreadCompleted?.(completedOp.context.agentId, completedOp.context.topicId);
+          get().markTopicUnread?.({
+            agentId: completedOp.context.agentId,
+            groupId: completedOp.context.groupId,
+            topicId: completedOp.context.topicId,
+          });
         }
 
         const merged = mergeQueuedMessages(remainingQueued);

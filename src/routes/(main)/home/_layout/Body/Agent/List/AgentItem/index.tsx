@@ -81,6 +81,10 @@ interface AgentItemProps {
 
 const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) => {
   const { id, avatar, backgroundColor, title, pinned, heterogeneousType } = item;
+  // Unread count is server-computed (topics.status === 'unread') and carried on
+  // the sidebar list item, so it stays accurate across agents whose topics
+  // aren't loaded into the chat store on this client.
+  const unreadCount = item.unreadCount ?? 0;
   const { t } = useTranslation('chat');
   const { openCreateGroupModal } = useAgentModal();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -91,7 +95,6 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate }) 
 
   // Separate loading state from chat store - only show loading for this specific agent
   const isLoading = useChatStore(operationSelectors.isAgentRunning(id));
-  const unreadCount = useChatStore(operationSelectors.agentUnreadCount(id));
 
   // Get display title with fallback
   const displayTitle = title || t('untitledAgent');

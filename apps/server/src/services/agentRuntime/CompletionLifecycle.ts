@@ -7,6 +7,7 @@ import {
 } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
 import { type LobeChatDatabase } from '@/database/type';
+import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
 import { buildFinalSnapshotKey } from '@/server/modules/AgentTracing';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
@@ -361,13 +362,20 @@ export class CompletionLifecycle {
 
         const assistantMessageId = metadata?.assistantMessageId;
         if (assistantMessageId && state?.error) {
-          const errorMessage = this.extractErrorMessage(state.error) || String(state.error);
+          // Preserve the semantic error type written by the runtime. Rebuilding
+          // this as a generic AgentRuntimeError would lose UI routing data such
+          // as quota context and force the client into the fallback card.
+          const messageError = formatErrorForState(state.error);
+          const errorMessage =
+            this.extractErrorMessage(messageError) ||
+            this.extractErrorMessage(state.error) ||
+            String(state.error);
           try {
             await this.messageModel.update(assistantMessageId, {
               error: {
-                body: { message: errorMessage },
+                ...messageError,
+                body: messageError.body ?? { message: errorMessage },
                 message: errorMessage,
-                type: 'AgentRuntimeError',
               },
             });
           } catch (updateError) {

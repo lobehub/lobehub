@@ -23,7 +23,7 @@ interface ConnectorAuthRowProps {
  * surrounding container without extra bookkeeping.
  */
 export const ConnectorAuthRow = memo<ConnectorAuthRowProps>(({ disabled, spec, onError }) => {
-  const { t } = useTranslation('taskTemplate');
+  const { t } = useTranslation('common');
   const specs = useMemo(() => [spec], [spec]);
   const meta = useMemo(() => getProviderMeta(spec), [spec]);
   const { connect, isAllConnected, isConnecting } = useConnectorConnection(specs);
@@ -58,7 +58,7 @@ export const ConnectorAuthRow = memo<ConnectorAuthRowProps>(({ disabled, spec, o
         variant={'text'}
         onClick={handleConnect}
       >
-        {t('action.connect.short')}
+        {t('taskTemplate.action.connect.short')}
       </Button>
     </Flexbox>
   );

@@ -131,7 +131,7 @@ const Header = memo(() => {
   ) : !libraryId ? (
     <Flexbox style={{ marginLeft: 8 }}>
       {category === FilesTabs.All
-        ? t('resource', { defaultValue: 'Resource' })
+        ? t('resource', { ns: 'file' })
         : t(`tab.${category as FilesTabs}` as any, { ns: 'file' })}
     </Flexbox>
   ) : (

@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { ChatErrorType } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CompletionLifecycle } from '../CompletionLifecycle';
@@ -194,6 +195,50 @@ describe('CompletionLifecycle.buildLifecycleEvent', () => {
     expect(event.lastAssistantContent).toBeUndefined();
     expect(event.attachments).toBeUndefined();
     expect(event.agentId).toBe('a');
+  });
+});
+
+describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('persists budget errors without downgrading them to AgentRuntimeError', async () => {
+    const lifecycle = buildLifecycle();
+    const updateMessage = vi.fn().mockResolvedValue({ success: true });
+    const budget = { required: 12 };
+
+    (lifecycle as any).messageModel = { update: updateMessage };
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(() => {});
+
+    await lifecycle.dispatchHooks(
+      'op-1',
+      {
+        error: {
+          budget,
+          error: { message: 'Budget exceeded' },
+          errorType: ChatErrorType.FreePlanLimit,
+          provider: 'lobehub',
+        },
+        metadata: { _hooks: [], assistantMessageId: 'msg-1' },
+        status: 'error',
+      },
+      'error',
+    );
+
+    expect(updateMessage).toHaveBeenCalledWith('msg-1', {
+      error: expect.objectContaining({
+        body: expect.objectContaining({
+          budget,
+          message: 'Budget exceeded',
+          provider: 'lobehub',
+        }),
+        message: 'Budget exceeded',
+        type: ChatErrorType.FreePlanLimit,
+      }),
+    });
   });
 });
 

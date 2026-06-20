@@ -34,14 +34,17 @@ export interface UseTaskTemplateCreateResult {
   primaryButtonLabel: string;
 }
 
-type ConnectErrorMessageKey = 'action.connect.error' | 'action.connect.popupBlocked';
+type ConnectErrorMessageKey =
+  | 'taskTemplate.action.connect.error'
+  | 'taskTemplate.action.connect.popupBlocked';
 
 export const resolveTaskTemplateConnectErrorMessageKey = (
   error: unknown,
 ): ConnectErrorMessageKey | undefined => {
   if (error instanceof ConnectorConnectionMarketAuthRequiredError) return undefined;
-  if (error instanceof ConnectorConnectionPopupBlockedError) return 'action.connect.popupBlocked';
-  return 'action.connect.error';
+  if (error instanceof ConnectorConnectionPopupBlockedError)
+    return 'taskTemplate.action.connect.popupBlocked';
+  return 'taskTemplate.action.connect.error';
 };
 
 export const useTaskTemplateCreate = ({
@@ -50,7 +53,7 @@ export const useTaskTemplateCreate = ({
   template,
   title,
 }: UseTaskTemplateCreateOptions): UseTaskTemplateCreateResult => {
-  const { t } = useTranslation('taskTemplate');
+  const { t } = useTranslation('common');
   const { message } = App.useApp();
   const { allowed: canCreateTask } = usePermission('create_content');
   const [loading, setLoading] = useState(false);
@@ -90,7 +93,7 @@ export const useTaskTemplateCreate = ({
       }
     } catch (error) {
       console.error('[taskTemplate:create]', error);
-      message.error(t('action.create.error'));
+      message.error(t('taskTemplate.action.create.error'));
     } finally {
       setLoading(false);
     }
@@ -154,10 +157,10 @@ export const useTaskTemplateCreate = ({
   }, [canCreateTask, created, inboxAgentId, requiredConnection.needsConnect, handleCreate]);
 
   const primaryButtonLabel = loading
-    ? t('action.creating')
+    ? t('taskTemplate.action.creating')
     : pendingCreate
-      ? t('action.connecting')
-      : t('action.createButton');
+      ? t('taskTemplate.action.connecting')
+      : t('taskTemplate.action.createButton');
 
   return {
     created,

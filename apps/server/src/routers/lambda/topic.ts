@@ -1,4 +1,5 @@
 import {
+  chatTopicStatusSchema,
   type RecentTopic,
   type RecentTopicGroup,
   type RecentTopicGroupMember,
@@ -614,18 +615,7 @@ export const topicRouter = router({
             })
             .optional(),
           sessionId: z.string().optional(),
-          status: z
-            .enum([
-              'active',
-              'running',
-              'paused',
-              'waitingForHuman',
-              'failed',
-              'completed',
-              'archived',
-            ])
-            .nullable()
-            .optional(),
+          status: chatTopicStatusSchema.nullable().optional(),
           title: z.string().optional(),
         }),
       }),
