@@ -1,12 +1,15 @@
 import type { VerifyEvidence } from '@lobechat/types';
 import { and, asc, eq } from 'drizzle-orm';
 
-import { verifyEvidence } from '../schemas/verify';
+import { verifyCheckResults, verifyEvidence } from '../schemas/verify';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /** Caller-supplied fields when recording one evidence artifact (ownership is injected). */
 type CreateVerifyEvidence = Omit<VerifyEvidence, 'id' | 'createdAt'>;
+
+/** An evidence row annotated with the run-stable `checkItemId` of its result. */
+export type VerifyEvidenceForRun = VerifyEvidence & { checkItemId: string };
 
 export class VerifyEvidenceModel {
   private readonly db: LobeChatDatabase;
@@ -61,6 +64,26 @@ export class VerifyEvidenceModel {
       .from(verifyEvidence)
       .where(and(eq(verifyEvidence.checkResultId, checkResultId), this.ownership()))
       .orderBy(asc(verifyEvidence.createdAt));
+  };
+
+  /**
+   * All evidence for a whole verification session, each row carrying the
+   * `checkItemId` of the result it backs (joined through `verify_check_results`).
+   * Lets the judge and reporter group a run's artifacts by plan item in one
+   * query, oldest first.
+   */
+  listByRun = async (verifyRunId: string): Promise<VerifyEvidenceForRun[]> => {
+    const rows = await this.db
+      .select({
+        checkItemId: verifyCheckResults.checkItemId,
+        evidence: verifyEvidence,
+      })
+      .from(verifyEvidence)
+      .innerJoin(verifyCheckResults, eq(verifyEvidence.checkResultId, verifyCheckResults.id))
+      .where(and(eq(verifyCheckResults.verifyRunId, verifyRunId), this.ownership()))
+      .orderBy(asc(verifyEvidence.createdAt));
+
+    return rows.map((r) => ({ ...r.evidence, checkItemId: r.checkItemId }));
   };
 
   delete = async (id: string) => {

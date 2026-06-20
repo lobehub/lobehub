@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
@@ -12,12 +12,14 @@ import debug from 'debug';
 
 import { DocumentModel } from '@/database/models/document';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
+import { VerifyEvidenceModel } from '@/database/models/verifyEvidence';
 import { VerifyRunModel } from '@/database/models/verifyRun';
-import type { NewVerifyCheckResult } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 
-import { buildJudgePrompt, VERIFY_JUDGE_PROMPT_VERSION } from './prompts';
+import { coverageGaps, readRequiredEvidence } from './evidenceCoverage';
+import { buildJudgePrompt, type JudgeEvidence, VERIFY_JUDGE_PROMPT_VERSION } from './prompts';
+import { planItemToPendingResult } from './resultSnapshot';
 import {
   BATCH_VERDICT_JSON_SCHEMA,
   BatchVerdictSchema,
@@ -56,14 +58,11 @@ export interface ExecuteVerifyParams {
   runVerifierAgent?: VerifierAgentRunner;
 }
 
-const hashConfig = (config: Record<string, unknown>): string =>
-  createHash('sha256')
-    .update(JSON.stringify(config ?? {}))
-    .digest('hex')
-    .slice(0, 16);
-
 const verdictToStatus = (verdict: VerifyVerdict): VerifyCheckResultStatus =>
   verdict === 'passed' ? 'passed' : 'failed';
+
+/** Group a run's evidence rows by the plan item they back, for judge injection. */
+type EvidenceByItem = Map<string, JudgeEvidence[]>;
 
 const toToulmin = (v: SingleVerdict): ToulminVerdict => ({
   counterEvidence: v.counterEvidence ?? undefined,
@@ -79,6 +78,7 @@ export class VerifyExecutorService {
   private readonly resultModel: VerifyCheckResultModel;
   private readonly statusService: VerifyStatusService;
   private readonly documentModel: DocumentModel;
+  private readonly evidenceModel: VerifyEvidenceModel;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.db = db;
@@ -87,6 +87,7 @@ export class VerifyExecutorService {
     this.resultModel = new VerifyCheckResultModel(db, userId, workspaceId);
     this.statusService = new VerifyStatusService(db, userId, workspaceId);
     this.documentModel = new DocumentModel(db, userId, workspaceId);
+    this.evidenceModel = new VerifyEvidenceModel(db, userId, workspaceId);
   }
 
   /**
@@ -119,40 +120,83 @@ export class VerifyExecutorService {
     const verifyRunId = run.id;
     const items = run.plan as VerifyCheckItem[];
 
-    // Idempotently create the pending result rows (skip ones already present).
+    // Idempotently create the pending result rows (skip ones already present —
+    // an item may already have a row from evidence uploaded mid-run).
     const existing = await this.resultModel.listByRun(verifyRunId);
     const existingIds = new Set(existing.map((r) => r.checkItemId));
-    const toCreate: Omit<NewVerifyCheckResult, 'userId'>[] = items
+    const toCreate = items
       .filter((i) => !existingIds.has(i.id))
-      .map((item) => ({
-        checkItemId: item.id,
-        checkItemIndex: item.index,
-        checkItemTitle: item.title,
-        // Denormalized direct link to the Agent Run (canonical link is verifyRunId).
-        operationId: params.operationId,
-        required: item.required,
-        status: 'pending' as const,
-        verifierConfigHash: hashConfig(item.verifierConfig),
-        verifierType: item.verifierType,
-        verifyRunId,
-      }));
+      .map((item) => planItemToPendingResult(verifyRunId, params.operationId, item));
     if (toCreate.length > 0) await this.resultModel.createMany(toCreate);
 
     await this.statusService.markVerifying(params.operationId);
 
-    const llmItems = items.filter((i) => i.verifierType === 'llm');
-    const agentItems = items.filter((i) => i.verifierType === 'agent');
-    const programItems = items.filter((i) => i.verifierType === 'program');
+    // Load run-captured evidence once, grouped by plan item — feeds both the
+    // structural gate and the LLM judge.
+    const evidenceByItem = await this.loadEvidence(verifyRunId);
+
+    // Structural gate (server, no LLM): an evidence-driven item missing any of
+    // its declared evidence types is marked uncertain up front and excluded from
+    // the judges — we never let a required artifact-backed claim pass unseen.
+    const gapIds = await this.runStructuralGate(verifyRunId, items, evidenceByItem);
+    const gated = items.filter((i) => !gapIds.has(i.id));
+
+    const llmItems = gated.filter((i) => i.verifierType === 'llm');
+    const agentItems = gated.filter((i) => i.verifierType === 'agent');
+    const programItems = gated.filter((i) => i.verifierType === 'program');
 
     // The three verifier kinds are independent — run them concurrently. LLM items
     // are judged in one batched call; each agent item spawns its own sub-agent.
     await Promise.all([
       this.runProgramItems(verifyRunId, programItems),
-      this.runLlmItems(params, verifyRunId, llmItems),
+      this.runLlmItems(params, verifyRunId, llmItems, evidenceByItem),
       ...agentItems.map((item) => this.runAgentItem(params, verifyRunId, item)),
     ]);
 
     await this.statusService.recompute(params.operationId);
+  }
+
+  /** Load a run's evidence rows grouped by the plan item id they back. */
+  private async loadEvidence(verifyRunId: string): Promise<EvidenceByItem> {
+    const rows = await this.evidenceModel.listByRun(verifyRunId);
+    const byItem: EvidenceByItem = new Map();
+    for (const row of rows) {
+      const list = byItem.get(row.checkItemId) ?? [];
+      list.push({ content: row.content, description: row.description, type: row.type });
+      byItem.set(row.checkItemId, list);
+    }
+    return byItem;
+  }
+
+  /**
+   * Mark every evidence-driven item whose declared evidence is incomplete as
+   * `uncertain` (status `failed`, so it gates delivery and seeds repair), and
+   * return their ids so the judges skip them. Items with no `requiredEvidence`
+   * pass through untouched.
+   */
+  private async runStructuralGate(
+    verifyRunId: string,
+    items: VerifyCheckItem[],
+    evidenceByItem: EvidenceByItem,
+  ): Promise<Set<string>> {
+    const gapIds = new Set<string>();
+    for (const item of items) {
+      const required = readRequiredEvidence(item.verifierConfig);
+      const gaps = coverageGaps(required, evidenceByItem.get(item.id) ?? []);
+      if (gaps.length === 0) continue;
+
+      gapIds.add(item.id);
+      const missing = gaps.join(', ');
+      await this.resultModel.updateByCheckItem(verifyRunId, item.id, {
+        completedAt: new Date(),
+        confidence: 0,
+        status: 'failed',
+        suggestion: `Capture and upload the missing evidence (${missing}) via \`lh verify upload-evidence\`.`,
+        toulmin: { limitation: `Required evidence not provided: ${missing}.` },
+        verdict: 'uncertain',
+      });
+    }
+    return gapIds;
   }
 
   /** Program verifiers are a v1 placeholder (no shell environment) — mark skipped. */
@@ -171,13 +215,14 @@ export class VerifyExecutorService {
     params: ExecuteVerifyParams,
     verifyRunId: string,
     items: VerifyCheckItem[],
+    evidenceByItem: EvidenceByItem,
   ): Promise<void> {
     if (items.length === 0) return;
     try {
       if (params.batchLlm ?? true) {
-        await this.judgeBatch(params, verifyRunId, items);
+        await this.judgeBatch(params, verifyRunId, items, evidenceByItem);
       } else {
-        for (const item of items) await this.judgeSingle(params, verifyRunId, item);
+        for (const item of items) await this.judgeSingle(params, verifyRunId, item, evidenceByItem);
       }
     } catch (error) {
       log('llm judge failed for op %s: %O', params.operationId, error);
@@ -225,11 +270,13 @@ export class VerifyExecutorService {
     params: ExecuteVerifyParams,
     verifyRunId: string,
     items: VerifyCheckItem[],
+    evidenceByItem: EvidenceByItem,
   ): Promise<void> {
     // Batch: N verdicts share ONE tracing row (N:1).
     const tracingId = randomUUID();
     const promptItems = await Promise.all(
       items.map(async (i) => ({
+        evidence: evidenceByItem.get(i.id),
         id: i.id,
         instruction: await this.resolveInstruction(i),
         title: i.title,
@@ -292,13 +339,21 @@ export class VerifyExecutorService {
     params: ExecuteVerifyParams,
     verifyRunId: string,
     item: VerifyCheckItem,
+    evidenceByItem: EvidenceByItem,
   ): Promise<void> {
     // Per-criterion: each result gets its own tracing row (1:1).
     const tracingId = randomUUID();
     const { system, user } = buildJudgePrompt({
       deliverable: params.deliverable,
       goal: params.goal,
-      items: [{ id: item.id, instruction: await this.resolveInstruction(item), title: item.title }],
+      items: [
+        {
+          evidence: evidenceByItem.get(item.id),
+          id: item.id,
+          instruction: await this.resolveInstruction(item),
+          title: item.title,
+        },
+      ],
       mode: 'single',
     });
 

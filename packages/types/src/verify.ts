@@ -189,6 +189,21 @@ export const verifyEvidenceCapturedBy = [
 export type VerifyEvidenceCapturedBy = (typeof verifyEvidenceCapturedBy)[number];
 
 /**
+ * Declares that a criterion is evidence-driven: it cannot pass on the
+ * deliverable text alone — the run must capture and upload an artifact of each
+ * listed `type` (via `lh verify upload-evidence`). Stored under the plan item's
+ * `verifierConfig.requiredEvidence`, so adding it needs no schema change. The
+ * structural gate marks a required item `uncertain` when any listed type is
+ * missing, independent of the LLM judge.
+ */
+export interface RequiredEvidenceSpec {
+  /** What the capturer should produce — guidance only, not validated. */
+  hint?: string;
+  /** The evidence medium that must be present for this criterion. */
+  type: VerifyEvidenceType;
+}
+
+/**
  * One evidence artifact produced while judging a check. Carries existence +
  * provenance only — no verdict logic. Verifying an evidence is itself a new
  * check (related through `verify_check_results`), so this table stays flat.

@@ -1,9 +1,11 @@
-import type { VerifyCheckItem } from '@lobechat/types';
+import type { VerifyCheckItem, VerifyEvidenceType } from '@lobechat/types';
 
 /** Bump when the plan-gen prompt meaningfully changes (tracing partition key). */
 export const VERIFY_PLAN_PROMPT_VERSION = '1';
 /** Bump when the judge prompt meaningfully changes. */
 export const VERIFY_JUDGE_PROMPT_VERSION = '1';
+/** Bump when the report prompt meaningfully changes. */
+export const VERIFY_REPORT_PROMPT_VERSION = '1';
 
 export interface PlanPromptInput {
   /** Optional run context (agent role, repo, constraints). */
@@ -46,19 +48,41 @@ export const buildPlanPrompt = ({
   return { system, user };
 };
 
+/** One captured artifact, summarized for the judge. */
+export interface JudgeEvidence {
+  content?: string | null;
+  description?: string | null;
+  type: VerifyEvidenceType;
+}
+
 export interface JudgePromptInput {
   /** The artifacts / agent output to judge against. */
   deliverable: string;
   goal: string;
-  /** Each item carries its resolved judging instruction (from its document, if any). */
-  items: (Pick<VerifyCheckItem, 'id' | 'title'> & { instruction?: string })[];
+  /** Each item carries its resolved judging instruction + any captured evidence. */
+  items: (Pick<VerifyCheckItem, 'id' | 'title'> & {
+    evidence?: JudgeEvidence[];
+    instruction?: string;
+  })[];
   /** Single mode judges one item; batch mode judges all `items`. */
   mode: 'single' | 'batch';
 }
 
+const describeEvidence = (evidence: JudgeEvidence[] | undefined): string => {
+  if (!evidence?.length) return '';
+  const lines = evidence.map((e) => {
+    const caption = e.description ? ` — ${e.description}` : '';
+    // Inline text is quoted in full; a stored artifact (screenshot/gif/video) is
+    // referenced by presence + caption, which is itself supporting Data.
+    const payload = e.content ? `: ${e.content}` : ' [artifact captured]';
+    return `  - (${e.type})${caption}${payload}`;
+  });
+  return `\nEvidence captured during the run:\n${lines.join('\n')}`;
+};
+
 const describeItem = (item: JudgePromptInput['items'][number]) => {
   const instruction = item.instruction ? `\n${item.instruction}` : '';
-  return `${item.title}${instruction}`;
+  return `${item.title}${instruction}${describeEvidence(item.evidence)}`;
 };
 
 export const buildJudgePrompt = ({ goal, deliverable, items, mode }: JudgePromptInput) => {
@@ -72,6 +96,7 @@ export const buildJudgePrompt = ({ goal, deliverable, items, mode }: JudgePrompt
     '- counterEvidence: evidence pointing the other way, if any (the Rebuttal).',
     '- limitation: what you could not verify and why (the Rebuttal).',
     '- suggestion: a concrete fix when the verdict is failed/uncertain.',
+    'Artifacts listed under "Evidence captured during the run" are primary Data — weight them above the deliverable prose. An entry marked "[artifact captured]" means the screenshot/recording was taken; treat its presence and caption as supporting Data for what it depicts.',
     'Be skeptical: default to "uncertain" rather than "passed" when evidence is missing.',
     mode === 'batch'
       ? 'Return one verdict object per criterion, each tagged with its exact checkItemId.'
@@ -86,6 +111,68 @@ export const buildJudgePrompt = ({ goal, deliverable, items, mode }: JudgePrompt
   const user = [
     `## Run goal\n${goal}`,
     `\n## Criteria\n${criteriaBlock}`,
+    `\n## Deliverable\n${deliverable}`,
+  ].join('\n');
+
+  return { system, user };
+};
+
+export interface ReportPromptItem {
+  confidence?: number | null;
+  evidence?: JudgeEvidence[];
+  reasoning?: string | null;
+  status: string;
+  suggestion?: string | null;
+  title?: string | null;
+  verdict?: string | null;
+}
+
+export interface ReportPromptInput {
+  deliverable: string;
+  goal: string;
+  items: ReportPromptItem[];
+  /** Pre-computed rollup so the narrative never contradicts the numbers. */
+  stats: { failed: number; passed: number; total: number; uncertain: number };
+  verdict: string;
+}
+
+/**
+ * Narrative-only report prompt: the verdict + statistics are computed upstream
+ * and handed in, so the LLM writes prose around fixed numbers rather than
+ * re-deriving (and possibly contradicting) them.
+ */
+export const buildReportPrompt = ({
+  goal,
+  deliverable,
+  items,
+  stats,
+  verdict,
+}: ReportPromptInput) => {
+  const system = [
+    'You are writing a delivery-verification report for the user who owns this task.',
+    'The overall verdict and the pass/fail/uncertain counts are already decided and given to you — never contradict or recompute them.',
+    'Write in the language of the run goal.',
+    'Produce two fields:',
+    '- summary: 3-5 sentences for a chat notification — the verdict, what was checked, and the single most important finding.',
+    '- content: a full Markdown report. Use a per-criterion section with its verdict, the reasoning, the evidence that backs it, and a concrete next step for anything failed or uncertain. Reference captured artifacts where they support a claim.',
+    'Be specific and evidence-grounded; do not invent results that are not listed below.',
+  ].join('\n');
+
+  const itemBlock = items
+    .map((i) => {
+      const head = `### ${i.title ?? 'Criterion'} — ${i.verdict ?? i.status}${
+        typeof i.confidence === 'number' ? ` (confidence ${i.confidence})` : ''
+      }`;
+      const reasoning = i.reasoning ? `\nReasoning: ${i.reasoning}` : '';
+      const suggestion = i.suggestion ? `\nSuggestion: ${i.suggestion}` : '';
+      return `${head}${reasoning}${suggestion}${describeEvidence(i.evidence)}`;
+    })
+    .join('\n\n');
+
+  const user = [
+    `## Run goal\n${goal}`,
+    `\n## Overall verdict\n${verdict} — ${stats.passed}/${stats.total} passed, ${stats.failed} failed, ${stats.uncertain} uncertain`,
+    `\n## Per-criterion results\n${itemBlock}`,
     `\n## Deliverable\n${deliverable}`,
   ].join('\n');
 
