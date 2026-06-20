@@ -327,12 +327,15 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     protected _options: ConstructorOptions<T>;
 
     constructor(options: LobeClientOptions & Record<string, any> = {}) {
+      const { modelIdMapping, ...inputOptions } = options as LobeClientOptions &
+        Record<string, any> &
+        ModelIdMappingOptions;
       const _options = {
-        ...options,
-        apiKey: options.apiKey?.trim() || DEFAULT_API_KEY,
-        baseURL: options.baseURL?.trim() || DEFAULT_BASE_URL,
+        ...inputOptions,
+        apiKey: inputOptions.apiKey?.trim() || DEFAULT_API_KEY,
+        baseURL: inputOptions.baseURL?.trim() || DEFAULT_BASE_URL,
       };
-      const { apiKey, baseURL = DEFAULT_BASE_URL, modelIdMapping, ...res } = _options;
+      const { apiKey, baseURL = DEFAULT_BASE_URL, ...res } = _options;
       this._options = _options as ConstructorOptions<T>;
       this.modelIdMappingOptions = { modelIdMapping };
 
@@ -579,7 +582,6 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
             ...restOptions,
             apiKey: sanitizedApiKey,
             baseURL: targetBaseURL,
-            modelIdMapping: this.modelIdMappingOptions.modelIdMapping,
           } as ConstructorOptions<T>;
 
           const initOptions = {

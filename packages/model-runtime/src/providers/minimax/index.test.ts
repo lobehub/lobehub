@@ -159,7 +159,9 @@ describe('LobeMinimaxAI', () => {
           model: 'minimax-public',
         });
 
-        expect((chatSpy.mock.contexts[0] as any)._options.modelIdMapping).toEqual(modelIdMapping);
+        expect((chatSpy.mock.contexts[0] as any).modelIdMappingOptions.modelIdMapping).toEqual(
+          modelIdMapping,
+        );
       } finally {
         chatSpy.mockRestore();
       }
@@ -183,7 +185,9 @@ describe('LobeMinimaxAI', () => {
           model: 'minimax-public',
         });
 
-        expect((chatSpy.mock.contexts[0] as any)._options.modelIdMapping).toEqual(modelIdMapping);
+        expect((chatSpy.mock.contexts[0] as any).modelIdMappingOptions.modelIdMapping).toEqual(
+          modelIdMapping,
+        );
       } finally {
         chatSpy.mockRestore();
       }

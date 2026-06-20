@@ -465,23 +465,28 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
     protected _options: ConstructorOptions<T>;
 
     constructor(options: ClientOptions & Record<string, any> = {}) {
-      const apiKey = typeof options.apiKey === 'string' ? options.apiKey.trim() : options.apiKey;
+      const { modelIdMapping, ...inputOptions } = options as ClientOptions &
+        Record<string, any> &
+        ModelIdMappingOptions;
+      const apiKey =
+        typeof inputOptions.apiKey === 'string' ? inputOptions.apiKey.trim() : inputOptions.apiKey;
       const inputBaseURL =
-        typeof options.baseURL === 'string' ? options.baseURL.trim() : options.baseURL;
+        typeof inputOptions.baseURL === 'string'
+          ? inputOptions.baseURL.trim()
+          : inputOptions.baseURL;
       // Anthropic SDK appends `/v1/messages`; normalize gateway URLs that already
       // include that SDK-managed path segment before constructing any client.
       const baseURL = normalizeAnthropicCompatibleBaseURL(inputBaseURL);
       const defaultBaseURL = normalizeAnthropicCompatibleBaseURL(DEFAULT_BASE_URL);
 
       const resolvedOptions = {
-        ...options,
+        ...inputOptions,
         apiKey: apiKey || DEFAULT_API_KEY,
         baseURL: baseURL || defaultBaseURL,
       };
       const {
         apiKey: finalApiKey,
         baseURL: finalBaseURL = DEFAULT_BASE_URL,
-        modelIdMapping,
         ...rest
       } = resolvedOptions;
       this._options = resolvedOptions as ConstructorOptions<T>;
