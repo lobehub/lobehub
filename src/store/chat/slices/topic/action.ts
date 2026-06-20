@@ -668,7 +668,7 @@ export class ChatTopicActionImpl {
         {
           agentTopicsViewMap: {
             ...this.#get().agentTopicsViewMap,
-            [key]: { ...this.#get().agentTopicsViewMap[key]!, isLoadingMore: false },
+            [key]: { ...(this.#get().agentTopicsViewMap[key] || {}), isLoadingMore: false } as any,
           },
         },
         false,
@@ -755,7 +755,7 @@ export class ChatTopicActionImpl {
         {
           topicDataMap: {
             ...this.#get().topicDataMap,
-            [key]: { ...this.#get().topicDataMap[key]!, isLoadingMore: false },
+            [key]: { ...(this.#get().topicDataMap[key] || {}), isLoadingMore: false } as any,
           },
         },
         false,
