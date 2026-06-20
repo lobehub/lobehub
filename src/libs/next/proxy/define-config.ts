@@ -217,6 +217,9 @@ export function defineConfig() {
     '/market-auth-callback',
     // public share pages
     '/share(.*)',
+    // standalone verification report viewer — the run id in the URL is the
+    // read-only capability for viewing the report without a signed-in session.
+    '/verify/(.*)',
     // messenger verify-im — page itself handles unauth (in-page sign-in CTA)
     // and the random_id token is the actual capability check; no need for
     // session-protected access at the middleware layer.
