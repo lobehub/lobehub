@@ -85,7 +85,7 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   agent_self_iteration: isDev,
   agent_onboarding: isDev,
   auth_captcha: true,
-  cloud_promotion: true,
+  cloud_promotion: false,
   storage_overage: true,
   workspace: true,
 
