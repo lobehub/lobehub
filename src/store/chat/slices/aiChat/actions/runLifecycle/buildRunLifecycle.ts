@@ -15,17 +15,21 @@ import { messageMapKey } from '../../../../utils/messageMapKey';
 import { topicMapKey } from '../../../../utils/topicMapKey';
 import type { OperationStatus } from '../../../operation/types';
 import { mergeQueuedMessages, reconstructUploadFilesFromQueue } from '../../../operation/types';
-import type { AgentRunLifecycle, RunCompleteEvent, RunCompleteResult, RunScope } from './types';
+import type {
+  AgentRunLifecycle,
+  RunCompleteEvent,
+  RunCompleteResult,
+  RunParkedEvent,
+  RunScope,
+} from './types';
 
 /**
  * Normalize the runtime/operation status into the cross-runtime
- * `client.runtime.complete` signal status. Relocated verbatim from
- * `streamingExecutor` — kept identical for behavior preservation.
+ * `client.runtime.complete` signal status.
  *
- * NOTE: `waiting_for_human` is encoded as `cancelled` (a parked state mis-encoded as terminal) and
- * `waiting_for_async_tool` falls through to `undefined`. Both are parked, not
- * terminal — this mis-encoding is locked by characterization tests and fixed
- * when the parked/resumed signal is unified.
+ * Only TERMINAL states reach here: parked states (`waiting_for_human` /
+ * `waiting_for_async_tool`) are routed to `onRunParked` by the executor and
+ * never emit a completion signal — a run is not complete while it is parked.
  */
 const normalizeClientRuntimeCompleteStatus = (
   runtimeStatus: AgentState['status'] | undefined,
@@ -33,10 +37,38 @@ const normalizeClientRuntimeCompleteStatus = (
 ): 'cancelled' | 'completed' | 'failed' | undefined => {
   if (operationStatus === 'cancelled') return 'cancelled';
   if (operationStatus === 'failed') return 'failed';
-  if (runtimeStatus === 'waiting_for_human') return 'cancelled';
   if (operationStatus === 'completed') return 'completed';
   if (runtimeStatus === 'done') return 'completed';
   if (runtimeStatus === 'error' || runtimeStatus === 'interrupted') return 'failed';
+  return undefined;
+};
+
+/** The effective terminal disposition a run ended on, transport-agnostic. */
+type TerminalDisposition = 'cancelled' | 'failed' | 'success';
+
+/**
+ * Resolve the terminal disposition from EITHER the client's raw `runtimeStatus`
+ * (`AgentState['status']`) OR the normalized cross-runtime `status` that gateway
+ * / hetero supply. This lets `completeRun` drive the same store/UI side effects
+ * regardless of which transport reached the terminal boundary.
+ *
+ * `cancelled` / `undefined` deliberately do not complete the operation here — the
+ * client cancel path already moves the operation to its terminal state out of
+ * band; gateway/hetero cancel completion is handled when those transports are
+ * wired in.
+ */
+const resolveTerminalDisposition = (
+  event: Pick<RunCompleteEvent, 'runtimeStatus' | 'status'>,
+): TerminalDisposition | undefined => {
+  const { runtimeStatus, status } = event;
+  // Client drives off the raw runtime status.
+  if (runtimeStatus === 'done') return 'success';
+  if (runtimeStatus === 'error') return 'failed';
+  if (runtimeStatus === 'interrupted') return 'cancelled';
+  // Gateway / hetero drive off the normalized terminal status.
+  if (status === 'completed') return 'success';
+  if (status === 'failed') return 'failed';
+  if (status === 'cancelled') return 'cancelled';
   return undefined;
 };
 
@@ -88,11 +120,11 @@ const NOOP = async () => {};
 /**
  * Assemble the store/UI run-lifecycle hooks for a single run.
  *
- * Phase 1 (behavior-preserving): the implementations are the CLIENT
- * completion effects relocated verbatim from `streamingExecutor`, so wiring the
- * client executor to these hooks keeps the characterization net green. The
- * gateway/hetero adapters are wired in the follow-up transport unification, where the currently-missing
- * effects (title / notification / queue on gateway) are folded in.
+ * The hook bodies are the CLIENT completion effects (the fullest set today), to
+ * be reused as the shared implementation when gateway/hetero are wired in the
+ * follow-up entry convergence. `completeRun` handles only TERMINAL states;
+ * parked states route to `onRunParked` and fire no terminal side effects — a
+ * run is not complete while it is parked (see LOBE-10382).
  */
 export const buildRunLifecycle = (
   get: () => ChatStore,
@@ -104,6 +136,11 @@ export const buildRunLifecycle = (
   const contextKey = messageKey;
 
   const emitComplete = (operationId: string, runtimeStatus: AgentState['status'] | undefined) => {
+    // `client.runtime.complete` is a CLIENT-only source event (browser → server
+    // policy pipeline). Gateway / hetero emit their own `client.gateway.*` events
+    // at their transport boundaries, so the shared lifecycle must not emit it for
+    // them.
+    if (adapter.runtimeType !== 'client') return;
     const finalMessages = get().messagesMap[messageKey] || [];
     const assistantMessageId =
       findCompletionAssistantMessageId(finalMessages, parentMessageId, parentMessageType) ??
@@ -168,10 +205,25 @@ export const buildRunLifecycle = (
       void operationId;
     },
     beforeRunComplete: NOOP,
-    completeRun: async ({
-      operationId,
-      runtimeStatus,
-    }: RunCompleteEvent): Promise<RunCompleteResult> => {
+    completeRun: async (event: RunCompleteEvent): Promise<RunCompleteResult> => {
+      const { operationId, runtimeStatus } = event;
+      // Effective terminal disposition, resolved from the client `runtimeStatus`
+      // OR the normalized `status` gateway/hetero pass — so the same side effects
+      // fire regardless of which transport reached this boundary.
+      const disposition = resolveTerminalDisposition(event);
+
+      const completeSuccess = () => {
+        get().completeOperation(operationId);
+        const completedOp = get().operations[operationId];
+        if (completedOp?.context.agentId) {
+          get().markTopicUnread({
+            agentId: completedOp.context.agentId,
+            groupId: completedOp.context.groupId,
+            topicId: completedOp.context.topicId,
+          });
+        }
+      };
+
       // 1. afterCompletion callbacks — fire on ALL terminal states (tools that
       //    registered post-run actions: speak / broadcast / delegate).
       const operation = get().operations[operationId];
@@ -189,22 +241,12 @@ export const buildRunLifecycle = (
 
       // 2. On success with queued messages: drain, complete, and re-trigger a new
       //    sendMessage. Only drain on success — on error the queue is preserved.
-      if (runtimeStatus === 'done') {
+      if (disposition === 'success') {
         const remainingQueued = get().drainQueuedMessages(contextKey);
         if (remainingQueued.length > 0) {
           const merged = mergeQueuedMessages(remainingQueued);
 
-          get().completeOperation(operationId);
-
-          const completedOp = get().operations[operationId];
-          if (completedOp?.context.agentId) {
-            get().markTopicUnread({
-              agentId: completedOp.context.agentId,
-              groupId: completedOp.context.groupId,
-              topicId: completedOp.context.topicId,
-            });
-          }
-
+          completeSuccess();
           emitComplete(operationId, runtimeStatus);
 
           const execContext = { ...context };
@@ -236,33 +278,22 @@ export const buildRunLifecycle = (
         }
       }
 
-      // 3. Complete the operation based on the terminal state.
-      switch (runtimeStatus) {
-        case 'done': {
-          get().completeOperation(operationId);
-          const completedOp = get().operations[operationId];
-          if (completedOp?.context.agentId) {
-            get().markTopicUnread({
-              agentId: completedOp.context.agentId,
-              groupId: completedOp.context.groupId,
-              topicId: completedOp.context.topicId,
-            });
-          }
+      // 3. Complete the operation based on the terminal disposition.
+      switch (disposition) {
+        case 'success': {
+          completeSuccess();
           break;
         }
-        case 'error': {
+        case 'failed': {
           get().failOperation(operationId, {
             type: 'runtime_error',
             message: 'Agent runtime execution failed',
           });
           break;
         }
-        case 'waiting_for_human': {
-          // Parked for human intervention: complete this op so the loading UI
-          // clears; a new operation runs when the user approves/rejects.
-          get().completeOperation(operationId);
-          break;
-        }
+        // `cancelled` / `undefined`: the operation already reached its terminal
+        // state out of band (client cancel path). Parked states never reach
+        // `completeRun` — the executor routes them to `onRunParked`.
       }
 
       emitComplete(operationId, runtimeStatus);
@@ -270,7 +301,20 @@ export const buildRunLifecycle = (
       return { requeued: false };
     },
     onRunError: NOOP,
-    onRunParked: NOOP,
+    onRunParked: async ({ operationId, reason }: RunParkedEvent) => {
+      // Parked is NOT terminal: fire NO terminal side effects (title / queue
+      // drain / notification / markUnread) and emit NO `client.runtime.complete`
+      // — the run has not ended, it is waiting out-of-band.
+      //
+      // - `waiting_for_human`: complete this operation so the loading spinner
+      //   clears for the approval UI; a NEW operation resumes the run when the
+      //   user approves / rejects / submits / skips.
+      // - `waiting_for_async_tool`: keep the operation running until the async
+      //   tool / sub-agent result resolves and drives the run forward.
+      if (reason === 'waiting_for_human') {
+        get().completeOperation(operationId);
+      }
+    },
     onRunResumed: NOOP,
     onRunStarted: NOOP,
     onTerminalPersisted: NOOP,

@@ -575,6 +575,7 @@ export default {
   'userPanel.email': 'Email Support',
   'userPanel.feedback': 'Contact Us',
   'userPanel.help': 'Help Center',
+  'userPanel.inviteFriend': 'Invite a friend',
   'userPanel.moveGuide': 'The settings button has been moved here',
   'userPanel.plans': 'Subscription Plans',
   'userPanel.profile': 'Account',

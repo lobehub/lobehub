@@ -108,6 +108,52 @@ export class MessageCollector {
   }
 
   /**
+   * True when a TOOLLESS assistant is the head of a turn whose very next step
+   * calls tools — the narration the LLM streams in reply to the user
+   * immediately before its first tool call, with the tool-using step as its
+   * direct child. `collectAssistantChain` already walks correctly from such a
+   * head, but the flat-list dispatcher only opens an AssistantGroup when the
+   * message itself carries tools — so without this check the toolless head is
+   * emitted as its own standalone bubble and visually splits off from the group
+   * that starts at the first tool step (looks like a broken chain).
+   *
+   * Deliberately narrow:
+   * - Only a turn head (parent is a `user` message). A toolless step after a
+   *   tool result is a mid-chain answer handled elsewhere; folding those would
+   *   change unrelated grouping (and the contextTree path).
+   * - The immediate continuation must ALREADY carry tools. We intentionally do
+   *   not walk through intermediate toolless prose steps: `collectAssistantChain`
+   *   stops at the first toolless continuation (it only recurses through
+   *   tool-using steps), so classifying a multi-prose head would yield a
+   *   tools-less AssistantGroup and still leave the tool step split off. Such a
+   *   multi-prose prelude therefore falls back to standalone bubbles rather than
+   *   a malformed group.
+   * - A fork (>1 same-agent non-signal continuation) returns false so branch
+   *   handling stays untouched.
+   */
+  isToolChainHead(assistant: Message): boolean {
+    if (assistant.role !== 'assistant') return false;
+    if (assistant.tools && assistant.tools.length > 0) return false;
+
+    const parent = assistant.parentId ? this.messageMap.get(assistant.parentId) : undefined;
+    if (parent?.role !== 'user') return false;
+
+    // A toolless step owns no tool results, so its only continuation candidates
+    // are its own non-signal, same-agent assistant children (mirrors
+    // findFlatChainContinuation for that case).
+    const groupAgentId = assistant.agentId;
+    const candidates = (this.childrenMap.get(assistant.id) ?? [])
+      .map((id) => this.messageMap.get(id))
+      .filter(
+        (m): m is Message =>
+          !!m && m.role === 'assistant' && m.agentId === groupAgentId && !getMessageSignal(m),
+      );
+    if (candidates.length !== 1) return false; // no continuation, or a fork → defer to branch logic
+    const next = candidates[0];
+    return !!(next.tools && next.tools.length > 0); // only when the very next step calls tools
+  }
+
+  /**
    * Recursively collect the entire assistant chain
    * (assistant -> tools -> assistant -> tools -> ...)
    * Only collects messages from the SAME agent (matching agentId)
