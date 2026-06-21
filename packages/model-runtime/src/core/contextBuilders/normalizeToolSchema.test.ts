@@ -131,7 +131,7 @@ describe('normalizeToolsParameters', () => {
 
     const result = normalizeToolsParameters(tools)!;
 
-    expect((result[0].function.parameters as any).properties.sourceIds.items).toEqual({});
+    expect((result[0] as any).function.parameters.properties.sourceIds.items).toEqual({});
   });
 
   it('leaves tools without parameters untouched', () => {
