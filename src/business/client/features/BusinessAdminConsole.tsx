@@ -69,24 +69,41 @@ export default function BusinessAdminConsole() {
   const [personalUser, setPersonalUser] = useState('');
   const [personalAmount, setPersonalAmount] = useState('');
   const [workspaceAmount, setWorkspaceAmount] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
+
+  const runAction = async (actionId: string, action: () => Promise<void>, successText: string) => {
+    setBusyAction(actionId);
+    setNotice(null);
+
+    try {
+      await action();
+      setNotice({ text: successText, tone: 'success' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Операция не выполнена';
+      setNotice({ text: message, tone: 'error' });
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   const grantPersonal = async () => {
     const amount = Number(personalAmount);
     if (!personalUser.trim() || !Number.isFinite(amount) || amount <= 0) return;
-    setBusy(true);
-    try {
-      await lambdaClient.businessAdmin.grantPersonalCredits.mutate({
-        amount,
-        note: 'Выдано из super-admin console',
-        user: personalUser.trim(),
-      });
-      setPersonalAmount('');
-      setPersonalUser('');
-      await mutate();
-    } finally {
-      setBusy(false);
-    }
+    await runAction(
+      'grant-personal',
+      async () => {
+        await lambdaClient.businessAdmin.grantPersonalCredits.mutate({
+          amount,
+          note: 'Выдано из super-admin console',
+          user: personalUser.trim(),
+        });
+        setPersonalAmount('');
+        setPersonalUser('');
+        await mutate();
+      },
+      'Личные кредиты выданы',
+    );
   };
 
   if (error) {
@@ -96,6 +113,15 @@ export default function BusinessAdminConsole() {
         <Text type="secondary">
           Эта страница доступна только пользователям с ролью super_admin.
         </Text>
+      </Flexbox>
+    );
+  }
+
+  if (!data) {
+    return (
+      <Flexbox className={styles.card} gap={10} style={{ maxWidth: 720, padding: 24 }}>
+        <Text weight={700}>Загружаем Business Control Center…</Text>
+        <Text type="secondary">Проверяем права super-admin и свежие B2B метрики.</Text>
       </Flexbox>
     );
   }
@@ -114,6 +140,11 @@ export default function BusinessAdminConsole() {
           балансы и freeze при рисках. Здесь нет плейсхолдеров — все действия идут в реальные tRPC
           API и меняют production-сущности.
         </Text>
+        {notice && (
+          <Text type={notice.tone === 'error' ? 'danger' : 'success'} weight={600}>
+            {notice.text}
+          </Text>
+        )}
         <Flexbox horizontal className={styles.mobileStack} gap={12}>
           <Flexbox className={styles.card} flex={1} gap={6}>
             <Flexbox horizontal align="center" gap={8}>
@@ -152,7 +183,12 @@ export default function BusinessAdminConsole() {
             value={personalAmount}
             onChange={(e) => setPersonalAmount(e.target.value)}
           />
-          <Button loading={busy} type="primary" onClick={grantPersonal}>
+          <Button
+            disabled={busyAction !== null}
+            loading={busyAction === 'grant-personal'}
+            type="primary"
+            onClick={grantPersonal}
+          >
             Выдать
           </Button>
         </Flexbox>
@@ -164,7 +200,8 @@ export default function BusinessAdminConsole() {
             <UsersRound size={20} />
             <Text weight={700}>Последние пользователи</Text>
           </Flexbox>
-          {data?.users.map((user) => (
+          {data.users.length === 0 && <Text className={styles.muted}>Пользователей пока нет.</Text>}
+          {data.users.map((user) => (
             <Flexbox className={styles.item} gap={8} key={user.id}>
               <Flexbox horizontal className={styles.mobileStack} gap={8} justify="space-between">
                 <Flexbox gap={2}>
@@ -191,7 +228,10 @@ export default function BusinessAdminConsole() {
             <Building2 size={20} />
             <Text weight={700}>Workspace управление</Text>
           </Flexbox>
-          {data?.workspaces.map((workspace) => (
+          {data.workspaces.length === 0 && (
+            <Text className={styles.muted}>Workspace пока нет.</Text>
+          )}
+          {data.workspaces.map((workspace) => (
             <Flexbox className={styles.item} gap={10} key={workspace.id}>
               <Flexbox horizontal className={styles.mobileStack} gap={8} justify="space-between">
                 <Flexbox gap={2}>
@@ -214,11 +254,18 @@ export default function BusinessAdminConsole() {
                   style={{ width: 150 }}
                   value={workspace.plan}
                   onChange={async (plan) => {
-                    await lambdaClient.businessAdmin.setWorkspacePlan.mutate({
-                      plan: plan as 'starter' | 'business' | 'enterprise',
-                      workspaceId: workspace.id,
-                    });
-                    await mutate();
+                    const actionId = `plan:${workspace.id}`;
+                    await runAction(
+                      actionId,
+                      async () => {
+                        await lambdaClient.businessAdmin.setWorkspacePlan.mutate({
+                          plan: plan as 'starter' | 'business' | 'enterprise',
+                          workspaceId: workspace.id,
+                        });
+                        await mutate();
+                      },
+                      `Тариф workspace ${workspace.name} обновлён`,
+                    );
                   }}
                 />
                 <Input
@@ -230,30 +277,55 @@ export default function BusinessAdminConsole() {
                   }
                 />
                 <Button
+                  disabled={busyAction !== null}
                   icon={<Gauge size={15} />}
+                  loading={busyAction === `topup:${workspace.id}`}
                   onClick={async () => {
                     const amount = Number(workspaceAmount[workspace.id]);
                     if (!Number.isFinite(amount) || amount <= 0) return;
-                    await lambdaClient.businessAdmin.topUpWorkspaceCredits.mutate({
-                      amount,
-                      note: 'Пополнение из super-admin console',
-                      workspaceId: workspace.id,
-                    });
-                    setWorkspaceAmount((prev) => ({ ...prev, [workspace.id]: '' }));
-                    await mutate();
+                    if (
+                      !window.confirm(
+                        `Пополнить ${workspace.name} на ${amount.toLocaleString('ru-RU')} кредитов?`,
+                      )
+                    ) {
+                      return;
+                    }
+                    await runAction(
+                      `topup:${workspace.id}`,
+                      async () => {
+                        await lambdaClient.businessAdmin.topUpWorkspaceCredits.mutate({
+                          amount,
+                          note: 'Пополнение из super-admin console',
+                          workspaceId: workspace.id,
+                        });
+                        setWorkspaceAmount((prev) => ({ ...prev, [workspace.id]: '' }));
+                        await mutate();
+                      },
+                      `Баланс workspace ${workspace.name} пополнен`,
+                    );
                   }}
                 >
                   Пополнить
                 </Button>
                 <Button
+                  disabled={busyAction !== null}
                   icon={<Snowflake size={15} />}
+                  loading={busyAction === `freeze:${workspace.id}`}
                   onClick={async () => {
-                    await lambdaClient.businessAdmin.setWorkspaceFrozen.mutate({
-                      frozen: !workspace.frozen,
-                      reason: !workspace.frozen ? 'Заморожено super-admin' : undefined,
-                      workspaceId: workspace.id,
-                    });
-                    await mutate();
+                    const verb = workspace.frozen ? 'разморозить' : 'заморозить';
+                    if (!window.confirm(`Точно ${verb} workspace ${workspace.name}?`)) return;
+                    await runAction(
+                      `freeze:${workspace.id}`,
+                      async () => {
+                        await lambdaClient.businessAdmin.setWorkspaceFrozen.mutate({
+                          frozen: !workspace.frozen,
+                          reason: !workspace.frozen ? 'Заморожено super-admin' : undefined,
+                          workspaceId: workspace.id,
+                        });
+                        await mutate();
+                      },
+                      `Workspace ${workspace.name} ${workspace.frozen ? 'разморожен' : 'заморожен'}`,
+                    );
                   }}
                 >
                   {workspace.frozen ? 'Разморозить' : 'Freeze'}

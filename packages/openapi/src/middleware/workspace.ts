@@ -11,7 +11,16 @@ const log = debug('lobe-hono:workspace-middleware');
 export const OPENAPI_WORKSPACE_HEADER = 'X-Workspace-Id';
 
 export const workspaceAuthMiddleware = async (c: Context, next: Next) => {
-  const workspaceId = c.req.header(OPENAPI_WORKSPACE_HEADER)?.trim();
+  const headerWorkspaceId = c.req.header(OPENAPI_WORKSPACE_HEADER)?.trim();
+  const apiKeyWorkspaceId = (c.get('workspaceId') as string | null | undefined)?.trim();
+
+  if (headerWorkspaceId && apiKeyWorkspaceId && headerWorkspaceId !== apiKeyWorkspaceId) {
+    throw new HTTPException(403, {
+      message: 'Workspace header does not match the API key workspace',
+    });
+  }
+
+  const workspaceId = headerWorkspaceId || apiKeyWorkspaceId;
 
   if (!workspaceId) {
     c.set('workspaceId', undefined);
@@ -28,13 +37,21 @@ export const workspaceAuthMiddleware = async (c: Context, next: Next) => {
 
   const serverDB = await getServerDB();
   const workspace = await serverDB.query.workspaces.findFirst({
-    columns: { id: true },
+    columns: { frozen: true, frozenReason: true, id: true },
     where: eq(workspaces.id, workspaceId),
   });
 
   if (!workspace) {
     throw new HTTPException(404, {
       message: 'Workspace not found',
+    });
+  }
+
+  if (workspace.frozen) {
+    throw new HTTPException(403, {
+      message: workspace.frozenReason
+        ? `Workspace is frozen: ${workspace.frozenReason}`
+        : 'Workspace is frozen',
     });
   }
 

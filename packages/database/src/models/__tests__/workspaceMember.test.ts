@@ -182,6 +182,28 @@ describe('WorkspaceMemberModel', () => {
         .where(eq(workspaceMembers.workspaceId, otherWorkspaceId));
       expect(row.deletedAt).toBeNull();
     });
+
+    it('rejects removing the primary owner', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ role: 'owner', userId: inviterId, workspaceId });
+
+      await expect(model.removeMember(workspaceId, inviterId)).rejects.toThrow(
+        'Cannot remove the primary owner',
+      );
+    });
+
+    it('rejects removing the last owner', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await serverDB
+        .update(workspaces)
+        .set({ primaryOwnerId: memberId })
+        .where(eq(workspaces.id, workspaceId));
+      await model.addMember({ role: 'owner', userId: inviterId, workspaceId });
+
+      await expect(model.removeMember(workspaceId, inviterId)).rejects.toThrow(
+        'Cannot remove the last owner',
+      );
+    });
   });
 
   describe('updateMemberRole', () => {
@@ -207,6 +229,28 @@ describe('WorkspaceMemberModel', () => {
         .from(workspaceMembers)
         .where(eq(workspaceMembers.userId, memberId));
       expect(row.role).toBe('member');
+    });
+
+    it('rejects demoting the primary owner', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await model.addMember({ role: 'owner', userId: inviterId, workspaceId });
+
+      await expect(model.updateMemberRole(workspaceId, inviterId, 'member')).rejects.toThrow(
+        'Cannot demote the primary owner',
+      );
+    });
+
+    it('rejects demoting the last owner', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      await serverDB
+        .update(workspaces)
+        .set({ primaryOwnerId: memberId })
+        .where(eq(workspaces.id, workspaceId));
+      await model.addMember({ role: 'owner', userId: inviterId, workspaceId });
+
+      await expect(model.updateMemberRole(workspaceId, inviterId, 'member')).rejects.toThrow(
+        'Cannot demote the last owner',
+      );
     });
   });
 
@@ -271,7 +315,7 @@ describe('WorkspaceMemberModel', () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
       const pending = await model.createInvitation({ workspaceId });
       const accepted = await model.createInvitation({ workspaceId });
-      await model.updateInvitationStatus(accepted.id, 'accepted');
+      await model.updateInvitationStatus(accepted.id, 'accepted', workspaceId);
 
       const rows = await model.listPendingInvitations(workspaceId);
 
@@ -303,13 +347,26 @@ describe('WorkspaceMemberModel', () => {
       const model = new WorkspaceMemberModel(serverDB, inviterId);
       const created = await model.createInvitation({ workspaceId });
 
-      await model.revokeInvitation(created.id);
+      await model.revokeInvitation(created.id, workspaceId);
 
       const [row] = await serverDB
         .select()
         .from(workspaceInvitations)
         .where(eq(workspaceInvitations.id, created.id));
       expect(row.status).toBe('revoked');
+    });
+
+    it('does not revoke an invitation from another workspace with the same id input', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      const created = await model.createInvitation({ workspaceId });
+
+      await model.revokeInvitation(created.id, otherWorkspaceId);
+
+      const [row] = await serverDB
+        .select()
+        .from(workspaceInvitations)
+        .where(eq(workspaceInvitations.id, created.id));
+      expect(row.status).toBe('pending');
     });
   });
 
@@ -320,11 +377,21 @@ describe('WorkspaceMemberModel', () => {
         const model = new WorkspaceMemberModel(serverDB, inviterId);
         const created = await model.createInvitation({ workspaceId });
 
-        await model.updateInvitationStatus(created.id, status);
+        await model.updateInvitationStatus(created.id, status, workspaceId);
 
         const found = await model.findInvitationByToken(created.token);
         expect(found?.status).toBe(status);
       },
     );
+
+    it('does not update an invitation from another workspace with the same id input', async () => {
+      const model = new WorkspaceMemberModel(serverDB, inviterId);
+      const created = await model.createInvitation({ workspaceId });
+
+      await model.updateInvitationStatus(created.id, 'accepted', otherWorkspaceId);
+
+      const found = await model.findInvitationByToken(created.token);
+      expect(found?.status).toBe('pending');
+    });
   });
 });

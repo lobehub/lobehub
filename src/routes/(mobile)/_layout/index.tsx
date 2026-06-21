@@ -11,28 +11,16 @@ import { RouteMetaBridge } from '@/features/RouteMeta';
 import dynamic from '@/libs/next/dynamic';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
+import { shouldShowMobileNav } from './mobileNavigation';
 import NavBar from './NavBar';
 
 const CloudBanner = dynamic(() => import('@/features/AlertBanner/CloudBanner'));
-const MOBILE_NAV_ROUTES = new Set([
-  '/',
-  '/community',
-  '/community/agent',
-  '/community/mcp',
-  '/community/plugin',
-  '/community/model',
-  '/community/provider',
-  '/me',
-]);
 
 const MobileMainLayout: FC = () => {
   const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);
   const location = useLocation();
   const activeSlug = useActiveWorkspaceSlug();
-  const pathname = location.pathname;
-  const showNav =
-    MOBILE_NAV_ROUTES.has(pathname) ||
-    (!!activeSlug && (pathname === `/${activeSlug}` || pathname === `/${activeSlug}/`));
+  const showNav = shouldShowMobileNav(location.pathname, activeSlug ?? undefined);
   return (
     <WorkspaceContextSlot>
       <RouteMetaBridge />

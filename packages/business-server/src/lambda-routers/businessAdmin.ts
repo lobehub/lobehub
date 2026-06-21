@@ -218,6 +218,7 @@ export const businessAdminRouter = router({
             actorUserId: ctx.userId,
             amount: input.amount,
             at: new Date().toISOString(),
+            balanceAfter: balance,
             note: input.note,
             type: 'admin_top_up',
           },

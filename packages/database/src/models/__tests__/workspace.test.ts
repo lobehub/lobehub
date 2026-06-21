@@ -350,6 +350,26 @@ describe('WorkspaceModel', () => {
       ).rejects.toThrow('Cannot demote the primary owner');
     });
 
+    it('rejects demoting the last owner', async () => {
+      const workspaceId = await createWorkspace();
+      await serverDB
+        .update(workspaces)
+        .set({ primaryOwnerId: memberId })
+        .where(eq(workspaces.id, workspaceId));
+      await serverDB
+        .update(workspaceMembers)
+        .set({ role: 'member' })
+        .where(eq(workspaceMembers.userId, memberId));
+      await serverDB
+        .update(workspaceMembers)
+        .set({ deletedAt: new Date() })
+        .where(eq(workspaceMembers.userId, ownerId));
+
+      await expect(
+        new WorkspaceModel(serverDB, secondOwnerId).demoteFromOwner(workspaceId, secondOwnerId),
+      ).rejects.toThrow('Cannot demote the last owner');
+    });
+
     it('rejects when the actor is not an owner', async () => {
       const workspaceId = await createWorkspace();
       await expect(
