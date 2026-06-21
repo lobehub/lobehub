@@ -1,4 +1,4 @@
-import type { TaskDetailData } from '@lobechat/types';
+import type { TaskDetailData, TaskVerifyConfig } from '@lobechat/types';
 
 import type { TaskStoreState } from '../initialState';
 
@@ -60,6 +60,9 @@ const activeTaskScheduleMaxExecutions = (s: TaskStoreState) =>
 
 const activeTaskCheckpoint = (s: TaskStoreState) => activeTaskDetail(s)?.checkpoint;
 
+const activeTaskVerifyConfig = (s: TaskStoreState): TaskVerifyConfig | undefined =>
+  (activeTaskDetail(s)?.config as { verify?: TaskVerifyConfig } | undefined)?.verify;
+
 const activeTaskWorkspace = (s: TaskStoreState) => activeTaskDetail(s)?.workspace ?? [];
 
 const activeTaskWorkspaceId = (s: TaskStoreState) => activeTaskDetail(s)?.workspaceId;
@@ -113,6 +116,7 @@ export const taskDetailSelectors = {
   activeTaskStatus,
   activeTaskSubtasks,
   activeTaskTopicCount,
+  activeTaskVerifyConfig,
   activeTaskWorkspace,
   activeTaskWorkspaceId,
   activeTopicDrawerTopicId,

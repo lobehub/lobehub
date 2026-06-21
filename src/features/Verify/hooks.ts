@@ -38,3 +38,17 @@ export const useRubric = (rubricId: string | null | undefined) =>
   useClientDataSWR(rubricId ? verifyKeys.rubric(rubricId) : null, () =>
     verifyService.getRubric(rubricId!),
   );
+
+/** The workspace's reusable rubric templates (delivery-standard groups). */
+export const useRubrics = () =>
+  useClientDataSWR(verifyKeys.rubrics(), () => verifyService.listRubrics());
+
+/** The workspace's reusable atomic criteria. */
+export const useCriteria = () =>
+  useClientDataSWR(verifyKeys.criteria(), () => verifyService.listCriteria());
+
+/** The criteria a rubric groups, in rubric order. Pass null to skip. */
+export const useRubricCriteria = (rubricId: string | null | undefined) =>
+  useClientDataSWR(rubricId ? verifyKeys.rubricCriteria(rubricId) : null, () =>
+    verifyService.getRubricCriteria(rubricId!),
+  );
