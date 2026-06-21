@@ -17,11 +17,11 @@ import { AgentRuntimeErrorType } from '@lobechat/types';
 import { isRecord, pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 
 import { messageService } from '@/services/message';
-import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/agentSignalBridge';
+import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import type {
   AgentRunLifecycle,
   RunScope,
-} from '@/store/chat/slices/agentRun/actions/runLifecycle/types';
+} from '@/store/chat/slices/agentRun/actions/lifecycle/types';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 

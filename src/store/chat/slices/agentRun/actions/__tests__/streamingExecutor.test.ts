@@ -91,7 +91,7 @@ const createMockRuntimeState = (operationId: string, status: AgentState['status'
 
 // Keep zustand mock as it's needed globally
 vi.mock('zustand/traditional');
-vi.mock('@/store/chat/slices/agentRun/actions/agentSignalBridge', () => ({
+vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge', () => ({
   emitClientAgentSignalSourceEvent: agentSignalBridgeMock.emitClientAgentSignalSourceEvent,
 }));
 // Desktop notification gating: isDesktop defaults to false (web/test env), matching

@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as ConstVersion from '@/const/version';
 import { aiAgentService } from '@/services/aiAgent';
 
-import type { GatewayConnection } from '../gateway';
-import { GatewayActionImpl } from '../gateway';
+import type { GatewayConnection } from '../transports/gateway/gateway';
+import { GatewayActionImpl } from '../transports/gateway/gateway';
 
 vi.mock('@/services/aiAgent', () => ({
   aiAgentService: {

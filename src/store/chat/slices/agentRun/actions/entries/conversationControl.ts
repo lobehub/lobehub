@@ -9,21 +9,21 @@ import {
 
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
+import { displayMessageSelectors } from '@/store/chat/selectors';
 import {
   type AgentRuntimeType,
   selectRuntimeType,
-} from '@/store/chat/slices/agentRun/actions/agentDispatcher';
+} from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
+import { type OptimisticUpdateContext } from '@/store/chat/slices/message/actions/optimisticUpdate';
+import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { type ChatStore } from '@/store/chat/store';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { type StoreSetter } from '@/store/types';
 
-import { displayMessageSelectors } from '../../../selectors';
-import { messageMapKey } from '../../../utils/messageMapKey';
-import { type OptimisticUpdateContext } from '../../message/actions/optimisticUpdate';
-import { dbMessageSelectors } from '../../message/selectors';
-import { buildRunLifecycle } from './runLifecycle/buildRunLifecycle';
-import { type RunScope } from './runLifecycle/types';
+import { buildRunLifecycle } from '../lifecycle/buildRunLifecycle';
+import { type RunScope } from '../lifecycle/types';
 
 /**
  * Actions for controlling conversation operations like cancellation and error handling

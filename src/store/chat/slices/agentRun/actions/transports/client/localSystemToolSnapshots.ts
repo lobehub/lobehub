@@ -6,7 +6,7 @@ import { nanoid } from 'nanoid';
 
 import { localFileService } from '@/services/electron/localFileService';
 
-import type { ParsedLocalFileReference } from './commandBus/parseCommands';
+import type { ParsedLocalFileReference } from '../../entries/commandBus/parseCommands';
 
 const DEFAULT_DIRECTORY_LIMIT = 100;
 

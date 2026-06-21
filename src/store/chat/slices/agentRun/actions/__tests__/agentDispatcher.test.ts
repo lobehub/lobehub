@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { selectRuntimeType } from '../agentDispatcher';
+import { selectRuntimeType } from '../dispatch/agentDispatcher';
 
 const heteroProvider = { command: 'claude', type: 'claude-code' as const };
 const remoteHeteroProvider = { type: 'openclaw' as const };

@@ -3,20 +3,20 @@ import { type StateCreator } from 'zustand/vanilla';
 import { type ChatStore } from '@/store/chat/store';
 import { flattenActions } from '@/store/utils/flattenActions';
 
-import { type ClientToolExecutionAction } from './clientToolExecution';
-import { ClientToolExecutionActionImpl } from './clientToolExecution';
-import { type ConversationControlAction } from './conversationControl';
-import { ConversationControlActionImpl } from './conversationControl';
-import { type ConversationLifecycleAction } from './conversationLifecycle';
-import { ConversationLifecycleActionImpl } from './conversationLifecycle';
-import { type GatewayAction } from './gateway';
-import { GatewayActionImpl } from './gateway';
-import { type ChatMemoryAction } from './memory';
-import { ChatMemoryActionImpl } from './memory';
-import { type StreamingExecutorAction } from './streamingExecutor';
-import { StreamingExecutorActionImpl } from './streamingExecutor';
-import { type StreamingStatesAction } from './streamingStates';
-import { StreamingStatesActionImpl } from './streamingStates';
+import { type ConversationControlAction } from './entries/conversationControl';
+import { ConversationControlActionImpl } from './entries/conversationControl';
+import { type ConversationLifecycleAction } from './entries/conversationLifecycle';
+import { ConversationLifecycleActionImpl } from './entries/conversationLifecycle';
+import { type ChatMemoryAction } from './state/memory';
+import { ChatMemoryActionImpl } from './state/memory';
+import { type StreamingStatesAction } from './state/streamingStates';
+import { StreamingStatesActionImpl } from './state/streamingStates';
+import { type ClientToolExecutionAction } from './transports/client/clientToolExecution';
+import { ClientToolExecutionActionImpl } from './transports/client/clientToolExecution';
+import { type StreamingExecutorAction } from './transports/client/streamingExecutor';
+import { StreamingExecutorActionImpl } from './transports/client/streamingExecutor';
+import { type GatewayAction } from './transports/gateway/gateway';
+import { GatewayActionImpl } from './transports/gateway/gateway';
 
 export type ChatAgentRunAction = ChatMemoryAction &
   ClientToolExecutionAction &

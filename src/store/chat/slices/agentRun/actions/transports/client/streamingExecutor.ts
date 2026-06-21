@@ -39,9 +39,16 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra/store';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
-import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/agentSignalBridge';
+import { topicSelectors } from '@/store/chat/selectors';
+import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
+import {
+  selectActivatedSkillsFromMessages,
+  selectActivatedToolIdsFromMessages,
+  selectTodosFromMessages,
+} from '@/store/chat/slices/message/selectors/dbMessage';
 import { type ChatStore } from '@/store/chat/store';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getElectronStoreState } from '@/store/electron';
 import { getServerConfigStoreState, serverConfigSelectors } from '@/store/serverConfig';
 import { getTaskStoreState } from '@/store/task';
@@ -50,15 +57,8 @@ import { type StoreSetter } from '@/store/types';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 import { getUserStoreState } from '@/store/user/store';
 
-import { topicSelectors } from '../../../selectors';
-import { messageMapKey } from '../../../utils/messageMapKey';
-import {
-  selectActivatedSkillsFromMessages,
-  selectActivatedToolIdsFromMessages,
-  selectTodosFromMessages,
-} from '../../message/selectors/dbMessage';
-import { buildRunLifecycle } from './runLifecycle/buildRunLifecycle';
-import type { RunParkedReason, RunScope } from './runLifecycle/types';
+import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
+import type { RunParkedReason, RunScope } from '../../lifecycle/types';
 
 const log = debug('lobe-store:streaming-executor');
 

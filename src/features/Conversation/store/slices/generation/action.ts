@@ -15,13 +15,13 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
-import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/agentDispatcher';
+import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import {
   parseMentionedAgentsFromEditorData,
   parseSelectedSkillsFromEditorData,
   parseSelectedToolsFromEditorData,
-} from '@/store/chat/slices/agentRun/actions/commandBus';
-import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/heteroResume';
+} from '@/store/chat/slices/agentRun/actions/entries/commandBus';
+import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import {
@@ -156,7 +156,7 @@ const runHeterogeneousFromExistingMessage = async (
 
   try {
     const { executeHeterogeneousAgent } =
-      await import('@/store/chat/slices/agentRun/actions/heterogeneousAgentExecutor');
+      await import('@/store/chat/slices/agentRun/actions/transports/hetero/heterogeneousAgentExecutor');
     await executeHeterogeneousAgent(() => useChatStore.getState(), {
       assistantMessageId: assistantMsg.id,
       context,

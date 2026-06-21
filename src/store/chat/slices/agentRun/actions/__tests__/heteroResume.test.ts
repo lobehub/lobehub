@@ -1,7 +1,7 @@
 import type { ChatTopicMetadata } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { resolveHeteroResume } from '../heteroResume';
+import { resolveHeteroResume } from '../transports/hetero/heteroResume';
 
 describe('resolveHeteroResume', () => {
   it('resumes when saved cwd matches current cwd', () => {

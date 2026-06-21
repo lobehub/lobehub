@@ -2,11 +2,11 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageService } from '@/services/message';
-import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/agentSignalBridge';
+import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import { notifyDesktopHumanApprovalRequired } from '@/store/chat/utils/desktopNotification';
 
-import { createGatewayEventHandler } from '../gatewayEventHandler';
-import { buildRunLifecycle } from '../runLifecycle/buildRunLifecycle';
+import { buildRunLifecycle } from '../lifecycle/buildRunLifecycle';
+import { createGatewayEventHandler } from '../transports/gateway/gatewayEventHandler';
 
 vi.mock('@/services/message', () => ({
   messageService: {
@@ -17,7 +17,7 @@ vi.mock('@/services/message', () => ({
 vi.mock('@/store/chat/utils/desktopNotification', () => ({
   notifyDesktopHumanApprovalRequired: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('@/store/chat/slices/agentRun/actions/agentSignalBridge', () => ({
+vi.mock('@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge', () => ({
   emitClientAgentSignalSourceEvent: vi.fn().mockResolvedValue(undefined),
 }));
 

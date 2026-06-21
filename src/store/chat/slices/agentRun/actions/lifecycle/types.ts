@@ -1,7 +1,7 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import type { ConversationContext, UIChatMessage } from '@lobechat/types';
 
-import type { AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/agentDispatcher';
+import type { AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
 import type { OperationStatus } from '@/store/chat/slices/operation/types';
 
 /**

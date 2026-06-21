@@ -38,7 +38,7 @@ vi.mock('@lobechat/const', async (importOriginal) => {
   };
 });
 
-vi.mock('../heterogeneousAgentExecutor', () => ({
+vi.mock('../transports/hetero/heterogeneousAgentExecutor', () => ({
   executeHeterogeneousAgent: (...args: any[]) => executeHeterogeneousAgentMock(...args),
 }));
 

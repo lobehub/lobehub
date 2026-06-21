@@ -20,9 +20,9 @@ import type { StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 
+import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
+import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from './gatewayEventHandler';
-import { buildRunLifecycle } from './runLifecycle/buildRunLifecycle';
-import type { RunScope } from './runLifecycle/types';
 
 /**
  * When the agent runs against the local machine, resolve this desktop's

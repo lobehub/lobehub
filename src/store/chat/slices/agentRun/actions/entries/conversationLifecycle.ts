@@ -37,11 +37,17 @@ import {
   chatConfigByIdSelectors,
 } from '@/store/agent/selectors';
 import { agentGroupByIdSelectors, getChatGroupStoreState } from '@/store/agentGroup';
-import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/agentDispatcher';
-import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/heteroResume';
-import { dispatchNonHeteroSubAgent } from '@/store/chat/slices/agentRun/actions/nonHeteroSubAgentDispatcher';
-import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/runLifecycle/buildRunLifecycle';
-import type { RunScope } from '@/store/chat/slices/agentRun/actions/runLifecycle/types';
+import {
+  dbMessageSelectors,
+  displayMessageSelectors,
+  topicSelectors,
+} from '@/store/chat/selectors';
+import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
+import { dispatchNonHeteroSubAgent } from '@/store/chat/slices/agentRun/actions/dispatch/nonHeteroSubAgentDispatcher';
+import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycle/buildRunLifecycle';
+import type { RunScope } from '@/store/chat/slices/agentRun/actions/lifecycle/types';
+import { resolveHeteroResume } from '@/store/chat/slices/agentRun/actions/transports/hetero/heteroResume';
+import { AI_RUNTIME_OPERATION_TYPES, type QueuedFile } from '@/store/chat/slices/operation/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 import { type ChatStore } from '@/store/chat/store';
@@ -54,6 +60,8 @@ import {
   getCompressionCandidateMessageIds,
   hasRunningCompressionOperation,
 } from '@/store/chat/utils/compression';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { getElectronStoreState } from '@/store/electron';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -62,10 +70,7 @@ import { type StoreSetter } from '@/store/types';
 import { useUserMemoryStore } from '@/store/userMemory';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
-import { dbMessageSelectors, displayMessageSelectors, topicSelectors } from '../../../selectors';
-import { messageMapKey } from '../../../utils/messageMapKey';
-import { topicMapKey } from '../../../utils/topicMapKey';
-import { AI_RUNTIME_OPERATION_TYPES, type QueuedFile } from '../../operation/types';
+import { materializeLocalSystemToolSnapshots } from '../transports/client/localSystemToolSnapshots';
 import type { CommandSendOverrides, SingleAgentMentionDirectRoute } from './commandBus';
 import {
   hasNonActionContent,
@@ -78,7 +83,6 @@ import {
   parseSingleAgentMentionDirectRoute,
   processCommands,
 } from './commandBus';
-import { materializeLocalSystemToolSnapshots } from './localSystemToolSnapshots';
 /**
  * Extended params for sendMessage with context
  */
@@ -699,7 +703,8 @@ export class ConversationLifecycleActionImpl {
       this.#get().associateMessageWithOperation(heteroData.assistantMessageId, heteroOpId);
 
       try {
-        const { executeHeterogeneousAgent } = await import('./heterogeneousAgentExecutor');
+        const { executeHeterogeneousAgent } =
+          await import('../transports/hetero/heterogeneousAgentExecutor');
         // Extract imageList from the persisted user message (chatUploadFileList
         // may already be cleared by this point, so we read from DB instead)
         const userMsg = heteroData.messages.find((m: any) => m.id === heteroData.userMessageId);

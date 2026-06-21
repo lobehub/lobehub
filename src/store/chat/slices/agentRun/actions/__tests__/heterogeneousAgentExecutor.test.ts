@@ -20,9 +20,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/store/chat/store';
 
-import { createGatewayEventHandler } from '../gatewayEventHandler';
-import type { HeterogeneousAgentExecutorParams } from '../heterogeneousAgentExecutor';
-import { executeHeterogeneousAgent } from '../heterogeneousAgentExecutor';
+import { createGatewayEventHandler } from '../transports/gateway/gatewayEventHandler';
+import type { HeterogeneousAgentExecutorParams } from '../transports/hetero/heterogeneousAgentExecutor';
+import { executeHeterogeneousAgent } from '../transports/hetero/heterogeneousAgentExecutor';
 
 // ─── Mocks ───
 
@@ -69,7 +69,7 @@ vi.mock('@/services/electron/heterogeneousAgent', () => ({
 }));
 
 // Gateway event handler — we spy on it but let it run (it calls getMessages)
-vi.mock('../gatewayEventHandler', () => ({
+vi.mock('../transports/gateway/gatewayEventHandler', () => ({
   createGatewayEventHandler: vi.fn(() => vi.fn()),
 }));
 

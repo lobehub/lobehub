@@ -1,7 +1,7 @@
 import type { ToolExecuteData } from '@lobechat/agent-gateway-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ClientToolExecutionActionImpl } from '../clientToolExecution';
+import { ClientToolExecutionActionImpl } from '../transports/client/clientToolExecution';
 
 // ─── Hoisted mocks ───
 

@@ -34,14 +34,17 @@ import { message as antdMessage } from '@/components/AntdStaticMethods';
 import { heterogeneousAgentService } from '@/services/electron/heterogeneousAgent';
 import { messageService } from '@/services/message';
 import { threadService } from '@/services/thread';
+import {
+  mergeQueuedMessages,
+  reconstructUploadFilesFromQueue,
+} from '@/store/chat/slices/operation/types';
 import { type ChatStore, useChatStore } from '@/store/chat/store';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
-import { messageMapKey } from '../../../utils/messageMapKey';
-import { mergeQueuedMessages, reconstructUploadFilesFromQueue } from '../../operation/types';
-import { createGatewayEventHandler } from './gatewayEventHandler';
-import { buildRunLifecycle } from './runLifecycle/buildRunLifecycle';
-import type { RunScope } from './runLifecycle/types';
+import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
+import type { RunScope } from '../../lifecycle/types';
+import { createGatewayEventHandler } from '../gateway/gatewayEventHandler';
 
 /** Mirrors `idGenerator('threads', 16)` on the server so sync-allocated ids have the same shape. */
 const generateThreadId = () => `thd_${createNanoId(16)()}`;
