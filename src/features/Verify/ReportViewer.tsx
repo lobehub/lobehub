@@ -1,10 +1,11 @@
 'use client';
 
+import { BRANDING_NAME } from '@lobechat/business-const';
 import type { VerifyRunContext } from '@lobechat/types';
 import { Block, Flexbox, Icon, Markdown, Tag, Text } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { Check, CircleHelp, X } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import { useParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
@@ -21,10 +22,16 @@ const useStyles = createStyles(({ css, token }) => ({
     padding: 24px;
   `,
   evidenceImg: css`
+    align-self: flex-start;
+
+    width: auto;
     max-width: 100%;
+    height: auto;
     max-height: 360px;
     border: 1px solid ${token.colorBorderSecondary};
     border-radius: ${token.borderRadiusLG}px;
+
+    object-fit: contain;
   `,
   evidenceLink: css`
     display: inline-flex;
@@ -68,19 +75,16 @@ const useStyles = createStyles(({ css, token }) => ({
     background: ${token.colorFillQuaternary};
   `,
   evidenceVideo: css`
+    align-self: flex-start;
+
+    width: auto;
     max-width: 100%;
+    height: auto;
     max-height: 360px;
     border: 1px solid ${token.colorBorderSecondary};
     border-radius: ${token.borderRadiusLG}px;
-  `,
-  conclusion: css`
-    padding-block: 10px;
-    padding-inline: 14px;
-    border: 1px solid ${token.colorBorderSecondary};
-    border-inline-start: 3px solid ${token.colorInfo};
-    border-radius: ${token.borderRadiusLG}px;
 
-    background: ${token.colorInfoBg};
+    object-fit: contain;
   `,
   resultCard: css`
     padding-block: 10px;
@@ -246,6 +250,13 @@ const ReportViewer = memo(() => {
   const verifyRunId = runId ?? null;
   const { data, isLoading } = useVerifyReportBundle(verifyRunId);
 
+  // Standalone page sits outside the main layout, so RouteMetaBridge never runs
+  // for it — set the document (browser tab) title to the report title ourselves.
+  const pageTitle = data?.run.title || 'Verification report';
+  useEffect(() => {
+    document.title = `${pageTitle} · ${BRANDING_NAME}`;
+  }, [pageTitle]);
+
   if (!verifyRunId)
     return <Text type="danger">Missing report id (/verify/&lt;verifyRunId&gt;).</Text>;
   if (isLoading) return <Loading debugId="verify-report-viewer" />;
@@ -257,19 +268,12 @@ const ReportViewer = memo(() => {
     <Flexbox className={styles.container} gap={24}>
       <Flexbox gap={12}>
         <Flexbox horizontal align="center" gap={12} justify="space-between">
-          <Text as="h2">{run.title || report?.summary || 'Verification report'}</Text>
+          <Text as="h2">{run.title || 'Verification report'}</Text>
           <VerdictTag verdict={report?.verdict} />
         </Flexbox>
         {run.scenario !== 'coding' && run.goal && <Text type="secondary">{run.goal}</Text>}
         <ScopeBlock context={run.context} scenario={run.scenario} />
-        {report?.summary && (
-          <Block className={styles.conclusion} gap={4}>
-            <Text fontSize={12} type="secondary" weight={600}>
-              Conclusion
-            </Text>
-            <Text>{report.summary}</Text>
-          </Block>
-        )}
+        {report?.summary && <Text type="secondary">{report.summary}</Text>}
         <Flexbox horizontal gap={24}>
           <Flexbox>
             <span className={styles.stat}>{report?.totalChecks ?? results.length}</span>
