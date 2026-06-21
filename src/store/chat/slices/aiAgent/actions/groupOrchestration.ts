@@ -6,6 +6,7 @@ import { type SWRResponse } from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { aiAgentService } from '@/services/aiAgent';
+import { getChatGroupStoreState } from '@/store/agentGroup';
 import { createGroupOrchestrationExecutors } from '@/store/chat/agents/GroupOrchestration';
 import { type ChatStore } from '@/store/chat/store';
 import { type GroupOrchestrationCallbacks } from '@/store/tool/slices/builtin/types';
@@ -48,6 +49,15 @@ export class GroupOrchestrationActionImpl {
     this.#get = get;
   }
 
+  /**
+   * Resolve the active groupId for orchestration. The chat store's activeGroupId is
+   * route-synced and can be transiently empty; fall back to the agentGroup store (the
+   * authoritative group identity) so the supervisor doesn't silently skip triggering
+   * member agents.
+   */
+  #resolveActiveGroupId = (): string | undefined =>
+    this.#get().activeGroupId ?? getChatGroupStoreState().activeGroupId;
+
   getGroupOrchestrationCallbacks = (): GroupOrchestrationCallbacks => {
     return {
       triggerSpeak: this.#get().triggerSpeak,
@@ -70,7 +80,7 @@ export class GroupOrchestrationActionImpl {
       skipCallSupervisor,
     );
 
-    const groupId = this.#get().activeGroupId;
+    const groupId = this.#resolveActiveGroupId();
     if (!groupId) {
       log('[triggerSpeak] No active group, skipping');
       return;
@@ -104,7 +114,7 @@ export class GroupOrchestrationActionImpl {
       toolMessageId,
     );
 
-    const groupId = this.#get().activeGroupId;
+    const groupId = this.#resolveActiveGroupId();
     if (!groupId) {
       log('[triggerBroadcast] No active group, skipping');
       return;
@@ -136,7 +146,7 @@ export class GroupOrchestrationActionImpl {
       reason,
     );
 
-    const groupId = this.#get().activeGroupId;
+    const groupId = this.#resolveActiveGroupId();
     if (!groupId) {
       log('[triggerDelegate] No active group, skipping');
       return;
@@ -180,7 +190,7 @@ export class GroupOrchestrationActionImpl {
       runInClient,
     );
 
-    const groupId = this.#get().activeGroupId;
+    const groupId = this.#resolveActiveGroupId();
     if (!groupId) {
       log('[triggerExecuteTask] No active group, skipping');
       return;
@@ -213,7 +223,7 @@ export class GroupOrchestrationActionImpl {
       skipCallSupervisor,
     );
 
-    const groupId = this.#get().activeGroupId;
+    const groupId = this.#resolveActiveGroupId();
     if (!groupId) {
       log('[triggerExecuteTasks] No active group, skipping');
       return;
