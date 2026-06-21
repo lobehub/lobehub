@@ -8,6 +8,7 @@ export {
 export { computeFalseFlags, VerifyFeedbackService } from './feedbackService';
 export { runVerifyOnCompletion } from './lifecycle';
 export { type GeneratePlanParams, VerifyPlanGeneratorService } from './planGenerator';
+export { instantiateVerifyPlanOnStart } from './planInstantiation';
 export {
   createRepairRunner,
   maybeAutoRepair,

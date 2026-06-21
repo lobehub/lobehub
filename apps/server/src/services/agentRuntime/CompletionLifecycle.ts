@@ -13,7 +13,7 @@ import { buildFinalSnapshotKey } from '@/server/modules/AgentTracing';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
 import { extractSelfIterationCompletionPayload } from '@/server/services/agentSignal/services/selfIteration/completion';
-import { runVerifyOnCompletion } from '@/server/services/verify';
+import { instantiateVerifyPlanOnStart, runVerifyOnCompletion } from '@/server/services/verify';
 
 import { hookDispatcher } from './hooks';
 
@@ -68,6 +68,19 @@ export class CompletionLifecycle {
       await this.agentOperationModel.recordStart(params);
     } catch (error) {
       log('[%s] Failed to record operation start (non-fatal): %O', params.operationId, error);
+    }
+
+    // Auto-instantiate the task's verify plan at run start so the completion gate
+    // fires. Only for a top-level task operation — repair / verifier sub-agents
+    // (which carry a parentOperationId) get their plan from the repair path, not
+    // here. Fire-and-forget; never blocks startup.
+    if (params.taskId && !params.parentOperationId) {
+      void instantiateVerifyPlanOnStart(
+        this.serverDB,
+        this.userId,
+        { operationId: params.operationId, taskId: params.taskId },
+        this.workspaceId,
+      );
     }
   }
 
