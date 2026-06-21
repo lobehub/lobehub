@@ -124,12 +124,15 @@ const isNativeGPT5Model = (model: string): ParsedOpenAIModelId | undefined => {
 const hasModifier = (parsed: ParsedOpenAIModelId, modifier: string): boolean =>
   parsed.modifiers.includes(modifier);
 
+const baseGPT5MiniResponsesModels = new Set(['gpt-5-mini', 'gpt-5-mini-2025-08-07']);
+
 export const isGPT5ResponsesModel = (model: string): boolean => {
   const parsed = isNativeGPT5Model(model);
   if (!parsed) return false;
 
   if (hasModifier(parsed, 'chat')) return false;
   if (hasModifier(parsed, 'codex') || hasModifier(parsed, 'pro')) return true;
+  if (baseGPT5MiniResponsesModels.has(parsed.normalizedModelId)) return true;
 
   return parsed.minorVersion !== undefined && parsed.minorVersion >= 2;
 };
