@@ -6,6 +6,7 @@ import { useTheme } from 'antd-style';
 import { MessageSquareHeartIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 
 import Menu from '@/components/Menu';
 import { DEFAULT_AVATAR } from '@/const/meta';
@@ -19,8 +20,9 @@ const Content = memo(() => {
   const { t } = useTranslation('setting');
   const theme = useTheme();
   const { allowed: canEdit } = usePermission('edit_own_content');
+  const { gid } = useParams<{ gid: string }>();
   const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
-  const currentGroup = useAgentGroupStore(agentGroupSelectors.currentGroup);
+  const currentGroup = useAgentGroupStore((s) => agentGroupSelectors.getGroupById(gid ?? '')(s));
   const [tab] = useState(ChatSettingsTabs.Opening);
 
   const updateGroupConfig = async (config: any) => {

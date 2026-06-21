@@ -19,7 +19,9 @@ export function useGroupContext(): ConversationContext {
     s.activeGroupId ?? null,
   ]);
 
-  const currentGroup = useAgentGroupStore(agentGroupSelectors.currentGroup);
+  const currentGroup = useAgentGroupStore((s) =>
+    s.activeGroupId ? agentGroupSelectors.getGroupById(s.activeGroupId)(s) : undefined,
+  );
   const supervisorAgentId = currentGroup?.supervisorAgentId;
 
   // Group context uses supervisorAgentId as agentId for message storage

@@ -17,7 +17,7 @@ import { userGeneralSettingsSelectors, userProfileSelectors } from '@/store/user
 
 import { ReactionDisplay } from '../../components/Reaction';
 import { useAgentMeta } from '../../hooks';
-import { dataSelectors, useConversationStore } from '../../store';
+import { contextSelectors, dataSelectors, useConversationStore } from '../../store';
 import Usage from '../components/Extras/Usage';
 import MessageBranch from '../components/MessageBranch';
 import {
@@ -49,14 +49,16 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing }) => 
     item;
   const avatar = useAgentMeta(agentId);
 
+  const groupId = useConversationStore(contextSelectors.groupId);
+
   // Get group member avatars for GroupAvatar
   const memberAvatars = useAgentGroupStore(
-    (s) => agentGroupSelectors.currentGroupMemberAvatars(s),
+    (s) => agentGroupSelectors.getGroupMemberAvatars(groupId ?? '')(s),
     isEqual,
   );
 
   // Get group meta for title
-  const groupMeta = useAgentGroupStore(agentGroupSelectors.currentGroupMeta);
+  const groupMeta = useAgentGroupStore((s) => agentGroupSelectors.getGroupMeta(groupId ?? '')(s));
 
   // Get editing state from ConversationStore
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);

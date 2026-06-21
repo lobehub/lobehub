@@ -9,6 +9,8 @@ import { useTranslation } from 'react-i18next';
 import { DEFAULT_AVATAR } from '@/const/meta';
 import { type ActionKeys } from '@/features/ChatInput';
 import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
+import { useConversationStore } from '@/features/Conversation';
+import { contextSelectors } from '@/features/Conversation/store';
 import GroupAvatar from '@/features/GroupAvatar';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -32,7 +34,11 @@ const Desktop = memo((props: { targetMemberId?: string }) => {
   const { t } = useTranslation('chat');
 
   const isDMPortal = !!props.targetMemberId;
-  const currentGroupMembers = useAgentGroupStore(agentGroupSelectors.currentGroupAgents, isEqual);
+  const groupId = useConversationStore(contextSelectors.groupId);
+  const currentGroupMembers = useAgentGroupStore(
+    (s) => agentGroupSelectors.getGroupAgents(groupId ?? '')(s),
+    isEqual,
+  );
   const isGroupConfigLoading = useAgentGroupStore(agentGroupSelectors.isGroupsInit);
 
   const [mainInputSendErrorMsg, clearSendMessageError] = useChatStore((s) => [

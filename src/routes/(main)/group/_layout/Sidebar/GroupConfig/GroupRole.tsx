@@ -5,6 +5,7 @@ import { EditableMessage } from '@lobehub/ui/chat';
 import { type MouseEvent } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useParams } from 'react-router';
 
 import GroupInfo from '@/features/GroupInfo';
 import { usePermission } from '@/hooks/usePermission';
@@ -27,9 +28,10 @@ const GroupRole = memo<GroupRoleProps>(
     const { t } = useTranslation('chat');
     const { allowed: canEdit } = usePermission('edit_own_content');
 
+    const { gid } = useParams<{ gid: string }>();
     const activeGroupId = useAgentGroupStore((s) => s.activeGroupId);
     const updateGroupConfig = useAgentGroupStore((s) => s.updateGroupConfig);
-    const groupConfig = useAgentGroupStore(agentGroupSelectors.currentGroupConfig);
+    const groupConfig = useAgentGroupStore((s) => agentGroupSelectors.getGroupConfig(gid ?? '')(s));
 
     const handleSystemPromptChange = async (value: string) => {
       if (!canEdit) return;
