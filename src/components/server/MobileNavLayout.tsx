@@ -7,6 +7,8 @@ interface MobileContentLayoutProps extends FlexboxProps {
   withNav?: boolean;
 }
 
+const MOBILE_NAV_SAFE_PADDING = 'calc(48px + env(safe-area-inset-bottom, 0px))';
+
 const MobileContentLayout = ({
   children,
   withNav,
@@ -26,7 +28,7 @@ const MobileContentLayout = ({
         position: 'relative',
         ...style,
         // TabNav Height
-        paddingBottom: withNav ? 48 : style?.paddingBottom,
+        paddingBottom: withNav ? MOBILE_NAV_SAFE_PADDING : style?.paddingBottom,
       }}
       {...rest}
     >
@@ -49,7 +51,7 @@ const MobileContentLayout = ({
           position: 'relative',
           ...style,
           // TabNav Height
-          paddingBottom: withNav ? 48 : style?.paddingBottom,
+          paddingBottom: withNav ? MOBILE_NAV_SAFE_PADDING : style?.paddingBottom,
         }}
         {...rest}
       >

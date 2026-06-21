@@ -25,14 +25,27 @@ const MOBILE_NAV_ROUTES = new Set([
   '/me',
 ]);
 
+export const normalizeMobileNavPathname = (pathname: string, activeSlug?: string | null) => {
+  if (!activeSlug) return pathname || '/';
+
+  const activeSlugPrefix = `/${activeSlug}`;
+
+  if (pathname === activeSlugPrefix) return '/';
+
+  if (!pathname.startsWith(`${activeSlugPrefix}/`)) return pathname || '/';
+
+  return pathname.slice(activeSlugPrefix.length) || '/';
+};
+
+export const shouldShowMobileNav = (pathname: string, activeSlug?: string | null) =>
+  MOBILE_NAV_ROUTES.has(normalizeMobileNavPathname(pathname, activeSlug));
+
 const MobileMainLayout: FC = () => {
   const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);
   const location = useLocation();
   const activeSlug = useActiveWorkspaceSlug();
   const pathname = location.pathname;
-  const showNav =
-    MOBILE_NAV_ROUTES.has(pathname) ||
-    (!!activeSlug && (pathname === `/${activeSlug}` || pathname === `/${activeSlug}/`));
+  const showNav = shouldShowMobileNav(pathname, activeSlug);
   return (
     <WorkspaceContextSlot>
       <RouteMetaBridge />

@@ -1,5 +1,10 @@
-import { Navigate } from 'react-router';
+import Home from '../(home)';
+import MobileLayout from '../(home)/_layout/MobileLayout';
 
 export default function MobileWorkspaceIndex() {
-  return <Navigate replace to="agent/inbox" />;
+  return (
+    <MobileLayout>
+      <Home />
+    </MobileLayout>
+  );
 }

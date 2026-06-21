@@ -29,6 +29,18 @@ export default ({ token }: { prefixCls: string; token: Theme }) => css`
     transform: translateZ(0);
   }
 
+  @media (hover: none) and (pointer: coarse) {
+    input,
+    textarea,
+    select,
+    [contenteditable='true'],
+    [role='combobox'] input,
+    .ant-input,
+    .ant-select-selection-search-input {
+      font-size: 16px !important;
+    }
+  }
+
   * {
     scrollbar-color: ${token.colorFill} transparent;
     scrollbar-width: thin;
