@@ -66,6 +66,10 @@ export const UserLabSchema = z.object({
    * show the "Add Platform Agent" entry in the create menu
    */
   enablePlatformAgent: z.boolean().optional(),
+  /**
+   * enable the task delivery-acceptance (verify) config UI on the task detail
+   */
+  enableTaskVerify: z.boolean().optional(),
 });
 
 export type UserLab = z.infer<typeof UserLabSchema>;
