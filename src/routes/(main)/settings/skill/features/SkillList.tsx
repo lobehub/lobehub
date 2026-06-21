@@ -453,7 +453,7 @@ const SkillList = memo<SkillListProps>(
         {hasBuiltinTools &&
           renderSection(
             'builtinTools',
-            t('skillGroup.builtinTools', 'LobeHub 内置 Tools'),
+            t('skillGroup.builtinTools', 'Built-in Tools'),
             builtinToolItems.map((item) => {
               if (item.type !== 'builtin') return null;
               const localizedTitle = t(`tools.builtins.${item.builtinTool.identifier}.title`, {
@@ -477,7 +477,7 @@ const SkillList = memo<SkillListProps>(
         {hasBuiltinSkills &&
           renderSection(
             'builtinSkills',
-            t('skillGroup.builtinSkills', '内置 Skill'),
+            t('skillGroup.builtinSkills', 'Built-in Skills'),
             builtinSkillItems.map((item) => {
               if (item.type !== 'builtinAgent') return null;
               return (
@@ -534,21 +534,21 @@ const SkillList = memo<SkillListProps>(
         {hasCommunitySkills &&
           renderSection(
             'communitySkills',
-            t('skillGroup.communitySkills', '社区 Skill'),
+            t('skillGroup.communitySkills', 'Community Skills'),
             renderMarketAgentSkills(),
           )}
 
         {hasCommunityTools &&
           renderSection(
             'communityTools',
-            t('skillGroup.communityTools', '社区 Tools'),
+            t('skillGroup.communityTools', 'Community Tools'),
             renderCommunityMCPs(),
           )}
 
         {hasCustomConnectors &&
           renderSection(
             'customConnectors',
-            t('skillGroup.customConnectors', '自定义 Connectors'),
+            t('skillGroup.customConnectors', 'Custom Connectors'),
             <>
               {renderCustomConnectors()}
               {renderCustomMCPs()}
@@ -558,10 +558,9 @@ const SkillList = memo<SkillListProps>(
         {hasCustomSkills &&
           renderSection(
             'customSkills',
-            t('skillGroup.customSkills', '自定义 Skills'),
+            t('skillGroup.customSkills', 'Custom Skills'),
             renderUserAgentSkills(),
           )}
-
       </div>
     );
   },
