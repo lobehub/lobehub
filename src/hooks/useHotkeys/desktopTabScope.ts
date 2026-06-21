@@ -3,14 +3,16 @@
 import { useCallback } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 
-import { isDesktop } from '@/const/version';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useElectronStore } from '@/store/electron';
 
 /**
- * Mod+1–9: jump to the Nth tab (desktop only).
+ * Mod+1–9: jump to the Nth tab.
  * Ctrl+Tab: cycle to the next tab, wrapping around.
  * Ctrl+Shift+Tab: cycle to the previous tab, wrapping around.
+ *
+ * Must be called from a component that only renders in the Desktop app
+ * (e.g. TabBar) — no `isDesktop` guard needed.
  */
 export const useRegisterDesktopTabHotkeys = () => {
   const navigate = useWorkspaceAwareNavigate();
@@ -39,7 +41,6 @@ export const useRegisterDesktopTabHotkeys = () => {
     },
     {
       enableOnFormTags: true,
-      enabled: isDesktop,
       preventDefault: true,
     },
   );
@@ -61,7 +62,6 @@ export const useRegisterDesktopTabHotkeys = () => {
     },
     {
       enableOnFormTags: true,
-      enabled: isDesktop,
       preventDefault: true,
     },
   );
@@ -83,7 +83,6 @@ export const useRegisterDesktopTabHotkeys = () => {
     },
     {
       enableOnFormTags: true,
-      enabled: isDesktop,
       preventDefault: true,
     },
   );
