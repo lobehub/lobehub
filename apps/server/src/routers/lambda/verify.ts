@@ -1,3 +1,4 @@
+import { VerifySkill } from '@lobechat/builtin-skills';
 import { TRPCError } from '@trpc/server';
 import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -305,6 +306,22 @@ export const verifyRouter = router({
         provider: row.provider ?? null,
       };
     }),
+
+  /**
+   * Serve the portable verify skill bundle (`SKILL.md` + inline resource files)
+   * so `lh verify init` can materialize it into a builder's working directory.
+   * Dynamic-by-design: the source is the server's deployed `@lobechat/builtin-skills`,
+   * so updating the skill + redeploying reaches every builder on the next pull —
+   * no CLI re-release. Static content, no DB/auth context needed.
+   */
+  getSkillBundle: publicProcedure.query(() => ({
+    content: VerifySkill.content,
+    files: Object.fromEntries(
+      Object.entries(VerifySkill.resources ?? {}).map(([path, meta]) => [path, meta.content ?? '']),
+    ),
+    identifier: VerifySkill.identifier,
+    name: VerifySkill.name,
+  })),
 
   getVerifyState: verifyProcedure
     .input(z.object({ operationId: z.string() }))
