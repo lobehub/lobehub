@@ -161,7 +161,7 @@ export const UserPreferenceSchema = z
     guide: UserGuideSchema.optional(),
     hideSyncAlert: z.boolean().optional(),
     lab: UserLabSchema.optional(),
-    lastWorkspaceId: z.string().nullable().optional(),
+    lastWorkspaceId: z.string().nullish(),
     telemetry: z.boolean().nullable(),
     topicGroupMode: z.enum(['byTime', 'byProject', 'flat', 'byStatus']).optional(),
     topicIncludeCompleted: z.boolean().optional(),

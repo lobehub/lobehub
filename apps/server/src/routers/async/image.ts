@@ -54,7 +54,7 @@ const createImageInputSchema = z.object({
       height: z.number().optional(),
       imageUrls: z.array(z.string()).optional(),
       prompt: z.string(),
-      seed: z.number().nullable().optional(),
+      seed: z.number().nullish(),
       steps: z.number().optional(),
       width: z.number().optional(),
     })

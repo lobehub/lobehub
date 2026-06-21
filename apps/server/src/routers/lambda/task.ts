@@ -68,9 +68,9 @@ const createSchema = z.object({
 });
 
 const updateSchema = z.object({
-  assigneeAgentId: z.string().nullable().optional(),
-  assigneeUserId: z.string().nullable().optional(),
-  automationMode: z.enum(['heartbeat', 'schedule']).nullable().optional(),
+  assigneeAgentId: z.string().nullish(),
+  assigneeUserId: z.string().nullish(),
+  automationMode: z.enum(['heartbeat', 'schedule']).nullish(),
   config: z.record(z.unknown()).optional(),
   context: z.record(z.unknown()).optional(),
   description: z.string().optional(),
@@ -85,13 +85,13 @@ const updateSchema = z.object({
       message: 'heartbeatInterval must be 0 (disabled) or at least 600 seconds (10 minutes)',
     })
     .optional(),
-  heartbeatTimeout: z.number().min(1).nullable().optional(),
+  heartbeatTimeout: z.number().min(1).nullish(),
   instruction: z.string().optional(),
   name: z.string().optional(),
-  parentTaskId: z.string().nullable().optional(),
+  parentTaskId: z.string().nullish(),
   priority: z.number().min(0).max(4).optional(),
-  schedulePattern: z.string().nullable().optional(),
-  scheduleTimezone: z.string().nullable().optional(),
+  schedulePattern: z.string().nullish(),
+  scheduleTimezone: z.string().nullish(),
 });
 
 const listSchema = z.object({
@@ -99,7 +99,7 @@ const listSchema = z.object({
   limit: z.number().min(1).max(100).default(50),
   offset: z.number().min(0).default(0),
   parentIdentifier: z.string().optional(),
-  parentTaskId: z.string().nullable().optional(),
+  parentTaskId: z.string().nullish(),
   priorities: z.array(z.number().min(0).max(4)).max(5).optional(),
   statuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
 });
@@ -117,7 +117,7 @@ const groupListSchema = z.object({
     )
     .min(1)
     .max(10),
-  parentTaskId: z.string().nullable().optional(),
+  parentTaskId: z.string().nullish(),
 });
 
 // Helper: resolve id/identifier and throw if not found

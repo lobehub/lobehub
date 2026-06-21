@@ -65,8 +65,8 @@ const checkItemSchema = z.object({
   index: z.number(),
   onFail: onFailSchema,
   required: z.boolean(),
-  sourceCriterionId: z.string().nullable().optional(),
-  sourceRubricId: z.string().nullable().optional(),
+  sourceCriterionId: z.string().nullish(),
+  sourceRubricId: z.string().nullish(),
   title: z.string(),
   verifierConfig: z.record(z.unknown()),
   verifierType: verifierTypeSchema,
@@ -160,8 +160,8 @@ export const verifyRouter = router({
       z.object({
         id: z.string(),
         value: z.object({
-          description: z.string().nullable().optional(),
-          documentId: z.string().nullable().optional(),
+          description: z.string().nullish(),
+          documentId: z.string().nullish(),
           onFail: onFailSchema.optional(),
           required: z.boolean().optional(),
           title: z.string().optional(),
@@ -214,7 +214,7 @@ export const verifyRouter = router({
         id: z.string(),
         value: z.object({
           config: rubricConfigSchema.optional(),
-          description: z.string().nullable().optional(),
+          description: z.string().nullish(),
           title: z.string().optional(),
         }),
       }),
@@ -239,7 +239,7 @@ export const verifyRouter = router({
         modelConfig: modelConfigSchema.optional(),
         operationId: z.string(),
         verifyCriteriaIds: z.array(z.string()).optional(),
-        verifyRubricId: z.string().nullable().optional(),
+        verifyRubricId: z.string().nullish(),
       }),
     )
     .mutation(async ({ ctx, input }) => ctx.planGenerator.generateDraftPlan(input)),

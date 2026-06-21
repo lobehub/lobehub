@@ -130,8 +130,7 @@ export const connectorRouter = router({
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
       const connector = await ctx.connectorModel.findById(input.id);
-      if (!connector)
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
+      if (!connector) throw new TRPCError({ code: 'NOT_FOUND', message: 'Connector not found' });
 
       const { oidcConfig, credentials, ...rest } = connector;
       const safeOidcConfig = oidcConfig ? { ...oidcConfig, clientSecret: undefined } : oidcConfig;
@@ -287,7 +286,7 @@ export const connectorRouter = router({
           .partial()
           .omit({ identifier: true, sourceType: true })
           // Allow `null` here so an edit can clear credentials (switch to no-auth).
-          .extend({ credentials: connectorCredentialsInputSchema.nullable().optional() }),
+          .extend({ credentials: connectorCredentialsInputSchema.nullish() }),
       }),
     )
     .mutation(async ({ input, ctx }) => {

@@ -91,7 +91,7 @@ const mountedSkillNamespaceSchema = z.literal('agent');
 const agentDocumentToolContextSchema = z.object({
   messageId: z.string(),
   operationId: z.string().optional(),
-  taskId: z.string().nullable().optional(),
+  taskId: z.string().nullish(),
   toolCallId: z.string(),
   topicId: z.string().optional(),
 });

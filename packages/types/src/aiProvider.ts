@@ -332,8 +332,8 @@ export interface AiProviderDetailItem {
 // Update
 export const UpdateAiProviderSchema = z.object({
   config: z.object({}).passthrough().optional(),
-  description: z.string().nullable().optional(),
-  logo: z.string().nullable().optional(),
+  description: z.string().nullish(),
+  logo: z.string().nullish(),
   name: z.string(),
   sdkType: z.enum(AiProviderSdkTypes).optional(),
   settings: AiProviderSettingsSchema.optional(),
@@ -348,7 +348,7 @@ export const UpdateAiProviderConfigSchema = z.object({
       enableResponseApi: z.boolean().optional(),
     })
     .optional(),
-  fetchOnClient: z.boolean().nullable().optional(),
+  fetchOnClient: z.boolean().nullish(),
   keyVaults: z
     .record(
       z.string(),
