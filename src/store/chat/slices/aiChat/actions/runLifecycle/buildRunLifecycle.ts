@@ -1,6 +1,7 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import { isDesktop } from '@lobechat/const';
 import type { ConversationContext, UIChatMessage } from '@lobechat/types';
+import debug from 'debug';
 import { t } from 'i18next';
 
 import { getAgentStoreState } from '@/store/agent';
@@ -22,9 +23,12 @@ import type {
   RunCompleteEvent,
   RunCompleteResult,
   RunParkedEvent,
+  RunResumedEvent,
   RunScope,
   UserMessagePersistedEvent,
 } from './types';
+
+const log = debug('lobe-store:run-lifecycle');
 
 /**
  * Normalize the runtime/operation status into the cross-runtime
@@ -428,7 +432,23 @@ export const buildRunLifecycle = (
         get().completeOperation(operationId);
       }
     },
-    onRunResumed: NOOP,
+    onRunResumed: async ({ operationId, resumedOperationId, runId }: RunResumedEvent) => {
+      // A NEW operation resumes the SAME logical run after a park
+      // (`waiting_for_human` → approve / reject / reject-continue / submit / skip).
+      // This is the single broadcast seam for that transition: it fires NO terminal
+      // side effects (the run is continuing, not completing) and mutates NO store
+      // state — the resume operation is already started by its entry. Behavior-
+      // neutral today; the structural marker is what `[6]` AgentRunner builds on to
+      // thread a stable cross-operation `runId`. Top-level only, mirroring the other
+      // run-scoped hooks (a parked sub-agent is not a user-facing resume).
+      if (adapter.runScope === 'sub_agent') return;
+      log(
+        'run resumed (parkedOp=%s → resumeOp=%s, runId=%s)',
+        operationId,
+        resumedOperationId,
+        runId,
+      );
+    },
     onRunStarted: NOOP,
     onTerminalPersisted: NOOP,
   };

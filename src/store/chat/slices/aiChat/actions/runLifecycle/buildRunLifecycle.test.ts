@@ -248,3 +248,44 @@ describe('buildRunLifecycle.afterUserMessagePersisted — topic title (all runti
     expect(store.summaryTopicTitle).not.toHaveBeenCalled();
   });
 });
+
+describe('buildRunLifecycle.onRunResumed — park → resume broadcast seam', () => {
+  const resumedEvent = (runtimeType: AgentRuntimeType, runScope: 'sub_agent' | 'top_level') => ({
+    context: CONTEXT,
+    operationId: OP,
+    resumedOperationId: 'op2',
+    runId: OP,
+    runScope,
+    runtimeType,
+  });
+
+  it.each<AgentRuntimeType>(['client', 'gateway', 'hetero'])(
+    'is behavior-neutral for %s: fires NO terminal side effects and emits no completion signal',
+    async (runtimeType) => {
+      const { get, store } = makeStore();
+
+      await expect(
+        lifecycle(runtimeType, get).onRunResumed(resumedEvent(runtimeType, 'top_level')),
+      ).resolves.toBeUndefined();
+
+      // The run is continuing, not completing — none of the terminal mutations
+      // (op completion / unread / queue drain) nor the completion signal may fire.
+      expect(store.completeOperation).not.toHaveBeenCalled();
+      expect(store.failOperation).not.toHaveBeenCalled();
+      expect(store.markTopicUnread).not.toHaveBeenCalled();
+      expect(store.drainQueuedMessages).not.toHaveBeenCalled();
+      expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).not.toHaveBeenCalled();
+    },
+  );
+
+  it('is a no-op for a sub_agent resume (top-level only, like the other run-scoped hooks)', async () => {
+    const { get, store } = makeStore();
+
+    await expect(
+      lifecycle('client', get, 'sub_agent').onRunResumed(resumedEvent('client', 'sub_agent')),
+    ).resolves.toBeUndefined();
+
+    expect(store.completeOperation).not.toHaveBeenCalled();
+    expect(agentSignalBridgeMock.emitClientAgentSignalSourceEvent).not.toHaveBeenCalled();
+  });
+});

@@ -9,7 +9,10 @@ import {
 
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
-import { selectRuntimeType } from '@/store/chat/slices/aiChat/actions/agentDispatcher';
+import {
+  type AgentRuntimeType,
+  selectRuntimeType,
+} from '@/store/chat/slices/aiChat/actions/agentDispatcher';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { type ChatStore } from '@/store/chat/store';
@@ -19,6 +22,8 @@ import { displayMessageSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
 import { type OptimisticUpdateContext } from '../../message/actions/optimisticUpdate';
 import { dbMessageSelectors } from '../../message/selectors';
+import { buildRunLifecycle } from './runLifecycle/buildRunLifecycle';
+import { type RunScope } from './runLifecycle/types';
 
 /**
  * Actions for controlling conversation operations like cancellation and error handling
@@ -220,6 +225,41 @@ export class ConversationControlActionImpl {
     );
   };
 
+  /**
+   * Broadcast that a parked run is resuming under a NEW operation. The resume
+   * entries (approve / reject / reject-continue / submit / skip) call this at
+   * dispatch so the park → resume transition flows through the unified run
+   * lifecycle's `onRunResumed` seam instead of being invisible to it.
+   *
+   * Behavior-neutral: fires no terminal side effects and mutates no store state
+   * (see `buildRunLifecycle.onRunResumed`). `buildRunLifecycle` is a pure factory,
+   * so constructing a throwaway instance here purely to broadcast the resume is
+   * cheap and side-effect-free; `[6]` AgentRunner is where the lifecycle becomes a
+   * single per-run instance threaded through dispatch.
+   */
+  #emitRunResumed = (
+    context: ConversationContext,
+    params: { operationId: string; parentMessageId: string; runtimeType: AgentRuntimeType },
+  ) => {
+    const { operationId, parentMessageId, runtimeType } = params;
+    const runScope: RunScope = context.scope === 'sub_agent' ? 'sub_agent' : 'top_level';
+    void buildRunLifecycle(this.#get, {
+      context,
+      parentMessageId,
+      parentMessageType: 'tool',
+      runId: operationId,
+      runScope,
+      runtimeType,
+    }).onRunResumed({
+      context,
+      operationId,
+      resumedOperationId: operationId,
+      runId: operationId,
+      runScope,
+      runtimeType,
+    });
+  };
+
   approveToolCalling = async (
     toolMessageId: string,
     _assistantGroupId: string,
@@ -254,6 +294,13 @@ export class ConversationControlActionImpl {
     });
 
     const optimisticContext = { operationId };
+
+    // Park → resume: a new op continues the run paused on this tool's approval.
+    this.#emitRunResumed(effectiveContext, {
+      operationId,
+      parentMessageId: toolMessageId,
+      runtimeType: this.#shouldUseGatewayResume(effectiveContext) ? 'gateway' : 'client',
+    });
 
     // 2. Update intervention status to approved
     await this.#get().optimisticUpdateMessagePlugin(
@@ -397,6 +444,13 @@ export class ConversationControlActionImpl {
 
     const optimisticContext: OptimisticUpdateContext = { operationId };
     const shouldCreateUserMessage = options?.createUserMessage !== false;
+
+    // Park → resume: a new op continues the run paused on this tool interaction.
+    this.#emitRunResumed(effectiveContext, {
+      operationId,
+      parentMessageId: toolMessageId,
+      runtimeType: 'client',
+    });
 
     // 1. Mark intervention as approved and set tool result to user's response
     await this.#get().optimisticUpdateMessagePlugin(
@@ -569,6 +623,13 @@ export class ConversationControlActionImpl {
     });
 
     const optimisticContext: OptimisticUpdateContext = { operationId };
+
+    // Park → resume: a new op continues the run paused on this tool interaction.
+    this.#emitRunResumed(effectiveContext, {
+      operationId,
+      parentMessageId: toolMessageId,
+      runtimeType: 'client',
+    });
 
     // 1. Mark intervention as rejected (skipped) with reason
     await this.#get().optimisticUpdateMessagePlugin(
@@ -961,6 +1022,12 @@ export class ConversationControlActionImpl {
         return;
       }
       const pausedOpIds = this.#getRunningServerOps(effectiveContext).map((op) => op.id);
+      // Park → resume: the new gateway op continues the run paused on this tool.
+      this.#emitRunResumed(effectiveContext, {
+        operationId,
+        parentMessageId: messageId,
+        runtimeType: 'gateway',
+      });
       try {
         await this.#get().executeGatewayAgent({
           context: effectiveContext,
@@ -1031,6 +1098,12 @@ export class ConversationControlActionImpl {
       });
 
       const optimisticContext = { operationId };
+      // Park → resume: the new gateway op continues the run paused on this tool.
+      this.#emitRunResumed(effectiveContext, {
+        operationId,
+        parentMessageId: messageId,
+        runtimeType: 'gateway',
+      });
       await this.#get().optimisticUpdateMessagePlugin(
         messageId,
         { intervention: { rejectedReason: reason, status: 'rejected' } as any },
@@ -1086,6 +1159,13 @@ export class ConversationControlActionImpl {
         scope,
         messageId,
       },
+    });
+
+    // Park → resume: this local op continues the run paused on the rejected tool.
+    this.#emitRunResumed(effectiveContext, {
+      operationId,
+      parentMessageId: messageId,
+      runtimeType: 'client',
     });
 
     // Get current messages for state construction using context
