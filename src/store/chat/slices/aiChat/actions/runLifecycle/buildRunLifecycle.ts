@@ -128,7 +128,8 @@ const NOOP = async () => {};
  * be reused as the shared implementation when gateway/hetero are wired in the
  * follow-up entry convergence. `completeRun` handles only TERMINAL states;
  * parked states route to `onRunParked` and fire no terminal side effects — a
- * run is not complete while it is parked (see LOBE-10382).
+ * run is not complete while it is parked — parked states are non-terminal and
+ * must not emit terminal side effects (title, queue drain, notification, unread).
  */
 export const buildRunLifecycle = (
   get: () => ChatStore,
@@ -173,9 +174,9 @@ export const buildRunLifecycle = (
 
   return {
     afterUserMessagePersisted: async (event: UserMessagePersistedEvent) => {
-      // Topic title auto-generation. Single home for all three runtimes
-      // (LOBE-10379 "补齐缺列 title"): the client used to do this inline in
-      // sendMessage and gateway/hetero had no LLM-summarized title at all.
+      // Topic title auto-generation. Single home for all three runtimes —
+      // the client used to do this inline in sendMessage and gateway/hetero
+      // had no LLM-summarized title at all before the unified lifecycle.
       // Top-level only — a nested sub-agent / `/compact` run must not retitle the
       // user's topic. See RunScope.
       if (adapter.runScope !== 'top_level') return;
@@ -230,7 +231,8 @@ export const buildRunLifecycle = (
     },
     afterRunComplete: async (event: RunCompleteEvent) => {
       // Desktop notification + dock badge. Single home for all three runtimes'
-      // completion notification (LOBE-10379 "通知去重，统一到 afterRunComplete").
+      // completion notification — unified in afterRunComplete so every transport
+      // fires the same notification/badge logic exactly once.
       // Top-level-only: a nested sub-agent finishing is not a user-facing run
       // completion — the parent run is still going, so it must not fire a
       // "generation finished" notification / badge. See RunScope.

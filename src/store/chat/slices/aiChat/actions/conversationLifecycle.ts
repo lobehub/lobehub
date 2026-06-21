@@ -469,7 +469,7 @@ export class ConversationLifecycleActionImpl {
 
     // Shared run lifecycle for the post-persist topic-title hook. Built once here
     // so all three runtime branches fire the SAME `afterUserMessagePersisted`
-    // (LOBE-10379 "补齐缺列 title" — gateway/hetero previously had no LLM title).
+    // — gateway/hetero previously had no LLM title before the unified lifecycle.
     // `parentMessage*` are unused by this hook.
     const sendRunScope: RunScope =
       operationContext.scope === 'sub_agent' ? 'sub_agent' : 'top_level';
@@ -662,7 +662,7 @@ export class ConversationLifecycleActionImpl {
       // Complete sendMessage operation, start ACP execution as child operation
       this.#get().completeOperation(operationId);
 
-      // Topic title (LOBE-10379): hetero used to set only a sliced placeholder
+      // Topic title: hetero used to set only a sliced placeholder
       // title on new topics — upgrade it to the LLM summary via the shared hook
       // (reads the just-persisted conversation from the store). Fire-and-forget.
       void sendRunLifecycle
@@ -766,7 +766,7 @@ export class ConversationLifecycleActionImpl {
           tempMessageIds: [tempAssistantId],
         });
 
-        // Topic title (LOBE-10379): gateway-created topics had no LLM-summarized
+        // Topic title: gateway-created topics had no LLM-summarized
         // title. executeGatewayAgent has already replaced messages + switched to
         // the new topic, so the shared hook reads the persisted conversation from
         // the store and titles it. Fire-and-forget.
@@ -1029,7 +1029,7 @@ export class ConversationLifecycleActionImpl {
     if (data.topicId) this.#get().internal_updateTopicLoading(data.topicId, true);
 
     // Topic title auto-generation, now via the shared `afterUserMessagePersisted`
-    // hook (LOBE-10379). The client passes its freshly-created `data.messages`
+    // hook. The client passes its freshly-created `data.messages`
     // (not yet in the store under the real topicId); gateway/hetero call the same
     // hook from their branches and let it read the persisted conversation.
     void sendRunLifecycle

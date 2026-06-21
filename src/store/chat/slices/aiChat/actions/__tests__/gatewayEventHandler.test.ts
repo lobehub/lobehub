@@ -1099,7 +1099,7 @@ describe('createGatewayEventHandler', () => {
   // They describe what the gateway terminal path does NOW, not ideal
   // behavior. If something reads like a bug it is locked as-is with a note.
   describe('gateway terminal characterization (lifecycle refactor regression net)', () => {
-    // POST-LOBE-10379 CONTRACT: the `error` event FAILS the operation
+    // CONTRACT: the `error` event FAILS the operation
     // (`failOperation`) via the shared run lifecycle — an errored run is a failed
     // run, not a completed one. Like `agent_runtime_end`'s cancel/park endings it
     // does NOT mark the topic unread (no unread badge for a failed generation).
@@ -1240,7 +1240,7 @@ describe('createGatewayEventHandler', () => {
       },
     );
 
-    // POST-LOBE-10379: the agent_runtime_end handler completes the op once via
+    // the agent_runtime_end handler completes the op once via
     // the shared run lifecycle, and gateway.ts onSessionComplete no longer
     // double-completes (it only completes as the terminal-missing fallback). The
     // reducer is still idempotent (a stray second completeOperation on an

@@ -347,7 +347,7 @@ export const executeHeterogeneousAgent = async (
 
   const adapterType = resolveAdapterType(heterogeneousProvider);
 
-  // Shared run lifecycle (LOBE-10379). Hetero owns its terminal lifecycle here
+  // Shared run lifecycle — hetero owns its terminal lifecycle here
   // (the desktop notification via `afterRunComplete`); the queue drain + op
   // completion stay in this executor's flow because the resume-session-id save
   // must run before the drain. `parentMessage*` are unused for non-client.
@@ -1356,10 +1356,10 @@ export const executeHeterogeneousAgent = async (
           eventHandler(terminalEvent);
         }
 
-        // Signal completion to the user — dock badge + (window-hidden) notification.
-        // Relocated into the shared `afterRunComplete` hook (LOBE-10379 "通知统一到
-        // afterRunComplete"): it does the same showNotification + setBadgeCount
-        // fan-out for non-client runtimes. The body is resolved here from the
+        // Signal completion to the user — dock badge + (window-hidden) notification,
+        // delegated to the shared `afterRunComplete` hook. It does the same
+        // showNotification + setBadgeCount fan-out for non-client runtimes.
+        // The body is resolved here from the
         // in-memory accumulated content (the store snapshot isn't durable yet).
         // Skip for aborted runs and for error terminations.
         if (!isAborted() && !isErrorTerminal) {
@@ -1438,7 +1438,7 @@ export const executeHeterogeneousAgent = async (
       .getSessionInfo(agentSessionId)
       .catch(() => undefined);
     if (sessionInfo?.agentSessionId && context.topicId) {
-      // Best-effort (LOBE-10379 "heteroSessionId 保存…失败不阻断 core"): a rejected
+      // Best-effort: a rejected
       // metadata save must NOT throw past the queue drain below — guarding the
       // await here keeps the resume-id persistence from blocking the follow-up
       // send. The save still runs BEFORE the drain so the next turn's

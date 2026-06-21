@@ -782,8 +782,9 @@ export const createGatewayEventHandler = (
           get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
           endReasoningIfNeeded();
 
-          // An errored run is a FAILED run, not a completed one (LOBE-10379
-          // "error→fail"). For gateway, drive the terminal disposition through the
+          // An errored run is a FAILED run, not a completed one — failed runs
+          // receive no unread badge, no queue drain, and no notification.
+          // For gateway, drive the terminal disposition through the
           // shared lifecycle so the op lands in `failed` (no unread badge, no queue
           // drain, no notification). hetero never forwards `error` to this handler
           // (its executor routes errors through persistTerminalError), but keep the
