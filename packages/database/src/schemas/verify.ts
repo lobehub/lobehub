@@ -1,4 +1,10 @@
-import type { ToulminVerdict, VerifyCheckItem, VerifyRubricConfig } from '@lobechat/types';
+import type {
+  ToulminVerdict,
+  VerifyCheckItem,
+  VerifyRubricConfig,
+  VerifyRunContext,
+  VerifyRunScenario,
+} from '@lobechat/types';
 import {
   verifierTypes,
   verifyCheckResultStatuses,
@@ -425,10 +431,31 @@ export const verifyRuns = pgTable(
     /** What produced this session — drives provenance + analytics filtering. */
     source: text('source', { enum: verifyRunSources }).default('agent').notNull(),
 
+    /**
+     * What kind of thing this session verifies (e.g. `coding`). Drives how the
+     * report renders its scope header + scenario-specific detail. Null for
+     * legacy/agent runs that predate scenarios.
+     */
+    scenario: text('scenario').$type<VerifyRunScenario>(),
+
     /** Human-readable session title (report title / test name). */
     title: text('title'),
     /** The delivery goal being verified. */
     goal: text('goal'),
+
+    /**
+     * The scenario's context — its scope/provenance (shape keyed by `scenario`;
+     * for `coding`: branch / commit / surfaces / …), rendered as the report's
+     * scope header. One bag so each scenario can enrich it without a migration.
+     */
+    context: jsonb('context').$type<VerifyRunContext>(),
+
+    /**
+     * Generic, scenario-agnostic extension bag — reserved for cross-scenario
+     * metadata we don't model yet (the active scenario's input lives in
+     * `context`). Kept open so future needs don't require a migration.
+     */
+    metadata: jsonb('metadata').$type<Record<string, unknown>>(),
 
     /**
      * Immutable check-plan snapshot for this session (instantiated from rubrics /

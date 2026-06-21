@@ -61,6 +61,47 @@ export type VerifyRunStatus = (typeof verifyRunStatuses)[number];
 export const verifyRunSources = ['agent', 'agent-testing'] as const;
 export type VerifyRunSource = (typeof verifyRunSources)[number];
 
+/**
+ * The kind of thing a verification session checks. Orthogonal to `source` (which
+ * records what *produced* the run): `scenario` drives how the report renders its
+ * scope header and scenario-specific detail. Open-ended — new scenarios add a
+ * value here plus their own {@link VerifyRunContext} shape.
+ * - coding: verifying a software change (branch / commit / surfaces under test).
+ */
+export const verifyRunScenarios = ['coding'] as const;
+export type VerifyRunScenario = (typeof verifyRunScenarios)[number];
+
+/**
+ * Coding-scenario scope: where the code under test came from and how it ran.
+ * Rendered as the report's scope header so the verify page reads as the final
+ * report.
+ */
+export interface VerifyCodingScope {
+  /** Git branch the report was produced against. */
+  branch?: string;
+  /** Git commit (short sha) of the code under test. */
+  commit?: string;
+  /** Entry point / command exercised, e.g. "lh verify ingest-report". */
+  entry?: string;
+  /** The focus / key risk of this round (free text). */
+  focus?: string;
+  /** Test surfaces exercised, e.g. ["cli", "web"]. */
+  surfaces?: string[];
+  /** When the report was authored (ISO 8601) — distinct from the row's createdAt (ingest time). */
+  testedAt?: string;
+}
+
+/**
+ * The scenario's context — its scope/provenance, discriminated by the run's
+ * `scenario`. Kept in one jsonb (not columns) so each scenario can carry its own
+ * shape and the viewer can render per scenario without a migration. Today only
+ * `coding`; as scenarios grow this becomes a union (`VerifyCodingScope | …`).
+ *
+ * Distinct from a future generic `metadata` bag (reserved for cross-scenario
+ * extension) — `context` is specifically the active scenario's input.
+ */
+export type VerifyRunContext = VerifyCodingScope;
+
 /** Default cap on automatic repair rounds when a rubric doesn't override it. */
 export const DEFAULT_MAX_REPAIR_ROUNDS = 3;
 

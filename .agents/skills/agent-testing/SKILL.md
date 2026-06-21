@@ -326,24 +326,28 @@ not a chat-only summary. Scaffold it up front and fill it as you test:
 ```bash
 DIR=$(./.agents/skills/agent-testing/scripts/report-init.sh my-feature "Verify my feature")
 # ... test, saving screenshots / CLI transcripts into $DIR/assets/ ...
-# fill $DIR/report.md (scope, case table with inline evidence, verdict, score) and $DIR/result.json
+# fill $DIR/result.json (scenario, context, cases[], summary.conclusion) — the report;
+# $DIR/report.md holds only the narrative tail (跟进 / 本轮验证 / 评分)
 ```
 
-Reports live in `.records/reports/<timestamp>-<slug>/` (gitignored): `report.md`
-(human-readable, with screenshots/GIFs embedded directly in the case table),
-`result.json` (machine-readable pass/fail + score), `assets/` (evidence).
-Format spec and evidence rules:
+Reports live in `.records/reports/<timestamp>-<slug>/` (gitignored): `result.json`
+(the structured report — scenario/context/cases/summary), `report.md` (narrative
+tail), `assets/` (evidence). Format spec and evidence rules:
 [references/report.md](./references/report.md).
 
 Two hard rules worth front-loading:
 
-- **Report language = the user's conversation language.** Write the ENTIRE
-  `report.md` (headings included) in the language the user is conversing in —
-  no mixed English. `result.json` keys/status values stay English.
-- **The case table is the main reading surface.** Prefer the compact
-  `# | case | result | key observation | evidence` shape and embed the
-  screenshot/GIF in the evidence cell. Use separate evidence sections only for
-  long CLI transcripts, HAR summaries, or supplemental detail.
+- **Report language = the user's conversation language.** Write `report.md` and
+  every human-facing string in `result.json` (case `name`/`observation`,
+  `summary.conclusion`, scope `focus`/`entry`) in the language the user is
+  conversing in. `result.json` keys/status values stay English.
+- **`result.json` is the report; the verify page renders it.** Each tested
+  behavior is one entry in `cases[]` (`{ name, result, observation, evidence }`);
+  the published `/verify/<id>` page builds the scope header from
+  `scenario`+`context`, the check list from `cases[]`, and the headline verdict
+  from `summary.conclusion`. So do NOT hand-build a 用例 table or a 范围 block in
+  `report.md` — they double up on the page. `report.md` is the narrative tail
+  only (跟进 / 本轮验证 / 评分).
 - **Visual evidence must render inline.** Screenshots and GIFs in `report.md`
   must use Markdown image syntax like `![case 1](assets/case1.png)`. Do not
   use bare file paths, Markdown links, or local file links as the primary
@@ -367,9 +371,34 @@ The local report under `.records/reports/` is the working artifact; the
 push the session up with the CLI so the user (and later reviewers) can open it
 at a stable URL with the evidence rendered inline.
 
+**Publish targets PRODUCTION (`https://app.lobehub.com`), not the local dev
+server.** The product-under-test usually runs against a local env whose seeded
+CLI profile (`.records/env/agent-testing-cli.env`) points the CLI at
+`http://localhost:3010` via `LOBEHUB_SERVER` / `LOBE_API_KEY` /
+`LOBEHUB_CLI_HOME=.lobehub-dev`. Those overrides are for _running_ the backend
+test — they are wrong for _publishing_: a localhost run yields a URL nobody else
+can open, and a local env's stub S3 makes file-evidence uploads fail
+(`fetch failed`). The deliverable must live on production, with the user's real
+login (`~/.lobehub`) and real storage.
+
+So run the publish in a CLEAN environment that strips the local dev overrides,
+which falls back to the CLI defaults (`https://app.lobehub.com` + `~/.lobehub`):
+
 ```bash
-# Auth: the CLI surface must be green (setup-auth.sh status --surface cli).
-lh verify ingest-report "$DIR" --source agent-testing --open --json
+# Publish to PRODUCTION — strip the local dev CLI overrides so `lh` uses its
+# production defaults (app.lobehub.com + the user's real ~/.lobehub login).
+env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME \
+  lh verify ingest-report "$DIR" --source agent-testing --open --json
+```
+
+Production auth is the user's own device-code login, not the seeded local key.
+Verify it first in the same clean env; if it returns "No authentication found",
+have the user log in (the flow prints a URL + code to authorize in the browser),
+then re-run the publish:
+
+```bash
+env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME lh verify run list --json # [] = authed
+env -u LOBEHUB_SERVER -u LOBE_API_KEY -u LOBEHUB_CLI_API_KEY -u LOBEHUB_CLI_HOME lh login                  # only if not authed
 ```
 
 `verify ingest-report` reads `$DIR` and, in one call, creates a standalone
@@ -381,8 +410,9 @@ verification session and uploads everything:
 
 It prints the `verifyRunId` and, with `--open`, the in-app path
 `/verify/<verifyRunId>` — the report viewer (verdict, stats, every check, and the
-inline screenshot/text evidence). **Include that `/verify/<verifyRunId>` link in
-the final chat reply** alongside the local report dir.
+inline screenshot/text evidence). On production that resolves to
+`https://app.lobehub.com/verify/<verifyRunId>`. **Include that full production
+link in the final chat reply** alongside the local report dir.
 
 Notes:
 

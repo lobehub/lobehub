@@ -2599,8 +2599,11 @@ table verify_runs {
   workspace_id text
   operation_id text
   source text [not null, default: 'agent']
+  scenario text
   title text
   goal text
+  context jsonb
+  metadata jsonb
   plan jsonb
   plan_confirmed_at "timestamp with time zone"
   status text

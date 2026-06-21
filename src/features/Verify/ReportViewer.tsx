@@ -1,5 +1,6 @@
 'use client';
 
+import type { VerifyRunContext } from '@lobechat/types';
 import { Block, Flexbox, Icon, Markdown, Tag, Text } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { Check, CircleHelp, X } from 'lucide-react';
@@ -72,11 +73,46 @@ const useStyles = createStyles(({ css, token }) => ({
     border: 1px solid ${token.colorBorderSecondary};
     border-radius: ${token.borderRadiusLG}px;
   `,
+  conclusion: css`
+    padding-block: 10px;
+    padding-inline: 14px;
+    border: 1px solid ${token.colorBorderSecondary};
+    border-inline-start: 3px solid ${token.colorInfo};
+    border-radius: ${token.borderRadiusLG}px;
+
+    background: ${token.colorInfoBg};
+  `,
   resultCard: css`
-    padding: 16px;
+    padding-block: 10px;
+    padding-inline: 14px;
     border: 1px solid ${token.colorBorderSecondary};
     border-radius: ${token.borderRadiusLG}px;
+
     background: ${token.colorBgContainer};
+  `,
+  scopeBlock: css`
+    padding-block: 10px;
+    padding-inline: 14px;
+    border: 1px solid ${token.colorBorderSecondary};
+    border-radius: ${token.borderRadiusLG}px;
+
+    background: ${token.colorFillQuaternary};
+  `,
+  scopeKey: css`
+    flex-shrink: 0;
+
+    width: 56px;
+
+    font-size: 12px;
+    line-height: 20px;
+    color: ${token.colorTextTertiary};
+  `,
+  scopeValue: css`
+    font-family: ${token.fontFamilyCode};
+    font-size: 12px;
+    line-height: 20px;
+    color: ${token.colorTextSecondary};
+    word-break: break-word;
   `,
   stat: css`
     font-size: 20px;
@@ -103,10 +139,50 @@ const VerdictTag = memo<{ verdict?: string | null }>(({ verdict }) => {
   );
 });
 
+/** A single labelled row in the scope header (e.g. "Branch  docs/foo"). */
+const ScopeRow = memo<{ label: string; value?: string | null }>(({ label, value }) => {
+  const { styles } = useStyles();
+  if (!value) return null;
+  return (
+    <Flexbox horizontal gap={8}>
+      <span className={styles.scopeKey}>{label}</span>
+      <span className={styles.scopeValue}>{value}</span>
+    </Flexbox>
+  );
+});
+
+/**
+ * Scope header — the report's "范围" block. Rendered per `scenario`; today only
+ * `coding` (branch / commit / surfaces / …). Returns null when there's nothing
+ * to show so the page stays clean for runs without context.
+ */
+const ScopeBlock = memo<{ context?: VerifyRunContext | null; scenario?: string | null }>(
+  ({ context, scenario }) => {
+    const { styles } = useStyles();
+    if (scenario !== 'coding' || !context) return null;
+
+    const { branch, commit, surfaces, entry, focus, testedAt } = context;
+    const date = testedAt ? new Date(testedAt).toLocaleString() : undefined;
+    const surface = surfaces && surfaces.length > 0 ? surfaces.join(' / ') : undefined;
+    if (!branch && !commit && !surface && !entry && !focus && !date) return null;
+
+    return (
+      <Block className={styles.scopeBlock} gap={2}>
+        <ScopeRow label="Branch" value={branch} />
+        <ScopeRow label="Commit" value={commit} />
+        <ScopeRow label="Date" value={date} />
+        <ScopeRow label="Surface" value={surface} />
+        <ScopeRow label="Entry" value={entry} />
+        <ScopeRow label="Focus" value={focus} />
+      </Block>
+    );
+  },
+);
+
 const ResultItem = memo<{ result: VerifyResultWithEvidence }>(({ result }) => {
   const { styles } = useStyles();
   return (
-    <Block className={styles.resultCard} gap={12}>
+    <Block className={styles.resultCard} gap={6}>
       <Flexbox horizontal align="center" gap={8} justify="space-between">
         <Text strong>{result.checkItemTitle || result.checkItemId}</Text>
         <Flexbox horizontal align="center" gap={8}>
@@ -114,8 +190,16 @@ const ResultItem = memo<{ result: VerifyResultWithEvidence }>(({ result }) => {
           <VerdictTag verdict={result.verdict ?? result.status} />
         </Flexbox>
       </Flexbox>
-      {result.suggestion && <Text type="secondary">{result.suggestion}</Text>}
-      {result.toulmin?.evidence && <Text type="secondary">{result.toulmin.evidence}</Text>}
+      {result.toulmin?.evidence && (
+        <Text fontSize={13} type="secondary">
+          {result.toulmin.evidence}
+        </Text>
+      )}
+      {result.suggestion && (
+        <Text fontSize={13} type="secondary">
+          {result.suggestion}
+        </Text>
+      )}
       {result.evidence.length > 0 && (
         <Flexbox gap={8}>
           {result.evidence.map((e) => (
@@ -171,12 +255,21 @@ const ReportViewer = memo(() => {
 
   return (
     <Flexbox className={styles.container} gap={24}>
-      <Flexbox gap={8}>
+      <Flexbox gap={12}>
         <Flexbox horizontal align="center" gap={12} justify="space-between">
           <Text as="h2">{run.title || report?.summary || 'Verification report'}</Text>
           <VerdictTag verdict={report?.verdict} />
         </Flexbox>
-        {run.goal && <Text type="secondary">{run.goal}</Text>}
+        {run.scenario !== 'coding' && run.goal && <Text type="secondary">{run.goal}</Text>}
+        <ScopeBlock context={run.context} scenario={run.scenario} />
+        {report?.summary && (
+          <Block className={styles.conclusion} gap={4}>
+            <Text fontSize={12} type="secondary" weight={600}>
+              Conclusion
+            </Text>
+            <Text>{report.summary}</Text>
+          </Block>
+        )}
         <Flexbox horizontal gap={24}>
           <Flexbox>
             <span className={styles.stat}>{report?.totalChecks ?? results.length}</span>
@@ -200,19 +293,30 @@ const ReportViewer = memo(() => {
               failed
             </Text>
           </Flexbox>
+          {typeof report?.overallConfidence === 'number' && (
+            <Flexbox>
+              <span className={styles.stat}>{Math.round(report.overallConfidence * 100)}</span>
+              <Text fontSize={12} type="secondary">
+                score
+              </Text>
+            </Flexbox>
+          )}
         </Flexbox>
       </Flexbox>
 
-      <Flexbox gap={12}>
+      <Flexbox gap={8}>
         <Text as="h3">Checks</Text>
         {results.map((r) => (
           <ResultItem key={r.id} result={r} />
         ))}
       </Flexbox>
 
+      {/* Narrative detail (verification commands / score / notes). The scope and
+          per-check table are already structured above, so a well-formed report
+          body carries only the non-duplicate prose. */}
       {report?.content && (
         <Flexbox gap={8}>
-          <Text as="h3">Report</Text>
+          <Text as="h3">Details</Text>
           <Markdown>{report.content}</Markdown>
         </Flexbox>
       )}

@@ -324,16 +324,30 @@ export const verifyRouter = router({
   createRun: verifyProcedure
     .input(
       z.object({
+        // The active scenario's context, rendered as the report's scope header.
+        context: z
+          .object({
+            branch: z.string().optional(),
+            commit: z.string().optional(),
+            entry: z.string().optional(),
+            focus: z.string().optional(),
+            surfaces: z.array(z.string()).optional(),
+            testedAt: z.string().optional(),
+          })
+          .optional(),
         goal: z.string().optional(),
         operationId: z.string().optional(),
+        scenario: z.enum(['coding']).optional(),
         source: runSourceSchema.optional(),
         title: z.string().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) =>
       ctx.runModel.create({
+        context: input.context,
         goal: input.goal,
         operationId: input.operationId,
+        scenario: input.scenario,
         source: input.source ?? 'agent-testing',
         title: input.title,
       }),
