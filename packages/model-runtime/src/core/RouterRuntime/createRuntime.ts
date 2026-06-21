@@ -720,7 +720,7 @@ export const createRouterRuntime = ({
     async createImage(payload: CreateImagePayload, options?: CreateImageMethodOptions) {
       return this.runWithFallback(
         payload.model,
-        (runtime) => runtime.createImage!(payload),
+        (runtime) => runtime.createImage!(payload, options),
         options?.metadata,
       );
     }
@@ -728,7 +728,7 @@ export const createRouterRuntime = ({
     async createVideo(payload: CreateVideoPayload, options?: CreateVideoMethodOptions) {
       return this.runWithFallback(
         payload.model,
-        (runtime) => runtime.createVideo!(payload),
+        (runtime) => runtime.createVideo!(payload, options),
         options?.metadata,
       );
     }
