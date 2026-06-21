@@ -424,10 +424,13 @@ Notes:
   `verify run create`, `verify result ingest`, `verify evidence upload`
   (`--file` or `--content`), `verify report upsert` — so a session can be built
   incrementally instead of from a report dir.
-- File evidence uploads through the app's storage (S3/R2). If a local env points
-  at a stub/unreachable bucket, the file PUT fails — fall back to inline text
-  evidence (`--content`) or run against an env with real storage; the rest of the
-  ingest still succeeds.
+- File evidence uploads through the app's storage (S3/R2). Against a stub or
+  unreachable bucket (common in local dev) the file PUT fails; `ingest-report`
+  logs a warning, **skips that one artifact**, and still finishes the session,
+  results, and report. So the published session is real and openable — but it is
+  **missing the skipped evidence**, which is easy to mistake for a complete
+  report. If the evidence must appear, publish against an env with real storage
+  (e.g. production) or attach it inline with `verify evidence upload --content`.
 
 ## Directory map
 
