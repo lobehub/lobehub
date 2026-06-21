@@ -59,7 +59,6 @@ const PriceValue: FC<PriceValueProps> = ({ price, prefix = '', suffix = '' }) =>
       <span className={styles.originalPriceText}>
         {prefix}
         {price.original}
-        {suffix}
       </span>
     )}
     <span>

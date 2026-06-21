@@ -127,6 +127,13 @@ const emptyLookupPricing = {
   ],
 };
 
+const discountedTextPricing = {
+  currency: 'USD',
+  units: [
+    { name: 'textInput', originalRate: 5, rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
+  ],
+};
+
 const createEnabledList = (
   provider: string,
   pricing: Record<string, unknown>,
@@ -161,6 +168,22 @@ describe('ModelDetailPanel pricing', () => {
     expect(screen.getByText('5M credits/M tokens')).toBeInTheDocument();
     expect(screen.getByText('25M credits/M tokens')).toBeInTheDocument();
     expect(container).not.toHaveTextContent('$5.00');
+  });
+
+  it('renders the original branding price without repeating the unit suffix', () => {
+    const { container } = render(
+      <ModelDetailPanel
+        enabledList={createEnabledList('lobehub', discountedTextPricing)}
+        model="test-model"
+        provider="lobehub"
+      />,
+    );
+
+    const originalPrice = container.querySelector('.originalPriceText');
+
+    expect(originalPrice).toHaveTextContent('5M');
+    expect(originalPrice).not.toHaveTextContent('credits/M tokens');
+    expect(container).toHaveTextContent('2.5M credits/M tokens');
   });
 
   it('keeps dollar pricing for non-branding providers', () => {
