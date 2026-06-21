@@ -140,6 +140,7 @@ const TaskVerifyConfig = memo(() => {
           .map((c) =>
             toDraftItem({
               description: c.description ?? undefined,
+              documentId: c.documentId,
               required: c.required,
               title: c.title,
               verifierConfig: c.verifierConfig ?? undefined,
@@ -156,43 +157,64 @@ const TaskVerifyConfig = memo(() => {
   // We deliberately do NOT diff/dedupe against existing criteria — order of the
   // returned ids is the display order, which keeps drag-reorder trivially correct.
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Latest not-yet-flushed payload; the debounce timer (or unmount flush) reads it.
+  const pendingRef = useRef<{
+    drafts: DraftItem[];
+    enabled: boolean;
+    requirement: string;
+  } | null>(null);
+
+  const doSave = useCallback(async () => {
+    const payload = pendingRef.current;
+    pendingRef.current = null;
+    if (!taskId || !payload) return;
+    try {
+      const cleaned = payload.drafts.filter((d) => d.title.trim().length > 0);
+      const requirement = payload.requirement.trim() || null;
+      if (cleaned.length === 0) {
+        // Removing all criteria clears the gate → back to the empty state.
+        await useTaskStore.getState().updateVerifyConfig(taskId, {
+          enabled: payload.enabled,
+          requirement,
+          verifyCriteriaIds: null,
+        });
+        return;
+      }
+      const ids = await verifyService.createCriteria(
+        cleaned.map(({ id: _id, ...draft }) => ({ ...draft, title: draft.title.trim() })),
+      );
+      await useTaskStore.getState().updateVerifyConfig(taskId, {
+        enabled: payload.enabled,
+        requirement,
+        verifyCriteriaIds: ids,
+      });
+    } catch (e) {
+      console.error('[TaskVerifyConfig] Failed to save:', e);
+    }
+  }, [taskId]);
+
   const persist = useCallback(
     (nextDrafts: DraftItem[], nextEnabled: boolean, nextRequirement: string) => {
       if (!taskId) return;
+      pendingRef.current = {
+        drafts: nextDrafts,
+        enabled: nextEnabled,
+        requirement: nextRequirement,
+      };
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(async () => {
-        try {
-          const cleaned = nextDrafts.filter((d) => d.title.trim().length > 0);
-          if (cleaned.length === 0) {
-            // Removing all criteria clears the gate → back to the empty state.
-            await useTaskStore.getState().updateVerifyConfig(taskId, {
-              enabled: nextEnabled,
-              requirement: nextRequirement.trim() || null,
-              verifyCriteriaIds: null,
-            });
-            return;
-          }
-          const ids = await verifyService.createCriteria(
-            cleaned.map(({ id: _id, ...draft }) => ({ ...draft, title: draft.title.trim() })),
-          );
-          await useTaskStore.getState().updateVerifyConfig(taskId, {
-            enabled: nextEnabled,
-            requirement: nextRequirement.trim() || null,
-            verifyCriteriaIds: ids,
-          });
-        } catch (e) {
-          console.error('[TaskVerifyConfig] Failed to save:', e);
-        }
-      }, SAVE_DEBOUNCE_MS);
+      saveTimerRef.current = setTimeout(() => void doSave(), SAVE_DEBOUNCE_MS);
     },
-    [taskId],
+    [taskId, doSave],
   );
 
+  // On unmount, FLUSH any debounced-but-unsaved edit instead of dropping it —
+  // this editor has no explicit Save button, so the timer is the only path.
   useEffect(
     () => () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      if (pendingRef.current) void doSave();
     },
-    [],
+    [doSave],
   );
 
   const commit = useCallback(
@@ -238,6 +260,7 @@ const TaskVerifyConfig = memo(() => {
         const items = criteria.map((c) =>
           toDraftItem({
             description: c.description ?? undefined,
+            documentId: c.documentId,
             required: c.required,
             title: c.title,
             verifierConfig: c.verifierConfig ?? undefined,

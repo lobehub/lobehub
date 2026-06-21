@@ -41,6 +41,12 @@ export interface GeneratePlanParams {
 export interface CriterionDraft {
   /** One-sentence summary; stored on the `verify_criteria.description` column. */
   description?: string;
+  /**
+   * Reuse an existing instruction document instead of creating one from
+   * `instruction`. Set when re-persisting a hydrated criterion so its detailed
+   * rubric (the doc body) is preserved rather than dropped to null.
+   */
+  documentId?: string | null;
   /** The detailed judging rubric; stored as the linked document's content. */
   instruction?: string;
   onFail?: VerifyCheckItem['onFail'];
@@ -236,8 +242,10 @@ export class VerifyPlanGeneratorService {
   async createCriteriaFromDrafts(drafts: CriterionDraft[]): Promise<string[]> {
     const ids: string[] = [];
     for (const [index, draft] of drafts.entries()) {
-      let documentId: string | null = null;
-      if (draft.instruction) {
+      // Reuse the existing instruction doc when re-persisting a hydrated criterion;
+      // only create a fresh doc for a genuinely new draft that carries inline text.
+      let documentId: string | null = draft.documentId ?? null;
+      if (!documentId && draft.instruction) {
         const doc = await this.documentModel.create({
           content: draft.instruction,
           fileType: VERIFY_INSTRUCTION_FILE_TYPE,

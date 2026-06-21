@@ -60,8 +60,13 @@ const activeTaskScheduleMaxExecutions = (s: TaskStoreState) =>
 
 const activeTaskCheckpoint = (s: TaskStoreState) => activeTaskDetail(s)?.checkpoint;
 
+// Read the RESOLVED verify config that getTaskDetail populates via
+// TaskModel.getVerifyConfig (which includes the legacy `config.review` fallback
+// during migration) — not the raw `config.verify`. Reading raw config.verify
+// would return undefined for a legacy review-only task, so the panel would open
+// as unconfigured and the first autosave could clobber the old settings.
 const activeTaskVerifyConfig = (s: TaskStoreState): TaskVerifyConfig | undefined =>
-  (activeTaskDetail(s)?.config as { verify?: TaskVerifyConfig } | undefined)?.verify;
+  activeTaskDetail(s)?.verify ?? undefined;
 
 const activeTaskWorkspace = (s: TaskStoreState) => activeTaskDetail(s)?.workspace ?? [];
 

@@ -267,6 +267,7 @@ export const verifyRouter = router({
         drafts: z.array(
           z.object({
             description: z.string().optional(),
+            documentId: z.string().nullable().optional(),
             instruction: z.string().optional(),
             onFail: onFailSchema.optional(),
             required: z.boolean().optional(),

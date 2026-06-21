@@ -51,6 +51,8 @@ export interface CreateRubricInput {
  */
 export interface VerifyCriterionDraft {
   description?: string;
+  /** Reuse an existing instruction doc (preserves the rubric on re-save). */
+  documentId?: string | null;
   instruction?: string;
   onFail?: VerifyOnFailStrategy;
   required?: boolean;
