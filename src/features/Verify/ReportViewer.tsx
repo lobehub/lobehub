@@ -1,11 +1,10 @@
 'use client';
 
-import { BRANDING_NAME } from '@lobechat/business-const';
 import type { VerifyRunContext } from '@lobechat/types';
 import { Block, Flexbox, Icon, Markdown, Tag, Text } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { Check, CircleHelp, X } from 'lucide-react';
-import { memo, useEffect } from 'react';
+import { memo } from 'react';
 import { useParams } from 'react-router';
 
 import Loading from '@/components/Loading/BrandTextLoading';
@@ -249,13 +248,6 @@ const ReportViewer = memo(() => {
   const { runId } = useParams<{ runId: string }>();
   const verifyRunId = runId ?? null;
   const { data, isLoading } = useVerifyReportBundle(verifyRunId);
-
-  // Standalone page sits outside the main layout, so RouteMetaBridge never runs
-  // for it — set the document (browser tab) title to the report title ourselves.
-  const pageTitle = data?.run.title || 'Verification report';
-  useEffect(() => {
-    document.title = `${pageTitle} · ${BRANDING_NAME}`;
-  }, [pageTitle]);
 
   if (!verifyRunId)
     return <Text type="danger">Missing report id (/verify/&lt;verifyRunId&gt;).</Text>;
