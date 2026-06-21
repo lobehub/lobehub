@@ -25,6 +25,8 @@
   "openChatSettings.title": "Open Chat Settings",
   "openHotkeyHelper.desc": "View instructions for all keyboard shortcuts",
   "openHotkeyHelper.title": "Open Hotkey Help",
+  "prevTab.desc": "Cycle to the previous tab in the Desktop app; wraps around to the last tab at the beginning",
+  "prevTab.title": "Previous Tab",
   "regenerateMessage.desc": "Regenerate the last message",
   "regenerateMessage.title": "Regenerate Message",
   "saveDocument.desc": "Save all changes to the current page immediately",

@@ -7,6 +7,7 @@ export type HotkeyId =
   | 'navigateToChat'
   | 'nextTab'
   | 'openChatSettings'
+  | 'prevTab'
   | 'openHotkeyHelper'
   | 'regenerateMessage'
   | 'saveDocument'

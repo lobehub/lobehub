@@ -25,6 +25,8 @@
   "openChatSettings.title": "打开会话设置",
   "openHotkeyHelper.desc": "查看所有快捷键的使用说明",
   "openHotkeyHelper.title": "打开快捷键帮助",
+  "prevTab.desc": "在桌面端标签页之间反向循环切换，到达开头后跳回最后一个标签页",
+  "prevTab.title": "上一个标签页",
   "regenerateMessage.desc": "重新生成最后一条消息",
   "regenerateMessage.title": "重新生成消息",
   "saveDocument.desc": "立即保存当前文档的所有更改",
